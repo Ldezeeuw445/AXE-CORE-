@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  TELEFOON_APPS, appMetId, appUrl, laadOpenApp, bewaarOpenApp,
+  TELEFOON_APPS, TELEFOON_CHIPS, appMetId, appUrl, laadOpenApp, bewaarOpenApp,
   animatieVlaggen, telefoonSchaal, telefoonHoogte, SCHAAL_DOEL, TOPBALK, MARGE_ONDER,
 } from './launcher';
 
@@ -69,23 +69,22 @@ describe('de animatievlaggen', () => {
 });
 
 describe('de schaal van de telefoon', () => {
-  it('is .69 op 1728x1080, ook met het chroom onderin (204) meegerekend', () => {
+  it('is .92 op 1728×1080 — hij zweeft over het chroom, dus dat telt niet mee', () => {
     expect(telefoonSchaal(1080)).toBe(SCHAAL_DOEL);
-    expect(telefoonSchaal(1080, 204)).toBe(SCHAAL_DOEL);
   });
-  it('past op 1440x900 boven het chroom: kop + toestel + marge blijven boven de nav', () => {
-    const s = telefoonSchaal(900, 204);
-    expect(s).toBeLessThan(SCHAAL_DOEL);
-    expect(s).toBe(0.65);
-    expect(TOPBALK + telefoonHoogte(s) + MARGE_ONDER + 204).toBeLessThanOrEqual(900);
+  it('past op 1440×900 boven de voetmarge', () => {
+    const s = telefoonSchaal(900);
+    expect(s).toBeLessThanOrEqual(SCHAAL_DOEL);
+    expect(s).toBe(0.90);
+    expect(TOPBALK + telefoonHoogte(s) + MARGE_ONDER).toBeLessThanOrEqual(900);
   });
   it('krimpt op een laag scherm zodat kop, telefoon en marge onder de topbalk passen', () => {
     const s = telefoonSchaal(700);
     expect(s).toBeLessThan(SCHAAL_DOEL);
     expect(TOPBALK + telefoonHoogte(s) + MARGE_ONDER).toBeLessThanOrEqual(700);
   });
-  it('wordt nooit kleiner dan .4', () => {
-    expect(telefoonSchaal(200)).toBe(0.4);
+  it('wordt nooit kleiner dan .55', () => {
+    expect(telefoonSchaal(200)).toBe(0.55);
   });
 });
 
@@ -94,5 +93,8 @@ describe('de tegels', () => {
     for (const a of TELEFOON_APPS) expect(a.icoon.length).toBeGreaterThan(0);
     expect(TELEFOON_APPS.filter((a) => a.dok)).toHaveLength(4);
     expect(TELEFOON_APPS.filter((a) => !a.dok)).toHaveLength(8);
+  });
+  it('elke chip wijst naar een app die bestaat', () => {
+    for (const c of TELEFOON_CHIPS) expect(appMetId(c.appId)).not.toBeNull();
   });
 });

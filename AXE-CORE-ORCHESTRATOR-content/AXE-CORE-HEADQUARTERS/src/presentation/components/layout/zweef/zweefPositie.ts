@@ -42,6 +42,18 @@ export function ankerNaarPunt(anker: Anker, maat: Maat, venster: Maat): Punt {
   return klem({ x, y }, maat, venster);
 }
 
+/**
+ * Laat een zwever aan de rand kleven als je hem dicht genoeg loslaat —
+ * het gebaar van een venster dat “weet” waar het thuishoort. Drempel in px.
+ */
+export function kleefAanRand(p: Punt, maat: Maat, venster: Maat, drempel = 64): Punt {
+  let x = p.x;
+  let y = p.y;
+  if (x < drempel) x = MARGE + 12;
+  if (venster.h - (y + maat.h) < drempel) y = venster.h - maat.h - 16;
+  return klem({ x, y }, maat, venster);
+}
+
 type Opslag = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 function isPunt(v: unknown): v is Punt {

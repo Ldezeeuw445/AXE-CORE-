@@ -37,6 +37,20 @@ export interface TelefoonApp {
   dok?: boolean;
 }
 
+/** Chips op het beginscherm: een zin, een app. Dat is het AI-gebaar —
+ *  je zegt wat je wilt en AXE opent het, in plaats van een raster te zoeken. */
+export interface TelefoonChip {
+  id: string;
+  tekst: string;
+  appId: string;
+}
+
+export const TELEFOON_CHIPS: readonly TelefoonChip[] = [
+  { id: 'chart', tekst: 'Show the chart', appId: 'chart' },
+  { id: 'desk', tekst: 'Open the NorthSea desk', appId: 'northsea' },
+  { id: 'mem', tekst: 'What do we remember?', appId: 'memory' },
+];
+
 export const TELEFOON_APPS: readonly TelefoonApp[] = [
   { id: 'mobile', naam: 'AXE Mobile', icoon: 'telefoon', kleur: '#22D3EE', soort: 'route', doel: '/mobile', dok: true },
   { id: 'chart', naam: 'Chart', icoon: 'grafiek', kleur: '#2EF2C2', soort: 'route', doel: '/trading-intel?tab=chart&bare=1', dok: true },
@@ -101,23 +115,22 @@ export function animatieVlaggen(bron: { search: string; minderBeweging: boolean 
 }
 
 /**
- * De schaal van de telefoon op dit venster. Streef .69 (271x588 van 393x852),
- * maar nooit hoger dan wat er past tussen de topbalk en het chroom onderin
- * (nav en composer, gemeten als --axe-rail-onder), met de kop erboven en de
- * marge eronder. Anders steekt hij op een laag scherm in de dok en is de
- * home-indicator weg -- dat gebeurde op 1080 hoog toen alleen de vensterrand
- * meetelde.
+ * De schaal van de telefoon op dit venster. Streef .92 (361×784 van 393×852):
+ * groot genoeg om een app te lezen, niet een gadget in de kantlijn. Hij
+ * zweeft OVER composer en dok — die laag is de zweeflaag — dus het chroom
+ * onderin telt niet mee als plafond. Alleen de topbalk en een voetmarge
+ * houden hem in het venster.
  */
-export const SCHAAL_DOEL = 0.69;
+export const SCHAAL_DOEL = 0.92;
 export const TELEFOON_ECHT = { b: 393, h: 852 } as const;
 export const KOP_HOOGTE = 43;
 export const TOPBALK = 66;
-export const MARGE_ONDER = 26;
+export const MARGE_ONDER = 16;
 
-export function telefoonSchaal(vensterHoogte: number, onderChroom = 0, topbalk = TOPBALK, marge = MARGE_ONDER): number {
-  const ruimte = vensterHoogte - topbalk - onderChroom - marge - KOP_HOOGTE;
+export function telefoonSchaal(vensterHoogte: number, topbalk = TOPBALK, marge = MARGE_ONDER): number {
+  const ruimte = vensterHoogte - topbalk - marge - KOP_HOOGTE;
   const past = Math.floor((ruimte / TELEFOON_ECHT.h) * 100) / 100;
-  return Math.max(0.4, Math.min(SCHAAL_DOEL, past));
+  return Math.max(0.55, Math.min(SCHAAL_DOEL, past));
 }
 
 /** De kop plus het geschaalde toestel: wat de zwever hoog is. */

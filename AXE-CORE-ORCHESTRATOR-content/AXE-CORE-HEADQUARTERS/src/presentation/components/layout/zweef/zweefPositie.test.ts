@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MARGE, ankerNaarPunt, beginPositie, bewaarPositie, bewaarVerborgen, klem,
+  MARGE, ankerNaarPunt, beginPositie, bewaarPositie, bewaarVerborgen, kleefAanRand, klem,
   laadPositie, laadVerborgen, sleutelVan, vergeetPositie,
 } from './zweefPositie';
 
@@ -113,5 +113,14 @@ describe('de beginplek', () => {
     bewaarPositie('telefoon', { x: 900, y: 300 }, o);
     expect(beginPositie('telefoon', { links: 28, onder: 26 }, telefoon, venster, o, true))
       .toEqual({ x: 28, y: 1080 - 486 - 26 });
+  });
+});
+
+describe('kleven aan de rand', () => {
+  it('trekt naar links als je dicht bij de linkerrand loslaat', () => {
+    expect(kleefAanRand({ x: 40, y: 200 }, telefoon, venster).x).toBe(MARGE + 12);
+  });
+  it('laat een plek in het midden met rust', () => {
+    expect(kleefAanRand({ x: 400, y: 200 }, telefoon, venster)).toEqual({ x: 400, y: 200 });
   });
 });

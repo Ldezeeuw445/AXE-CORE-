@@ -118,9 +118,13 @@ UI-MAATSTAF leest daarmee in black als: *één materiaal, mat glas, geen eigen
 achtergrond per kaart*. Rails en zijbalken krijgen géén blur (`--kaart-filter`
 staat daar op `none`); glass is onaangeroerd.
 
-De entree van de telefoon (van onder omhoog, 520 ms, `--ease`) en de idle-bob
-(2,5 px, 4 s) staan uit bij `prefers-reduced-motion` en met `?anim=0` in de
-URL — die vlag is er voor screenshots en tests, niet voor gebruikers.
+De entree van de telefoon (van onder omhoog, 680 ms, `--ease`, met een korte
+blur) en de idle-bob (3 px, 5,2 s) staan uit bij `prefers-reduced-motion` en
+met `?anim=0`. Schaal .92 (361×784): hij zweeft over composer en dok, niet
+ernaast in een te smalle kolom. Het beginscherm is AXE zelf — levende bol,
+glas, een vraag, chips die een zin zijn — niet een iOS-raster. Swipe omhoog
+op de home-indicator sluit de open app; dicht bij de linkerrand losgelaten
+klemt de telefoon vast. De zweeflaag bestaat in beide looks.
 
 ## De NorthSea Desk op Home
 
@@ -160,9 +164,7 @@ bron als de site (Supabase + mail-sync); niets wordt in de app zelf bewaard.
 Elke fase eindigt met een screenshot in beide looks naast de maquette. Klopt
 het niet, dan is de maquette de maatstaf — niet andersom.
 
-Stand: fase 1 en 2 gedaan in black (tokens, fonts, `ZweefLaag`/`Zwever`, de
-telefoon op Home en de bolwidget op de browsertab); daarna de kaart naar mat
-glas met edge glow, de bol groot op de plaat met alleen een HUD-chip als
-greep (`BolWidget`), de telefoon op schaal .69 met entree en bob en een
-iOS-achtig beginscherm met tegels (`components/devices/TelefoonScherm.tsx`,
-`launcher.ts`); glass onaangeroerd.
+Stand: fase 1 en 2 in de app. Black is mat glas met edge glow. De telefoon op
+Home is .92 (361×784), zweeft over het chroom, met een beginscherm dat AXE is
+(levende bol, glas, chips, Ask AXE) in plaats van een iOS-kloon. De bol op de
+browsertab ligt op de plaat. De zweeflaag werkt in beide looks.

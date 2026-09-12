@@ -1,29 +1,27 @@
 /**
  * Wat er op het scherm van de telefoon staat: een beginscherm, of een open
- * app in een iframe. Rendert op 393x852 (de echte maat); de schaal zit op de
- * omhullende .axe-toestel.
+ * app in een iframe. Rendert op 393×852; de schaal zit op .axe-toestel.
  *
- * Het beginscherm heeft het ritme van iOS -- vier kolommen, tegels van 60 met
- * hoek 14 en de naam eronder, widgets in tegelmaten, het dok onderaan -- maar
- * het materiaal van AXE: kaart voor de tegels en widgets, ruit voor het dok,
- * kleur alleen in iconen, stippen en letters. Bovenin een statuswidget van
- * 2x4 met de kleine bol en de tellers die de schil ook toont (herinneringen,
- * open taken, meldingen, agents); onder de apps een 1x4 "Now running" met de
- * drie diensten uit de kopregel van Home. De klok is de echte klok.
+ * Het beginscherm is geen iOS-raster met een bolletje erbij. Het is AXE:
+ * een levende bol als aanwezigheid, glas eromheen, een vraag onderaan, en
+ * chips die een zin zijn in plaats van een icoon. Tegels blijven bestaan —
+ * Luka's apps horen erop — maar ze zijn de tweede laag, niet de eerste.
+ * Een swipe omhoog op de home-indicator sluit de open app.
  */
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   Brain, Calendar, CandlestickChart, CheckSquare, Code2, Database, Globe, Map,
   MessageCircle, Settings, Ship, Smartphone,
 } from 'lucide-react';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
-import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { useNotifications } from '@/presentation/contexts/NotificationContext';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { isBezig } from '@/presentation/components/layout/zweef/bezig';
 import { teller, useGeheugenTotaal } from '@/presentation/components/layout/zweef/geheugenTeller';
+import { isSwipeOmhoog } from './gebaar';
 import {
-  TELEFOON_APPS, appUrl, bewaarOpenApp, laadOpenApp, type AppIcoon, type TelefoonApp,
+  TELEFOON_APPS, TELEFOON_CHIPS, appMetId, appUrl, bewaarOpenApp, laadOpenApp,
+  type AppIcoon, type TelefoonApp,
 } from './launcher';
 import { useTellers } from './telefoonTellers';
 
@@ -38,8 +36,6 @@ function herkomst() {
   return { origin, pathname, search };
 }
 
-/* Elke tien seconden, zodat de minuut nooit meer dan tien seconden achterloopt
-   op de klok in de kopbalk. */
 function useKlok(): string {
   const [t, setT] = useState(() => new Date());
   useEffect(() => {
@@ -53,74 +49,82 @@ function Tegel({ app, onOpen, inDok = false }: { app: TelefoonApp; onOpen: (a: T
   const Icoon = ICONEN[app.icoon];
   return (
     <button type="button" className={`axe-tegel${inDok ? ' axe-tegel--dok' : ''}`} onClick={() => onOpen(app)} title={app.soort === 'url' ? app.doel : `#${app.doel}`}>
-      <span className="axe-tegel__icoon" style={{ color: app.kleur }}><Icoon size={26} strokeWidth={1.6} /></span>
+      <span className="axe-tegel__icoon" style={{ color: app.kleur }}><Icoon size={24} strokeWidth={1.5} /></span>
       {!inDok && <span className="axe-tegel__naam">{app.naam}</span>}
     </button>
   );
 }
 
-function Getal({ n }: { n: number | null }) {
-  return <b>{n === null ? '—' : n}</b>;
-}
-
-function StatusWidget({ totaal, bezig }: { totaal: number | null; bezig: boolean }) {
+function Aanwezigheid({ totaal, bezig }: { totaal: number | null; bezig: boolean }) {
   const { openTaken, actieveAgents } = useTellers();
   const { unreadCount } = useNotifications();
   return (
-    <section className="axe-widget axe-widget--status" aria-label="AXE Core status">
-      <div className="axe-widget__bol"><AxeCoreSphere boost={bezig ? 1 : 0} /></div>
-      <div className="axe-widget__tekst">
-        <div className="axe-widget__kop">
-          <i className={`axe-stip ${bezig ? 'c-warn' : 'c-ok'}`} />
-          AXE Core <span className="axe-widget__sep">·</span>
-          <span className={bezig ? 'c-warn' : 'c-ok'}>{bezig ? 'thinking' : 'live'}</span>
-        </div>
-        <div className="axe-widget__getal">{totaal === null ? '—' : teller(totaal)}</div>
-        <div className="axe-widget__label">memories</div>
-        <div className="axe-widget__rij">
-          <span><Getal n={openTaken} /> open</span>
-          <span><Getal n={unreadCount} /> new</span>
-          <span><Getal n={actieveAgents} /> agents</span>
-        </div>
+    <section className="axe-aanwezig" aria-label="AXE Core">
+      <div className="axe-aanwezig__ringen" aria-hidden>
+        <i /><i /><i />
+      </div>
+      <div className="axe-aanwezig__bol">
+        <AxeCoreSphere boost={bezig ? 1 : 0.15} />
+      </div>
+      <div className="axe-aanwezig__naam">
+        <i className={`axe-stip ${bezig ? 'c-warn' : 'c-ok'}`} />
+        AXE Core
+        <span className={bezig ? 'c-warn' : 'c-ok'}>{bezig ? 'thinking' : 'live'}</span>
+      </div>
+      <div className="axe-aanwezig__getal">{totaal === null ? '—' : teller(totaal)}</div>
+      <div className="axe-aanwezig__label">memories · always with you</div>
+      <div className="axe-aanwezig__rij">
+        <span><b>{openTaken ?? '—'}</b> open</span>
+        <span><b>{unreadCount}</b> new</span>
+        <span><b>{actieveAgents ?? '—'}</b> agents</span>
       </div>
     </section>
   );
 }
 
-function NowRunning({ totaal, bezig }: { totaal: number | null; bezig: boolean }) {
-  /* Dezelfde vraag als de kopregel: is er íets dat kan antwoorden? */
-  const provider = useVoiceStore((s) =>
-    !!s.primarySlot || !!s.fallback1Slot || !!s.fallback2Slot || !!s.fallback3Slot || s.routingLog.length > 0);
-  const diensten: Array<{ naam: string; stand: string; ok: boolean }> = [
-    { naam: 'Core', stand: bezig ? 'thinking' : provider ? 'active' : 'no AI', ok: provider && !bezig },
-    { naam: 'Memory', stand: totaal === null ? '—' : `${teller(totaal)} nodes`, ok: totaal !== null },
-    { naam: 'VPS API', stand: isAxeApiConfigured ? 'configured' : 'not set', ok: isAxeApiConfigured },
-  ];
+function Vraag({ onChip, onAsk }: { onChip: (app: TelefoonApp) => void; onAsk: () => void }) {
+  const [tekst, setTekst] = useState('');
+  const stuur = (e: FormEvent) => {
+    e.preventDefault();
+    onAsk();
+    setTekst('');
+  };
   return (
-    <section className="axe-widget axe-widget--running" aria-label="Now running">
-      <span className="axe-widget__titel">Now running</span>
-      <div className="axe-widget__diensten">
-        {diensten.map((d) => (
-          <span key={d.naam} className="axe-widget__dienst">
-            <i className={`axe-stip ${d.ok ? 'c-ok' : 'c-warn'}`} />
-            {d.naam} <em className={d.ok ? 'c-ok' : 'c-warn'}>{d.stand}</em>
-          </span>
-        ))}
+    <div className="axe-vraag">
+      <form className="axe-vraag__veld" onSubmit={stuur}>
+        <input
+          value={tekst}
+          onChange={(e) => setTekst(e.target.value)}
+          placeholder="Ask AXE anything"
+          aria-label="Ask AXE anything"
+        />
+        <button type="submit" className="axe-glas-knop" title="Ask">→</button>
+      </form>
+      <div className="axe-vraag__chips">
+        {TELEFOON_CHIPS.map((c) => {
+          const app = appMetId(c.appId);
+          if (!app) return null;
+          return (
+            <button key={c.id} type="button" className="axe-chip" onClick={() => onChip(app)}>
+              {c.tekst}
+            </button>
+          );
+        })}
       </div>
-    </section>
+    </div>
   );
 }
 
-function Beginscherm({ raster, onOpen }: { raster: TelefoonApp[]; onOpen: (a: TelefoonApp) => void }) {
+function Beginscherm({ raster, onOpen, onAsk }: { raster: TelefoonApp[]; onOpen: (a: TelefoonApp) => void; onAsk: () => void }) {
   const totaal = useGeheugenTotaal();
   const bezig = useVoiceStore((s) => isBezig(s.voiceStatus));
   return (
     <div className="axe-beginscherm__pagina">
-      <StatusWidget totaal={totaal} bezig={bezig} />
+      <Aanwezigheid totaal={totaal} bezig={bezig} />
+      <Vraag onChip={onOpen} onAsk={onAsk} />
       <div className="axe-beginscherm__raster">
         {raster.map((a) => <Tegel key={a.id} app={a} onOpen={onOpen} />)}
       </div>
-      <NowRunning totaal={totaal} bezig={bezig} />
     </div>
   );
 }
@@ -128,6 +132,7 @@ function Beginscherm({ raster, onOpen }: { raster: TelefoonApp[]; onOpen: (a: Te
 export function TelefoonScherm({ onApp }: { onApp?: (app: TelefoonApp | null) => void }) {
   const [open, setOpen] = useState<TelefoonApp | null>(() => laadOpenApp(window.localStorage));
   const klok = useKlok();
+  const swipe = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => { onApp?.(open); }, [open, onApp]);
 
@@ -136,8 +141,18 @@ export function TelefoonScherm({ onApp }: { onApp?: (app: TelefoonApp | null) =>
     setOpen(app);
   };
 
+  const omlaag = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    swipe.current = { x: e.clientX, y: e.clientY };
+  };
+  const los = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const van = swipe.current;
+    swipe.current = null;
+    if (van && isSwipeOmhoog(van, { x: e.clientX, y: e.clientY })) ga(null);
+  };
+
   const raster = TELEFOON_APPS.filter((a) => !a.dok);
   const dok = TELEFOON_APPS.filter((a) => a.dok);
+  const mobile = appMetId('mobile');
 
   return (
     <div className="axe-mobiel" data-app={open?.id ?? 'home'}>
@@ -149,17 +164,23 @@ export function TelefoonScherm({ onApp }: { onApp?: (app: TelefoonApp | null) =>
             <span>{klok}</span>
             <span className="axe-beginscherm__rechts"><i className="axe-stip c-ok" /> AXE</span>
           </div>
-          <Beginscherm raster={raster} onOpen={ga} />
+          <Beginscherm raster={raster} onOpen={ga} onAsk={() => mobile && ga(mobile)} />
           <div className="axe-beginscherm__dok axe-ruit">
             {dok.map((a) => <Tegel key={a.id} app={a} onOpen={ga} inDok />)}
           </div>
         </div>
       )}
-      {open && (
-        <button type="button" className="axe-mobiel__home" title="Home screen" onClick={() => ga(null)}>
-          <span className="axe-mobiel__indicator" />
-        </button>
-      )}
+      <button
+        type="button"
+        className="axe-mobiel__home"
+        title="Home screen · swipe up"
+        onClick={() => ga(null)}
+        onPointerDown={omlaag}
+        onPointerUp={los}
+        onPointerCancel={() => { swipe.current = null; }}
+      >
+        <span className="axe-mobiel__indicator" />
+      </button>
     </div>
   );
 }

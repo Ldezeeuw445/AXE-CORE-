@@ -377,6 +377,33 @@ html:root[data-look],
   --axe-lift:
     0 1px 2px rgba(12, 20, 34, 0.22),
     0 10px 30px rgba(12, 20, 34, 0.26);
+
+  /* Ruit voor wat zweeft (telefoon, bol): op licht glas dichter, anders
+     valt de kopbalk weg tegen de bergen. */
+  --ruit: rgba(18, 18, 22, 0.72);
+  --ruit-filter: blur(24px) saturate(120%);
+  --ruit-rand:
+    0 1px 0 rgba(255, 255, 255, 0.16) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.10);
+  --ruit-schaduw: 0 30px 70px -30px rgba(0, 0, 0, 0.55);
+  --onderglow: 0 28px 56px -28px rgba(34, 211, 238, 0.22);
+  --onderglow-actief: 0 32px 64px -26px rgba(34, 211, 238, 0.34);
+  --ring: 0 0 0 1px rgba(34, 211, 238, 0.35);
+  --r-ruit: 28px;
+  --snel: 140ms;
+  --basis: 200ms;
+  --traag: 320ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ink: #E8ECF5;
+  --ink-2: #9AA3B5;
+  --ink-3: #6F7A90;
+  --ink-4: #4A5366;
+  --ok: #2EF2C2;
+  --warn: #FFCC66;
+  --accent: #22D3EE;
+  --accent-rgb: 34, 211, 238;
+  --ui: 'Inter', -apple-system, 'SF Pro Text', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 }
 
 /* De kaarten, de chatplaat, de composer en de nav krijgen die hoogte. */
@@ -3040,13 +3067,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    Ligt over de hele app en vangt zelf niets: alleen wat erin staat is
    bedienbaar, de tab eronder blijft gewoon werken. Boven de schil (z 1) en
    onder de view-schakelaar (1200) en de dialogen van Radix (50). */
-:root[data-look='black'] .axe-zweeflaag {
+:root[data-look] .axe-zweeflaag {
   position: fixed;
   inset: 0;
   z-index: 2;
   pointer-events: none;
 }
-:root[data-look='black'] .axe-zweeflaag > * { pointer-events: auto; }
+:root[data-look] .axe-zweeflaag > * { pointer-events: auto; }
 
 .axe-zwever {
   position: absolute;
@@ -3061,7 +3088,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 /* ── De ruit: gerookt glas, alleen voor wat zweeft ────────────────────────
    Tijdens slepen komt de onderglow erbij: dat is het moment waarop dit het
    ding is waar het gebeurt. */
-:root[data-look='black'] .axe-ruit {
+:root[data-look] .axe-ruit {
   background: var(--ruit);
   backdrop-filter: var(--ruit-filter);
   -webkit-backdrop-filter: var(--ruit-filter);
@@ -3069,9 +3096,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   box-shadow: var(--ruit-rand), var(--ruit-schaduw);
   color: var(--ink);
 }
-:root[data-look='black'] .axe-ruit--actief,
-:root[data-look='black'] .axe-zwever--sleept .axe-ruit,
-:root[data-look='black'] .axe-zwever--sleept.axe-ruit {
+:root[data-look] .axe-ruit--actief,
+:root[data-look] .axe-zwever--sleept .axe-ruit,
+:root[data-look] .axe-zwever--sleept.axe-ruit {
   box-shadow: var(--ruit-rand), var(--ring), 0 50px 100px -30px rgba(0, 0, 0, 0.9), var(--onderglow-actief);
 }
 
@@ -3109,7 +3136,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 /* De chip die overblijft als een zwever verborgen is: zelfde plek, klein,
    en één klik brengt hem terug. */
-:root[data-look='black'] .axe-zwever__chip {
+:root[data-look] .axe-zwever__chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3123,7 +3150,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   color: var(--ink-2);
   cursor: pointer;
 }
-:root[data-look='black'] .axe-zwever__chip:hover { color: var(--ink); }
+:root[data-look] .axe-zwever__chip:hover { color: var(--ink); }
 .axe-zwever__chip svg { width: 12px; height: 12px; }
 
 /* Een stip die een toestand draagt: hier IS de kleur het bericht. */
@@ -3139,34 +3166,28 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 
 /* ── De telefoon: een iPhone 15 Pro in ruit ───────────────────────────────
-   393x852 echt; de schaal (--tel-schaal, streef .69 dus 271x588) en de hoogte
-   van de telefoon (--tel-h) zet ZwevendeTelefoon op .axe-telefoon__lijf,
-   gerekend uit de vensterhoogte. .axe-toestel zet zijn eigen --schaal op 1,
-   dus die naam kan hier niet van buiten gezet worden; daarom een tweede naam
-   die .axe-telefoon .axe-toestel overneemt. De maat van de zwever zelf komt
-   uit de component. */
+   393×852 echt; de schaal (--tel-schaal, streef .92 dus 361×784) en de hoogte
+   van de telefoon (--tel-h) zet ZwevendeTelefoon op .axe-telefoon__lijf.
+   Hij zweeft OVER het chroom, groot genoeg om te gebruiken. */
 .axe-telefoon__lijf { position: absolute; inset: 0; }
-/* De entree: van onder het scherm omhoog naar zijn plek, 520 ms met --ease;
-   daarna een zweving van 2,5 px in 4 s. Twee animaties op dezelfde transform:
-   de zweving begint pas na de entree (delay) en neemt het dan over. */
 .axe-telefoon__lijf--entree {
-  animation: axe-telefoon-entree 520ms var(--ease) both;
+  animation: axe-telefoon-entree 680ms var(--ease) both;
 }
 .axe-telefoon__lijf--zweeft {
-  animation: axe-telefoon-zweef 4s ease-in-out infinite;
+  animation: axe-telefoon-zweef 5.2s ease-in-out infinite;
 }
 .axe-telefoon__lijf--entree.axe-telefoon__lijf--zweeft {
   animation:
-    axe-telefoon-entree 520ms var(--ease) both,
-    axe-telefoon-zweef 4s ease-in-out 520ms infinite;
+    axe-telefoon-entree 680ms var(--ease) both,
+    axe-telefoon-zweef 5.2s ease-in-out 680ms infinite;
 }
 @keyframes axe-telefoon-entree {
-  from { transform: translateY(100vh); opacity: 0.4; }
-  to   { transform: translateY(0); opacity: 1; }
+  from { transform: translateY(110%) scale(0.92); opacity: 0; filter: blur(8px); }
+  to   { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
 }
 @keyframes axe-telefoon-zweef {
   0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-2.5px); }
+  50%      { transform: translateY(-3px); }
 }
 .axe-telefoon__kop {
   position: absolute;
@@ -3190,7 +3211,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 .axe-telefoon__kop > svg { width: 12px; height: 12px; flex: none; }
 .axe-telefoon__kop .axe-groei { flex: 1; }
-.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 43px; --schaal: var(--tel-schaal, 0.69); }
+.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 43px; --schaal: var(--tel-schaal, 0.92); }
 /* Liggend: om het eigen midden gedraaid, en de zwever wordt zo breed als de
    telefoon hoog was, zodat hij niet buiten het venster valt. */
 .axe-telefoon--liggend .axe-toestel {
@@ -3301,55 +3322,209 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: 62px 1fr auto;
+  grid-template-rows: 58px 1fr auto;
   padding: 0 0 34px;
+  overflow: hidden;
   background:
-    radial-gradient(60% 40% at 50% 12%, rgba(var(--accent-rgb), 0.10), transparent 70%),
-    linear-gradient(180deg, #0B0C10 0%, #07080B 100%);
+    radial-gradient(70% 42% at 50% 8%, rgba(34, 211, 238, 0.16), transparent 62%),
+    radial-gradient(40% 30% at 80% 80%, rgba(167, 139, 250, 0.06), transparent 70%),
+    #07080B;
+}
+.axe-beginscherm::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, #000 20%, transparent 75%);
 }
 .axe-beginscherm__status {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 30px 0;
+  padding: 18px 28px 0;
   font: 600 15px/1 var(--ui);
 }
-.axe-beginscherm__rechts { display: inline-flex; align-items: center; gap: 6px; font: 500 10px/1 var(--mono); letter-spacing: 0.1em; color: var(--ink-3); }
+.axe-beginscherm__rechts { display: inline-flex; align-items: center; gap: 6px; font: 500 10px/1 var(--mono); letter-spacing: 0.12em; color: var(--ink-3); }
 
-/* De pagina tussen statusbalk en dok, in het ritme van iOS: vier kolommen van
-   (393 - 2*18) / 4 = 89 px, tegels van 60 met de naam eronder (80 hoog),
-   widgets in veelvouden daarvan. De rijen worden gelijkmatig over de hoogte
-   verdeeld -- iOS doet dat ook -- zodat er geen lege helft onder de laatste
-   rij blijft, hoe hoog het scherm ook is (regel 6 geldt ook hier). */
 .axe-beginscherm__pagina {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-rows: 184px 182px 84px;
-  align-content: space-evenly;
-  row-gap: 0;
-  padding: 0 18px;
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  gap: 14px;
+  padding: 4px 18px 8px;
   min-height: 0;
 }
 .axe-beginscherm__raster {
-  align-content: space-between;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: 80px 80px;
+  grid-template-rows: 76px 76px;
+  align-content: start;
+  justify-items: center;
 }
 .axe-beginscherm__dok {
-  margin: 0 14px 12px;
-  height: 92px;
-  border-radius: 34px;
+  position: relative;
+  z-index: 1;
+  margin: 0 14px 10px;
+  height: 86px;
+  border-radius: 28px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   align-items: center;
   justify-items: center;
 }
-/* Een tegel: 60x60 kaart met het icoon in de merkkleur, naam eronder. */
+
+/* De aanwezigheid: de bol is AXE, de ringen zijn het veld eromheen.
+   Geen gadget-widget — dit is het gezicht van de app op dit scherm. */
+.axe-aanwezig {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  padding: 4px 8px 2px;
+  color: var(--ink-2);
+}
+.axe-aanwezig__ringen {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 196px;
+  height: 196px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.axe-aanwezig__ringen i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  animation: axe-ring 7.5s linear infinite;
+}
+.axe-aanwezig__ringen i:nth-child(2) { inset: 14px; animation-duration: 11s; animation-direction: reverse; opacity: 0.7; }
+.axe-aanwezig__ringen i:nth-child(3) { inset: 28px; animation-duration: 9s; opacity: 0.45; }
+@keyframes axe-ring {
+  from { transform: rotate(0deg) scale(1); }
+  50%  { transform: rotate(180deg) scale(1.03); }
+  to   { transform: rotate(360deg) scale(1); }
+}
+.axe-aanwezig__bol {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  clip-path: circle(50%);
+  filter: drop-shadow(0 0 28px rgba(34, 211, 238, 0.28));
+}
+.axe-aanwezig__bol > canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 295px !important;
+  height: 295px !important;
+  transform: translate(-50%, -50%);
+  cursor: default !important;
+}
+.axe-aanwezig__naam {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  font: 600 13px/1 var(--ui);
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+.axe-aanwezig__naam span { font: 500 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.axe-aanwezig__getal {
+  font: 600 40px/1 var(--mono);
+  color: var(--ink);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+}
+.axe-aanwezig__label {
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+.axe-aanwezig__rij {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font: 500 11px/1 var(--ui);
+  color: var(--ink-3);
+}
+.axe-aanwezig__rij b { font: 600 12px/1 var(--mono); color: var(--ink); }
+
+/* Vraag: glas, geen vlak. Chips zijn zinnen, geen iconen. */
+.axe-vraag { display: grid; gap: 10px; }
+.axe-vraag__veld {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 6px 0 16px;
+  border-radius: 999px;
+  background: rgba(18, 18, 22, 0.55);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 0 0 1px rgba(34, 211, 238, 0.22);
+}
+.axe-vraag__veld input {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 500 14px/1 var(--ui);
+  outline: none;
+  min-width: 0;
+}
+.axe-vraag__veld input::placeholder { color: var(--ink-3); }
+.axe-glas-knop {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--accent);
+  font: 600 16px/1 var(--ui);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35) inset;
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background 140ms;
+}
+.axe-glas-knop:hover { background: rgba(34, 211, 238, 0.22); }
+.axe-glas-knop:active { transform: scale(0.9); }
+.axe-vraag__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.axe-chip {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(18, 18, 22, 0.5);
+  color: var(--ink-2);
+  font: 500 11.5px/1 var(--ui);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  transition: color 140ms, box-shadow 140ms, transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.axe-chip:hover { color: var(--accent); box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.4) inset; }
+.axe-chip:active { transform: scale(0.96); }
+
+/* Een tegel: glas, icoon in merkkleur, naam eronder. */
 .axe-tegel {
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 7px;
+  gap: 6px;
   border: 0;
   background: none;
   padding: 0;
@@ -3357,72 +3532,31 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   cursor: pointer;
 }
 .axe-tegel__icoon {
-  width: 60px;
-  height: 60px;
-  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
-  background: var(--kaart);
-  box-shadow: var(--kaart-rand), 0 8px 18px -8px rgba(0, 0, 0, 0.6);
-  transition: transform var(--snel) var(--ease), box-shadow var(--snel) var(--ease);
+  background: rgba(23, 23, 28, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 8px 18px -8px rgba(0, 0, 0, 0.6);
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms;
 }
-.axe-tegel:hover .axe-tegel__icoon { transform: translateY(-1px); box-shadow: var(--kaart-rand), 0 10px 22px -8px rgba(0, 0, 0, 0.7), var(--onderglow); }
-.axe-tegel:active .axe-tegel__icoon { transform: scale(0.96); }
-.axe-tegel__naam { font: 500 11px/1.2 var(--ui); color: var(--ink-2); max-width: 84px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.axe-tegel--dok .axe-tegel__icoon { width: 62px; height: 62px; }
-
-/* De widgets: kaartmateriaal, hoek 22 zoals een grote iOS-widget, kleur alleen
-   in stip, cijfer en letters. */
-.axe-widget {
-  border-radius: 22px;
-  background: var(--kaart);
-  box-shadow: var(--kaart-rand), 0 10px 24px -10px rgba(0, 0, 0, 0.65);
-  color: var(--ink-2);
-  font: 500 12px/1.3 var(--ui);
+.axe-tegel:hover .axe-tegel__icoon {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.16) inset,
+    0 0 0 1px rgba(34, 211, 238, 0.28),
+    0 14px 28px -10px rgba(0, 0, 0, 0.7),
+    0 0 24px -8px rgba(34, 211, 238, 0.35);
 }
-.axe-widget--status {
-  display: grid;
-  grid-template-columns: 124px 1fr;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px 12px 12px;
-}
-/* De kleine bol: zelfde truc als op de browsertab -- een groter canvas,
-   afgeknipt op de zichtbare bol (100 / 0,57 = 176). */
-.axe-widget__bol {
-  position: relative;
-  width: 100px;
-  height: 100px;
-  margin: 0 auto;
-  clip-path: circle(50%);
-}
-.axe-widget__bol > canvas {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 176px !important;
-  height: 176px !important;
-  transform: translate(-50%, -50%);
-  cursor: default !important;
-}
-.axe-widget__tekst { display: grid; gap: 3px; min-width: 0; }
-.axe-widget__kop { display: flex; align-items: center; gap: 6px; font: 600 12px/1 var(--ui); color: var(--ink); letter-spacing: 0.02em; }
-.axe-widget__sep { color: var(--ink-4); }
-.axe-widget__getal { font: 600 34px/1 var(--mono); color: var(--ink); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 6px; }
-.axe-widget__label { font: 500 10px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
-.axe-widget__rij { display: flex; gap: 12px; margin-top: 8px; font: 500 11px/1 var(--ui); color: var(--ink-3); white-space: nowrap; }
-.axe-widget__rij b { font: 600 12px/1 var(--mono); color: var(--ink); }
-.axe-widget--running {
-  display: grid;
-  align-content: center;
-  gap: 10px;
-  padding: 0 18px;
-  white-space: nowrap;
-}
-.axe-widget__titel { font: 500 10px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
-.axe-widget__diensten { display: flex; justify-content: space-between; gap: 10px; }
-.axe-widget__dienst { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--ui); color: var(--ink-2); }
-.axe-widget__dienst em { font: 500 10px/1 var(--mono); font-style: normal; }
+.axe-tegel:active .axe-tegel__icoon { transform: scale(0.9); }
+.axe-tegel__naam { font: 500 11px/1.2 var(--ui); color: var(--ink-2); max-width: 80px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-tegel--dok .axe-tegel__icoon { width: 58px; height: 58px; }
 
 /* ── De bol op de plaat: geen kaart, alleen een HUD-chip als greep ─────────
    De zwever is precies de zichtbare bol (--bol) plus 10 px en de chip van 30.
@@ -3510,6 +3644,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   :root[data-look='black'][data-bezig='ja'] .axe-chatplaat { animation: none; --gloed: 0.22; }
   .axe-zwever { transition: none; }
   .axe-telefoon__lijf { animation: none !important; }
+  .axe-aanwezig__ringen i { animation: none; }
   :root[data-look='black'] .axe-shell .widget-card:hover,
   :root[data-look='black'] .axe-shell .axe-surface:hover { transform: none; }
 }

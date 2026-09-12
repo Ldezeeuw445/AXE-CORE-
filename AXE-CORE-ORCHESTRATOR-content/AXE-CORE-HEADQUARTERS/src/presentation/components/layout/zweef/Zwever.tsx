@@ -13,7 +13,7 @@
  * wilt. Pas bij loslaten gaat de plek naar de state en naar localStorage.
  */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { type Anker, type Maat, type Punt, ankerNaarPunt, bewaarPositie, klem, laadPositie } from './zweefPositie';
+import { type Anker, type Maat, type Punt, ankerNaarPunt, bewaarPositie, kleefAanRand, klem, laadPositie } from './zweefPositie';
 
 interface ZweverProps {
   /** De sleutel waaronder de plek bewaard wordt. Uniek per zwever. */
@@ -101,7 +101,11 @@ export function Zwever({ naam, anker, standaard, maat, vast = false, className =
     const el = ref.current;
     if (!s || !el) return;
     sleep.current = null;
-    const p = klem({ x: s.l + e.clientX - s.sx, y: s.t + e.clientY - s.sy }, s.maat, meetVenster());
+    const p = kleefAanRand(
+      klem({ x: s.l + e.clientX - s.sx, y: s.t + e.clientY - s.sy }, s.maat, meetVenster()),
+      s.maat,
+      meetVenster(),
+    );
     setPos(p);
     setSleept(false);
     bewaarPositie(naam, p, window.localStorage);

@@ -1,22 +1,17 @@
 /**
  * De telefoon die linksonder over Home zweeft: een iPhone 15 Pro met daarin
  * Luka's eigen apps. Het scherm is een beginscherm (TelefoonScherm); een tik
- * op een tegel opent de app in het frame, de home-indicator brengt je terug.
+ * op een tegel of een chip opent de app in het frame, een swipe omhoog of de
+ * home-indicator brengt je terug.
  *
- * Schaal .69 (271x588) als het venster dat toelaat; anders krimpt hij zodat
- * kop, telefoon en marge tussen de topbalk en het chroom onderin passen
- * (telefoonSchaal, met --axe-rail-onder als gemeten hoogte van dat chroom).
- * Hij staat linksonder in de kolom links van de band, met zijn onderkant op
- * 26 px boven dat chroom -- zo blijft de home-indicator altijd in beeld.
+ * Schaal .92 (361×784) als het venster dat toelaat. Hij zweeft OVER composer
+ * en dok — dat is de zweeflaag — dus hij mag groot zijn. Bij het openen van
+ * Home komt hij van onder het scherm omhoog (680 ms) en zweeft daarna licht.
+ * `prefers-reduced-motion` en `?anim=0` zetten dat stil.
  *
- * Bij het openen van Home komt hij van onder het scherm omhoog (520 ms,
- * --ease) en zweeft daarna licht (2,5 px, 4 s). `prefers-reduced-motion` en
- * `?anim=0` zetten dat stil -- die vlag is er voor screenshots die niet op de
- * entree willen wachten.
- *
- * De kopbalk is de greep. Draaien maakt de zwever breed in plaats van hoog,
- * pinnen zet hem vast, verbergen laat een chip achter. Alle drie, en de open
- * app, worden onthouden.
+ * De kopbalk is de greep. Draaien, pinnen, verbergen, en de open app worden
+ * onthouden. Dicht bij de linkerrand of de onderkant gelaten klemt hij vast
+ * (kleefAanRand).
  */
 import { useState } from 'react';
 import { IphoneFrame } from './IphoneFrame';
@@ -28,7 +23,7 @@ import { useSchilMaten } from '@/presentation/components/layout/zweef/schilMaten
 import { bewaarVlag, laadVlag, type Anker, type Maat } from '@/presentation/components/layout/zweef/zweefPositie';
 
 const NAAM = 'telefoon';
-const LINKS = 8;
+const LINKS = 20;
 const CHIP: Maat = { b: 236, h: 34 };
 
 function useAnimatie() {
@@ -44,18 +39,15 @@ export function ZwevendeTelefoon() {
   const [liggend, setLiggend] = useState(() => laadVlag(NAAM, 'liggend', window.localStorage));
   const [app, setApp] = useState<TelefoonApp | null>(null);
   const schil = useSchilMaten();
-  const schaal = telefoonSchaal(schil.venster.h, schil.onderChroom);
+  const schaal = telefoonSchaal(schil.venster.h);
   const anim = useAnimatie();
-  const onder = schil.onderChroom + MARGE_ONDER;
-  const anker: Anker = { links: LINKS, onder };
+  const anker: Anker = { links: LINKS, onder: MARGE_ONDER };
 
   const b = Math.round(TELEFOON_ECHT.b * schaal);
   const h = Math.round(TELEFOON_ECHT.h * schaal);
   const staand: Maat = { b, h: h + KOP_HOOGTE };
   const liggendMaat: Maat = { b: h, h: b + KOP_HOOGTE };
-  /* De chip staat waar de kopbalk stond: zelfde linkerkant, en van onderen
-     gerekend het verschil in hoogte erbij. */
-  const chipAnker: Anker = { links: LINKS, onder: onder + staand.h - CHIP.h };
+  const chipAnker: Anker = { links: LINKS, onder: MARGE_ONDER + staand.h - CHIP.h };
 
   const zet = (vlag: 'verborgen' | 'vast' | 'liggend', aan: boolean) => {
     bewaarVlag(NAAM, vlag, aan, window.localStorage);
