@@ -26,7 +26,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Globe, MapPin, Mic, Plus, RotateCcw, Send, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronUp, Clock, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
@@ -76,6 +76,9 @@ export function PlaatChat() {
   const [chatText, setChatText] = useState('');
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
   const [dropActive, setDropActive] = useState(false);
+  /* Het paneel achter de klok. Dicht bij het laden: de kopregel hoort leeg te
+     beginnen, net als in het voorbeeld. */
+  const [paneelOpen, setPaneelOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const lastProjectedMsgRef = useRef<string>('');
   const lastUserTextRef = useRef<string>('');
@@ -286,87 +289,87 @@ export function PlaatChat() {
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
           data-dicht={chatCollapsed ? 'ja' : 'nee'}
-          className="axe-chatplaat axe-chatplaat--vast h-full flex flex-col rounded-xl overflow-hidden relative"
-          style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }}
+          className="axe-chatplaat axe-chatplaat--kaal h-full flex flex-col relative"
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={(e) => { void onDrop(e); }}
         >
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => setChatCollapsed(!chatCollapsed)}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChatCollapsed(!chatCollapsed); } }}
-            className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left cursor-pointer"
-            style={{ borderBottom: chatCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide" style={{ color: 'var(--accent-cyan)' }}>
-              {chatCollapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              AXE CHAT
-              {attachments.length > 0 && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
-                  {attachments.length} file{attachments.length > 1 ? 's' : ''}
-                </span>
-              )}
-              {/* De tellers stonden als losse pillen BOVEN de plaat, en dat is
-                  waarom er een rij zwevende doosjes tussen de scene en de chat
-                  hing. In de demo staan ze op dezelfde regel als de naam, ín de
-                  kop, gescheiden door een streepje in plaats van door een
-                  kader: het zijn tellers, geen knoppen. */}
-              <span className="axe-cpills" onClick={e => e.stopPropagation()}>
-                <MissionControlStrip />
-              </span>
-              {/* Waar je bent en of de verbinding staat. Dit stond boven de
-                  composer, waardoor die twee regels hoog was en op elke tab
-                  anders. Hier staat het bij de rest van de status, op één
-                  lijn. */}
-              {/* Waar AXE mee denkt. Hier en niet bij de knoppen rechts: het is
-                  status over dit gesprek, net als NL en Online ernaast -- alleen
-                  is deze aan te klikken. */}
+          {/* De kopregel, zoals het voorbeeld: links wie er praat, rechts drie
+              kale icoonknoppen. Geen vlak, geen lijn, geen kader -- de kop
+              zweeft boven het gesprek.
+
+              Wat hier WEG is: de tellers, NL/Online, de gespreks-chips en
+              "+New" stonden allemaal op deze ene regel. Dat is precies waarom
+              het er oud uitzag naast een voorbeeld met twee dingen links en
+              twee rechts. Ze zijn niet verdwenen -- ze staan onder de klok,
+              samen met de gesprekken, want dat is allemaal "welk gesprek kijk
+              je en hoe staat het ervoor". */}
+          <div className="axe-vak-kop">
+            <span className="axe-kop-links">
               <span onClick={e => e.stopPropagation()}>
                 <ChatModelKiezer />
               </span>
-              <span className="axe-cstat hidden lg:flex items-center gap-2.5">
-                <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
-                <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}>
-                  <Wifi size={10} />Online
-                </span>
-                {voice.apiKeyValid === true && (
-                  <span style={{ color: 'var(--success)' }}>API OK</span>
-                )}
+              <span className="axe-kop-streep" aria-hidden="true" />
+              {/* De tegenhanger van "UX Researcher" in het voorbeeld: in welk
+                  gesprek je zit. Dat is hier de titel, en "AXE CORE" zolang er
+                  nog geen gesprek is. */}
+              <span className="axe-kop-persona">
+                <Sparkles size={13} />
+                {voice.allConversations.find(c => c.id === voice.sessionId)?.title ?? 'AXE CORE'}
               </span>
             </span>
-            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-              {/* De gesprekken stonden op een eigen regel ONDER de kop, met een
-                  streep eronder -- twee regels chroom voordat het gesprek zelf
-                  begon. Ze horen op de kopregel: het is dezelfde informatie
-                  ("welk gesprek kijk je"), en de demo heeft daar één lijn. */}
-              {!chatCollapsed && voice.allConversations.length > 1 && (
-                <span className="axe-convs flex items-center gap-1 overflow-x-auto">
-                  {voice.allConversations.slice(0, 4).map(conv => (
-                    <button
-                      key={conv.id}
-                      onClick={() => voice.switchConversation(conv.id)}
-                      className="axe-conv flex-shrink-0 truncate max-w-[110px]"
-                      data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}
-                    >
-                      {conv.title}
-                    </button>
-                  ))}
-                </span>
-              )}
-              {!chatCollapsed && voice.allConversations.length > 0 && (
-                <button onClick={() => voice.loadAllConversations()} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
-                  <RotateCcw size={11} />
-                </button>
-              )}
-              {!chatCollapsed && (
-                <button onClick={() => voice.startNewConversation()} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
-                  <Plus size={9} /> New
-                </button>
-              )}
-            </div>
+
+            <span className="axe-kop-rechts">
+              <button onClick={() => setPaneelOpen(v => !v)} title="Gesprekken en status" aria-expanded={paneelOpen}>
+                <Clock size={15} />
+              </button>
+              <button onClick={() => navigate('/settings')} title="Instellingen">
+                <SlidersHorizontal size={15} />
+              </button>
+              {/* Inklappen blijft: zonder deze knop is er geen weg terug naar
+                  een volle pagina. In het voorbeeld staat hij niet, want daar
+                  is de composer het hele scherm. */}
+              <button onClick={() => setChatCollapsed(!chatCollapsed)} title={chatCollapsed ? 'Chat openen' : 'Chat inklappen'}>
+                {chatCollapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </button>
+            </span>
           </div>
+
+          {/* Achter de klok: de gesprekken en de status. Eén paneel in plaats
+              van vier dingen op de kopregel. */}
+          {paneelOpen && !chatCollapsed && (
+            <div className="axe-kop-paneel">
+              <span className="axe-cpills"><MissionControlStrip /></span>
+              <span className="axe-cstat">
+                <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
+                <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}><Wifi size={10} />Online</span>
+                {voice.apiKeyValid === true && <span style={{ color: 'var(--success)' }}>API OK</span>}
+                {attachments.length > 0 && (
+                  <span style={{ color: 'var(--accent-cyan)' }}>
+                    {attachments.length} file{attachments.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </span>
+              <span className="axe-convs">
+                {voice.allConversations.slice(0, 6).map(conv => (
+                  <button
+                    key={conv.id}
+                    onClick={() => voice.switchConversation(conv.id)}
+                    className="axe-conv"
+                    data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}
+                  >
+                    {conv.title}
+                  </button>
+                ))}
+              </span>
+              <button onClick={() => voice.loadAllConversations()} title="Verversen" className="axe-kop-mini">
+                <RotateCcw size={12} />
+              </button>
+              <button onClick={() => voice.startNewConversation()} title="Nieuw gesprek" className="axe-kop-mini">
+                <Plus size={12} />
+              </button>
+            </div>
+          )}
 
           {!chatCollapsed && (
             <>

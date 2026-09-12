@@ -34,9 +34,19 @@ import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 const STRAAL = 92;
 /** Maat van een tab-knop. */
 const TAB = 42;
-/** Over hoeveel graden de tabs verdeeld worden, en waar de eerste staat. */
+/**
+ * Over hoeveel graden de tabs verdeeld worden, en waar de eerste staat.
+ *
+ * 320 + 260 betekent: het gat loopt van 220 tot 320 graden, met het midden op
+ * 270 -- en 270 is LINKS (nul is boven, met de klok mee; zie radiaal.ts).
+ * Daar staat de driehoek. Stond eerder op 20 + 260, en dan viel het gat
+ * linksBOVEN en stond de driehoek los naast de ring.
+ *
+ * Dezelfde twee getallen staan in de conic-gradient van .axe-dok-ring. Ze
+ * horen gelijk te blijven: de boog is de achtergrond van deze tabs.
+ */
 const BOOG = 260;
-const START = 20;
+const START = 320;
 
 interface Tab {
   id: string;
@@ -126,10 +136,13 @@ export function RadiaalDok({ opDriehoek }: { opDriehoek?: () => void }) {
         );
       })}
 
-      {/* De cyane driehoek, links buiten de ring. Hij is geen tab -- daarom
-          staat hij in het gat van de boog en niet ertussen. Wat hij doet komt
-          van buiten (opDriehoek), zodat hij ergens op aangesloten kan worden
-          zonder dit bestand aan te raken. */}
+      {/* De cyane driehoek, IN het gat van de ring en op dezelfde straal als
+          de tabs -- dus even ver van het midden, maar in het stuk waar de boog
+          ontbreekt. Hij is geen tab, en dat is precies waarom hij daar staat
+          en niet ertussen.
+
+          Wat hij doet komt van buiten (opDriehoek), zodat hij ergens op
+          aangesloten kan worden zonder dit bestand aan te raken. */}
       <button
         type="button"
         className="axe-dok-driehoek"
@@ -138,7 +151,8 @@ export function RadiaalDok({ opDriehoek }: { opDriehoek?: () => void }) {
         tabIndex={open ? 0 : -1}
         onClick={() => { opDriehoek?.(); sluit(); }}
         style={{
-          transform: open ? 'translate(-124px, 0) scale(1)' : 'translate(0, 0) scale(0.4)',
+          // 270 graden op straal STRAAL is precies (-STRAAL, 0): links, op de ring.
+          transform: open ? `translate(${-STRAAL}px, 0) scale(1)` : 'translate(0, 0) scale(0.4)',
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
         }}

@@ -2905,8 +2905,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * De rand is één haarlijn en verder niets: geen gloed, geen ring. In het
  * voorbeeld is het vak donkerder dan de plaat eromheen, en dat verschil doet
  * het werk. */
+/* Rond aan ALLE vier de hoeken, en een rand rondom. Even had hij platte
+   bovenhoeken omdat de plaat erbovenop geplakt zat; die plaat heeft nu geen
+   doos meer, dus het vak staat weer los -- en dan hoort het een doos te zijn
+   en geen onderste helft van iets. */
 :root[data-look] .axe-vak {
-  border-radius: 22px;
+  border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: var(--axe-bar);
   padding: clamp(12px, 0.9vw, 18px) clamp(14px, 1vw, 20px) clamp(10px, 0.7vw, 14px);
@@ -3069,15 +3073,119 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * En het vak sluit bovenaan aan: platte bovenhoeken, en de bovenlijn weg
  * zodat er niet twee haarlijnen tegen elkaar liggen (die lezen als een dikke
  * grijze streep dwars door het blok). */
-:root[data-look] .axe-shell .axe-chatplaat--vast {
-  border-bottom-left-radius: 0 !important;
-  border-bottom-right-radius: 0 !important;
-  border-bottom: 0 !important;
+/* DE PLAAT HEEFT GEEN DOOS MEER.
+ *
+ * Dit was de fout van de vorige ronde: ik zette het nieuwe vak eronder en
+ * plakte de OUDE plaat er bovenop vast. Dan is de bovenkant oud en de
+ * onderkant nieuw, en dat is erger dan twee losse dozen -- het leest als
+ * halfaf.
+ *
+ * In het voorbeeld is er precies ÉÉN omlijnd vlak: het invoervak. De kop
+ * zweeft erboven en het gesprek staat er los boven, zonder rand, zonder
+ * achtergrond, zonder hoeken. Dus die haalt de plaat hier allemaal af.
+ *
+ * De klasse blijft .axe-chatplaat, want AxeShellChrome MEET dat element voor
+ * --axe-chat-onder en --axe-bol-vak. Alleen de doos is weg, niet het element. */
+:root[data-look] .axe-shell .axe-chatplaat--kaal {
+  background: none !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0 !important;
+  margin-bottom: 8px;
+  overflow: visible !important;
 }
-:root[data-look] .axe-vakcomposer .axe-vak {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  border-top: 0;
+
+/* De kopregel: twee dingen links, drie kale icoonknoppen rechts. */
+:root[data-look] .axe-kop-links,
+:root[data-look] .axe-kop-rechts {
+  display: flex;
+  align-items: center;
+  gap: clamp(7px, 0.6vw, 12px);
+  min-width: 0;
+}
+/* Het streepje tussen model en persona. Als element en niet als border op de
+   buur: ChatModelKiezer rendert zijn eigen knop en een border daarop zou met
+   zijn hover-stijl vechten. */
+:root[data-look] .axe-kop-streep {
+  width: 1px;
+  height: 15px;
+  flex: none;
+  background: rgba(255, 255, 255, 0.14);
+}
+:root[data-look] .axe-kop-persona {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+:root[data-look] .axe-kop-persona svg { flex: none; opacity: 0.7; }
+
+:root[data-look] .axe-kop-rechts button {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-muted) !important;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px !important;
+  display: grid;
+  place-items: center;
+  padding: 0 !important;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+:root[data-look] .axe-kop-rechts button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #E8ECF5 !important;
+}
+
+/* Het paneel achter de klok: gesprekken en status, op één rij die mag wrappen.
+   Hier staan de dingen die eerst de kopregel vulden. */
+:root[data-look] .axe-kop-paneel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(6px, 0.5vw, 12px);
+  padding: 8px 6px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+}
+:root[data-look] .axe-kop-paneel .axe-cstat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+:root[data-look] .axe-kop-paneel .axe-convs {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+:root[data-look] .axe-kop-mini {
+  background: none !important;
+  border: 0 !important;
+  color: var(--text-muted) !important;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px !important;
+  display: grid;
+  place-items: center;
+  padding: 0 !important;
+}
+:root[data-look] .axe-kop-mini:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #E8ECF5 !important;
 }
 /* De toverstaf is violet, zoals in het voorbeeld: het enige gekleurde ding in
    het vak, en dus het enige dat om aandacht vraagt naast versturen. */
@@ -3105,9 +3213,20 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  */
 :root[data-look] .axe-dok {
   position: fixed;
-  left: clamp(14px, 1.4vw, 30px);
-  bottom: calc(var(--axe-chat-onder, 120px) + 8px);
-  z-index: 60;
+  left: clamp(10px, 1vw, 26px);
+  /* Linksonder IN DE HOEK, en niet op --axe-chat-onder. Die maat hangt de dok
+     op aan de chatplaat, en dan staat hij halverwege het scherm in de linker
+     rail -- precies waar hij niet hoort. De ring is breder dan hij hoog lijkt,
+     dus het midden van de knop zit hoger dan deze waarde: die gaat over de
+     onderkant van het VAK, en dat vak is de hele opengeklapte ring. */
+  bottom: clamp(8px, 1vh, 20px);
+  /* 105: boven de rails (40-50) EN boven de navigatie (100), onder de echte
+     modals (120).
+     Dat laatste is geen smaak maar een hit-test: de nav-balk is een
+     scrollvlak dat van links naar rechts doorloopt, ook waar hij leeg is. Zijn
+     achtergrond is doorzichtig dus je ziet de ring er dwars door, maar de
+     klikken kwamen op de nav terecht en de tab linksonder deed niets. */
+  z-index: 105;
   pointer-events: none;   /* alleen de knoppen erin vangen klikken */
   display: grid;
   place-items: center;
@@ -3117,18 +3236,35 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 /* De ring: een schijf met een dikke rand. Doorschijnend zwart met blur, zodat
    de plaat eronder zichtbaar blijft -- een dekkende ring zou een gat in de
    plaat zijn. */
+/* DE RING IS NIET ROND: hij staat open aan de linkerkant, en in dat gat
+ * staat de driehoek.
+ *
+ * Een `border` op een cirkel kan dat niet -- die loopt altijd helemaal rond.
+ * Vandaar een conic-gradient voor de boog plus een mask voor het gat in het
+ * midden. De conic begint op 12 uur en loopt met de klok mee, precies dezelfde
+ * afspraak als radiaal.ts, dus de graden hier zijn dezelfde graden als daar.
+ *
+ * 320 graden + 260 graden boog = het gat loopt van 220 tot 320, met het
+ * midden op 270 -- en 270 is links. Daar zit de driehoek.
+ *
+ * Geen backdrop-filter: een mask over een backdrop-filter geeft in WebKit een
+ * zwart vlak in plaats van een doorkijkje. De boog is doorschijnend wit, dus
+ * de plaat eronder blijft zichtbaar zonder filter. */
 :root[data-look] .axe-dok-ring {
   position: absolute;
-  width: calc(2 * 92px + 42px);
-  height: calc(2 * 92px + 42px);
+  width: 230px;
+  height: 230px;
   border-radius: 999px;
-  border: 42px solid rgba(255, 255, 255, 0.045);
-  background: none;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 24px 50px -24px rgba(0, 0, 0, 0.9);
+  border: 0;
+  background: conic-gradient(
+    from 320deg,
+    rgba(255, 255, 255, 0.055) 0deg,
+    rgba(255, 255, 255, 0.055) 260deg,
+    transparent 260deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(circle at center, transparent 0 68px, #000 69px);
+  mask: radial-gradient(circle at center, transparent 0 68px, #000 69px);
   opacity: 0;
   transform: scale(0.55);
   transition: opacity 0.22s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
