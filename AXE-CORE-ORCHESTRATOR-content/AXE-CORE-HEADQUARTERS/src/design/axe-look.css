@@ -3293,6 +3293,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   background: #07080B;
   color-scheme: dark;
 }
+:root[data-look='glass'] .axe-mobiel > iframe {
+  background: #E6EEF6;
+  color-scheme: light;
+}
 /* De home-indicator: de enige weg terug, zoals op een echte telefoon. De
    knop is 34 hoog over de volle breedte zodat hij op schaal .69 nog te raken
    is; het streepje zelf is 134x5. */
@@ -3309,6 +3313,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   cursor: pointer;
   z-index: 4;
 }
+:root[data-look='glass'] .axe-mobiel__home {
+  background: linear-gradient(180deg, rgba(230, 238, 246, 0), rgba(230, 238, 246, 0.62));
+}
 .axe-mobiel__indicator {
   width: 134px;
   height: 5px;
@@ -3316,7 +3323,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   background: rgba(255, 255, 255, 0.55);
   transition: background var(--snel);
 }
+:root[data-look='glass'] .axe-mobiel__indicator { background: rgba(18, 21, 28, 0.32); }
 .axe-mobiel__home:hover .axe-mobiel__indicator { background: rgba(255, 255, 255, 0.9); }
+:root[data-look='glass'] .axe-mobiel__home:hover .axe-mobiel__indicator { background: rgba(18, 21, 28, 0.55); }
 
 .axe-beginscherm {
   position: absolute;

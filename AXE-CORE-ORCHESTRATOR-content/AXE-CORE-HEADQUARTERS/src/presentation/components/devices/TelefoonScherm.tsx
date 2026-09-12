@@ -130,7 +130,7 @@ function Beginscherm({ raster, onOpen, onAsk }: { raster: TelefoonApp[]; onOpen:
 }
 
 export function TelefoonScherm({ onApp }: { onApp?: (app: TelefoonApp | null) => void }) {
-  const [open, setOpen] = useState<TelefoonApp | null>(() => laadOpenApp(window.localStorage));
+  const [open, setOpen] = useState<TelefoonApp | null>(() => laadOpenApp(window.localStorage) ?? appMetId('mobile'));
   const klok = useKlok();
   const swipe = useRef<{ x: number; y: number } | null>(null);
 

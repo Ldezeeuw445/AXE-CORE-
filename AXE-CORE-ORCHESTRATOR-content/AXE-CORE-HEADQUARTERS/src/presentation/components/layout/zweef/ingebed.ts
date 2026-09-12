@@ -21,3 +21,18 @@ export function isIngebed(w: Venster | undefined = typeof window === 'undefined'
     return true;
   }
 }
+
+/**
+ * Of de schil TopNav, onderbalk en composer moet weglaten.
+ *
+ * Drie plekken, één regel: #/mobile is zelf het telefoonoppervlak; de
+ * Android-schil tekent haar eigen chroom; en in het iframe van de zwevende
+ * telefoon zou desktopchroom 80 procent van 393 px opeten. Zonder deze
+ * derde tak "werken alle tabs vanaf de telefoon" alleen op papier.
+ */
+export function schilZonderChroom(
+  pathname: string,
+  extra: { android?: boolean; ingebed?: boolean } = {},
+): boolean {
+  return pathname === '/mobile' || extra.android === true || extra.ingebed === true;
+}
