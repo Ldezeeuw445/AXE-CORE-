@@ -82,12 +82,17 @@ export function AppShell() {
   // TopNav, Sidebar, RightPanel, BottomBar and BottomNav, and let the page
   // itself have the whole viewport.
   const isMobile = useIsMobile();
+  // Op een telefoon is ELKE route een command-surface: de desktop-chrome
+  // (TopNav, Sidebar, RightPanel, PlaatChat, plaat-slots) gaat weg en de pagina
+  // krijgt het hele scherm, met de lade als navigatie. Zo is er nergens een
+  // desktop-balk of -composer in het klein, en ziet de telefoon eruit zoals de
+  // Android-shell (waar isAndroidShellRuntime dit hoe dan ook aanzet). `/mobile`
+  // en `/lock` blijven het ook op een breed scherm, voor preview/dev.
   const mobileCommandSurface =
-    location.pathname === '/mobile' || location.pathname === '/lock' || isAndroidShellRuntime();
-  // Op een telefoon (smal scherm of de Android-shell) is de nav altijd de lade
-  // van links — nooit óók de onderbalk. Anders zag je op /mobile de lade en op
-  // andere tabs de onderbalk: twee soorten navigatie door elkaar.
-  const mobileNav = isMobile || mobileCommandSurface;
+    isMobile || isAndroidShellRuntime()
+    || location.pathname === '/mobile' || location.pathname === '/lock';
+  // De nav is dan altijd de lade; de horizontale onderbalk is alleen desktop.
+  const mobileNav = mobileCommandSurface;
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -156,7 +161,18 @@ export function AppShell() {
               opschrijven, niet per ongeluk krijgen. */}
           <ErrorBoundary key={location.pathname} fallback={<PageError />}>
             <Suspense fallback={<PageLoading />}>
-              <div className="flex-1 min-h-0 flex flex-col">
+              {/* Op de telefoon zweeft de hamburger van de lade linksboven. De
+                  mobiele home en het lock screen houden daar zelf rekening mee;
+                  de overige pagina's krijgen hier bovenruimte zodat de knop hun
+                  kop (titel/Refresh) niet afdekt. */}
+              <div
+                className="flex-1 min-h-0 flex flex-col"
+                style={
+                  mobileCommandSurface && location.pathname !== '/mobile' && location.pathname !== '/lock'
+                    ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 52px)' }
+                    : undefined
+                }
+              >
                 <Outlet />
               </div>
             </Suspense>

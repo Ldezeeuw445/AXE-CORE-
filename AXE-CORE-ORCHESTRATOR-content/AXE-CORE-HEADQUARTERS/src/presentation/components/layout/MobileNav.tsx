@@ -72,9 +72,14 @@ export function MobileNav() {
     };
   }, []);
 
-  const go = (path: string) => { navigate(path); setOpen(false); };
-  const isActive = (path: string) =>
-    location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
+  // Home (`/`) is op de telefoon leeg — de mobiele home is `/mobile`. Stuur de
+  // "Home"-regel daarheen, zodat de lade nooit op een leeg scherm uitkomt.
+  const go = (path: string) => { navigate(path === '/' ? '/mobile' : path); setOpen(false); };
+  const isActive = (path: string) => {
+    const here = location.pathname;
+    if (path === '/') return here === '/mobile' || here === '/';
+    return here === path || here.startsWith(path);
+  };
 
   if (typeof document === 'undefined') return null;
   // Portal naar body: buiten .axe-shell, dus de shell-regel die elke directe
