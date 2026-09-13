@@ -266,6 +266,9 @@ function NavTile({
       title={item.label}
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
+      // Een doel voor de zwevende bol: meldt iets op deze tab terwijl je er
+      // niet bent, dan vliegt hij naar dit icoon (shared/axeActiviteit).
+      data-axe-doel={item.path}
       className="flex items-center justify-center rounded-[16px] transition-all flex-shrink-0 active:scale-95"
       style={{
         width: size,

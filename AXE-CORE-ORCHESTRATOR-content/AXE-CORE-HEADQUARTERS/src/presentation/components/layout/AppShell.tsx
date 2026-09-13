@@ -25,6 +25,8 @@ import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFlo
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
 import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
+import { ZwevendeBol } from '@/presentation/components/layout/zweef/ZwevendeBol';
+import { wisselBol } from '@/presentation/components/layout/zweef/bolZichtbaar';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -250,23 +252,18 @@ export function AppShell() {
         />
       )}
 
-      {/* De zwevende iPhone, op elke pagina met plaat. Het telefoon-icoon in het
-          dok hieronder zet hem aan en uit. */}
+      {/* De zwevende iPhone en de zwevende bol, op elke pagina met plaat. Het
+          telefoon-icoon en de cyaan driehoek in het dok hieronder zetten ze aan
+          en uit. */}
       {!mobileCommandSurface && opPlaat && (
         <ZweefLaag>
           <ZwevendeTelefoon />
+          <ZwevendeBol />
         </ZweefLaag>
       )}
 
       {!mobileCommandSurface && opPlaat && (
-        <RadiaalDok
-          opHoek={() => {
-            setChatDicht(false);
-            requestAnimationFrame(() => {
-              document.querySelector<HTMLTextAreaElement>('.axe-vak-invoer')?.focus();
-            });
-          }}
-        />
+        <RadiaalDok opHoek={wisselBol} hoekLabel="AXE Core" />
       )}
 
       {/* De oude onderbalk alleen nog zonder plaat. Met plaat levert PlaatChat

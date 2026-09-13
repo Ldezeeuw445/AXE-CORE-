@@ -5763,3 +5763,41 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   :root[data-look='black'] .axe-shell .widget-card:hover,
   :root[data-look='black'] .axe-shell .axe-surface:hover { transform: none; }
 }
+
+/* ── De vrije bol: overal, zonder HUD, en hij vliegt uit ──────────────────
+   Zie ZwevendeBol.tsx. De ring van RAND px rond de bol is de greep; het
+   canvas erin draai je. */
+.axe-bol-vrij__greep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  cursor: grab;
+}
+.axe-zwever--sleept .axe-bol-vrij__greep { cursor: grabbing; }
+.axe-bol-vrij__bol { transition: opacity 0.5s ease, transform 0.5s ease; }
+/* Uiteen: de bol wordt zwak terwijl zijn deeltjes onderweg zijn. */
+.axe-bol-vrij__bol--uiteen { opacity: 0.18; transform: scale(0.86); }
+
+.axe-bolvlucht {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.axe-bolvlucht__canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.axe-bolvlucht__label {
+  position: absolute;
+  max-width: 420px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font: 500 11px/1.2 var(--mono);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.axe-bolvlucht__label--aan { opacity: 1; transform: none; }
+.axe-bolvlucht__wie { opacity: 0.6; margin-right: 4px; }

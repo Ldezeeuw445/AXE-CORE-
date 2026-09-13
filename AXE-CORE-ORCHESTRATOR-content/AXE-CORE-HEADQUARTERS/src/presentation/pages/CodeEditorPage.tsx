@@ -41,6 +41,7 @@ import {
 } from '@/presentation/components/axe-core/CodeStudioExtras';
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
+import { meldActiviteit } from '@/shared/axeActiviteit';
 
 /**
  * De drie motoren waar dit paneel een taak aan kan geven, met dezelfde namen
@@ -890,6 +891,10 @@ export default function CodeEditorPage() {
     setAgentInput('');
     setAgentBusy(true);
     setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
+    meldActiviteit({
+      doelen: ['editor', '/code-editor'],
+      label: `${agentEngine === 'native' ? 'AXE Native' : agentEngine === 'openhands' ? 'OpenHands' : MOTOR_LABEL[agentEngine] ?? agentEngine} werkt in ${claudeRepo || 'de repo'}: ${instruction.slice(0, 48)}`,
+    });
 
     if (agentEngine === 'openhands') {
       setAgentMessages(prev => [...prev, { role: 'status', text: 'Sending task to OpenHands…' }]);
@@ -1034,6 +1039,7 @@ export default function CodeEditorPage() {
   const acceptPatch = useCallback(async (msgIdx: number, patchId: string) => {
     const patch = agentMessages[msgIdx]?.patches?.find(p => p.id === patchId);
     if (!patch) return;
+    meldActiviteit({ doelen: ['editor', '/code-editor'], label: `past ${patch.file.split('/').pop()} aan`, kleur: '#34d399' });
     const inMemoryTab = openTabs.find(t => t.path === patch.file);
     if (inMemoryTab) {
       const next = applyPatch(inMemoryTab.content, patch);
@@ -1416,7 +1422,7 @@ export default function CodeEditorPage() {
                  de schil een verborgen zijlade (position: fixed, buiten beeld).
                  Als aside viel deze kolom uit het rooster, schoof de editor in
                  het 220px-vak van de bestanden en bleef rechts een lege kolom. */
-              <section className="axe-studio-kaart axe-studio-bestanden">
+              <section className="axe-studio-kaart axe-studio-bestanden" data-axe-doel="bestanden">
                 <div className="axe-studio-kop">
                   <label className="axe-studio-repo" title="In welke repo je werkt — bestanden én code-agent">
                     <GitBranch size={11} />
@@ -1497,7 +1503,7 @@ export default function CodeEditorPage() {
               </section>
             )}
 
-            <section className="axe-studio-kaart axe-studio-editor">
+            <section className="axe-studio-kaart axe-studio-editor" data-axe-doel="editor">
               <div className="axe-studio-tabs">
                 {openTabs.map(tab => {
                   const isActive = tab.path === activeTabPath || tab.path === splitTabPath;
@@ -1690,7 +1696,7 @@ export default function CodeEditorPage() {
                   </section>
                 )}
               </div>
-              <div className="axe-studio-term">
+              <div className="axe-studio-term" data-axe-doel="terminal">
                 <button type="button" className="axe-studio-termkop" onClick={() => setShowTerminal(v => !v)}
                   title={showTerminal ? 'Fold terminal' : 'Open terminal'}>
                   <span>Terminal</span>

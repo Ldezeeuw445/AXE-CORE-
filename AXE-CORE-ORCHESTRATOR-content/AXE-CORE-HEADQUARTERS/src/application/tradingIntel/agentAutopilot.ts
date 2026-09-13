@@ -47,6 +47,7 @@ import { magZelftestDraaien, volgendeZelftestStempel } from '@/domain/tradingInt
 import type { CycleAccountResult } from '@/domain/tradingIntel/cycleJournal';
 import { refreshTradingAgents } from '@/infrastructure/gateways/axeCoreApiService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
+import { meldActiviteit } from '@/shared/axeActiviteit';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
 const KEY_INTERVAL_MIN = 'axe_trading_autopilot_interval_min';
@@ -1095,6 +1096,7 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
         : 'Rounds disagreed — each ranked on its own record.');
 
     await note('execution', result ? 'ok' : 'empty', result || 'No account acted');
+    if (result) meldActiviteit({ doelen: ['trading', '/trading-intel'], label: `AXE Algo · ${symbol}: ${result.slice(0, 56)}`, kleur: '#fbbf24' });
     journal = { ...journal, endedAt: new Date().toISOString() };
     await saveCycleRecord(journal).catch(() => undefined);
     return `${symbol}: ${strategyLine}${deskLine ? ` · ${deskLine}` : ''} · ${result}`;
