@@ -150,7 +150,14 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
            vlak dat de terminal anders liet ogen dan de agent-chat ernaast.
            Zonder plaat blijft hij zijn eigen zwart houden. */
         background:          document.documentElement.dataset.look ? '#00000000' : '#02080a',
-        foreground:          '#a5f3fc',
+        /* Neutraal lichtgrijs en niet cyaan.
+         *
+         * Het stond op #a5f3fc: alle gewone uitvoer had een blauwe zweem. Dat
+         * las als "AXE-scherm" in plaats van als een terminal, en het vecht met
+         * de cyane accenten die wél iets betekenen -- als álles cyaan is, zegt
+         * cyaan niets meer. De kleuren die het werk doen (groen voor gelukt,
+         * geel voor let op, rood voor stuk) staan hieronder en blijven. */
+        foreground:          '#C9CDD6',
         cursor:              'var(--accent-cyan)',
         cursorAccent:        'var(--bg-base)',
         selectionBackground: 'var(--tint-hi)',

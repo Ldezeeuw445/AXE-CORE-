@@ -3508,17 +3508,18 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   .axe-termraster { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Het venster. Zelfde materiaal als een composer -- het is hetzelfde soort
-   ding: een vlak waarop je iets intypt. */
+/* Het venster. LETTERLIJK hetzelfde materiaal als de composer -- dezelfde
+   tokens, niet een eigen bijna-zwart ernaast. Het is ook hetzelfde soort ding:
+   een vlak waarop je iets intypt. */
 .axe-term {
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--axe-vak-hoek, 24px);
   border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
-  background: #0B0B0E;
+  background: var(--axe-vak-vlak, #0E0E12);
   box-shadow: var(--axe-vak-zweef, 0 16px 30px -14px rgba(0, 0, 0, 0.85));
 }
 /* Vol beeld: over de hele breedte van het raster en hoger, zodat er echt iets
@@ -3529,28 +3530,33 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   grid-row: span 2;
 }
 
+/* De titelbalk is GEEN aparte grijze strook meer.
+ *
+ * Hij was #202024 met een zwarte lijn eronder -- een macOS-balk nagedaan op een
+ * vlak dat verder niets van macOS heeft. In het voorbeeld heeft de balk dezelfde
+ * kleur als de terminal eronder; wat hem scheidt is één haarlijn. Daardoor is
+ * het één vlak met lucht bovenin, precies zoals de composer één vlak is met de
+ * gereedschapsrij onderin. */
 .axe-term-kop {
   position: relative;
   flex: 0 0 auto;
-  height: 30px;
+  height: 42px;
   display: flex;
   align-items: center;
-  padding: 0 10px;
-  background: #202024;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  padding: 0 18px;
+  background: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
 }
 .axe-term-lampen {
   display: flex;
   align-items: center;
-  gap: 6px;
-  /* Boven de titel: de titel is gecentreerd over de VOLLE breedte (zo doet
-     macOS het ook), dus hij loopt onder de lampen door. */
+  gap: 8px;
   position: relative;
   z-index: 1;
 }
 .axe-term-lamp {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
   border: 0;
   padding: 0;
@@ -3564,20 +3570,25 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-term-lamp--geel  { background: #FEBC2E; }
 .axe-term-lamp--groen { background: #28C840; }
 
-/* De titel over de volle breedte en gecentreerd, met de lampen eroverheen.
-   Als absolute laag en niet als flex-kind: met flex staat hij gecentreerd
-   tussen de lampen en de rechterrand, en dus niet in het midden van het
-   venster. */
+/* De naam staat RECHTS en zacht, niet gecentreerd en helder.
+ *
+ * In het voorbeeld is de balk leeg: alleen de drie lampen. Dat zou hier
+ * betekenen dat acht shells er identiek uitzien, en dat zijn acht kansen om
+ * het verkeerde commando op de verkeerde machine te plakken -- de reden dat
+ * die naam er ooit bij kwam.
+ *
+ * Rechts en gedempt is het compromis dat allebei haalt: de linkerkant leest
+ * als de lege balk uit het voorbeeld, en de naam is er als je hem zoekt. */
 .axe-term-titel {
-  position: absolute;
-  inset: 0;
+  margin-left: auto;
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 0 78px;
-  font-size: 11px;
-  color: #C8CBD2;
+  min-width: 0;
+  padding-left: 16px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  opacity: 0.75;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3601,9 +3612,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-term-stip[data-stand='aan']  { background: var(--m-happened); }
 .axe-term-stip[data-stand='stuk'] { background: var(--m-broken); }
 
+/* Ruimte om de tekst. In het voorbeeld begint de eerste regel niet tegen de
+   rand maar met lucht eromheen -- dat is wat een terminal rustig maakt, en het
+   is dezelfde binnenruimte die de composer heeft. */
+.axe-term .xterm,
+.axe-term .xterm-viewport,
+.axe-term .xterm-screen {
+  padding-left: 0;
+}
+.axe-term > .axe-termvlak {
+  padding: 12px 18px 4px;
+}
+
 .axe-term-melding {
   flex: 0 0 auto;
-  padding: 4px 10px;
+  padding: 4px 18px;
   font-size: 9px;
   color: var(--text-muted);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
@@ -3614,6 +3637,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    eronder zit -- een greep zonder woord is een gokje. */
 .axe-term-greep {
   flex: 0 0 auto;
+  border-radius: 0 0 var(--axe-vak-hoek, 24px) var(--axe-vak-hoek, 24px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3642,6 +3666,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 .axe-term-hulp {
   flex: 0 0 auto;
+  border-radius: 0 0 var(--axe-vak-hoek, 24px) var(--axe-vak-hoek, 24px);
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -3656,6 +3681,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 /* Een leeg vak: hetzelfde venster, maar gestippeld en zonder inhoud. */
 .axe-term--leeg {
   align-items: center;
+  border-radius: var(--axe-vak-hoek, 24px);
   justify-content: center;
   gap: 6px;
   border-style: dashed;

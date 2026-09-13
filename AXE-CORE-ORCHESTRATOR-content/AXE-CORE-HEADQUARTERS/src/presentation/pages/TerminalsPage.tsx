@@ -290,7 +290,9 @@ function MachinePaneel({
             wsBasis={host.wsUrl}
             ref={termRef}
             onConnectionChange={setVerbonden}
-            className="flex-1 min-h-0"
+            // axe-termvlak geeft de binnenruimte: in het voorbeeld begint de
+            // eerste regel niet tegen de rand. Zie design/axe-look.css.
+            className="axe-termvlak flex-1 min-h-0"
           />
 
           {!verbonden && (
