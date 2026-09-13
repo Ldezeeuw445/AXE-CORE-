@@ -13,6 +13,7 @@ import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } fr
 import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { PROVIDERS, defaultOllamaSlot, buildStableChatCascade, type KeySlot as ProviderKeySlot } from '@/domain/providers';
+import { zonderAbonnement } from '@/domain/abonnementChat';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getTradingModelPref, saveTradingModelPref, type TradingModelPref } from '@/infrastructure/persistence/tradingModelService';
 import { getTradingSetups, saveTradingSetup, deleteTradingSetup, type TradingSetup } from '@/application/tradingIntel/tradingSetupService';
@@ -440,11 +441,11 @@ export function useTradingDeskState() {
     }
 
     const st = useVoiceStore.getState();
-    const cascade = buildStableChatCascade(allSlots, {
+    const cascade = zonderAbonnement(buildStableChatCascade(allSlots, {
       primary: chosen ?? st.primarySlot,
       fallback1: st.fallback1Slot,
       fallback2: st.fallback2Slot,
-    });
+    }));
     if (!cascade.length) return undefined;
     return buildCallLlmFromSlots(cascade, (s, msgs) => callProvider(s as ProviderKeySlot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
   }, []);

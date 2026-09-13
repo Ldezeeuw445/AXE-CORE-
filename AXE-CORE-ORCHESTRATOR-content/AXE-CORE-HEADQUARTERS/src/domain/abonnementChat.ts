@@ -148,6 +148,26 @@ export function bouwPrompt(berichten: ChatBericht[]): string {
  * willekeurige repo te kiezen: waar deze chat draait bepaalt welke code hij
  * leest, en dat mag nooit een gok zijn.
  */
+/**
+ * Trading draait nooit op een abonnement.
+ *
+ * Gemeten 13 september op de Mac mini: de autopilot startte zes `codex exec`-
+ * processen tegelijk, één per rol van de research-desk (Market Analyst, Bear
+ * Researcher, Trader, Portfolio Manager ...), elke cyclus opnieuw. Binnen een
+ * uur zei Codex "You've hit your usage limit ... try again at 10:36 PM" -- en
+ * toen was er ook voor de chat en de code-editor niets meer over.
+ *
+ * Een abonnement is voor het werk dat Luka zelf doet. Een lus die uit zichzelf
+ * elke cyclus draait hoort op een provider die daarvoor bedoeld is; de cascade
+ * eindigt op Ollama, dus er blijft altijd iets over.
+ *
+ * Een regel en geen instelling, om dezelfde reden als ABONNEMENT_MODUS: een
+ * schakelaar staat ooit weer aan, en dan merk je het pas aan de limiet.
+ */
+export function zonderAbonnement<T extends { provider?: string }>(slots: readonly T[]): T[] {
+  return slots.filter(s => s.provider !== ABONNEMENT_PROVIDER);
+}
+
 export function kiesRepo(
   voorkeur: string | null | undefined,
   repos: Record<string, { runnable: boolean }>,

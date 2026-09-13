@@ -12,6 +12,7 @@
  */
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { buildStableChatCascade, defaultOllamaSlot, PROVIDERS, type KeySlot } from '@/domain/providers';
+import { zonderAbonnement } from '@/domain/abonnementChat';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { ThinkingTrace, AgentLearningStats } from '@/domain/tradingIntel/botTypes';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
@@ -143,20 +144,20 @@ export interface SendTradingChatInput {
  * thinking" — which is exactly what Luka asked for.
  */
 export function buildResearchCascade(): KeySlot[] {
-  return buildStableChatCascade(collectConfiguredSlots(), {
+  return zonderAbonnement(buildStableChatCascade(collectConfiguredSlots(), {
     primary: readPrimarySlot(),
     fallback1: readStoredSlot('axe_slot_fallback1'),
     fallback2: readStoredSlot('axe_slot_fallback2'),
-  });
+  }));
 }
 
 export async function sendTradingChatMessage(input: SendTradingChatInput): Promise<string> {
   const allSlots = collectConfiguredSlots();
-  const cascade = buildStableChatCascade(allSlots, {
+  const cascade = zonderAbonnement(buildStableChatCascade(allSlots, {
     primary: readPrimarySlot(),
     fallback1: readStoredSlot('axe_slot_fallback1'),
     fallback2: readStoredSlot('axe_slot_fallback2'),
-  });
+  }));
   if (!cascade.length) {
     throw new Error('No ★ Primary provider configured — set one in Settings first.');
   }
