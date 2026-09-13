@@ -87,8 +87,12 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const WORKSPACE_DEFS = {
   'AXE Core': {
     envKey: 'AXE_WS_AXE_CORE',
-    fallback: '/Volumes/EagetSSD/AXE-CORE-/.kilo/worktrees/unequaled-louse'
-            + '/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS',
+    // Was the kilo worktree on the SSD. That one was drained on 2026-09-02 and
+    // still sits on trading-desk-aug-25-26; the live checkout has been
+    // ~/AXE-CORE- on orchestrator since 2026-09-03. Measured 2026-09-13: a
+    // system.info from the app answered with the kilo root and the old branch,
+    // so every computer-use call on the Mac Mini read a tree nobody edits.
+    fallback: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS',
     protected: ['orchestrator', 'main'],
   },
   'AXE Companion': {
