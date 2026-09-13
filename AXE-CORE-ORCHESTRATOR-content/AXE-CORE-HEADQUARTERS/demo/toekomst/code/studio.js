@@ -138,12 +138,36 @@
       <div class="deskframe__scherm">${binnen}</div>
     </div>`;
 
+  CODE.zetTermPlek = () => {
+    const term = document.getElementById('termvak');
+    const studio = document.querySelector('.studio');
+    if (!term || !studio) return;
+    const stand = studio.dataset.stand;
+    const host = stand === 'canvas'
+      ? document.querySelector('.artboard')
+      : stand === 'preview'
+        ? document.querySelector('.previewvak > .kaart')
+        : document.querySelector('.editor');
+    if (host && term.parentElement !== host) host.appendChild(term);
+  };
+
+  CODE.zetTerm = (aan) => {
+    const studio = document.querySelector('.studio');
+    if (!studio) return;
+    studio.dataset.term = aan ? 'aan' : 'uit';
+    document.querySelectorAll('[data-term-klap].knop').forEach((b) => {
+      b.textContent = aan ? 'Fold' : 'Open';
+    });
+    requestAnimationFrame(() => { CODE.pasSchaal(); requestAnimationFrame(CODE.pasSchaal); });
+  };
+
   CODE.zetStand = (stand) => {
     const studio = document.querySelector('.studio');
     if (!studio) return;
     studio.dataset.stand = stand;
     document.body.dataset.studioStand = stand;
     document.querySelectorAll('.standen button').forEach((b) => b.classList.toggle('aan', b.dataset.stand === stand));
+    CODE.zetTermPlek();
     requestAnimationFrame(() => {
       CODE.pasSchaal();
       requestAnimationFrame(CODE.pasSchaal);
@@ -491,9 +515,17 @@
     document.querySelectorAll('[data-paneel]').forEach((b) => {
       b.addEventListener('click', () => {
         const naam = b.dataset.paneel;
+        if (naam === 'term') {
+          CODE.zetTerm(studio.dataset.term !== 'aan');
+          return;
+        }
         studio.dataset[naam] = studio.dataset[naam] === 'aan' ? 'uit' : 'aan';
         requestAnimationFrame(() => { CODE.pasSchaal(); requestAnimationFrame(CODE.pasSchaal); });
       });
+    });
+    document.getElementById('termvak')?.addEventListener('click', (e) => {
+      if (!e.target.closest('[data-term-klap]')) return;
+      CODE.zetTerm(studio.dataset.term !== 'aan');
     });
     document.querySelectorAll('[data-file]').forEach((rij) => {
       rij.addEventListener('click', () => CODE.zetBron(rij.dataset.file));
@@ -515,10 +547,8 @@
       });
     });
     document.querySelector('[data-run]')?.addEventListener('click', () => {
-      const studio = document.querySelector('.studio');
-      if (studio) studio.dataset.term = 'aan';
+      CODE.zetTerm(true);
       CODE.termRegel('npx vitest run --reporter=dot', '✓ 1025 passed · 0 failed');
-      requestAnimationFrame(() => { CODE.pasSchaal(); requestAnimationFrame(CODE.pasSchaal); });
     });
     document.querySelector('[data-ask]')?.addEventListener('click', () => {
       const inp = document.querySelector('.band .composer input.tekst');
@@ -528,8 +558,7 @@
     document.querySelector('[data-term-stuur]')?.addEventListener('click', () => {
       const inp = document.getElementById('term-in');
       if (!inp || !inp.value.trim()) return;
-      const studio = document.querySelector('.studio');
-      if (studio) studio.dataset.term = 'aan';
+      CODE.zetTerm(true);
       CODE.termRegel(inp.value.trim(), 'ok');
       inp.value = '';
     });

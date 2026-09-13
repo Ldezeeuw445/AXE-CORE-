@@ -19,10 +19,11 @@ Eén tab, drie **standen**. Geen vier producten naast elkaar.
 | **Canvas** | Figma + FlutterFlow | lagenboom, artboard, inspecteur; sleep is een diff |
 | **Preview** | Replit preview + Figma device frames | dezelfde route op telefoon, tablet en desktop |
 
-Wisselen is één segment in de werkbalk. **Terminal** zit onderin de studio —
-zelfde ritme als Cursor/Replit: files, editor, preview, en daaronder de shell
-van *deze* worktree. Term in de balk klapt hem in. Run opent hem. De tab
-`/terminals` blijft de plek voor machines (Mac Mini, VPS).
+Wisselen is één segment in de werkbalk. **Terminal** zit onderin het middelste
+vak (de editor; op Canvas het artboard; op Preview het device-vak) — Cursor:
+files en preview blijven hun hoogte, de shell klapt onder de bron in en uit.
+**Term** in de balk, of **Fold** op de kop, of de smalle balk als hij dicht is.
+Run opent hem. `/terminals` blijft de tab voor machines.
 
 **Code-agent** krijgt geen hoek naast de composer. Vragen gaat via de ene
 AXE-composer (`Ask anything…` / Ask agent · ⌘K). Welke motor (Native / Hands /

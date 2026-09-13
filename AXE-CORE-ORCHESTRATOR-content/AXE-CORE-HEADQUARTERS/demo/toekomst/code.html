@@ -114,6 +114,21 @@
               <button class="knop" data-reject>Reject</button>
             </div>
           </div>
+          <div class="termvak terminal" id="termvak">
+            <div class="paneelkop" data-term-klap title="Fold terminal">
+              <span class="t-titel">Terminal</span>
+              <span class="chip c-ok"><i class="stip"></i> zsh</span>
+              <span class="chip">this worktree</span>
+              <span class="rechts"><span class="chip">local</span><button type="button" class="knop" data-term-klap>Fold</button></span>
+            </div>
+            <div class="body" id="term-body">
+              <div><span class="prompt">❯</span> npm run dev</div>
+              <div><span class="ok">VITE</span> v5.4 ready in <span class="c-warn">412 ms</span></div>
+              <div>  ➜ Local: <span class="c-accent">http://localhost:5199/</span></div>
+              <div><span class="ok">✓</span> 1025 passed · 0 failed</div>
+            </div>
+            <div class="termregel"><span class="c-accent">❯</span><input class="tekst" id="term-in" placeholder="Run a command" spellcheck="false" aria-label="Run a command"><button class="knop stuur" data-term-stuur data-ic="pijl"></button></div>
+          </div>
         </section>
 
         <section class="kaart kaart--plaat voorbeeld">
@@ -221,22 +236,6 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="termvak kaart terminal">
-        <div class="paneelkop">
-          <span class="t-titel">Terminal</span>
-          <span class="chip c-ok"><i class="stip"></i> zsh</span>
-          <span class="chip">this worktree</span>
-          <span class="rechts"><span class="chip">local</span></span>
-        </div>
-        <div class="body" id="term-body">
-          <div><span class="prompt">❯</span> npm run dev</div>
-          <div><span class="ok">VITE</span> v5.4 ready in <span class="c-warn">412 ms</span></div>
-          <div>  ➜ Local: <span class="c-accent">http://localhost:5199/</span></div>
-          <div><span class="ok">✓</span> 1025 passed · 0 failed</div>
-        </div>
-        <div class="termregel"><span class="c-accent">❯</span><input class="tekst" id="term-in" placeholder="Run a command" spellcheck="false" aria-label="Run a command"><button class="knop stuur" data-term-stuur data-ic="pijl"></button></div>
       </div>
     </div>
   </main>

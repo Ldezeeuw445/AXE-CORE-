@@ -3,14 +3,11 @@
 
 .werkblad {
   display: grid;
-  grid-template-rows: 36px minmax(0, 1fr) 148px;
+  grid-template-rows: 36px minmax(0, 1fr);
   gap: 10px;
   height: 100%;
   padding: 8px 0;
   min-height: 0;
-}
-.studio[data-term='uit'] {
-  grid-template-rows: 36px minmax(0, 1fr);
 }
 .werkbalk { grid-row: 1; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: var(--r-kaart); }
 .werkbalk .pad { display: flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono); color: var(--ink-2); }
@@ -54,6 +51,8 @@
 .boom .in1 { padding-left: 18px; } .boom .in2 { padding-left: 30px; } .boom .in3 { padding-left: 42px; }
 
 .kolommen > .editor { grid-template-rows: auto auto minmax(0, 1fr); }
+.studio[data-term='aan'] .editor:has(.termvak) { grid-template-rows: auto auto minmax(0, 1fr) 148px; }
+.studio[data-term='uit'] .editor:has(.termvak) { grid-template-rows: auto auto minmax(0, 1fr) 28px; }
 .editor .tabs { display: flex; align-items: center; height: 34px; padding: 0 6px; gap: 2px; box-shadow: 0 -1px 0 rgba(255,255,255,.05) inset; }
 .editor .tabs .bestandtab { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 8px; font: 400 11px/1 var(--mono); color: var(--ink-3); cursor: pointer; }
 .editor .tabs .bestandtab svg.ic { width: 11px; height: 11px; }
@@ -132,10 +131,16 @@
 }
 .artboard .kader { position: absolute; left: 50%; top: 52px; transform: translateX(-50%) scale(var(--schaal, .42)); transform-origin: top center; }
 .artboard .kader .toestel { transform: none; }
+.studio[data-term='aan'] .artboard:has(.termvak) .kader { bottom: 148px; }
+.studio[data-term='uit'] .artboard:has(.termvak) .kader { bottom: 28px; }
+.studio[data-term='aan'] .artboard:has(.termvak) { grid-template-rows: auto minmax(0, 1fr) 148px; }
+.studio[data-term='uit'] .artboard:has(.termvak) { grid-template-rows: auto minmax(0, 1fr) 28px; }
 
 /* ── Preview-stand: drie toestellen ───────────────────────────────────── */
 .previewvak { display: none; min-height: 0; height: 100%; grid-row: 2; }
 .previewvak .kaart { height: 100%; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.studio[data-term='aan'] .previewvak .kaart:has(.termvak) { grid-template-rows: auto minmax(0, 1fr) 148px; }
+.studio[data-term='uit'] .previewvak .kaart:has(.termvak) { grid-template-rows: auto minmax(0, 1fr) 28px; }
 .rij-toestellen {
   display: flex; align-items: flex-end; justify-content: center; gap: 36px;
   padding: 28px 24px 32px; overflow: hidden; min-height: 0; height: 100%;
@@ -184,17 +189,23 @@
 .studio[data-preview='aan'] .werkbalk .knop[data-paneel='preview'],
 .studio[data-term='aan'] .werkbalk .knop[data-paneel='term'] { color: var(--accent); }
 
-/* Terminal hoort bij de studio, onder files/editor/preview — Cursor/Replit.
-   Niet in de hoeken naast de composer: die zijn van Home. /terminals blijft
-   de tab voor machines. Dit vak is de shell van deze worktree. */
+/* Terminal in het middelste vak — onder de bron, in- en uitklapbaar.
+   Files en preview blijven hun hoogte. /terminals blijft de machine-tab. */
 .termvak {
-  grid-row: 3;
   min-height: 0;
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) 32px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.07) inset;
 }
-.studio[data-term='uit'] .termvak { display: none; }
+.studio[data-term='uit'] .termvak {
+  grid-template-rows: 28px;
+  height: 28px;
+}
+.studio[data-term='uit'] .termvak .body,
+.studio[data-term='uit'] .termvak .termregel { display: none; }
+.studio[data-term='uit'] .termvak .paneelkop [data-term-klap].knop { display: none; }
+.termvak .paneelkop[data-term-klap] { cursor: pointer; }
 .termregel {
   display: flex; align-items: center; gap: 8px; padding: 0 12px;
   box-shadow: 0 1px 0 rgba(255,255,255,.06) inset;
