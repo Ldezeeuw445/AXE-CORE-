@@ -4087,3 +4087,186 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-cron-knoppen button:focus-visible { opacity: 1; }
 .axe-cron-knoppen button:hover { color: var(--text-primary); }
 .axe-cron-knoppen button:disabled { opacity: 0.3; }
+
+/* Geen tweede vlak in de terminalkaart.
+ *
+ * xterm tekent zijn eigen achtergrond op meerdere lagen (.xterm-screen, de
+ * viewport en de canvassen). Alleen de theme-kleur op doorzichtig zetten is
+ * niet genoeg: de viewport houdt zijn eigen vulling en dat is precies het
+ * zwarte rechthoekje in de matzwarte kaart. De kaart levert de vulling. */
+.axe-term .xterm,
+.axe-term .xterm-viewport,
+.axe-term .xterm-screen,
+.axe-term .xterm .xterm-viewport {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* ══ De weekweergave ══════════════════════════════════════════════════════
+ *
+ * Zeven kolommen, de uren erlangs. Eén raster met een vaste celhoogte, en de
+ * blokjes absoluut daarbinnen -- niet in cellen. Een afspraak van 09:00 tot
+ * 12:00 is dan drie uur hoog in plaats van drie losse cellen die je met het
+ * oog aan elkaar moet praten.
+ */
+.axe-week {
+  --celhoog: 44px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  margin: 10px;
+  border-radius: var(--axe-vak-hoek, 24px);
+  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
+  background: var(--axe-vak-vlak, #0E0E12);
+  box-shadow: var(--axe-vak-zweef);
+  overflow: hidden;
+}
+.axe-week-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+.axe-week-titel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.axe-week-titel svg { color: var(--text-muted); }
+.axe-week-nav { display: inline-flex; align-items: center; gap: 6px; }
+.axe-week-nav button {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.axe-week-nav button:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.axe-week-nu { border-color: rgba(255, 255, 255, 0.12) !important; color: var(--text-secondary) !important; }
+
+.axe-week-rol { flex: 1; min-height: 0; overflow: auto; }
+.axe-week-raster {
+  display: grid;
+  grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto repeat(var(--uren), var(--celhoog));
+  min-width: 640px;
+}
+.axe-week-hoek {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  background: var(--axe-vak-vlak, #0E0E12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+.axe-week-dagkop {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 4px;
+  background: var(--axe-vak-vlak, #0E0E12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
+}
+.axe-week-dagnaam { font-size: 10px; color: var(--text-muted); }
+.axe-week-dagnr { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+.axe-week-dagtel { font-size: 9.5px; color: var(--text-muted); }
+/* Vandaag: het nummer in een rondje, zoals in het voorbeeld. Kleur plus vorm,
+   want kleur alleen is te zwak om "hier ben je" te dragen. */
+.axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnr {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--text-primary);
+  color: #000;
+}
+.axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnaam { color: var(--text-secondary); }
+
+.axe-week-uur {
+  grid-column: 1;
+  padding: 0 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+  /* Op de LIJN en niet in het midden van de cel: een uurlabel hoort bij de
+     streep waar dat uur begint. */
+  transform: translateY(-6px);
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
+}
+
+.axe-week-kolom {
+  position: relative;
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
+}
+.axe-week-kolom[data-vandaag='ja'] { background: rgba(255, 255, 255, 0.018); }
+.axe-week-cel {
+  height: var(--celhoog);
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
+}
+
+/* Een blok: kleur in de linkerrand en in de TITEL, niet in een gevuld vlak
+   (wet 10). Vier gevulde balken in vier kleuren naast elkaar zijn het drukste
+   ding op het scherm, en dan zegt de kleur niets meer. */
+.axe-week-blok {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  overflow: hidden;
+  padding: 4px 6px;
+  border: 0;
+  border-left: 2px solid currentColor;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.045);
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.axe-week-blok:hover { background: rgba(255, 255, 255, 0.09); }
+.axe-week-bloktitel {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.axe-week-bloktijd { font-size: 9.5px; color: var(--text-muted); }
+
+.axe-week-voet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.axe-week-voet span { display: inline-flex; align-items: center; gap: 6px; }
+.axe-week-voet i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  display: inline-block;
+}

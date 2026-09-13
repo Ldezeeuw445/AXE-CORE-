@@ -145,11 +145,19 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
 
     const term = new Terminal({
       theme: {
-        /* Doorzichtig op de plaat: het paneel eromheen levert de vulling al,
-           en een eigen bijna-zwart erin geeft precies dat donkere vlak-in-een-
-           vlak dat de terminal anders liet ogen dan de agent-chat ernaast.
-           Zonder plaat blijft hij zijn eigen zwart houden. */
-        background:          document.documentElement.dataset.look ? '#00000000' : '#02080a',
+        /* ALTIJD doorzichtig. Het vlak eromheen levert de vulling.
+         *
+         * Hier stond een voorwaarde op data-look, met `#02080a` als terugval.
+         * Twee dingen gingen daar mis. De stand wordt één keer gelezen, bij het
+         * opzetten van de terminal -- staat data-look dan nog niet op <html>
+         * (het wordt na de eerste render gezet), dan krijgt hij dat blauwzwart
+         * en houdt het, ook als de plaat er allang is. En wisselen van stand
+         * verandert er daarna niets meer aan.
+         *
+         * Dat is het zwarte vlak IN de kaart: een bijna-zwart met een blauwe
+         * zweem op een matzwarte kaart. Nu is er geen tweede vlak meer om uit
+         * de pas te lopen. */
+        background:          '#00000000',
         /* Neutraal lichtgrijs en niet cyaan.
          *
          * Het stond op #a5f3fc: alle gewone uitvoer had een blauwe zweem. Dat

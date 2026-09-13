@@ -10,6 +10,44 @@ import {
   X,
 } from 'lucide-react';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
+import { WeekRooster } from './agenda/WeekRooster';
+import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster';
+import { CalendarRange, LayoutGrid } from 'lucide-react';
+
+/**
+ * Maand of week. Als twee iconen in de band naast de composer, net als de
+ * sub-tabs van de trading-desk -- dezelfde component (IcoonZuil), want het is
+ * dezelfde handeling: kiezen wat je in het midden ziet.
+ */
+type Weergave = 'maand' | 'week';
+const WEERGAVEN: ZuilItem[] = [
+  { id: 'maand', label: 'Maand', kleur: '#22D3EE', icoon: <LayoutGrid size={17} /> },
+  { id: 'week', label: 'Week', kleur: '#8B7CF6', icoon: <CalendarRange size={17} /> },
+];
+
+/** De legenda onder het weekrooster: welk soort welke kleur heeft. */
+const SOORTEN: ReadonlyArray<{ label: string; kleur: string }> = [
+  { label: 'Afspraak', kleur: '#3B82F6' },
+  { label: 'Focus', kleur: '#8B5CF6' },
+  { label: 'Taak', kleur: '#34D399' },
+  { label: 'Herinnering', kleur: '#F5A524' },
+];
+
+/**
+ * Een agenda-item omzetten naar iets waar het weekrooster mee kan rekenen.
+ *
+ * De duur staat als tekst in het event ("1h 30m", "45m") en daar kun je niet
+ * mee rekenen. Kan hij niet gelezen worden, dan een uur: een blokje van nul
+ * hoog is onzichtbaar, en dan lijkt de afspraak er niet te zijn.
+ */
+function duurInMinuten(tekst: string): number {
+  const u = /(\d+)\s*h/i.exec(tekst);
+  const m = /(\d+)\s*m/i.exec(tekst);
+  const totaal = (u ? Number(u[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
+  return totaal > 0 ? totaal : 60;
+}
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -102,6 +140,20 @@ export default function CalendarPage() {
   // tapped (the desktop right sidebar is hidden there). Without this there was
   // no way to see or add a day's events on a phone.
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [weergave, setWeergave] = useState<Weergave>('maand');
+  /* De week die je bekijkt. Apart van de maand: bladeren door weken hoort de
+     maandweergave niet te verzetten en andersom. */
+  const [weekAnker, setWeekAnker] = useState<Date>(() => new Date());
+
+  const roosterItems: RoosterItem[] = useMemo(
+    () => EVENTS
+      .filter(e => minutenVan(e.time) !== null)
+      .map(e => ({
+        id: e.id, titel: e.title, datum: e.date, tijd: e.time,
+        duurMin: duurInMinuten(e.duration), kleur: e.color, soort: e.type,
+      })),
+    [],
+  );
 
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
   const firstDayOffset = getFirstDayOfMonth(currentYear, currentMonth);
@@ -119,6 +171,15 @@ export default function CalendarPage() {
 
   /* Selected date events */
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] || []) : [];
+
+  /* Welke dag het paneel toont, in woorden. */
+  const vandaagSleutel = datumSleutel(new Date());
+  const isVandaag = selectedDate === vandaagSleutel;
+  const dagKop = selectedDate
+    ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString('nl-NL', {
+        weekday: 'long', day: 'numeric', month: 'long',
+      })
+    : 'Geen dag gekozen';
 
   /* Upcoming events (sorted) */
   const upcomingEvents = useMemo(() => {
@@ -166,8 +227,35 @@ export default function CalendarPage() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
+      {/* Maand of week, links in de band naast de composer -- net als de
+          sub-tabs van de trading-desk, en met dezelfde component. Het is
+          dezelfde handeling: kiezen wat je in het midden ziet. */}
+      <PlaatSlot slot="links">
+        <IcoonZuil
+          items={WEERGAVEN}
+          actief={weergave}
+          kies={id => setWeergave(id as Weergave)}
+          rijen={2}
+        />
+      </PlaatSlot>
+
       {/* Main Grid Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {weergave === 'week' ? (
+          <WeekRooster
+            anker={weekAnker}
+            items={roosterItems}
+            opAnker={setWeekAnker}
+            soorten={SOORTEN}
+            opKies={item => {
+              /* Klik je een blok aan, dan spring je terug naar de maand met die
+                 dag geselecteerd -- daar staat de volle omschrijving. */
+              setSelectedDate(item.datum);
+              setWeergave('maand');
+            }}
+          />
+        ) : (
+        <>
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 flex-shrink-0"
@@ -314,6 +402,8 @@ export default function CalendarPage() {
             );
           })}
         </div>
+        </>
+        )}
       </div>
 
       {/* Mobile: dim backdrop behind the bottom sheet so a tap outside closes it */}
@@ -359,13 +449,28 @@ export default function CalendarPage() {
               transition={{ duration: 0.2 }}
               className="p-4"
             >
+              {/* "Vandaag" en niet een datumcode.
+                *
+                * Hier stond de sleutel zoals hij in de data staat: 2026-03-17.
+                * Dat is een sorteervorm, geen kop -- je leest hem als een
+                * getal en niet als "de dag waar ik naar kijk". En verreweg de
+                * meeste keren dat je hier kijkt is het vandaag, en dan hoort
+                * dat er te staan.
+                *
+                * De datum blijft eronder, want bij een andere dag moet je wel
+                * WELKE zien. */}
               <div className="flex items-center gap-2 mb-4">
                 <CalendarDays size={14} color="var(--accent-cyan)" />
-                <h2 className="text-body font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {selectedDate}
-                </h2>
-                <span className="text-xs-custom ml-auto" style={{ color: 'var(--text-muted)' }}>
-                  {selectedEvents.length} events
+                <div className="min-w-0">
+                  <h2 className="text-body font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {isVandaag ? 'Vandaag' : dagKop}
+                  </h2>
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{dagKop}</div>
+                </div>
+                <span className="text-xs-custom ml-auto shrink-0" style={{ color: 'var(--text-muted)' }}>
+                  {selectedEvents.length === 0
+                    ? 'niets'
+                    : `${selectedEvents.length} ${selectedEvents.length === 1 ? 'afspraak' : 'afspraken'}`}
                 </span>
               </div>
 
@@ -392,7 +497,7 @@ export default function CalendarPage() {
                 className="text-[10px] uppercase tracking-wider font-medium mb-3"
                 style={{ color: 'var(--text-muted)' }}
               >
-                Upcoming
+                Hierna
               </h3>
               <div className="space-y-2">
                 {upcomingEvents
