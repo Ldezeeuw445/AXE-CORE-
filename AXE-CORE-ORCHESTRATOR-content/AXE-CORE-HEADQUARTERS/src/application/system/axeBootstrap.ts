@@ -13,6 +13,7 @@ import { applyReinforcement } from '@/infrastructure/persistence/memoryFeedbackS
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { loadTodaysBriefing } from '@/application/system/dailyBriefing';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
+import { ABONNEMENT_PROVIDER } from '@/domain/abonnementChat';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
 import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopilot';
 import { maybeTriggerCompanionCorrelation } from '@/infrastructure/gateways/companionToolsService';
@@ -191,6 +192,11 @@ export async function warmPrimaryAtBoot(): Promise<void> {
   // cascadeAround keeps Ollama last as the one provider that cannot be revoked.
 
   if (!primary?.provider) return;
+  // Een abonnement-CLI heeft niets om op te warmen: geen TLS, geen model in
+  // een geheugen. De ping was een volle `codex exec`- of `claude -p`-sessie bij
+  // ELKE opstart ("You are AXE. OK" -- 6x op 13 september in de audit-log), en
+  // dat is limiet die voor echt werk bedoeld is.
+  if (primary.provider === ABONNEMENT_PROVIDER) return;
 
   try {
     const { useVoiceStore } = await import('@/presentation/store/voiceStore');
@@ -216,7 +222,7 @@ export async function warmPrimaryAtBoot(): Promise<void> {
     } catch { /* */ }
     conns[primary.provider] = { ...(conns[primary.provider] ?? {}), lastTest: ok ? 'ok' : 'fail' };
 
-    if (fb1?.provider && fb1.provider !== primary.provider) {
+    if (fb1?.provider && fb1.provider !== primary.provider && fb1.provider !== ABONNEMENT_PROVIDER) {
       const ok2 = await quietTest(fb1);
       conns[fb1.provider] = { ...(conns[fb1.provider] ?? {}), lastTest: ok2 ? 'ok' : 'fail' };
     }

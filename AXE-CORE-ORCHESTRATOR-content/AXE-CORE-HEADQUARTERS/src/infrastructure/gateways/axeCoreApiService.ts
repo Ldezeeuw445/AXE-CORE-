@@ -15,6 +15,7 @@
 
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import { agentBasis } from '@/infrastructure/config/agentHost';
+import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
 
 // axeCoreApiUrl() only rewrites this to a direct api.axecompanion.com call
 // inside a PACKAGED Tauri app that was built with VITE_AXE_CORE_API_KEY set;
@@ -44,7 +45,8 @@ async function basisVoor(path: string): Promise<string> {
   // De codeeragent bewerkt bestanden op de machine waar hij draait, dus die
   // machine is een keuze — zie config/agentHost.ts. Al het andere (marktdata,
   // geheugen, proxies) blijft waar de sleutels staan.
-  if (path.startsWith('/claude/')) return await agentBasis(BASE_URL).catch(() => BASE_URL);
+  // De preview draait in de repo van de editor, dus op dezelfde machine.
+  if (path.startsWith('/claude/') || path.startsWith('/preview/')) return await agentBasis(BASE_URL).catch(() => BASE_URL);
   if (!path.startsWith('/browser/agent')) return BASE_URL;
   return (await browserBasis().catch(() => '')) || BASE_URL;
 }
@@ -56,7 +58,11 @@ async function call<T = unknown>(
 ): Promise<T> {
   const res = await fetch(`${await basisVoor(path)}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
+    headers: {
+      'Content-Type': 'application/json',
+      ...axeCoreApiExtraHeaders(),
+      ...(path.startsWith('/preview/') ? editorRepoHeaders() : {}),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {

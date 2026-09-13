@@ -2073,6 +2073,53 @@ MAX_PREVIEW_LOG = 200
 class PreviewStartBody(BaseModel):
     command: Optional[str] = None  # defaults to a Vite/CRA-style dev server on PREVIEW_PORT
 
+_preview_map: str = ""
+
+
+def _projectmap(root: str) -> Optional[str]:
+    """De map met het package.json dat een dev-script heeft, zo dicht mogelijk bij root.
+
+    Gemeten 14 september: de preview startte `npm run dev` in WORKSPACE_DIR
+    (/opt/axe-workspace), los van de repo die in de editor gekozen was, en gaf
+    "ENOENT ... package.json". En in de repo axe-core staat package.json niet in
+    de git-root maar in AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS.
+    Dus: in de gekozen repo, breedte eerst, hooguit drie niveaus diep, zonder
+    node_modules en verborgen mappen.
+    """
+    rij = [(root, 0)]
+    while rij:
+        map_, diepte = rij.pop(0)
+        pj = os.path.join(map_, "package.json")
+        if os.path.isfile(pj):
+            try:
+                with open(pj, "r", encoding="utf-8") as f:
+                    if "dev" in (json.load(f).get("scripts") or {}):
+                        return map_
+            except Exception:  # noqa: BLE001
+                pass
+        if diepte >= 3:
+            continue
+        try:
+            kinderen = sorted(os.listdir(map_))
+        except OSError:
+            continue
+        for k in kinderen:
+            if k.startswith(".") or k in ("node_modules", "dist", "build", "target"):
+                continue
+            pad = os.path.join(map_, k)
+            if os.path.isdir(pad) and not os.path.islink(pad):
+                rij.append((pad, diepte + 1))
+    return None
+
+
+def _preview_url(request: Request) -> Optional[str]:
+    """Waar de app de preview kan openen. Op de VPS via nginx; lokaal rechtstreeks."""
+    if PREVIEW_PUBLIC_URL:
+        return PREVIEW_PUBLIC_URL
+    if (request.url.hostname or "") in ("127.0.0.1", "localhost"):
+        return f"http://127.0.0.1:{PREVIEW_PORT}/"
+    return None
+
 async def _drain_preview_output(stream: asyncio.StreamReader) -> None:
     while True:
         line = await stream.readline()
@@ -2082,22 +2129,32 @@ async def _drain_preview_output(stream: asyncio.StreamReader) -> None:
         _preview_log[:] = _preview_log[-MAX_PREVIEW_LOG:]
 
 @app.post("/preview/start", dependencies=[AUTH])
-async def preview_start(body: PreviewStartBody):
-    global _preview_proc, _preview_command
+async def preview_start(body: PreviewStartBody, request: Request):
+    global _preview_proc, _preview_command, _preview_map
     if _preview_proc is not None and _preview_proc.returncode is None:
         raise HTTPException(409, "Preview server already running — stop it first")
-    command = body.command or f"npm run dev -- --host 0.0.0.0 --port {PREVIEW_PORT}"
+    werk = _werkmap(request)
+    projectmap = _projectmap(werk)
+    if not projectmap:
+        raise HTTPException(400, f"Geen package.json met een dev-script gevonden in {werk} (tot drie mappen diep).")
+    # 127.0.0.1 en niet 0.0.0.0: op de Mac zou 0.0.0.0 de dev-server op het
+    # hele wifi zetten, en op de VPS proxyt nginx toch naar localhost.
+    command = body.command or f"npm run dev -- --host 127.0.0.1 --port {PREVIEW_PORT}"
     _preview_log.clear()
     _preview_command = command
+    _preview_map = projectmap
     try:
         _preview_proc = await asyncio.create_subprocess_shell(
-            command, cwd=WORKSPACE_DIR,
+            command, cwd=projectmap,
+            # PORT ook als variabele: vite.config.ts in axe-core weigert te
+            # starten zonder ("PORT environment variable is required").
+            env={**os.environ, "PORT": str(PREVIEW_PORT)},
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
         )
     except Exception as e:
         raise HTTPException(500, f"Could not start preview server: {e}")
     asyncio.create_task(_drain_preview_output(_preview_proc.stdout))
-    return {"started": True, "command": command, "port": PREVIEW_PORT, "url": PREVIEW_PUBLIC_URL or None}
+    return {"started": True, "command": command, "port": PREVIEW_PORT, "url": _preview_url(request), "map": projectmap}
 
 @app.post("/preview/stop", dependencies=[AUTH])
 async def preview_stop():
@@ -2114,15 +2171,17 @@ async def preview_stop():
     return {"stopped": True, "was_running": True}
 
 @app.get("/preview/status", dependencies=[AUTH])
-async def preview_status():
+async def preview_status(request: Request):
     running = _preview_proc is not None and _preview_proc.returncode is None
+    url = _preview_url(request)
     return {
         "running": running,
         "command": _preview_command,
         "port": PREVIEW_PORT,
-        "url": PREVIEW_PUBLIC_URL or None,
+        "url": url,
+        "map": _preview_map,
         "log": _preview_log[-40:],
-        "configured": bool(PREVIEW_PUBLIC_URL),
+        "configured": bool(url),
     }
 
 

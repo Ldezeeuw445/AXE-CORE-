@@ -4037,7 +4037,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   margin-top: auto;
   height: var(--axe-composer-hoog, auto);
   justify-content: center;
-  padding: 0;
+  /* Iets boven het midden: rooster plus naamregel (84 + 18px) staan in de
+     composer, met de naam nog binnen zijn onderkant. Gemeten 14 sep, 1440x900:
+     iconen 20px onder de bovenkant van de composer (was 29) en de naamregel
+     eindigt 37px boven de onderkant. Luka: "mogen nog een stukje omhoog". */
+  padding: 0 0 18px;
 }
 
 /* Vaste hoogte, ook leeg: een regel die komt en gaat duwt het rooster op en

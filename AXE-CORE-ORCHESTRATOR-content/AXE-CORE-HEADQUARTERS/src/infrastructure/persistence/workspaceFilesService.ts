@@ -8,6 +8,7 @@
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import { execCommand } from '@/infrastructure/gateways/axeCoreApiService';
 import { agentBasis } from '@/infrastructure/config/agentHost';
+import { editorRepoHeaders, huidigeEditorRepo } from '@/infrastructure/config/editorRepo';
 
 export interface WorkspaceTreeNode {
   path: string;
@@ -43,8 +44,7 @@ export async function editorBasis(): Promise<string> {
  * whitelist als de code-agents (zie _werkmap in backend/axe_api/main.py). Zo
  * kijk je in de boom altijd naar de checkout waar de agent ook in schrijft.
  */
-let editorRepo = '';
-export function zetEditorRepo(naam: string): void { editorRepo = naam.trim(); }
+export { zetEditorRepo } from '@/infrastructure/config/editorRepo';
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${await editorBasis()}/files${path}`, {
@@ -52,7 +52,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     headers: {
       'Content-Type': 'application/json',
       ...axeCoreApiExtraHeaders(),
-      ...(editorRepo ? { 'X-AXE-Repo': editorRepo } : {}),
+      ...editorRepoHeaders(),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -105,7 +105,7 @@ export async function moveWorkspaceEntry(from: string, to: string): Promise<void
   } catch (e) {
     // In een gekozen repo nooit terugvallen op een shell elders: die kent die
     // repo niet, en dan verplaats je iets in een andere boom.
-    if (editorRepo) throw e;
+    if (huidigeEditorRepo()) throw e;
   }
   const q = (p: string) => `'${p.replace(/'/g, `'"'"'`)}'`;
   const result = await execCommand(`mv -- ${q(from)} ${q(to)}`, 15);
