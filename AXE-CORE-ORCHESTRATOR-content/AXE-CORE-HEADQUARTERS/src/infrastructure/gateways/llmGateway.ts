@@ -25,6 +25,7 @@ import {
   LIMIET_SLEUTEL, isLimietFout, koelingTot, koeltNog, koelingTekst,
 } from '@/domain/gebruikslimiet';
 import { proxyProviderNaam } from '@/domain/proxyProvider';
+import { herstelModelNaam, isModelBestaatNiet } from '@/domain/modelHerstel';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
@@ -51,7 +52,7 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   const custom=builtin?undefined:findCustomProvider(slot.provider);
   const cfg:ProviderCfg|undefined=builtin??(custom?{id:custom.id as ProviderCfg['id'],name:custom.name,baseUrl:custom.baseUrl,defaultModel:custom.defaultModel,format:custom.format,needsKey:custom.needsKey}:undefined);
   if(!cfg) throw new Error(`Unknown provider: ${slot.provider}`);
-  const base=toProxied(slot.baseUrl||cfg.baseUrl), model=slot.model||cfg.defaultModel;
+  const base=toProxied(slot.baseUrl||cfg.baseUrl), model=herstelModelNaam(slot.provider,slot.model)||cfg.defaultModel;
   const isOllama=slot.provider==='ollama';
   const signal=AbortSignal.timeout(isOllama?90_000:15_000);
 
@@ -192,7 +193,14 @@ function onthoudKoeling(motor:string,tot:number):void{
   // ── Production: CORS-safe proxy (Vercel Edge Fn on the web, the VPS
   // backend directly inside a packaged Tauri app — see aiProxyUrl()) ──────
   if(import.meta.env.PROD){
-    const pr=await fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    const viaProxy=(m:string)=>fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model:m,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    let pr=await viaProxy(model);
+    // Bestaat het model niet, dan één keer het standaardmodel: een oud of
+    // verkeerd getypt model is geen kapotte sleutel. Zie domain/modelHerstel.ts.
+    if(!pr.ok && model!==cfg.defaultModel){
+      const eerste=await pr.clone().json().catch(()=>({}));
+      if(isModelBestaatNiet(proxyErrorMessage(eerste,pr.status))) pr=await viaProxy(cfg.defaultModel);
+    }
     if(!pr.ok){
       // proxyErrorMessage en niet e.error: de VPS antwoordt in FastAPI-vorm,
       // met de reden in `detail`. Dit las alleen `error`, gooide daarmee de
