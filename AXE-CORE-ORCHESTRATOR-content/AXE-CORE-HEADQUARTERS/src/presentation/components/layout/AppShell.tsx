@@ -23,6 +23,8 @@ import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
 import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFloatingChat';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
+import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -246,6 +248,14 @@ export function AppShell() {
           hoekLabel={rechtsHoek?.label}
           opHoek={rechtsHoek?.doe}
         />
+      )}
+
+      {/* De zwevende iPhone, op elke pagina met plaat. Het telefoon-icoon in het
+          dok hieronder zet hem aan en uit. */}
+      {!mobileCommandSurface && opPlaat && (
+        <ZweefLaag>
+          <ZwevendeTelefoon />
+        </ZweefLaag>
       )}
 
       {!mobileCommandSurface && opPlaat && (

@@ -1,30 +1,37 @@
 /**
- * De telefoon die linksonder over Home zweeft: een iPhone 15 Pro met daarin
- * Luka's eigen apps. Het scherm is een beginscherm (TelefoonScherm); een tik
- * op een tegel of een chip opent de app in het frame, een swipe omhoog of de
- * home-indicator brengt je terug.
+ * De zwevende iPhone: een iPhone 15 Pro met daarin Luka's eigen apps. Het
+ * scherm is een beginscherm (TelefoonScherm); een tik op een tegel of een chip
+ * opent de app in het frame, een swipe omhoog of de home-indicator brengt je
+ * terug.
+ *
+ * Alleen het toestel, zonder kopbalk of chip erboven. Aan en uit gaat met het
+ * telefoon-icoon in het radiaal dok linksonder (telefoonZichtbaar.ts). Slepen
+ * doe je aan de rand van het toestel; het scherm zelf blijft tikbaar, want dat
+ * draagt data-geen-greep (zie IphoneFrame en NIET_SLEPEN in Zwever).
  *
  * Schaal .92 (361×784) als het venster dat toelaat. Hij zweeft OVER composer
- * en dok — dat is de zweeflaag — dus hij mag groot zijn. Bij het openen van
- * Home komt hij van onder het scherm omhoog (680 ms) en zweeft daarna licht.
- * `prefers-reduced-motion` en `?anim=0` zetten dat stil.
- *
- * De kopbalk is de greep. Draaien, pinnen, verbergen, en de open app worden
- * onthouden. Dicht bij de linkerrand of de onderkant gelaten klemt hij vast
- * (kleefAanRand).
+ * en dok -- dat is de zweeflaag. Bij het tonen komt hij van onder het scherm
+ * omhoog (680 ms) en zweeft daarna licht. `prefers-reduced-motion` en
+ * `?anim=0` zetten dat stil.
  */
 import { useState } from 'react';
 import { IphoneFrame } from './IphoneFrame';
 import { TelefoonScherm } from './TelefoonScherm';
-import { KOP_HOOGTE, MARGE_ONDER, TELEFOON_ECHT, animatieVlaggen, telefoonSchaal, type TelefoonApp } from './launcher';
+import { MARGE_ONDER, TELEFOON_ECHT, animatieVlaggen, telefoonSchaal } from './launcher';
+import { useTelefoonZichtbaar } from './telefoonZichtbaar';
 import { Zwever } from '@/presentation/components/layout/zweef/Zwever';
-import { ZweefIcoon } from '@/presentation/components/layout/zweef/ZweefIcoon';
 import { useSchilMaten } from '@/presentation/components/layout/zweef/schilMaten';
-import { bewaarVlag, laadVlag, type Anker, type Maat } from '@/presentation/components/layout/zweef/zweefPositie';
+import type { Anker, Maat } from '@/presentation/components/layout/zweef/zweefPositie';
 
 const NAAM = 'telefoon';
-const LINKS = 20;
-const CHIP: Maat = { b: 236, h: 34 };
+/**
+ * Rechts naast het radiaal dok linksonder (16 + 268 breed), niet eroverheen.
+ * De zweeflaag ligt boven de hele schil, dus een telefoon op de plek van het
+ * dok bedekt precies de knop waarmee je hem weer wegklikt. Gemeten 13 sep op
+ * 1440x900: op links 20 lag hij over de dok-knop en was hij niet meer dicht te
+ * krijgen.
+ */
+const LINKS = 16 + 268 + 8;
 
 function useAnimatie() {
   return useState(() => animatieVlaggen({
@@ -34,37 +41,14 @@ function useAnimatie() {
 }
 
 export function ZwevendeTelefoon() {
-  const [verborgen, setVerborgen] = useState(() => laadVlag(NAAM, 'verborgen', window.localStorage));
-  const [vast, setVast] = useState(() => laadVlag(NAAM, 'vast', window.localStorage));
-  const [liggend, setLiggend] = useState(() => laadVlag(NAAM, 'liggend', window.localStorage));
-  const [app, setApp] = useState<TelefoonApp | null>(null);
+  const zichtbaar = useTelefoonZichtbaar();
   const schil = useSchilMaten();
-  const schaal = telefoonSchaal(schil.venster.h);
   const anim = useAnimatie();
+  if (!zichtbaar) return null;
+
+  const schaal = telefoonSchaal(schil.venster.h);
   const anker: Anker = { links: LINKS, onder: MARGE_ONDER };
-
-  const b = Math.round(TELEFOON_ECHT.b * schaal);
-  const h = Math.round(TELEFOON_ECHT.h * schaal);
-  const staand: Maat = { b, h: h + KOP_HOOGTE };
-  const liggendMaat: Maat = { b: h, h: b + KOP_HOOGTE };
-  const chipAnker: Anker = { links: LINKS, onder: MARGE_ONDER + staand.h - CHIP.h };
-
-  const zet = (vlag: 'verborgen' | 'vast' | 'liggend', aan: boolean) => {
-    bewaarVlag(NAAM, vlag, aan, window.localStorage);
-    if (vlag === 'verborgen') setVerborgen(aan);
-    else if (vlag === 'vast') setVast(aan);
-    else setLiggend(aan);
-  };
-
-  if (verborgen) {
-    return (
-      <Zwever naam={NAAM} anker={chipAnker} maat={CHIP} vast>
-        <button type="button" className="axe-ruit axe-zwever__chip" title="Show iPhone" onClick={() => zet('verborgen', false)}>
-          <ZweefIcoon naam="telefoon" /> iPhone 15 Pro
-        </button>
-      </Zwever>
-    );
-  }
+  const maat: Maat = { b: Math.round(TELEFOON_ECHT.b * schaal), h: Math.round(TELEFOON_ECHT.h * schaal) };
 
   const lijfKlassen = [
     'axe-telefoon__lijf',
@@ -73,32 +57,10 @@ export function ZwevendeTelefoon() {
   ].filter(Boolean).join(' ');
 
   return (
-    <Zwever
-      naam={NAAM}
-      anker={anker}
-      maat={liggend ? liggendMaat : staand}
-      vast={vast}
-      className={liggend ? 'axe-telefoon axe-telefoon--liggend' : 'axe-telefoon'}
-    >
-      <div
-        className={lijfKlassen}
-        style={{ '--tel-schaal': schaal, '--tel-h': `${h}px` } as React.CSSProperties}
-      >
-        <div className="axe-ruit axe-telefoon__kop" data-greep>
-          <ZweefIcoon naam="telefoon" /> iPhone 15 Pro · <span className={app ? 'c-accent' : 'c-ok'}>{app ? app.naam : 'home'}</span>
-          <span className="axe-groei" />
-          <button type="button" className={`axe-zweefknop ${liggend ? 'axe-zweefknop--aan' : ''}`} title="Rotate" onClick={() => zet('liggend', !liggend)}>
-            <ZweefIcoon naam="herlaad" />
-          </button>
-          <button type="button" className={`axe-zweefknop ${vast ? 'axe-zweefknop--aan' : ''}`} title={vast ? 'Unpin' : 'Pin'} onClick={() => zet('vast', !vast)}>
-            <ZweefIcoon naam="speld" />
-          </button>
-          <button type="button" className="axe-zweefknop" title="Hide" onClick={() => zet('verborgen', true)}>
-            <ZweefIcoon naam="kruis" />
-          </button>
-        </div>
+    <Zwever naam={NAAM} anker={anker} maat={maat} className="axe-telefoon">
+      <div className={lijfKlassen} style={{ '--tel-schaal': schaal } as React.CSSProperties} data-greep>
         <IphoneFrame>
-          <TelefoonScherm onApp={setApp} />
+          <TelefoonScherm onApp={() => {}} />
         </IphoneFrame>
       </div>
     </Zwever>

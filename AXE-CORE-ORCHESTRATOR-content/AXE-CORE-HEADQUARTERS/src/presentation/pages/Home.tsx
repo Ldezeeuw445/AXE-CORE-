@@ -14,8 +14,6 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp';
-import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
-import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
 import { BezigVlag } from '@/presentation/components/layout/zweef/BezigVlag';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
@@ -268,9 +266,6 @@ export default function Home() {
     {/* Buiten de motion.div: framer zet er een transform op en dat zou de
         laag aan de scene binden in plaats van aan het venster. */}
     <BezigVlag />
-    <ZweefLaag>
-      <ZwevendeTelefoon />
-    </ZweefLaag>
     </>
   );
 }

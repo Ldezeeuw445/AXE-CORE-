@@ -123,7 +123,8 @@ export function animatieVlaggen(bron: { search: string; minderBeweging: boolean 
  */
 export const SCHAAL_DOEL = 0.92;
 export const TELEFOON_ECHT = { b: 393, h: 852 } as const;
-export const KOP_HOOGTE = 43;
+/** Geen kopbalk meer boven de telefoon (13 sep): alleen het toestel. */
+export const KOP_HOOGTE = 0;
 export const TOPBALK = 66;
 export const MARGE_ONDER = 16;
 

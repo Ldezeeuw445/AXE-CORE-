@@ -72,13 +72,12 @@ describe('de schaal van de telefoon', () => {
   it('is .92 op 1728×1080 — hij zweeft over het chroom, dus dat telt niet mee', () => {
     expect(telefoonSchaal(1080)).toBe(SCHAAL_DOEL);
   });
-  it('past op 1440×900 boven de voetmarge', () => {
+  it('past op 1440×900 boven de voetmarge, zonder kopbalk op volle schaal', () => {
     const s = telefoonSchaal(900);
-    expect(s).toBeLessThanOrEqual(SCHAAL_DOEL);
-    expect(s).toBe(0.90);
+    expect(s).toBe(SCHAAL_DOEL);
     expect(TOPBALK + telefoonHoogte(s) + MARGE_ONDER).toBeLessThanOrEqual(900);
   });
-  it('krimpt op een laag scherm zodat kop, telefoon en marge onder de topbalk passen', () => {
+  it('krimpt op een laag scherm zodat telefoon en marge onder de topbalk passen', () => {
     const s = telefoonSchaal(700);
     expect(s).toBeLessThan(SCHAAL_DOEL);
     expect(TOPBALK + telefoonHoogte(s) + MARGE_ONDER).toBeLessThanOrEqual(700);

@@ -28,6 +28,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Bell, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
+import { wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 
 /** Afstand van het midden tot een tab. */
@@ -100,7 +101,9 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
   }, [open, sluit]);
 
   const standaardTabs: DokTab[] = [
-    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => navigate('/mobile') },
+    // Zet de zwevende iPhone aan en uit. De pagina /mobile blijft bestaan, maar
+    // dit icoon was bedoeld om de telefoon zelf te laten komen.
+    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon() },
     { id: 'notities', label: 'Notities', teken: <StickyNote size={18} />, doe: () => navigate('/obsidian') },
     // Een sierlijke hoofdletter N, geen icoon. Als letterteken en niet als svg:
     // hij hoort mee te kleuren en mee te schalen met de rest van de ring.

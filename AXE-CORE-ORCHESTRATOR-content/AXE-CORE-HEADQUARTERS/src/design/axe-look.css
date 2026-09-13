@@ -5280,7 +5280,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 .axe-telefoon__kop > svg { width: 12px; height: 12px; flex: none; }
 .axe-telefoon__kop .axe-groei { flex: 1; }
-.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 43px; --schaal: var(--tel-schaal, 0.92); }
+.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 0; --schaal: var(--tel-schaal, 0.92); }
+/* Geen kopbalk: je sleept aan de rand van het toestel. */
+.axe-telefoon .axe-iphone { cursor: grab; }
+.axe-telefoon .axe-iphone__scherm { cursor: auto; }
+.axe-zwever--sleept .axe-iphone { cursor: grabbing; }
 /* Liggend: om het eigen midden gedraaid, en de zwever wordt zo breed als de
    telefoon hoog was, zodat hij niet buiten het venster valt. */
 .axe-telefoon--liggend .axe-toestel {
