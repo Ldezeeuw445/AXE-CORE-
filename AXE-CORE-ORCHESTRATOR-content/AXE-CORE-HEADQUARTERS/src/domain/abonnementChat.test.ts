@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   motorVanSlot, bouwPrompt, kiesRepo, ABONNEMENT_MODUS, STANDAARD_MOTOR,
-  ABONNEMENT_MOTOREN, ALLE_MOTOREN,
+  ABONNEMENT_MOTOREN, ALLE_MOTOREN, zonderAbonnement,
 } from '@/domain/abonnementChat';
 
 describe('welke motor', () => {
@@ -116,5 +116,17 @@ describe('de modus', () => {
     // De hele reden dat dit een constante is: een chatvenster mag nooit
     // bestanden herschrijven omdat je een vraag stelde.
     expect(ABONNEMENT_MODUS).toBe('plan');
+  });
+});
+
+describe('trading draait nooit op een abonnement', () => {
+  it('haalt elke abonnement-slot uit de cascade en laat de rest in volgorde staan', () => {
+    const cascade = [
+      { provider: 'abonnement', model: 'codex' },
+      { provider: 'groq', model: 'llama' },
+      { provider: 'abonnement', model: 'claude' },
+      { provider: 'ollama', model: 'qwen3.5:2b' },
+    ];
+    expect(zonderAbonnement(cascade).map(s => s.provider)).toEqual(['groq', 'ollama']);
   });
 });

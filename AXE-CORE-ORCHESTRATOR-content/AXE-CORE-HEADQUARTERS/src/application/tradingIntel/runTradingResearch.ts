@@ -34,6 +34,7 @@ import {
 // to callProvider — two types with one name, which is the same fault this
 // codebase keeps finding in its tables.
 import type { KeySlot } from '@/domain/providers';
+import { zonderAbonnement } from '@/domain/abonnementChat';
 import { remember } from '@/infrastructure/persistence/agentMemoryService';
 
 export interface RunResearchInput {
@@ -536,6 +537,9 @@ export function buildCallLlmFromSlots(
   slots: KeySlot[],
   callProvider: (slot: KeySlot, messages: Array<{ role: string; content: string }>) => Promise<string>,
 ): ((system: string, user: string) => Promise<string>) | undefined {
+  // Nooit op een abonnement: elke rol is een eigen CLI-sessie, elke cyclus
+  // opnieuw. Zie zonderAbonnement voor wat dat op 13 september kostte.
+  slots = zonderAbonnement(slots);
   if (!slots.length) return undefined;
   return async (system, user) => {
     let lastErr: unknown;

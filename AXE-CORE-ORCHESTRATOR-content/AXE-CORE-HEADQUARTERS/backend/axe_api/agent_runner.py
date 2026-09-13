@@ -215,6 +215,20 @@ def _repos() -> dict:
     return out
 
 
+def _stderr_staart(stderr: str, n: int = 500) -> str:
+    """Het stuk van stderr dat de fout noemt: het EINDE, zonder MCP-ruis.
+
+    Gemeten 13 september, codex via /claude/run: `stderr[:500]` gaf de banner
+    (workdir, model, sandbox, session id) en `rmcp::transport`-regels, en hield
+    op vóór de enige regel die telde -- `ERROR: You've hit your usage limit ...
+    try again at 10:36 PM`. De app herkent een limiet aan die tekst
+    (src/domain/gebruikslimiet.ts); zonder die regel leek een tijdelijke limiet
+    een kapotte motor.
+    """
+    regels = [r for r in (stderr or "").splitlines() if r.strip() and "rmcp::" not in r]
+    return "\n".join(regels)[-n:]
+
+
 def _subprocess_env(blocked: tuple) -> dict:
     env = os.environ.copy()
     for key in blocked:
@@ -364,14 +378,14 @@ def run_agent(
     if motor["leest_bestand"]:
         if proc.returncode != 0 and not uitvoer:
             return {**basis, "status": "error",
-                    "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {(proc.stderr or '')[:500]}"}
+                    "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"}
         return {**basis, "status": "error" if proc.returncode != 0 else "ok",
                 "result": (uitvoer or stdout)[:8000]}
 
     # Claude: JSON op stdout.
     if proc.returncode != 0 and not stdout:
         return {**basis, "status": "error",
-                "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {(proc.stderr or '')[:500]}"}
+                "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"}
 
     try:
         parsed = json.loads(stdout) if stdout else None

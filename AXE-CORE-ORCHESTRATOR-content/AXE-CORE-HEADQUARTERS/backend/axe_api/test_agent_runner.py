@@ -116,3 +116,22 @@ class TestBewakingen:
     def test_onbekende_motor(self):
         r = a.run_agent("proef", "x", engine="verzonnen")
         assert r["status"] == "error" and "Onbekende motor" in r["error"]
+
+
+class TestFoutmelding:
+    def test_stderr_geeft_de_fout_en_niet_de_banner(self):
+        # Letterlijk de vorm van codex op 13 september: banner, MCP-ruis, en de
+        # enige regel die telt helemaal onderaan.
+        stderr = (
+            "Reading additional input from stdin...\nOpenAI Codex v0.140.0\n--------\n"
+            "workdir: /Users/luka/AXE-CORE-\nmodel: gpt-5.5\nsession id: 01a09b80\n--------\n"
+            + "2026-09-13T16:01:46Z ERROR rmcp::transport::worker: worker quit with fatal\n" * 20
+            + "ERROR: You've hit your usage limit. Upgrade to Pro or try again at 10:36 PM.\n"
+        )
+        kern = a._stderr_staart(stderr)
+        assert "usage limit" in kern and "10:36 PM" in kern
+        assert "rmcp::" not in kern
+        assert len(kern) <= 500
+
+    def test_lege_stderr_blijft_leeg(self):
+        assert a._stderr_staart("") == "" and a._stderr_staart(None) == ""
