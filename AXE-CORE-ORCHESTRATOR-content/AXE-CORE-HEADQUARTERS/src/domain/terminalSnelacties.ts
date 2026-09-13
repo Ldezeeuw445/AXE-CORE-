@@ -38,6 +38,16 @@ export interface Snelactie {
   groep: Groep;
   /** Alleen waar voor acties die niets veranderen; die mogen meteen draaien. */
   leestAlleen?: boolean;
+  /**
+   * Waar voor een commando dat NIET terugkomt: het blijft in de voorgrond
+   * draaien en het venster is daarna bezet.
+   *
+   * Dit is het verschil dat je moet weten vóór je klikt, en dat nergens stond.
+   * Je start `npm run terminal`, de prompt komt niet terug, en dan lijkt het
+   * alsof er iets vastloopt -- terwijl dat precies is wat er moet gebeuren.
+   * Sluit je het venster, dan valt de dienst om.
+   */
+  blijftDraaien?: boolean;
 }
 
 /** Waar de repo op een Mac staat. Eén plek, want hij komt in vier commando's terug. */
@@ -132,12 +142,14 @@ const MAC: Snelactie[] = [
     cmd: `cd ${REPO_MAC}/backend/axe_api && ./run-local.sh`,
     uitleg: 'De lokale axe_api opnieuw — nodig na een pull met nieuwe endpoints',
     groep: 'machine',
+    blijftDraaien: true,
   },
   {
     label: 'Terminal-server',
     cmd: `cd ${REPO_MAC} && npm run terminal`,
     uitleg: 'De shell-server van deze machine — nodig voor deze terminal zelf',
     groep: 'machine',
+    blijftDraaien: true,
   },
   {
     label: 'Poort 8001 vrij',
@@ -258,4 +270,16 @@ export function snelactiesVoor(hostId: string): Snelactie[] {
 /** De acties van één groep, in de volgorde waarin ze gedefinieerd zijn. */
 export function actiesVanGroep(acties: Snelactie[], groep: Groep): Snelactie[] {
   return acties.filter(a => a.groep === groep);
+}
+
+/**
+ * Wat er op deze machine moet BLIJVEN draaien.
+ *
+ * Voor het lijstje in de app en in docs/TERMINALS.md: welke vensters je open
+ * moet laten staan. Een dienst die je per ongeluk afsluit valt om, en dan is
+ * het volgende dat je merkt een 404 of een terminal die niet verbindt -- zonder
+ * dat iets zegt waarom.
+ */
+export function blijvendDraaiend(hostId: string): Snelactie[] {
+  return snelactiesVoor(hostId).filter(a => a.blijftDraaien);
 }

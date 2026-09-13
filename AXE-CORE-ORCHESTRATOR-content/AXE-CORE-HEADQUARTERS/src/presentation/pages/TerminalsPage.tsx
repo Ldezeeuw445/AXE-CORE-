@@ -45,7 +45,7 @@ import {
   type TerminalHost,
 } from '@/domain/terminalHosts';
 import {
-  snelactiesVoor, actiesVanGroep, GROEP_LABEL,
+  snelactiesVoor, actiesVanGroep, blijvendDraaiend, GROEP_LABEL,
   type Groep, type Snelactie,
 } from '@/domain/terminalSnelacties';
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
@@ -97,6 +97,13 @@ export default function TerminalsPage() {
         </span>
         <span className="text-[9.5px]" style={{ color: 'var(--text-muted)' }}>
           {hosts.filter(isKlaar).length} van {hosts.length} ingesteld
+        </span>
+        {/* Wat er open MOET blijven staan, op de plek waar je het nodig hebt.
+            Het stond alleen in docs/TERMINALS.md, en een document dat je moet
+            opzoeken bestaat niet op het moment dat je het nodig hebt. */}
+        <span className="text-[9.5px] flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+          <span className="axe-term-blijft" aria-hidden="true" />
+          blijft draaien: {blijvendDraaiend('deze-mac').map(a => a.label).join(' · ')}
         </span>
         <button
           onClick={() => setToevoegen(v => !v)}
@@ -264,12 +271,21 @@ function MachinePaneel({
                     // Dat verschil hoort zichtbaar te zijn vóór je klikt.
                     style={{ borderStyle: a.leestAlleen ? 'solid' : 'dashed' }}>
                     {a.label}
+                    {/* Een rondje bij een commando dat het venster bezet houdt.
+                        Anders klik je hem aan, komt de prompt niet terug, en
+                        lijkt het alsof er iets vastloopt. */}
+                    {a.blijftDraaien && <span className="axe-term-blijft" aria-label="blijft draaien" />}
                   </button>
                 ))}
               </div>
               {uitgelicht && (
                 <div className="text-[9px] min-w-0">
                   <div style={{ color: 'var(--text-secondary)' }}>{uitgelicht.uitleg}</div>
+                  {uitgelicht.blijftDraaien && (
+                    <div style={{ color: 'var(--m-budget)' }}>
+                      Blijft draaien — dit venster blijft daarna bezet. Sluit je het, dan stopt de dienst.
+                    </div>
+                  )}
                   <code className="block truncate" style={{ color: 'var(--text-muted)' }}>
                     {uitgelicht.cmd}
                   </code>

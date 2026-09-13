@@ -42,6 +42,19 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 TAK="$(git rev-parse --abbrev-ref HEAD)"
+VOOR="$(git rev-parse HEAD)"
+
+# De tak waarop ontwikkeld wordt. Staat je checkout ergens anders, dan haalt
+# `git pull origin $TAK` netjes niets binnen en lijkt alles in orde -- terwijl
+# je het werk van de laatste dagen niet krijgt. Dat is precies hoe "er is niks
+# veranderd" ontstaat, dus het script zegt het hardop.
+VERWACHT="orchestrator"
+if [[ "$TAK" != "$VERWACHT" ]]; then
+  printf '\n\033[33m! Je staat op tak "%s" en niet op "%s".\033[0m\n' "$TAK" "$VERWACHT"
+  printf '  Het werk staat op %s. Overstappen met:\n' "$VERWACHT"
+  printf '    git checkout %s && npm run bijwerken\n\n' "$VERWACHT"
+fi
+
 zeg "Binnenhalen op '$TAK'"
 # Vier pogingen met oplopende wachttijd: een haperend netwerk hoort geen
 # mislukte update te zijn, maar een echte fout moet wel zichtbaar blijven.
@@ -51,6 +64,18 @@ until git pull origin "$TAK"; do
   echo "   pull faalde — opnieuw over ${WACHT}s"
   sleep "$WACHT"; WACHT=$(( WACHT * 2 )); POGING=$(( POGING + 1 ))
 done
+
+# Wat er binnenkwam, met de commits erbij. Zonder dit is een pull die niets
+# ophaalde niet te onderscheiden van een pull die alles ophaalde, en dat
+# verschil is precies wat je wilt weten voordat je vijf minuten gaat bouwen.
+NA="$(git rev-parse HEAD)"
+if [[ "$VOOR" == "$NA" ]]; then
+  printf '  \033[33mNiets nieuws — je had %s al.\033[0m\n' "$(git rev-parse --short HEAD)"
+else
+  AANTAL="$(git rev-list --count "$VOOR..$NA")"
+  printf '  \033[32m%s nieuwe commit(s):\033[0m\n' "$AANTAL"
+  git log --oneline "$VOOR..$NA" | sed 's/^/    /'
+fi
 
 zeg "Pakketten"
 npm install
@@ -115,8 +140,16 @@ if [[ -d "/Applications/AXE CORE.app" ]]; then
   printf '    rm -rf "/Applications/AXE CORE.app"\033[0m\n'
 fi
 
-zeg "Starten — $(date '+%H:%M') · $(git rev-parse --short HEAD)"
+zeg "Starten — $(date '+%H:%M') · gebouwd uit $(git rev-parse --short HEAD)"
 open "$APP"
+
+# Dezelfde commit staat boven in beeld op Home. Klopt die niet met wat hier
+# staat, dan kijk je naar een andere app -- `npm run welke` zegt welke.
+printf '\n  In de app staat boven op Home: build %s\n' "$(git rev-parse --short HEAD)"
+printf '  Staat er iets anders? Dan draait er een andere kopie: npm run welke\n\n'
+printf '  \033[36mMoet blijven draaien in een EIGEN venster:\033[0m\n'
+printf '    npm run terminal   — de shell-server, anders verbindt de Terminals-tab niet\n'
+printf '    backend/axe_api/run-local.sh   — de lokale API, anders geeft de Code Agent 404\n'
 
 echo
 echo "Opent hij niet, start hem dan direct om de fout te zien:"

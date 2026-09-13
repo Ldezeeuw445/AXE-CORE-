@@ -3833,3 +3833,18 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   font-weight: 600;
 }
 :root[data-look] .axe-killvraag-ja:disabled { opacity: 0.5; }
+
+/* Het rondje bij een commando dat het venster bezet houdt. Amber en geen
+   groen: het is geen status maar een waarschuwing vóór je klikt -- de prompt
+   komt niet terug, en sluit je het venster dan stopt de dienst. */
+.axe-term-blijft {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--m-budget);
+  box-shadow: 0 0 5px var(--m-budget);
+  vertical-align: middle;
+}
