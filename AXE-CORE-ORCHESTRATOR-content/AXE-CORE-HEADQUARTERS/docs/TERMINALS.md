@@ -136,11 +136,27 @@ ollama list
 journalctl -u ollama -n 40 --no-pager
 ```
 
-### iMac
+### iMac — `main-imac-luka` (gebruiker `lukadezeeuw`)
 
-Nog geen adres. Zodra je `terminal-server.cjs` daar draait en het adres invult
-in de Terminals-tab, geldt hetzelfde als voor deze Mac: **dat venster moet open
-blijven**.
+**Terminal (vak 7):** `wss://main-imac-luka.tail03735e.ts.net:4022/terminal` —
+vul dat één keer in het invulveld van vak 7 in. Het staat niet in de code, want
+een tailnet-adres hoort niet in een gedeelde bundel.
+
+- Draait als LaunchAgent `com.axe.terminal` uit `~/.axe-terminal` (los van de
+  checkout in `~/Projects/AXE-CORE-`, zodat een pull of lokale wijziging daar
+  de terminal niet raakt). Log: `/tmp/axe-terminal.log`.
+- Luistert alleen op `127.0.0.1:4022`. **Tailscale Serve** geeft het HTTPS-adres,
+  alleen binnen je tailnet; op het thuisnetwerk is 4022 dicht.
+- Zelfde muur als overal: Supabase-token en `AXE_TERMINAL_ALLOWED_USER_IDS`.
+- Bijwerken: kopieer `terminal-server.cjs` en `terminalShell.cjs` naar
+  `~/.axe-terminal/` en `launchctl kickstart -k gui/$(id -u)/com.axe.terminal`.
+- Uitzetten: `tailscale serve --https=4022 off` en
+  `launchctl bootout gui/$(id -u)/com.axe.terminal`.
+
+Gemeten 13 september: `claude` en `codex` staan erop (codex ingelogd, claude
+niet), `cursor-agent` is toen geïnstalleerd. Inloggen doe je in vak 7 zelf,
+want de sleutelhanger van de iMac is alleen in je eigen sessie open — via ssh
+zegt cursor-agent *"login keychain is locked"*.
 
 ---
 
