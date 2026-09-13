@@ -2685,9 +2685,20 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
 @app.get("/claude/repos", dependencies=[AUTH])
 async def claude_repos():
     """Which repos this host will let Claude Code touch, and whether each one is
-    currently runnable (exists, and not sitting on a protected branch)."""
+    currently runnable (exists, and not sitting on a protected branch).
+
+    In een thread met time-out. Gemeten 14 september: na elke rebuild van AXE CORE
+    (ad-hoc ondertekend, dus voor macOS een nieuwe app) blijft open() op de
+    externe SSD hangen tot iemand "toegang tot verwijderbaar volume" toestaat.
+    Synchroon in deze async route hield dat de HELE API stil, ook /health.
+    """
+    try:
+        repos = await asyncio.wait_for(asyncio.to_thread(claude_repo_status), timeout=6)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, "De repo's op de externe schijf antwoorden niet. Staat er een macOS-venster "
+                                 "'AXE CORE wil toegang tot bestanden op een verwijderbaar volume'? Klik Sta toe.")
     return {
-        "repos": claude_repo_status(),
+        "repos": repos,
         "permission_modes": list(ALLOWED_PERMISSION_MODES),
         # Welke CLI's op deze machine staan. Alleen aanwezigheid — of je
         # ingelogd bent kost een echte aanroep, en een statuspaneel hoort geen
