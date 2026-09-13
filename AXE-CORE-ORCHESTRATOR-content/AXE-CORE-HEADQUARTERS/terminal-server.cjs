@@ -32,6 +32,7 @@
 const { WebSocketServer, WebSocket } = require('ws');
 
 const { spawn } = require('child_process');
+const { ptyCommando, maatCommando } = require('./terminalShell.cjs');
 const { createServer } = require('http');
 const os = require('os');
 
@@ -242,7 +243,19 @@ wss.on('connection', (ws, req) => {
   // override with AXE_TERMINAL_SHELL (e.g. zsh) if you've installed one.
   // `-l` is a login shell for both bash and zsh.
   const SHELL_BIN = process.env.AXE_TERMINAL_SHELL || process.env.SHELL || 'bash';
-  const shell = spawn(SHELL_BIN, ['-l'], {
+
+  // In een ECHTE terminal, niet op drie pijpen. Zie terminalShell.cjs voor wat
+  // dat verschil precies is -- kort: zonder pty geen prompt, geen kleur, geen
+  // Ctrl+C, en uitvoer die per 4 KB blok aankomt in plaats van meteen.
+  //
+  // `AXE_TERMINAL_PTY=0` zet het uit. Niet omdat iemand dat zou willen, maar
+  // omdat een nieuwe manier van starten een manier moet hebben om terug te
+  // vallen als hij op één machine toch niet blijkt te werken.
+  const ptyGewenst = process.env.AXE_TERMINAL_PTY !== '0';
+  const viaPty = ptyGewenst ? ptyCommando(process.platform, SHELL_BIN) : null;
+
+  const start = viaPty || { cmd: SHELL_BIN, args: ['-l'] };
+  const shell = spawn(start.cmd, start.args, {
     env: {
       ...process.env,
       TERM: 'xterm-256color',
@@ -257,6 +270,13 @@ wss.on('connection', (ws, req) => {
       ws.send(JSON.stringify({ type, data }));
     }
   };
+
+  // Of dit een echte terminal is bepaalt wat de BROWSER moet doen: bij een pty
+  // echoot de terminal zelf, dus een tweede echo in de browser zou elke letter
+  // dubbel tonen. Daarom staat het in het eerste bericht en niet in een
+  // aanname aan de andere kant.
+  let maatGezet = false;
+  send('ready', { pty: Boolean(viaPty), shell: SHELL_BIN, platform: process.platform });
 
   shell.stdout.on('data', (buf) => send('output', buf.toString()));
   shell.stderr.on('data', (buf) => send('output', buf.toString()));
@@ -276,6 +296,12 @@ wss.on('connection', (ws, req) => {
       const msg = JSON.parse(raw.toString());
       if (msg.type === 'input' && shell.stdin.writable) {
         shell.stdin.write(msg.data);
+      } else if (msg.type === 'resize' && viaPty && !maatGezet && shell.stdin.writable) {
+        // Eén keer, bij het openen: script maakt zijn pty op 80x24 en heeft
+        // zelf geen terminal om de echte maat van over te nemen. Zie
+        // maatCommando voor waarom dit niet bij élke resize opnieuw gaat.
+        maatGezet = true;
+        shell.stdin.write(maatCommando(msg.cols, msg.rows));
       }
     } catch { /* ignore malformed */ }
   });

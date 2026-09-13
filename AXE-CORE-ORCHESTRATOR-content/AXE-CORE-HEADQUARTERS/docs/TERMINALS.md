@@ -154,3 +154,62 @@ De Terminals-tab toont per machine dezelfde lijst, met:
 Die markering komt uit `src/domain/terminalSnelacties.ts` (`blijftDraaien`), met
 een test die bewaakt dat de Mac er precies twee heeft en een VPS geen enkele.
 Klopt dit document niet meer met de app, dan is de code de waarheid.
+
+---
+
+## Waarom de terminals traag waren (en niet meer zijn)
+
+Twee oorzaken, en de eerste was de echte.
+
+### 1. Er was geen terminal
+
+`terminal-server.cjs` startte de shell met `spawn(shell, ['-l'])`: drie pijpen,
+geen pty. Een shell zonder terminal is een ander programma:
+
+| | op pijpen | op een pty |
+|---|---|---|
+| prompt | geen | ja |
+| uitvoer | per blok van 4 KB | meteen |
+| Ctrl+C | doet niets | breekt af |
+| tab-aanvulling | nee | ja |
+| `less`, `top`, `vim` | onbruikbaar | werken |
+| kleur | uit | aan |
+
+Die blokbuffering is wat "mega traag" voelde: je typt `npm run build`, ziet
+seconden niets, en dan alles tegelijk. Het commando liep even snel als altijd —
+je zag het alleen niet gebeuren.
+
+Nu start de shell via `script`, dat een echte pty maakt. Geen nieuwe
+dependency, zit standaard op macOS én Ubuntu. Gemeten in deze repo: `tty` geeft
+`/dev/pts/0`, `tput cols` geeft de echte breedte, en `Ctrl+C` breekt een
+`sleep 30` af.
+
+Zet `AXE_TERMINAL_PTY=0` om terug te vallen op pijpen als een machine er niet
+mee blijkt te werken.
+
+### 2. Elke cel was een DOM-element
+
+xterm tekent zonder addon elke cel als DOM-knoop. Eén scherm vol uitvoer is dan
+duizenden knopen om op te maken — maal acht vakken. Nu via de GPU
+(`@xterm/addon-webgl`), met terugval op DOM als WebGL geweigerd wordt.
+
+Daarbij: de cursor knippert alleen nog in het vak met focus (was zestien
+hertekeningen per seconde in vensters waar je niet naar kijkt), scrollback van
+5000 naar 2000 regels per vak, en `fit()` draait één keer per frame in plaats
+van één keer per resize-melding — dat laatste was de schokkerigheid tijdens het
+verslepen van het venster.
+
+### Wat dit voor de VPS betekent
+
+De Strato-VPS draait nog de oude server en blijft dus op pijpen tot je daar
+deployt. Dat is geen storing: de server zegt in zijn eerste bericht of hij een
+pty gaf, en de browser zet zijn eigen regeleditor alleen aan als het antwoord
+nee is. Oude server, oud gedrag; nieuwe server, echte terminal.
+
+### Wat nog niet meebeweegt
+
+De venstermaat wordt één keer gezet, bij het openen van de sessie. `script`
+heeft zelf geen terminal om de maat van over te nemen, en zonder native module
+is er geen ioctl — dus vraagt de server het de shell met `stty`. Dat later
+herhalen zou midden in een regel vallen die je aan het typen bent. Maak je een
+vak veel groter, klik dan op de gele stip voor een verse shell.
