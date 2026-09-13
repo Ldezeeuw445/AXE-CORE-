@@ -39,6 +39,7 @@ import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
 import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -983,7 +984,7 @@ function OllamaModelsSection() {
     try {
       const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
       const baseUrl = conns.ollama?.baseUrl ?? OLLAMA_BASE_URL;
-      const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
+      const res = await fetch(`${baseUrl}/api/tags`, { headers: ollamaHeaders(baseUrl), signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
       const data = await res.json();
       const names = (data?.models ?? [])

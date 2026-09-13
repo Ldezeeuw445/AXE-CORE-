@@ -58,6 +58,10 @@ export function ProviderCard({
   onVerwijder?: () => void;
 }) {
   const Icoon = kaart.icon;
+  // Ollama heeft geen sleutel nodig om te werken, maar de externe box vraagt er
+  // sinds 13 september wel een (zie config/ollamaSleutel.ts). Dus: een veld, en
+  // optioneel -- leeg blijft de kaart gewoon "ingesteld".
+  const sleutelOptioneel = kaart.id === 'ollama';
   const ingesteld = !kaart.needsKey || !!sleutel || opServer;
   const kleur = standKleur(stand, ingesteld);
 
@@ -131,7 +135,7 @@ export function ProviderCard({
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-axe-meta shrink-0" style={{ color: 'var(--text-muted)' }}>Key</span>
           <div className="flex items-center gap-1.5 min-w-0">
-            {kaart.needsKey ? (
+            {kaart.needsKey || sleutelOptioneel ? (
               <>
                 <input
                   value={sleutel}
@@ -141,7 +145,7 @@ export function ProviderCard({
                      kunt zien. */
                   onChange={(e) => onSleutel(e.target.value.trim())}
                   type={sleutelZichtbaar ? 'text' : 'password'}
-                  placeholder={kaart.placeholder}
+                  placeholder={sleutelOptioneel ? 'optioneel · OLLAMA_PROXY_KEY' : kaart.placeholder}
                   spellCheck={false}
                   className="axe-field text-right min-w-0 flex-1 font-mono-data"
                   style={{ fontSize: 12 }}

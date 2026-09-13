@@ -18,6 +18,7 @@ import { currentHostKind } from '@/infrastructure/config/apiUrl';
  */
 
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 export const LOCAL_OLLAMA_URL = 'http://localhost:11434';
 
@@ -121,7 +122,7 @@ export async function resolveReachableOllama(): Promise<{ baseUrl: string; local
   const remote = remoteOllamaBaseUrl();
   if (!remote) return null;
   try {
-    const r = await fetch(`${remote}/api/tags`, { signal: AbortSignal.timeout(3_000) });
+    const r = await fetch(`${remote}/api/tags`, { headers: ollamaHeaders(remote), signal: AbortSignal.timeout(3_000) });
     if (r.ok) return { baseUrl: remote, local: false };
   } catch { /* unreachable */ }
   return null;

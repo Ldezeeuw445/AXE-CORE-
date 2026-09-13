@@ -24,6 +24,7 @@ import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
 import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import { useLocation } from 'react-router';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
@@ -172,7 +173,7 @@ function VpsHealthWidget() {
     const tickHetzner = async () => {
       const t0 = performance.now();
       try {
-        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { signal: AbortSignal.timeout(6000) });
+        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { headers: ollamaHeaders(OLLAMA_HEALTH_URL), signal: AbortSignal.timeout(6000) });
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
         if (!res.ok) {

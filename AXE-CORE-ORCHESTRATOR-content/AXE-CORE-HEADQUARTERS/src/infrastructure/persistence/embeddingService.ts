@@ -12,6 +12,7 @@
  */
 import { loadConnectionOverrides } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /**
  * Where Ollama actually is, according to Luka.
@@ -212,7 +213,7 @@ async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500)
     const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
     const res = await fetch(`${baseUrl}/api/embeddings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...ollamaHeaders(baseUrl) },
       body: JSON.stringify({ model: EMBED_MODEL, prompt: text.slice(0, 8000) }),
       signal: ctrl.signal,
     });

@@ -15,6 +15,7 @@ import { VPS_API_ORIGIN, axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrast
 // ── Types ─────────────────────────────────────────────────────────────────
 
 import { statusVan, NIET_INGESTELD, type ServiceStatus } from '@/domain/serviceStatus';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 export type { ServiceStatus };
 
 export interface ServiceState {
@@ -220,7 +221,7 @@ const SERVICES: Array<{
       const url = OLLAMA_URL;
       const t = Date.now();
       try {
-        const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
+        const res = await fetch(`${url}/api/tags`, { headers: ollamaHeaders(url), signal: AbortSignal.timeout(5000) });
         const data = res.ok ? await res.json() : null;
         return {
           ok: res.ok,
