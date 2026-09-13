@@ -280,7 +280,12 @@ export function PlaatChat() {
    * axe-look.css), dus nu volgt de een uit de ander in plaats van dat twee
    * getallen toevallig gelijk moeten staan. */
   const collapsedChatHeight = 72;
-  const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
+  /* Op de Code Editor geen chatplaat. De composer daar is de vraag aan de
+   * code-agent (zie handleSend), dus een kop met je Home-gesprek erboven klopt
+   * niet -- en hij kostte de studio 72px hoogte (gemeten 13 sep, 1440x900).
+   * Hij blijft wel gemount: handleSend en het slepen van bestanden wonen hier. */
+  const opEditor = location.pathname.includes('code-editor');
+  const chatHeight = opEditor ? 0 : chatCollapsed ? collapsedChatHeight : expandedChatHeight;
 
   /* De stand van de chat op <html>, zodat de panelen ernaast hem kennen.
    *
@@ -309,6 +314,9 @@ export function PlaatChat() {
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
           data-dicht={chatCollapsed ? 'ja' : 'nee'}
+          /* style en niet het hidden-attribuut: de klasse `flex` zet display en
+             wint het van [hidden], en dan piept de kop onder de studio uit. */
+          style={opEditor ? { display: 'none' } : undefined}
           className="axe-chatplaat axe-chatplaat--kaal h-full flex flex-col relative"
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}

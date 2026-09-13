@@ -468,7 +468,6 @@ export default function CodeEditorPage() {
   /* Of de plaat-schil eronder ligt. Zonder plaat blijft deze pagina zich
      gedragen zoals hij altijd deed -- dat is wat 'de schil is de basis'
      betekent: de pagina hangt ervan af, niet andersom. */
-  const opPlaat = useHeeftPlaat();
   const voice = useVoiceStore();
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [rootLoading, setRootLoading] = useState(true);
@@ -1365,7 +1364,11 @@ export default function CodeEditorPage() {
         {studioStand === 'code' && (
           <div className="axe-studio-kolommen">
             {showFiles && (
-              <aside className="axe-studio-kaart">
+              /* Een section en GEEN aside: axe-look.css maakt van elke aside in
+                 de schil een verborgen zijlade (position: fixed, buiten beeld).
+                 Als aside viel deze kolom uit het rooster, schoof de editor in
+                 het 220px-vak van de bestanden en bleef rechts een lege kolom. */
+              <section className="axe-studio-kaart axe-studio-bestanden">
                 <div className="axe-studio-kop">
                   <span>Files</span>
                   <span className="rechts">
@@ -1435,7 +1438,7 @@ export default function CodeEditorPage() {
                     }} />
                   )}
                 </div>
-              </aside>
+              </section>
             )}
 
             <section className="axe-studio-kaart axe-studio-editor">
@@ -1481,10 +1484,14 @@ export default function CodeEditorPage() {
                   {indeling === 'uit' ? (
                     <SleepVlak onBestand={neemBestandAan} />
                   ) : (
+                    /* Geen eigen plaat en geen marge per paneel meer: de editorkaart
+                       van de studio IS de plaat. Een tweede kaart erbinnen gaf dubbele
+                       randen en 12px rondom, en liet Monaco maar 236px van 285 over
+                       (gemeten 13 sep op 1440x900). */
                     <div id="axe-split-container"
-                      className={`flex-1 min-h-0 flex ${opPlaat ? 'gap-3 p-3' : ''} ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
-                      <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined} style={{
-                        flex: gesplitst ? `0 0 calc(${splitRatio * 100}% - ${opPlaat ? 12 : 0}px)` : 1,
+                      className={`flex-1 min-h-0 flex ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
+                      <div style={{
+                        flex: gesplitst ? `0 0 ${splitRatio * 100}%` : 1,
                         minWidth: 0, minHeight: 0, display: 'flex',
                       }}>
                         <EditorPane tab={activeTab} activePendingPatch={activePendingPatch} isMobile={isMobile}
@@ -1501,8 +1508,7 @@ export default function CodeEditorPage() {
                             orientation={indeling === 'kolommen' ? 'vertical' : 'horizontal'}
                             onRatioChange={setSplitRatio}
                           />
-                          <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined}
-                            style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
+                          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
                             <EditorPane tab={splitTab} activePendingPatch={null} isMobile={isMobile}
                               onChange={updateContent}
                               onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
@@ -1517,7 +1523,7 @@ export default function CodeEditorPage() {
                   )}
                 </div>
                 {showAgent && (
-                  <aside className="axe-studio-agent">
+                  <section className="axe-studio-agent">
                     <div className="axe-studio-kop">
                       <span>Code agent</span>
                       <span className="rechts">
@@ -1625,7 +1631,7 @@ export default function CodeEditorPage() {
                         </div>
                       ))}
                     </div>
-                  </aside>
+                  </section>
                 )}
               </div>
               <div className="axe-studio-term">
@@ -1683,7 +1689,7 @@ export default function CodeEditorPage() {
 
         {studioStand === 'canvas' && (
           <div className="axe-studio-canvas">
-            <aside className="axe-studio-kaart">
+            <section className="axe-studio-kaart">
               <div className="axe-studio-kop"><span>Layers</span></div>
               <div className="axe-studio-lagen">
                 {flattenFiles(fileTree).slice(0, 24).map(n => (
@@ -1694,7 +1700,7 @@ export default function CodeEditorPage() {
                 ))}
                 {fileTree.length === 0 && <div className="r">No files yet</div>}
               </div>
-            </aside>
+            </section>
             <section className="axe-studio-kaart axe-studio-artboard">
               <div className="axe-studio-kop">
                 <span>Canvas</span>
@@ -1719,12 +1725,12 @@ export default function CodeEditorPage() {
                 />
               </div>
             </section>
-            <aside className="axe-studio-kaart">
+            <section className="axe-studio-kaart">
               <div className="axe-studio-kop"><span>Inspect</span></div>
               <div className="p-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                 Design mode lives on the live preview. Apply writes the iframe; To agent sends a diff to the code agent.
               </div>
-            </aside>
+            </section>
           </div>
         )}
 
