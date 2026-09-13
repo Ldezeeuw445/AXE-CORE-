@@ -179,10 +179,18 @@ Die blokbuffering is wat "mega traag" voelde: je typt `npm run build`, ziet
 seconden niets, en dan alles tegelijk. Het commando liep even snel als altijd —
 je zag het alleen niet gebeuren.
 
-Nu start de shell via `script`, dat een echte pty maakt. Geen nieuwe
-dependency, zit standaard op macOS én Ubuntu. Gemeten in deze repo: `tty` geeft
-`/dev/pts/0`, `tput cols` geeft de echte breedte, en `Ctrl+C` breekt een
-`sleep 30` af.
+Nu start de shell in een echte pty. Geen nieuwe dependency. Gemeten in deze
+repo: `tty` geeft `/dev/pts/0`, `tput cols` geeft de echte breedte, en `Ctrl+C`
+breekt een `sleep 30` af.
+
+- **Linux:** via `script -qfc`.
+- **macOS:** via een lusje in de systeem-`python3` (module `pty`). Níét via
+  `script`: BSD-`script` leest de terminalinstellingen van zijn eigen stdin en
+  stopt als dat geen tty is — vanuit Node is dat altijd een socket. Gemeten 13
+  september op de Mac mini: exit 1 na 5 ms,
+  `script: tcgetattr/ioctl: Operation not supported on socket`, en elk Mac-vak
+  ging meteen dicht. Met python3: `tty` geeft `/dev/ttys002`, `Ctrl+C` breekt
+  `sleep 30` af, `exit 7` komt als exitcode 7 bij de server aan.
 
 Zet `AXE_TERMINAL_PTY=0` om terug te vallen op pijpen als een machine er niet
 mee blijkt te werken.

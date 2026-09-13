@@ -28,10 +28,12 @@
  * dat misgaat start de terminalserver helemaal niet meer. Dat is een slechtere
  * dag dan vandaag.
  *
- * `script` zit standaard op macOS én op Ubuntu en doet precies het stuk dat we
- * nodig hebben: het maakt een pty, hangt de shell eraan als beheersende
- * terminal en kopieert bytes heen en weer. Regeldiscipline, echo, SIGINT,
- * prompt en kleur komen daarmee terug. Nul dependencies.
+ * `script` zit standaard op Ubuntu en doet precies het stuk dat we nodig
+ * hebben: het maakt een pty, hangt de shell eraan als beheersende terminal en
+ * kopieert bytes heen en weer. Regeldiscipline, echo, SIGINT, prompt en kleur
+ * komen daarmee terug. Nul dependencies. Op macOS doet een lusje in de
+ * systeem-python3 hetzelfde, want BSD-`script` kan niet vanuit een server
+ * starten (zie DARWIN_PTY_PY).
  *
  * De vlaggen verschillen per systeem, en dat is geen detail: met de verkeerde
  * volgorde start `script` een shell die zijn uitvoer in een BESTAND schrijft
@@ -40,11 +42,56 @@
  */
 
 /**
+ * De pty-starter voor macOS, als Python uit de standaardbibliotheek.
+ *
+ * ## Waarom niet `script` op macOS
+ *
+ * Gemeten 13 september op de Mac mini: `script -q /dev/null /bin/zsh -l`
+ * vanuit Node stopt na 5 ms met exit 1 en
+ * `script: tcgetattr/ioctl: Operation not supported on socket`. BSD-`script`
+ * leest de terminalinstellingen van zijn EIGEN stdin en stopt als dat geen tty
+ * is -- en vanuit Node is stdin altijd een socket. Dat is geen vlag die
+ * ontbreekt; het kan vanuit een server principieel niet. De app kreeg
+ * `ready {pty: true}` en direct daarna `exit`: elk Mac-vak ging meteen dicht.
+ * Linux-`script` controleert dat eerst en werkt wel.
+ *
+ * `python3` staat op elke Mac met de Command Line Tools, en `pty` zit in de
+ * standaardbibliotheek. Nog steeds geen native module.
+ *
+ * Niet `pty.spawn()`: in Python 3.9 (de systeemversie) blijft die na `exit`
+ * van de shell op stdin wachten, en dan krijgt de app nooit een exit-bericht.
+ * Deze lus stopt zodra de pty dicht is en geeft de exitcode van de shell door.
+ * Begint op 80x24, net als `script`; de echte maat komt via maatCommando.
+ */
+const DARWIN_PTY_PY = [
+  'import os,pty,select,sys,fcntl,termios,struct',
+  'pid,fd=pty.fork()',
+  'if pid==0:os.execvp(sys.argv[1],sys.argv[1:])',
+  "fcntl.ioctl(fd,termios.TIOCSWINSZ,struct.pack('HHHH',24,80,0,0))",
+  'def alles(f,b):',
+  ' while b:b=b[os.write(f,b):]',
+  'bron=[fd,0]',
+  'while True:',
+  ' try:r=select.select(bron,[],[])[0]',
+  ' except InterruptedError:continue',
+  ' if fd in r:',
+  '  try:d=os.read(fd,65536)',
+  '  except OSError:d=b""',
+  '  if not d:break',
+  '  alles(1,d)',
+  ' if 0 in r:',
+  '  d=os.read(0,65536)',
+  '  if d:alles(fd,d)',
+  '  else:bron.remove(0)',
+  'st=os.waitpid(pid,0)[1]',
+  'sys.exit(os.WEXITSTATUS(st) if os.WIFEXITED(st) else 128+os.WTERMSIG(st))',
+].join('\n');
+
+/**
  * Hoe je op dit systeem een shell in een pty start.
  *
- * macOS (BSD): `script -q /dev/null <shell> -l`
- *   -q  geen "Script started/done"-regels
- *   /dev/null  het logbestand dat we niet willen; het commando volgt erna.
+ * macOS: `python3 -c <DARWIN_PTY_PY> <shell> -l` -- zie hierboven waarom niet
+ *   `script`.
  *
  * Linux (util-linux): `script -qfc "<shell> -l" /dev/null`
  *   -c  het commando (als één string, dus hier geen losse argumenten)
@@ -56,7 +103,7 @@
  * verkeerd geraden commando is erger dan de oude situatie.
  */
 function ptyCommando(platform, shell) {
-  if (platform === 'darwin') return { cmd: 'script', args: ['-q', '/dev/null', shell, '-l'] };
+  if (platform === 'darwin') return { cmd: 'python3', args: ['-c', DARWIN_PTY_PY, shell, '-l'] };
   if (platform === 'linux') return { cmd: 'script', args: ['-qfc', `${shell} -l`, '/dev/null'] };
   return null;
 }

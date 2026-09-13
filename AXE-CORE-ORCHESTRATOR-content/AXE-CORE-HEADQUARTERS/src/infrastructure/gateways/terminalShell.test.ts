@@ -12,12 +12,17 @@ const { ptyCommando, gezondeMaat, maatCommando } = req('../../../terminalShell.c
 };
 
 describe('een shell in een echte terminal starten', () => {
-  it('geeft op macOS het logbestand vóór het commando', () => {
-    // Andersom schrijft script de sessie IN een bestand met de naam van de
-    // shell, en dan krijgt de browser niets te zien.
+  it('gebruikt op macOS geen script, want dat eist een tty op stdin', () => {
+    // Gemeten 13 september: BSD-script vanuit Node stopt na 5 ms met
+    // "tcgetattr/ioctl: Operation not supported on socket". Wie dit ooit
+    // terugzet naar script, zet elk Mac-vak weer op direct-dicht.
     const { cmd, args } = ptyCommando('darwin', '/bin/zsh')!;
-    expect(cmd).toBe('script');
-    expect(args).toEqual(['-q', '/dev/null', '/bin/zsh', '-l']);
+    expect(cmd).toBe('python3');
+    expect(args[0]).toBe('-c');
+    expect(args.slice(2)).toEqual(['/bin/zsh', '-l']);
+    expect(args[1]).toContain('pty.fork()');
+    // Niet pty.spawn: die blijft in Python 3.9 hangen na exit van de shell.
+    expect(args[1]).not.toContain('pty.spawn');
   });
 
   it('geeft op Linux het commando als één string, mét doorspoelen', () => {
