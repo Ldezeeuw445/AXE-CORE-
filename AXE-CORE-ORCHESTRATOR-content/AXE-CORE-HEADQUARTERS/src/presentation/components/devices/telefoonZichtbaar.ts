@@ -19,6 +19,11 @@ export function telefoonZichtbaar(): boolean {
 
 function zetTelefoon(aan: boolean): void {
   bewaarVlag(NAAM, VLAG, aan, window.localStorage);
+  // Aanzetten begint op zijn vaste plek. Een oude plek (van de telefoon met
+  // kopbalk, of van een groter venster) kon hem buiten beeld laten beginnen.
+  if (aan) {
+    try { window.localStorage.removeItem('axe_zwever_telefoon'); } catch { /* privémodus */ }
+  }
   window.dispatchEvent(new CustomEvent(GEBEURTENIS, { detail: aan }));
 }
 

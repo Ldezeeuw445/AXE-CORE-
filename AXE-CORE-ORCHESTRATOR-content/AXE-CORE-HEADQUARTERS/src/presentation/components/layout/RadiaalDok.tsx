@@ -28,7 +28,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Bell, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
-import { wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
+import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 
 /** Afstand van het midden tot een tab. */
@@ -62,6 +62,8 @@ export interface DokTab {
   /** Een icoon, of een letter -- de N is geen icoon maar een letterteken. */
   teken: React.ReactNode;
   doe: () => void;
+  /** Staat wat deze tab aanzet nu aan? Dan licht hij op. */
+  aan?: boolean;
 }
 
 interface Props {
@@ -79,6 +81,7 @@ interface Props {
 
 export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, opHoek }: Props) {
   const navigate = useNavigate();
+  const telefoonAan = useTelefoonZichtbaar();
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
   const [open, setOpen] = useState(false);
   const [zweeft, setZweeft] = useState<string | null>(null);
@@ -103,7 +106,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
   const standaardTabs: DokTab[] = [
     // Zet de zwevende iPhone aan en uit. De pagina /mobile blijft bestaan, maar
     // dit icoon was bedoeld om de telefoon zelf te laten komen.
-    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon() },
+    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },
     { id: 'notities', label: 'Notities', teken: <StickyNote size={18} />, doe: () => navigate('/obsidian') },
     // Een sierlijke hoofdletter N, geen icoon. Als letterteken en niet als svg:
     // hij hoort mee te kleuren en mee te schalen met de rest van de ring.
@@ -148,6 +151,8 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
             className="axe-dok-tab"
             title={tab.label}
             aria-label={tab.label}
+            aria-pressed={tab.aan}
+            data-aan={tab.aan ? 'ja' : undefined}
             tabIndex={open ? 0 : -1}
             onMouseEnter={() => setZweeft(tab.id)}
             onMouseLeave={() => setZweeft(null)}

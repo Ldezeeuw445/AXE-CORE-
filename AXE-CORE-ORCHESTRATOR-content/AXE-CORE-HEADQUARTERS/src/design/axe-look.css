@@ -3652,6 +3652,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     background 0.15s ease,
     color 0.15s ease;
 }
+:root[data-look] .axe-dok-tab[data-aan='ja'] {
+  color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-cyan) 45%, transparent) inset, 0 0 14px -4px var(--accent-cyan);
+}
 :root[data-look] .axe-dok-tab:hover {
   box-shadow: var(--axe-tegel-op), 0 0 0 1px rgba(255, 255, 255, 0.12);
   color: #FFFFFF;
@@ -5240,19 +5244,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    Hij zweeft OVER het chroom, groot genoeg om te gebruiken. */
 .axe-telefoon__lijf { position: absolute; inset: 0; }
 .axe-telefoon__lijf--entree {
-  animation: axe-telefoon-entree 680ms var(--ease) both;
+  animation: axe-telefoon-entree 680ms var(--ease) backwards;
 }
 .axe-telefoon__lijf--zweeft {
   animation: axe-telefoon-zweef 5.2s ease-in-out infinite;
 }
 .axe-telefoon__lijf--entree.axe-telefoon__lijf--zweeft {
   animation:
-    axe-telefoon-entree 680ms var(--ease) both,
+    axe-telefoon-entree 680ms var(--ease) backwards,
     axe-telefoon-zweef 5.2s ease-in-out 680ms infinite;
 }
 @keyframes axe-telefoon-entree {
-  from { transform: translateY(110%) scale(0.92); opacity: 0; filter: blur(8px); }
-  to   { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+  /* Geen opacity 0 en geen blur als beginstand: loopt de animatie om welke
+     reden ook niet (WebKit in de app), dan bleef hij onzichtbaar staan. */
+  from { transform: translateY(40px) scale(0.96); }
+  to   { transform: translateY(0) scale(1); }
 }
 @keyframes axe-telefoon-zweef {
   0%, 100% { transform: translateY(0); }
