@@ -29,6 +29,8 @@ export interface AppTaak {
   /** 0-100. */
   voortgang: number;
   klaar: boolean;
+  /** De kanban-stand. Voor de tellers bovenin. */
+  stand: 'todo' | 'in-progress' | 'done' | 'blocked';
 }
 
 const PRIO_KLEUR: Record<AppTaak['prioriteit'], string> = {
@@ -64,9 +66,7 @@ export function AppTaken({
       <header className="axe-app-kop">
         <div className="min-w-0">
           <div className="axe-app-titel" style={{ color: kleur }}>{label}</div>
-          <div className="axe-app-onder">
-            {open.length} open{blurb ? ` · ${blurb}` : ''}
-          </div>
+          <div className="axe-app-onder">{blurb}</div>
         </div>
         <div className="axe-app-tellers">
           {telaat.length > 0 && (
@@ -77,6 +77,26 @@ export function AppTaken({
           <button onClick={opNieuw} title={`Nieuwe taak voor ${label}`}>+</button>
         </div>
       </header>
+
+      {/* De cijfers van DEZE app.
+        *
+        * Ze stonden als één rij bovenaan de pagina, over alle apps opgeteld.
+        * Dat getal beantwoordt geen enkele vraag die je hebt: "twaalf te doen"
+        * zegt niets als je wil weten of Companion achterloopt. Per kaart, dus,
+        * op dezelfde plek in alle vijf. */}
+      <div className="axe-app-cijfers">
+        {([
+          ['Totaal', taken.length, 'var(--text-primary)'],
+          ['Te doen', taken.filter(t => t.stand === 'todo').length, 'var(--text-muted)'],
+          ['Bezig', taken.filter(t => t.stand === 'in-progress').length, 'var(--m-structure)'],
+          ['Klaar', taken.filter(t => t.stand === 'done').length, 'var(--m-happened)'],
+        ] as const).map(([naam, waarde, tint]) => (
+          <div key={naam}>
+            <span className="axe-app-cijfer" style={{ color: tint }}>{waarde}</span>
+            <span className="axe-app-cijfernaam">{naam}</span>
+          </div>
+        ))}
+      </div>
 
       <div className="axe-app-rol">
         {open.length === 0 ? (

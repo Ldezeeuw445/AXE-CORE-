@@ -5,9 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, X, Zap, Clock } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { STAT_ROW } from '@/presentation/components/surface/Page';
 import { AppTaken, type AppTaak } from './taken/AppTaken';
-import { APPS, NAAST_CORE, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
+import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
   listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
   type DurableTaskRun,
@@ -257,6 +256,7 @@ export default function Tasks() {
         deadline: t.dueAt,
         voortgang: t.progress,
         klaar: t.status === 'done',
+        stand: t.status,
       }));
 
   /* Het formulier openen MET die app erin. Zonder dit moest je hem in het
@@ -264,11 +264,6 @@ export default function Tasks() {
   const nieuwVoor = (app: AppId) => {
     setNewTask(v => ({ ...v, app }));
     setAdding(true);
-  };
-  const counts = {
-    todo: tasks.filter(t => t.status === 'todo').length,
-    'in-progress': tasks.filter(t => t.status === 'in-progress').length,
-    done: tasks.filter(t => t.status === 'done').length,
   };
 
   return (
@@ -297,21 +292,10 @@ export default function Tasks() {
         </div>
       </div>
 
-      <div className={`${STAT_ROW} flex-none`}>
-        {[
-          { label: 'Total', val: tasks.length, color: 'var(--text-primary)' },
-          { label: 'To Do', val: counts.todo, color: 'var(--text-muted)' },
-          { label: 'In Progress', val: counts['in-progress'], color: 'var(--accent-cyan)' },
-          { label: 'Done', val: counts.done, color: 'var(--success)' },
-        ].map(({ label, val, color }) => (
-          <WidgetCard key={label} title="">
-            <div className="text-center py-0.5">
-              <div className="text-2xl font-bold font-mono-data" style={{ color }}>{val}</div>
-              <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{label}</div>
-            </div>
-          </WidgetCard>
-        ))}
-      </div>
+      {/* De cijferrij die hier stond telde ALLE apps bij elkaar op. Dat getal
+          beantwoordt geen vraag die je hebt: "twaalf te doen" zegt niets als je
+          wil weten of Companion achterloopt. Hij staat nu per kaart, op dezelfde
+          plek in alle vijf. */}
 
       <AnimatePresence>
         {adding && (
@@ -427,30 +411,25 @@ export default function Tasks() {
         *
         * De app staat in metadata.app, precies zoals de cron-tab het doet --
         * geen migratie, en alles wat er al staat valt terug op AXE Core. */}
-      <div className="axe-appvel">
-        <AppTaken
-          label={appMeta('axe_core').label}
-          kleur={appMeta('axe_core').kleur}
-          blurb={appMeta('axe_core').blurb}
-          taken={takenVan('axe_core')}
-          opNieuw={() => nieuwVoor('axe_core')}
-          opKlaar={t => { void updateStatus(t.id, 'done'); }}
-          opWeg={t => { void removeTask(t.id); }}
-        />
-        <div className="axe-appvier">
-          {NAAST_CORE.map(id => (
-            <AppTaken
-              key={id}
-              label={appMeta(id).label}
-              kleur={appMeta(id).kleur}
-              blurb={appMeta(id).blurb}
-              taken={takenVan(id)}
-              opNieuw={() => nieuwVoor(id)}
-              opKlaar={t => { void updateStatus(t.id, 'done'); }}
-              opWeg={t => { void removeTask(t.id); }}
-            />
-          ))}
-        </div>
+      {/* Vijf naast elkaar, AXE Core links.
+        *
+        * De cron-tab zet AXE Core apart omdat hij daar iets ANDERS doet:
+        * lokaal draaien tegenover een webhook. Bij taken is dat verschil er
+        * niet -- een taak is een taak, welke app hij ook raakt. Dan zijn vijf
+        * gelijke kolommen eerlijker dan er één uitlichten. */}
+      <div className="axe-appvijf">
+        {APPS.map(a => (
+          <AppTaken
+            key={a.id}
+            label={a.label}
+            kleur={a.kleur}
+            blurb={a.blurb}
+            taken={takenVan(a.id)}
+            opNieuw={() => nieuwVoor(a.id)}
+            opKlaar={t => { void updateStatus(t.id, 'done'); }}
+            opWeg={t => { void removeTask(t.id); }}
+          />
+        ))}
       </div>
 
       </div>

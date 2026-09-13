@@ -113,24 +113,24 @@ export function blokjesVoor(
     .sort((a, b) => a.vanUur - b.vanUur);
 }
 
-/** Het urenbereik dat je moet tonen om alles van deze week te zien. */
-export function urenBereik(
-  items: RoosterItem[],
-  dagen: string[],
-  standaardVan = 8,
-  standaardTot = 19,
-): { van: number; tot: number } {
-  const uren = items
-    .filter(i => dagen.includes(i.datum))
-    .map(i => minutenVan(i.tijd))
-    .filter((m): m is number => m !== null)
-    .map(m => m / 60);
-  if (uren.length === 0) return { van: standaardVan, tot: standaardTot };
-  // Een uur lucht aan de bovenkant, en de standaard blijft de ondergrens:
-  // een week met alleen een lunchafspraak hoort geen rooster van één rij te
-  // worden.
-  return {
-    van: Math.min(standaardVan, Math.floor(Math.min(...uren))),
-    tot: Math.max(standaardTot, Math.ceil(Math.max(...uren)) + 1),
-  };
+/**
+ * Het urenbereik: de HELE dag, altijd.
+ *
+ * Hier rekte hij mee met wat er in de week stond, met 8 tot 19 als ondergrens.
+ * Dat leest als een willekeurig bereik: een lege week stopte om 18:00 en je
+ * kunt niet zien of dat "er is niets na zessen" betekent of "hier houdt het
+ * rooster op". Erger nog: een afspraak om 21:00 verschoof de hele dag, dus de
+ * rij waar 14:00 stond was maandag een andere dan dinsdag.
+ *
+ * Een dag heeft 24 uur. Die staan er allemaal op, en het rooster schuift naar
+ * het werkuur toe (zie WERKDAG_START) zodat je niet elke keer zelf naar
+ * beneden hoeft.
+ */
+export const DAG_UREN = 24;
+
+/** Waar het rooster naartoe schuift als je het opent. */
+export const WERKDAG_START = 8;
+
+export function urenBereik(): { van: number; tot: number } {
+  return { van: 0, tot: DAG_UREN };
 }

@@ -698,6 +698,37 @@ html:root[data-look],
     0 16px 30px -14px rgba(0, 0, 0, 0.85),
     0 44px 66px -38px rgba(0, 0, 0, 0.9);
 
+  /* ── Het materiaal van een KAART ──────────────────────────────────────
+   *
+   * Apart van de composer. De composer is het ding waar je in typt en die
+   * hoort het donkerste vlak op het scherm te zijn; een kaart is iets waar je
+   * naar KIJKT en die mag lichter.
+   *
+   * Eén toon voor de hele kaart -- kop, lijf en voet allemaal hetzelfde. Er
+   * zaten laagjes in (een kop met 3% wit, een voet met 2%, een dagenstrook met
+   * 1.2%), en die stapelen tot een kaart met drie verschillende grijzen erin.
+   * Dat leest als drie blokken die toevallig tegen elkaar liggen. Waar iets
+   * gescheiden moet worden is er één haarlijn, en verder niets.
+   *
+   * ## En de schaduw is STRAKKER
+   *
+   * Hij stond op 44px verplaatsing met 66px vervaging. Vier kaarten naast
+   * elkaar lopen dan in elkaar over tot één donkere band onder de rij -- het
+   * zwarte vierkant dat je zag. Een schaduw die breder is dan de ruimte tussen
+   * twee kaarten is geen schaduw meer maar een ondergrond.
+   *
+   * Nu kort en dichtbij: elke kaart werpt zijn eigen schaduw en zweeft los op
+   * de plaat, ook als er vier naast elkaar staan. */
+  --axe-kaart-vlak: #17181C;
+  --axe-kaart-lijn: rgba(255, 255, 255, 0.08);
+  --axe-kaart-hoek: 18px;
+  --axe-kaart-zweef:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 2px 4px rgba(0, 0, 0, 0.4),
+    0 12px 22px -12px rgba(0, 0, 0, 0.6);
+  /* De scheidingslijn BINNEN een kaart. Niet nog een kleur, alleen een lijn. */
+  --axe-kaart-scheiding: 1px solid rgba(255, 255, 255, 0.055);
+
   /* ── Het materiaal van de chatplaat ───────────────────────────────────
      Als token, om dezelfde reden als --axe-bar-rand: .axe-chatplaat en
      .axe-paneel horen exact hetzelfde te zijn, en een gradient die je op twee
@@ -3517,10 +3548,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  border-radius: var(--axe-vak-hoek, 24px);
-  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
-  background: var(--axe-vak-vlak, #0E0E12);
-  box-shadow: var(--axe-vak-zweef, 0 16px 30px -14px rgba(0, 0, 0, 0.85));
+  border-radius: var(--axe-kaart-hoek);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+  box-shadow: var(--axe-kaart-zweef);
 }
 /* Vol beeld: over de hele breedte van het raster en hoger, zodat er echt iets
    te zien is. Het venster verdwijnt niet uit het raster -- het rekt op. Zo
@@ -3545,7 +3576,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   align-items: center;
   padding: 0 18px;
   background: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: var(--axe-kaart-scheiding);
 }
 .axe-term-lampen {
   display: flex;
@@ -3645,7 +3676,6 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 4px 0 5px;
   border: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.02);
   color: var(--text-muted);
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -3672,7 +3702,6 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   gap: 5px;
   padding: 7px 10px 9px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.015);
   /* Een plafond: acht commando's plus uitleg mag de terminal niet opeten. */
   max-height: 44%;
   overflow-y: auto;
@@ -3817,7 +3846,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 18px;
   border-radius: var(--axe-vak-hoek, 24px);
   border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
-  background: var(--axe-vak-vlak, #0E0E12);
+  background: var(--axe-kaart-vlak);
   box-shadow: var(--axe-vak-zweef);
 }
 :root[data-look] .axe-killvraag-kop {
@@ -3966,10 +3995,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-radius: var(--axe-vak-hoek, 24px);
-  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
-  background: var(--axe-vak-vlak, #0E0E12);
-  box-shadow: var(--axe-vak-zweef);
+  border-radius: var(--axe-kaart-hoek);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+  box-shadow: var(--axe-kaart-zweef);
   overflow: hidden;
 }
 .axe-cron-kop {
@@ -3978,7 +4007,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   justify-content: space-between;
   gap: 10px;
   padding: 13px 16px 11px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: var(--axe-kaart-scheiding);
 }
 .axe-cron-titel {
   font-size: 13px;
@@ -4051,8 +4080,8 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   font-size: 10px;
   color: var(--text-muted);
   padding: 8px 12px;
-  background: var(--axe-vak-vlak, #0E0E12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  background: var(--axe-kaart-vlak);
+  border-bottom: var(--axe-kaart-scheiding);
   white-space: nowrap;
 }
 .axe-cron-tabel td {
@@ -4140,10 +4169,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   min-height: 0;
   flex: 1;
   margin: 10px;
-  border-radius: var(--axe-vak-hoek, 24px);
-  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
-  background: var(--axe-vak-vlak, #0E0E12);
-  box-shadow: var(--axe-vak-zweef);
+  border-radius: var(--axe-kaart-hoek);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+  box-shadow: var(--axe-kaart-zweef);
   overflow: hidden;
 }
 .axe-week-kop {
@@ -4152,7 +4181,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   justify-content: space-between;
   gap: 10px;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: var(--axe-kaart-scheiding);
 }
 .axe-week-titel {
   display: inline-flex;
@@ -4191,8 +4220,8 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   top: 0;
   left: 0;
   z-index: 3;
-  background: var(--axe-vak-vlak, #0E0E12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  background: var(--axe-kaart-vlak);
+  border-bottom: var(--axe-kaart-scheiding);
 }
 .axe-week-dagkop {
   position: sticky;
@@ -4203,8 +4232,8 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   align-items: center;
   gap: 1px;
   padding: 8px 4px;
-  background: var(--axe-vak-vlak, #0E0E12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  background: var(--axe-kaart-vlak);
+  border-bottom: var(--axe-kaart-scheiding);
   border-left: 1px solid rgba(255, 255, 255, 0.04);
 }
 .axe-week-dagnaam { font-size: 10px; color: var(--text-muted); }
@@ -4283,7 +4312,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   align-items: center;
   gap: 14px;
   padding: 9px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-top: var(--axe-kaart-scheiding);
   font-size: 10.5px;
   color: var(--text-muted);
 }
@@ -4303,35 +4332,29 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * dezelfde taken, en los van elkaar moet je heen en weer kijken om een plan te
  * maken.
  */
-.axe-appvel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-bottom: 12px;
-  min-height: 100%;
-}
-.axe-appvel > .axe-app { flex: 1 1 42%; min-height: 200px; }
-.axe-appvier {
-  flex: 1 1 58%;
-  min-height: 240px;
+/* Vijf gelijke kolommen. Onder de 1600 twee rijen, onder de 1000 één kolom --
+   vijf panelen van 200px zijn vijf onleesbare lijstjes. */
+.axe-appvijf {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   align-items: stretch;
+  min-height: 100%;
+  padding-bottom: 12px;
 }
-.axe-appvier > .axe-app { height: 100%; }
-@media (max-width: 1500px) { .axe-appvier { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 900px)  { .axe-appvier { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1600px) { .axe-appvijf { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .axe-appvijf { grid-template-columns: minmax(0, 1fr); } }
+.axe-appvijf > .axe-app { min-height: 320px; }
 
 .axe-app {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border-radius: var(--axe-vak-hoek, 24px);
-  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
-  background: var(--axe-vak-vlak, #0E0E12);
-  box-shadow: var(--axe-vak-zweef);
+  border-radius: var(--axe-kaart-hoek);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+  box-shadow: var(--axe-kaart-zweef);
   overflow: hidden;
 }
 .axe-app-kop {
@@ -4340,7 +4363,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   justify-content: space-between;
   gap: 10px;
   padding: 13px 16px 11px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: var(--axe-kaart-scheiding);
 }
 .axe-app-titel {
   font-size: 13px;
@@ -4415,8 +4438,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   flex: 1 1 40%;
   min-height: 0;
   overflow: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
-  background: rgba(255, 255, 255, 0.012);
+  border-top: var(--axe-kaart-scheiding);
 }
 .axe-app-dagkop {
   position: sticky;
@@ -4424,7 +4446,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 6px 14px 4px;
   font-size: 9.5px;
   color: var(--text-muted);
-  background: var(--axe-vak-vlak, #0E0E12);
+  background: var(--axe-kaart-vlak);
 }
 .axe-app-dagrij {
   width: 100%;
@@ -4474,3 +4496,196 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border-radius: 6px;
 }
 .axe-app-rijknoppen button:hover { color: var(--text-primary); }
+
+/* De cijferrij per app: totaal, te doen, bezig, klaar. */
+.axe-app-cijfers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-app-cijfers > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 9px 2px 10px;
+}
+/* Een haarlijn tussen de cijfers en geen vier vlakjes: het is één rij en niet
+   vier kaartjes. */
+.axe-app-cijfers > div + div { border-left: var(--axe-kaart-scheiding); }
+.axe-app-cijfer { font-size: 17px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.axe-app-cijfernaam { font-size: 9.5px; color: var(--text-muted); }
+
+/* ══ De maandkalender ═════════════════════════════════════════════════════ */
+.axe-maand {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin: 10px;
+  border-radius: var(--axe-kaart-hoek);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+  box-shadow: var(--axe-kaart-zweef);
+  overflow: hidden;
+}
+.axe-maand-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-maand-titel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+.axe-maand-titel svg { color: var(--text-muted); }
+.axe-maand-nav { display: inline-flex; align-items: center; gap: 6px; }
+.axe-maand-nav button {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.axe-maand-nav button:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.axe-maand-nu { border-color: rgba(255, 255, 255, 0.12) !important; color: var(--text-secondary) !important; }
+
+.axe-maand-dagkoppen {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-maand-dagkoppen span {
+  padding: 8px 4px;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+/* Echte cellen: je ziet de weken als rijen omdat de lijnen doorlopen, niet
+   omdat de getallen toevallig uitlijnen. */
+.axe-maand-raster {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+.axe-maand-cel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 8px 4px;
+  border: 0;
+  border-right: var(--axe-kaart-scheiding);
+  border-bottom: var(--axe-kaart-scheiding);
+  background: none;
+  min-height: 54px;
+}
+.axe-maand-cel:nth-child(7n) { border-right: 0; }
+.axe-maand-cel:nth-last-child(-n+7) { border-bottom: 0; }
+.axe-maand-cel:hover:not(:disabled) { background: rgba(255, 255, 255, 0.03); }
+/* De dagen van de maand ernaast staan er wel, maar gedempt: een gat laat de
+   weekrijen breken. */
+.axe-maand-cel[data-buiten='ja'] { opacity: 0.25; cursor: default; }
+.axe-maand-nr {
+  font-size: 13px;
+  color: var(--text-secondary);
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+}
+/* Vandaag: wit rondje, zoals in het voorbeeld. De gekozen dag krijgt een ring
+   -- twee verschillende dingen, dus twee verschillende vormen. */
+.axe-maand-cel[data-vandaag='ja'] .axe-maand-nr {
+  background: var(--text-primary);
+  color: #000;
+  font-weight: 600;
+}
+.axe-maand-cel[data-gekozen='ja']:not([data-vandaag='ja']) .axe-maand-nr {
+  box-shadow: inset 0 0 0 1px var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.axe-maand-stippen { display: flex; align-items: center; gap: 3px; }
+.axe-maand-stippen i { width: 5px; height: 5px; border-radius: 999px; display: block; }
+.axe-maand-stippen em { font-size: 9px; color: var(--text-muted); font-style: normal; line-height: 1; }
+
+/* ══ De agenda-lijst in de rechter schuifbalk ═════════════════════════════ */
+.axe-agenda { display: flex; flex-direction: column; min-width: 0; }
+.axe-agenda-kop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-agenda-titel { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.axe-agenda-tel { font-size: 10px; color: var(--text-muted); }
+.axe-agenda-leeg { padding: 16px 12px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.axe-agenda-dagkop {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 10px 12px 5px;
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-agenda-dagnaam { font-size: 11.5px; font-weight: 600; color: var(--text-primary); text-transform: capitalize; }
+.axe-agenda-dagdatum {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.axe-agenda-dagtel { margin-left: auto; font-size: 9.5px; color: var(--text-muted); flex: none; }
+.axe-agenda-rij {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-agenda-rij:hover { background: rgba(255, 255, 255, 0.03); }
+.axe-agenda-tijd {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  min-width: 34px;
+}
+.axe-agenda-stip { width: 6px; height: 6px; border-radius: 999px; flex: none; }
+.axe-agenda-naam {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.axe-agenda-pijl { color: var(--text-muted); opacity: 0.45; flex: none; }

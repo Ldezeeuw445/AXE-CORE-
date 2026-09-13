@@ -9,9 +9,10 @@
  *
  * Hier staat alleen de opmaak.
  */
+import { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import {
-  weekDagen, datumSleutel, blokjesVoor, urenBereik, type RoosterItem,
+  weekDagen, datumSleutel, blokjesVoor, urenBereik, WERKDAG_START, type RoosterItem,
 } from '@/domain/weekRooster';
 
 const DAGNAAM = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -33,9 +34,23 @@ export function WeekRooster({
 }) {
   const dagen = weekDagen(anker);
   const sleutels = dagen.map(datumSleutel);
-  const { van, tot } = urenBereik(items, sleutels);
+  /* De hele dag, 00:00 tot 23:00. Vast, zodat de rij waar 14:00 staat elke dag
+     en elke week dezelfde is. */
+  const { van, tot } = urenBereik();
   const uren = Array.from({ length: tot - van }, (_, i) => van + i);
   const vandaag = datumSleutel(new Date());
+  const rol = useRef<HTMLDivElement>(null);
+
+  /* Bij het openen naar het werkuur toe schuiven. 24 rijen passen niet in
+     beeld; zonder dit kijk je naar 02:00 en moet je elke keer zelf naar
+     beneden. Eén keer, niet bij elke week -- anders springt hij terug terwijl
+     je aan het bladeren bent. */
+  useEffect(() => {
+    const el = rol.current;
+    if (!el) return;
+    const celHoog = parseFloat(getComputedStyle(el).getPropertyValue('--celhoog')) || 44;
+    el.scrollTop = WERKDAG_START * celHoog;
+  }, []);
 
   const verschuif = (weken: number) => {
     const d = new Date(anker);
@@ -61,7 +76,7 @@ export function WeekRooster({
         </span>
       </header>
 
-      <div className="axe-week-rol">
+      <div className="axe-week-rol" ref={rol}>
         <div className="axe-week-raster" style={{ ['--uren' as string]: uren.length }}>
           {/* Hoek linksboven: leeg, maar hij moet er staan om de kolommen te
               laten kloppen. */}

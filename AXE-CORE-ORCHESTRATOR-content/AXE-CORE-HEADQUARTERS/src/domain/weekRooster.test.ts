@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   maandagVan, weekDagen, datumSleutel, minutenVan, blokjesVoor, urenBereik,
-  type RoosterItem,
+  DAG_UREN, WERKDAG_START, type RoosterItem,
 } from './weekRooster';
 
 const item = (o: Partial<RoosterItem> & { datum: string; tijd: string }): RoosterItem => ({
@@ -49,6 +49,19 @@ describe('minutenVan', () => {
   });
 });
 
+describe('de schaal', () => {
+  it('begint bij middernacht en eindigt na 23 uur', () => {
+    expect(DAG_UREN).toBe(24);
+  });
+
+  it('opent op een werkuur en niet op middernacht', () => {
+    // 24 rijen passen niet in beeld; zonder dit kijk je bij het openen naar
+    // 02:00 en moet je elke keer zelf scrollen.
+    expect(WERKDAG_START).toBeGreaterThan(5);
+    expect(WERKDAG_START).toBeLessThan(12);
+  });
+});
+
 describe('blokjesVoor', () => {
   const items = [
     item({ datum: '2026-03-18', tijd: '09:00', duurMin: 180 }),
@@ -85,21 +98,11 @@ describe('blokjesVoor', () => {
 });
 
 describe('urenBereik', () => {
-  it('houdt de standaard aan als er niets is', () => {
-    expect(urenBereik([], ['d'])).toEqual({ van: 8, tot: 19 });
-  });
-
-  it('rekt op naar een vroege afspraak', () => {
-    expect(urenBereik([item({ datum: 'd', tijd: '06:30' })], ['d']).van).toBe(6);
-  });
-
-  it('krimpt nooit onder de standaard', () => {
-    // Een week met alleen een lunchafspraak hoort geen rooster van één rij te
-    // worden.
-    expect(urenBereik([item({ datum: 'd', tijd: '12:00' })], ['d'])).toEqual({ van: 8, tot: 19 });
-  });
-
-  it('kijkt alleen naar de dagen die getoond worden', () => {
-    expect(urenBereik([item({ datum: 'andere-dag', tijd: '05:00' })], ['d']).van).toBe(8);
+  it('geeft de hele dag, ongeacht wat erin staat', () => {
+    // Hij rekte eerst mee met de inhoud. Dan is de rij waar 14:00 staat op
+    // maandag een andere dan op dinsdag zodra er ergens een avondafspraak bij
+    // komt -- en dat is precies waarom een rooster een VASTE schaal hoort te
+    // hebben.
+    expect(urenBereik()).toEqual({ van: 0, tot: 24 });
   });
 });

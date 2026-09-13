@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronLeft,
-  ChevronRight,
   Clock,
   MapPin,
   AlignLeft,
@@ -13,6 +11,9 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
 import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
 import { WeekRooster } from './agenda/WeekRooster';
+import { MaandRooster } from './agenda/MaandRooster';
+import { AgendaLijst } from './agenda/AgendaLijst';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster';
 import { CalendarRange, LayoutGrid } from 'lucide-react';
 
@@ -84,12 +85,7 @@ interface CalendarEvent {
  */
 const EVENTS: CalendarEvent[] = [];
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const TYPE_LABELS: Record<string, string> = {
   meeting: 'Meeting',
@@ -102,24 +98,12 @@ const TYPE_LABELS: Record<string, string> = {
 /*  UTILITIES                                                          */
 /* ------------------------------------------------------------------ */
 
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
-}
 
-function getFirstDayOfMonth(year: number, month: number): number {
-  /* 0 = Sun, 1 = Mon, ... adjust so Mon = 0 */
-  const day = new Date(year, month, 1).getDay();
-  return day === 0 ? 6 : day - 1;
-}
 
 function formatDateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function isToday(year: number, month: number, day: number): boolean {
-  const now = new Date();
-  return now.getFullYear() === year && now.getMonth() === month && now.getDate() === day;
-}
 
 /* ------------------------------------------------------------------ */
 /*  MAIN COMPONENT                                                     */
@@ -152,9 +136,6 @@ export default function CalendarPage() {
     [],
   );
 
-  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-  const firstDayOffset = getFirstDayOfMonth(currentYear, currentMonth);
-  const totalSlots = Math.ceil((daysInMonth + firstDayOffset) / 7) * 7;
 
   /* Events by date */
   const eventsByDate = useMemo(() => {
@@ -186,36 +167,8 @@ export default function CalendarPage() {
       .slice(0, 6);
   }, [currentYear, currentMonth]);
 
-  const goToPrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear((y) => y - 1);
-    } else {
-      setCurrentMonth((m) => m - 1);
-    }
-    setSelectedDate(null);
-  };
 
-  const goToNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear((y) => y + 1);
-    } else {
-      setCurrentMonth((m) => m + 1);
-    }
-    setSelectedDate(null);
-  };
 
-  /* Build grid cells */
-  const cells: { day: number | null; dateKey: string | null; isCurrentMonth: boolean }[] = [];
-  for (let i = 0; i < totalSlots; i++) {
-    const dayNum = i - firstDayOffset + 1;
-    if (dayNum > 0 && dayNum <= daysInMonth) {
-      cells.push({ day: dayNum, dateKey: formatDateKey(currentYear, currentMonth, dayNum), isCurrentMonth: true });
-    } else {
-      cells.push({ day: null, dateKey: null, isCurrentMonth: false });
-    }
-  }
 
   return (
     <motion.div
@@ -224,6 +177,25 @@ export default function CalendarPage() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
+      {/* De rechter schuifbalk: wat komt eraan.
+          In de week alles vanaf vandaag, in de maand alleen de dag die je hebt
+          aangeklikt -- daar gaat het om die ene dag, want de kalender ernaast
+          laat de rest al zien. */}
+      <TabRail kant="rechts">
+        <AgendaLijst
+          items={roosterItems}
+          titel="Agenda"
+          vanaf={weergave === 'week' ? vandaagSleutel : undefined}
+          tot={weergave === 'maand' ? (selectedDate ?? undefined) : undefined}
+          opKies={item => { setSelectedDate(item.datum); }}
+          leegTekst={
+            weergave === 'maand'
+              ? 'Niets op deze dag.'
+              : 'Niets gepland. Er is nog geen agendakoppeling — zie de opmerking bij EVENTS.'
+          }
+        />
+      </TabRail>
+
       {/* Maand of week, links in de band naast de composer -- net als de
           sub-tabs van de trading-desk, en met dezelfde component. Het is
           dezelfde handeling: kiezen wat je in het midden ziet. */}
@@ -252,154 +224,14 @@ export default function CalendarPage() {
             }}
           />
         ) : (
-        <>
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-6 py-4 flex-shrink-0"
-          style={{ borderBottom: '1px solid var(--border-subtle)' }}
-        >
-          <div className="flex items-center gap-4">
-            <button
-              onClick={goToPrevMonth}
-              className="p-2 rounded-lg transition-colors hover:bg-white/5"
-              style={{ border: '1px solid var(--border-subtle)' }}
-            >
-              <ChevronLeft size={16} color="var(--text-secondary)" />
-            </button>
-            <h1
-              className="text-page-title font-semibold min-w-[200px] text-center"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {MONTH_NAMES[currentMonth]} {currentYear}
-            </h1>
-            <button
-              onClick={goToNextMonth}
-              className="p-2 rounded-lg transition-colors hover:bg-white/5"
-              style={{ border: '1px solid var(--border-subtle)' }}
-            >
-              <ChevronRight size={16} color="var(--text-secondary)" />
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const n = new Date();
-                setCurrentYear(n.getFullYear());
-                setCurrentMonth(n.getMonth());
-                setSelectedDate(formatDateKey(n.getFullYear(), n.getMonth(), n.getDate()));
-              }}
-              className="text-xs-custom px-3 py-1.5 rounded-lg transition-colors hover:bg-white/5"
-              style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
-            >
-              Today
-            </button>
-          </div>
-        </div>
-
-        {/* Day Labels */}
-        <div
-          className="grid flex-shrink-0"
-          style={{
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            borderBottom: '1px solid var(--border-subtle)',
-          }}
-        >
-          {DAY_LABELS.map((label, i) => (
-            <div
-              key={label}
-              className="py-2 text-center text-[10px] uppercase tracking-wider font-medium"
-              style={{
-                color: i >= 5 ? 'var(--text-muted)' : 'var(--text-secondary)',
-                borderRight: i < 6 ? '1px solid var(--border-subtle)' : 'none',
-              }}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
-
-        {/* Month Grid */}
-        <div
-          className="flex-1 grid overflow-hidden"
-          style={{
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gridTemplateRows: `repeat(${cells.length / 7}, 1fr)`,
-          }}
-        >
-          {cells.map((cell, i) => {
-            const cellEvents = cell.dateKey ? (eventsByDate[cell.dateKey] || []) : [];
-            const selected = cell.dateKey === selectedDate;
-            const today = cell.isCurrentMonth && cell.day !== null && isToday(currentYear, currentMonth, cell.day);
-
-            return (
-              <button
-                key={i}
-                onClick={() => { if (cell.dateKey) { setSelectedDate(cell.dateKey); if (isMobile) setMobileSheetOpen(true); } }}
-                className="relative text-left transition-colors flex flex-col"
-                style={{
-                  padding: '6px',
-                  borderRight: (i % 7) < 6 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                  borderBottom: '1px solid rgba(255,255,255,0.03)',
-                  /* Vandaag is geen doorzichtige cel. Op de plaat kijk je door
-                     'transparent' heen naar het bureaublad, en dan is de dag
-                     waar je op staat juist de minst leesbare van de maand.
-                     Geselecteerd blijft cyaan, vandaag krijgt een eigen vlak. */
-                  backgroundColor: selected
-                    ? 'rgba(34,211,238,0.10)'
-                    : today
-                    ? 'var(--bg-elevated)'
-                    : cell.isCurrentMonth
-                    ? 'var(--bg-panel)'
-                    : 'rgba(0,0,0,0.22)',
-                  cursor: cell.isCurrentMonth ? 'pointer' : 'default',
-                }}
-              >
-                {cell.day !== null && (
-                  <>
-                    {/* Day number */}
-                    <span
-                      className="text-xs font-mono inline-flex items-center justify-center rounded-full"
-                      style={{
-                        width: '24px',
-                        height: '24px',
-                        color: today ? '#05070A' : selected ? 'var(--accent-cyan)' : 'var(--text-primary)',
-                        backgroundColor: today ? 'var(--accent-cyan)' : selected ? 'var(--tint)' : 'transparent',
-                        fontWeight: today || selected ? 600 : 400,
-                      }}
-                    >
-                      {cell.day}
-                    </span>
-
-                    {/* Event dots/bars */}
-                    {cellEvents.length > 0 && (
-                      <div className="flex flex-col gap-0.5 mt-1.5 flex-1 min-h-0">
-                        {cellEvents.slice(0, 3).map((ev) => (
-                          <div
-                            key={ev.id}
-                            className="flex items-center gap-1.5 px-1 py-0.5 rounded text-[10px] truncate"
-                            style={{
-                              backgroundColor: `${ev.color}15`,
-                              color: ev.color,
-                              borderLeft: `2px solid ${ev.color}`,
-                            }}
-                          >
-                            <span className="truncate">{ev.title}</span>
-                          </div>
-                        ))}
-                        {cellEvents.length > 3 && (
-                          <span className="text-[9px] px-1" style={{ color: 'var(--text-muted)' }}>
-                            +{cellEvents.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        </>
+          <MaandRooster
+            jaar={currentYear}
+            maand={currentMonth}
+            items={roosterItems}
+            gekozen={selectedDate}
+            opKies={setSelectedDate}
+            opMaand={(j, m) => { setCurrentYear(j); setCurrentMonth(m); }}
+          />
         )}
       </div>
 
@@ -412,9 +244,11 @@ export default function CalendarPage() {
         />
       )}
 
-      {/* Day-detail panel: desktop right sidebar, mobile bottom sheet. Anchored
-          with `absolute` (not fixed) so it stays inside the calendar area and
-          never overlaps the app's bottom nav/composer. */}
+      {/* Alleen in de maandweergave. In de week is elke dag al een kolom, dus
+          een paneel dat één dag herhaalt kost alleen breedte -- en breedte is
+          precies wat zeven kolommen nodig hebben. Wat je in de week wilt (de
+          agenda-lijst) staat in de rechter schuifbalk. */}
+      {weergave === 'maand' && (
       <div
         className={
           isMobile
@@ -527,6 +361,7 @@ export default function CalendarPage() {
           )}
         </AnimatePresence>
       </div>
+      )}
     </motion.div>
   );
 }
