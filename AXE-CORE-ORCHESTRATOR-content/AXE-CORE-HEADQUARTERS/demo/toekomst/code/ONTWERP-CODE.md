@@ -4,8 +4,9 @@ Luka: *Cursor, Replit, FlutterFlow en Figma in één, met een preview-stand,
 en meteen mocks voor telefoon en tablet als je die ene pagina als demo wilt.*
 
 Dit is de spec bij de maquettes. Open `../code.html` (de studio) en
-`preview.html` (de pagina op drie toestellen). `CodeEditorPage.tsx` blijft
-van Claude-sessie 3; dit is alleen het ontwerp.
+`preview.html` (de pagina op drie toestellen). `CodeEditorPage.tsx` volgt
+deze indeling: drie standen, terminal onder de editor, motoren in de balk,
+vragen via de AXE-composer.
 
 ---
 

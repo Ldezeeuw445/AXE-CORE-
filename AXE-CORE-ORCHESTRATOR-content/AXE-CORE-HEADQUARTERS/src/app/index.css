@@ -1,5 +1,6 @@
 @import '../design/axe-surface.css';
 @import '../design/axe-look.css';
+@import '../design/code-studio.css';
 
 @tailwind base;
 @tailwind components;

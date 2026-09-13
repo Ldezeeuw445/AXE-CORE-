@@ -24,7 +24,7 @@
  * buiten de chat.
  */
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Check, ChevronDown, ChevronUp, MapPin, Mic, Plus, RotateCcw, Send, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
@@ -52,6 +52,7 @@ import {
   directFromAssistantMessageAsync,
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
+import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
 
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
@@ -66,6 +67,7 @@ function looksLikeChartRequest(t: string): boolean {
 
 export function PlaatChat() {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const voice = useVoiceStore();
   const dismiss = useSphereProjectionStore(s => s.dismiss);
@@ -223,6 +225,11 @@ export function PlaatChat() {
     const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
     setAttachments([]);
+    /* Op de code-tab is de composer de vraag aan de code-agent — geen tweede
+       balk, en AXE zelf hoeft dezelfde opdracht niet nóg eens te draaien. */
+    if (location.pathname.includes('code-editor') && designAgentBridge.send(payload)) {
+      return;
+    }
     await voice.sendMessage(payload);
   };
 

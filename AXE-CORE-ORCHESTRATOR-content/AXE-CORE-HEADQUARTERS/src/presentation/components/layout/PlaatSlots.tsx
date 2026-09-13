@@ -208,13 +208,13 @@ export function PlaatSlot({ slot, hoog, children }: {
    * Neem de volle hoogte van de plaat in plaats van alleen de onderband.
    *
    * De sloten lopen normaal van de chatplaat tot onder de composer -- dat is
-   * de band van de code-editor, met de terminal links en de agent rechts. De
+   * de onderband van tabs die er panelen in hangen. De code-editor doet dat
+   * niet meer (terminal onder de editor, agent in de balk). De
    * geheugenverkenners willen iets anders: kolommen naast het beeld, van onder
    * de kopbalk tot boven de chat, zoals in de oude AXE Core.
    *
-   * Als schakelaar op het slot en niet als attribuut op <html>: dan hoeft geen
-   * enkele andere pagina te weten dat deze stand bestaat, en kan de
-   * code-editor er niet per ongeluk in meegaan.
+   * Alleen wie er zelf om vraagt krijgt dit: PlaatSlot zet de klasse op de
+   * gastheer en haalt hem er bij het verlaten weer af.
    */
   hoog?: boolean;
   children: ReactNode;

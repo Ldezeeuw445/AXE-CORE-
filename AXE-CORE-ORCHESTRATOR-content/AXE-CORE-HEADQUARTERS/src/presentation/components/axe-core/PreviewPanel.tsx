@@ -1,8 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, Play, Square, RefreshCw, X, MousePointer2, Type, Layers } from 'lucide-react';
 import { previewStart, previewStop, previewStatus, type PreviewStatus } from '@/infrastructure/gateways/axeCoreApiService';
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
+import { IphoneFrame } from '@/presentation/components/devices/IphoneFrame';
+import { IpadFrame } from '@/presentation/components/devices/IpadFrame';
+import { DeskFrame } from '@/presentation/components/devices/DeskFrame';
+import { SchaalHouder } from '@/presentation/components/axe-core/SchaalHouder';
+import { TOESTEL_MAAT } from '@/presentation/components/devices/toestelMaat';
+
+export type PreviewKader = 'none' | 'phone' | 'tablet' | 'desktop';
+export type PreviewLayout = 'column' | 'podium' | 'devices';
 
 /**
  * Design-mode bridge injected into the preview iframe (same-origin only).
@@ -139,6 +147,40 @@ const DESIGN_BRIDGE = `
 })();
 `;
 
+function KaderOm({
+  kader, url, children,
+}: {
+  kader: PreviewKader;
+  url?: string | null;
+  children: ReactNode;
+}) {
+  if (kader === 'phone') {
+    const m = TOESTEL_MAAT.phone;
+    return (
+      <SchaalHouder breedte={m.breedte} hoogte={m.hoogte}>
+        <IphoneFrame>{children}</IphoneFrame>
+      </SchaalHouder>
+    );
+  }
+  if (kader === 'tablet') {
+    const m = TOESTEL_MAAT.tablet;
+    return (
+      <SchaalHouder breedte={m.breedte} hoogte={m.hoogte}>
+        <IpadFrame>{children}</IpadFrame>
+      </SchaalHouder>
+    );
+  }
+  if (kader === 'desktop') {
+    const m = TOESTEL_MAAT.desktop;
+    return (
+      <SchaalHouder breedte={m.breedte} hoogte={m.hoogte}>
+        <DeskFrame url={url ?? undefined}>{children}</DeskFrame>
+      </SchaalHouder>
+    );
+  }
+  return <>{children}</>;
+}
+
 export type DesignSelection = {
   tag: string;
   id: string;
@@ -153,17 +195,30 @@ export function PreviewPanel({
   isMobile,
   onClose,
   onSendToAgent,
+  embed = false,
+  kader = 'none',
+  layout = 'column',
+  designMode: designModeProp,
+  onDesignModeChange,
 }: {
   isMobile: boolean;
   onClose: () => void;
   /** Optional: push a design change instruction into the Code Agent */
   onSendToAgent?: (instruction: string) => void;
+  /** Vul de ouder in plaats van een vaste zijstrook — voor de studio. */
+  embed?: boolean;
+  kader?: PreviewKader;
+  layout?: PreviewLayout;
+  designMode?: boolean;
+  onDesignModeChange?: (aan: boolean) => void;
 }) {
   const [status, setStatus] = useState<PreviewStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [iframeKey, setIframeKey] = useState(0);
-  const [designMode, setDesignMode] = useState(false);
+  const [designModeIntern, setDesignModeIntern] = useState(false);
+  const designMode = designModeProp ?? designModeIntern;
+  const setDesignMode = onDesignModeChange ?? setDesignModeIntern;
   const [bridgeReady, setBridgeReady] = useState(false);
   const [selection, setSelection] = useState<DesignSelection | null>(null);
   const [editText, setEditText] = useState('');
@@ -327,18 +382,35 @@ export function PreviewPanel({
 
   const running = status?.running ?? false;
   const url = status?.url ?? null;
+  const vul = embed || layout !== 'column';
+
+  const iframeEl = (ref?: typeof iframeRef, titel = 'Live preview') => (
+    <iframe
+      ref={ref}
+      key={`${iframeKey}-${titel}`}
+      src={url ?? undefined}
+      className="w-full h-full"
+      style={{ border: 'none', background: '#07080B' }}
+      title={titel}
+      onLoad={() => { if (ref === iframeRef) injectBridge(); }}
+    />
+  );
 
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       /* `axe-dekkend`: het sterrenveld gumt deze rechthoek weg. De plaat is
          mat zwart, en dan hoort er ook echt niets doorheen te schijnen. */
-      className={`axe-preview axe-dekkend flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
-      style={{ width: isMobile ? '100%' : breedte, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}
+      className={`axe-preview axe-dekkend flex flex-col overflow-hidden ${isMobile || vul ? 'flex-1 min-h-0 min-w-0' : 'flex-shrink-0'}`}
+      style={{
+        width: isMobile || vul ? '100%' : breedte,
+        borderLeft: vul ? 'none' : '1px solid rgba(255,255,255,0.06)',
+        background: '#050505',
+      }}
     >
       {/* De sleepgreep: een strook van 6px op de linkerrand. Onzichtbaar tot je
           er bent, want een zichtbare greep is een streep die er altijd staat. */}
-      {!isMobile && (
+      {!isMobile && !vul && (
         <div
           className="axe-preview-greep"
           onPointerDown={e => {
@@ -389,15 +461,25 @@ export function PreviewPanel({
       {running && url ? (
         <div className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 min-h-0 relative">
-            <iframe
-              ref={iframeRef}
-              key={iframeKey}
-              src={url}
-              className="w-full h-full"
-              style={{ border: 'none', background: '#fff' }}
-              title="Live preview"
-              onLoad={() => injectBridge()}
-            />
+            {layout === 'devices' ? (
+              <div className="axe-studio-rij">
+                {(['phone', 'tablet', 'desktop'] as const).map(naam => {
+                  const m = TOESTEL_MAAT[naam];
+                  return (
+                    <div key={naam} className="axe-studio-plek">
+                      <KaderOm kader={naam} url={url}>
+                        {iframeEl(naam === 'phone' ? iframeRef : undefined, `Preview ${m.label}`)}
+                      </KaderOm>
+                      <span className="kop">{naam} · <b>{m.label}</b></span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <KaderOm kader={kader} url={url}>
+                {iframeEl(iframeRef)}
+              </KaderOm>
+            )}
             {designMode && (
               <div className="absolute top-1 left-1 right-1 flex items-center gap-1 px-2 py-0.5 rounded text-[8px] pointer-events-none"
                 style={{ background: 'rgba(3,9,11,0.85)', color: 'rgba(165,243,252,0.9)', border: '1px solid var(--tint-line)' }}>

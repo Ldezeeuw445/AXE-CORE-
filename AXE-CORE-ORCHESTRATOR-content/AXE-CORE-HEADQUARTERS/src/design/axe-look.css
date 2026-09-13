@@ -1976,9 +1976,9 @@ html:root[data-look],
 
      Dit is één keer omgedraaid naar "van de topbalk tot de chatplaat" op de
      aanname dat dit Home's schuifpanelen waren. Dat is het niet: Home gebruikt
-     Sidebar en RightPanel, en deze slots zijn ALLEEN van de code-editor -- de
-     terminal links, de code-agent rechts, allebei onderin naast de chat. Die
-     omkering zette ze verticaal op de plek van de schuifbalken. */
+     Sidebar en RightPanel. Deze slots zijn de onderband voor tabs die er
+     inhoud in hangen (trading, memory). De code-editor doet dat niet meer:
+     terminal zit onder de editor, de agent in de editorbalk. */
   top: var(--axe-chat-top, auto);
   bottom: var(--axe-composer-onder, 100px);
   height: auto;
@@ -1997,8 +1997,7 @@ html:root[data-look],
  * de kopbalk tot boven de chatplaat -- zoals in de oude AXE Core.
  *
  * Alleen wie er zelf om vraagt krijgt dit: PlaatSlot zet de klasse op de
- * gastheer en haalt hem er bij het verlaten weer af. De code-editor houdt zijn
- * onderband, want daar horen de terminal en de agent wel naast de chat.
+ * gastheer en haalt hem er bij het verlaten weer af.
  */
 :root[data-look] .axe-slot--hoog {
   /* Onder de kopbalk tot boven de chatplaat.

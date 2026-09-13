@@ -1,13 +1,14 @@
 /**
- * CodeEditorPage.tsx — AXE Code Studio (Zed-inspired)
- * - Cmd+K palette · Cmd+P quick-open · splits · live git · DnD file tree
+ * CodeEditorPage.tsx — AXE Code Studio
+ * Drie standen (Code / Canvas / Preview), terminal onder de editor,
+ * code-agent via de AXE-composer. Monaco, echte xterm, echte motoren.
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
-import { PlaatPanel, PlaatRail } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatRail } from '@/presentation/components/layout/PlaatSlots';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Check, ChevronRight, Code2, Columns2, Command, Copy, Eye, FileCode, FilePlus, Files, Folder, FolderOpen, FolderPlus, GitBranch, Paperclip, Play, RefreshCw, Rows2, Save, Search, Send, Square, Terminal, Trash2, Volume2, X, Zap } from 'lucide-react';
+import { Bot, Check, ChevronRight, Code2, Columns2, Command, FileCode, FilePlus, Files, Folder, FolderOpen, GitBranch, Layers, Monitor, MousePointer2, Play, RefreshCw, Save, Search, Send, Smartphone, Tablet, Terminal, Trash2, X, Zap } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -130,6 +131,8 @@ interface AgentMessage {
 }
 
 type SidebarMode = 'files' | 'search' | 'git';
+type StudioStand = 'code' | 'canvas' | 'preview';
+type StudioDevice = 'phone' | 'tablet' | 'desktop';
 /**
  * Hoe de code-plaat verdeeld is.
  *
@@ -470,7 +473,11 @@ export default function CodeEditorPage() {
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const activeTab = openTabs.find(t => t.path === activeTabPath) ?? null;
 
-  const [indeling, setIndeling] = useState<Indeling>('uit');
+  const [indeling, setIndeling] = useState<Indeling>('enkel');
+  const [studioStand, setStudioStand] = useState<StudioStand>('code');
+  const [studioDevice, setStudioDevice] = useState<StudioDevice>('phone');
+  const [showFiles, setShowFiles] = useState(true);
+  const [designMode, setDesignMode] = useState(false);
   /* Twee panelen betekent gesplitst; een plaat en geen plaat allebei niet. */
   const gesplitst = indeling === 'rijen' || indeling === 'kolommen';
   const [splitTabPath, setSplitTabPath] = useState<string | null>(null);
@@ -493,12 +500,10 @@ export default function CodeEditorPage() {
    * indeling moet voorkomen. */
   const [termInput, setTermInput] = useState('');
   const termRef = useRef<XtermHandle>(null);
-  /* De agent staat er gewoon. Hij zat achter een knop, maar in de nieuwe
-     indeling hangt hij in het rechterslot naast de chatplaat -- daar staat hij
-     niets in de weg, en een paneel dat je eerst moet aanzetten vergeet je. */
-  const [showAgent, setShowAgent] = useState(true);
-  const agentBestandRef = useRef<HTMLInputElement>(null);
-  const [showPreview, setShowPreview] = useState(false);
+  /* De agent hangt in de editor, niet naast de composer. Motoren in de balk;
+     vragen via de AXE-composer. Het chatvak klapt open als je vraagt. */
+  const [showAgent, setShowAgent] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
 
   const activePendingPatch = (() => {
@@ -598,7 +603,6 @@ export default function CodeEditorPage() {
   const [paletteIndex, setPaletteIndex] = useState(0);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
   const isMobile = useIsMobile();
 
@@ -1007,6 +1011,13 @@ export default function CodeEditorPage() {
 
   const allFiles = flattenFiles(fileTree);
 
+  const focusComposer = useCallback(() => {
+    setShowAgent(true);
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLInputElement>('.axe-composer input')?.focus();
+    });
+  }, []);
+
   const openPalette = useCallback((mode: 'all' | 'files' = 'all') => {
     setPaletteMode(mode); setPaletteQuery(''); setPaletteIndex(0); setPaletteOpen(true);
     setTimeout(() => paletteInputRef.current?.focus(), 40);
@@ -1020,6 +1031,10 @@ export default function CodeEditorPage() {
       { id: 'toggle-terminal', label: 'Toggle Terminal', category: 'command', run: () => setShowTerminal(v => !v) },
       { id: 'toggle-agent', label: 'Toggle Code Agent', category: 'command', run: () => setShowAgent(v => !v) },
       { id: 'toggle-preview', label: 'Toggle Preview', category: 'command', run: () => setShowPreview(v => !v) },
+      { id: 'stand-code', label: 'Stand: Code', category: 'command', run: () => setStudioStand('code') },
+      { id: 'stand-canvas', label: 'Stand: Canvas', category: 'command', run: () => setStudioStand('canvas') },
+      { id: 'stand-preview', label: 'Stand: Preview', category: 'command', run: () => setStudioStand('preview') },
+      { id: 'ask-agent', label: 'Ask code agent', hint: 'composer', category: 'command', run: () => focusComposer() },
       { id: 'plaat-een', label: 'One pane', category: 'command', run: () => kiesIndeling('enkel') },
       { id: 'plaat-kolommen', label: 'Two panes side by side', category: 'command', run: () => kiesIndeling('kolommen') },
       { id: 'plaat-rijen', label: 'Two panes stacked', category: 'command', run: () => kiesIndeling('rijen') },
@@ -1042,7 +1057,7 @@ export default function CodeEditorPage() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 40)
       .map(x => x.item);
-  }, [allFiles, paletteQuery, paletteMode, saveActiveFile, addFile, addFolder, kiesIndeling, sendGit, runFile, openFile]);
+  }, [allFiles, paletteQuery, paletteMode, saveActiveFile, addFile, addFolder, kiesIndeling, sendGit, runFile, openFile, focusComposer]);
 
   useEffect(() => { setPaletteIndex(0); }, [paletteQuery, paletteOpen]);
 
@@ -1067,13 +1082,6 @@ export default function CodeEditorPage() {
     return () => window.removeEventListener('keydown', h);
   }, [activeTab, saveActiveFile, openPalette, paletteOpen, paletteItems, paletteIndex]);
 
-  const copyCode = () => {
-    if (!activeTab?.content) return;
-    void navigator.clipboard.writeText(activeTab.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
-  };
-
   const treeProps = {
     selectedPath: activeTabPath,
     onSelect: (p: string) => { void openFile(p); },
@@ -1081,6 +1089,13 @@ export default function CodeEditorPage() {
     onDelete: (p: string) => { void deleteNode(p); },
     onMove: (from: string, to: string) => { void moveNode(from, to); },
   };
+
+  const laatsteAgent = [...agentMessages].reverse().find(m => m.role === 'agent' || m.role === 'status' || m.role === 'plan');
+  const agentSpoorTekst = agentBusy
+    ? 'Agent working…'
+    : laatsteAgent?.role === 'plan'
+      ? (laatsteAgent.planSteps?.[0] ?? 'Plan')
+      : (laatsteAgent?.text ?? '').split('\n')[0] || '';
 
   return (
     <motion.div className="h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -1179,539 +1194,489 @@ export default function CodeEditorPage() {
         )}
       </AnimatePresence>
 
-      {/* Wat deze tab te bedienen heeft, in het dock.
-
-          Je vroeg om de rechterknoppen in de kop van de agent-plaat. Dat heb ik
-          niet gedaan, om één reden: de Agent-knop zit daar dan in zijn eigen
-          paneel, dus zet je hem uit, dan verdwijnt de knop waarmee je hem weer
-          aan zet. Het dock is er precies voor dit soort knoppen -- ze horen bij
-          wat je ziet, staan op elke tab op dezelfde plek en verdwijnen niet met
-          het paneel dat ze bedienen. De bestandsknoppen staan links in de kop
-          van het terminal-paneel, zoals je vroeg. */}
-      <div className="axe-pagina-werkbalk flex items-center gap-1 px-3 py-1.5 flex-shrink-0 flex-wrap"
-        style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
-        <Code2 size={12} style={{ color: 'var(--accent-cyan)' }} />
-        <span className="text-[11px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CODE STUDIO</span>
-        {isMobile && (
-          <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
-            <SheetTrigger asChild>
-              <button className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded text-[9px]"
-                style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
-                <FolderOpen size={10} /> Files
-              </button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[240px] p-0 overflow-hidden"
-              style={{ background: '#050505', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="py-1 overflow-y-auto h-full">
-                {fileTree.map(node => <FileTreeItem key={node.path} node={node} depth={0} {...treeProps} />)}
-              </div>
-            </SheetContent>
-          </Sheet>
-        )}
-        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        <button onClick={() => void addFile()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }}><FilePlus size={10} /> New File</button>
-        <button onClick={() => void addFolder()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }}><FolderPlus size={10} /> Folder</button>
-        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        <button onClick={() => void saveActiveFile()}
-          disabled={!activeTab || activeTab.content === activeTab.savedContent || saving}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] disabled:opacity-30 hover:brightness-125"
-          style={{ color: (activeTab && activeTab.content !== activeTab.savedContent) ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }}>
-          {saving ? <RefreshCw size={10} className="animate-spin" /> : <Save size={10} />} Save
-        </button>
-        <button onClick={copyCode} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          {copied ? <><Check size={10} style={{ color: 'var(--success)' }} /> Copied</> : <><Copy size={10} /> Copy</>}
-        </button>
-        {activeTab && getRunCommand(activeTab.path, activeTab.content) && (
-          <button onClick={runFile} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium hover:brightness-125"
-            style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.2)' }}>
-            <Play size={9} /> Run
-          </button>
-        )}
-        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        <button onClick={() => kiesIndeling('enkel')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: indeling === 'enkel' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="One pane"><Square size={10} /></button>
-        <button onClick={() => kiesIndeling('kolommen')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: indeling === 'kolommen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Two side by side"><Columns2 size={10} /></button>
-        <button onClick={() => kiesIndeling('rijen')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: indeling === 'rijen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Two stacked"><Rows2 size={10} /></button>
-        <div className="flex-1" />
-        <button onClick={() => openPalette('all')} className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Command size={9} /> ⌘K</button>
-        <button onClick={() => openPalette('files')} className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Search size={9} /> ⌘P</button>
-        <button onClick={() => setShowPreview(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ background: showPreview ? 'var(--tint-line)' : 'transparent', border: showPreview ? '1px solid var(--tint-line)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
-          <Eye size={10} /> Preview
-        </button>
-        <button onClick={() => setShowAgent(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ background: showAgent ? 'var(--tint-line)' : 'transparent', border: showAgent ? '1px solid var(--tint-line)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
-          <Zap size={10} /> Agent
-        </button>
-        <button onClick={() => setShowTerminal(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: showTerminal ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }}>
-          <Terminal size={10} /> Terminal
-        </button>
-      </div>
-
-      {openTabs.length > 0 && (
-        <div className="flex items-end overflow-x-auto flex-shrink-0"
-          style={{ background: '#050505', borderBottom: '1px solid rgba(255,255,255,0.06)', minHeight: 32 }}>
-          {openTabs.map(tab => {
-            const isActive = tab.path === activeTabPath || tab.path === splitTabPath;
-            const dirty = tab.content !== tab.savedContent;
-            return (
-              <div key={tab.path} className="flex items-center gap-1.5 px-3 py-1.5 cursor-pointer flex-shrink-0 group"
-                style={{
-                  borderRight: '1px solid rgba(255,255,255,0.04)',
-                  borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                  background: isActive ? 'var(--tint)' : 'transparent', maxWidth: 180,
-                }}
-                onClick={() => {
-                  if (focusedPane === 'split' && gesplitst) setSplitTabPath(tab.path);
-                  else setActiveTabPath(tab.path);
-                }}
-                title={tab.path}>
-                <FileCode size={9} style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
-                <span className="text-[10px] truncate flex-1" style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.55)' }}>{tab.name}</span>
-                {dirty && <span style={{ color: 'var(--warning)', fontSize: 14, lineHeight: 1 }}>•</span>}
-                <button onClick={e => { e.stopPropagation(); closeTab(tab.path); }}
-                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded flex-shrink-0 hover:text-red-400"
-                  style={{ color: 'rgba(255,255,255,0.3)' }}><X size={9} /></button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="flex flex-1 min-h-0 relative">
-        {/* De bestandsboom is hier de uitschuivende linkerrail.
-            Hij stond als vaste kolom van 220px naast de editor: altijd zichtbaar,
-            altijd ruimte kwijt, ook als je gewoon aan het lezen bent. Als rail komt
-            hij met hetzelfde gebaar als overal -- muis naar de rand -- en houdt de
-            editor zijn volle breedte. De standaardwidgets wijken hier; twee dingen
-            die op dezelfde plek uitschuiven is een botsing, geen keuze. */}
+      {/* Studio: werkbalk + drie standen in tabruimte. Terminal onder de
+          editor, niet in een PlaatSlot naast de composer. */}
+      {!showFiles && (
         <PlaatRail title="Files">
-          {/* Geen eigen vak meer. In de rail IS de rail al de plaat, dus een
-              kolom met zijn eigen zwart en een streep ernaast leest daarop als
-              een doos in een doos -- dat zwarte vlak om de bestanden. Wat
-              overblijft is de inhoud, op de plaat die er al ligt. */}
           <div className="flex flex-col w-full min-h-0 flex-1">
-          <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-            {(['files', 'search', 'git'] as const).map(mode => (
-              <button key={mode} onClick={() => setSidebarMode(mode)}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] uppercase tracking-wide"
-                style={{
-                  color: sidebarMode === mode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)',
-                  borderBottom: sidebarMode === mode ? '1px solid var(--accent-cyan)' : '1px solid transparent',
-                }}>
-                {mode === 'files' ? <Files size={9} /> : mode === 'search' ? <Search size={9} /> : <GitBranch size={9} />}
-                {mode}
-              </button>
-            ))}
-          </div>
-
-          {sidebarMode === 'files' && (
-            <div className="flex-1 overflow-y-auto py-1"
-              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-              onDrop={e => {
-                e.preventDefault();
-                const from = getDragFilePath(e);
-                if (from) void moveNode(from, '');
-              }}>
-              {rootLoading && (
-                <div className="flex items-center gap-1.5 px-3 py-2 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                  <RefreshCw size={9} className="animate-spin" /> Loading…
-                </div>
-              )}
-              {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
-              {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
-              <div className="px-2 py-2 text-[8px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                Drag files onto folders to move · drop on empty area → root
-              </div>
+            <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              {(['files', 'search', 'git'] as const).map(mode => (
+                <button key={mode} onClick={() => setSidebarMode(mode)}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] uppercase tracking-wide"
+                  style={{
+                    color: sidebarMode === mode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)',
+                    borderBottom: sidebarMode === mode ? '1px solid var(--accent-cyan)' : '1px solid transparent',
+                  }}>
+                  {mode === 'files' ? <Files size={9} /> : mode === 'search' ? <Search size={9} /> : <GitBranch size={9} />}
+                  {mode}
+                </button>
+              ))}
             </div>
-          )}
-
-          {sidebarMode === 'search' && (
-            <div className="flex flex-col flex-1 min-h-0">
-              <div className="px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <div className="flex items-center gap-1 rounded px-2 py-1"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <Search size={9} style={{ color: 'rgba(255,255,255,0.3)' }} />
-                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') void runSearch(searchQuery); }}
-                    placeholder="Search in files… (Enter)"
-                    className="flex-1 bg-transparent outline-none text-[10px]" style={{ color: 'rgba(255,255,255,0.8)' }} />
-                  {searching && <RefreshCw size={8} className="animate-spin" style={{ color: 'rgba(255,255,255,0.3)' }} />}
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {searchResults.length === 0 && !searching && searchQuery && (
-                  <div className="py-3 text-center text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>No results</div>
-                )}
-                {searchResults.map((hit, i) => (
-                  <div key={i} className="px-2 py-1 cursor-pointer hover:bg-white hover:bg-opacity-5"
-                    onClick={() => void openFile(hit.file)}>
-                    <div className="text-[9px] truncate" style={{ color: 'var(--accent-cyan)' }}>{hit.file}</div>
-                    <div className="flex items-center gap-1 text-[8px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                      <span>:{hit.line}</span>
-                      <span className="truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>{hit.text.trim().slice(0, 48)}</span>
-                    </div>
+            {sidebarMode === 'files' && (
+              <div className="flex-1 overflow-y-auto py-1">
+                {rootLoading && (
+                  <div className="flex items-center gap-1.5 px-3 py-2 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                    <RefreshCw size={9} className="animate-spin" /> Loading…
                   </div>
-                ))}
+                )}
+                {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
+                {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
               </div>
-            </div>
-          )}
-
-          {sidebarMode === 'git' && (
-            <LiveGitPanel onRunInTerminal={(cmd) => {
-              setShowTerminal(true);
-              setTimeout(() => termRef.current?.send(cmd + '\n'), 80);
-            }} />
-          )}
-          </div>
-        </PlaatRail>
-
-        {/* Hier lag een vlak van rgba(255,255,255,0.035) over de volle hoogte
-            -- dat was de witte waas. Een achtergrond hoort de achtergrond te
-            laten zien; wat licht moet zijn is de PLAAT die erop komt, en die
-            komt er alleen als je hem aanzet. */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Niets open: dan is de schil zelf het vlak waar je iets op legt.
-              De uitleg staat er omdat een lege achtergrond anders niet vertelt
-              dat er iets kan -- en neerleggen zet de plaat meteen aan. */}
-          {indeling === 'uit' && (
-            <div className="flex-1 min-h-0 flex p-3">
-              <SleepVlak onBestand={neemBestandAan} />
-            </div>
-          )}
-          {indeling !== 'uit' && (
-          <div id="axe-split-container"
-            className={`flex-1 min-h-0 flex ${opPlaat ? 'gap-3 p-3' : ''} ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
-            <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined} style={{
-              flex: gesplitst ? `0 0 calc(${splitRatio * 100}% - ${opPlaat ? 12 : 0}px)` : 1,
-              minWidth: 0, minHeight: 0, display: 'flex',
-            }}>
-              <EditorPane tab={activeTab} activePendingPatch={activePendingPatch} isMobile={isMobile}
-                onChange={updateContent}
-                onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
-                onRejectPatch={rejectPatch}
-                focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')}
-                onBestand={neemBestandAan}
-                onSluit={() => kiesIndeling('uit')} />
-            </div>
-            {gesplitst && (
-              <>
-                <SplitResizeHandle
-                  orientation={indeling === 'kolommen' ? 'vertical' : 'horizontal'}
-                  onRatioChange={setSplitRatio}
-                />
-                <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined}
-                  style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
-                  <EditorPane tab={splitTab} activePendingPatch={null} isMobile={isMobile}
-                    onChange={updateContent}
-                    onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
-                    onRejectPatch={rejectPatch}
-                    focused={focusedPane === 'split'} onFocus={() => setFocusedPane('split')}
-                    onBestand={neemBestandAan}
-                    onSluit={() => kiesIndeling('enkel')} />
-                </div>
-              </>
+            )}
+            {sidebarMode === 'git' && (
+              <LiveGitPanel onRunInTerminal={(cmd) => {
+                setShowTerminal(true);
+                setTimeout(() => termRef.current?.send(cmd + '\n'), 80);
+              }} />
             )}
           </div>
+        </PlaatRail>
+      )}
+
+      <div
+        className="axe-studio flex-1 min-h-0"
+        data-stand={studioStand}
+        data-toestel={studioDevice}
+        data-files={showFiles ? 'aan' : 'uit'}
+        data-preview={showPreview ? 'aan' : 'uit'}
+        data-term={showTerminal ? 'aan' : 'uit'}
+        data-ontwerp={designMode ? 'aan' : 'uit'}
+      >
+        <div className="axe-studio-balk">
+          <span className="axe-studio-pad"><Code2 size={12} /> <b>AXE-CORE-HEADQUARTERS</b></span>
+          {isMobile && (
+            <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
+              <SheetTrigger asChild>
+                <button type="button"><FolderOpen size={10} /> Files</button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[240px] p-0 overflow-hidden"
+                style={{ background: '#050505', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="py-1 overflow-y-auto h-full">
+                  {fileTree.map(node => <FileTreeItem key={node.path} node={node} depth={0} {...treeProps} />)}
+                </div>
+              </SheetContent>
+            </Sheet>
           )}
-
-          {/* De terminal was een strook van 200px onder de editor. Die at de
-              hoogte op waar je juist code wilt zien, en verdween achter de
-              chatplaat zodra de plaat aanstond. Nu een zwevend paneel links,
-              over de volle hoogte: de editor houdt zijn ruimte, en de terminal
-              staat waar je hem verwacht. */}
-          {/* Het terminal-paneel staat ALTIJD, ook als de terminal zelf uit is.
-
-              De weergaveknoppen (Preview / Agent / Terminal) horen hier volgens
-              jouw indeling, en dan mag het paneel niet met de terminal mee
-              verdwijnen -- anders zet je de terminal uit en is de knop weg
-              waarmee je hem weer aan zet. De knoppen zitten dus in de kop, en de
-              terminal zelf is wat eronder staat of niet. */}
-          <PlaatPanel
-            side="left"
-            title="Terminal"
-            accent="groen"
-            fill
-            composer={
-              <>
-                <span className="axe-composer-vonk" aria-hidden="true" />
-                <input value={termInput} onChange={e => setTermInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); stuurTerminal(); } }}
-                  placeholder="Run a command" spellCheck={false}
-                  className="text-[13px] outline-none font-mono-data" />
-                <button onClick={stuurTerminal} disabled={!termInput.trim()}
-                  className="disabled:opacity-40" title="Run">
-                  <Send size={14} />
+          <span className="axe-studio-groei" />
+          <span className="axe-studio-standen">
+            <button type="button" data-aan={studioStand === 'code' ? 'ja' : undefined} onClick={() => setStudioStand('code')}>Code</button>
+            <button type="button" data-aan={studioStand === 'canvas' ? 'ja' : undefined} onClick={() => setStudioStand('canvas')}>Canvas</button>
+            <button type="button" data-aan={studioStand === 'preview' ? 'ja' : undefined} onClick={() => setStudioStand('preview')}>Preview</button>
+          </span>
+          <button type="button" data-aan={designMode ? 'ja' : undefined} title="Design mode"
+            onClick={() => { setDesignMode(v => !v); setShowPreview(true); }}>
+            <MousePointer2 size={11} /> Design
+          </button>
+          <button type="button" data-aan={showFiles ? 'ja' : undefined} onClick={() => setShowFiles(v => !v)}>Files</button>
+          <button type="button" data-aan={showPreview ? 'ja' : undefined} onClick={() => setShowPreview(v => !v)}>Preview</button>
+          <button type="button" data-aan={showTerminal ? 'ja' : undefined} onClick={() => setShowTerminal(v => !v)}>
+            <Terminal size={11} /> Term
+          </button>
+          <button type="button" onClick={runFile} title="Run active file"><Play size={11} /> Run</button>
+          <span className="axe-studio-motor" title="Which code agent — chosen here, in the editor">
+            <button type="button" data-aan={agentEngine === 'native' ? 'ja' : undefined} onClick={() => setAgentEngine('native')}>Native</button>
+            <button type="button" data-aan={agentEngine === 'openhands' ? 'ja' : undefined} onClick={() => setAgentEngine('openhands')}>Hands</button>
+            {CLI_MOTOR_KNOPPEN.map(({ id, uitleg }) => {
+              const m = motoren?.[id];
+              const ontbreekt = m ? !m.aanwezig : false;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-aan={agentEngine === id ? 'ja' : undefined}
+                  style={ontbreekt ? { opacity: 0.45 } : undefined}
+                  title={ontbreekt
+                    ? `${MOTOR_LABEL[id]} staat niet op deze host — log in met \`${m?.login ?? ''}\` nadat je hem hebt geïnstalleerd.`
+                    : uitleg}
+                  onClick={() => setAgentEngine(id)}
+                >
+                  {id === 'claude' ? 'Claude' : MOTOR_LABEL[id]}
                 </button>
-              </>
-            }
-            actions={
-              <>
-                <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined} title="Preview"><Eye size={11} /> Preview</button>
-                <button onClick={() => setShowAgent(v => !v)} data-actief={showAgent ? 'ja' : undefined} title="Code agent"><Zap size={11} /> Agent</button>
-                <button onClick={() => setShowTerminal(v => !v)} data-actief={showTerminal ? 'ja' : undefined} title="Terminal"><Terminal size={11} /> Terminal</button>
-                <span className="axe-paneel-scheiding" aria-hidden="true" />
-                {/* Hoe het scherm verdeeld is. Ze staan bij Preview, Agent en
-                    Terminal omdat het dezelfde soort knop is: wat ligt er op de
-                    achtergrond. Nog een keer op de actieve drukken haalt de
-                    plaat weer weg. */}
-                <button onClick={() => kiesIndeling('enkel')} data-actief={indeling === 'enkel' ? 'ja' : undefined} title="One pane"><Square size={11} /></button>
-                <button onClick={() => kiesIndeling('kolommen')} data-actief={indeling === 'kolommen' ? 'ja' : undefined} title="Two side by side"><Columns2 size={11} /></button>
-                <button onClick={() => kiesIndeling('rijen')} data-actief={indeling === 'rijen' ? 'ja' : undefined} title="Two stacked"><Rows2 size={11} /></button>
-                <span className="axe-paneel-scheiding" aria-hidden="true" />
-                <button onClick={() => void addFile()} title="New file">New</button>
-                <button onClick={() => void addFolder()} title="New folder">Folder</button>
-                <button onClick={() => void saveActiveFile()} title="Save">{saving ? 'Saving' : 'Save'}</button>
-                <span className="axe-paneel-scheiding" aria-hidden="true" />
-                <button onClick={() => termRef.current?.clear()} title="Clear"><Trash2 size={11} /></button>
-              </>
-            }
-          >
-            {showTerminal
-              ? <XtermTerminal ref={termRef} style={{ height: '100%' }} />
-              : <div className="text-[10px] pt-2" style={{ color: 'var(--text-muted)' }}>Terminal is off</div>}
-          </PlaatPanel>
+              );
+            })}
+          </span>
+          <button type="button" title="Ask agent — type in the AXE composer" onClick={focusComposer}>
+            <Bot size={11} /> Ask agent <span className="t-mono" style={{ opacity: 0.5 }}>⌘K</span>
+          </button>
         </div>
 
-        <AnimatePresence>
-          {showAgent && (
-            /* De agent-chat was een kolom van 300px die de editor smaller
-               maakte zodra je hem opende. Nu een zwevend paneel rechts: de
-               editor houdt zijn volle breedte, en de chat ligt op de plaat
-               naast de gewone AXE-chat onderin -- daar praat je met AXE, hier
-               met de agent die in deze map werkt. */
-            <PlaatPanel
-              side="right"
-              title="Code agent"
-              accent="cyaan"
-              fill
-              /* Alles wat de agent te kiezen heeft staat in de bovenrand, net
-                 als bij de chatplaat van AXE: welke motor, of hij zelfstandig
-                 mag werken, welk bestand hij als context heeft. Geen gekleurde
-                 blokjes -- de letter zelf kleurt cyaan als hij aan staat, en
-                 een haarstreepje scheidt de groepen. Een pil met een rand en
-                 een vulling is een knop uit een andere app. */
-              actions={
-                <>
-                  <button onClick={() => setAgentEngine('native')} data-actief={agentEngine === 'native' ? 'ja' : undefined} title="AXE Native">AXE Native</button>
-                  <button onClick={() => setAgentEngine('openhands')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="OpenHands">OpenHands</button>
-                  {/* De drie CLI-motoren, met hun aanwezigheid op de knop.
-                      Een ontbrekende CLI blijft klikbaar met opzet: uitzetten
-                      zou de knop verbergen achter "waarom kan ik hier niet op
-                      drukken", terwijl de weigering van de host precies vertelt
-                      wat je moet installeren. Wél doffer, en de reden staat in
-                      de titel -- dan weet je het vóór de heenreis in plaats van
-                      erna. */}
-                  {CLI_MOTOR_KNOPPEN.map(({ id, uitleg }) => {
-                    const m = motoren?.[id];
-                    const ontbreekt = m ? !m.aanwezig : false;
-                    return (
-                      <button
-                        key={id}
-                        onClick={() => setAgentEngine(id)}
-                        data-actief={agentEngine === id ? 'ja' : undefined}
-                        style={ontbreekt ? { opacity: 0.45 } : undefined}
-                        title={ontbreekt
-                          ? `${MOTOR_LABEL[id]} staat niet op deze host — log in met \`${m?.login ?? ''}\` nadat je hem hebt geïnstalleerd.`
-                          : uitleg}
-                      >
-                        {MOTOR_LABEL[id]}{ontbreekt ? ' ·' : ''}
-                      </button>
-                    );
-                  })}
-                  {CLI_MOTOREN.has(agentEngine) && (
-                    <>
-                      <span className="axe-paneel-scheiding" aria-hidden="true" />
-                      {/* De host bepaalt wat er in deze lijst staat. Staat er
-                          niets in, dan zeggen we dat -- een lege picker die er
-                          normaal uitziet laat je denken dat je iets vergeten
-                          bent te kiezen, terwijl er niets te kiezen valt. */}
-                      {claudeRepoMap === null ? (
-                        <span className="axe-paneel-context">{claudeReposError ? 'host unreachable' : 'loading repos…'}</span>
-                      ) : Object.keys(claudeRepoMap).length === 0 ? (
-                        <span className="axe-paneel-context" title="Set AGENT_REPOS on the host running axe_api">no repos whitelisted</span>
-                      ) : (
-                        <select
-                          value={claudeRepo}
-                          onChange={e => setClaudeRepo(e.target.value)}
-                          title="Which whitelisted repository to run in"
-                          className="bg-transparent outline-none"
-                        >
-                          {claudeRepo === '' && <option value="">choose a repo…</option>}
-                          {Object.entries(claudeRepoMap).map(([name, info]) => (
-                            <option key={name} value={name} disabled={!info.runnable}>
-                              {name}{info.branch ? ` — ${info.branch}` : ' — missing'}{info.runnable ? '' : ' (blocked)'}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {claudeRepoInfo && !claudeRepoInfo.runnable && (
-                        <span className="axe-paneel-context" title="The host refuses main/master, and a checkout it cannot find">
-                          on a protected branch
-                        </span>
-                      )}
-                      <span className="axe-paneel-scheiding" aria-hidden="true" />
-                      {/* Waar de agent draait bepaalt WELKE bestanden hij bewerkt:
-                          lokaal je eigen worktree, op de VPS de deploy-kopie. Dus
-                          staat de gekozen host hier, en daarachter welke het
-                          werkelijk werd — bij 'auto' kunnen die verschillen, en
-                          een stille terugval laat je in de verkeerde map werken. */}
-                      <select
-                        value={hostVoorkeur}
-                        onChange={e => {
-                          const v = e.target.value as AgentHostVoorkeur;
-                          setHostVoorkeur(v);
-                          zetAgentHostVoorkeur(v);
-                          setHostStand(null);
-                        }}
-                        title={`Waar de CLI draait. Lokaal is ${LOKALE_AGENT_ORIGIN} — start die met backend/axe_api/run-local.sh`}
-                        className="bg-transparent outline-none"
-                      >
-                        <option value="auto">host: auto</option>
-                        <option value="lokaal">host: deze Mac</option>
-                        <option value="vps">host: VPS</option>
-                      </select>
-                      {hostVoorkeur === 'auto' && hostStand && (
-                        <span
-                          className="axe-paneel-context"
-                          title={hostStand === 'lokaal'
-                            ? `Lokale axe_api antwoordde op ${LOKALE_AGENT_ORIGIN}`
-                            : 'Lokale axe_api antwoordde niet — teruggevallen op de VPS, die bewerkt de deploy-kopie'}
-                        >
-                          → {hostStand === 'lokaal' ? 'deze Mac' : 'VPS'}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {agentEngine === 'native' && (
-                    <>
-                      <span className="axe-paneel-scheiding" aria-hidden="true" />
-                      <button onClick={() => setAgentMode(m => !m)} data-actief={agentMode ? 'ja' : undefined} title="Agent mode">Agent mode</button>
-                    </>
-                  )}
-                  {agentBusy && agentMode && agentEngine === 'native' && (
-                    <button onClick={stopAgentLoop} data-stop="ja" title="Stop">Stop</button>
-                  )}
-                  {activeTab && (
-                    <>
-                      <span className="axe-paneel-scheiding" aria-hidden="true" />
-                      <span className="axe-paneel-context" title={activeTab.path}>{activeTab.name}</span>
-                    </>
-                  )}
-                  <span className="axe-paneel-scheiding" aria-hidden="true" />
-                  <button onClick={() => setAgentMessages([])} title="Clear conversation"><Trash2 size={11} /></button>
-                </>
-              }
-              composer={
-                <>
-                  {/* Dezelfde iconen als in de AXE-composer. Het is hetzelfde
-                      gebaar op dezelfde regel; twee verschillende invoerbalken
-                      naast elkaar dwingen je elke keer opnieuw te kijken welke
-                      welke is. */}
-                  <span className="axe-composer-vonk" aria-hidden="true" />
-                  <button type="button" onClick={() => agentBestandRef.current?.click()} title="Attach"><Paperclip size={16} /></button>
-                  {/* Cyclet door AGENT_ENGINES in plaats van tussen twee vaste
-                      namen, zodat een motor erbij ook hier meedoet. */}
-                  <button type="button"
-                    onClick={() => setAgentEngine(e => AGENT_ENGINES[(AGENT_ENGINES.indexOf(e) + 1) % AGENT_ENGINES.length])}
-                    data-actief={agentEngine !== 'native' ? 'ja' : undefined}
-                    title={`Switch engine (now: ${agentEngine})`}><Volume2 size={16} /></button>
-                  <input ref={agentBestandRef} type="file" className="hidden" multiple
-                    onChange={e => { const f = e.target.files?.[0]; if (f) setAgentInput(v => `${v}${v ? ' ' : ''}${f.name}`); }} />
-                  <textarea value={agentInput} onChange={e => setAgentInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAgentSubmit(); } }}
-                    placeholder="Describe a change" rows={1}
-                    className="text-[13px] outline-none" />
-                  <button onClick={() => void handleAgentSubmit()} disabled={agentBusy || !agentInput.trim()}
-                    className="disabled:opacity-40" title="Send">
-                    <Send size={14} />
-                  </button>
-                </>
-              }
-            >
-              <AgentActivityTrace messages={agentMessages} busy={agentBusy}
-                onSelect={i => agentMessageRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
-              {/* Alleen bij de CLI-motoren: die bewerken bestanden rechtstreeks
-                  op schijf, en dan is "wat is er nu veranderd en wil ik dat
-                  pushen" de volgende vraag. AXE Native en OpenHands leveren
-                  patches die je hier al ziet, dus daar zou deze balk een tweede
-                  antwoord op dezelfde vraag zijn. */}
-              {CLI_MOTOREN.has(agentEngine) && claudeRepo && (
-                <div className="px-2 pt-2">
-                  <AgentCommitBalk repo={claudeRepo} runTeller={runTeller} />
+        {studioStand === 'code' && (
+          <div className="axe-studio-kolommen">
+            {showFiles && (
+              <aside className="axe-studio-kaart">
+                <div className="axe-studio-kop">
+                  <span>Files</span>
+                  <span className="rechts">
+                    <button type="button" onClick={() => void addFile()} title="New file"><FilePlus size={11} /></button>
+                    <button type="button" onClick={() => void reloadTree()} title="Reload"><RefreshCw size={11} /></button>
+                  </span>
                 </div>
-              )}
-              <div ref={agentChatRef} className="flex-1 overflow-y-auto p-2 space-y-2">
-                {agentMessages.length === 0 && (
-                  <div className="text-[9px] text-center py-6 space-y-1" style={{ color: 'var(--text-muted)' }}>
-                    <Bot size={20} style={{ margin: '0 auto 6px', opacity: 0.3 }} />
-                    <div>Describe a code change</div>
+                <div className="axe-studio-boom">
+                  <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    {(['files', 'search', 'git'] as const).map(mode => (
+                      <button key={mode} onClick={() => setSidebarMode(mode)}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] uppercase tracking-wide"
+                        style={{
+                          color: sidebarMode === mode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)',
+                          borderBottom: sidebarMode === mode ? '1px solid var(--accent-cyan)' : '1px solid transparent',
+                        }}>
+                        {mode === 'files' ? <Files size={9} /> : mode === 'search' ? <Search size={9} /> : <GitBranch size={9} />}
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                  {sidebarMode === 'files' && (
+                    <div className="flex-1 overflow-y-auto py-1"
+                      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                      onDrop={e => {
+                        e.preventDefault();
+                        const from = getDragFilePath(e);
+                        if (from) void moveNode(from, '');
+                      }}>
+                      {rootLoading && (
+                        <div className="flex items-center gap-1.5 px-3 py-2 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                          <RefreshCw size={9} className="animate-spin" /> Loading…
+                        </div>
+                      )}
+                      {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
+                      {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
+                    </div>
+                  )}
+                  {sidebarMode === 'search' && (
+                    <div className="flex flex-col flex-1 min-h-0">
+                      <div className="px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div className="flex items-center gap-1 rounded px-2 py-1"
+                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <Search size={9} style={{ color: 'rgba(255,255,255,0.3)' }} />
+                          <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') void runSearch(searchQuery); }}
+                            placeholder="Search files · ⌘P"
+                            className="flex-1 bg-transparent outline-none text-[10px]" style={{ color: 'rgba(255,255,255,0.8)' }} />
+                          {searching && <RefreshCw size={8} className="animate-spin" style={{ color: 'rgba(255,255,255,0.3)' }} />}
+                        </div>
+                      </div>
+                      <div className="flex-1 overflow-y-auto">
+                        {searchResults.map((hit, i) => (
+                          <div key={i} className="px-2 py-1 cursor-pointer"
+                            onClick={() => void openFile(hit.file)}>
+                            <div className="text-[9px] truncate" style={{ color: 'var(--accent-cyan)' }}>{hit.file}</div>
+                            <div className="text-[8px] truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{hit.text.trim().slice(0, 48)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {sidebarMode === 'git' && (
+                    <LiveGitPanel onRunInTerminal={(cmd) => {
+                      setShowTerminal(true);
+                      setTimeout(() => termRef.current?.send(cmd + '\n'), 80);
+                    }} />
+                  )}
+                </div>
+              </aside>
+            )}
+
+            <section className="axe-studio-kaart axe-studio-editor">
+              <div className="axe-studio-tabs">
+                {openTabs.map(tab => {
+                  const isActive = tab.path === activeTabPath || tab.path === splitTabPath;
+                  const dirty = tab.content !== tab.savedContent;
+                  return (
+                    <span key={tab.path} className="bestandtab" data-aan={isActive ? 'ja' : undefined} role="button" tabIndex={0}
+                      title={tab.path}
+                      onClick={() => {
+                        if (focusedPane === 'split' && gesplitst) setSplitTabPath(tab.path);
+                        else setActiveTabPath(tab.path);
+                      }}>
+                      <FileCode size={11} /> {tab.name}
+                      {dirty && <i style={{ color: 'var(--warning)' }}>•</i>}
+                      <button type="button" onClick={e => { e.stopPropagation(); void closeTab(tab.path); }}
+                        style={{ color: 'rgba(255,255,255,0.3)', background: 'none', border: 0 }}><X size={9} /></button>
+                    </span>
+                  );
+                })}
+                <span className="axe-studio-groei" />
+                {(agentBusy || agentSpoorTekst) && (
+                  <div className="axe-studio-spoor" title={agentSpoorTekst}>
+                    <Zap size={11} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                    <span>{agentSpoorTekst || 'Code agent'}</span>
                   </div>
                 )}
-                {agentMessages.map((msg, i) => (
-                  <div key={i} ref={el => { agentMessageRefs.current[i] = el; }}>
-                    {msg.role === 'plan' && msg.planSteps && (
-                      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--tint-line)' }}>
-                        <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'var(--tint)' }}>
-                          <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />
-                          <span className="text-[9px] font-medium" style={{ color: 'rgba(165,243,252,0.85)' }}>AXE's plan</span>
-                        </div>
-                        <ol className="px-2 py-1.5 space-y-1">
-                          {msg.planSteps.map((step, si) => (
-                            <li key={si} className="flex items-start gap-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                              <span className="flex-shrink-0 font-mono" style={{ color: 'var(--accent-cyan)' }}>{si + 1}.</span>
-                              <span>{step}</span>
-                            </li>
-                          ))}
-                        </ol>
+                <button type="button" title="Split" onClick={() => kiesIndeling(indeling === 'kolommen' ? 'enkel' : 'kolommen')}><Columns2 size={11} /></button>
+                <button type="button" title="Save" onClick={() => void saveActiveFile()}>
+                  {saving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11} />}
+                </button>
+              </div>
+              <div className="axe-studio-kruimel">
+                {activeTab
+                  ? activeTab.path.split('/').map((stuk, i, all) => (
+                    <span key={i}>{i > 0 && <span> › </span>}{i === all.length - 1 ? <b>{stuk}</b> : stuk}</span>
+                  ))
+                  : <span>Drop a file or open with ⌘P</span>}
+              </div>
+              <div className="axe-studio-lijf">
+                <div className="axe-studio-bron">
+                  {indeling === 'uit' ? (
+                    <SleepVlak onBestand={neemBestandAan} />
+                  ) : (
+                    <div id="axe-split-container"
+                      className={`flex-1 min-h-0 flex ${opPlaat ? 'gap-3 p-3' : ''} ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
+                      <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined} style={{
+                        flex: gesplitst ? `0 0 calc(${splitRatio * 100}% - ${opPlaat ? 12 : 0}px)` : 1,
+                        minWidth: 0, minHeight: 0, display: 'flex',
+                      }}>
+                        <EditorPane tab={activeTab} activePendingPatch={activePendingPatch} isMobile={isMobile}
+                          onChange={updateContent}
+                          onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
+                          onRejectPatch={rejectPatch}
+                          focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')}
+                          onBestand={neemBestandAan}
+                          onSluit={() => kiesIndeling('uit')} />
                       </div>
-                    )}
-                    {msg.role === 'status' && (
-                      <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                        <RefreshCw size={8} className="animate-spin flex-shrink-0" /><span>{msg.text}</span>
-                      </div>
-                    )}
-                    {msg.role === 'user' && (
-                      <div className="flex justify-end">
-                        <div className="max-w-[88%] rounded px-2 py-1.5 text-[10px] leading-snug"
-                          style={{ background: 'var(--tint)', color: 'rgba(255,255,255,0.85)' }}>{msg.text}</div>
-                      </div>
-                    )}
-                    {msg.role === 'agent' && (
-                      <div className="space-y-1.5">
-                        <div className="flex gap-1.5">
-                          <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: 'var(--tint)' }}>
-                            <Zap size={8} style={{ color: 'var(--accent-cyan)' }} />
+                      {gesplitst && (
+                        <>
+                          <SplitResizeHandle
+                            orientation={indeling === 'kolommen' ? 'vertical' : 'horizontal'}
+                            onRatioChange={setSplitRatio}
+                          />
+                          <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined}
+                            style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
+                            <EditorPane tab={splitTab} activePendingPatch={null} isMobile={isMobile}
+                              onChange={updateContent}
+                              onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
+                              onRejectPatch={rejectPatch}
+                              focused={focusedPane === 'split'} onFocus={() => setFocusedPane('split')}
+                              onBestand={neemBestandAan}
+                              onSluit={() => kiesIndeling('enkel')} />
                           </div>
-                          <div className="text-[10px] leading-snug" style={{ color: 'rgba(165,243,252,0.85)' }}>{msg.text}</div>
-                        </div>
-                        {msg.patches && msg.patches.length > 0 && (
-                          <div className="space-y-1.5">
-                            {msg.patches.map(patch => (
-                              <PatchBlock key={patch.id} patch={patch}
-                                onAccept={id => { void acceptPatch(i, id); }}
-                                onReject={id => rejectPatch(i, id)} />
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {showAgent && (
+                  <aside className="axe-studio-agent">
+                    <div className="axe-studio-kop">
+                      <span>Code agent</span>
+                      <span className="rechts">
+                        {agentEngine === 'native' && (
+                          <button type="button" data-aan={agentMode ? 'ja' : undefined} onClick={() => setAgentMode(m => !m)}>Agent mode</button>
+                        )}
+                        {agentBusy && agentMode && agentEngine === 'native' && (
+                          <button type="button" onClick={stopAgentLoop}>Stop</button>
+                        )}
+                        <button type="button" onClick={() => setAgentMessages([])} title="Clear"><Trash2 size={11} /></button>
+                        <button type="button" onClick={() => setShowAgent(false)} title="Hide"><X size={11} /></button>
+                      </span>
+                    </div>
+                    {CLI_MOTOREN.has(agentEngine) && (
+                      <div className="flex flex-wrap gap-1 px-2 py-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {claudeRepoMap === null ? (
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{claudeReposError ? 'host unreachable' : 'loading repos…'}</span>
+                        ) : Object.keys(claudeRepoMap).length === 0 ? (
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>no repos whitelisted</span>
+                        ) : (
+                          <select value={claudeRepo} onChange={e => setClaudeRepo(e.target.value)}
+                            className="bg-transparent outline-none text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                            {claudeRepo === '' && <option value="">choose a repo…</option>}
+                            {Object.entries(claudeRepoMap).map(([name, info]) => (
+                              <option key={name} value={name} disabled={!info.runnable}>
+                                {name}{info.branch ? ` — ${info.branch}` : ' — missing'}
+                              </option>
                             ))}
-                          </div>
+                          </select>
+                        )}
+                        <select
+                          value={hostVoorkeur}
+                          onChange={e => {
+                            const v = e.target.value as AgentHostVoorkeur;
+                            setHostVoorkeur(v);
+                            zetAgentHostVoorkeur(v);
+                            setHostStand(null);
+                          }}
+                          title={`Waar de CLI draait. Lokaal is ${LOKALE_AGENT_ORIGIN}`}
+                          className="bg-transparent outline-none text-[10px]"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          <option value="auto">host: auto</option>
+                          <option value="lokaal">host: deze Mac</option>
+                          <option value="vps">host: VPS</option>
+                        </select>
+                        {hostVoorkeur === 'auto' && hostStand && (
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                            → {hostStand === 'lokaal' ? 'deze Mac' : 'VPS'}
+                          </span>
+                        )}
+                        {claudeRepoInfo && !claudeRepoInfo.runnable && (
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>on a protected branch</span>
                         )}
                       </div>
                     )}
+                    <AgentActivityTrace messages={agentMessages} busy={agentBusy}
+                      onSelect={i => agentMessageRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
+                    {CLI_MOTOREN.has(agentEngine) && claudeRepo && (
+                      <div className="px-2 pt-2">
+                        <AgentCommitBalk repo={claudeRepo} runTeller={runTeller} />
+                      </div>
+                    )}
+                    <div ref={agentChatRef} className="flex-1 overflow-y-auto p-2 space-y-2">
+                      {agentMessages.length === 0 && (
+                        <div className="text-[9px] text-center py-6 space-y-1" style={{ color: 'var(--text-muted)' }}>
+                          <Bot size={20} style={{ margin: '0 auto 6px', opacity: 0.3 }} />
+                          <div>Ask in the AXE composer</div>
+                        </div>
+                      )}
+                      {agentMessages.map((msg, i) => (
+                        <div key={i} ref={el => { agentMessageRefs.current[i] = el; }}>
+                          {msg.role === 'plan' && msg.planSteps && (
+                            <ol className="px-2 py-1.5 space-y-1">
+                              {msg.planSteps.map((step, si) => (
+                                <li key={si} className="text-[10px]" style={{ color: 'rgba(255,255,255,0.65)' }}>{si + 1}. {step}</li>
+                              ))}
+                            </ol>
+                          )}
+                          {msg.role === 'status' && (
+                            <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                              <RefreshCw size={8} className="animate-spin flex-shrink-0" /><span>{msg.text}</span>
+                            </div>
+                          )}
+                          {msg.role === 'user' && (
+                            <div className="flex justify-end">
+                              <div className="max-w-[88%] rounded px-2 py-1.5 text-[10px] leading-snug"
+                                style={{ background: 'var(--tint)', color: 'rgba(255,255,255,0.85)' }}>{msg.text}</div>
+                            </div>
+                          )}
+                          {msg.role === 'agent' && (
+                            <div className="space-y-1.5">
+                              <div className="text-[10px] leading-snug" style={{ color: 'rgba(165,243,252,0.85)' }}>{msg.text}</div>
+                              {msg.patches && msg.patches.length > 0 && (
+                                <div className="space-y-1.5">
+                                  {msg.patches.map(patch => (
+                                    <PatchBlock key={patch.id} patch={patch}
+                                      onAccept={id => { void acceptPatch(i, id); }}
+                                      onReject={id => rejectPatch(i, id)} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </aside>
+                )}
+              </div>
+              <div className="axe-studio-term">
+                <button type="button" className="axe-studio-termkop" onClick={() => setShowTerminal(v => !v)}
+                  title={showTerminal ? 'Fold terminal' : 'Open terminal'}>
+                  <span>Terminal</span>
+                  <span className="axe-studio-chip">this worktree</span>
+                  <span className="rechts">{showTerminal ? 'Fold' : 'Terminal · zsh'}</span>
+                </button>
+                <div className="axe-studio-termbody">
+                  <XtermTerminal ref={termRef} style={{ height: '100%' }} />
+                </div>
+                <div className="axe-studio-termregel">
+                  <input value={termInput} onChange={e => setTermInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); stuurTerminal(); } }}
+                    placeholder="Run a command" spellCheck={false} aria-label="Run a command" />
+                  <button type="button" onClick={stuurTerminal} disabled={!termInput.trim()} title="Run">
+                    <Send size={14} />
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {showPreview && (
+              <section className="axe-studio-kaart">
+                <div className="axe-studio-kop">
+                  <span>Preview</span>
+                  <span className="rechts">
+                    <span className="axe-studio-toestellen">
+                      <button type="button" data-aan={studioDevice === 'phone' ? 'ja' : undefined} title="iPhone 15 Pro" onClick={() => setStudioDevice('phone')}><Smartphone size={12} /></button>
+                      <button type="button" data-aan={studioDevice === 'tablet' ? 'ja' : undefined} title="iPad Pro 11" onClick={() => setStudioDevice('tablet')}><Tablet size={12} /></button>
+                      <button type="button" data-aan={studioDevice === 'desktop' ? 'ja' : undefined} title="Desktop" onClick={() => setStudioDevice('desktop')}><Monitor size={12} /></button>
+                    </span>
+                  </span>
+                </div>
+                <PreviewPanel
+                  isMobile={isMobile}
+                  embed
+                  kader={studioDevice}
+                  layout="podium"
+                  designMode={designMode}
+                  onDesignModeChange={setDesignMode}
+                  onClose={() => setShowPreview(false)}
+                />
+              </section>
+            )}
+          </div>
+        )}
+
+        {studioStand === 'canvas' && (
+          <div className="axe-studio-canvas">
+            <aside className="axe-studio-kaart">
+              <div className="axe-studio-kop"><span>Layers</span></div>
+              <div className="axe-studio-lagen">
+                {flattenFiles(fileTree).slice(0, 24).map(n => (
+                  <div key={n.path} className="r" data-aan={n.path === activeTabPath ? 'ja' : undefined}
+                    onClick={() => { void openFile(n.path); }}>
+                    <Layers size={11} /> {n.name}
                   </div>
                 ))}
+                {fileTree.length === 0 && <div className="r">No files yet</div>}
               </div>
+            </aside>
+            <section className="axe-studio-kaart axe-studio-artboard">
+              <div className="axe-studio-kop">
+                <span>Canvas</span>
+                <span className="axe-studio-chip">Artboard · {studioDevice}</span>
+                <span className="rechts">
+                  <span className="axe-studio-toestellen">
+                    <button type="button" data-aan={studioDevice === 'phone' ? 'ja' : undefined} onClick={() => setStudioDevice('phone')}><Smartphone size={12} /></button>
+                    <button type="button" data-aan={studioDevice === 'tablet' ? 'ja' : undefined} onClick={() => setStudioDevice('tablet')}><Tablet size={12} /></button>
+                    <button type="button" data-aan={studioDevice === 'desktop' ? 'ja' : undefined} onClick={() => setStudioDevice('desktop')}><Monitor size={12} /></button>
+                  </span>
+                </span>
+              </div>
+              <div className="axe-studio-kader">
+                <PreviewPanel
+                  isMobile={isMobile}
+                  embed
+                  kader={studioDevice}
+                  layout="podium"
+                  designMode={designMode}
+                  onDesignModeChange={setDesignMode}
+                  onClose={() => setStudioStand('code')}
+                />
+              </div>
+            </section>
+            <aside className="axe-studio-kaart">
+              <div className="axe-studio-kop"><span>Inspect</span></div>
+              <div className="p-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                Design mode lives on the live preview. Apply writes the iframe; To agent sends a diff to the code agent.
+              </div>
+            </aside>
+          </div>
+        )}
 
-            </PlaatPanel>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {showPreview && <PreviewPanel isMobile={isMobile} onClose={() => setShowPreview(false)} />}
-        </AnimatePresence>
+        {studioStand === 'preview' && (
+          <div className="axe-studio-preview">
+            <div className="axe-studio-kaart">
+              <div className="axe-studio-kop">
+                <span>Preview · this page on every device</span>
+              </div>
+              <PreviewPanel
+                isMobile={isMobile}
+                embed
+                layout="devices"
+                designMode={designMode}
+                onDesignModeChange={setDesignMode}
+                onClose={() => setStudioStand('code')}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );

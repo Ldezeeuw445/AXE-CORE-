@@ -1,0 +1,479 @@
+/* Code studio — dezelfde indeling als de galerij-demo, in de echte tab.
+ *
+ * Terminal zit onder het middelste vak (editor / artboard / preview), niet
+ * in een PlaatSlot naast de composer. Files en preview houden hun hoogte.
+ * /terminals blijft de tab voor machines. */
+
+.axe-studio {
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 10px 0;
+}
+.axe-studio-balk {
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-radius: var(--r-kaart, 18px);
+  min-width: 0;
+  overflow: auto hidden;
+  background: var(--kaart);
+  box-shadow: var(--kaart-rand), var(--kaart-schaduw);
+}
+.axe-studio-balk .axe-studio-pad {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 11px/1 var(--font-mono, ui-monospace, monospace);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.axe-studio-balk .axe-studio-pad b { color: var(--text-primary); font-weight: 500; }
+.axe-studio-groei { flex: 1; min-width: 8px; }
+
+.axe-studio-standen,
+.axe-studio-motor,
+.axe-studio-toestellen {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+.axe-studio-standen button,
+.axe-studio-motor button,
+.axe-studio-toestellen button {
+  height: 24px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font: 500 11px/1 inherit;
+  cursor: pointer;
+}
+.axe-studio-toestellen button {
+  width: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  height: 20px;
+}
+.axe-studio-standen button[data-aan='ja'],
+.axe-studio-motor button[data-aan='ja'],
+.axe-studio-toestellen button[data-aan='ja'],
+.axe-studio-balk > button[data-aan='ja'] {
+  color: var(--accent-cyan);
+}
+.axe-studio-balk > button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font: 500 11px/1 inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.axe-studio-kaart {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: #0B0B0D;
+  border-radius: var(--r-kaart, 18px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 22px 48px -20px rgba(0, 0, 0, 0.75);
+}
+.axe-studio-kop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px 0 12px;
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.05) inset;
+  color: var(--text-secondary);
+  font: 500 11px/1 inherit;
+}
+.axe-studio-kop .rechts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.axe-studio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font: 400 10px/1 var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+/* ── Code-stand: boom · editor · toestel ─────────────────────────────── */
+.axe-studio-kolommen {
+  display: none;
+  grid-template-columns: 220px minmax(0, 1fr) minmax(280px, 420px);
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+  grid-row: 2;
+}
+.axe-studio[data-stand='code'] .axe-studio-kolommen { display: grid; }
+.axe-studio[data-stand='code'][data-toestel='tablet'] .axe-studio-kolommen {
+  grid-template-columns: 188px minmax(260px, 1fr) minmax(360px, 1.2fr);
+}
+.axe-studio[data-stand='code'][data-toestel='desktop'] .axe-studio-kolommen {
+  grid-template-columns: 168px minmax(220px, 0.9fr) minmax(420px, 1.45fr);
+}
+.axe-studio[data-files='uit'][data-stand='code'] .axe-studio-kolommen {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+}
+.axe-studio[data-preview='uit'][data-stand='code'] .axe-studio-kolommen {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+.axe-studio[data-files='uit'][data-preview='uit'][data-stand='code'] .axe-studio-kolommen {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.axe-studio-boom { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.axe-studio-editor {
+  grid-template-rows: auto auto minmax(0, 1fr) 148px;
+}
+.axe-studio[data-term='uit'] .axe-studio-editor {
+  grid-template-rows: auto auto minmax(0, 1fr) 28px;
+}
+
+.axe-studio-tabs {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 6px;
+  gap: 2px;
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.05) inset;
+  min-width: 0;
+}
+.axe-studio-tabs .bestandtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  max-width: 180px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font: 400 11px/1 var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  cursor: pointer;
+  min-width: 0;
+}
+.axe-studio-tabs .bestandtab[data-aan='ja'] {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+.axe-studio-spoor {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 340px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.axe-studio-spoor span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axe-studio-kruimel {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  font: 400 10px/1 var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+}
+.axe-studio-kruimel b { color: var(--text-secondary); font-weight: 400; }
+
+.axe-studio-lijf {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+.axe-studio-bron { flex: 1; min-width: 0; min-height: 0; display: flex; }
+
+.axe-studio-agent {
+  width: 280px;
+  flex: 0 0 280px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+/* Terminal onder de bron — altijd gemonteerd, anders sterft de websocket. */
+.axe-studio-term {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) 32px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+.axe-studio[data-term='uit'] .axe-studio-term {
+  grid-template-rows: 28px;
+  height: 28px;
+}
+.axe-studio[data-term='uit'] .axe-studio-termbody,
+.axe-studio[data-term='uit'] .axe-studio-termregel { display: none; }
+.axe-studio-termkop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font: 500 11px/1 inherit;
+  background: none;
+  border: 0;
+  width: 100%;
+  text-align: left;
+}
+.axe-studio-termkop .rechts { margin-left: auto; color: var(--text-muted); }
+.axe-studio-termbody { min-height: 0; overflow: hidden; }
+.axe-studio-termregel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+.axe-studio-termregel input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  padding: 0 6px;
+  outline: none;
+  font: 400 12px/1 var(--font-mono, ui-monospace, monospace);
+}
+.axe-studio-termregel button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: none;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+/* ── Canvas-stand ─────────────────────────────────────────────────────── */
+.axe-studio-canvas {
+  display: none;
+  grid-template-columns: 200px minmax(0, 1fr) 226px;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+  grid-row: 2;
+}
+.axe-studio[data-stand='canvas'] .axe-studio-canvas { display: grid; }
+.axe-studio-artboard {
+  position: relative;
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-position: center;
+}
+.axe-studio-kader { min-height: 0; position: relative; overflow: hidden; }
+.axe-studio-lagen { padding: 8px; font-size: 11.5px; overflow: auto; }
+.axe-studio-lagen .r {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.axe-studio-lagen .r[data-aan='ja'] { color: var(--accent-cyan); }
+
+/* ── Preview-stand: drie toestellen ───────────────────────────────────── */
+.axe-studio-preview {
+  display: none;
+  min-height: 0;
+  height: 100%;
+  grid-row: 2;
+}
+.axe-studio[data-stand='preview'] .axe-studio-preview { display: grid; }
+.axe-studio-preview > .axe-studio-kaart {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.axe-studio-rij {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 36px;
+  padding: 20px 16px 24px;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+.axe-studio-plek {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  justify-items: center;
+  align-content: end;
+  cursor: pointer;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  max-width: 420px;
+  height: 100%;
+}
+.axe-studio-plek .kop {
+  height: 22px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  font: 500 10px/1 var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.axe-studio-plek[data-aan='ja'] .kop { color: var(--accent-cyan); }
+
+.axe-studio-schaal {
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: start center;
+  overflow: hidden;
+}
+
+.axe-ipad {
+  width: 820px;
+  height: 1180px;
+  border-radius: 34px;
+  background: linear-gradient(160deg, #2A2B30 0%, #15161A 50%, #23242A 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16) inset,
+    0 0 0 3px #0A0A0C inset,
+    0 40px 90px -30px rgba(0, 0, 0, 0.85);
+  padding: 18px;
+  position: relative;
+}
+.axe-ipad__camera {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #000;
+  z-index: 4;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.05);
+}
+.axe-ipad__scherm {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #07080B;
+}
+.axe-ipad__scherm > iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.axe-deskframe {
+  width: 1280px;
+  height: 800px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1A1A20, #101014);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 40px 90px -30px rgba(0, 0, 0, 0.85);
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr);
+  overflow: hidden;
+}
+.axe-deskframe__balk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font: 400 11px/1 var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+.axe-deskframe__verkeers { display: flex; gap: 6px; }
+.axe-deskframe__verkeers i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.axe-deskframe__verkeers i:first-child { background: #F87171; }
+.axe-deskframe__url {
+  flex: 1;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.axe-deskframe__scherm { position: relative; overflow: hidden; background: #07080B; }
+.axe-deskframe__scherm > iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* In de studio vult het voorbeeld de kaart, geen losse zijstrook. */
+:root[data-look] .axe-studio .axe-preview {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  width: auto !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  border-left: 0 !important;
+}
+:root[data-look] .axe-studio .axe-preview-greep { display: none; }
