@@ -212,20 +212,47 @@ export function kiesHost(bewaardId: string | null | undefined, hosts: TerminalHo
 /**
  * De machine waar de code-editor zijn terminal op hoort te hebben.
  *
- * ## Waarom dit een regel is en geen weggelaten prop
+ * ## De regel: bestanden, agent en shell staan op DEZELFDE machine
  *
- * `XtermTerminal` zonder `wsBasis` valt terug op de VPS -- dat is het oude
- * gedrag van toen er één terminal was en die op de VPS hoorde. In de
- * code-editor is dat stil verkeerd: je bewerkt de checkout op deze Mac, de
- * code-agent draait via de API op deze Mac, en de shell eronder zou dan op een
- * andere machine staan. Dan draait `npm test` in het vak onder je bestand tegen
- * een ándere checkout, en er is niets dat dat zegt.
+ * In de code-editor komen drie dingen samen die makkelijk uit elkaar lopen:
+ * de bestandsboom (`/files/*`), de code-agent (`/claude/run`) en het
+ * terminalvak eronder. De eerste twee volgen allebei het adres van de
+ * axe_api. Het terminalvak had daar niets mee te maken -- `XtermTerminal`
+ * zonder `wsBasis` valt terug op de VPS -- en dus kon je bestanden op de ene
+ * machine bewerken met een shell op de andere eronder. `npm test` in dat vak
+ * zei dan niets over de code die je voor je zag, en niets wees daarop.
  *
- * Dus: het vak onder de editor hangt aan dezelfde machine als de agent die je
- * erboven aanstuurt. Wil je een shell op de VPS, dan is daar de Terminals-tab
- * voor, waar je de machine zíet die je kiest.
+ * Vandaar dat dit uit het API-adres volgt en niet uit een vaste keuze. Zet je
+ * de app op de lokale API, dan verhuist de shell mee; wijst hij naar de VPS,
+ * dan ook. Ze kunnen niet meer uit elkaar lopen, want er is nog maar één
+ * antwoord op "welke machine".
+ *
+ * (Een eerdere versie zette hier hard "deze Mac" neer. Dat is juist zolang de
+ * API lokaal draait en stil verkeerd zodra hij dat niet doet -- precies het
+ * soort aanname dat dit bestand hoort te vervangen.)
+ *
+ * @param apiBasis het adres waarop de bestanden en de agent bereikbaar zijn.
+ *   Een absolute URL betekent: die machine. Een relatief pad betekent: de API
+ *   draait naast ons, dus deze machine.
  */
-export function hostVanDeEditor(): TerminalHost {
+export function hostVanDeEditor(apiBasis: string): TerminalHost {
+  try {
+    const u = new URL(apiBasis);
+    const lokaal = u.hostname === '127.0.0.1' || u.hostname === 'localhost';
+    if (!lokaal) {
+      return {
+        id: `api-${u.hostname}`,
+        naam: u.hostname,
+        waarvoor: 'Dezelfde machine als de bestanden en de code-agent',
+        // wss en niet ws: een absolute API-host is niet deze machine, dus het
+        // verkeer verlaat het apparaat en hoort versleuteld te zijn.
+        wsUrl: `wss://${u.host}/terminal`,
+      };
+    }
+  } catch {
+    // Geen absolute URL -- dan is het een pad op deze host en draait de API
+    // hiernaast. Dat is de normale stand in de Tauri-app op de Mac.
+  }
   const mac = INGEBOUWDE_HOSTS.find(h => h.id === 'deze-mac');
   // Niet-null in de praktijk; de terugval is er zodat het hernoemen van een id
   // geen lege wsUrl oplevert die stilletjes weer naar de VPS terugvalt.

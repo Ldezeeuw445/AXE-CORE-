@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import { hostVanDeEditor } from '@/domain/terminalHosts';
+import { axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 import {
   listWorkspaceDirectory, readWorkspaceFile, writeWorkspaceFile,
   createWorkspaceEntry, deleteWorkspaceEntry, searchWorkspace,
@@ -60,8 +61,15 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
  * zie backend/axe_api/agent_runner.py. Daarom staan ze hier als set en niet als
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
-/** De machine van het terminalvak onder de editor. Zie hostVanDeEditor(). */
-const EDITOR_HOST = hostVanDeEditor();
+/**
+ * De machine van het terminalvak onder de editor.
+ *
+ * Hetzelfde adres als waar de bestandsboom en de code-agent op uitkomen, want
+ * dat MOET dezelfde machine zijn -- zie hostVanDeEditor(). Dezelfde aanroep
+ * als in workspaceFilesService, zodat er geen tweede plek is die er anders
+ * over kan gaan denken.
+ */
+const EDITOR_HOST = hostVanDeEditor(axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore'));
 
 const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex', 'cursor']);
 const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };

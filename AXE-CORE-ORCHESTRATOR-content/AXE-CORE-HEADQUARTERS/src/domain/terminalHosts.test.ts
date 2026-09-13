@@ -164,12 +164,22 @@ describe('de shortlist hoort bij de machine', () => {
 });
 
 describe('de terminal onder de code-editor', () => {
-  it('hangt aan deze machine en niet aan de VPS', () => {
-    // Zonder wsBasis valt XtermTerminal terug op de VPS. Dan bewerk je een
-    // bestand hier en draait het vak eronder ergens anders -- en `npm test`
-    // daar zegt niets over de code die je voor je ziet.
-    const h = hostVanDeEditor();
+  it('staat op deze machine als de API hiernaast draait', () => {
+    // Relatief pad = de API draait op deze host. Zo staat het in de Tauri-app
+    // op de Mac, met run-local.sh op 8001.
+    const h = hostVanDeEditor('/api/proxy/axecore');
     expect(h.wsUrl).toContain('127.0.0.1');
-    expect(h.wsUrl).not.toContain('axecompanion.com');
+  });
+
+  it('verhuist mee als de bestanden op de VPS staan', () => {
+    // Dit is het geval dat stil misging: bestanden en agent op de VPS, shell
+    // op de Mac. Dan bewerk je hier en test je daar, zonder dat iets dat zegt.
+    const h = hostVanDeEditor('https://api.axecompanion.com');
+    expect(h.wsUrl).toBe('wss://api.axecompanion.com/terminal');
+    expect(h.naam).toBe('api.axecompanion.com');
+  });
+
+  it('leest een lokale API op poort als deze machine', () => {
+    expect(hostVanDeEditor('http://127.0.0.1:8001').wsUrl).toContain('127.0.0.1:4022');
   });
 });
