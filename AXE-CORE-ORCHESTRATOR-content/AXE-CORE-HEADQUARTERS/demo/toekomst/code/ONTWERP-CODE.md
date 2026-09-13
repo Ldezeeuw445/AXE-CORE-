@@ -19,8 +19,13 @@ Eén tab, drie **standen**. Geen vier producten naast elkaar.
 | **Canvas** | Figma + FlutterFlow | lagenboom, artboard, inspecteur; sleep is een diff |
 | **Preview** | Replit preview + Figma device frames | dezelfde route op telefoon, tablet en desktop |
 
-Wisselen is één segment in de werkbalk. De agent, de terminal en de composer
-blijven. Alleen het middenvak verandert.
+Wisselen is één segment in de werkbalk. Terminal en code-agent staan in de
+**hoekslots** naast de composer — dezelfde plek als de camera-pads op Home.
+Geen tweede balk over het chroom. Alleen het middenvak (de tabruimte) verandert.
+
+Open `../code.html?look=glass`. Dat is de werkende demo-tab, op de echte plaat:
+één composer, het dok, de studio in `.tabruimte`. Files / Preview / Term / Agent
+zijn knoppen om te kijken wat erin past voordat het naar `CodeEditorPage` gaat.
 
 ## Wat er al in de app zit (gemeten, niet aangenomen)
 

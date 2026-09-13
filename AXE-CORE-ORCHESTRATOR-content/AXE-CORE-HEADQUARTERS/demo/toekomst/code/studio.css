@@ -1,7 +1,14 @@
 /* Code studio — alleen wat tokens.css niet heeft: drie standen, toestellen,
    artboard, deskframe. Kleur in letters. */
 
-.werkblad { display: grid; grid-template-rows: 36px minmax(0, 1fr); gap: 10px; height: 100%; padding: 8px var(--onder) 0; min-height: 0; }
+.werkblad {
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  padding: 8px 0 0;
+  min-height: 0;
+}
 .werkbalk { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: var(--r-kaart); }
 .werkbalk .pad { display: flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono); color: var(--ink-2); }
 .werkbalk .pad b { color: var(--ink); font-weight: 500; }
@@ -79,7 +86,7 @@
 .inspecteur .kop .t-mono { color: var(--ink-3); margin-left: auto; font-size: 9.5px; }
 .inspecteur .veld { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 8px; }
 .inspecteur .veld label { color: var(--ink-3); font-size: 10.5px; }
-.inspecteur .veld .w { height: 24px; padding: 0 8px; display: flex; align-items: center; gap: 6px; border-radius: 6px; background: rgba(0,0,0,.35); box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset; font: 400 10.5px/1 var(--mono); color: var(--ink); overflow: hidden; white-space: nowrap; }
+.inspecteur .veld .w { height: 24px; padding: 0 8px; display: flex; align-items: center; gap: 6px; border-radius: 6px; background: rgba(0,0,0,.35); box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset; font: 400 10.5px/1 var(--mono); color: var(--ink); overflow: hidden; white-space: nowrap; border: 0; width: 100%; }
 .inspecteur .veld .w i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .inspecteur .twee { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .inspecteur .acties { display: flex; gap: 6px; padding-top: 2px; }
@@ -145,31 +152,60 @@
 .studio[data-stand='preview'] .kolommen { display: none; }
 .studio[data-stand='canvas'] .canvasvak { display: grid; }
 .studio[data-stand='preview'] .previewvak { display: block; }
-.studio[data-stand='code'] .onderband { display: grid; }
-.studio[data-stand='canvas'] .onderband,
-.studio[data-stand='preview'] .onderband { display: none; }
-body[data-studio-stand='canvas'] .onderband,
-body[data-studio-stand='preview'] .onderband,
-body[data-studio-stand='canvas'] .composers,
-body[data-studio-stand='preview'] .composers { display: none; }
-
-.onderband { display: grid; grid-template-columns: minmax(0, 1fr) var(--band) minmax(0, 1fr); gap: 10px; width: calc(100vw - var(--onder) * 2); }
-.onderband .kaart { height: 118px; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border-radius: var(--r-plaat); }
-.onderband .paneelkop { height: 30px; }
-.terminal .body { padding: 6px 12px; font: 400 11px/1.6 var(--mono); color: var(--ink-2); overflow: hidden; }
+.studio[data-files='uit'] .kolommen { grid-template-columns: minmax(0, 1fr) 420px; }
+.studio[data-files='uit'] .kolommen > aside:first-child { display: none; }
+.studio[data-preview='uit'] .kolommen { grid-template-columns: 220px minmax(0, 1fr); }
+.studio[data-preview='uit'] .kolommen > .voorbeeld { display: none; }
+.studio[data-files='uit'][data-preview='uit'] .kolommen { grid-template-columns: minmax(0, 1fr); }
+.studio[data-files='uit'] .kolommen > aside:first-child,
+.studio[data-preview='uit'] .voorbeeld { display: none; }
+.terminal .body { padding: 6px 12px; font: 400 11px/1.6 var(--mono); color: var(--ink-2); overflow: auto; }
 .terminal .body .prompt { color: var(--accent); }
 .terminal .body .ok { color: var(--ok); }
-.agent .body { padding: 6px 12px; display: grid; gap: 6px; align-content: start; font-size: 11.5px; overflow: hidden; }
+.agent .body { padding: 6px 12px; display: grid; gap: 6px; align-content: start; font-size: 11.5px; overflow: auto; }
 .agent .body .stap { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; }
 .agent .body .stap .t-mono { font-size: 10px; }
 .motor { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-pil); }
 .motor button { height: 20px; padding: 0 8px; border: 0; border-radius: var(--r-pil); background: transparent; color: var(--ink-3); font: 500 10px/1 var(--ui); cursor: pointer; }
 .motor button.aan { color: var(--ink); background: var(--barknop); box-shadow: var(--barknop-rand); }
-.composers { display: grid; grid-template-columns: minmax(0, 1fr) var(--band) minmax(0, 1fr); gap: 10px; width: calc(100vw - var(--onder) * 2); }
-.composers .composer { height: 40px; }
-.composers .composer .tekst { color: var(--ink-4); }
-.composers .composer--klein { padding-left: 14px; }
-.band > .onderband, .band > .composers { width: calc(100vw - var(--onder) * 2); }
+
+.boom .r[data-file] { cursor: pointer; }
+body:has(.studio[data-term='uit']) .slot--links { display: none; }
+body:has(.studio[data-agent='uit']) .slot--rechts { display: none; }
+.werkbalk .knop[data-paneel] { color: var(--ink-3); }
+.studio[data-files='aan'] .werkbalk .knop[data-paneel='files'],
+.studio[data-preview='aan'] .werkbalk .knop[data-paneel='preview'],
+.studio[data-term='aan'] .werkbalk .knop[data-paneel='term'],
+.studio[data-agent='aan'] .werkbalk .knop[data-paneel='agent'] { color: var(--accent); }
+
+/* ── Sloten naast de band: terminal links, agent rechts — dezelfde hoeken
+     als de camera-pads op Home. Niet een tweede balk over de composer. ── */
+.slot {
+  position: fixed;
+  z-index: 4;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 46px;
+  gap: 10px;
+  width: calc((100vw - var(--band)) / 2 - 28px);
+  max-width: 280px;
+  height: 168px;
+  bottom: 58px;
+  min-width: 160px;
+}
+.slot--links { left: 14px; }
+.slot--rechts { right: 14px; }
+.slot > .kaart { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.slot .composer--klein { width: 100%; padding-left: 14px; }
+.slot .composer--klein .tekst {
+  flex: 1; min-width: 0; border: 0; background: none; color: var(--ink);
+  padding: 0 6px; outline: none; font: 400 12px/1 var(--ui);
+}
+.slot .composer--klein .tekst::placeholder { color: var(--ink-4); }
+@media (max-width: 1100px) {
+  .slot { display: none; }
+}
+
+.onderband, .composers { display: none; }
 
 /* ── Demo-pagina in een toestel: de device manager, versie telefoon/tablet ─ */
 .dm { position: absolute; inset: 0; display: flex; flex-direction: column; color: var(--ink); font-family: var(--ui);

@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   const CODE = (window.CODE = {});
+  CODE.titel = 'Device manager';
 
   const TOESTEL = {
     phone: { naam: 'iPhone 15 Pro', maat: '393 × 852 @3x', w: 393, h: 852, klasse: 'iphone' },
@@ -20,7 +21,7 @@
     return `
       <div class="dm${extra}">
         <header class="dm__kop">
-          <div><div class="dm__merk">AXE Core</div><div class="dm__titel">Device manager</div></div>
+          <div><div class="dm__merk">AXE Core</div><div class="dm__titel">${CODE.titel || 'Device manager'}</div></div>
           <div class="dm__look"><span>Light</span><span class="aan">Dark</span></div>
         </header>
         <main class="dm__lijf">
@@ -216,5 +217,69 @@
     }
     CODE.pasSchaal();
     new ResizeObserver(CODE.pasSchaal).observe(studio);
+
+    document.querySelectorAll('[data-paneel]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const naam = b.dataset.paneel;
+        studio.dataset[naam] = studio.dataset[naam] === 'aan' ? 'uit' : 'aan';
+        requestAnimationFrame(() => { CODE.pasSchaal(); requestAnimationFrame(CODE.pasSchaal); });
+      });
+    });
+    document.querySelectorAll('[data-file]').forEach((rij) => {
+      rij.addEventListener('click', () => {
+        document.querySelectorAll('[data-file]').forEach((r) => r.classList.toggle('aan', r === rij));
+        const tab = document.querySelector('.bestandtab.aan');
+        if (tab) tab.innerHTML = `${AXE.ic('bestand')} ${rij.dataset.file} <i class="stip c-warn"></i>`;
+        const kruimel = document.querySelector('.kruimel b');
+        if (kruimel) kruimel.textContent = rij.dataset.file;
+      });
+    });
+    document.querySelector('[data-accept]')?.addEventListener('click', () => {
+      document.querySelectorAll('.code .l.plus').forEach((l) => l.classList.remove('plus', 'aan'));
+      document.querySelectorAll('.code .l.min').forEach((l) => l.remove());
+      document.querySelector('.diffbalk')?.remove();
+      document.querySelector('.boom .r.aan.gewijzigd')?.classList.remove('gewijzigd');
+      const wacht = document.getElementById('agent-wacht');
+      if (wacht) wacht.innerHTML = '<span class="c-ok">✓</span><span>Wrote the file</span><span class="t-mono c-ok">done</span>';
+    });
+    document.querySelector('[data-reject]')?.addEventListener('click', () => {
+      document.querySelectorAll('.code .l.plus').forEach((l) => l.remove());
+      document.querySelectorAll('.code .l.min').forEach((l) => l.classList.remove('min'));
+      document.querySelector('.diffbalk')?.remove();
+    });
+    const titel = document.getElementById('inspect-titel');
+    if (titel) {
+      titel.addEventListener('input', () => {
+        CODE.titel = titel.value || 'Device manager';
+        document.querySelectorAll('.dm__titel').forEach((el) => { el.textContent = CODE.titel; });
+      });
+    }
+    document.querySelector('[data-term-stuur]')?.addEventListener('click', () => {
+      const inp = document.getElementById('term-in');
+      const body = document.getElementById('term-body');
+      if (!inp || !body || !inp.value.trim()) return;
+      body.insertAdjacentHTML('beforeend', `<div><span class="prompt">❯</span> ${inp.value.trim()}</div><div class="ok">ok</div>`);
+      inp.value = '';
+      body.scrollTop = body.scrollHeight;
+    });
+    document.getElementById('term-in')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.querySelector('[data-term-stuur]')?.click();
+    });
+    document.querySelector('[data-agent-stuur]')?.addEventListener('click', () => {
+      const inp = document.getElementById('agent-in');
+      const body = document.getElementById('agent-body');
+      if (!inp || !body || !inp.value.trim()) return;
+      body.insertAdjacentHTML('beforeend', `<div class="stap"><span class="c-accent">▸</span><span>${inp.value.trim()}</span><span class="t-mono c-3">now</span></div>`);
+      inp.value = '';
+      body.scrollTop = body.scrollHeight;
+    });
+    document.getElementById('agent-in')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.querySelector('[data-agent-stuur]')?.click();
+    });
+    document.querySelectorAll('[data-motor]').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('[data-motor]').forEach((x) => x.classList.toggle('aan', x === b));
+      });
+    });
   };
 })();
