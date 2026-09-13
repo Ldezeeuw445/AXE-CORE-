@@ -218,7 +218,9 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
      *
      * document.hidden dekt het venster, de IntersectionObserver de bol zelf. */
     let zichtbaar = true;
-    const draaien = () => !document.hidden && zichtbaar;
+    // Ook stil als het venster niet vooraan staat: een app die open staat terwijl
+    // je elders werkt, hoort de Mac niets te kosten (gemeten 13 sep: ~35% CPU in rust).
+    const draaien = () => !document.hidden && zichtbaar && document.hasFocus();
 
     /* ── Dertig beelden per seconde, niet zestig ────────────────────────────
      *

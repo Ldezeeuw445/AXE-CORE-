@@ -382,8 +382,8 @@ export async function warmLocalOllamaAtBoot(): Promise<void> {
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
-  // Warm the local model so the first local/fast turn is instant when home.
-  void warmLocalOllamaAtBoot();
+  // Niet meer opwarmen bij het opstarten: dat laadde 2,4 GB in op een Mac met
+  // 8 GB, ook als je niets lokaal vroeg. De eerste lokale beurt laadt hem zelf.
   void maybeNightlyReview();
   void maybeSelfHealCheck();
   void maybeSyncObsidianVault();
