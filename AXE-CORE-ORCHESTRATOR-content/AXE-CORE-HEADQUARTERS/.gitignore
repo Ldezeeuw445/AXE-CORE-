@@ -8,3 +8,10 @@ dist
 # MCP config contains API keys
 .vscode/mcp.json
 .axe-status.log
+# Uitvoer van de diensten die AXE CORE zelf start (src-tauri/src/diensten.rs).
+# In de repo en niet in Application Support, zodat je er met `tail -f` bij kunt
+# zonder een pad op te zoeken -- maar het is uitvoer en geen werk, dus het hoort
+# niet in git. Zonder deze regel blokkeert `npm run bijwerken` op zijn eigen
+# logs: het script stopt bij ELKE lokale wijziging, en dan kan hij de fix die
+# dit oplost nooit binnenhalen.
+.axe-logs/

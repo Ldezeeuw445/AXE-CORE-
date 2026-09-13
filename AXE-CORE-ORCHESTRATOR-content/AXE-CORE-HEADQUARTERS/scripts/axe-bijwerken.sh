@@ -35,10 +35,33 @@ stop() { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ── 1. Niets kwijtraken ──────────────────────────────────────────────────────
 zeg "Controleren of er onopgeslagen werk staat"
-if [[ -n "$(git status --porcelain)" ]]; then
-  git status --short
+#
+# Gewijzigd werk en onbekende bestanden zijn NIET hetzelfde probleem, en dat
+# maakte de melding onbruikbaar. Een gewijzigd bestand is werk van jou: daar
+# moet dit script vanaf blijven. Een onbekend bestand is meestal uitvoer die er
+# gewoon is komen staan -- en daar is "commit of bewaar ze eerst" een antwoord
+# waar je niets mee kunt.
+#
+# Het is één keer misgegaan op de logs die de app ZELF wegschrijft: het script
+# blokkeerde erop, en de commit die dat oplost (.gitignore) kon daardoor nooit
+# binnenkomen. Nu zegt hij per soort wat je kunt doen, met het commando erbij.
+GEWIJZIGD="$(git status --porcelain --untracked-files=no)"
+ONBEKEND="$(git ls-files --others --exclude-standard)"
+
+if [[ -n "$GEWIJZIGD" ]]; then
+  echo "$GEWIJZIGD" | sed 's/^/    /'
   echo
-  stop "Er staan lokale wijzigingen. Commit of bewaar ze eerst — dit script raakt ze met opzet niet aan."
+  stop "Er staat gewijzigd werk. Commit of bewaar het eerst — dit script raakt het met opzet niet aan."
+fi
+
+if [[ -n "$ONBEKEND" ]]; then
+  printf '\n\033[33m! Deze bestanden kent git niet:\033[0m\n'
+  echo "$ONBEKEND" | sed 's/^/    /'
+  printf '\n  Is het uitvoer of rommel, haal het weg:\n'
+  printf '    rm -rf %s\n' "$(echo "$ONBEKEND" | head -1)"
+  printf '  Hoort het erbij, zet het in .gitignore of commit het.\n'
+  echo
+  stop "Eerst opruimen. Dit script gooit met opzet nooit iets van je weg."
 fi
 
 TAK="$(git rev-parse --abbrev-ref HEAD)"
