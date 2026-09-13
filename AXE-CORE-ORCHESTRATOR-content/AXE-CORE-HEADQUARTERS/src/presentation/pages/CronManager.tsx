@@ -3,6 +3,7 @@ import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { NAAST_CORE, appVan, appMeta as appInfo, type AppId } from '@/domain/apps';
 import { CronTabel, type TabelActies, type KolomTekst } from './cron/CronTabel';
 import { toast } from '@/presentation/components/shared/toast';
 import { AlertCircle, Bot, Globe, MessageSquare, Plus, RefreshCw, Terminal, Workflow, X } from 'lucide-react';
@@ -47,40 +48,17 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
  * Companion and Trading OS stay cleanly separated. AXE Core runs its jobs
  * locally (prompt/crew/exec); the two external apps are driven via a webhook
  * carrying your CRON_KEY — the self-hosted pattern you already use. */
-type AppId = 'axe_core' | 'axe_companion' | 'trading_os' | 'axon_memory' | 'northsea';
-
 /**
- * AXE Core staat apart en de vier anderen naast elkaar.
+ * De apps staan in domain/apps.ts -- gedeeld met de taken-tab.
  *
- * Dat is niet alleen indeling: AXE Core draait zijn jobs LOKAAL (prompt, crew,
- * exec op je eigen server) en de vier anderen gaan over een webhook met je
- * CRON_KEY. Eén brede tabel met alle apps door elkaar zou dat verschil
- * wegpoetsen, en dat is precies het verschil dat bepaalt waar je moet kijken
- * als er iets mislukt.
+ * Ze stonden hier, voor deze pagina alleen. Toen de taken-tab dezelfde
+ * groepering nodig had zouden de id's uit elkaar gaan lopen, en dat is geen
+ * zichtbare fout: een rij valt gewoon in de verkeerde kolom.
  */
-const APP_TABS: Array<{ id: AppId; label: string; color: string; blurb: string }> = [
-  { id: 'axe_core',      label: 'AXE Core',      color: 'var(--accent-cyan)', blurb: 'Prompts, CrewAI-runs en VPS-commando’s op je eigen server' },
-  { id: 'axe_companion', label: 'AXE Companion', color: '#A78BFA', blurb: 'Webhooks met je CRON_KEY' },
-  { id: 'trading_os',    label: 'Trading OS',    color: '#34D399', blurb: 'Webhooks met je CRON_KEY' },
-  { id: 'axon_memory',   label: 'AXON Memory',   color: '#F5A524', blurb: 'Webhooks met je CRON_KEY' },
-  { id: 'northsea',      label: 'Northsea Commodity Partners', color: '#38BDF8', blurb: 'Webhooks met je CRON_KEY' },
-];
-
-/** De vier onder AXE Core, in de volgorde waarin ze op het scherm staan. */
-const NAAST_ELKAAR: AppId[] = ['axe_companion', 'trading_os', 'axon_memory', 'northsea'];
-
-const APP_IDS = APP_TABS.map(t => t.id) as string[];
-
-function appMeta(id: AppId) {
-  return APP_TABS.find(t => t.id === id) ?? APP_TABS[0];
-}
+const NAAST_ELKAAR = NAAST_CORE;
 
 function scheduleApp(s: CronSchedule): AppId {
-  const a = (s.metadata?.app as string) ?? 'axe_core';
-  // Een onbekende app valt terug op AXE Core in plaats van te verdwijnen. Een
-  // schema dat nergens meer te zien is, blijft wél draaien -- en dat is het
-  // soort ding dat je pas ontdekt als het iets kapotmaakt.
-  return (APP_IDS.includes(a) ? a : 'axe_core') as AppId;
+  return appVan(s.metadata);
 }
 
 /** A fresh draft seeded for the given app: external apps default to a
@@ -438,9 +416,9 @@ export default function CronManager() {
            verschil tussen lokaal draaien en een webhook. */
         <div className="axe-cronvel">
           <CronTabel
-            titel={appMeta('axe_core').label}
-            onderschrift={appMeta('axe_core').blurb}
-            kleur={appMeta('axe_core').color}
+            titel={appInfo('axe_core').label}
+            onderschrift={appInfo('axe_core').blurb}
+            kleur={appInfo('axe_core').kleur}
             schemas={voorApp('axe_core')}
             acties={tabelActies}
             tekst={kolomTekst}
@@ -451,9 +429,9 @@ export default function CronManager() {
             {NAAST_ELKAAR.map(id => (
               <CronTabel
                 key={id}
-                titel={appMeta(id).label}
-                onderschrift={appMeta(id).blurb}
-                kleur={appMeta(id).color}
+                titel={appInfo(id).label}
+                onderschrift={appInfo(id).blurb}
+                kleur={appInfo(id).kleur}
                 schemas={voorApp(id)}
                 acties={tabelActies}
                 tekst={kolomTekst}

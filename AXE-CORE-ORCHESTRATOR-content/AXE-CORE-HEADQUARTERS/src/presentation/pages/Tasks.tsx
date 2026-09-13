@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Bot, Check, X, Zap, Clock, Circle } from 'lucide-react';
+import { Plus, X, Zap, Clock } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STAT_ROW } from '@/presentation/components/surface/Page';
+import { AppTaken, type AppTaak } from './taken/AppTaken';
+import { APPS, NAAST_CORE, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
   listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
   type DurableTaskRun,
@@ -27,6 +29,8 @@ interface Task {
   progress: number;
   routedBy?: 'user' | 'axe-core';
   dueAt?: number;
+  /** Welke van de vijf apps. Uit metadata.app; onbekend valt terug op AXE Core. */
+  app: AppId;
 }
 
 const STATUS_CFG: Record<TaskStatus, { color: string; label: string }> = {
@@ -36,12 +40,6 @@ const STATUS_CFG: Record<TaskStatus, { color: string; label: string }> = {
   blocked: { color: 'var(--error)', label: 'Blocked' },
 };
 
-const PRIORITY_CFG: Record<TaskPriority, { color: string }> = {
-  low: { color: 'var(--text-muted)' },
-  medium: { color: 'var(--accent-blue)' },
-  high: { color: 'var(--warning)' },
-  critical: { color: 'var(--error)' },
-};
 
 /**
  * The kanban status this page shows lives in `metadata.uiStatus`, not the
@@ -78,17 +76,6 @@ function dueFromRow(row: DurableTaskRun): number | undefined {
 }
 
 /** Human due-date label + whether it's overdue (only meaningful for open tasks). */
-function dueLabel(dueAt: number): { text: string; overdue: boolean } {
-  const now = Date.now();
-  const overdue = dueAt < now;
-  const d = new Date(dueAt);
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  const text = d.toLocaleString('en-US', {
-    day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }),
-    hour: '2-digit', minute: '2-digit',
-  });
-  return { text, overdue };
-}
 
 function normalizeRows(rows: DurableTaskRun[]): Task[] {
   return rows.map(row => ({
@@ -102,6 +89,7 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
     progress: progressFromRow(row),
     routedBy: row.assignee === 'AXE Core' ? 'user' : 'axe-core',
     dueAt: dueFromRow(row),
+    app: appVan(row.metadata),
   }));
 }
 
@@ -115,10 +103,8 @@ export default function Tasks() {
   // specific task (see chatActionService.ts resolveRecordDeepLink).
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get('open');
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const [newTask, setNewTask] = useState<{ title: string; description: string; priority: TaskPriority; assignee: string; dueAt: string }>({
-    title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '',
+  const [newTask, setNewTask] = useState<{ title: string; description: string; priority: TaskPriority; assignee: string; dueAt: string; app: AppId }>({
+    title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '', app: 'axe_core',
   });
 
   const refresh = async () => {
@@ -138,23 +124,19 @@ export default function Tasks() {
     void refresh();
   }, []);
 
-  // Once tasks are loaded, honor a deep-link (?open=<id>) by clearing any
-  // status filter that would hide it, scrolling it into view, and briefly
-  // highlighting it. Falls through silently if the id no longer exists.
+  /* Een deep-link (?open=<id>) haalt het statusfilter weg, zodat de taak in
+     beeld staat.
+     Scrollen en oplichten deed hij ook; dat werkte op één lange lijst met een
+     ref per taak. Met vijf panelen naast elkaar bestaat die lijst niet meer.
+     Het filter weghalen is wat ervan overblijft en het is het deel dat telt:
+     zonder dat kon de taak er wél staan en tóch verborgen zijn. */
   useEffect(() => {
     if (!openId || loading) return;
-    const task = tasks.find(t => t.id === openId);
-    if (!task) return;
+    if (!tasks.some(t => t.id === openId)) return;
     setFilterStatus('all');
-    setHighlightedId(openId);
-    requestAnimationFrame(() => {
-      taskRefs.current[openId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
     const clearParams = new URLSearchParams(searchParams);
     clearParams.delete('open');
     setSearchParams(clearParams, { replace: true });
-    const timer = setTimeout(() => setHighlightedId(null), 3000);
-    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, loading, tasks]);
 
@@ -176,13 +158,15 @@ export default function Tasks() {
         requested_by: 'luka',
         capability: 'task_manage',
         execution_mode: 'read',
-        metadata: {
+        metadata: metMetaApp(newTask.app, {
           uiStatus: 'todo', progress: 0,
           routedBy: newTask.assignee === 'AXE Core' ? 'user' : 'axe-core',
           ...(dueIso ? { dueAt: dueIso } : {}),
-        },
+        }),
       });
-      setNewTask({ title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '' });
+      // De app blijft staan: maak je er twee achter elkaar voor Companion,
+      // dan is het onzin om hem elke keer opnieuw te kiezen.
+      setNewTask(v => ({ title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '', app: v.app }));
       setAdding(false);
       await refresh();
     } catch (e) {
@@ -193,7 +177,14 @@ export default function Tasks() {
   const updateStatus = async (id: string, status: TaskStatus) => {
     try {
       await updateDurableTask(id, {
-        metadata: { uiStatus: status, progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0 },
+        /* De app MOET mee. metadata wordt vervangen en niet samengevoegd:
+           zonder dit veld verliest een taak zijn app zodra je hem afvinkt, en
+           springt hij naar de AXE Core-kolom. Dat is precies het soort stille
+           verhuizing waar je nooit achter komt. */
+        metadata: metMetaApp(
+          tasks.find(t => t.id === id)?.app ?? 'axe_core',
+          { uiStatus: status, progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0 },
+        ),
       });
       await refresh();
     } catch (e) {
@@ -201,17 +192,6 @@ export default function Tasks() {
     }
   };
 
-  const updateProgress = async (id: string, delta: number) => {
-    const current = tasks.find(t => t.id === id);
-    if (!current) return;
-    const nextProgress = Math.max(0, Math.min(100, current.progress + delta));
-    try {
-      await updateDurableTask(id, { metadata: { progress: nextProgress } });
-      await refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not update task');
-    }
-  };
 
   const removeTask = async (id: string) => {
     try {
@@ -262,6 +242,29 @@ export default function Tasks() {
   };
 
   const displayed = filterStatus === 'all' ? tasks : tasks.filter(t => t.status === filterStatus);
+
+  /* De taken van één app, in de vorm die AppTaken leest. Het statusfilter uit
+     de schuifbalk werkt gewoon door: kies je 'todo', dan tonen alle vijf de
+     panelen alleen dat. */
+  const takenVan = (app: AppId): AppTaak[] =>
+    displayed
+      .filter(t => t.app === app)
+      .map(t => ({
+        id: t.id,
+        titel: t.title,
+        van: t.assignee,
+        prioriteit: t.priority,
+        deadline: t.dueAt,
+        voortgang: t.progress,
+        klaar: t.status === 'done',
+      }));
+
+  /* Het formulier openen MET die app erin. Zonder dit moest je hem in het
+     formulier nog eens kiezen terwijl je net op de + van die app klikte. */
+  const nieuwVoor = (app: AppId) => {
+    setNewTask(v => ({ ...v, app }));
+    setAdding(true);
+  };
   const counts = {
     todo: tasks.filter(t => t.status === 'todo').length,
     'in-progress': tasks.filter(t => t.status === 'in-progress').length,
@@ -346,6 +349,17 @@ export default function Tasks() {
                   )}
                 </label>
                 <div className="flex gap-2">
+                  {/* Voor welke app. Eerst, want dat bepaalt in welke kolom hij
+                      terechtkomt -- en dat is het veld dat je het vaakst
+                      verkeerd zou laten staan. */}
+                  <select
+                    value={newTask.app}
+                    onChange={e => setNewTask(n => ({ ...n, app: e.target.value as AppId }))}
+                    className="flex-1 text-xs-custom px-2 py-1.5 rounded-lg outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: appMeta(newTask.app).kleur }}
+                  >
+                    {APPS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  </select>
                   <select
                     value={newTask.priority}
                     onChange={e => setNewTask(n => ({ ...n, priority: e.target.value as TaskPriority }))}
@@ -404,82 +418,41 @@ export default function Tasks() {
           is. De lege staat gebruikt diezelfde ruimte in plaats van als strookje
           bovenin te blijven hangen met een halve pagina plaat eronder. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-      {displayed.length === 0 ? (
-        <div className="flex h-full flex-col items-center justify-center gap-2">
-          <Circle size={28} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
-          <span className="text-small" style={{ color: 'var(--text-muted)' }}>No tasks yet — create one above</span>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {displayed.map((task, i) => (
-            <motion.div
-              key={task.id}
-              ref={el => { taskRefs.current[task.id] = el; }}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.03 }}
-              style={highlightedId === task.id ? { outline: '2px solid var(--accent-cyan)', outlineOffset: 2, borderRadius: 12 } : undefined}
-            >
-              <WidgetCard title="">
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: PRIORITY_CFG[task.priority].color, display: 'inline-block' }} title={task.priority} />
-                        <span className={`text-small font-medium ${task.status === 'done' ? 'line-through' : ''}`} style={{ color: task.status === 'done' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{task.title}</span>
-                        {task.routedBy === 'axe-core' && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>AXE Routed</span>}
-                      </div>
-                      {task.description && <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>{task.description}</p>}
-                      <div className="flex items-center gap-2">
-                        <Bot size={11} style={{ color: 'var(--text-muted)' }} />
-                        <span className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>{task.assignee}</span>
-                        <span style={{ color: 'var(--text-muted)' }}>·</span>
-                        <Clock size={10} style={{ color: 'var(--text-muted)' }} />
-                        <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{new Date(task.createdAt).toLocaleDateString()}</span>
-                        {task.dueAt != null && (() => {
-                          const { text, overdue } = dueLabel(task.dueAt);
-                          const isLate = overdue && task.status !== 'done';
-                          return (
-                            <span
-                              className="text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1"
-                              style={{
-                                background: isLate ? 'rgba(239,68,68,0.12)' : 'var(--tint)',
-                                color: isLate ? 'var(--error)' : 'var(--accent-cyan)',
-                                border: `1px solid ${isLate ? 'rgba(239,68,68,0.3)' : 'var(--tint-line)'}`,
-                              }}
-                              title={isLate ? 'Over tijd' : 'Gepland'}
-                            >
-                              <Clock size={9} /> {text}{isLate ? ' · te laat' : ''}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button onClick={() => { void updateStatus(task.id, task.status === 'done' ? 'todo' : 'done'); }} title="Toggle done">
-                        <Check size={12} style={{ color: 'var(--text-muted)' }} />
-                      </button>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${STATUS_CFG[task.status].color}15`, color: STATUS_CFG[task.status].color, border: `1px solid ${STATUS_CFG[task.status].color}30` }}>
-                        {STATUS_CFG[task.status].label}
-                      </span>
-                      <button onClick={() => { void removeTask(task.id); }} style={{ color: 'var(--text-muted)' }} title="Delete"><X size={12} /></button>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                      <div className="h-full rounded-full transition-all" style={{ width: `${task.progress}%`, background: `linear-gradient(90deg, ${PRIORITY_CFG[task.priority].color}, var(--accent-cyan))` }} />
-                    </div>
-                    <span className="text-[9px] w-8 text-right" style={{ color: 'var(--text-muted)' }}>{task.progress}%</span>
-                    <button onClick={() => { void updateProgress(task.id, -10); }} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>-</button>
-                    <button onClick={() => { void updateProgress(task.id, 10); }} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>+</button>
-                  </div>
-                </div>
-              </WidgetCard>
-            </motion.div>
+      {/* Per app zijn deadlines, en eronder zijn dagen.
+        *
+        * Dit was één lange lijst met alle taken van alles door elkaar, met een
+        * statusfilter erbij. Dat werkt zolang je één ding bouwt. Met vijf apps
+        * is "wat ligt er bij Companion" de vraag die je stelt, en die kon je
+        * alleen beantwoorden door de hele lijst te lezen.
+        *
+        * De app staat in metadata.app, precies zoals de cron-tab het doet --
+        * geen migratie, en alles wat er al staat valt terug op AXE Core. */}
+      <div className="axe-appvel">
+        <AppTaken
+          label={appMeta('axe_core').label}
+          kleur={appMeta('axe_core').kleur}
+          blurb={appMeta('axe_core').blurb}
+          taken={takenVan('axe_core')}
+          opNieuw={() => nieuwVoor('axe_core')}
+          opKlaar={t => { void updateStatus(t.id, 'done'); }}
+          opWeg={t => { void removeTask(t.id); }}
+        />
+        <div className="axe-appvier">
+          {NAAST_CORE.map(id => (
+            <AppTaken
+              key={id}
+              label={appMeta(id).label}
+              kleur={appMeta(id).kleur}
+              blurb={appMeta(id).blurb}
+              taken={takenVan(id)}
+              opNieuw={() => nieuwVoor(id)}
+              opKlaar={t => { void updateStatus(t.id, 'done'); }}
+              opWeg={t => { void removeTask(t.id); }}
+            />
           ))}
         </div>
-      )}
+      </div>
+
       </div>
     </motion.div>
   );

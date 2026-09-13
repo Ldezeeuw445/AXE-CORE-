@@ -3925,18 +3925,37 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * alles door elkaar poetst dat verschil weg, en dat is precies het verschil
  * dat bepaalt waar je moet kijken als er iets mislukt.
  */
+/* De tabellen VULLEN de hoogte die ze krijgen.
+ *
+ * Ze stonden als kaartjes bovenin met een half scherm leegte eronder: elke
+ * tabel werd zo hoog als zijn inhoud, en een lege tabel is drie regels. Dat
+ * leest als vier vergeten blokjes in plaats van als een indeling.
+ *
+ * Nu deelt AXE Core de hoogte met de rij eronder (45/55, want de brede tabel
+ * heeft meer kolommen maar de vier eronder zijn met z'n vieren) en schuift de
+ * inhoud BINNEN een tabel. Een minimum eronder, zodat het op een kort venster
+ * niet tot niets samendrukt maar de pagina gewoon gaat schuiven. */
 .axe-cronvel {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding-bottom: 12px;
+  min-height: 100%;
+}
+.axe-cronvel > .axe-cron {
+  flex: 1 1 45%;
+  min-height: 180px;
 }
 .axe-cronvier {
+  flex: 1 1 55%;
+  min-height: 220px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
+/* De vier onderin krijgen elk de volle hoogte van hun vak. */
+.axe-cronvier > .axe-cron { height: 100%; }
 /* Vier kolommen van 200px zijn vier onleesbare tabellen. Onder de 1500 worden
    het er twee, onder de 900 één. */
 @media (max-width: 1500px) { .axe-cronvier { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -4009,9 +4028,14 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   font-size: 11px;
   color: var(--text-muted);
 }
-/* Een plafond en dan schuiven. Bij twintig jobs mag de tabel de pagina niet
-   opeten; de kop blijft staan zodat je weet welke app je leest. */
-.axe-cron-rol { overflow: auto; max-height: 46vh; }
+/* De tabel schuift BINNEN de kaart. Er stond een plafond van 46vh op, en dat
+   was het plafond dat de kaarten klein hield; nu neemt hij de hoogte die de
+   kaart hem geeft en schuift de inhoud daarbinnen. De kop blijft staan zodat
+   je weet welke app je leest. */
+.axe-cron-rol { overflow: auto; flex: 1; min-height: 0; }
+/* Ook de lege staat vult: anders zakt een lege tabel terug naar drie regels en
+   staat de rij scheef. */
+.axe-cron-leeg { flex: 1; }
 
 .axe-cron-tabel {
   width: 100%;
@@ -4270,3 +4294,183 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border-radius: 999px;
   display: inline-block;
 }
+
+/* ══ Taken per app ════════════════════════════════════════════════════════
+ *
+ * Dezelfde indeling als de cron-tab: AXE Core over de volle breedte, de vier
+ * anderen eronder naast elkaar. Elke kaart draagt twee dingen -- de deadlines
+ * (WAT er ligt) en de dagen (WANNEER) -- want dat zijn twee vragen over
+ * dezelfde taken, en los van elkaar moet je heen en weer kijken om een plan te
+ * maken.
+ */
+.axe-appvel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+  min-height: 100%;
+}
+.axe-appvel > .axe-app { flex: 1 1 42%; min-height: 200px; }
+.axe-appvier {
+  flex: 1 1 58%;
+  min-height: 240px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.axe-appvier > .axe-app { height: 100%; }
+@media (max-width: 1500px) { .axe-appvier { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .axe-appvier { grid-template-columns: minmax(0, 1fr); } }
+
+.axe-app {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--axe-vak-hoek, 24px);
+  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
+  background: var(--axe-vak-vlak, #0E0E12);
+  box-shadow: var(--axe-vak-zweef);
+  overflow: hidden;
+}
+.axe-app-kop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+.axe-app-titel {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.axe-app-onder { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.axe-app-tellers {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.axe-app-tellers > span { display: inline-flex; align-items: center; gap: 4px; }
+.axe-app-tellers button {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+}
+.axe-app-tellers button:hover { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.25); }
+
+.axe-app-rol { flex: 1 1 60%; min-height: 0; overflow: auto; }
+.axe-app-leeg { padding: 18px 16px; font-size: 11px; color: var(--text-muted); }
+.axe-app-lijst { list-style: none; margin: 0; padding: 0; }
+.axe-app-rij {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px;
+  border: 0;
+  background: none;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+}
+.axe-app-rij:hover { background: rgba(255, 255, 255, 0.022); }
+/* De prioriteit is een stip en geen gevulde rij: kleur zit in het teken, nooit
+   in een vlak (wet 10). */
+.axe-app-prio { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+.axe-app-taaknaam {
+  display: block;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.axe-app-taakvan { display: block; font-size: 10px; color: var(--text-muted); }
+.axe-app-balk {
+  display: block;
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.axe-app-balk i { display: block; height: 100%; border-radius: 999px; }
+.axe-app-wanneer { font-size: 10.5px; color: var(--text-muted); flex: none; white-space: nowrap; }
+.axe-app-pijl { color: var(--text-muted); flex: none; opacity: 0.5; }
+
+/* De dagen onderin: dezelfde taken, op datum. */
+.axe-app-dagen {
+  flex: 1 1 40%;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(255, 255, 255, 0.012);
+}
+.axe-app-dagkop {
+  position: sticky;
+  top: 0;
+  padding: 6px 14px 4px;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  background: var(--axe-vak-vlak, #0E0E12);
+}
+.axe-app-dagrij {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.axe-app-dagrij:hover { background: rgba(255, 255, 255, 0.03); }
+.axe-app-dagrij i { width: 6px; height: 6px; border-radius: 999px; flex: none; }
+.axe-app-dagtijd {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  flex: none;
+}
+.axe-app-dagnaam {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* De knopjes naast een taakrij: pas zichtbaar als je erop staat. */
+.axe-app-li { position: relative; }
+.axe-app-rijknoppen {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.axe-app-li:hover .axe-app-rijknoppen,
+.axe-app-rijknoppen:focus-within { opacity: 1; }
+.axe-app-rijknoppen button {
+  border: 0;
+  background: rgba(20, 20, 24, 0.9);
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: 6px;
+}
+.axe-app-rijknoppen button:hover { color: var(--text-primary); }
