@@ -3917,3 +3917,173 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ══ Cron: één brede tabel voor AXE Core, vier eronder ═════════════════════
+ *
+ * AXE Core staat apart omdat hij zijn jobs LOKAAL draait (prompt, crew, exec
+ * op je eigen server) en de vier anderen over een webhook gaan. Eén lijst met
+ * alles door elkaar poetst dat verschil weg, en dat is precies het verschil
+ * dat bepaalt waar je moet kijken als er iets mislukt.
+ */
+.axe-cronvel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+.axe-cronvier {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+/* Vier kolommen van 200px zijn vier onleesbare tabellen. Onder de 1500 worden
+   het er twee, onder de 900 één. */
+@media (max-width: 1500px) { .axe-cronvier { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .axe-cronvier { grid-template-columns: minmax(0, 1fr); } }
+
+/* Hetzelfde materiaal als de composer en de terminals. */
+.axe-cron {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--axe-vak-hoek, 24px);
+  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
+  background: var(--axe-vak-vlak, #0E0E12);
+  box-shadow: var(--axe-vak-zweef);
+  overflow: hidden;
+}
+.axe-cron-kop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+.axe-cron-titel {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.axe-cron-onder {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.axe-cron-tellers {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.axe-cron-tellers > span { display: inline-flex; align-items: center; gap: 5px; }
+.axe-cron-tellers button {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+}
+.axe-cron-tellers button:hover { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.25); }
+.axe-cron-stip {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+}
+
+.axe-cron-leeg {
+  padding: 22px 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+/* Een plafond en dan schuiven. Bij twintig jobs mag de tabel de pagina niet
+   opeten; de kop blijft staan zodat je weet welke app je leest. */
+.axe-cron-rol { overflow: auto; max-height: 46vh; }
+
+.axe-cron-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.axe-cron-tabel th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  background: var(--axe-vak-vlak, #0E0E12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  white-space: nowrap;
+}
+.axe-cron-tabel td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.axe-cron-tabel tr:last-child td { border-bottom: 0; }
+.axe-cron-tabel tbody tr:hover td { background: rgba(255, 255, 255, 0.022); }
+/* Een uitgezette job is gedempt, niet verborgen: hij bestaat nog en gaat weer
+   draaien zodra je hem aanzet. */
+.axe-cron-tabel tr[data-uit='ja'] td { opacity: 0.45; }
+.axe-cron-r { text-align: right; }
+.axe-cron-zacht { color: var(--text-muted); }
+.axe-cron-naam {
+  color: var(--text-primary);
+  font-weight: 500;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.axe-cron-expr {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* De stand: kleur in de LETTERS plus een stip, nooit in een vlak (wet 10). */
+.axe-cron-stand { display: inline-flex; align-items: center; gap: 6px; }
+.axe-cron-stand .axe-cron-stip { background: var(--m-idle); }
+.axe-cron-stand[data-stand='goed'] { color: var(--m-happened); }
+.axe-cron-stand[data-stand='goed'] .axe-cron-stip { background: var(--m-happened); }
+.axe-cron-stand[data-stand='stuk'] { color: var(--m-broken); }
+.axe-cron-stand[data-stand='stuk'] .axe-cron-stip { background: var(--m-broken); }
+.axe-cron-stand[data-stand='nieuw'] { color: var(--m-structure); }
+.axe-cron-stand[data-stand='nieuw'] .axe-cron-stip { background: var(--m-structure); }
+.axe-cron-stand[data-stand='uit'] { color: var(--text-muted); }
+
+.axe-cron-knoppen {
+  text-align: right;
+  white-space: nowrap;
+}
+.axe-cron-knoppen button {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  padding: 3px;
+  border-radius: 6px;
+  /* Pas zichtbaar als je op de rij staat: drie knopjes maal twintig rijen is
+     zestig knopjes die allemaal even hard om aandacht vragen. */
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+.axe-cron-tabel tr:hover .axe-cron-knoppen button,
+.axe-cron-knoppen button:focus-visible { opacity: 1; }
+.axe-cron-knoppen button:hover { color: var(--text-primary); }
+.axe-cron-knoppen button:disabled { opacity: 0.3; }
