@@ -3,7 +3,7 @@
 
 .werkblad {
   display: grid;
-  grid-template-rows: 36px minmax(0, 1fr) 132px;
+  grid-template-rows: 36px minmax(0, 1fr) 148px;
   gap: 10px;
   height: 100%;
   padding: 8px 0;
