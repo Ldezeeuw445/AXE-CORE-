@@ -11,6 +11,7 @@ import { Sidebar } from '@/presentation/components/layout/Sidebar';
 import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
@@ -80,8 +81,13 @@ export function AppShell() {
   // screen. Treat "inside the shell" exactly like the /mobile surface: hide
   // TopNav, Sidebar, RightPanel, BottomBar and BottomNav, and let the page
   // itself have the whole viewport.
+  const isMobile = useIsMobile();
   const mobileCommandSurface =
     location.pathname === '/mobile' || location.pathname === '/lock' || isAndroidShellRuntime();
+  // Op een telefoon (smal scherm of de Android-shell) is de nav altijd de lade
+  // van links — nooit óók de onderbalk. Anders zag je op /mobile de lade en op
+  // andere tabs de onderbalk: twee soorten navigatie door elkaar.
+  const mobileNav = isMobile || mobileCommandSurface;
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -180,8 +186,8 @@ export function AppShell() {
             onderbalk nam hoogte in en toonde dezelfde tabs als de app-grid;
             de lade lost dat op en laat home + composer de basis blijven,
             precies zoals de Tauri-app. */}
-      {!mobileCommandSurface && keyboardInset === 0 && <BottomNav />}
-      {mobileCommandSurface && <MobileNav />}
+      {!mobileNav && keyboardInset === 0 && <BottomNav />}
+      {mobileNav && <MobileNav />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
