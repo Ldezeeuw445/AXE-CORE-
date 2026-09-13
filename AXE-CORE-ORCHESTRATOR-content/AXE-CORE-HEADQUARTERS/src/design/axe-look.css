@@ -3679,52 +3679,77 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * met drie vaste rijen vult hem van links naar rechts en laat het aantal
  * kolommen uit het aantal tabs volgen; twaalf tabs worden dus vier kolommen.
  */
+/* TEGEN DE COMPOSER AAN, niet tegen de schermrand.
+ *
+ * Het slot loopt van de rand tot aan de chatplaat, en de zuil stond aan het
+ * begin daarvan -- dus helemaal links in beeld, met een half scherm leegte
+ * tussen de iconen en de composer waar ze bij horen. `align-items: flex-end`
+ * duwt hem naar de andere kant van datzelfde slot, en dat is precies de rand
+ * van de composer.
+ *
+ * Onderaan uitgelijnd, want de onderkant van de band is de lijn die de
+ * composer, de nav en de dok delen. */
 :root[data-look] .axe-tabzuil {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   justify-content: flex-end;
   height: 100%;
   min-height: 0;
-  gap: 6px;
-  padding: 4px 2px;
+  gap: 5px;
+  padding: 4px 0 2px;
 }
 :root[data-look] .axe-tabzuil-rooster {
   display: grid;
   grid-auto-flow: column;
   grid-template-rows: repeat(3, auto);
-  justify-content: start;
-  gap: clamp(2px, 0.3vw, 7px);
+  justify-content: end;
+  gap: clamp(1px, 0.2vw, 5px);
 }
+
+/* ── Ze horen bij de ACHTERGROND ──────────────────────────────────────────
+ *
+ * Ze stonden er als knoppen: een vlak eronder, een randje om de actieve, een
+ * oplichtend vlak bij hover. Daarmee zijn het twaalf kaartjes die om aandacht
+ * vragen naast een composer die dat ook doet.
+ *
+ * Nu alleen het teken, en ver naar achteren gezet. Geen vlak, geen rand, geen
+ * hover-plaat -- wat er verandert is hoe HARD het icoon staat.
+ *
+ * Dat is ook wat de designpack toestaat om een keuze te dragen: kleur plus een
+ * tweede kanaal, en dat tweede kanaal is hier helderheid (de pack noemt
+ * gewicht, grootte of dekking). De actieve is vol en in zijn eigen kleur, de
+ * rest is een schim. */
 :root[data-look] .axe-tabzuil-knop {
-  width: clamp(28px, 2vw, 36px);
-  height: clamp(28px, 2vw, 36px);
+  width: clamp(26px, 1.8vw, 32px);
+  height: clamp(26px, 1.8vw, 32px);
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   background: none;
   color: var(--text-muted);
-  transition: background 0.15s ease, color 0.15s ease;
+  opacity: 0.28;
+  transition: opacity 0.15s ease, color 0.15s ease;
 }
-:root[data-look] .axe-tabzuil-knop:hover { background: rgba(255, 255, 255, 0.06); }
-/* De tab waar je op staat houdt zijn kleur (die zet de component inline) en
-   krijgt er een vlak bij -- kleur alleen is te zwak om "hier ben je" te
-   dragen, en dat staat zo in de designpack. */
-:root[data-look] .axe-tabzuil-knop[data-aan='ja'] {
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
+:root[data-look] .axe-tabzuil-knop:hover { opacity: 0.85; }
+:root[data-look] .axe-tabzuil-knop[data-aan='ja'] { opacity: 1; }
+
 /* Vaste hoogte, ook leeg: een regel die komt en gaat duwt het rooster op en
-   neer terwijl je er met je muis overheen gaat. */
+   neer terwijl je er met je muis overheen gaat. Rechts uitgelijnd, zodat hij
+   onder de laatste kolom eindigt en niet halverwege de leegte begint. */
 :root[data-look] .axe-tabzuil-naam {
-  min-height: 14px;
-  font-size: 11px;
-  line-height: 14px;
-  padding-left: 3px;
+  min-height: 13px;
+  font-size: 10px;
+  line-height: 13px;
+  padding-right: 4px;
+  text-align: right;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-muted);
+  opacity: 0.7;
   transition: color 0.15s ease;
 }
 
