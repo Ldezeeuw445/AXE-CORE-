@@ -1,0 +1,375 @@
+/* Device manager — alleen #/mobile. Light én dark glass, scoped, zodat de
+   desktopplaat niet meeverandert. Kleur in letters en stippen, niet in vlakken. */
+
+.axe-dm {
+  --dm-ink: #E8ECF5;
+  --dm-ink-2: #9AA3B5;
+  --dm-ink-3: #6F7A90;
+  --dm-ink-4: #4A5366;
+  --dm-kaart: rgba(18, 18, 22, 0.52);
+  --dm-kaart-2: rgba(12, 12, 14, 0.38);
+  --dm-rand: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --dm-schaduw: 0 18px 40px -24px rgba(0, 0, 0, 0.55);
+  --dm-accent: #22D3EE;
+  --dm-ok: #2EF2C2;
+  --dm-warn: #FFCC66;
+  --dm-err: #FF4D6D;
+  --dm-blur: blur(28px) saturate(160%);
+  --dm-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dm-mesh:
+    radial-gradient(90% 55% at 50% -8%, rgba(34, 211, 238, 0.18), transparent 58%),
+    radial-gradient(60% 40% at 100% 100%, rgba(167, 139, 250, 0.08), transparent 50%),
+    radial-gradient(50% 35% at 0% 80%, rgba(46, 242, 194, 0.06), transparent 46%);
+  --dm-plaat: #07080B;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--dm-ink);
+  font-family: Inter, -apple-system, system-ui, sans-serif;
+  background: var(--dm-mesh), var(--dm-plaat);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.axe-dm::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+:root[data-look='glass'] .axe-dm {
+  --dm-ink: #12151C;
+  --dm-ink-2: #3D4553;
+  --dm-ink-3: #6B7384;
+  --dm-ink-4: #8B93A3;
+  --dm-kaart: rgba(255, 255, 255, 0.46);
+  --dm-kaart-2: rgba(255, 255, 255, 0.28);
+  --dm-rand: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 0 0 1px rgba(18, 21, 28, 0.08);
+  --dm-schaduw: 0 18px 40px -24px rgba(18, 21, 28, 0.22);
+  --dm-mesh:
+    radial-gradient(90% 55% at 50% -8%, rgba(34, 211, 238, 0.22), transparent 58%),
+    radial-gradient(60% 40% at 100% 100%, rgba(167, 139, 250, 0.10), transparent 50%),
+    radial-gradient(50% 35% at 0% 80%, rgba(46, 242, 194, 0.08), transparent 46%);
+  --dm-plaat: #E6EEF6;
+}
+
+:root[data-look='glass'] .axe-dm::before { opacity: 0.22; }
+
+.axe-dm__kop,
+.axe-dm__lijf,
+.axe-dm__dok {
+  position: relative;
+  z-index: 1;
+}
+
+.axe-dm__kop {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 56px 16px 10px;
+  gap: 10px;
+}
+.axe-dm__merk {
+  font: 600 10px/1 ui-monospace, 'JetBrains Mono', monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dm-accent);
+}
+.axe-dm__titel {
+  font: 600 22px/1.05 Inter, system-ui, sans-serif;
+  letter-spacing: -0.04em;
+  margin-top: 5px;
+  color: var(--dm-ink);
+}
+.axe-dm__look {
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--dm-kaart-2);
+  box-shadow: var(--dm-rand);
+  backdrop-filter: var(--dm-blur);
+  -webkit-backdrop-filter: var(--dm-blur);
+}
+.axe-dm__look button {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--dm-ink-3);
+  font: 500 10px/1 ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 140ms var(--dm-ease), background 140ms var(--dm-ease);
+}
+.axe-dm__look button.aan {
+  color: var(--dm-accent);
+  background: var(--dm-kaart);
+  box-shadow: var(--dm-rand);
+}
+
+.axe-dm__lijf {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 14px 18px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  -webkit-overflow-scrolling: touch;
+}
+
+.axe-dm-kaart {
+  border-radius: 22px;
+  padding: 14px 16px;
+  background: var(--dm-kaart);
+  backdrop-filter: var(--dm-blur);
+  -webkit-backdrop-filter: var(--dm-blur);
+  box-shadow: var(--dm-rand), var(--dm-schaduw);
+  color: var(--dm-ink-2);
+  display: grid;
+  gap: 8px;
+}
+.axe-dm-kaart h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 10px/1 ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dm-ink-3);
+}
+.axe-dm-kaart h2 .rechts {
+  margin-left: auto;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-size: 10px;
+}
+.axe-dm-kaart .groot {
+  font: 600 28px/1 Inter, system-ui, sans-serif;
+  letter-spacing: -0.04em;
+  color: var(--dm-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.axe-dm-regel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  min-height: 22px;
+  font: 500 13px/1.35 Inter, system-ui, sans-serif;
+  color: var(--dm-ink);
+}
+.axe-dm-regel small {
+  grid-column: 1 / -1;
+  color: var(--dm-ink-3);
+  font: 500 11px/1.35 Inter, system-ui, sans-serif;
+  margin-top: -2px;
+}
+.axe-dm-regel .w {
+  font: 500 11.5px/1 ui-monospace, monospace;
+  color: var(--dm-ink-2);
+  text-align: right;
+}
+
+.axe-dm-rij { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.axe-dm-stip {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; box-shadow: 0 0 8px currentColor;
+  display: inline-block; vertical-align: middle; margin-right: 6px;
+}
+
+.axe-dm-veld {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  height: 48px;
+  padding: 0 6px 0 16px;
+  border-radius: 999px;
+  background: var(--dm-kaart-2);
+  box-shadow: var(--dm-rand);
+  backdrop-filter: var(--dm-blur);
+  -webkit-backdrop-filter: var(--dm-blur);
+}
+.axe-dm-veld input {
+  border: 0; background: none; outline: none;
+  color: var(--dm-ink); font: 500 14px/1 Inter, system-ui, sans-serif; min-width: 0;
+}
+.axe-dm-veld input::placeholder { color: var(--dm-ink-3); }
+.axe-dm-ga {
+  width: 36px; height: 36px; border: 0; border-radius: 50%;
+  background: var(--dm-kaart); color: var(--dm-accent);
+  font: 600 16px/1 Inter, system-ui, sans-serif; cursor: pointer;
+  box-shadow: var(--dm-rand), 0 0 0 1px rgba(34, 211, 238, 0.28);
+  transition: transform 140ms var(--dm-ease);
+}
+.axe-dm-ga:active { transform: scale(0.9); }
+.axe-dm-ga:disabled { opacity: 0.4; }
+
+.axe-dm-chip {
+  height: 28px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: var(--dm-kaart-2); color: var(--dm-ink-2);
+  font: 500 11.5px/1 Inter, system-ui, sans-serif; cursor: pointer;
+  box-shadow: var(--dm-rand);
+  backdrop-filter: var(--dm-blur);
+  -webkit-backdrop-filter: var(--dm-blur);
+  transition: color 140ms var(--dm-ease);
+}
+.axe-dm-chip.aan { color: var(--dm-accent); }
+.axe-dm-chip:disabled { opacity: 0.45; cursor: default; }
+
+.axe-dm-groep { display: grid; gap: 8px; }
+.axe-dm-groep__naam {
+  font: 500 10px/1 ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dm-ink-3);
+  padding: 4px 4px 0;
+}
+.axe-dm-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.axe-dm-tab {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  align-content: start;
+  min-height: 78px;
+  padding: 12px;
+  border: 0;
+  border-radius: 18px;
+  text-align: left;
+  background: var(--dm-kaart);
+  color: var(--dm-ink);
+  box-shadow: var(--dm-rand);
+  backdrop-filter: var(--dm-blur);
+  -webkit-backdrop-filter: var(--dm-blur);
+  font: 600 12.5px/1.2 Inter, system-ui, sans-serif;
+  cursor: pointer;
+  transition: transform 160ms var(--dm-ease);
+}
+.axe-dm-tab:active { transform: scale(0.97); }
+.axe-dm-tab svg { width: 16px; height: 16px; color: var(--dm-accent); }
+.axe-dm-tab small {
+  font: 500 10px/1 ui-monospace, monospace;
+  color: var(--dm-ink-3);
+  letter-spacing: 0.04em;
+}
+
+.axe-dm-uit {
+  font: 500 12.5px/1.45 Inter, system-ui, sans-serif;
+  color: var(--dm-ink-2);
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow: auto;
+  margin: 4px 0 0;
+}
+.axe-dm-uit.fout { color: var(--dm-err); }
+.axe-dm-uit.ok { color: var(--dm-ok); }
+
+.axe-dm-vraag {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0 2px;
+}
+.axe-dm-vraag p {
+  margin: 0;
+  font: 500 13px/1.4 Inter, system-ui, sans-serif;
+  color: var(--dm-ink);
+}
+.axe-dm-vraag code {
+  font: 500 11.5px/1.4 ui-monospace, monospace;
+  color: var(--dm-warn);
+}
+
+.axe-dm__dok {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  height: auto;
+  padding: 8px 10px 36px;
+  background: var(--dm-kaart);
+  backdrop-filter: var(--dm-blur);
+  -webkit-backdrop-filter: var(--dm-blur);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.axe-dm__dok button {
+  border: 0;
+  background: none;
+  color: var(--dm-ink-3);
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  font: 500 9px/1 Inter, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.axe-dm__dok button .rond {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--dm-kaart-2);
+  box-shadow: var(--dm-rand);
+  transition: color 160ms var(--dm-ease), box-shadow 160ms var(--dm-ease);
+}
+.axe-dm__dok button.aan { color: var(--dm-accent); }
+.axe-dm__dok button.aan .rond {
+  box-shadow: var(--dm-rand), 0 0 0 1px rgba(34, 211, 238, 0.35), 0 10px 22px -8px rgba(34, 211, 238, 0.55);
+}
+.axe-dm__dok svg { width: 18px; height: 18px; }
+
+.axe-dm-machines { display: flex; flex-wrap: wrap; gap: 6px; }
+.axe-dm-log { font: 500 12.5px/1.45 Inter, system-ui, sans-serif; color: var(--dm-ink-2); margin: 0; }
+
+.axe-dm-voor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.axe-dm-voor button {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  min-height: 88px;
+  padding: 12px;
+  border: 0;
+  border-radius: 18px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--dm-rand);
+  backdrop-filter: var(--dm-blur);
+  -webkit-backdrop-filter: var(--dm-blur);
+  font: 600 13px/1.2 Inter, system-ui, sans-serif;
+}
+.axe-dm-voor button small {
+  font: 500 10.5px/1.35 Inter, system-ui, sans-serif;
+  color: inherit;
+  opacity: 0.7;
+}
+.axe-dm-voor--donker {
+  background: rgba(12, 12, 14, 0.72);
+  color: #E8ECF5;
+}
+.axe-dm-voor--licht {
+  background: rgba(255, 255, 255, 0.62);
+  color: #12151C;
+}
+.axe-dm-voor button.aan { box-shadow: var(--dm-rand), 0 0 0 1px rgba(34, 211, 238, 0.45); }
+
+@media (prefers-reduced-motion: reduce) {
+  .axe-dm-tab, .axe-dm-ga, .axe-dm__dok button .rond { transition: none; }
+}

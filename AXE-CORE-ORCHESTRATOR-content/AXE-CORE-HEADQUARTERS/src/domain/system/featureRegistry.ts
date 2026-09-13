@@ -86,7 +86,7 @@ export const FEATURES: Feature[] = [
   { route: 'ai-core', label: 'AI Core', state: 'works', note: '8 cards, heaviest text page.' },
   { route: 'cron-manager', label: 'Cron Manager', state: 'partial', note: 'Thin — 16 controls.' },
   { route: 'code-editor', label: 'Code Editor', state: 'partial',
-    note: 'The editor itself works; the agents side of it does not yet.' },
+    note: 'Studio chrome is in the real tab: Code/Canvas/Preview stands, foldable terminal under the editor, motors in the toolbar, ask via the AXE composer. Monaco, xterm and the agent engines are real. Canvas layers are the file tree over the live preview, not a full Figma editor.' },
 
   // ── not finished ───────────────────────────────────────────────────────
   { route: 'thinkthanks', label: 'ThinkTank', state: 'broken', note: 'Does not work yet.' },
