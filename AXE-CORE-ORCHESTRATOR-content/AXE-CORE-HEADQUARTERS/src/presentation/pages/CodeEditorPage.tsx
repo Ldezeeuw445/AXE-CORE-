@@ -51,7 +51,7 @@ import Editor, { DiffEditor } from '@monaco-editor/react';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'codex', 'cursor'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'codex', 'cursor'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
 
 /**
@@ -63,12 +63,13 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
 
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex', 'cursor']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'codex', 'cursor']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', codex: 'Codex', cursor: 'Cursor' };
 
 /** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
 const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [
   { id: 'claude', uitleg: 'Claude Code — de echte CLI in een gewhiteliste checkout, op je Anthropic-abonnement' },
+  { id: 'claude2', uitleg: 'Claude Code op je tweede Claude-abonnement (eigen login in ~/.claude-tweede)' },
   { id: 'codex', uitleg: 'Codex — dezelfde opzet, op je ChatGPT-abonnement' },
   { id: 'cursor', uitleg: 'Cursor — dezelfde opzet, op je Cursor-abonnement' },
 ];
@@ -549,7 +550,7 @@ export default function CodeEditorPage() {
   agentEngineRef.current = agentEngine;
   const setAgentEngine = useCallback((volgende: AgentEngine | ((huidig: AgentEngine) => AgentEngine)) => {
     const motor = typeof volgende === 'function' ? volgende(agentEngineRef.current) : volgende;
-    const cli = motor === 'claude' || motor === 'codex' || motor === 'cursor';
+    const cli = motor === 'claude' || motor === 'claude2' || motor === 'codex' || motor === 'cursor';
     setToewijzing(kiesMotor('code-agent', cli ? motor : 'sleutels'));
     setAgentEngineRauw(motor);
   }, []);

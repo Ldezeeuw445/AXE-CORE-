@@ -37,8 +37,9 @@ describe('drie agents, drie abonnementen', () => {
 
   it('toont in het menu geen abonnement dat al van een ander is', () => {
     const t = STANDAARD_TOEWIJZING; // core=claude, code=cursor, algo=codex
-    expect(kiesbaar(t, 'axe-core')).toEqual(['claude', 'sleutels']);
-    expect(kiesbaar(t, 'code-agent')).toEqual(['cursor', 'sleutels']);
+    // claude2 is vrij zolang niemand hem heeft, dus die mag iedereen kiezen.
+    expect(kiesbaar(t, 'axe-core')).toEqual(['claude', 'claude2', 'sleutels']);
+    expect(kiesbaar(t, 'code-agent')).toEqual(['claude2', 'cursor', 'sleutels']);
   });
 
   it('een nieuwe keuze wint en de vorige eigenaar krijgt API-sleutels', () => {

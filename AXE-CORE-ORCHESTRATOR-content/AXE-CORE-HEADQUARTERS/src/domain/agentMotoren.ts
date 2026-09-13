@@ -46,6 +46,7 @@ export const AGENT_LABEL: Record<HoofdAgent, string> = {
 
 export const MOTOR_LABEL: Record<HoofdMotor, string> = {
   claude: 'Claude-abonnement',
+  claude2: 'Claude-abonnement 2',
   codex: 'ChatGPT-abonnement (Codex)',
   cursor: 'Cursor-abonnement',
   sleutels: 'API-sleutels',

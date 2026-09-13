@@ -140,12 +140,32 @@ ENGINES = {
         "bin_default": "claude",
         # Gemeten en gedocumenteerd in CLAUDE_CODE_SETUP.md: de CLI verkiest een
         # sleutel in zijn omgeving boven de `claude auth login`-sessie.
-        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+        # ANTHROPIC_BASE_URL en CLAUDECODE ook: gemeten 13 september erfde de API
+        # die vanuit een Claude-sessie gestart was, en dan liep een run via de
+        # proxy van die sessie in plaats van via het eigen abonnement.
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
         "cmd": _claude_cmd,
         "leest_bestand": False,
         "install": "npm i -g @anthropic-ai/claude-code",
         "login": "claude auth login",
         # --permission-mode plan laat hem lezen en niets schrijven.
+        "alleen_lezen": True,
+    },
+    "claude2": {
+        # Een tweede Claude-abonnement op dezelfde Mac. Claude Code bewaart zijn
+        # login per CLAUDE_CONFIG_DIR -- gemeten 13 september: met een eigen map
+        # zegt `claude auth status` loggedIn false terwijl de gewone login Pro is.
+        # Eenmalig inloggen, in vak 3 (Mac · agents):
+        #   CLAUDE_CONFIG_DIR=~/.claude-tweede claude auth login
+        "label": "Claude Code 2",
+        "bin_env": "CLAUDE_BIN",
+        "bin_default": "claude",
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
+        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE2_CONFIG_DIR", "~/.claude-tweede"))},
+        "cmd": _claude_cmd,
+        "leest_bestand": False,
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "login": "CLAUDE_CONFIG_DIR=~/.claude-tweede claude auth login",
         "alleen_lezen": True,
     },
     "codex": {
@@ -244,10 +264,11 @@ def _motor_slot(naam: str) -> threading.Lock:
         return _MOTOR_SLOTEN.setdefault(naam, threading.Lock())
 
 
-def _subprocess_env(blocked: tuple) -> dict:
+def _subprocess_env(blocked: tuple, extra: dict | None = None) -> dict:
     env = os.environ.copy()
     for key in blocked:
         env.pop(key, None)
+    env.update(extra or {})
     return env
 
 
@@ -380,7 +401,7 @@ def run_agent(
 
         cmd = motor["cmd"](binary, prompt, mode, tmp or "")
         proc = subprocess.run(
-            cmd, cwd=repo_path, env=_subprocess_env(motor["blocked_env"]),
+            cmd, cwd=repo_path, env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")),
             capture_output=True, text=True, timeout=limit,
         )
 
