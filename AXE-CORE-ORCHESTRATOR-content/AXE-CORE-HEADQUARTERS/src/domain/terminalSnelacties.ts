@@ -210,18 +210,28 @@ const MAC_API: Snelactie[] = [
 const MAC_AGENTS: Snelactie[] = [
   {
     label: 'Codex proberen',
-    // De faalwijze uit de routeringslog: "codex gaf geen antwoord: Codex
-    // eindigde". Dat is wat je ziet als hij niet is ingelogd -- hij stopt
-    // zonder uitvoer in plaats van om een login te vragen. Dit laat zien of
-    // dat het is.
-    cmd: 'codex exec "zeg alleen: ok" 2>&1 | tail -5',
-    uitleg: 'Antwoordt Codex? Stil afbreken betekent meestal: niet ingelogd',
+    // MET de cd, en dat is het hele punt. Gemeten 13 september 2026: dezelfde
+    // aanroep vanuit ~ geeft "Not inside a trusted directory and
+    // --skip-git-repo-check was not specified" -- codex weigert buiten een
+    // checkout te draaien. Dat leest als "codex is stuk" terwijl hij prima is
+    // ingelogd, dus een diagnose zonder werkmap stelt de verkeerde vraag.
+    // De chat draait zelf ook in een checkout (agent_runner geeft cwd=repo mee),
+    // dus dit is dezelfde omstandigheid en daarmee een eerlijke proef.
+    cmd: `cd ${REPO_MAC} && codex exec "zeg alleen: ok" 2>&1 | tail -5`,
+    uitleg: 'Antwoordt Codex vanuit de repo? Zo niet: de regel eronder zegt waarom',
+    groep: 'agents',
+    leestAlleen: true,
+  },
+  {
+    label: 'Codex-login',
+    cmd: 'codex login status 2>&1 | tail -3',
+    uitleg: 'Staat het ChatGPT-abonnement erachter, of is hij uitgelogd',
     groep: 'agents',
     leestAlleen: true,
   },
   {
     label: 'Claude proberen',
-    cmd: 'claude -p "zeg alleen: ok" 2>&1 | tail -5',
+    cmd: `cd ${REPO_MAC} && claude -p "zeg alleen: ok" 2>&1 | tail -5`,
     uitleg: 'Antwoordt Claude Code op je abonnement',
     groep: 'agents',
     leestAlleen: true,

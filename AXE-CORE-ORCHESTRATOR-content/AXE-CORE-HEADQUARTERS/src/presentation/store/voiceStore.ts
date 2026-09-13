@@ -20,6 +20,7 @@ import {
   type ProviderId, type ProviderCfg, type KeySlot, type QueryCapability,
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
+import { korteFaalReden } from '@/domain/faalReden';
 import { toProxied, callProvider } from '@/infrastructure/gateways/llmGateway';
 
 // Re-exported for backwards compatibility: consumers historically imported
@@ -383,12 +384,6 @@ export interface RoutingEvent{
 }
 
 /** Shorten a raw error message to a concise label: "401", "429", "timeout", "network", etc. */
-function shortErr(msg:string):string{
-  if(/timeout|timed out|abort/i.test(msg)) return 'timeout';
-  if(/network|failed to fetch|cors|load failed/i.test(msg)) return 'network';
-  const m=msg.match(/\b(4\d{2}|5\d{2})\b/);if(m) return m[1];
-  return msg.slice(0,24).replace(/\s+/g,' ').trim();
-}
 
 export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'open_url';url:string};
 
@@ -992,10 +987,10 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
           speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,slot.provider,cap).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
         }
-        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=shortErr(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
+        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=korteFaalReden(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,600)});}
       }
 
-      await logRoute('all providers failed',{error:lastError.slice(0,200)});
+      await logRoute('all providers failed',{error:lastError.slice(0,600)});
       const slotSummary=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
       routeEvt.via='none';pushRouteEvt(routeEvt);
 

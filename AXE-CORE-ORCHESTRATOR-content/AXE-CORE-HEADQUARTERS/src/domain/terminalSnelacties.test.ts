@@ -53,3 +53,22 @@ describe('elke actie is te begrijpen voor je hem uitvoert', () => {
     }
   });
 });
+
+/**
+ * Een agent-CLI weigert buiten een checkout.
+ *
+ * Gemeten 13 september 2026: `codex exec` vanuit ~ antwoordt met "Not inside a
+ * trusted directory and --skip-git-repo-check was not specified" en stopt.
+ * Een diagnoseknop die dat uitlokt bewijst niets over de chat, want die draait
+ * wél in een repo -- hij stelt alleen een andere vraag dan je dacht.
+ */
+describe('agent-acties draaien in de checkout', () => {
+  it('zet elke agent-proef eerst in de repo', () => {
+    const proeven = snelactiesVoor('mac-agents')
+      .filter(a => a.groep === 'agents' && /\b(codex exec|claude -p)\b/.test(a.cmd));
+    expect(proeven.length).toBeGreaterThan(0);
+    for (const a of proeven) {
+      expect(a.cmd, a.label).toMatch(/^cd \S+ && /);
+    }
+  });
+});
