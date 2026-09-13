@@ -13,6 +13,7 @@ import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
+import { hostVanDeEditor } from '@/domain/terminalHosts';
 import {
   listWorkspaceDirectory, readWorkspaceFile, writeWorkspaceFile,
   createWorkspaceEntry, deleteWorkspaceEntry, searchWorkspace,
@@ -59,6 +60,9 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
  * zie backend/axe_api/agent_runner.py. Daarom staan ze hier als set en niet als
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
+/** De machine van het terminalvak onder de editor. Zie hostVanDeEditor(). */
+const EDITOR_HOST = hostVanDeEditor();
+
 const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex', 'cursor']);
 const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
 
@@ -1570,11 +1574,17 @@ export default function CodeEditorPage() {
                 <button type="button" className="axe-studio-termkop" onClick={() => setShowTerminal(v => !v)}
                   title={showTerminal ? 'Fold terminal' : 'Open terminal'}>
                   <span>Terminal</span>
-                  <span className="axe-studio-chip">this worktree</span>
+                  {/* De NAAM van de machine, niet de belofte "this worktree".
+                      Dat stond er, terwijl het vak zonder wsBasis op de VPS
+                      uitkwam -- een label dat iets zegt wat niet zo was. */}
+                  <span className="axe-studio-chip">{EDITOR_HOST.naam}</span>
                   <span className="rechts">{showTerminal ? 'Fold' : 'Terminal · zsh'}</span>
                 </button>
                 <div className="axe-studio-termbody">
-                  <XtermTerminal ref={termRef} style={{ height: '100%' }} />
+                  {/* Expliciet dezelfde machine als waar de code-agent draait.
+                      Zonder wsBasis valt XtermTerminal terug op de VPS -- zie
+                      hostVanDeEditor() in domain/terminalHosts.ts. */}
+                  <XtermTerminal ref={termRef} wsBasis={EDITOR_HOST.wsUrl} style={{ height: '100%' }} />
                 </div>
                 <div className="axe-studio-termregel">
                   <input value={termInput} onChange={e => setTermInput(e.target.value)}

@@ -208,3 +208,27 @@ export function alleHosts(eigen: TerminalHost[] | null | undefined): TerminalHos
 export function kiesHost(bewaardId: string | null | undefined, hosts: TerminalHost[]): TerminalHost {
   return hosts.find(h => h.id === bewaardId) ?? hosts[0];
 }
+
+/**
+ * De machine waar de code-editor zijn terminal op hoort te hebben.
+ *
+ * ## Waarom dit een regel is en geen weggelaten prop
+ *
+ * `XtermTerminal` zonder `wsBasis` valt terug op de VPS -- dat is het oude
+ * gedrag van toen er één terminal was en die op de VPS hoorde. In de
+ * code-editor is dat stil verkeerd: je bewerkt de checkout op deze Mac, de
+ * code-agent draait via de API op deze Mac, en de shell eronder zou dan op een
+ * andere machine staan. Dan draait `npm test` in het vak onder je bestand tegen
+ * een ándere checkout, en er is niets dat dat zegt.
+ *
+ * Dus: het vak onder de editor hangt aan dezelfde machine als de agent die je
+ * erboven aanstuurt. Wil je een shell op de VPS, dan is daar de Terminals-tab
+ * voor, waar je de machine zíet die je kiest.
+ */
+export function hostVanDeEditor(): TerminalHost {
+  const mac = INGEBOUWDE_HOSTS.find(h => h.id === 'deze-mac');
+  // Niet-null in de praktijk; de terugval is er zodat het hernoemen van een id
+  // geen lege wsUrl oplevert die stilletjes weer naar de VPS terugvalt.
+  if (!mac) throw new Error('terminalHosts: deze-mac ontbreekt');
+  return mac;
+}

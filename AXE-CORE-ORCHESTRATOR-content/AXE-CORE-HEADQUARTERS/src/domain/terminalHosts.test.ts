@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  alleHosts, kiesHost, maakHost, geldigWsAdres, INGEBOUWDE_HOSTS,
+  alleHosts, kiesHost, maakHost, geldigWsAdres, INGEBOUWDE_HOSTS, hostVanDeEditor,
 } from '@/domain/terminalHosts';
 import { snelactiesVoor } from '@/domain/terminalSnelacties';
 
@@ -160,5 +160,16 @@ describe('de shortlist hoort bij de machine', () => {
         expect(zonderPrullenbak).not.toMatch(/\brestart\b|\bkill\b|\brm\b|>\s*\/|\bmv\b/);
       }
     }
+  });
+});
+
+describe('de terminal onder de code-editor', () => {
+  it('hangt aan deze machine en niet aan de VPS', () => {
+    // Zonder wsBasis valt XtermTerminal terug op de VPS. Dan bewerk je een
+    // bestand hier en draait het vak eronder ergens anders -- en `npm test`
+    // daar zegt niets over de code die je voor je ziet.
+    const h = hostVanDeEditor();
+    expect(h.wsUrl).toContain('127.0.0.1');
+    expect(h.wsUrl).not.toContain('axecompanion.com');
   });
 });
