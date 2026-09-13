@@ -12,6 +12,7 @@ import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
+import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
@@ -80,7 +81,7 @@ export function AppShell() {
   // TopNav, Sidebar, RightPanel, BottomBar and BottomNav, and let the page
   // itself have the whole viewport.
   const mobileCommandSurface =
-    location.pathname === '/mobile' || isAndroidShellRuntime();
+    location.pathname === '/mobile' || location.pathname === '/lock' || isAndroidShellRuntime();
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -171,10 +172,16 @@ export function AppShell() {
           raden. */}
       {!mobileCommandSurface && !opPlaat && <BottomBar />}
 
-      {/* BottomNav — navigation tabs on ALL devices. Hidden while the keyboard
-          is up so the composer sits directly above the keyboard instead of the
-          tab bar wedging in between. */}
+      {/* Navigatie. Twee vormen, want een telefoon en een desktop willen niet
+          hetzelfde:
+          - Desktop (geen command-surface): de horizontale BottomNav-strip.
+          - Telefoon / Android-shell (command-surface): een lade van links
+            (MobileNav) die alleen ruimte pakt als je hem opent. De vaste
+            onderbalk nam hoogte in en toonde dezelfde tabs als de app-grid;
+            de lade lost dat op en laat home + composer de basis blijven,
+            precies zoals de Tauri-app. */}
       {!mobileCommandSurface && keyboardInset === 0 && <BottomNav />}
+      {mobileCommandSurface && <MobileNav />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
