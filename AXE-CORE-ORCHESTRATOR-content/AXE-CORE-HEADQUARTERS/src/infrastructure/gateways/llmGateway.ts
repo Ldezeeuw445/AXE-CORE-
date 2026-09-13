@@ -21,6 +21,9 @@ import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
 import { proxyErrorMessage } from '@/domain/proxyError';
+import {
+  LIMIET_SLEUTEL, isLimietFout, koelingTot, koeltNog, koelingTekst,
+} from '@/domain/gebruikslimiet';
 import { proxyProviderNaam } from '@/domain/proxyProvider';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
@@ -51,6 +54,27 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   const base=toProxied(slot.baseUrl||cfg.baseUrl), model=slot.model||cfg.defaultModel;
   const isOllama=slot.provider==='ollama';
   const signal=AbortSignal.timeout(isOllama?90_000:15_000);
+
+/**
+ * De koeling per motor, in localStorage.
+ *
+ * Hier en niet in domain/: dat weet wat een limiet betekent, dit weet waar het
+ * blijft staan. En in localStorage en niet in het geheugen, want de limiet
+ * loopt over het herstarten van de app heen -- zou hij bij elke start leeg
+ * zijn, dan is dit precies niets waard op de dag dat je hem nodig hebt.
+ */
+function leesKoeling():Record<string,number>{
+  try{
+    const rauw=localStorage.getItem(LIMIET_SLEUTEL);
+    const g=rauw?JSON.parse(rauw):null;
+    return (g && typeof g==='object')?g as Record<string,number>:{};
+  }catch{ return {}; }  // privémodus, of iets anders onder dezelfde sleutel
+}
+
+function onthoudKoeling(motor:string,tot:number):void{
+  try{ localStorage.setItem(LIMIET_SLEUTEL,JSON.stringify({...leesKoeling(),[motor]:tot})); }
+  catch{ /* privémodus: dan maar elke beurt opnieuw proberen */ }
+}
 
   // ── Abonnement: een CLI in een checkout, geen HTTP-API ──────────────────
   //
@@ -83,11 +107,34 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
         :'Abonnement-chat: geen repo op de whitelist. Zet AGENT_REPOS op de host die de CLI draait.');
     }
 
+    // Een abonnement dat op is, is geen storing -- maar wel een reden om deze
+    // motor niet te starten. Zie domain/gebruikslimiet.ts: de CLI noemt zelf
+    // een tijd, en tot dan kost proberen alleen seconden.
+    const tot=leesKoeling()[motor];
+    if(koeltNog(tot,new Date())) throw new Error(koelingTekst(motor,tot));
+
     const res=await claudeRun({repo,prompt:bouwPrompt(messages),permission_mode:ABONNEMENT_MODUS,engine:motor});
     if(res.status!=='ok'){
-      throw new Error(`${motor} gaf geen antwoord: ${res.error||res.result||'onbekende fout'}`);
+      const reden=res.error||res.result||'onbekende fout';
+      if(isLimietFout(reden)){
+        const nu=new Date();
+        const nieuweTot=koelingTot(reden,nu);
+        onthoudKoeling(motor,nieuweTot);
+        throw new Error(koelingTekst(motor,nieuweTot));
+      }
+      throw new Error(`${motor} gaf geen antwoord: ${reden}`);
     }
     const tekst=(res.result||'').trim();
+    // Een CLI die met exitcode 0 afsluit en toch "ERROR: ..." schrijft, zou
+    // hier zijn eigen foutmelding als antwoord de chat in sturen. Bewust
+    // alleen op die vorm en niet op de tekst alleen: een antwoord dat
+    // tóevallig over rate limits gaat is een antwoord, geen storing.
+    if(/^ERROR:/i.test(tekst)&&isLimietFout(tekst)){
+      const nu=new Date();
+      const nieuweTot=koelingTot(tekst,nu);
+      onthoudKoeling(motor,nieuweTot);
+      throw new Error(koelingTekst(motor,nieuweTot));
+    }
     // Een lege maar geslaagde run is geen antwoord. Hem als leeg bericht
     // doorgeven zou in de chat lezen als "AXE had niets te zeggen", terwijl er
     // iets misging tussen de CLI en ons.

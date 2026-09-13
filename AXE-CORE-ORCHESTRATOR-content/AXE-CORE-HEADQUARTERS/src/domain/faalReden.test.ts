@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { korteFaalReden } from './faalReden';
+import { koelingTekst } from './gebruikslimiet';
 
 describe('korteFaalReden', () => {
   it('bewaart de stderr, niet de aanloop ervoor', () => {
@@ -33,5 +34,12 @@ describe('korteFaalReden', () => {
 
   it('valt terug op het begin als er niets herkenbaars in staat', () => {
     expect(korteFaalReden('iets onverwachts ging mis in de gateway')).toBe('iets onverwachts ging m…');
+  });
+
+  it('houdt de klok vast als een abonnement even op is', () => {
+    // Niet losgetypt: als koelingTekst anders gaat formuleren, hoort dat hier
+    // op te vallen in plaats van stil een logregel zonder tijd op te leveren.
+    const tot = new Date('2026-09-13T17:36:00').getTime();
+    expect(korteFaalReden(koelingTekst('codex', tot))).toBe('limiet tot 17:36');
   });
 });

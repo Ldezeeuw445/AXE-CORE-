@@ -968,28 +968,23 @@ html:root[data-look],
   min-height: calc(66px + env(safe-area-inset-top)) !important;
 }
 
-/* ── En tóch een eigen strook, in BEIDE standen ────────────────────────
+/* ── Geen eigen balk: de kopregel LIGT op de vensterbalk ───────────────
  *
- * De regel hierboven zet de achtergrond op `none`. Verderop stond een regel
- * die de kopbalk in de glas-stand juist een donkere strook gaf -- maar die
- * staat EERDER in het bestand en heeft dezelfde specificiteit
- * (`[data-look='glass']` telt net zo zwaar als `[data-look]`), dus deze won en
- * de balk werd doorzichtig.
+ * Het venster draait op `titleBarStyle: "Overlay"` met `hiddenTitle`, en dat
+ * betekent iets heel bepaalds: macOS tekent geen titelbalk, alleen de drie
+ * stoplichten, die over de pagina heen zweven. De kopregel schuift er met
+ * `padding-left: 82px` naast (zie `.axe-tauri .axe-topbar`) en IS daarmee de
+ * vensterbalk. Eén balk, niet twee.
  *
- * Daardoor liep de plaat door tot bovenaan: op licht glas zag de balk er
- * anders uit dan op zwart, en een rail die eronder uitschoof leek erdoorheen
- * te lopen. Dit is dus geen smaak maar het herstel van een regel die stil
- * werd overschreven.
+ * Hier stond een frosted strook met een lijn eronder. Bedoeld om een rail te
+ * laten verdwijnen die onder de balk door schoof -- maar een eigen vlak met
+ * een eigen rand leest als een tweede balk onder die van macOS, en dat is
+ * precies het venster-in-een-venster dat de rest van dit bestand vermijdt.
  *
- * Bewust geen dekkend zwart: dezelfde vervaging als de plaat, zodat het
- * bureaublad er nog doorheen schemert en de balk bij het glas hoort. */
+ * Wat dat railprobleem oploste was niet het vlak maar de stapeling: een
+ * element met `position` en een z-index ligt boven de rails (40) en de sloten
+ * (30). Dat blijft, de verf gaat eraf. */
 :root[data-look] .axe-shell .axe-topbar {
-  background: rgba(10, 12, 16, 0.55) !important;
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-  /* Boven de rails (40) en boven de sloten (30): een rail die uitschuift hoort
-     ONDER de balk door te gaan, niet eroverheen. */
   position: relative;
   z-index: 45;
 }

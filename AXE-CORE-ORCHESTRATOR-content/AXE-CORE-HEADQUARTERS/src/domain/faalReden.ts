@@ -44,6 +44,13 @@ export function korteFaalReden(bericht: string): string {
   const stderr = bericht.match(/stderr:\s*(\S[\s\S]*)/i);
   if (stderr) return knip(stderr[1]);
 
+  // Een bereikte limiet draagt een klok, en die klok is het hele nut van de
+  // regel: "limiet" zegt alleen dat het nu niet kan, "tot 17:36" zegt wanneer
+  // wel. De zin komt uit koelingTekst in gebruikslimiet.ts -- de test hier
+  // gebruikt die functie, zodat een andere formulering daar hier opvalt.
+  const limiet = bericht.match(/beschikbaar om (\d{1,2}:\d{2})/);
+  if (limiet) return `limiet tot ${limiet[1]}`;
+
   const status = bericht.match(/\b(4\d{2}|5\d{2})\b/);
   if (status) return status[1];
 
