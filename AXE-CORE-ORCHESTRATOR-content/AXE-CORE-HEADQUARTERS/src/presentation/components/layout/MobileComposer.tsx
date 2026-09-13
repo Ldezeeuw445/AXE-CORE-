@@ -22,7 +22,9 @@ export function MobileComposer() {
     if (!text) return;
     void sendMessage(text).catch(() => {});
     setDraft('');
-    navigate('/'); // naar de chatplaat, waar het antwoord verschijnt
+    // Naar de mobiele home, want dáár verschijnt het gesprek (op de shell is
+    // "/" leeg). Op de home zelf is dit een no-op.
+    navigate('/mobile');
   }, [draft, sendMessage, navigate]);
 
   return (
