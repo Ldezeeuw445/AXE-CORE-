@@ -72,6 +72,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
   { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'navigate', 'surf'] },
+  { path: '/device', label: 'Device Manager', keywords: ['device manager', 'device', 'phone', 'samsung', 'a17', 'toestel', 'telefoon', 'adb', 'mobile device'] },
+  { path: '/lock', label: 'Lock Screen', keywords: ['lock screen', 'lockscreen', 'vergrendelscherm', 'glance', 'lock', 'slot', 'startscherm'] },
   { path: '/organization', label: 'Organization', keywords: ['organization', 'org', 'team', 'org chart'] },
   { path: '/terminal', label: 'Terminal', keywords: ['terminal', 'console', 'shell', 'command line'] },
   { path: '/terminals', label: 'Terminals', keywords: ['terminals', 'machines', 'mac mini', 'imac', 'vps', 'ssh', 'hosts', 'worker starten'] },

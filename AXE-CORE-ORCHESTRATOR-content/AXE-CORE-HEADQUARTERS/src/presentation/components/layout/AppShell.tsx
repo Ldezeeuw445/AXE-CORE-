@@ -15,6 +15,7 @@ import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { isIngebed, schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
+import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { describeFailure } from '@/domain/globalFailure';
@@ -271,10 +272,16 @@ export function AppShell() {
           raden. */}
       {!mobileCommandSurface && !opPlaat && <BottomBar />}
 
-      {/* BottomNav — navigation tabs on ALL devices. Hidden while the keyboard
-          is up so the composer sits directly above the keyboard instead of the
-          tab bar wedging in between. */}
+      {/* Navigatie. Twee vormen, want een telefoon en een desktop willen niet
+          hetzelfde:
+          - Desktop (geen command-surface): de horizontale BottomNav-strip.
+          - Telefoon / Android-shell (command-surface): een lade van links
+            (MobileNav) die alleen ruimte pakt als je hem opent. De vaste
+            onderbalk nam hoogte in en toonde dezelfde tabs als de app-grid;
+            de lade lost dat op en laat home + composer de basis blijven,
+            precies zoals de Tauri-app. */}
       {!mobileCommandSurface && keyboardInset === 0 && <BottomNav />}
+      {mobileCommandSurface && <MobileNav />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
