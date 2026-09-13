@@ -4022,6 +4022,24 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 :root[data-look] .axe-tabzuil[data-kant='rechts'] .axe-tabzuil-naam { text-align: left; padding: 0 0 0 4px; }
 :root[data-look] .axe-tabzuil-knop[data-aan='ja'] { opacity: 1; }
 
+/* In de onderband: precies zo hoog als de composer, en daartussen gecentreerd.
+ *
+ * Gemeten 14 september op 1440x900: het slot loopt van de chatkop tot de
+ * onderkant van de composer (181px), de composer zelf is 159px. Onderaan
+ * uitgelijnd stonden de iconen dus lager dan het midden van de composer, en de
+ * rechter zuil stond met zijn 84px aan de VERRE kant van het slot -- tegen de
+ * radiaal-dok in plaats van tegen de composer. Nu vullen beide de breedte van
+ * hun slot (zodat data-kant bepaalt waar het rooster ligt) en de hoogte van de
+ * composer. */
+:root[data-look] .axe-slot--links > .axe-tabzuil,
+:root[data-look] .axe-slot--rechts > .axe-tabzuil {
+  align-self: stretch;
+  margin-top: auto;
+  height: var(--axe-composer-hoog, auto);
+  justify-content: center;
+  padding: 0;
+}
+
 /* Vaste hoogte, ook leeg: een regel die komt en gaat duwt het rooster op en
    neer terwijl je er met je muis overheen gaat. Rechts uitgelijnd, zodat hij
    onder de laatste kolom eindigt en niet halverwege de leegte begint. */

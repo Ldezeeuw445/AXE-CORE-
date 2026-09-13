@@ -1389,7 +1389,7 @@ export default function CodeEditorPage() {
               <IcoonZuil items={weergaveItems} actief={studioStand} kies={kiesWeergave} />
             </PlaatSlot>
             <PlaatSlot slot="rechts">
-              <IcoonZuil items={motorItems} actief={agentEngine} kies={id => setAgentEngine(id as AgentEngine)} kant="rechts" rijen={2} />
+              <IcoonZuil items={motorItems} actief={agentEngine} kies={id => setAgentEngine(id as AgentEngine)} kant="rechts" />
             </PlaatSlot>
           </>
         )}
