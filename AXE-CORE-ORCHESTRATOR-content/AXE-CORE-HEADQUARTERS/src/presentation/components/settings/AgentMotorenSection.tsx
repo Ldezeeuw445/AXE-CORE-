@@ -14,7 +14,7 @@ import {
   type HoofdAgent, type HoofdMotor, type MotorToewijzing,
 } from '@/domain/agentMotoren';
 import { leesToewijzing, kiesMotor } from '@/infrastructure/persistence/agentMotorenOpslag';
-import { claudeRepos } from '@/infrastructure/gateways/axeCoreApiService';
+import { claudeRepos, plannerStatus, plannerZetAan, type PlannerStatus } from '@/infrastructure/gateways/axeCoreApiService';
 
 const WAARVOOR: Record<HoofdAgent, string> = {
   'axe-core': 'Het antwoord in de chat. Alleen-lezen in je repo.',
@@ -25,6 +25,11 @@ const WAARVOOR: Record<HoofdAgent, string> = {
 export function AgentMotorenSection() {
   const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
   const [aanwezig, setAanwezig] = useState<Record<string, boolean> | null>(null);
+  const [planner, setPlanner] = useState<PlannerStatus | null>(null);
+  useEffect(() => { plannerStatus().then(setPlanner).catch(() => setPlanner(null)); }, []);
+  const zetPlanner = async (aan: boolean) => {
+    try { await plannerZetAan(aan); setPlanner(await plannerStatus()); } catch { /* host onbereikbaar */ }
+  };
 
   useEffect(() => {
     const bij = () => setToewijzing(leesToewijzing());
@@ -81,6 +86,24 @@ export function AgentMotorenSection() {
             </div>
           );
         })}
+      </div>
+      {/* De planner: dezelfde abonnementen, maar dan zonder dat je iets vraagt.
+          Met een dagbudget per abonnement, zodat hij het niet opmaakt. */}
+      <div className="mt-3 pt-3 flex items-center justify-between gap-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="min-w-0">
+          <div className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>Planner</div>
+          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            {!planner ? 'Agent-host niet bereikbaar.'
+              : !planner.host_kan ? 'Draait niet op deze host (AXE_PLANNER staat niet aan).'
+              : `Elke ${Math.round(planner.interval_s / 3600)} uur · max ${planner.dagbudget} runs per abonnement per dag · vandaag: ${
+                  Object.entries(planner.gebruik_vandaag).map(([m, n]) => `${m} ${n}`).join(', ') || 'nog niets'}${
+                  Object.keys(planner.koeling).length ? ` · koelt: ${Object.entries(planner.koeling).map(([m, t]) => `${m} tot ${new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`).join(', ')}` : ''}`}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs-custom shrink-0" style={{ color: 'var(--text-secondary)' }}>
+          <input type="checkbox" checked={!!planner?.aan} disabled={!planner?.host_kan} onChange={e => { void zetPlanner(e.target.checked); }} />
+          aan
+        </label>
       </div>
     </div>
   );

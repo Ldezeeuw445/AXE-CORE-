@@ -11,6 +11,7 @@ import {
   listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
   type DurableTaskRun,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { PlannerTaken } from '@/presentation/components/tasks/PlannerTaken';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -291,6 +292,8 @@ export default function Tasks() {
           </button>
         </div>
       </div>
+
+      <PlannerTaken />
 
       {/* De cijferrij die hier stond telde ALLE apps bij elkaar op. Dat getal
           beantwoordt geen vraag die je hebt: "twaalf te doen" zegt niets als je

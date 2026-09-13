@@ -46,7 +46,11 @@ async function basisVoor(path: string): Promise<string> {
   // machine is een keuze — zie config/agentHost.ts. Al het andere (marktdata,
   // geheugen, proxies) blijft waar de sleutels staan.
   // De preview draait in de repo van de editor, dus op dezelfde machine.
-  if (path.startsWith('/claude/') || path.startsWith('/preview/')) return await agentBasis(BASE_URL).catch(() => BASE_URL);
+  // De preview draait in de repo van de editor, en de planner draait waar de
+  // abonnementen staan: allebei op de agent-host, niet op de VPS.
+  if (path.startsWith('/claude/') || path.startsWith('/preview/') || path.startsWith('/planner/')) {
+    return await agentBasis(BASE_URL).catch(() => BASE_URL);
+  }
   if (!path.startsWith('/browser/agent')) return BASE_URL;
   return (await browserBasis().catch(() => '')) || BASE_URL;
 }
@@ -1315,4 +1319,52 @@ export interface MarketNewsItem {
  *  actual current events instead of only the LLM's own dated knowledge. */
 export async function fetchMarketNews(category = 'forex', limit = 20): Promise<{ category: string; source: string; news: MarketNewsItem[] }> {
   return call('GET', `/market/news?category=${encodeURIComponent(category)}&limit=${limit}`);
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PLANNER — de drie hoofdagents plannen zelf (backend/axe_api/planner.py)
+// ══════════════════════════════════════════════════════════════════════════════
+export interface PlannerAgentVerslag {
+  motor: string;
+  voorstellen?: string[];
+  fout?: string;
+  uitgevoerd?: { taak: string; ok?: boolean; fout?: string | null; overgeslagen?: string };
+  goedgekeurd_uitgevoerd?: { taak: string; ok?: boolean; fout?: string | null; overgeslagen?: string };
+}
+export interface PlannerStatus {
+  host_kan: boolean;
+  aan: boolean;
+  bezig: boolean;
+  interval_s: number;
+  dagbudget: number;
+  gebruik_vandaag: Record<string, number>;
+  koeling: Record<string, string>;
+  motoren: Record<string, string>;
+  laatste_ronde: { begon: string; klaar?: string; agents: Record<string, PlannerAgentVerslag> } | null;
+}
+export interface PlannerTaak {
+  id: string;
+  title: string;
+  goal: string | null;
+  description: string | null;
+  status: string;
+  priority: string;
+  assignee: string | null;
+  metadata: { agent?: string; motor?: string; risico?: 'lezen' | 'schrijven'; goedkeuring?: 'niet_nodig' | 'nodig' | 'ja' | 'afgewezen'; pogingen?: number } | null;
+  result: { output?: string } | null;
+  error: { message?: string } | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export function plannerStatus(): Promise<PlannerStatus> { return call('GET', '/planner/status'); }
+export function plannerTaken(limit = 40): Promise<{ taken: PlannerTaak[] }> { return call('GET', `/planner/taken?limit=${limit}`); }
+export function plannerZetMotoren(motoren: Record<string, string>): Promise<{ motoren: Record<string, string> }> {
+  return call('PUT', '/planner/motoren', { motoren });
+}
+export function plannerZetAan(aan: boolean): Promise<{ aan: boolean; host_kan: boolean }> { return call('PUT', '/planner/aan', { aan }); }
+export function plannerRonde(): Promise<{ gestart: boolean; reden?: string }> { return call('POST', '/planner/ronde'); }
+export function plannerBesluit(id: string, goedkeuren: boolean): Promise<{ id: string; goedkeuring: string }> {
+  return call('POST', `/planner/taken/${encodeURIComponent(id)}/besluit`, { goedkeuren });
 }

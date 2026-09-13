@@ -1,0 +1,111 @@
+"""De planner: wat hij uit een antwoord haalt, en wanneer hij een abonnement met rust laat."""
+from datetime import datetime
+
+import planner as p
+
+
+class TestVoorstellen:
+    def test_haalt_de_array_uit_praat_en_codeblokken(self):
+        tekst = 'Hier is mijn plan:\n```json\n[{"titel": "Tests draaien", "doel": "vitest in axe-core", "risico": "lezen"}]\n```\nSucces!'
+        uit = p.lees_voorstellen(tekst)
+        assert uit[0]["titel"] == "Tests draaien" and uit[0]["risico"] == "lezen"
+
+    def test_normaliseert_en_begrenst(self):
+        tekst = '[' + ','.join(['{"title": "t%d", "goal": "g", "risk": "write", "priority": "urgent"}' % i for i in range(6)]) + ']'
+        uit = p.lees_voorstellen(tekst)
+        assert len(uit) == p.MAX_VOORSTELLEN
+        assert uit[0]["risico"] == "schrijven" and uit[0]["prioriteit"] == "medium"
+
+    def test_zonder_titel_of_doel_telt_niet_en_onzin_is_leeg(self):
+        assert p.lees_voorstellen('[{"titel": "alleen titel"}]') == []
+        assert p.lees_voorstellen("geen json") == []
+        assert p.lees_voorstellen("[kapot") == []
+
+
+class TestAbonnementenMetRust:
+    nu = datetime(2026, 9, 14, 1, 0)
+
+    def test_leest_de_tijd_uit_de_codex_limiet(self):
+        tot = p.limiet_tot("ERROR: You've hit your usage limit ... or try again at 3:40 AM.", self.nu)
+        assert tot == datetime(2026, 9, 14, 3, 40)
+
+    def test_een_tijd_die_al_voorbij_is_is_morgen(self):
+        tot = p.limiet_tot("usage limit, try again at 10:36 PM", datetime(2026, 9, 14, 23, 0))
+        assert tot == datetime(2026, 9, 15, 22, 36)
+
+    def test_geen_limiet_is_geen_koeling(self):
+        assert p.limiet_tot("Incorrect API key provided", self.nu) is None
+
+    def test_dagbudget_telt_per_abonnement_en_sleutels_hebben_er_geen(self):
+        staat = {}
+        for _ in range(p.DAGBUDGET):
+            p.tel_gebruik(staat, "codex", "2026-09-14")
+        assert p.budget_over(staat, "codex", "2026-09-14") == 0
+        assert p.budget_over(staat, "claude", "2026-09-14") == p.DAGBUDGET
+        assert p.budget_over(staat, "codex", "2026-09-15") == p.DAGBUDGET
+        assert p.budget_over(staat, "sleutels", "2026-09-14") > 1000
+
+    def test_koeling(self):
+        staat = {"koeling": {"codex": datetime(2026, 9, 14, 3, 40).isoformat()}}
+        assert p.koelt(staat, "codex", self.nu) is True
+        assert p.koelt(staat, "codex", datetime(2026, 9, 14, 4, 0)) is False
+        assert p.koelt(staat, "claude", self.nu) is False
+
+
+class TestRonde:
+    """Een ronde met nep-Supabase en nep-motor: wat wordt er weggeschreven en uitgevoerd."""
+
+    def test_schrijftaak_wacht_leestaak_wordt_gedaan_en_status_nooit_queued(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(p, "STAAT_PAD", str(tmp_path / "planner.json"))
+        ingevoegd, updates = [], []
+
+        class Q:
+            def __init__(self, tabel): self.tabel, self.rij, self.upd = tabel, None, None
+            def select(self, *a, **k): return self
+            def eq(self, *a, **k): return self
+            def in_(self, *a, **k): return self
+            def order(self, *a, **k): return self
+            def limit(self, *a, **k): return self
+            def insert(self, rij):
+                self.rij = {**rij, "id": f"t{len(ingevoegd)}"}; ingevoegd.append((self.tabel, self.rij)); return self
+            def update(self, velden): self.upd = velden; updates.append((self.tabel, velden)); return self
+            def execute(self):
+                class R: pass
+                r = R()
+                r.data = [self.rij] if self.rij else ([{"id": "x"}] if self.upd else [])
+                return r
+
+        class SB:
+            def table(self, naam): return Q(naam)
+
+        antwoorden = iter([
+            '[{"titel": "Lees de logs", "doel": "kijk", "risico": "lezen"}, {"titel": "Fix bug", "doel": "pas aan", "risico": "schrijven"}]',
+            "verslag: alles rustig",
+        ] + ['[]'] * 10)
+        runs = []
+
+        def run_agent(repo, prompt, modus, timeout, motor):
+            runs.append((repo, modus, motor))
+            return {"status": "ok", "result": next(antwoorden)}
+
+        monkeypatch.setattr("agent_runner.repo_status", lambda: {"axe-core": {"runnable": True}})
+        pl = p.Planner(lambda: SB(), run_agent, lambda: {})
+        pl._git = lambda: ""
+        verslag = pl.ronde({"axe-core": "claude", "code-agent": "claude2", "axe-algo": "codex"})
+
+        taken = [r for t, r in ingevoegd if t == "core_tasks"]
+        assert all(t["status"] == "pending" for t in taken)
+        assert {t["metadata"]["goedkeuring"] for t in taken} == {"niet_nodig", "nodig"}
+        assert all(m == "plan" for _, m, _ in runs), "zonder goedkeuring nooit schrijven"
+        assert any(t == "memory" for t, _ in ingevoegd), "de uitkomst van een leestaak gaat naar het geheugen"
+        assert verslag["agents"]["axe-core"]["uitgevoerd"]["ok"] is True
+
+
+class TestSchrijfRepo:
+    def test_schrijftaak_valt_niet_terug_op_een_andere_repo(self, monkeypatch):
+        monkeypatch.setattr("agent_runner.repo_status", lambda: {
+            "axe-core": {"runnable": True}, "axon-memory": {"runnable": False}})
+        pl = p.Planner(lambda: None, lambda *a: {}, lambda: {})
+        assert pl._werkrepo("axon-memory", streng=True) is None
+        assert pl._werkrepo("axon-memory") == "axe-core", "lezen mag wel elders"
+        assert pl._werkrepo("axe-core", streng=True) == "axe-core"

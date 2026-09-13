@@ -3720,3 +3720,109 @@ _MARKET_TOOLS = [
 ]
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PLANNER — de drie hoofdagents plannen zelf (zie planner.py)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Endpoints bestaan overal, zodat de app eerlijk kan zeggen "staat uit"; de lus
+# draait alleen met AXE_PLANNER=1 (de Mac mini, waar de abonnementen staan).
+import planner as _planner_mod
+from agent_runner import whitelisted_repos as _planner_repos
+
+_planner = _planner_mod.Planner(sb, run_agent, _planner_repos)
+
+
+class PlannerMotoren(BaseModel):
+    motoren: dict[str, str]
+
+
+class PlannerAan(BaseModel):
+    aan: bool
+
+
+class PlannerBesluit(BaseModel):
+    goedkeuren: bool
+
+
+@app.on_event("startup")
+async def _planner_start():
+    if _planner_mod.planner_aan():
+        asyncio.create_task(_planner_mod.lus(_planner))
+        log.info("[planner] aan: eerste ronde over 10 minuten, daarna elke %ss", _planner_mod.INTERVAL_S)
+
+
+@app.get("/planner/status", dependencies=[AUTH])
+async def planner_status():
+    staat = _planner_mod.lees_staat()
+    vandaag = datetime.now().strftime("%Y-%m-%d")
+    return {
+        "host_kan": _planner_mod.planner_aan(),
+        "aan": bool(staat.get("aan", True)) and _planner_mod.planner_aan(),
+        "bezig": _planner.bezig,
+        "interval_s": _planner_mod.INTERVAL_S,
+        "dagbudget": _planner_mod.DAGBUDGET,
+        "gebruik_vandaag": staat.get("gebruik", {}).get(vandaag, {}),
+        "koeling": staat.get("koeling", {}),
+        "motoren": staat.get("motoren") or _planner_mod.STANDAARD_MOTOREN,
+        "laatste_ronde": staat.get("laatste_ronde"),
+    }
+
+
+@app.put("/planner/motoren", dependencies=[AUTH])
+async def planner_motoren(body: PlannerMotoren):
+    """De verdeling uit Instellingen → Motoren per agent. Die leeft in de app
+    (localStorage); de planner draait hier en moet hem dus aangereikt krijgen."""
+    geldig = {a: m for a, m in body.motoren.items()
+              if a in _planner_mod.AGENTS and m in (*_planner_mod.ABONNEMENTEN, "sleutels")}
+    staat = _planner_mod.lees_staat()
+    staat["motoren"] = {**_planner_mod.STANDAARD_MOTOREN, **geldig}
+    _planner_mod.schrijf_staat(staat)
+    return {"motoren": staat["motoren"]}
+
+
+@app.put("/planner/aan", dependencies=[AUTH])
+async def planner_zet_aan(body: PlannerAan):
+    staat = _planner_mod.lees_staat()
+    staat["aan"] = body.aan
+    _planner_mod.schrijf_staat(staat)
+    return {"aan": body.aan, "host_kan": _planner_mod.planner_aan()}
+
+
+@app.post("/planner/ronde", dependencies=[AUTH], status_code=202)
+async def planner_ronde_nu():
+    if not _planner_mod.planner_aan():
+        raise HTTPException(409, "De planner draait niet op deze host (AXE_PLANNER staat niet op 1).")
+    if _planner.bezig:
+        return {"gestart": False, "reden": "er loopt al een ronde"}
+    asyncio.create_task(asyncio.to_thread(_planner.ronde))
+    return {"gestart": True}
+
+
+@app.get("/planner/taken", dependencies=[AUTH])
+async def planner_taken(limit: int = 40):
+    rijen = (sb().table("core_tasks")
+             .select("id,title,goal,description,status,priority,assignee,metadata,result,error,created_at,completed_at")
+             .eq("capability", "planner").order("created_at", desc=True)
+             .limit(max(1, min(limit, 100))).execute().data) or []
+    return {"taken": rijen}
+
+
+@app.post("/planner/taken/{taak_id}/besluit", dependencies=[AUTH])
+async def planner_besluit(taak_id: str, body: PlannerBesluit):
+    rij = (sb().table("core_tasks").select("id,status,metadata").eq("id", taak_id)
+           .eq("capability", "planner").limit(1).execute().data)
+    if not rij:
+        raise HTTPException(404, "Geen planner-taak met dit id")
+    meta = dict(rij[0].get("metadata") or {})
+    if meta.get("goedkeuring") != "nodig" or rij[0].get("status") != "pending":
+        raise HTTPException(409, "Deze taak wacht niet op goedkeuring")
+    meta["goedkeuring"] = "ja" if body.goedkeuren else "afgewezen"
+    meta["uiStatus"] = "todo" if body.goedkeuren else "blocked"
+    velden = {"metadata": meta, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if not body.goedkeuren:
+        velden["status"] = "cancelled"
+        velden["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+    sb().table("core_tasks").update(velden).eq("id", taak_id).execute()
+    return {"id": taak_id, "goedkeuring": meta["goedkeuring"]}

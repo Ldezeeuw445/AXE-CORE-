@@ -18,6 +18,7 @@ import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infr
 import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopilot';
 import { maybeTriggerCompanionCorrelation } from '@/infrastructure/gateways/companionToolsService';
 import { warmLocalOllama } from '@/infrastructure/gateways/localOllama';
+import { startPlannerKoppeling } from '@/application/planner/plannerKoppeling';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -391,6 +392,9 @@ export function runAxeBootstrap(): void {
   // Niet meer opwarmen bij het opstarten: dat laadde 2,4 GB in op een Mac met
   // 8 GB, ook als je niets lokaal vroeg. De eerste lokale beurt laadt hem zelf.
   void maybeNightlyReview();
+  // De planner op de agent-host: motorverdeling doorgeven, en wat hij doet aan
+  // de zwevende bol melden. Zie application/planner/plannerKoppeling.ts.
+  startPlannerKoppeling();
   void maybeSelfHealCheck();
   void maybeSyncObsidianVault();
   // Warm ★ Primair (+ fallback1) so first chat is not a cold start

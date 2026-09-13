@@ -278,15 +278,47 @@ def _current_branch(repo_path: str) -> str:
     Leeg bij een pad dat geen git-worktree is of waar git niet kan antwoorden;
     aanroepers lezen dat als een weigering, niet als toestemming.
     """
+    # Eerst .git/HEAD zelf lezen. Gemeten 14 september: `git rev-parse` op de
+    # repo's op de USB-SSD liep telkens tegen de 15s time-out terwijl er een
+    # agent in een andere repo werkte, en /claude/repos (een async route) hield
+    # daarmee de hele API 45 seconden stil. HEAD lezen is één klein bestand.
+    branch = _branch_uit_head(repo_path)
+    if branch is not None:
+        return branch
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=repo_path, capture_output=True, text=True, timeout=15,
+            cwd=repo_path, capture_output=True, text=True, timeout=5,
         )
     except Exception as e:  # noqa: BLE001
         log.warning("branch check failed in %s: %s", repo_path, e)
         return ""
     return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def _branch_uit_head(repo_path: str) -> str | None:
+    """De branch uit .git/HEAD, ook in een worktree (.git is dan een bestand met gitdir).
+
+    None als het geen gewone branch-HEAD is (losgekoppeld, of onleesbaar): dan
+    beslist git zelf. "HEAD" wordt nooit teruggegeven als branchnaam.
+    """
+    try:
+        git = os.path.join(repo_path, ".git")
+        if os.path.isfile(git):
+            with open(git, "r", encoding="utf-8") as f:
+                regel = f.read().strip()
+            if not regel.startswith("gitdir:"):
+                return None
+            git = regel.split(":", 1)[1].strip()
+            if not os.path.isabs(git):
+                git = os.path.normpath(os.path.join(repo_path, git))
+        with open(os.path.join(git, "HEAD"), "r", encoding="utf-8") as f:
+            head = f.read().strip()
+    except OSError:
+        return None
+    if head.startswith("ref: refs/heads/"):
+        return head[len("ref: refs/heads/"):]
+    return None
 
 
 def _binary(engine: dict) -> str | None:

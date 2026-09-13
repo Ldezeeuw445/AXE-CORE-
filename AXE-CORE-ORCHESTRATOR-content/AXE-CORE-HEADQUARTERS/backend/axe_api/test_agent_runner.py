@@ -222,3 +222,21 @@ class TestTweedeClaude:
         for naam in ("claude", "claude2"):
             env = a._subprocess_env(a.ENGINES[naam]["blocked_env"], a.ENGINES[naam].get("extra_env"))
             assert "ANTHROPIC_BASE_URL" not in env and "CLAUDECODE" not in env
+
+
+class TestBranchZonderGit:
+    def test_leest_de_branch_uit_head_ook_in_een_worktree(self, tmp_path):
+        repo = _repo("werkbranch")
+        assert a._branch_uit_head(repo) == "werkbranch"
+        # Een worktree: .git is een bestand dat naar de echte gitdir wijst.
+        wt = tmp_path / "wt"
+        subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", "andere", str(wt)], check=True)
+        assert a._branch_uit_head(str(wt)) == "andere"
+
+    def test_losgekoppeld_of_geen_repo_laat_git_beslissen(self, tmp_path):
+        repo = _repo("werkbranch")
+        sha = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        subprocess.run(["git", "-C", repo, "checkout", "-q", sha], check=True)
+        assert a._branch_uit_head(repo) is None
+        assert a._current_branch(repo) == "HEAD"
+        assert a._branch_uit_head(str(tmp_path)) is None
