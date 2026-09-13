@@ -17,9 +17,22 @@ describe('de indeling van de Code Editor', () => {
     expect(lees('./CodeEditorPage.tsx')).not.toMatch(/axe-codeplaat/);
   });
 
-  it('toont op de code-tab geen chatplaat, maar houdt PlaatChat gemount voor handleSend', () => {
+  it('toont op de code-tab alleen de kop: CODE AGENT met motor en repo, geen gesprek', () => {
     const chat = lees('../components/layout/PlaatChat.tsx');
-    expect(chat).toMatch(/const opEditor = location\.pathname\.includes\('code-editor'\)/);
-    expect(chat).toMatch(/style=\{opEditor \? \{ display: 'none' \} : undefined\}/);
+    expect(chat).toMatch(/const kopAlleen = opEditor \|\| chatCollapsed/);
+    expect(chat).toMatch(/CODE AGENT/);
+    expect(chat).toMatch(/snelactieLijst=\{opEditor \? codeKop\?\.snelacties : undefined\}/);
+  });
+
+  it('heeft geen topbalk meer: weergaven links en motoren rechts naast de composer', () => {
+    const pagina = lees('./CodeEditorPage.tsx');
+    expect(pagina).toMatch(/<PlaatSlot slot="links">\s*<IcoonZuil items=\{weergaveItems\}/);
+    expect(pagina).toMatch(/<PlaatSlot slot="rechts">\s*<IcoonZuil items=\{motorItems\}/);
+    // De balk bestaat alleen nog op mobiel, voor de bestanden-lade.
+    expect(pagina).toMatch(/\{isMobile && \(\s*<div className="axe-studio-balk">/);
+  });
+
+  it('laat het Canvas de toestellen op het raster zetten', () => {
+    expect(lees('./CodeEditorPage.tsx')).toMatch(/layout="raster"/);
   });
 });

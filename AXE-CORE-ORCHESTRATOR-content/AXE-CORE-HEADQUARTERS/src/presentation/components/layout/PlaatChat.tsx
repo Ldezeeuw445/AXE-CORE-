@@ -26,7 +26,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Check, Clock, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Code2, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
@@ -53,6 +53,7 @@ import {
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
+import { useCodeAgentKop } from '@/presentation/store/codeAgentKopStore';
 
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
@@ -280,12 +281,14 @@ export function PlaatChat() {
    * axe-look.css), dus nu volgt de een uit de ander in plaats van dat twee
    * getallen toevallig gelijk moeten staan. */
   const collapsedChatHeight = 72;
-  /* Op de Code Editor geen chatplaat. De composer daar is de vraag aan de
-   * code-agent (zie handleSend), dus een kop met je Home-gesprek erboven klopt
-   * niet -- en hij kostte de studio 72px hoogte (gemeten 13 sep, 1440x900).
-   * Hij blijft wel gemount: handleSend en het slepen van bestanden wonen hier. */
   const opEditor = location.pathname.includes('code-editor');
-  const chatHeight = opEditor ? 0 : chatCollapsed ? collapsedChatHeight : expandedChatHeight;
+  const codeKop = useCodeAgentKop(s => s.kop);
+  /* Op de Code Editor: alleen de kop, net als het ingeklapte gesprek op Home.
+   * De composer gaat daar naar de code-agent (zie handleSend); de kop zegt dat,
+   * met welke motor en in welke repo. Geen gespreksrol eronder -- het gesprek
+   * met de agent staat in de editor zelf. */
+  const kopAlleen = opEditor || chatCollapsed;
+  const chatHeight = kopAlleen ? collapsedChatHeight : expandedChatHeight;
 
   /* De stand van de chat op <html>, zodat de panelen ernaast hem kennen.
    *
@@ -313,10 +316,7 @@ export function PlaatChat() {
       )}
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
-          data-dicht={chatCollapsed ? 'ja' : 'nee'}
-          /* style en niet het hidden-attribuut: de klasse `flex` zet display en
-             wint het van [hidden], en dan piept de kop onder de studio uit. */
-          style={opEditor ? { display: 'none' } : undefined}
+          data-dicht={kopAlleen ? 'ja' : 'nee'}
           className="axe-chatplaat axe-chatplaat--kaal h-full flex flex-col relative"
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -332,6 +332,25 @@ export function PlaatChat() {
               twee rechts. Ze zijn niet verdwenen -- ze staan onder de klok,
               samen met de gesprekken, want dat is allemaal "welk gesprek kijk
               je en hoe staat het ervoor". */}
+          {opEditor ? (
+          <div className="axe-vak-kop">
+            <span className="axe-kop-links">
+              <span className="axe-kop-persona" style={{ color: 'var(--accent-cyan)', letterSpacing: '0.08em' }}>
+                <Code2 size={13} /> CODE AGENT
+              </span>
+              <span className="axe-kop-streep" aria-hidden="true" />
+              <span className="axe-kop-persona">{codeKop?.motor ?? '…'}</span>
+            </span>
+            <span className="axe-kop-rechts" style={{ gap: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+              {codeKop?.spoor && <span className="truncate" style={{ maxWidth: 320 }} title={codeKop.spoor}>{codeKop.spoor}</span>}
+              {codeKop?.repo && (
+                <span className="t-mono" title="De repo waar de bestanden en de agent in werken">
+                  {codeKop.repo}{codeKop.branch ? ` · ${codeKop.branch}` : ''}
+                </span>
+              )}
+            </span>
+          </div>
+          ) : (
           <div className="axe-vak-kop">
             <span className="axe-kop-links">
               <span onClick={e => e.stopPropagation()}>
@@ -363,10 +382,11 @@ export function PlaatChat() {
                   ooit toch dicht zet. */}
             </span>
           </div>
+          )}
 
           {/* Achter de klok: de gesprekken en de status. Eén paneel in plaats
               van vier dingen op de kopregel. */}
-          {paneelOpen && !chatCollapsed && (
+          {paneelOpen && !kopAlleen && (
             <div className="axe-kop-paneel">
               <span className="axe-cpills"><MissionControlStrip /></span>
               <span className="axe-cstat">
@@ -400,7 +420,7 @@ export function PlaatChat() {
             </div>
           )}
 
-          {!chatCollapsed && (
+          {!kopAlleen && (
             <>
               <div ref={chatScrollRef} className="axe-chatrol overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
                 {voice.conversation.map((m, i) => {
@@ -484,7 +504,8 @@ export function PlaatChat() {
         opWaarde={setChatText}
         opVerstuur={() => void handleChatSend()}
         plaatshouder={attachments.length ? 'Send · show · chart · done' : 'Ask anything, @models, /prompts …'}
-        snelacties={!isMobile && !chatCollapsed}
+        snelacties={!isMobile && (opEditor || !chatCollapsed)}
+        snelactieLijst={opEditor ? codeKop?.snelacties : undefined}
         staf={<VermogensKnop onKies={t => setChatText(t)} />}
         links={
           <>

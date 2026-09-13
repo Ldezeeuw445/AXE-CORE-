@@ -28,6 +28,7 @@
  */
 import { useRef, type ReactNode, type KeyboardEvent } from 'react';
 import { ComposerSnelacties } from './ComposerSnelacties';
+import type { Snelactie } from '@/domain/snelacties';
 
 interface Props {
   waarde: string;
@@ -42,6 +43,8 @@ interface Props {
   staf?: ReactNode;
   /** De pillen eronder. Laat ze weg op een paneel-composer; daar is geen plek. */
   snelacties?: boolean;
+  /** Een eigen rij, bijvoorbeeld die van de Code Editor. Leeg = de rij van Home. */
+  snelactieLijst?: readonly Snelactie[];
   /** Bovenaan buiten het vak: model, persona, en wat er rechts bij hoort. */
   kop?: ReactNode;
 }
@@ -55,6 +58,7 @@ export function AxeComposerVak({
   rechts,
   staf,
   snelacties = false,
+  snelactieLijst,
   kop,
 }: Props) {
   const veld = useRef<HTMLTextAreaElement>(null);
@@ -95,6 +99,7 @@ export function AxeComposerVak({
 
       {snelacties && (
         <ComposerSnelacties
+          acties={snelactieLijst}
           onKies={(prompt) => {
             opWaarde(waarde ? `${waarde.trimEnd()} ${prompt}` : prompt);
             veld.current?.focus();

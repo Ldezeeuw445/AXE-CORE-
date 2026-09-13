@@ -4015,6 +4015,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 :root[data-look] .axe-tabzuil-knop:hover { opacity: 0.85; }
+:root[data-look] .axe-tabzuil-knop[data-uit='ja'] { opacity: 0.12; cursor: not-allowed; }
+/* Rechts van de composer: tegen de composer aan, dus links uitgelijnd. */
+:root[data-look] .axe-tabzuil[data-kant='rechts'] { align-items: flex-start; }
+:root[data-look] .axe-tabzuil[data-kant='rechts'] .axe-tabzuil-rooster { justify-content: start; }
+:root[data-look] .axe-tabzuil[data-kant='rechts'] .axe-tabzuil-naam { text-align: left; padding: 0 0 0 4px; }
 :root[data-look] .axe-tabzuil-knop[data-aan='ja'] { opacity: 1; }
 
 /* Vaste hoogte, ook leeg: een regel die komt en gaat duwt het rooster op en
