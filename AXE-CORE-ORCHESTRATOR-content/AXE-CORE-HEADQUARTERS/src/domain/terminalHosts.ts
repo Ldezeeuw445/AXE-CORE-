@@ -38,23 +38,56 @@ export interface TerminalHost {
 /** De poort waarop terminal-server.cjs standaard luistert. */
 export const TERMINAL_POORT = 4022;
 
+/**
+ * De acht vakken, ingevuld.
+ *
+ * ## Waarom vier van de acht dezelfde machine zijn
+ *
+ * Er zijn vier machines maar acht vakken, en dat is geen probleem om op te
+ * lossen met vier lege plekken: wat je op de Mac doet zijn VIER dingen die
+ * naast elkaar draaien. Bouwen duurt minuten, de API-logs wil je ondertussen
+ * zien, een agent-login wacht op jouw antwoord, en git is iets wat je
+ * tussendoor doet. Dat in één shell proppen betekent wachten op elkaar.
+ *
+ * Elk vak is een eigen shell op dezelfde server (poort 4022), dus ze delen
+ * niets behalve de machine -- precies zoals vier tabbladen in Terminal.app.
+ *
+ * ## En waarom er geen terminal meer open hoeft op de Mac
+ *
+ * AXE Core start de shell-server zelf zodra hij opent (src-tauri/src/diensten.rs)
+ * en houdt hem in de gaten. Dit adres is dezelfde poort waar die server op
+ * luistert. Je hoeft er dus niets meer naast open te houden -- dat was de
+ * situatie waarin je per ongeluk een venster sloot en de helft wegviel.
+ */
 export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   {
     id: 'deze-mac',
-    naam: 'Deze Mac',
-    waarvoor: 'Waar AXE Core nu draait — bouwen, lokale API, poorten',
+    naam: 'Mac · repo',
+    waarvoor: 'Bouwen en bijwerken — npm run bijwerken, welke, tests',
     // Zonder tls: het verkeer verlaat de machine niet. Een certificaat voor
     // 127.0.0.1 bestaat niet zinnig en zou alleen een waarschuwing opleveren.
     wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
     ingebouwd: true,
   },
   {
-    id: 'imac',
-    naam: 'iMac',
-    waarvoor: 'De andere Mac',
-    // Leeg: het adres staat hier niet en mag niet verzonnen worden. Het scherm
-    // toont dan een invulveld in plaats van een knop die stil faalt.
-    wsUrl: '',
+    id: 'mac-api',
+    naam: 'Mac · API',
+    waarvoor: 'De lokale API en zijn logs — poort 8001',
+    wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
+    ingebouwd: true,
+  },
+  {
+    id: 'mac-agents',
+    naam: 'Mac · agents',
+    waarvoor: 'Claude, Codex en Cursor — inloggen en draaien',
+    wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
+    ingebouwd: true,
+  },
+  {
+    id: 'mac-git',
+    naam: 'Mac · git',
+    waarvoor: 'Status, commits, pushen — zonder je bouw te onderbreken',
+    wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
     ingebouwd: true,
   },
   {
@@ -67,7 +100,23 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   {
     id: 'vps-hetzner',
     naam: 'VPS Hetzner',
-    waarvoor: 'De tweede server',
+    waarvoor: 'Ollama en de modellen — de tweede server',
+    // Leeg: het adres staat hier niet en mag niet verzonnen worden. Het scherm
+    // toont dan een invulveld in plaats van een knop die stil faalt.
+    wsUrl: '',
+    ingebouwd: true,
+  },
+  {
+    id: 'imac',
+    naam: 'iMac',
+    waarvoor: 'De andere Mac',
+    wsUrl: '',
+    ingebouwd: true,
+  },
+  {
+    id: 'vrij',
+    naam: 'Vrij',
+    waarvoor: 'Nog een machine — vul het adres in',
     wsUrl: '',
     ingebouwd: true,
   },

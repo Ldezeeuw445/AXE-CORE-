@@ -77,12 +77,24 @@ describe('welke host geselecteerd is', () => {
 });
 
 describe('de shortlist hoort bij de machine', () => {
-  it('geeft de Mac zijn eigen acties', () => {
-    const a = snelactiesVoor('deze-mac').map(x => x.cmd).join(' ');
-    expect(a).toContain('run-local.sh');
-    // En NOOIT systemctl: die diensten bestaan daar niet, en een knop die op de
-    // verkeerde machine landt is erger dan geen knop.
-    expect(a).not.toContain('systemctl');
+  it('geeft elk Mac-vak de acties van ZIJN rol', () => {
+    // De vier Mac-vakken draaien op dezelfde machine maar niet voor hetzelfde.
+    // Eén lijst met alles erin betekent dat je in het git-vak langs de
+    // bouwcommando's scrolt en in het bouw-vak langs de API-logs.
+    const cmds = (id: string) => snelactiesVoor(id).map(x => x.cmd).join(' ');
+    expect(cmds('deze-mac')).toContain('npm run bijwerken');
+    expect(cmds('mac-api')).toContain('run-local.sh');
+    // En andersom: het bouw-vak heeft de API-dingen NIET, anders was de
+    // splitsing zinloos.
+    expect(cmds('deze-mac')).not.toContain('run-local.sh');
+  });
+
+  it('geeft geen enkel Mac-vak een commando van een VPS', () => {
+    // systemctl bestaat daar niet, en een knop die op de verkeerde machine
+    // landt is erger dan geen knop.
+    for (const id of ['deze-mac', 'mac-api', 'mac-agents', 'mac-git', 'imac']) {
+      expect(snelactiesVoor(id).map(x => x.cmd).join(' '), id).not.toContain('systemctl');
+    }
   });
 
   it('een deploy stopt als de pull mislukt', () => {

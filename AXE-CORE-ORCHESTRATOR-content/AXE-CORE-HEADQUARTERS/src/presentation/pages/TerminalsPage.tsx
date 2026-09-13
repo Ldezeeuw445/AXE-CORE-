@@ -107,7 +107,10 @@ export default function TerminalsPage() {
             opzoeken bestaat niet op het moment dat je het nodig hebt. */}
         <span className="text-[9.5px] flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
           <span className="axe-term-blijft" aria-hidden="true" />
-          blijft draaien: {blijvendDraaiend('deze-mac').map(a => a.label).join(' · ')}
+          {/* Wat er open MOET blijven staan. Sinds AXE CORE de diensten zelf
+              start is dat op deze Mac niets meer -- en dan hoort die regel er
+              ook niet te staan alsof er nog werk voor je ligt. */}
+          blijft draaien: {blijvendDraaiend('mac-api').map(a => a.label).join(' · ') || 'niets — AXE CORE doet het zelf'}
         </span>
         <button
           onClick={() => setToevoegen(v => !v)}
@@ -297,8 +300,8 @@ function MachinePaneel({
 
           {!verbonden && (
             <div className="axe-term-melding">
-              {host.id === 'deze-mac'
-                ? <>Start hem met <code>npm run terminal</code> in de repo.</>
+              {host.wsUrl.includes('127.0.0.1')
+                ? <>AXE CORE start de shell-server zelf. Staat hij bovenaan op <code>uit</code>, klik dan <code>start</code> — de reden staat in <code>.axe-logs/terminal.log</code>.</>
                 : <>Geen verbinding. Draait terminal-server.cjs daar, op poort {TERMINAL_POORT}?</>}
             </div>
           )}

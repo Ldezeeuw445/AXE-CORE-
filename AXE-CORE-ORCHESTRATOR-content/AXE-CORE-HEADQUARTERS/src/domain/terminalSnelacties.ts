@@ -130,7 +130,17 @@ const GIT_ACTIES = (pad: string): Snelactie[] => [
   },
 ];
 
-const MAC: Snelactie[] = [
+/**
+ * De vier Mac-vakken hebben elk hun EIGEN lijst.
+ *
+ * Ze draaien op dezelfde machine, maar niet voor hetzelfde. Eén lijst met alles
+ * erin betekent dat je in het git-vak langs de bouwcommando's scrolt en in het
+ * bouw-vak langs de agent-logins -- en dan zoek je elke keer opnieuw. Waar een
+ * vak voor is, bepaalt wat erin staat.
+ *
+ * Agents en git staan wél overal: die zijn niet aan een rol gebonden.
+ */
+const MAC_REPO: Snelactie[] = [
   {
     label: 'App bijwerken',
     cmd: `cd ${REPO_MAC} && npm run bijwerken`,
@@ -138,16 +148,47 @@ const MAC: Snelactie[] = [
     groep: 'machine',
   },
   {
-    label: 'API herstarten',
-    cmd: `cd ${REPO_MAC}/backend/axe_api && ./run-local.sh`,
-    uitleg: 'De lokale axe_api opnieuw — nodig na een pull met nieuwe endpoints',
+    label: 'Welke bouw',
+    cmd: `cd ${REPO_MAC} && npm run welke`,
+    uitleg: 'Welke commit zit er in elke AXE CORE.app op deze Mac',
+    groep: 'machine',
+    leestAlleen: true,
+  },
+  {
+    label: 'Tests',
+    cmd: `cd ${REPO_MAC} && npx vitest run`,
+    uitleg: 'De hele testsuite',
+    groep: 'machine',
+    leestAlleen: true,
+  },
+  {
+    label: 'Schijf',
+    cmd: 'df -h / | tail -1; echo; du -sh ~/AXE-CORE- 2>/dev/null',
+    uitleg: 'Vrije ruimte, en hoe groot de repo is',
+    groep: 'machine',
+    leestAlleen: true,
+  },
+];
+
+const MAC_API: Snelactie[] = [
+  {
+    label: 'Draait de API',
+    cmd: 'curl -s -o /dev/null -w "%{http_code}\\n" http://127.0.0.1:8001/health || echo "geen antwoord"',
+    uitleg: 'Antwoordt de lokale API op poort 8001',
+    groep: 'machine',
+    leestAlleen: true,
+  },
+  {
+    label: 'Logs volgen',
+    cmd: `tail -f ${REPO_MAC}/.axe-logs/api.log`,
+    uitleg: 'De uitvoer van de API die AXE CORE zelf startte',
     groep: 'machine',
     blijftDraaien: true,
   },
   {
-    label: 'Terminal-server',
-    cmd: `cd ${REPO_MAC} && npm run terminal`,
-    uitleg: 'De shell-server van deze machine — nodig voor deze terminal zelf',
+    label: 'Zelf starten',
+    cmd: `cd ${REPO_MAC}/backend/axe_api && ./run-local.sh`,
+    uitleg: 'Alleen nodig als AXE CORE hem niet kon starten — zie de strip bovenaan',
     groep: 'machine',
     blijftDraaien: true,
   },
@@ -159,20 +200,73 @@ const MAC: Snelactie[] = [
   },
   {
     label: 'Wat draait er',
-    cmd: 'ps aux | grep -E "uvicorn|terminal-server|node" | grep -v grep; lsof -nP -iTCP:8001 -iTCP:4022 -sTCP:LISTEN 2>/dev/null',
-    uitleg: 'De lokale API, de terminal-server en hun poorten',
+    cmd: 'ps aux | grep -E "uvicorn|terminal-server" | grep -v grep; lsof -nP -iTCP:8001 -iTCP:4022 -sTCP:LISTEN 2>/dev/null',
+    uitleg: 'De lokale API, de shell-server en hun poorten',
     groep: 'machine',
+    leestAlleen: true,
+  },
+];
+
+const MAC_AGENTS: Snelactie[] = [
+  {
+    label: 'Codex proberen',
+    // De faalwijze uit de routeringslog: "codex gaf geen antwoord: Codex
+    // eindigde". Dat is wat je ziet als hij niet is ingelogd -- hij stopt
+    // zonder uitvoer in plaats van om een login te vragen. Dit laat zien of
+    // dat het is.
+    cmd: 'codex exec "zeg alleen: ok" 2>&1 | tail -5',
+    uitleg: 'Antwoordt Codex? Stil afbreken betekent meestal: niet ingelogd',
+    groep: 'agents',
     leestAlleen: true,
   },
   {
-    label: 'Schijf',
-    cmd: 'df -h / | tail -1; echo; du -sh ~/AXE-CORE- 2>/dev/null',
-    uitleg: 'Vrije ruimte, en hoe groot de repo is',
-    groep: 'machine',
+    label: 'Claude proberen',
+    cmd: 'claude -p "zeg alleen: ok" 2>&1 | tail -5',
+    uitleg: 'Antwoordt Claude Code op je abonnement',
+    groep: 'agents',
     leestAlleen: true,
   },
-  ...AGENT_ACTIES(`cd ${REPO_MAC}`),
-  ...GIT_ACTIES(REPO_MAC),
+];
+
+/**
+ * Het git-vak krijgt wat NIET in GIT_ACTIES staat.
+ *
+ * Die gedeelde lijst is het minimum dat op elke machine klopt: status, log,
+ * pull. Dit vak is er om echt met git te werken, en dan wil je ook de dingen
+ * die je niet blind op een VPS wilt aanbieden.
+ */
+const MAC_GIT: Snelactie[] = [
+  {
+    label: 'Diff',
+    cmd: `git -C ${REPO_MAC} diff --stat`,
+    uitleg: 'Wat is er gewijzigd, per bestand',
+    groep: 'git',
+    leestAlleen: true,
+  },
+  {
+    label: 'Takken',
+    cmd: `git -C ${REPO_MAC} branch -vv`,
+    uitleg: 'Welke takken er zijn en waar ze op staan',
+    groep: 'git',
+    leestAlleen: true,
+  },
+  {
+    label: 'Pushen',
+    // -u origin <tak>, zoals afgesproken: nooit naar een andere tak dan waar je
+    // op staat, en de tak expliciet in het commando zodat je hem ziet.
+    cmd: `git -C ${REPO_MAC} push -u origin $(git -C ${REPO_MAC} rev-parse --abbrev-ref HEAD)`,
+    uitleg: 'Naar origin, op de tak waar je nu op staat',
+    groep: 'git',
+  },
+  {
+    label: 'Onbekende bestanden',
+    // De val waar npm run bijwerken op stopte: hij weigert bij ELKE lokale
+    // wijziging, en onbekende bestanden zijn er daar één van.
+    cmd: `git -C ${REPO_MAC} ls-files --others --exclude-standard`,
+    uitleg: 'Wat git niet kent — hier stopt npm run bijwerken op',
+    groep: 'git',
+    leestAlleen: true,
+  },
 ];
 
 /** Waar de deploy-kopie op een VPS staat. */
@@ -262,7 +356,15 @@ const ONBEKEND: Snelactie[] = [
  * lijst van een andere machine.
  */
 export function snelactiesVoor(hostId: string): Snelactie[] {
-  if (hostId === 'deze-mac' || hostId === 'imac') return MAC;
+  const metAgentsEnGit = (eigen: Snelactie[], cd: string, pad: string) =>
+    [...eigen, ...AGENT_ACTIES(cd), ...GIT_ACTIES(pad)];
+
+  if (hostId === 'deze-mac') return metAgentsEnGit(MAC_REPO, `cd ${REPO_MAC}`, REPO_MAC);
+  if (hostId === 'mac-api') return metAgentsEnGit(MAC_API, `cd ${REPO_MAC}`, REPO_MAC);
+  if (hostId === 'mac-agents') return metAgentsEnGit(MAC_AGENTS, `cd ${REPO_MAC}`, REPO_MAC);
+  if (hostId === 'mac-git') return metAgentsEnGit(MAC_GIT, `cd ${REPO_MAC}`, REPO_MAC);
+  // De iMac is een Mac zonder eigen rol: de bouwcommando's zijn daar hetzelfde.
+  if (hostId === 'imac') return metAgentsEnGit(MAC_REPO, `cd ${REPO_MAC}`, REPO_MAC);
   if (hostId.startsWith('vps')) return VPS;
   return ONBEKEND;
 }

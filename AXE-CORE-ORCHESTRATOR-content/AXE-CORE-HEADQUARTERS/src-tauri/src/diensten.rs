@@ -187,6 +187,7 @@ pub fn start_dienst(id: &str) -> Result<String, String> {
         .map_err(|e| format!("starten van {}: {e}", p.naam))?;
 
     met_kinderen(|k| k.insert(p.id.to_string(), kind));
+    onthoud_gestart(p.id);
     Ok(format!("{} gestart. Uitvoer: {}", p.naam, log.display()))
 }
 
@@ -205,6 +206,9 @@ pub fn stop_dienst(id: &str) -> Result<String, String> {
     });
 
     if gedood {
+        // Bewust gestopt is geen storing: de bewaker mag hem niet meteen weer
+        // aanzetten, want dan kun je hem nooit uit krijgen.
+        vergeet_gestart(p.id);
         Ok(format!("{} gestopt.", p.naam))
     } else if luistert(p.poort) {
         Err(format!(
@@ -213,6 +217,13 @@ pub fn stop_dienst(id: &str) -> Result<String, String> {
         ))
     } else {
         Ok(format!("{} draaide niet.", p.naam))
+    }
+}
+
+fn vergeet_gestart(id: &str) {
+    let mut slot = OOIT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(v) = slot.as_mut() {
+        v.retain(|x| x != id);
     }
 }
 
@@ -233,12 +244,32 @@ pub fn stand() -> Vec<DienstStand> {
         .collect()
 }
 
-/// Bij het opstarten allebei aanzetten, tenzij er al iets luistert.
+/// Hoe vaak de bewaker kijkt of alles nog luistert.
+///
+/// Tien seconden. Vaker is zinloos -- een dienst die omvalt merk je niet in
+/// vijf seconden meer dan in tien -- en het kost elke keer twee
+/// verbindingspogingen. Minder vaak en je zit een minuut naar een dode
+/// terminal te kijken zonder te weten waarom.
+const BEWAAK_SECONDEN: u64 = 10;
+
+/// Bij het opstarten allebei aanzetten, en daarna blijven kijken.
 ///
 /// In een eigen thread: `luistert()` wacht tot 250ms per poort, en dat mag het
 /// venster niet ophouden. Een app die een halve seconde later opent omdat hij
 /// twee poorten aan het aftasten was, is een app die traag aanvoelt zonder dat
 /// iemand kan zien waarom.
+///
+/// ## Waarom er een bewaker is
+///
+/// Een dienst kan omvallen: uvicorn stopt op een fout in de code, de
+/// shell-server op een kapotte verbinding. Zonder bewaker merk je dat pas als
+/// je iets probeert -- een terminal die niet verbindt, een Code Agent die 404
+/// geeft -- en dan moet je eerst uitzoeken dát er iets weg is voordat je kunt
+/// bedenken waarom.
+///
+/// Hij start alleen opnieuw wat WIJ startten en wat niet meer luistert. Draait
+/// jouw eigen venster op die poort, dan is er niets aan de hand en blijft hij
+/// ervan af.
 pub fn start_bij_opstarten() {
     std::thread::spawn(|| {
         for p in PLANNEN {
@@ -247,7 +278,46 @@ pub fn start_bij_opstarten() {
                 Err(fout) => eprintln!("[diensten] {} kon niet starten: {fout}", p.naam),
             }
         }
+
+        loop {
+            std::thread::sleep(Duration::from_secs(BEWAAK_SECONDEN));
+            for p in PLANNEN {
+                if luistert(p.poort) {
+                    continue;
+                }
+                // Niets aan de hand als we hem nooit gestart hebben: dan heeft
+                // iemand hem bewust uit, of draait hij hier gewoon niet.
+                if !van_ons(p.id) && !ooit_gestart(p.id) {
+                    continue;
+                }
+                eprintln!("[diensten] {} luistert niet meer — opnieuw starten", p.naam);
+                match start_dienst(p.id) {
+                    Ok(bericht) => eprintln!("[diensten] {bericht}"),
+                    Err(fout) => eprintln!("[diensten] {} kwam niet terug: {fout}", p.naam),
+                }
+            }
+        }
     });
+}
+
+/// Hebben wij deze dienst ooit gestart in dit vensterleven?
+///
+/// Nodig omdat het kind dat we startten weg is zodra hij crasht: `van_ons`
+/// zegt dan nee, en zonder dit geheugen zou de bewaker hem nooit meer
+/// aanzetten. Precies de stille faalwijze die hij moest oplossen.
+static OOIT: Mutex<Option<Vec<String>>> = Mutex::new(None);
+
+fn ooit_gestart(id: &str) -> bool {
+    let slot = OOIT.lock().unwrap_or_else(|e| e.into_inner());
+    slot.as_ref().is_some_and(|v| v.iter().any(|x| x == id))
+}
+
+fn onthoud_gestart(id: &str) {
+    let mut slot = OOIT.lock().unwrap_or_else(|e| e.into_inner());
+    let lijst = slot.get_or_insert_with(Vec::new);
+    if !lijst.iter().any(|x| x == id) {
+        lijst.push(id.to_string());
+    }
 }
 
 /// Alles wat wij startten weer neerhalen.

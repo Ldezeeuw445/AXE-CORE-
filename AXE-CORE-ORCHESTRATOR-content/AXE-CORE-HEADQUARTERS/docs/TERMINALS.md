@@ -3,8 +3,15 @@
 Dit is het antwoord op één vraag: **welke vensters moet ik openhouden om AXE
 CORE volledig te laten werken?**
 
-Het korte antwoord sinds `diensten.rs`: **geen**. AXE CORE start de twee
-diensten zelf zodra hij opent, want hij draait op diezelfde Mac.
+Het korte antwoord: **geen**. AXE CORE start de twee diensten zelf zodra hij
+opent, want hij draait op diezelfde Mac -- en een bewaker zet ze elke tien
+seconden terug als er eentje omvalt.
+
+De Terminals-tab heeft acht vakken. Vier daarvan zijn dezelfde Mac met een
+andere rol (repo, API, agents, git): elk vak is een eigen shell op poort 4022,
+zoals vier tabbladen in Terminal.app. Bouwen duurt minuten, de API-logs wil je
+ondertussen zien, een agent-login wacht op jouw antwoord en git doe je
+tussendoor -- dat in één shell proppen betekent wachten op elkaar.
 
 Je ziet ze bovenaan de Terminals-tab, met een lampje per dienst en een
 start/stop-knop. Wil je ze liever met de hand in een venster draaien, dan kan
