@@ -101,9 +101,11 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
     id: 'vps-hetzner',
     naam: 'VPS Hetzner',
     waarvoor: 'Ollama en de modellen — de tweede server',
-    // Leeg: het adres staat hier niet en mag niet verzonnen worden. Het scherm
-    // toont dan een invulveld in plaats van een knop die stil faalt.
-    wsUrl: '',
+    // Gemeten 13 september: tot die dag stond hier een Docker-container van
+    // 10 juli op publieke poort 4022 die elk token accepteerde. Nu draait de
+    // huidige terminal-server als systemd-dienst op 127.0.0.1, met Supabase-
+    // token en allowlist, en nginx geeft dit adres. Zelfde vorm als Strato.
+    wsUrl: 'wss://ollama.axecompanion.com/terminal',
     ingebouwd: true,
   },
   {

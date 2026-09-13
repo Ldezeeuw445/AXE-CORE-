@@ -119,8 +119,19 @@ journalctl -u axe-terminal -n 40 --no-pager
 
 Ollama met 18 modellen. Draait als dienst; geen venster nodig.
 
+**Terminal (vak 6):** `wss://ollama.axecompanion.com/terminal`. Dienst
+`axe-terminal` (systemd), code in `/opt/axe-terminal`, omgeving in
+`/etc/axe-terminal.env`, luistert alleen op `127.0.0.1:4022`; nginx geeft TLS.
+Bijwerken: kopieer `terminal-server.cjs` en `terminalShell.cjs` naar
+`/opt/axe-terminal` en `systemctl restart axe-terminal`.
+
+> Tot 13 september stond hier de Docker-container `axe-terminal-server`
+> (10 juli) op **publieke** poort 4022, en die accepteerde elk token. Docker
+> publiceert poorten langs ufw heen, dus "ufw staat alleen 22 toe" beschermde
+> niets. De container is gestopt en start niet meer vanzelf.
+
 ```bash
-systemctl --no-pager status ollama --lines=0
+systemctl --no-pager status axe-terminal ollama --lines=0
 ollama list
 journalctl -u ollama -n 40 --no-pager
 ```
