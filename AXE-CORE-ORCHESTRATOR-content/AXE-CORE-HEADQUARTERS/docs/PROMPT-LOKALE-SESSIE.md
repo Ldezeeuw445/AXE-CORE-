@@ -103,6 +103,34 @@ Daarna, in de app zelf (Terminals-tab, elk van de vier Mac-vakken):
 - Geen dubbele letters bij het typen (dat zou betekenen dat de browser nog
   zelf echoot terwijl de pty dat ook doet).
 
+### 1b. Let op de wees op poort 4022
+
+Een valkuil die ons al een ronde kostte, en een stille. AXE CORE start de
+terminalserver zelf en ruimt hem op bij afsluiten -- maar die opruimer hangt aan
+Tauri's afsluit-gebeurtenis, en het bijwerkscript sluit de app met `pkill`
+(SIGTERM). Dan gaat de app weg zonder dat de handler draait, en blijft de server
+als wees op zijn poort staan.
+
+Gevolg: de nieuwe app start op, ziet poort 4022 bezet, start dus niets, en raakt
+hem niet aan omdat hij niet van hem is. Alles in de app is nieuw behalve juist de
+shell waar je in werkt -- en niets zegt dat.
+
+`scripts/axe-bijwerken.sh` ruimt dit sinds vandaag op (zoekt op poort, kijkt via
+de werkmap van het proces of het van deze checkout is, en laat andermans server
+staan). Controleer dat het op de Mac echt werkt:
+
+```bash
+lsof -ti :4022
+lsof -a -p $(lsof -ti :4022 | head -1) -d cwd -Fn
+```
+
+De werkmap moet de checkout zijn. Draai daarna `npm run bijwerken` en controleer
+dat er ná afloop een NIEUW pid op 4022 staat. Zie je hetzelfde pid als ervoor,
+dan werkt het opruimen op macOS niet en is dat een bevinding.
+
+Als een terminalvak zich raar gedraagt na een update, is dit de eerste
+verdachte -- niet de code.
+
 ### 2. Elk abonnement is ingelogd, en dat blijft zo
 
 De drie CLI's die AXE CORE gebruikt (`backend/axe_api/agent_runner.py`):

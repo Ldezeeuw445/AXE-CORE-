@@ -145,6 +145,47 @@ if pgrep -f "AXE CORE.app" > /dev/null 2>&1; then
   sleep 1
 fi
 
+# ── 4b. En de diensten die hij achterliet ────────────────────────────────────
+#
+# Dit was een echte valkuil, en een stille. AXE CORE start de terminalserver en
+# de API zelf, en ruimt ze op bij afsluiten -- maar die opruimer hangt aan
+# Tauri's afsluit-gebeurtenis, en `pkill` hierboven stuurt SIGTERM. Dan gaat de
+# app weg zonder dat die handler ooit draait, en blijven zijn kinderen als wees
+# achter op hun poort.
+#
+# Wat je daarna ziet: je bouwt de nieuwe app, hij start op, ziet dat poort 4022
+# bezet is en start dus niets. De server die daar luistert is de OUDE. Alles in
+# de app is nieuw behalve juist de shell waar je in werkt, en niets zegt dat.
+# Precies zo werkte de pty er na een rebuild niet in -- niet omdat de code niet
+# klopte, maar omdat de oude nog draaide.
+#
+# Alleen wat bij DEZE checkout hoort. Op pad matchen en niet op "node" of
+# "uvicorn": een andere node-server of een ander project op deze Mac heeft
+# hier niets mee te maken en hoort niet om te vallen omdat wij bijwerken.
+# Draaide je er zelf een in een eigen venster, dan gaat die hier dus ook uit --
+# vandaar dat het erbij staat in plaats van stilletjes te gebeuren.
+# Op POORT zoeken en niet op procesnaam. De terminalserver draait als
+# `node terminal-server.cjs` -- een relatief pad, dus op naam matchen raakt net
+# zo goed een tweede checkout van deze repo. De poort is wat er werkelijk in de
+# weg zit, en via de werkmap van dat proces weten we of het van ons is.
+for poort in 4022 8001; do
+  for pid in $(lsof -ti :"$poort" 2>/dev/null); do
+    # De werkmap van het proces. Zit die niet in deze checkout, dan is het
+    # iemand anders zijn server en blijft hij staan -- ook als hij toevallig
+    # onze poort bezet. Dan zegt de app straks zelf dat de poort bezet is.
+    werkmap="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+    case "$werkmap" in
+      "$HIER"|"$HIER"/*)
+        zeg "Achtergebleven dienst op poort $poort afsluiten (pid $pid)"
+        kill "$pid" 2>/dev/null || true
+        ;;
+      *)
+        [[ -n "$werkmap" ]] && printf '  \033[33m! poort %s is bezet door iets buiten deze checkout (%s) -- blijft staan\033[0m\n' "$poort" "$werkmap"
+        ;;
+    esac
+  done
+done
+
 # ── 5. Starten ───────────────────────────────────────────────────────────────
 # Een zelfgebouwde app is niet ondertekend; zonder dit weigert Gatekeeper hem
 # zwijgend en gebeurt er bij dubbelklikken niets.
