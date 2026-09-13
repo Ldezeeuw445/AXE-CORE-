@@ -102,7 +102,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-AXE-Repo"],
     max_age=86400,
 )
 
@@ -1821,13 +1821,38 @@ WORKSPACE_DIR = os.path.realpath(os.environ.get("WORKSPACE_DIR", "/opt/axe-works
 os.makedirs(WORKSPACE_DIR, exist_ok=True)
 _SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"}
 
-def _safe_path(rel: str) -> str:
-    """Resolve a workspace-relative path and confine it to WORKSPACE_DIR."""
+def _safe_path(rel: str, root: str | None = None) -> str:
+    """Resolve a path relative to `root` (default WORKSPACE_DIR) and confine it there."""
+    root = root or WORKSPACE_DIR
     rel = (rel or "").lstrip("/")
-    full = os.path.realpath(os.path.join(WORKSPACE_DIR, rel))
-    if full != WORKSPACE_DIR and not full.startswith(WORKSPACE_DIR + os.sep):
+    full = os.path.realpath(os.path.join(root, rel))
+    if full != root and not full.startswith(root + os.sep):
         raise HTTPException(400, "Path escapes the workspace")
     return full
+
+
+def _werkmap(request: Request) -> str:
+    """De map waarin de Code Editor werkt: WORKSPACE_DIR, of een repo uit AGENT_REPOS.
+
+    De editor stuurt `X-AXE-Repo: <naam>` mee. Alleen een naam uit dezelfde
+    whitelist als de code-agents (agent_runner._repos) mag -- een pad uit het
+    verzoek zelf nooit. Zo bewerk je in de editor precies de repo's waar de
+    agent ook in mag, en toont de boom dezelfde checkout als waar de agent in
+    schrijft. Een onbekende naam is een 400 en geen stille terugval: anders kijk
+    je naar de ene repo terwijl je denkt in de andere te zitten.
+    """
+    naam = (request.headers.get("x-axe-repo") or "").strip()
+    if not naam:
+        return WORKSPACE_DIR
+    from agent_runner import whitelisted_repos
+    repos = whitelisted_repos()
+    pad = repos.get(naam)
+    if not pad:
+        raise HTTPException(400, f"Repo '{naam}' staat niet in AGENT_REPOS op deze host")
+    pad = os.path.realpath(pad)
+    if not os.path.isdir(pad):
+        raise HTTPException(404, f"Repo '{naam}' wijst naar {pad}, dat hier niet bestaat")
+    return pad
 
 class FileWrite(BaseModel):
     path: str
@@ -1893,9 +1918,10 @@ async def st_device_command(device_id: str, body: StCommandBody, request: Reques
     return r.json()
 
 @app.get("/files/tree", dependencies=[AUTH])
-async def files_tree(path: str = ""):
+async def files_tree(request: Request, path: str = ""):
     """List one directory level (folders first, then files)."""
-    full = _safe_path(path)
+    root = _werkmap(request)
+    full = _safe_path(path, root)
     if not os.path.isdir(full):
         raise HTTPException(404, "Not a directory")
     nodes = []
@@ -1903,14 +1929,14 @@ async def files_tree(path: str = ""):
         if name in _SKIP_DIRS:
             continue
         p = os.path.join(full, name)
-        rel = os.path.relpath(p, WORKSPACE_DIR)
+        rel = os.path.relpath(p, root)
         nodes.append({"path": rel, "name": name, "type": "folder" if os.path.isdir(p) else "file"})
     nodes.sort(key=lambda n: (n["type"] != "folder", n["name"].lower()))
     return {"nodes": nodes}
 
 @app.get("/files/read", dependencies=[AUTH])
-async def files_read(path: str):
-    full = _safe_path(path)
+async def files_read(request: Request, path: str):
+    full = _safe_path(path, _werkmap(request))
     if not os.path.isfile(full):
         raise HTTPException(404, "Not a file")
     if os.path.getsize(full) > 2_000_000:
@@ -1923,7 +1949,7 @@ async def files_read(path: str):
 
 @app.put("/files/write", dependencies=[AUTH])
 async def files_write(req: FileWrite, request: Request):
-    full = _safe_path(req.path)
+    full = _safe_path(req.path, _werkmap(request))
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w", encoding="utf-8") as f:
         f.write(req.content)
@@ -1932,7 +1958,7 @@ async def files_write(req: FileWrite, request: Request):
 
 @app.post("/files/create", dependencies=[AUTH])
 async def files_create(req: FileCreate, request: Request):
-    full = _safe_path(req.path)
+    full = _safe_path(req.path, _werkmap(request))
     if os.path.exists(full):
         raise HTTPException(409, "Already exists")
     if req.type == "folder":
@@ -1945,8 +1971,9 @@ async def files_create(req: FileCreate, request: Request):
 
 @app.delete("/files/delete", dependencies=[AUTH])
 async def files_delete(path: str, request: Request):
-    full = _safe_path(path)
-    if full == WORKSPACE_DIR:
+    root = _werkmap(request)
+    full = _safe_path(path, root)
+    if full == root:
         raise HTTPException(400, "Refusing to delete the workspace root")
     if os.path.isdir(full):
         _shutil.rmtree(full)
@@ -1963,9 +1990,10 @@ class FileMove(BaseModel):
 
 @app.post("/files/move", dependencies=[AUTH])
 async def files_move(req: FileMove, request: Request):
-    src = _safe_path(req.from_path)
-    dst = _safe_path(req.to_path)
-    if src == WORKSPACE_DIR or dst == WORKSPACE_DIR:
+    root = _werkmap(request)
+    src = _safe_path(req.from_path, root)
+    dst = _safe_path(req.to_path, root)
+    if src == root or dst == root:
         raise HTTPException(400, "Refusing to move the workspace root")
     if not os.path.exists(src):
         raise HTTPException(404, "Source not found")
@@ -1980,8 +2008,9 @@ async def files_move(req: FileMove, request: Request):
     return {"moved": True, "from": req.from_path, "to": req.to_path}
 
 @app.post("/files/search", dependencies=[AUTH])
-async def files_search(req: FileSearch):
+async def files_search(req: FileSearch, request: Request):
     """Grep the workspace (ripgrep if present, else Python walk)."""
+    root = _werkmap(request)
     results: list[dict] = []
     rg = _shutil.which("rg")
     if rg:
@@ -1990,7 +2019,7 @@ async def files_search(req: FileSearch):
             cmd.append("-i")
         if req.glob:
             cmd += ["--glob", req.glob]
-        cmd += ["--", req.query, WORKSPACE_DIR]
+        cmd += ["--", req.query, root]
         try:
             proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
@@ -1998,25 +2027,25 @@ async def files_search(req: FileSearch):
                 parts = line.split(":", 3)
                 if len(parts) == 4:
                     fpath, ln, col, text = parts
-                    results.append({"file": os.path.relpath(fpath, WORKSPACE_DIR), "line": int(ln), "col": int(col), "text": text[:300]})
+                    results.append({"file": os.path.relpath(fpath, root), "line": int(ln), "col": int(col), "text": text[:300]})
                     if len(results) >= req.maxResults:
                         break
         except Exception:
             pass
     else:
         needle = req.query if req.caseSensitive else req.query.lower()
-        for root, dirs, filenames in os.walk(WORKSPACE_DIR):
+        for map_, dirs, filenames in os.walk(root):
             dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
             for fn in filenames:
                 if len(results) >= req.maxResults:
                     break
-                fp = os.path.join(root, fn)
+                fp = os.path.join(map_, fn)
                 try:
                     with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                         for i, line in enumerate(f, 1):
                             hay = line if req.caseSensitive else line.lower()
                             if needle in hay:
-                                results.append({"file": os.path.relpath(fp, WORKSPACE_DIR), "line": i, "col": hay.index(needle) + 1, "text": line.strip()[:300]})
+                                results.append({"file": os.path.relpath(fp, root), "line": i, "col": hay.index(needle) + 1, "text": line.strip()[:300]})
                                 if len(results) >= req.maxResults:
                                     break
                 except Exception:
