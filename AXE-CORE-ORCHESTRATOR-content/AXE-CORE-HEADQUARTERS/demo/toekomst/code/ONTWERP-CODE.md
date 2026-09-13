@@ -19,13 +19,22 @@ Eén tab, drie **standen**. Geen vier producten naast elkaar.
 | **Canvas** | Figma + FlutterFlow | lagenboom, artboard, inspecteur; sleep is een diff |
 | **Preview** | Replit preview + Figma device frames | dezelfde route op telefoon, tablet en desktop |
 
-Wisselen is één segment in de werkbalk. Terminal en code-agent staan in de
-**hoekslots** naast de composer — dezelfde plek als de camera-pads op Home.
-Geen tweede balk over het chroom. Alleen het middenvak (de tabruimte) verandert.
+Wisselen is één segment in de werkbalk. **Terminal** zit onderin de studio —
+zelfde ritme als Cursor/Replit: files, editor, preview, en daaronder de shell
+van *deze* worktree. Term in de balk klapt hem in. Run opent hem. De tab
+`/terminals` blijft de plek voor machines (Mac Mini, VPS).
+
+**Code-agent** krijgt geen hoek naast de composer. Vragen gaat via de ene
+AXE-composer (`Ask anything…` / Ask agent · ⌘K). Welke motor (Native / Hands /
+Claude) kies je in de editorbalk — dat is wat Luka in `CodeEditorPage` afmaakt.
+De stappen staan als één regel in de editor-tabs; de diff blijft Accept/Reject.
+
+De hoeken naast de composer blijven van Home (camera-pads). Geen tweede
+composer, geen `PlaatSlot` links/rechts voor deze tab.
 
 Open `../code.html?look=glass`. Dat is de werkende demo-tab, op de echte plaat:
-één composer, het dok, de studio in `.tabruimte`. Files / Preview / Term / Agent
-zijn knoppen om te kijken wat erin past voordat het naar `CodeEditorPage` gaat.
+één composer, het dok, de studio in `.tabruimte`. Files / Preview / Term zijn
+knoppen om te kijken wat erin past voordat het naar `CodeEditorPage` gaat.
 
 ## Wat er al in de app zit (gemeten, niet aangenomen)
 
@@ -58,4 +67,5 @@ Reject blijft mogelijk. Dat is de Cursor-regel, toegepast op FlutterFlow-gebaren
 
 Geen tweede AXE in het preview-venster (geen TopNav, geen dok van 25).
 Geen eigen kleuren voor de editor. Geen gevulde cyaan knoppen. De Kotlin-schil
-van de Samsung blijft buiten deze tab.
+van de Samsung blijft buiten deze tab. Geen terminal of code-agent in
+`PlaatSlot` links/rechts — die hoeken zijn van Home.

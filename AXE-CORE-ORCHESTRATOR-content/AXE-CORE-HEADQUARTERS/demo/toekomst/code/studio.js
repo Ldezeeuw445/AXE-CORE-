@@ -425,7 +425,8 @@
   CODE.vraag = (tekst) => {
     const t = (tekst || '').trim();
     if (!t) return;
-    CODE.agentStap(t);
+    const motor = document.querySelector('[data-motor].aan')?.dataset.motor || 'native';
+    CODE.agentStap(t, motor);
     const titelMatch = t.match(/["“']([^"”']+)["”']/) || (/title|titel|header/i.test(t) && t.match(/to\s+(.+)$/i));
     if (titelMatch) {
       CODE.titel = titelMatch[1].trim();
@@ -514,29 +515,26 @@
       });
     });
     document.querySelector('[data-run]')?.addEventListener('click', () => {
+      const studio = document.querySelector('.studio');
+      if (studio) studio.dataset.term = 'aan';
       CODE.termRegel('npx vitest run --reporter=dot', '✓ 1025 passed · 0 failed');
+      requestAnimationFrame(() => { CODE.pasSchaal(); requestAnimationFrame(CODE.pasSchaal); });
     });
     document.querySelector('[data-ask]')?.addEventListener('click', () => {
       const inp = document.querySelector('.band .composer input.tekst');
+      if (inp && !inp.value.trim()) inp.focus();
       CODE.vraag((inp && inp.value) || 'put the device manager on phone and tablet');
     });
     document.querySelector('[data-term-stuur]')?.addEventListener('click', () => {
       const inp = document.getElementById('term-in');
       if (!inp || !inp.value.trim()) return;
+      const studio = document.querySelector('.studio');
+      if (studio) studio.dataset.term = 'aan';
       CODE.termRegel(inp.value.trim(), 'ok');
       inp.value = '';
     });
     document.getElementById('term-in')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.querySelector('[data-term-stuur]')?.click();
-    });
-    document.querySelector('[data-agent-stuur]')?.addEventListener('click', () => {
-      const inp = document.getElementById('agent-in');
-      if (!inp || !inp.value.trim()) return;
-      CODE.vraag(inp.value);
-      inp.value = '';
-    });
-    document.getElementById('agent-in')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.querySelector('[data-agent-stuur]')?.click();
     });
     document.querySelectorAll('[data-motor]').forEach((b) => {
       b.addEventListener('click', () => {

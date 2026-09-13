@@ -3,13 +3,16 @@
 
 .werkblad {
   display: grid;
-  grid-template-rows: 36px minmax(0, 1fr);
+  grid-template-rows: 36px minmax(0, 1fr) 132px;
   gap: 10px;
   height: 100%;
-  padding: 8px 0 124px;
+  padding: 8px 0;
   min-height: 0;
 }
-.werkbalk { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: var(--r-kaart); }
+.studio[data-term='uit'] {
+  grid-template-rows: 36px minmax(0, 1fr);
+}
+.werkbalk { grid-row: 1; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: var(--r-kaart); }
 .werkbalk .pad { display: flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono); color: var(--ink-2); }
 .werkbalk .pad b { color: var(--ink); font-weight: 500; }
 .werkbalk .groei { flex: 1; }
@@ -22,7 +25,7 @@
 .standen button.aan { color: var(--accent); background: var(--barknop); box-shadow: var(--barknop-rand); }
 
 /* ── Code-stand: boom · editor · toestel ──────────────────────────────── */
-.kolommen { display: grid; grid-template-columns: 220px minmax(0, 1fr) 420px; gap: 10px; min-height: 0; height: 100%; }
+.kolommen { display: grid; grid-template-columns: 220px minmax(0, 1fr) 420px; gap: 10px; min-height: 0; height: 100%; grid-row: 2; }
 .studio[data-stand='code'][data-toestel='tablet'] .kolommen {
   grid-template-columns: 188px minmax(260px, 1fr) minmax(520px, 1.2fr);
 }
@@ -56,6 +59,14 @@
 .editor .tabs .bestandtab svg.ic { width: 11px; height: 11px; }
 .editor .tabs .bestandtab.aan { color: var(--ink); background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
 .editor .tabs .bestandtab .stip { width: 5px; height: 5px; box-shadow: none; }
+.editor .tabs .agentspoor {
+  display: flex; align-items: center; min-width: 0; max-width: 340px; overflow: hidden;
+  font-size: 11px; color: var(--ink-3);
+}
+.editor .tabs .agentspoor .stap { display: none; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; }
+.editor .tabs .agentspoor .stap:last-child { display: grid; min-width: 0; }
+.editor .tabs .agentspoor .stap span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor .tabs .agentspoor .t-mono { font-size: 10px; }
 .editor .kruimel { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 14px; font: 400 10px/1 var(--mono); color: var(--ink-4); }
 .editor .kruimel b { color: var(--ink-3); font-weight: 400; }
 .code { position: relative; overflow: auto; font: 400 11.5px/1.62 var(--mono); color: var(--ink); counter-reset: regel; padding: 4px 0 0; }
@@ -103,7 +114,7 @@
 }
 
 /* ── Canvas-stand ─────────────────────────────────────────────────────── */
-.canvasvak { display: none; grid-template-columns: 200px minmax(0, 1fr) 226px; gap: 10px; min-height: 0; height: 100%; }
+.canvasvak { display: none; grid-template-columns: 200px minmax(0, 1fr) 226px; gap: 10px; min-height: 0; height: 100%; grid-row: 2; }
 .canvasvak > .kaart { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .lagen { padding: 8px; font-size: 11.5px; overflow: auto; }
 .lagen .r { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); cursor: pointer; }
@@ -123,7 +134,7 @@
 .artboard .kader .toestel { transform: none; }
 
 /* ── Preview-stand: drie toestellen ───────────────────────────────────── */
-.previewvak { display: none; min-height: 0; height: 100%; }
+.previewvak { display: none; min-height: 0; height: 100%; grid-row: 2; }
 .previewvak .kaart { height: 100%; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .rij-toestellen {
   display: flex; align-items: flex-end; justify-content: center; gap: 36px;
@@ -163,48 +174,37 @@
 .terminal .body { padding: 6px 12px; font: 400 11px/1.6 var(--mono); color: var(--ink-2); overflow: auto; }
 .terminal .body .prompt { color: var(--accent); }
 .terminal .body .ok { color: var(--ok); }
-.agent .body { padding: 6px 12px; display: grid; gap: 6px; align-content: start; font-size: 11.5px; overflow: auto; }
-.agent .body .stap { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; }
-.agent .body .stap .t-mono { font-size: 10px; }
 .motor { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-pil); }
 .motor button { height: 20px; padding: 0 8px; border: 0; border-radius: var(--r-pil); background: transparent; color: var(--ink-3); font: 500 10px/1 var(--ui); cursor: pointer; }
 .motor button.aan { color: var(--ink); background: var(--barknop); box-shadow: var(--barknop-rand); }
 
 .boom .r[data-file] { cursor: pointer; }
-body:has(.studio[data-term='uit']) .slot--links { display: none; }
-body:has(.studio[data-agent='uit']) .slot--rechts { display: none; }
 .werkbalk .knop[data-paneel] { color: var(--ink-3); }
 .studio[data-files='aan'] .werkbalk .knop[data-paneel='files'],
 .studio[data-preview='aan'] .werkbalk .knop[data-paneel='preview'],
-.studio[data-term='aan'] .werkbalk .knop[data-paneel='term'],
-.studio[data-agent='aan'] .werkbalk .knop[data-paneel='agent'] { color: var(--accent); }
+.studio[data-term='aan'] .werkbalk .knop[data-paneel='term'] { color: var(--accent); }
 
-/* ── Sloten naast de band: terminal links, agent rechts — dezelfde hoeken
-     als de camera-pads op Home. Niet een tweede balk over de composer. ── */
-.slot {
-  position: fixed;
-  z-index: 4;
+/* Terminal hoort bij de studio, onder files/editor/preview — Cursor/Replit.
+   Niet in de hoeken naast de composer: die zijn van Home. /terminals blijft
+   de tab voor machines. Dit vak is de shell van deze worktree. */
+.termvak {
+  grid-row: 3;
+  min-height: 0;
+  overflow: hidden;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 46px;
-  gap: 10px;
-  width: calc((100vw - var(--band)) / 2 - 28px);
-  max-width: 280px;
-  height: 168px;
-  bottom: 58px;
-  min-width: 160px;
+  grid-template-rows: auto minmax(0, 1fr) 32px;
 }
-.slot--links { left: 14px; }
-.slot--rechts { right: 14px; }
-.slot > .kaart { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
-.slot .composer--klein { width: 100%; padding-left: 14px; }
-.slot .composer--klein .tekst {
+.studio[data-term='uit'] .termvak { display: none; }
+.termregel {
+  display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.06) inset;
+}
+.termregel .tekst {
   flex: 1; min-width: 0; border: 0; background: none; color: var(--ink);
-  padding: 0 6px; outline: none; font: 400 12px/1 var(--ui);
+  padding: 0 6px; outline: none; font: 400 12px/1 var(--mono);
 }
-.slot .composer--klein .tekst::placeholder { color: var(--ink-4); }
-@media (max-width: 1100px) {
-  .slot { display: none; }
-}
+.termregel .tekst::placeholder { color: var(--ink-4); }
+.termregel .stuur { width: 22px; height: 22px; }
 
 .band .composer input.tekst {
   flex: 1; min-width: 0; border: 0; background: none; color: var(--ink);
