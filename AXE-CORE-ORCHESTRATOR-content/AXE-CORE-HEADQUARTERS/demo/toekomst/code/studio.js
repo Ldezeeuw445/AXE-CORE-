@@ -372,6 +372,19 @@
     CODE.bestand = naam;
     CODE.tekenBron();
     document.querySelectorAll('.boom [data-file]').forEach((el) => el.classList.toggle('aan', el.dataset.file === naam));
+    let tab = document.querySelector('.bestandtab[data-file="' + naam.replace(/"/g, '') + '"]');
+    if (!tab) {
+      const strip = document.querySelector('.editor .tabs');
+      const groei = strip && strip.querySelector('.groei');
+      tab = document.createElement('span');
+      tab.className = 'bestandtab';
+      tab.dataset.file = naam;
+      tab.setAttribute('role', 'button');
+      tab.innerHTML = AXE.ic('bestand') + ' ' + naam;
+      tab.addEventListener('click', () => CODE.zetBron(naam));
+      if (strip && groei) strip.insertBefore(tab, groei);
+      else if (strip) strip.appendChild(tab);
+    }
     document.querySelectorAll('.bestandtab').forEach((el) => el.classList.toggle('aan', el.dataset.file === naam));
     const kruimel = document.querySelector('.kruimel b');
     if (kruimel) kruimel.textContent = naam;
