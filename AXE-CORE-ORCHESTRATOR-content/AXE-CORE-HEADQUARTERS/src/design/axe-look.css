@@ -723,6 +723,28 @@ html:root[data-look],
    *
    * Nu kort en dichtbij: elke kaart werpt zijn eigen schaduw en zweeft los op
    * de plaat, ook als er vier naast elkaar staan. */
+  /* ── Tekst die je op elke ondergrond kunt lezen ───────────────────────
+   *
+   * In index.css staan deze drie als vaste grijzen: #E8EAED, #9BA1AB, #6F757E.
+   * Dat werkt op een dekvlak dat altijd even donker is. De shell is dat niet:
+   * het venster is doorzichtig, dus achter de platen zit het bureaublad, en op
+   * een licht bureaublad zakt een middengrijs weg terwijl wit blijft staan.
+   *
+   * Vandaar dit: geen eigen grijswaarde meer, maar wit met minder dekking. De
+   * rangorde blijft precies hetzelfde -- primair is het meest aanwezig,
+   * gedempt het minst -- maar alle drie liggen ze op dezelfde kleur als de
+   * ondergrond eronder, en dan valt er niets meer weg.
+   *
+   * Waar dit vandaan komt: de klok rechtsboven is `<b>` op --text-primary en
+   * de datum ernaast een `<span>` op --text-secondary. Dezelfde regel, twee
+   * tokens, en op licht glas las je alleen het eerste.
+   *
+   * Hier en niet in index.css, want deze tokens gelden voor de shell (elk
+   * `data-look`); index.css bedient ook plekken buiten die shell. */
+  --text-primary: rgba(255, 255, 255, 0.96);
+  --text-secondary: rgba(255, 255, 255, 0.78);
+  --text-muted: rgba(255, 255, 255, 0.6);
+
   --axe-kaart-vlak: #17181C;
   --axe-kaart-lijn: rgba(255, 255, 255, 0.08);
   --axe-kaart-hoek: 18px;
@@ -929,7 +951,11 @@ html:root[data-look],
      zit in de verticale ruimte en niet in de horizontale. */
   padding: clamp(13px, 1.05vw, 18px) clamp(22px, 1.7vw, 30px) !important;
   gap: clamp(13px, 1vw, 19px);
-  margin-top: 16px;
+  /* Nul, want de chat erboven hoort er tegenaan te zitten. Die 16px kwam uit
+     de demo, waar de plaat een eigen doos MET rand was -- daar scheidde de
+     lucht twee vlakken. De plaat is nu kaal, dus scheidt die lucht niets; het
+     is alleen een gat tussen het gesprek en het antwoordveld. */
+  margin-top: 0;
   margin-bottom: 14px;
 }
 
@@ -958,9 +984,10 @@ html:root[data-look],
   /* In de demo IS er geen kopbalk: de statusregel, de view-pillen en de klok
      liggen los op de plaat. Een vlak met een lijn eronder maakt er weer een
      venster-in-een-venster van, en dat is precies wat "één plaat" niet is.
-     De achtergrond en de rand staan in TopNav als inline-stijl, dus die zijn
-     alleen met !important te overrulen -- dit is geen voorkeur maar de enige
-     manier waarop de cascade ze bereikt. */
+     De !important stond hier omdat TopNav zijn eigen achtergrond en rand als
+     inline-stijl meegaf. Die zijn daar nu weg, dus dit is de enige plek die er
+     nog iets over zegt. !important blijft staan als vangnet voor een volgende
+     inline-stijl -- maar de regel hoort hier, niet daar. */
   background: none !important;
   background-color: transparent !important;
   border-bottom: 0 !important;
@@ -3182,8 +3209,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  padding: 0 !important;
-  margin-bottom: 8px;
+  /* Zijruimte GELIJK aan die van de composer, niet nul.
+   *
+   * De plaat en de composer delen al exact dezelfde breedte, maar de composer
+   * heeft binnenruimte en deze plaat stond op nul. Daardoor begon "ChatGPT
+   * (abonnement)" een centimeter links van de tekst in de composer eronder --
+   * twee elementen die even breed zijn maar niet onder elkaar uitkomen, en dat
+   * leest als scheef. Dezelfde clamp als `.axe-composer` hieronder, zodat ze
+   * op elke vensterbreedte samen opschuiven in plaats van uit elkaar te lopen. */
+  padding: 0 clamp(22px, 1.7vw, 30px) !important;
+  /* Aansluitend, geen zwevende strook. Hier stond 8px, en de composer heeft er
+     zelf nog 16px bovenop: 24px lucht tussen twee dingen die bij elkaar horen.
+     De composer-marge gaat hieronder mee naar nul. */
+  margin-bottom: 0;
   overflow: visible !important;
   /* Het plafond. De hoogte staat in React op 'auto' zodat een leeg gesprek
      geen 300px leegte is; zonder een plafond zou een lang gesprek de composer

@@ -388,17 +388,6 @@ export function PlaatChat() {
           {!chatCollapsed && (
             <>
               <div ref={chatScrollRef} className="axe-chatrol overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
-                {voice.conversation.length === 0 && (
-                  /* Eén regel en geen h-full. Met h-full rekte deze hint het
-                     vak op tot de volle hoogte -- dan is een leeg gesprek net
-                     zo groot als een vol gesprek, en dat is de leegte die
-                     erboven stond. */
-                  <div className="flex items-center justify-center text-center px-4 py-1.5">
-                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      “show chart” · “show me New York” · drop files · “done”
-                    </span>
-                  </div>
-                )}
                 {voice.conversation.map((m, i) => {
                   const isUser = m.role === 'user';
                   const displayText = isUser && (m.text.includes('## Attached files') || m.text.includes('LAUNCH CREWAI'))

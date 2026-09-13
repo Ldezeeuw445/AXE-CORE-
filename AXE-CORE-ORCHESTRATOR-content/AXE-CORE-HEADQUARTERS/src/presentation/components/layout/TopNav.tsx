@@ -65,8 +65,15 @@ export function TopNav() {
         paddingTop: 'env(safe-area-inset-top)',
         paddingLeft: 'calc(12px + env(safe-area-inset-left))',
         paddingRight: 'calc(12px + env(safe-area-inset-right))',
-        backgroundColor: 'var(--bg-base)',
-        borderBottom: '1px solid var(--border-subtle)',
+        /* Geen eigen achtergrond en geen lijn eronder.
+         *
+         * Die stonden hier wel, en axe-look.css haalde ze er met !important
+         * weer af -- de enige reden dat daar !important stond. Twee plekken die
+         * het oneens zijn over hoe deze balk eruitziet, waarbij de ene altijd
+         * wint: dat is geen instelling maar dode verf, en precies zo'n paar
+         * regels maakte de balk in de lichte stand anders dan de rest van de
+         * shell. De kopregel LIGT op de vensterbalk (titleBarStyle "Overlay");
+         * hij is er geen tweede. */
       }}
     >
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
