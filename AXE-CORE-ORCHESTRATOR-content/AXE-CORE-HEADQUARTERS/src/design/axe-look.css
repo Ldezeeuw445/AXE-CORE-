@@ -488,7 +488,11 @@ html:root[data-look],
    de onderbalk de volle breedte pakken -- die twee hangen samen. */
 :root[data-look] .axe-shell aside {
   position: fixed;
-  top: 54px;
+  /* Onder de kopbalk beginnen en niet erachter.
+     Hij stond op 54px terwijl de balk 66px hoog is (plus de veilige zone
+     bovenaan, die in de Tauri-app niet nul is). De widget schoof dus deels
+     achter de balk uit -- wat je zag. Nu de echte hoogte plus lucht. */
+  top: calc(66px + env(safe-area-inset-top) + 10px);
   /* Tot de BOVENKANT van de chatplaat, niet tot de voet.
      Ze liepen door tot achter de onderste band, dus een uitgeschoven rail lag
      over de tab-panelen en de chat heen. Nu houdt hij op waar de band begint --
@@ -962,6 +966,32 @@ html:root[data-look],
   border-bottom: 0 !important;
   height: calc(66px + env(safe-area-inset-top)) !important;
   min-height: calc(66px + env(safe-area-inset-top)) !important;
+}
+
+/* ── En tóch een eigen strook, in BEIDE standen ────────────────────────
+ *
+ * De regel hierboven zet de achtergrond op `none`. Verderop stond een regel
+ * die de kopbalk in de glas-stand juist een donkere strook gaf -- maar die
+ * staat EERDER in het bestand en heeft dezelfde specificiteit
+ * (`[data-look='glass']` telt net zo zwaar als `[data-look]`), dus deze won en
+ * de balk werd doorzichtig.
+ *
+ * Daardoor liep de plaat door tot bovenaan: op licht glas zag de balk er
+ * anders uit dan op zwart, en een rail die eronder uitschoof leek erdoorheen
+ * te lopen. Dit is dus geen smaak maar het herstel van een regel die stil
+ * werd overschreven.
+ *
+ * Bewust geen dekkend zwart: dezelfde vervaging als de plaat, zodat het
+ * bureaublad er nog doorheen schemert en de balk bij het glas hoort. */
+:root[data-look] .axe-shell .axe-topbar {
+  background: rgba(10, 12, 16, 0.55) !important;
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  /* Boven de rails (40) en boven de sloten (30): een rail die uitschuift hoort
+     ONDER de balk door te gaan, niet eroverheen. */
+  position: relative;
+  z-index: 45;
 }
 
 /* Alles op de kopregel op DEZELFDE hoogte en hetzelfde hart als de knoppen in
@@ -4247,18 +4277,16 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-week-dagnaam { font-size: 10px; color: var(--text-muted); }
 .axe-week-dagnr { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
 .axe-week-dagtel { font-size: 9.5px; color: var(--text-muted); }
-/* Vandaag: het nummer in een rondje, zoals in het voorbeeld. Kleur plus vorm,
-   want kleur alleen is te zwak om "hier ben je" te dragen. */
-.axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnr {
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: var(--text-primary);
-  color: #000;
-}
-.axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnaam { color: var(--text-secondary); }
+/* Vandaag is alleen het GETAL, in het accent.
+ *
+ * Er zat een wit rondje omheen en een lichte waas over de hele kolom. Die waas
+ * maakte van vandaag een ander soort dag -- alsof er iets mee was -- terwijl
+ * het gewoon de dag is waar je nu op staat. En een wit rondje is de zwaarste
+ * vorm op het scherm voor iets wat je alleen hoeft te hérkennen.
+ *
+ * Eén gekleurd getal is genoeg: je zoekt het niet, je ziet het. */
+.axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnr { color: var(--accent-cyan); }
+.axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnaam { color: var(--accent-cyan); opacity: 0.75; }
 
 .axe-week-uur {
   grid-column: 1;
@@ -4278,7 +4306,6 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   flex-direction: column;
   border-left: 1px solid rgba(255, 255, 255, 0.04);
 }
-.axe-week-kolom[data-vandaag='ja'] { background: rgba(255, 255, 255, 0.018); }
 /* Elke cel een gelijk deel van de kolom. Zo volgen de uurlijnen vanzelf de
    rijen van het raster, zonder dat er ergens een getal in pixels staat. */
 .axe-week-cel {
@@ -4645,16 +4672,32 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   place-items: center;
   border-radius: 999px;
 }
-/* Vandaag: wit rondje, zoals in het voorbeeld. De gekozen dag krijgt een ring
-   -- twee verschillende dingen, dus twee verschillende vormen. */
+/* Vandaag: het getal in het accent, en de CEL een tikje donkerder.
+ *
+ * Het rondje is weg om dezelfde reden als in de week. Wat blijft is het
+ * verschil dat je op een maandraster wél nodig hebt: welke van de 42 vakjes is
+ * vandaag. Dat doet het donkerdere vlak -- een matte, dieper zwarte kaart in
+ * het raster -- plus het gekleurde getal. Vorm én kleur, nooit kleur alleen.
+ *
+ * Donkerder en niet lichter: alles eromheen is al licht mat zwart, dus een
+ * lichter vakje zou omhoog komen terwijl vandaag juist een verdieping in het
+ * raster mag zijn. */
+.axe-maand-cel[data-vandaag='ja'] {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.axe-maand-cel[data-vandaag='ja']:hover { background: rgba(0, 0, 0, 0.28); }
 .axe-maand-cel[data-vandaag='ja'] .axe-maand-nr {
-  background: var(--text-primary);
-  color: #000;
+  color: var(--accent-cyan);
   font-weight: 600;
 }
+/* De gekozen dag is iets ANDERS dan vandaag, dus een andere vorm: een ring om
+   het getal in plaats van een vlak. */
 .axe-maand-cel[data-gekozen='ja']:not([data-vandaag='ja']) .axe-maand-nr {
-  box-shadow: inset 0 0 0 1px var(--accent-cyan);
-  color: var(--accent-cyan);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  color: var(--text-primary);
 }
 .axe-maand-stippen { display: flex; align-items: center; gap: 3px; }
 .axe-maand-stippen i { width: 5px; height: 5px; border-radius: 999px; display: block; }
@@ -4720,3 +4763,60 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   text-overflow: ellipsis;
 }
 .axe-agenda-pijl { color: var(--text-muted); opacity: 0.45; flex: none; }
+
+/* ══ De balk midden boven ═════════════════════════════════════════════════
+ *
+ * Awareness plus de vier weergaven, in één balk die eruitziet als de
+ * navigatie onderin: dezelfde tegels, hetzelfde reliëf, en de actieve blijft
+ * INGEDRUKT.
+ *
+ * Het waren vier losse dingen naast elkaar -- twee tellers, een losse pil en
+ * een groepje van vier -- dus vier vormen voor één rij. De tellers staan nu in
+ * het meldingenpaneel: ze zijn informatie en geen navigatie, en tussen de
+ * knoppen keek je er de hele dag naar zonder ze te lezen.
+ */
+:root[data-look] .axe-viewctl {
+  display: flex;
+  align-items: center;
+  gap: clamp(3px, 0.3vw, 7px);
+  padding: 5px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(10, 11, 14, 0.55);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+}
+/* Het streepje tussen Awareness en de vier: die eerste zet iets OPEN, de rest
+   kiest wat er in het midden staat. Twee soorten, dus een scheiding -- zoals
+   de `+` in de composer. */
+:root[data-look] .axe-viewstreep {
+  width: 1px;
+  height: 18px;
+  flex: none;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 2px;
+}
+:root[data-look] .axe-viewknop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px clamp(8px, 0.7vw, 14px);
+  border: 0;
+  border-radius: 11px;
+  font-size: clamp(10px, 0.72vw, 12px);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: var(--axe-barbtn);
+  box-shadow: var(--axe-tegel-op);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+:root[data-look] .axe-viewknop:hover { color: #E8ECF5; transform: translateY(-1px); }
+/* Ingedrukt en in het accent -- dezelfde taal als de onderbalk: kleur plus
+   vorm, nooit kleur alleen. */
+:root[data-look] .axe-viewknop[data-aan='ja'] {
+  box-shadow: var(--axe-tegel-in);
+  color: var(--accent-cyan);
+  transform: none;
+}
+:root[data-look] .axe-viewknop[data-aan='ja']:hover { transform: none; }

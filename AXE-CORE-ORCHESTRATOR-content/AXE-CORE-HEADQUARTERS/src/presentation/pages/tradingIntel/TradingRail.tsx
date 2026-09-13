@@ -22,11 +22,11 @@
  * Op die plek staat nu de radiaal-dok, gespiegeld, met de kill switch in het
  * gat. Dat is wel iets dat je vanuit elke tab binnen handbereik wilt hebben.
  */
-import { useState, type ReactNode } from 'react';
-import { Brain, CandlestickChart, OctagonX, Telescope, Trophy, Wallet } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { OctagonX } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
-import { RadiaalDok, type DokTab } from '@/presentation/components/layout/RadiaalDok';
+import { useDokStore } from '@/presentation/store/dokStore';
 import { TradingTabZuil } from './TradingTabZuil';
 
 export function TradingRail({
@@ -42,6 +42,19 @@ export function TradingRail({
   killBezig: boolean;
 }) {
   const [vraagt, setVraagt] = useState(false);
+  const zetRechtsHoek = useDokStore(s => s.zetRechtsHoek);
+
+  /* De kill switch in het gat van de rechter dok, zolang je op deze tab bent.
+     Bij het verlaten weer weg: een knop die posities sluit hoort niet op een
+     pagina te blijven staan waar je niets met posities doet. */
+  useEffect(() => {
+    zetRechtsHoek({
+      teken: <KillVorm bezig={killBezig} />,
+      label: 'Kill switch — alles plat en de autopilot uit',
+      doe: () => setVraagt(true),
+    });
+    return () => zetRechtsHoek(null);
+  }, [zetRechtsHoek, killBezig]);
 
   return (
     <>
@@ -63,17 +76,13 @@ export function TradingRail({
           accounts-tab al toont, en je moest het openschuiven om het te zien --
           dus het was een tweede pagina die uit de pas kon lopen met de eerste.
           De cijfers staan op de tab zelf, één klik verderop in deze zuil. */}
-      <RadiaalDok
-        kant="rechts"
-        tabs={DESK_TABS(kies)}
-        hoek={<KillVorm bezig={killBezig} />}
-        hoekLabel="Kill switch — alles plat en de autopilot uit"
-        /* Eerst vragen. Deze knop sluit ELKE positie op ELKE rekening en zet
-           de autopilot uit; dat is het enige onomkeerbare knopje in de app.
-           Eén misklik in een hoek waar je toevallig met je muis langs gaat mag
-           dat niet kunnen doen. */
-        opHoek={() => setVraagt(true)}
-      />
+      {/* De radiaal-dok stond hier, alleen op deze tab. Hij hangt nu in de
+          schil (AppShell) en staat dus overal -- een dok die op één pagina
+          bestaat is geen dok maar een knop van die pagina.
+
+          De kill switch hoort wél bij deze tab en blijft hier: hij sluit
+          posities, en die knop mag niet op een pagina staan waar je niets met
+          posities doet. */}
 
       {vraagt && (
         <KillBevestiging
@@ -122,24 +131,6 @@ function KillBevestiging({ bezig, onJa, onNee }: { bezig: boolean; onJa: () => v
   );
 }
 
-/**
- * Wat er in de rechter ring staat.
- *
- * Vijf sprongen binnen de desk, en bewust niet alle twaalf: de ring is geen
- * tweede tabbalk -- die staat links in de zuil. Dit zijn de plekken waar je
- * tijdens het werken heen springt.
- */
-function DESK_TABS(kies: (id: string) => void): DokTab[] {
-  const spring = (id: string, label: string, teken: ReactNode): DokTab =>
-    ({ id, label, teken, doe: () => kies(id) });
-  return [
-    spring('chart', 'Chart', <CandlestickChart size={18} />),
-    spring('accounts', 'Accounts', <Wallet size={18} />),
-    spring('scorecard', 'Scorecard', <Trophy size={18} />),
-    spring('research', 'Research', <Telescope size={18} />),
-    spring('brain', 'Brain', <Brain size={18} />),
-  ];
-}
 
 /**
  * De vorm in het gat: een rood stopvlak in plaats van de cyane driehoek.

@@ -4,6 +4,8 @@ import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS,
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
+import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
@@ -28,9 +30,8 @@ import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnec
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
 import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
-  ELEVENLABS_VOICES, getSelectedVoiceId, setSelectedVoiceId,
+  setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
-  fetchAvailableVoices, type ElevenLabsVoice,
 } from '@/infrastructure/gateways/elevenLabsService';
 import { testExaKey } from '@/infrastructure/gateways/exaSearchService';
 import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructure/persistence/trustLevelsService';
@@ -754,102 +755,110 @@ function ProviderKeysSection() {
   );
 }
 
+/**
+ * De stemkeuze: vier, en niet een bibliotheek.
+ *
+ * Hier stond de HELE ElevenLabs-lijst: tientallen namen met land en
+ * omschrijving, opgehaald bij het openen. Voor dit doel klinken die
+ * nauwelijks verschillend, dus je luisterde twintig voorbeelden en koos
+ * alsnog de eerste -- een keuzelijst die je niet kunt beantwoorden is geen
+ * keuze maar werk.
+ *
+ * Nu vier: AXE (Fish), een man, een vrouw, en de browser als vangnet. De lijst
+ * staat in domain/stemKeuzes met een test die hem kort houdt.
+ *
+ * Kiezen zet MEEBEEN de motor. Dat was hiervoor twee losse instellingen -- een
+ * stem hier en een provider verderop -- en je kon dus een ElevenLabs-stem
+ * kiezen terwijl Fish aan het praten was. Eén keuze, één uitkomst.
+ */
 function VoiceSection() {
-  const [selected, setSelected] = useState(getSelectedVoiceId);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
-  const [voices, setVoices] = useState<ElevenLabsVoice[]>(ELEVENLABS_VOICES);
-  const [voiceListSource, setVoiceListSource] = useState<'loading' | 'live' | 'fallback'>('loading');
-  const [voiceListFallbackReason, setVoiceListFallbackReason] = useState<string | null>(null);
-  const configured = isElevenLabsConfigured();
+  const [gekozen, setGekozen] = useState<string>(() => {
+    try { return localStorage.getItem(STEM_SLEUTEL) ?? STANDAARD_STEM; } catch { return STANDAARD_STEM; }
+  });
+  const [speelt, setSpeelt] = useState<string | null>(null);
+  const [melding, setMelding] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!configured) { setVoiceListSource('fallback'); setVoiceListFallbackReason('ElevenLabs not configured'); return; }
-    fetchAvailableVoices()
-      .then(list => {
-        if (list.length) { setVoices(list); setVoiceListSource('live'); }
-        else { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); setVoiceListFallbackReason('ElevenLabs returned zero voices for this API key — check its permission scope in the ElevenLabs dashboard (it may be a text-to-speech-only key without voice-library read access).'); }
-      })
-      .catch(err => { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); setVoiceListFallbackReason(err instanceof Error ? err.message : String(err)); });
-  }, [configured]);
-
-  const select = (id: string) => {
-    setSelectedVoiceId(id);
-    setSelected(id);
+  const kies = (id: string) => {
+    const stem = stemVan(id);
+    setGekozen(stem.id);
+    try {
+      localStorage.setItem(STEM_SLEUTEL, stem.id);
+      // De motor mee. Zonder dit kies je een ElevenLabs-stem terwijl Fish
+      // blijft praten -- de instelling die niets deed.
+      localStorage.setItem(TTS_PROVIDER_KEY, stem.motor);
+    } catch { /* volle opslag mag de keuze niet blokkeren */ }
+    if (stem.stemId) setSelectedVoiceId(stem.stemId);
   };
 
-  const preview = (id: string) => {
+  const proef = (id: string) => {
     stopTTS();
-    if (playingId === id) { setPlayingId(null); return; }
-    setPlayingId(id);
-    setFallbackNotice(null);
-    // `selected` (component state, not storage) is the restore target — reading
-    // storage here would pick up whatever the *previous* preview left behind
-    // if one preview is started before another's callback has fired.
-    setSelectedVoiceId(id); // speakWithElevenLabs always reads the current selection
-    void speakWithElevenLabs(
-      'Hi Luka, this is a sample of this voice.',
-      () => { setPlayingId(null); setSelectedVoiceId(selected); },
-      () => { setPlayingId(null); setSelectedVoiceId(selected); },
-      (reason) => { setFallbackNotice(`ElevenLabs didn't play this voice — heard the browser's own voice instead. Reason: ${reason}`); },
+    if (speelt === id) { setSpeelt(null); return; }
+    const stem = stemVan(id);
+    setSpeelt(id);
+    setMelding(null);
+    if (stem.motor === 'elevenlabs' && stem.stemId) {
+      setSelectedVoiceId(stem.stemId);
+      void speakWithElevenLabs(
+        'Hoi Luka, zo klinkt deze stem.',
+        () => setSpeelt(null),
+        () => setSpeelt(null),
+        (reden) => setMelding(`ElevenLabs speelde dit niet af — je hoorde de browser. Reden: ${reden}`),
+      );
+      return;
+    }
+    // Fish en browser lopen allebei via de globale TTS; die kiest op de
+    // provider die we net hebben gezet.
+    speakGlobal(
+      'Hoi Luka, zo klinkt deze stem.',
+      () => setSpeelt(null),
+      (reden) => { setSpeelt(null); setMelding(`Kon deze stem niet afspelen: ${reden}`); },
     );
   };
 
   return (
-    <WidgetCard title="VOICE" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
-      {!configured ? (
-        <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-          <AlertTriangle size={13} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
-          <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
-            ElevenLabs isn't configured (no <code>VITE_ELEVENLABS_API_KEY</code>) — AXE is speaking through the browser's built-in voice instead, which can't be changed here.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
-            Pick a voice and tap play to preview it before switching — this is the ElevenLabs voice AXE speaks with, separate from which AI model answers you.
-            {voiceListSource === 'loading' && ' Loading your real voice library…'}
-          </p>
-          {voiceListSource === 'fallback' && voiceListFallbackReason && (
-            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
-              <AlertTriangle size={12} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
-              <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
-                Showing a fallback voice list (IDs may not be valid on this account) — real reason: {voiceListFallbackReason}
-              </p>
+    <WidgetCard title="STEM" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
+      <div className="space-y-1.5">
+        <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
+          Welke stem AXE gebruikt. Dit staat los van welk model je vragen beantwoordt.
+        </p>
+        {melding && (
+          <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
+            <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
+            <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{melding}</p>
+          </div>
+        )}
+        {STEMMEN.map(v => {
+          const aan = v.id === gekozen;
+          const bezig = v.id === speelt;
+          const kan = v.motor !== 'elevenlabs' || isElevenLabsConfigured();
+          return (
+            <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
+              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', opacity: kan ? 1 : 0.55 }}>
+              <button onClick={() => kan && kies(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0" disabled={!kan}>
+                <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: aan ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
+                <span className="min-w-0">
+                  <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{v.naam}</span>
+                  <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>
+                    {/* Waarom hij niet kan, in plaats van een knop die niets doet. */}
+                    {kan ? v.uitleg : 'Geen ElevenLabs-sleutel (VITE_ELEVENLABS_API_KEY)'}
+                  </p>
+                </span>
+              </button>
+              <button onClick={() => kan && proef(v.id)} disabled={!kan}
+                className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
+                style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: bezig ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+                <Play size={11} /> {bezig ? 'Speelt…' : 'Beluister'}
+              </button>
             </div>
-          )}
-          {fallbackNotice && (
-            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
-              <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-              <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{fallbackNotice}</p>
-            </div>
-          )}
-          {voices.map(v => {
-            const isSelected = v.id === selected;
-            const isPlaying = v.id === playingId;
-            return (
-              <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
-                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-                <button onClick={() => select(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0">
-                  <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: isSelected ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
-                  <span className="min-w-0">
-                    <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{v.name}</span>
-                    <span className="text-xs-custom ml-1.5" style={{ color: 'var(--text-muted)' }}>{v.accent} · {v.gender}</span>
-                    <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>{v.description}</p>
-                  </span>
-                </button>
-                <button onClick={() => preview(v.id)} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-                  style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
-                  <Play size={11} /> {isPlaying ? 'Playing…' : 'Preview'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </WidgetCard>
   );
 }
+
+/** Waar de keuze staat. Eén sleutel, want het is één keuze. */
+const STEM_SLEUTEL = 'axe_stem';
 
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 

@@ -6,6 +6,7 @@ import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitc
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
 import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
+import { useDokStore } from '@/presentation/store/dokStore';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -113,6 +114,9 @@ export function AppShell() {
    * naar Home en terug, dan hoort het weer te kloppen.
    */
   const setChatDicht = useCoreViewStore(s => s.setChatDicht);
+  /* Wat de huidige pagina in het gat van de rechter dok wil. Null = de
+     standaard driehoek. Zie store/dokStore.ts. */
+  const rechtsHoek = useDokStore(s => s.rechtsHoek);
   useEffect(() => {
     setChatDicht(location.pathname !== '/');
   }, [location.pathname, setChatDicht]);
@@ -222,6 +226,25 @@ export function AppShell() {
           snelste weg naar "ik wil iets vragen" vanaf welke tab dan ook. Dat
           zit hier en niet in RadiaalDok, zodat hij ergens anders op aan te
           sluiten is zonder dat bestand te wijzigen. */}
+      {/* Ook rechts, op ELKE tab.
+        *
+        * Hij hing alleen op de trading-desk, in TradingRail. Een dok die op één
+        * tab bestaat is geen dok maar een knop van die pagina -- en je kwam hem
+        * pas tegen als je daar toevallig was. Nu staat hij overal, net als de
+        * linker.
+        *
+        * De tabs en de hoekknop zijn nog de standaard; klopt dat ergens niet
+        * (de code-editor bijvoorbeeld), dan krijgt die tab later zijn eigen
+        * inhoud mee -- de component neemt ze al als prop. */}
+      {!mobileCommandSurface && opPlaat && (
+        <RadiaalDok
+          kant="rechts"
+          hoek={rechtsHoek?.teken}
+          hoekLabel={rechtsHoek?.label}
+          opHoek={rechtsHoek?.doe}
+        />
+      )}
+
       {!mobileCommandSurface && opPlaat && (
         <RadiaalDok
           opHoek={() => {
