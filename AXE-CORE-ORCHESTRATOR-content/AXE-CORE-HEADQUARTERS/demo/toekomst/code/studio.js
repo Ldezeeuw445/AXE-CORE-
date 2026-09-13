@@ -163,14 +163,14 @@
       const kader = document.querySelector('.artboard .kader');
       if (!board || !kader) return;
       const r = board.getBoundingClientRect();
-      const s = Math.max(0.2, Math.min((r.height - 120) / t.h, (r.width - 48) / t.w));
+      const s = Math.max(0.2, Math.min((r.height - 160) / t.h, (r.width - 48) / t.w));
       kader.style.setProperty('--schaal', s.toFixed(3));
     }
     if (stand === 'preview') {
       const rij = document.querySelector('.rij-toestellen');
       if (!rij) return;
       const R = rij.getBoundingClientRect();
-      const maxH = Math.max(180, R.height - 96);
+      const maxH = Math.max(180, R.height - 120);
       const n = document.querySelectorAll('[data-preview-schaal]').length || 3;
       const maxW = Math.max(120, (R.width - 48 - (n - 1) * 36) / n);
       document.querySelectorAll('[data-preview-schaal]').forEach((el) => {
