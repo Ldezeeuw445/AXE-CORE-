@@ -122,14 +122,12 @@ export function blokjesVoor(
  * rooster op". Erger nog: een afspraak om 21:00 verschoof de hele dag, dus de
  * rij waar 14:00 stond was maandag een andere dan dinsdag.
  *
- * Een dag heeft 24 uur. Die staan er allemaal op, en het rooster schuift naar
- * het werkuur toe (zie WERKDAG_START) zodat je niet elke keer zelf naar
- * beneden hoeft.
+ * Een dag heeft 24 uur. Die staan er allemaal op, en ze passen allemaal in
+ * beeld: het rooster deelt de hoogte die het krijgt door 24 in plaats van een
+ * vaste celhoogte aan te houden. Zo is er geen leegte onder 23:00 en hoef je
+ * nergens heen te schuiven.
  */
 export const DAG_UREN = 24;
-
-/** Waar het rooster naartoe schuift als je het opent. */
-export const WERKDAG_START = 8;
 
 export function urenBereik(): { van: number; tot: number } {
   return { van: 0, tot: DAG_UREN };

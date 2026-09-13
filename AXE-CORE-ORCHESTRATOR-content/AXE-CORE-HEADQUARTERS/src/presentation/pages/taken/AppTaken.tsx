@@ -41,6 +41,38 @@ const PRIO_KLEUR: Record<AppTaak['prioriteit'], string> = {
 };
 
 
+/**
+ * De cijfers van één app, als LOSSE kaart boven het paneel.
+ *
+ * Ze stonden eerst als strook in de kop van het paneel. Dat werkt, maar het
+ * maakt van de kolom één lang donker blok -- en op de lichte stand telt dat
+ * dubbel, want daar is een groot donker vlak het zwaarste ding op het scherm.
+ * Los erboven breekt het de kolom, en twee kleine kaarten lezen lichter dan
+ * één grote.
+ *
+ * Het is ook duidelijker: de cijfers gaan over de APP, de lijst eronder over
+ * de taken. Dat zijn twee dingen, dus twee kaarten.
+ */
+export function AppCijfers({ taken, label }: { taken: AppTaak[]; label: string }) {
+  const rijen = [
+    ['Totaal', taken.length, 'var(--text-primary)'],
+    ['Te doen', taken.filter(t => t.stand === 'todo').length, 'var(--text-muted)'],
+    ['Bezig', taken.filter(t => t.stand === 'in-progress').length, 'var(--m-structure)'],
+    ['Klaar', taken.filter(t => t.stand === 'done').length, 'var(--m-happened)'],
+  ] as const;
+
+  return (
+    <div className="axe-app-cijfers" aria-label={`Cijfers van ${label}`}>
+      {rijen.map(([naam, waarde, tint]) => (
+        <div key={naam}>
+          <span className="axe-app-cijfer" style={{ color: tint }}>{waarde}</span>
+          <span className="axe-app-cijfernaam">{naam}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AppTaken({
   label, kleur, blurb, taken, opTaak, opNieuw, opKlaar, opWeg,
 }: {
@@ -78,25 +110,6 @@ export function AppTaken({
         </div>
       </header>
 
-      {/* De cijfers van DEZE app.
-        *
-        * Ze stonden als één rij bovenaan de pagina, over alle apps opgeteld.
-        * Dat getal beantwoordt geen enkele vraag die je hebt: "twaalf te doen"
-        * zegt niets als je wil weten of Companion achterloopt. Per kaart, dus,
-        * op dezelfde plek in alle vijf. */}
-      <div className="axe-app-cijfers">
-        {([
-          ['Totaal', taken.length, 'var(--text-primary)'],
-          ['Te doen', taken.filter(t => t.stand === 'todo').length, 'var(--text-muted)'],
-          ['Bezig', taken.filter(t => t.stand === 'in-progress').length, 'var(--m-structure)'],
-          ['Klaar', taken.filter(t => t.stand === 'done').length, 'var(--m-happened)'],
-        ] as const).map(([naam, waarde, tint]) => (
-          <div key={naam}>
-            <span className="axe-app-cijfer" style={{ color: tint }}>{waarde}</span>
-            <span className="axe-app-cijfernaam">{naam}</span>
-          </div>
-        ))}
-      </div>
 
       <div className="axe-app-rol">
         {open.length === 0 ? (

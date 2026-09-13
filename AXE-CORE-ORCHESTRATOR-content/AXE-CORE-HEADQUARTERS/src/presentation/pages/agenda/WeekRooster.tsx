@@ -9,10 +9,9 @@
  *
  * Hier staat alleen de opmaak.
  */
-import { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import {
-  weekDagen, datumSleutel, blokjesVoor, urenBereik, WERKDAG_START, type RoosterItem,
+  weekDagen, datumSleutel, blokjesVoor, urenBereik, type RoosterItem,
 } from '@/domain/weekRooster';
 
 const DAGNAAM = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -39,18 +38,6 @@ export function WeekRooster({
   const { van, tot } = urenBereik();
   const uren = Array.from({ length: tot - van }, (_, i) => van + i);
   const vandaag = datumSleutel(new Date());
-  const rol = useRef<HTMLDivElement>(null);
-
-  /* Bij het openen naar het werkuur toe schuiven. 24 rijen passen niet in
-     beeld; zonder dit kijk je naar 02:00 en moet je elke keer zelf naar
-     beneden. Eén keer, niet bij elke week -- anders springt hij terug terwijl
-     je aan het bladeren bent. */
-  useEffect(() => {
-    const el = rol.current;
-    if (!el) return;
-    const celHoog = parseFloat(getComputedStyle(el).getPropertyValue('--celhoog')) || 44;
-    el.scrollTop = WERKDAG_START * celHoog;
-  }, []);
 
   const verschuif = (weken: number) => {
     const d = new Date(anker);
@@ -76,7 +63,7 @@ export function WeekRooster({
         </span>
       </header>
 
-      <div className="axe-week-rol" ref={rol}>
+      <div className="axe-week-rol">
         <div className="axe-week-raster" style={{ ['--uren' as string]: uren.length }}>
           {/* Hoek linksboven: leeg, maar hij moet er staan om de kolommen te
               laten kloppen. */}
@@ -117,8 +104,13 @@ export function WeekRooster({
                   className="axe-week-blok"
                   onClick={() => opKies?.(b.item)}
                   style={{
-                    top: `calc(${b.vanUur} * var(--celhoog))`,
-                    height: `calc(${b.hoogUur} * var(--celhoog) - 2px)`,
+                    /* Percentage van de KOLOM en niet een vast aantal pixels.
+                       De kolom is precies 24 uur hoog, dus 9:00 staat op 9/24
+                       -- hoe hoog het rooster ook uitkomt. Met een vaste
+                       celhoogte moest de kaart die hoogte toevallig hebben, en
+                       anders bleef er ruimte over onder 23:00. */
+                    top: `${(b.vanUur / uren.length) * 100}%`,
+                    height: `calc(${(b.hoogUur / uren.length) * 100}% - 2px)`,
                     /* De kleur zit in de linkerrand en in de TITEL, niet in een
                        gevuld blok (wet 10). Een gevulde balk in vier kleuren
                        naast elkaar is het drukste ding op het scherm, en dan

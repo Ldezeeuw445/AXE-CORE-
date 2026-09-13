@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   maandagVan, weekDagen, datumSleutel, minutenVan, blokjesVoor, urenBereik,
-  DAG_UREN, WERKDAG_START, type RoosterItem,
+  DAG_UREN, type RoosterItem,
 } from './weekRooster';
 
 const item = (o: Partial<RoosterItem> & { datum: string; tijd: string }): RoosterItem => ({
@@ -54,12 +54,6 @@ describe('de schaal', () => {
     expect(DAG_UREN).toBe(24);
   });
 
-  it('opent op een werkuur en niet op middernacht', () => {
-    // 24 rijen passen niet in beeld; zonder dit kijk je bij het openen naar
-    // 02:00 en moet je elke keer zelf scrollen.
-    expect(WERKDAG_START).toBeGreaterThan(5);
-    expect(WERKDAG_START).toBeLessThan(12);
-  });
 });
 
 describe('blokjesVoor', () => {

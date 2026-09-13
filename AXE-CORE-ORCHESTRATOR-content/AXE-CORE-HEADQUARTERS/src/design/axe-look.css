@@ -4163,7 +4163,6 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * oog aan elkaar moet praten.
  */
 .axe-week {
-  --celhoog: 44px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -4208,11 +4207,20 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-week-nav button:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
 .axe-week-nu { border-color: rgba(255, 255, 255, 0.12) !important; color: var(--text-secondary) !important; }
 
-.axe-week-rol { flex: 1; min-height: 0; overflow: auto; }
+/* Geen verticale schuif meer: alle 24 uur passen in de kaart.
+   Horizontaal wel -- zeven kolommen onder de 640px zijn zeven streepjes. */
+.axe-week-rol { flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; }
+/* De rijen zijn 1fr en geen vaste hoogte.
+ *
+ * Met een vaste celhoogte (44px) moest de kaart toevallig 24 x 44 hoog zijn;
+ * was hij hoger, dan bleef er ruimte over onder 23:00, en was hij lager dan
+ * viel het eind eruit. Nu deelt het rooster de hoogte die het krijgt door 24
+ * -- het past altijd precies, hoe hoog het venster ook is. */
 .axe-week-raster {
+  height: 100%;
   display: grid;
   grid-template-columns: 56px repeat(7, minmax(0, 1fr));
-  grid-template-rows: auto repeat(var(--uren), var(--celhoog));
+  grid-template-rows: auto repeat(var(--uren), minmax(0, 1fr));
   min-width: 640px;
 }
 .axe-week-hoek {
@@ -4266,11 +4274,16 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 .axe-week-kolom {
   position: relative;
+  display: flex;
+  flex-direction: column;
   border-left: 1px solid rgba(255, 255, 255, 0.04);
 }
 .axe-week-kolom[data-vandaag='ja'] { background: rgba(255, 255, 255, 0.018); }
+/* Elke cel een gelijk deel van de kolom. Zo volgen de uurlijnen vanzelf de
+   rijen van het raster, zonder dat er ergens een getal in pixels staat. */
 .axe-week-cel {
-  height: var(--celhoog);
+  flex: 1;
+  min-height: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.035);
 }
 
@@ -4281,6 +4294,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   position: absolute;
   left: 3px;
   right: 3px;
+  /* De uurrijen kunnen op een kort venster onder de 20px komen; dan past de
+     tekst niet meer maar moet het blok nog wel aanklikbaar zijn. */
+  min-height: 14px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -4344,7 +4360,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 @media (max-width: 1600px) { .axe-appvijf { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1000px) { .axe-appvijf { grid-template-columns: minmax(0, 1fr); } }
-.axe-appvijf > .axe-app { min-height: 320px; }
+.axe-appvijf > .axe-appkolom { min-height: 340px; }
 
 .axe-app {
   display: flex;
@@ -4498,10 +4514,25 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-app-rijknoppen button:hover { color: var(--text-primary); }
 
 /* De cijferrij per app: totaal, te doen, bezig, klaar. */
+/* Een eigen kaart, los boven het paneel. */
+.axe-appkolom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+.axe-appkolom > .axe-app { flex: 1; min-height: 0; }
+
 .axe-app-cijfers {
+  flex: none;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-bottom: var(--axe-kaart-scheiding);
+  border-radius: var(--axe-kaart-hoek);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+  box-shadow: var(--axe-kaart-zweef);
+  overflow: hidden;
 }
 .axe-app-cijfers > div {
   display: flex;

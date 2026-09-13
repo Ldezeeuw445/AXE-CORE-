@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, X, Zap, Clock } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { AppTaken, type AppTaak } from './taken/AppTaken';
+import { AppTaken, AppCijfers, type AppTaak } from './taken/AppTaken';
 import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
   listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
@@ -419,16 +419,20 @@ export default function Tasks() {
         * gelijke kolommen eerlijker dan er één uitlichten. */}
       <div className="axe-appvijf">
         {APPS.map(a => (
-          <AppTaken
-            key={a.id}
-            label={a.label}
-            kleur={a.kleur}
-            blurb={a.blurb}
-            taken={takenVan(a.id)}
-            opNieuw={() => nieuwVoor(a.id)}
-            opKlaar={t => { void updateStatus(t.id, 'done'); }}
-            opWeg={t => { void removeTask(t.id); }}
-          />
+          /* Twee losse kaarten per kolom: de cijfers erboven, het paneel
+             eronder. Zie AppCijfers voor waarom ze niet in de kop zitten. */
+          <div key={a.id} className="axe-appkolom">
+            <AppCijfers taken={takenVan(a.id)} label={a.label} />
+            <AppTaken
+              label={a.label}
+              kleur={a.kleur}
+              blurb={a.blurb}
+              taken={takenVan(a.id)}
+              opNieuw={() => nieuwVoor(a.id)}
+              opKlaar={t => { void updateStatus(t.id, 'done'); }}
+              opWeg={t => { void removeTask(t.id); }}
+            />
+          </div>
         ))}
       </div>
 
