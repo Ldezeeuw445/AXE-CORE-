@@ -67,7 +67,7 @@ export function MobileGlass() {
           src={wallpaper}
           alt=""
           onError={() => setFailed(wallpaper)}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(2px)', transform: 'scale(1.05)' }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(22px) saturate(1.05)', transform: 'scale(1.18)' }}
         />
       )}
       {/* Sluier voor leesbaarheid */}

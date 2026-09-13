@@ -14,6 +14,7 @@ import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { isIngebed, schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
@@ -141,6 +142,11 @@ export function AppShell() {
     android: isAndroidShellRuntime(),
     ingebed: isIngebed(),
   });
+  const isMobile = useIsMobile();
+  // Op een telefoon (smal scherm of de Android-shell) is de nav altijd de lade
+  // van links — nooit óók de onderbalk. Anders zag je op /mobile de lade en op
+  // andere tabs de onderbalk: twee soorten navigatie door elkaar.
+  const mobileNav = isMobile || mobileCommandSurface;
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -280,8 +286,8 @@ export function AppShell() {
             onderbalk nam hoogte in en toonde dezelfde tabs als de app-grid;
             de lade lost dat op en laat home + composer de basis blijven,
             precies zoals de Tauri-app. */}
-      {!mobileCommandSurface && keyboardInset === 0 && <BottomNav />}
-      {mobileCommandSurface && <MobileNav />}
+      {!mobileNav && keyboardInset === 0 && <BottomNav />}
+      {mobileNav && <MobileNav />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
