@@ -53,6 +53,8 @@ import {
   getDurableTask,
   type DurableTaskSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { abonnementVan, cascadeVoorAgent } from '@/domain/agentMotoren';
+import { leesToewijzing } from '@/infrastructure/persistence/agentMotorenOpslag';
 
 let installed = false;
 const ACTIVE_TASKS_KEY = 'axe_active_durable_tasks';
@@ -185,12 +187,14 @@ function chatCascade(): KeySlot[] {
   const all = collectAllSlots();
   if (all.length === 0) return [];
   const st = useVoiceStore.getState();
-  const cascade = buildStableChatCascade(all, {
+  // Het abonnement dat AXE Core in Instellingen kreeg vooraan, en géén ander:
+  // anders valt de chat bij een limiet door op het abonnement van AXE Algo.
+  const cascade = cascadeVoorAgent(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
-  });
-  return cascade.length ? cascade : all.slice(0, 1);
+  }), abonnementVan(leesToewijzing(), 'axe-core'));
+  return cascade.length ? cascade : cascadeVoorAgent(all, null).slice(0, 1);
 }
 
 /** First choice only — for callers that need a slot to label a reply with,
@@ -465,11 +469,11 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   if (all.length === 0) return false;
 
   const st = useVoiceStore.getState();
-  let cascade = buildStableChatCascade(all, {
+  let cascade = cascadeVoorAgent(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
-  });
+  }), abonnementVan(leesToewijzing(), 'axe-core'));
   // "Local model first when home": when the Mac Mini's own Ollama is reachable
   // and the toggle is on, put the local model at the front for simple chat.
   // The gateway then serves it locally (fast, private, no key) and falls back

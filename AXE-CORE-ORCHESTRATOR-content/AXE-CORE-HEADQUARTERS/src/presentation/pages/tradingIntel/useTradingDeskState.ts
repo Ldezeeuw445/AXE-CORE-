@@ -10,7 +10,9 @@ import { toast } from 'sonner';
 import { type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal, type TradingIntelWatchlistItem } from '@/domain/tradingIntel/types';
 import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
-import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
+import { runTradingResearch, buildCallLlmFromSlots, buildBeslissingCallLlm } from '@/application/tradingIntel/runTradingResearch';
+import { abonnementVan } from '@/domain/agentMotoren';
+import { leesToewijzing } from '@/infrastructure/persistence/agentMotorenOpslag';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { PROVIDERS, defaultOllamaSlot, buildStableChatCascade, type KeySlot as ProviderKeySlot } from '@/domain/providers';
 import { zonderAbonnement } from '@/domain/abonnementChat';
@@ -409,7 +411,8 @@ export function useTradingDeskState() {
   /** Build the trading LLM from the user's chosen "trading model" (Settings).
    *  Returns undefined for auto (let runTradingResearch use CrewAI/default).
    *  The chosen model becomes both the CrewAI fallback and the synthesis LLM. */
-  const buildTradingCallLlm = useCallback(async (): Promise<((system: string, user: string) => Promise<string>) | undefined> => {
+  type TradingLlm = (system: string, user: string) => Promise<string>;
+  const buildTradingCallLlm = useCallback(async (): Promise<{ callLlm?: TradingLlm; callLlmBeslissing?: TradingLlm }> => {
     const pref = await getTradingModelPref();
 
     // Every configured provider, so a chosen-but-quota-exhausted model still
@@ -446,15 +449,20 @@ export function useTradingDeskState() {
       fallback1: st.fallback1Slot,
       fallback2: st.fallback2Slot,
     }));
-    if (!cascade.length) return undefined;
-    return buildCallLlmFromSlots(cascade, (s, msgs) => callProvider(s as ProviderKeySlot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
+    const roep = (s: ProviderKeySlot, msgs: Array<{ role: string; content: string }>) =>
+      callProvider(s, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>);
+    // Elf rollen op sleutels; de eindbeslissing op het abonnement van AXE Algo.
+    return {
+      callLlm: buildCallLlmFromSlots(cascade, roep),
+      callLlmBeslissing: buildBeslissingCallLlm(cascade, abonnementVan(leesToewijzing(), 'axe-algo'), roep),
+    };
   }, []);
 
   const runResearch = useCallback(async () => {
     setRunning(true);
     try {
-      const callLlm = await buildTradingCallLlm();
-      const r = await runTradingResearch({ ticker: symbol, callLlm });
+      const { callLlm, callLlmBeslissing } = await buildTradingCallLlm();
+      const r = await runTradingResearch({ ticker: symbol, callLlm, callLlmBeslissing });
       toast.success(`Research done · ${r.signal}`);
       await reload();
     } catch (e) {

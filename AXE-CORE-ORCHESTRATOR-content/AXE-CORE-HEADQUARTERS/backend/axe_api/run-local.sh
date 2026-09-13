@@ -53,6 +53,14 @@ fi
 
 # WORKSPACE_DIR defaults to /opt/axe-workspace, which does not exist here and
 # main.py creates it at import time — so give it somewhere writable instead.
+# Zonder eigen WORKSPACE_DIR: de eerste repo uit AGENT_REPOS. Dat is dezelfde
+# checkout waar de code-agent in werkt, zodat de bestandsboom van de editor en
+# de agent over hetzelfde spreken. Gemeten 13 september: de boom toonde een lege
+# .workspace-local terwijl de agent in ~/AXE-CORE- bewerkte.
+EERSTE_REPO="${AGENT_REPOS%%,*}"; EERSTE_REPO="${EERSTE_REPO#*=}"
+if [[ -n "${EERSTE_REPO:-}" && -d "$EERSTE_REPO" ]]; then
+  export WORKSPACE_DIR="${WORKSPACE_DIR:-$EERSTE_REPO}"
+fi
 export WORKSPACE_DIR="${WORKSPACE_DIR:-$PWD/.workspace-local}"
 mkdir -p "$WORKSPACE_DIR"
 

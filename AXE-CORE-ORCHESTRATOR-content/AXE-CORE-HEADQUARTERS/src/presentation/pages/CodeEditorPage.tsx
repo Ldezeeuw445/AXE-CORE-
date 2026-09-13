@@ -13,12 +13,13 @@ import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
-import { hostVanDeEditor } from '@/domain/terminalHosts';
-import { axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
+import { hostVanDeEditor, type TerminalHost } from '@/domain/terminalHosts';
+import { AGENT_LABEL, HOOFD_AGENTS, type MotorToewijzing } from '@/domain/agentMotoren';
+import { leesToewijzing, kiesMotor } from '@/infrastructure/persistence/agentMotorenOpslag';
 import {
   listWorkspaceDirectory, readWorkspaceFile, writeWorkspaceFile,
   createWorkspaceEntry, deleteWorkspaceEntry, searchWorkspace,
-  moveWorkspaceEntry,
+  moveWorkspaceEntry, editorBasis,
   type SearchResult,
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
@@ -61,15 +62,6 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
  * zie backend/axe_api/agent_runner.py. Daarom staan ze hier als set en niet als
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
-/**
- * De machine van het terminalvak onder de editor.
- *
- * Hetzelfde adres als waar de bestandsboom en de code-agent op uitkomen, want
- * dat MOET dezelfde machine zijn -- zie hostVanDeEditor(). Dezelfde aanroep
- * als in workspaceFilesService, zodat er geen tweede plek is die er anders
- * over kan gaan denken.
- */
-const EDITOR_HOST = hostVanDeEditor(axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore'));
 
 const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex', 'cursor']);
 const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
@@ -533,11 +525,48 @@ export default function CodeEditorPage() {
   const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
   useEffect(() => { localStorage.setItem('axe_code_agent_mode', agentMode ? 'on' : 'off'); }, [agentMode]);
   const agentAbortRef = useRef<AbortController | null>(null);
-  const [agentEngine, setAgentEngine] = useState<AgentEngine>(() => {
-    const stored = localStorage.getItem('axe_code_agent_engine');
-    return AGENT_ENGINES.includes(stored as AgentEngine) ? (stored as AgentEngine) : 'native';
+  // De abonnementen zijn verdeeld over drie agents (Instellingen → Motoren per
+  // agent). Het abonnement van de Code Agent komt daarvandaan; Native en Hands
+  // zijn geen abonnement en blijven een keuze hier. Zie domain/agentMotoren.ts.
+  const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
+  useEffect(() => {
+    const bij = () => setToewijzing(leesToewijzing());
+    window.addEventListener('axe:agent-motoren', bij);
+    window.addEventListener('storage', bij);
+    return () => { window.removeEventListener('axe:agent-motoren', bij); window.removeEventListener('storage', bij); };
+  }, []);
+  const [agentEngine, setAgentEngineRauw] = useState<AgentEngine>(() => {
+    const eigen = leesToewijzing()['code-agent'];
+    if (eigen !== 'sleutels') return eigen;
+    // Zonder abonnement: Native of Hands, zoals de vorige keer. Een opgeslagen
+    // CLI telt niet meer -- die komt uit de toewijzing.
+    const stored = localStorage.getItem('axe_code_agent_engine') as AgentEngine | null;
+    return stored && AGENT_ENGINES.includes(stored) && !CLI_MOTOREN.has(stored) ? stored : 'native';
   });
   useEffect(() => { localStorage.setItem('axe_code_agent_engine', agentEngine); }, [agentEngine]);
+  // Een CLI-knop is een toewijzing: wie een vrij abonnement kiest, geeft het aan
+  // de Code Agent. Native of Hands kiezen geeft zijn abonnement weer vrij.
+  const agentEngineRef = useRef(agentEngine);
+  agentEngineRef.current = agentEngine;
+  const setAgentEngine = useCallback((volgende: AgentEngine | ((huidig: AgentEngine) => AgentEngine)) => {
+    const motor = typeof volgende === 'function' ? volgende(agentEngineRef.current) : volgende;
+    const cli = motor === 'claude' || motor === 'codex' || motor === 'cursor';
+    setToewijzing(kiesMotor('code-agent', cli ? motor : 'sleutels'));
+    setAgentEngineRauw(motor);
+  }, []);
+  // Verandert de verdeling elders (Instellingen, een ander venster), dan schuift
+  // de motor hier mee -- anders draait de editor op een abonnement dat inmiddels
+  // van een andere agent is.
+  const eigenMotor = toewijzing['code-agent'];
+  useEffect(() => {
+    if (eigenMotor !== 'sleutels') setAgentEngineRauw(eigenMotor);
+    else setAgentEngineRauw(huidig => (huidig === 'native' || huidig === 'openhands') ? huidig : 'native');
+  }, [eigenMotor]);
+  // Van welke andere agent dit abonnement is, of null als het vrij is.
+  const eigenaarVan = (motor: string): string | null => {
+    const ander = HOOFD_AGENTS.find(a => a !== 'code-agent' && toewijzing[a] === motor);
+    return ander ? AGENT_LABEL[ander] : null;
+  };
 
   // Branch C. The repo list comes from the host running axe_api — it is the
   // one that decides what may be touched (CLAUDE_CODE_REPOS), so asking it is
@@ -628,13 +657,30 @@ export default function CodeEditorPage() {
     }
   }, []);
 
+  // Herladen bij een andere hostkeuze: de boom hoort bij de machine waar de
+  // agent werkt, en die kan net veranderd zijn.
   useEffect(() => {
     void (async () => {
       try {
         await reloadTree();
       } finally { setRootLoading(false); }
     })();
-  }, [reloadTree]);
+  }, [reloadTree, hostVoorkeur]);
+
+  /**
+   * De machine van het terminalvak onder de editor.
+   *
+   * Dezelfde uitkomst als de bestandsboom en de code-agent -- editorBasis() is
+   * agentBasis(), dus bestanden, agent en shell staan op dezelfde machine.
+   * Eerder volgde het vak het algemene API-adres, en dat is in de verpakte app
+   * altijd de VPS: bestanden en shell op de VPS, de agent op deze Mac.
+   */
+  const [editorHost, setEditorHost] = useState<TerminalHost | null>(null);
+  useEffect(() => {
+    let weg = false;
+    void editorBasis().then(basis => { if (!weg) setEditorHost(hostVanDeEditor(basis)); });
+    return () => { weg = true; };
+  }, [hostVoorkeur]);
 
   useEffect(() => {
     agentChatRef.current?.scrollTo(0, agentChatRef.current.scrollHeight);
@@ -1291,15 +1337,19 @@ export default function CodeEditorPage() {
             {CLI_MOTOR_KNOPPEN.map(({ id, uitleg }) => {
               const m = motoren?.[id];
               const ontbreekt = m ? !m.aanwezig : false;
+              const eigenaar = eigenaarVan(id);
               return (
                 <button
                   key={id}
                   type="button"
                   data-aan={agentEngine === id ? 'ja' : undefined}
-                  style={ontbreekt ? { opacity: 0.45 } : undefined}
-                  title={ontbreekt
-                    ? `${MOTOR_LABEL[id]} staat niet op deze host — log in met \`${m?.login ?? ''}\` nadat je hem hebt geïnstalleerd.`
-                    : uitleg}
+                  disabled={Boolean(eigenaar)}
+                  style={ontbreekt || eigenaar ? { opacity: 0.45 } : undefined}
+                  title={eigenaar
+                    ? `Dit abonnement hoort bij ${eigenaar}. Verdeel het anders in Instellingen → Motoren per agent.`
+                    : ontbreekt
+                      ? `${MOTOR_LABEL[id]} staat niet op deze host — log in met \`${m?.login ?? ''}\` nadat je hem hebt geïnstalleerd.`
+                      : uitleg}
                   onClick={() => setAgentEngine(id)}
                 >
                   {id === 'claude' ? 'Claude' : MOTOR_LABEL[id]}
@@ -1585,14 +1635,14 @@ export default function CodeEditorPage() {
                   {/* De NAAM van de machine, niet de belofte "this worktree".
                       Dat stond er, terwijl het vak zonder wsBasis op de VPS
                       uitkwam -- een label dat iets zegt wat niet zo was. */}
-                  <span className="axe-studio-chip">{EDITOR_HOST.naam}</span>
+                  <span className="axe-studio-chip">{editorHost?.naam ?? '…'}</span>
                   <span className="rechts">{showTerminal ? 'Fold' : 'Terminal · zsh'}</span>
                 </button>
                 <div className="axe-studio-termbody">
                   {/* Expliciet dezelfde machine als waar de code-agent draait.
                       Zonder wsBasis valt XtermTerminal terug op de VPS -- zie
                       hostVanDeEditor() in domain/terminalHosts.ts. */}
-                  <XtermTerminal ref={termRef} wsBasis={EDITOR_HOST.wsUrl} style={{ height: '100%' }} />
+                  {editorHost && <XtermTerminal key={editorHost.wsUrl} ref={termRef} wsBasis={editorHost.wsUrl} style={{ height: '100%' }} />}
                 </div>
                 <div className="axe-studio-termregel">
                   <input value={termInput} onChange={e => setTermInput(e.target.value)}

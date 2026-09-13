@@ -16,7 +16,9 @@ import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService'
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
 import { tradablePairsForAccount } from '@/infrastructure/gateways/metaApiSymbolResolver';
-import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
+import { runTradingResearch, buildCallLlmFromSlots, buildBeslissingCallLlm } from '@/application/tradingIntel/runTradingResearch';
+import { abonnementVan } from '@/domain/agentMotoren';
+import { leesToewijzing } from '@/infrastructure/persistence/agentMotorenOpslag';
 import { buildResearchCascade } from '@/application/tradingIntel/tradingAgentChat';
 import { runDeskIntel, runDeskCompanion, type UpstreamContext } from '@/application/tradingIntel/deskAgents';
 import { leesDeskFeiten, deskFeitenBlok } from '@/infrastructure/persistence/deskFeitenService';
@@ -965,8 +967,18 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
       ),
     );
     const timedOut = Symbol('timeout');
+    // Alleen de eindbeslissing mag het abonnement van AXE Algo (Instellingen →
+    // Motoren per agent); de elf rollen hierboven blijven op sleutels.
+    const callLlmBeslissing = buildBeslissingCallLlm(
+      cascade,
+      abonnementVan(leesToewijzing(), 'axe-algo'),
+      (slot, msgs) => callProvider(
+        slot as Parameters<typeof callProvider>[0],
+        msgs as Parameters<typeof callProvider>[1],
+      ),
+    );
     const outcome = await Promise.race([
-      runTradingResearch({ ticker: symbol, callLlm }),
+      runTradingResearch({ ticker: symbol, callLlm, callLlmBeslissing }),
       new Promise(resolve => setTimeout(() => resolve(timedOut), RESEARCH_DEADLINE_MS)),
     ]);
     if (outcome === timedOut) {

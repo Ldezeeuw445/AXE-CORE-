@@ -135,3 +135,74 @@ class TestFoutmelding:
 
     def test_lege_stderr_blijft_leeg(self):
         assert a._stderr_staart("") == "" and a._stderr_staart(None) == ""
+
+
+class TestEenSessiePerMotor:
+    """Twee runs op hetzelfde abonnement lopen na elkaar, nooit naast elkaar."""
+
+    def _nep_run(self, log, duur=0.3):
+        import threading as _t
+        import time as _time
+        bezig = {"n": 0, "max": 0}
+        slot = _t.Lock()
+
+        echt = subprocess.run
+
+        def run(cmd, **kw):
+            # git (branch lezen) mag tegelijk; alleen de CLI-start telt.
+            if cmd and cmd[0] == "git":
+                return echt(cmd, **kw)
+            with slot:
+                bezig["n"] += 1
+                bezig["max"] = max(bezig["max"], bezig["n"])
+            _time.sleep(duur)
+            with slot:
+                bezig["n"] -= 1
+            log.append(cmd[0])
+            return subprocess.CompletedProcess(cmd, 0, stdout='{"result": "ok"}', stderr="")
+        return run, bezig
+
+    def test_twee_gelijktijdige_runs_wachten_op_elkaar(self, monkeypatch):
+        import threading as _t
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: "claude")
+        log = []
+        run, bezig = self._nep_run(log)
+        monkeypatch.setattr(subprocess, "run", run)
+        uitslagen = []
+        draden = [_t.Thread(target=lambda: uitslagen.append(a.run_agent("proef", "x", permission_mode="plan", engine="claude"))) for _ in range(3)]
+        for d in draden:
+            d.start()
+        for d in draden:
+            d.join()
+        assert [u["status"] for u in uitslagen] == ["ok", "ok", "ok"]
+        assert bezig["max"] == 1
+
+    def test_een_andere_motor_hoeft_niet_te_wachten(self, monkeypatch):
+        import threading as _t
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        log = []
+        run, bezig = self._nep_run(log)
+        monkeypatch.setattr(subprocess, "run", run)
+        draden = [_t.Thread(target=lambda e=e: a.run_agent("proef", "x", permission_mode="plan", engine=e)) for e in ("claude", "codex")]
+        for d in draden:
+            d.start()
+        for d in draden:
+            d.join()
+        assert bezig["max"] == 2
+
+    def test_te_lang_bezet_start_niet_en_zegt_dat(self, monkeypatch):
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: "claude")
+        monkeypatch.setattr(a, "MOTOR_WACHT", 0)
+        slot = a._motor_slot("claude")
+        slot.acquire()
+        try:
+            r = a.run_agent("proef", "x", permission_mode="plan", engine="claude")
+        finally:
+            slot.release()
+        assert r["status"] == "error" and "bezig met een andere run" in r["error"]

@@ -38,6 +38,7 @@ import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructu
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
+import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -650,6 +651,7 @@ function ProviderKeysSection() {
 
   return (
     <div>
+      <AgentMotorenSection />
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>

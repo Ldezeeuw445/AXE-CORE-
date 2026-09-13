@@ -51,6 +51,8 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 
 log = logging.getLogger("axe_core_api.agent_runner")
 
@@ -215,6 +217,10 @@ def _repos() -> dict:
     return out
 
 
+# Hoe lang een run op een bezette motor mag wachten voor hij opgeeft.
+MOTOR_WACHT = int(os.environ.get("AGENT_MOTOR_WACHT", "600"))
+
+
 def _stderr_staart(stderr: str, n: int = 500) -> str:
     """Het stuk van stderr dat de fout noemt: het EINDE, zonder MCP-ruis.
 
@@ -227,6 +233,15 @@ def _stderr_staart(stderr: str, n: int = 500) -> str:
     """
     regels = [r for r in (stderr or "").splitlines() if r.strip() and "rmcp::" not in r]
     return "\n".join(regels)[-n:]
+
+
+_MOTOR_SLOTEN: dict[str, threading.Lock] = {}
+_SLOTEN_SLOT = threading.Lock()
+
+
+def _motor_slot(naam: str) -> threading.Lock:
+    with _SLOTEN_SLOT:
+        return _MOTOR_SLOTEN.setdefault(naam, threading.Lock())
 
 
 def _subprocess_env(blocked: tuple) -> dict:
@@ -342,6 +357,20 @@ def run_agent(
         }
 
     limit = int(timeout or DEFAULT_TIMEOUT)
+
+    # Eén sessie per abonnement tegelijk. Gemeten 13 september: zes gelijktijdige
+    # `codex exec`-runs van de trading-desk maakten het limiet in een uur op. De
+    # app verdeelt de abonnementen nu over de agents (domain/agentMotoren.ts);
+    # dit is het vangnet als er tóch twee tegelijk komen: de tweede wacht.
+    slot = _motor_slot(motornaam)
+    begin = time.monotonic()
+    if not slot.acquire(timeout=MOTOR_WACHT):
+        return {"status": "error", "engine": motornaam, "repo": repo, "branch": branch,
+                "error": f"{motor['label']} was {MOTOR_WACHT}s bezig met een andere run; deze is niet gestart."}
+    gewacht = round(time.monotonic() - begin, 1)
+    if gewacht >= 1:
+        log.info("%s: %.1fs gewacht op een andere run", motornaam, gewacht)
+
     uitvoer = ""
     tmp = None
     try:
@@ -366,6 +395,7 @@ def run_agent(
     except Exception as e:  # noqa: BLE001
         return {"status": "error", "error": f"{type(e).__name__}: {e}", "repo": repo, "branch": branch, "engine": motornaam}
     finally:
+        slot.release()
         if tmp and os.path.exists(tmp):
             try:
                 os.unlink(tmp)

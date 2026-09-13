@@ -7,6 +7,7 @@
  */
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import { execCommand } from '@/infrastructure/gateways/axeCoreApiService';
+import { agentBasis } from '@/infrastructure/config/agentHost';
 
 export interface WorkspaceTreeNode {
   path: string;
@@ -23,8 +24,20 @@ export interface WorkspaceTreeNode {
 // .map() over the (nonexistent) node list.
 const BASE = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 
+/**
+ * Dezelfde machine als de code-agent.
+ *
+ * De bestanden stonden vast op de VPS (`/opt/axe-workspace`) terwijl de agent
+ * via agentBasis op deze Mac in de echte checkout bewerkte: je keek naar de ene
+ * boom en de agent veranderde de andere. Nu volgen ze allebei dezelfde keuze
+ * (auto / deze Mac / VPS in de Code Editor). Zie config/agentHost.ts.
+ */
+export async function editorBasis(): Promise<string> {
+  return agentBasis(BASE).catch(() => BASE);
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE}/files${path}`, {
+  const res = await fetch(`${await editorBasis()}/files${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
