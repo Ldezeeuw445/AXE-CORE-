@@ -35,7 +35,7 @@
  * dat niets doet is precies wat deze codebase te vaak had; als je het tekent,
  * laat het dan werken.
  */
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, X, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
@@ -49,6 +49,10 @@ import {
   type Groep, type Snelactie,
 } from '@/domain/terminalSnelacties';
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
+import {
+  beschikbaar as dienstenKunnen, dienstenStand, dienstStart, dienstStop,
+  type DienstStand,
+} from '@/infrastructure/gateways/diensten';
 
 const GROEPEN: Groep[] = ['machine', 'agents', 'git'];
 
@@ -118,6 +122,8 @@ export default function TerminalsPage() {
         <MachineToevoegen onKlaar={h => { bewaarEigen([...eigen, h]); setToevoegen(false); }} />
       )}
 
+      <DienstenStrip />
+
       {/* Vier breed, twee rijen. Vast en niet auto-fit: zie de uitleg bovenaan.
           Onder de 1100px worden het er twee en onder de 700 één -- vier
           terminals van 200px naast elkaar zijn vier onleesbare terminals. */}
@@ -138,6 +144,70 @@ export default function TerminalsPage() {
         ))}
       </div>
     </motion.div>
+  );
+}
+
+/**
+ * De twee diensten die AXE CORE zelf draait.
+ *
+ * Ze draaiden in twee terminalvensters die je open moest houden. De app staat
+ * op dezelfde Mac, dus hij kan ze net zo goed zelf starten -- en dat doet hij
+ * nu bij het opstarten. Deze strip is er om te ZIEN dat het gelukt is, en om
+ * ze aan en uit te kunnen zetten zonder een venster te zoeken.
+ *
+ * Staat er iets op de poort dat de app niet zelf startte (jouw eigen venster),
+ * dan blijft stoppen geweigerd en zegt de strip waarom. Een app die andermans
+ * processen afschiet omdat ze op "zijn" poort zitten is erger dan een app die
+ * niets doet.
+ */
+function DienstenStrip() {
+  const [standen, setStanden] = useState<DienstStand[]>([]);
+  const [bericht, setBericht] = useState<string | null>(null);
+  const kan = dienstenKunnen();
+
+  const ververs = useCallback(() => { void dienstenStand().then(setStanden); }, []);
+
+  useEffect(() => {
+    if (!kan) return;
+    ververs();
+    // Elke vijf seconden: een dienst kan omvallen zonder dat iemand iets doet,
+    // en dan hoort de lamp uit te gaan zonder dat je de tab opnieuw opent.
+    const t = window.setInterval(ververs, 5000);
+    return () => window.clearInterval(t);
+  }, [kan, ververs]);
+
+  if (!kan || standen.length === 0) return null;
+
+  const doe = (fn: (id: string) => Promise<string>, id: string) => {
+    void fn(id)
+      .then(m => setBericht(m))
+      .catch(e => setBericht(String(e)))
+      .finally(ververs);
+  };
+
+  return (
+    <div className="axe-diensten">
+      {standen.map(d => (
+        <div key={d.id} className="axe-dienst" title={d.waarvoor}>
+          <span className="axe-term-stip" data-stand={d.luistert ? 'aan' : 'stuk'} />
+          <span className="axe-dienst-naam">{d.naam}</span>
+          <span className="axe-dienst-poort">:{d.poort}</span>
+          {/* Wie hem draait staat erbij, want dat bepaalt of je hem hier kunt
+              stoppen. Zonder dat verschil is een geweigerde stop een raadsel. */}
+          <span className="axe-dienst-door">
+            {d.luistert ? (d.van_ons ? 'door de app' : 'eigen venster') : 'uit'}
+          </span>
+          {d.luistert
+            ? <button onClick={() => doe(dienstStop, d.id)} disabled={!d.van_ons}>stop</button>
+            : <button onClick={() => doe(dienstStart, d.id)}>start</button>}
+        </div>
+      ))}
+      {bericht && (
+        <span className="axe-dienst-bericht" onClick={() => setBericht(null)} title="Klik om te sluiten">
+          {bericht}
+        </span>
+      )}
+    </div>
   );
 }
 

@@ -3,16 +3,37 @@
 Dit is het antwoord op één vraag: **welke vensters moet ik openhouden om AXE
 CORE volledig te laten werken?**
 
-Het korte antwoord: **twee**, allebei op de Mac waar je werkt. De rest van de
-commando's komt terug en laat het venster weer vrij.
+Het korte antwoord sinds `diensten.rs`: **geen**. AXE CORE start de twee
+diensten zelf zodra hij opent, want hij draait op diezelfde Mac.
+
+Je ziet ze bovenaan de Terminals-tab, met een lampje per dienst en een
+start/stop-knop. Wil je ze liever met de hand in een venster draaien, dan kan
+dat nog steeds -- de app merkt dat er al iets op de poort luistert en laat het
+met rust. Hieronder staan die commando's, want je hebt ze nodig zodra de app
+zelf niet start.
 
 ---
 
-## Op je Mac: twee vensters die open blijven
+## Wat AXE CORE zelf start
 
-Deze twee draaien in de **voorgrond**. De prompt komt niet terug — dat is geen
-storing, dat is wat er hoort te gebeuren. Sluit je het venster, dan stopt de
-dienst.
+Bij het openen zet de app deze twee aan, tenzij er al iets op hun poort
+luistert. Bij het afsluiten haalt hij alleen neer wat hij zelf startte -- jouw
+eigen venster blijft met rust gelaten.
+
+De uitvoer gaat naar `.axe-logs/terminal.log` en `.axe-logs/api.log` in de
+repo. Start er een niet, dan staat daar waarom.
+
+> **Waarom via een login-shell.** Een GUI-app op macOS erft je PATH niet: hij
+> krijgt het kale `/usr/bin:/bin` en daar staat geen npm, geen node uit nvm en
+> geen homebrew. De app start ze daarom via `zsh -lc`, dat je profiel leest.
+> Dit is de valkuil die anders een uur zoeken kost: het werkt in een terminal
+> en niet vanuit de app.
+
+## Dezelfde twee met de hand
+
+Nodig zodra de app ze niet kan starten. Ze draaien in de **voorgrond**: de
+prompt komt niet terug — dat is geen storing. Sluit je het venster, dan stopt
+de dienst.
 
 ### 1. De shell-server
 

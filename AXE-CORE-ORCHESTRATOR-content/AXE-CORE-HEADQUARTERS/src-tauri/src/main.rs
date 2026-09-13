@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod diensten;
+
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -179,6 +181,22 @@ fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String>
     Ok(())
 }
 
+/// De stand van de twee achtergronddiensten. Zie diensten.rs.
+#[tauri::command]
+fn diensten_stand() -> Vec<diensten::DienstStand> {
+    diensten::stand()
+}
+
+#[tauri::command]
+fn dienst_start(id: String) -> Result<String, String> {
+    diensten::start_dienst(&id)
+}
+
+#[tauri::command]
+fn dienst_stop(id: String) -> Result<String, String> {
+    diensten::stop_dienst(&id)
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -189,6 +207,9 @@ fn main() {
             ensure_vault_dir,
             list_vault_files,
             show_main_window,
+            diensten_stand,
+            dienst_start,
+            dienst_stop,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -282,9 +303,23 @@ fn main() {
                 })
                 .build(app)?;
 
+            // De shell-server en de lokale API meteen aanzetten, tenzij er al
+            // iets op hun poort luistert. Dat scheelt twee terminalvensters die
+            // je anders zelf open moet houden -- en die je per ongeluk sluit.
+            diensten::start_bij_opstarten();
+
             let _ = handle;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Alles wat wij startten weer neerhalen. Zonder dit blijven npm en
+            // uvicorn draaien nadat je de app hebt afgesloten, en dan is de
+            // volgende bouw "address already in use" van een proces waarvan je
+            // niet meer weet dat het bestaat.
+            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+                diensten::stop_alles();
+            }
+        });
 }
