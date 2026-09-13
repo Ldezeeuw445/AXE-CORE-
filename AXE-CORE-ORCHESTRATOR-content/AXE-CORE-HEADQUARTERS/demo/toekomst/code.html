@@ -39,15 +39,15 @@
         <button class="knop" data-paneel="preview" title="Preview">Preview</button>
         <button class="knop" data-paneel="term" title="Terminal">Term</button>
         <button class="knop" data-paneel="agent" title="Code agent">Agent</button>
-        <button class="knop"><span data-ic="speel"></span> Run</button>
-        <button class="knop knop--primair"><span data-ic="bot"></span> Ask agent <span class="t-mono c-3">⌘K</span></button>
+        <button class="knop" data-run><span data-ic="speel"></span> Run</button>
+        <button class="knop knop--primair" data-ask><span data-ic="bot"></span> Ask agent <span class="t-mono c-3">⌘K</span></button>
       </div>
 
       <div class="kolommen">
         <aside class="kaart">
           <div class="paneelkop"><span class="t-titel">Files</span><span class="rechts"><button class="knop knop--rond" data-ic="plus"></button><button class="knop knop--rond" data-ic="herlaad"></button></span></div>
           <div class="boom">
-            <div class="zoek kaart--in"><span data-ic="zoek"></span> Search files · ⌘P</div>
+            <div class="zoek kaart--in"><span data-ic="zoek"></span><input id="file-zoek" placeholder="Search files · ⌘P"></div>
             <div class="r map"><span data-ic="map"></span> src/presentation</div>
             <div class="r map in1"><span data-ic="map"></span> pages</div>
             <div class="r in2 aan gewijzigd" data-file="MobileSystem.tsx"><span data-ic="bestand"></span> MobileSystem.tsx</div>
@@ -56,8 +56,8 @@
             <div class="r in2" data-file="CodeEditorPage.tsx"><span data-ic="bestand"></span> CodeEditorPage.tsx</div>
             <div class="r map in1"><span data-ic="map"></span> components</div>
             <div class="r map in2"><span data-ic="map"></span> device-manager</div>
-            <div class="r in3 gewijzigd"><span data-ic="bestand"></span> device-manager.css</div>
-            <div class="r in3"><span data-ic="bestand"></span> tabs.ts</div>
+            <div class="r in3 gewijzigd" data-file="device-manager.css"><span data-ic="bestand"></span> device-manager.css</div>
+            <div class="r in3" data-file="tabs.ts"><span data-ic="bestand"></span> tabs.ts</div>
             <div class="r in3"><span data-ic="bestand"></span> gebruik.ts</div>
             <div class="r map in2"><span data-ic="map"></span> devices</div>
             <div class="r in3"><span data-ic="bestand"></span> TelefoonScherm.tsx</div>
@@ -69,9 +69,9 @@
 
         <section class="kaart kaart--plaat editor">
           <div class="tabs">
-            <span class="bestandtab aan"><span data-ic="bestand"></span> MobileSystem.tsx <i class="stip c-warn"></i></span>
-            <span class="bestandtab"><span data-ic="bestand"></span> device-manager.css <i class="stip c-warn"></i></span>
-            <span class="bestandtab"><span data-ic="bestand"></span> tabs.ts</span>
+            <span class="bestandtab aan" data-file="MobileSystem.tsx" role="button" tabindex="0"><span data-ic="bestand"></span> MobileSystem.tsx <i class="stip c-warn"></i></span>
+            <span class="bestandtab" data-file="device-manager.css" role="button" tabindex="0"><span data-ic="bestand"></span> device-manager.css <i class="stip c-warn"></i></span>
+            <span class="bestandtab" data-file="tabs.ts" role="button" tabindex="0"><span data-ic="bestand"></span> tabs.ts</span>
             <span class="groei"></span>
             <button class="knop knop--rond" data-ic="schakel" title="Split"></button>
             <button class="knop knop--rond" data-ic="kruis"></button>
@@ -117,7 +117,7 @@
                 <button type="button" data-toestel="tablet" title="iPad Pro 11" data-ic="tablet"></button>
                 <button type="button" data-toestel="desktop" title="Desktop" data-ic="monitor"></button>
               </span>
-              <button class="knop knop--rond" data-ic="herlaad" title="Reload"></button>
+              <button class="knop knop--rond" data-herlaad data-ic="herlaad" title="Reload"></button>
               <button class="knop knop--rond c-accent" data-ontwerp-knop data-ic="muis" title="Design mode"></button>
             </span>
           </div>
@@ -135,7 +135,7 @@
               <div class="veld"><label>Font</label><span class="w">Inter · 22 / 600</span></div>
               <div class="veld"><label>Colour</label><span class="twee"><span class="w"><i style="background:#E8ECF5"></i>ink</span><span class="w"><i style="background:#22D3EE"></i>accent</span></span></div>
               <div class="veld"><label>Pad</label><span class="twee"><span class="w">56 16 10</span><span class="w c-3">island</span></span></div>
-              <div class="acties"><button class="knop knop--primair">Apply</button><button class="knop"><span data-ic="bot"></span> To agent</button></div>
+              <div class="acties"><button class="knop knop--primair" data-apply>Apply</button><button class="knop" data-naar-agent><span data-ic="bot"></span> To agent</button></div>
               <div class="tip">Every change is a diff in the source. Reject stays possible — that is Cursor, on a FlutterFlow gesture.</div>
             </div>
           </div>
@@ -146,14 +146,14 @@
         <aside class="kaart">
           <div class="paneelkop"><span class="t-titel">Layers</span><span class="rechts"><span class="chip">#/mobile</span></span></div>
           <div class="lagen">
-            <div class="r map"><span data-ic="layers"></span> Device manager</div>
-            <div class="r in1 aan"><span data-ic="tekst"></span> Header · axe-dm__kop</div>
-            <div class="r in2"><span data-ic="tekst"></span> Title</div>
-            <div class="r in2"><span data-ic="schakel"></span> Look toggle</div>
-            <div class="r in1"><span data-ic="raster"></span> Card · memories</div>
-            <div class="r in1"><span data-ic="stekker"></span> Card · Link</div>
-            <div class="r in1"><span data-ic="grafiek"></span> Card · Trading OS</div>
-            <div class="r in1"><span data-ic="home"></span> Dock · five tabs</div>
+            <div class="r map" data-laag="pagina"><span data-ic="layers"></span> Device manager</div>
+            <div class="r in1 aan" data-laag="kop"><span data-ic="tekst"></span> Header · axe-dm__kop</div>
+            <div class="r in2" data-laag="titel"><span data-ic="tekst"></span> Title</div>
+            <div class="r in2" data-laag="look"><span data-ic="schakel"></span> Look toggle</div>
+            <div class="r in1" data-laag="memories"><span data-ic="raster"></span> Card · memories</div>
+            <div class="r in1" data-laag="link"><span data-ic="stekker"></span> Card · Link</div>
+            <div class="r in1" data-laag="trading"><span data-ic="grafiek"></span> Card · Trading OS</div>
+            <div class="r in1" data-laag="dok"><span data-ic="home"></span> Dock · five tabs</div>
           </div>
         </aside>
         <section class="kaart kaart--plaat artboard">
@@ -180,7 +180,7 @@
             <div class="veld"><label>Pad top</label><span class="w">56 · island</span></div>
             <div class="veld"><label>Radius</label><span class="w">—</span></div>
             <div class="veld"><label>Fill</label><span class="w c-3">none · plate shows</span></div>
-            <div class="acties"><button class="knop knop--primair">Apply</button><button class="knop">To agent</button></div>
+            <div class="acties"><button class="knop knop--primair" data-apply>Apply</button><button class="knop" data-naar-agent>To agent</button></div>
             <div class="tip">Constraints like Figma, written as CSS. The agent owns the file.</div>
           </div>
         </aside>
@@ -198,15 +198,15 @@
             </span>
           </div>
           <div class="rij-toestellen">
-            <div class="plek">
+            <div class="plek" data-kies-toestel="phone">
               <div class="schaal-houder" data-preview-schaal="phone" style="width:180px;height:390px"></div>
               <span class="kop ruit">Phone · <b>iPhone 15 Pro</b></span>
             </div>
-            <div class="plek">
+            <div class="plek" data-kies-toestel="tablet">
               <div class="schaal-houder" data-preview-schaal="tablet" style="width:240px;height:345px"></div>
               <span class="kop ruit">Tablet · <b>iPad Pro 11</b></span>
             </div>
-            <div class="plek">
+            <div class="plek" data-kies-toestel="desktop">
               <div class="schaal-houder" data-preview-schaal="desktop" style="width:420px;height:262px"></div>
               <span class="kop ruit">Desktop · <b>1280 × 800</b></span>
             </div>
