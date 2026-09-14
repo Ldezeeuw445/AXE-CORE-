@@ -16,6 +16,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { MobileFab } from '@/presentation/components/layout/MobileFab';
+import { MobileStatsRow } from '@/presentation/components/layout/MobileStatsRow';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
@@ -74,9 +75,14 @@ export function AppShell() {
    * naar Home en terug, dan hoort het weer te kloppen.
    */
   const setChatDicht = useCoreViewStore(s => s.setChatDicht);
+  const setChatUserSet = useCoreViewStore(s => s.setChatUserSet);
   useEffect(() => {
     setChatDicht(location.pathname !== '/');
-  }, [location.pathname, setChatDicht]);
+    // Elke navigatie begint schoon: op de telefoon is de home dan weer clean
+    // (chat dicht, sphere + cijfers), tot je 'm daar zelf weer opent. De chat
+    // leidt zijn zichtbare stand hiervan af — zie useChatCollapsed.
+    setChatUserSet(false);
+  }, [location.pathname, setChatDicht, setChatUserSet]);
   const opPlaat = useHeeftPlaat();
   // The Android shell draws its own top bar, tab bar and composer natively, so
   // the web chrome would be a second copy of all three stacked on a 384px-wide
@@ -230,6 +236,10 @@ export function AppShell() {
       {/* Slimme hoekknop (mobiel): snelacties binnen duim-bereik, de mobiel-eigen
           vervanging van de radiale hoekmenu's van de desktop. */}
       {mobileNav && <MobileFab />}
+      {/* De drie kerncijfers onder de sphere (MEMORIES/BRAIN NODES/INTEGRITY),
+          zoals de Tauri-mockup — alleen op de telefoon-home, en alleen zolang de
+          chat is ingeklapt (dan is de sphere de baas). */}
+      {mobileNav && location.pathname === '/' && <MobileStatsRow />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />

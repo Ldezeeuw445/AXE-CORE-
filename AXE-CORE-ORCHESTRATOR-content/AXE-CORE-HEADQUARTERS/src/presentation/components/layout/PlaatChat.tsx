@@ -33,7 +33,7 @@ import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessag
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import { VermogensKnop } from '@/presentation/components/layout/VermogensKnop';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { useCoreViewStore, useChatCollapsed } from '@/presentation/store/coreViewStore';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
@@ -69,7 +69,6 @@ export function PlaatChat() {
   const voice = useVoiceStore();
   const dismiss = useSphereProjectionStore(s => s.dismiss);
   const setCoreView = useCoreViewStore(s => s.setCoreView);
-  const chatCollapsed = useCoreViewStore(s => s.chatDicht);
   const setChatCollapsed = useCoreViewStore(s => s.setChatDicht);
 
   // Op de telefoon start de home clean, zoals de Tauri-mockup: alleen de sphere
@@ -80,8 +79,8 @@ export function PlaatChat() {
   // telt die stand. Afgeleid i.p.v. via een effect, want de Tauri-webview meldt
   // zijn 'mobiele' breedte pas ná de eerste render, waardoor een effect de stand
   // miste. `collapsed` is voortaan de bron voor alle chat-hoogte/kop-logica.
-  const [chatUserSet, setChatUserSet] = useState(false);
-  const collapsed = (chatUserSet || !isMobile) ? chatCollapsed : true;
+  const setChatUserSet = useCoreViewStore(s => s.setChatUserSet);
+  const collapsed = useChatCollapsed(isMobile);
   const openChat = () => { setChatUserSet(true); setChatCollapsed(false); };
   const toggleChat = () => { setChatUserSet(true); setChatCollapsed(!collapsed); };
 
@@ -210,6 +209,9 @@ export function PlaatChat() {
     }
 
     lastUserTextRef.current = t;
+    // Je stuurt iets, dus je wilt het antwoord zien: op de clean mobiele home
+    // klapt de chat hierbij open (op de desktop-home staat hij al open).
+    openChat();
 
     try {
       let directed = await directFromChat({ text: t, attachments });
