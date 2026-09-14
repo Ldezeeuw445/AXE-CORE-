@@ -224,3 +224,10 @@ class TestBranchZonderGit:
         assert a._branch_uit_head(repo) is None
         assert a._current_branch(repo) == "HEAD"
         assert a._branch_uit_head(str(tmp_path)) is None
+
+
+class TestWorktree:
+    def test_een_worktree_is_een_checkout(self, tmp_path):
+        (tmp_path / ".git").write_text("gitdir: /ergens/.git/worktrees/x\n")
+        assert a._is_checkout(str(tmp_path))
+        assert not a._is_checkout(str(tmp_path / "leeg"))

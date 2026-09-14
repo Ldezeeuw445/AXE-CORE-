@@ -375,7 +375,7 @@ def run_agent(
 
     if not os.path.isdir(repo_path):
         return {"status": "error", "error": f"Repo '{repo}' wijst naar {repo_path}, dat hier niet bestaat."}
-    if not os.path.isdir(os.path.join(repo_path, ".git")):
+    if not _is_checkout(repo_path):
         return {"status": "error", "error": f"Repo '{repo}' ({repo_path}) is geen git-checkout."}
 
     mode = (permission_mode or DEFAULT_PERMISSION_MODE).strip()
@@ -537,7 +537,7 @@ def _repo_pad(repo: str) -> tuple:
     if not repo or repo not in repos:
         return None, None, f"Onbekende repo '{repo}'. Toegestaan: {', '.join(sorted(repos)) or '(geen)'}"
     pad = repos[repo]
-    if not os.path.isdir(os.path.join(pad, ".git")):
+    if not _is_checkout(pad):
         return None, None, f"Repo '{repo}' ({pad}) is geen git-checkout."
     branch = _current_branch(pad)
     if not branch:
@@ -665,12 +665,22 @@ def whitelisted_repos() -> dict:
     return _repos()
 
 
+def _is_checkout(pad: str) -> bool:
+    """Een git-checkout: `.git` als map, of als bestand in een worktree.
+
+    Gemeten 14 september: de agent-werkkopieën in /Volumes/EagetSSD/agent-werk
+    zijn worktrees, en daar is `.git` een bestand met "gitdir: ...". isdir gaf
+    False en alle drie heetten "bestaat niet".
+    """
+    return os.path.exists(os.path.join(pad, ".git"))
+
+
 def repo_status() -> dict:
     """Wat /health eerlijk moet kunnen zeggen: welke repo's er staan, of ze
     bestaan, en op welke branch ze nu zitten."""
     out = {}
     for name, path in sorted(whitelisted_repos().items()):
-        exists = os.path.isdir(os.path.join(path, ".git"))
+        exists = _is_checkout(path)
         branch = _current_branch(path) if exists else ""
         out[name] = {
             "path": path,
