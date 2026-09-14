@@ -11,6 +11,7 @@ import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
 import { runAxeBootstrap } from '@/application/system/axeBootstrap';
 import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
+import { isTauriMobile, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
@@ -153,7 +154,10 @@ export default function App() {
           <Route path="/dev-browser-standalone" element={<StandaloneBrowserPage />} />
           <Route path="/browser-desktop" element={<RequireAuth><StandaloneBrowserPage /></RequireAuth>} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-            <Route index element={<Home />} />
+            {/* Op de telefoon-app (Tauri-Android of de Android-shell) opent de
+                index-route de volledige mobiele home (/mobile: sphere, composer,
+                lade met alle tabs) i.p.v. de desktop-Home die daar leeg oogt. */}
+            <Route index element={isTauriMobile() || isAndroidShellRuntime() ? <Navigate to="/mobile" replace /> : <Home />} />
             {/* The page that answers "what actually works". */}
             <Route path="status" element={<StatusPage />} />
             <Route path="ai-core" element={<AICore />} />
