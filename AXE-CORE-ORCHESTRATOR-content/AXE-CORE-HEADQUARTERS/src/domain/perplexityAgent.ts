@@ -11,9 +11,22 @@
  * een antwoord dat gewoon gelukt is, en dat lijkt dan op "Perplexity wist het
  * niet".
  *
- * Bronnen staan op twee plekken: als `url_citation` in de tekstblokken (wat het
- * antwoord echt aanhaalt) en als `search_results` / `fetch_url_results` (wat er
- * gezocht is). Aangehaald eerst, want dat is waar een zin op steunt.
+ * ## Twee dingen die de documentatie niet zegt
+ *
+ * Gemeten met een echte vraag op 14 september 2026, preset `low`:
+ *
+ * 1. **Citaten staan in de TEKST, als `[web:1]` en `[web:13]`.** Niet als
+ *    `url_citation`-annotaties -- daar kwamen er nul van, ook met "cite
+ *    sources" in de vraag. De N is het `id` van een zoekresultaat, en die ids
+ *    lopen vanaf 1. Zonder die koppeling ziet een model `[web:13]` staan en
+ *    weet het niet welke URL dat is; dan is een citaat niets waard. Annotaties
+ *    worden nog steeds gelezen, voor het geval Perplexity ze wél stuurt.
+ *
+ * 2. **`fetch_url_results` gebruikt het veld `contents`, niet `results`.** De
+ *    API-referentie noemt alleen `results`. Wie dat leest mist stilletjes elke
+ *    pagina die Perplexity zelf opende: geen fout, gewoon niets.
+ *
+ * Aangehaald eerst, want daar steunt een zin op.
  *
  * Puur, zodat de vorm zonder netwerk en zonder tegoed te testen is.
  */
@@ -23,6 +36,8 @@ export interface PerplexityBron {
   title: string;
   /** Aangehaald in de tekst, of alleen gevonden tijdens het zoeken. */
   aangehaald: boolean;
+  /** Het nummer waarmee de tekst ernaar verwijst, als `[web:N]`. Alleen bij zoekresultaten. */
+  id?: number;
 }
 
 export interface PerplexityOnderzoek {
@@ -38,22 +53,25 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+const WEB_VERWIJZING = /\[web:(\d+)\]/g;
+
 export function leesAgentAntwoord(antwoord: unknown): PerplexityOnderzoek {
   const root = isObj(antwoord) ? antwoord : {};
   const tekst: string[] = [];
   const bronnen = new Map<string, PerplexityBron>();
 
-  const voegToe = (url: string, title: string, aangehaald: boolean) => {
+  const voegToe = (url: string, title: string, aangehaald: boolean, id?: number) => {
     if (!url) return;
     const bestaand = bronnen.get(url);
     if (bestaand) {
-      // Een bron die ook aangehaald wordt blijft aangehaald, en krijgt een
-      // titel als hij die eerst niet had.
+      // Een bron die ook aangehaald wordt blijft aangehaald, en houdt het
+      // eerste nummer en de eerste titel die hij kreeg.
       bestaand.aangehaald ||= aangehaald;
       if (!bestaand.title && title) bestaand.title = title;
+      if (bestaand.id === undefined && id !== undefined) bestaand.id = id;
       return;
     }
-    bronnen.set(url, { url, title, aangehaald });
+    bronnen.set(url, { url, title, aangehaald, ...(id !== undefined ? { id } : {}) });
   };
 
   for (const item of arr(root.output)) {
@@ -67,19 +85,36 @@ export function leesAgentAntwoord(antwoord: unknown): PerplexityOnderzoek {
           if (isObj(a) && a.type === 'url_citation') voegToe(str(a.url), str(a.title), true);
         }
       }
-    } else if (item.type === 'search_results' || item.type === 'fetch_url_results') {
+    } else if (item.type === 'search_results') {
       for (const r of arr(item.results)) {
+        if (!isObj(r)) continue;
+        const id = typeof r.id === 'number' && Number.isInteger(r.id) ? r.id : undefined;
+        voegToe(str(r.url), str(r.title), false, id);
+      }
+    } else if (item.type === 'fetch_url_results') {
+      // `contents` in het echte antwoord; `results` alleen omdat de referentie
+      // dat noemt, voor als het ooit gelijkgetrokken wordt.
+      for (const r of [...arr(item.contents), ...arr(item.results)]) {
         if (isObj(r)) voegToe(str(r.url), str(r.title), false);
       }
     }
   }
 
+  const answer = tekst.join('\n\n').trim();
+
+  // De verwijzingen in de tekst maken een zoekresultaat "aangehaald".
+  const aangehaaldeIds = new Set([...answer.matchAll(WEB_VERWIJZING)].map(m => Number(m[1])));
+  for (const b of bronnen.values()) {
+    if (b.id !== undefined && aangehaaldeIds.has(b.id)) b.aangehaald = true;
+  }
+
   const cost = isObj(root.usage) && isObj(root.usage.cost) ? Number(root.usage.cost.total_cost) : 0;
+  const volgorde = [...bronnen.values()];
 
   return {
-    answer: tekst.join('\n\n').trim(),
+    answer,
     // Aangehaald eerst; binnen elke groep de volgorde waarin ze voorkwamen.
-    sources: [...bronnen.values()].sort((a, b) => Number(b.aangehaald) - Number(a.aangehaald)),
+    sources: volgorde.sort((a, b) => Number(b.aangehaald) - Number(a.aangehaald)),
     costUsd: Number.isFinite(cost) && cost > 0 ? cost : 0,
     model: str(root.model),
   };
@@ -157,7 +192,9 @@ export function formatteerOnderzoek(o: PerplexityOnderzoek, vraag: string, maxBr
   const bronnen = o.sources.slice(0, maxBronnen);
   if (bronnen.length) {
     regels.push('', 'Sources:');
-    for (const b of bronnen) regels.push(`- ${b.title || b.url} — ${b.url}`);
+    // Met het nummer erbij, zodat een model `[web:13]` in de tekst aan een URL
+    // kan koppelen. Zonder dat nummer is het citaat niet te volgen.
+    for (const b of bronnen) regels.push(`- ${b.id !== undefined ? `[web:${b.id}] ` : ''}${b.title || b.url} — ${b.url}`);
   }
   return regels.join('\n');
 }

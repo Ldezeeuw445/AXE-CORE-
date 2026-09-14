@@ -83,6 +83,65 @@ describe('een antwoord van de Agent API lezen', () => {
   });
 });
 
+/**
+ * De vorm zoals Perplexity hem ECHT stuurde, gemeten op 14 september 2026 met
+ * preset `low` -- en die wijkt op twee punten af van de API-referentie hierboven.
+ * Titels en URLs zijn vervangen; de structuur en veldnamen zijn letterlijk.
+ */
+const ECHTE_VORM = {
+  object: 'response',
+  status: 'completed',
+  model: 'openai/gpt-5.6-luna',
+  output: [
+    {
+      type: 'search_results',
+      queries: ['gold price this week'],
+      results: Array.from({ length: 15 }, (_, i) => ({
+        id: i + 1, url: `https://bron${i + 1}.example`, title: `Bron ${i + 1}`,
+        snippet: '…', source: 'web', date: '2026-09-12', last_updated: '2026-09-12',
+      })),
+    },
+    // `contents`, niet `results` -- de referentie noemt alleen `results`.
+    { type: 'fetch_url_results', contents: [{ url: 'https://geopend.example', title: 'Geopende pagina', snippet: '…' }] },
+    {
+      type: 'message', id: 'msg_1', role: 'assistant', status: 'completed',
+      content: [{
+        type: 'output_text',
+        text: 'Gold fell about 1.5% this week. [web:1] Friday saw a rebound. [web:1][web:13]',
+        annotations: [], // nul url_citations, ook met "cite sources" in de vraag
+      }],
+    },
+  ],
+  usage: { cost: { currency: 'USD', total_cost: 0.0049 } },
+};
+
+describe('de vorm die Perplexity echt stuurt', () => {
+  it('maakt een bron aangehaald via [web:N] in de tekst, niet alleen via annotaties', () => {
+    const { sources } = leesAgentAntwoord(ECHTE_VORM);
+    const aangehaald = sources.filter(s => s.aangehaald).map(s => s.id);
+    expect(aangehaald).toEqual([1, 13]);
+    // en die staan vooraan
+    expect(sources.slice(0, 2).map(s => s.id)).toEqual([1, 13]);
+  });
+
+  it('leest de geopende pagina uit `contents`', () => {
+    // Met alleen `results` gelezen kwam deze bron stilletjes nooit mee.
+    expect(leesAgentAntwoord(ECHTE_VORM).sources.map(s => s.url)).toContain('https://geopend.example');
+  });
+
+  it('zet het nummer bij de bron, zodat [web:13] te volgen is', () => {
+    const tekst = formatteerOnderzoek(leesAgentAntwoord(ECHTE_VORM), 'goud');
+    expect(tekst).toContain('[web:13] Bron 13 — https://bron13.example');
+    expect(tekst).toContain('[web:1] Bron 1 — https://bron1.example');
+  });
+
+  it('noemt een verwijzing naar een onbekend id geen bron', () => {
+    const anders = structuredClone(ECHTE_VORM);
+    (anders.output[2] as { content: Array<{ text: string }> }).content[0].text = 'Iets. [web:99]';
+    expect(leesAgentAntwoord(anders).sources.some(s => s.aangehaald)).toBe(false);
+  });
+});
+
 describe('waarom een vraag niet doorging', () => {
   it('onderscheidt het eigen dagbudget van Perplexity-tegoed', () => {
     // Allebei 402, andere oplossing: wachten tot middernacht versus bijladen.
