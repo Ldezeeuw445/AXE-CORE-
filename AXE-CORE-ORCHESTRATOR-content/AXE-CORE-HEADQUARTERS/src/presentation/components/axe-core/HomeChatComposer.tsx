@@ -16,10 +16,7 @@ export function HomeChatComposer({ children }: { children: ReactNode }) {
   return (
     <div className="axe-composer px-2.5 py-2.5 flex-shrink-0">
       <div className="axe-gemini-shell">
-        {/* flex-wrap zodat de input op een smal scherm naar zijn eigen volle
-            regel kan (zie de input in PlaatChat: basis-full op mobiel). Op
-            desktop is er ruimte genoeg, dus daar wrapt er niets. */}
-        <div className="axe-gemini-inner gap-1.5 flex-wrap">
+        <div className="axe-gemini-inner gap-1.5">
           {children}
         </div>
       </div>

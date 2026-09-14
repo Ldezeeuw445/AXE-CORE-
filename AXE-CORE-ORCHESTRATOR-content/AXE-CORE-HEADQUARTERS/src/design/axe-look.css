@@ -1196,6 +1196,14 @@ html:root[data-look],
   gap: clamp(13px, 1vw, 19px) !important;
 }
 
+/* Mobiel: de knoprij van de composer past alleen als één compacte balk (de
+   "vierkante" Tauri-composer) als de ruime desktop-gap kleiner wordt; met
+   clamp(13px,…) × zes gaten klapte de input naar bijna niets. */
+@media (max-width: 640px) {
+  :root[data-look] .axe-composer .axe-gemini-inner,
+  :root[data-look] .axe-composer .axe-gemini-inner-subtle { gap: 5px !important; }
+}
+
 /* Het cyaan ruitje vooraan. In de demo is dat het eerste wat je ziet -- de
    afzender, nog voor je iets getypt hebt. Als ::before, want het is decoratie
    en hoort niet in de DOM van een invoerbalk. */

@@ -478,7 +478,7 @@ export function PlaatChat() {
                       onChange={e => setChatText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
                       placeholder={attachments.length ? 'Send · show · chart · done' : (isMobile ? 'Ask anything…' : 'show chart · show me New York')}
-                      className={`${isMobile ? 'order-first basis-full mb-1' : 'flex-1 min-w-0'} text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent`}
+                      className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
                       style={{ color: 'var(--text-primary)', border: 'none' }}
                     />
                     <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
