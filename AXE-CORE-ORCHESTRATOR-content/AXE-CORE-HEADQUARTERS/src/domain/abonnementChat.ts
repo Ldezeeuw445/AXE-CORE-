@@ -35,7 +35,7 @@
  * architecture.test.ts bewaakt (en die hem bij de eerste versie van dit bestand
  * ook meteen ving).
  */
-export type AgentEngine = 'claude' | 'claude2' | 'codex' | 'cursor';
+export type AgentEngine = 'claude' | 'claude2' | 'claude3' | 'codex' | 'cursor';
 
 /** De provider-id die deze weg kiest. */
 export const ABONNEMENT_PROVIDER = 'abonnement';
@@ -44,7 +44,7 @@ export const ABONNEMENT_PROVIDER = 'abonnement';
 export const ABONNEMENT_MODUS = 'plan' as const;
 
 /** Elke motor die er is. De code-editor mag ze alle drie. */
-export const ALLE_MOTOREN: readonly AgentEngine[] = ['claude', 'claude2', 'codex', 'cursor'] as const;
+export const ALLE_MOTOREN: readonly AgentEngine[] = ['claude', 'claude2', 'claude3', 'codex', 'cursor'] as const;
 
 /**
  * De motoren die de CHAT mag gebruiken: sinds 14 september alle vier.

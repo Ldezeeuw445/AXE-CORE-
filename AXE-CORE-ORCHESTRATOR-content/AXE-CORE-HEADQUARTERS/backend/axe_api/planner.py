@@ -58,7 +58,7 @@ GEHEUGEN_AGENT = {"axe-core": "global", "code-agent": "axe_code", "axe-algo": "a
                   "maps-agent": "global"}
 STANDAARD_MOTOREN = {"axe-core": "claude", "code-agent": "cursor", "axe-algo": "codex",
                      "maps-agent": "sleutels"}
-ABONNEMENTEN = ("claude", "claude2", "codex", "cursor")
+ABONNEMENTEN = ("claude", "claude2", "claude3", "codex", "cursor")
 
 STAAT_PAD = os.path.expanduser(os.environ.get("AXE_PLANNER_STAAT", "~/.axe/planner.json"))
 INTERVAL_S = int(os.environ.get("AXE_PLANNER_INTERVAL_S", str(3 * 3600)))
@@ -450,7 +450,7 @@ class Planner:
         schrijven = meta.get("risico") == "schrijven"
         if schrijven and agent not in ("code-agent", "maps-agent"):
             return {"taak": taak["id"], "overgeslagen": "alleen de Code Agent en de Northsea Desk voeren schrijftaken uit"}
-        if schrijven and motor not in ("claude", "claude2", "codex", "cursor"):
+        if schrijven and motor not in ABONNEMENTEN:
             return {"taak": taak["id"], "overgeslagen": "schrijven vraagt een CLI-motor"}
         gevraagd = (REPO_ALIAS.get((taak.get("payload") or {}).get("repo") or "")
                     or (taak.get("payload") or {}).get("repo")

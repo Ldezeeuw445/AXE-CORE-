@@ -197,13 +197,16 @@ class TestTweedeClaude:
         c2 = a.ENGINES["claude2"]
         assert c2["cmd"] is a.ENGINES["claude"]["cmd"]
         assert c2["extra_env"]["CLAUDE_CONFIG_DIR"].endswith(".claude-tweede")
+        c3 = a.ENGINES["claude3"]
+        assert c3["cmd"] is a.ENGINES["claude"]["cmd"]
+        assert c3["extra_env"]["CLAUDE_CONFIG_DIR"].endswith(".claude-derde")
         env = a._subprocess_env(c2["blocked_env"], c2["extra_env"])
         assert env["CLAUDE_CONFIG_DIR"] == c2["extra_env"]["CLAUDE_CONFIG_DIR"]
 
     def test_geen_sessieproxy_naar_een_claude_motor(self, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:1")
         monkeypatch.setenv("CLAUDECODE", "1")
-        for naam in ("claude", "claude2"):
+        for naam in ("claude", "claude2", "claude3"):
             env = a._subprocess_env(a.ENGINES[naam]["blocked_env"], a.ENGINES[naam].get("extra_env"))
             assert "ANTHROPIC_BASE_URL" not in env and "CLAUDECODE" not in env
 

@@ -56,8 +56,9 @@ import { meldActiviteit } from '@/shared/axeActiviteit';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'codex', 'cursor'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'codex', 'cursor'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
+type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
 
 /**
  * De motoren die een échte CLI in een checkout zijn, op een abonnement.
@@ -68,13 +69,14 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
 
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'codex', 'cursor']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', codex: 'Codex', cursor: 'Cursor' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'codex', 'cursor']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', codex: 'Codex', cursor: 'Cursor' };
 
 /** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
 const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [
   { id: 'claude', uitleg: 'Claude Code — de echte CLI in een gewhiteliste checkout, op je Anthropic-abonnement' },
   { id: 'claude2', uitleg: 'Claude Code op je tweede Claude-abonnement (eigen login in ~/.claude-tweede)' },
+  { id: 'claude3', uitleg: 'Claude Code op je derde Claude-abonnement (eigen login in ~/.claude-derde)' },
   { id: 'codex', uitleg: 'Codex — dezelfde opzet, op je ChatGPT-abonnement' },
   { id: 'cursor', uitleg: 'Cursor — dezelfde opzet, op je Cursor-abonnement' },
 ];
@@ -555,8 +557,7 @@ export default function CodeEditorPage() {
   agentEngineRef.current = agentEngine;
   const setAgentEngine = useCallback((volgende: AgentEngine | ((huidig: AgentEngine) => AgentEngine)) => {
     const motor = typeof volgende === 'function' ? volgende(agentEngineRef.current) : volgende;
-    const cli = motor === 'claude' || motor === 'claude2' || motor === 'codex' || motor === 'cursor';
-    setToewijzing(kiesMotor('code-agent', cli ? motor : 'sleutels'));
+    setToewijzing(kiesMotor('code-agent', CLI_MOTOREN.has(motor) ? motor as CliMotor : 'sleutels'));
     setAgentEngineRauw(motor);
   }, []);
   // Verandert de verdeling elders (Instellingen, een ander venster), dan schuift
@@ -940,7 +941,7 @@ export default function CodeEditorPage() {
         // Zie application/agents/abonnementLeerlus.ts.
         const leer = await openLeerbeurt(`${instruction} ${claudeRepo} ${activeTab?.path ?? ''}`, 'code-editor');
         const prompt = metGeheugen(opdracht, leer);
-        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as 'claude' | 'codex' | 'cursor' });
+        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as CliMotor });
         // A refusal comes back as HTTP 200 with status 'error' — reading the
         // body is the only way to tell a guarded refusal from a finished run.
         const text = res.status === 'ok'
@@ -1229,10 +1230,10 @@ export default function CodeEditorPage() {
   };
   const MOTOR_ICOON: Record<string, React.ReactNode> = {
     native: <Cpu size={17} />, openhands: <Hand size={17} />, claude: <Sparkle size={17} />,
-    claude2: <Sparkles size={17} />, codex: <Braces size={17} />, cursor: <MousePointerClick size={17} />,
+    claude2: <Sparkles size={17} />, claude3: <Sparkles size={17} />, codex: <Braces size={17} />, cursor: <MousePointerClick size={17} />,
   };
   const MOTOR_KLEUR: Record<string, string> = {
-    native: '#22D3EE', openhands: '#F5A524', claude: '#D97757', claude2: '#E8A488', codex: '#E5E7EB', cursor: '#8B7CF6',
+    native: '#22D3EE', openhands: '#F5A524', claude: '#D97757', claude2: '#E8A488', claude3: '#F4C7B0', codex: '#E5E7EB', cursor: '#8B7CF6',
   };
   const motorItems: ZuilItem[] = (['native', 'openhands', ...CLI_MOTOR_KNOPPEN.map(k => k.id)] as AgentEngine[]).map(id => {
     const cli = CLI_MOTOR_KNOPPEN.find(k => k.id === id);

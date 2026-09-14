@@ -176,6 +176,21 @@ ENGINES = {
         "login": "CLAUDE_CONFIG_DIR=~/.claude-tweede claude auth login",
         "alleen_lezen": True,
     },
+    "claude3": {
+        # Een derde Claude-abonnement, zelfde opzet als claude2 (14 september):
+        # eigen loginmap, dus een los limiet. Eenmalig inloggen in vak 3:
+        #   CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login
+        "label": "Claude Code 3",
+        "bin_env": "CLAUDE_BIN",
+        "bin_default": "claude",
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
+        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE3_CONFIG_DIR", "~/.claude-derde"))},
+        "cmd": _claude_cmd,
+        "leest_bestand": False,
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "login": "CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login",
+        "alleen_lezen": True,
+    },
     "codex": {
         "label": "Codex",
         "bin_env": "CODEX_BIN",
