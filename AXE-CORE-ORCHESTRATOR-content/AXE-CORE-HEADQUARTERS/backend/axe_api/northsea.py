@@ -67,7 +67,16 @@ select json_build_object(
             cb.company_name as koper, cs.company_name as leverancier,
             so.origin as herkomst, so.loading_port as laadhaven, br.destination as bestemming,
             cs.country as leverancier_land, cs.city as leverancier_stad,
-            cb.country as koper_land, cb.city as koper_stad
+            cb.country as koper_land, cb.city as koper_stad,
+            -- Voor de dealtabel en de kaartjes. Leeg is leeg: commissie en
+            -- waarde staan (september 2026) bij geen enkele deal ingevuld, en
+            -- de app toont dan een streepje in plaats van een bedrag.
+            coalesce(so.quantity_mt, br.quantity_mt) as volume_mt,
+            o.readiness_score as gereedheid, o.qualification_status as kwalificatie,
+            o.commission_rate as commissie_pct, o.commission_type as commissie_soort,
+            o.commission_amount as commissie_bedrag, o.estimated_value as waarde, o.currency as valuta,
+            coalesce(nullif(o.next_action,''), o.next_best_action) as volgende,
+            o.approval_required as akkoord_nodig, o.created_at, o.updated_at
      from opportunities o
      left join supplier_offers so on so.id = o.supplier_offer_id
      left join buyer_requirements br on br.id = o.buyer_requirement_id

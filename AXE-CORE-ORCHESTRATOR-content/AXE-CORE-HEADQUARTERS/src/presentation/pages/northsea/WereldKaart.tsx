@@ -1,28 +1,40 @@
 /**
  * De NorthSea-wereldkaart, direct op de plaat.
  *
- * ## Geen achtergrond, met opzet
+ * ## Geen achtergrond, wel land
  *
- * UI-MAATSTAF regel 1: de achtergrond is de plaat. Een kaart met tegels
- * schildert een donker vlak over het glas heen -- dat is wat de oude 3D-kaart
- * deed. Hier alleen lijnen: kustlijnen iets helderder, landsgrenzen zacht, en
- * daartussen blijft het bureaublad zichtbaar.
+ * UI-MAATSTAF regel 1: de achtergrond is de plaat. De ZEE tekent dus niets --
+ * daar blijft het bureaublad zichtbaar. Het LAND wel: elk land een gedempte
+ * kleur uit zijn klimaat, en buren nooit dezelfde tint (zie kaartGeo.ts). Zo
+ * houd je landen uit elkaar zonder dat het een kleurplaat wordt.
+ *
+ * ## Slepen en zoomen dat soepel voelt
+ *
+ * - De landen zitten in een eigen, gememoriseerde laag. Bij elke zoomstap
+ *   verandert alleen de transform van de groep; 240 landpaden opnieuw
+ *   renderen per muisbeweging was wat het schokkerig maakte.
+ * - De zoomstand gaat hooguit één keer per frame naar React.
+ * - Het wiel doet d3 niet zelf: een muiswiel zoomt met een korte overgang
+ *   rond de muis, een trackpad met twee vingers SCHUIFT (zoals elke kaart op
+ *   een Mac), knijpen zoomt direct.
+ * - De kaart mag een stuk voorbij de rand: op zoom 1 past de wereld precies,
+ *   en zonder speling kon je dan niet slepen.
  *
  * ## Wat de kaart wél en niet belooft
  *
  * De regels staan in domain/northsea/kaart.ts: alleen deals die aan beide
  * kanten eenduidig te plaatsen zijn krijgen een lijn. Een lijn naar een land
- * of naar de vestiging van een bedrijf (in plaats van een haven of stad uit de
- * deal zelf) is zwakker getekend. En onder de legenda staat hoeveel deals er
- * NIET op staan, met de reden: een kaart die de helft stil weglaat leest als
- * een rustige desk.
+ * of vestiging is zwakker getekend, en onder de legenda staat wat er NIET op
+ * staat en waarom.
  *
  * Tekst op het scherm in het Engels (AGENTS.md), toelichting hier in het Nederlands.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { geoGraticule10, geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { geoGraticule10, geoInterpolate, geoNaturalEarth1, geoPath, type GeoPath } from 'd3-geo';
 import { select } from 'd3-selection';
-import { zoom as d3Zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
+import 'd3-transition';
+import { zoom as d3Zoom, zoomIdentity, zoomTransform, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
+import type { FeatureCollection, Geometry } from 'geojson';
 import { Minus, Plus, RotateCw } from 'lucide-react';
 import {
   bouwKaart, redenenNietGeplaatst,
@@ -49,13 +61,42 @@ const KNOP_STIJL = { color: 'var(--text-secondary)' } as const;
 
 const STER = 'M0,-6 L1.76,-2.43 L5.71,-1.85 L2.85,0.93 L3.53,4.85 L0,3 L-3.53,4.85 L-2.85,0.93 L-5.71,-1.85 L-1.76,-2.43 Z';
 
+const MAX_ZOOM = 12;
+const KNOP_DUUR_MS = 320;
+const WIEL_DUUR_MS = 180;
+
+/** Het land: één keer getekend per kaartmaat, niet per zoomstap. */
+const LandLaag = memo(function LandLaag({ pad, landen, land, kleuren }: {
+  pad: GeoPath;
+  landen: FeatureCollection<Geometry, { name: string }>;
+  land: FeatureCollection<Geometry>;
+  kleuren: string[];
+}) {
+  return (
+    <>
+      <path d={pad(geoGraticule10()) ?? ''} fill="none" stroke="rgba(148,163,184,0.10)"
+        strokeWidth={0.5} strokeDasharray="1 3" vectorEffect="non-scaling-stroke" />
+      {landen.features.map((f, i) => (
+        <path key={i} d={pad(f) ?? ''} fill={kleuren[i]} fillOpacity={0.8}
+          stroke="rgba(6,10,14,0.55)" strokeWidth={0.6} vectorEffect="non-scaling-stroke">
+          <title>{f.properties.name}</title>
+        </path>
+      ))}
+      <path d={pad(land) ?? ''} fill="none" stroke="rgba(125,211,252,0.38)"
+        strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+    </>
+  );
+});
+
 export function WereldKaart({
-  deals, lagen, fout,
+  deals, lagen, fout, legendaTop = 12,
 }: {
   /** null = nog aan het laden; undefined = de lokale API stuurt geen kaartdata. */
   deals: KaartDeal[] | null | undefined;
   lagen: Record<KaartLaag, boolean>;
   fout?: string | null;
+  /** Hoe ver de legenda van de bovenkant staat -- de kaartjes liggen erboven. */
+  legendaTop?: number;
 }) {
   const vakRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -65,7 +106,7 @@ export function WereldKaart({
   const [muis, setMuis] = useState<[number, number] | null>(null);
   const [zweeft, setZweeft] = useState<{ punt: KaartPunt; x: number; y: number } | null>(null);
 
-  const { landen, land, middelpunten } = useMemo(() => wereldkaart(), []);
+  const { landen, land, middelpunten, kleuren } = useMemo(() => wereldkaart(), []);
 
   useEffect(() => {
     const vak = vakRef.current;
@@ -83,13 +124,45 @@ export function WereldKaart({
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg || !maat.b) return;
+    let frame = 0;
+    let laatste: ZoomTransform = zoomTransform(svg);
     const z = d3Zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 8])
-      .translateExtent([[0, 0], [maat.b, maat.h]])
-      .on('zoom', e => setT(e.transform));
-    select(svg).call(z);
+      .scaleExtent([1, MAX_ZOOM])
+      .translateExtent([[-maat.b * 0.35, -maat.h * 0.35], [maat.b * 1.35, maat.h * 1.35]])
+      .duration(KNOP_DUUR_MS)
+      // Het wiel doen we hieronder zelf; slepen en dubbelklikken laten we aan d3.
+      .filter(e => e.type !== 'wheel' && !e.button)
+      .on('zoom', e => {
+        laatste = e.transform;
+        if (!frame) frame = requestAnimationFrame(() => { frame = 0; setT(laatste); });
+      });
+    const sel = select(svg);
+    sel.call(z);
     zoomRef.current = z;
-    return () => { select(svg).on('.zoom', null); };
+
+    const wiel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = svg.getBoundingClientRect();
+      const p: [number, number] = [e.clientX - r.left, e.clientY - r.top];
+      if (e.ctrlKey) {
+        // Knijpen op een trackpad: kleine stapjes, direct volgen.
+        z.scaleBy(sel, Math.pow(2, -e.deltaY * 0.01), p);
+      } else if (e.deltaMode === 1 || Math.abs(e.deltaY) >= 40 && e.deltaX === 0) {
+        // Een muiswiel: grove klikken, dus een korte overgang per klik.
+        const stap = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        z.scaleBy(sel.transition().duration(WIEL_DUUR_MS), Math.pow(2, -stap * 0.0025), p);
+      } else {
+        // Twee vingers op een trackpad: schuiven, zoals elke kaart op een Mac.
+        const k = zoomTransform(svg).k;
+        z.translateBy(sel, -e.deltaX / k, -e.deltaY / k);
+      }
+    };
+    svg.addEventListener('wheel', wiel, { passive: false });
+    return () => {
+      cancelAnimationFrame(frame);
+      svg.removeEventListener('wheel', wiel);
+      sel.on('.zoom', null);
+    };
   }, [maat]);
 
   const kaart = useMemo(() => (deals ? bouwKaart(deals, middelpunten) : null), [deals, middelpunten]);
@@ -121,11 +194,11 @@ export function WereldKaart({
   const k = t.k;
   const zoomDoor = (factor: number) => {
     const svg = svgRef.current;
-    if (svg && zoomRef.current) zoomRef.current.scaleBy(select(svg), factor);
+    if (svg && zoomRef.current) zoomRef.current.scaleBy(select(svg).transition().duration(KNOP_DUUR_MS), factor);
   };
   const herstel = () => {
     const svg = svgRef.current;
-    if (svg && zoomRef.current) zoomRef.current.transform(select(svg), zoomIdentity);
+    if (svg && zoomRef.current) zoomRef.current.transform(select(svg).transition().duration(KNOP_DUUR_MS * 1.5), zoomIdentity);
   };
 
   const coordinaat = (() => {
@@ -144,6 +217,7 @@ export function WereldKaart({
         width={maat.b}
         height={maat.h}
         className="absolute inset-0 cursor-grab active:cursor-grabbing"
+        style={{ touchAction: 'none' }}
         onMouseMove={e => {
           const r = e.currentTarget.getBoundingClientRect();
           setMuis([e.clientX - r.left, e.clientY - r.top]);
@@ -161,18 +235,11 @@ export function WereldKaart({
 
         {pad && (
           <g transform={t.toString()}>
-            <path d={pad(geoGraticule10()) ?? ''} fill="none" stroke="rgba(148,163,184,0.10)"
-              strokeWidth={0.5} strokeDasharray="1 3" vectorEffect="non-scaling-stroke" />
-            {landen.features.map(f => (
-              <path key={f.properties.name} d={pad(f) ?? ''} fill="none"
-                stroke="rgba(125,211,252,0.16)" strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
-            ))}
-            <path d={pad(land) ?? ''} fill="none" stroke="rgba(125,211,252,0.42)"
-              strokeWidth={0.8} vectorEffect="non-scaling-stroke" filter="url(#ns-gloed)" />
+            <LandLaag pad={pad} landen={landen} land={land} kleuren={kleuren} />
 
             {lagen.routes && kaart?.routes.map(r => (
               <path key={r.id} d={routePad(r)} fill="none" stroke={STAND_STIJL[r.stand].kleur}
-                strokeOpacity={r.benaderd ? 0.38 : 0.85} strokeWidth={r.benaderd ? 1 : 1.5}
+                strokeOpacity={r.benaderd ? 0.45 : 0.9} strokeWidth={r.benaderd ? 1.1 : 1.6}
                 strokeDasharray="5 6" vectorEffect="non-scaling-stroke" className="ns-route">
                 <title>{`${r.deal.code ?? r.deal.product ?? 'Deal'}: ${r.van.label} → ${r.naar.label}${r.benaderd ? ' (approximate)' : ''}`}</title>
               </path>
@@ -187,13 +254,13 @@ export function WereldKaart({
                 <g key={p.locatie.sleutel} transform={`translate(${xy[0]},${xy[1]})`}
                   onMouseEnter={e => setZweeft({ punt: p, x: e.clientX, y: e.clientY })}
                   onMouseLeave={() => setZweeft(null)} style={{ cursor: 'pointer' }}>
-                  <circle r={straal * 2.8} fill={kleur} opacity={0.14} />
+                  <circle r={straal * 2.8} fill={kleur} opacity={0.16} />
                   {p.hub
                     ? <path d={STER} transform={`scale(${1.05 / k})`} fill="#F8FAFC" filter="url(#ns-gloed)" />
-                    : <circle r={straal} fill={kleur} filter="url(#ns-gloed)" />}
+                    : <circle r={straal} fill={kleur} stroke="rgba(0,0,0,0.5)" strokeWidth={0.6 / k} filter="url(#ns-gloed)" />}
                   {(p.hub || p.locatie.soort === 'haven') && (
                     <text x={8 / k} y={4 / k} fontSize={11 / k} fill="var(--text-primary)"
-                      style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.55)', strokeWidth: 3 / k }}>
+                      style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.7)', strokeWidth: 3 / k }}>
                       {p.locatie.label}
                     </text>
                   )}
@@ -204,8 +271,9 @@ export function WereldKaart({
         )}
       </svg>
 
-      {/* De legenda, linksboven, zoals het ontwerp -- tekst op de plaat, geen kaartje. */}
-      <div className="pointer-events-none absolute left-4 top-3 flex flex-col gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+      {/* De legenda, linksboven onder de kaartjes -- tekst op de plaat, geen kaartje. */}
+      <div className="pointer-events-none absolute left-4 flex flex-col gap-1.5 text-[12px]"
+        style={{ top: legendaTop, color: 'var(--text-secondary)', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
         {STAND_VOLGORDE.filter(s => s !== 'overig' || (kaart?.tellers.overig ?? 0) > 0).map(s => (
           <div key={s} className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: STAND_STIJL[s].kleur, boxShadow: `0 0 8px ${STAND_STIJL[s].kleur}` }} />
@@ -269,7 +337,7 @@ export function WereldKaart({
       </div>
 
       <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 overflow-hidden rounded-lg"
-        style={{ border: '1px solid rgba(255,255,255,0.10)' }}>
+        style={{ background: 'var(--axe-barbtn)', boxShadow: 'var(--axe-tegel-op)' }}>
         {/* Drie losse knoppen en geen lijst met functies erin: react-hooks/refs
             ziet een ref in een functie die tijdens het renderen in data wordt
             gestopt als een ref die tijdens het renderen gelezen wordt. */}

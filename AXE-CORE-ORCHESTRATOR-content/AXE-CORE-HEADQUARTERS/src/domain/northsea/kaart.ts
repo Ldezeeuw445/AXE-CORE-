@@ -44,6 +44,19 @@ export interface KaartDeal {
   leverancier_stad?: string | null;
   koper_land?: string | null;
   koper_stad?: string | null;
+  /* Voor de dealtabel en de kaartjes (zie domain/northsea/desk.ts). */
+  volume_mt?: number | string | null;
+  gereedheid?: number | null;
+  kwalificatie?: string | null;
+  commissie_pct?: number | string | null;
+  commissie_soort?: string | null;
+  commissie_bedrag?: number | string | null;
+  waarde?: number | string | null;
+  valuta?: string | null;
+  volgende?: string | null;
+  akkoord_nodig?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 /** De stand van een deal, in de kleuren van de legenda. */
