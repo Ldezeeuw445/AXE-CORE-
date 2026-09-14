@@ -35,7 +35,7 @@ import { select } from 'd3-selection';
 import 'd3-transition';
 import { zoom as d3Zoom, zoomIdentity, zoomTransform, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
 import type { FeatureCollection, Geometry } from 'geojson';
-import { Minus, Plus, RotateCw } from 'lucide-react';
+import { Crosshair, Minus, Plus, RotateCw } from 'lucide-react';
 import {
   bouwKaart, redenenNietGeplaatst,
   type DealStand, type KaartDeal, type KaartPunt, type KaartRoute,
@@ -60,6 +60,38 @@ const KNOP = 'flex h-8 w-9 items-center justify-center transition-colors hover:t
 const KNOP_STIJL = { color: 'var(--text-secondary)' } as const;
 
 const STER = 'M0,-6 L1.76,-2.43 L5.71,-1.85 L2.85,0.93 L3.53,4.85 L0,3 L-3.53,4.85 L-2.85,0.93 L-5.71,-1.85 L-1.76,-2.43 Z';
+
+const TEGEL = { background: 'var(--axe-barbtn)', boxShadow: 'var(--axe-tegel-op)' } as const;
+const KOMPAS = 64;
+/** Ruim genoeg voor "89.9999° N, 179.9999° W" met het icoon ervoor. */
+const COORD_BREED = 250;
+
+/** Een kompasroos: ring, streepjes, een cyane noordnaald en de vier windstreken. */
+function Kompas() {
+  const straal = KOMPAS / 2;
+  return (
+    <svg width={KOMPAS} height={KOMPAS} viewBox={`${-straal} ${-straal} ${KOMPAS} ${KOMPAS}`} aria-label="Compass, north up">
+      <circle r={straal - 1} fill="none" stroke="rgba(255,255,255,0.10)" />
+      {Array.from({ length: 16 }, (_, i) => i * 22.5).map(g => {
+        const hoofd = g % 90 === 0;
+        return (
+          <line key={g} x1={0} y1={-(straal - 1)} x2={0} y2={-(straal - (hoofd ? 7 : 4))} transform={`rotate(${g})`}
+            stroke={hoofd ? 'rgba(226,232,240,0.6)' : 'rgba(148,163,184,0.28)'} strokeWidth={hoofd ? 1.3 : 0.8} />
+        );
+      })}
+      <path d="M0,-15 L4.2,0 L-4.2,0 Z" fill="#22D3EE" style={{ filter: 'drop-shadow(0 0 3px rgba(34,211,238,0.75))' }} />
+      <path d="M0,15 L4.2,0 L-4.2,0 Z" fill="rgba(148,163,184,0.5)" />
+      <circle r={2.2} fill="#E2E8F0" />
+      {([['N', 0, -19.5], ['E', 19.5, 0], ['S', 0, 19.5], ['W', -19.5, 0]] as const).map(([l, x, y]) => (
+        <text key={l} x={x} y={y} textAnchor="middle" dominantBaseline="central" fontSize={l === 'N' ? 8.5 : 7}
+          fontWeight={l === 'N' ? 700 : 500} fill={l === 'N' ? '#22D3EE' : 'rgba(203,213,225,0.7)'}
+          style={l === 'N' ? undefined : { paintOrder: 'stroke', stroke: 'rgba(10,10,12,0.9)', strokeWidth: 2 }}>
+          {l}
+        </text>
+      ))}
+    </svg>
+  );
+}
 
 const MAX_ZOOM = 12;
 const KNOP_DUUR_MS = 320;
@@ -105,7 +137,8 @@ export function WereldKaart({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [maat, setMaat] = useState({ b: 0, h: 0 });
-  const [onder, setOnder] = useState(0);
+  /** Waar de dealtabel over de kaart ligt, in kaartcoördinaten; null als nergens. */
+  const [blok, setBlok] = useState<{ links: number; rechts: number; top: number } | null>(null);
 
   /* De dealtabel komt via een portal in het dock, dus hij staat er pas een
      render later, en klapt open en dicht. Zoeken met een korte interval tot hij
@@ -113,19 +146,19 @@ export function WereldKaart({
      alleen nog meten als hij of de kaart van maat verandert. */
   useEffect(() => {
     if (!vrijVan) return;
-    let frame = 0;
     let gevonden: Element | null = null;
     const ro = new ResizeObserver(() => meet());
+    /* Direct meten, niet in een requestAnimationFrame: een verborgen venster
+       tekent geen frames, en dan bleef de bediening op zijn beginplek staan.
+       Een ResizeObserver-callback valt al na de layout, dus de maten kloppen. */
     function meet() {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const vak = vakRef.current;
-        if (!vak || !gevonden?.isConnected) { setOnder(0); return; }
-        const a = vak.getBoundingClientRect();
-        const b = gevonden.getBoundingClientRect();
-        const overlapt = b.width > 0 && b.left < a.right && b.right > a.left && b.top < a.bottom;
-        setOnder(overlapt ? Math.max(0, Math.round(a.bottom - b.top)) : 0);
-      });
+      const vak = vakRef.current;
+      const b = gevonden?.isConnected ? gevonden.getBoundingClientRect() : null;
+      const a = vak?.getBoundingClientRect();
+      const nieuw = a && b && b.width > 0 && b.left < a.right && b.right > a.left && b.top < a.bottom
+        ? { links: Math.round(b.left - a.left), rechts: Math.round(b.right - a.left), top: Math.round(b.top - a.top) }
+        : null;
+      setBlok(v => (v && nieuw && v.links === nieuw.links && v.rechts === nieuw.rechts && v.top === nieuw.top) || v === nieuw ? v : nieuw);
     }
     const zoek = () => {
       const el = document.querySelector(vrijVan);
@@ -138,7 +171,7 @@ export function WereldKaart({
     if (vakRef.current) ro.observe(vakRef.current);
     zoek();
     const iv = setInterval(zoek, 700);
-    return () => { clearInterval(iv); cancelAnimationFrame(frame); ro.disconnect(); };
+    return () => { clearInterval(iv); ro.disconnect(); };
   }, [vrijVan]);
   const [t, setT] = useState<ZoomTransform>(zoomIdentity);
   const [muis, setMuis] = useState<[number, number] | null>(null);
@@ -247,6 +280,10 @@ export function WereldKaart({
   })();
 
   const redenen = kaart ? redenenNietGeplaatst(kaart.nietGeplaatst) : [];
+
+  /** De afstand tot de onderrand voor een stuk bediening tussen x `van` en `tot`. */
+  const onderVoor = (van: number, tot: number) =>
+    16 + (blok && blok.links < tot && blok.rechts > van ? Math.max(0, maat.h - blok.top) : 0);
 
   return (
     <div ref={vakRef} className="axe-scene-vlak relative h-full w-full select-none" data-axe-doel="northsea-kaart">
@@ -367,15 +404,17 @@ export function WereldKaart({
         </div>
       )}
 
-      {/* Kompas linksonder, zoom middenonder, coördinaten rechtsonder: de plek uit het ontwerp. */}
-      <div className="pointer-events-none absolute left-4 flex h-12 w-12 flex-col items-center justify-center rounded-full"
-        style={{ bottom: onder + 12, border: '1px solid rgba(255,255,255,0.10)', color: 'var(--text-muted)', transition: 'bottom 180ms ease' }}>
-        <span className="text-[9px] font-semibold" style={{ color: 'var(--accent-cyan)' }}>N</span>
-        <span className="mt-0.5 h-1.5 w-1.5 rounded-full" style={{ background: 'var(--text-secondary)' }} />
+      {/* Kompas linksonder, zoom middenonder, coördinaten rechtsonder: in de hoeken
+          van het kaartvak. Elk schuift alleen omhoog als de dealtabel over ZIJN
+          stuk van de onderrand ligt -- op een breed venster laat de tabel (zo
+          breed als de composer) beide hoeken vrij. */}
+      <div className="pointer-events-none absolute left-4 flex items-center justify-center rounded-full"
+        style={{ width: KOMPAS + 12, height: KOMPAS + 12, bottom: onderVoor(16, 16 + KOMPAS + 12), ...TEGEL, transition: 'bottom 180ms ease' }}>
+        <Kompas />
       </div>
 
       <div className="absolute left-1/2 flex -translate-x-1/2 overflow-hidden rounded-lg"
-        style={{ bottom: onder + 12, background: 'var(--axe-barbtn)', boxShadow: 'var(--axe-tegel-op)', transition: 'bottom 180ms ease' }}>
+        style={{ bottom: onderVoor(maat.b / 2 - 60, maat.b / 2 + 60), ...TEGEL, transition: 'bottom 180ms ease' }}>
         {/* Drie losse knoppen en geen lijst met functies erin: react-hooks/refs
             ziet een ref in een functie die tijdens het renderen in data wordt
             gestopt als een ref die tijdens het renderen gelezen wordt. */}
@@ -390,11 +429,11 @@ export function WereldKaart({
         </button>
       </div>
 
-      {coordinaat && (
-        <div className="pointer-events-none absolute right-4 font-mono-data text-[11px]" style={{ bottom: onder + 16, color: 'var(--text-muted)' }}>
-          {coordinaat}
-        </div>
-      )}
+      <div className="pointer-events-none absolute right-4 flex items-center gap-2 rounded-full px-3.5 py-2 font-mono-data text-[11.5px] tabular-nums"
+        style={{ bottom: onderVoor(maat.b - 16 - COORD_BREED, maat.b - 16), ...TEGEL, transition: 'bottom 180ms ease' }}>
+        <Crosshair size={13} style={{ color: 'var(--accent-cyan)' }} />
+        <span style={{ color: coordinaat ? 'var(--text-primary)' : 'var(--text-muted)' }}>{coordinaat ?? 'Hover the map'}</span>
+      </div>
 
       <style>{`
         @media (prefers-reduced-motion: no-preference) {

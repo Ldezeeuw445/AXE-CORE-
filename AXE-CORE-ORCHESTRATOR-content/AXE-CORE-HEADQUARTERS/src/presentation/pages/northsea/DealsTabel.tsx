@@ -7,6 +7,14 @@
  *
  * Wat leeg is in de database staat hier als streepje: geen gereedheid, geen
  * commissie, geen volume. Zie de uitleg in desk.ts.
+ *
+ * ## De breedte
+ *
+ * Even breed als de composer eronder, op dezelfde lijnen en in hetzelfde
+ * materiaal, zodat het één band is. De kolommen passen daarin: herkomst en bestemming
+ * delen één kolom, en "Next action" neemt wat overblijft. De eerste versie had
+ * twaalf vaste kolommen van samen 1444px in een doos van 1180, en dan vielen
+ * commissie, volgende stap en tijd rechts van de rand.
  */
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
@@ -24,7 +32,21 @@ const TABS: Array<{ id: DealTab; label: string; teller: keyof Pick<DeskTellers, 
   { id: 'afgerond', label: 'Completed', teller: 'afgerond' },
 ];
 
-const KOP = ['ID', 'Commodity', 'Volume', 'Origin', '', 'Destination', 'Counterparty', 'Stage', 'Readiness', 'Commission', 'Next action', 'Updated'];
+/** Kolommen met hun breedte; `null` is de kolom die de rest van de ruimte krijgt. */
+const KOLOMMEN: Array<{ kop: string; breed: number | null }> = [
+  { kop: 'ID', breed: 112 },
+  { kop: 'Commodity', breed: 150 },
+  { kop: 'Volume', breed: 84 },
+  { kop: 'Route', breed: 230 },
+  { kop: 'Counterparty', breed: 200 },
+  { kop: 'Stage', breed: 140 },
+  { kop: 'Readiness', breed: 118 },
+  { kop: 'Commission', breed: 88 },
+  { kop: 'Next action', breed: null },
+  { kop: 'Updated', breed: 70 },
+];
+/** Smaller dan dit wordt het onleesbaar; dan liever horizontaal schuiven. */
+const MIN_TABEL = KOLOMMEN.reduce((s, k) => s + (k.breed ?? 160), 0);
 
 const herkomst = (d: KaartDeal) => d.laadhaven?.trim() || d.herkomst?.trim() || d.leverancier_land?.trim() || '—';
 const bestemming = (d: KaartDeal) => d.bestemming?.trim() || d.koper_land?.trim() || '—';
@@ -35,7 +57,7 @@ function Gereedheid({ waarde }: { waarde: number | null | undefined }) {
   return (
     <span className="flex items-center gap-2">
       <span className="w-8 text-right tabular-nums" style={{ color: kleur }}>{waarde}%</span>
-      <span className="h-1.5 w-16 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+      <span className="h-1.5 w-14 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
         <span className="block h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, waarde))}%`, background: kleur }} />
       </span>
     </span>
@@ -59,10 +81,22 @@ export function DealsTabel({ deals, tellers, nu, fout }: {
   const rijen = deals ? dealRijen(deals, tab) : [];
 
   return (
-    <div className="pointer-events-auto flex flex-col overflow-hidden rounded-[16px]"
-      style={{ width: 'min(1180px, calc(100vw - 48px))', background: 'var(--axe-bar)', boxShadow: 'var(--axe-tegel-op)' }}
+    /* Precies zo breed als de composer: dezelfde linker- en rechterlijn als de
+       chatplaat (AxeShellChrome meet die), en hetzelfde materiaal als het
+       invoervak (.axe-vak) -- vlak, randje, hoek en zweefschaduw. Het dock
+       centreert zijn inhoud; met flex-grow en die marges vult hij precies de
+       strook boven de composer, ook als links en rechts niet even breed zijn. */
+    <div className="pointer-events-auto flex min-w-0 flex-auto flex-col overflow-hidden"
+      style={{
+        marginLeft: 'var(--axe-chat-links, 24px)',
+        marginRight: 'var(--axe-chat-rechts, 24px)',
+        borderRadius: 'var(--axe-vak-hoek, 24px)',
+        border: '1px solid var(--axe-vak-lijn)',
+        background: 'var(--axe-vak-vlak)',
+        boxShadow: 'var(--axe-vak-zweef)',
+      }}
       data-axe-doel="northsea-deals">
-      <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: open ? '1px solid rgba(255,255,255,0.06)' : undefined }}>
+      <div className="flex items-center gap-1 px-4 pt-2" style={{ borderBottom: open ? '1px solid var(--axe-vak-lijn)' : undefined }}>
         {TABS.map(t => {
           const aan = tab === t.id;
           return (
@@ -90,36 +124,36 @@ export function DealsTabel({ deals, tellers, nu, fout }: {
             </div>
           )}
           {rijen.length > 0 && (
-            <table className="w-full table-fixed border-collapse text-[12px]">
+            <table className="w-full table-fixed border-collapse text-[12px]" style={{ minWidth: MIN_TABEL }}>
               <colgroup>
-                <col style={{ width: 118 }} /><col style={{ width: 150 }} /><col style={{ width: 88 }} />
-                <col style={{ width: 120 }} /><col style={{ width: 22 }} /><col style={{ width: 120 }} />
-                <col style={{ width: 190 }} /><col style={{ width: 150 }} /><col style={{ width: 118 }} />
-                <col style={{ width: 88 }} /><col style={{ width: 210 }} /><col style={{ width: 70 }} />
+                {KOLOMMEN.map(k => <col key={k.kop} style={k.breed ? { width: k.breed } : undefined} />)}
               </colgroup>
-              <thead className="sticky top-0 z-[1]" style={{ background: '#0F0F12' }}>
+              <thead className="sticky top-0 z-[1]" style={{ background: 'var(--axe-vak-vlak)' }}>
                 <tr>
-                  {KOP.map((k, i) => (
-                    <th key={i} className="truncate px-2.5 py-1.5 text-left text-[10.5px] font-medium" style={{ color: 'var(--text-muted)' }}>{k}</th>
+                  {KOLOMMEN.map(k => (
+                    <th key={k.kop} className="truncate px-2.5 py-1.5 text-left text-[10.5px] font-medium" style={{ color: 'var(--text-muted)' }}>{k.kop}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rijen.map(d => {
-                  const stand = dealStand(d);
-                  const kleur = STAND_STIJL[stand].kleur;
+                  const kleur = STAND_STIJL[dealStand(d)].kleur;
+                  const route = `${herkomst(d)} → ${bestemming(d)}`;
+                  const commissie = commissieTekst(d);
                   return (
                     <tr key={d.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
                       <Cel className="font-mono-data font-semibold" stijl={{ color: kleur }} titel={d.id}>{dealId(d)}</Cel>
                       <Cel titel={d.product ?? undefined} stijl={{ color: 'var(--text-primary)' }}>{d.product?.trim() || '—'}</Cel>
                       <Cel className="tabular-nums" stijl={{ color: 'var(--text-secondary)' }}>{volumeTekst(d)}</Cel>
-                      <Cel titel={herkomst(d)} stijl={{ color: 'var(--text-secondary)' }}>{herkomst(d)}</Cel>
-                      <Cel stijl={{ color: 'var(--text-muted)' }}><ArrowRight size={12} /></Cel>
-                      <Cel titel={bestemming(d)} stijl={{ color: 'var(--text-secondary)' }}>{bestemming(d)}</Cel>
+                      <Cel titel={route} stijl={{ color: 'var(--text-secondary)' }}>
+                        {herkomst(d)}
+                        <ArrowRight size={11} className="mx-1.5 inline-block align-[-1px]" style={{ color: 'var(--text-muted)' }} />
+                        {bestemming(d)}
+                      </Cel>
                       <Cel titel={tegenpartijen(d)} stijl={{ color: '#60A5FA' }}>{tegenpartijen(d)}</Cel>
                       <Cel titel={d.kwalificatie ? `Qualification: ${d.kwalificatie}` : undefined} stijl={{ color: kleur }}>{faseLabel(d)}</Cel>
                       <Cel><Gereedheid waarde={d.gereedheid} /></Cel>
-                      <Cel className="tabular-nums" stijl={{ color: commissieTekst(d) === '—' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{commissieTekst(d)}</Cel>
+                      <Cel className="tabular-nums" stijl={{ color: commissie === '—' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{commissie}</Cel>
                       <Cel titel={d.volgende ?? undefined} stijl={{ color: 'var(--text-secondary)' }}>{d.volgende?.trim() || '—'}</Cel>
                       <Cel stijl={{ color: 'var(--text-muted)' }}>{d.updated_at ? tijdGeleden(d.updated_at, nu) : '—'}</Cel>
                     </tr>
