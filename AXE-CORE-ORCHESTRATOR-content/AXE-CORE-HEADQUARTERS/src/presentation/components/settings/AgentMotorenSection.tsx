@@ -1,7 +1,7 @@
 /**
  * Instellingen → Motoren per agent.
  *
- * Drie agents, drie abonnementen, en elk abonnement bij hooguit één agent. Het
+ * Vier agents, vier abonnementen, en elk abonnement bij hooguit één agent. Het
  * menu van een agent toont geen abonnement dat al van een ander is; kies je er
  * toch een via een andere weg, dan zet normaliseer() het recht. Subtaken staan
  * hier bewust niet: die draaien altijd op je API-sleutels.
@@ -20,6 +20,7 @@ const WAARVOOR: Record<HoofdAgent, string> = {
   'axe-core': 'Het antwoord in de chat. Alleen-lezen in je repo.',
   'code-agent': 'Runs in de Code Editor. Mag bestanden bewerken.',
   'axe-algo': 'Alleen de eindbeslissing per cyclus. De elf desk-rollen blijven op sleutels.',
+  'maps-agent': 'Northsea Commodity: bouwt en runt de desk op de 3D Maps-tab. Schrijftaken pas na jouw akkoord.',
 };
 
 export function AgentMotorenSection() {

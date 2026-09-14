@@ -20,28 +20,35 @@
  *    is voor de hoofdbeurt -- het chatantwoord, de code-run, de eindbeslissing
  *    van AXE Algo. Zie zonderAbonnement() in abonnementChat.ts.
  *
- * ## Waarom Cursor alleen de Code Agent mag zijn
+ * ## Cursor mag overal
  *
- * De chat en AXE Algo draaien in `plan`: een vraag stellen of een markt lezen
- * mag nooit bestanden herschrijven. Cursor heeft geen alleen-lezen stand (zie
- * ABONNEMENT_MOTOREN). De Code Agent is de enige plek waar bewerken de
- * bedoeling is.
+ * Tot 14 september alleen bij de Code Agent, omdat de chat en AXE Algo in
+ * `plan` draaien en Cursor geen alleen-lezen stand had. Die heeft hij nu
+ * (`--mode ask`, zie abonnementChat.ts). Elke agent kan dus elk abonnement.
+ *
+ * ## De Northsea Desk
+ *
+ * De vierde agent. Northsea Commodity Partners is geen eigen app: de hele desk
+ * wordt een dashboard op de 3D Maps-tab van AXE CORE, en deze agent plant en
+ * bouwt daaraan (planner.py, taken in de kolom Northsea). Zijn standaard is
+ * API-sleutels, zodat hij niemand zijn abonnement afpakt.
  */
-import { ABONNEMENT_MOTOREN, ALLE_MOTOREN, ABONNEMENT_PROVIDER, zonderAbonnement, type AgentEngine } from '@/domain/abonnementChat';
+import { ALLE_MOTOREN, ABONNEMENT_PROVIDER, zonderAbonnement, type AgentEngine } from '@/domain/abonnementChat';
 
-export type HoofdAgent = 'axe-core' | 'code-agent' | 'axe-algo';
+export type HoofdAgent = 'axe-core' | 'code-agent' | 'axe-algo' | 'maps-agent';
 
 /** Een abonnement, of: je API-sleutels (de gewone cascade). */
 export type HoofdMotor = AgentEngine | 'sleutels';
 
 export type MotorToewijzing = Record<HoofdAgent, HoofdMotor>;
 
-export const HOOFD_AGENTS: readonly HoofdAgent[] = ['axe-core', 'code-agent', 'axe-algo'] as const;
+export const HOOFD_AGENTS: readonly HoofdAgent[] = ['axe-core', 'code-agent', 'axe-algo', 'maps-agent'] as const;
 
 export const AGENT_LABEL: Record<HoofdAgent, string> = {
   'axe-core': 'AXE Core (chat)',
   'code-agent': 'Code Agent',
   'axe-algo': 'AXE Algo (eindbeslissing)',
+  'maps-agent': 'Northsea Desk (3D Maps)',
 };
 
 export const MOTOR_LABEL: Record<HoofdMotor, string> = {
@@ -52,11 +59,12 @@ export const MOTOR_LABEL: Record<HoofdMotor, string> = {
   sleutels: 'API-sleutels',
 };
 
-/** Wat elke agent überhaupt mag. Zie de kop voor waarom Cursor alleen code is. */
+/** Wat elke agent überhaupt mag: sinds Cursor alleen-lezen kan, alles. */
 export const TOEGESTAAN: Record<HoofdAgent, readonly HoofdMotor[]> = {
-  'axe-core': [...ABONNEMENT_MOTOREN, 'sleutels'],
+  'axe-core': [...ALLE_MOTOREN, 'sleutels'],
   'code-agent': [...ALLE_MOTOREN, 'sleutels'],
-  'axe-algo': [...ABONNEMENT_MOTOREN, 'sleutels'],
+  'axe-algo': [...ALLE_MOTOREN, 'sleutels'],
+  'maps-agent': [...ALLE_MOTOREN, 'sleutels'],
 };
 
 /** Elk abonnement bij de agent die er het best bij past, geen enkele dubbel. */
@@ -64,6 +72,7 @@ export const STANDAARD_TOEWIJZING: MotorToewijzing = {
   'axe-core': 'claude',
   'code-agent': 'cursor',
   'axe-algo': 'codex',
+  'maps-agent': 'sleutels',
 };
 
 export const MOTOREN_SLEUTEL = 'axe_agent_motoren';

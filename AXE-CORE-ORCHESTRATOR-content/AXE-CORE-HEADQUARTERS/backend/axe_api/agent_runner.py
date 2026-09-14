@@ -128,7 +128,15 @@ def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> li
     vlag hangt hij op een prompt die nooit beantwoord wordt.
     """
     cmd = [binary, "-p", str(prompt), "--output-format", "json"]
-    if mode != "plan":
+    if mode == "plan":
+        # Gemeten 14 september, cursor-agent 2026.09.10: `--mode ask` in een
+        # wegwerp-repo met de opdracht "verwijder bewijs.txt". Hij las het
+        # bestand, antwoordde "Ask mode is alleen lezen", en git bleef schoon.
+        # `--mode plan` hield ook alles heel maar gaf alleen een plan terug; ask
+        # geeft een antwoord, en dat is wat chat en AXE Algo vragen. `--trust`
+        # omdat een headless run anders op de werkmap-vraag blijft staan.
+        cmd += ["--mode", "ask", "--trust"]
+    else:
         cmd += ["--force"]
     return cmd
 
@@ -209,7 +217,9 @@ ENGINES = {
         # stellen herschrijft nooit bestanden -- is het enige wat hem veilig
         # maakt. Een motor die dat niet kan waarmaken hoort daar te weigeren,
         # niet stilletjes schrijfrechten mee te brengen.
-        "alleen_lezen": False,
+        # Achterhaald sinds cursor-agent `--mode ask` heeft (zie _cursor_cmd):
+        # die stand leest en weigert te schrijven, gemeten op 14 september.
+        "alleen_lezen": True,
     },
 }
 

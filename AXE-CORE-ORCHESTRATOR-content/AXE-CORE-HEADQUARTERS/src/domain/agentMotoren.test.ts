@@ -19,15 +19,15 @@ describe('drie agents, drie abonnementen', () => {
     expect(t['axe-algo']).toBe('sleutels');   // zijn standaard (codex) is bezet
   });
 
-  it('geeft Cursor nooit aan de chat of aan AXE Algo, want die draaien alleen-lezen', () => {
-    expect(TOEGESTAAN['axe-core']).not.toContain('cursor');
-    expect(TOEGESTAAN['axe-algo']).not.toContain('cursor');
-    expect(normaliseer({ 'axe-core': 'cursor' })['axe-core']).toBe('claude');
+  it('elke agent mag elk abonnement, ook Cursor, en de Maps Agent begint op sleutels', () => {
+    for (const agent of HOOFD_AGENTS) expect(TOEGESTAAN[agent]).toContain('cursor');
+    expect(normaliseer({ 'axe-core': 'cursor', 'code-agent': 'claude' })['axe-core']).toBe('cursor');
+    expect(normaliseer(null)['maps-agent']).toBe('sleutels');
   });
 
   it('respecteert een bewuste keuze voor API-sleutels', () => {
     const t = normaliseer({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels' });
-    expect(t).toEqual({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels' });
+    expect(t).toEqual({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels', 'maps-agent': 'sleutels' });
   });
 
   it('overleeft onzin zonder uitzondering', () => {
@@ -40,6 +40,7 @@ describe('drie agents, drie abonnementen', () => {
     // claude2 is vrij zolang niemand hem heeft, dus die mag iedereen kiezen.
     expect(kiesbaar(t, 'axe-core')).toEqual(['claude', 'claude2', 'sleutels']);
     expect(kiesbaar(t, 'code-agent')).toEqual(['claude2', 'cursor', 'sleutels']);
+    expect(kiesbaar(t, 'maps-agent')).toEqual(['claude2', 'sleutels']);
   });
 
   it('een nieuwe keuze wint en de vorige eigenaar krijgt API-sleutels', () => {

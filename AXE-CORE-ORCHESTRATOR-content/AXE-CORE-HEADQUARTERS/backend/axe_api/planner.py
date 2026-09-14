@@ -50,11 +50,14 @@ from typing import Any, Callable, Optional
 
 log = logging.getLogger("axe_core_api.planner")
 
-AGENTS = ("axe-core", "code-agent", "axe-algo")
-AGENT_LABEL = {"axe-core": "AXE Core", "code-agent": "Code Agent", "axe-algo": "AXE Algo"}
+AGENTS = ("axe-core", "code-agent", "axe-algo", "maps-agent")
+AGENT_LABEL = {"axe-core": "AXE Core", "code-agent": "Code Agent", "axe-algo": "AXE Algo",
+               "maps-agent": "Northsea Desk"}
 # De namespace in de tabel `memory` waar de uitkomsten van deze agent landen.
-GEHEUGEN_AGENT = {"axe-core": "global", "code-agent": "axe_code", "axe-algo": "axe_research"}
-STANDAARD_MOTOREN = {"axe-core": "claude", "code-agent": "cursor", "axe-algo": "codex"}
+GEHEUGEN_AGENT = {"axe-core": "global", "code-agent": "axe_code", "axe-algo": "axe_research",
+                  "maps-agent": "global"}
+STANDAARD_MOTOREN = {"axe-core": "claude", "code-agent": "cursor", "axe-algo": "codex",
+                     "maps-agent": "sleutels"}
 ABONNEMENTEN = ("claude", "claude2", "codex", "cursor")
 
 STAAT_PAD = os.path.expanduser(os.environ.get("AXE_PLANNER_STAAT", "~/.axe/planner.json"))
@@ -79,6 +82,14 @@ def planner_aan() -> bool:
 # Welke app-kolom in Taken bij welke repo hoort (domain/apps.ts in de app).
 REPO_APP = {"axe-core": "axe_core", "axe-companion": "axe_companion",
             "trading-os": "trading_os", "axon-memory": "axon_memory"}
+# Namen die een model voor een repo aanziet. cloudflare-migration-2 is de
+# branch van AXE Companion, geen repo -- de Code Agent noemde hem zo.
+#
+# Northsea Commodity is geen eigen app en geen eigen repo: de hele desk wordt
+# een dashboard op de 3D Maps-tab van AXE CORE (Luka, 14 september). Werk
+# ervoor gaat dus naar axe-core, en de taak staat in de kolom Northsea.
+REPO_ALIAS = {"cloudflare-migration-2": "axe-companion", "companion": "axe-companion",
+              "northsea-commodity": "axe-core", "northsea": "axe-core", "trading os": "trading-os"}
 
 
 def repo_uit_tekst(tekst: str) -> Optional[str]:
@@ -90,11 +101,14 @@ def repo_uit_tekst(tekst: str) -> Optional[str]:
     zou daar een privacy-link voor Axon schrijven. Twee of nul namen: None.
     """
     plat = re.sub(r"[^a-z0-9]", "", (tekst or "").lower())
-    genoemd = [n for n in REPO_APP if n.replace("-", "") in plat]
-    return genoemd[0] if len(genoemd) == 1 else None
+    genoemd = {n for n in REPO_APP if n.replace("-", "") in plat}
+    genoemd |= {doel for alias, doel in REPO_ALIAS.items() if re.sub(r"[^a-z0-9]", "", alias) in plat}
+    return next(iter(genoemd)) if len(genoemd) == 1 else None
 
 
-def app_voor_repo(repo: Optional[str]) -> str:
+def app_voor_repo(repo: Optional[str], agent: str = "", tekst: str = "") -> str:
+    if agent == "maps-agent" or "northsea" in (tekst or "").lower():
+        return "northsea"
     return REPO_APP.get(repo or "", "axe_core")
 
 
@@ -193,6 +207,10 @@ def planprompt(agent: str, context: str, open_taken: list[str]) -> str:
         "axe-core": "de hoofdassistent van Luka: overzicht, geheugen, afspraken, wat er blijft liggen",
         "code-agent": "de Code Agent: de repo's van AXE (bugs, tests, opruimen, kleine verbeteringen)",
         "axe-algo": "AXE Algo, de trading-desk op demo-accounts: onderzoek, lessen, strategie-controles",
+        "maps-agent": ("de Northsea Desk: Northsea Commodity Partners -- sourcing, koper-leverancier matching, "
+                       "verificatie en deal-coördinatie. Er is geen aparte app: de hele desk wordt gebouwd als "
+                       "dashboard op de 3D Maps-tab in AXE CORE (repo axe-core, route /maps-3d). Plan wat er "
+                       "nodig is om die desk daar te bouwen en te laten draaien"),
     }[agent]
     open_regels = "\n".join(f"- {t}" for t in open_taken[:12]) or "- (geen)"
     return (
@@ -312,13 +330,12 @@ class Planner:
     def _vraag(self, staat: dict, motor: str, prompt: str, repo: str, modus: str = "plan") -> tuple[Optional[str], str]:
         """Eén sessie. Geeft (tekst, fout). Houdt budget en koeling bij.
 
-        Cursor heeft geen alleen-lezen stand (agent_runner weigert plan), dus
-        lezen en plannen voor een agent op Cursor gaan via de sleutels; Cursor
-        zelf doet alleen goedgekeurde schrijftaken.
+        Cursor leest sinds 14 september in `--mode ask` (zie agent_runner), dus
+        die plant en leest nu ook zelf.
         """
         nu = datetime.now()
         vandaag = nu.strftime("%Y-%m-%d")
-        if motor == "sleutels" or (motor == "cursor" and modus == "plan"):
+        if motor == "sleutels":
             return self._sleutels(prompt)
         if koelt(staat, motor, nu):
             return None, f"{motor} koelt tot {staat['koeling'][motor]}"
@@ -347,7 +364,8 @@ class Planner:
 
     # schrijven -------------------------------------------------------------
     def _maak_taak(self, agent: str, motor: str, v: dict) -> Optional[dict]:
-        repo = v.get("repo") or repo_uit_tekst(f"{v['titel']} {v['doel']}")
+        repo = v.get("repo")
+        repo = REPO_ALIAS.get(repo or "", repo) or repo_uit_tekst(f"{v['titel']} {v['doel']}")
         row = {
             "title": v["titel"],
             "goal": v["doel"],
@@ -363,7 +381,7 @@ class Planner:
             "metadata": {
                 "planner": True, "agent": agent, "motor": motor, "risico": v["risico"],
                 "goedkeuring": "niet_nodig" if v["risico"] == "lezen" else "nodig",
-                "uiStatus": "todo", "app": app_voor_repo(repo),
+                "uiStatus": "todo", "app": app_voor_repo(repo, agent, f"{v['titel']} {v['doel']}"),
             },
         }
         try:
@@ -419,11 +437,12 @@ class Planner:
         agent = meta.get("agent") or taak.get("assignee") or "axe-core"
         motor = meta.get("motor") or STANDAARD_MOTOREN[agent]
         schrijven = meta.get("risico") == "schrijven"
-        if schrijven and agent != "code-agent":
-            return {"taak": taak["id"], "overgeslagen": "alleen de Code Agent voert schrijftaken uit"}
+        if schrijven and agent not in ("code-agent", "maps-agent"):
+            return {"taak": taak["id"], "overgeslagen": "alleen de Code Agent en de Northsea Desk voeren schrijftaken uit"}
         if schrijven and motor not in ("claude", "claude2", "codex", "cursor"):
             return {"taak": taak["id"], "overgeslagen": "schrijven vraagt een CLI-motor"}
-        gevraagd = ((taak.get("payload") or {}).get("repo")
+        gevraagd = (REPO_ALIAS.get((taak.get("payload") or {}).get("repo") or "")
+                    or (taak.get("payload") or {}).get("repo")
                     or repo_uit_tekst(f"{taak.get('title') or ''} {taak.get('goal') or ''}"))
         if schrijven and not gevraagd:
             # Nooit raden waar geschreven wordt: zie repo_uit_tekst.

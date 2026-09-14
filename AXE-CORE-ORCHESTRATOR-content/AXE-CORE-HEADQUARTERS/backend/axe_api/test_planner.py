@@ -118,7 +118,11 @@ class TestRepoEnApp:
         assert p.repo_uit_tekst("Testen voor UI-wijzigingen in axe-core uitbreiden") == "axe-core"
 
     def test_onbekend_of_twee_namen_is_geen_repo(self):
-        assert p.repo_uit_tekst("Beveiligingslekken in cloudflare-migration-2 dichten") is None
+        assert p.repo_uit_tekst("Beveiligingslekken in cloudflare-migration-2 dichten") == "axe-companion"
+        assert p.repo_uit_tekst("Landingspagina van Northsea Commodity") == "axe-core"
+        assert p.app_voor_repo("axe-core", "maps-agent") == "northsea"
+        assert p.app_voor_repo("axe-core", "code-agent", "Deal-kaart voor Northsea op de 3D-tab") == "northsea"
+        assert p.repo_uit_tekst("Iets in een repo die niet bestaat") is None
         assert p.repo_uit_tekst("axe-core en axe-companion gelijktrekken") is None
         assert p.app_voor_repo(None) == "axe_core"
 
@@ -126,6 +130,6 @@ class TestRepoEnApp:
         pln = p.Planner(lambda: None, lambda *a, **k: {"status": "ok"}, lambda: {})
         monkeypatch.setattr(pln, "_werkrepo", lambda *a, **k: "axe-core")
         monkeypatch.setattr(pln, "_claim", lambda _id: (_ for _ in ()).throw(AssertionError("mag niet claimen")))
-        taak = {"id": "t1", "title": "Beveiligingslekken in cloudflare-migration-2 dichten", "goal": "dicht ze",
+        taak = {"id": "t1", "title": "Beveiligingslekken in een onbekende repo dichten", "goal": "dicht ze",
                 "payload": {"repo": None}, "metadata": {"agent": "code-agent", "motor": "claude2", "risico": "schrijven"}}
         assert "noemt geen" in pln._voer_uit({}, taak)["overgeslagen"]

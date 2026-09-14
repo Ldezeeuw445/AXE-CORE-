@@ -38,12 +38,13 @@ class TestCommandos:
         schrijf = a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
         assert "workspace-write" in schrijf and "--approve-for-me" in schrijf
 
-    def test_cursor_forceert_altijd(self):
-        # Altijd, want plan-modus bereikt deze motor niet (zie de weigering
-        # hieronder) en zonder --force hangt hij op een goedkeuring.
+    def test_cursor_schrijft_met_force_en_leest_met_ask(self):
         cmd = a.ENGINES["cursor"]["cmd"]("cursor-agent", "p", "acceptEdits", "")
         assert "--force" in cmd and "-p" in cmd
         assert cmd[cmd.index("--output-format") + 1] == "json"
+        lees = a.ENGINES["cursor"]["cmd"]("cursor-agent", "p", "plan", "")
+        assert "--force" not in lees
+        assert lees[lees.index("--mode") + 1] == "ask"
 
     def test_de_prompt_gaat_nooit_door_een_shell(self):
         # Een lijst en geen string: anders zou een prompt met backticks of een
@@ -59,26 +60,9 @@ class TestAlleenLezen:
         assert a.ENGINES["claude"]["alleen_lezen"] is True
         assert a.ENGINES["codex"]["alleen_lezen"] is True
 
-    def test_cursor_kan_het_niet(self):
-        # Cursor's eigen documentatie: `-p/--print` "has access to all tools,
-        # including write and shell". Er is geen stand die dat wegneemt.
-        assert a.ENGINES["cursor"]["alleen_lezen"] is False
-
-    def test_plan_wordt_geweigerd_voor_een_motor_die_het_niet_kan(self, monkeypatch):
-        pad = _repo()
-        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
-        r = a.run_agent("proef", "lees dit", permission_mode="plan", engine="cursor")
-        assert r["status"] == "error"
-        assert "alleen-lezen" in r["error"]
-
-    def test_de_weigering_komt_voor_de_cli(self, monkeypatch):
-        # Er mag niets gestart zijn. Zou de weigering ná de start komen, dan had
-        # de agent al kunnen schrijven voordat iemand nee zei.
-        pad = _repo()
-        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
-        monkeypatch.setattr(subprocess, "run", _weiger_elke_start)
-        r = a.run_agent("proef", "x", permission_mode="plan", engine="cursor")
-        assert r["status"] == "error"
+    def test_cursor_kan_het_nu_ook(self):
+        # cursor-agent kreeg `--mode ask`: lezen zonder schrijven. Zie _cursor_cmd.
+        assert a.ENGINES["cursor"]["alleen_lezen"] is True
 
 
 def _weiger_elke_start(*args, **kwargs):

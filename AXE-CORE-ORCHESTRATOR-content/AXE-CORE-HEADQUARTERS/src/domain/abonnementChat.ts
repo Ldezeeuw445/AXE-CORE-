@@ -47,21 +47,16 @@ export const ABONNEMENT_MODUS = 'plan' as const;
 export const ALLE_MOTOREN: readonly AgentEngine[] = ['claude', 'claude2', 'codex', 'cursor'] as const;
 
 /**
- * De motoren die de CHAT mag gebruiken -- en Cursor staat er niet bij.
+ * De motoren die de CHAT mag gebruiken: sinds 14 september alle vier.
  *
- * Niet omdat hij niet werkt, maar omdat hij niet KAN wat deze plek eist. Cursor
- * schrijft over zijn eigen `-p/--print`: "has access to all tools, including
- * write and shell". Er is geen vlag die dat wegneemt; `--sandbox enabled`
- * begrenst tot de werkmap maar maakt het niet alleen-lezen.
- *
- * De chat draait op `plan`, en de hele belofte daarvan is dat een vraag stellen
- * nooit bestanden herschrijft. Een motor die dat niet kan waarmaken hoort hier
- * niet aangeboden te worden -- agent_runner weigert hem trouwens ook, dus dit is
- * de tweede helft van dezelfde regel: niet tonen wat toch geweigerd wordt.
- *
- * In de code-editor is hij gewoon beschikbaar. Daar IS bewerken de bedoeling.
+ * Cursor stond er niet bij, omdat `-p/--print` "has access to all tools,
+ * including write and shell" en de chat op `plan` draait. cursor-agent heeft
+ * nu `--mode ask`: gemeten in een wegwerp-repo las hij een bestand, weigerde
+ * hij het te verwijderen, en bleef git schoon. agent_runner zet die stand bij
+ * `plan`, dus de belofte -- een vraag stellen herschrijft nooit iets -- geldt
+ * voor Cursor net zo.
  */
-export const ABONNEMENT_MOTOREN: readonly AgentEngine[] = ['claude', 'claude2', 'codex'] as const;
+export const ABONNEMENT_MOTOREN: readonly AgentEngine[] = ALLE_MOTOREN;
 
 /**
  * De motor voor wie niets gekozen heeft.
