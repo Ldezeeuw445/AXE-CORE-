@@ -36,11 +36,13 @@ interface Props {
   modelLabel: string;
 }
 
+// Korte labels zodat de vier chips náást elkaar op één rij passen (scheelt
+// ruimte en staat strakker). Icoon + kleur blijven; de prefix is de actie.
 const CHIPS: Array<{ label: string; icon: typeof Brain; color: string; prefix: string }> = [
-  { label: 'Verhelder de vraag', icon: Brain,      color: '#a855f7', prefix: 'Verhelder deze vraag en stel verduidelijkende vragen: ' },
-  { label: 'Geef context',       icon: Sparkles,   color: '#eab308', prefix: 'Geef meer context bij: ' },
-  { label: 'Kies wat je oplevert', icon: CirclePlay, color: '#ef4444', prefix: 'Lever dit op als concreet resultaat: ' },
-  { label: 'Scherp het aan',     icon: Wand2,      color: '#2dd4bf', prefix: 'Scherp dit aan en stel verbeteringen voor: ' },
+  { label: 'Clarify', icon: Brain,      color: '#a855f7', prefix: 'Verhelder deze vraag en stel verduidelijkende vragen: ' },
+  { label: 'Context', icon: Sparkles,   color: '#eab308', prefix: 'Geef meer context bij: ' },
+  { label: 'Output',  icon: CirclePlay, color: '#ef4444', prefix: 'Lever dit op als concreet resultaat: ' },
+  { label: 'Sharpen', icon: Wand2,      color: '#2dd4bf', prefix: 'Scherp dit aan en stel verbeteringen voor: ' },
 ];
 
 export function HomeCommandComposer(props: Props) {
@@ -135,20 +137,19 @@ export function HomeCommandComposer(props: Props) {
         </div>
       </div>
 
-      {/* De vier tip-chips onder de composer. Ze breken af naar twee regels op
-          de smalle telefoon, zodat ze alle vier zichtbaar zijn (op de brede
-          desktop staan ze op één rij, zoals de foto). */}
-      <div className="flex flex-wrap items-center gap-2 pb-0.5">
+      {/* De vier tip-chips: korte labels, vier gelijke knoppen náást elkaar op
+          één rij (flex-1). Scheelt ruimte en staat strakker dan twee regels. */}
+      <div className="flex items-center gap-1.5 pb-0.5">
         {CHIPS.map(chip => (
           <button
             key={chip.label}
             type="button"
             onClick={() => applyChip(chip.prefix)}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 flex-shrink-0 active:scale-95 transition-transform"
+            className="flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-full px-2 py-1.5 active:scale-95 transition-transform"
             style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.09)' }}
           >
-            <chip.icon size={14} style={{ color: chip.color }} />
-            <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
+            <chip.icon size={14} className="flex-shrink-0" style={{ color: chip.color }} />
+            <span className="text-[12px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
           </button>
         ))}
       </div>
