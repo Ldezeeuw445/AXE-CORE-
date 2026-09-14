@@ -76,6 +76,28 @@ def planner_aan() -> bool:
 
 # ── Pure onderdelen (getest in test_planner.py) ──────────────────────────────
 
+# Welke app-kolom in Taken bij welke repo hoort (domain/apps.ts in de app).
+REPO_APP = {"axe-core": "axe_core", "axe-companion": "axe_companion",
+            "trading-os": "trading_os", "axon-memory": "axon_memory"}
+
+
+def repo_uit_tekst(tekst: str) -> Optional[str]:
+    """De repo die een voorstel bij naam noemt, als het er precies één is.
+
+    Gemeten 14 september: alle drie de voorstellen van de Code Agent hadden
+    "repo": null, terwijl de titel "axon-memory" of "cloudflare-migration-2"
+    zei. Zonder repo viel een goedgekeurde schrijftaak terug op axe-core en
+    zou daar een privacy-link voor Axon schrijven. Twee of nul namen: None.
+    """
+    plat = re.sub(r"[^a-z0-9]", "", (tekst or "").lower())
+    genoemd = [n for n in REPO_APP if n.replace("-", "") in plat]
+    return genoemd[0] if len(genoemd) == 1 else None
+
+
+def app_voor_repo(repo: Optional[str]) -> str:
+    return REPO_APP.get(repo or "", "axe_core")
+
+
 def lees_voorstellen(tekst: str) -> list[dict]:
     """De taken uit een antwoord, ook als het model er praat omheen zet.
 
@@ -325,6 +347,7 @@ class Planner:
 
     # schrijven -------------------------------------------------------------
     def _maak_taak(self, agent: str, motor: str, v: dict) -> Optional[dict]:
+        repo = v.get("repo") or repo_uit_tekst(f"{v['titel']} {v['doel']}")
         row = {
             "title": v["titel"],
             "goal": v["doel"],
@@ -336,11 +359,11 @@ class Planner:
             "execution_mode": "read" if v["risico"] == "lezen" else "patch",
             "source_app": "axe_core",
             "requested_by": "planner",
-            "payload": {"repo": v.get("repo")},
+            "payload": {"repo": repo},
             "metadata": {
                 "planner": True, "agent": agent, "motor": motor, "risico": v["risico"],
                 "goedkeuring": "niet_nodig" if v["risico"] == "lezen" else "nodig",
-                "uiStatus": "todo", "app": "axe_core",
+                "uiStatus": "todo", "app": app_voor_repo(repo),
             },
         }
         try:
@@ -400,7 +423,11 @@ class Planner:
             return {"taak": taak["id"], "overgeslagen": "alleen de Code Agent voert schrijftaken uit"}
         if schrijven and motor not in ("claude", "claude2", "codex", "cursor"):
             return {"taak": taak["id"], "overgeslagen": "schrijven vraagt een CLI-motor"}
-        gevraagd = (taak.get("payload") or {}).get("repo")
+        gevraagd = ((taak.get("payload") or {}).get("repo")
+                    or repo_uit_tekst(f"{taak.get('title') or ''} {taak.get('goal') or ''}"))
+        if schrijven and not gevraagd:
+            # Nooit raden waar geschreven wordt: zie repo_uit_tekst.
+            return {"taak": taak["id"], "overgeslagen": "schrijftaak noemt geen (bekende) repo"}
         repo = self._werkrepo(gevraagd, streng=schrijven)
         if not repo:
             return {"taak": taak["id"], "overgeslagen":

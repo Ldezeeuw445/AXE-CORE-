@@ -109,3 +109,23 @@ class TestSchrijfRepo:
         assert pl._werkrepo("axon-memory", streng=True) is None
         assert pl._werkrepo("axon-memory") == "axe-core", "lezen mag wel elders"
         assert pl._werkrepo("axe-core", streng=True) == "axe-core"
+
+
+class TestRepoEnApp:
+    def test_repo_uit_de_titel_en_de_app_kolom(self):
+        assert p.repo_uit_tekst("Privacy-link op homepage van axon-memory toevoegen") == "axon-memory"
+        assert p.app_voor_repo("axon-memory") == "axon_memory"
+        assert p.repo_uit_tekst("Testen voor UI-wijzigingen in axe-core uitbreiden") == "axe-core"
+
+    def test_onbekend_of_twee_namen_is_geen_repo(self):
+        assert p.repo_uit_tekst("Beveiligingslekken in cloudflare-migration-2 dichten") is None
+        assert p.repo_uit_tekst("axe-core en axe-companion gelijktrekken") is None
+        assert p.app_voor_repo(None) == "axe_core"
+
+    def test_schrijftaak_zonder_repo_wordt_nooit_in_axe_core_uitgevoerd(self, monkeypatch):
+        pln = p.Planner(lambda: None, lambda *a, **k: {"status": "ok"}, lambda: {})
+        monkeypatch.setattr(pln, "_werkrepo", lambda *a, **k: "axe-core")
+        monkeypatch.setattr(pln, "_claim", lambda _id: (_ for _ in ()).throw(AssertionError("mag niet claimen")))
+        taak = {"id": "t1", "title": "Beveiligingslekken in cloudflare-migration-2 dichten", "goal": "dicht ze",
+                "payload": {"repo": None}, "metadata": {"agent": "code-agent", "motor": "claude2", "risico": "schrijven"}}
+        assert "noemt geen" in pln._voer_uit({}, taak)["overgeslagen"]
