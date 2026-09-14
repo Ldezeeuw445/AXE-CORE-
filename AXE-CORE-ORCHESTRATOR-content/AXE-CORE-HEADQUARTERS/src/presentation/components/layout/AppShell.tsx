@@ -156,7 +156,9 @@ export function AppShell() {
               height: 'auto',
               zIndex: 1,
               borderRadius: 28,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+              // Diepe slagschaduw (zweeft) + een lichte binnenrand bovenaan, zodat
+              // de plaat een glasachtige lichtvang aan de bovenkant krijgt.
+              boxShadow: '0 24px 64px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 1px rgba(255,255,255,0.02)',
               // Content van de plaatrand af: de composer en de sphere raken zo
               // de ronde hoeken niet.
               paddingLeft: 14,
