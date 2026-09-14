@@ -93,9 +93,15 @@ export function MobileNav() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Menu openen"
-          className="fixed left-3 z-[70] flex size-10 items-center justify-center rounded-full active:scale-95"
+          className="fixed z-[70] flex size-10 items-center justify-center rounded-full active:scale-95"
           style={{
-            top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            // Op de glasplaat-home netjes binnen de rand, precies zoals de
+            // licht/donker-knop rechtsboven (AppShell): zelfde hoogte, zelfde
+            // marge. Buiten de home in de schermhoek.
+            top: location.pathname === '/'
+              ? 'calc(env(safe-area-inset-top, 0px) + 22px)'
+              : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            left: location.pathname === '/' ? 24 : 12,
             background: 'var(--surface-bg)',
             border: '1px solid var(--border-subtle)',
             color: 'var(--text-primary)',
