@@ -16,7 +16,7 @@ import { useState } from 'react';
 import { useLook } from '@/presentation/hooks/useLook';
 import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 import { useWallpaper } from '@/presentation/hooks/useWallpaper';
-import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { hasNativeGlass } from '@/infrastructure/config/apiUrl';
 import { Sun, Moon } from 'lucide-react';
 
 // Zachte gekleurde vlekken geven het glas iets om te vervagen — zonder textuur
@@ -55,7 +55,7 @@ export function MobileGlass() {
   // een andere URL, dan probeert hij vanzelf opnieuw (geen set-state-in-effect,
   // en een gefaalde standaard blokkeert een later gekozen foto niet).
   const [failed, setFailed] = useState<string | null>(null);
-  if (isTauriRuntime()) return null; // op de Mac doet het native glas dit al
+  if (hasNativeGlass()) return null; // alleen op de macOS-desktop doet het native glas dit al
   return (
     <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
       {/* Kleur-gradiënt als bodem: zichtbaar zolang (of als) de foto niet laadt. */}
