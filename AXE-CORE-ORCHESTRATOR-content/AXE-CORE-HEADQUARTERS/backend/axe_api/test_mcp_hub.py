@@ -101,7 +101,7 @@ class TestStdio:
     def test_een_npm_pakket_ziet_geen_andere_sleutels(self, schoon, monkeypatch):
         monkeypatch.setenv("SUPABASE_SERVICE_ROLE", "niet-voor-npm")
         monkeypatch.setenv("BRAVE_API_KEY", "wel-voor-brave")
-        env = h.StdioSessie("brave-search").env
+        env = h.StdioSessie("brave-search", h.sleutel_voor("brave-search")[0]).env
         assert "SUPABASE_SERVICE_ROLE" not in env and env["BRAVE_API_KEY"] == "wel-voor-brave"
 
 
@@ -118,3 +118,12 @@ class TestGrenzen:
         assert h.mag_nog("perplexity", "2026-09-14", {"2026-09-14": {"perplexity": 24}})
         assert not h.mag_nog("perplexity", "2026-09-14", {"2026-09-14": {"perplexity": 25}})
         assert h.mag_nog("github", "2026-09-14", {"2026-09-14": {"github": 999}})
+
+
+class TestSsdHangt:
+    def test_een_hangende_vault_bevriest_niets_en_zegt_wat_er_is(self, schoon, monkeypatch):
+        import time as _t
+        monkeypatch.setattr(h, "SLEUTEL_WACHT_S", 0.2)
+        monkeypatch.setattr(h, "sleutel_voor", lambda vid: (_t.sleep(2), (None, ""))[1])
+        uit = asyncio.run(h.test("supabase"))
+        assert uit["status"] == "offline" and "Sta toe" in uit["fout"]

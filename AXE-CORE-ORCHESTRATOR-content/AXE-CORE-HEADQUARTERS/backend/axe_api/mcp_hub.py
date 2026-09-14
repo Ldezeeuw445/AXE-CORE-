@@ -339,12 +339,11 @@ def url_voor(vid: str) -> str:
 
 
 class HttpSessie:
-    def __init__(self, vid: str):
+    def __init__(self, vid: str, sleutel: Optional[str]):
         self.url = url_voor(vid)
         self.client: Optional[httpx.AsyncClient] = None
         self.sessie: Optional[str] = None
         self.volgnummer = 0
-        sleutel, _ = sleutel_voor(vid)
         self.basis = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
         if sleutel:
             self.basis["Authorization"] = f"Bearer {sleutel}"
@@ -383,7 +382,7 @@ class HttpSessie:
 class StdioSessie:
     """Een MCP-server als proces op deze Mac: één JSON-bericht per regel."""
 
-    def __init__(self, vid: str):
+    def __init__(self, vid: str, sleutel: Optional[str]):
         v = verbindingen()[vid]
         s = SJABLONEN[v["sjabloon"]]
         self.commando = s["commando"]
@@ -393,7 +392,6 @@ class StdioSessie:
         for k in list(self.env):
             if re.search(r"(KEY|TOKEN|SECRET|PASSWORD|SERVICE_ROLE)", k):
                 del self.env[k]
-        sleutel, _ = sleutel_voor(vid)
         if sleutel and s["sleutels"]:
             self.env[s["sleutels"][0]] = sleutel
         self.proc: Optional[asyncio.subprocess.Process] = None
@@ -445,8 +443,27 @@ class StdioSessie:
         await self._stuur({"jsonrpc": "2.0", "method": methode})
 
 
-def sessie_voor(vid: str):
-    return StdioSessie(vid) if SJABLONEN[verbindingen()[vid]["sjabloon"]]["transport"] == "stdio" else HttpSessie(vid)
+def sessie_voor(vid: str, sleutel: Optional[str]):
+    soort = SJABLONEN[verbindingen()[vid]["sjabloon"]]["transport"]
+    return StdioSessie(vid, sleutel) if soort == "stdio" else HttpSessie(vid, sleutel)
+
+
+SLEUTEL_WACHT_S = 6
+SSD_MELDING = ("De sleutels op de externe schijf antwoorden niet. Staat er een macOS-venster "
+               "'AXE CORE wil toegang tot bestanden op een verwijderbaar volume'? Klik Sta toe.")
+
+
+async def sleutel_async(vid: str) -> tuple[Optional[str], str]:
+    """sleutel_voor buiten de event loop, met een grens.
+
+    De vault staat op de SSD. Na elke rebuild vraagt macOS opnieuw toestemming,
+    en tot iemand klikt blijft open() hangen -- gemeten 14 september: /mcp/hub
+    gaf na 20 s nog niets. In de event loop zou dat de hele API bevriezen.
+    """
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(sleutel_voor, vid), timeout=SLEUTEL_WACHT_S)
+    except asyncio.TimeoutError:
+        raise McpFout(SSD_MELDING)
 
 
 async def _open(s) -> dict:
@@ -527,12 +544,15 @@ async def test(vid: str) -> dict:
     if vid not in alle:
         raise KeyError(vid)
     sjabloon = alle[vid]["sjabloon"]
-    _, bron = sleutel_voor(vid)
+    try:
+        sleutel, bron = await sleutel_async(vid)
+    except McpFout as e:
+        return {"status": "offline", "fout": str(e)}
     if bron == "ontbreekt":
         return {"status": "sleutel_ontbreekt", "sleutelnaam": _sleutelnaam(alle[vid], vid)}
     start = time.monotonic()
     try:
-        async with sessie_voor(vid) as s:
+        async with sessie_voor(vid, sleutel) as s:
             info = await _open(s)
             tools = zichtbare_tools(sjabloon, await _tools(s))
     except (McpFout, httpx.HTTPError, asyncio.TimeoutError, OSError) as e:
@@ -557,7 +577,8 @@ async def roep(vid: str, tool: str, argumenten: dict) -> dict:
     if not mag_nog(sjabloon, dag):
         return {"status": "error", "error": f"Dagbudget van {s_def['per_dag']} aanroepen voor {s_def['naam']} is op (reset 00:00 UTC)."}
     try:
-        async with sessie_voor(vid) as s:
+        sleutel, _ = await sleutel_async(vid)
+        async with sessie_voor(vid, sleutel) as s:
             await _open(s)
             res = await s.verzoek("tools/call", {"name": tool, "arguments": argumenten or {}})
     except (McpFout, httpx.HTTPError, asyncio.TimeoutError, OSError) as e:

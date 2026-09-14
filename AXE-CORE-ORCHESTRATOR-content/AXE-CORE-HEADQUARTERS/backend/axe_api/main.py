@@ -4021,7 +4021,10 @@ class McpVerbinding(BaseModel):
 
 @app.get("/mcp/hub", dependencies=[AUTH])
 async def mcp_hub_lijst():
-    return await asyncio.to_thread(_mcp_hub.overzicht)
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_mcp_hub.overzicht), timeout=8)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, _mcp_hub.SSD_MELDING)
 
 
 @app.post("/mcp/hub/verbinding", dependencies=[AUTH])
