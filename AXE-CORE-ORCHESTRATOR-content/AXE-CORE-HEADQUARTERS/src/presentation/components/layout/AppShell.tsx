@@ -270,8 +270,10 @@ export function AppShell() {
         </div>
       )}
       {/* Slimme hoekknop (mobiel): snelacties binnen duim-bereik, de mobiel-eigen
-          vervanging van de radiale hoekmenu's van de desktop. */}
-      {mobileNav && <MobileFab />}
+          vervanging van de radiale hoekmenu's van de desktop. Op de glasplaat-
+          home weg: de composer heeft z'n eigen knoppen en de FAB botste ertegen —
+          de Tauri-home heeft daar ook geen zwevende hoekknop. */}
+      {mobileNav && !opHome && <MobileFab />}
       {/* De drie kerncijfers onder de sphere (MEMORIES/BRAIN NODES/INTEGRITY),
           zoals de Tauri-mockup — alleen op de telefoon-home, en alleen zolang de
           chat is ingeklapt (dan is de sphere de baas). */}

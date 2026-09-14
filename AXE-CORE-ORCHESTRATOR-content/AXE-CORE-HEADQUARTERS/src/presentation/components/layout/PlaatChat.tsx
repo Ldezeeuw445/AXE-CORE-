@@ -297,6 +297,11 @@ export function PlaatChat() {
           </div>
         </div>
       )}
+      {/* Op de telefoon-home is de ingeklapte chatbalk weg: dan zijn de sphere,
+          de cijferregel en de composer de baas (zoals de Tauri-mockup). Zodra je
+          iets stuurt klapt de chat open en verschijnt de plaat met het gesprek.
+          Op de desktop en op andere tabs blijft de ingeklapte kop gewoon staan. */}
+      {!(isMobile && collapsed) && (
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
           data-dicht={collapsed ? 'ja' : 'nee'}
@@ -461,6 +466,7 @@ export function PlaatChat() {
           )}
         </div>
       </motion.div>
+      )}
       {/* De composer staat ONDER de chatplaat, niet erin.
           In de demo zijn dat twee losse dingen: de plaat met het gesprek,
           en daaronder de pil waarin je typt. Hier zat hij binnenin, wat twee
@@ -486,13 +492,16 @@ export function PlaatChat() {
                     {/* Wat AXE buiten dit gesprek kan: deze Mac, een echte
                         browser, en een paar kant-en-klare opdrachten. Eén knop
                         die opengaat en niet drie erbij -- deze rij is al vol,
-                        en binnenin is er wél plek voor de stand erbij. */}
-                    <VermogensKnop onKies={t => setChatText(t)} />
+                        en binnenin is er wél plek voor de stand erbij.
+                        Op de telefoon weg: op de smalle glasplaat drukte deze
+                        vierde knop de invoer dicht tot "Ask a"; het vermogen is
+                        elders te bereiken, de invoer moet leesbaar blijven. */}
+                    {!isMobile && <VermogensKnop onKies={t => setChatText(t)} />}
                     <input
                       value={chatText}
                       onChange={e => setChatText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                      placeholder={attachments.length ? 'Send · show · chart · done' : (isMobile ? 'Ask anything…' : 'show chart · show me New York')}
+                      placeholder={attachments.length ? 'Send · show · chart · done' : (isMobile ? 'Ask AXE…' : 'show chart · show me New York')}
                       className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
                       style={{ color: 'var(--text-primary)', border: 'none' }}
                     />
