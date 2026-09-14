@@ -12,75 +12,67 @@
  * chat en composer erbovenop houden hun donkere materiaal en lichte inkt. Zo
  * ziet de telefoon er in beide standen uit als de Tauri-app.
  */
-import { useState } from 'react';
 import { useLook } from '@/presentation/hooks/useLook';
 import { useLookValue } from '@/presentation/hooks/usePlaatInk';
-import { useWallpaper } from '@/presentation/hooks/useWallpaper';
 import { hasNativeGlass } from '@/infrastructure/config/apiUrl';
 import { Sun, Moon } from 'lucide-react';
 
-// Zachte gekleurde vlekken geven het glas iets om te vervagen — zonder textuur
-// erachter is backdrop-filter onzichtbaar. Licht: koele lucht met een warme en
-// een cyaan gloed; donker: dezelfde vlekken, gedempt op bijna-zwart.
-const GLASS_LIGHT =
-  'radial-gradient(560px 460px at 12% 6%, rgba(120,162,236,0.30), rgba(120,162,236,0) 60%),' +
-  'radial-gradient(640px 520px at 94% 10%, rgba(190,150,236,0.24), rgba(190,150,236,0) 60%),' +
-  'radial-gradient(720px 620px at 72% 104%, rgba(110,205,214,0.22), rgba(110,205,214,0) 62%),' +
-  'radial-gradient(1100px 800px at 20% -10%, rgba(255,255,255,0.85), rgba(255,255,255,0) 58%),' +
-  'linear-gradient(180deg, #eef1f7 0%, #e0e6f0 52%, #ccd4e2 100%)';
+/*
+ * De achtergrond van de Tauri-home ("AXE Glass Plate"), voor de telefoon.
+ *
+ * De Mac heeft het native macOS-glas; een telefoon niet. Vroeger legde dit een
+ * foto-wallpaper met een sluier neer, maar de echte Tauri-plaat is geen foto —
+ * het is een GRADIËNT-plaat. Luka koos twee van de drie standen uit die
+ * mockup en koppelde ze aan de licht/donker-knop:
+ *
+ *   • donker  ("black") = NU / ZWART   → een vlakke, bijna zwarte plaat.
+ *   • licht   ("glass") = GLAS DONKER  → een diep indigo/violet glas.
+ *
+ * (GLAS LICHT — de pastel-variant — gebruikt hij niet.) Beide standen zijn dus
+ * donker met lichte inkt; alleen de achtergrond verschilt. De frosted plates
+ * (chat, cijferregel) liggen hier bovenop en vervagen deze grond.
+ */
 
-const GLASS_DARK =
-  'radial-gradient(560px 460px at 12% 4%, rgba(64,96,196,0.26), rgba(64,96,196,0) 60%),' +
-  'radial-gradient(640px 520px at 94% 8%, rgba(128,74,196,0.22), rgba(128,74,196,0) 60%),' +
-  'radial-gradient(720px 620px at 76% 104%, rgba(38,150,162,0.18), rgba(38,150,162,0) 62%),' +
-  'radial-gradient(1000px 760px at 22% -8%, rgba(90,104,140,0.24), rgba(90,104,140,0) 56%),' +
-  'linear-gradient(180deg, #0a0d12 0%, #070a0e 60%, #04060a 100%)';
+// GLAS DONKER — diep indigo glas: een violette gloed bovenin, koel blauw links,
+// een zweem paars rechts, wegzakkend naar bijna-zwart onderin. Dit is de LICHTE
+// stand ('glass'), precies zoals de mockup: donker glas, geen wit.
+const GLAS_DONKER =
+  'radial-gradient(1100px 720px at 50% -6%, rgba(96,86,190,0.34), rgba(96,86,190,0) 55%),' +
+  'radial-gradient(680px 560px at 10% 8%, rgba(60,96,200,0.26), rgba(60,96,200,0) 60%),' +
+  'radial-gradient(760px 640px at 92% 26%, rgba(132,92,204,0.22), rgba(132,92,204,0) 60%),' +
+  'radial-gradient(900px 760px at 74% 108%, rgba(46,120,168,0.16), rgba(46,120,168,0) 62%),' +
+  'linear-gradient(180deg, #17182e 0%, #101124 46%, #090a13 100%)';
+
+// NU / ZWART — vlak, bijna zwart. Eén hele zachte radiaal houdt het levend
+// zonder banding; verder zo dicht bij zuiver zwart als de mockup.
+const ZWART =
+  'radial-gradient(900px 700px at 50% 8%, rgba(20,24,40,0.55), rgba(20,24,40,0) 60%),' +
+  'linear-gradient(180deg, #05060a 0%, #030407 60%, #010103 100%)';
 
 // Heel fijne korrel, zodat het glas niet als plat karton leest. Eén kleine SVG
 // als data-URI, laag in dekking — kost niets en tilt de vlakken net op.
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")";
 
-// Sluier over de foto: net genoeg dat de kaarten en tekst leesbaar blijven,
-// weinig genoeg dat de foto er doorheen komt. Licht een lichte waas, donker een
-// donkere — zoals het Tauri-glas de plaat licht of gerookt maakt.
-const VEIL_LIGHT = 'linear-gradient(180deg, rgba(236,240,247,0.52) 0%, rgba(222,229,241,0.58) 60%, rgba(206,215,229,0.66) 100%)';
-const VEIL_DARK = 'linear-gradient(180deg, rgba(8,11,16,0.62) 0%, rgba(5,8,12,0.70) 60%, rgba(3,5,9,0.78) 100%)';
-
-/** Volvlakse achtergrondlaag achter de mobiele surfaces: foto → sluier → korrel. */
+/** Volvlakse achtergrond-plaat achter de mobiele surfaces (gradiënt + korrel). */
 export function MobileGlass() {
   const look = useLookValue();
-  const wallpaper = useWallpaper();
-  // We onthouden wélke URL faalde, niet een boolean: wisselt de wallpaper naar
-  // een andere URL, dan probeert hij vanzelf opnieuw (geen set-state-in-effect,
-  // en een gefaalde standaard blokkeert een later gekozen foto niet).
-  const [failed, setFailed] = useState<string | null>(null);
   if (hasNativeGlass()) return null; // alleen op de macOS-desktop doet het native glas dit al
+  const glass = look === 'glass';
   return (
     <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-      {/* Kleur-gradiënt als bodem: zichtbaar zolang (of als) de foto niet laadt. */}
-      <div style={{ position: 'absolute', inset: 0, background: look === 'glass' ? GLASS_LIGHT : GLASS_DARK }} />
-      {/* De wallpaper zelf, zacht wazig zodat hij als plaat leest en niet met de
-          inhoud vecht. Faalt hij, dan blijft de gradiënt eronder staan. */}
-      {wallpaper !== failed && (
-        <img
-          src={wallpaper}
-          alt=""
-          onError={() => setFailed(wallpaper)}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(22px) saturate(1.05)', transform: 'scale(1.18)' }}
-        />
-      )}
-      {/* Sluier voor leesbaarheid */}
-      <div style={{ position: 'absolute', inset: 0, background: look === 'glass' ? VEIL_LIGHT : VEIL_DARK }} />
-      {/* Fijne korrel */}
+      {/* De plaat zelf: het indigo glas in de lichte stand, vlak zwart in de
+          donkere. Geen foto meer — dit is de gradiënt-plaat uit de mockup. */}
+      <div style={{ position: 'absolute', inset: 0, background: glass ? GLAS_DONKER : ZWART }} />
+      {/* Fijne korrel, zodat het glas niet als plat karton leest. */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
           backgroundImage: GRAIN,
           backgroundRepeat: 'repeat',
-          opacity: look === 'glass' ? 0.05 : 0.08,
-          mixBlendMode: look === 'glass' ? 'multiply' : 'screen',
+          opacity: glass ? 0.06 : 0.05,
+          mixBlendMode: 'screen',
         }}
       />
     </div>
