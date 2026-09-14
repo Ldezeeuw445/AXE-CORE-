@@ -140,3 +140,13 @@ class TestVorm:
         with pytest.raises(ValueError):
             h.bewaar_sleutel("supabase", "bp_" + "a" * 40)
         assert not (schoon / "sleutels.env").exists()
+
+
+class TestWeigering:
+    def test_de_reden_van_de_server_komt_mee(self):
+        r = httpx.Response(403, json={"error": "insufficient_scope", "error_description": "Token lacks required user:read or account:read scope"})
+        assert "user:read" in h.weigering(r)
+
+    def test_zonder_body_uit_de_header(self):
+        r = httpx.Response(403, headers={"www-authenticate": 'Bearer realm="OAuth", error="insufficient_scope", scope="user:read account:read"'})
+        assert h.weigering(r) == "sleutel geweigerd (HTTP 403): insufficient_scope (nodig: user:read account:read)"

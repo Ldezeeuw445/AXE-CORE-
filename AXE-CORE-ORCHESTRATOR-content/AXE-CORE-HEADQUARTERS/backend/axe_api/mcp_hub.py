@@ -360,6 +360,29 @@ def url_voor(vid: str) -> str:
     return SJABLONEN[v["sjabloon"]]["url"].format(**v["velden"])
 
 
+def weigering(r: httpx.Response) -> str:
+    """Waarom de server weigerde, in zijn eigen woorden.
+
+    Gemeten 14 september: Cloudflare gaf 403 met "Token lacks required user:read
+    or account:read scope". De hub toonde alleen "sleutel geweigerd (HTTP 403)",
+    en dan zoek je op de verkeerde plek -- de sleutel was geldig, er misten twee
+    leesrechten.
+    """
+    reden = ""
+    try:
+        body = r.json()
+        if isinstance(body, dict):
+            fout = body.get("error")
+            reden = body.get("error_description") or (fout.get("message") if isinstance(fout, dict) else fout) or body.get("message") or ""
+    except ValueError:
+        pass
+    if not reden:
+        m = re.search(r'error="([^"]+)"(?:.*?scope="([^"]+)")?', r.headers.get("www-authenticate", ""))
+        if m:
+            reden = m.group(1) + (f" (nodig: {m.group(2)})" if m.group(2) else "")
+    return f"sleutel geweigerd (HTTP {r.status_code})" + (f": {str(reden)[:200]}" if reden else "")
+
+
 class HttpSessie:
     def __init__(self, vid: str, sleutel: Optional[str]):
         self.url = url_voor(vid)
@@ -390,7 +413,7 @@ class HttpSessie:
         r = await self.client.post(self.url, headers=self._headers(),
                                    json={"jsonrpc": "2.0", "id": nr, "method": methode, "params": params or {}})
         if r.status_code in (401, 403):
-            raise McpFout(f"sleutel geweigerd (HTTP {r.status_code})")
+            raise McpFout(weigering(r))
         if r.status_code >= 400:
             raise McpFout(f"HTTP {r.status_code}: {r.text[:200]}")
         if r.headers.get("mcp-session-id"):
