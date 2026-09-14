@@ -43,7 +43,10 @@ const TEGEL_STIJL = {
 
 function Tegel({ children, breed }: { children: ReactNode; breed?: boolean }) {
   return (
-    <div className={`flex h-[74px] shrink-0 snap-start flex-col justify-center rounded-[15px] px-3.5 ${breed ? 'min-w-[196px]' : 'min-w-[132px]'}`}
+    /* Smal gehouden zodat de hele rij op een gewoon venster past en in het
+       midden staat: gemeten op 2000 breed was hij met 196/132 net 30px te breed
+       voor zijn ruimte (1526 in 1496), en dan schoof hij en stond er een pijl. */
+    <div className={`flex h-[74px] shrink-0 snap-start flex-col justify-center rounded-[15px] px-3 ${breed ? 'min-w-[172px]' : 'min-w-[120px]'}`}
       style={TEGEL_STIJL}>
       {children}
     </div>
@@ -68,7 +71,7 @@ function Lijntje({ punten, kleur }: { punten: number[]; kleur: string }) {
   if (punten.length < 2) return null;
   const min = Math.min(...punten);
   const max = Math.max(...punten);
-  const b = 64;
+  const b = 52;
   const h = 24;
   const d = punten.map((p, i) => `${i ? 'L' : 'M'}${((i / (punten.length - 1)) * b).toFixed(1)},${(h - ((p - min) / (max - min || 1)) * h).toFixed(1)}`).join('');
   return (
@@ -171,7 +174,7 @@ export function DeskKaartjes({ data, tellers, routes }: {
           en schuift de rij zoals voorheen. De pijlen blijven ruimte houden als
           ze onzichtbaar zijn, dus het midden is echt het midden. */}
       <div ref={rijRef} className="ns-kaartrij pointer-events-auto flex min-w-0 flex-1 snap-x scroll-px-2 overflow-x-auto px-2 py-3">
-        <div className="mx-auto flex w-max gap-3">
+        <div className="mx-auto flex w-max gap-2.5">
         <Getal waarde={tellers?.actief ?? leeg} label="Active deals" kleur="#22D3EE"
           sub={tellers ? `+${tellers.nieuwDezeWeek} this week` : undefined} subKleur="#34D399" />
         <Getal waarde={tellers?.akkoord ?? leeg} label="Awaiting approval" kleur="#FBBF24"
