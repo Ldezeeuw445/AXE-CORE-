@@ -111,6 +111,11 @@ export interface PerplexityFout {
 export function leesPerplexityFout(status: number, detail: string, retryAfter?: string | null): PerplexityFout {
   const bericht = detail || `HTTP ${status}`;
   if (status === 503 && /not configured/i.test(detail)) return { reden: 'niet-ingesteld', status, bericht };
+  // Een 404 op deze route betekent dat de VPS hem nog niet kent: de app is
+  // gebouwd voordat de backend gedeployd is. Dat is "nog niet ingesteld", niet
+  // een mislukte vraag -- en zo gelezen zegt AXE het eerlijk in plaats van
+  // "Perplexity failed (404)", wat naar Perplexity wijst in plaats van naar de VPS.
+  if (status === 404) return { reden: 'niet-ingesteld', status, bericht: 'Research route not deployed on the server yet' };
   // Twee soorten 402 met een andere oplossing. Het eigen budget van de server
   // zegt dat letterlijk (zie perplexity_agent.py); elke andere 402 komt van
   // Perplexity zelf en gaat over tegoed.
@@ -131,7 +136,7 @@ export function leesPerplexityFout(status: number, detail: string, retryAfter?: 
 export function formatteerFout(f: PerplexityFout): string {
   switch (f.reden) {
     case 'niet-ingesteld':
-      return 'Perplexity research is not set up on the server yet (no PERPLEXITY_API_KEY). Say so; do not answer as if it searched.';
+      return 'Perplexity research is not set up on the server yet (the route is not deployed or PERPLEXITY_API_KEY is missing). Say so; do not answer as if it searched.';
     case 'dagbudget-op':
       return "Perplexity research is paused: today's spending limit is reached (resets 00:00 UTC). This is a budget stop, not an empty result — say so.";
     case 'tegoed-op':

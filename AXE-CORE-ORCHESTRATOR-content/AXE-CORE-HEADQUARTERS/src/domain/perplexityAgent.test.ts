@@ -102,6 +102,14 @@ describe('waarom een vraag niet doorging', () => {
     expect(leesPerplexityFout(502, 'Perplexity rejected the server key (401). Rotate PERPLEXITY_API_KEY in the console.').reden).toBe('sleutel-geweigerd');
   });
 
+  it('leest een 404 als een route die nog niet gedeployd is, niet als een mislukte vraag', () => {
+    // De app kan eerder gebouwd zijn dan de VPS bijgewerkt is. Dan moet AXE
+    // naar de server wijzen, niet naar Perplexity.
+    const f = leesPerplexityFout(404, 'Not Found');
+    expect(f.reden).toBe('niet-ingesteld');
+    expect(formatteerFout(f)).toMatch(/not deployed/);
+  });
+
   it('laat een budgetstop nooit lezen als een leeg zoekresultaat', () => {
     const zin = formatteerFout(leesPerplexityFout(402, 'Daily Perplexity budget of $1.00 is spent.'));
     expect(zin).toMatch(/budget stop, not an empty result/);
