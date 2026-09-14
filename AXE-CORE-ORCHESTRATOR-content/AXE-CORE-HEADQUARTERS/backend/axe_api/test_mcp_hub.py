@@ -127,3 +127,16 @@ class TestSsdHangt:
         monkeypatch.setattr(h, "sleutel_voor", lambda vid: (_t.sleep(2), (None, ""))[1])
         uit = asyncio.run(h.test("supabase"))
         assert uit["status"] == "offline" and "Sta toe" in uit["fout"]
+
+
+class TestVorm:
+    def test_een_weggevallen_eerste_letter_wordt_benoemd(self):
+        assert "weggevallen" in h.controleer_vorm("supabase", "bp_" + "a" * 40)
+        assert h.controleer_vorm("supabase", "sbp_" + "a" * 40) is None
+        assert "begint met" in h.controleer_vorm("resend", "sk_verkeerde_dienst")
+        assert h.controleer_vorm("cloudflare", "willekeurig-token-zonder-voorvoegsel") is None
+
+    def test_een_verkeerde_vorm_wordt_niet_opgeslagen(self, schoon):
+        with pytest.raises(ValueError):
+            h.bewaar_sleutel("supabase", "bp_" + "a" * 40)
+        assert not (schoon / "sleutels.env").exists()

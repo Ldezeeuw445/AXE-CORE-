@@ -80,7 +80,7 @@ SJABLONEN: dict[str, dict[str, Any]] = {
         "url": "https://mcp.supabase.com/mcp?project_ref={project_ref}&read_only=true",
         "velden": [{"id": "project_ref", "label": "Project-ref", "standaard": "pqnngpcgbdwxavbatbia"}],
         "meerdere": True, "deel_sleutel": True,
-        "sleutels": ["SUPABASE_ACCESS_TOKEN"],
+        "sleutels": ["SUPABASE_ACCESS_TOKEN"], "voorvoegsel": ["sbp_"],
         "docs": "https://supabase.com/docs/guides/getting-started/mcp",
         "uitleg": "Tabellen, logs en advies van één project, alleen-lezen. Token: supabase.com/dashboard/account/tokens.",
     },
@@ -100,13 +100,13 @@ SJABLONEN: dict[str, dict[str, Any]] = {
     "resend": {
         "naam": "Resend", "categorie": "comms", "transport": "http",
         "url": "https://mcp.resend.com/mcp", "meerdere": True, "deel_sleutel": False,
-        "sleutels": ["RESEND_API_KEY"], "docs": "https://github.com/resend/resend-mcp",
+        "sleutels": ["RESEND_API_KEY"], "voorvoegsel": ["re_"], "docs": "https://github.com/resend/resend-mcp",
         "uitleg": "E-mail versturen en domeinen, contacten en broadcasts beheren. API-key: resend.com/api-keys.",
     },
     "firecrawl": {
         "naam": "Firecrawl", "categorie": "ai", "transport": "http",
         "url": "https://mcp.firecrawl.dev/v2/mcp",
-        "sleutels": ["FIRECRAWL_API_KEY"], "docs": "https://docs.firecrawl.dev/mcp-server",
+        "sleutels": ["FIRECRAWL_API_KEY"], "voorvoegsel": ["fc-"], "docs": "https://docs.firecrawl.dev/mcp-server",
         "uitleg": "Elke site scrapen, crawlen en doorzoeken als schone tekst. API-key: firecrawl.dev/app/api-keys.",
     },
     "brave-search": {
@@ -118,7 +118,7 @@ SJABLONEN: dict[str, dict[str, Any]] = {
     "stripe": {
         "naam": "Stripe", "categorie": "comms", "transport": "http",
         "url": "https://mcp.stripe.com/", "meerdere": True, "deel_sleutel": False,
-        "sleutels": ["STRIPE_RESTRICTED_KEY"], "docs": "https://docs.stripe.com/mcp",
+        "sleutels": ["STRIPE_RESTRICTED_KEY"], "voorvoegsel": ["rk_"], "docs": "https://docs.stripe.com/mcp",
         "uitleg": "Saldo, facturen, abonnementen. Gebruik een restricted key (rk_...); Stripe vraagt zelf bevestiging bij terugbetalingen.",
     },
     "figma": {
@@ -135,13 +135,13 @@ SJABLONEN: dict[str, dict[str, Any]] = {
     "e2b": {
         "naam": "E2B", "categorie": "dev", "transport": "stdio",
         "commando": ["npx", "-y", "@e2b/mcp-server"],
-        "sleutels": ["E2B_API_KEY"], "docs": "https://github.com/e2b-dev/mcp-server",
+        "sleutels": ["E2B_API_KEY"], "voorvoegsel": ["e2b_"], "docs": "https://github.com/e2b-dev/mcp-server",
         "uitleg": "Code draaien in een afgesloten sandbox in de cloud. API-key: e2b.dev/dashboard.",
     },
     "perplexity": {
         "naam": "Perplexity", "categorie": "ai", "transport": "http",
         "url": "https://api.perplexity.ai/mcp",
-        "sleutels": ["PERPLEXITY_API_KEY"], "toegestaan": ["perplexity_search"], "per_dag": 25,
+        "sleutels": ["PERPLEXITY_API_KEY"], "voorvoegsel": ["pplx-"], "toegestaan": ["perplexity_search"], "per_dag": 25,
         "docs": "https://github.com/perplexityai/modelcontextprotocol",
         "uitleg": "Zoeken met actuele bronnen. Alleen perplexity_search, max 25 per dag; onderzoek loopt via [RESEARCH:].",
     },
@@ -289,12 +289,34 @@ def sleutel_voor(vid: str) -> tuple[Optional[str], str]:
     return None, "ontbreekt"
 
 
+def controleer_vorm(sjabloon: str, waarde: str) -> Optional[str]:
+    """Klopt het begin van de sleutel bij deze dienst?
+
+    Gemeten 14 september: een Supabase-token kwam binnen als `bp_...` -- de `s`
+    was bij het kopiëren weggevallen. Supabase zei alleen "JWT could not be
+    decoded"; niemand zag dat het aan één letter lag. Alleen het begin wordt
+    genoemd, nooit de waarde.
+    """
+    verwacht = SJABLONEN[sjabloon].get("voorvoegsel")
+    w = (waarde or "").strip()
+    if not verwacht or any(w.startswith(p) for p in verwacht):
+        return None
+    naam = SJABLONEN[sjabloon]["naam"]
+    mist = next((p for p in verwacht if w.startswith(p[1:])), None)
+    if mist:
+        return f"Deze {naam}-sleutel begint met '{mist[1:]}' in plaats van '{mist}': het eerste teken is bij het kopiëren weggevallen."
+    return f"Een {naam}-sleutel begint met {' of '.join(repr(p) for p in verwacht)}. Controleer of je de juiste (en hele) sleutel hebt gekopieerd."
+
+
 def bewaar_sleutel(vid: str, waarde: str) -> str:
     """Schrijf een zelf ingevulde sleutel weg, alleen leesbaar voor jou (600)."""
     v = verbindingen()[vid]
     naam = _sleutelnaam(v, vid)
     if not naam:
         raise ValueError("Deze verbinding heeft geen sleutel nodig.")
+    fout = controleer_vorm(v["sjabloon"], waarde)
+    if fout:
+        raise ValueError(fout)
     bestaand = _lees_env_bestand(SLEUTEL_BESTAND)
     bestaand[naam] = waarde.strip()
     _schrijf_prive(SLEUTEL_BESTAND, "".join(f"{k}={w}\n" for k, w in bestaand.items()))
