@@ -14,8 +14,12 @@ DOMAIN=mcp.northseacommodity.com
 echo "== gebruiker en mappen"
 id northsea-mcp >/dev/null 2>&1 || useradd --system --home-dir $ROOT --shell /usr/sbin/nologin northsea-mcp
 mkdir -p $ROOT/app $ROOT/state $ROOT/backups
-chown northsea-mcp:northsea-mcp $ROOT/state
-chmod 750 $ROOT/state
+# Rechten expliciet, nooit via de umask: bij de eerste uitrol maakte een
+# stap met `umask 077` $ROOT aan als 700, en dan kon de service-gebruiker
+# niet eens bij zijn eigen code (Permission denied, unit bleef herstarten).
+chown root:root $ROOT && chmod 755 $ROOT
+chown northsea-mcp:northsea-mcp $ROOT/state && chmod 750 $ROOT/state
+chmod 700 $ROOT/backups
 
 echo "== omgeving (alleen namen controleren)"
 [ -f $ROOT/.env ] || { echo "ontbreekt: $ROOT/.env (zie deploy/env.example)"; exit 2; }
@@ -30,6 +34,7 @@ rsync -a --delete --exclude '.venv' --exclude '__pycache__' --exclude 'tests' "$
 [ -x $ROOT/venv/bin/python ] || python3.12 -m venv $ROOT/venv
 $ROOT/venv/bin/pip install -q --upgrade pip
 $ROOT/venv/bin/pip install -q -r "$INCOMING/requirements.txt"
+chmod -R u=rwX,go=rX $ROOT/app $ROOT/venv
 
 echo "== systemd"
 install -m 644 "$INCOMING/deploy/northsea-mcp.service" /etc/systemd/system/northsea-mcp.service
