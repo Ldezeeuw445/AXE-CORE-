@@ -8,12 +8,18 @@
  * component meeschakelt zodra de stand ergens wisselt — ongeacht wélke knop.
  *
  * `usePlaatInk` geeft de inkt voor tekst die DIRECT op de plaat ligt (klok,
- * datum, sectiekoppen): donker op de lichte plaat, licht op de zwarte. Wat op
- * een donkere kaart staat houdt gewoon `--text-primary`; die AXE-regel geldt
- * hier niet.
+ * datum, sectiekoppen): donker op een écht lichte plaat, licht op een donkere.
+ * Wat op een donkere kaart staat houdt gewoon `--text-primary`; die AXE-regel
+ * geldt hier niet.
+ *
+ * Let op: op de telefoon is de "lichte" stand ('glass') sinds de Glass-Plate-
+ * mockup GLAS DONKER — een diep indigo glas, dus donker. Alleen op de macOS-
+ * desktop is 'glass' het native, écht lichte glas. Daarom hangt de donkere inkt
+ * aan `hasNativeGlass()`, niet aan de stand alleen.
  */
 import { useEffect, useState } from 'react';
 import { type Look, DEFAULT_LOOK } from '@/domain/look';
+import { hasNativeGlass } from '@/infrastructure/config/apiUrl';
 
 function readLook(): Look {
   if (typeof document !== 'undefined') {
@@ -38,7 +44,10 @@ export function useLookValue(): Look {
 
 export function usePlaatInk(): { ink: string; muted: string } {
   const look = useLookValue();
-  return look === 'glass'
+  // Donkere inkt hoort alleen op een écht lichte plaat: dat is de macOS-desktop
+  // met native glas. Op de telefoon is 'glass' = GLAS DONKER (indigo, donker),
+  // dus daar blijft de inkt licht — net als in de zwarte stand.
+  return look === 'glass' && hasNativeGlass()
     ? { ink: '#1b2432', muted: 'rgba(27,36,50,0.60)' }
     : { ink: 'var(--text-primary)', muted: 'var(--text-muted)' };
 }
