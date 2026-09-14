@@ -160,10 +160,10 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       x.clearRect(0, 0, w, h);
 
       const b = boostRef.current;
-      // Iets boven het midden: op de telefoon-plaat staat de composer eronder,
-      // en dan oogt het gecentreerde midden te laag. 0.44 tilt de bol een stukje
-      // op zonder hem tegen de bovenrand te duwen.
-      const cx = w / 2, cy = h * 0.44;
+      // Boven het midden: op de telefoon-plaat staat de composer eronder, en dan
+      // oogt het gecentreerde midden te laag. 0.40 tilt de bol wat verder op
+      // zonder hem tegen de bovenrand te duwen.
+      const cx = w / 2, cy = h * 0.40;
       const R = Math.min(w, h) * 0.31 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
 
