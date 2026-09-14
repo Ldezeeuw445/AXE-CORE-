@@ -76,6 +76,14 @@ export function PlaatChat() {
   const chatCollapsed = useCoreViewStore(s => s.chatDicht);
   const setChatCollapsed = useCoreViewStore(s => s.setChatDicht);
 
+  // Op de telefoon start de home clean, zoals de Tauri-mockup: alleen de sphere
+  // en de slanke composer, met de chat ingeklapt. Hij opent zodra je 'm gebruikt
+  // (typen/versturen) of bij een approval/bestand — zie de effecten hieronder.
+  useEffect(() => {
+    if (isMobile) setChatCollapsed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [chatText, setChatText] = useState('');
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
   const [dropActive, setDropActive] = useState(false);
