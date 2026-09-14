@@ -135,8 +135,10 @@ export function HomeCommandComposer(props: Props) {
         </div>
       </div>
 
-      {/* De vier tip-chips onder de composer. */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
+      {/* De vier tip-chips onder de composer. Ze breken af naar twee regels op
+          de smalle telefoon, zodat ze alle vier zichtbaar zijn (op de brede
+          desktop staan ze op één rij, zoals de foto). */}
+      <div className="flex flex-wrap items-center gap-2 pb-0.5">
         {CHIPS.map(chip => (
           <button
             key={chip.label}
