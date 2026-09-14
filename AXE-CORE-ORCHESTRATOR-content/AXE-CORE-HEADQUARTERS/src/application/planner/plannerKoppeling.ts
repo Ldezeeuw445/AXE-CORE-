@@ -11,8 +11,10 @@
 import { plannerTaken, plannerZetMotoren, type PlannerTaak } from '@/infrastructure/gateways/axeCoreApiService';
 import { leesToewijzing } from '@/infrastructure/persistence/agentMotorenOpslag';
 import { meldActiviteit } from '@/shared/axeActiviteit';
+import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 
-const AGENT: Record<string, string> = { 'axe-core': 'AXE Core', 'code-agent': 'Code Agent', 'axe-algo': 'AXE Algo' };
+const AGENT: Record<string, string> = { 'axe-core': 'AXE Core', 'code-agent': 'Code Agent', 'axe-algo': 'AXE Algo', 'maps-agent': 'Northsea Desk' };
+const IN_GEHEUGEN_SLEUTEL = 'axe_planner_in_geheugen';
 const GEZIEN_SLEUTEL = 'axe_planner_gezien';
 const POLL_MS = 90_000;
 
@@ -36,6 +38,33 @@ export function nieuweMeldingen(taken: PlannerTaak[], gezien: Record<string, str
   return uit;
 }
 
+/**
+ * Afgeronde planner-taken het doorzoekbare geheugen in, één keer per taak.
+ *
+ * De planner schrijft zijn uitkomst in de tabel `memory`, maar de chat en de
+ * code-agent zoeken in rag_memories (embeddings). Zonder deze stap wist de chat
+ * niet wat de planner vannacht had uitgezocht. De embedding maakt de app, met
+ * dezelfde embedder als elke andere herinnering, zodat ze vergelijkbaar zijn.
+ */
+function naarGeheugen(taken: PlannerTaak[]): void {
+  let gedaan: string[] = [];
+  try { gedaan = JSON.parse(localStorage.getItem(IN_GEHEUGEN_SLEUTEL) ?? '[]'); } catch { /* leeg */ }
+  const nieuw = taken.filter(t => t.status === 'completed' && t.result?.output && !gedaan.includes(t.id));
+  for (const t of nieuw) {
+    const agent = AGENT[t.metadata?.agent ?? ''] ?? 'AXE';
+    void saveRagMemory({
+      category: 'agent',
+      importance: 6,
+      content: `[planner · ${agent}] ${t.title}\n→ ${String(t.result?.output).slice(0, 1500)}`,
+      metadata: { source: 'planner', taakId: t.id, app: (t.metadata as Record<string, unknown> | null)?.app },
+    }).catch(() => { /* volgende ronde opnieuw */ });
+    gedaan.push(t.id);
+  }
+  if (nieuw.length) {
+    try { localStorage.setItem(IN_GEHEUGEN_SLEUTEL, JSON.stringify(gedaan.slice(-300))); } catch { /* quota */ }
+  }
+}
+
 export function startPlannerKoppeling(): void {
   geefMotorenDoor();
   window.addEventListener('axe:agent-motoren', geefMotorenDoor);
@@ -47,6 +76,7 @@ export function startPlannerKoppeling(): void {
     try { gezien = JSON.parse(localStorage.getItem(GEZIEN_SLEUTEL) ?? '{}'); } catch { /* leeg */ }
     const { taken } = await plannerTaken(20).catch(() => ({ taken: [] as PlannerTaak[] }));
     const meldingen = nieuweMeldingen(taken, gezien);
+    naarGeheugen(taken);
     for (const m of meldingen) gezien[m.id] = m.stand;
     try {
       const houd = new Set(taken.map(t => t.id));

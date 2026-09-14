@@ -8,8 +8,8 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { AppTaken, AppCijfers, type AppTaak } from './taken/AppTaken';
 import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
-  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
-  type DurableTaskRun,
+  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask, plannerTaken,
+  type DurableTaskRun, type PlannerTaak,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { PlannerTaken } from '@/presentation/components/tasks/PlannerTaken';
 
@@ -77,6 +77,26 @@ function dueFromRow(row: DurableTaskRun): number | undefined {
 
 /** Human due-date label + whether it's overdue (only meaningful for open tasks). */
 
+/**
+ * Een planner-taak als rij van dit bord.
+ *
+ * De planner draait op de agent-host en niet via de VPS-takenlijst, dus zijn
+ * taken komen apart binnen. Zijn `uiStatus` staat op 'todo' vanaf het aanmaken
+ * en schuift niet mee; de echte status wel. Daarom weg ermee, dan leest
+ * uiStatusOf de status zelf.
+ */
+function plannerAlsRij(t: PlannerTaak): DurableTaskRun {
+  const { uiStatus: _genegeerd, ...metadata } = (t.metadata ?? {}) as Record<string, unknown>;
+  return {
+    ...(t as unknown as DurableTaskRun),
+    goal: t.goal ?? '',
+    priority: (['low', 'medium', 'high', 'critical'].includes(t.priority) ? t.priority : 'medium') as DurableTaskRun['priority'],
+    status: t.status as DurableTaskRun['status'],
+    assignee: (metadata.agent as string | undefined) ?? t.assignee ?? 'AXE Core',
+    metadata: { ...metadata, planner: true },
+  };
+}
+
 function normalizeRows(rows: DurableTaskRun[]): Task[] {
   return rows.map(row => ({
     id: row.id,
@@ -109,8 +129,14 @@ export default function Tasks() {
 
   const refresh = async () => {
     try {
-      const { tasks: rows } = await listDurableTasks({ limit: 100 });
-      setTasks(normalizeRows(rows));
+      // Twee bronnen, elk apart: de takenlijst op de VPS en de planner op de
+      // agent-host. Valt er één weg, dan staat de ander er nog.
+      const [lijst, planner] = await Promise.allSettled([listDurableTasks({ limit: 100 }), plannerTaken(60)]);
+      const rows = lijst.status === 'fulfilled' ? lijst.value.tasks : [];
+      const plannerRows = planner.status === 'fulfilled' ? planner.value.taken.map(plannerAlsRij) : [];
+      // Planner-rijen alleen uit de planner zelf: die heeft de actuele status.
+      setTasks(normalizeRows([...rows.filter(r => r.capability !== 'planner'), ...plannerRows]));
+      if (lijst.status === 'rejected' && planner.status === 'rejected') throw lijst.reason;
     } catch (e) {
       // Leave whatever was last loaded rather than blanking the board, but
       // say so — a silent failure here is indistinguishable from "no tasks".

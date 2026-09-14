@@ -265,7 +265,18 @@ class Planner:
         except Exception as e:  # noqa: BLE001
             log.warning("planner: geheugen lezen faalde: %s", e)
             return ""
-        return "\n".join(f"- [{r.get('kind')}] {str(r.get('content') or '')[:220]}" for r in rijen)
+        regels = [f"- [{r.get('kind')}] {str(r.get('content') or '')[:220]}" for r in rijen]
+        # Ook het doorzoekbare geheugen (rag_memories): daar schrijven de chat en
+        # de code-runs op een abonnement hun uitkomst. Zonder dit plande de
+        # planner naast wat je vandaag in de chat besprak in plaats van erop.
+        try:
+            rag = (self.sb().table("rag_memories").select("category,content,created_at")
+                   .in_("category", ["agent", "user"])
+                   .order("created_at", desc=True).limit(15).execute().data) or []
+            regels += [f"- [{r.get('category')}] {str(r.get('content') or '')[:220]}" for r in rag]
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: rag_memories lezen faalde: %s", e)
+        return "\n".join(regels)
 
     def _git(self) -> str:
         regels = []

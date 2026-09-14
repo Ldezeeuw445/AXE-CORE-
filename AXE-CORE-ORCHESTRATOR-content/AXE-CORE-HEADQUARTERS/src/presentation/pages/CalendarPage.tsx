@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
@@ -9,6 +9,9 @@ import { AgendaLijst } from './agenda/AgendaLijst';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster';
 import { CalendarRange, LayoutGrid } from 'lucide-react';
+import { APPS } from '@/domain/apps';
+import { werkAgenda, type AgendaTaak, type AgendaCron } from '@/domain/werkAgenda';
+import { cronListSchedules, listDurableTasks, plannerTaken } from '@/infrastructure/gateways/axeCoreApiService';
 
 /**
  * Maand of week. Als twee iconen in de band naast de composer, net als de
@@ -21,13 +24,26 @@ const WEERGAVEN: ZuilItem[] = [
   { id: 'week', label: 'Week', kleur: '#8B7CF6', icoon: <CalendarRange size={17} /> },
 ];
 
-/** De legenda onder het weekrooster: welk soort welke kleur heeft. */
-const SOORTEN: ReadonlyArray<{ label: string; kleur: string }> = [
-  { label: 'Afspraak', kleur: '#3B82F6' },
-  { label: 'Focus', kleur: '#8B5CF6' },
-  { label: 'Taak', kleur: '#34D399' },
-  { label: 'Herinnering', kleur: '#F5A524' },
-];
+/** De legenda: de kleur van elke app, dezelfde als in Taken en Cron. */
+const SOORTEN: ReadonlyArray<{ label: string; kleur: string }> = APPS.map(a => ({ label: a.label, kleur: a.kleur }));
+
+/**
+ * Taken, planner en cronjobs ophalen. Elk apart: valt er één weg (de VPS, of
+ * de agent-host), dan staat de rest er gewoon.
+ */
+async function laadWerk(): Promise<{ taken: AgendaTaak[]; crons: AgendaCron[] }> {
+  const [taken, planner, crons] = await Promise.allSettled([
+    listDurableTasks({ limit: 200 }), plannerTaken(100), cronListSchedules(),
+  ]);
+  const uit: AgendaTaak[] = [];
+  if (planner.status === 'fulfilled') {
+    for (const t of planner.value.taken) uit.push({ ...t, metadata: t.metadata as Record<string, unknown> | null, planner: true });
+  }
+  if (taken.status === 'fulfilled') {
+    for (const t of taken.value.tasks) uit.push({ ...t, completed_at: null, planner: t.capability === 'planner' });
+  }
+  return { taken: uit, crons: crons.status === 'fulfilled' ? crons.value : [] };
+}
 
 /**
  * Een agenda-item omzetten naar iets waar het weekrooster mee kan rekenen.
@@ -108,14 +124,29 @@ export default function CalendarPage() {
      maandweergave niet te verzetten en andersom. */
   const [weekAnker, setWeekAnker] = useState<Date>(() => new Date());
 
+  /* Het werk van de agents: taken met een deadline, wat de planner deed en
+     wanneer de cronjobs draaien. Elke minuut opnieuw, zodat een afgeronde
+     planner-taak vanzelf verschuift. */
+  const [werk, setWerk] = useState<{ taken: AgendaTaak[]; crons: AgendaCron[] }>({ taken: [], crons: [] });
+  useEffect(() => {
+    let weg = false;
+    const haal = () => { void laadWerk().then(w => { if (!weg) setWerk(w); }); };
+    haal();
+    const t = setInterval(haal, 60_000);
+    return () => { weg = true; clearInterval(t); };
+  }, []);
+
   const roosterItems: RoosterItem[] = useMemo(
-    () => EVENTS
-      .filter(e => minutenVan(e.time) !== null)
-      .map(e => ({
-        id: e.id, titel: e.title, datum: e.date, tijd: e.time,
-        duurMin: duurInMinuten(e.duration), kleur: e.color, soort: e.type,
-      })),
-    [],
+    () => [
+      ...EVENTS
+        .filter(e => minutenVan(e.time) !== null)
+        .map(e => ({
+          id: e.id, titel: e.title, datum: e.date, tijd: e.time,
+          duurMin: duurInMinuten(e.duration), kleur: e.color, soort: e.type,
+        })),
+      ...werkAgenda(werk.taken, werk.crons),
+    ],
+    [werk],
   );
 
 
@@ -147,7 +178,7 @@ export default function CalendarPage() {
           leegTekst={
             weergave === 'maand'
               ? 'Niets op deze dag.'
-              : 'Niets gepland. Er is nog geen agendakoppeling — zie de opmerking bij EVENTS.'
+              : 'Niets gepland: geen taken met een deadline, planner-werk of cronjobs deze week.'
           }
         />
       </TabRail>

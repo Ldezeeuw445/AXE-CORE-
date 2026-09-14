@@ -27,6 +27,7 @@ import {
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
+import { openLeerbeurt, metGeheugen, sluitLeerbeurt } from '@/application/agents/abonnementLeerlus';
 import {
   agentHostVoorkeur, zetAgentHostVoorkeur, agentHostStand,
   LOKALE_AGENT_ORIGIN, type AgentHostVoorkeur,
@@ -932,9 +933,13 @@ export default function CodeEditorPage() {
         // The active file is context, not an instruction: Claude Code reads the
         // checkout itself, so pasting the whole file would just duplicate what
         // it can already open — the path is the useful part.
-        const prompt = activeTab
+        const opdracht = activeTab
           ? `${instruction}\n\n(The file currently open in the editor is ${activeTab.path}.)`
           : instruction;
+        // Dezelfde leerlus als de chat: gedeeld geheugen mee, uitkomst terug.
+        // Zie application/agents/abonnementLeerlus.ts.
+        const leer = await openLeerbeurt(`${instruction} ${claudeRepo} ${activeTab?.path ?? ''}`, 'code-editor');
+        const prompt = metGeheugen(opdracht, leer);
         const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as 'claude' | 'codex' | 'cursor' });
         // A refusal comes back as HTTP 200 with status 'error' — reading the
         // body is the only way to tell a guarded refusal from a finished run.
@@ -947,6 +952,10 @@ export default function CodeEditorPage() {
           patches: [],
         }]);
         if (res.status === 'ok') setRunTeller(n => n + 1);
+        sluitLeerbeurt(leer, res.status === 'ok', {
+          wie: `Code Agent · ${motorLabel} · ${claudeRepo}`, opdracht: instruction, uitkomst: text,
+          metadata: { repo: claudeRepo, branch: res.branch, motor: agentEngine },
+        });
         // It edited files on disk directly, so what is open here is now stale.
         if (res.status === 'ok' && activeTab) {
           void readWorkspaceFile(activeTab.path)
