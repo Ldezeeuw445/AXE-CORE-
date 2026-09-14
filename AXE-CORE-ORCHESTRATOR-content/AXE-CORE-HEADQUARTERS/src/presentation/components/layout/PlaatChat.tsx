@@ -75,10 +75,17 @@ export function PlaatChat() {
   // Op de telefoon start de home clean, zoals de Tauri-mockup: alleen de sphere
   // en de slanke composer, met de chat ingeklapt. Hij opent zodra je 'm gebruikt
   // (typen/versturen) of bij een approval/bestand — zie de effecten hieronder.
+  const mobileCollapsedRef = useRef(false);
   useEffect(() => {
-    if (isMobile) setChatCollapsed(true);
+    // Eén keer inklappen zodra 'mobiel' bekend is (useIsMobile is bij mount nog
+    // false tot de breedte gemeten is). De ref voorkomt dat een latere expand
+    // door de gebruiker weer wordt dichtgeklapt.
+    if (isMobile && !mobileCollapsedRef.current) {
+      mobileCollapsedRef.current = true;
+      setChatCollapsed(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isMobile]);
 
   const [chatText, setChatText] = useState('');
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
