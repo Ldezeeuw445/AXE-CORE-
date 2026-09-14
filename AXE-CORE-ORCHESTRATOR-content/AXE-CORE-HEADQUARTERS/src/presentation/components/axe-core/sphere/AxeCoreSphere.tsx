@@ -160,7 +160,10 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       x.clearRect(0, 0, w, h);
 
       const b = boostRef.current;
-      const cx = w / 2, cy = h / 2;
+      // Iets boven het midden: op de telefoon-plaat staat de composer eronder,
+      // en dan oogt het gecentreerde midden te laag. 0.44 tilt de bol een stukje
+      // op zonder hem tegen de bovenrand te duwen.
+      const cx = w / 2, cy = h * 0.44;
       const R = Math.min(w, h) * 0.31 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
 
@@ -170,8 +173,8 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth > 0.5) continue;
-        x.fillStyle = `rgba(120,205,240,${(0.16 + q.depth * 0.52).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.7 + q.depth * 1.45) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(120,205,240,${(0.20 + q.depth * 0.56).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.8 + q.depth * 1.5) * d, 0, 6.284); x.fill();
       }
 
       ringHelft(cx, cy, R, false);
@@ -194,14 +197,15 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth <= 0.5) continue;
-        x.fillStyle = `rgba(150,228,255,${(0.20 + q.depth * 0.66).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.7 + q.depth * 1.55) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(150,228,255,${(0.26 + q.depth * 0.66).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.8 + q.depth * 1.6) * d, 0, 6.284); x.fill();
       }
 
       for (const p of bol) {
         const q = proj(p, cx, cy, R);
-        const size = (0.85 + q.depth * 2.2) * d * (0.9 + b * 0.4);
-        x.fillStyle = `rgba(${p.rgb},${(0.34 + q.depth * 0.66).toFixed(3)})`;
+        // Iets groter en steviger dan eerst: Luka wil de korrel wat duidelijker.
+        const size = (1.0 + q.depth * 2.35) * d * (0.9 + b * 0.4);
+        x.fillStyle = `rgba(${p.rgb},${(0.44 + q.depth * 0.56).toFixed(3)})`;
         x.beginPath(); x.arc(q.px, q.py, size, 0, 6.284); x.fill();
       }
 
@@ -257,17 +261,51 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       teken();
     };
 
+    /* Één vinger draait, twee vingers zoomen (knijpen).
+     *
+     * `wheel` vuurt alleen op de desktop, dus op de telefoon was er geen manier
+     * om in/uit te zoomen. Nu houden we de actieve pointers bij: bij twee raak-
+     * punten meet de afstand het zoomen (net als een foto), bij één punt draait
+     * hij zoals eerst. touch-action:none op de canvas houdt de browser-zoom weg. */
+    const pointers = new Map<number, { x: number; y: number }>();
+    let knijpAfstand = 0;
+    const tweeAfstand = () => {
+      const pts = [...pointers.values()];
+      if (pts.length < 2) return 0;
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    };
     const omlaag = (e: PointerEvent) => {
-      slepen = true; lastX = e.clientX; lastY = e.clientY;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       canvas.setPointerCapture(e.pointerId);
+      if (pointers.size === 1) { slepen = true; lastX = e.clientX; lastY = e.clientY; }
+      else if (pointers.size === 2) { slepen = false; knijpAfstand = tweeAfstand(); }
     };
     const beweeg = (e: PointerEvent) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size >= 2) {
+        const d2 = tweeAfstand();
+        if (knijpAfstand > 0 && d2 > 0) {
+          zoom = Math.max(0.55, Math.min(2.6, zoom * (d2 / knijpAfstand)));
+        }
+        knijpAfstand = d2;
+        return;
+      }
       if (!slepen) return;
       rotY += (e.clientX - lastX) * 0.006;
       rotX = Math.max(-1.3, Math.min(1.3, rotX + (e.clientY - lastY) * 0.006));
       lastX = e.clientX; lastY = e.clientY;
     };
-    const los = () => { slepen = false; };
+    const los = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) knijpAfstand = 0;
+      if (pointers.size === 0) { slepen = false; }
+      else if (pointers.size === 1) {
+        // Terug naar draaien met de overgebleven vinger, zonder sprong.
+        const [p] = pointers.values();
+        slepen = true; lastX = p.x; lastY = p.y;
+      }
+    };
     const wiel = (e: WheelEvent) => {
       e.preventDefault();
       zoom = Math.max(0.55, Math.min(2.6, zoom * (e.deltaY < 0 ? 1.08 : 0.926)));
