@@ -36,6 +36,59 @@ from supabase import Client, create_client
 from crew_runner import run_crew
 from zuinig import Bezet, lagere_prioriteit, slot as zuinig_slot
 import contextlib as _contextlib
+
+# ── agent_runner: beschermd ingeladen ────────────────────────────────────────
+#
+# Dit bestand draait op TWEE machines: de VPS en de lokale API op de Mac mini.
+# Op de Mac staat agent_runner.py naast dit bestand; op de VPS niet -- daar staat
+# hij in een checkout ín /opt/axe-core-api, en die map moet eerst in sys.path.
+#
+# De git-versie importeerde hier kaal (`from agent_runner import ...`). Op de VPS
+# had dat de hele API bij het opstarten laten crashen: trading, chat, alles. De
+# serverversie deed het wel goed -- sys.path aanvullen, en de import in een try,
+# zodat een ontbrekende module alleen /claude/* laat weigeren. Die aanpak is hier
+# overgenomen en naar BOVEN gehaald, omdat de planner-code verderop `run_agent`
+# al bij het laden nodig heeft.
+import sys as _sys
+import logging as _logging
+
+_CLAUDE_RUNNER_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "AXE-CORE-ORCHESTRATOR-content", "AXE-CORE-HEADQUARTERS", "backend", "axe_api",
+)
+if os.path.isdir(_CLAUDE_RUNNER_DIR) and _CLAUDE_RUNNER_DIR not in _sys.path:
+    _sys.path.append(_CLAUDE_RUNNER_DIR)
+
+try:
+    from agent_runner import (  # noqa: E402
+        run_agent,
+        engine_status as agent_engine_status,
+        repo_status as claude_repo_status,
+        cli_available as claude_cli_available,
+        ALLOWED_PERMISSION_MODES,
+        werkboom_status,
+        commit_en_push,
+    )
+    _CLAUDE_IMPORT_ERROR = None
+except Exception as _e:  # noqa: BLE001
+    _CLAUDE_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
+    ALLOWED_PERMISSION_MODES = ()
+    _logging.getLogger("axe_api").warning(
+        "agent_runner niet ingeladen (%s) -- /claude/* weigert", _CLAUDE_IMPORT_ERROR)
+
+    def _geen_agent_runner(*_a, **_k):
+        raise RuntimeError(f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}")
+
+    run_agent = werkboom_status = commit_en_push = _geen_agent_runner  # type: ignore[assignment]
+
+    def agent_engine_status(*_a, **_k) -> dict:  # type: ignore[misc]
+        return {}
+
+    def claude_repo_status(*_a, **_k) -> dict:  # type: ignore[misc]
+        return {}
+
+    def claude_cli_available(*_a, **_k) -> bool:  # type: ignore[misc]
+        return False
 from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -95,7 +148,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-AXE-Repo"],
     max_age=86400,
 )
 
@@ -193,6 +246,15 @@ class CrewRunRequest(BaseModel):
     task: str
     context: Optional[str] = None
     conversation: Optional[list] = None
+
+class ClaudeRunRequest(BaseModel):
+    repo: str
+    prompt: str
+    permission_mode: Optional[str] = None
+    timeout: Optional[int] = None
+    # 'claude' of 'codex'. Beide gaan door dezelfde bewakingen in agent_runner;
+    # alleen het commando verschilt. Weggelaten is 'claude'.
+    engine: Optional[str] = None
 
 class ExecRequest(BaseModel):
     command: str
@@ -388,17 +450,24 @@ async def decide_task_approval(
     return {"approval": approval}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# OPEN PROXIES — LLM providers + Exa search
+# PROXIES — LLM providers, Exa search, Fish TTS
 # ══════════════════════════════════════════════════════════════════════════════
-# Mirrors api/proxy/ai.ts and api/exa.ts (the Vercel versions) exactly, incl.
-# their security model: no AXE_API_KEY / AUTH here, on purpose. The caller's
-# own provider key travels in the request body (same as it already does
-# against Vercel) — these routes only exist to dodge the browser-CORS wall
-# each provider puts up, not to guard a secret of ours. That's what lets the
-# packaged Tauri app reach a real LLM without embedding the master AXE_API_KEY
-# (Supabase service_role + GitHub write + /internal/exec) into a distributed
-# app bundle just to get chat working. Not gated behind Vercel either, so
-# this keeps working even while the Vercel deployment is billing-disabled.
+# Deze routes stonden open, met als redenering: de client stuurt zijn eigen
+# providersleutel mee, de proxy omzeilt alleen CORS en bewaakt geen geheim van
+# ons. Dat klopte tot 2 sep 2026. Toen kreeg de proxy _SERVER_KEYS als
+# terugval (zie hieronder), en EXA_API_KEY / FISH_AUDIO_API_KEY stonden er al.
+# Vanaf dat moment kon iedereen die dit adres kende op Luka's kosten OpenAI,
+# Anthropic, Exa en Fish aanroepen met een lege sleutel.
+#
+# Gemeten 14 sep 2026: POST /proxy/ai met '{}' gaf 400, een validatiefout, dus
+# voorbij elke authcontrole. Daarom nu achter AUTH, net als de rest.
+#
+# Wie ze aanroept en zijn Bearer meestuurt:
+#   - de verpakte Tauri-app en de Android-schil: apiUrl.ts -> vpsAuthHeaders()
+#   - de planner in dit proces: planner.py -> _proxy_headers()
+#   - functions/api/_forward.ts (Cloudflare Pages) stuurt BEWUST geen sleutel
+#     mee. Die route controleert niet wie er belt, dus een sleutel erbij maakt
+#     van de Pages-URL dezelfde open kraan. Eerst een gebruikerscontrole daar.
 
 def _openai_chat_url(base_url: str) -> str:
     """Het chat-adres voor een OpenAI-vormige basis, in welke vorm hij ook komt.
@@ -468,7 +537,7 @@ def _server_key_for(provider: str) -> str:
     return ""
 
 
-@app.get("/proxy/ai/providers")
+@app.get("/proxy/ai/providers", dependencies=[AUTH])
 async def proxy_ai_providers():
     """Welke providers deze server zelf kan bedienen.
 
@@ -479,8 +548,8 @@ async def proxy_ai_providers():
     dat er niets is, is precies het soort stille misleiding dat deze codebase
     elders opruimt.
 
-    Geeft namen terug, nooit waarden. Open zoals /proxy/ai zelf: welke merken
-    er geconfigureerd zijn is geen geheim, de sleutels wel.
+    Geeft namen terug, nooit waarden. Achter AUTH net als /proxy/ai: de lijst
+    zegt precies welke betaalde sleutels hier te gebruiken zijn.
     """
     return {
         "providers": sorted({
@@ -492,7 +561,7 @@ async def proxy_ai_providers():
     }
 
 
-@app.post("/proxy/ai")
+@app.post("/proxy/ai", dependencies=[AUTH])
 async def proxy_ai(body: dict = Body(...)):
     provider = body.get("provider")
     key = body.get("key", "")
@@ -614,7 +683,7 @@ async def proxy_ai(body: dict = Body(...)):
         raise HTTPException(502, str(e)[:300])
 
 
-@app.post("/proxy/exa")
+@app.post("/proxy/exa", dependencies=[AUTH])
 async def proxy_exa(body: dict = Body(...)):
     key = os.environ.get("EXA_API_KEY") or body.get("key", "")
     query = (body.get("query") or "").strip()
@@ -639,7 +708,7 @@ async def proxy_exa(body: dict = Body(...)):
         raise HTTPException(502, str(e)[:300])
 
 
-@app.post("/proxy/fish-tts")
+@app.post("/proxy/fish-tts", dependencies=[AUTH])
 async def proxy_fish_tts(body: dict = Body(...)):
     # Fish Audio's API doesn't answer CORS preflight (OPTIONS) requests
     # properly — it 401s them instead of returning Access-Control-Allow-*
@@ -679,7 +748,7 @@ async def proxy_fish_tts(body: dict = Body(...)):
 # every VITE_-prefixed env var straight into its shipped JS bundle, so a paid
 # key would be trivially extractable from the packaged Tauri app if it lived
 # client-side — trading-os.json in the vault has the same note carved in for
-# exactly this reason. Gated behind AUTH (unlike /proxy/exa): this gets hit
+# exactly this reason. Gated behind AUTH (like /proxy/exa): this gets hit
 # every autopilot cycle x every symbol, and an open unauthenticated proxy
 # would let anyone who finds the URL burn through a paid quota.
 
@@ -1835,6 +1904,18 @@ async def vercel_promote(deployment_id: str, request: Request):
 from osint.router import router as osint_router  # noqa: E402 — after app setup by design
 app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
 
+# Perplexity Agent API: onderzoek met actuele bronnen. Achter AUTH omdat elke
+# vraag geld kost, anders dan /proxy/exa. Zie perplexity_agent.py voor waarom
+# de Agent API en niet de Router, en waarom het dagbudget op de server staat.
+# Beschermd: een onderzoeksfunctie mag nooit de hele API laten omvallen omdat
+# een deploy dit bestand vergat. Dan bestaat /research/perplexity gewoon niet
+# (404), en de app leest dat als "nog niet ingesteld op de server".
+try:
+    from perplexity_agent import router as perplexity_router  # noqa: E402
+    app.include_router(perplexity_router, prefix="/research", dependencies=[AUTH], tags=["research"])
+except Exception as _e:  # noqa: BLE001
+    log.warning("perplexity_agent niet ingeladen (%s) -- /research/perplexity bestaat niet", _e)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
@@ -1849,13 +1930,38 @@ WORKSPACE_DIR = os.path.realpath(os.environ.get("WORKSPACE_DIR", "/opt/axe-works
 os.makedirs(WORKSPACE_DIR, exist_ok=True)
 _SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"}
 
-def _safe_path(rel: str) -> str:
-    """Resolve a workspace-relative path and confine it to WORKSPACE_DIR."""
+def _safe_path(rel: str, root: str | None = None) -> str:
+    """Resolve a path relative to `root` (default WORKSPACE_DIR) and confine it there."""
+    root = root or WORKSPACE_DIR
     rel = (rel or "").lstrip("/")
-    full = os.path.realpath(os.path.join(WORKSPACE_DIR, rel))
-    if full != WORKSPACE_DIR and not full.startswith(WORKSPACE_DIR + os.sep):
+    full = os.path.realpath(os.path.join(root, rel))
+    if full != root and not full.startswith(root + os.sep):
         raise HTTPException(400, "Path escapes the workspace")
     return full
+
+
+def _werkmap(request: Request) -> str:
+    """De map waarin de Code Editor werkt: WORKSPACE_DIR, of een repo uit AGENT_REPOS.
+
+    De editor stuurt `X-AXE-Repo: <naam>` mee. Alleen een naam uit dezelfde
+    whitelist als de code-agents (agent_runner._repos) mag -- een pad uit het
+    verzoek zelf nooit. Zo bewerk je in de editor precies de repo's waar de
+    agent ook in mag, en toont de boom dezelfde checkout als waar de agent in
+    schrijft. Een onbekende naam is een 400 en geen stille terugval: anders kijk
+    je naar de ene repo terwijl je denkt in de andere te zitten.
+    """
+    naam = (request.headers.get("x-axe-repo") or "").strip()
+    if not naam:
+        return WORKSPACE_DIR
+    from agent_runner import whitelisted_repos
+    repos = whitelisted_repos()
+    pad = repos.get(naam)
+    if not pad:
+        raise HTTPException(400, f"Repo '{naam}' staat niet in AGENT_REPOS op deze host")
+    pad = os.path.realpath(pad)
+    if not os.path.isdir(pad):
+        raise HTTPException(404, f"Repo '{naam}' wijst naar {pad}, dat hier niet bestaat")
+    return pad
 
 class FileWrite(BaseModel):
     path: str
@@ -1921,9 +2027,10 @@ async def st_device_command(device_id: str, body: StCommandBody, request: Reques
     return r.json()
 
 @app.get("/files/tree", dependencies=[AUTH])
-async def files_tree(path: str = ""):
+async def files_tree(request: Request, path: str = ""):
     """List one directory level (folders first, then files)."""
-    full = _safe_path(path)
+    root = _werkmap(request)
+    full = _safe_path(path, root)
     if not os.path.isdir(full):
         raise HTTPException(404, "Not a directory")
     nodes = []
@@ -1931,14 +2038,14 @@ async def files_tree(path: str = ""):
         if name in _SKIP_DIRS:
             continue
         p = os.path.join(full, name)
-        rel = os.path.relpath(p, WORKSPACE_DIR)
+        rel = os.path.relpath(p, root)
         nodes.append({"path": rel, "name": name, "type": "folder" if os.path.isdir(p) else "file"})
     nodes.sort(key=lambda n: (n["type"] != "folder", n["name"].lower()))
     return {"nodes": nodes}
 
 @app.get("/files/read", dependencies=[AUTH])
-async def files_read(path: str):
-    full = _safe_path(path)
+async def files_read(request: Request, path: str):
+    full = _safe_path(path, _werkmap(request))
     if not os.path.isfile(full):
         raise HTTPException(404, "Not a file")
     if os.path.getsize(full) > 2_000_000:
@@ -1951,7 +2058,7 @@ async def files_read(path: str):
 
 @app.put("/files/write", dependencies=[AUTH])
 async def files_write(req: FileWrite, request: Request):
-    full = _safe_path(req.path)
+    full = _safe_path(req.path, _werkmap(request))
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w", encoding="utf-8") as f:
         f.write(req.content)
@@ -1960,7 +2067,7 @@ async def files_write(req: FileWrite, request: Request):
 
 @app.post("/files/create", dependencies=[AUTH])
 async def files_create(req: FileCreate, request: Request):
-    full = _safe_path(req.path)
+    full = _safe_path(req.path, _werkmap(request))
     if os.path.exists(full):
         raise HTTPException(409, "Already exists")
     if req.type == "folder":
@@ -1973,8 +2080,9 @@ async def files_create(req: FileCreate, request: Request):
 
 @app.delete("/files/delete", dependencies=[AUTH])
 async def files_delete(path: str, request: Request):
-    full = _safe_path(path)
-    if full == WORKSPACE_DIR:
+    root = _werkmap(request)
+    full = _safe_path(path, root)
+    if full == root:
         raise HTTPException(400, "Refusing to delete the workspace root")
     if os.path.isdir(full):
         _shutil.rmtree(full)
@@ -1991,9 +2099,10 @@ class FileMove(BaseModel):
 
 @app.post("/files/move", dependencies=[AUTH])
 async def files_move(req: FileMove, request: Request):
-    src = _safe_path(req.from_path)
-    dst = _safe_path(req.to_path)
-    if src == WORKSPACE_DIR or dst == WORKSPACE_DIR:
+    root = _werkmap(request)
+    src = _safe_path(req.from_path, root)
+    dst = _safe_path(req.to_path, root)
+    if src == root or dst == root:
         raise HTTPException(400, "Refusing to move the workspace root")
     if not os.path.exists(src):
         raise HTTPException(404, "Source not found")
@@ -2008,8 +2117,9 @@ async def files_move(req: FileMove, request: Request):
     return {"moved": True, "from": req.from_path, "to": req.to_path}
 
 @app.post("/files/search", dependencies=[AUTH])
-async def files_search(req: FileSearch):
+async def files_search(req: FileSearch, request: Request):
     """Grep the workspace (ripgrep if present, else Python walk)."""
+    root = _werkmap(request)
     results: list[dict] = []
     rg = _shutil.which("rg")
     if rg:
@@ -2018,7 +2128,7 @@ async def files_search(req: FileSearch):
             cmd.append("-i")
         if req.glob:
             cmd += ["--glob", req.glob]
-        cmd += ["--", req.query, WORKSPACE_DIR]
+        cmd += ["--", req.query, root]
         try:
             proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
@@ -2026,25 +2136,25 @@ async def files_search(req: FileSearch):
                 parts = line.split(":", 3)
                 if len(parts) == 4:
                     fpath, ln, col, text = parts
-                    results.append({"file": os.path.relpath(fpath, WORKSPACE_DIR), "line": int(ln), "col": int(col), "text": text[:300]})
+                    results.append({"file": os.path.relpath(fpath, root), "line": int(ln), "col": int(col), "text": text[:300]})
                     if len(results) >= req.maxResults:
                         break
         except Exception:
             pass
     else:
         needle = req.query if req.caseSensitive else req.query.lower()
-        for root, dirs, filenames in os.walk(WORKSPACE_DIR):
+        for map_, dirs, filenames in os.walk(root):
             dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
             for fn in filenames:
                 if len(results) >= req.maxResults:
                     break
-                fp = os.path.join(root, fn)
+                fp = os.path.join(map_, fn)
                 try:
                     with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                         for i, line in enumerate(f, 1):
                             hay = line if req.caseSensitive else line.lower()
                             if needle in hay:
-                                results.append({"file": os.path.relpath(fp, WORKSPACE_DIR), "line": i, "col": hay.index(needle) + 1, "text": line.strip()[:300]})
+                                results.append({"file": os.path.relpath(fp, root), "line": i, "col": hay.index(needle) + 1, "text": line.strip()[:300]})
                                 if len(results) >= req.maxResults:
                                     break
                 except Exception:
@@ -2072,6 +2182,53 @@ MAX_PREVIEW_LOG = 200
 class PreviewStartBody(BaseModel):
     command: Optional[str] = None  # defaults to a Vite/CRA-style dev server on PREVIEW_PORT
 
+_preview_map: str = ""
+
+
+def _projectmap(root: str) -> Optional[str]:
+    """De map met het package.json dat een dev-script heeft, zo dicht mogelijk bij root.
+
+    Gemeten 14 september: de preview startte `npm run dev` in WORKSPACE_DIR
+    (/opt/axe-workspace), los van de repo die in de editor gekozen was, en gaf
+    "ENOENT ... package.json". En in de repo axe-core staat package.json niet in
+    de git-root maar in AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS.
+    Dus: in de gekozen repo, breedte eerst, hooguit drie niveaus diep, zonder
+    node_modules en verborgen mappen.
+    """
+    rij = [(root, 0)]
+    while rij:
+        map_, diepte = rij.pop(0)
+        pj = os.path.join(map_, "package.json")
+        if os.path.isfile(pj):
+            try:
+                with open(pj, "r", encoding="utf-8") as f:
+                    if "dev" in (json.load(f).get("scripts") or {}):
+                        return map_
+            except Exception:  # noqa: BLE001
+                pass
+        if diepte >= 3:
+            continue
+        try:
+            kinderen = sorted(os.listdir(map_))
+        except OSError:
+            continue
+        for k in kinderen:
+            if k.startswith(".") or k in ("node_modules", "dist", "build", "target"):
+                continue
+            pad = os.path.join(map_, k)
+            if os.path.isdir(pad) and not os.path.islink(pad):
+                rij.append((pad, diepte + 1))
+    return None
+
+
+def _preview_url(request: Request) -> Optional[str]:
+    """Waar de app de preview kan openen. Op de VPS via nginx; lokaal rechtstreeks."""
+    if PREVIEW_PUBLIC_URL:
+        return PREVIEW_PUBLIC_URL
+    if (request.url.hostname or "") in ("127.0.0.1", "localhost"):
+        return f"http://127.0.0.1:{PREVIEW_PORT}/"
+    return None
+
 async def _drain_preview_output(stream: asyncio.StreamReader) -> None:
     while True:
         line = await stream.readline()
@@ -2081,22 +2238,32 @@ async def _drain_preview_output(stream: asyncio.StreamReader) -> None:
         _preview_log[:] = _preview_log[-MAX_PREVIEW_LOG:]
 
 @app.post("/preview/start", dependencies=[AUTH])
-async def preview_start(body: PreviewStartBody):
-    global _preview_proc, _preview_command
+async def preview_start(body: PreviewStartBody, request: Request):
+    global _preview_proc, _preview_command, _preview_map
     if _preview_proc is not None and _preview_proc.returncode is None:
         raise HTTPException(409, "Preview server already running — stop it first")
-    command = body.command or f"npm run dev -- --host 0.0.0.0 --port {PREVIEW_PORT}"
+    werk = _werkmap(request)
+    projectmap = _projectmap(werk)
+    if not projectmap:
+        raise HTTPException(400, f"Geen package.json met een dev-script gevonden in {werk} (tot drie mappen diep).")
+    # 127.0.0.1 en niet 0.0.0.0: op de Mac zou 0.0.0.0 de dev-server op het
+    # hele wifi zetten, en op de VPS proxyt nginx toch naar localhost.
+    command = body.command or f"npm run dev -- --host 127.0.0.1 --port {PREVIEW_PORT}"
     _preview_log.clear()
     _preview_command = command
+    _preview_map = projectmap
     try:
         _preview_proc = await asyncio.create_subprocess_shell(
-            command, cwd=WORKSPACE_DIR,
+            command, cwd=projectmap,
+            # PORT ook als variabele: vite.config.ts in axe-core weigert te
+            # starten zonder ("PORT environment variable is required").
+            env={**os.environ, "PORT": str(PREVIEW_PORT)},
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
         )
     except Exception as e:
         raise HTTPException(500, f"Could not start preview server: {e}")
     asyncio.create_task(_drain_preview_output(_preview_proc.stdout))
-    return {"started": True, "command": command, "port": PREVIEW_PORT, "url": PREVIEW_PUBLIC_URL or None}
+    return {"started": True, "command": command, "port": PREVIEW_PORT, "url": _preview_url(request), "map": projectmap}
 
 @app.post("/preview/stop", dependencies=[AUTH])
 async def preview_stop():
@@ -2113,15 +2280,17 @@ async def preview_stop():
     return {"stopped": True, "was_running": True}
 
 @app.get("/preview/status", dependencies=[AUTH])
-async def preview_status():
+async def preview_status(request: Request):
     running = _preview_proc is not None and _preview_proc.returncode is None
+    url = _preview_url(request)
     return {
         "running": running,
         "command": _preview_command,
         "port": PREVIEW_PORT,
-        "url": PREVIEW_PUBLIC_URL or None,
+        "url": url,
+        "map": _preview_map,
         "log": _preview_log[-40:],
-        "configured": bool(PREVIEW_PUBLIC_URL),
+        "configured": bool(url),
     }
 
 
@@ -2440,6 +2609,21 @@ async def _check_vps_services() -> dict:
     # python actually exists, not a network probe.
     crew_venv = os.environ.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3")
     results["crewai"] = {"configured": True, "reachable": os.path.exists(crew_venv), "note": f"isolated venv at {crew_venv}, not a network service"}
+    # Branch C. Counts only — this endpoint is open (no AXE_API_KEY), so repo
+    # paths and branch names stay behind /claude/repos, which is authed.
+    try:
+        _claude_repos = claude_repo_status()
+        _runnable = [n for n, r in _claude_repos.items() if r.get("runnable")]
+        results["claude_code"] = {
+            "configured": bool(_claude_repos),
+            "reachable": any(m.get("aanwezig") for m in agent_engine_status().values()),
+            "engines": {n: bool(m.get("aanwezig")) for n, m in agent_engine_status().items()},
+            "repos": len(_claude_repos),
+            "runnable_repos": len(_runnable),
+            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
+        }
+    except Exception as e:  # noqa: BLE001
+        results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
     # OpenClaw is a real running service but a messaging gateway, not the
     # browsing/computer-use agent AXE's [AGENT:] tool describes — flagged
     # here so the UI can show "reachable" honestly without implying it's
@@ -2546,6 +2730,165 @@ async def crew_run(req: CrewRunRequest, request: Request):
     except Exception as e:  # noqa: BLE001 — a memory-write failure must not fail the crew response
         log.warning(f"crew_run memory write failed: {e}")
 
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CLAUDE CODE — Branch C: a real Claude Code session inside a whitelisted repo
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/claude/run", dependencies=[AUTH])
+async def claude_run(req: ClaudeRunRequest, request: Request):
+    """
+    Run one Claude Code session against a whitelisted repository on this host.
+
+    Body: { "repo": "axe-core", "prompt": "...", "permission_mode": "acceptEdits" }
+
+    Unlike /crew/run this one writes to a working tree, so claude_runner refuses
+    the call before starting anything when: the repo is not in CLAUDE_CODE_REPOS,
+    the checkout is on main/master, or permission_mode is not one of
+    ALLOWED_PERMISSION_MODES. It also strips ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN
+    from the subprocess environment, so the CLI uses the host's `claude auth login`
+    subscription rather than silently billing a metered API key.
+
+    Auth on this host is deliberately NOT configured through an env var here —
+    it is `claude auth login`, run once by the operator. See CLAUDE_CODE_SETUP.md.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude"),
+    )
+    await audit(
+        "claude_run", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "prompt": (req.prompt or "")[:200],
+            "branch": result.get("branch"),
+            "permission_mode": result.get("permission_mode"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
+
+    # Same memory/RAG landing as /crew/run, tagged tab:code — a code session
+    # that only reaches core_audit_log is invisible to Memory Hub and recall.
+    try:
+        ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+        result_text = str(result.get("result") or result.get("error") or "")[:2000]
+        sb().table("global_memory").upsert(
+            [{
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "system_event",
+                "key": f"claude:{ts}",
+                "value": json.dumps({
+                    "repo": (req.repo or "")[:100],
+                    "branch": result.get("branch"),
+                    "prompt": (req.prompt or "")[:500],
+                    "status": result.get("status"),
+                    "result": result_text,
+                }),
+                "confidence": 0.8,
+                "metadata": {"kind": "agent_run", "tab": "code", "repo": req.repo, "branch": result.get("branch")},
+            }],
+            on_conflict="user_id,key",
+        ).execute()
+        if result.get("status") == "ok" and result_text:
+            sb().table("rag_memories").insert({
+                "app_source": "axe-core",
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "agent",
+                "content": f"[claude:{req.repo}@{result.get('branch')}] {(req.prompt or '')[:200]} → {result_text[:400]}",
+                "importance": 6,
+                "metadata": {"source": "claude_run", "repo": req.repo, "branch": result.get("branch"), "tab": "code"},
+            }).execute()
+    except Exception as e:  # noqa: BLE001 — a memory-write failure must not fail the response
+        log.warning(f"claude_run memory write failed: {e}")
+
+    return result
+
+
+@app.get("/claude/repos", dependencies=[AUTH])
+async def claude_repos():
+    """Which repos this host will let Claude Code touch, and whether each one is
+    currently runnable (exists, and not sitting on a protected branch).
+
+    In een thread met time-out. Gemeten 14 september: na elke rebuild van AXE CORE
+    (ad-hoc ondertekend, dus voor macOS een nieuwe app) blijft open() op de
+    externe SSD hangen tot iemand "toegang tot verwijderbaar volume" toestaat.
+    Synchroon in deze async route hield dat de HELE API stil, ook /health.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"repos": {}, "permission_modes": [], "error": _CLAUDE_IMPORT_ERROR}
+    try:
+        repos = await asyncio.wait_for(asyncio.to_thread(claude_repo_status), timeout=6)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, "De repo's op de externe schijf antwoorden niet. Staat er een macOS-venster "
+                                 "'AXE CORE wil toegang tot bestanden op een verwijderbaar volume'? Klik Sta toe.")
+    return {
+        "repos": repos,
+        "permission_modes": list(ALLOWED_PERMISSION_MODES),
+        # Welke CLI's op deze machine staan. Alleen aanwezigheid — of je
+        # ingelogd bent kost een echte aanroep, en een statuspaneel hoort geen
+        # sessie van je abonnement op te maken.
+        "engines": agent_engine_status(),
+    }
+
+
+class AgentCommitRequest(BaseModel):
+    repo: str
+    # 'bericht' en niet 'message': de rest van deze API is Nederlands en een
+    # half-Engelse body is precies hoe je later twee velden krijgt die hetzelfde
+    # betekenen.
+    bericht: str
+    push: bool = True
+
+
+@app.get("/claude/changes", dependencies=[AUTH])
+async def claude_changes(repo: str):
+    """Wat er in deze checkout gewijzigd is, vóór er iets vastgelegd wordt.
+
+    Bestaat omdat de volgende stap onomkeerbaar is: zodra er gepusht is, staat
+    het op GitHub. Een knop die commit zonder dat er iets te lezen viel, is een
+    knop die je op een dag indrukt terwijl er iets in staat dat je niet bedoelde.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: werkboom_status(repo))
+
+
+@app.post("/claude/commit", dependencies=[AUTH])
+async def claude_commit(req: AgentCommitRequest, request: Request):
+    """Leg vast wat de agent veranderde, en zet het op de werkbranch.
+
+    Dezelfde bewakingen als een agent-run, via dezelfde functies: repo op de
+    whitelist, checkout is git, en nooit op main of master. Geen force, geen
+    rebase, geen amend — dit duwt vooruit of het faalt.
+
+    Altijd geaudit, ook als het misgaat. Een push is naar buiten gaan, en dat
+    hoort een spoor te hebben dat niet afhangt van of het lukte.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: commit_en_push(req.repo, req.bericht, req.push)
+    )
+    await audit(
+        "agent_commit", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "bericht": (req.bericht or "")[:200],
+            "branch": result.get("branch"),
+            "sha": result.get("sha"),
+            "gepusht": result.get("gepusht"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
     return result
 
 
@@ -3522,213 +3865,129 @@ _MARKET_TOOLS = [
 ]
 
 
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-# CLAUDE CODE — Branch C: een echte Claude Code-sessie in een whitelisted repo
+# PLANNER — de drie hoofdagents plannen zelf (zie planner.py)
 # ══════════════════════════════════════════════════════════════════════════════
 #
-# ## Waarom dit hier staat en niet in backend/axe_api/main.py
-#
-# Daar is het geschreven, en daar draait het niet. Gemeten 10 september op de
-# VPS:
-#
-#     WorkingDirectory=/opt/axe-core-api
-#     ExecStart=…/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 12
-#
-# `main:app` laadt dít bestand. `backend/axe_api/main.py` wordt door uvicorn
-# nooit ingeladen, dus /claude/repos antwoordde 404 hoeveel je ook pullde — en
-# een 404 op een endpoint dat je net hebt geschreven leest als "de code is stuk"
-# in plaats van "de code draait niet". Dezelfde val als het LSE-endpoint een dag
-# eerder.
-#
-# ## Eén kopie van claude_runner, niet twee
-#
-# Het bestand blijft staan waar het hoort; alleen het pad gaat mee in sys.path.
-# Een tweede kopie in de hoofdmap zou binnen een week uit elkaar lopen met de
-# eerste, en dan is niet te zien welke van de twee de weigeringen doet.
-#
-# De import staat in een try: valt hij om — bestand weg, andere checkout — dan
-# weigeren deze twee endpoints netjes, in plaats van dat de hele API niet meer
-# opstart. Een kapotte Code Studio is vervelend; een kapotte API is je hele desk.
-
-import sys as _sys
-
-_CLAUDE_RUNNER_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "AXE-CORE-ORCHESTRATOR-content", "AXE-CORE-HEADQUARTERS", "backend", "axe_api",
-)
-if _CLAUDE_RUNNER_DIR not in _sys.path:
-    _sys.path.append(_CLAUDE_RUNNER_DIR)
-
+# Endpoints bestaan overal, zodat de app eerlijk kan zeggen "staat uit"; de lus
+# draait alleen met AXE_PLANNER=1 (de Mac mini, waar de abonnementen staan).
+# Beschermd, om dezelfde reden als agent_runner bovenaan: planner.py stond niet
+# op de VPS, en een kale import had de hele API bij het opstarten laten vallen.
+# Zonder planner antwoorden deze routes 503 in plaats van dat niets meer werkt.
 try:
-    from agent_runner import (  # noqa: E402
-        run_agent,
-        repo_status as claude_repo_status,
-        engine_status as agent_engine_status,
-        cli_available as claude_cli_available,
-        ALLOWED_PERMISSION_MODES,
-        ENGINES as AGENT_ENGINES,
-        werkboom_status,
-        commit_en_push,
-    )
-    _CLAUDE_IMPORT_ERROR = None
+    import planner as _planner_mod
+    from agent_runner import whitelisted_repos as _planner_repos
+    _planner = _planner_mod.Planner(sb, run_agent, _planner_repos)
+    _PLANNER_IMPORT_ERROR = None
 except Exception as _e:  # noqa: BLE001
-    _CLAUDE_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
-    ALLOWED_PERMISSION_MODES = ()
-    AGENT_ENGINES = {}
-    log.warning(f"agent_runner niet ingeladen ({_CLAUDE_IMPORT_ERROR}) — /claude/* weigert")
-
-    def claude_repo_status() -> dict:  # type: ignore[misc]
-        return {}
-
-    def agent_engine_status() -> dict:  # type: ignore[misc]
-        return {}
-
-    def claude_cli_available(engine: str = "claude") -> bool:  # type: ignore[misc]
-        return False
+    _planner_mod = None  # type: ignore[assignment]
+    _planner = None  # type: ignore[assignment]
+    _PLANNER_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
+    log.warning("planner niet ingeladen (%s) -- /planner/* weigert", _PLANNER_IMPORT_ERROR)
 
 
-class ClaudeRunRequest(BaseModel):
-    repo: str
-    prompt: str
-    permission_mode: Optional[str] = None
-    timeout: Optional[int] = None
-    # 'claude' (Claude Code, Anthropic-abonnement) of 'codex' (ChatGPT-abonnement).
-    # Beide draaien via dezelfde bewakingen in agent_runner; alleen het commando
-    # en de vlaggen verschillen. Weggelaten is 'claude', zodat bestaande
-    # aanroepers niets merken.
-    engine: Optional[str] = None
+def _planner_of_503():
+    if _planner_mod is None:
+        raise HTTPException(503, f"Planner niet beschikbaar op deze host: {_PLANNER_IMPORT_ERROR}")
 
 
-@app.post("/claude/run", dependencies=[AUTH])
-async def claude_run(req: ClaudeRunRequest, request: Request):
-    """
-    Draai één Claude Code-sessie tegen een whitelisted repo op deze host.
-
-    Body: { "repo": "axe-core", "prompt": "...", "permission_mode": "acceptEdits" }
-
-    Anders dan /crew/run schrijft deze in een working tree, dus claude_runner
-    weigert vóór er iets start: repo niet in CLAUDE_CODE_REPOS, checkout op
-    main/master, of een permission_mode die er niet bij hoort. Hij strípt ook
-    ANTHROPIC_API_KEY en ANTHROPIC_AUTH_TOKEN uit de omgeving van het subproces,
-    zodat de CLI het `claude auth login`-abonnement van de host gebruikt in
-    plaats van stilletijk een betaalde API-sleutel af te schrijven.
-
-    Zie CLAUDE_CODE_SETUP.md; inloggen gebeurt eenmalig door de operator, niet
-    via een omgevingsvariabele hier.
-    """
-    if _CLAUDE_IMPORT_ERROR:
-        return {"status": "error", "error": f"claude_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
-
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None,
-        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude"),
-    )
-    await audit(
-        "claude_run", "claude_code",
-        {
-            "repo": (req.repo or "")[:100],
-            "prompt": (req.prompt or "")[:200],
-            "engine": result.get("engine"),
-            "branch": result.get("branch"),
-            "permission_mode": result.get("permission_mode"),
-            "status": result.get("status"),
-        },
-        request.client.host if request.client else "",
-    )
-
-    # Een mislukte geheugenschrijving mag het antwoord niet laten mislukken: de
-    # run is dan al gebeurd, en doen alsof van niet is erger dan een gat in de
-    # index.
-    try:
-        result_text = (result.get("result") or "")
-        if result.get("status") == "ok" and result_text:
-            sb().table("rag_memories").insert({
-                "app_source": "axe-core",
-                "user_id": AXE_CORE_DEFAULT_USER_ID,
-                "category": "agent",
-                "content": f"[{result.get('engine') or 'claude'}:{req.repo}@{result.get('branch')}] "
-                           f"{(req.prompt or '')[:200]} → {result_text[:400]}",
-                "importance": 6,
-                "metadata": {
-                    "source": "agent_run", "engine": result.get("engine"),
-                    "repo": req.repo, "branch": result.get("branch"), "tab": "code",
-                },
-            }).execute()
-    except Exception as e:  # noqa: BLE001
-        log.warning(f"claude_run memory write failed: {e}")
-
-    return result
+class PlannerMotoren(BaseModel):
+    motoren: dict[str, str]
 
 
-@app.get("/claude/repos", dependencies=[AUTH])
-async def claude_repos():
-    """Welke repo's deze host door Claude Code laat aanraken, en of elk er nu
-    klaar voor is — bestaat het pad, en staat de checkout niet op een beschermde
-    branch."""
-    if _CLAUDE_IMPORT_ERROR:
-        return {"repos": {}, "permission_modes": [], "error": _CLAUDE_IMPORT_ERROR}
+class PlannerAan(BaseModel):
+    aan: bool
+
+
+class PlannerBesluit(BaseModel):
+    goedkeuren: bool
+
+
+@app.on_event("startup")
+async def _planner_start():
+    if _planner_mod is not None and _planner_mod.planner_aan():
+        asyncio.create_task(_planner_mod.lus(_planner))
+        log.info("[planner] aan: eerste ronde over 10 minuten, daarna elke %ss", _planner_mod.INTERVAL_S)
+
+
+@app.get("/planner/status", dependencies=[AUTH])
+async def planner_status():
+    _planner_of_503()
+    staat = _planner_mod.lees_staat()
+    vandaag = datetime.now().strftime("%Y-%m-%d")
     return {
-        "repos": claude_repo_status(),
-        "permission_modes": list(ALLOWED_PERMISSION_MODES),
-        # Welke CLI's op deze host staan. Alleen aanwezigheid — of je ingelogd
-        # bent kost een echte aanroep, en een statuspaneel hoort geen sessie van
-        # je abonnement op te maken.
-        "engines": agent_engine_status(),
+        "host_kan": _planner_mod.planner_aan(),
+        "aan": bool(staat.get("aan", True)) and _planner_mod.planner_aan(),
+        "bezig": _planner.bezig,
+        "interval_s": _planner_mod.INTERVAL_S,
+        "dagbudget": _planner_mod.DAGBUDGET,
+        "gebruik_vandaag": staat.get("gebruik", {}).get(vandaag, {}),
+        "koeling": staat.get("koeling", {}),
+        "motoren": staat.get("motoren") or _planner_mod.STANDAARD_MOTOREN,
+        "laatste_ronde": staat.get("laatste_ronde"),
     }
 
 
-class AgentCommitRequest(BaseModel):
-    repo: str
-    # 'bericht' en niet 'message': de rest van deze API is Nederlands en een
-    # half-Engelse body is precies hoe je later twee velden krijgt die hetzelfde
-    # betekenen.
-    bericht: str
-    push: bool = True
+@app.put("/planner/motoren", dependencies=[AUTH])
+async def planner_motoren(body: PlannerMotoren):
+    _planner_of_503()
+    """De verdeling uit Instellingen → Motoren per agent. Die leeft in de app
+    (localStorage); de planner draait hier en moet hem dus aangereikt krijgen."""
+    geldig = {a: m for a, m in body.motoren.items()
+              if a in _planner_mod.AGENTS and m in (*_planner_mod.ABONNEMENTEN, "sleutels")}
+    staat = _planner_mod.lees_staat()
+    staat["motoren"] = {**_planner_mod.STANDAARD_MOTOREN, **geldig}
+    _planner_mod.schrijf_staat(staat)
+    return {"motoren": staat["motoren"]}
 
 
-@app.get("/claude/changes", dependencies=[AUTH])
-async def claude_changes(repo: str):
-    """Wat er in deze checkout gewijzigd is, vóór er iets vastgelegd wordt.
-
-    Bestaat omdat de volgende stap onomkeerbaar is: zodra er gepusht is, staat
-    het op GitHub. Een knop die commit zonder dat er iets te lezen viel, is een
-    knop die je op een dag indrukt terwijl er iets in staat dat je niet bedoelde.
-    """
-    if _CLAUDE_IMPORT_ERROR:
-        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, lambda: werkboom_status(repo))
+@app.put("/planner/aan", dependencies=[AUTH])
+async def planner_zet_aan(body: PlannerAan):
+    _planner_of_503()
+    staat = _planner_mod.lees_staat()
+    staat["aan"] = body.aan
+    _planner_mod.schrijf_staat(staat)
+    return {"aan": body.aan, "host_kan": _planner_mod.planner_aan()}
 
 
-@app.post("/claude/commit", dependencies=[AUTH])
-async def claude_commit(req: AgentCommitRequest, request: Request):
-    """Leg vast wat de agent veranderde, en zet het op de werkbranch.
+@app.post("/planner/ronde", dependencies=[AUTH], status_code=202)
+async def planner_ronde_nu():
+    _planner_of_503()
+    if not _planner_mod.planner_aan():
+        raise HTTPException(409, "De planner draait niet op deze host (AXE_PLANNER staat niet op 1).")
+    if _planner.bezig:
+        return {"gestart": False, "reden": "er loopt al een ronde"}
+    asyncio.create_task(asyncio.to_thread(_planner.ronde))
+    return {"gestart": True}
 
-    Dezelfde bewakingen als een agent-run, via dezelfde functies: repo op de
-    whitelist, checkout is git, en nooit op main of master. Geen force, geen
-    rebase, geen amend — dit duwt vooruit of het faalt.
 
-    Altijd geaudit, ook als het misgaat. Een push is naar buiten gaan, en dat
-    hoort een spoor te hebben dat niet afhangt van of het lukte.
-    """
-    if _CLAUDE_IMPORT_ERROR:
-        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+@app.get("/planner/taken", dependencies=[AUTH])
+async def planner_taken(limit: int = 40):
+    _planner_of_503()
+    rijen = (sb().table("core_tasks")
+             .select("id,title,goal,description,status,priority,assignee,metadata,result,error,created_at,completed_at")
+             .eq("capability", "planner").order("created_at", desc=True)
+             .limit(max(1, min(limit, 100))).execute().data) or []
+    return {"taken": rijen}
 
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None, lambda: commit_en_push(req.repo, req.bericht, req.push)
-    )
-    await audit(
-        "agent_commit", "claude_code",
-        {
-            "repo": (req.repo or "")[:100],
-            "bericht": (req.bericht or "")[:200],
-            "branch": result.get("branch"),
-            "sha": result.get("sha"),
-            "gepusht": result.get("gepusht"),
-            "status": result.get("status"),
-        },
-        request.client.host if request.client else "",
-    )
-    return result
+
+@app.post("/planner/taken/{taak_id}/besluit", dependencies=[AUTH])
+async def planner_besluit(taak_id: str, body: PlannerBesluit):
+    _planner_of_503()
+    rij = (sb().table("core_tasks").select("id,status,metadata").eq("id", taak_id)
+           .eq("capability", "planner").limit(1).execute().data)
+    if not rij:
+        raise HTTPException(404, "Geen planner-taak met dit id")
+    meta = dict(rij[0].get("metadata") or {})
+    if meta.get("goedkeuring") != "nodig" or rij[0].get("status") != "pending":
+        raise HTTPException(409, "Deze taak wacht niet op goedkeuring")
+    meta["goedkeuring"] = "ja" if body.goedkeuren else "afgewezen"
+    meta["uiStatus"] = "todo" if body.goedkeuren else "blocked"
+    velden = {"metadata": meta, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if not body.goedkeuren:
+        velden["status"] = "cancelled"
+        velden["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+    sb().table("core_tasks").update(velden).eq("id", taak_id).execute()
+    return {"id": taak_id, "goedkeuring": meta["goedkeuring"]}
