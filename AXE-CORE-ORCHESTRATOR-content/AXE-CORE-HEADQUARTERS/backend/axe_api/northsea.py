@@ -57,6 +57,23 @@ select json_build_object(
      'documenten', (select count(*) from deal_documents),
      'campagnes', (select count(*) from sourcing_campaigns)
   ),
+  -- De kaart: per deal de ruwe plaatsvelden. Welke tekst waar ligt, en wat
+  -- NIET te plaatsen is, beslist de app (src/domain/northsea/kaart.ts) --
+  -- daar staan de regels en de tests, net als bij AXE Chase.
+  'kaart', (select coalesce(json_agg(r), '[]'::json) from (
+     select o.id, o.stage, o.execution_state, (coalesce(o.primary_blocker,'') <> '') as geblokkeerd,
+            o.deal_priority as code,
+            coalesce(so.product, br.product, so.commodity, br.commodity) as product,
+            cb.company_name as koper, cs.company_name as leverancier,
+            so.origin as herkomst, so.loading_port as laadhaven, br.destination as bestemming,
+            cs.country as leverancier_land, cs.city as leverancier_stad,
+            cb.country as koper_land, cb.city as koper_stad
+     from opportunities o
+     left join supplier_offers so on so.id = o.supplier_offer_id
+     left join buyer_requirements br on br.id = o.buyer_requirement_id
+     left join companies cs on cs.id = so.company_id
+     left join companies cb on cb.id = br.company_id
+     where o.stage <> 'lost') r),
   'acties', (select coalesce(json_agg(r), '[]'::json) from (
      select a.id, a.action_type as soort, a.title as titel, a.status, a.priority as prioriteit,
             a.requires_approval as akkoord_nodig, a.due_at, a.created_at, a.updated_at,

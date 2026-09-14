@@ -1,27 +1,34 @@
 /**
  * NorthSea Commodity desk -- de Maps-tab.
  *
- * Links (de schuifbalk die met de muis naar buiten komt): het NorthSea-menu.
- * Rechts: AXE Chase, wat er achterna gezeten moet worden.
- * Het midden volgt de specificatie van Luka; tot die er is staat daar alleen
- * wat echt uit de database komt.
+ * ## De indeling, zoals Trading, Calendar en de Code Editor
+ *
+ * Links naast de composer: het NorthSea-menu als kale iconen (IcoonZuil), niet
+ * meer als paneel dat je moet openschuiven. Rechts naast de composer: de
+ * kaartlagen als schakelaars, alleen zolang de kaart openstaat. In de rechter
+ * schuifbalk: AXE Chase, wat er achterna gezeten moet worden. In het midden:
+ * de wereldkaart, direct op de plaat.
  *
  * Alles hier is echte data uit AXE Commodities (zie domain/northsea/chase.ts
- * voor de regels en backend/axe_api/northsea.py voor de bron). Faalt het
- * ophalen, dan staat dat er -- nooit een lijst die er echt uitziet maar het
- * niet is.
+ * en domain/northsea/kaart.ts voor de regels, backend/axe_api/northsea.py voor
+ * de bron). Faalt het ophalen, dan staat dat er -- nooit een lijst die er echt
+ * uitziet maar het niet is.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Map as MapIcon, Target, TrendingUp, Building2, MessageSquare, LineChart,
   FileText, ShieldCheck, Workflow, FileBarChart, Crosshair, ArrowRight, AlertTriangle, RefreshCw,
+  Route, Anchor, CloudLightning,
 } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
 import { northseaOverzicht } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   chaseItems, chaseTellers, tijdGeleden,
   type ChaseItem, type ChaseToon, type NorthseaOverzicht,
 } from '@/domain/northsea/chase';
+import { WereldKaart, type KaartLaag } from './WereldKaart';
 
 type Tab = 'live' | 'deals' | 'pipeline' | 'tegenpartijen' | 'communicatie' | 'markt' | 'documenten' | 'bewijs' | 'automatisering' | 'rapporten';
 type ChaseFilter = 'alle' | 'kritiek' | 'nieuw';
@@ -38,6 +45,10 @@ export default function NorthseaDesk() {
   const [filter, setFilter] = useState<ChaseFilter>('alle');
   const [alles, setAlles] = useState(false);
   const [nu, setNu] = useState(() => Date.now());
+  // Weer & verstoringen staat uit en is niet aan te zetten: er is nog geen bron.
+  const [lagen, setLagen] = useState<Record<KaartLaag, boolean>>({
+    routes: true, havens: true, tegenpartijen: true, weer: false,
+  });
 
   const haal = async (vers = false) => {
     setBezig(true);
@@ -65,59 +76,50 @@ export default function NorthseaDesk() {
   const gefilterd = items.filter(i => filter === 'alle' || (filter === 'kritiek' ? i.kritiek : i.nieuw));
   const zichtbaar = alles ? gefilterd : gefilterd.slice(0, CHASE_ZICHTBAAR);
 
-  const menu: { id: Tab; label: string; icoon: ReactNode; teller?: number }[] = [
-    { id: 'live', label: 'Live Map', icoon: <MapIcon size={16} /> },
-    { id: 'deals', label: 'Active Deals', icoon: <Target size={16} />, teller: data?.actief },
-    { id: 'pipeline', label: 'Pipeline', icoon: <TrendingUp size={16} />, teller: data?.pipeline },
-    { id: 'tegenpartijen', label: 'Counterparties', icoon: <Building2 size={16} /> },
-    { id: 'communicatie', label: 'Communications', icoon: <MessageSquare size={16} /> },
-    { id: 'markt', label: 'Market Intel', icoon: <LineChart size={16} /> },
-    { id: 'documenten', label: 'Documents', icoon: <FileText size={16} /> },
-    { id: 'bewijs', label: 'Evidence', icoon: <ShieldCheck size={16} /> },
-    { id: 'automatisering', label: 'Automation', icoon: <Workflow size={16} /> },
-    { id: 'rapporten', label: 'Reports', icoon: <FileBarChart size={16} /> },
+  /* Elk menu-item zijn eigen kleur, zoals de trading-tabs: zonder kleur zijn het
+     tien gelijke knopjes en onthoud je niet waar wat zit. De teller staat in de
+     tooltip, want in deze strook is geen ruimte voor cijfers onder elk icoon. */
+  const menu: ZuilItem[] = [
+    { id: 'live', label: 'Live Map', kleur: '#22D3EE', icoon: <MapIcon size={17} /> },
+    { id: 'deals', label: 'Active Deals', kleur: '#34D399', icoon: <Target size={17} />, uitleg: data ? `Active Deals · ${data.actief}` : undefined },
+    { id: 'pipeline', label: 'Pipeline', kleur: '#FBBF24', icoon: <TrendingUp size={17} />, uitleg: data ? `Pipeline · ${data.pipeline}` : undefined },
+    { id: 'tegenpartijen', label: 'Counterparties', kleur: '#A78BFA', icoon: <Building2 size={17} /> },
+    { id: 'communicatie', label: 'Communications', kleur: '#60A5FA', icoon: <MessageSquare size={17} /> },
+    { id: 'markt', label: 'Market Intel', kleur: '#F472B6', icoon: <LineChart size={17} /> },
+    { id: 'documenten', label: 'Documents', kleur: '#94A3B8', icoon: <FileText size={17} /> },
+    { id: 'bewijs', label: 'Evidence', kleur: '#2DD4BF', icoon: <ShieldCheck size={17} /> },
+    { id: 'automatisering', label: 'Automation', kleur: '#FB923C', icoon: <Workflow size={17} /> },
+    { id: 'rapporten', label: 'Reports', kleur: '#E2E8F0', icoon: <FileBarChart size={17} /> },
   ];
   const huidig = menu.find(m => m.id === tab)!;
 
+  const kaartLagen: ZuilItem[] = [
+    { id: 'routes', label: 'Trade Routes', kleur: '#22D3EE', icoon: <Route size={17} />, aan: lagen.routes },
+    { id: 'havens', label: 'Ports & Terminals', kleur: '#FBBF24', icoon: <Anchor size={17} />, aan: lagen.havens },
+    { id: 'tegenpartijen', label: 'Counterparties', kleur: '#A78BFA', icoon: <Building2 size={17} />, aan: lagen.tegenpartijen },
+    {
+      id: 'weer', label: 'Weather & Disruptions', kleur: '#94A3B8', icoon: <CloudLightning size={17} />, aan: false, uit: true,
+      uitleg: 'Weather & Disruptions — no data source connected yet',
+    },
+  ];
+
   return (
     <div className="axe-tabruimte flex min-h-0 flex-1 flex-col">
-      <TabRail kant="links">
-        <div className="axe-paneel" data-axe-doel="northsea-menu">
-          <h2 className="text-[17px] font-semibold mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.01em' }}>NorthSea</h2>
-          <nav className="flex flex-col gap-0.5" aria-label="NorthSea">
-            {menu.map(m => {
-              const actief = m.id === tab;
-              return (
-                <button key={m.id} onClick={() => setTab(m.id)}
-                  className="relative flex items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] transition-colors"
-                  style={{
-                    background: actief ? 'rgba(34,211,238,0.08)' : 'transparent',
-                    color: actief ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                  }}>
-                  {actief && <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded" style={{ background: 'var(--accent-cyan)' }} />}
-                  <span style={{ color: actief ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{m.icoon}</span>
-                  <span className="flex-1">{m.label}</span>
-                  {m.teller != null && (
-                    <span className="rounded-md px-1.5 py-0.5 text-[11px] font-mono-data" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>{m.teller}</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+      <PlaatSlot slot="links">
+        <IcoonZuil items={menu} actief={tab} kies={id => setTab(id as Tab)} rijen={3} />
+      </PlaatSlot>
 
-          {/* Geen foto: er is geen beeldbestand van NorthSea in de app, en een
-              stockfoto van internet laden mag de app niet. Komt er een eigen
-              beeld, dan hoort het hier als achtergrond. */}
-          <div className="mt-4 rounded-xl p-3" style={{ background: 'linear-gradient(160deg, rgba(34,211,238,0.10), rgba(8,20,28,0.9) 60%)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div className="font-mono-data text-[10px]" style={{ color: 'var(--text-muted)' }}>Energy. Minerals. Opportunities.</div>
-            <div className="font-mono-data text-[12px] mt-1" style={{ color: 'var(--text-primary)' }}>NorthSea Commodity Partners</div>
-            <button onClick={() => setTab('pipeline')} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-[12px]"
-              style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}>
-              Explore Opportunities <ArrowRight size={12} />
-            </button>
-          </div>
-        </div>
-      </TabRail>
+      {tab === 'live' && (
+        <PlaatSlot slot="rechts">
+          <IcoonZuil
+            items={kaartLagen}
+            actief=""
+            kant="rechts"
+            rijen={2}
+            kies={id => setLagen(l => ({ ...l, [id]: !l[id as KaartLaag] }))}
+          />
+        </PlaatSlot>
+      )}
 
       <TabRail kant="rechts">
         <div className="axe-paneel" data-axe-doel="axe-chase">
@@ -165,26 +167,34 @@ export default function NorthseaDesk() {
         </div>
       </TabRail>
 
-      {/* Het midden: de weergave volgt Luka's specificatie. Tot dan alleen
-          wat er echt staat, zodat niemand op een verzonnen scherm werkt. */}
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <div className="flex items-center gap-2 text-[15px]" style={{ color: 'var(--text-primary)' }}>
-          <span style={{ color: 'var(--accent-cyan)' }}>{huidig.icoon}</span> {huidig.label}
+      {tab === 'live' ? (
+        /* De kaart vult het midden, zonder vak: `data.kaart` ontbreekt als de
+           lokale API van vóór de kaart is, en dan zegt de kaart dat zelf. */
+        <div className="flex min-h-0 flex-1">
+          <WereldKaart deals={fout ? null : data ? data.kaart : null} lagen={lagen} fout={fout} />
         </div>
-        {data && (
-          <div className="flex flex-wrap justify-center gap-4 text-[12px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-            <span>{data.pipeline} opportunities</span>
-            <span>{data.actief} active</span>
-            <span>{data.tellers.bedrijven} companies</span>
-            <span>{data.tellers.contacten} contacts</span>
-            <span>{data.tellers.communicatie_7d} messages · 7d</span>
-            <span>{tellers.alle} chase actions</span>
+      ) : (
+        /* De andere weergaven volgen Luka's specificatie. Tot dan alleen wat er
+           echt staat, zodat niemand op een verzonnen scherm werkt. */
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <div className="flex items-center gap-2 text-[15px]" style={{ color: 'var(--text-primary)' }}>
+            <span style={{ color: huidig.kleur }}>{huidig.icoon}</span> {huidig.label}
           </div>
-        )}
-        <div className="text-[11px] max-w-md" style={{ color: 'var(--text-muted)' }}>
-          Deze weergave wordt gebouwd volgens de NorthSea-specificatie.
+          {data && (
+            <div className="flex flex-wrap justify-center gap-4 text-[12px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
+              <span>{data.pipeline} opportunities</span>
+              <span>{data.actief} active</span>
+              <span>{data.tellers.bedrijven} companies</span>
+              <span>{data.tellers.contacten} contacts</span>
+              <span>{data.tellers.communicatie_7d} messages · 7d</span>
+              <span>{tellers.alle} chase actions</span>
+            </div>
+          )}
+          <div className="text-[11px] max-w-md" style={{ color: 'var(--text-muted)' }}>
+            Deze weergave wordt gebouwd volgens de NorthSea-specificatie.
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

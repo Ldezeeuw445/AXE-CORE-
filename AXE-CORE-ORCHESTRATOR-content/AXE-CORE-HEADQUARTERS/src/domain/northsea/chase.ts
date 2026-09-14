@@ -35,6 +35,8 @@
  * "NORTHSEA-017" bestaat nergens en wordt dus ook niet verzonnen.
  */
 
+import type { KaartDeal } from '@/domain/northsea/kaart';
+
 export interface NorthseaRij {
   id: string;
   soort?: string | null;
@@ -67,6 +69,9 @@ export interface NorthseaOverzicht {
   taken: NorthseaRij[];
   concepten: NorthseaRij[];
   bounces: NorthseaRij[];
+  /** Per deal de plaatsvelden voor de kaart. Optioneel: een lokale API van vóór
+   *  de kaart stuurt hem niet, en dan zegt de kaart dat in plaats van leeg te ogen. */
+  kaart?: KaartDeal[];
 }
 
 export type ChaseToon = 'rood' | 'amber' | 'groen';
