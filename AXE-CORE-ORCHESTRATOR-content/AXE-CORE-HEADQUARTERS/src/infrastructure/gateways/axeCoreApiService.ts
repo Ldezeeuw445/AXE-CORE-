@@ -48,7 +48,8 @@ async function basisVoor(path: string): Promise<string> {
   // De preview draait in de repo van de editor, dus op dezelfde machine.
   // De preview draait in de repo van de editor, en de planner draait waar de
   // abonnementen staan: allebei op de agent-host, niet op de VPS.
-  if (path.startsWith('/claude/') || path.startsWith('/preview/') || path.startsWith('/planner/')) {
+  // De MCP-hub ook: die gebruikt de sleutels en de gh-login van de agent-host.
+  if (path.startsWith('/claude/') || path.startsWith('/preview/') || path.startsWith('/planner/') || path.startsWith('/mcp/hub')) {
     return await agentBasis(BASE_URL).catch(() => BASE_URL);
   }
   if (!path.startsWith('/browser/agent')) return BASE_URL;
@@ -953,12 +954,34 @@ export async function mcpSaveServers(servers: Array<Record<string, unknown>>): P
   return call('POST', '/mcp/servers', servers);
 }
 
-export async function mcpTestServer(serverId: string): Promise<{ status: string; latency: number | null; error?: string }> {
-  return call('POST', `/mcp/servers/${encodeURIComponent(serverId)}/test`, {});
+// MCP-hub op de agent-host (backend/axe_api/mcp_hub.py): echte MCP over
+// Streamable HTTP. De oude /mcp/servers-routes spraken geen MCP.
+export interface McpHubServer {
+  id: string;
+  naam: string;
+  categorie: 'ai' | 'infra' | 'storage' | 'comms' | 'dev';
+  docs: string;
+  uitleg: string;
+  sleutelnaam: string | null;
+  /** Waar de sleutel vandaan komt, of 'ontbreekt'. Nooit de waarde. */
+  sleutel: string;
+  klaar: boolean;
+  per_dag: number | null;
 }
-
-export async function mcpCallTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<{ status: string; result?: unknown; error?: string }> {
-  return call('POST', '/mcp/tools/call', { server_name: serverName, tool_name: toolName, arguments: args });
+export interface McpHubTest {
+  status: 'online' | 'offline' | 'sleutel_ontbreekt';
+  latency?: number;
+  fout?: string;
+  sleutelnaam?: string;
+  tools?: { name: string; description: string }[];
+}
+export function mcpHubLijst(): Promise<{ servers: McpHubServer[] }> { return call('GET', '/mcp/hub'); }
+export function mcpHubTest(id: string): Promise<McpHubTest> { return call('POST', `/mcp/hub/${encodeURIComponent(id)}/test`, {}); }
+export function mcpHubRoep(id: string, tool: string, args: Record<string, unknown>): Promise<{ status: string; result?: unknown; error?: string }> {
+  return call('POST', `/mcp/hub/${encodeURIComponent(id)}/call`, { tool, arguments: args });
+}
+export function mcpHubSleutel(id: string, waarde: string): Promise<McpHubTest & { opgeslagen: string }> {
+  return call('PUT', `/mcp/hub/${encodeURIComponent(id)}/sleutel`, { waarde });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

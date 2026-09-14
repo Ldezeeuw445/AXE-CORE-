@@ -3991,3 +3991,58 @@ async def planner_besluit(taak_id: str, body: PlannerBesluit):
         velden["cancelled_at"] = datetime.now(timezone.utc).isoformat()
     sb().table("core_tasks").update(velden).eq("id", taak_id).execute()
     return {"id": taak_id, "goedkeuring": meta["goedkeuring"]}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MCP HUB — echte MCP-verbindingen op de agent-host. Zie mcp_hub.py.
+#
+# Naast /mcp/servers (de oude route, die nooit MCP sprak) en niet in plaats
+# ervan: de VPS draait die oude nog, en niets weggooien wat een andere client
+# misschien leest. De app gebruikt deze.
+# ══════════════════════════════════════════════════════════════════════════════
+
+import mcp_hub as _mcp_hub
+
+
+class McpRoep(BaseModel):
+    tool: str
+    arguments: dict = {}
+
+
+class McpSleutel(BaseModel):
+    waarde: str
+
+
+@app.get("/mcp/hub", dependencies=[AUTH])
+async def mcp_hub_lijst():
+    return {"servers": await asyncio.to_thread(_mcp_hub.overzicht)}
+
+
+@app.post("/mcp/hub/{server_id}/test", dependencies=[AUTH])
+async def mcp_hub_test(server_id: str):
+    try:
+        return await _mcp_hub.test(server_id)
+    except KeyError:
+        raise HTTPException(404, f"Onbekende MCP-server: {server_id}")
+
+
+@app.post("/mcp/hub/{server_id}/call", dependencies=[AUTH])
+async def mcp_hub_roep(server_id: str, body: McpRoep):
+    try:
+        return await _mcp_hub.roep(server_id, body.tool, body.arguments)
+    except KeyError:
+        raise HTTPException(404, f"Onbekende MCP-server: {server_id}")
+
+
+@app.put("/mcp/hub/{server_id}/sleutel", dependencies=[AUTH])
+async def mcp_hub_sleutel(server_id: str, body: McpSleutel):
+    """Een zelf ingevulde sleutel bewaren op deze machine (600). Geeft nooit de waarde terug."""
+    s = _mcp_hub.SERVERS.get(server_id)
+    if not s:
+        raise HTTPException(404, f"Onbekende MCP-server: {server_id}")
+    if not s["sleutels"]:
+        raise HTTPException(400, "Deze server heeft geen sleutel nodig.")
+    if len(body.waarde.strip()) < 8:
+        raise HTTPException(422, "Dat lijkt geen sleutel.")
+    naam = await asyncio.to_thread(_mcp_hub.bewaar_sleutel, server_id, body.waarde)
+    return {"opgeslagen": naam, **(await _mcp_hub.test(server_id))}

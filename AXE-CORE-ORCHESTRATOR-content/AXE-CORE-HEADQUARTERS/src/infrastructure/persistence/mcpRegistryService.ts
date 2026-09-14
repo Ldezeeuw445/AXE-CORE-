@@ -1,5 +1,5 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export interface MCPServer {
   id: string;
@@ -45,26 +45,6 @@ function coerceStatus(status: string | null | undefined): MCPServer['status'] {
   return 'not-linked';
 }
 
-function toDbRow(server: MCPServer) {
-  return {
-    name: server.id,
-    display_name: server.name,
-    description: `${server.category} MCP server`,
-    transport: 'stdio',
-    command: server.envKey ? `npx ${server.id}` : null,
-    url: null,
-    capabilities: [server.category],
-    status: server.status === 'online' ? 'active' : server.status === 'standby' ? 'configured' : 'not_configured',
-    metadata: {
-      category: server.category,
-      version: server.version ?? null,
-      latency: server.latency ?? null,
-      docsUrl: server.docsUrl,
-      envKey: server.envKey ?? null,
-    },
-  };
-}
-
 function fromDbRow(row: CoreMcpRow): MCPServer {
   const meta = row.metadata ?? {};
   return {
@@ -98,10 +78,6 @@ function loadLocalMcpServers(): MCPServer[] {
   }
 }
 
-export function getDefaultMcpServers(): MCPServer[] {
-  return DEFAULT_SERVERS;
-}
-
 export async function loadMcpServers(): Promise<MCPServer[]> {
   const fallback = await loadSetting<MCPServer[]>('axe_mcp_servers', DEFAULT_SERVERS);
   const local = loadLocalMcpServers();
@@ -118,19 +94,4 @@ export async function loadMcpServers(): Promise<MCPServer[]> {
     // fall back to local cache
   }
   return mergeWithDefaults(local.length ? local : fallback);
-}
-
-export async function saveMcpServers(servers: MCPServer[]): Promise<void> {
-  const merged = mergeWithDefaults(servers);
-  localStorage.setItem('axe_mcp_servers', JSON.stringify(merged));
-  void saveSetting('axe_mcp_servers', merged);
-
-  const sb = getSupabase();
-  if (!sb) return;
-  try {
-    const rows = merged.map(toDbRow);
-    await sb.from('core_mcp_servers').upsert(rows, { onConflict: 'name' });
-  } catch {
-    // Ignore, local persistence still succeeded.
-  }
 }
