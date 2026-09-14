@@ -4075,3 +4075,18 @@ async def mcp_hub_sleutel(server_id: str, body: McpSleutel):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"opgeslagen": naam, **(await _mcp_hub.test(server_id))}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NORTHSEA — de commodity desk leest AXE Commodities, alleen-lezen. Zie northsea.py.
+# ══════════════════════════════════════════════════════════════════════════════
+
+import northsea as _northsea
+
+
+@app.get("/northsea/overzicht", dependencies=[AUTH])
+async def northsea_overzicht(vers: bool = False):
+    try:
+        return await _northsea.overzicht(vers=vers)
+    except _northsea.NorthseaFout as e:
+        raise HTTPException(502, str(e))

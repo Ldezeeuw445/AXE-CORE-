@@ -13,6 +13,7 @@
  *   AXE_CORE_API_KEY = <your secret key>
  */
 
+import type { NorthseaOverzicht } from '@/domain/northsea/chase';
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import { agentBasis } from '@/infrastructure/config/agentHost';
 import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
@@ -49,7 +50,7 @@ async function basisVoor(path: string): Promise<string> {
   // De preview draait in de repo van de editor, en de planner draait waar de
   // abonnementen staan: allebei op de agent-host, niet op de VPS.
   // De MCP-hub ook: die gebruikt de sleutels en de gh-login van de agent-host.
-  if (path.startsWith('/claude/') || path.startsWith('/preview/') || path.startsWith('/planner/') || path.startsWith('/mcp/hub')) {
+  if (path.startsWith('/claude/') || path.startsWith('/preview/') || path.startsWith('/planner/') || path.startsWith('/mcp/hub') || path.startsWith('/northsea/')) {
     return await agentBasis(BASE_URL).catch(() => BASE_URL);
   }
   if (!path.startsWith('/browser/agent')) return BASE_URL;
@@ -981,6 +982,12 @@ export interface McpHubTest {
   sleutelnaam?: string;
   tools?: { name: string; description: string }[];
 }
+// NorthSea: de commodity desk leest AXE Commodities alleen-lezen via de
+// MCP-hub op de agent-host (backend/axe_api/northsea.py).
+export function northseaOverzicht(vers = false): Promise<NorthseaOverzicht> {
+  return call('GET', `/northsea/overzicht${vers ? '?vers=true' : ''}`);
+}
+
 export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }
 export function mcpHubLijst(): Promise<{ servers: McpHubServer[]; sjablonen: McpHubSjabloon[] }> { return call('GET', '/mcp/hub'); }
 export function mcpHubVoegToe(sjabloon: string, label: string, velden: Record<string, string>): Promise<McpHubServer> {

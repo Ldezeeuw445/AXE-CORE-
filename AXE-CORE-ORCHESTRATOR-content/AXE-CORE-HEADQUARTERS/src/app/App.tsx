@@ -37,6 +37,7 @@ const TableEditor = lazy(() => import('@/presentation/pages/TableEditor'));
 const CronManager = lazy(() => import('@/presentation/pages/CronManager'));
 const ControlPlane = lazy(() => import('@/presentation/pages/ControlPlane'));
 const Maps3D = lazy(() => import('@/presentation/pages/Maps3D'));
+const NorthseaDesk = lazy(() => import('@/presentation/pages/northsea/NorthseaDesk'));
 const CrewAI = lazy(() => import('@/presentation/pages/CrewAI'));
 const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'));
 const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
@@ -201,7 +202,9 @@ export default function App() {
             <Route path="table-editor" element={<TableEditor />} />
             <Route path="cron-manager" element={<CronManager />} />
             <Route path="control-plane" element={<ControlPlane />} />
-            <Route path="maps-3d" element={<Maps3D />} />
+            {/* De Maps-tab is de NorthSea Commodity desk (Luka, 14 september). De
+                oude 3D-kaart staat nog op /dev-map-preview. */}
+            <Route path="maps-3d" element={<NorthseaDesk />} />
             <Route path="crewai" element={<CrewAI />} />
             <Route path="developer" element={<CommandCenter />} />
             <Route path="code-editor" element={<CodeEditorPage />} />
