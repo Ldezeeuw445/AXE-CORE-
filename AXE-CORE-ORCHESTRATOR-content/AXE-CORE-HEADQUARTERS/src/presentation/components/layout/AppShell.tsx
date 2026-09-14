@@ -1,6 +1,7 @@
 import { useEffect, Suspense } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
+import { MobileGlass, LookToggle } from '@/presentation/components/layout/MobileGlass';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
@@ -107,6 +108,11 @@ export function AppShell() {
       {/* De galaxy en de gloed, achter de plaat. De backdrop-filter van de
           schil vervaagt ze tot glas. */}
       <AxeAtmosphere />
+      {/* De geschilderde plaat (wallpaper + licht/donker-sluier) voor elke
+          telefoon/web-weergave — op de macOS-desktop doet het native glas dit,
+          dus daar rendert MobileGlass niets. Achter de hele schil, op elke tab,
+          zodat het niet zwart is zoals de Tauri-app op de Mac ook nooit zwart is. */}
+      <MobileGlass />
       {/* De rails aan de rand en de hoogtes die de rest eraan ophangt.
           Doet niets zonder data-look. */}
       <AxeShellChrome />
@@ -114,7 +120,10 @@ export function AppShell() {
           het is de snelste weg tussen Core, Neural, Terrain en Architecture,
           en hij ligt op de plaat in plaats van in een balk, dus hij zit
           niets in de weg. */}
-      {!mobileCommandSurface && opPlaat && <PlaatViewSwitch />}
+      {/* De wereldschakelaar hoort óók op de telefoon-home: hij is de 1-op-1
+          Tauri-manier tussen Core/Neural/Terrain/Architecture. Alleen de
+          desktop-balken (TopNav/Sidebar) blijven op mobiel weg. */}
+      {opPlaat && <PlaatViewSwitch />}
 
     <div
       className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"
@@ -187,7 +196,9 @@ export function AppShell() {
           Dit stond in Home en bestond dus alleen daar; op elke andere tab viel
           je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
           elke pagina Home met de dingen van die tab erbij. */}
-      {!mobileCommandSurface && opPlaat && <PlaatChat />}
+      {/* De volledige composer (met alles erop) hoort óók op de telefoon-home,
+          net als in de Tauri-app — niet mijn afgeslankte mobiele composer. */}
+      {opPlaat && <PlaatChat />}
 
       {/* De oude onderbalk alleen nog zonder plaat. Met plaat levert PlaatChat
           de composer, en twee invoerbalken onder elkaar is voor niemand te
@@ -204,6 +215,17 @@ export function AppShell() {
             precies zoals de Tauri-app. */}
       {!mobileNav && keyboardInset === 0 && <BottomNav />}
       {mobileNav && <MobileNav />}
+      {/* Licht/donker-knop rechtsboven op de telefoon — op de desktop zit die
+          in de TopNav, maar die is hier verborgen. Zo kun je de plaat ook op
+          mobiel omklappen, net als in de Tauri-app. */}
+      {mobileNav && (
+        <div
+          className="fixed right-3 z-[70]"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)' }}
+        >
+          <LookToggle />
+        </div>
+      )}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
