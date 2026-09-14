@@ -17,7 +17,7 @@ import {
   motorVanSlot, bouwPrompt, kiesRepo,
 } from '@/domain/abonnementChat';
 import { findCustomProvider } from '@/domain/customProviders';
-import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
+import { aiProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
 import { proxyErrorMessage } from '@/domain/proxyError';
@@ -193,7 +193,7 @@ function onthoudKoeling(motor:string,tot:number):void{
   // ── Production: CORS-safe proxy (Vercel Edge Fn on the web, the VPS
   // backend directly inside a packaged Tauri app — see aiProxyUrl()) ──────
   if(import.meta.env.PROD){
-    const viaProxy=(m:string)=>fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model:m,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    const viaProxy=(m:string)=>fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json',...vpsAuthHeaders(aiProxyUrl())},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model:m,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
     let pr=await viaProxy(model);
     // Bestaat het model niet, dan één keer het standaardmodel: een oud of
     // verkeerd getypt model is geen kapotte sleutel. Zie domain/modelHerstel.ts.

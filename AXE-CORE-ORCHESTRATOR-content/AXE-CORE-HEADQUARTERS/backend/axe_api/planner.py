@@ -73,6 +73,18 @@ SLEUTEL_MODEL = {"provider": "groq", "model": "openai/gpt-oss-120b", "format": "
 LUKA_TEKST_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
 
 
+def _proxy_headers() -> dict:
+    """De Bearer voor /proxy/ai, die sinds 14 september achter AUTH staat.
+
+    De planner draait in hetzelfde proces als main.py, dus AXE_API_KEY staat
+    er al. AXE_PLANNER_PROXY_KEY bestaat voor een planner die een ándere box
+    aanroept dan de zijne (AXE_PLANNER_PROXY), met een andere sleutel. Zonder
+    sleutel geen lege header: dan zegt de proxy eerlijk 401/403.
+    """
+    sleutel = os.environ.get("AXE_PLANNER_PROXY_KEY") or os.environ.get("AXE_API_KEY") or ""
+    return {"Authorization": f"Bearer {sleutel}"} if sleutel else {}
+
+
 def planner_aan() -> bool:
     return os.environ.get("AXE_PLANNER", "").strip() == "1"
 
@@ -330,8 +342,9 @@ class Planner:
     def _sleutels(self, prompt: str) -> tuple[Optional[str], str]:
         import httpx
         try:
-            r = httpx.post(PROXY_URL, json={**SLEUTEL_MODEL, "key": "",
-                                            "messages": [{"role": "user", "content": prompt}]}, timeout=60)
+            r = httpx.post(PROXY_URL, headers=_proxy_headers(),
+                           json={**SLEUTEL_MODEL, "key": "",
+                                 "messages": [{"role": "user", "content": prompt}]}, timeout=60)
             if r.status_code != 200:
                 return None, f"sleutels: proxy {r.status_code} {r.text[:200]}"
             return str(r.json().get("text") or ""), ""

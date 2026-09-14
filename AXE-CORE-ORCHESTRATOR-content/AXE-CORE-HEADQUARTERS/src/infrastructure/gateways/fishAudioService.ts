@@ -9,7 +9,7 @@
  */
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
-import { isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
+import { isTauriRuntime, VPS_API_ORIGIN, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 
 const ENV_FISH_KEY = import.meta.env.VITE_FISH_AUDIO_API_KEY ?? '';
 const USE_VPS_PROXY = import.meta.env.PROD && isTauriRuntime();
@@ -91,7 +91,7 @@ function ttsFetch(text: string, voiceId: string): Promise<Response> {
   }
   return fetch(FISH_PROXY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...vpsAuthHeaders(FISH_PROXY_URL) },
     body: JSON.stringify({
       text: text.slice(0, 4000),
       voiceId,

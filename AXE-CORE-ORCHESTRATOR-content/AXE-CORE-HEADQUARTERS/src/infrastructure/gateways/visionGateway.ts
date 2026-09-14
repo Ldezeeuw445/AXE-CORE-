@@ -8,7 +8,7 @@ import type { KeySlot } from '@/domain/providers';
 import { PROVIDERS } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
-import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
+import { aiProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { proxyErrorMessage } from '@/domain/proxyError';
 
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
@@ -82,7 +82,7 @@ async function callVisionProvider(
   if (import.meta.env.PROD && slot.provider !== 'google') {
     const pr = await fetch(aiProxyUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...vpsAuthHeaders(aiProxyUrl()) },
       body: JSON.stringify({
         provider: slot.provider,
         key: slot.key,

@@ -404,17 +404,24 @@ async def decide_task_approval(
     return {"approval": approval}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# OPEN PROXIES — LLM providers + Exa search
+# PROXIES — LLM providers, Exa search, Fish TTS
 # ══════════════════════════════════════════════════════════════════════════════
-# Mirrors api/proxy/ai.ts and api/exa.ts (the Vercel versions) exactly, incl.
-# their security model: no AXE_API_KEY / AUTH here, on purpose. The caller's
-# own provider key travels in the request body (same as it already does
-# against Vercel) — these routes only exist to dodge the browser-CORS wall
-# each provider puts up, not to guard a secret of ours. That's what lets the
-# packaged Tauri app reach a real LLM without embedding the master AXE_API_KEY
-# (Supabase service_role + GitHub write + /internal/exec) into a distributed
-# app bundle just to get chat working. Not gated behind Vercel either, so
-# this keeps working even while the Vercel deployment is billing-disabled.
+# Deze routes stonden open, met als redenering: de client stuurt zijn eigen
+# providersleutel mee, de proxy omzeilt alleen CORS en bewaakt geen geheim van
+# ons. Dat klopte tot 2 sep 2026. Toen kreeg de proxy _SERVER_KEYS als
+# terugval (zie hieronder), en EXA_API_KEY / FISH_AUDIO_API_KEY stonden er al.
+# Vanaf dat moment kon iedereen die dit adres kende op Luka's kosten OpenAI,
+# Anthropic, Exa en Fish aanroepen met een lege sleutel.
+#
+# Gemeten 14 sep 2026: POST /proxy/ai met '{}' gaf 400, een validatiefout, dus
+# voorbij elke authcontrole. Daarom nu achter AUTH, net als de rest.
+#
+# Wie ze aanroept en zijn Bearer meestuurt:
+#   - de verpakte Tauri-app en de Android-schil: apiUrl.ts -> vpsAuthHeaders()
+#   - de planner in dit proces: planner.py -> _proxy_headers()
+#   - functions/api/_forward.ts (Cloudflare Pages) stuurt BEWUST geen sleutel
+#     mee. Die route controleert niet wie er belt, dus een sleutel erbij maakt
+#     van de Pages-URL dezelfde open kraan. Eerst een gebruikerscontrole daar.
 
 def _openai_chat_url(base_url: str) -> str:
     """Het chat-adres voor een OpenAI-vormige basis, in welke vorm hij ook komt.
@@ -484,7 +491,7 @@ def _server_key_for(provider: str) -> str:
     return ""
 
 
-@app.get("/proxy/ai/providers")
+@app.get("/proxy/ai/providers", dependencies=[AUTH])
 async def proxy_ai_providers():
     """Welke providers deze server zelf kan bedienen.
 
@@ -495,8 +502,8 @@ async def proxy_ai_providers():
     dat er niets is, is precies het soort stille misleiding dat deze codebase
     elders opruimt.
 
-    Geeft namen terug, nooit waarden. Open zoals /proxy/ai zelf: welke merken
-    er geconfigureerd zijn is geen geheim, de sleutels wel.
+    Geeft namen terug, nooit waarden. Achter AUTH net als /proxy/ai: de lijst
+    zegt precies welke betaalde sleutels hier te gebruiken zijn.
     """
     return {
         "providers": sorted({
@@ -508,7 +515,7 @@ async def proxy_ai_providers():
     }
 
 
-@app.post("/proxy/ai")
+@app.post("/proxy/ai", dependencies=[AUTH])
 async def proxy_ai(body: dict = Body(...)):
     provider = body.get("provider")
     key = body.get("key", "")
@@ -630,7 +637,7 @@ async def proxy_ai(body: dict = Body(...)):
         raise HTTPException(502, str(e)[:300])
 
 
-@app.post("/proxy/exa")
+@app.post("/proxy/exa", dependencies=[AUTH])
 async def proxy_exa(body: dict = Body(...)):
     key = os.environ.get("EXA_API_KEY") or body.get("key", "")
     query = (body.get("query") or "").strip()
@@ -655,7 +662,7 @@ async def proxy_exa(body: dict = Body(...)):
         raise HTTPException(502, str(e)[:300])
 
 
-@app.post("/proxy/fish-tts")
+@app.post("/proxy/fish-tts", dependencies=[AUTH])
 async def proxy_fish_tts(body: dict = Body(...)):
     # Fish Audio's API doesn't answer CORS preflight (OPTIONS) requests
     # properly — it 401s them instead of returning Access-Control-Allow-*
@@ -695,7 +702,7 @@ async def proxy_fish_tts(body: dict = Body(...)):
 # every VITE_-prefixed env var straight into its shipped JS bundle, so a paid
 # key would be trivially extractable from the packaged Tauri app if it lived
 # client-side — trading-os.json in the vault has the same note carved in for
-# exactly this reason. Gated behind AUTH (unlike /proxy/exa): this gets hit
+# exactly this reason. Gated behind AUTH (like /proxy/exa): this gets hit
 # every autopilot cycle x every symbol, and an open unauthenticated proxy
 # would let anyone who finds the URL burn through a paid quota.
 
