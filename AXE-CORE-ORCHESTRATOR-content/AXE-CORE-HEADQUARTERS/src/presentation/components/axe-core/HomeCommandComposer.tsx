@@ -59,7 +59,7 @@ export function HomeCommandComposer(props: Props) {
   const iconStyle = { width: 34, height: 34, color: 'rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.04)' };
 
   return (
-    <div className="flex flex-col gap-2 px-1 pb-1">
+    <div className="flex flex-col gap-1.5 px-1 pb-1">
       {/* Kopregel: modelkiezer + AXE CORE links, klok + instellingen rechts. */}
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2 min-w-0">
@@ -137,20 +137,21 @@ export function HomeCommandComposer(props: Props) {
         </div>
       </div>
 
-      {/* De vier tip-chips: korte labels, náást elkaar op één rij. Elke chip is
-          zo breed als zijn woord (geen gelijke breedte, want dan brak "Context"
-          en "Sharpen" af tot "Cont…"); justify-between spreidt ze over de rij. */}
-      <div className="flex items-center justify-between gap-1.5 pb-0.5">
+      {/* De vier tip-chips: korte labels, gecentreerd als groep (niet tegen de
+          randen), zodat beide uiteinden even ver uitsteken — symmetrisch. Een
+          tikje kleiner en compacter, zodat ze dichter op de composer staan en er
+          onderin wat ruimte overblijft (fijn op een telefoon). */}
+      <div className="flex items-center justify-center gap-2">
         {CHIPS.map(chip => (
           <button
             key={chip.label}
             type="button"
             onClick={() => applyChip(chip.prefix)}
-            className="flex items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 active:scale-95 transition-transform"
+            className="flex items-center justify-center gap-1 rounded-full px-2.5 py-1 active:scale-95 transition-transform"
             style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.09)' }}
           >
-            <chip.icon size={14} className="flex-shrink-0" style={{ color: chip.color }} />
-            <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
+            <chip.icon size={13} className="flex-shrink-0" style={{ color: chip.color }} />
+            <span className="text-[11px] font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
           </button>
         ))}
       </div>
