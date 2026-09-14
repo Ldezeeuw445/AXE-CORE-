@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Check, ChevronDown, ChevronUp, MapPin, Mic, Plus, RotateCcw, Send, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
+import { HomeCommandComposer } from '@/presentation/components/axe-core/HomeCommandComposer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
@@ -473,6 +474,20 @@ export function PlaatChat() {
           dingen brak -- hij verdween zodra je de chat inklapte (in de demo
           blijft hij staan), en hij kreeg de breedte van de plaat MIN de
           padding, dus hij was altijd smaller dan de plaat erboven. */}
+              {isMobile ? (
+                <HomeCommandComposer
+                  value={chatText}
+                  onChange={setChatText}
+                  onSend={() => void handleChatSend()}
+                  onMic={() => void handleChatMic()}
+                  isListening={chatIsListening}
+                  attachments={attachments}
+                  onAttachments={setAttachments}
+                  responseMode={voice.responseMode}
+                  onToggleResponseMode={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
+                  modelLabel={voice.primarySlot?.model || voice.activeProvider || 'AXE CORE'}
+                />
+              ) : (
               <HomeChatComposer>
                     <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
                     {/* Speak/text toggle dropped on mobile: five icon buttons plus
@@ -509,6 +524,7 @@ export function PlaatChat() {
                       <Send size={13} />
                     </button>
               </HomeChatComposer>
+              )}
     </>
   );
 }

@@ -16,7 +16,6 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { MobileFab } from '@/presentation/components/layout/MobileFab';
-import { MobileStatsRow } from '@/presentation/components/layout/MobileStatsRow';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
@@ -276,10 +275,10 @@ export function AppShell() {
           home weg: de composer heeft z'n eigen knoppen en de FAB botste ertegen —
           de Tauri-home heeft daar ook geen zwevende hoekknop. */}
       {mobileNav && !opHome && <MobileFab />}
-      {/* De drie kerncijfers onder de sphere (MEMORIES/BRAIN NODES/INTEGRITY),
-          zoals de Tauri-mockup — alleen op de telefoon-home, en alleen zolang de
-          chat is ingeklapt (dan is de sphere de baas). */}
-      {mobileNav && location.pathname === '/' && <MobileStatsRow />}
+      {/* De drie kerncijfers stonden hier los boven de composer; Luka wil ze
+          weg — de composer (met kop + tip-chips) is nu de basis onder de sphere,
+          zoals de echte AXE CORE-home. MobileStatsRow blijft bestaan voor als we
+          de cijfers later ergens anders willen tonen. */}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
