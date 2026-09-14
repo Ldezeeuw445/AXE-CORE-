@@ -138,7 +138,7 @@ export function WereldKaart({
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [maat, setMaat] = useState({ b: 0, h: 0 });
   /** Waar de dealtabel over de kaart ligt, in kaartcoördinaten; null als nergens. */
-  const [blok, setBlok] = useState<{ links: number; rechts: number; top: number } | null>(null);
+  const [blok, setBlok] = useState<{ links: number; rechts: number; top: number; onder: number } | null>(null);
 
   /* De dealtabel komt via een portal in het dock, dus hij staat er pas een
      render later, en klapt open en dicht. Zoeken met een korte interval tot hij
@@ -156,9 +156,9 @@ export function WereldKaart({
       const b = gevonden?.isConnected ? gevonden.getBoundingClientRect() : null;
       const a = vak?.getBoundingClientRect();
       const nieuw = a && b && b.width > 0 && b.left < a.right && b.right > a.left && b.top < a.bottom
-        ? { links: Math.round(b.left - a.left), rechts: Math.round(b.right - a.left), top: Math.round(b.top - a.top) }
+        ? { links: Math.round(b.left - a.left), rechts: Math.round(b.right - a.left), top: Math.round(b.top - a.top), onder: Math.round(b.bottom - a.top) }
         : null;
-      setBlok(v => (v && nieuw && v.links === nieuw.links && v.rechts === nieuw.rechts && v.top === nieuw.top) || v === nieuw ? v : nieuw);
+      setBlok(v => (v && nieuw && v.links === nieuw.links && v.rechts === nieuw.rechts && v.top === nieuw.top && v.onder === nieuw.onder) || v === nieuw ? v : nieuw);
     }
     const zoek = () => {
       const el = document.querySelector(vrijVan);
@@ -281,9 +281,25 @@ export function WereldKaart({
 
   const redenen = kaart ? redenenNietGeplaatst(kaart.nietGeplaatst) : [];
 
-  /** De afstand tot de onderrand voor een stuk bediening tussen x `van` en `tot`. */
-  const onderVoor = (van: number, tot: number) =>
-    16 + (blok && blok.links < tot && blok.rechts > van ? Math.max(0, maat.h - blok.top) : 0);
+  /**
+   * De afstand tot de onderrand voor een stuk bediening tussen x `van` en `tot`,
+   * `hoog` pixels hoog.
+   *
+   * Standaard 16px van de rand. Alleen omhoog als de dealtabel er ECHT overheen
+   * ligt: horizontaal meer dan zijn afgeronde hoek (die is doorzichtig), en
+   * verticaal tot in de plek waar het ding staat. Gemeten op 2000 breed eindigt
+   * de tabel 87px boven de onderrand van de kaart en raakt hij het kompas maar
+   * 5px in zijn ronde hoek -- met "ergens overlap" sprong het kompas 172px
+   * omhoog, midden in de linkerkant.
+   */
+  const onderVoor = (van: number, tot: number, hoog: number) => {
+    const rand = 16;
+    if (!blok) return rand;
+    const HOEK = 24;
+    const bovenkant = maat.h - rand - hoog;
+    const overlapt = blok.links < tot - HOEK && blok.rechts > van + HOEK && blok.onder > bovenkant;
+    return overlapt ? Math.max(rand, maat.h - blok.top + 12) : rand;
+  };
 
   return (
     <div ref={vakRef} className="axe-scene-vlak relative h-full w-full select-none" data-axe-doel="northsea-kaart">
@@ -409,12 +425,12 @@ export function WereldKaart({
           stuk van de onderrand ligt -- op een breed venster laat de tabel (zo
           breed als de composer) beide hoeken vrij. */}
       <div className="pointer-events-none absolute left-4 flex items-center justify-center rounded-full"
-        style={{ width: KOMPAS + 12, height: KOMPAS + 12, bottom: onderVoor(16, 16 + KOMPAS + 12), ...TEGEL, transition: 'bottom 180ms ease' }}>
+        style={{ width: KOMPAS + 12, height: KOMPAS + 12, bottom: onderVoor(16, 16 + KOMPAS + 12, KOMPAS + 12),...TEGEL, transition: 'bottom 180ms ease' }}>
         <Kompas />
       </div>
 
       <div className="absolute left-1/2 flex -translate-x-1/2 overflow-hidden rounded-lg"
-        style={{ bottom: onderVoor(maat.b / 2 - 60, maat.b / 2 + 60), ...TEGEL, transition: 'bottom 180ms ease' }}>
+        style={{ bottom: onderVoor(maat.b / 2 - 60, maat.b / 2 + 60, 32),...TEGEL, transition: 'bottom 180ms ease' }}>
         {/* Drie losse knoppen en geen lijst met functies erin: react-hooks/refs
             ziet een ref in een functie die tijdens het renderen in data wordt
             gestopt als een ref die tijdens het renderen gelezen wordt. */}
@@ -430,7 +446,7 @@ export function WereldKaart({
       </div>
 
       <div className="pointer-events-none absolute right-4 flex items-center gap-2 rounded-full px-3.5 py-2 font-mono-data text-[11.5px] tabular-nums"
-        style={{ bottom: onderVoor(maat.b - 16 - COORD_BREED, maat.b - 16), ...TEGEL, transition: 'bottom 180ms ease' }}>
+        style={{ bottom: onderVoor(maat.b - 16 - COORD_BREED, maat.b - 16, 34),...TEGEL, transition: 'bottom 180ms ease' }}>
         <Crosshair size={13} style={{ color: 'var(--accent-cyan)' }} />
         <span style={{ color: coordinaat ? 'var(--text-primary)' : 'var(--text-muted)' }}>{coordinaat ?? 'Hover the map'}</span>
       </div>
