@@ -572,6 +572,31 @@ html:root[data-look],
   -webkit-backdrop-filter: none;
 }
 
+/* ── De mobiele glasplaat ────────────────────────────────────────────────
+ *
+ * Op de telefoon-home IS de schil de zwevende glasplaat uit de "AXE Glass
+ * Plate"-mockup: een paneel met een kier eromheen (de inset staat inline in
+ * AppShell), een randje en een subtiele vulling die het van de achtergrond
+ * (MobileGlass) aftekent. De inhoud eronder — sphere, cijfers, chat, composer —
+ * houdt zijn eigen donkere materiaal; dit is alleen de plaat waarop het ligt.
+ *
+ * Waarom een klasse met !important: de shell-achtergrond hierboven staat op
+ * `transparent !important` (glass) en `var(--axe-plaat) !important` (black), en
+ * dat moet de plaatvulling overrulen. Geen backdrop-filter op de plaat: die zou
+ * de eigen matglas-lagen van de chat en de composer platslaan (een element met
+ * backdrop-filter is de backdrop-root voor alles erbinnen). */
+:root[data-look] .axe-shell.axe-plaat-mobiel {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.025) 46%, rgba(255, 255, 255, 0.01) 100%) !important;
+}
+:root[data-look='black'] .axe-shell.axe-plaat-mobiel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.018) 50%, rgba(255, 255, 255, 0.006) 100%) !important;
+}
+
 /* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de
    galaxy doorkomt, saturate 0 trekt de kleur naar grijs — donker glas dat
    leeft, geen effen zwart vlak. */
@@ -1383,6 +1408,14 @@ html:root[data-look],
    * De rechten zijn nu ook goedgezet (core:window:allow-start-dragging in
    * tauri.conf.json), zodat slepen echt werkt in plaats van te klagen. */
   z-index: 1200;
+}
+
+/* Op de telefoon onder de statusbalk én binnen de glasplaat-rand: top:16 zonder
+   safe-area zette de wereldschakelaar in de statusregel, boven de plaat uit. */
+@media (max-width: 767px) {
+  :root[data-look] .axe-viewctl {
+    top: calc(env(safe-area-inset-top, 0px) + 20px);
+  }
 }
 
 /* Home's eigen CORE ACTIVE staat nu in de kopregel. Twee keer dezelfde status,

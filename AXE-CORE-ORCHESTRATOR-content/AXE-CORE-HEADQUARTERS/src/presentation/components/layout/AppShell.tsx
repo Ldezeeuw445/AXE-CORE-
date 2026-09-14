@@ -160,6 +160,14 @@ export function AppShell() {
     });
   // De nav is dan altijd de lade; de horizontale onderbalk is alleen desktop.
   const mobileNav = mobileCommandSurface;
+  // De telefoon-home is de échte Tauri-glasplaat: een paneel dat op de
+  // achtergrond zweeft met een kleine kier eromheen (zie de "AXE Glass Plate"-
+  // mockup). Dat is de schil zelf — vaste inset, ronde hoeken, een randje en een
+  // subtiele glasvulling, met overflow:hidden zodat de sphere en de composer
+  // netjes ín de plaat vallen. De zwevende knoppen (wereldschakelaar, licht/
+  // donker, FAB) blijven eroverheen zweven. Alleen op de home, zodat de andere
+  // tabs (nog) ongemoeid blijven.
+  const opHome = mobileNav && location.pathname === '/';
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -192,8 +200,32 @@ export function AppShell() {
       {opPlaat && <PlaatViewSwitch />}
 
     <div
-      className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"
-      style={{ background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
+      className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opHome ? ' axe-plaat-mobiel' : ''}`}
+      style={
+        opHome
+          ? {
+              // De glasplaat: vast paneel met een kier eromheen. Boven onder de
+              // statusbalk, onder boven de systeembalk, links/rechts een smalle
+              // marge — zo zweeft hij op de achtergrond zoals in de Tauri-app.
+              position: 'fixed',
+              top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+              left: 12,
+              right: 12,
+              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
+              height: 'auto',
+              zIndex: 1,
+              borderRadius: 28,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+              // Content van de plaatrand af: de composer en de sphere raken zo
+              // de ronde hoeken niet.
+              paddingLeft: 14,
+              paddingRight: 14,
+              paddingTop: 10,
+              paddingBottom: keyboardInset || 14,
+              transition: 'padding-bottom 0.18s ease-out',
+            }
+          : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }
+      }
     >
       {/* De sloten: lege plekken die de schil vrijhoudt voor wat de huidige tab
           nodig heeft. Een pagina levert er inhoud aan (PlaatPanel / PlaatDock)
@@ -327,8 +359,12 @@ export function AppShell() {
           mobiel omklappen, net als in de Tauri-app. */}
       {mobileNav && (
         <div
-          className="fixed right-3 z-[70]"
-          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)' }}
+          className="fixed z-[70]"
+          style={{
+            // Op de home binnen de glasplaat-rand; anders in de schermhoek.
+            top: opHome ? 'calc(env(safe-area-inset-top, 0px) + 22px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            right: opHome ? 24 : 12,
+          }}
         >
           <LookToggle />
         </div>
