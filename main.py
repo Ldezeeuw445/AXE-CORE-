@@ -34,6 +34,8 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
+from zuinig import Bezet, lagere_prioriteit, slot as zuinig_slot
+import contextlib as _contextlib
 from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -834,15 +836,32 @@ async def _run_engine(py: str, script: str, label: str, args: list[str], timeout
     takes its own subprocess with it and not this API."""
     if not os.path.exists(py) or not os.path.exists(script):
         raise HTTPException(status_code=503, detail=f"{label} engine not installed on this host")
+    # Hoeveel engines tegelijk: zie zuinig.py. Een TradingAgents-debat of
+    # -backtest duurt minuten en vraagt ~360 MB, dus één tegelijk; de rest
+    # (vbt, nautilus, kronos) twee. Het signaal leest alleen een cache.
+    if label.endswith("signal"):
+        beperking = _contextlib.nullcontext()
+    elif label.startswith("tradingagents"):
+        beperking = zuinig_slot("ta", 1, 0, sleutel=f"{label} {args}")
+    else:
+        beperking = zuinig_slot("engine", 2, 0, sleutel=f"{label} {args}")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            py, script, *args,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
-        )
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail=f"{label} timed out")
+        with beperking:
+            proc = await asyncio.create_subprocess_exec(
+                py, script, *args,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+                preexec_fn=lagere_prioriteit,
+            )
+            try:
+                out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                # Afmaken, niet laten doorlopen: een verlopen run hield zijn
+                # geheugen vast tot hij uit zichzelf klaar was.
+                proc.kill()
+                raise HTTPException(status_code=504, detail=f"{label} timed out")
+    except Bezet as e:
+        raise HTTPException(status_code=429, detail=f"{label}: {e}")
     try:
         return json.loads(out.decode() or "{}")
     except Exception:

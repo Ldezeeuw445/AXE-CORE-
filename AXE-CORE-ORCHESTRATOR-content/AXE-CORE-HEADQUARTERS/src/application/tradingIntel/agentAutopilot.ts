@@ -38,6 +38,7 @@ import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
 import { tradeableAccounts, accountLabel, accountRun, getAccounts } from '@/infrastructure/persistence/tradingAccountsService';
 import { runDecisionFunnel, loadLastFunnelRun, type FunnelVote } from '@/application/tradingIntel/runDecisionFunnel';
 import { listIntelReports } from '@/infrastructure/persistence/tradingIntelService';
+import { moetResearchDraaien } from '@/domain/tradingIntel/researchVers';
 import {
   emptyCycle, withStage, type CycleRecord,
 } from '@/domain/tradingIntel/cycleJournal';
@@ -946,7 +947,22 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
   // completed report says, so a stale one defeats the point of running
   // on a schedule at all. Bounded, because a slow provider must not be able
   // to spend the whole cycle on one symbol.
-  try {
+  //
+  // Hooguit één onderzoek per symbool per uur, en nooit twee tegelijk: zie
+  // domain/tradingIntel/researchVers.ts. De cyclus zelf loopt gewoon door op
+  // het laatste afgeronde rapport.
+  const researchBesluit = moetResearchDraaien(
+    await listIntelReports().catch(() => []), symbol, Date.now(),
+  );
+  if (!researchBesluit.draaien) {
+    const r = researchBesluit.rapport;
+    if (researchBesluit.reden === 'vers') thesis = r.thesis ?? null;
+    await note('research', 'ok',
+      researchBesluit.reden === 'vers'
+        ? `Rapport van ${Math.round((Date.now() - Date.parse(r.updatedAt)) / 60_000)} min geleden gebruikt`
+        : 'Vorig onderzoek loopt nog',
+      'Geen nieuw onderzoek: hooguit één per symbool per uur.');
+  } else try {
     // Hand research the SAME provider cascade the chat box uses.
     //
     // This called runTradingResearch with no callLlm, so a failed CrewAI run
