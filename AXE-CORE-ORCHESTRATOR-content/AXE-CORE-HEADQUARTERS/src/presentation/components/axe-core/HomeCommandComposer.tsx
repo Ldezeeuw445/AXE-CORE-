@@ -137,19 +137,20 @@ export function HomeCommandComposer(props: Props) {
         </div>
       </div>
 
-      {/* De vier tip-chips: korte labels, vier gelijke knoppen náást elkaar op
-          één rij (flex-1). Scheelt ruimte en staat strakker dan twee regels. */}
-      <div className="flex items-center gap-1.5 pb-0.5">
+      {/* De vier tip-chips: korte labels, náást elkaar op één rij. Elke chip is
+          zo breed als zijn woord (geen gelijke breedte, want dan brak "Context"
+          en "Sharpen" af tot "Cont…"); justify-between spreidt ze over de rij. */}
+      <div className="flex items-center justify-between gap-1.5 pb-0.5">
         {CHIPS.map(chip => (
           <button
             key={chip.label}
             type="button"
             onClick={() => applyChip(chip.prefix)}
-            className="flex-1 min-w-0 flex items-center justify-center gap-1.5 rounded-full px-2 py-1.5 active:scale-95 transition-transform"
+            className="flex items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 active:scale-95 transition-transform"
             style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.09)' }}
           >
             <chip.icon size={14} className="flex-shrink-0" style={{ color: chip.color }} />
-            <span className="text-[12px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
+            <span className="text-[12px] font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
           </button>
         ))}
       </div>
