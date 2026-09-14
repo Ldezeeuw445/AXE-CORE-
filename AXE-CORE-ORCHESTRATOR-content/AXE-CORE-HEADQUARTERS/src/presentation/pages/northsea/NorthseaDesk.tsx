@@ -34,9 +34,8 @@ import { WereldKaart, type KaartLaag } from './WereldKaart';
 import { wereldkaart } from './kaartGeo';
 import { DeskKaartjes } from './DeskKaartjes';
 import { DealsTabel } from './DealsTabel';
-
-/** De legenda begint onder de kaartjes: 74px tegel plus de ruimte eromheen. */
-const LEGENDA_TOP = 112;
+import { KaartLegenda } from './KaartLegenda';
+import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 
 type Tab = 'live' | 'deals' | 'pipeline' | 'tegenpartijen' | 'communicatie' | 'markt' | 'documenten' | 'bewijs' | 'automatisering' | 'rapporten';
 type ChaseFilter = 'alle' | 'kritiek' | 'nieuw';
@@ -82,9 +81,11 @@ export default function NorthseaDesk() {
   const items = useMemo(() => (data ? chaseItems(data, nu) : []), [data, nu]);
   const tellers = chaseTellers(items);
   const desk = useMemo(() => (data?.kaart ? deskTellers(data.kaart, nu) : null), [data, nu]);
-  // Dezelfde routes als op de kaart, zodat het kaartje en de lijnen hetzelfde tellen.
-  const routes = useMemo(
-    () => (data?.kaart ? bouwKaart(data.kaart, wereldkaart().middelpunten).routes.length : null),
+  // Dezelfde kaart als WereldKaart tekent, zodat de legenda bovenin, het
+  // routes-kaartje en de lijnen allemaal hetzelfde tellen -- ook op de
+  // tabbladen waar de kaart zelf niet openstaat.
+  const kaart = useMemo(
+    () => (data?.kaart ? bouwKaart(data.kaart, wereldkaart().middelpunten) : null),
     [data],
   );
   const gefilterd = items.filter(i => filter === 'alle' || (filter === 'kritiek' ? i.kritiek : i.nieuw));
@@ -121,7 +122,10 @@ export default function NorthseaDesk() {
     <div className="axe-tabruimte relative flex min-h-0 flex-1 flex-col">
       {/* Bovenin: losse kaartjes die doorschuiven. Boven de composer: de deals.
           De zuilen naast de composer blijven vrij voor wat er nog komt. */}
-      <DeskKaartjes data={data} tellers={desk} routes={routes} />
+      <TopbalkSlot kant="links">
+        <KaartLegenda kaart={fout ? null : kaart} totaal={data?.kaart ? data.kaart.length : null} />
+      </TopbalkSlot>
+      <DeskKaartjes data={data} tellers={desk} routes={kaart ? kaart.routes.length : null} />
       <PlaatSlot slot="dock">
         <DealsTabel deals={fout ? null : data?.kaart ?? null} tellers={desk} nu={nu} fout={fout} />
       </PlaatSlot>
@@ -192,7 +196,7 @@ export default function NorthseaDesk() {
         /* De kaart vult het midden, zonder vak: `data.kaart` ontbreekt als de
            lokale API van vóór de kaart is, en dan zegt de kaart dat zelf. */
         <div className="flex min-h-0 flex-1">
-          <WereldKaart deals={fout ? null : data ? data.kaart : null} lagen={lagen} fout={fout} legendaTop={LEGENDA_TOP}
+          <WereldKaart deals={fout ? null : data ? data.kaart : null} lagen={lagen} fout={fout}
             vrijVan="[data-axe-doel=northsea-deals]" />
         </div>
       ) : (

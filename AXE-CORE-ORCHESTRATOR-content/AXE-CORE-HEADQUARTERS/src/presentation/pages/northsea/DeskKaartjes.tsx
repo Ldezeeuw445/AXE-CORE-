@@ -166,7 +166,12 @@ export function DeskKaartjes({ data, tellers, routes }: {
       {pijl(-1, randen.links)}
       {/* scroll-px-2 hoort bij px-2: zonder springt de snap de rij bij het laden
           8px op, en staat de linkerpijl er terwijl er links niets is. */}
-      <div ref={rijRef} className="ns-kaartrij pointer-events-auto flex min-w-0 flex-1 snap-x scroll-px-2 gap-3 overflow-x-auto px-2 py-3">
+      {/* De binnenrij is zo breed als zijn kaartjes (w-max) en staat met mx-auto
+          in het midden zolang ze passen. Passen ze niet, dan wordt de marge nul
+          en schuift de rij zoals voorheen. De pijlen blijven ruimte houden als
+          ze onzichtbaar zijn, dus het midden is echt het midden. */}
+      <div ref={rijRef} className="ns-kaartrij pointer-events-auto flex min-w-0 flex-1 snap-x scroll-px-2 overflow-x-auto px-2 py-3">
+        <div className="mx-auto flex w-max gap-3">
         <Getal waarde={tellers?.actief ?? leeg} label="Active deals" kleur="#22D3EE"
           sub={tellers ? `+${tellers.nieuwDezeWeek} this week` : undefined} subKleur="#34D399" />
         <Getal waarde={tellers?.akkoord ?? leeg} label="Awaiting approval" kleur="#FBBF24"
@@ -180,6 +185,7 @@ export function DeskKaartjes({ data, tellers, routes }: {
           sub={data ? `${data.tellers.communicatie_7d} messages · 7d` : undefined} />
         <Getal waarde={routes ?? leeg} label="Active routes" sub={routes !== null ? 'On the map' : undefined} />
         {MARKTEN.map(m => <MarktTegel key={m.symbool} markt={m} koers={koersen[m.symbool] ?? null} />)}
+        </div>
       </div>
       {pijl(1, randen.rechts)}
       <style>{`

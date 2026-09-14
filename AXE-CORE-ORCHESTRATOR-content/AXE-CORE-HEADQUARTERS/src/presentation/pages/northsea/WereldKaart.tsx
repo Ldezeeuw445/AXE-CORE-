@@ -37,11 +37,11 @@ import { zoom as d3Zoom, zoomIdentity, zoomTransform, type ZoomBehavior, type Zo
 import type { FeatureCollection, Geometry } from 'geojson';
 import { Crosshair, Minus, Plus, RotateCw } from 'lucide-react';
 import {
-  bouwKaart, redenenNietGeplaatst,
+  bouwKaart,
   type DealStand, type KaartDeal, type KaartPunt, type KaartRoute,
 } from '@/domain/northsea/kaart';
 import { wereldkaart } from './kaartGeo';
-import { REDEN_LABEL, SOORT_LABEL, STAND_STIJL, STAND_VOLGORDE } from './kaartStijl';
+import { SOORT_LABEL, STAND_STIJL, STAND_VOLGORDE } from './kaartStijl';
 
 export type KaartLaag = 'routes' | 'havens' | 'tegenpartijen' | 'weer';
 
@@ -121,14 +121,12 @@ const LandLaag = memo(function LandLaag({ pad, landen, land, kleuren }: {
 });
 
 export function WereldKaart({
-  deals, lagen, fout, legendaTop = 12, vrijVan,
+  deals, lagen, fout, vrijVan,
 }: {
   /** null = nog aan het laden; undefined = de lokale API stuurt geen kaartdata. */
   deals: KaartDeal[] | null | undefined;
   lagen: Record<KaartLaag, boolean>;
   fout?: string | null;
-  /** Hoe ver de legenda van de bovenkant staat -- de kaartjes liggen erboven. */
-  legendaTop?: number;
   /** Een element dat over de onderkant van de kaart ligt (de dealtabel in het
    *  dock). Kompas, zoomknoppen en coördinaten schuiven erboven. */
   vrijVan?: string;
@@ -279,7 +277,6 @@ export function WereldKaart({
     return ll && Number.isFinite(ll[0]) ? `${graden(ll[1], 'N', 'S')}, ${graden(ll[0], 'E', 'W')}` : null;
   })();
 
-  const redenen = kaart ? redenenNietGeplaatst(kaart.nietGeplaatst) : [];
 
   /**
    * De afstand tot de onderrand voor een stuk bediening tussen x `van` en `tot`,
@@ -362,35 +359,8 @@ export function WereldKaart({
         )}
       </svg>
 
-      {/* De legenda, linksboven onder de kaartjes -- tekst op de plaat, geen kaartje. */}
-      <div className="pointer-events-none absolute left-4 flex flex-col gap-1.5 text-[12px]"
-        style={{ top: legendaTop, color: 'var(--text-secondary)', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
-        {STAND_VOLGORDE.filter(s => s !== 'overig' || (kaart?.tellers.overig ?? 0) > 0).map(s => (
-          <div key={s} className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: STAND_STIJL[s].kleur, boxShadow: `0 0 8px ${STAND_STIJL[s].kleur}` }} />
-            <span>{STAND_STIJL[s].label}</span>
-            {kaart && <span className="font-mono-data text-[11px]" style={{ color: 'var(--text-muted)' }}>{kaart.tellers[s]}</span>}
-            {/* Zonder deze regel zegt de desk "24 actief" en de legenda "2": allebei
-                waar, want een blokkade gaat voor. Zie dealStand. */}
-            {kaart && s === 'geblokkeerd' && kaart.geblokkeerdActief > 0 && (
-              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>incl. {kaart.geblokkeerdActief} active</span>
-            )}
-          </div>
-        ))}
-        <div className="flex items-center gap-2">
-          <svg width="11" height="11" viewBox="-6 -6 12 12"><path d={STER} fill="#F8FAFC" /></svg>
-          <span>Key Trade Hubs</span>
-        </div>
-        {kaart && (
-          <div className="mt-1 max-w-[260px] text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }}>
-            {kaart.routes.length} of {(deals ?? []).length} deals on the map
-            {kaart.routes.some(r => r.benaderd) && ` · ${kaart.routes.filter(r => r.benaderd).length} approximate (faint)`}
-            {redenen.length > 0 && (
-              <> · not shown: {redenen.map(r => `${r.aantal} ${REDEN_LABEL[r.reden]}`).join(', ')}</>
-            )}
-          </div>
-        )}
-      </div>
+      {/* De legenda staat in de topbalk (KaartLegenda, via NorthseaDesk), zodat hij
+          op elk tabblad van de desk bovenin zichtbaar blijft. */}
 
       {(fout || deals === null || deals === undefined) && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[12px]" style={{ color: 'var(--text-muted)' }}>
