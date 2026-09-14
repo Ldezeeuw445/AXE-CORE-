@@ -89,7 +89,7 @@ const LandLaag = memo(function LandLaag({ pad, landen, land, kleuren }: {
 });
 
 export function WereldKaart({
-  deals, lagen, fout, legendaTop = 12,
+  deals, lagen, fout, legendaTop = 12, vrijVan,
 }: {
   /** null = nog aan het laden; undefined = de lokale API stuurt geen kaartdata. */
   deals: KaartDeal[] | null | undefined;
@@ -97,11 +97,49 @@ export function WereldKaart({
   fout?: string | null;
   /** Hoe ver de legenda van de bovenkant staat -- de kaartjes liggen erboven. */
   legendaTop?: number;
+  /** Een element dat over de onderkant van de kaart ligt (de dealtabel in het
+   *  dock). Kompas, zoomknoppen en coördinaten schuiven erboven. */
+  vrijVan?: string;
 }) {
   const vakRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [maat, setMaat] = useState({ b: 0, h: 0 });
+  const [onder, setOnder] = useState(0);
+
+  /* De dealtabel komt via een portal in het dock, dus hij staat er pas een
+     render later, en klapt open en dicht. Zoeken met een korte interval tot hij
+     er is (geen MutationObserver op de hele body -- zie PlaatSlots), daarna
+     alleen nog meten als hij of de kaart van maat verandert. */
+  useEffect(() => {
+    if (!vrijVan) return;
+    let frame = 0;
+    let gevonden: Element | null = null;
+    const ro = new ResizeObserver(() => meet());
+    function meet() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const vak = vakRef.current;
+        if (!vak || !gevonden?.isConnected) { setOnder(0); return; }
+        const a = vak.getBoundingClientRect();
+        const b = gevonden.getBoundingClientRect();
+        const overlapt = b.width > 0 && b.left < a.right && b.right > a.left && b.top < a.bottom;
+        setOnder(overlapt ? Math.max(0, Math.round(a.bottom - b.top)) : 0);
+      });
+    }
+    const zoek = () => {
+      const el = document.querySelector(vrijVan);
+      if (el === gevonden) return;
+      if (gevonden) ro.unobserve(gevonden);
+      gevonden = el;
+      if (el) ro.observe(el);
+      meet();
+    };
+    if (vakRef.current) ro.observe(vakRef.current);
+    zoek();
+    const iv = setInterval(zoek, 700);
+    return () => { clearInterval(iv); cancelAnimationFrame(frame); ro.disconnect(); };
+  }, [vrijVan]);
   const [t, setT] = useState<ZoomTransform>(zoomIdentity);
   const [muis, setMuis] = useState<[number, number] | null>(null);
   const [zweeft, setZweeft] = useState<{ punt: KaartPunt; x: number; y: number } | null>(null);
@@ -330,14 +368,14 @@ export function WereldKaart({
       )}
 
       {/* Kompas linksonder, zoom middenonder, coördinaten rechtsonder: de plek uit het ontwerp. */}
-      <div className="pointer-events-none absolute bottom-3 left-4 flex h-12 w-12 flex-col items-center justify-center rounded-full"
-        style={{ border: '1px solid rgba(255,255,255,0.10)', color: 'var(--text-muted)' }}>
+      <div className="pointer-events-none absolute left-4 flex h-12 w-12 flex-col items-center justify-center rounded-full"
+        style={{ bottom: onder + 12, border: '1px solid rgba(255,255,255,0.10)', color: 'var(--text-muted)', transition: 'bottom 180ms ease' }}>
         <span className="text-[9px] font-semibold" style={{ color: 'var(--accent-cyan)' }}>N</span>
         <span className="mt-0.5 h-1.5 w-1.5 rounded-full" style={{ background: 'var(--text-secondary)' }} />
       </div>
 
-      <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 overflow-hidden rounded-lg"
-        style={{ background: 'var(--axe-barbtn)', boxShadow: 'var(--axe-tegel-op)' }}>
+      <div className="absolute left-1/2 flex -translate-x-1/2 overflow-hidden rounded-lg"
+        style={{ bottom: onder + 12, background: 'var(--axe-barbtn)', boxShadow: 'var(--axe-tegel-op)', transition: 'bottom 180ms ease' }}>
         {/* Drie losse knoppen en geen lijst met functies erin: react-hooks/refs
             ziet een ref in een functie die tijdens het renderen in data wordt
             gestopt als een ref die tijdens het renderen gelezen wordt. */}
@@ -353,7 +391,7 @@ export function WereldKaart({
       </div>
 
       {coordinaat && (
-        <div className="pointer-events-none absolute bottom-4 right-4 font-mono-data text-[11px]" style={{ color: 'var(--text-muted)' }}>
+        <div className="pointer-events-none absolute right-4 font-mono-data text-[11px]" style={{ bottom: onder + 16, color: 'var(--text-muted)' }}>
           {coordinaat}
         </div>
       )}

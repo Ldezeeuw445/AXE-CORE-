@@ -164,7 +164,9 @@ export function DeskKaartjes({ data, tellers, routes }: {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex items-center gap-2 px-3" data-axe-doel="northsea-kaartjes">
       {pijl(-1, randen.links)}
-      <div ref={rijRef} className="ns-kaartrij pointer-events-auto flex min-w-0 flex-1 snap-x gap-3 overflow-x-auto px-2 py-3">
+      {/* scroll-px-2 hoort bij px-2: zonder springt de snap de rij bij het laden
+          8px op, en staat de linkerpijl er terwijl er links niets is. */}
+      <div ref={rijRef} className="ns-kaartrij pointer-events-auto flex min-w-0 flex-1 snap-x scroll-px-2 gap-3 overflow-x-auto px-2 py-3">
         <Getal waarde={tellers?.actief ?? leeg} label="Active deals" kleur="#22D3EE"
           sub={tellers ? `+${tellers.nieuwDezeWeek} this week` : undefined} subKleur="#34D399" />
         <Getal waarde={tellers?.akkoord ?? leeg} label="Awaiting approval" kleur="#FBBF24"

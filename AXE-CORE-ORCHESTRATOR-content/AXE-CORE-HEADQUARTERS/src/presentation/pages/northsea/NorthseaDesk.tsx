@@ -192,7 +192,8 @@ export default function NorthseaDesk() {
         /* De kaart vult het midden, zonder vak: `data.kaart` ontbreekt als de
            lokale API van vóór de kaart is, en dan zegt de kaart dat zelf. */
         <div className="flex min-h-0 flex-1">
-          <WereldKaart deals={fout ? null : data ? data.kaart : null} lagen={lagen} fout={fout} legendaTop={LEGENDA_TOP} />
+          <WereldKaart deals={fout ? null : data ? data.kaart : null} lagen={lagen} fout={fout} legendaTop={LEGENDA_TOP}
+            vrijVan="[data-axe-doel=northsea-deals]" />
         </div>
       ) : (
         /* De andere weergaven volgen Luka's specificatie. Tot dan alleen wat er
