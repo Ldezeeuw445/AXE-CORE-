@@ -286,7 +286,14 @@ export function PlaatChat() {
         <div
           data-dicht={chatCollapsed ? 'ja' : 'nee'}
           className="axe-chatplaat h-full flex flex-col rounded-xl overflow-hidden relative"
-          style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }}
+          style={
+            isMobile
+              // Op de telefoon geen native glas: maak de plaat zelf gerookt glas —
+              // half-transparant + backdrop-blur, zodat de wallpaper er wazig
+              // doorheen komt (frosted), net als het Tauri-glas op de Mac.
+              ? { background: 'rgba(12,14,20,0.48)', backdropFilter: 'blur(28px) saturate(150%)', WebkitBackdropFilter: 'blur(28px) saturate(150%)', border: '1px solid rgba(255,255,255,0.08)' }
+              : { background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }
+          }
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={(e) => { void onDrop(e); }}
@@ -312,9 +319,14 @@ export function PlaatChat() {
                   hing. In de demo staan ze op dezelfde regel als de naam, ín de
                   kop, gescheiden door een streepje in plaats van door een
                   kader: het zijn tellers, geen knoppen. */}
-              <span className="axe-cpills" onClick={e => e.stopPropagation()}>
-                <MissionControlStrip />
-              </span>
+              {/* Op de telefoon botsten deze tellers met de gesprekstitels in
+                  dezelfde smalle kopregel; daar houden we de kop schoon (alleen
+                  "AXE CHAT"). Op desktop staan ze gewoon op de regel. */}
+              {!isMobile && (
+                <span className="axe-cpills" onClick={e => e.stopPropagation()}>
+                  <MissionControlStrip />
+                </span>
+              )}
               {/* Waar je bent en of de verbinding staat. Dit stond boven de
                   composer, waardoor die twee regels hoog was en op elke tab
                   anders. Hier staat het bij de rest van de status, op één
@@ -334,7 +346,7 @@ export function PlaatChat() {
                   streep eronder -- twee regels chroom voordat het gesprek zelf
                   begon. Ze horen op de kopregel: het is dezelfde informatie
                   ("welk gesprek kijk je"), en de demo heeft daar één lijn. */}
-              {!chatCollapsed && voice.allConversations.length > 1 && (
+              {!isMobile && !chatCollapsed && voice.allConversations.length > 1 && (
                 <span className="axe-convs flex items-center gap-1 overflow-x-auto">
                   {voice.allConversations.slice(0, 4).map(conv => (
                     <button
@@ -466,7 +478,7 @@ export function PlaatChat() {
                       onChange={e => setChatText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
                       placeholder={attachments.length ? 'Send · show · chart · done' : (isMobile ? 'Ask anything…' : 'show chart · show me New York')}
-                      className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
+                      className={`${isMobile ? 'order-first basis-full mb-1' : 'flex-1 min-w-0'} text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent`}
                       style={{ color: 'var(--text-primary)', border: 'none' }}
                     />
                     <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
