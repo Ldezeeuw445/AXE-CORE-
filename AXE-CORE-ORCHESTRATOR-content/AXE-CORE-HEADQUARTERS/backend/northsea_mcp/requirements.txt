@@ -1,0 +1,6 @@
+# NorthSea MCP — eigen venv op de box (/opt/northsea-mcp/venv), los van axe-core-api.
+mcp==2.2.0
+httpx>=0.28,<1
+uvicorn>=0.31
+starlette>=0.48
+pydantic>=2.12
