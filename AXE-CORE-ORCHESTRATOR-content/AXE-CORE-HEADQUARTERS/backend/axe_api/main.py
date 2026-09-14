@@ -1807,6 +1807,12 @@ async def vercel_promote(deployment_id: str, request: Request):
 from osint.router import router as osint_router  # noqa: E402 — after app setup by design
 app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
 
+# Perplexity Agent API: onderzoek met actuele bronnen. Achter AUTH omdat elke
+# vraag geld kost, anders dan /proxy/exa. Zie perplexity_agent.py voor waarom
+# de Agent API en niet de Router, en waarom het dagbudget op de server staat.
+from perplexity_agent import router as perplexity_router  # noqa: E402
+app.include_router(perplexity_router, prefix="/research", dependencies=[AUTH], tags=["research"])
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
