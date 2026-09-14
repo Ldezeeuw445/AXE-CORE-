@@ -15,6 +15,7 @@ import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
+import { MobileFab } from '@/presentation/components/layout/MobileFab';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
@@ -226,6 +227,9 @@ export function AppShell() {
           <LookToggle />
         </div>
       )}
+      {/* Slimme hoekknop (mobiel): snelacties binnen duim-bereik, de mobiel-eigen
+          vervanging van de radiale hoekmenu's van de desktop. */}
+      {mobileNav && <MobileFab />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
