@@ -70,6 +70,46 @@ PLANNER_RUN_S = 300
 PROXY_URL = os.environ.get("AXE_PLANNER_PROXY", "https://api.axecompanion.com/proxy/ai")
 SLEUTEL_MODEL = {"provider": "groq", "model": "openai/gpt-oss-120b", "format": "openai",
                  "baseUrl": "https://api.groq.com/openai/v1"}
+
+# ── Bedenken gaat over sleutels, uitvoeren over het abonnement ───────────────
+#
+# Gemeten 14 september: 29 abonnement-runs op één dag, waarvan claude er 10 deed
+# en daarmee zijn dagbudget opmaakte. Per agent per ronde zijn er tot drie runs:
+# het bedenken van taken, een leestaak en een goedgekeurde schrijftaak. De
+# eerste is de goedkoopste van de drie -- een kort verzoek om drie regels JSON --
+# en juist die ging op een abonnement dat Luka zelf nodig heeft voor chatten en
+# coderen.
+#
+# Dus: bedenken op sleutels (groq via de VPS-proxy), uitvoeren op het abonnement
+# van de agent. Dat scheelt tot vier runs per ronde, oftewel tot 32 per dag.
+#
+# De TAAK houdt de motor van de agent, niet deze: _voer_uit leest die uit de
+# taak, en een schrijftaak wordt overgeslagen als daar geen CLI-motor staat.
+#
+# Op "agent" zetten geeft het oude gedrag terug, zonder deze code aan te raken.
+PLAN_MOTOR = os.environ.get("AXE_PLANNER_PLAN_MOTOR", "sleutels")
+
+
+def is_planantwoord(tekst: Optional[str]) -> bool:
+    """Gaf de motor een antwoord in de gevraagde vorm, ook als dat leeg is?
+
+    "[]" betekent "niets te doen" en is een geldig antwoord. Terugvallen op het
+    abonnement hoort alleen als de sleutelroute faalde (geen tekst) of iets
+    anders dan een JSON-array gaf. Anders kostte elke rustige ronde alsnog
+    een abonnement-run -- precies wat het plannen op sleutels moest voorkomen.
+    """
+    blok = re.search(r"\[[\s\S]*\]", tekst or "")
+    if not blok:
+        return False
+    try:
+        return isinstance(json.loads(blok.group(0)), list)
+    except json.JSONDecodeError:
+        return False
+
+
+def plan_motor_voor(motor: str) -> str:
+    """Welke motor het BEDENKEN doet voor een agent die op `motor` draait."""
+    return motor if PLAN_MOTOR == "agent" else PLAN_MOTOR
 LUKA_TEKST_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
 
 
@@ -506,9 +546,18 @@ class Planner:
                     a["fout"] = "geen bruikbare repo om vanuit te plannen"
                     verslag["agents"][agent] = a
                     continue
-                tekst, fout = self._vraag(staat, motor,
-                                          planprompt(agent, self._context(agent), [r["title"] for r in open_rijen]),
-                                          repo)
+                prompt = planprompt(agent, self._context(agent), [r["title"] for r in open_rijen])
+                plan_motor = plan_motor_voor(motor)
+                a["plan_motor"] = plan_motor
+                tekst, fout = self._vraag(staat, plan_motor, prompt, repo)
+                # Terugvallen op het abonnement als de sleutelroute niets geeft.
+                # Die loopt over de VPS-proxy; ligt de VPS eruit, dan zou de
+                # planner helemaal niets meer bedenken -- goedkoper, maar stuk.
+                # Kosten alleen als het misgaat, en het verslag zegt dat het
+                # gebeurde, zodat een stille terugval niet als normaal leest.
+                if plan_motor != motor and not is_planantwoord(tekst):
+                    a["plan_terugval"] = {"van": plan_motor, "naar": motor, "reden": fout or "geen bruikbaar antwoord"}
+                    tekst, fout = self._vraag(staat, motor, prompt, repo)
                 voorstellen = lees_voorstellen(tekst or "")
                 a["voorstellen"] = [v["titel"] for v in voorstellen]
                 if fout:

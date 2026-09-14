@@ -37,7 +37,7 @@ class TestDagbudget:
     def test_een_nieuwe_dag_begint_bij_nul_en_vergeet_de_oude(self):
         staat = {"2026-09-13": 0.99}
         pa.tel_kosten(staat, "2026-09-14", 0.01)
-        assert staat == {"2026-09-14": 0.01}
+        assert staat == {"2026-09-14": 0.01, "2026-09-14#vragen": 1}
 
     def test_budget_over_raakt_nooit_onder_nul(self):
         assert pa.budget_over({"2026-09-14": 1.50}, "2026-09-14", 1.00) == 0.0
@@ -52,7 +52,16 @@ class TestDagbudget:
         monkeypatch.setenv("PERPLEXITY_DAILY_USD", "2.5")
         assert pa.dagbudget_usd() == 2.5
         monkeypatch.setenv("PERPLEXITY_DAILY_USD", "veel")
-        assert pa.dagbudget_usd() == 1.00
+        assert pa.dagbudget_usd() == 0.25
+
+    def test_ook_een_plafond_op_het_aantal_vragen(self, monkeypatch):
+        staat = {"2026-09-13": 0.4, "2026-09-13#vragen": 9}
+        for _ in range(3):
+            pa.tel_kosten(staat, "2026-09-14", 0.001)
+        assert staat == {"2026-09-14": 0.003, "2026-09-14#vragen": 3}, "oude dagen weg, vandaag geteld"
+        assert pa.vragen_over(staat, "2026-09-14", 3) == 0
+        monkeypatch.delenv("PERPLEXITY_DAILY_QUESTIONS", raising=False)
+        assert pa.dagvragen() == 25
 
 
 class TestKostenEnWachttijd:

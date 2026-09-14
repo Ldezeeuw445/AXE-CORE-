@@ -133,3 +133,77 @@ class TestRepoEnApp:
         taak = {"id": "t1", "title": "Beveiligingslekken in een onbekende repo dichten", "goal": "dicht ze",
                 "payload": {"repo": None}, "metadata": {"agent": "code-agent", "motor": "claude2", "risico": "schrijven"}}
         assert "noemt geen" in pln._voer_uit({}, taak)["overgeslagen"]
+
+
+class TestPlannenOpSleutels:
+    """Bedenken hoort op sleutels, uitvoeren op het abonnement van de agent.
+
+    Gemeten 14 september: 29 abonnement-runs op een dag, claude op 10/10. Het
+    bedenken is de goedkoopste van de drie runs per ronde en juist die ging op
+    het abonnement dat Luka zelf nodig heeft.
+    """
+
+    def _planner(self, monkeypatch, gevraagd):
+        pl = p.Planner(lambda: None, lambda *a, **k: {"status": "ok", "result": ""}, lambda: {})
+        monkeypatch.setattr(pl, "_context", lambda agent: "context")
+        monkeypatch.setattr(pl, "_open_taken", lambda agent: [])
+        monkeypatch.setattr(pl, "_werkrepo", lambda r: "axe-core")
+        monkeypatch.setattr(pl, "_maak_taak", lambda agent, motor, v: gevraagd.setdefault("taakmotoren", []).append(motor))
+        monkeypatch.setattr(p, "lees_staat", lambda: {})
+        monkeypatch.setattr(p, "schrijf_staat", lambda s: None)
+
+        def nep_vraag(staat, motor, prompt, repo, modus="plan"):
+            gevraagd.setdefault("plan", []).append(motor)
+            return "[]", ""
+        monkeypatch.setattr(pl, "_vraag", nep_vraag)
+        return pl
+
+    def test_het_bedenken_gaat_naar_de_sleutels(self, monkeypatch):
+        gevraagd = {}
+        monkeypatch.setattr(p, "PLAN_MOTOR", "sleutels")
+        self._planner(monkeypatch, gevraagd).ronde()
+        assert set(gevraagd["plan"]) == {"sleutels"}
+        assert len(gevraagd["plan"]) == len(p.AGENTS)
+
+    def test_op_agent_gezet_is_het_oude_gedrag(self, monkeypatch):
+        gevraagd = {}
+        monkeypatch.setattr(p, "PLAN_MOTOR", "agent")
+        self._planner(monkeypatch, gevraagd).ronde({"axe-core": "claude2", "code-agent": "cursor",
+                                                    "axe-algo": "claude", "maps-agent": "claude3"})
+        assert set(gevraagd["plan"]) == {"claude2", "cursor", "claude", "claude3"}
+
+    def test_de_taak_houdt_de_motor_van_de_agent(self, monkeypatch):
+        # Anders leest _voer_uit "sleutels" uit de taak en slaat hij elke
+        # schrijftaak over met "schrijven vraagt een CLI-motor".
+        gevraagd = {}
+        monkeypatch.setattr(p, "PLAN_MOTOR", "sleutels")
+        pl = self._planner(monkeypatch, gevraagd)
+        monkeypatch.setattr(p, "lees_voorstellen", lambda t: [{"titel": "t", "doel": "d", "risico": "lezen"}])
+        pl.ronde({"axe-core": "claude2", "code-agent": "cursor", "axe-algo": "claude", "maps-agent": "claude3"})
+        assert "sleutels" not in gevraagd["taakmotoren"]
+        assert set(gevraagd["taakmotoren"]) == {"claude2", "cursor", "claude", "claude3"}
+
+    def test_valt_terug_op_het_abonnement_als_de_sleutelroute_niets_geeft(self, monkeypatch):
+        # De sleutelroute loopt over de VPS-proxy. Ligt die eruit, dan moet de
+        # planner blijven werken -- anders ruil je kosten in voor een storing.
+        gevraagd = {}
+        monkeypatch.setattr(p, "PLAN_MOTOR", "sleutels")
+        pl = self._planner(monkeypatch, gevraagd)
+
+        def stukke_sleutels(staat, motor, prompt, repo, modus="plan"):
+            gevraagd.setdefault("plan", []).append(motor)
+            if motor == "sleutels":
+                return None, "sleutels: proxy 502"
+            return '[{"titel": "t", "doel": "d", "risico": "lezen"}]', ""
+        monkeypatch.setattr(pl, "_vraag", stukke_sleutels)
+        verslag = pl.ronde({"axe-core": "claude2", "code-agent": "cursor",
+                            "axe-algo": "claude", "maps-agent": "claude3"})
+        assert gevraagd["plan"][:2] == ["sleutels", "claude2"], "eerst sleutels, dan het abonnement"
+        assert verslag["agents"]["axe-core"]["plan_terugval"]["naar"] == "claude2"
+
+    def test_een_lege_lijst_is_een_antwoord_en_geen_reden_om_terug_te_vallen(self):
+        assert p.is_planantwoord("[]")
+        assert p.is_planantwoord('Hier: [{"titel": "t"}]')
+        assert not p.is_planantwoord(None)
+        assert not p.is_planantwoord("sorry, geen idee")
+        assert not p.is_planantwoord("[kapot")

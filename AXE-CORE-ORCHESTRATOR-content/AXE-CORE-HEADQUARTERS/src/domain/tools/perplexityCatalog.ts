@@ -24,8 +24,8 @@ export const PERPLEXITY_CATALOG: ToolCatalogEntry[] = [
     stripPattern: /\[RESEARCH:\s*"[^"\]\n]*"\s*\]/g,
     promptDoc: `📚 **Research with sources** (Perplexity) — a question answered from live web sources, with citations:
 \`[RESEARCH: "what is driving gold this week and what are analysts watching"]\`
-Use for: questions that need a synthesized, up-to-date answer from several sources — why a market moved, what changed in a regulation, what a company announced and how it was received.
-Do NOT use for a single fact, a price, or a quick lookup — that is [SEARCH:], which is cheaper. Each [RESEARCH:] costs real money from a separate API credit.
+Use ONLY as the final judgment: first gather facts with [SEARCH:] and [FETCH:] (free), then use [RESEARCH:] once to check your conclusion before an important decision or answer — why a market moved before a trade, whether a Northsea counterparty or regulation is what it seems.
+Never for a single fact, a price, or a quick lookup, and at most once per reply. Each [RESEARCH:] costs real money and there are only 25 per day for all agents together.
 If it comes back saying the budget is spent, the key is missing, or Perplexity is overloaded, say exactly that — do not answer as if it had searched.`,
   },
 ];

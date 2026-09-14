@@ -64,9 +64,27 @@ def dagbudget_usd() -> float:
     in .env het plafond na een herstart zonder dat deze code weer open moet.
     """
     try:
-        return max(0.0, float(os.environ.get("PERPLEXITY_DAILY_USD", "1.00")))
+        return max(0.0, float(os.environ.get("PERPLEXITY_DAILY_USD", "0.25")))
     except ValueError:
-        return 1.00
+        return 0.25
+
+
+def dagvragen() -> int:
+    """Hoeveel vragen per dag, naast het dollarplafond.
+
+    Luka, 14 september: $1 per dag is zo'n 200 vragen, en dat is te veel voor
+    iets dat alleen het eindoordeel hoort te geven -- het zoeken zelf doen de
+    gratis routes. Een dollarplafond alleen merkt dat niet op zolang elke vraag
+    goedkoop is; een telling wel.
+    """
+    try:
+        return max(0, int(os.environ.get("PERPLEXITY_DAILY_QUESTIONS", "25")))
+    except ValueError:
+        return 25
+
+
+def _tel_sleutel(dag: str) -> str:
+    return f"{dag}#vragen"
 
 
 def kies_preset(gevraagd: object) -> str:
@@ -87,9 +105,14 @@ def vandaag() -> str:
 
 def tel_kosten(staat: dict, dag: str, usd: float) -> None:
     """Tel wat een vraag kostte bij de dag op. Oude dagen vallen weg."""
-    for oude in [d for d in staat if d != dag]:
+    for oude in [d for d in staat if not d.startswith(dag)]:
         del staat[oude]
     staat[dag] = round(staat.get(dag, 0.0) + max(0.0, usd), 6)
+    staat[_tel_sleutel(dag)] = int(staat.get(_tel_sleutel(dag), 0)) + 1
+
+
+def vragen_over(staat: dict, dag: str, maximum: int) -> int:
+    return max(0, maximum - int(staat.get(_tel_sleutel(dag), 0)))
 
 
 def budget_over(staat: dict, dag: str, plafond: float) -> float:
@@ -171,6 +194,10 @@ async def perplexity_onderzoek(body: dict = Body(...)):
     dag = vandaag()
     staat = lees_staat()
     plafond = dagbudget_usd()
+    if vragen_over(staat, dag, dagvragen()) <= 0:
+        return JSONResponse(status_code=402, content={
+            "detail": f"Daily Perplexity budget of {dagvragen()} questions is spent. Resets at 00:00 UTC.",
+        })
     if budget_over(staat, dag, plafond) <= 0:
         # 402 en geen 429: dit gaat niet over wachten maar over geld. Een
         # client die 429 ziet probeert het straks opnieuw; dat hoort hier niet.
