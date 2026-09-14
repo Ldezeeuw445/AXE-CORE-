@@ -3,10 +3,10 @@ import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
-import { ExternalLink, Check, X, RefreshCw, Play, Wrench } from 'lucide-react';
+import { ExternalLink, Check, X, RefreshCw, Play, Wrench, Plus, Trash2 } from 'lucide-react';
 import {
-  mcpHubLijst, mcpHubRoep, mcpHubSleutel, mcpHubTest,
-  type McpHubServer, type McpHubTest,
+  mcpHubLijst, mcpHubRoep, mcpHubSleutel, mcpHubTest, mcpHubVerwijder, mcpHubVoegToe,
+  type McpHubServer, type McpHubSjabloon, type McpHubTest,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { LIST_GRID, STAT_ROW } from '@/presentation/components/surface/Page';
 import { gemiddelde, toonGetal } from '@/domain/gemiddelde';
@@ -34,6 +34,10 @@ type Stand = { test?: McpHubTest; bezig?: boolean };
 
 export default function MCPCenter() {
   const [servers, setServers] = useState<McpHubServer[]>([]);
+  const [sjablonen, setSjablonen] = useState<McpHubSjabloon[]>([]);
+  /* Nog een project of account toevoegen: welk sjabloon, welke naam, welke velden. */
+  const [nieuw, setNieuw] = useState<{ sjabloon: string; label: string; velden: Record<string, string> } | null>(null);
+  const [nieuwFout, setNieuwFout] = useState<string | null>(null);
   const [standen, setStanden] = useState<Record<string, Stand>>({});
   const [laadFout, setLaadFout] = useState<string | null>(null);
   const [filter, setFilter] = useState<Categorie | 'all' | 'active'>('all');
@@ -56,8 +60,9 @@ export default function MCPCenter() {
 
   const laad = async () => {
     try {
-      const { servers: lijst } = await mcpHubLijst();
+      const { servers: lijst, sjablonen: soorten } = await mcpHubLijst();
       setServers(lijst);
+      setSjablonen(soorten);
       setLaadFout(null);
       // Wat een sleutel heeft meteen testen: zo zie je bij openen wat werkt.
       for (const s of lijst) if (s.klaar) void testServer(s.id);
@@ -84,6 +89,28 @@ export default function MCPCenter() {
     } catch (e) {
       setStanden(s => ({ ...s, [id]: { test: { status: 'offline', fout: e instanceof Error ? e.message : String(e) }, bezig: false } }));
     }
+  };
+
+  const voegToe = async () => {
+    if (!nieuw) return;
+    setNieuwFout(null);
+    try {
+      const v = await mcpHubVoegToe(nieuw.sjabloon, nieuw.label, nieuw.velden);
+      setNieuw(null);
+      const { servers: lijst } = await mcpHubLijst();
+      setServers(lijst);
+      // Meteen de sleutel vragen als die nodig is en er nog geen is.
+      if (!v.klaar && v.sleutelnaam) { setConfiguring(v.id); setEnvInput(''); } else void testServer(v.id);
+    } catch (e) {
+      setNieuwFout(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const verwijder = async (id: string) => {
+    await mcpHubVerwijder(id).catch(() => undefined);
+    setStanden(s => { const n = { ...s }; delete n[id]; return n; });
+    const { servers: lijst } = await mcpHubLijst();
+    setServers(lijst);
   };
 
   const callTool = async () => {
@@ -120,12 +147,44 @@ export default function MCPCenter() {
           <button onClick={() => { void laad(); }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]" style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={10} /> Opnieuw testen
           </button>
+          {sjablonen.map(sj => (
+            <button key={sj.id}
+              onClick={() => { setNieuwFout(null); setNieuw({ sjabloon: sj.id, label: '', velden: Object.fromEntries(sj.velden.map(v => [v.id, ''])) }); }}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
+              style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              <Plus size={10} /> {sj.naam}
+            </button>
+          ))}
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs-custom" style={{ color: 'var(--accent-cyan)' }}>
             Docs <ExternalLink size={11} />
           </a>
         </div>
         {laadFout && <span className="text-[10px]" style={{ color: 'var(--error)' }}>Agent-host niet bereikbaar: {laadFout}</span>}
       </div>
+
+      {nieuw && (
+        <div className="flex-none mb-3">
+          <WidgetCard title={`NIEUWE ${sjablonen.find(sj => sj.id === nieuw.sjabloon)?.naam.toUpperCase() ?? ''}-VERBINDING`}>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input autoFocus value={nieuw.label} onChange={e => setNieuw({ ...nieuw, label: e.target.value })}
+                placeholder="Naam (bijv. Companion, Axon, account 2)"
+                className="flex-1 min-w-[10rem] text-[10px] px-2 py-1 rounded"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
+              {sjablonen.find(sj => sj.id === nieuw.sjabloon)?.velden.map(veld => (
+                <input key={veld.id} value={nieuw.velden[veld.id] ?? ''}
+                  onChange={e => setNieuw({ ...nieuw, velden: { ...nieuw.velden, [veld.id]: e.target.value } })}
+                  onKeyDown={e => { if (e.key === 'Enter') void voegToe(); }}
+                  placeholder={veld.label}
+                  className="flex-1 min-w-[10rem] text-[10px] px-2 py-1 rounded font-mono-data"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
+              ))}
+              <button onClick={() => { void voegToe(); }} className="px-2 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={11} /></button>
+              <button onClick={() => setNieuw(null)} className="px-2 py-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}><X size={11} /></button>
+            </div>
+            {nieuwFout && <div className="mt-1 text-[10px]" style={{ color: 'var(--error)' }}>{nieuwFout}</div>}
+          </WidgetCard>
+        </div>
+      )}
 
       <div className={`${STAT_ROW} flex-none`}>
         {[
@@ -188,6 +247,8 @@ export default function MCPCenter() {
                           <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{server.naam}</span>
                           <div className="flex items-center gap-1.5">
                             <span className="text-[9px]" style={{ color: kleur }}>{server.categorie}</span>
+                            {server.transport === 'stdio' && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>op deze Mac</span>}
+                            {Object.values(server.velden).filter(Boolean).map(w => <span key={w} className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>{w}</span>)}
                             {t?.latency != null && t.status === 'online' && <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>{t.latency}ms</span>}
                             {t?.tools && <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>{t.tools.length} tools</span>}
                           </div>
@@ -203,6 +264,11 @@ export default function MCPCenter() {
                         <button onClick={() => { void testServer(server.id); }} disabled={stand?.bezig} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
                           {stand?.bezig ? '...' : 'Test'}
                         </button>
+                        {server.extra && (
+                          <button onClick={() => { void verwijder(server.id); }} title="Verbinding verwijderen" className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                            <Trash2 size={10} />
+                          </button>
+                        )}
                         <a href={server.docs} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}><ExternalLink size={11} /></a>
                       </div>
                     </div>

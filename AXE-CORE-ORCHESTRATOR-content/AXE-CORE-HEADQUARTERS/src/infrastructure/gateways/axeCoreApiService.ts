@@ -958,7 +958,13 @@ export async function mcpSaveServers(servers: Array<Record<string, unknown>>): P
 // Streamable HTTP. De oude /mcp/servers-routes spraken geen MCP.
 export interface McpHubServer {
   id: string;
+  /** Het soort server; een verbinding is één exemplaar ervan. */
+  sjabloon: string;
   naam: string;
+  transport: 'http' | 'stdio';
+  velden: Record<string, string>;
+  /** Zelf toegevoegd (een tweede project of account), dus ook te verwijderen. */
+  extra: boolean;
   categorie: 'ai' | 'infra' | 'storage' | 'comms' | 'dev';
   docs: string;
   uitleg: string;
@@ -975,7 +981,14 @@ export interface McpHubTest {
   sleutelnaam?: string;
   tools?: { name: string; description: string }[];
 }
-export function mcpHubLijst(): Promise<{ servers: McpHubServer[] }> { return call('GET', '/mcp/hub'); }
+export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }
+export function mcpHubLijst(): Promise<{ servers: McpHubServer[]; sjablonen: McpHubSjabloon[] }> { return call('GET', '/mcp/hub'); }
+export function mcpHubVoegToe(sjabloon: string, label: string, velden: Record<string, string>): Promise<McpHubServer> {
+  return call('POST', '/mcp/hub/verbinding', { sjabloon, label, velden });
+}
+export function mcpHubVerwijder(id: string): Promise<{ verwijderd: string }> {
+  return call('DELETE', `/mcp/hub/verbinding/${encodeURIComponent(id)}`);
+}
 export function mcpHubTest(id: string): Promise<McpHubTest> { return call('POST', `/mcp/hub/${encodeURIComponent(id)}/test`, {}); }
 export function mcpHubRoep(id: string, tool: string, args: Record<string, unknown>): Promise<{ status: string; result?: unknown; error?: string }> {
   return call('POST', `/mcp/hub/${encodeURIComponent(id)}/call`, { tool, arguments: args });

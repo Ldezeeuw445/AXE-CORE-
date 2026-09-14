@@ -4013,9 +4013,35 @@ class McpSleutel(BaseModel):
     waarde: str
 
 
+class McpVerbinding(BaseModel):
+    sjabloon: str
+    label: str
+    velden: dict = {}
+
+
 @app.get("/mcp/hub", dependencies=[AUTH])
 async def mcp_hub_lijst():
-    return {"servers": await asyncio.to_thread(_mcp_hub.overzicht)}
+    return await asyncio.to_thread(_mcp_hub.overzicht)
+
+
+@app.post("/mcp/hub/verbinding", dependencies=[AUTH])
+async def mcp_hub_verbinding(body: McpVerbinding):
+    """Nog een project of account van een sjabloon dat er meerdere mag hebben."""
+    try:
+        return await asyncio.to_thread(_mcp_hub.voeg_toe, body.sjabloon, body.label, body.velden)
+    except KeyError:
+        raise HTTPException(404, f"Onbekend sjabloon: {body.sjabloon}")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.delete("/mcp/hub/verbinding/{verbinding_id}", dependencies=[AUTH])
+async def mcp_hub_verbinding_weg(verbinding_id: str):
+    try:
+        await asyncio.to_thread(_mcp_hub.verwijder, verbinding_id)
+    except KeyError:
+        raise HTTPException(404, "Alleen een toegevoegde verbinding kan weg.")
+    return {"verwijderd": verbinding_id}
 
 
 @app.post("/mcp/hub/{server_id}/test", dependencies=[AUTH])
@@ -4023,7 +4049,7 @@ async def mcp_hub_test(server_id: str):
     try:
         return await _mcp_hub.test(server_id)
     except KeyError:
-        raise HTTPException(404, f"Onbekende MCP-server: {server_id}")
+        raise HTTPException(404, f"Onbekende MCP-verbinding: {server_id}")
 
 
 @app.post("/mcp/hub/{server_id}/call", dependencies=[AUTH])
@@ -4031,18 +4057,18 @@ async def mcp_hub_roep(server_id: str, body: McpRoep):
     try:
         return await _mcp_hub.roep(server_id, body.tool, body.arguments)
     except KeyError:
-        raise HTTPException(404, f"Onbekende MCP-server: {server_id}")
+        raise HTTPException(404, f"Onbekende MCP-verbinding: {server_id}")
 
 
 @app.put("/mcp/hub/{server_id}/sleutel", dependencies=[AUTH])
 async def mcp_hub_sleutel(server_id: str, body: McpSleutel):
     """Een zelf ingevulde sleutel bewaren op deze machine (600). Geeft nooit de waarde terug."""
-    s = _mcp_hub.SERVERS.get(server_id)
-    if not s:
-        raise HTTPException(404, f"Onbekende MCP-server: {server_id}")
-    if not s["sleutels"]:
-        raise HTTPException(400, "Deze server heeft geen sleutel nodig.")
+    if server_id not in _mcp_hub.verbindingen():
+        raise HTTPException(404, f"Onbekende MCP-verbinding: {server_id}")
     if len(body.waarde.strip()) < 8:
         raise HTTPException(422, "Dat lijkt geen sleutel.")
-    naam = await asyncio.to_thread(_mcp_hub.bewaar_sleutel, server_id, body.waarde)
+    try:
+        naam = await asyncio.to_thread(_mcp_hub.bewaar_sleutel, server_id, body.waarde)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return {"opgeslagen": naam, **(await _mcp_hub.test(server_id))}
