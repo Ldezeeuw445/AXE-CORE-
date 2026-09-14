@@ -75,17 +75,15 @@ export function PlaatChat() {
   // Op de telefoon start de home clean, zoals de Tauri-mockup: alleen de sphere
   // en de slanke composer, met de chat ingeklapt. Hij opent zodra je 'm gebruikt
   // (typen/versturen) of bij een approval/bestand — zie de effecten hieronder.
-  const mobileCollapsedRef = useRef(false);
-  useEffect(() => {
-    // Eén keer inklappen zodra 'mobiel' bekend is (useIsMobile is bij mount nog
-    // false tot de breedte gemeten is). De ref voorkomt dat een latere expand
-    // door de gebruiker weer wordt dichtgeklapt.
-    if (isMobile && !mobileCollapsedRef.current) {
-      mobileCollapsedRef.current = true;
-      setChatCollapsed(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile]);
+  // Op de telefoon start de home clean (chat dicht), zoals de Tauri-mockup;
+  // pas als de gebruiker — of een approval/bestand — de chat expliciet opent,
+  // telt die stand. Afgeleid i.p.v. via een effect, want de Tauri-webview meldt
+  // zijn 'mobiele' breedte pas ná de eerste render, waardoor een effect de stand
+  // miste. `collapsed` is voortaan de bron voor alle chat-hoogte/kop-logica.
+  const [chatUserSet, setChatUserSet] = useState(false);
+  const collapsed = (chatUserSet || !isMobile) ? chatCollapsed : true;
+  const openChat = () => { setChatUserSet(true); setChatCollapsed(false); };
+  const toggleChat = () => { setChatUserSet(true); setChatCollapsed(!collapsed); };
 
   const [chatText, setChatText] = useState('');
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
@@ -123,7 +121,7 @@ export function PlaatChat() {
 
   useEffect(() => {
     const onScrollToApproval = () => {
-      setChatCollapsed(false);
+      openChat();
       requestAnimationFrame(() => {
         const el = chatScrollRef.current;
         if (el) el.scrollTop = el.scrollHeight;
@@ -195,7 +193,7 @@ export function PlaatChat() {
   const ingestFiles = async (files: FileList | File[]) => {
     const next = await filesToAttachments(files, attachments);
     setAttachments(next);
-    setChatCollapsed(false);
+    openChat();
     emitAxeEvent('axe:files-attached', { names: next.map(a => a.name), count: next.length });
     const proj = projectionFromAttachments(next, 'drop');
     if (proj) showOnSphere(proj);
@@ -271,7 +269,7 @@ export function PlaatChat() {
    * axe-look.css), dus nu volgt de een uit de ander in plaats van dat twee
    * getallen toevallig gelijk moeten staan. */
   const collapsedChatHeight = 72;
-  const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
+  const chatHeight = collapsed ? collapsedChatHeight : expandedChatHeight;
 
   /* De stand van de chat op <html>, zodat de panelen ernaast hem kennen.
    *
@@ -280,9 +278,9 @@ export function PlaatChat() {
    * onderin één rij balken, en dan horen alle drie de namen op dezelfde hoogte
    * te staan. Eén attribuut is genoeg; de rest is opmaak. */
   useEffect(() => {
-    document.documentElement.dataset.chat = chatCollapsed ? 'dicht' : 'open';
+    document.documentElement.dataset.chat = collapsed ? 'dicht' : 'open';
     return () => { delete document.documentElement.dataset.chat; };
-  }, [chatCollapsed]);
+  }, [collapsed]);
 
   return (
     <>
@@ -299,7 +297,7 @@ export function PlaatChat() {
       )}
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
-          data-dicht={chatCollapsed ? 'ja' : 'nee'}
+          data-dicht={collapsed ? 'ja' : 'nee'}
           className="axe-chatplaat h-full flex flex-col rounded-xl overflow-hidden relative"
           style={
             isMobile
@@ -316,13 +314,13 @@ export function PlaatChat() {
           <div
             role="button"
             tabIndex={0}
-            onClick={() => setChatCollapsed(!chatCollapsed)}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChatCollapsed(!chatCollapsed); } }}
+            onClick={toggleChat}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleChat(); } }}
             className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left cursor-pointer"
-            style={{ borderBottom: chatCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
+            style={{ borderBottom: collapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
           >
             <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide" style={{ color: 'var(--accent-cyan)' }}>
-              {chatCollapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               AXE CHAT
               {attachments.length > 0 && (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
@@ -361,7 +359,7 @@ export function PlaatChat() {
                   streep eronder -- twee regels chroom voordat het gesprek zelf
                   begon. Ze horen op de kopregel: het is dezelfde informatie
                   ("welk gesprek kijk je"), en de demo heeft daar één lijn. */}
-              {!isMobile && !chatCollapsed && voice.allConversations.length > 1 && (
+              {!isMobile && !collapsed && voice.allConversations.length > 1 && (
                 <span className="axe-convs flex items-center gap-1 overflow-x-auto">
                   {voice.allConversations.slice(0, 4).map(conv => (
                     <button
@@ -375,12 +373,12 @@ export function PlaatChat() {
                   ))}
                 </span>
               )}
-              {!chatCollapsed && voice.allConversations.length > 0 && (
+              {!collapsed && voice.allConversations.length > 0 && (
                 <button onClick={() => voice.loadAllConversations()} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
                   <RotateCcw size={11} />
                 </button>
               )}
-              {!chatCollapsed && (
+              {!collapsed && (
                 <button onClick={() => voice.startNewConversation()} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
                   <Plus size={9} /> New
                 </button>
@@ -388,7 +386,7 @@ export function PlaatChat() {
             </div>
           </div>
 
-          {!chatCollapsed && (
+          {!collapsed && (
             <>
               <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
                 {voice.conversation.length === 0 && (
