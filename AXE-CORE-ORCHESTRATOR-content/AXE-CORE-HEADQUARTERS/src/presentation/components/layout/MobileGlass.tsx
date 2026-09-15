@@ -33,11 +33,24 @@ import { Sun, Moon } from 'lucide-react';
  * (chat, cijferregel) liggen hier bovenop en vervagen deze grond.
  */
 
-// LICHT — de lichte stand: licht-blauw bovenaan dat naar onderen steeds iets
-// donkerder wordt. Verder niets bijzonders; de plaat en de chrome blijven zoals
-// ze waren, alleen deze grond verschilt van de donkere stand.
+// LICHT — een kleur-gradient met dezelfde kleur-flow als Luka's bureaubladfoto
+// (Moraine Lake): blauwe lucht → witte wolken → grijze bergen → groene bossen →
+// donker naar onder, eindigend in ZWART (zodat de onderkant, waar de Samsung-
+// systeembalk zit, zwart is). De frosted plaat (backdrop-blur, axe-look.css)
+// vervaagt dit tot matglas — geen foto, wel dezelfde kleur-flow.
 const LICHT =
-  'linear-gradient(180deg, #bfe0f5 0%, #96bfe0 30%, #5e88b4 58%, #33547d 80%, #1b3350 100%)';
+  'linear-gradient(180deg,' +
+  ' #9cc4e6 0%,' +   /* blauwe lucht */
+  ' #bcd8ec 12%,' +  /* lichtere lucht */
+  ' #d9e7f1 22%,' +  /* witte wolken */
+  ' #a8c3db 33%,' +  /* lucht weer */
+  ' #8b93a1 46%,' +  /* grijze berg */
+  ' #6f7680 58%,' +  /* donkerder grijs */
+  ' #5f6f5a 68%,' +  /* grijs-groen (scree) */
+  ' #47643f 78%,' +  /* groen bos */
+  ' #2b4030 87%,' +  /* donkergroen */
+  ' #132018 93%,' +  /* bijna zwart */
+  ' #000000 100%)';  /* zwart onder (systeembalk) */
 
 // NU / ZWART — puur mat zwart, met heel subtiel licht dat schuin ónder de
 // glasplaat langs strijkt: van boven-midden/links naar onder-midden/rechts.
