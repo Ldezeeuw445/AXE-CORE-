@@ -579,7 +579,8 @@ class NorthSeaService:
             woord = "producer refinery supplier exporter" if kant == "supplier" else "importer buyer manufacturer end user"
             query = " ".join(x for x in [anchor.get("grade") or "", product or "", woord, geo] if x).strip()
             try:
-                hits = await self.research.search(query, max_results=SEARCH_RESULTS_BY_PRIORITY.get(priority, 6))
+                zoek = await self.research.search(query, max_results=SEARCH_RESULTS_BY_PRIORITY.get(priority, 6), priority=priority)
+                hits = zoek.hits
                 gevonden = len(hits)
                 bekende_domeinen = set()
                 for c in await self.repo.list_company_domains():
@@ -607,9 +608,10 @@ class NorthSeaService:
                         source_type="web_search", preliminary_score=score,
                         score_basis="keyword fit on the search snippet only; capped at 80 because nothing is verified",
                         fit_reasons=redenen, verification_gaps=list(SUPPLIER_GAPS if kant == "supplier" else BUYER_GAPS)))
-                run = ResearchRun(status="completed", provider="tavily", calls_made=1)
+                run = ResearchRun(status="completed", provider=zoek.provider, calls_made=1 + len(zoek.fallbacks),
+                                  message=("fell back after: " + "; ".join(zoek.fallbacks)) if zoek.fallbacks else None)
             except ResearchError as e:
-                run = ResearchRun(status=e.status, provider="tavily", message=e.message)
+                run = ResearchRun(status=e.status, provider="search-chain", message=e.message)
 
         kandidaten.sort(key=lambda c: (c.source_type == "web_search", -c.preliminary_score))
         mist = [k for k, v in anchor_view.items() if v in (None, "") and k not in ("id", "status")]

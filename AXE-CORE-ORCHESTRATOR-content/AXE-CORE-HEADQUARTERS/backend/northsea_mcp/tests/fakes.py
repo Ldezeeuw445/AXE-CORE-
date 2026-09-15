@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from northsea_mcp.models import CrewRunInfo, SourceRef
 from northsea_mcp.repository import uid
-from northsea_mcp.research import Answer, ResearchError, SearchHit
+from northsea_mcp.research import Answer, ResearchError, SearchHit, SearchResult
 
 
 def ts(delta_h: float = 0) -> str:
@@ -294,16 +294,16 @@ class FakeResearch:
                      SourceRef(url="https://news.example.com/zambia-copper", title="Zambia copper output", provider="perplexity", cited=False)],
             cost_usd=0.012, model="sonar")
 
-    async def search(self, query, *, max_results):
+    async def search(self, query, *, max_results, priority="P2"):
         self.searches.append(query)
         if self.search_fail:
             raise self.search_fail
-        return [
+        return SearchResult(provider="tavily", hits=[
             SearchHit("Mopani Copper Mines", "https://www.mopani.com/products", "Copper cathode producer in Zambia", 0.9),
             SearchHit("Kansanshi refinery copper cathode exporter", "https://kansanshi.example/cathode", "Copper cathode refinery exporter Grade A 99.99 Zambia", 0.8),
             SearchHit("Kansanshi again", "https://kansanshi.example/other", "duplicate domain", 0.5),
             SearchHit("Copper cathode trade leads", "https://tradekey.example/copper", "B2B marketplace broker copper cathode", 0.4),
-        ][:max_results]
+        ][:max_results])
 
 
 class FakeCrew:

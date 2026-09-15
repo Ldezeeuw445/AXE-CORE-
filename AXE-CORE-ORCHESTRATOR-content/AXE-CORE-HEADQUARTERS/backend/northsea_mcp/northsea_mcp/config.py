@@ -46,6 +46,7 @@ class Settings:
     axe_api_url: str = "http://127.0.0.1:8001"
     axe_api_key: str = ""
     tavily_key: str = ""
+    zenserp_key: str = ""
     crew_venv_py: str = "/opt/axe-crew-venv/bin/python3"
     access_token_ttl_s: int = 3600
     refresh_token_ttl_s: int = 30 * 24 * 3600
@@ -94,6 +95,7 @@ class Settings:
             axe_api_url=env.get("AXE_API_INTERNAL_URL", "http://127.0.0.1:8001").rstrip("/"),
             axe_api_key=env.get("AXE_API_KEY", ""),
             tavily_key=env.get("TAVILY_API_KEY", ""),
+            zenserp_key=env.get("ZENSERP_API_KEY", ""),
             crew_venv_py=env.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3"),
             access_token_ttl_s=getal("NORTHSEA_MCP_ACCESS_TTL_S", 3600),
             refresh_token_ttl_s=getal("NORTHSEA_MCP_REFRESH_TTL_S", 30 * 24 * 3600),

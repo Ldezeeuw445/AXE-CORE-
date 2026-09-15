@@ -135,7 +135,9 @@ async def test_discovery_metadata(app):
     assert asm["issuer"] == PUBLIC and asm["code_challenge_methods_supported"] == ["S256"]
     assert asm["registration_endpoint"].endswith("/oauth/register")
     assert "northsea.identity" in asm["scopes_supported"]
-    assert prm["resource"].rstrip("/") == f"{PUBLIC}/mcp" and PUBLIC in [s.rstrip("/") for s in prm["authorization_servers"]]
+    # Letterlijk gelijk, zonder slash-verschil: een client vergelijkt issuer en authorization_servers als string.
+    assert prm["resource"] == f"{PUBLIC}/mcp" and prm["authorization_servers"] == [asm["issuer"]]
+    assert "northsea.identity" in prm["scopes_supported"]
     assert root_prm["resource"] == f"{PUBLIC}/mcp"
 
 

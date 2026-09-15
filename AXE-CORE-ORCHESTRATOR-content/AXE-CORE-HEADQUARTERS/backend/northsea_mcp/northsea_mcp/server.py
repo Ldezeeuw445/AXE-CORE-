@@ -61,6 +61,10 @@ RATE_LIMITS: dict[Risk, list[tuple[int, int]]] = {
 }
 TIMEOUTS: dict[Risk, float] = {Risk.READ_ONLY: 30, Risk.RESEARCH: 175, Risk.DRAFT: 45,
                                Risk.LOW_RISK_WRITE: 30, Risk.HIGH_IMPACT_WRITE: 90}
+# depth="deep" wacht op een CrewAI-run (crew.py: 170 s). Zonder eigen grens kreeg
+# qualify_opportunity (READ_ONLY, 30 s) een timeout vóór de crew klaar kon zijn.
+# 190 s blijft onder nginx' proxy_read_timeout van 200 s.
+DEEP_TIMEOUT = 190.0
 
 
 class ToolFailure(ToolError):
@@ -80,7 +84,8 @@ class Guard:
         self.auditor = auditor
 
     async def run(self, tool: str, entity_ids: dict[str, Any], call: Callable[[Caller], Awaitable[BaseModel]],
-                  result_type: type[BaseModel], *, idempotency_key: str | None = None, args: dict | None = None) -> BaseModel:
+                  result_type: type[BaseModel], *, idempotency_key: str | None = None, args: dict | None = None,
+                  timeout: float | None = None) -> BaseModel:
         beleid = TOOLS[tool]
         token = get_access_token()
         request_id = str(uuid.uuid4())
@@ -114,7 +119,7 @@ class Guard:
                 if staat == "running":
                     raise PolicyDenied("in_progress", "An identical request is still running.")
                 idem_open = True
-            result = await asyncio.wait_for(call(caller), timeout=TIMEOUTS[beleid.risk])
+            result = await asyncio.wait_for(call(caller), timeout=timeout or TIMEOUTS[beleid.risk])
             if idem_open:
                 self.store.idem_finish(principal, tool, idempotency_key or "", result.model_dump(mode="json"))
                 idem_open = False
@@ -276,7 +281,8 @@ def register_tools(mcp: MCPServer, service: NorthSeaService, guard: Guard) -> No
               annotations=_ann("Qualify opportunity", Risk.READ_ONLY, False), structured_output=True)
     async def qualify_opportunity(opportunity_id: Id, depth: DEPTH = "standard") -> QualificationResult:
         return await guard.run("northsea_qualify_opportunity", {"opportunity_id": opportunity_id},
-                               lambda c: service.qualify_opportunity(c, opportunity_id=opportunity_id, depth=depth), QualificationResult)
+                               lambda c: service.qualify_opportunity(c, opportunity_id=opportunity_id, depth=depth), QualificationResult,
+                               timeout=DEEP_TIMEOUT if depth == "deep" else None)
 
     @mcp.tool(name="northsea_assess_match", title="Assess match", description=DESCRIPTIONS["northsea_assess_match"],
               annotations=_ann("Assess match", Risk.READ_ONLY, False), structured_output=True)
@@ -301,7 +307,8 @@ def register_tools(mcp: MCPServer, service: NorthSeaService, guard: Guard) -> No
     ) -> CounterpartyResearch:
         return await guard.run("northsea_research_counterparty", {"counterparty_id": counterparty_id},
                                lambda c: service.research_counterparty(c, objective=objective, counterparty_id=counterparty_id,
-                                                                       context=context, priority=priority, depth=depth), CounterpartyResearch)
+                                                                       context=context, priority=priority, depth=depth), CounterpartyResearch,
+                               timeout=DEEP_TIMEOUT if depth == "deep" else None)
 
     @mcp.tool(name="northsea_find_suppliers", title="Find suppliers", description=DESCRIPTIONS["northsea_find_suppliers"],
               annotations=_ann("Find suppliers", Risk.RESEARCH, True), structured_output=True)
@@ -328,7 +335,8 @@ def register_tools(mcp: MCPServer, service: NorthSeaService, guard: Guard) -> No
                                    priority: PRIO = "P2", depth: DEPTH = "standard") -> BlockerInvestigation:
         return await guard.run("northsea_investigate_blockers", {"opportunity_id": opportunity_id},
                                lambda c: service.investigate_blockers(c, opportunity_id=opportunity_id, blocker_codes=blocker_codes,
-                                                                      priority=priority, depth=depth), BlockerInvestigation)
+                                                                      priority=priority, depth=depth), BlockerInvestigation,
+                               timeout=DEEP_TIMEOUT if depth == "deep" else None)
 
     @mcp.tool(name="northsea_prepare_outreach", title="Prepare outreach draft", description=DESCRIPTIONS["northsea_prepare_outreach"],
               annotations=_ann("Prepare outreach draft", Risk.DRAFT, False), structured_output=True)
@@ -457,7 +465,8 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
     store = store or Store(settings.state_db)
     repo = repo or SupabaseRepository(settings.commodities_url, settings.commodities_key, settings.http_timeout_s)
     research = research or ResearchGateway(axe_api_url=settings.axe_api_url, axe_api_key=settings.axe_api_key,
-                                           tavily_key=settings.tavily_key, timeout=settings.research_timeout_s)
+                                           tavily_key=settings.tavily_key, zenserp_key=settings.zenserp_key,
+                                           timeout=settings.research_timeout_s)
     crew = crew or CrewGateway(axe_api_url=settings.axe_api_url, axe_api_key=settings.axe_api_key, crew_venv_py=settings.crew_venv_py)
     auditor = auditor or Auditor(axe_url=settings.axe_url, axe_key=settings.axe_key, store=store)
     service = NorthSeaService(repo, research, crew)
@@ -519,7 +528,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         return JSONResponse({"ready": klaar}, status_code=200 if klaar else 503, headers={"Cache-Control": "no-store"})
 
     host = urlparse(settings.issuer).hostname or "localhost"
-    app = mcp.streamable_http_app(
+    starlette_app = mcp.streamable_http_app(
         streamable_http_path="/mcp", json_response=True, stateless_http=True, max_request_body_size=256 * 1024,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
@@ -527,6 +536,14 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             allowed_origins=[settings.issuer, "https://chatgpt.com", "https://chat.openai.com", "http://127.0.0.1:*", "http://localhost:*"]),
         host=host,
     )
+    app = starlette_app
+    # De SDK serveert /.well-known/oauth-protected-resource/mcp zelf, maar met de
+    # autorisatieserver als pydantic-URL: "https://mcp.northseacommodity.com/" (met
+    # slash), terwijl onze AS-metadata issuer zonder slash zegt. Een strikte client
+    # vergelijkt die twee letterlijk en weigert (gemeten op het publieke endpoint,
+    # 15 sep 2026). Onze eigen route vooraan wint, met dezelfde issuer en scopes.
+    from starlette.routing import Route
+    app.router.routes.insert(0, Route("/.well-known/oauth-protected-resource/mcp", endpoint=oauth.well_known_resource, methods=["GET"]))
     app.state.northsea = {"settings": settings, "store": store, "service": service, "oauth": oauth, "guard": guard,
                           "auditor": auditor, "mcp": mcp, "client_ip": client_ip}
     return app

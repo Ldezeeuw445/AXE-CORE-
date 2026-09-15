@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from typing import Any
 
@@ -51,11 +52,15 @@ PROHIBITED = [
 
 
 class CrewGateway:
-    def __init__(self, *, axe_api_url: str, axe_api_key: str, crew_venv_py: str, timeout: float = 200.0,
+    # 170 s: binnen de guard-timeout voor deep (190 s) en nginx' proxy_read_timeout (200 s).
+    # Wat langer duurt krijgt status "timeout"; de tool geeft dan wel zijn
+    # deterministische resultaat terug in plaats van als geheel te falen.
+    def __init__(self, *, axe_api_url: str, axe_api_key: str, crew_venv_py: str, timeout: float = 170.0,
                  client: httpx.AsyncClient | None = None):
         self._api = axe_api_url.rstrip("/")
         self._key = axe_api_key
         self._venv = crew_venv_py
+        self._timeout = timeout
         self._client = client or httpx.AsyncClient(timeout=timeout)
 
     def available(self) -> tuple[bool, str]:
@@ -82,7 +87,10 @@ class CrewGateway:
         context = json.dumps({"run_id": run_id, "crew": crew, **handoff}, default=str)[:12000]
         try:
             r = await self._client.post(f"{self._api}/crew/run", headers={"Authorization": f"Bearer {self._key}"},
-                                        json={"task": task, "context": context})
+                                        json={"task": task, "context": context}, timeout=self._timeout)
+        except httpx.TimeoutException:
+            return CrewRunInfo(used=True, crew=crew, run_id=run_id, status="timeout",
+                               reason=f"crew did not finish within {self._timeout:.0f}s; deterministic result returned without crew analysis")
         except httpx.HTTPError as e:
             return CrewRunInfo(used=True, crew=crew, run_id=run_id, status="error",
                                reason=f"crew boundary unreachable ({type(e).__name__})")
@@ -90,6 +98,11 @@ class CrewGateway:
             return CrewRunInfo(used=True, crew=crew, run_id=run_id, status="error", reason=f"crew run failed ({r.status_code})")
         body = r.json() if r.content else {}
         status = str(body.get("status") or "unknown")
+        # zuinig.py weigert een run als alle crew-slots bezet zijn ("2 crew-run(s) bezig").
+        # Dat is geen fout van de crew maar drukte op de box; apart melden.
+        if status != "ok" and re.search(r"bezig|busy|slot", str(body.get("error") or ""), re.I):
+            return CrewRunInfo(used=True, crew=crew, run_id=run_id, status="busy",
+                               reason="all CrewAI slots on the host are in use; retry later")
         text = body.get("result") if status == "ok" else None
         return CrewRunInfo(used=True, crew=crew, run_id=run_id, status=status,
                            analysis=str(text)[:6000] if text else None,

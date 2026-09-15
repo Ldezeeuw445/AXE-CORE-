@@ -4,9 +4,12 @@
   (op dezelfde box, via localhost). Het dagbudget (vragen en dollars) staat daar
   server-side; door daar langs te gaan telt een MCP-vraag mee in hetzelfde
   budget als AXE CORE zelf. Een tweede sleutel hier zou dat budget omzeilen.
-- Zoekresultaten (kandidaten vinden): Tavily, met de sleutel die al op de box
-  staat (`TAVILY_API_KEY`). Goedkoper dan een Perplexity-vraag per zoekterm; de
-  NorthSea COST_ROUTER zet zoeken vóór premium synthese.
+- Zoekresultaten (kandidaten vinden): een KETEN, geen enkele provider. Eerst
+  Tavily (`TAVILY_API_KEY`), dan Zenserp (`ZENSERP_API_KEY`, Google-resultaten),
+  en als laatste Perplexity (geciteerde bedrijfssites, uit het gedeelde budget).
+  Aanleiding: op 15 sep 2026 gaf Tavily HTTP 432 (planlimiet), en toen stopte
+  leveranciers-discovery helemaal. Exa en Brave staan (nog) niet op de box; wie
+  daar een sleutel voor neerzet kan ze hier in de keten zetten.
 
 Het antwoord-formaat van Perplexity is gemeten, niet uit de docs: zie
 src/domain/perplexityAgent.ts in AXE CORE (citaten als `[web:N]`, geopende
@@ -43,6 +46,13 @@ class SearchHit:
     url: str
     content: str
     score: float
+
+
+@dataclass
+class SearchResult:
+    hits: list["SearchHit"]
+    provider: str
+    fallbacks: list[str] = field(default_factory=list)   # wat eerder faalde, bijv. "tavily: budget_exhausted"
 
 
 @dataclass
@@ -133,12 +143,25 @@ def domain_of(url: str | None) -> str | None:
     return m.group(1) if m and "." in m.group(1) else None
 
 
+def zenserp_url(item: dict) -> str | None:
+    """Zenserp's `url` is een Google-doorstuurlink (google.com/goto?...); de echte
+    site staat in `destination` als kruimelpad: "https://jcmminingcorp.com › copper-cathodes"."""
+    ruw = str(item.get("url") or "")
+    if ruw and "google." not in (domain_of(ruw) or ""):
+        return ruw
+    dest = str(item.get("destination") or "").split("›")[0].strip()
+    if dest and not dest.startswith("http"):
+        dest = "https://" + dest
+    return dest if domain_of(dest) else None
+
+
 class ResearchGateway:
-    def __init__(self, *, axe_api_url: str, axe_api_key: str, tavily_key: str, timeout: float = 130.0,
+    def __init__(self, *, axe_api_url: str, axe_api_key: str, tavily_key: str, zenserp_key: str = "", timeout: float = 130.0,
                  client: httpx.AsyncClient | None = None):
         self._api = axe_api_url.rstrip("/")
         self._api_key = axe_api_key
         self._tavily = tavily_key
+        self._zenserp = zenserp_key
         self._client = client or httpx.AsyncClient(timeout=timeout)
 
     @property
@@ -147,7 +170,26 @@ class ResearchGateway:
 
     @property
     def search_configured(self) -> bool:
-        return bool(self._tavily)
+        return bool(self._tavily or self._zenserp or self._api_key)
+
+    async def search(self, query: str, *, max_results: int, priority: str = "P2") -> SearchResult:
+        """De zoekketen: Tavily → Zenserp → Perplexity. Stopt bij de eerste met resultaten."""
+        geprobeerd: list[str] = []
+        statussen: list[str] = []
+        for naam, fn in (("tavily", self._tavily_search), ("zenserp", self._zenserp_search), ("perplexity", self._perplexity_search)):
+            try:
+                hits = await fn(query, max_results=max_results, priority=priority)
+            except ResearchError as e:
+                geprobeerd.append(f"{naam}: {e.status}")
+                statussen.append(e.status)
+                continue
+            if hits:
+                return SearchResult(hits=hits, provider=naam, fallbacks=geprobeerd)
+            geprobeerd.append(f"{naam}: no results")
+            statussen.append("no_results")
+        status = ("budget_exhausted" if "budget_exhausted" in statussen
+                  else "not_configured" if statussen and all(s == "not_configured" for s in statussen) else "provider_error")
+        raise ResearchError(status, "No search provider returned results (" + "; ".join(geprobeerd) + ").")
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -174,7 +216,39 @@ class ResearchGateway:
             raise ResearchError("provider_error", f"Research request failed ({r.status_code}).")
         return parse_agent_answer(r.json())
 
-    async def search(self, query: str, *, max_results: int) -> list[SearchHit]:
+    async def _zenserp_search(self, query: str, *, max_results: int, priority: str = "P2") -> list[SearchHit]:
+        if not self._zenserp:
+            raise ResearchError("not_configured", "Zenserp is not configured on this server.")
+        try:
+            r = await self._client.get("https://app.zenserp.com/api/v2/search", headers={"apikey": self._zenserp},
+                                       params={"q": query[:400], "num": str(max(1, min(max_results, 10)))}, timeout=40)
+        except httpx.HTTPError as e:
+            raise ResearchError("provider_error", f"Zenserp unreachable ({type(e).__name__}).") from e
+        if r.status_code in (401, 403):
+            raise ResearchError("not_configured", "Zenserp key was rejected.")
+        if r.status_code in (402, 429):
+            raise ResearchError("budget_exhausted", "Zenserp quota reached.")
+        if r.status_code >= 400:
+            raise ResearchError("provider_error", f"Zenserp failed ({r.status_code}).")
+        hits = []
+        for i, x in enumerate((r.json().get("organic") or [])[:max_results]):
+            url = zenserp_url(x) if isinstance(x, dict) else None
+            if url:
+                hits.append(SearchHit(title=str(x.get("title") or ""), url=url, content=str(x.get("description") or "")[:1500],
+                                      score=1.0 - i * 0.05))
+        return hits
+
+    async def _perplexity_search(self, query: str, *, max_results: int, priority: str = "P2") -> list[SearchHit]:
+        """Laatste redmiddel: laat Perplexity echte bedrijfssites noemen, en gebruik alleen de geciteerde bronnen."""
+        antwoord = await self.ask(
+            f"List up to {max_results} real companies with their official websites that match this search: {query}.",
+            instructions="Only include companies you can cite with [web:N]. One line per company: name - official website. "
+                         "No marketplaces, directories or broker listings. Never invent companies.",
+            priority=priority)
+        bronnen = [s for s in antwoord.sources if s.cited] or antwoord.sources
+        return [SearchHit(title=s.title or (domain_of(s.url) or s.url), url=s.url, content="", score=0.5) for s in bronnen[:max_results]]
+
+    async def _tavily_search(self, query: str, *, max_results: int, priority: str = "P2") -> list[SearchHit]:
         if not self._tavily:
             raise ResearchError("not_configured", "Web search (Tavily) is not configured on this server.")
         try:

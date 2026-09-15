@@ -17,7 +17,7 @@ This package adds one secured entry point in front of a shared service layer.
 | Service | `service.py` → `NorthSeaService` | all NorthSea capabilities; deterministic state, redaction, policy checks |
 | Policy | `policy.py`, `matching.py` | scopes, risk classes, sensitive-draft rule, match and readiness scoring |
 | Data | `repository.py` | typed PostgREST reads/writes on existing tables; no SQL strings |
-| Research | `research.py` | `/research/perplexity` on axe-core-api (shared daily budget) and Tavily search |
+| Research | `research.py` | `/research/perplexity` on axe-core-api (shared daily budget); search chain Tavily → Zenserp → Perplexity (never stops on one provider's quota) |
 | CrewAI | `crew.py` | bounded handoff to `/crew/run` on axe-core-api, `depth="deep"` only |
 | Audit | `audit.py` | `core_audit_log` (AXE Companion), local fallback queue |
 | State | `store.py` | SQLite on the box: OAuth clients/codes, token hashes, idempotency, rate windows |
