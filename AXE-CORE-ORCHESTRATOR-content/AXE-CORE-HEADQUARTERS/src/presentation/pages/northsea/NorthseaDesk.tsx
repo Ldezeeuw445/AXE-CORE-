@@ -36,6 +36,15 @@ import { DeskKaartjes } from './DeskKaartjes';
 import { DealsTabel } from './DealsTabel';
 import { KaartLegenda } from './KaartLegenda';
 import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
+import { DealsTab } from './tabs/DealsTab';
+import { PipelineTab } from './tabs/PipelineTab';
+import { TegenpartijenTab } from './tabs/TegenpartijenTab';
+import { CommunicatieTab } from './tabs/CommunicatieTab';
+import { MarktTab } from './tabs/MarktTab';
+import { DocumentenTab } from './tabs/DocumentenTab';
+import { BewijsTab } from './tabs/BewijsTab';
+import { AutomatiseringTab } from './tabs/AutomatiseringTab';
+import { RapportenTab } from './tabs/RapportenTab';
 
 type Tab = 'live' | 'deals' | 'pipeline' | 'tegenpartijen' | 'communicatie' | 'markt' | 'documenten' | 'bewijs' | 'automatisering' | 'rapporten';
 type ChaseFilter = 'alle' | 'kritiek' | 'nieuw';
@@ -49,6 +58,8 @@ export default function NorthseaDesk() {
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
   const [tab, setTab] = useState<Tab>('live');
+  /** De deal die Active Deals opent, als je er vanuit Pipeline naartoe gaat. */
+  const [dealStart, setDealStart] = useState<string | null>(null);
   const [filter, setFilter] = useState<ChaseFilter>('alle');
   const [alles, setAlles] = useState(false);
   const [nu, setNu] = useState(() => Date.now());
@@ -106,7 +117,6 @@ export default function NorthseaDesk() {
     { id: 'automatisering', label: 'Automation', kleur: '#FB923C', icoon: <Workflow size={17} /> },
     { id: 'rapporten', label: 'Reports', kleur: '#E2E8F0', icoon: <FileBarChart size={17} /> },
   ];
-  const huidig = menu.find(m => m.id === tab)!;
 
   const kaartLagen: ZuilItem[] = [
     { id: 'routes', label: 'Trade Routes', kleur: '#22D3EE', icoon: <Route size={17} />, aan: lagen.routes },
@@ -126,9 +136,13 @@ export default function NorthseaDesk() {
         <KaartLegenda kaart={fout ? null : kaart} totaal={data?.kaart ? data.kaart.length : null} />
       </TopbalkSlot>
       <DeskKaartjes data={data} tellers={desk} routes={kaart ? kaart.routes.length : null} />
-      <PlaatSlot slot="dock">
-        <DealsTabel deals={fout ? null : data?.kaart ?? null} tellers={desk} nu={nu} fout={fout} />
-      </PlaatSlot>
+      {/* De dealtabel ligt over de kaart heen; op de andere tabbladen zou hij de
+          inhoud bedekken, en daar heeft elk tabblad zijn eigen lijst. */}
+      {tab === 'live' && (
+        <PlaatSlot slot="dock">
+          <DealsTabel deals={fout ? null : data?.kaart ?? null} tellers={desk} nu={nu} fout={fout} />
+        </PlaatSlot>
+      )}
 
       <PlaatSlot slot="links">
         <IcoonZuil items={menu} actief={tab} kies={id => setTab(id as Tab)} rijen={3} />
@@ -146,6 +160,10 @@ export default function NorthseaDesk() {
         </PlaatSlot>
       )}
 
+      {/* AXE Chase hoort bij Live Map. De andere tabbladen zetten hun eigen
+          detailpaneel in dezelfde rechter strook; twee portalen in één strook
+          zouden onder elkaar staan. */}
+      {tab === 'live' && (
       <TabRail kant="rechts">
         <div className="axe-paneel" data-axe-doel="axe-chase">
           <div className="flex items-center gap-2 mb-3">
@@ -191,6 +209,7 @@ export default function NorthseaDesk() {
           )}
         </div>
       </TabRail>
+      )}
 
       {tab === 'live' ? (
         /* De kaart vult het midden, zonder vak: `data.kaart` ontbreekt als de
@@ -199,27 +218,26 @@ export default function NorthseaDesk() {
           <WereldKaart deals={fout ? null : data ? data.kaart : null} lagen={lagen} fout={fout}
             vrijVan="[data-axe-doel=northsea-deals]" />
         </div>
+      ) : tab === 'deals' ? (
+        /* `key`: vanuit Pipeline een andere deal openen maakt een verse Active
+           Deals met die deal geselecteerd, in plaats van de oude keuze te houden. */
+        <DealsTab key={dealStart ?? 'deals'} startId={dealStart} />
+      ) : tab === 'pipeline' ? (
+        <PipelineTab openDeal={id => { setDealStart(id); setTab('deals'); }} />
+      ) : tab === 'tegenpartijen' ? (
+        <TegenpartijenTab />
+      ) : tab === 'communicatie' ? (
+        <CommunicatieTab />
+      ) : tab === 'markt' ? (
+        <MarktTab />
+      ) : tab === 'documenten' ? (
+        <DocumentenTab />
+      ) : tab === 'bewijs' ? (
+        <BewijsTab />
+      ) : tab === 'automatisering' ? (
+        <AutomatiseringTab />
       ) : (
-        /* De andere weergaven volgen Luka's specificatie. Tot dan alleen wat er
-           echt staat, zodat niemand op een verzonnen scherm werkt. */
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <div className="flex items-center gap-2 text-[15px]" style={{ color: 'var(--text-primary)' }}>
-            <span style={{ color: huidig.kleur }}>{huidig.icoon}</span> {huidig.label}
-          </div>
-          {data && (
-            <div className="flex flex-wrap justify-center gap-4 text-[12px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-              <span>{data.pipeline} opportunities</span>
-              <span>{data.actief} active</span>
-              <span>{data.tellers.bedrijven} companies</span>
-              <span>{data.tellers.contacten} contacts</span>
-              <span>{data.tellers.communicatie_7d} messages · 7d</span>
-              <span>{tellers.alle} chase actions</span>
-            </div>
-          )}
-          <div className="text-[11px] max-w-md" style={{ color: 'var(--text-muted)' }}>
-            Deze weergave wordt gebouwd volgens de NorthSea-specificatie.
-          </div>
-        </div>
+        <RapportenTab />
       )}
     </div>
   );

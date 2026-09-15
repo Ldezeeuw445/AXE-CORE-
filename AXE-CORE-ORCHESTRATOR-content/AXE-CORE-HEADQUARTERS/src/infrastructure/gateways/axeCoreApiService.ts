@@ -14,6 +14,7 @@
  */
 
 import type { NorthseaOverzicht } from '@/domain/northsea/chase';
+import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import { agentBasis } from '@/infrastructure/config/agentHost';
 import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
@@ -986,6 +987,12 @@ export interface McpHubTest {
 // MCP-hub op de agent-host (backend/axe_api/northsea.py).
 export function northseaOverzicht(vers = false): Promise<NorthseaOverzicht> {
   return call('GET', `/northsea/overzicht${vers ? '?vers=true' : ''}`);
+}
+
+// De tabbladen naast Live Map: één vaste query per tabblad (northsea.TAB_SQL).
+// Een lokale API van vóór deze tabbladen geeft 404; het tabblad zegt dat dan zelf.
+export function northseaTab<T extends TabNaam>(naam: T, vers = false): Promise<TabData[T]> {
+  return call('GET', `/northsea/tab/${naam}${vers ? '?vers=true' : ''}`);
 }
 
 export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }

@@ -4090,3 +4090,14 @@ async def northsea_overzicht(vers: bool = False):
         return await _northsea.overzicht(vers=vers)
     except _northsea.NorthseaFout as e:
         raise HTTPException(502, str(e))
+
+
+@app.get("/northsea/tab/{naam}", dependencies=[AUTH])
+async def northsea_tab(naam: str, vers: bool = False):
+    """De data van één tabblad naast Live Map. De naam kiest een vaste query; zie northsea.TAB_SQL."""
+    try:
+        return await _northsea.tab(naam, vers=vers)
+    except _northsea.OnbekendTabblad as e:
+        raise HTTPException(404, str(e))
+    except _northsea.NorthseaFout as e:
+        raise HTTPException(502, str(e))
