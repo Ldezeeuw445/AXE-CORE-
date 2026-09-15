@@ -170,8 +170,14 @@ export function AppShell() {
   // De glasplaat is nu de basis van ELKE mobiele tab (niet meer alleen de home):
   // de Tauri-shell waar alleen het midden per tab wisselt. `/mobile` en `/lock`
   // tekenen hun eigen volledige scherm, dus die houden we buiten de plaat.
+  // Zware, volscherm-ervaringen (3D-kaart, browser) passen niet in de plaat met
+  // een composer eronder — die vullen het hele scherm zonder plaat/composer, net
+  // als /mobile en /lock. De lade-hamburger (portal) blijft om weg te navigeren.
+  const volScherm = mobileNav
+    && (location.pathname === '/maps-3d' || location.pathname === '/browser');
   const opPlaatMobiel = mobileNav
-    && location.pathname !== '/mobile' && location.pathname !== '/lock';
+    && location.pathname !== '/mobile' && location.pathname !== '/lock'
+    && !volScherm;
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -201,7 +207,7 @@ export function AppShell() {
       {/* De wereldschakelaar hoort óók op de telefoon-home: hij is de 1-op-1
           Tauri-manier tussen Core/Neural/Terrain/Architecture. Alleen de
           desktop-balken (TopNav/Sidebar) blijven op mobiel weg. */}
-      {opPlaat && <PlaatViewSwitch />}
+      {opPlaat && !volScherm && <PlaatViewSwitch />}
 
       {/* Licht/donker-knop rechtsboven op de telefoon. BUITEN de schil, want de
           schil krijgt in de lichte stand een backdrop-filter (frosted glas) en
@@ -322,7 +328,7 @@ export function AppShell() {
           elke pagina Home met de dingen van die tab erbij. */}
       {/* De volledige composer (met alles erop) hoort óók op de telefoon-home,
           net als in de Tauri-app — niet mijn afgeslankte mobiele composer. */}
-      {opPlaat && <PlaatChat />}
+      {opPlaat && !volScherm && <PlaatChat />}
 
       {/* Het radiaal menu linksonder. Naast de chat en niet erin: het zijn
           sprongen naar ergens anders, en die horen niet tussen de knoppen
