@@ -14,7 +14,7 @@
  * zetten een richtlijn vóór je concept en focussen de invoer (prompt-helpers);
  * de modelpil toont het actieve model.
  */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Volume2, VolumeX, Telescope, Globe, Mic, Send, Zap, ChevronDown,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { FileUploadButton, type NormalizedAttachment } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
+import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 
 interface Props {
   value: string;
@@ -53,6 +54,22 @@ export function HomeCommandComposer(props: Props) {
   const { value, onChange, onSend, onRunChip, onHistory, onMic, isListening, attachments, onAttachments, responseMode, onToggleResponseMode, modelLabel } = props;
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  // De modelpil is een dropdown: standaard ingeklapt tot alleen het groene
+  // bolletje; tik = claude (+ pijltje) schuift open, tik weer = dicht.
+  const [modelOpen, setModelOpen] = useState(false);
+
+  // Lichte stand: de grond is nu écht licht (blauw→grijs), dus de tekst die
+  // DIRECT op de plaat ligt (AXE CORE, model, klok, chips) moet donkere inkt
+  // krijgen — anders licht-op-licht. De composer-doos zelf blijft donker glas,
+  // die drijft erbovenop.
+  const light = useLookValue() === 'glass';
+  const axeInk = light ? '#0e7490' : 'var(--accent-cyan)';
+  const headInk = light ? '#243043' : 'var(--text-primary)';
+  const subInk = light ? 'rgba(36,48,67,0.62)' : 'rgba(255,255,255,0.5)';
+  const chipBg = light ? 'rgba(20,28,45,0.05)' : 'rgba(255,255,255,0.035)';
+  const chipBorder = light ? 'rgba(20,28,45,0.16)' : 'rgba(255,255,255,0.09)';
+  const pillBg = light ? 'rgba(20,28,45,0.05)' : 'rgba(255,255,255,0.05)';
+  const pillBorder = light ? 'rgba(20,28,45,0.16)' : 'rgba(255,255,255,0.09)';
 
   // Een tip-chip is een echte actie: staat er een concept, dan stuurt hij dat
   // meteen met de richtlijn eromheen (AXE verheldert / geeft context / kiest de
@@ -72,29 +89,44 @@ export function HomeCommandComposer(props: Props) {
 
   return (
     <div className="flex flex-col gap-1.5 px-1 pb-0">
-      {/* Kopregel: modelkiezer + AXE CORE links, klok + instellingen rechts. */}
+      {/* Kopregel: AXE CORE links, dan de model-dropdown (claude in een bubbel
+          die inklapt tot het groene bolletje); klok + instellingen rechts. */}
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2 min-w-0">
+          <span className="flex items-center gap-1 flex-shrink-0">
+            <Sparkles size={12} style={{ color: axeInk }} />
+            <span className="text-[10px] font-semibold tracking-wide" style={{ color: axeInk }}>AXE CORE</span>
+          </span>
           <button
             type="button"
-            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 min-w-0"
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)' }}
-            title="Actief model"
+            onClick={() => setModelOpen(o => !o)}
+            className="flex items-center rounded-full px-1.5 py-1 min-w-0"
+            style={{ background: pillBg, border: `1px solid ${pillBorder}` }}
+            title={modelOpen ? 'Model verbergen' : 'Model tonen'}
+            aria-expanded={modelOpen}
           >
             <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: '#10b981', boxShadow: '0 0 5px #10b981' }} />
-            <span className="text-[10px] font-medium truncate max-w-[150px]" style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{modelLabel}</span>
-            <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />
+            {/* claude + pijltje schuiven open/dicht (dropdown). */}
+            <span
+              className="inline-flex items-center overflow-hidden"
+              style={{
+                maxWidth: modelOpen ? 150 : 0,
+                opacity: modelOpen ? 1 : 0,
+                marginLeft: modelOpen ? 6 : 0,
+                gap: 4,
+                transition: 'max-width .28s ease, opacity .2s ease, margin-left .28s ease',
+              }}
+            >
+              <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: headInk, fontFamily: 'JetBrains Mono, monospace' }}>{modelLabel}</span>
+              <ChevronDown size={12} className="flex-shrink-0" style={{ color: subInk, transform: 'rotate(180deg)' }} />
+            </span>
           </button>
-          <span className="flex items-center gap-1 flex-shrink-0">
-            <Sparkles size={12} style={{ color: 'var(--accent-cyan)' }} />
-            <span className="text-[10px] font-semibold tracking-wide" style={{ color: 'var(--accent-cyan)' }}>AXE CORE</span>
-          </span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button type="button" onClick={onHistory} className="p-1.5 rounded-md" title="Gespreksgeschiedenis" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          <button type="button" onClick={onHistory} className="p-1.5 rounded-md" title="Gespreksgeschiedenis" style={{ color: subInk }}>
             <Clock size={15} />
           </button>
-          <button type="button" onClick={() => navigate('/settings')} className="p-1.5 rounded-md" title="Instellingen" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          <button type="button" onClick={() => navigate('/settings')} className="p-1.5 rounded-md" title="Instellingen" style={{ color: subInk }}>
             <SlidersHorizontal size={15} />
           </button>
         </div>
@@ -162,10 +194,10 @@ export function HomeCommandComposer(props: Props) {
             type="button"
             onClick={() => applyChip(chip.prefix)}
             className="flex items-center justify-center gap-1 rounded-full px-2.5 py-1 active:scale-95 transition-transform"
-            style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.09)' }}
+            style={{ background: chipBg, border: `1px solid ${chipBorder}` }}
           >
             <chip.icon size={13} className="flex-shrink-0" style={{ color: chip.color }} />
-            <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
+            <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: headInk }}>{chip.label}</span>
           </button>
         ))}
       </div>

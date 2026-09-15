@@ -33,24 +33,20 @@ import { Sun, Moon } from 'lucide-react';
  * (chat, cijferregel) liggen hier bovenop en vervagen deze grond.
  */
 
-// GLAS DONKER — diep indigo glas: een violette gloed bovenin, koel blauw links,
-// een zweem paars rechts, wegzakkend naar bijna-zwart onderin. Dit is de LICHTE
-// stand ('glass'), precies zoals de mockup: donker glas, geen wit.
-const GLAS_DONKER =
-  'radial-gradient(1100px 720px at 50% -6%, rgba(96,86,190,0.34), rgba(96,86,190,0) 55%),' +
-  'radial-gradient(680px 560px at 10% 8%, rgba(60,96,200,0.26), rgba(60,96,200,0) 60%),' +
-  'radial-gradient(760px 640px at 92% 26%, rgba(132,92,204,0.22), rgba(132,92,204,0) 60%),' +
-  'radial-gradient(900px 760px at 74% 108%, rgba(46,120,168,0.16), rgba(46,120,168,0) 62%),' +
-  'linear-gradient(180deg, #17182e 0%, #101124 46%, #090a13 100%)';
+// LICHT — de échte lichte stand ('glass'): een licht-blauwe lucht bovenaan die
+// naar onderen steeds iets donkerder en grijzer wordt, zoals Luka's bureaublad.
+// Zo is er eindelijk een echt lichte grond, en doet het frosted glas meer.
+const LICHT =
+  'radial-gradient(130% 90% at 50% -12%, rgba(255,255,255,0.55), rgba(255,255,255,0) 55%),' +
+  'linear-gradient(180deg, #c8ddf3 0%, #b0c1d5 40%, #939dac 74%, #7b8492 100%)';
 
-// NU / ZWART — donker, maar niet dood-vlak zwart: een zweem blauw-paars (de
-// Tauri-look is nooit zuiver zwart). Een zachte indigo/violette gloed bovenin
-// over een heel donkere blauw-zwarte grond; nog steeds duidelijk "donker", maar
-// met leven erin.
+// NU / ZWART — puur mat zwart, met heel subtiel licht dat schuin ónder de
+// glasplaat langs strijkt: van boven-midden/links naar onder-midden/rechts.
+// Verder zwart, zodat het licht juist opvalt.
 const ZWART =
-  'radial-gradient(1000px 780px at 50% 0%, rgba(58,54,104,0.42), rgba(58,54,104,0) 58%),' +
-  'radial-gradient(760px 620px at 88% 14%, rgba(70,58,120,0.22), rgba(70,58,120,0) 60%),' +
-  'linear-gradient(180deg, #0b0c18 0%, #08080f 55%, #050509 100%)';
+  'radial-gradient(1200px 680px at 30% 4%, rgba(128,140,178,0.11), rgba(128,140,178,0) 50%),' +
+  'radial-gradient(1000px 560px at 74% 99%, rgba(96,106,142,0.06), rgba(96,106,142,0) 54%),' +
+  '#000000';
 
 // Heel fijne korrel, zodat het glas niet als plat karton leest. Eén kleine SVG
 // als data-URI, laag in dekking — kost niets en tilt de vlakken net op.
@@ -64,18 +60,19 @@ export function MobileGlass() {
   const glass = look === 'glass';
   return (
     <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-      {/* De plaat zelf: het indigo glas in de lichte stand, vlak zwart in de
-          donkere. Geen foto meer — dit is de gradiënt-plaat uit de mockup. */}
-      <div style={{ position: 'absolute', inset: 0, background: glass ? GLAS_DONKER : ZWART }} />
-      {/* Fijne korrel, zodat het glas niet als plat karton leest. */}
+      {/* De grond: licht-blauw→grijs in de lichte stand, puur mat zwart met een
+          subtiele schuine lichtstreep in de donkere. */}
+      <div style={{ position: 'absolute', inset: 0, background: glass ? LICHT : ZWART }} />
+      {/* Fijne korrel, zodat het glas niet als plat karton leest. Op de lichte
+          grond met 'multiply' zodat de korrel juist donkert i.p.v. oplicht. */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
           backgroundImage: GRAIN,
           backgroundRepeat: 'repeat',
-          opacity: glass ? 0.06 : 0.05,
-          mixBlendMode: 'screen',
+          opacity: glass ? 0.04 : 0.05,
+          mixBlendMode: glass ? 'multiply' : 'screen',
         }}
       />
     </div>
