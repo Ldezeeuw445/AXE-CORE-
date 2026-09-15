@@ -509,16 +509,19 @@ html:root[data-look],
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
    een dichte kaart wordt. */
-/* De plaat blijft in BEIDE standen DONKER glas — alleen de grond eromheen
-   (MobileGlass) wisselt licht/donker. Lichte stand: de grond is licht-blauw→grijs,
-   maar de plaat zelf is gerookt donker glas dat erop drijft (anders sloeg hij wit
-   uit). Genoeg dekking dat het licht er niet doorheen wast, met een zachte
-   lichtbloei bovenaan voor het frosted-gevoel. */
+/* Lichte stand = de Tauri-shell: LICHT frosted glas. Een lichte sluier + een
+   echte backdrop-blur die de lichte grond (MobileGlass) tot matglas vervaagt —
+   precies het native-glas-gevoel, maar zelf opgewekt. De donkere chrome (composer,
+   chips, model-pil) drijft er donker op, net als in de Tauri-shell.
+   Backdrop-filter mag hier: op de home gebruikt geen kind zelf een backdrop-filter
+   (de chatplaat is ingeklapt/niet gerenderd). */
 :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
   background:
-    radial-gradient(130% 80% at 50% -12%, rgba(210, 224, 255, 0.08), rgba(210, 224, 255, 0) 62%),
-    linear-gradient(180deg, rgba(16, 18, 28, 0.82) 0%, rgba(12, 14, 22, 0.88) 55%, rgba(9, 11, 18, 0.92) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    radial-gradient(130% 80% at 50% -14%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, rgba(240, 245, 251, 0.30) 0%, rgba(228, 236, 245, 0.22) 100%) !important;
+  backdrop-filter: blur(26px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.42) !important;
 }
 :root[data-look='black'] .axe-shell.axe-plaat-mobiel {
   background:
