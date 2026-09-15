@@ -27,7 +27,6 @@
  * je kijkt ergens ín, niet tegen een schil aan.
  */
 import { useEffect, useRef } from 'react';
-import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 
 const N = 2200;
 
@@ -71,14 +70,6 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const boostRef = useRef(boost);
   useEffect(() => { boostRef.current = boost; }, [boost]);
-
-  // In de lichte (frosted) stand wast de bleke bol weg op de lichte grond — dan
-  // lijkt het alsof het glas vóór de bol zit. Een zachte donkere lens áchter de
-  // bol geeft de deeltjes weer contrast (bol komt "naar voren"). Op zwart valt
-  // die lens weg, dus de donkere stand blijft onaangeroerd.
-  const look = useLookValue();
-  const lightRef = useRef(look === 'glass');
-  useEffect(() => { lightRef.current = look === 'glass'; }, [look]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -178,19 +169,6 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       // tussen de punten, dus ook zonder inzoomen leest de korrel.
       const R = Math.min(w, h) * 0.34 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
-
-      // Donkere lens áchter de bol, alleen in de lichte stand: geeft de bleke
-      // deeltjes contrast op de lichte frosted grond zodat de bol vóór het glas
-      // lijkt te staan i.p.v. erachter. Zacht uitgevloeid, dus geen harde schijf.
-      if (lightRef.current) {
-        const rr = R * 1.16;
-        const lens = x.createRadialGradient(cx, cy, R * 0.15, cx, cy, rr);
-        lens.addColorStop(0, 'rgba(9,14,26,0.52)');
-        lens.addColorStop(0.6, 'rgba(9,14,26,0.34)');
-        lens.addColorStop(1, 'rgba(9,14,26,0)');
-        x.fillStyle = lens;
-        x.beginPath(); x.arc(cx, cy, rr, 0, 6.284); x.fill();
-      }
 
       // Binnenbol op 46% van de straal: je ziet hem door de buitenste heen
       // bewegen -- twee snelheden, één beeld.

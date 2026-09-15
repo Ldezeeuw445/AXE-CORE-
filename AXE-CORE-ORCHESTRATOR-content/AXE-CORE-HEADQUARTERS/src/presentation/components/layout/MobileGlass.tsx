@@ -33,19 +33,22 @@ import { Sun, Moon } from 'lucide-react';
  * (chat, cijferregel) liggen hier bovenop en vervagen deze grond.
  */
 
-// LICHT — een schone blauw-gradient: licht-blauw bovenaan → steeds donkerder
-// blauw → zwart onderin (waar de Samsung-systeembalk zit). Geen groen/grijs meer:
-// die kleuren zaten óók in de sphere en maakten hem juist onduidelijker. Één
-// blauwe flow leest rustiger, en de frosted plaat (backdrop-blur, axe-look.css)
-// vervaagt hem tot zacht matglas waar de sphere scherp op staat.
+// LICHT — de tonale flow van de Tauri-shell: licht-blauwe lucht bovenaan, maar
+// in het MIDDEN (waar de sphere staat) een MIDDEN-tint blauw-grijs — net als de
+// wazige bergen achter het glas op de Mac. Juist die midden-tint geeft de bleke
+// deeltjes contrast (geen donkere lens nodig, zoals de Tauri-app die ook niet
+// heeft). Naar onder verder donker → zwart bij de systeembalk. De frosted plaat
+// (zware backdrop-blur, axe-look.css) vervaagt dit tot zacht matglas.
 const LICHT =
   'linear-gradient(180deg,' +
-  ' #c2e1f6 0%,' +   /* licht-blauw */
-  ' #93bfe3 26%,' +  /* blauw */
-  ' #5c8abb 50%,' +  /* donkerder blauw */
-  ' #345680 72%,' +  /* diep blauw */
-  ' #1a3050 86%,' +  /* navy */
-  ' #0a1424 94%,' +  /* bijna zwart */
+  ' #bcd8ee 0%,' +   /* lichte lucht */
+  ' #98bcdd 18%,' +  /* lichtblauw */
+  ' #6d88a8 34%,' +  /* midden-slate (sphere-top) */
+  ' #4e6788 46%,' +  /* midden blauw-grijs (bergen, sphere) */
+  ' #3e5578 58%,' +  /* midden-donker (sphere-onder) */
+  ' #2c4160 72%,' +  /* donkerblauw */
+  ' #1a2c46 84%,' +  /* navy */
+  ' #0c1728 93%,' +  /* bijna zwart */
   ' #000000 100%)';  /* zwart onder (systeembalk) */
 
 // NU / ZWART — puur mat zwart, met heel subtiel licht dat schuin ónder de
