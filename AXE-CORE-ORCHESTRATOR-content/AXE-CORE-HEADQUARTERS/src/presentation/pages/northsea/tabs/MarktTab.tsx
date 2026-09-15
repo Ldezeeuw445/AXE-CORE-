@@ -74,7 +74,7 @@ export function MarktTab() {
   const zonder = MARKTEN.filter(m => koersen[m.symbool] === 'geen');
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 pt-[104px]" data-axe-doel="northsea-markt">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 pt-2" data-axe-doel="northsea-markt">
       <KengetalRij>
         {MARKTEN.slice(0, 5).map(m => {
           const k = koersen[m.symbool];

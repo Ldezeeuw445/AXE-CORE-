@@ -59,7 +59,7 @@ export function AutomatiseringTab() {
   const soorten = tel(alleLog, g => g.soort).slice(0, 8);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-[104px]" data-axe-doel="northsea-automatisering">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-automatisering">
       <KengetalRij>
         <Kengetal waarde={data ? alleCampagnes.filter(c => c.status === 'active').length : '—'} label="Active campaigns" toon="paars" />
         <Kengetal waarde={data ? som('gevonden') : '—'} label="Candidates found" />

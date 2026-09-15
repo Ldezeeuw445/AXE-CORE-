@@ -51,7 +51,7 @@ export function RapportenTab() {
   const grootsteWeek = Math.max(1, ...weken.map(w => w.inkomend + w.uitgaand + w.intern));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 pt-[104px]" data-axe-doel="northsea-rapporten">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 pt-2" data-axe-doel="northsea-rapporten">
       <KengetalRij>
         <Kengetal waarde={t ? t.deals : '—'} label="Open deals" toon="blauw" />
         <Kengetal waarde={t ? t.gewonnen : '—'} label="Closed (won)" toon="groen" />

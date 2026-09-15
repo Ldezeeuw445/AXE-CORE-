@@ -18,7 +18,7 @@ import { AlertTriangle, ArrowRight, Target } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { isDealCode, tijdGeleden } from '@/domain/northsea/chase';
 import { geld, getal } from '@/domain/northsea/desk';
-import { alsLijst, past, pipelineKolom, PIPELINE_KOLOMMEN, type KolomId } from '@/domain/northsea/tabs/lijsten';
+import { alsLijst, geblokkeerdIn, past, pipelineKolom, PIPELINE_KOLOMMEN, type KolomId } from '@/domain/northsea/tabs/lijsten';
 import {
   gebeurtenisToon, mensLabel, poortStappen, taakBadge, TOON_KLEUR, verificatieBadge,
 } from '@/domain/northsea/tabs/status';
@@ -126,15 +126,26 @@ export function DealsTab({ startId }: { startId?: string | null }) {
   const geblokkeerd = alle.filter(d => (d.blokkade ?? '').trim()).length;
   const akkoord = alle.filter(d => d.akkoord_nodig).length;
   const openTaken = alle.reduce((s, d) => s + (d.aantallen?.taken ?? 0), 0);
+  /* Uitvoerbaar is het einde van de trechter, niet een synoniem van "gematcht":
+     de match-beoordeling zegt het pas als beide kanten rond zijn. Staat er als
+     eigen tegel zodat 55 kansen nooit voor 55 deals kunnen doorgaan. */
+  const uitvoerbaar = alle.filter(d => d.match?.uitvoerbaar === true).length;
+  const kwalGeblokkeerd = geblokkeerdIn(
+    alle.map(d => ({ stage: d.stage, execution_state: d.execution_state, geblokkeerd: !!(d.blokkade ?? '').trim() })),
+    'kwalificatie',
+  );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-[104px]" data-axe-doel="northsea-deals-tab">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-deals-tab">
       <KengetalRij>
-        <Kengetal waarde={data ? alle.length : '—'} label="Open deals" toon="blauw" />
-        <Kengetal waarde={data ? (perKolom.get('kwalificatie') ?? 0) : '—'} label="Qualifying" toon="blauw" />
+        <Kengetal waarde={data ? alle.length : '—'} label="Opportunities" sub="Not deals until executable" toon="blauw" />
+        <Kengetal waarde={data ? (perKolom.get('kwalificatie') ?? 0) : '—'} label="Qualifying" toon="blauw"
+          sub={data && kwalGeblokkeerd ? `${kwalGeblokkeerd} more under Blocked` : undefined} />
         <Kengetal waarde={data ? (perKolom.get('gematcht') ?? 0) : '—'} label="Matched" toon="geel" />
         <Kengetal waarde={data ? akkoord : '—'} label="Awaiting approval" toon="oranje" />
         <Kengetal waarde={data ? geblokkeerd : '—'} label="Blocked" toon="rood" />
+        <Kengetal waarde={data ? uitvoerbaar : '—'} label="Executable" toon={uitvoerbaar ? 'groen' : 'grijs'}
+          sub={data ? (uitvoerbaar ? 'Both sides confirmed' : 'None confirmed executable') : undefined} />
         <Kengetal waarde={data ? openTaken : '—'} label="Open deal tasks" />
       </KengetalRij>
 

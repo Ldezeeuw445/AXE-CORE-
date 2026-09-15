@@ -58,12 +58,30 @@ const STAGE_KOLOM: Record<string, KolomId> = {
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
 
-export function pipelineKolom(d: Pick<PipelineDeal, 'stage' | 'execution_state' | 'geblokkeerd'>): KolomId {
-  if (d.geblokkeerd) return 'geblokkeerd';
+/** De kolom die een deal zou hebben als er geen blokkade was.
+ *
+ * Nodig omdat een blokkade in `pipelineKolom` alles overstemt: alle 18 deals die
+ * in kwalificatie zitten zijn ook geblokkeerd, dus de kolom Qualifying staat op
+ * 0 terwijl Reports er 18 telt. Twee waarheden over dezelfde deals. Hiermee kan
+ * een tegel zeggen hoeveel er onder Blocked staan in plaats van ze te verzwijgen. */
+export function kolomZonderBlokkade(d: Pick<PipelineDeal, 'stage' | 'execution_state'>): KolomId {
   const stage = norm(d.stage);
   // Latere fases winnen van een achtergebleven uitvoeringsstatus.
   if (['introduced', 'negotiating', 'contracting', 'shipment', 'commission_due', 'won'].includes(stage)) return 'afronding';
   return UITVOERING_KOLOM[norm(d.execution_state)] ?? STAGE_KOLOM[stage] ?? 'nieuw';
+}
+
+export function pipelineKolom(d: Pick<PipelineDeal, 'stage' | 'execution_state' | 'geblokkeerd'>): KolomId {
+  if (d.geblokkeerd) return 'geblokkeerd';
+  return kolomZonderBlokkade(d);
+}
+
+/** Hoeveel deals in deze kolom zouden staan, maar onder Blocked staan. */
+export function geblokkeerdIn(
+  deals: readonly Pick<PipelineDeal, 'stage' | 'execution_state' | 'geblokkeerd'>[],
+  kolom: KolomId,
+): number {
+  return deals.filter(d => d.geblokkeerd && kolomZonderBlokkade(d) === kolom).length;
 }
 
 const tijd = (iso: string | null | undefined) => (iso ? Date.parse(iso) || 0 : 0);

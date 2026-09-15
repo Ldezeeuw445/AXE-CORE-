@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  alsLijst, filterBedrijven, filterBerichten, groepeerPipeline, past, pipelineKolom, tel, volumeSom, vraagtActie,
+  alsLijst, filterBedrijven, filterBerichten, geblokkeerdIn, groepeerPipeline, kolomZonderBlokkade, past, pipelineKolom, tel, volumeSom, vraagtActie,
 } from './lijsten';
 import type { Bedrijf, Bericht, PipelineDeal } from './typen';
 
@@ -22,6 +22,25 @@ describe('pipelineKolom', () => {
   it('een onbekende uitvoeringsstatus valt terug op de fase, niet weg', () => {
     expect(pipelineKolom({ stage: 'verifying', execution_state: 'iets_nieuws' })).toBe('kwalificatie');
     expect(pipelineKolom({ stage: null, execution_state: null })).toBe('nieuw');
+  });
+});
+
+describe('kolomZonderBlokkade en geblokkeerdIn', () => {
+  it('laat zien waar een geblokkeerde deal zonder blokkade zou staan', () => {
+    const d = { stage: 'identified', execution_state: 'qualifying', geblokkeerd: true };
+    expect(pipelineKolom(d)).toBe('geblokkeerd');
+    expect(kolomZonderBlokkade(d)).toBe('kwalificatie');
+  });
+
+  it('telt alleen geblokkeerde deals die in die kolom thuishoren', () => {
+    const deals = [
+      { stage: 'identified', execution_state: 'qualifying', geblokkeerd: true },
+      { stage: 'identified', execution_state: 'qualifying', geblokkeerd: false },
+      { stage: 'identified', execution_state: 'matched', geblokkeerd: true },
+    ];
+    expect(geblokkeerdIn(deals, 'kwalificatie')).toBe(1);
+    expect(geblokkeerdIn(deals, 'gematcht')).toBe(1);
+    expect(geblokkeerdIn(deals, 'afronding')).toBe(0);
   });
 });
 

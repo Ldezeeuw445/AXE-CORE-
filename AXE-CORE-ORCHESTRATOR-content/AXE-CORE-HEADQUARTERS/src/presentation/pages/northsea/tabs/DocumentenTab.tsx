@@ -82,7 +82,7 @@ export function DocumentenTab() {
   const aantalBijlagen = data?.bijlagen?.length ?? 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-[104px]" data-axe-doel="northsea-documenten">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-documenten">
       <KengetalRij>
         <Kengetal waarde={data ? alle.length : '—'} label="Total" toon="blauw" />
         <Kengetal waarde={data ? aantalDocs : '—'} label="Deal documents" sub={data && aantalDocs === 0 ? 'None filed yet' : undefined} />

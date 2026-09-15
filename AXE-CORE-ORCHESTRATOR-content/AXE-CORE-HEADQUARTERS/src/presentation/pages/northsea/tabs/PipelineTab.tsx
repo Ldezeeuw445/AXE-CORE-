@@ -10,7 +10,7 @@ import { ArrowRight, TrendingUp } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { tijdGeleden } from '@/domain/northsea/chase';
 import { getal } from '@/domain/northsea/desk';
-import { groepeerPipeline, PIPELINE_KOLOMMEN, past, tel, volumeSom, type KolomId } from '@/domain/northsea/tabs/lijsten';
+import { geblokkeerdIn, groepeerPipeline, PIPELINE_KOLOMMEN, past, tel, volumeSom, type KolomId } from '@/domain/northsea/tabs/lijsten';
 import { TOON_KLEUR, mensLabel } from '@/domain/northsea/tabs/status';
 import type { PipelineDeal } from '@/domain/northsea/tabs/typen';
 import {
@@ -66,19 +66,24 @@ export function PipelineTab({ openDeal }: { openDeal?: (id: string) => void }) {
   const week = 7 * 24 * 3600 * 1000;
   const nieuw = alle.filter(d => d.created_at && nu - Date.parse(d.created_at) < week).length;
   const geblokkeerd = alle.filter(d => d.geblokkeerd).length;
+  /* Een blokkade wint van elke andere kolom, dus een deal in kwalificatie die
+     ook geblokkeerd is staat onder Blocked. Zonder dit getal lijkt Qualifying 0
+     terwijl Reports er 18 telt — hetzelfde verhaal, twee cijfers. */
+  const kwalGeblokkeerd = geblokkeerdIn(alle, 'kwalificatie');
   const akkoord = alle.filter(d => d.akkoord_nodig).length;
   const producten = tel(alle, d => mensLabel(d.commodity || d.product)).slice(0, 6);
   const kies = (id: string) => (openDeal ? openDeal(id) : setGekozen(id));
   const detail = gekozen ? alle.find(d => d.id === gekozen) ?? null : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-[104px]" data-axe-doel="northsea-pipeline">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-pipeline">
       <KengetalRij>
         <Kengetal waarde={data ? alle.length : '—'} label="Opportunities" sub={data ? `+${nieuw} this week` : undefined} toon="blauw" />
         <Kengetal waarde={data ? mt(volumeSom(alle)) : '—'} label="Pipeline volume" sub="Sum of known volumes" />
-        <Kengetal waarde={data ? kolommen.kwalificatie.length : '—'} label="Qualifying" toon="blauw" />
+        <Kengetal waarde={data ? kolommen.kwalificatie.length : '—'} label="Qualifying" toon="blauw"
+          sub={data && kwalGeblokkeerd ? `${kwalGeblokkeerd} more under Blocked` : undefined} />
         <Kengetal waarde={data ? akkoord : '—'} label="Awaiting approval" toon="oranje" />
-        <Kengetal waarde={data ? geblokkeerd : '—'} label="Blocked" toon="rood" sub={data ? (geblokkeerd ? 'Need attention' : 'Nothing blocked') : undefined} />
+        <Kengetal waarde={data ? geblokkeerd : '—'} label="Blocked" toon="rood" sub={data ? (geblokkeerd ? 'Blocker stops progress' : 'Nothing blocked') : undefined} />
       </KengetalRij>
 
       <Vlak vul titel={<span className="flex items-center gap-2"><TrendingUp size={15} style={{ color: '#FBBF24' }} />Pipeline</span>}

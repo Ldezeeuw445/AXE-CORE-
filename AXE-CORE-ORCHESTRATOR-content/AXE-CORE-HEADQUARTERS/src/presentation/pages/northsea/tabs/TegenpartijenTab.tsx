@@ -97,7 +97,7 @@ export function TegenpartijenTab() {
   const detail = gekozen ? alle.find(b => b.id === gekozen) ?? null : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-[104px]" data-axe-doel="northsea-tegenpartijen">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-tegenpartijen">
       <KengetalRij>
         <Kengetal waarde={data ? alle.length : '—'} label="Total counterparties" sub={data ? `${landen.length} countries` : undefined} toon="blauw" />
         <Kengetal waarde={data ? (perSoort.buyer ?? 0) : '—'} label="Buyers" />

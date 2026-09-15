@@ -67,7 +67,7 @@ export function CommunicatieTab() {
   const bericht = (gekozen ? alle.find(b => b.id === gekozen) : null) ?? rijen[0] ?? null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-[104px]" data-axe-doel="northsea-communicatie">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-communicatie">
       <KengetalRij>
         <Kengetal waarde={data ? tellers.alle : '—'} label="Messages" sub="Last 300 recorded" toon="blauw" />
         <Kengetal waarde={data ? tellers.inkomend : '—'} label="Inbound" />

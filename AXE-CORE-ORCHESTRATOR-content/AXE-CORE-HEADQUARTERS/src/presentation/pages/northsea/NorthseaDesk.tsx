@@ -135,7 +135,9 @@ export default function NorthseaDesk() {
       <TopbalkSlot kant="links">
         <KaartLegenda kaart={fout ? null : kaart} totaal={data?.kaart ? data.kaart.length : null} />
       </TopbalkSlot>
-      <DeskKaartjes data={data} tellers={desk} routes={kaart ? kaart.routes.length : null} />
+      {/* Alleen op Live Map: elk tabblad heeft zijn eigen kengetallen, en twee
+          rijen tegels boven elkaar laat je twee keer hetzelfde lezen. */}
+      {tab === 'live' && <DeskKaartjes data={data} tellers={desk} routes={kaart ? kaart.routes.length : null} />}
       {/* De dealtabel ligt over de kaart heen; op de andere tabbladen zou hij de
           inhoud bedekken, en daar heeft elk tabblad zijn eigen lijst. */}
       {tab === 'live' && (
