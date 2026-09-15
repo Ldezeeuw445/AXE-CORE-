@@ -108,6 +108,11 @@ export function AppShell() {
   // donker, FAB) blijven eroverheen zweven. Alleen op de home, zodat de andere
   // tabs (nog) ongemoeid blijven.
   const opHome = mobileNav && location.pathname === '/';
+  // De glasplaat is nu de basis van ELKE mobiele tab (niet meer alleen de home):
+  // de Tauri-shell waar alleen het midden per tab wisselt. `/mobile` en `/lock`
+  // tekenen hun eigen volledige scherm, dus die houden we buiten de plaat.
+  const opPlaatMobiel = mobileNav
+    && location.pathname !== '/mobile' && location.pathname !== '/lock';
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -148,8 +153,8 @@ export function AppShell() {
         <div
           className="fixed z-[70]"
           style={{
-            top: opHome ? 'calc(env(safe-area-inset-top, 0px) + 22px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
-            right: opHome ? 24 : 12,
+            top: opPlaatMobiel ? 'calc(env(safe-area-inset-top, 0px) + 22px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            right: opPlaatMobiel ? 24 : 12,
           }}
         >
           <LookToggle />
@@ -157,9 +162,9 @@ export function AppShell() {
       )}
 
     <div
-      className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opHome ? ' axe-plaat-mobiel' : ''}`}
+      className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opPlaatMobiel ? ' axe-plaat-mobiel' : ''}`}
       style={
-        opHome
+        opPlaatMobiel
           ? {
               // De glasplaat: vast paneel met een kier eromheen. Boven onder de
               // statusbalk, onder boven de systeembalk, links/rechts een smalle
@@ -277,7 +282,7 @@ export function AppShell() {
           vervanging van de radiale hoekmenu's van de desktop. Op de glasplaat-
           home weg: de composer heeft z'n eigen knoppen en de FAB botste ertegen —
           de Tauri-home heeft daar ook geen zwevende hoekknop. */}
-      {mobileNav && !opHome && <MobileFab />}
+      {mobileNav && !opPlaatMobiel && <MobileFab />}
       {/* De drie kerncijfers stonden hier los boven de composer; Luka wil ze
           weg — de composer (met kop + tip-chips) is nu de basis onder de sphere,
           zoals de echte AXE CORE-home. MobileStatsRow blijft bestaan voor als we
