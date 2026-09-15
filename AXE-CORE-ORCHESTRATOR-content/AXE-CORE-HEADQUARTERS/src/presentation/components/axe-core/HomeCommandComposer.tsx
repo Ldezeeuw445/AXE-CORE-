@@ -63,8 +63,12 @@ export function HomeCommandComposer(props: Props) {
     else inputRef.current?.focus();
   };
 
-  const iconBtn = 'flex-shrink-0 flex items-center justify-center rounded-lg transition-colors';
-  const iconStyle = { width: 34, height: 34, color: 'rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.04)' };
+  // Elk knopje in de iconenrij krijgt hetzelfde blokje als de files-knop
+  // (rounded-md p-1.5, zelfde vulling) — één maat voor alle zes. De versturen-
+  // knop blijft bewust wat groter (ronde teal-cirkel).
+  const iconBtn = 'flex-shrink-0 flex items-center justify-center rounded-md p-1.5 transition-colors';
+  const iconStyle = { color: 'rgba(255,255,255,0.6)', background: 'rgba(255,255,255,0.05)', border: '1px solid transparent' };
+  const ICON = 13;
 
   return (
     <div className="flex flex-col gap-1.5 px-1 pb-1">
@@ -78,12 +82,12 @@ export function HomeCommandComposer(props: Props) {
             title="Actief model"
           >
             <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: '#10b981', boxShadow: '0 0 5px #10b981' }} />
-            <span className="text-[11px] font-medium truncate max-w-[150px]" style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{modelLabel}</span>
+            <span className="text-[10px] font-medium truncate max-w-[150px]" style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{modelLabel}</span>
             <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />
           </button>
           <span className="flex items-center gap-1 flex-shrink-0">
             <Sparkles size={12} style={{ color: 'var(--accent-cyan)' }} />
-            <span className="text-[11px] font-semibold tracking-wide" style={{ color: 'var(--accent-cyan)' }}>AXE CORE</span>
+            <span className="text-[10px] font-semibold tracking-wide" style={{ color: 'var(--accent-cyan)' }}>AXE CORE</span>
           </span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -108,7 +112,7 @@ export function HomeCommandComposer(props: Props) {
             onChange={e => onChange(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') onSend(); }}
             placeholder="Ask anything, @models, /prompts ..."
-            className="flex-1 min-w-0 bg-transparent outline-none text-[14px] py-1"
+            className="flex-1 min-w-0 bg-transparent outline-none text-[13px] py-1"
             style={{ color: 'var(--text-primary)' }}
           />
           <Zap size={16} className="flex-shrink-0" style={{ color: '#a855f7' }} />
@@ -117,29 +121,31 @@ export function HomeCommandComposer(props: Props) {
           <div className="flex items-center gap-1.5">
             <FileUploadButton attachments={attachments} onAttachmentsChange={onAttachments} />
             <button type="button" onClick={onToggleResponseMode} className={iconBtn} style={iconStyle} title={responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}>
-              {responseMode === 'speak' ? <Volume2 size={15} /> : <VolumeX size={15} />}
+              {responseMode === 'speak' ? <Volume2 size={ICON} /> : <VolumeX size={ICON} />}
             </button>
             <button type="button" className={iconBtn} style={iconStyle} title="Verkennen">
-              <Telescope size={15} />
+              <Telescope size={ICON} />
             </button>
             <button type="button" onClick={() => navigate('/browser-desktop')} className={iconBtn} style={iconStyle} title="Browser">
-              <Globe size={15} />
+              <Globe size={ICON} />
             </button>
           </div>
           <div className="flex items-center gap-1.5">
-            <VisionCaptureButton compact className={`${iconBtn} border-0`} />
+            {/* Camera krijgt hetzelfde blokje als de rest (via className, want de
+                knop neemt geen style). */}
+            <VisionCaptureButton compact className={`${iconBtn} bg-white/5 border border-transparent text-white/60`} />
             <button type="button" onClick={onMic} className={iconBtn} style={{ ...iconStyle, ...(isListening ? { background: 'var(--accent-cyan)', color: '#001018' } : {}) }} title="Spraak">
-              <Mic size={15} />
+              <Mic size={ICON} />
             </button>
             <button
               type="button"
               onClick={onSend}
               disabled={!value.trim() && attachments.length === 0}
               className="flex-shrink-0 flex items-center justify-center rounded-full transition-transform active:scale-95 disabled:opacity-40"
-              style={{ width: 36, height: 36, background: 'linear-gradient(135deg, #22d3ee, #0d9488)', color: '#001018' }}
+              style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #22d3ee, #0d9488)', color: '#001018' }}
               title="Versturen"
             >
-              <Send size={15} />
+              <Send size={14} />
             </button>
           </div>
         </div>
@@ -159,7 +165,7 @@ export function HomeCommandComposer(props: Props) {
             style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.09)' }}
           >
             <chip.icon size={13} className="flex-shrink-0" style={{ color: chip.color }} />
-            <span className="text-[11px] font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
+            <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{chip.label}</span>
           </button>
         ))}
       </div>

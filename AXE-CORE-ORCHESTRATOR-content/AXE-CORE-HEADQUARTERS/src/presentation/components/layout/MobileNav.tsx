@@ -93,7 +93,7 @@ export function MobileNav() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Menu openen"
-          className="fixed z-[70] flex size-10 items-center justify-center rounded-full active:scale-95"
+          className="fixed z-[70] flex size-9 items-center justify-center rounded-full active:scale-95"
           style={{
             // Op de glasplaat-home netjes binnen de rand, precies zoals de
             // licht/donker-knop rechtsboven (AppShell): zelfde hoogte, zelfde
@@ -107,7 +107,7 @@ export function MobileNav() {
             color: 'var(--text-primary)',
           }}
         >
-          <Menu size={18} />
+          <Menu size={16} />
         </button>
       )}
 
