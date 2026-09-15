@@ -38,7 +38,7 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response
 from . import __version__
 from .audit import Auditor
 from .config import Settings
-from .crew import CrewGateway
+from .crew import CrewGateway, StudioRoute
 from .models import (
     BlockerInvestigation, CandidateSearch, CounterpartyResearch, DealReview, DraftApprovalResult, MatchAssessmentResult,
     NextActions, OutreachDraft, QualificationResult, ReplyAnalysis, SendResult, TaskResult,
@@ -128,9 +128,13 @@ class Guard:
                 if data.get(sleutel):
                     details["northsea_run_id"] = data[sleutel]
             crew = data.get("crew") or {}
-            if isinstance(crew, dict) and crew.get("used"):
+            if isinstance(crew, dict) and (crew.get("used") or crew.get("route")):
+                # Volledige herkomst: een fallback naar de algemene crew staat ALTIJD in de audit.
                 details["crewai_run_id"] = crew.get("run_id")
                 details["crewai_status"] = crew.get("status")
+                details["crewai"] = {k: crew.get(k) for k in (
+                    "route", "requested_crew", "backend", "actual_crew", "fallback_used", "fallback_reason", "models",
+                    "skills", "tools", "budget_usage", "timings", "validation", "attempts")}
             research = data.get("research") or {}
             if isinstance(research, dict) and research.get("provider"):
                 details["research"] = {k: research.get(k) for k in ("status", "provider", "calls_made", "cost_usd")}
@@ -467,7 +471,10 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
     research = research or ResearchGateway(axe_api_url=settings.axe_api_url, axe_api_key=settings.axe_api_key,
                                            tavily_key=settings.tavily_key, zenserp_key=settings.zenserp_key,
                                            timeout=settings.research_timeout_s)
-    crew = crew or CrewGateway(axe_api_url=settings.axe_api_url, axe_api_key=settings.axe_api_key, crew_venv_py=settings.crew_venv_py)
+    crew = crew or CrewGateway(
+        axe_api_url=settings.axe_api_url, axe_api_key=settings.axe_api_key, crew_venv_py=settings.crew_venv_py,
+        studio_routes={r: StudioRoute(url=u, token=t) for r, (u, t) in settings.crew_routes.items()},
+        fallback_on=settings.crew_fallback_on, studio_poll_s=settings.crew_poll_s)
     auditor = auditor or Auditor(axe_url=settings.axe_url, axe_key=settings.axe_key, store=store)
     service = NorthSeaService(repo, research, crew)
     oauth = OAuthServer(settings, store, http)

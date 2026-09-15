@@ -1189,6 +1189,8 @@ class NorthSeaService:
         ok, reden = self.crew.available()
         uit["crewai"] = ok
         uit["crewai_detail"] = reden
+        if hasattr(self.crew, "status"):
+            uit["crewai_backends"] = self.crew.status()
         uit["research_perplexity"] = self.research.perplexity_configured
         uit["research_search"] = self.research.search_configured
         return uit

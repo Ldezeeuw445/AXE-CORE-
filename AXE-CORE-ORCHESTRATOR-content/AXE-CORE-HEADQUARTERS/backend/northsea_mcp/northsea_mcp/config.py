@@ -48,6 +48,11 @@ class Settings:
     tavily_key: str = ""
     zenserp_key: str = ""
     crew_venv_py: str = "/opt/axe-crew-venv/bin/python3"
+    # Toegewijde NorthSea CrewAI-deployments per route: {"deal_run": (url, token), ...}. Leeg = nog niet geleverd.
+    crew_routes: dict[str, tuple[str, str]] = field(default_factory=dict)
+    crew_fallback_on: tuple[str, ...] = ("dedicated_backend_not_configured", "dedicated_backend_unavailable",
+                                         "health_check_failed", "capacity_exhausted", "timeout")
+    crew_poll_s: float = 3.0
     access_token_ttl_s: int = 3600
     refresh_token_ttl_s: int = 30 * 24 * 3600
     auth_code_ttl_s: int = 300
@@ -84,7 +89,21 @@ class Settings:
             except ValueError as e:
                 raise ConfigError(f"{naam} must be an integer") from e
 
+        routes = {}
+        for route in ("discovery", "deal", "intelligence", "operations"):
+            url = (env.get(f"NORTHSEA_CREW_{route.upper()}_URL") or "").strip()
+            token = (env.get(f"NORTHSEA_CREW_{route.upper()}_TOKEN") or "").strip()
+            if url and token:
+                if not url.startswith("https://"):
+                    raise ConfigError(f"NORTHSEA_CREW_{route.upper()}_URL must be https://")
+                routes[f"{route}_run"] = (url.rstrip("/"), token)
+        fallback_raw = (env.get("NORTHSEA_CREW_FALLBACK_ON") or "").strip()
+        fallback_on = Settings.crew_fallback_on if not fallback_raw else (
+            () if fallback_raw.lower() == "none" else tuple(x.strip() for x in fallback_raw.split(",") if x.strip()))
+
         return cls(
+            crew_routes=routes,
+            crew_fallback_on=fallback_on,
             public_url=public,
             commodities_url=env["NORTHSEA_SUPABASE_URL"].strip().rstrip("/"),
             commodities_key=env["NORTHSEA_SUPABASE_SERVICE_ROLE"].strip(),

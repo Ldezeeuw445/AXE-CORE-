@@ -79,12 +79,32 @@ class ResearchRun(BaseModel):
 
 
 class CrewRunInfo(BaseModel):
+    """Het getypte crew-resultaat (CrewRunResult). Nieuwe velden zijn optioneel met een
+    standaardwaarde: bestaande clients blijven werken, en elke run is herleidbaar
+    (welke crew gevraagd, welke backend, fallback ja/nee en waarom)."""
     used: bool = False
     crew: str | None = None
     run_id: str | None = None
     status: str | None = None
     analysis: str | None = Field(default=None, description="Unverified CrewAI analysis text; never treated as fact.")
     reason: str | None = None
+    route: str | None = Field(default=None, description="discovery_run, deal_run, intelligence_run or operations_run.")
+    requested_crew: str | None = None
+    backend: Literal["northsea_crewai", "axe_general_crew"] | None = Field(
+        default=None, description="northsea_crewai = dedicated NorthSea workforce; axe_general_crew = fallback.")
+    actual_crew: str | None = None
+    fallback_used: bool = False
+    fallback_reason: str | None = None
+    models: list[str] = Field(default_factory=list)
+    skills: list[dict[str, Any]] = Field(default_factory=list, description="Skill names with versions.")
+    tools: list[str] = Field(default_factory=list, description="Tools and providers used.")
+    budget_usage: dict[str, Any] = Field(default_factory=dict)
+    timings: dict[str, float] = Field(default_factory=dict)
+    validation: Literal["valid", "invalid", "not_validated"] = "not_validated"
+    attempts: list[dict[str, Any]] = Field(default_factory=list, description="Every backend attempt, in order.")
+
+
+CrewRunResult = CrewRunInfo
 
 
 # ── Tools ────────────────────────────────────────────────────────────────────
