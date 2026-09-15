@@ -159,11 +159,12 @@ export function AppShell() {
               // de plaat een glasachtige lichtvang aan de bovenkant krijgt.
               boxShadow: '0 24px 64px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 1px rgba(255,255,255,0.02)',
               // Content van de plaatrand af: de composer en de sphere raken zo
-              // de ronde hoeken niet.
+              // de ronde hoeken niet. Onder bewust krap gehouden: zo staat de hele
+              // composer + chips lager en wint de sphere ruimte bovenin.
               paddingLeft: 14,
               paddingRight: 14,
               paddingTop: 10,
-              paddingBottom: keyboardInset || 14,
+              paddingBottom: keyboardInset || 7,
               transition: 'padding-bottom 0.18s ease-out',
             }
           : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }
