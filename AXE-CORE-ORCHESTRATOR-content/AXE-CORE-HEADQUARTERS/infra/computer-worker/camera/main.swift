@@ -31,15 +31,25 @@ func stop(_ code: Int32, _ msg: String) -> Never {
   exit(code)
 }
 
+/// Wacht zonder de hoofdthread te blokkeren. AVFoundation levert callbacks (toestemming,
+/// "foto klaar") via de hoofd-runloop; een semafoor-wacht op de hoofdthread laat die nooit
+/// door, en dan loopt elke foto in een time-out — gemeten op de iMac.
+func wachtTot(_ seconden: TimeInterval, _ klaar: () -> Bool) -> Bool {
+  let grens = Date().addingTimeInterval(seconden)
+  while !klaar() && Date() < grens {
+    RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
+  }
+  return klaar()
+}
+
 switch AVCaptureDevice.authorizationStatus(for: .video) {
 case .authorized:
   break
 case .notDetermined:
-  let wacht = DispatchSemaphore(value: 0)
-  var ok = false
-  AVCaptureDevice.requestAccess(for: .video) { ok = $0; wacht.signal() }
-  _ = wacht.wait(timeout: .now() + 120)
-  if !ok { stop(2, "geen cameratoestemming") }
+  var antwoord: Bool?
+  AVCaptureDevice.requestAccess(for: .video) { ok in DispatchQueue.main.async { antwoord = ok } }
+  _ = wachtTot(120) { antwoord != nil }
+  if antwoord != true { stop(2, "geen cameratoestemming") }
 default:
   stop(2, "geen cameratoestemming")
 }
@@ -56,7 +66,7 @@ guard session.canAddOutput(output) else { stop(4, "geen foto-uitvoer") }
 session.addOutput(output)
 
 final class Vanger: NSObject, AVCapturePhotoCaptureDelegate {
-  let klaar = DispatchSemaphore(value: 0)
+  var klaar = false
   var fout: String?
   func photoOutput(_ o: AVCapturePhotoOutput, didFinishProcessingPhoto p: AVCapturePhoto, error: Error?) {
     if let error {
@@ -66,15 +76,15 @@ final class Vanger: NSObject, AVCapturePhotoCaptureDelegate {
     } else {
       fout = "lege foto"
     }
-    klaar.signal()
+    DispatchQueue.main.async { self.klaar = true }
   }
 }
 
 session.startRunning()
-Thread.sleep(forTimeInterval: 1.5)  // belichting en witbalans laten instellen
+_ = wachtTot(1.5) { false }  // belichting en witbalans laten instellen, zonder de runloop te blokkeren
 let vanger = Vanger()
 output.capturePhoto(with: AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg]), delegate: vanger)
-if vanger.klaar.wait(timeout: .now() + 15) == .timedOut { stop(4, "time-out bij de foto") }
+if !wachtTot(15, { vanger.klaar }) { stop(4, "time-out bij de foto") }
 session.stopRunning()
 if let f = vanger.fout { stop(4, f) }
 print(uit.path)
