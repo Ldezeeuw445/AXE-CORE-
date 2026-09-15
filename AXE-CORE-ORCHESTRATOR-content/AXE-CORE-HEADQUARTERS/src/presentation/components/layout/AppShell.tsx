@@ -390,7 +390,7 @@ export function AppShell() {
           vervanging van de radiale hoekmenu's van de desktop. Op de glasplaat-
           home weg: de composer heeft z'n eigen knoppen en de FAB botste ertegen —
           de Tauri-home heeft daar ook geen zwevende hoekknop. */}
-      {mobileNav && !opPlaatMobiel && <MobileFab />}
+      {mobileNav && !opPlaatMobiel && !volScherm && <MobileFab />}
       {/* De drie kerncijfers stonden hier los boven de composer; Luka wil ze
           weg — de composer (met kop + tip-chips) is nu de basis onder de sphere,
           zoals de echte AXE CORE-home. MobileStatsRow blijft bestaan voor als we
