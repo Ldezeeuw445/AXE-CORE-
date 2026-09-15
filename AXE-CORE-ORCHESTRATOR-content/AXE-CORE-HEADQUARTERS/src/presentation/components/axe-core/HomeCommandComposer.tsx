@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { FileUploadButton, type NormalizedAttachment } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
-import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 
 interface Props {
   value: string;
@@ -58,18 +57,16 @@ export function HomeCommandComposer(props: Props) {
   // bolletje; tik = claude (+ pijltje) schuift open, tik weer = dicht.
   const [modelOpen, setModelOpen] = useState(false);
 
-  // Lichte stand: de grond is nu écht licht (blauw→grijs), dus de tekst die
-  // DIRECT op de plaat ligt (AXE CORE, model, klok, chips) moet donkere inkt
-  // krijgen — anders licht-op-licht. De composer-doos zelf blijft donker glas,
-  // die drijft erbovenop.
-  const light = useLookValue() === 'glass';
-  const axeInk = light ? '#0e7490' : 'var(--accent-cyan)';
-  const headInk = light ? '#243043' : 'var(--text-primary)';
-  const subInk = light ? 'rgba(36,48,67,0.62)' : 'rgba(255,255,255,0.5)';
-  const chipBg = light ? 'rgba(20,28,45,0.05)' : 'rgba(255,255,255,0.035)';
-  const chipBorder = light ? 'rgba(20,28,45,0.16)' : 'rgba(255,255,255,0.09)';
-  const pillBg = light ? 'rgba(20,28,45,0.05)' : 'rgba(255,255,255,0.05)';
-  const pillBorder = light ? 'rgba(20,28,45,0.16)' : 'rgba(255,255,255,0.09)';
+  // De plaat blijft in BEIDE standen donker glas — alleen de achtergrond
+  // eromheen wisselt licht/donker. Dus de inkt op de plaat blijft altijd licht
+  // (anders sloeg de lichte stand wit uit).
+  const axeInk = 'var(--accent-cyan)';
+  const headInk = 'var(--text-primary)';
+  const subInk = 'rgba(255,255,255,0.5)';
+  const chipBg = 'rgba(255,255,255,0.035)';
+  const chipBorder = 'rgba(255,255,255,0.09)';
+  const pillBg = 'rgba(255,255,255,0.05)';
+  const pillBorder = 'rgba(255,255,255,0.09)';
 
   // Een tip-chip is een echte actie: staat er een concept, dan stuurt hij dat
   // meteen met de richtlijn eromheen (AXE verheldert / geeft context / kiest de

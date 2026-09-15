@@ -593,14 +593,16 @@ html:root[data-look],
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
    een dichte kaart wordt. */
-/* Frosted glas. Lichte stand: een witte matglas-sluier op de licht-blauwe grond,
-   met een donkerder randje zodat de plaat zich aftekent op het licht. Donkere
-   stand: melkige vulling + zachte lichtbloei bovenaan (matglas dat licht vangt). */
+/* De plaat blijft in BEIDE standen DONKER glas — alleen de grond eromheen
+   (MobileGlass) wisselt licht/donker. Lichte stand: de grond is licht-blauw→grijs,
+   maar de plaat zelf is gerookt donker glas dat erop drijft (anders sloeg hij wit
+   uit). Genoeg dekking dat het licht er niet doorheen wast, met een zachte
+   lichtbloei bovenaan voor het frosted-gevoel. */
 :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
   background:
-    radial-gradient(130% 80% at 50% -12%, rgba(255, 255, 255, 0.40), rgba(255, 255, 255, 0) 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.07) 100%) !important;
-  border: 1px solid rgba(38, 52, 78, 0.18) !important;
+    radial-gradient(130% 80% at 50% -12%, rgba(210, 224, 255, 0.08), rgba(210, 224, 255, 0) 62%),
+    linear-gradient(180deg, rgba(16, 18, 28, 0.82) 0%, rgba(12, 14, 22, 0.88) 55%, rgba(9, 11, 18, 0.92) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 :root[data-look='black'] .axe-shell.axe-plaat-mobiel {
   background:
