@@ -182,9 +182,12 @@ function cameraShot(file) {
     execFile(CAMERA_BIN, [file], { timeout: 45_000 }, (err, _stdout, stderr) => {
       if (!err) return res();
       if (err.code === 'ENOENT') {
-        return rej(new Error(`camera-tool ontbreekt: bouw hem met xcrun swiftc -O -o ${CAMERA_BIN} ${join(HERE, 'camera', 'main.swift')}`));
+        return rej(new Error(`camera-tool ontbreekt: bouw hem volgens ${join(HERE, 'camera', 'main.swift')} (swiftc + Info.plist + codesign)`));
       }
-      const uitleg = { 2: 'geen cameratoestemming — sta de camera toe op deze Mac', 3: 'deze Mac heeft geen camera' }[err.code];
+      const uitleg = {
+        2: 'geen cameratoestemming — klik "Sta toe" op deze Mac, of zet AXE Camera aan in Systeeminstellingen → Privacy en beveiliging → Camera',
+        3: 'deze Mac heeft geen camera',
+      }[err.code];
       rej(new Error(uitleg ?? `camera mislukt: ${String(stderr ?? err.message).trim().slice(0, 200)}`));
     });
   });

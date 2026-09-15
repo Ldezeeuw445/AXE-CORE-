@@ -1,11 +1,15 @@
 // axe-camera <uitvoer.jpg> — maakt één foto met de ingebouwde camera en stopt.
 //
-// De computer-worker roept dit aan voor `camera.snapshot`. Bouwen op de Mac zelf:
-//   xcrun swiftc -O -o infra/computer-worker/camera/axe-camera infra/computer-worker/camera/main.swift
+// De computer-worker roept dit aan voor `camera.snapshot`. Bouwen op de Mac zelf, vanuit
+// infra/computer-worker/camera:
+//   xcrun swiftc -O -o axe-camera main.swift \
+//     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker Info.plist
+//   codesign --force -s - -i com.axe.camera axe-camera
 //
-// macOS vraagt de eerste keer toestemming voor de camera, en koppelt die aan het
-// proces dat de worker start (launchd → zsh → node). Via SSH verschijnt die vraag
-// niet en komt er exit 2 terug; geef de toestemming dus op de Mac zelf.
+// Beide stappen zijn nodig. Zonder ingebakken Info.plist (NSCameraUsageDescription)
+// weigert macOS de camera zonder te vragen; zonder vaste identifier hoort een eerdere
+// weigering bij een willekeurige ad-hoc-handtekening en komt de vraag nooit terug.
+// De eerste keer verschijnt de vraag op het scherm van de Mac zelf: klik "Sta toe".
 //
 // Exit: 0 gelukt (pad op stdout) · 2 geen toestemming · 3 geen camera · 4 mislukt · 64 verkeerd gebruik.
 import AVFoundation
