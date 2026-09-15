@@ -33,16 +33,11 @@ import { Sun, Moon } from 'lucide-react';
  * (chat, cijferregel) liggen hier bovenop en vervagen deze grond.
  */
 
-// LICHT — een zacht licht "landschap" waar het frosted glas doorheen kijkt, net
-// als de Tauri-shell op de Mac (native glas dat het bureaublad toont). Geen echte
-// foto (rechten), maar wél variatie — licht bovenin, een lichte wolk, een teal
-// gloed onderin — zodat het matglas iets heeft om te tonen i.p.v. vlak wit uit
-// te slaan. De plaat vervaagt dit tot glas (backdrop-filter, zie axe-look.css).
+// LICHT — de lichte stand: licht-blauw bovenaan dat naar onderen steeds iets
+// donkerder wordt. Verder niets bijzonders; de plaat en de chrome blijven zoals
+// ze waren, alleen deze grond verschilt van de donkere stand.
 const LICHT =
-  'radial-gradient(72% 55% at 26% 14%, rgba(255,255,255,0.85), rgba(255,255,255,0) 60%),' +
-  'radial-gradient(84% 60% at 80% 24%, rgba(196,224,247,0.75), rgba(196,224,247,0) 62%),' +
-  'radial-gradient(96% 72% at 50% 106%, rgba(120,180,190,0.60), rgba(120,180,190,0) 66%),' +
-  'linear-gradient(180deg, #bfd9f1 0%, #a9c6da 44%, #93b3bd 78%, #86a2ab 100%)';
+  'linear-gradient(180deg, #bfe0f5 0%, #96bfe0 30%, #5e88b4 58%, #33547d 80%, #1b3350 100%)';
 
 // NU / ZWART — puur mat zwart, met heel subtiel licht dat schuin ónder de
 // glasplaat langs strijkt: van boven-midden/links naar onder-midden/rechts.
