@@ -510,10 +510,10 @@ html:root[data-look],
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
    een dichte kaart wordt. */
 :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
-  background: linear-gradient(180deg, rgba(200, 214, 255, 0.12) 0%, rgba(172, 192, 242, 0.05) 46%, rgba(150, 170, 226, 0.022) 100%) !important;
+  background: linear-gradient(180deg, rgba(202, 216, 255, 0.16) 0%, rgba(174, 194, 244, 0.075) 46%, rgba(152, 172, 228, 0.035) 100%) !important;
 }
 :root[data-look='black'] .axe-shell.axe-plaat-mobiel {
-  background: linear-gradient(180deg, rgba(188, 206, 246, 0.085) 0%, rgba(158, 178, 226, 0.032) 50%, rgba(140, 160, 216, 0.013) 100%) !important;
+  background: linear-gradient(180deg, rgba(190, 208, 248, 0.115) 0%, rgba(160, 180, 228, 0.05) 50%, rgba(142, 162, 218, 0.022) 100%) !important;
 }
 
 /* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de

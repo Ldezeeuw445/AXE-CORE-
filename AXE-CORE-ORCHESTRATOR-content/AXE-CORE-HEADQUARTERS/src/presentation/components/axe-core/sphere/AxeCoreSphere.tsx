@@ -119,30 +119,30 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       return { px: cx + X * R * persp, py: cy + Y * R * persp, depth: (Z + 1) / 2 };
     };
 
-    /* De helft van de ring die achter (voor=false) of vóór het midden langs
-       loopt. Goud: één warme lijn tussen al dat koele blauw valt op zonder fel
-       te zijn. In twee helften, want dát is wat een ring van een cirkel
-       onderscheidt. */
+    /* De ring, als DEELTJES i.p.v. een lijn — een ketting gouden puntjes om de
+       bol. Goud: één warme kleur tussen al dat koele blauw valt op zonder fel te
+       zijn. In twee helften (voor=false achterlangs, voor=true voorlangs), want
+       dát is wat een ring van een platte cirkel onderscheidt: de achterste helft
+       ijler, de voorste steviger, zodat hij er echt omhéén loopt. */
+    const RING_N = 150;
     const ringHelft = (cx: number, cy: number, R: number, voor: boolean) => {
       const straal = R * 0.74;
-      x.lineWidth = Math.max(1, 1.15 * d);
-      x.beginPath();
-      let begonnen = false;
-      for (let i = 0; i <= 180; i++) {
-        const a = (i / 180) * 6.2832;
+      for (let i = 0; i < RING_N; i++) {
+        const a = (i / RING_N) * 6.2832;
         const X0 = Math.cos(a), Z0 = Math.sin(a);
         const X = X0 * cyv - Z0 * syv;
         let Z = X0 * syv + Z0 * cyv;
         const Y = -Z * sxv;
         Z = Z * cxv;
-        if ((Z > 0) !== voor) { begonnen = false; continue; }
+        if ((Z > 0) !== voor) continue;
         const persp = 1.9 / (2.4 - Z);
         const px = cx + X * straal * persp, py = cy + Y * straal * persp;
-        if (begonnen) x.lineTo(px, py); else x.moveTo(px, py);
-        begonnen = true;
+        const depth = (Z + 1) / 2;
+        x.fillStyle = voor
+          ? `rgba(228,210,120,${(0.55 + depth * 0.42).toFixed(3)})`
+          : `rgba(210,192,96,${(0.20 + depth * 0.30).toFixed(3)})`;
+        x.beginPath(); x.arc(px, py, (0.75 + depth * 1.25) * d, 0, 6.284); x.fill();
       }
-      x.strokeStyle = voor ? 'rgba(212,196,86,.62)' : 'rgba(212,196,86,.26)';
-      x.stroke();
     };
 
     /* Deeltjes voller en iets groter dan eerst.
@@ -173,8 +173,8 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth > 0.5) continue;
-        x.fillStyle = `rgba(120,205,240,${(0.20 + q.depth * 0.56).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.8 + q.depth * 1.5) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(130,212,246,${(0.26 + q.depth * 0.60).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.95 + q.depth * 1.6) * d, 0, 6.284); x.fill();
       }
 
       ringHelft(cx, cy, R, false);
@@ -197,15 +197,16 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth <= 0.5) continue;
-        x.fillStyle = `rgba(150,228,255,${(0.26 + q.depth * 0.66).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.8 + q.depth * 1.6) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(160,232,255,${(0.34 + q.depth * 0.66).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.95 + q.depth * 1.7) * d, 0, 6.284); x.fill();
       }
 
       for (const p of bol) {
         const q = proj(p, cx, cy, R);
-        // Iets groter en steviger dan eerst: Luka wil de korrel wat duidelijker.
-        const size = (1.0 + q.depth * 2.35) * d * (0.9 + b * 0.4);
-        x.fillStyle = `rgba(${p.rgb},${(0.44 + q.depth * 0.56).toFixed(3)})`;
+        // Groter en steviger: Luka wil de korrel duidelijker — zowel de buitenschil
+        // als de binnenbol met deeltjes.
+        const size = (1.15 + q.depth * 2.55) * d * (0.9 + b * 0.4);
+        x.fillStyle = `rgba(${p.rgb},${(0.52 + q.depth * 0.48).toFixed(3)})`;
         x.beginPath(); x.arc(q.px, q.py, size, 0, 6.284); x.fill();
       }
 
