@@ -33,23 +33,19 @@ import { Sun, Moon } from 'lucide-react';
  * (chat, cijferregel) liggen hier bovenop en vervagen deze grond.
  */
 
-// LICHT — een kleur-gradient met dezelfde kleur-flow als Luka's bureaubladfoto
-// (Moraine Lake): blauwe lucht → witte wolken → grijze bergen → groene bossen →
-// donker naar onder, eindigend in ZWART (zodat de onderkant, waar de Samsung-
-// systeembalk zit, zwart is). De frosted plaat (backdrop-blur, axe-look.css)
-// vervaagt dit tot matglas — geen foto, wel dezelfde kleur-flow.
+// LICHT — een schone blauw-gradient: licht-blauw bovenaan → steeds donkerder
+// blauw → zwart onderin (waar de Samsung-systeembalk zit). Geen groen/grijs meer:
+// die kleuren zaten óók in de sphere en maakten hem juist onduidelijker. Één
+// blauwe flow leest rustiger, en de frosted plaat (backdrop-blur, axe-look.css)
+// vervaagt hem tot zacht matglas waar de sphere scherp op staat.
 const LICHT =
   'linear-gradient(180deg,' +
-  ' #9cc4e6 0%,' +   /* blauwe lucht */
-  ' #bcd8ec 12%,' +  /* lichtere lucht */
-  ' #d9e7f1 22%,' +  /* witte wolken */
-  ' #a8c3db 33%,' +  /* lucht weer */
-  ' #8b93a1 46%,' +  /* grijze berg */
-  ' #6f7680 58%,' +  /* donkerder grijs */
-  ' #5f6f5a 68%,' +  /* grijs-groen (scree) */
-  ' #47643f 78%,' +  /* groen bos */
-  ' #2b4030 87%,' +  /* donkergroen */
-  ' #132018 93%,' +  /* bijna zwart */
+  ' #c2e1f6 0%,' +   /* licht-blauw */
+  ' #93bfe3 26%,' +  /* blauw */
+  ' #5c8abb 50%,' +  /* donkerder blauw */
+  ' #345680 72%,' +  /* diep blauw */
+  ' #1a3050 86%,' +  /* navy */
+  ' #0a1424 94%,' +  /* bijna zwart */
   ' #000000 100%)';  /* zwart onder (systeembalk) */
 
 // NU / ZWART — puur mat zwart, met heel subtiel licht dat schuin ónder de
