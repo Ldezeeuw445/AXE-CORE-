@@ -593,11 +593,18 @@ html:root[data-look],
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
    een dichte kaart wordt. */
+/* Frosted glas: een melkige vulling PLUS een zachte lichtbloei bovenaan — het
+   punt waar matglas het licht vangt. Samen leest de plaat wazig/frosted i.p.v.
+   als een strak vlak, dichter bij de Tauri-look. */
 :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
-  background: linear-gradient(180deg, rgba(202, 216, 255, 0.16) 0%, rgba(174, 194, 244, 0.075) 46%, rgba(152, 172, 228, 0.035) 100%) !important;
+  background:
+    radial-gradient(130% 80% at 50% -12%, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, rgba(204, 218, 255, 0.20) 0%, rgba(176, 196, 246, 0.095) 46%, rgba(154, 174, 230, 0.045) 100%) !important;
 }
 :root[data-look='black'] .axe-shell.axe-plaat-mobiel {
-  background: linear-gradient(180deg, rgba(190, 208, 248, 0.115) 0%, rgba(160, 180, 228, 0.05) 50%, rgba(142, 162, 218, 0.022) 100%) !important;
+  background:
+    radial-gradient(130% 80% at 50% -12%, rgba(212, 222, 255, 0.11), rgba(212, 222, 255, 0) 62%),
+    linear-gradient(180deg, rgba(192, 210, 250, 0.15) 0%, rgba(162, 182, 230, 0.062) 50%, rgba(144, 164, 220, 0.028) 100%) !important;
 }
 
 /* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de

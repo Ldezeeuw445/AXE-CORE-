@@ -43,11 +43,14 @@ const GLAS_DONKER =
   'radial-gradient(900px 760px at 74% 108%, rgba(46,120,168,0.16), rgba(46,120,168,0) 62%),' +
   'linear-gradient(180deg, #17182e 0%, #101124 46%, #090a13 100%)';
 
-// NU / ZWART — vlak, bijna zwart. Eén hele zachte radiaal houdt het levend
-// zonder banding; verder zo dicht bij zuiver zwart als de mockup.
+// NU / ZWART — donker, maar niet dood-vlak zwart: een zweem blauw-paars (de
+// Tauri-look is nooit zuiver zwart). Een zachte indigo/violette gloed bovenin
+// over een heel donkere blauw-zwarte grond; nog steeds duidelijk "donker", maar
+// met leven erin.
 const ZWART =
-  'radial-gradient(900px 700px at 50% 8%, rgba(20,24,40,0.55), rgba(20,24,40,0) 60%),' +
-  'linear-gradient(180deg, #05060a 0%, #030407 60%, #010103 100%)';
+  'radial-gradient(1000px 780px at 50% 0%, rgba(58,54,104,0.42), rgba(58,54,104,0) 58%),' +
+  'radial-gradient(760px 620px at 88% 14%, rgba(70,58,120,0.22), rgba(70,58,120,0) 60%),' +
+  'linear-gradient(180deg, #0b0c18 0%, #08080f 55%, #050509 100%)';
 
 // Heel fijne korrel, zodat het glas niet als plat karton leest. Eén kleine SVG
 // als data-URI, laag in dekking — kost niets en tilt de vlakken net op.

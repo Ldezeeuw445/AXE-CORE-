@@ -71,7 +71,7 @@ export function HomeCommandComposer(props: Props) {
   const ICON = 13;
 
   return (
-    <div className="flex flex-col gap-1.5 px-1 pb-1">
+    <div className="flex flex-col gap-1.5 px-1 pb-0">
       {/* Kopregel: modelkiezer + AXE CORE links, klok + instellingen rechts. */}
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2 min-w-0">

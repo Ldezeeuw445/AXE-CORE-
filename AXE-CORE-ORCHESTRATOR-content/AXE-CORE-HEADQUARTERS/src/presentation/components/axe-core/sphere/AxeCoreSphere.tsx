@@ -164,7 +164,10 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       // oogt het gecentreerde midden te laag. 0.40 tilt de bol wat verder op
       // zonder hem tegen de bovenrand te duwen.
       const cx = w / 2, cy = h * 0.40;
-      const R = Math.min(w, h) * 0.31 * zoom;
+      // Iets groter standaard (0.31 -> 0.34): op klein formaat lagen de deeltjes
+      // te dicht op elkaar en versmolten tot één waas. Meer straal = meer lucht
+      // tussen de punten, dus ook zonder inzoomen leest de korrel.
+      const R = Math.min(w, h) * 0.34 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
 
       // Binnenbol op 46% van de straal: je ziet hem door de buitenste heen
@@ -181,16 +184,19 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       // Twee gradients: één wijde gloed en één felle punt. Eén gradient geeft
       // óf een vlek óf een stip, nooit allebei.
+      // Minder gloed dan eerst: de wijde waas en de hete kern maakten van de bol
+      // op klein formaat één lichtende bol i.p.v. deeltjes. Gedempt zodat de
+      // korrel wint; bij inzoomen blijft er genoeg kern voor diepte.
       const wijd = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.55 * puls);
-      wijd.addColorStop(0, `rgba(110,200,240,${(0.18 + b * 0.1).toFixed(3)})`);
-      wijd.addColorStop(0.45, 'rgba(60,130,190,.06)');
+      wijd.addColorStop(0, `rgba(110,200,240,${(0.10 + b * 0.08).toFixed(3)})`);
+      wijd.addColorStop(0.45, 'rgba(60,130,190,.03)');
       wijd.addColorStop(1, 'rgba(0,0,0,0)');
       x.fillStyle = wijd;
       x.beginPath(); x.arc(cx, cy, R * 0.55 * puls, 0, 6.284); x.fill();
 
-      const kern = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.12 * puls);
-      kern.addColorStop(0, `rgba(240,252,255,${(0.72 + b * 0.25).toFixed(3)})`);
-      kern.addColorStop(0.42, 'rgba(120,215,245,.30)');
+      const kern = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.11 * puls);
+      kern.addColorStop(0, `rgba(240,252,255,${(0.44 + b * 0.22).toFixed(3)})`);
+      kern.addColorStop(0.42, 'rgba(120,215,245,.16)');
       kern.addColorStop(1, 'rgba(0,0,0,0)');
       x.fillStyle = kern;
       x.beginPath(); x.arc(cx, cy, R * 0.12 * puls, 0, 6.284); x.fill();
