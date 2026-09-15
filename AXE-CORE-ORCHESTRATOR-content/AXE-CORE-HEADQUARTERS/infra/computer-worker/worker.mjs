@@ -29,9 +29,9 @@
  * Run:  node infra/axe-computer-worker/worker.mjs
  */
 import { execFile } from 'node:child_process';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { resolve, sep, join, dirname } from 'node:path';
-import { homedir, hostname } from 'node:os';
+import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -162,7 +162,54 @@ const COMMANDS = {
 const READ_ONLY = new Set([
   'system.info', 'files.list', 'files.read', 'files.search',
   'git.status', 'git.branch', 'git.diff', 'git.log',
+  // Raakt de repo niet: de foto gaat naar de privé-bucket, dus ook toegestaan op orchestrator.
+  'camera.snapshot',
 ]);
+
+/**
+ * camera.snapshot — één foto met de ingebouwde camera, naar de privé-bucket `axe-camera`.
+ *
+ * Alleen zinvol op een Mac met camera (de iMac). De foto staat nooit publiek: de
+ * bucket heeft geen publieke URL en alleen Luka's ingelogde account mag hem lezen.
+ * Het resultaat is het pad in de bucket, niet de foto zelf, zodat core_tasks geen
+ * beelden bevat.
+ */
+const CAMERA_BIN = env.AXE_CAMERA_BIN ?? join(HERE, 'camera', 'axe-camera');
+const CAMERA_BUCKET = 'axe-camera';
+
+function cameraShot(file) {
+  return new Promise((res, rej) => {
+    execFile(CAMERA_BIN, [file], { timeout: 45_000 }, (err, _stdout, stderr) => {
+      if (!err) return res();
+      if (err.code === 'ENOENT') {
+        return rej(new Error(`camera-tool ontbreekt: bouw hem met xcrun swiftc -O -o ${CAMERA_BIN} ${join(HERE, 'camera', 'main.swift')}`));
+      }
+      const uitleg = { 2: 'geen cameratoestemming — sta de camera toe op deze Mac', 3: 'deze Mac heeft geen camera' }[err.code];
+      rej(new Error(uitleg ?? `camera mislukt: ${String(stderr ?? err.message).trim().slice(0, 200)}`));
+    });
+  });
+}
+
+async function cameraSnapshot() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = join(tmpdir(), `axe-camera-${process.pid}-${stamp}.jpg`);
+  try {
+    await cameraShot(file);
+    const data = await readFile(file);
+    const object = `${DEVICE_ID}/${stamp}.jpg`;
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${CAMERA_BUCKET}/${object}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'image/jpeg' },
+      body: data,
+    });
+    if (!res.ok) {
+      throw new Error(`upload mislukt: ${res.status} ${(await res.text().catch(() => '')).slice(0, 160)}`);
+    }
+    return `bucket ${CAMERA_BUCKET}\npad ${object}\nbytes ${data.length}`;
+  } finally {
+    await unlink(file).catch(() => {});
+  }
+}
 
 /* ── supabase ───────────────────────────────────────────────────────────── */
 function sb(path, init = {}) {
@@ -345,6 +392,8 @@ async function execute(payload) {
   switch (tool) {
     case 'system.info':
       return `host ${hostname()}\nworkspace ${workspace}\nroot ${root}\nbranch ${branch}\nnode ${process.version}`;
+
+    case 'camera.snapshot': return cameraSnapshot();
 
     case 'git.branch':  return branch || '(detached)';
     case 'git.status':  return git(root, 'status', '--porcelain', '-b');
