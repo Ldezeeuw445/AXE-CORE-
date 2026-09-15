@@ -637,9 +637,9 @@ function ProviderKeysSection() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+        <div className="min-w-0">
+          <h2 className="text-body font-semibold flex items-center gap-2 whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
             <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> Provider Keys
           </h2>
           <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
