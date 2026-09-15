@@ -509,15 +509,19 @@ html:root[data-look],
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
    een dichte kaart wordt. */
-/* Lichte stand: dezelfde subtiele plaat als de donkere (geen backdrop-filter —
-   die maakte de vaste licht/donker-knop t.o.v. de plaat i.p.v. het scherm en
-   verschoof 'm). Alleen de grond eronder (MobileGlass) verschilt: licht-blauw dat
-   naar onderen donkerder wordt. De inkt op de plaat blijft licht. */
+/* Lichte stand = FROSTED glas over de kleur-grond (MobileGlass): een echte
+   backdrop-blur vervaagt de kleurige gradient tot matglas, met een lichte sluier
+   erover. Zo tekent de plaat zich af tegen de grond en scheidt hij de sphere van
+   de achtergrond (die vervaagt erachter, de sphere blijft scherp erop).
+   De licht/donker-knop staat buiten de schil (AppShell), dus deze backdrop-filter
+   verschuift hem niet meer. */
 :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
   background:
-    radial-gradient(130% 80% at 50% -12%, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0) 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    radial-gradient(130% 80% at 50% -14%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, rgba(246, 249, 252, 0.16) 0%, rgba(238, 243, 249, 0.10) 100%) !important;
+  backdrop-filter: blur(30px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.34) !important;
 }
 :root[data-look='black'] .axe-shell.axe-plaat-mobiel {
   background:

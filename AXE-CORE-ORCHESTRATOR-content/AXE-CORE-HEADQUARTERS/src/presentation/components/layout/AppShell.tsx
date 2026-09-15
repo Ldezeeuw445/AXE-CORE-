@@ -139,6 +139,23 @@ export function AppShell() {
           desktop-balken (TopNav/Sidebar) blijven op mobiel weg. */}
       {opPlaat && <PlaatViewSwitch />}
 
+      {/* Licht/donker-knop rechtsboven op de telefoon. BUITEN de schil, want de
+          schil krijgt in de lichte stand een backdrop-filter (frosted glas) en
+          dat maakt een vast-gepositioneerd kind t.o.v. de schil i.p.v. het scherm
+          — dan verschuift de knop mee met de plaat. Hierbuiten blijft hij vast
+          aan de schermhoek. */}
+      {mobileNav && (
+        <div
+          className="fixed z-[70]"
+          style={{
+            top: opHome ? 'calc(env(safe-area-inset-top, 0px) + 22px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            right: opHome ? 24 : 12,
+          }}
+        >
+          <LookToggle />
+        </div>
+      )}
+
     <div
       className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opHome ? ' axe-plaat-mobiel' : ''}`}
       style={
@@ -256,21 +273,6 @@ export function AppShell() {
             precies zoals de Tauri-app. */}
       {!mobileNav && keyboardInset === 0 && <BottomNav />}
       {mobileNav && <MobileNav />}
-      {/* Licht/donker-knop rechtsboven op de telefoon — op de desktop zit die
-          in de TopNav, maar die is hier verborgen. Zo kun je de plaat ook op
-          mobiel omklappen, net als in de Tauri-app. */}
-      {mobileNav && (
-        <div
-          className="fixed z-[70]"
-          style={{
-            // Op de home binnen de glasplaat-rand; anders in de schermhoek.
-            top: opHome ? 'calc(env(safe-area-inset-top, 0px) + 22px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
-            right: opHome ? 24 : 12,
-          }}
-        >
-          <LookToggle />
-        </div>
-      )}
       {/* Slimme hoekknop (mobiel): snelacties binnen duim-bereik, de mobiel-eigen
           vervanging van de radiale hoekmenu's van de desktop. Op de glasplaat-
           home weg: de composer heeft z'n eigen knoppen en de FAB botste ertegen —
