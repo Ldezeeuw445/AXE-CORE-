@@ -231,8 +231,11 @@ export function Stat({
  * on the last row stretching to full width is exactly the raggedness this is
  * meant to remove.
  */
+// Op de telefoon horen de kerncijfers náást elkaar in één compacte rij (3 kolommen,
+// natuurlijke hoogte) — niet als drie manshoge kaarten onder elkaar die de rest van
+// de pagina wegduwen. Vanaf sm het oude auto-fit-rooster met vaste rijhoogte.
 export const STAT_ROW =
-  'grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]';
+  'grid grid-cols-3 gap-2 mb-3 sm:gap-3 sm:mb-4 sm:[grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] sm:[grid-auto-rows:104px]';
 
 /** The content grid. Equal columns, equal rows, cards scroll inside. */
 export const CARD_GRID =

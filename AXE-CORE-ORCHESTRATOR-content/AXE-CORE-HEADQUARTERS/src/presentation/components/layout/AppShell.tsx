@@ -300,7 +300,9 @@ export function AppShell() {
                 className="flex-1 min-h-0 flex flex-col"
                 style={
                   mobileCommandSurface && location.pathname !== '/mobile' && location.pathname !== '/lock'
-                    ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 52px)' }
+                    // Net genoeg om onder de zwevende top-bar (view-switcher) en de
+                    // hamburger te blijven; de 52 gaf een grote lege plek bovenin.
+                    ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 30px)' }
                     : undefined
                 }
               >
