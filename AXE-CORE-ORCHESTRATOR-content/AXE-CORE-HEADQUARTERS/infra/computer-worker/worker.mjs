@@ -38,8 +38,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
 
-function loadEnv() {
-  const p = join(REPO, '.env');
+function loadEnvFile(p) {
   if (!existsSync(p)) return {};
   const out = {};
   for (const line of readFileSync(p, 'utf8').split('\n')) {
@@ -48,10 +47,20 @@ function loadEnv() {
   }
   return out;
 }
-const env = { ...loadEnv(), ...process.env };
+// De frontend-.env én de backend-.env.local van deze Mac. De tweede heeft de
+// service-sleutel: core_tasks is niet meer open voor anon, omdat de anon-sleutel
+// in elke app-build zit en wie hem uitleest anders taken op deze Mac kon zetten.
+const env = {
+  ...loadEnvFile(join(REPO, '.env')),
+  ...loadEnvFile(join(REPO, 'backend/axe_api/.env.local')),
+  ...process.env,
+};
 
-const SUPABASE_URL = env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = env.SUPABASE_URL ?? env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = env.SUPABASE_SERVICE_ROLE ?? env.VITE_SUPABASE_ANON_KEY;
+if (!env.SUPABASE_SERVICE_ROLE) {
+  console.warn('axe-computer-worker: geen SUPABASE_SERVICE_ROLE in backend/axe_api/.env.local — valt terug op de anon-sleutel, en die mag core_tasks niet meer lezen.');
+}
 const CAPABILITY = 'computer_use';
 const POLL_MS = Number(env.AXE_COMPUTER_POLL_MS ?? 1500);
 const LEASE_MS = 90_000;
