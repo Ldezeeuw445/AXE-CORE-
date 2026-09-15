@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { FileUploadButton, type NormalizedAttachment } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
+import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 
 interface Props {
   value: string;
@@ -57,16 +58,20 @@ export function HomeCommandComposer(props: Props) {
   // bolletje; tik = claude (+ pijltje) schuift open, tik weer = dicht.
   const [modelOpen, setModelOpen] = useState(false);
 
-  // De plaat blijft in BEIDE standen donker glas — alleen de achtergrond
-  // eromheen wisselt licht/donker. Dus de inkt op de plaat blijft altijd licht
-  // (anders sloeg de lichte stand wit uit).
-  const axeInk = 'var(--accent-cyan)';
+  // Lichte stand = de Tauri-shell: de plaat is LICHT frosted glas. De chrome
+  // blijft donker (composer, chips, model-pil = donkere pillen met lichte tekst),
+  // maar de kale tekst die DIRECT op het lichte glas ligt (AXE CORE, klok,
+  // instellingen) krijgt donkere inkt zodat het leesbaar blijft.
+  const light = useLookValue() === 'glass';
+  const axeInk = light ? '#0c6b7a' : 'var(--accent-cyan)';
+  const subInk = light ? 'rgba(26,36,52,0.66)' : 'rgba(255,255,255,0.5)';
+  // Model-pil en chips zijn donkere pillen (in beide standen lichte tekst); op
+  // het lichte glas wat donkerder/dekker zodat ze zich aftekenen.
   const headInk = 'var(--text-primary)';
-  const subInk = 'rgba(255,255,255,0.5)';
-  const chipBg = 'rgba(255,255,255,0.035)';
-  const chipBorder = 'rgba(255,255,255,0.09)';
-  const pillBg = 'rgba(255,255,255,0.05)';
-  const pillBorder = 'rgba(255,255,255,0.09)';
+  const chipBg = light ? 'rgba(20,25,36,0.36)' : 'rgba(255,255,255,0.035)';
+  const chipBorder = light ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.09)';
+  const pillBg = light ? 'rgba(20,25,36,0.36)' : 'rgba(255,255,255,0.05)';
+  const pillBorder = light ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.09)';
 
   // Een tip-chip is een echte actie: staat er een concept, dan stuurt hij dat
   // meteen met de richtlijn eromheen (AXE verheldert / geeft context / kiest de
