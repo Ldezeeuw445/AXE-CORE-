@@ -199,8 +199,11 @@ export function PlaatChat() {
     if (proj) showOnSphere(proj);
   };
 
-  const handleChatSend = async () => {
-    const t = chatText.trim();
+  // `override` laat een tip-chip een bewerkte prompt sturen zonder eerst de
+  // invoer-state te moeten bijwerken (die is async). Zonder override telt het
+  // veld, zoals altijd.
+  const handleChatSend = async (override?: string) => {
+    const t = (override ?? chatText).trim();
     if (!t && attachments.length === 0) return;
 
     if (shouldDismissProjection(t)) {
@@ -367,8 +370,11 @@ export function PlaatChat() {
                   streep eronder -- twee regels chroom voordat het gesprek zelf
                   begon. Ze horen op de kopregel: het is dezelfde informatie
                   ("welk gesprek kijk je"), en de demo heeft daar één lijn. */}
-              {!isMobile && !collapsed && voice.allConversations.length > 1 && (
-                <span className="axe-convs flex items-center gap-1 overflow-x-auto">
+              {/* Ook op de telefoon zichtbaar zodra de chat open is: de klok-knop
+                  in de composer opent de chat als "geschiedenis", en dan wil je
+                  hier je eerdere gesprekken kunnen kiezen (ze scrollen zijwaarts). */}
+              {!collapsed && voice.allConversations.length > 1 && (
+                <span className="axe-convs flex items-center gap-1 overflow-x-auto max-w-[60vw]">
                   {voice.allConversations.slice(0, 4).map(conv => (
                     <button
                       key={conv.id}
@@ -479,6 +485,8 @@ export function PlaatChat() {
                   value={chatText}
                   onChange={setChatText}
                   onSend={() => void handleChatSend()}
+                  onRunChip={(full) => void handleChatSend(full)}
+                  onHistory={() => { void voice.loadAllConversations(); openChat(); }}
                   onMic={() => void handleChatMic()}
                   isListening={chatIsListening}
                   attachments={attachments}

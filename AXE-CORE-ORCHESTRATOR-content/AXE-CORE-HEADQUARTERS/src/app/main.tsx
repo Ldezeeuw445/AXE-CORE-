@@ -3,6 +3,7 @@ import { HashRouter } from 'react-router'
 import { Toaster } from 'sonner'
 import '@/app/index.css'
 import { applyStoredLookEarly } from '@/presentation/hooks/useLook'
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl'
 
 // Vóór de eerste render: anders ziet frame 1 de standaardstand en klapt het
 // scherm daarna om -- een flits die eruitziet als een fout.
@@ -56,10 +57,15 @@ const inAndroidShell =
   typeof window !== 'undefined' &&
   (window as unknown as Record<string, unknown>).__AXE_ANDROID__ !== undefined;
 
+// Ook overslaan in de Tauri-webview (desktop én Android): die serveert de bundle
+// van tauri.localhost / uit de APK, er is geen /sw.js, en de mislukte registratie
+// kwam als rode foutbanner over de app te staan. Tauri heeft de PWA-SW niet nodig.
+const inTauri = isTauriRuntime();
+
 // Never register SW during Vite dev — sw.js is not served and breaks Safari/Chrome reload
 const isDev = import.meta.env.DEV;
 
-if ('serviceWorker' in navigator && !inAndroidShell && !isDev) {
+if ('serviceWorker' in navigator && !inAndroidShell && !inTauri && !isDev) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {

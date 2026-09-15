@@ -27,6 +27,10 @@ interface Props {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
+  /** Een tip-chip stuurt de bewerkte prompt meteen (met de richtlijn eromheen). */
+  onRunChip: (fullText: string) => void;
+  /** De klok opent de gespreksgeschiedenis (klapt de chat open). */
+  onHistory: () => void;
   onMic: () => void;
   isListening: boolean;
   attachments: NormalizedAttachment[];
@@ -46,13 +50,17 @@ const CHIPS: Array<{ label: string; icon: typeof Brain; color: string; prefix: s
 ];
 
 export function HomeCommandComposer(props: Props) {
-  const { value, onChange, onSend, onMic, isListening, attachments, onAttachments, responseMode, onToggleResponseMode, modelLabel } = props;
+  const { value, onChange, onSend, onRunChip, onHistory, onMic, isListening, attachments, onAttachments, responseMode, onToggleResponseMode, modelLabel } = props;
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Een tip-chip is een echte actie: staat er een concept, dan stuurt hij dat
+  // meteen met de richtlijn eromheen (AXE verheldert / geeft context / kiest de
+  // vorm / scherpt aan). Is het veld leeg, dan is er niets om te bewerken —
+  // focus de invoer zodat je eerst iets typt.
   const applyChip = (prefix: string) => {
-    onChange(value ? `${prefix}${value}` : prefix);
-    inputRef.current?.focus();
+    if (value.trim()) onRunChip(`${prefix}${value.trim()}`);
+    else inputRef.current?.focus();
   };
 
   const iconBtn = 'flex-shrink-0 flex items-center justify-center rounded-lg transition-colors';
@@ -79,7 +87,7 @@ export function HomeCommandComposer(props: Props) {
           </span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button type="button" className="p-1.5 rounded-md" title="Geschiedenis" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          <button type="button" onClick={onHistory} className="p-1.5 rounded-md" title="Gespreksgeschiedenis" style={{ color: 'rgba(255,255,255,0.5)' }}>
             <Clock size={15} />
           </button>
           <button type="button" onClick={() => navigate('/settings')} className="p-1.5 rounded-md" title="Instellingen" style={{ color: 'rgba(255,255,255,0.5)' }}>
