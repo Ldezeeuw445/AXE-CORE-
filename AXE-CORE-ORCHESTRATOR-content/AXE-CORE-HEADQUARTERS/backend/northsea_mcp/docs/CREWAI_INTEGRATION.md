@@ -22,6 +22,17 @@
   labelled unverified, redacted for the caller, never persisted, never used to pass a gate.
 - Availability (`/ready`): AXE API key present and crew venv exists on the host.
 
+## Measured in production (15 Sep 2026)
+
+- Direct `/crew/run`: waited 30 s for a slot, ran 147 s, status ok.
+- Through the public MCP (`northsea_qualify_opportunity`, `depth=deep`): crew `deal`, status ok,
+  typed `QualificationResult` with 1784-char redacted analysis, total call 114 s, audit row carries
+  the `crewai_run_id`.
+- Limits: crew call 170 s, deep tool timeout 190 s, nginx 200 s. Busy slots (max 2, shared with
+  trading crews) return `crew.status = "busy"`; overruns return `"timeout"`. In both cases the
+  deterministic result is still returned.
+- The crew answering today is AXE CORE's general crew, not dedicated NorthSea crews.
+
 ## Mapping
 
 | MCP capability | Crew / role (pack) | Today |

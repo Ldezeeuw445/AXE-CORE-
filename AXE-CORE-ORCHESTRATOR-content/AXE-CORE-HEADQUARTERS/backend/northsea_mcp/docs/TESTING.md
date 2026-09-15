@@ -25,6 +25,18 @@ positive`), verified against the live database on 15 Sep 2026 through the read-o
 After deployment, run the live smoke test from CHATGPT_MCP_CONNECTION.md §8 with a service
 token.
 
+## Live acceptance (production, 15 Sep 2026)
+
+| Check | Result |
+|---|---|
+| Public HTTPS `https://mcp.northseacommodity.com` | Let's Encrypt, HSTS, http→https, `/health` ok |
+| Discovery | `/mcp` without token → 401 + `resource_metadata`; PRM `authorization_servers` == AS `issuer` exactly; 8 scopes |
+| Remote MCP client (public, service token) | 14 tools; `review_deal` DEAL-001 masked without `northsea.identity`, unmasked with it |
+| OAuth up to login | DCR 201; consent page 200 with CSP; `northsea.identity` unticked by default |
+| Search fallback | Tavily 432 → Zenserp answered; 3 new masked web candidates |
+| CrewAI (public, `qualify_opportunity depth=deep`) | real crew run, status ok, 1784-char analysis (names redacted), typed result, call 114 s; audit row has `crewai_run_id` |
+| ChatGPT OAuth login + tool call | pending: done by Luka in ChatGPT |
+
 ## ChatGPT-shaped selection checks
 
 | Request | Expected tool | Why the description selects it |
