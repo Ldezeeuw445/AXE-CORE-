@@ -154,9 +154,9 @@ export default function MCPCenter() {
           { label: 'Total Servers', val: servers.length },
         ].map(({ label, val }) => (
           <WidgetCard key={label} title="">
-            <div className="text-center py-1">
-              <div className="text-xl font-bold font-mono-data" style={{ color: 'var(--accent-cyan)' }}>{val}</div>
-              <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{label}</div>
+            <div className="text-center py-1 px-0.5">
+              <div className="text-lg sm:text-xl font-bold font-mono-data leading-tight" style={{ color: 'var(--accent-cyan)' }}>{val}</div>
+              <div className="text-[10px] sm:text-xs-custom leading-tight" style={{ color: 'var(--text-muted)' }}>{label}</div>
             </div>
           </WidgetCard>
         ))}
@@ -203,16 +203,16 @@ export default function MCPCenter() {
           <motion.div key={server.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
             <WidgetCard title="">
               <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="rounded-lg flex items-center justify-center font-mono-data text-[9px] font-bold"
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="rounded-lg flex items-center justify-center font-mono-data text-[9px] font-bold flex-shrink-0"
                       style={{ width: 32, height: 32, background: `${CATEGORY_COLORS[server.category]}15`, color: CATEGORY_COLORS[server.category], border: `1px solid ${CATEGORY_COLORS[server.category]}30` }}>
                       {server.name.slice(0, 2).toUpperCase()}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{server.name}</span>
-                        {server.version && <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>v{server.version}</span>}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-small font-medium truncate" style={{ color: 'var(--text-primary)' }}>{server.name}</span>
+                        {server.version && <span className="text-[9px] font-mono-data flex-shrink-0" style={{ color: 'var(--text-muted)' }}>v{server.version}</span>}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px]" style={{ color: CATEGORY_COLORS[server.category] }}>{server.category}</span>
@@ -220,7 +220,7 @@ export default function MCPCenter() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
                     <StatusBadge variant={server.status === 'not-linked' ? 'standby' : server.status} size="sm" />
                     {server.status !== 'online' ? (
                       <button onClick={() => connect(server.id)} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>
