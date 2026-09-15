@@ -364,7 +364,7 @@ class OAuthServer:
         return _no_store(Response(status_code=200))  # RFC 7009: altijd 200
 
     # ── HTML ──────────────────────────────────────────────────────────────────
-    def _page(self, title: str, inner: str, status: int = 200) -> Response:
+    def _page(self, title: str, inner: str, status: int = 200, redirect_uri: str | None = None) -> Response:
         doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)} · NorthSea MCP</title><style>
 :root{{color-scheme:light dark;--bg:#0b1017;--card:#121a24;--line:#243142;--text:#e6edf3;--muted:#8b98a7;--accent:#c08a4f;--danger:#f87171}}
@@ -381,7 +381,14 @@ button.primary{{background:var(--accent);border-color:var(--accent);color:#fff}}
 button:focus-visible,input:focus-visible{{outline:2px solid var(--accent);outline-offset:2px}}
 </style></head><body><main><div class="brand">NORTHSEA COMMODITY PARTNERS</div>{inner}</main></body></html>"""
         resp = HTMLResponse(doc, status_code=status)
-        resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+        # form-action geldt in Chromium ook voor de 302 ná het posten: zonder de (al tegen de
+        # registratie gecontroleerde) redirect-origin blijft de login hangen en komt de code nooit aan.
+        form_action = "'self'"
+        if redirect_uri:
+            u = urlparse(redirect_uri)
+            if u.scheme in ("https", "http") and u.netloc:
+                form_action += f" {u.scheme}://{u.netloc}"
+        resp.headers["Content-Security-Policy"] = f"default-src 'none'; style-src 'unsafe-inline'; form-action {form_action}; frame-ancestors 'none'; base-uri 'none'"
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
         return _no_store(resp)
@@ -408,4 +415,4 @@ button:focus-visible,input:focus-visible{{outline:2px solid var(--accent);outlin
 <div class="row"><button type="submit" name="decision" value="deny" formnovalidate>Deny</button>
 <button class="primary" type="submit" name="decision" value="allow">Sign in and allow</button></div>
 </form>"""
-        return self._page(f"Connect {p.client_name}", inner, status=status)
+        return self._page(f"Connect {p.client_name}", inner, status=status, redirect_uri=p.redirect_uri)

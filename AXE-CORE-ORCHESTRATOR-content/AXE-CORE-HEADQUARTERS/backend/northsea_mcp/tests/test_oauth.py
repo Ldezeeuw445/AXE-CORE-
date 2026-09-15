@@ -106,6 +106,18 @@ async def test_full_authorization_code_flow_with_pkce_and_rotation(oauth_app, st
         assert await NorthSeaTokenVerifier(store).verify_token(new["access_token"]) is None
 
 
+async def test_consent_csp_allows_only_the_registered_redirect_origin(oauth_app):
+    # Chromium past form-action ook toe op de 302 na het posten; met alleen 'self' bleef
+    # de ChatGPT-login hangen (15 sep 2026: code uitgegeven, nooit ingewisseld).
+    _, challenge = pkce()
+    async with client(oauth_app) as h:
+        cid = await register(h)
+        page, _ = await authorize(h, cid, challenge)
+        csp = page.headers["content-security-policy"]
+        assert "form-action 'self' https://chatgpt.com;" in csp
+        assert "frame-ancestors 'none'" in csp
+
+
 async def test_wrong_password_and_non_allowlisted_user_get_no_code(oauth_app):
     _, challenge = pkce()
     async with client(oauth_app) as h:
