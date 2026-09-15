@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  In de binary ingebakken (zie main.swift). Zonder NSCameraUsageDescription weigert macOS
-  de camera aan een losse opdrachtregeltool zonder het ooit te vragen.
+  Info.plist van "AXE Camera.app" (zie main.swift voor het bouwen).
+
+  Waarom een app-bundel en geen losse tool: macOS schrijft een cameraverzoek toe aan het
+  "verantwoordelijke proces". Start de worker (node) de tool zelf, dan is dat node, en node
+  mist het camera-recht — dan vraagt macOS niets en weigert direct (gemeten in de TCC-log:
+  "Policy disallows prompt"). Via `open` start LaunchServices deze app als eigen
+  verantwoordelijk proces, en dan komt de vraag wél, op naam van AXE Camera.
 -->
 <plist version="1.0">
 <dict>
@@ -10,6 +15,18 @@
   <string>com.axe.camera</string>
   <key>CFBundleName</key>
   <string>AXE Camera</string>
+  <key>CFBundleDisplayName</key>
+  <string>AXE Camera</string>
+  <key>CFBundleExecutable</key>
+  <string>axe-camera</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSUIElement</key>
+  <true/>
+  <key>LSMinimumSystemVersion</key>
+  <string>13.0</string>
   <key>NSCameraUsageDescription</key>
   <string>AXE CORE maakt op jouw verzoek een foto met deze Mac en bewaart die privé in je eigen opslag.</string>
 </dict>

@@ -1,28 +1,32 @@
-// axe-camera <uitvoer.jpg> — maakt één foto met de ingebouwde camera en stopt.
+// AXE Camera — maakt één foto met de ingebouwde camera en stopt.
 //
-// De computer-worker roept dit aan voor `camera.snapshot`. Bouwen op de Mac zelf, vanuit
-// infra/computer-worker/camera:
-//   xcrun swiftc -O -o axe-camera main.swift \
-//     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker Info.plist
-//   codesign --force -s - -i com.axe.camera axe-camera
+// De computer-worker roept dit aan voor `camera.snapshot`, via
+//   open -W -n -g -a "AXE Camera.app" --args <pad.jpg>
+// en níet rechtstreeks: zie Info.plist voor waarom (macOS vraagt anders nooit toestemming).
 //
-// Beide stappen zijn nodig. Zonder ingebakken Info.plist (NSCameraUsageDescription)
-// weigert macOS de camera zonder te vragen; zonder vaste identifier hoort een eerdere
-// weigering bij een willekeurige ad-hoc-handtekening en komt de vraag nooit terug.
-// De eerste keer verschijnt de vraag op het scherm van de Mac zelf: klik "Sta toe".
+// Bouwen op de Mac zelf, vanuit infra/computer-worker/camera:
+//   mkdir -p "AXE Camera.app/Contents/MacOS"
+//   xcrun swiftc -O -o "AXE Camera.app/Contents/MacOS/axe-camera" main.swift
+//   cp Info.plist "AXE Camera.app/Contents/Info.plist"
+//   codesign --force -s - -i com.axe.camera "AXE Camera.app"
 //
-// Exit: 0 gelukt (pad op stdout) · 2 geen toestemming · 3 geen camera · 4 mislukt · 64 verkeerd gebruik.
+// `open` geeft de exitcode van de app niet door. Daarom schrijft de app bij een fout
+// <pad.jpg>.fout met "<code> <uitleg>"; bij succes staat de foto op <pad.jpg>.
+// Codes: 2 geen toestemming · 3 geen camera · 4 mislukt · 64 verkeerd gebruik.
+// De eerste keer verschijnt de toestemmingsvraag op het scherm van deze Mac.
 import AVFoundation
 import Foundation
 
 let args = CommandLine.arguments
-guard args.count == 2 else {
+guard args.count >= 2 else {
   FileHandle.standardError.write("gebruik: axe-camera <pad.jpg>\n".data(using: .utf8)!)
   exit(64)
 }
 let uit = URL(fileURLWithPath: args[1])
+let foutBestand = URL(fileURLWithPath: args[1] + ".fout")
 
 func stop(_ code: Int32, _ msg: String) -> Never {
+  try? "\(code) \(msg)\n".write(to: foutBestand, atomically: true, encoding: .utf8)
   FileHandle.standardError.write((msg + "\n").data(using: .utf8)!)
   exit(code)
 }
@@ -34,7 +38,7 @@ case .notDetermined:
   let wacht = DispatchSemaphore(value: 0)
   var ok = false
   AVCaptureDevice.requestAccess(for: .video) { ok = $0; wacht.signal() }
-  _ = wacht.wait(timeout: .now() + 60)
+  _ = wacht.wait(timeout: .now() + 120)
   if !ok { stop(2, "geen cameratoestemming") }
 default:
   stop(2, "geen cameratoestemming")

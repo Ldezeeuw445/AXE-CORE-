@@ -174,21 +174,34 @@ const READ_ONLY = new Set([
  * Het resultaat is het pad in de bucket, niet de foto zelf, zodat core_tasks geen
  * beelden bevat.
  */
-const CAMERA_BIN = env.AXE_CAMERA_BIN ?? join(HERE, 'camera', 'axe-camera');
+// Een app-bundel, gestart via `open`: dan is de app zelf het verantwoordelijke proces en
+// vraagt macOS toestemming op naam van "AXE Camera". Rechtstreeks vanuit node weigert
+// macOS zonder te vragen (node mist het camera-recht). Zie camera/Info.plist.
+const CAMERA_APP = env.AXE_CAMERA_APP ?? join(HERE, 'camera', 'AXE Camera.app');
 const CAMERA_BUCKET = 'axe-camera';
 
 function cameraShot(file) {
+  const foutBestand = `${file}.fout`;
   return new Promise((res, rej) => {
-    execFile(CAMERA_BIN, [file], { timeout: 45_000 }, (err, _stdout, stderr) => {
-      if (!err) return res();
-      if (err.code === 'ENOENT') {
-        return rej(new Error(`camera-tool ontbreekt: bouw hem volgens ${join(HERE, 'camera', 'main.swift')} (swiftc + Info.plist + codesign)`));
-      }
+    if (!existsSync(CAMERA_APP)) {
+      return rej(new Error(`camera-app ontbreekt: bouw "AXE Camera.app" volgens ${join(HERE, 'camera', 'main.swift')}`));
+    }
+    // -W wacht tot de app stopt, -n altijd een nieuwe instantie, -g niet naar voren.
+    // 150 s: de eerste keer wacht de app tot iemand op "Sta toe" klikt.
+    execFile('/usr/bin/open', ['-W', '-n', '-g', '-a', CAMERA_APP, '--args', file], { timeout: 150_000 }, (err) => {
+      if (err?.killed) return rej(new Error('camera: geen antwoord binnen 150 s (wacht de toestemmingsvraag nog op deze Mac?)'));
+      if (existsSync(file)) return res();
+      let code = 0; let msg = err?.message ?? 'geen foto gemaakt';
+      try {
+        const regel = readFileSync(foutBestand, 'utf8').trim();
+        code = Number(regel.split(' ')[0]); msg = regel.slice(String(code).length).trim() || msg;
+      } catch { /* geen foutbestand: de app startte niet */ }
+      unlink(foutBestand).catch(() => {});
       const uitleg = {
         2: 'geen cameratoestemming — klik "Sta toe" op deze Mac, of zet AXE Camera aan in Systeeminstellingen → Privacy en beveiliging → Camera',
         3: 'deze Mac heeft geen camera',
-      }[err.code];
-      rej(new Error(uitleg ?? `camera mislukt: ${String(stderr ?? err.message).trim().slice(0, 200)}`));
+      }[code];
+      rej(new Error(uitleg ?? `camera mislukt: ${String(msg).slice(0, 200)}`));
     });
   });
 }
