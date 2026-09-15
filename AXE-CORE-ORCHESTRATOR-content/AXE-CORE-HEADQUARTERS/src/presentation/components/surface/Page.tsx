@@ -237,9 +237,11 @@ export function Stat({
 export const STAT_ROW =
   'grid grid-cols-3 gap-2 mb-3 sm:gap-3 sm:mb-4 sm:[grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] sm:[grid-auto-rows:104px]';
 
-/** The content grid. Equal columns, equal rows, cards scroll inside. */
+/** The content grid. Equal columns, equal rows, cards scroll inside.
+ *  Op de telefoon één kolom op volle breedte: minmax(320px) dwong anders kaarten
+ *  breder dan de plaat en liep de rechterkant (knoppen) van het scherm af. */
 export const CARD_GRID =
-  'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:336px]';
+  'grid gap-3 grid-cols-1 [grid-auto-rows:336px] sm:[grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]';
 
 /**
  * Equal columns, natural height — for LISTS laid out in columns.
@@ -253,8 +255,8 @@ export const CARD_GRID =
  * content. A row that is one line tall should stay one line tall.
  */
 export const LIST_GRID =
-  'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]';
+  'grid gap-3 grid-cols-1 sm:[grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]';
 
 /** Taller variant for pages whose cards hold real lists. */
 export const CARD_GRID_TALL =
-  'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:440px]';
+  'grid gap-3 grid-cols-1 [grid-auto-rows:440px] sm:[grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]';
