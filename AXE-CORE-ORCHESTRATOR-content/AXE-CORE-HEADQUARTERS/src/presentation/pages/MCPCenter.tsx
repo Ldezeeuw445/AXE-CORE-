@@ -203,7 +203,7 @@ export default function MCPCenter() {
           <motion.div key={server.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
             <WidgetCard title="">
               <div>
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div className="rounded-lg flex items-center justify-center font-mono-data text-[9px] font-bold flex-shrink-0"
                       style={{ width: 32, height: 32, background: `${CATEGORY_COLORS[server.category]}15`, color: CATEGORY_COLORS[server.category], border: `1px solid ${CATEGORY_COLORS[server.category]}30` }}>
