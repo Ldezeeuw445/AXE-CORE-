@@ -56,6 +56,17 @@ const isReplit = process.env.REPL_ID !== undefined;
 const isAndroidShell = process.env.ANDROID_SHELL === '1';
 
 /**
+ * Een Tauri-bouw (desktop óf `tauri android`) serveert deze bundle zelf van
+ * tauri.localhost / uit de APK — er is geen /sw.js. De VitePWA-plugin injecteert
+ * anders een registratie-script (injectRegister) dat de service worker tóch
+ * probeert te registreren; dat faalt op tauri.localhost en kwam als rode
+ * foutbanner over de app. Tauri zet TAURI_ENV_PLATFORM wanneer het de
+ * beforeBuildCommand draait, dus zo herkennen we die bouw en zetten we PWA uit.
+ */
+const isTauriBuild =
+  process.env.TAURI_ENV_PLATFORM !== undefined || process.env.AXE_TAURI_BUILD === '1';
+
+/**
  * Which build is this, stamped in at build time.
  *
  * From the Mac Mini's branch, and it answers a question that has cost real
@@ -85,9 +96,9 @@ export default defineConfig(async ({ command }) => ({
   plugins: [
     react(),
     VitePWA({
-      disable: isAndroidShell,
+      disable: isAndroidShell || isTauriBuild,
       registerType: 'autoUpdate',
-      injectRegister: isAndroidShell ? false : 'script',
+      injectRegister: (isAndroidShell || isTauriBuild) ? false : 'script',
       manifest: false, // We use our own public/manifest.json
       workbox: {
         // 8 MB. The main chunk was 3.7 MB when this was set to 5, and is 5.24 MB
