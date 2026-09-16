@@ -591,29 +591,37 @@ html:root[data-look],
   -webkit-backdrop-filter: none !important;
 }
 
-/* ── Border-beam op de composer: "Pulse Outside, colorful" ───────────────
+/* ── Border-beam op de composer: "Pulse Outside, colorful" (roterend) ─────
  *
- * Niet de dunne draaiende boog, maar een zachte KLEURIGE gloed die BUITEN de
- * doos uitwaaiert (roze/paars/blauw/groen/oranje) en pulseert. Puur CSS, geen
- * dependency. Twee lagen:
- *   ::before = de wazige gloed-halo áchter de doos (z-index:-1, blur), pulseert;
- *   ::after  = de scherpe kleurige rand op de doos zelf (masked randring).
+ * Een zachte KLEURIGE gloed die BUITEN de doos uitwaaiert (roze/paars/blauw/
+ * groen/oranje). Niet de hele rand die tegelijk aan/uit pulseert, maar de
+ * kleuren die héél subtiel rónd de doos draaien — de plek van elke kleur
+ * schuift langzaam langs de rand. Zacht en niet opvallend. Puur CSS.
+ * Twee lagen die samen draaien (dezelfde hoek-variabele):
+ *   ::before = de wazige gloed-halo áchter de doos (z-index:-1, blur);
+ *   ::after  = de zachte kleurige randring op de doos zelf (masked).
  * Geen `isolation` op de doos, zodat de negatieve z-index van ::before echt
  * áchter de doosachtergrond valt (de halo dus rondom zichtbaar is). */
+@property --axe-beam-a {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .axe-beam { position: relative; }
 
 .axe-beam::before {
   content: '';
   position: absolute;
-  inset: -5px;
-  border-radius: 21px;
-  background: conic-gradient(from 215deg,
+  inset: -4px;
+  border-radius: 20px;
+  background: conic-gradient(from var(--axe-beam-a),
     #ec4899, #a855f7, #6366f1, #3b82f6, #22c55e, #f59e0b, #ec4899);
-  filter: blur(15px);
-  opacity: 0.8;
+  filter: blur(13px);
+  opacity: 0.34;
   z-index: -1;
   pointer-events: none;
-  animation: axe-beam-pulse 3.4s ease-in-out infinite;
+  animation: axe-beam-spin 11s linear infinite;
 }
 
 .axe-beam::after {
@@ -621,8 +629,8 @@ html:root[data-look],
   position: absolute;
   inset: -1px;
   border-radius: 17px;
-  padding: 1.6px;
-  background: conic-gradient(from 215deg,
+  padding: 1.1px;
+  background: conic-gradient(from var(--axe-beam-a),
     #ec4899, #a855f7, #6366f1, #3b82f6, #22c55e, #f59e0b, #ec4899);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -632,16 +640,16 @@ html:root[data-look],
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
+  opacity: 0.5;
   pointer-events: none;
-  animation: axe-beam-pulse 3.4s ease-in-out infinite;
+  animation: axe-beam-spin 11s linear infinite;
 }
 
-@keyframes axe-beam-pulse {
-  0%, 100% { opacity: 0.45; }
-  50%      { opacity: 1; }
+@keyframes axe-beam-spin {
+  to { --axe-beam-a: 360deg; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .axe-beam::before, .axe-beam::after { animation: none; opacity: 0.8; }
+  .axe-beam::before, .axe-beam::after { animation: none; }
 }
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
