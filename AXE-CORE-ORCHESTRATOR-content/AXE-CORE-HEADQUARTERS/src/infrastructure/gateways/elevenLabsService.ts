@@ -8,6 +8,7 @@ import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { getReplyLanguage } from '@/domain/replyLanguage';
 import { STEMMEN } from '@/domain/stemKeuzes';
+import { normalizeForSpeech } from '@/domain/speechText';
 
 const ENV_ELEVENLABS_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
@@ -130,31 +131,19 @@ export async function speakWithElevenLabs(
   onError?: () => void,
   onFallback?: (reason: string) => void,
 ): Promise<void> {
+  const spoken = normalizeForSpeech(text);
+  if (!spoken) { onDone?.(); return; }
+
   if (isElevenLabsConfigured()) {
     try {
       const currentVoice = getSelectedVoiceId();
-      let response = await ttsFetch(text, currentVoice);
+      const response = await ttsFetch(spoken, currentVoice);
 
-      if (!response.ok && response.status === 400) {
-        const body = await response.clone().text().catch(() => '');
-        if (/invalid_uid|voice/i.test(body)) {
-          /* Onbekende stem-id: probeer de ANDERE die we aanbieden.
-           *
-           * Dit haalde eerst de hele bibliotheek op en probeerde er acht. Dat
-           * kon een willekeurige stem opleveren die je nooit gekozen had, en
-           * die bleef dan staan -- je vroeg om "Man" en kreeg een maand lang
-           * iemand anders. We bieden er twee aan; is de ene ongeldig op deze
-           * sleutel, dan is de andere de enige zinnige poging. Lukt die ook
-           * niet, dan valt hij verderop netjes terug op de browserstem. */
-          for (const kandidaat of STEMMEN) {
-            if (kandidaat.motor !== 'elevenlabs') continue;
-            if (!kandidaat.stemId || kandidaat.stemId === currentVoice) continue;
-            const retry = await ttsFetch(text, kandidaat.stemId);
-            if (retry.ok) { setSelectedVoiceId(kandidaat.stemId); response = retry; break; }
-          }
-        }
-      }
-
+      /* One fixed voice: if the selected voice-id is invalid on this key we do
+       * NOT quietly switch to a different ElevenLabs voice and remember it —
+       * that is how "you asked for Man and got someone else for a month"
+       * happened. We surface the error and let the caller fall back to the
+       * browser voice, leaving the user's chosen voice-id untouched. */
       if (!response.ok) {
         const body = await response.text().catch(() => '');
         throw new Error(`ElevenLabs ${response.status}: ${response.statusText}${body ? ` — ${body.slice(0, 200)}` : ''}`);
@@ -199,9 +188,12 @@ export function speakWithBrowser(text: string, onDone?: () => void): void {
       return;
     }
 
+    const spoken = normalizeForSpeech(text);
+    if (!spoken) { onDone?.(); return; }
+
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(spoken);
     utterance.rate = 1.02;
     utterance.pitch = 0.88;
     utterance.volume = 1.0;

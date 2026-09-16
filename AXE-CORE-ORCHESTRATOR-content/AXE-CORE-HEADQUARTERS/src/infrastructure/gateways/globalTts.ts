@@ -21,6 +21,7 @@ import {
   stopOpenAiTts,
   isOpenAiTtsConfigured,
 } from '@/infrastructure/gateways/openAiTtsService';
+import { normalizeForSpeech } from '@/domain/speechText';
 
 export type TtsProvider = 'fish' | 'elevenlabs' | 'openai' | 'browser';
 
@@ -40,13 +41,16 @@ export function stopGlobalTts(): void {
 }
 
 /**
- * Strip UI / routing chrome that must never be spoken:
- * "google · gemini-3.6-flash", markdown fences, trailing model badges.
+ * Prepare text for the voice. Two jobs, in order:
+ *  1. Drop UI / routing chrome that must never be spoken — the "google · gemini"
+ *     model badges under chat bubbles, "provider:"/"routed:" lines. These are
+ *     whole lines, so they are filtered before anything collapses the newlines.
+ *  2. Hand the rest to normalizeForSpeech, which removes Markdown, links, emoji
+ *     and stray symbols so AXE reads words, not "star star" and "backtick".
  */
 export function sanitizeForSpeech(text: string): string {
-  return text
+  const withoutChrome = text
     .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
     .split('\n')
     .filter((line) => {
       const t = line.trim();
@@ -57,9 +61,8 @@ export function sanitizeForSpeech(text: string): string {
       if (/^[a-z0-9_.-]+\s*[·•|]\s*[a-z0-9_.-]+$/i.test(t) && t.length < 48) return false;
       return true;
     })
-    .join(' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+    .join('\n');
+  return normalizeForSpeech(withoutChrome);
 }
 
 /**

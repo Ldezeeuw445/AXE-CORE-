@@ -10,6 +10,7 @@
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
 import { isTauriRuntime, VPS_API_ORIGIN, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
+import { normalizeForSpeech } from '@/domain/speechText';
 
 const ENV_FISH_KEY = import.meta.env.VITE_FISH_AUDIO_API_KEY ?? '';
 const USE_VPS_PROXY = import.meta.env.PROD && isTauriRuntime();
@@ -105,6 +106,9 @@ export async function speakWithFishAudio(
   onDone?: () => void,
   onError?: (reason: string) => void,
 ): Promise<void> {
+  const spoken = normalizeForSpeech(text);
+  if (!spoken) { onDone?.(); return; }
+
   const voiceId = getFishVoiceId();
   if (!voiceId) {
     onError?.('No Fish Audio voice configured');
@@ -112,7 +116,7 @@ export async function speakWithFishAudio(
   }
 
   try {
-    const res = await ttsFetch(text, voiceId);
+    const res = await ttsFetch(spoken, voiceId);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(

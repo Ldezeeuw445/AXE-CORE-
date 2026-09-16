@@ -20,6 +20,8 @@
  * kan hebben.
  */
 
+import { normalizeForSpeech } from '@/domain/speechText';
+
 /** De stemmen die de API voert (gpt-4o-mini-tts). */
 export const OPENAI_STEMMEN = [
   'marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral',
@@ -82,12 +84,15 @@ export async function speakWithOpenAi(
   const key = sleutel();
   if (!key) { opFout?.('no_openai_key'); return; }
 
+  const spoken = normalizeForSpeech(tekst);
+  if (!spoken) { opKlaar?.(); return; }
+
   stopOpenAiTts();
   try {
     const res = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, voice: getOpenAiStem(), input: tekst, response_format: 'mp3' }),
+      body: JSON.stringify({ model: MODEL, voice: getOpenAiStem(), input: spoken, response_format: 'mp3' }),
     });
     if (!res.ok) {
       opFout?.(`openai_tts_${res.status}: ${(await res.text()).slice(0, 200)}`);
