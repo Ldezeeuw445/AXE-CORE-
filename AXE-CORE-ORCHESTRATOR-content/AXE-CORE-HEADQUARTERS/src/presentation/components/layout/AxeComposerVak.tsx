@@ -86,7 +86,11 @@ export function AxeComposerVak({
     <div className="axe-composer axe-vakcomposer flex-shrink-0">
       {kop && <div className="axe-vak-kop">{kop}</div>}
 
-      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={0.5} active={bezig}>
+      {/* Altijd aan, zacht in rust en voller zodra AXE werkt. Stond op
+          active={bezig}: dan bewoog hij alleen tijdens een antwoord, en in rust
+          was er niets van te zien -- terwijl Luka hem juist rustig zichtbaar
+          wilde (16 september). */}
+      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={bezig ? 1 : 0.75} active>
       <div className="axe-vak">
         <div className="axe-vak-boven">
           <textarea

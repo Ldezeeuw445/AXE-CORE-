@@ -210,17 +210,27 @@ done
 # zwijgend en gebeurt er bij dubbelklikken niets.
 xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 
-# De kopie in /Applications is van een dmg-installatie en wordt door een bouw
-# NOOIT bijgewerkt. Hij heet net zo, dus in Spotlight staan er twee "AXE CORE"
-# en pak je soms de verkeerde -- precies waardoor het leek alsof een wijziging
-# er niet in zat.
+# De kopie in /Applications: bijwerken, niet alleen melden.
 #
-# Melden en niet weggooien: dat staat buiten deze repo en is niet aan een
-# bouwscript om te beslissen.
+# Tot 16 september werd hij hier nooit aangeraakt, omdat een nieuwe build
+# adhoc ondertekend was en macOS hem als een andere app zag. Luka opent AXE
+# via Dock en Spotlight -- en die pakten de oude kopie, die dan om toestemming
+# vroeg en de wijzigingen van vandaag niet had. Nu elke build met hetzelfde
+# certificaat ondertekend is (zie hierboven), blijft de toestemming staan en
+# kan de kopie gewoon vervangen worden. Zonder certificaat blijft hij staan,
+# want dan zou vervangen juist wel om toestemming vragen.
 if [[ -d "/Applications/AXE CORE.app" ]]; then
-  printf '\n\033[33m! Er staat ook een AXE CORE in /Applications. Die wordt hier niet bijgewerkt\n'
-  printf '  en verschijnt in Spotlight naast deze. Weghalen met:\n'
-  printf '    rm -rf "/Applications/AXE CORE.app"\033[0m\n'
+  if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+    zeg "/Applications/AXE CORE.app bijwerken"
+    rm -rf "/Applications/AXE CORE.app"
+    ditto "$APP" "/Applications/AXE CORE.app"
+    xattr -dr com.apple.quarantine "/Applications/AXE CORE.app" 2>/dev/null || true
+    APP="/Applications/AXE CORE.app"
+  else
+    printf '\n\033[33m! Er staat ook een AXE CORE in /Applications. Zonder certificaat wordt die niet bijgewerkt\n'
+    printf '  en verschijnt hij in Spotlight naast deze. Weghalen met:\n'
+    printf '    rm -rf "/Applications/AXE CORE.app"\033[0m\n'
+  fi
 fi
 
 zeg "Starten — $(date '+%H:%M') · gebouwd uit $(git rev-parse --short HEAD)"
