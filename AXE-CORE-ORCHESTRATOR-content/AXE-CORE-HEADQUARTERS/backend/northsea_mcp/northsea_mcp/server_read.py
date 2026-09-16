@@ -248,6 +248,16 @@ def register_read_tools(mcp: MCPServer, rt: ReadTools, guard: Any) -> None:
     async def approval(approval_id: Annotated[str, Field(min_length=36, max_length=36)]) -> ReadResult:
         return await run("northsea_get_approval", {"approval_id": approval_id}, lambda c: rt.get_approval(c, approval_id=approval_id))
 
+    @tool("northsea_get_engine_status", "Communication Engine status")
+    async def engine_status() -> ReadResult:
+        return await run("northsea_get_engine_status", {}, rt.engine_status)
+
+    @tool("northsea_list_followups", "Follow-up plans")
+    async def followups(status: Literal["scheduled", "draft_created", "replied", "cancelled", "blocked", "expired"] | None = None,
+                        deal: Annotated[str | None, Field(description="Deal code or UUID")] = None,
+                        limit: Limit = 25, offset: Offset = 0) -> ReadResult:
+        return await run("northsea_list_followups", {}, lambda c: rt.list_followups(c, status=status, deal=deal, limit=limit, offset=offset))
+
     @tool("northsea_get_market_context", "Market context")
     async def market() -> ReadResult:
         return await run("northsea_get_market_context", {}, rt.market_context)

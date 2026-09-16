@@ -123,6 +123,13 @@ READ_TOOLS: list[tuple[str, str, str]] = [
     ("northsea_get_approval", "northsea.read", "ONE pending approval by id (reply draft, deal, task or flagged inbound message); for a reply draft includes the exact text "
      "awaiting approval and whether it is sensitive. Does not approve anything. Read-only."),
     # INTELLIGENCE
+    ("northsea_get_engine_status", "northsea.read",
+     "State of the NorthSea Communication Engine: when it last ran, what it did (classified, evidence, follow-ups, chase items, "
+     "errors), deals per current blocker and per owner (Luka / AXE / counterparty), follow-up plans per status, open engine "
+     "chase items and bounced channels. The engine never sends or approves. Read-only."),
+    ("northsea_list_followups", "northsea.deal.read",
+     "Durable follow-up plans: status (scheduled, draft_created, replied, cancelled, blocked, expired), attempt, due time, deal, "
+     "counterparty (redacted without northsea.identity) and the pending draft awaiting approval. Filter by status or deal. Read-only."),
     ("northsea_get_market_context", "northsea.read",
      "Which market instruments the Global Trade Center tracks (copper, gold, silver, Brent, WTI, DXY), where its prices come from and "
      "why the MCP does not return prices. Market data is context, never a deal fact. Read-only."),

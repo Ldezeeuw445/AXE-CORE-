@@ -1,0 +1,182 @@
+"""P1 Communication Engine: de tick tegen de nep-database. Idempotentie, stormrem, P0-grenzen, geen verzending."""
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timedelta, timezone
+
+import httpx
+import pytest
+
+from fakes import COMM, CONTACT_S, OPP, SELLER_CO, FakeRepo
+from northsea_mcp import engine_rules as rules
+from northsea_mcp.engine import EngineService
+
+NU = datetime.now(timezone.utc)
+
+
+def iso(h):
+    return (NU + timedelta(hours=h)).isoformat()
+
+
+def eng(repo, **kw):
+    return EngineService(repo, now=lambda: NU, **kw)
+
+
+def oude_inbound(repo):
+    """De seed-inbound (-4u) telt als antwoord op elk ouder uitgaand bericht; zet hem ver terug."""
+    next(c for c in repo.t["communications"] if c["id"] == COMM)["occurred_at"] = iso(-200)
+
+
+def outbound(repo, h=-60, company=SELLER_CO, contact=CONTACT_S, opp=OPP, **kw):
+    cid = str(uuid.uuid4())
+    repo.t["communications"].append({"id": cid, "company_id": company, "contact_id": contact, "opportunity_id": opp, "direction": "outbound",
+                                     "channel": "email", "subject": "Copper Cathode — supply qualification", "body": "Please confirm allocation.",
+                                     "occurred_at": iso(h), "delivery_status": "delivered", **kw})
+    return cid
+
+
+async def test_inbound_is_classified_with_explicit_terms_and_evidence_once():
+    repo = FakeRepo()
+    uit = await eng(repo).tick()
+    intel = next(i for i in repo.t["email_intelligence"] if i["communication_id"] == COMM)
+    assert intel["engine_primary"] == "supplier" and intel["engine_version"] == rules.ENGINE_VERSION
+    assert intel["engine_terms"]["quantity_mt"] == 800 and intel["engine_terms"]["incoterms"] == ["FOB"]
+    ev = [e for e in repo.t["deal_evidence"] if e.get("evidence_type") == "stated_terms"]
+    assert len(ev) == 1 and ev[0]["verification_status"] == "counterparty_stated" and ev[0]["source_reference"] == COMM
+    assert uit["sent"] == 0 and repo.sends == []
+    voor = len(repo.engine_writes)
+    tweede = await eng(repo).tick()
+    assert tweede["summary"]["intelligence"] == 0 and tweede["summary"]["evaluations"] == 0
+    assert len([e for e in repo.t["deal_evidence"] if e.get("evidence_type") == "stated_terms"]) == 1
+    assert [w for w in repo.engine_writes[voor:] if w[0] != "northsea_audit_events"] == []
+
+
+async def test_ambiguous_mapping_creates_one_chase_item_and_no_deal_change():
+    repo = FakeRepo()
+    cid = str(uuid.uuid4())
+    repo.t["communications"].append({"id": cid, "company_id": SELLER_CO, "direction": "inbound", "channel": "email", "subject": "Re: offer",
+                                     "body": "We can supply 500 MT", "occurred_at": iso(-1), "mapping_status": "ambiguous",
+                                     "mapping_candidates": [OPP, str(uuid.uuid4())], "opportunity_id": None})
+    await eng(repo).tick()
+    await eng(repo).tick()
+    items = [q for q in repo.t["action_queue"] if q.get("dedupe_key") == f"review_mapping:{cid}"]
+    assert len(items) == 1 and items[0]["opportunity_id"] is None
+    assert not [e for e in repo.t["deal_evidence"] if e.get("source_reference") == cid]
+
+
+async def test_bounce_marks_channel_and_blocks_retry_path():
+    repo = FakeRepo()
+    outbound(repo, h=-5, delivery_status="bounced")
+    await eng(repo).tick()
+    contact = next(c for c in repo.t["contacts"] if c["id"] == CONTACT_S)
+    assert contact["email_status"] == "bounced" and "delivery_status=bounced" in contact["email_status_reason"]
+    assert any(q.get("dedupe_key") == f"repair_channel:{CONTACT_S}" for q in repo.t["action_queue"])
+    opp = next(o for o in repo.t["opportunities"] if o["id"] == OPP)
+    # Mopani heeft één contact met e-mail, en dat adres bounced: deal staat op 'kanaal herstellen'.
+    assert opp["engine_blocker_code"] == "channel_bounced"
+
+
+async def test_followup_is_planned_once_as_pending_draft_and_never_sent():
+    repo = FakeRepo()
+    oude_inbound(repo)
+    repo.t["reply_drafts"] = [d for d in repo.t["reply_drafts"] if d["approval_status"] != "pending"]
+    anker = outbound(repo, h=-60)
+    uit = await eng(repo).tick()
+    fu = repo.t["northsea_followups"]
+    assert len(fu) == 1 and fu[0]["status"] == "draft_created" and fu[0]["attempt"] == 1
+    d = next(x for x in repo.t["reply_drafts"] if x["id"] == fu[0]["draft_id"])
+    assert (d["approval_status"], d["generated_by"], d["communication_id"]) == ("pending", "northsea-engine", anker)
+    assert d["policy_decision"]["allowed"] is False and repo.sends == [] and uit["sent"] == 0
+    assert "No counterparty introduction or binding commercial commitment" in d["body"]
+    await eng(repo).tick()
+    assert len(repo.t["northsea_followups"]) == 1
+
+
+async def test_reply_closes_followup_plan():
+    repo = FakeRepo()
+    oude_inbound(repo)
+    anker = outbound(repo, h=-60)
+    await eng(repo).tick()
+    repo.t["communications"].append({"id": str(uuid.uuid4()), "company_id": SELLER_CO, "direction": "inbound", "channel": "email",
+                                     "subject": "Re: allocation", "body": "Allocation confirmed next week", "occurred_at": iso(-1)})
+    await eng(repo).tick()
+    assert repo.t["northsea_followups"][0]["status"] == "replied"
+    assert repo.t["northsea_followups"][0]["anchor_communication_id"] == anker
+
+
+async def test_guard_refusal_blocks_plan_without_draft():
+    repo = FakeRepo()
+    oude_inbound(repo)
+    repo.guard_block = True
+    outbound(repo, h=-60)
+    uit = await eng(repo).tick()
+    assert repo.t["northsea_followups"][0]["status"] == "blocked" and "bounced_channel" in repo.t["northsea_followups"][0]["reason"]
+    assert uit["plan"]["followups"][0]["result"] == "blocked_by_guard"
+
+
+async def test_storm_cap_and_invalid_policy_fail_closed():
+    repo = FakeRepo()
+    for i in range(15):
+        co = str(uuid.uuid4())
+        repo.t["companies"].append({"id": co, "company_name": f"C{i}", "company_type": "supplier", "contact_policy": "allowed"})
+        outbound(repo, h=-60, company=co, contact=None, opp=None)
+    uit = await eng(repo, max_followups_per_run=5).tick()
+    assert uit["summary"]["followups"] == 5
+    repo2 = FakeRepo()
+    oude_inbound(repo2)
+    repo2.t["deal_automation_policy"][0]["followup_interval_hours"] = None
+    outbound(repo2, h=-60)
+    uit2 = await eng(repo2).tick()
+    assert uit2["summary"]["followups"] == 0 and any("fail closed" in f for f in uit2["errors"])
+
+
+async def test_synthetic_messages_are_ignored():
+    repo = FakeRepo()
+    outbound(repo, h=-60, is_synthetic=True)
+    for c in repo.t["communications"]:
+        c["is_synthetic"] = True
+    uit = await eng(repo).tick()
+    assert uit["summary"]["intelligence"] == 0 and uit["summary"]["followups"] == 0
+
+
+async def test_dry_run_writes_nothing():
+    repo = FakeRepo()
+    oude_inbound(repo)
+    outbound(repo, h=-60)
+    uit = await eng(repo).tick(dry_run=True)
+    assert repo.engine_writes == [] and uit["summary"]["followups"] == 1 and uit["summary"]["intelligence"] == 1
+
+
+async def test_evaluation_respects_contact_policy():
+    repo = FakeRepo()
+    next(c for c in repo.t["companies"] if c["id"] == SELLER_CO)["contact_policy"] = "review_required"
+    await eng(repo).tick()
+    opp = next(o for o in repo.t["opportunities"] if o["id"] == OPP)
+    assert opp["engine_blocker_code"] == "contact_policy_review" and opp["engine_owner"] == "luka"
+    assert any(e["event_type"] == "engine_evaluation_changed" for e in repo.t["deal_events"])
+
+
+# ── Interne endpoint ─────────────────────────────────────────────────────────
+
+@pytest.fixture
+def client(app):
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://mcp.northsea.test")
+
+
+async def test_engine_endpoint_requires_engine_service_token(client, store, repo):
+    r = await client.post("/internal/engine/tick")
+    assert r.status_code == 401
+    read = store.issue(kind="service", client_id="service:x", subject="service:x", scopes=["northsea.read", "northsea.admin"],
+                       resource="https://mcp.northsea.test/mcp", ttl_s=600, label="x")
+    r = await client.post("/internal/engine/tick", headers={"Authorization": f"Bearer {read}"})
+    assert r.status_code == 403
+    ok = store.issue(kind="service", client_id="service:engine", subject="service:engine", scopes=["northsea.engine"],
+                     resource="https://mcp.northsea.test/mcp", ttl_s=600, label="engine")
+    r = await client.post("/internal/engine/tick?dry_run=1", headers={"Authorization": f"Bearer {ok}"})
+    assert r.status_code == 200 and r.json()["dry_run"] is True and r.json()["sent"] == 0
+    assert repo.engine_writes == []
+
+
+def test_engine_scope_is_not_offered_to_oauth_clients():
+    from northsea_mcp.policy import INTERNAL_SCOPES, SCOPES
+    assert "northsea.engine" in INTERNAL_SCOPES and "northsea.engine" not in SCOPES

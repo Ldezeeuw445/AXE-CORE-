@@ -110,7 +110,10 @@ def seed() -> dict[str, list[dict]]:
              "to_email": "chanda@mopani.com", "subject": "Introduction", "body": "We will introduce you to the buyer.",
              "approval_status": "pending", "sensitive_action": True, "sent_at": None, "resend_email_id": None, "updated_at": ts(-1), "created_at": ts(-1)},
         ],
-        "deal_automation_policy": [{"id": 1, "auto_send_qualification": True, "auto_disclose_counterparty_identity": False}],
+        "deal_automation_policy": [{"id": 1, "auto_send_qualification": False, "auto_reply_nonbinding": False, "auto_send_followups": False,
+                                    "auto_disclose_counterparty_identity": False, "followup_interval_hours": 48, "max_auto_followups": 3}],
+        "northsea_followups": [],
+        "northsea_audit_events": [],
     }
 
 
@@ -119,6 +122,8 @@ class FakeRepo:
         self.t = seed()
         self.sends: list[str] = []
         self.fail_reads = False
+        self.guard_block = False
+        self.engine_writes: list[tuple[str, str]] = []
 
     def _find(self, table: str, **eq) -> list[dict]:
         if self.fail_reads:
@@ -132,6 +137,38 @@ class FakeRepo:
 
     async def ping(self):
         return True
+
+    async def engine_insert(self, table, row, *, on_conflict=None, ignore_duplicates=False):
+        from northsea_mcp.repository import RepositoryError
+        assert table in {"email_intelligence", "opportunities", "northsea_followups", "reply_drafts", "action_queue", "contacts", "deal_evidence",
+                         "deal_events", "northsea_audit_events"}
+        rows = self.t.setdefault(table, [])
+        if self.guard_block and table == "reply_drafts":
+            raise RepositoryError("database write failed for reply_drafts (400): NS_CONTACT_POLICY: draft blocked (bounced_channel)")
+        if on_conflict:
+            sleutels = on_conflict.split(",")
+            if any(all(r.get(k) == row.get(k) for k in sleutels) for r in rows):
+                if ignore_duplicates:
+                    return []
+                raise RepositoryError(f"database write failed for {table} (409): duplicate")
+        if table == "action_queue" and row.get("dedupe_key") and any(r.get("dedupe_key") == row["dedupe_key"] and r.get("status") in ("open", "waiting", "in_progress") for r in rows):
+            return [] if ignore_duplicates else None
+        if table == "deal_evidence" and any((r.get("opportunity_id"), r.get("evidence_type"), r.get("source_reference")) == (row.get("opportunity_id"), row.get("evidence_type"), row.get("source_reference")) for r in rows):
+            return []
+        nieuw = {"id": str(uuid.uuid4()), "created_at": ts(), "updated_at": ts(), **copy.deepcopy(row)}
+        rows.append(nieuw)
+        self.engine_writes.append((table, "insert"))
+        return [copy.deepcopy(nieuw)]
+
+    async def engine_patch(self, table, filters, body):
+        rows = self.t.setdefault(table, [])
+        (sleutel, waarde), = filters.items()
+        doel = waarde.removeprefix("eq.")
+        hits = [r for r in rows if str(r.get(sleutel)) == doel]
+        for r in hits:
+            r.update(copy.deepcopy(body))
+        self.engine_writes.append((table, "patch"))
+        return copy.deepcopy(hits)
 
     async def fetch_all(self, table, max_rows=5000):
         from northsea_mcp.repository import SNAPSHOT_SELECT

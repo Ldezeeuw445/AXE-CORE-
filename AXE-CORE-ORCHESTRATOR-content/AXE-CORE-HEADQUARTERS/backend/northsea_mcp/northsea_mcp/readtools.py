@@ -686,6 +686,58 @@ class ReadTools:
                     "source": ["reply_drafts", "opportunities", "deal_tasks", "action_queue", "email_intelligence"]}
         raise NotFound("approval")
 
+    # ── COMMUNICATION ENGINE (P1) ────────────────────────────────────────────
+    async def engine_status(self, caller: Caller) -> dict:
+        v = await self.v(caller)
+        ticks = sorted([a for a in v.s.rows("northsea_audit_events") if a.get("action") == "engine_tick"],
+                       key=lambda a: str(a.get("occurred_at") or ""), reverse=True)
+        deals = [o for o in v.s.rows("opportunities") if o.get("stage") != "lost" and not o.get("is_synthetic")]
+        per_blokkade = Counter(o.get("engine_blocker_code") or "(not evaluated)" for o in deals)
+        per_eigenaar = Counter(o.get("engine_owner") or "(not evaluated)" for o in deals)
+        fu = v.s.rows("northsea_followups")
+        chase = [q for q in v.s.rows("action_queue") if (q.get("metadata") or {}).get("source") == "northsea-engine" and q.get("status") in OPEN_TASK]
+        bounced = [c for c in v.s.rows("contacts") if c.get("email_status") in ("bounced", "complained")]
+        return {
+            "generated_at": v.generated_at,
+            "engine": {"last_tick_at": ticks[0].get("occurred_at") if ticks else None,
+                       "last_summary": (ticks[0].get("details") or {}).get("summary") if ticks else None,
+                       "last_errors": (ticks[0].get("details") or {}).get("errors") if ticks else None,
+                       "ticks_recorded": len(ticks), "sends": 0,
+                       "guarantees": ["never sends", "never approves", "never passes a gate or changes stage",
+                                      "follow-ups are pending drafts that need human approval",
+                                      "ambiguous mappings are never resolved automatically"]},
+            "deals_by_current_blocker": dict(per_blokkade),
+            "deals_by_owner": dict(per_eigenaar),
+            "followups_by_status": dict(Counter(f.get("status") for f in fu)),
+            "open_engine_chase_items": [{"action_queue_id": q.get("id"), "type": q.get("action_type"), "title": q.get("title"),
+                                         "deal_id": q.get("opportunity_id"), "priority": q.get("priority"), "created_at": q.get("created_at")}
+                                        for q in sorted(chase, key=lambda q: -(q.get("priority") or 0))[:25]],
+            "bounced_channels": len(bounced),
+            "definition": "Deterministic engine (engine_rules.py). Blocker and next action are stored in opportunities.engine_*; "
+                          "they complement, and never overwrite, next_best_action set by people or agents.",
+            "source": ["northsea_audit_events", "opportunities", "northsea_followups", "action_queue", "contacts"],
+        }
+
+    async def list_followups(self, caller: Caller, *, status: str | None = None, deal: str | None = None, limit=25, offset=0) -> dict:
+        v = await self.v(caller)
+        rijen = v.s.rows("northsea_followups")
+        if status:
+            rijen = [f for f in rijen if f.get("status") == status]
+        if deal:
+            o = self.deal(v, deal)
+            rijen = [f for f in rijen if f.get("opportunity_id") == o.get("id")]
+        rijen = sorted(rijen, key=lambda f: str(f.get("due_at") or ""))
+        drafts = {d.get("id"): d for d in v.s.rows("reply_drafts")}
+        items = [{"followup_id": f.get("id"), "status": f.get("status"), "attempt": f.get("attempt"), "due_at": f.get("due_at"),
+                  "deal_id": f.get("opportunity_id"), "deal": canon.deal_label(v.s.get("opportunities", f.get("opportunity_id")) or {}) if f.get("opportunity_id") else None,
+                  "counterparty": v.company_ref(v.s.get("companies", f.get("company_id"))), "anchor_communication_id": f.get("anchor_communication_id"),
+                  "draft_id": f.get("draft_id"), "draft_approval_status": (drafts.get(f.get("draft_id")) or {}).get("approval_status"),
+                  "reason": f.get("reason"), "created_at": f.get("created_at")} for f in rijen]
+        stuk, meta = page(items, limit=limit, offset=offset)
+        return {"items": stuk, **meta, "generated_at": v.generated_at, "filters": {"status": status, "deal": deal},
+                "definition": "Durable follow-up plans (one per anchor email and attempt). A plan becomes a PENDING draft; sending needs human approval.",
+                "source": ["northsea_followups", "reply_drafts", "opportunities", "companies"]}
+
     # ── MARKET ───────────────────────────────────────────────────────────────
     async def market_context(self, caller: Caller) -> dict:
         v = await self.v(caller)

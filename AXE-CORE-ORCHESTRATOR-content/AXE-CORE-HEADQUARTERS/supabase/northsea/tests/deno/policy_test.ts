@@ -46,5 +46,5 @@ Deno.test("each blocker blocks independently", () => {
   for (const c of cases) assertEquals(decideAutoQualificationReply(base(ok, c)).allowed, false, JSON.stringify(c));
 });
 Deno.test("human send: review_required allowed, dnc/synthetic never", () => {
-  assertEquals([blocksHumanSend(null), blocksHumanSend("review_required"), blocksHumanSend("do_not_contact"), blocksHumanSend("synthetic")], [false, false, true, true]);
+  assertEquals([blocksHumanSend(null), blocksHumanSend("review_required"), blocksHumanSend("do_not_contact"), blocksHumanSend("synthetic"), blocksHumanSend("bounced_channel")], [false, false, true, true, true]);
 });

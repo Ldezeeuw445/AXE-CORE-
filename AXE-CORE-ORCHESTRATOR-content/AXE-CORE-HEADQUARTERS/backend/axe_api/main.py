@@ -3218,6 +3218,29 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
             ok = r.status_code < 400
             return {"status": "ok" if ok else "fail", "output": f"{r.status_code} {r.text[:1000]}"}
 
+        if action_type == "northsea":
+            # De NorthSea Communication Engine draait in de NorthSea-MCP op dezelfde box. De sleutel staat in
+            # de omgeving van deze API (nooit in core_schedules). De engine verstuurt nooit.
+            job = (payload.get("job") or "engine_tick").strip()
+            if job != "engine_tick":
+                return {"status": "fail", "output": f"northsea: unknown job {job!r}"}
+            token = os.environ.get("NORTHSEA_ENGINE_TOKEN", "").strip()
+            if not token:
+                return {"status": "fail", "output": "northsea: NORTHSEA_ENGINE_TOKEN not set on this host"}
+            url = os.environ.get("NORTHSEA_ENGINE_URL", "http://127.0.0.1:8040/internal/engine/tick")
+            params = {"dry_run": "1"} if payload.get("dry_run") else {}
+            async with httpx.AsyncClient(timeout=260) as client:
+                r = await client.post(url, params=params, headers={"Authorization": f"Bearer {token}"})
+            try:
+                data = r.json()
+            except ValueError:
+                data = {"raw": r.text[:500]}
+            if r.status_code == 409:
+                return {"status": "skipped", "output": "northsea engine: previous tick still running"}
+            ok = r.status_code == 200 and not data.get("errors")
+            samenvatting = {"summary": data.get("summary"), "errors": (data.get("errors") or [])[:10], "sent": data.get("sent"), "http": r.status_code}
+            return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
+
         if action_type in ("crew", "prompt"):
             task = (payload.get("task") or payload.get("prompt") or "").strip()
             if not task:

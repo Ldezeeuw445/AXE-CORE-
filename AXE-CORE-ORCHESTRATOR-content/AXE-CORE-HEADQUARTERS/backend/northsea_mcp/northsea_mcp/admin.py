@@ -16,7 +16,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from .policy import SCOPES
+from .policy import INTERNAL_SCOPES, SCOPES
 from .store import Store
 
 
@@ -44,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
             print("NORTHSEA_MCP_PUBLIC_URL is not set", file=sys.stderr)
             return 2
         scopes = [s.strip() for s in a.scopes.split(",") if s.strip()]
-        onbekend = [s for s in scopes if s not in SCOPES]
+        onbekend = [s for s in scopes if s not in SCOPES and s not in INTERNAL_SCOPES]
         if onbekend or not scopes:
             print(f"Unknown scopes: {', '.join(onbekend) or '(none given)'}", file=sys.stderr)
             return 2

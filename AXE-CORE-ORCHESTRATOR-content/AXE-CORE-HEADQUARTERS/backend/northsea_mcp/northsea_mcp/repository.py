@@ -31,11 +31,13 @@ SNAPSHOT_SELECT: dict[str, str] = {
     "supplier_offers": "*",
     "companies": "*",
     "contacts": "id,company_id,full_name,role,email,phone,linkedin_url,is_primary,verification_status,contact_policy,contact_policy_reason,"
-                "created_at,updated_at",
+                "email_status,email_status_at,email_status_reason,created_at,updated_at",
     "communications": "id,company_id,contact_id,opportunity_id,direction,channel,subject,body,external_message_id,occurred_at,"
                       "created_at,delivery_status,delivery_status_at,is_synthetic,synthetic_reason,mapping_status,mapping_basis,"
                       "mapping_candidates,from_address,reply_to_address,transport,actor_type,actor,approval_basis,reply_draft_id",
     "email_intelligence": "*",
+    "northsea_followups": "*",
+    "northsea_audit_events": "id,occurred_at,actor_type,actor,action,communication_id,opportunity_id,company_id,contact_id,draft_id,details",
     "call_intelligence": "id,communication_id,external_call_id,call_status,duration_seconds,summary,caller_type,commodity,product,"
                          "grade,quantity_mt,frequency,origin,destination,incoterm,payment_terms,urgency,requires_human_review,is_synthetic,"
                          "created_at,updated_at",
@@ -55,6 +57,9 @@ SNAPSHOT_SELECT: dict[str, str] = {
     "deal_automation_policy": "*",
     "commissions": "*",
 }
+
+
+GUARD_CODE = re.compile(r"NS_(?:CONTACT_POLICY|APPROVAL_INTEGRITY|OUTBOUND_PROVENANCE|POLICY|SYNTHETIC)[^\"]{0,80}")
 
 
 class RepositoryError(RuntimeError):
@@ -107,9 +112,39 @@ class SupabaseRepository:
         except httpx.HTTPError as e:
             raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
         if r.status_code >= 400:
-            raise RepositoryError(f"database write failed for {table} ({r.status_code})")
+            # De P0/P1-guards melden zich met een vaste code; die mag door (geen query, geen sleutel).
+            code = GUARD_CODE.search(r.text or "")
+            raise RepositoryError(f"database write failed for {table} ({r.status_code})"
+                                  + (f": {code.group(0)}" if code else "") + (": duplicate" if "23505" in (r.text or "") else ""))
         data = r.json() if r.content else []
         return data if isinstance(data, list) else [data]
+
+    # ── Engine (P1): alleen deze tabellen, alleen deze bewerkingen ────────────
+    ENGINE_TABLES = frozenset({"email_intelligence", "opportunities", "northsea_followups", "reply_drafts", "action_queue",
+                               "contacts", "deal_evidence", "deal_events", "northsea_audit_events"})
+
+    async def engine_insert(self, table: str, row: dict, *, on_conflict: str | None = None, ignore_duplicates: bool = False) -> list[dict]:
+        if table not in self.ENGINE_TABLES:
+            raise RepositoryError(f"engine may not write {table}")
+        params = {"on_conflict": on_conflict} if on_conflict else {}
+        prefer = "return=representation" + (",resolution=ignore-duplicates" if ignore_duplicates else "")
+        try:
+            r = await self._client.post(f"{self._url}/rest/v1/{table}", params=params, headers={**self._headers, "Prefer": prefer}, json=row)
+        except httpx.HTTPError as e:
+            raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
+        if r.status_code >= 400:
+            if ignore_duplicates and (r.status_code == 409 or "23505" in (r.text or "")):
+                return []
+            code = GUARD_CODE.search(r.text or "")
+            raise RepositoryError(f"database write failed for {table} ({r.status_code})" + (f": {code.group(0)}" if code else "")
+                                  + (": duplicate" if "23505" in (r.text or "") else ""))
+        data = r.json() if r.content else []
+        return data if isinstance(data, list) else [data]
+
+    async def engine_patch(self, table: str, filters: dict[str, str], body: dict) -> list[dict]:
+        if table not in self.ENGINE_TABLES or not filters:
+            raise RepositoryError(f"engine may not patch {table}")
+        return await self._write("PATCH", table, filters, body)
 
     # ── Gezondheid ────────────────────────────────────────────────────────────
     async def ping(self) -> bool:
@@ -279,7 +314,7 @@ class SupabaseRepository:
         if r.status_code >= 400:
             raise RepositoryError(f"contact policy check failed ({r.status_code})")
         waarde = r.json()
-        if waarde in (None, "do_not_contact", "synthetic", "review_required"):
+        if waarde in (None, "do_not_contact", "synthetic", "bounced_channel", "review_required"):
             return waarde
         return "do_not_contact"
 

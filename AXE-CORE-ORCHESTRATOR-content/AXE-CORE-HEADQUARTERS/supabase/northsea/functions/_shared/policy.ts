@@ -6,7 +6,7 @@
 
 import { CANONICAL_REPLY_TO } from "./canonical.ts";
 
-export type BlockReason = "do_not_contact" | "synthetic" | "review_required" | null;
+export type BlockReason = "do_not_contact" | "synthetic" | "bounced_channel" | "review_required" | null;
 export type MappingStatus = "mapped" | "ambiguous" | "unmapped" | "manual_review" | "synthetic";
 
 const BOOLEAN_FIELDS = [
@@ -82,7 +82,7 @@ export function decideAutoQualificationReply(i: AutoReplyInput): PolicyDecision 
 
 /** Een menselijke verzending mag bij review_required; nooit bij do_not_contact of synthetic. */
 export function blocksHumanSend(reason: BlockReason): boolean {
-  return reason === "do_not_contact" || reason === "synthetic";
+  return reason === "do_not_contact" || reason === "synthetic" || reason === "bounced_channel";
 }
 
 export function blocksAutomation(reason: BlockReason): boolean {
@@ -91,7 +91,7 @@ export function blocksAutomation(reason: BlockReason): boolean {
 
 export function asBlockReason(value: unknown): BlockReason {
   if (value === null || value === undefined) return null;
-  if (value === "do_not_contact" || value === "synthetic" || value === "review_required") return value;
+  if (value === "do_not_contact" || value === "synthetic" || value === "bounced_channel" || value === "review_required") return value;
   // Onbekende waarde uit de database: behandel als het strengste.
   return "do_not_contact";
 }

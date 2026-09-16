@@ -24,6 +24,8 @@ import {
   type DealTab, type DeskTellers,
 } from '@/domain/northsea/desk';
 import { tijdGeleden } from '@/domain/northsea/chase';
+import { blokkadeToon, eigenaarLabel } from '@/domain/northsea/engine';
+import { TOON_KLEUR } from '@/domain/northsea/tabs/status';
 import { STAND_STIJL } from './kaartStijl';
 
 const TABS: Array<{ id: DealTab; label: string; teller: keyof Pick<DeskTellers, 'actief' | 'pipeline' | 'afgerond'> }> = [
@@ -154,7 +156,11 @@ export function DealsTabel({ deals, tellers, nu, fout }: {
                       <Cel titel={d.kwalificatie ? `Qualification: ${d.kwalificatie}` : undefined} stijl={{ color: kleur }}>{faseLabel(d)}</Cel>
                       <Cel><Gereedheid waarde={d.gereedheid} /></Cel>
                       <Cel className="tabular-nums" stijl={{ color: commissie === '—' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{commissie}</Cel>
-                      <Cel titel={d.volgende ?? undefined} stijl={{ color: 'var(--text-secondary)' }}>{d.volgende?.trim() || '—'}</Cel>
+                      {/* P1: de engine-beoordeling gaat voor; zonder beoordeling blijft de oude volgende stap staan. */}
+                      <Cel titel={d.beste_actie ? [d.huidige_blokkade, d.beste_actie, d.actie_eigenaar ? `Owner: ${eigenaarLabel(d.actie_eigenaar)}` : null].filter(Boolean).join('\n') : (d.volgende ?? undefined)}
+                        stijl={{ color: d.blokkade_code ? TOON_KLEUR[blokkadeToon(d.blokkade_code)] : 'var(--text-secondary)' }}>
+                        {d.beste_actie?.trim() || d.volgende?.trim() || '—'}
+                      </Cel>
                       <Cel stijl={{ color: 'var(--text-muted)' }}>{d.updated_at ? tijdGeleden(d.updated_at, nu) : '—'}</Cel>
                     </tr>
                   );

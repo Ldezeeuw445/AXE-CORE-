@@ -39,6 +39,7 @@ from . import __version__
 from .audit import Auditor
 from .config import Settings
 from .crew import CrewGateway, StudioRoute
+from .engine import EngineService
 from .models import (
     BlockerInvestigation, CandidateSearch, CounterpartyResearch, DealReview, DraftApprovalResult, MatchAssessmentResult,
     NextActions, OutreachDraft, QualificationResult, ReplyAnalysis, SendResult, TaskResult,
@@ -527,6 +528,31 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
     route("/oauth/authorize", methods=["POST"])(oauth.authorize_post)
     route("/oauth/token", methods=["POST"])(oauth.token)
     route("/oauth/revoke", methods=["POST"])(oauth.revoke)
+
+    engine = EngineService(repo)
+    engine_lock = asyncio.Lock()
+
+    @route("/internal/engine/tick", methods=["POST"])
+    async def engine_tick(request: Request) -> Response:
+        """Communication Engine (P1). Alleen een service-token met scope northsea.engine (via admin issue, nooit OAuth).
+        Verstuurt nooit. `?dry_run=1` rekent alles uit en schrijft niets."""
+        auth = request.headers.get("authorization", "")
+        rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
+        if rec is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        if "northsea.engine" not in rec.scopes:
+            return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
+        dry = request.query_params.get("dry_run") in ("1", "true", "yes")
+        if engine_lock.locked():
+            return JSONResponse({"skipped": True, "reason": "a tick is already running"}, status_code=409)
+        async with engine_lock:
+            try:
+                uit = await asyncio.wait_for(engine.tick(dry_run=dry), timeout=240)
+            except asyncio.TimeoutError:
+                return JSONResponse({"error": "timeout"}, status_code=504)
+            except RepositoryError:
+                return JSONResponse({"error": "upstream_error"}, status_code=502)
+        return JSONResponse(uit, headers={"Cache-Control": "no-store"})
 
     @route("/", methods=["GET"])
     async def index(request: Request) -> Response:

@@ -77,7 +77,9 @@ select json_build_object(
             o.commission_rate as commissie_pct, o.commission_type as commissie_soort,
             o.commission_amount as commissie_bedrag, o.estimated_value as waarde, o.currency as valuta,
             coalesce(nullif(o.next_action,''), o.next_best_action) as volgende,
-            o.approval_required as akkoord_nodig, o.created_at, o.updated_at
+            o.approval_required as akkoord_nodig, o.created_at, o.updated_at,
+            o.engine_blocker_code as blokkade_code, o.engine_blocker as huidige_blokkade,
+            o.engine_next_action as beste_actie, o.engine_owner as actie_eigenaar, o.engine_evaluated_at as beoordeeld_op
      from opportunities o
      left join supplier_offers so on so.id = o.supplier_offer_id
      left join buyer_requirements br on br.id = o.buyer_requirement_id
@@ -224,18 +226,25 @@ select json_build_object('bedrijven', (select coalesce(json_agg(r order by r.upd
     "communicatie": """
 select json_build_object('berichten', (select coalesce(json_agg(r order by r.occurred_at desc nulls last), '[]'::json) from (
   select cm.id, cm.direction as richting, cm.channel as kanaal, cm.subject as onderwerp, left(cm.body, 6000) as tekst,
-         cm.occurred_at, cm.delivery_status as bezorging,
+         cm.occurred_at, cm.delivery_status as bezorging, cm.mapping_status as koppeling, cm.mapping_basis as koppeling_basis,
+         cm.is_synthetic as test, cm.from_address as afzender, cm.approval_basis as akkoord_basis, cm.actor as verstuurd_door,
          cm.company_id as bedrijf_id, co.company_name as bedrijf, co.country as bedrijf_land,
          ct.full_name as contact, ct.email as contact_email,
          cm.opportunity_id as deal_id, o.deal_priority as deal_code,
          (select json_build_object('classificatie', ei.classification, 'intentie', ei.commercial_intent, 'urgentie', ei.urgency,
                                    'risico', ei.risk_level, 'score', ei.qualification_score, 'samenvatting', ei.summary,
                                    'termen', ei.extracted_terms, 'ontbreekt', ei.missing_information, 'rode_vlaggen', ei.red_flags,
-                                   'advies', ei.recommended_action, 'akkoord_nodig', ei.requires_human_approval, 'status', ei.status)
+                                   'advies', ei.recommended_action, 'akkoord_nodig', ei.requires_human_approval, 'status', ei.status,
+                                   -- P1: de Communication Engine (deterministisch, claims blijven onbevestigd)
+                                   'engine', case when ei.engine_version is null then null else json_build_object(
+                                      'soort', ei.engine_primary, 'categorieen', ei.engine_categories, 'termen', ei.engine_terms,
+                                      'ontbreekt', ei.engine_missing, 'urgentie', ei.engine_urgency, 'risico', ei.engine_risk,
+                                      'redenen', ei.engine_reasons, 'versie', ei.engine_version, 'op', ei.engine_evaluated_at) end)
             from email_intelligence ei where ei.communication_id = cm.id order by ei.analyzed_at desc nulls last limit 1) as intelligentie,
          (select coalesce(json_agg(d order by d.created_at desc), '[]'::json) from (
             select rd.id, rd.subject as onderwerp, rd.to_email as aan, rd.purpose as doel, rd.approval_status as akkoord,
-                   rd.sensitive_action as gevoelig, rd.sent_at, rd.created_at
+                   rd.sensitive_action as gevoelig, rd.sent_at, rd.created_at, rd.lifecycle_state as levensloop,
+                   rd.approval_actor_type as akkoord_door_soort, rd.approved_by as akkoord_door, rd.generated_by as gemaakt_door
             from reply_drafts rd where rd.communication_id = cm.id limit 5) d) as concepten
   from communications cm
   left join companies co on co.id = cm.company_id
@@ -290,6 +299,18 @@ select json_build_object(
   'deal_automatisering', (select coalesce(json_agg(r), '[]'::json) from (
      select coalesce(automation_status, '(none)') as status, count(*) as aantal, max(last_automation_at) as laatst
      from opportunities where stage <> 'lost' group by 1) r),
+  -- P1: wat de Communication Engine echt deed (geen 'actief'-labels): laatste runs, follow-ups, open Chase-items.
+  'engine', json_build_object(
+     'runs', (select coalesce(json_agg(r order by r.op desc), '[]'::json) from (
+        select a.occurred_at as op, a.details -> 'summary' as samenvatting, a.details -> 'errors' as fouten
+        from northsea_audit_events a where a.action = 'engine_tick' order by a.occurred_at desc limit 20) r),
+     'followups', (select coalesce(json_agg(r), '[]'::json) from (
+        select f.status, count(*) as aantal, min(f.due_at) filter (where f.status in ('scheduled','draft_created')) as eerstvolgende
+        from northsea_followups f group by f.status) r),
+     'chase_open', (select count(*) from action_queue q where q.status in ('open','in_progress','waiting') and q.metadata ->> 'source' = 'northsea-engine'),
+     'blokkades', (select coalesce(json_agg(r), '[]'::json) from (
+        select coalesce(o.engine_blocker_code, '(niet beoordeeld)') as code, coalesce(o.engine_owner, '-') as eigenaar, count(*) as aantal
+        from opportunities o where o.stage <> 'lost' and not o.is_synthetic group by 1, 2) r)),
   'campagnes', (select coalesce(json_agg(r order by r.prioriteit desc nulls last, r.updated_at desc nulls last), '[]'::json) from (
      select sc.id, sc.direction as richting, sc.commodity, sc.product, sc.search_geographies as gebieden, sc.status,
             sc.priority as prioriteit, sc.candidates_found as gevonden, sc.candidates_screened as gescreend,
@@ -328,6 +349,10 @@ select json_build_object(
      select 'campagne:' || sc.id::text, 'campagne', sc.next_action_at, sc.next_action, null
      from sourcing_campaigns sc
      where sc.next_action_at is not null
+     union all
+     select 'followup:' || f.id::text, 'follow-up', f.due_at, 'Follow-up ' || f.attempt || coalesce(' · ' || f.status, ''), o3.deal_priority
+     from northsea_followups f left join opportunities o3 on o3.id = f.opportunity_id
+     where f.status in ('scheduled', 'draft_created')
      limit 400) r)
 ) as data
 """,

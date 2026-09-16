@@ -191,6 +191,20 @@ export interface EmailIntelligentie {
   advies?: Tekst;
   akkoord_nodig?: boolean | null;
   status?: Tekst;
+  /** P1: deterministische Communication Engine; termen zijn wat de tegenpartij zei, niet geverifieerd. */
+  engine?: EngineAnalyse | null;
+}
+
+export interface EngineAnalyse {
+  soort?: Tekst;
+  categorieen?: string[] | null;
+  termen?: Record<string, unknown> | null;
+  ontbreekt?: string[] | null;
+  urgentie?: Tekst;
+  risico?: Tekst;
+  redenen?: string[] | null;
+  versie?: Tekst;
+  op?: Tijd;
 }
 
 export interface Concept {
@@ -202,6 +216,10 @@ export interface Concept {
   gevoelig?: boolean | null;
   sent_at?: Tijd;
   created_at?: Tijd;
+  levensloop?: Tekst;
+  akkoord_door_soort?: Tekst;
+  akkoord_door?: Tekst;
+  gemaakt_door?: Tekst;
 }
 
 export interface Bericht {
@@ -212,6 +230,12 @@ export interface Bericht {
   tekst?: Tekst;
   occurred_at?: Tijd;
   bezorging?: Tekst;
+  koppeling?: Tekst;
+  koppeling_basis?: Tekst;
+  test?: boolean | null;
+  afzender?: Tekst;
+  akkoord_basis?: Tekst;
+  verstuurd_door?: Tekst;
   bedrijf_id?: Tekst;
   bedrijf?: Tekst;
   bedrijf_land?: Tekst;
@@ -327,6 +351,13 @@ export interface TabData {
     gebeurtenissen: Array<DealGebeurtenis & { deal_code?: Tekst }>;
     deal_automatisering: Array<{ status: string; aantal: number; laatst?: Tijd }>;
     campagnes: Campagne[];
+    /** P1: echte engine-runs uit northsea_audit_events; ontbreekt zolang de migratie niet draait. */
+    engine?: {
+      runs: Array<{ op: string; samenvatting?: Record<string, number> | null; fouten?: string[] | null }>;
+      followups: Array<{ status: string; aantal: number; eerstvolgende?: Tijd }>;
+      chase_open: number;
+      blokkades: Array<{ code: string; eigenaar: string; aantal: number }>;
+    } | null;
   };
   werk: { taken: NorthseaTaak[]; agenda: NorthseaAgendaItem[] };
   rapporten: {

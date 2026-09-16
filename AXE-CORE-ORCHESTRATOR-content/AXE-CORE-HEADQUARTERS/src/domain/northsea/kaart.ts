@@ -55,6 +55,12 @@ export interface KaartDeal {
   valuta?: string | null;
   volgende?: string | null;
   akkoord_nodig?: boolean | null;
+  /* P1 engine-beoordeling (opportunities.engine_*). */
+  blokkade_code?: string | null;
+  huidige_blokkade?: string | null;
+  beste_actie?: string | null;
+  actie_eigenaar?: string | null;
+  beoordeeld_op?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }

@@ -838,7 +838,7 @@ class NorthSeaService:
         primair = next((c for c in contacts if c.get("email")), None)
         beleid = await self.repo.outbound_block_reason(company_id=(company or {}).get("id"), contact_id=(primair or {}).get("id"),
                                                        email=(primair or {}).get("email"), opportunity_id=(opp or {}).get("id"))
-        if beleid in ("do_not_contact", "synthetic"):
+        if beleid in ("do_not_contact", "synthetic", "bounced_channel"):
             raise PolicyDenied("contact_policy_blocked",
                                f"Outreach is blocked by contact policy ({beleid}). No draft was prepared.")
         if template == "auto":
@@ -1090,7 +1090,7 @@ class NorthSeaService:
             raise NotFound("opportunity")
         if task_type not in REVIEW_TASK_TYPES:
             beleid = await self.repo.outbound_block_reason(opportunity_id=opp["id"])
-            if beleid in ("do_not_contact", "synthetic"):
+            if beleid in ("do_not_contact", "synthetic", "bounced_channel"):
                 raise PolicyDenied("contact_policy_blocked",
                                    f"This deal is blocked by contact policy ({beleid}); only review tasks ({', '.join(sorted(REVIEW_TASK_TYPES))}) can be created.")
         for t in await self.repo.list_deal_tasks(opp["id"], open_only=True):
@@ -1164,7 +1164,7 @@ class NorthSeaService:
         check_sensitive_draft(d, opp)
         beleid = await self.repo.outbound_block_reason(company_id=d.get("company_id"), contact_id=d.get("contact_id"),
                                                        email=d.get("to_email"), opportunity_id=d.get("opportunity_id"))
-        if beleid in ("do_not_contact", "synthetic"):
+        if beleid in ("do_not_contact", "synthetic", "bounced_channel"):
             raise PolicyDenied("contact_policy_blocked", f"This draft cannot be approved: contact policy ({beleid}).")
         tijd = now().isoformat()
         rij = await self.repo.update_draft_if(d["id"], expected_updated_at or d["updated_at"],
@@ -1197,7 +1197,7 @@ class NorthSeaService:
         check_sensitive_draft(d, opp)
         beleid = await self.repo.outbound_block_reason(company_id=d.get("company_id"), contact_id=d.get("contact_id"),
                                                        email=d.get("to_email"), opportunity_id=d.get("opportunity_id"))
-        if beleid in ("do_not_contact", "synthetic"):
+        if beleid in ("do_not_contact", "synthetic", "bounced_channel"):
             raise PolicyDenied("contact_policy_blocked", f"Sending is blocked by contact policy ({beleid}). Nothing was sent.")
         res = await self.repo.send_approved_reply(d["id"], requested_by=caller.principal)
         if res.get("ok"):

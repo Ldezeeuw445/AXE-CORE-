@@ -2,6 +2,9 @@
  * Automation: wat NorthSea automatisch doet, en wat nooit.
  *
  * Geen tweede automatiseringsmotor (AUTOMATIONS.md, CRONJOBS.md): dit scherm toont
+ *   - de Communication Engine (P1): echte runs uit northsea_audit_events, de
+ *     follow-up-plannen, open Chase-items, en de runs van job `northsea:engine`
+ *     uit het grootboek van de ene planner;
  *   - het beleid uit `deal_automation_policy` (wat mag zonder mens);
  *   - de sourcing-campagnes die lopen;
  *   - de log van `deal_events`, gekleurd met gebeurtenisToon (status.ts).
@@ -18,6 +21,8 @@ import { tijdGeleden } from '@/domain/northsea/chase';
 import { past, tel } from '@/domain/northsea/tabs/lijsten';
 import { gebeurtenisToon, mensLabel, TOON_KLEUR, type Toon } from '@/domain/northsea/tabs/status';
 import type { AutomatiseringsBeleid } from '@/domain/northsea/tabs/typen';
+import { blokkadeToon, eigenaarLabel } from '@/domain/northsea/engine';
+import { ledgerList, type LedgerEntry } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, VerversKnop, Vlak, Zoekveld,
 } from './bouwstenen';
@@ -41,7 +46,17 @@ function schakelaarToon(aan: boolean | null | undefined, gevoelig: boolean): { t
 
 export function AutomatiseringTab() {
   const { data, fout, bezig, ververs } = useNorthseaTab('automatisering');
-  const [weergave, setWeergave] = useState<'log' | 'campagnes'>('log');
+  const [weergave, setWeergave] = useState<'engine' | 'log' | 'campagnes'>('engine');
+  /* De planner-runs komen van de VPS (/ledger), los van de tabdata: faalt dat,
+     dan blijft de rest van het scherm staan en staat de reden erbij. */
+  const [planner, setPlanner] = useState<{ runs: LedgerEntry[]; fout?: string } | null>(null);
+  useEffect(() => {
+    let weg = false;
+    void ledgerList({ app: 'northsea', source: 'schedule', hours: 72, limit: 60 })
+      .then(runs => { if (!weg) setPlanner({ runs }); })
+      .catch(e => { if (!weg) setPlanner({ runs: [], fout: e instanceof Error ? e.message : 'ledger onbereikbaar' }); });
+    return () => { weg = true; };
+  }, [data]);
   const [zoek, setZoek] = useState('');
   const [nu, setNu] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNu(Date.now()), 60_000); return () => clearInterval(t); }, []);
@@ -53,18 +68,22 @@ export function AutomatiseringTab() {
   const dezeWeek = alleLog.filter(g => g.created_at && nu - Date.parse(g.created_at) < week).length;
   const fouten = alleLog.filter(g => gebeurtenisToon(g.soort) === 'rood').length;
   const alleCampagnes = data?.campagnes ?? [];
-  const som = (k: 'gevonden' | 'benaderd' | 'gekwalificeerd') => alleCampagnes.reduce((s, c) => s + (c[k] ?? 0), 0);
   const beleid = data?.beleid ?? null;
   const gevoeligAan = beleid ? SCHAKELAARS.filter(s => s.gevoelig && beleid[s.sleutel] === true).length : 0;
   const soorten = tel(alleLog, g => g.soort).slice(0, 8);
+  const engine = data?.engine ?? null;
+  const laatsteRun = engine?.runs[0] ?? null;
+  const openPlannen = (engine?.followups ?? []).filter(f => f.status === 'scheduled' || f.status === 'draft_created').reduce((n, f) => n + f.aantal, 0);
+  const plannerFouten = (planner?.runs ?? []).filter(r => !['ok', 'success', 'skipped'].includes(r.status)).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-automatisering">
       <KengetalRij>
+        <Kengetal waarde={laatsteRun ? tijdGeleden(laatsteRun.op, nu) : (data ? 'Never' : '—')} label="Engine last run" toon="paars"
+          sub={data ? (laatsteRun ? `${(laatsteRun.fouten ?? []).length} errors` : 'No engine run recorded') : undefined} />
+        <Kengetal waarde={data ? openPlannen : '—'} label="Open follow-ups" sub="Drafts wait for approval" />
+        <Kengetal waarde={data ? (engine?.chase_open ?? 0) : '—'} label="Engine Chase items" toon="oranje" />
         <Kengetal waarde={data ? alleCampagnes.filter(c => c.status === 'active').length : '—'} label="Active campaigns" toon="paars" />
-        <Kengetal waarde={data ? som('gevonden') : '—'} label="Candidates found" />
-        <Kengetal waarde={data ? som('benaderd') : '—'} label="Contacted" />
-        <Kengetal waarde={data ? som('gekwalificeerd') : '—'} label="Qualified" toon="groen" />
         <Kengetal waarde={data ? dezeWeek : '—'} label="Events this week" toon="blauw" />
         <Kengetal waarde={data ? fouten : '—'} label="Failures" toon="rood" sub={data ? (fouten ? 'Bounces or delivery failures' : 'None recorded') : undefined} />
       </KengetalRij>
@@ -74,13 +93,76 @@ export function AutomatiseringTab() {
         acties={(
           <>
             <div className="w-[240px]"><Zoekveld waarde={zoek} zet={setZoek} plaats={weergave === 'log' ? 'Search activity…' : 'Search campaigns…'} /></div>
-            <Filters opties={[{ id: 'log', label: 'Activity', aantal: alleLog.length }, { id: 'campagnes', label: 'Sourcing campaigns', aantal: alleCampagnes.length }] as const}
+            <Filters opties={[{ id: 'engine', label: 'Engine', aantal: engine?.runs.length ?? 0 }, { id: 'log', label: 'Activity', aantal: alleLog.length }, { id: 'campagnes', label: 'Sourcing campaigns', aantal: alleCampagnes.length }] as const}
               actief={weergave} kies={setWeergave} />
             <VerversKnop bezig={bezig} ververs={ververs} />
           </>
         )}>
         {fout && <FoutRegel fout={fout} />}
         {!fout && !data && <LegeStaat titel="Loading automation…" />}
+        {data && weergave === 'engine' && (
+          <div className="grid gap-4 px-4 pb-3 lg:grid-cols-2">
+            <section>
+              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Engine runs (audit)</div>
+              {!engine && <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>The engine is not installed on this database yet.</div>}
+              {engine && engine.runs.length === 0 && <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>No engine run recorded.</div>}
+              <ul className="flex flex-col">
+                {(engine?.runs ?? []).map(r => {
+                  const fouten = r.fouten ?? [];
+                  const som = Object.entries(r.samenvatting ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `${mensLabel(k)} ${n}`).join(' · ');
+                  return (
+                    <li key={r.op} className="flex gap-2 py-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: TOON_KLEUR[fouten.length ? 'rood' : 'groen'] }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2 text-[12px]">
+                          <span className="truncate" style={{ color: 'var(--text-primary)' }}>{som || 'No changes'}</span>
+                          <span className="ml-auto shrink-0 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{tijdGeleden(r.op, nu)}</span>
+                        </div>
+                        {fouten.slice(0, 3).map((f, i) => (
+                          <div key={i} className="truncate text-[11px]" style={{ color: TOON_KLEUR.rood }} title={f}>{f}</div>
+                        ))}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+            <section>
+              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Scheduler runs · northsea:engine</div>
+              {planner?.fout && <div className="text-[11.5px]" style={{ color: TOON_KLEUR.rood }}>Ledger unavailable — {planner.fout}</div>}
+              {planner && !planner.fout && planner.runs.length === 0 && (
+                <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>No scheduled NorthSea job ran in the last 72 h.</div>
+              )}
+              <ul className="flex flex-col">
+                {(planner?.runs ?? []).slice(0, 12).map(r => (
+                  <li key={`${r.ref_id}:${r.at}`} className="flex items-baseline gap-2 py-1 text-[11.5px]" style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
+                    <Label toon={r.status === 'ok' || r.status === 'success' ? 'groen' : r.status === 'skipped' ? 'grijs' : r.status === 'running' ? 'blauw' : 'rood'}>{mensLabel(r.status)}</Label>
+                    <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text-secondary)' }} title={r.detail}>{r.detail || r.name}</span>
+                    <span className="shrink-0 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{tijdGeleden(r.at, nu)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Deals by current blocker</div>
+              <ul className="flex flex-col gap-1">
+                {(engine?.blokkades ?? []).slice().sort((a, b) => b.aantal - a.aantal).map(b => (
+                  <li key={`${b.code}:${b.eigenaar}`} className="flex items-center gap-2 text-[11.5px]">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: TOON_KLEUR[blokkadeToon(b.code)] }} />
+                    <span className="flex-1 truncate" style={{ color: 'var(--text-secondary)' }}>{mensLabel(b.code)}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{eigenaarLabel(b.eigenaar)}</span>
+                    <span className="w-6 text-right tabular-nums" style={{ color: 'var(--text-primary)' }}>{b.aantal}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Follow-up plans</div>
+              <div className="flex flex-wrap gap-1.5">
+                {(engine?.followups ?? []).length === 0 && <span className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>None planned.</span>}
+                {(engine?.followups ?? []).map(f => (
+                  <Label key={f.status} toon={f.status === 'blocked' ? 'rood' : f.status === 'draft_created' ? 'oranje' : 'grijs'}>{mensLabel(f.status)} {f.aantal}</Label>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
         {data && weergave === 'log' && (log.length === 0 ? <LegeStaat titel="No automation activity matches" /> : (
           <ul className="px-2 pb-2">
             {log.map(g => {
@@ -165,7 +247,14 @@ export function AutomatiseringTab() {
             ))}
           </div>
 
-          <Link to="/cron-manager" className="mt-4 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
+          <div className="mt-3 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+            The engine never sends: follow-ups become pending drafts, and every send needs a human approver.
+            {plannerFouten > 0 && <span style={{ color: TOON_KLEUR.rood }}> {plannerFouten} scheduler run{plannerFouten > 1 ? 's' : ''} failed in 72 h.</span>}
+          </div>
+          <Link to="/ledger" className="mt-3 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
+            All runs in the Ledger <ArrowRight size={12} />
+          </Link>
+          <Link to="/cron-manager" className="mt-1.5 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
             Scheduled jobs live in the Cron Manager <ArrowRight size={12} />
           </Link>
         </DetailPaneel>

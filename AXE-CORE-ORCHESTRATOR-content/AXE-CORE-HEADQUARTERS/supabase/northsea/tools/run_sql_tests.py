@@ -9,12 +9,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from supa_mcp import call
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-MIGRATIES = sorted((ROOT / "migrations").glob("20260916150*_p0_*.sql"))
-TEST = ROOT / "tests" / "sql" / "p0_guards_test.sql"
+MIGRATIES = sorted((ROOT / "migrations").glob("2026091*_p[01]_*.sql"))
+TESTS = {"p0": ROOT / "tests" / "sql" / "p0_guards_test.sql", "p1": ROOT / "tests" / "sql" / "p1_engine_test.sql"}
 
 def main() -> int:
     delen = [p.read_text() for p in MIGRATIES] if "--with-migrations" in sys.argv else []
-    sql = "\n".join(delen + [TEST.read_text()])
+    welke = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--suite=")), "p0")
+    sql = "\n".join(delen + [TESTS[welke].read_text()])
     t = call("execute_sql", {"query": sql})
     tekst = t if isinstance(t, str) else json.dumps(t)
     m = re.search(r"NS_TESTS_PASSED: (\d+)", tekst)

@@ -38,6 +38,12 @@ SCOPES: dict[str, str] = {
     "northsea.admin": "Approve drafts and other administrative NorthSea decisions.",
 }
 
+# Interne scopes: alleen via `northsea_mcp.admin issue` op de box, nooit via OAuth (niet in SCOPES,
+# dus ook niet in scopes_supported en niet te kiezen in het toestemmingsscherm).
+INTERNAL_SCOPES: dict[str, str] = {
+    "northsea.engine": "Run the deterministic Communication Engine tick (no sending, no LLM). Service tokens only.",
+}
+
 # Wat een nieuwe ChatGPT-verbinding standaard aanvraagt als de client niets vraagt.
 DEFAULT_SCOPES = ("northsea.read", "northsea.deal.read", "northsea.research", "northsea.communications.draft")
 

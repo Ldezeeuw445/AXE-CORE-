@@ -16,6 +16,7 @@ import { tijdGeleden } from '@/domain/northsea/chase';
 import { alsLijst, filterBerichten, vraagtActie, type BerichtFilter } from '@/domain/northsea/tabs/lijsten';
 import { bezorgBadge, conceptBadge, mensLabel, TOON_KLEUR, type Toon } from '@/domain/northsea/tabs/status';
 import type { Bericht } from '@/domain/northsea/tabs/typen';
+import { conceptHerkomst, termenRegels } from '@/domain/northsea/engine';
 import {
   DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, Zoekveld,
 } from './bouwstenen';
@@ -145,6 +146,8 @@ export function CommunicatieTab() {
                           {b.deal_code && <Label toon="blauw">{b.deal_code}</Label>}
                           {actie && <Label toon="oranje">Needs action</Label>}
                           {bezorgBadge(b.bezorging)?.toon === 'rood' && <Label toon="rood">Not delivered</Label>}
+                          {b.test && <Label toon="grijs">Test</Label>}
+                          {b.intelligentie?.engine?.soort && <Label toon="paars">{mensLabel(b.intelligentie.engine.soort)}</Label>}
                         </span>
                       </span>
                     </button>
@@ -181,6 +184,34 @@ export function CommunicatieTab() {
             <Veld label="Contact">{bericht.contact}</Veld>
             <Veld label="Email">{bericht.contact_email}</Veld>
             <Veld label="Deal">{bericht.deal_code || (bericht.deal_id ? `#${bericht.deal_id.slice(0, 6)}` : null)}</Veld>
+            <Veld label="Mapping">{bericht.koppeling ? `${mensLabel(bericht.koppeling)}${bericht.koppeling_basis ? ` · ${bericht.koppeling_basis}` : ''}` : null}</Veld>
+            {bericht.richting === 'outbound' && (
+              <>
+                {/* Herkomst zoals vastgelegd; ontbrekend blijft "not recorded" (P0.9). */}
+                <Veld label="Sent from">{bericht.afzender || 'Not recorded'}</Veld>
+                <Veld label="Sent by">{bericht.verstuurd_door || 'Not recorded'}</Veld>
+                <Veld label="Approval basis">{bericht.akkoord_basis || 'Not recorded'}</Veld>
+              </>
+            )}
+            {bericht.test && <div className="mt-2 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Synthetic test record — never drives deal state.</div>}
+
+            {bericht.intelligentie?.engine && (() => {
+              const e = bericht.intelligentie.engine;
+              return (
+                <>
+                  <div className="mb-1 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#F472B6' }}>
+                    Engine · rules {e.versie ?? ''} — counterparty-stated, unverified
+                  </div>
+                  <Veld label="Type">{mensLabel(e.soort)}</Veld>
+                  <Veld label="Signals">{(e.categorieen ?? []).map(mensLabel).join(', ') || null}</Veld>
+                  <Veld label="Urgency">{e.urgentie}</Veld>
+                  <Veld label="Risk">{e.risico}</Veld>
+                  <Lijstje titel="Stated terms" regels={termenRegels(e.termen)} />
+                  <Lijstje titel="Still missing" regels={e.ontbreekt ?? []} toon="geel" />
+                  <Lijstje titel="Why" regels={e.redenen ?? []} />
+                </>
+              );
+            })()}
 
             {bericht.intelligentie ? (
               <>
@@ -216,6 +247,7 @@ export function CommunicatieTab() {
                   <div className="mt-1 flex items-center gap-2">
                     <StatusChip badge={conceptBadge(c.akkoord, c.sent_at)} klein />
                     {c.gevoelig && <Label toon="oranje">Sensitive</Label>}
+                    {c.levensloop && <Label toon="grijs">{mensLabel(c.levensloop)}</Label>}
                     {/* Alleen bij een concept dat AL goedgekeurd is en nog niet
                         verstuurd. Goedkeuren gebeurt niet hier: dat eist
                         menselijke herkomst, en die hoort bij de goedkeurder. */}
@@ -228,6 +260,9 @@ export function CommunicatieTab() {
                       </button>
                     )}
                   </div>
+                  {conceptHerkomst(c) && (
+                    <div className="mt-1 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{conceptHerkomst(c)}</div>
+                  )}
                   {verstuurd[c.id]?.ok && (
                     <div className="mt-1 text-[11px]" style={{ color: '#34D399' }}>{verstuurd[c.id]?.ok}</div>
                   )}
