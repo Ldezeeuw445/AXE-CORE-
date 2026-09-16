@@ -1,0 +1,34 @@
+sourcing_strategy_formulation:
+  agent: sourcing_strategist
+  description: Parse NorthSea sourcing inputs including {direction} {commodity} {current_blockers} {search_geographies} and related fields. UNKNOWN stays UNKNOWN.
+  expected_output: Commercially grounded sourcing strategy.
+
+buyer_discovery:
+  agent: buyer_hunter
+  description: If {direction} is find_supplier, return empty list. Else search 5–15 evidenced buyer candidates. No invented contacts or payment compatibility.
+  expected_output: Raw buyer candidate list with sources.
+
+supplier_discovery:
+  agent: supplier_hunter
+  description: If {direction} is find_buyer, return empty list. Else search evidenced suppliers. Payment compatibility remains UNKNOWN unless documented.
+  expected_output: Raw supplier candidate list with sources.
+
+counterparty_verification:
+  agent: counterparty_verifier
+  description: Independently verify every candidate. Never fabricate emails from naming patterns.
+  expected_output: Enriched profiles with fact classifications and provenance.
+
+commercial_fit_analysis:
+  agent: commercial_fit_analyst
+  description: Score 0–100. Critical incompatibility overrides score. UNKNOWN payment = partial score only.
+  expected_output: Fit assessments with qualification questions.
+
+evidence_normalization:
+  agent: evidence_provenance_analyst
+  description: Final evidence quality gate before canonical output.
+  expected_output: Normalized evidence set.
+
+sourcing_supervision_canonical_output:
+  agent: sourcing_supervisor
+  description: Deduplicate, reject, rank Priority A/B/C, assemble canonical JSON for CrewGateway. Do not disclose protected counterparties.
+  expected_output: Single valid structured sourcing result.

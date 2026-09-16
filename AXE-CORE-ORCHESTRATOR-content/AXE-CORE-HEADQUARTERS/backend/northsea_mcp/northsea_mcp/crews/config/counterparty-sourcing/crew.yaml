@@ -1,0 +1,13 @@
+name: NorthSea Counterparty Intelligence & Sourcing
+studio_id: 9679d3e8-7e66-4017-9970-b67b447cc679
+studio_url: https://app.crewai.com/studio/v2/projects/9679d3e8-7e66-4017-9970-b67b447cc679/editor
+process: sequential
+version: 1
+triggers: []
+default_llm: openai/gpt-5.6-luna
+purpose: northsea_counterparty_intelligence
+requires_env:
+  - EXA_API_KEY  # not included; set in Crew Studio Environment Variables
+run_workaround: >
+  Studio shows every {variable} as a Run field. For unused fields type "-" or N/A.
+  The strategist treats empty/null/dash as commercially UNKNOWN.

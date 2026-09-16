@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import matching
+from . import orchestration
 from .crew import PROHIBITED, CrewGateway
 from .models import (
     Blocker, BlockerInvestigation, CandidateSearch, CandidateView, Claim, CounterpartyResearch, CrewRunInfo,
@@ -443,6 +444,233 @@ class NorthSeaService:
         if depth != "deep":
             return CrewRunInfo(used=False, reason="deterministic analysis was sufficient (depth=standard)")
         return await self.crew.run(action, handoff)
+
+    def _snapshot_deal(self, ctx: dict) -> dict[str, Any]:
+        """Canonical deal-state voor crews — geen bestand, alleen NorthSea-service data."""
+        opp = ctx["opp"]
+        red: Redactor = ctx["red"]
+        return {
+            "deal_id": opp.get("id"),
+            "stage": opp.get("stage"),
+            "execution_state": opp.get("execution_state"),
+            "qualification_status": opp.get("qualification_status"),
+            "primary_blocker": red(opp.get("primary_blocker")),
+            "approval_required": bool(opp.get("approval_required")),
+            "action_owner": opp.get("action_owner"),
+            "waiting_since": opp.get("waiting_since"),
+            "readiness_score": ctx.get("readiness"),
+            "origin": (ctx.get("off") or {}).get("origin"),
+            "is_synthetic": bool(opp.get("is_synthetic") or opp.get("internal_testcase")),
+            "gates": [g.model_dump() for g in ctx["gates"]],
+            "buyer": party_view(ctx["bc"], "buyer", ctx["red"].caller, ctx["contacts_b"]).model_dump(),
+            "seller": party_view(ctx["sc"], "supplier", ctx["red"].caller, ctx["contacts_s"]).model_dump(),
+            "requirement": summary_requirement(ctx["req"]) if ctx.get("req") else {},
+            "offer": summary_offer(ctx["off"]) if ctx.get("off") else {},
+            "evidence": [{"evidence_type": e.get("evidence_type"), "verification_status": e.get("verification_status"),
+                          "claim": red(e.get("claim")), "source_type": e.get("source_type")} for e in ctx["evidence"]],
+            "blockers": [b.model_dump() for b in ctx["blockers"]],
+            "tasks": [{"id": t.get("id"), "title": red(t.get("title")), "status": t.get("status"),
+                       "task_type": t.get("task_type")} for t in ctx["tasks"]],
+            "communications": [{"id": c.get("id"), "direction": c.get("direction"), "channel": c.get("channel"),
+                                "subject": red(c.get("subject")), "body": red(c.get("body"))} for c in ctx["comms"]],
+        }
+
+    def _snapshot_ops(self, ctx: dict) -> dict[str, Any]:
+        deal = self._snapshot_deal(ctx)
+        return {
+            "communications": deal["communications"],
+            "deals": [deal],
+            "documents": deal["evidence"],
+            "tasks": deal["tasks"],
+        }
+
+    async def canonical_handoff(self, caller: Caller, action: str, handoff: dict[str, Any]) -> dict[str, Any]:
+        """Zet canonieke deal/ops-state op de MCP-grens. Crews lezen geen files."""
+        payload = dict(handoff.get("payload") or {})
+        entity_ids = list(handoff.get("entity_ids") or [])
+        opp_id = payload.get("opportunity_id") or payload.get("deal_id")
+        if not opp_id:
+            for e in entity_ids:
+                if e:
+                    opp_id = e
+                    break
+        state: dict[str, Any] = {
+            "source": "northsea_service",
+            "channel": "mcp_boundary",
+            "file_read": False,
+            "action": action,
+            "inputs": payload,
+            "deal": None,
+            "operations": None,
+        }
+        if opp_id:
+            try:
+                ctx = await self._deal_context(str(opp_id), caller)
+                state["deal"] = self._snapshot_deal(ctx)
+                state["operations"] = self._snapshot_ops(ctx)
+            except NotFound:
+                state["missing"] = ["opportunity_not_found"]
+        out = dict(handoff)
+        out["canonical_state"] = state
+        out["action"] = action
+        return out
+
+    async def handle_event(self, caller: Caller, event: dict[str, Any]) -> orchestration.OrchestrationResult:
+        """Canoniek event-instappunt — de deterministische master-orchestratie.
+
+        Eén weg naar binnen voor AXE CORE-events. CrewAI redeneert; deze laag
+        valideert, gate't, routeert, redigeert identiteiten, en legt alleen
+        gerechtvaardigde provenance vast. Geen send, geen engine_*-mutatie, geen
+        verified-promotie. Studio mag down zijn. Dubbele event_id is idempotent.
+        """
+        from .crews.schemas import market_as_transaction_evidence, parse_typed_result
+
+        event_id = event.get("event_id") if isinstance(event, dict) else None
+        if isinstance(event_id, str) and event_id:
+            eerder = await self._find_crew_audit(event_id)
+            if eerder:
+                details = eerder.get("details") or {}
+                return orchestration.OrchestrationResult(
+                    status=details.get("orchestration_status") or "ok",
+                    event_id=event_id, run_id=details.get("run_id"),
+                    route=details.get("route"), crew_family=details.get("crew_family"),
+                    validation=orchestration.ValidationResult(valid=True, event_type=str(event.get("event_type") or "")),
+                    crew=CrewRunInfo(used=True, status=details.get("crew_status") or "ok",
+                                     crew=details.get("crew_short"), route=details.get("route"),
+                                     backend=details.get("backend"), actual_crew=details.get("actual_crew"),
+                                     validation=details.get("validation") or "valid",
+                                     analysis=details.get("analysis"),
+                                     fallback_used=bool(details.get("fallback_used")),
+                                     timings=details.get("timings") or {},
+                                     budget_usage=details.get("budget_usage") or {}),
+                    reason="idempotent replay of existing crew_run",
+                )
+
+        payload = event.get("payload") if isinstance(event, dict) else None
+        opp_id = payload.get("opportunity_id") if isinstance(payload, dict) else None
+        ctx = None
+        if opp_id:
+            try:
+                ctx = await self._deal_context(str(opp_id), caller)
+            except NotFound:
+                ctx = None
+            if ctx and (ctx["opp"].get("is_synthetic") or ctx["opp"].get("internal_testcase")):
+                if isinstance(event, dict):
+                    event = dict(event)
+                    pl = dict(event.get("payload") or {})
+                    pl["is_synthetic"] = True
+                    event["payload"] = pl
+
+        service = self
+
+        class CanonicalGateway:
+            async def run(self, action: str, handoff: dict) -> CrewRunInfo:
+                enriched = await service.canonical_handoff(caller, action, handoff)
+                info = await service.crew.run(action, enriched)
+                if ctx is not None and info.analysis:
+                    red: Redactor = ctx["red"]
+                    info = info.model_copy(update={"analysis": red(info.analysis)})
+                return info
+
+        result = await orchestration.handle_event(event, CanonicalGateway(), caller.scopes)
+        await self._persist_crew_outcome(caller, event, result, ctx)
+        return result
+
+    async def _find_crew_audit(self, event_id: str) -> dict | None:
+        finder = getattr(self.repo, "find_crew_audit", None)
+        if finder:
+            return await finder(event_id)
+        return None
+
+    async def _persist_crew_outcome(self, caller: Caller, event: dict, result: orchestration.OrchestrationResult,
+                                    ctx: dict | None) -> None:
+        """Gerechtvaardigde persistence: audit + deal_event + optionele Chase. Nooit send/engine_*/verified."""
+        from .crews.schemas import market_as_transaction_evidence, parse_typed_result
+
+        if result.crew is None and result.status not in ("crew_unavailable", "crew_error"):
+            return
+        payload = event.get("payload") if isinstance(event, dict) else None
+        opp_id = payload.get("opportunity_id") if isinstance(payload, dict) else None
+        crew = result.crew
+        details = {
+            "event_id": result.event_id or event.get("event_id"),
+            "run_id": result.run_id,
+            "route": result.route,
+            "crew_family": result.crew_family,
+            "orchestration_status": result.status,
+            "crew_status": crew.status if crew else None,
+            "crew_short": crew.crew if crew else None,
+            "backend": crew.backend if crew else None,
+            "actual_crew": crew.actual_crew if crew else None,
+            "validation": crew.validation if crew else None,
+            "fallback_used": crew.fallback_used if crew else False,
+            "fallback_reason": crew.fallback_reason if crew else None,
+            "timings": crew.timings if crew else {},
+            "budget_usage": crew.budget_usage if crew else {},
+            "models": crew.models if crew else [],
+            "tools": crew.tools if crew else [],
+            "skills": crew.skills if crew else [],
+            "error": result.reason or (crew.reason if crew else None),
+            "approval_required": result.status == "approval_required" or (result.gate.approval_required if result.gate else False),
+            "next_action": None,
+            "result_type": result.route,
+            "source": "northsea_service",
+            "engine_columns_written": False,
+            "sent": False,
+            "analysis": (crew.analysis[:500] if crew and crew.analysis else None),
+        }
+        nba = None
+        if crew and crew.status == "ok":
+            typed, fout = parse_typed_result(
+                {"analysis": crew.analysis or "ok", "typed_result": {},
+                 "tools": crew.tools, "skills": crew.skills, "models": crew.models,
+                 "budget_usage": crew.budget_usage},
+                specialist_crew=crew.actual_crew or crew.crew or "unknown",
+                agents_run=max(1, len(crew.skills) or 1),
+            )
+            if typed:
+                details["approval_required"] = details["approval_required"] or typed.approval_required
+                if isinstance(typed.next_best_action, dict):
+                    nba = typed.next_best_action.get("action")
+                elif isinstance(typed.next_best_action, str):
+                    nba = typed.next_best_action
+                details["next_action"] = nba or (typed.recommendations[0] if typed.recommendations else None)
+                if market_as_transaction_evidence(typed):
+                    details["rejected"] = "market_information_not_transaction_evidence"
+        try:
+            await self.repo.engine_insert("northsea_audit_events", {
+                "actor_type": "automation", "actor": "northsea-crew", "action": "crew_run",
+                "opportunity_id": opp_id, "details": details,
+            })
+        except Exception:
+            pass
+        if opp_id and result.status in ("ok", "crew_unavailable", "crew_error"):
+            await self.repo.insert_deal_event({
+                "opportunity_id": opp_id,
+                "event_type": "crew_run" if result.status == "ok" else f"crew_{result.status}",
+                "actor": f"crew:{result.crew_family or 'none'}"[:100],
+                "summary": (f"NorthSea {result.crew_family or 'none'} via {result.route} "
+                            f"status={result.status} backend={details.get('backend')} "
+                            f"fallback={details.get('fallback_used')} (unverified).")[:500],
+                "metadata": details,
+            })
+        # Chase alleen als de crew ok is, de aanbeveling approval/next-action is, en we niet de engine dupliceren.
+        if result.status == "ok" and opp_id and details.get("approval_required"):
+            try:
+                await self.repo.engine_insert(
+                    "action_queue",
+                    {"opportunity_id": opp_id, "action_type": "approval_required",
+                     "title": "Crew recommended an action that requires human approval",
+                     "status": "open", "requires_approval": True,
+                     "dedupe_key": f"crew-approval:{details.get('event_id')}",
+                     "metadata": {"source": "northsea-crew", "execute": False, "event_id": details.get("event_id")}},
+                    ignore_duplicates=True,
+                )
+            except Exception:
+                pass
+        # Nooit: send, engine_patch opportunities, verified evidence, reply_drafts (P1 engine-pad).
+        _ = caller, ctx
+
 
     # ── 1. research_counterparty ─────────────────────────────────────────────
     async def research_counterparty(self, caller: Caller, *, objective: str, counterparty_id: str | None = None,

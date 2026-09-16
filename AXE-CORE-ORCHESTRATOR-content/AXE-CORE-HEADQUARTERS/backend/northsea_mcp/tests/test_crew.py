@@ -24,7 +24,7 @@ def make(handler, *, routes=None, timeout=5.0, fallback_on=None):
     kw = {} if fallback_on is None else {"fallback_on": fallback_on}
     return CrewGateway(axe_api_url=f"http://{API}", axe_api_key="k", crew_venv_py="", timeout=timeout,
                        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)), studio_poll_s=0,
-                       studio_routes=routes or {}, min_fallback_s=0, **kw)
+                       studio_routes=routes or {}, min_fallback_s=0, local_enabled=False, **kw)
 
 
 def general_ok(req: httpx.Request) -> httpx.Response | None:
@@ -55,8 +55,9 @@ ROUTE = {"deal_run": StudioRoute(url=f"https://{DEAL}", token="crew-token")}
 
 
 def test_routing_is_explicit_for_all_four_crews():
-    assert CREW_FOR_ROUTE == {"discovery_run": "NorthSea Discovery Crew", "deal_run": "NorthSea Deal Crew",
-                              "intelligence_run": "NorthSea Intelligence Crew", "operations_run": "NorthSea Operations Crew"}
+    assert CREW_FOR_ROUTE["discovery_run"] == "NorthSea Counterparty Intelligence & Sourcing"
+    assert CREW_FOR_ROUTE["deal_run"] == "NorthSea Deal Execution Crew"
+    assert CREW_FOR_ROUTE["intelligence_run"] == CREW_FOR_ROUTE["operations_run"] == "NorthSea Intelligence & Operations"
     assert ROUTE_FOR_ACTION["research_counterparty"] == "discovery_run"
     assert ROUTE_FOR_ACTION["qualify_opportunity"] == "deal_run"
     assert ROUTE_FOR_ACTION["market_signal"] == "intelligence_run"
@@ -73,7 +74,7 @@ async def test_without_dedicated_deployment_the_general_crew_is_an_explicit_fall
 
     info = await make(handler).run("qualify_opportunity", {"entity_ids": {"opportunity_id": "x"}})
     assert info.status == "ok" and info.crew == "deal" and "seller authority" in info.analysis
-    assert info.route == "deal_run" and info.requested_crew == "NorthSea Deal Crew"
+    assert info.route == "deal_run" and info.requested_crew == "NorthSea Deal Execution Crew"
     assert info.backend == "axe_general_crew" and info.actual_crew == "AXE CORE general crew"
     assert info.fallback_used is True and info.fallback_reason == "dedicated_backend_not_configured"
     assert info.validation == "not_validated" and info.attempts[0]["outcome"] == "not_configured"
@@ -85,7 +86,7 @@ async def test_dedicated_crew_runs_first_and_returns_validated_provenance():
                       {"status": "completed", "result": {"output": GOOD_OUTPUT, "tasks": [{"agent": "Evidence Specialist"}]}, "execution_time": 42.5}])
     info = await make(handler, routes=ROUTE).run("qualify_opportunity", {"x": 1})
     assert info.status == "ok" and info.backend == "northsea_crewai" and info.fallback_used is False
-    assert info.actual_crew == "NorthSea Deal Crew" and info.run_id == "k-123" and info.validation == "valid"
+    assert info.actual_crew == "NorthSea Deal Execution Crew" and info.run_id == "k-123" and info.validation == "valid"
     assert info.models == ["gpt-5-mini"] and info.skills == [{"name": "assess_match", "version": 1}]
     assert info.tools == ["supabase:read"] and info.budget_usage == {"research_calls": 1}
     assert info.timings["crew_execution_s"] == 42.5 and "seller authority" in info.analysis.lower()
@@ -112,7 +113,7 @@ async def test_dedicated_timeout_without_permission_does_not_fall_back():
 async def test_policy_none_blocks_fallback_even_when_not_configured():
     info = await make(lambda r: general_ok(r) or httpx.Response(404), fallback_on=()).run("research_counterparty", {})
     assert info.used is False and info.fallback_used is False and info.route == "discovery_run"
-    assert "NorthSea Discovery Crew not executed (dedicated_backend_not_configured)" in info.reason
+    assert "NorthSea Counterparty Intelligence & Sourcing not executed (dedicated_backend_not_configured)" in info.reason
 
 
 async def test_invalid_dedicated_output_is_reported_not_silently_replaced():
@@ -148,10 +149,12 @@ def test_contract_parser_accepts_fenced_json_and_rejects_missing_analysis():
 
 
 def test_gateway_status_lists_routes_and_fallback_policy():
-    g = CrewGateway(axe_api_url="http://api.test", axe_api_key="k", crew_venv_py="", studio_routes=ROUTE)
+    g = CrewGateway(axe_api_url="http://api.test", axe_api_key="k", crew_venv_py="", studio_routes=ROUTE,
+                    local_enabled=False)
     s = g.status()
     assert s["routes"]["deal_run"]["dedicated_configured"] is True
     assert s["routes"]["discovery_run"]["dedicated_configured"] is False
+    assert s["studio_optional"] is True
     assert s["fallback"]["backend"] == "axe_general_crew" and "timeout" in s["fallback"]["permitted_reasons"]
 
 

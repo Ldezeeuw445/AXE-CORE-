@@ -357,6 +357,22 @@ export interface TabData {
       followups: Array<{ status: string; aantal: number; eerstvolgende?: Tijd }>;
       chase_open: number;
       blokkades: Array<{ code: string; eigenaar: string; aantal: number }>;
+      /** P2: CrewAI-runs uit northsea_audit_events (action=crew_run). */
+      crewai?: Array<{
+        op: string;
+        crew?: Tekst;
+        route?: Tekst;
+        status?: Tekst;
+        timings?: Record<string, number> | null;
+        budget?: Record<string, unknown> | null;
+        backend?: Tekst;
+        result_type?: Tekst;
+        fallback?: boolean | null;
+        error?: Tekst;
+        next_action?: Tekst;
+        approval_required?: boolean | null;
+        deal_id?: Tekst;
+      }>;
     } | null;
   };
   werk: { taken: NorthseaTaak[]; agenda: NorthseaAgendaItem[] };
