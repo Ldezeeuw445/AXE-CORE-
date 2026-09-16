@@ -16,13 +16,18 @@ import {
   stopTTS,
   speakWithBrowser,
 } from '@/infrastructure/gateways/elevenLabsService';
+import {
+  speakWithOpenAi,
+  stopOpenAiTts,
+  isOpenAiTtsConfigured,
+} from '@/infrastructure/gateways/openAiTtsService';
 
-export type TtsProvider = 'fish' | 'elevenlabs' | 'browser';
+export type TtsProvider = 'fish' | 'elevenlabs' | 'openai' | 'browser';
 
 export function getActiveTtsProvider(): TtsProvider {
   try {
     const v = localStorage.getItem('axe_tts_provider') as TtsProvider | null;
-    if (v === 'fish' || v === 'elevenlabs' || v === 'browser') return v;
+    if (v === 'fish' || v === 'elevenlabs' || v === 'openai' || v === 'browser') return v;
   } catch { /* ignore */ }
   return 'fish';
 }
@@ -31,6 +36,7 @@ export function getActiveTtsProvider(): TtsProvider {
 export function stopGlobalTts(): void {
   stopTTS();
   stopFishAudio();
+  stopOpenAiTts();
 }
 
 /**
@@ -86,6 +92,16 @@ export function speakGlobal(
         onError?.(reason);
       },
     );
+    return;
+  }
+
+  /* De stem van ChatGPT, voor zover die met een sleutel te draaien is: Arbor is
+     app-only, marin/cedar zijn OpenAI's eigen beste. Zie openAiTtsService.ts. */
+  if (provider === 'openai' && isOpenAiTtsConfigured()) {
+    void speakWithOpenAi(line, onDone, (reason) => {
+      speakWithBrowser(line, onDone);
+      onError?.(reason);
+    });
     return;
   }
 

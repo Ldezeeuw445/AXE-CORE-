@@ -14,6 +14,9 @@ import {
   type HoofdAgent, type HoofdMotor, type MotorToewijzing,
 } from '@/domain/agentMotoren';
 import { leesToewijzing, kiesMotor } from '@/infrastructure/persistence/agentMotorenOpslag';
+import { leesModellen, zetModel } from '@/infrastructure/persistence/motorModellenOpslag';
+import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motorModellen';
+import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import { claudeRepos, plannerStatus, plannerZetAan, type PlannerStatus } from '@/infrastructure/gateways/axeCoreApiService';
 
 const WAARVOOR: Record<HoofdAgent, string> = {
@@ -26,6 +29,7 @@ const WAARVOOR: Record<HoofdAgent, string> = {
 export function AgentMotorenSection() {
   const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
   const [aanwezig, setAanwezig] = useState<Record<string, boolean> | null>(null);
+  const [modellen, setModellen] = useState<MotorModellen>(() => leesModellen());
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   useEffect(() => { plannerStatus().then(setPlanner).catch(() => setPlanner(null)); }, []);
   const zetPlanner = async (aan: boolean) => {
@@ -88,6 +92,44 @@ export function AgentMotorenSection() {
           );
         })}
       </div>
+      {/* Het model per abonnement.
+          Hoort bij de MOTOR en niet bij de agent: Claude Code draait een
+          Claude-model, Codex een OpenAI-model. Per agent instellen zou je een
+          model laten kiezen dat zijn motor niet kent, en dat merk je pas als de
+          run faalt. Leeg laten = de CLI houdt zijn eigen standaard, die met een
+          update meebeweegt. */}
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Model per abonnement</div>
+        <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+          Leeg = de CLI kiest zelf. Een naam of alias mag allebei.
+        </div>
+        <div className="space-y-2">
+          {ALLE_MOTOREN.map((motor: AgentEngine) => (
+            <div key={motor} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs-custom" style={{ color: 'var(--text-primary)' }}>{MOTOR_LABEL[motor]}</div>
+                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  {MODEL_VLAG[motor]} · suggesties: {MODEL_SUGGESTIES[motor].join(', ')}
+                </div>
+              </div>
+              <input
+                value={modellen[motor] ?? ''}
+                onChange={e => setModellen(zetModel(motor, e.target.value))}
+                list={`modellen-${motor}`}
+                placeholder="CLI-standaard"
+                spellCheck={false}
+                className="w-[170px] rounded-lg px-2 py-1 text-xs-custom"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                aria-label={`Model voor ${MOTOR_LABEL[motor]}`}
+              />
+              <datalist id={`modellen-${motor}`}>
+                {MODEL_SUGGESTIES[motor].map(m => <option key={m} value={m} />)}
+              </datalist>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* De planner: dezelfde abonnementen, maar dan zonder dat je iets vraagt.
           Met een dagbudget per abonnement, zodat hij het niet opmaakt. */}
       <div className="mt-3 pt-3 flex items-center justify-between gap-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>

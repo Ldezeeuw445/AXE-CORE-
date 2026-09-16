@@ -1,4 +1,5 @@
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
+import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
 import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
@@ -865,8 +866,10 @@ const STEM_SLEUTEL = 'axe_stem';
 
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
-function loadTtsProvider(): 'fish' | 'elevenlabs' | 'browser' {
-  try { return (localStorage.getItem(TTS_PROVIDER_KEY) as 'fish' | 'elevenlabs' | 'browser') || 'fish'; } catch { return 'fish'; }
+type TtsKeuze = 'fish' | 'elevenlabs' | 'openai' | 'browser';
+
+function loadTtsProvider(): TtsKeuze {
+  try { return (localStorage.getItem(TTS_PROVIDER_KEY) as TtsKeuze) || 'fish'; } catch { return 'fish'; }
 }
 
 /** Voice provider — Fish Audio is the default (no paid ElevenLabs account),
@@ -878,8 +881,9 @@ function FishAudioSection() {
   const [voiceId, setVoiceIdState] = useState(getFishVoiceId);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openAiStem, setOpenAiStemState] = useState<OpenAiStem>(getOpenAiStem);
 
-  const chooseProvider = (next: 'fish' | 'elevenlabs' | 'browser') => {
+  const chooseProvider = (next: TtsKeuze) => {
     setProvider(next);
     try { localStorage.setItem(TTS_PROVIDER_KEY, next); } catch { /* ignore */ }
   };
@@ -918,11 +922,40 @@ function FishAudioSection() {
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           ElevenLabs
         </button>
+        <button onClick={() => chooseProvider('openai')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'openai' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          OpenAI
+        </button>
         <button onClick={() => chooseProvider('browser')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Browser (built-in)
         </button>
       </div>
+
+      {/* Arbor staat hier niet tussen, en dat is geen omissie: Arbor, Breeze,
+          Juniper, Cove en Ember zijn stemmen van de ChatGPT-APP. De API voert
+          een andere vaste lijst (nagelezen in OpenAI's TTS-gids, 16 sep 2026);
+          een app-stem is niet met een sleutel op te halen. marin en cedar zijn
+          OpenAI's eigen aanbeveling en staan daarom bovenaan. */}
+      {provider === 'openai' && (
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            <select
+              value={openAiStem}
+              onChange={e => { const v = e.target.value as OpenAiStem; setOpenAiStem(v); setOpenAiStemState(v); }}
+              className="flex-1 rounded-lg px-2 py-1.5 text-xs-custom"
+              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              aria-label="OpenAI-stem"
+            >
+              {OPENAI_STEMMEN.map(v => <option key={v} value={v}>{v}{v === 'marin' || v === 'cedar' ? ' — aanbevolen' : ''}</option>)}
+            </select>
+          </div>
+          <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+            Arbor, Breeze, Juniper, Cove en Ember zijn alleen in de ChatGPT-app beschikbaar, niet via de API.
+            Gebruikt gpt-4o-mini-tts met je OpenAI-sleutel uit Connections.
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-1.5">
         <input

@@ -234,3 +234,32 @@ class TestWorktree:
         (tmp_path / ".git").write_text("gitdir: /ergens/.git/worktrees/x\n")
         assert a._is_checkout(str(tmp_path))
         assert not a._is_checkout(str(tmp_path / "leeg"))
+
+
+class TestModelVlag:
+    """Het gekozen model moet in het commando belanden, met de vlag die die CLI kent."""
+
+    def test_elke_motor_krijgt_zijn_eigen_vlag(self):
+        import agent_runner as a
+        claude = a.ENGINES["claude"]["cmd"]("claude", "hoi", "plan", "", "opus")
+        assert "--model" in claude and claude[claude.index("--model") + 1] == "opus"
+
+        codex = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "gpt-5-codex")
+        assert "-m" in codex and codex[codex.index("-m") + 1] == "gpt-5-codex"
+
+        cursor = a.ENGINES["cursor"]["cmd"]("cursor-agent", "hoi", "plan", "", "gpt-5")
+        assert "--model" in cursor and cursor[cursor.index("--model") + 1] == "gpt-5"
+
+    def test_zonder_keuze_staat_er_geen_vlag(self):
+        """Leeg betekent: de CLI houdt zijn eigen standaard."""
+        import agent_runner as a
+        for naam in ("claude", "codex", "cursor"):
+            cmd = a.ENGINES[naam]["cmd"](naam, "hoi", "plan", "/tmp/uit.txt", "")
+            assert "--model" not in cmd and "-m" not in cmd
+
+    def test_codex2_is_een_tweede_chatgpt_abonnement(self):
+        """Eigen CODEX_HOME: dat is wat de limieten scheidt."""
+        import agent_runner as a
+        motor = a.ENGINES["codex2"]
+        assert motor["extra_env"]["CODEX_HOME"].endswith(".codex-tweede")
+        assert motor["bin_default"] == "codex"

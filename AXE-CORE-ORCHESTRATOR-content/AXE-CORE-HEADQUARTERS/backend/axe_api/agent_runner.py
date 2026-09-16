@@ -64,7 +64,7 @@ ALLOWED_PERMISSION_MODES = ("default", "acceptEdits", "plan")
 DEFAULT_PERMISSION_MODE = "acceptEdits"
 
 
-def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str) -> list:
+def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: str = "") -> list:
     """Codex-aanroep voor één modus.
 
     `default` en `acceptEdits` komen op hetzelfde uit, en dat staat hier met
@@ -75,6 +75,8 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str) -> list
     zijn naam belooft, zolang het maar ergens staat — hier dus.
     """
     cmd = [binary, "exec", str(prompt), "-C", ".", "-o", uitvoerbestand]
+    if model:
+        cmd += ["-m", model]
     if mode == "plan":
         cmd += ["-s", "read-only"]
     else:
@@ -82,11 +84,13 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str) -> list
     return cmd
 
 
-def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
-    return [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
+def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model: str = "") -> list:
+    cmd = [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
+    # Leeg = de CLI houdt zijn eigen standaard, die met een update meebeweegt.
+    return cmd + (["--model", model] if model else [])
 
 
-def _cursor_cmd(binary: str, prompt: str, _mode: str, _uitvoerbestand: str) -> list:
+def _cursor_cmd(binary: str, prompt: str, _mode: str, _uitvoerbestand: str, model: str = "") -> list:
     """Cursor-agent, niet-interactief.
 
     Vlaggen nagelezen in Cursor's eigen documentatie (cursor.com/docs/cli/
@@ -105,11 +109,13 @@ def _cursor_cmd(binary: str, prompt: str, _mode: str, _uitvoerbestand: str) -> l
     return [binary, "-p", str(prompt), "--output-format", "json", "--force"]
 
 
-def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
-    return [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
+def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model: str = "") -> list:
+    cmd = [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
+    # Leeg = de CLI houdt zijn eigen standaard, die met een update meebeweegt.
+    return cmd + (["--model", model] if model else [])
 
 
-def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
+def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model: str = "") -> list:
     """Cursor-agent voor één modus.
 
     NIET GEMETEN OP DEZE HOST. Claude en Codex hierboven zijn allebei tegen een
@@ -128,6 +134,8 @@ def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> li
     vlag hangt hij op een prompt die nooit beantwoord wordt.
     """
     cmd = [binary, "-p", str(prompt), "--output-format", "json"]
+    if model:
+        cmd += ["--model", model]
     if mode == "plan":
         # Gemeten 14 september, cursor-agent 2026.09.10: `--mode ask` in een
         # wegwerp-repo met de opdracht "verwijder bewijs.txt". Hij las het
@@ -191,22 +199,6 @@ ENGINES = {
         "login": "CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login",
         "alleen_lezen": True,
     },
-    "claude4": {
-        # Een vierde Claude-abonnement (16 september), zelfde opzet als claude3:
-        # een eigen CLAUDE_CONFIG_DIR is wat de limieten scheidt, dus een vierde
-        # map is een vierde limiet. Eenmalig inloggen in vak 3 (Mac - agents):
-        #   CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login
-        "label": "Claude Code 4",
-        "bin_env": "CLAUDE_BIN",
-        "bin_default": "claude",
-        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
-        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE4_CONFIG_DIR", "~/.claude-vierde"))},
-        "cmd": _claude_cmd,
-        "leest_bestand": False,
-        "install": "npm i -g @anthropic-ai/claude-code",
-        "login": "CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login",
-        "alleen_lezen": True,
-    },
     "codex": {
         "label": "Codex",
         "bin_env": "CODEX_BIN",
@@ -221,6 +213,24 @@ ENGINES = {
         "install": "npm i -g @openai/codex",
         "login": "codex login",
         # -s read-only, hun eigen sandbox-stand.
+        "alleen_lezen": True,
+    },
+    "codex2": {
+        # Een tweede ChatGPT-abonnement op dezelfde Mac. Codex bewaart zijn
+        # login (auth.json) onder CODEX_HOME -- gemeten 16 september: met een
+        # eigen map zegt `codex doctor` dat CODEX_HOME daarheen wijst, dus een
+        # tweede map is een tweede sessie en dus een tweede limiet.
+        # Eenmalig inloggen, in vak 3 (Mac - agents):
+        #   CODEX_HOME=~/.codex-tweede codex login
+        "label": "Codex 2",
+        "bin_env": "CODEX_BIN",
+        "bin_default": "codex",
+        "blocked_env": ("OPENAI_API_KEY", "OPENAI_BASE_URL"),
+        "extra_env": {"CODEX_HOME": os.path.expanduser(os.environ.get("CODEX2_HOME", "~/.codex-tweede"))},
+        "cmd": _codex_cmd,
+        "leest_bestand": True,
+        "install": "npm i -g @openai/codex",
+        "login": "CODEX_HOME=~/.codex-tweede codex login",
         "alleen_lezen": True,
     },
     "cursor": {
@@ -376,6 +386,7 @@ def run_agent(
     permission_mode: str = None,
     timeout: int = None,
     engine: str = DEFAULT_ENGINE,
+    model: str = "",
 ) -> dict:
     """Draai één sessie van `engine` in `repo`.
 
@@ -472,7 +483,7 @@ def run_agent(
             fd, tmp = tempfile.mkstemp(prefix="axe-agent-", suffix=".txt")
             os.close(fd)
 
-        cmd = motor["cmd"](binary, prompt, mode, tmp or "")
+        cmd = motor["cmd"](binary, prompt, mode, tmp or "", (model or "").strip())
         proc = subprocess.run(
             cmd, cwd=repo_path, env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")),
             capture_output=True, text=True, timeout=limit,

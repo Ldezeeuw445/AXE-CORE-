@@ -6,6 +6,8 @@
  * knows how to talk to the wire.
  */
 import { PROVIDERS, VPS_BRIDGE_PROVIDER_IDS, type KeySlot, type ProviderCfg } from '@/domain/providers';
+import { leesModellen } from '@/infrastructure/persistence/motorModellenOpslag';
+import { modelVoor } from '@/domain/motorModellen';
 import {
   crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw,
@@ -114,7 +116,10 @@ function onthoudKoeling(motor:string,tot:number):void{
     const tot=leesKoeling()[motor];
     if(koeltNog(tot,new Date())) throw new Error(koelingTekst(motor,tot));
 
-    const res=await claudeRun({repo,prompt:bouwPrompt(messages),permission_mode:ABONNEMENT_MODUS,engine:motor});
+    // Het model dat bij deze motor gekozen is (Instellingen -> Agent-motoren).
+    // Leeg laten betekent: de CLI houdt zijn eigen standaard.
+    const model=modelVoor(leesModellen(),motor);
+    const res=await claudeRun({repo,prompt:bouwPrompt(messages),permission_mode:ABONNEMENT_MODUS,engine:motor,...(model?{model}:{})});
     if(res.status!=='ok'){
       const reden=res.error||res.result||'onbekende fout';
       if(isLimietFout(reden)){

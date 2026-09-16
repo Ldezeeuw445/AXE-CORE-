@@ -774,6 +774,8 @@ export interface ClaudeRunRequest {
   timeout?: number;
   /** Weggelaten is 'claude', zodat oudere aanroepers niets merken. */
   engine?: AgentEngine;
+  /** Het model voor deze motor. Leeg = de CLI kiest zelf. */
+  model?: string;
 }
 
 export interface ClaudeRunResult {

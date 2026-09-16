@@ -56,7 +56,7 @@ import { meldActiviteit } from '@/shared/axeActiviteit';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'claude4', 'codex', 'cursor'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'codex', 'codex2', 'cursor'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
 type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
 
@@ -69,8 +69,8 @@ type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
 
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'claude4', 'codex', 'cursor']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', claude4: 'Claude 4', codex: 'Codex', cursor: 'Cursor' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'codex', 'codex2', 'cursor']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', codex: 'Codex', codex2: 'Codex 2', cursor: 'Cursor' };
 
 /** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
 const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [

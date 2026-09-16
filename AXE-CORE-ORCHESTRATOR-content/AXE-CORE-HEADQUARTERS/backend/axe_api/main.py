@@ -255,6 +255,9 @@ class ClaudeRunRequest(BaseModel):
     # 'claude' of 'codex'. Beide gaan door dezelfde bewakingen in agent_runner;
     # alleen het commando verschilt. Weggelaten is 'claude'.
     engine: Optional[str] = None
+    # Het model dat deze motor moet draaien. Leeg = de CLI houdt zijn eigen
+    # standaard, die met een update meebeweegt (zie domain/motorModellen.ts).
+    model: Optional[str] = None
 
 class ExecRequest(BaseModel):
     command: str
@@ -2759,7 +2762,7 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None,
-        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude"),
+        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude", req.model or ""),
     )
     await audit(
         "claude_run", "claude_code",
