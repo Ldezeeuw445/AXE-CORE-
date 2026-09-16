@@ -25,6 +25,13 @@ case "${1:-}" in
     "${SSH[@]}" "bash /opt/northsea-mcp/incoming/deploy/install.sh"
     ;;
   deploy)
+    # Nooit een oudere versie over een nieuwere heen: rsync --delete zou bv. de P1-engine (1.3.0) wissen als
+    # iemand uitrolt vanaf een tak die nog op 1.2.0 staat. Bewust overschrijven: NS_DEPLOY_DOWNGRADE=1.
+    LOKAAL=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$HIER/northsea_mcp/__init__.py")
+    OP_BOX=$("${SSH[@]}" "curl -fsS http://127.0.0.1:8040/health" 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' || true)
+    if [ -n "$OP_BOX" ] && [ "$(printf '%s\n%s\n' "$LOKAAL" "$OP_BOX" | sort -V | tail -1)" != "$LOKAAL" ] && [ "${NS_DEPLOY_DOWNGRADE:-0}" != "1" ]; then
+      echo "geweigerd: box draait $OP_BOX, deze checkout is $LOKAAL (merge eerst, of NS_DEPLOY_DOWNGRADE=1)"; exit 3
+    fi
     STAMP=$(date -u +%Y%m%d-%H%M%S)
     "${SSH[@]}" "set -e; mkdir -p /opt/northsea-mcp/backups/$STAMP /opt/northsea-mcp/incoming; cp -a /opt/northsea-mcp/app/northsea_mcp /opt/northsea-mcp/backups/$STAMP/; ls -1dt /opt/northsea-mcp/backups/* | tail -n +11 | xargs -r rm -rf"
     rsync -a --delete -e "$RSYNC_SSH" --exclude '.venv' --exclude '__pycache__' --exclude '.pytest_cache' \
