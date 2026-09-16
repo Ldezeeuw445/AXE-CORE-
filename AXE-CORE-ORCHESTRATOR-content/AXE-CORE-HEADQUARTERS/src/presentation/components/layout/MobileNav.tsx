@@ -19,7 +19,7 @@ import {
   LineChart, Globe, FileCode, Sparkles, Compass, Users, Terminal, Settings,
   Smartphone, Lock, LayoutGrid, TrendingUp, Menu, X, type LucideIcon,
 } from 'lucide-react';
-import { getAllNavItems } from '@/domain/navRegistry';
+import { BOTTOM_NAV_ITEMS } from '@/presentation/components/layout/BottomNav';
 import { setMobileWallpaper } from '@/presentation/hooks/useWallpaper';
 import { Image as ImageIcon } from 'lucide-react';
 
@@ -39,7 +39,7 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const items = getAllNavItems();
+  const items = BOTTOM_NAV_ITEMS;
   const startX = useRef<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -72,12 +72,13 @@ export function MobileNav() {
     };
   }, []);
 
-  // Home (`/`) is op de telefoon leeg — de mobiele home is `/mobile`. Stuur de
-  // "Home"-regel daarheen, zodat de lade nooit op een leeg scherm uitkomt.
-  const go = (path: string) => { navigate(path === '/' ? '/mobile' : path); setOpen(false); };
+  // Home is `/` — de échte glasplaat-home (sphere + AXE CORE-composer), net als
+  // de Tauri-app. (Vroeger stuurde dit naar `/mobile`, maar dat is nu de aparte
+  // Device Manager; Home hoort gewoon Home te zijn.)
+  const go = (path: string) => { navigate(path); setOpen(false); };
   const isActive = (path: string) => {
     const here = location.pathname;
-    if (path === '/') return here === '/mobile' || here === '/';
+    if (path === '/') return here === '/';
     return here === path || here.startsWith(path);
   };
 

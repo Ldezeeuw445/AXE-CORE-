@@ -15,6 +15,7 @@
  * uitziet maar het niet is.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Map as MapIcon, Target, TrendingUp, Building2, MessageSquare, LineChart,
   FileText, ShieldCheck, Workflow, FileBarChart, Crosshair, ArrowRight, AlertTriangle, RefreshCw,
@@ -58,6 +59,7 @@ export default function NorthseaDesk() {
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
   const [tab, setTab] = useState<Tab>('live');
+  const isMobile = useIsMobile();
   /** De deal die Active Deals opent, als je er vanuit Pipeline naartoe gaat. */
   const [dealStart, setDealStart] = useState<string | null>(null);
   const [filter, setFilter] = useState<ChaseFilter>('alle');
@@ -127,6 +129,135 @@ export default function NorthseaDesk() {
       uitleg: 'Weather & Disruptions — no data source connected yet',
     },
   ];
+
+  // Op de telefoon werkt de desktop-slot-indeling niet: de tab-zuil, de dock met
+  // de dealtabel en de rechter chase-strook portalen naar slots die op mobiel
+  // verborgen zijn — je zag daardoor alleen de kaart. Hier een zelfstandige,
+  // map-first mobiele indeling: een horizontale tab-balk bovenaan, en daaronder
+  // de inhoud van het gekozen tabblad (Live Map met tegels/kaart/deals/chase, of
+  // een van de negen datatabs op vol scherm).
+  if (isMobile) {
+    return (
+      <div className="axe-tabruimte relative flex min-h-0 flex-1 flex-col">
+        <div
+          className="flex-none overflow-x-auto scrollbar-none px-2 pt-2 pb-2"
+          style={{ borderBottom: '1px solid var(--border-subtle)' }}
+        >
+          <div className="flex w-max items-center gap-1.5">
+            {menu.map(m => {
+              const actief = tab === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setTab(m.id as Tab)}
+                  className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-medium active:scale-95"
+                  style={{
+                    background: actief ? `${m.kleur}22` : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${actief ? m.kleur : 'var(--border-subtle)'}`,
+                    color: actief ? m.kleur : 'var(--text-secondary)',
+                  }}
+                >
+                  <span className="flex-none" style={{ color: m.kleur }}>{m.icoon}</span>
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {tab === 'live' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+            <DeskKaartjes data={data} tellers={desk} routes={kaart ? kaart.routes.length : null} />
+            <div className="px-2 pt-1">
+              <div
+                className="relative overflow-hidden rounded-xl"
+                style={{ height: '44vh', border: '1px solid var(--border-subtle)' }}
+              >
+                <WereldKaart deals={fout ? null : data ? data.kaart : null} lagen={lagen} fout={fout} vrijVan="" />
+              </div>
+              <div className="mt-2">
+                <KaartLegenda kaart={fout ? null : kaart} totaal={data?.kaart ? data.kaart.length : null} />
+              </div>
+            </div>
+            <div className="px-2 pt-3">
+              <DealsTabel deals={fout ? null : data?.kaart ?? null} tellers={desk} nu={nu} fout={fout} />
+            </div>
+            <div className="px-2 pt-3">
+              <div className="axe-paneel" data-axe-doel="axe-chase">
+                <div className="mb-3 flex items-center gap-2">
+                  <Crosshair size={15} style={{ color: 'var(--accent-cyan)' }} />
+                  <h2 className="flex-1 text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>AXE Chase</h2>
+                  <button onClick={() => { void haal(true); }} disabled={bezig} title="Verversen" style={{ color: 'var(--text-muted)' }}>
+                    <RefreshCw size={12} className={bezig ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                <div className="mb-3 flex gap-1.5">
+                  {([['alle', 'All', tellers.alle], ['kritiek', 'Critical', tellers.kritiek], ['nieuw', 'New', tellers.nieuw]] as const).map(([id, label, n]) => (
+                    <button
+                      key={id}
+                      onClick={() => setFilter(id)}
+                      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px]"
+                      style={{
+                        background: filter === id ? 'rgba(255,255,255,0.06)' : 'transparent',
+                        border: `1px solid ${filter === id ? 'rgba(34,211,238,0.30)' : 'var(--border-subtle)'}`,
+                        color: filter === id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {label}
+                      <span className="rounded px-1 text-[10px] font-mono-data" style={{ background: 'rgba(255,255,255,0.06)' }}>{n}</span>
+                    </button>
+                  ))}
+                </div>
+                {fout && (
+                  <div className="flex gap-2 rounded-lg bg-white/[0.03] p-2 text-[11px]" style={{ border: '1px solid rgba(248,113,113,0.35)', color: '#F87171' }}>
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <span>NorthSea-data niet op te halen: {fout}</span>
+                  </div>
+                )}
+                {!fout && !data && <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Laden…</div>}
+                {data && gefilterd.length === 0 && <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Niets om achterna te zitten.</div>}
+                <ul className="flex flex-col gap-1">
+                  {zichtbaar.map(i => <ChaseRegel key={i.id} item={i} nu={nu} />)}
+                </ul>
+                {gefilterd.length > CHASE_ZICHTBAAR && (
+                  <button
+                    onClick={() => setAlles(v => !v)}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12px]"
+                    style={{ border: '1px solid rgba(34,211,238,0.20)', color: 'var(--accent-cyan)' }}
+                  >
+                    {alles ? 'Show fewer' : `View All Chase Actions (${gefilterd.length})`} <ArrowRight size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {tab === 'deals' ? (
+              <DealsTab key={dealStart ?? 'deals'} startId={dealStart} />
+            ) : tab === 'pipeline' ? (
+              <PipelineTab openDeal={id => { setDealStart(id); setTab('deals'); }} />
+            ) : tab === 'tegenpartijen' ? (
+              <TegenpartijenTab />
+            ) : tab === 'communicatie' ? (
+              <CommunicatieTab />
+            ) : tab === 'markt' ? (
+              <MarktTab />
+            ) : tab === 'documenten' ? (
+              <DocumentenTab />
+            ) : tab === 'bewijs' ? (
+              <BewijsTab />
+            ) : tab === 'automatisering' ? (
+              <AutomatiseringTab />
+            ) : (
+              <RapportenTab />
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="axe-tabruimte relative flex min-h-0 flex-1 flex-col">

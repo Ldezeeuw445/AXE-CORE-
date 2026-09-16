@@ -56,6 +56,11 @@ const rightItems: NavItem[] = [
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
 
+// Dezelfde gecureerde tab-set die de desktop AXE-core-balk toont, in dezelfde
+// volgorde. De mobiele lade (MobileNav) gebruikt deze lijst, zodat telefoon en
+// desktop exact dezelfde tabs hebben (niet de volledige navRegistry-dump).
+export const BOTTOM_NAV_ITEMS: NavItem[] = [...leftItems, ...rightItems];
+
 /**
  * What comes first on a phone.
  *
