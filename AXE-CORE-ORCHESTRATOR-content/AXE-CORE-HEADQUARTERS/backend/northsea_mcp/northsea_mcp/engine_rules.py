@@ -16,9 +16,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Callable, Any, Optional
 
-ENGINE_VERSION = "ns-engine-1"
+ENGINE_VERSION = "ns-engine-1.1"  # 1.1: nieuwsbrieven zijn spam_noise, niet rejection (productie 16 sep)
 
 CATEGORIES = ("buyer", "supplier", "reply", "qualification", "documents_evidence", "commercial_terms", "logistics",
               "payment", "rejection", "bounce_failure", "spam_noise", "ambiguous")
@@ -39,13 +39,19 @@ _RULES: dict[str, tuple[str, ...]] = {
                   r"\bIncoterms?\b", r"\b(?:CIF|FOB|CFR|DAP|DDP|EXW|FCA)\b", r"\bdelivery\b", r"\bloading\b"),
     "payment": (r"\bletter of credit\b", r"\bL/?C\b", r"\bDLC\b", r"\bSBLC\b", r"\bT/?T\b", r"\bwire transfer\b", r"\bbank guarantee\b", r"\bescrow\b",
                 r"\bpayment terms?\b", r"\badvance payment\b"),
-    "rejection": (r"\bnot interested\b", r"\bno longer (?:interested|available|required)\b", r"\bdecline\b", r"\bdeclined\b", r"\bdo not contact\b",
-                  r"\bremove (?:us|me) from\b", r"\bunsubscribe\b", r"\bwe (?:do not|don't) work with (?:brokers|intermediaries|agents)\b",
-                  r"\bno (?:brokers|intermediaries)\b", r"\bdirect (?:sellers|buyers) only\b", r"\bnot (?:able|in a position) to\b"),
+    # Alleen expliciete afwijzing door de tegenpartij. Een losse "unsubscribe"-voettekst of "not able to offer FOB" is dat niet.
+    "rejection": (r"\bnot interested\b", r"\bno longer (?:interested|required)\b", r"\b(?:we|i) (?:must|have to|will|would like to) decline\b",
+                  r"\bdeclined? (?:your|the|this) (?:offer|request|inquiry|enquiry|proposal)\b", r"\bdo not contact\b",
+                  r"\bremove (?:us|me) from\b", r"\bplease (?:unsubscribe|remove) (?:us|me)\b", r"\bwe (?:do not|don't) work with (?:brokers|intermediaries|agents)\b",
+                  r"\bno (?:brokers|intermediaries)\b", r"\bdirect (?:sellers|buyers) only\b",
+                  r"\bnot (?:able|in a position) to (?:proceed|help|assist|work with you|cooperate)\b"),
     "bounce_failure": (r"\bdelivery (?:status notification|has failed|failure)\b", r"\bundeliverable\b", r"\bmailer-daemon\b", r"\baddress not found\b",
                        r"\bmailbox (?:unavailable|full)\b", r"\bmessage (?:not delivered|blocked)\b"),
     "spam_noise": (r"\bnewsletter\b", r"\bwebinar\b", r"\bSEO\b", r"\bweb design\b", r"\blottery\b", r"\bcrypto (?:investment|opportunity)\b",
-                   r"\bclick here\b", r"\blimited time offer\b", r"\bguest post\b"),
+                   r"\bclick here\b", r"\blimited time offer\b", r"\bguest post\b",
+                   # platform- en marketingmail
+                   r"\bunsubscribe\b", r"\bview (?:this email )?in (?:your )?browser\b", r"mandrillapp\.com", r"list-manage\.com", r"\bwelcome to\b",
+                   r"\bthanks? (?:you )?for (?:joining|signing up|registering)\b", r"\bverify your email\b", r"\bmanage (?:your )?(?:email )?preferences\b"),
 }
 _COMPILED = {k: [re.compile(p, re.I) for p in v] for k, v in _RULES.items()}
 _SENSITIVE = re.compile(r"\b(?:introduce (?:us|me)|introduction|buyer(?:'s)? identity|seller(?:'s)? identity|bank account|banking instructions|beneficiary|"
@@ -77,8 +83,13 @@ def classify(subject: Optional[str], body: Optional[str], *, sender_domain: Opti
         cats.insert(0, "reply")
         reasons.append("reply: subject/thread")
     primary: str
+    marketing = "spam_noise" in hits and not ({"buyer", "supplier"} & set(hits))
     if "bounce_failure" in hits:
         primary = "bounce_failure"
+    elif marketing and len(hits["spam_noise"]) >= 2:
+        primary = "spam_noise"  # duidelijke marketing/platformmail wint van een toevallige afwijzingsformule
+        if "rejection" in hits:
+            reasons.append("spam_noise over rejection: marketing markers")
     elif "rejection" in hits:
         primary = "rejection"
     elif "spam_noise" in hits and not ({"buyer", "supplier"} & set(hits)):
@@ -289,7 +300,7 @@ class FollowupPlan:
 
 
 def plan_followups(outbound: list[dict], inbound: list[dict], plans: list[dict], *, interval_hours: int, max_followups: int,
-                   now: datetime, max_per_run: int = 10) -> list[FollowupPlan]:
+                   now: datetime, max_per_run: int = 10, anchor_ok: Optional[Callable[[dict], Optional[str]]] = None) -> list[FollowupPlan]:
     """Welke follow-ups moeten NU gepland worden. Nooit meer dan max_followups per ankerbericht, nooit twee per deal
     in één interval, nooit meer dan max_per_run per run (stormrem)."""
     if max_followups <= 0 or interval_hours <= 0:
@@ -321,6 +332,9 @@ def plan_followups(outbound: list[dict], inbound: list[dict], plans: list[dict],
         later_uit = any(x.get("company_id") == partij and x.get("direction") == "outbound" and (_ts(x.get("occurred_at")) or verzonden) > verzonden
                         for x in outbound)
         if later_uit:
+            continue
+        # Pas NA de "laatste bericht"-regel: een later bericht zonder bruikbare herkomst houdt een ouder anker ook tegen.
+        if anchor_ok is not None and anchor_ok(o):
             continue
         bestaand = per_anker.get(str(o["id"]), [])
         if len(bestaand) >= max_followups:

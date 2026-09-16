@@ -40,6 +40,32 @@ def _lower(v: Any) -> str:
     return str(v or "").strip().lower()
 
 
+CANONICAL_MAILBOX = "trade@northseacommodity.com"
+BLOCKING_POLICIES = ("do_not_contact", "review_required")
+
+
+def _adres(v: Any) -> str:
+    """'Naam <a@b>' of 'a@b' -> 'a@b' (lowercase); alles zonder @ -> ''."""
+    t = _lower(v)
+    if "<" in t and ">" in t:
+        t = t[t.index("<") + 1:t.index(">")].strip()
+    return t if "@" in t else ""
+
+
+def _metadata_ontvangers(o: dict) -> list[str]:
+    """Ontvangers zoals de provider ze vastlegde (provider_metadata.to / last_event.to). Feit, geen gok."""
+    md = o.get("provider_metadata") or {}
+    if not isinstance(md, dict):
+        return []
+    uit: list[str] = []
+    for bron in (md.get("to"), (md.get("last_event") or {}).get("to") if isinstance(md.get("last_event"), dict) else None):
+        for x in (bron if isinstance(bron, list) else [bron] if bron else []):
+            a = _adres(x)
+            if a and a not in uit:
+                uit.append(a)
+    return uit
+
+
 class EngineService:
     def __init__(self, repo: Any, *, now=_now, max_followups_per_run: int = 10):
         self.repo = repo
@@ -56,7 +82,7 @@ class EngineService:
         nu = self.now()
         d = await self._load()
         plan: dict[str, list] = {"intelligence": [], "evidence": [], "contacts_bounced": [], "evaluations": [], "followups": [],
-                                 "followups_replied": [], "chase": []}
+                                 "followups_replied": [], "chase": [], "chase_cancelled": []}
         fouten: list[str] = []
 
         companies = {c["id"]: c for c in d["companies"]}
@@ -69,6 +95,25 @@ class EngineService:
         interval = policy.get("followup_interval_hours")
         max_fu = policy.get("max_auto_followups")
         policy_ok = isinstance(interval, int) and isinstance(max_fu, int) and interval > 0
+
+        opp_by_id = {o["id"]: o for o in d["opportunities"]}
+
+        def partijen(opp_id: Any) -> list[str]:
+            """De bedrijven die deze deal echt zijn: koper (requirement) en verkoper (offer). Niets anders."""
+            o = opp_by_id.get(opp_id) or {}
+            return [x for x in ((req.get(o.get("buyer_requirement_id")) or {}).get("company_id"),
+                                (off.get(o.get("supplier_offer_id")) or {}).get("company_id")) if x]
+
+        def deal_van(c: dict, *, gekoppeld: bool) -> Optional[str]:
+            """Een bericht telt alleen voor een deal als zijn bedrijf een partij van die deal is; een oude
+            campagnekoppeling naar een kandidaat-leverancier is geen deal-feit. gekoppeld=True eist bovendien
+            een deterministische koppeling (mapping_status='mapped'), voor alles wat als bewijs wordt vastgelegd."""
+            opp_id = c.get("opportunity_id")
+            if not opp_id or c.get("company_id") not in partijen(opp_id):
+                return None
+            if gekoppeld and c.get("mapping_status") != "mapped":
+                return None
+            return opp_id
 
         comms = [c for c in d["communications"] if not c.get("is_synthetic")]
         email = [c for c in comms if c.get("channel") == "email"]
@@ -89,6 +134,26 @@ class EngineService:
                       "engine_urgency": k.urgency, "engine_risk": k.risk, "engine_reasons": k.reasons, "engine_version": rules.ENGINE_VERSION,
                       "engine_evaluated_at": nu.isoformat()}
             plan["intelligence"].append({"communication_id": c["id"], "primary": k.primary, "update": bool(i)})
+            # Herclassificatie (nieuwe engineversie): een open Chase-item van de engine dat bij de OUDE uitkomst hoorde
+            # en nu niet meer klopt, wordt geannuleerd met reden. Nooit verwijderd; menselijke items blijven onaangeroerd.
+            verwacht = {f"review_mapping:{c['id']}" if c.get("mapping_status") == "ambiguous" else None,
+                        f"review_rejection:{c['id']}" if k.primary == "rejection" else None,
+                        f"review_bounce_email:{c['id']}" if k.primary == "bounce_failure" else None}
+            for q in d["action_queue"]:
+                sleutel = q.get("dedupe_key") or ""
+                if (q.get("status") in OPEN_TASK and (q.get("metadata") or {}).get("source") == "northsea-engine"
+                        and sleutel.endswith(f":{c['id']}") and sleutel.split(":")[0] in ("review_mapping", "review_rejection", "review_bounce_email")
+                        and sleutel not in verwacht):
+                    plan["chase_cancelled"].append({"dedupe_key": sleutel, "reason": f"reclassified as {k.primary} by {rules.ENGINE_VERSION}"})
+                    q["status"] = "cancelled"
+                    if not dry_run:
+                        try:
+                            await self.repo.engine_patch("action_queue", {"id": f"eq.{q['id']}"}, {
+                                "status": "cancelled", "completed_at": nu.isoformat(), "updated_at": nu.isoformat(),
+                                "metadata": {**(q.get("metadata") or {}), "cancelled_by": "northsea-engine", "cancelled_at": nu.isoformat(),
+                                             "cancelled_reason": f"message reclassified as {k.primary} by {rules.ENGINE_VERSION}"}})
+                        except RepositoryError as e:
+                            fouten.append(f"chase cancel {sleutel}: {e}")
             if c.get("mapping_status") == "ambiguous":
                 plan["chase"].append({"dedupe_key": f"review_mapping:{c['id']}", "action_type": "review_mapping", "company_id": c.get("company_id"),
                                       "opportunity_id": None, "priority": 80, "title": "Review ambiguous email mapping",
@@ -96,13 +161,13 @@ class EngineService:
                                                      "The engine did not change any deal; choose the right one."})
             if k.primary == "rejection":
                 plan["chase"].append({"dedupe_key": f"review_rejection:{c['id']}", "action_type": "review_rejection", "company_id": c.get("company_id"),
-                                      "opportunity_id": c.get("opportunity_id"), "priority": 85, "title": "Counterparty signals rejection",
+                                      "opportunity_id": deal_van(c, gekoppeld=False), "priority": 85, "title": "Counterparty signals rejection",
                                       "description": "Review the email; decide on contact policy or closing the deal. The engine changes neither."})
             if k.primary == "bounce_failure":
                 plan["chase"].append({"dedupe_key": f"review_bounce_email:{c['id']}", "action_type": "review_bounce", "company_id": c.get("company_id"),
-                                      "opportunity_id": c.get("opportunity_id"), "priority": 75, "title": "Delivery failure notice received",
+                                      "opportunity_id": deal_van(c, gekoppeld=False), "priority": 75, "title": "Delivery failure notice received",
                                       "description": "A bounce/failure notice arrived by email. Verify which address failed."})
-            opp_id = c.get("opportunity_id") if c.get("mapping_status") in (None, "mapped") else None
+            opp_id = deal_van(c, gekoppeld=True)
             belangrijk = {k2: v for k2, v in terms.items() if v and not k2.startswith("_") and k2 != "quantities_mentioned"}
             if opp_id and belangrijk and co.get("contact_policy", "allowed") != "do_not_contact" and not co.get("is_synthetic"):
                 zijde = "buyer" if rol == "buyer" else ("seller" if rol == "supplier" else ("buyer" if co.get("company_type") == "buyer" else "seller"))
@@ -130,26 +195,47 @@ class EngineService:
             if k2.get("email"):
                 per_email.setdefault(_lower(k2["email"]), []).append(k2)
         draft_by_id = {x["id"]: x for x in drafts}
+
+        def ontvangers(o: dict) -> list[str]:
+            uit = [a for a in (_adres((draft_by_id.get(o.get("reply_draft_id")) or {}).get("to_email")),
+                               _adres((contacts.get(o.get("contact_id")) or {}).get("email"))) if a]
+            return uit + [a for a in _metadata_ontvangers(o) if a not in uit]
+
+        # Adressen met een vastgelegde bounce. Alleen een contact met hetzelfde adres dat een mens als 'valid'
+        # heeft herbevestigd heft dat op (zelfde regel als northsea_outbound_block_reason in de database).
+        bounced_adressen: set[str] = set()
         for o in outbound:
             if (o.get("delivery_status") or "") not in ("bounced", "complained"):
                 continue
-            adres = _lower((draft_by_id.get(o.get("reply_draft_id")) or {}).get("to_email") or (contacts.get(o.get("contact_id")) or {}).get("email"))
-            for k2 in per_email.get(adres, []):
-                if k2.get("email_status") in ("bounced", "complained"):
-                    continue
-                status = "complained" if o.get("delivery_status") == "complained" else "bounced"
-                plan["contacts_bounced"].append({"contact_id": k2["id"], "status": status, "communication_id": o["id"]})
-                plan["chase"].append({"dedupe_key": f"repair_channel:{k2['id']}", "action_type": "repair_contact_channel", "company_id": k2.get("company_id"),
-                                      "opportunity_id": o.get("opportunity_id"), "priority": 90, "title": "Email address bounced — find a verified channel",
-                                      "description": "The address bounced and will not be retried automatically. Find and verify an alternative commercial contact."})
-                k2["email_status"] = status  # voor de evaluatie hieronder
-                if not dry_run:
-                    try:
-                        await self.repo.engine_patch("contacts", {"id": f"eq.{k2['id']}"}, {
-                            "email_status": status, "email_status_at": nu.isoformat(),
-                            "email_status_reason": f"communication {o['id']} delivery_status={o.get('delivery_status')}"})
-                    except RepositoryError as e:
-                        fouten.append(f"contact {k2['id']}: {e}")
+            for adres in ontvangers(o):
+                if not any(k2.get("email_status") == "valid" for k2 in per_email.get(adres, [])):
+                    bounced_adressen.add(adres)
+            if not any(per_email.get(a) for a in ontvangers(o)):
+                # Geen contactrecord voor dit adres: de database-guard blokkeert het toch; Chase vraagt om een geverifieerd kanaal.
+                plan["chase"].append({"dedupe_key": f"repair_channel_address:{o['id']}", "action_type": "repair_contact_channel",
+                                      "company_id": o.get("company_id"), "opportunity_id": deal_van(o, gekoppeld=False), "priority": 90,
+                                      "title": "Email address bounced — find a verified channel",
+                                      "description": "The recorded recipient address bounced and will not be retried automatically. "
+                                                     "Find and verify an alternative commercial contact."})
+            for adres in ontvangers(o):
+                for k2 in per_email.get(adres, []):
+                    if k2.get("email_status") in ("bounced", "complained"):
+                        continue
+                    if k2.get("email_status") == "valid" and str(k2.get("email_status_at") or "") >= str(o.get("occurred_at") or ""):
+                        continue  # na deze bounce door een mens herbevestigd: niet overschrijven
+                    status = "complained" if o.get("delivery_status") == "complained" else "bounced"
+                    plan["contacts_bounced"].append({"contact_id": k2["id"], "status": status, "communication_id": o["id"]})
+                    plan["chase"].append({"dedupe_key": f"repair_channel:{k2['id']}", "action_type": "repair_contact_channel", "company_id": k2.get("company_id"),
+                                          "opportunity_id": deal_van(o, gekoppeld=False), "priority": 90, "title": "Email address bounced — find a verified channel",
+                                          "description": "The address bounced and will not be retried automatically. Find and verify an alternative commercial contact."})
+                    k2["email_status"] = status  # voor de evaluatie hieronder
+                    if not dry_run:
+                        try:
+                            await self.repo.engine_patch("contacts", {"id": f"eq.{k2['id']}"}, {
+                                "email_status": status, "email_status_at": nu.isoformat(),
+                                "email_status_reason": f"communication {o['id']} delivery_status={o.get('delivery_status')}"})
+                        except RepositoryError as e:
+                            fouten.append(f"contact {k2['id']}: {e}")
 
         # ── 3. Follow-ups ─────────────────────────────────────────────────────
         plans = d["northsea_followups"]
@@ -164,9 +250,29 @@ class EngineService:
                         await self.repo.engine_patch("northsea_followups", {"id": f"eq.{p['id']}"}, {"status": "replied", "updated_at": nu.isoformat()})
                     except RepositoryError as e:
                         fouten.append(f"followup {p['id']}: {e}")
+        plan["followups_skipped"] = []
+
+        def anker_bezwaar(o: dict) -> Optional[str]:
+            """Waarom dit uitgaande bericht GEEN follow-up krijgt; None = mag (als pending concept)."""
+            reden = None
+            co = companies.get(o.get("company_id")) or {}
+            ct = contacts.get(o.get("contact_id")) or {}
+            adressen = [a for a in ontvangers(o) if a not in bounced_adressen]
+            if CANONICAL_MAILBOX not in _lower(o.get("from_address")):
+                reden = "provenance_unknown"  # P0.9: niet opvolgen namens trade@ wat niet aantoonbaar van trade@ kwam
+            elif co.get("is_synthetic"):
+                reden = "synthetic"
+            elif co.get("contact_policy") in BLOCKING_POLICIES or ct.get("contact_policy") in BLOCKING_POLICIES:
+                reden = f"contact_policy:{co.get('contact_policy') if co.get('contact_policy') in BLOCKING_POLICIES else ct.get('contact_policy')}"
+            elif not adressen:
+                reden = "bounced_channel" if ontvangers(o) else "no_recipient"
+            if reden:
+                plan["followups_skipped"].append({"anchor": o["id"], "company_id": o.get("company_id"), "reason": reden})
+            return reden
+
         if policy_ok:
             nieuw = rules.plan_followups(outbound, inbound, plans, interval_hours=interval, max_followups=max_fu, now=nu,
-                                         max_per_run=self.max_followups_per_run)
+                                         max_per_run=self.max_followups_per_run, anchor_ok=anker_bezwaar)
         else:
             nieuw = []
             fouten.append("follow-ups skipped: deal_automation_policy interval/max missing or invalid (fail closed)")
@@ -174,7 +280,7 @@ class EngineService:
             anker = next(c for c in outbound if c["id"] == f.anchor_communication_id)
             co = companies.get(f.company_id) or {}
             ct = contacts.get(f.contact_id) or {}
-            adres = ct.get("email") or (draft_by_id.get(anker.get("reply_draft_id")) or {}).get("to_email")
+            adres = next((a for a in ontvangers(anker) if a not in bounced_adressen), None)
             opp = next((o for o in d["opportunities"] if o["id"] == f.opportunity_id), None) or {}
             laatste_intel = [intel[c["id"]] for c in inbound if c.get("company_id") == f.company_id and c["id"] in intel]
             missing = next((i.get("engine_missing") or i.get("missing_information") for i in reversed(laatste_intel) if i), []) or []
@@ -221,8 +327,9 @@ class EngineService:
         # ── 4. Deal-evaluatie ─────────────────────────────────────────────────
         per_opp_comm: dict[str, list[dict]] = {}
         for c in comms:
-            if c.get("opportunity_id"):
-                per_opp_comm.setdefault(c["opportunity_id"], []).append(c)
+            opp_id = deal_van(c, gekoppeld=False)
+            if opp_id:
+                per_opp_comm.setdefault(opp_id, []).append(c)
         for opp in d["opportunities"]:
             if opp.get("stage") == "lost" and not opp.get("engine_blocker_code"):
                 continue

@@ -34,7 +34,7 @@ SNAPSHOT_SELECT: dict[str, str] = {
                 "email_status,email_status_at,email_status_reason,created_at,updated_at",
     "communications": "id,company_id,contact_id,opportunity_id,direction,channel,subject,body,external_message_id,occurred_at,"
                       "created_at,delivery_status,delivery_status_at,is_synthetic,synthetic_reason,mapping_status,mapping_basis,"
-                      "mapping_candidates,from_address,reply_to_address,transport,actor_type,actor,approval_basis,reply_draft_id",
+                      "mapping_candidates,from_address,reply_to_address,transport,actor_type,actor,approval_basis,reply_draft_id,provider_metadata",
     "email_intelligence": "*",
     "northsea_followups": "*",
     "northsea_audit_events": "id,occurred_at,actor_type,actor,action,communication_id,opportunity_id,company_id,contact_id,draft_id,details",

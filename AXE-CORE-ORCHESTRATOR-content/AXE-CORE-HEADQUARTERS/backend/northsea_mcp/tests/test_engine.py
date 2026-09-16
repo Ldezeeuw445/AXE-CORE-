@@ -31,12 +31,14 @@ def outbound(repo, h=-60, company=SELLER_CO, contact=CONTACT_S, opp=OPP, **kw):
     cid = str(uuid.uuid4())
     repo.t["communications"].append({"id": cid, "company_id": company, "contact_id": contact, "opportunity_id": opp, "direction": "outbound",
                                      "channel": "email", "subject": "Copper Cathode — supply qualification", "body": "Please confirm allocation.",
-                                     "occurred_at": iso(h), "delivery_status": "delivered", **kw})
+                                     "occurred_at": iso(h), "delivery_status": "delivered",
+                                     "from_address": "NorthSea Commodity Partners <trade@northseacommodity.com>", **kw})
     return cid
 
 
 async def test_inbound_is_classified_with_explicit_terms_and_evidence_once():
     repo = FakeRepo()
+    next(c for c in repo.t["communications"] if c["id"] == COMM).update(mapping_status="mapped", mapping_basis="thread")
     uit = await eng(repo).tick()
     intel = next(i for i in repo.t["email_intelligence"] if i["communication_id"] == COMM)
     assert intel["engine_primary"] == "supplier" and intel["engine_version"] == rules.ENGINE_VERSION
@@ -119,7 +121,7 @@ async def test_storm_cap_and_invalid_policy_fail_closed():
     for i in range(15):
         co = str(uuid.uuid4())
         repo.t["companies"].append({"id": co, "company_name": f"C{i}", "company_type": "supplier", "contact_policy": "allowed"})
-        outbound(repo, h=-60, company=co, contact=None, opp=None)
+        outbound(repo, h=-60, company=co, contact=None, opp=None, provider_metadata={"to": [f"desk{i}@example-{i}.com"]})
     uit = await eng(repo, max_followups_per_run=5).tick()
     assert uit["summary"]["followups"] == 5
     repo2 = FakeRepo()
@@ -180,3 +182,85 @@ async def test_engine_endpoint_requires_engine_service_token(client, store, repo
 def test_engine_scope_is_not_offered_to_oauth_clients():
     from northsea_mcp.policy import INTERNAL_SCOPES, SCOPES
     assert "northsea.engine" in INTERNAL_SCOPES and "northsea.engine" not in SCOPES
+
+
+# ── Productie-bevindingen (dry run 16 sep): herkomst, beleid en bounce zonder contactrecord ──
+
+async def test_no_followup_on_outbound_without_canonical_provenance():
+    repo = FakeRepo()
+    oude_inbound(repo)
+    outbound(repo, h=-60, from_address=None)
+    uit = await eng(repo).tick(dry_run=True)
+    assert uit["summary"]["followups"] == 0
+    assert [x["reason"] for x in uit["plan"]["followups_skipped"]] == ["provenance_unknown"]
+
+
+async def test_no_followup_for_review_required_party():
+    repo = FakeRepo()
+    oude_inbound(repo)
+    next(c for c in repo.t["companies"] if c["id"] == SELLER_CO)["contact_policy"] = "review_required"
+    outbound(repo, h=-60)
+    uit = await eng(repo).tick()
+    assert uit["summary"]["followups"] == 0 and repo.t["northsea_followups"] == []
+    assert uit["plan"]["followups_skipped"][0]["reason"] == "contact_policy:review_required"
+
+
+async def test_bounce_recorded_only_in_provider_metadata_blocks_that_address():
+    repo = FakeRepo()
+    oude_inbound(repo)
+    co = str(uuid.uuid4())
+    repo.t["companies"].append({"id": co, "company_name": "Rice Co", "company_type": "supplier", "contact_policy": "allowed"})
+    outbound(repo, h=-200, company=co, contact=None, opp=None, delivery_status="bounced",
+             provider_metadata={"to": ["info@rice.example"], "from": "NorthSea Commodity Partners <trade@northseacommodity.com>"})
+    outbound(repo, h=-60, company=co, contact=None, opp=None, provider_metadata={"last_event": {"to": ["Info <INFO@rice.example>"]}})
+    uit = await eng(repo).tick()
+    assert uit["summary"]["followups"] == 0 and uit["plan"]["followups_skipped"][0]["reason"] == "bounced_channel"
+    chase = [q for q in repo.t["action_queue"] if str(q.get("dedupe_key", "")).startswith("repair_channel_address:")]
+    assert len(chase) == 1
+    await eng(repo).tick()
+    assert len([q for q in repo.t["action_queue"] if str(q.get("dedupe_key", "")).startswith("repair_channel_address:")]) == 1
+
+
+async def test_human_reverified_contact_is_not_overwritten_by_old_bounce():
+    repo = FakeRepo()
+    outbound(repo, h=-50, delivery_status="bounced")
+    k = next(c for c in repo.t["contacts"] if c["id"] == CONTACT_S)
+    k["email_status"], k["email_status_at"] = "valid", iso(-1)
+    uit = await eng(repo).tick(dry_run=True)
+    assert uit["plan"]["contacts_bounced"] == []
+
+
+async def test_legacy_or_non_party_link_is_not_deal_evidence():
+    repo = FakeRepo()
+    # Seed-inbound: wel aan de deal gelinkt, maar zonder deterministische koppeling -> classificatie ja, bewijs nee.
+    await eng(repo).tick()
+    assert [e for e in repo.t["deal_evidence"] if e.get("evidence_type") == "stated_terms"] == []
+    # Kandidaat-leverancier die geen partij van de deal is, zelfs 'mapped': telt niet voor die deal.
+    repo2 = FakeRepo()
+    ander = str(uuid.uuid4())
+    repo2.t["companies"].append({"id": ander, "company_name": "Candidate Mill", "company_type": "supplier", "contact_policy": "allowed"})
+    cid = str(uuid.uuid4())
+    repo2.t["communications"].append({"id": cid, "company_id": ander, "opportunity_id": OPP, "direction": "inbound", "channel": "email",
+                                      "subject": "Re: offer", "body": "We can supply 500 MT FOB Bangkok, LC at sight", "occurred_at": iso(-1),
+                                      "mapping_status": "mapped", "mapping_basis": "thread"})
+    uit = await eng(repo2).tick(dry_run=True)
+    assert not [e for e in uit["plan"]["evidence"] if e["source_reference"] == cid]
+    assert not [x for x in uit["plan"]["evaluations"] if x["opportunity_id"] == OPP and x["to"] == "reply_needed"]
+
+
+async def test_reclassification_cancels_stale_engine_chase_item_but_not_human_items():
+    repo = FakeRepo()
+    cid = str(uuid.uuid4())
+    repo.t["communications"].append({"id": cid, "company_id": SELLER_CO, "direction": "inbound", "channel": "email",
+                                     "subject": "Welcome to TradeWheel", "body": "Thanks for joining. Unsubscribe here.", "occurred_at": iso(-3)})
+    repo.t["email_intelligence"].append({"communication_id": cid, "engine_version": "ns-engine-1", "engine_primary": "rejection"})
+    repo.t["action_queue"] += [
+        {"id": str(uuid.uuid4()), "dedupe_key": f"review_rejection:{cid}", "status": "open", "metadata": {"source": "northsea-engine"}},
+        {"id": str(uuid.uuid4()), "dedupe_key": f"review_rejection:{cid}-human", "status": "open", "metadata": {"source": "luka"}},
+    ]
+    uit = await eng(repo).tick()
+    engine_item, mens = repo.t["action_queue"][-2:]
+    assert engine_item["status"] == "cancelled" and "spam_noise" in engine_item["metadata"]["cancelled_reason"]
+    assert mens["status"] == "open"
+    assert uit["summary"]["chase_cancelled"] == 1
+    assert (await eng(repo).tick())["summary"]["chase_cancelled"] == 0

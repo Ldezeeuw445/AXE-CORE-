@@ -160,3 +160,23 @@ def test_draft_names_real_open_points_and_commits_nothing():
 def test_draft_falls_back_to_blocker_questions():
     d = e.followup_draft(blocker_code="buyer_unqualified", role="buyer", missing=[], product=None, attempt=2, original_subject=None)
     assert "legal buying entity" in d["body"] and "reminder" in d["body"]
+
+
+def test_anchor_veto_applies_after_latest_rule():
+    # m2 is het laatste bericht aan c1 maar zonder bruikbare herkomst: geen follow-up, en m1 (ouder) ook niet.
+    veto = lambda o: "provenance_unknown" if o["id"] == "m2" else None
+    assert e.plan_followups([out("m1", -100), out("m2", -60)], [], [], interval_hours=48, max_followups=3, now=NU, anchor_ok=veto) == []
+
+
+def test_platform_newsletter_is_spam_not_rejection():
+    # Productie 16 sep: TradeWheel-welkomstmails werden 'rejection' door de unsubscribe-voettekst.
+    c = e.classify("Welcome to Tradewheel — Verify your email & start exploring global trade!",
+                   "<https://mandrillapp.com/track/click/1> Thanks for joining TradeWheel. Not interested? Unsubscribe here.")
+    assert c.primary == "spam_noise"
+    assert e.classify("Re: offer", "Thank you, but we are not interested at this time.").primary == "rejection"
+    assert e.classify("Re: offer", "Please remove me from your mailing list.").primary == "rejection"
+
+
+def test_operational_limits_are_not_rejections():
+    assert e.classify("Re: qualification", "We can supply 500 MT but we are not able to offer FOB, only CIF.").primary == "supplier"
+    assert e.classify("Re: LC", "The bank declined the draft wording; we will send a corrected version.").primary != "rejection"

@@ -57,6 +57,27 @@ begin
     raise exception 'NS_TEST_FAILED: bad engine_primary';
   exception when check_violation then null; end; n := n + 1;
 
+  -- P1b: bounce alleen in provider_metadata (geen contactrecord), en herbevestiging
+  -- Fixture: een historische bounce zoals die in productie staat (zonder provenance-kolommen). De P0-insertguard
+  -- geldt voor NIEUWE verzendingen; alleen voor deze fixture staan triggers uit, en meteen weer aan.
+  execute 'set local session_replication_role = replica';
+  insert into communications (company_id, direction, channel, subject, occurred_at, delivery_status, delivery_status_at, provider_metadata)
+    values (co, 'outbound', 'email', 'NS P1 TEST out', now() - interval '2 days', 'bounced', now() - interval '1 day',
+            jsonb_build_object('last_event', jsonb_build_object('to', jsonb_build_array('Desk <Desk@NS-P1B.invalid>'))));
+  execute 'set local session_replication_role = origin';
+  if northsea_outbound_block_reason(null, null, 'desk@ns-p1b.invalid', null) is distinct from 'bounced_channel' then raise exception 'NS_TEST_FAILED: metadata bounce not detected'; end if; n := n + 1;
+  begin
+    insert into reply_drafts (communication_id, company_id, opportunity_id, to_email, subject, body, approval_status, generated_by)
+      values (comm, co, opp, 'desk@ns-p1b.invalid', 's3', 'b', 'pending', 'test');
+    raise exception 'NS_TEST_FAILED: draft to metadata-bounced address accepted';
+  exception when others then if sqlerrm not like 'NS_CONTACT_POLICY%bounced_channel%' then raise; end if; end; n := n + 1;
+  insert into contacts (company_id, email, email_status, email_status_at, email_status_reason) values (co, 'desk@ns-p1b.invalid', 'valid', now(), 'test: human re-verified');
+  if northsea_outbound_block_reason(null, null, 'desk@ns-p1b.invalid', null) is not null then raise exception 'NS_TEST_FAILED: re-verified address still blocked'; end if; n := n + 1;
+  if (select contact_policy from companies where id = 'dbe1c54c-f2ed-4329-b5ec-647d3d9c5ae6') is distinct from 'review_required'
+     and exists (select 1 from companies where id = 'dbe1c54c-f2ed-4329-b5ec-647d3d9c5ae6') then raise exception 'NS_TEST_FAILED: dbe1c54c not review_required'; end if; n := n + 1;
+  if exists (select 1 from companies where id = 'dbe1c54c-f2ed-4329-b5ec-647d3d9c5ae6')
+     and northsea_outbound_block_reason(null, null, 'info@thairiceandfood.com', null) is distinct from 'bounced_channel' then raise exception 'NS_TEST_FAILED: Thai rice bounced address not blocked'; end if; n := n + 1;
+
   raise exception 'NS_TESTS_PASSED: %', n;
 end
 $test$;
