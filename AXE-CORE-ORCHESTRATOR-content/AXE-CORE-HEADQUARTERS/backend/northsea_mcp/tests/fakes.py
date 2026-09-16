@@ -131,6 +131,11 @@ class FakeRepo:
     async def ping(self):
         return True
 
+    async def fetch_all(self, table, max_rows=5000):
+        from northsea_mcp.repository import SNAPSHOT_SELECT
+        assert table in SNAPSHOT_SELECT
+        return (self._find(table) if table in self.t else []), False
+
     async def get_company(self, i):
         return self._by_id("companies", i)
 

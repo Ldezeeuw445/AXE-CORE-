@@ -51,7 +51,7 @@ async def test_remote_client_lists_and_calls_tools_with_service_token(server_url
     http = httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=30)
     async with Client(streamable_http_client(f"{server_url}/mcp", http_client=http)) as c:
         tools = (await c.list_tools()).tools
-        assert len(tools) == 14
+        assert len(tools) == 14 + 41
         res = await c.call_tool("northsea_review_deal", {"opportunity_id": OPP})
         assert not res.is_error and res.structured_content["opportunity_id"] == OPP
         denied = await c.call_tool("northsea_send_approved_communication",

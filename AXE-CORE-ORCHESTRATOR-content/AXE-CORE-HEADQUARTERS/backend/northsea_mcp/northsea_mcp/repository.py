@@ -23,6 +23,36 @@ UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}
 ACTIVE = "(draft,active,paused,matched)"
 
 
+# Kolommen per tabel voor de leeslaag. Bewust zonder transcript, raw_event en
+# bestandsinhoud: te groot en te persoonlijk voor een tool-antwoord.
+SNAPSHOT_SELECT: dict[str, str] = {
+    "opportunities": "*",
+    "buyer_requirements": "*",
+    "supplier_offers": "*",
+    "companies": "*",
+    "contacts": "id,company_id,full_name,role,email,phone,linkedin_url,is_primary,verification_status,created_at,updated_at",
+    "communications": "id,company_id,contact_id,opportunity_id,direction,channel,subject,body,external_message_id,occurred_at,"
+                      "created_at,delivery_status,delivery_status_at",
+    "email_intelligence": "*",
+    "call_intelligence": "id,communication_id,external_call_id,call_status,duration_seconds,summary,caller_type,commodity,product,"
+                         "grade,quantity_mt,frequency,origin,destination,incoterm,payment_terms,urgency,requires_human_review,created_at,updated_at",
+    "reply_drafts": "id,communication_id,company_id,contact_id,opportunity_id,to_email,subject,body,purpose,approval_status,"
+                    "sensitive_action,generated_by,approved_at,sent_at,resend_email_id,created_at,updated_at",
+    "deal_tasks": "*",
+    "action_queue": "*",
+    "deal_events": "id,opportunity_id,event_type,actor,summary,created_at",
+    "deal_evidence": "*",
+    "deal_documents": "*",
+    "inbound_email_attachments": "id,resend_email_id,company_id,contact_id,opportunity_id,filename,content_type,size,created_at",
+    "verification_checks": "*",
+    "match_assessments": "*",
+    "sourcing_campaigns": "*",
+    "sourcing_candidates": "id,campaign_id,company_id,candidate_name,source_type,fit_score,status,last_contacted_at,created_at,updated_at",
+    "deal_automation_policy": "*",
+    "commissions": "*",
+}
+
+
 class RepositoryError(RuntimeError):
     """Een databasefout. De tekst is veilig: geen sleutels, geen query."""
 
@@ -190,6 +220,25 @@ class SupabaseRepository:
 
     async def get_draft(self, draft_id: str) -> dict | None:
         return await self._one("reply_drafts", {"id": f"eq.{uid(draft_id, 'draft_id')}", "select": "*"})
+
+    # ── Hele tabellen, voor de leeslaag (inspect.py) ──────────────────────────
+    async def fetch_all(self, table: str, max_rows: int = 5000) -> tuple[list[dict], bool]:
+        """Een tabel in pagina's van 1000, met vaste kolommen per tabel.
+
+        Alleen tabellen uit SNAPSHOT_SELECT; een tool-argument kiest nooit een
+        tabel of kolom. Geeft (rijen, afgekapt) terug zodat een antwoord kan
+        zeggen dat het niet alles zag, in plaats van stil te tellen op een deel.
+        """
+        select = SNAPSHOT_SELECT[table]
+        rows: list[dict] = []
+        offset = 0
+        while offset < max_rows:
+            page = await self._get(table, {"select": select, "order": "id.asc", "limit": "1000", "offset": str(offset)})
+            rows += page
+            if len(page) < 1000:
+                return rows, False
+            offset += 1000
+        return rows[:max_rows], True
 
     # ── Schrijven (alleen wat de write-tools nodig hebben) ────────────────────
     async def insert_deal_task(self, row: dict) -> dict:

@@ -68,6 +68,11 @@ TOOLS: dict[str, ToolPolicy] = {p.name: p for p in (
     ToolPolicy("northsea_send_approved_communication", Risk.HIGH_IMPACT_WRITE,
                ("northsea.communications.send",), needs_idempotency_key=True),
 )}
+# Leestools (server_read.py): allemaal READ_ONLY, zonder bijwerkingen.
+from .read_catalog import READ_TOOL_SCOPES  # noqa: E402
+
+TOOLS.update({naam: ToolPolicy(naam, Risk.READ_ONLY, (scope,)) for naam, scope in READ_TOOL_SCOPES.items()})
+
 
 
 class PolicyDenied(Exception):
