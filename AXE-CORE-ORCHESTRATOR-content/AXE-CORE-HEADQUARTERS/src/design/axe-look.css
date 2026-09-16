@@ -507,77 +507,11 @@ html:root[data-look],
   -webkit-backdrop-filter: none !important;
 }
 
-/* ── Border-beam op de composer: "Pulse Outside, colorful" (golvend) ──────
- *
- * GEEN scherpe randlijn (dat was de constante edge), en ook niet overal even
- * groot ademen. Wat je wél wilt: een zachte KLEURIGE gloed die van áchter de
- * doos naar buiten straalt en GOLFT — een golf die rond de doos reist, zodat
- * de ene kant opbolt terwijl de andere terugzakt (nooit overal gelijk).
- * Zoals de `border-beam`-library met size="pulse-outside", colorVariant=
- * "colorful". Puur CSS, geen dependency.
- *
- * De gloed is opgebouwd uit losse gekleurde vlekken van verschillende grootte
- * (radial-gradients), dus hij is van zichzelf al ongelijk. Twee lagen draaien
- * traag in tégengestelde richting, met versprongen dekking → de golf reist en
- * de intensiteit deint. Geen `isolation` op de doos, zodat de negatieve
- * z-index echt áchter de doosachtergrond valt. */
-.axe-beam { position: relative; }
-
-.axe-beam::before,
-.axe-beam::after {
-  content: '';
-  position: absolute;
-  border-radius: 40%;
-  z-index: -1;
-  pointer-events: none;
-  transform-origin: center;
-  will-change: transform, opacity;
-  /* Ongelijke kleurvlekken rond de doos — verschillende grootte, dus de gloed
-     is nooit overal even dik. */
-  background:
-    radial-gradient(38% 42% at 22% 8%,  #ec4899 0%, transparent 70%),
-    radial-gradient(30% 34% at 78% 6%,  #a855f7 0%, transparent 70%),
-    radial-gradient(42% 46% at 98% 55%, #3b82f6 0%, transparent 70%),
-    radial-gradient(34% 40% at 66% 99%, #22c55e 0%, transparent 70%),
-    radial-gradient(30% 36% at 18% 96%, #f59e0b 0%, transparent 70%),
-    radial-gradient(40% 44% at 2% 44%,  #6366f1 0%, transparent 70%);
-}
-
-/* Brede, ver uitwaaierende wolk — de gloed die van onderen/achter komt. */
-.axe-beam::before {
-  inset: -12px;
-  filter: blur(20px);
-  animation: axe-beam-wave-a 9s linear infinite;
-}
-
-/* Strakkere laag vlak om de doos — laat de rand-zone zachtjes oplichten,
-   draait de andere kant op en deint versprongen, zodat het golft. */
-.axe-beam::after {
-  inset: -5px;
-  filter: blur(11px);
-  animation: axe-beam-wave-b 7s linear infinite;
-}
-
-/* De golf: elke laag draait één trage ronde (kleurvlekken reizen rondom) en
-   deint tegelijk in dekking + schaal, uit fase met de andere laag. Zo is de
-   gloed nooit overal even groot — hij golft. */
-@keyframes axe-beam-wave-a {
-  0%   { transform: rotate(0deg)   scale(1);    opacity: 0.22; }
-  25%  { transform: rotate(90deg)  scale(1.05); opacity: 0.46; }
-  50%  { transform: rotate(180deg) scale(1);    opacity: 0.24; }
-  75%  { transform: rotate(270deg) scale(1.05); opacity: 0.46; }
-  100% { transform: rotate(360deg) scale(1);    opacity: 0.22; }
-}
-@keyframes axe-beam-wave-b {
-  0%   { transform: rotate(360deg) scale(1.04); opacity: 0.42; }
-  25%  { transform: rotate(270deg) scale(0.99); opacity: 0.2;  }
-  50%  { transform: rotate(180deg) scale(1.04); opacity: 0.44; }
-  75%  { transform: rotate(90deg)  scale(0.99); opacity: 0.2;  }
-  100% { transform: rotate(0deg)   scale(1.04); opacity: 0.42; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .axe-beam::before, .axe-beam::after { animation: none; opacity: 0.36; }
-}
+/* ── Border-beam op de composer ──────────────────────────────────────────
+ * De gloed rond de home-composer komt nu uit de `border-beam`-library
+ * (size="pulse-outside", colorVariant="colorful") in HomeCommandComposer.tsx.
+ * Het eerdere handgemaakte `.axe-beam` (conic-rand / radiale golf in CSS) is
+ * verwijderd — de library doet de pulse-outside halo netjes rond de doos. */
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
    een dichte kaart wordt. */

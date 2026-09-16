@@ -20,6 +20,7 @@ import {
   Volume2, VolumeX, Telescope, Globe, Mic, Send, Zap, ChevronDown,
   Clock, SlidersHorizontal, Brain, Sparkles, CirclePlay, Wand2,
 } from 'lucide-react';
+import { BorderBeam } from 'border-beam';
 import { FileUploadButton, type NormalizedAttachment } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 
@@ -128,12 +129,15 @@ export function HomeCommandComposer(props: Props) {
         </div>
       </div>
 
-      {/* De composer-doos: invoer + bliksem, dan de iconenrij. Met de border-beam
-          (axe-beam): een gloed die om de rand loopt — puur CSS (roterende conic-
-          gradient in de rand), geen extra dependency. */}
+      {/* De composer-doos: invoer + bliksem, dan de iconenrij. Eromheen de
+          border-beam uit de `border-beam`-library: size="pulse-outside" =
+          een kleurige halo die van áchter de doos naar buiten bloeit en golft
+          (colorVariant="colorful"). De doos zelf blijft ondoorzichtig zodat de
+          kern-gloed er niet doorheen schijnt; de eigen 1px-rand is de hairline. */}
+      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={0.55} theme="dark" borderRadius={16}>
       <div
-        className="axe-beam rounded-2xl px-3 pt-3 pb-2.5"
-        style={{ background: 'rgba(10,12,14,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16 }}
+        className="rounded-2xl px-3 pt-3 pb-2.5"
+        style={{ background: 'rgba(9,11,13,0.94)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 16 }}
       >
         <div className="flex items-center gap-2">
           <input
@@ -180,6 +184,7 @@ export function HomeCommandComposer(props: Props) {
           </div>
         </div>
       </div>
+      </BorderBeam>
 
       {/* De vier tip-chips: korte labels, gecentreerd als groep (niet tegen de
           randen), zodat beide uiteinden even ver uitsteken — symmetrisch. Een
