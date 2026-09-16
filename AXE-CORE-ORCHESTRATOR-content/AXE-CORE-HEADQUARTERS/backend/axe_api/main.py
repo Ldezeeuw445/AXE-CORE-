@@ -3110,7 +3110,9 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None  # type: ignore
 
-CRON_ACTIONS = ("prompt", "exec", "webhook", "crew")
+import planning as _planning  # noqa: E402 — één planner + grootboek, zie planning.py
+
+CRON_ACTIONS = _planning.ALLE_SOORTEN
 
 
 class ScheduleBody(BaseModel):
@@ -3121,6 +3123,11 @@ class ScheduleBody(BaseModel):
     action_payload: dict[str, Any] = {}
     enabled: bool = True
     metadata: dict[str, Any] = {}
+    app: Optional[str] = None
+    executor: str = "vps"
+    job_key: Optional[str] = None
+    description: Optional[str] = None
+    max_runtime_s: int = 300
 
 
 class ScheduleUpdate(BaseModel):
@@ -3131,6 +3138,23 @@ class ScheduleUpdate(BaseModel):
     action_payload: Optional[dict[str, Any]] = None
     enabled: Optional[bool] = None
     metadata: Optional[dict[str, Any]] = None
+    app: Optional[str] = None
+    executor: Optional[str] = None
+    description: Optional[str] = None
+    max_runtime_s: Optional[int] = None
+
+
+def _check_schedule_fields(action_type: Optional[str], executor: Optional[str], app: Optional[str], max_runtime_s: Optional[int]) -> None:
+    if action_type is not None and action_type not in CRON_ACTIONS:
+        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    if executor is not None and executor not in _planning.EXECUTORS:
+        raise HTTPException(400, f"executor must be one of {_planning.EXECUTORS}")
+    if app is not None and app not in _planning.APPS:
+        raise HTTPException(400, f"app must be one of {_planning.APPS}")
+    if max_runtime_s is not None and not 5 <= max_runtime_s <= 3600:
+        raise HTTPException(400, "max_runtime_s must be 5-3600")
+    if action_type and executor and action_type != "observed" and action_type not in _planning.UITVOERBAAR.get(executor, ()):
+        raise HTTPException(400, f"action_type '{action_type}' cannot run on executor '{executor}'")
 
 
 def _compute_next_run(cron_expr: str, tz_name: str = "UTC") -> str:
@@ -3242,8 +3266,8 @@ async def cron_list_schedules():
 
 @app.post("/cron/schedules", dependencies=[AUTH])
 async def cron_create_schedule(body: ScheduleBody, request: Request):
-    if body.action_type not in CRON_ACTIONS:
-        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    app_id = body.app or (body.metadata or {}).get("app") or "axe_core"
+    _check_schedule_fields(body.action_type, body.executor, app_id, body.max_runtime_s)
     try:
         next_run = _compute_next_run(body.cron_expr, body.timezone) if body.enabled else None
     except ValueError as e:
@@ -3256,7 +3280,12 @@ async def cron_create_schedule(body: ScheduleBody, request: Request):
         "action_payload": body.action_payload,
         "enabled": body.enabled,
         "next_run_at": next_run,
-        "metadata": body.metadata,
+        "metadata": {**(body.metadata or {}), "app": app_id},
+        "app": app_id,
+        "executor": body.executor,
+        "job_key": body.job_key,
+        "description": body.description,
+        "max_runtime_s": body.max_runtime_s,
     }
     res = sb().table("core_schedules").insert(row).execute()
     await audit("schedule_create", "cron", {"name": body.name, "cron": body.cron_expr}, request.client.host if request.client else "")
@@ -3266,14 +3295,23 @@ async def cron_create_schedule(body: ScheduleBody, request: Request):
 @app.put("/cron/schedules/{schedule_id}", dependencies=[AUTH])
 async def cron_update_schedule(schedule_id: str, body: ScheduleUpdate):
     patch: dict[str, Any] = {}
-    for field in ("name", "cron_expr", "timezone", "action_type", "action_payload", "enabled", "metadata"):
+    for field in ("name", "cron_expr", "timezone", "action_type", "action_payload", "enabled", "metadata",
+                  "app", "executor", "description", "max_runtime_s"):
         val = getattr(body, field)
         if val is not None:
             patch[field] = val
     if not patch:
         raise HTTPException(400, "nothing to update")
-    if patch.get("action_type") and patch["action_type"] not in CRON_ACTIONS:
-        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    if "metadata" in patch and "app" not in patch and isinstance(patch["metadata"], dict) and patch["metadata"].get("app") in _planning.APPS:
+        patch["app"] = patch["metadata"]["app"]
+    if any(k in patch for k in ("action_type", "executor")):
+        huidig = sb().table("core_schedules").select("action_type, executor").eq("id", schedule_id).single().execute().data or {}
+        _check_schedule_fields(patch.get("action_type", huidig.get("action_type")), patch.get("executor", huidig.get("executor")),
+                               patch.get("app"), patch.get("max_runtime_s"))
+    else:
+        _check_schedule_fields(None, None, patch.get("app"), patch.get("max_runtime_s"))
+    if "enabled" in patch and patch["enabled"]:
+        patch["consecutive_failures"] = 0
     # Recompute next_run_at when the schedule or its enabled state changes.
     if "cron_expr" in patch or "timezone" in patch or "enabled" in patch:
         cur = sb().table("core_schedules").select("cron_expr, timezone, enabled").eq("id", schedule_id).single().execute()
@@ -3306,15 +3344,119 @@ async def cron_run_now(schedule_id: str):
     if not cur.data:
         raise HTTPException(404, "schedule not found")
     s = cur.data
-    payload = s.get("action_payload") or {}
-    result = await _run_schedule_action(s["action_type"], payload)
-    sb().table("core_schedules").update({
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
-        "last_status": result["status"],
-        "last_result": result["output"][:4000],
-    }).eq("id", schedule_id).execute()
-    _notify_if_requested(s["name"], payload, result)
-    return {"result": result}
+    if s.get("action_type") == "observed":
+        raise HTTPException(400, "observed jobs run elsewhere and cannot be fired from here")
+    executor = s.get("executor") or "vps"
+    if executor != _deze_uitvoerder():
+        raise HTTPException(409, f"this job runs on '{executor}', not on this host ('{_deze_uitvoerder()}')")
+    uit = await _uitvoerder(executor).voer_uit(s, trigger="manual")
+    rij = sb().table("core_schedules").select("last_status, last_result").eq("id", schedule_id).single().execute().data or {}
+    return {"result": {"status": rij.get("last_status") or uit.get("status"), "output": rij.get("last_result") or ""}, "run": uit}
+
+
+def _deze_uitvoerder() -> str:
+    """'mac' op de agent-host (AXE_MAC_EXECUTOR=1), anders 'vps'."""
+    return "mac" if os.environ.get("AXE_MAC_EXECUTOR", "").strip() == "1" else "vps"
+
+
+def _meld_run(naam: str, payload: dict, resultaat: dict) -> None:
+    _notify_if_requested(naam, payload, {"status": resultaat["status"], "output": resultaat.get("output") or ""})
+    if resultaat.get("uitgezet"):
+        try:
+            sb().table("core_notifications").insert({
+                "type": "error",
+                "message": f"{naam}: uitgezet na {_planning.MAX_FAILS} mislukte runs op rij. Laatste fout: {(resultaat.get('output') or '')[:1500]}",
+            }).execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"disable notify failed: {e}")
+
+
+async def _mac_actie(soort: str, payload: dict) -> dict:
+    if soort == "planner":
+        if _planner is None:
+            return {"status": "fail", "output": "planner niet ingeladen op deze host"}
+        uit = await asyncio.to_thread(_planner.ronde)
+        return {"status": "ok", "output": json.dumps(uit, default=str)[:4000]}
+    return await _run_schedule_action(soort, payload)
+
+
+def _uitvoerder(executor: str) -> "_planning.Uitvoerder":
+    import socket as _socket
+    actie = _mac_actie if executor == "mac" else _run_schedule_action
+    return _planning.Uitvoerder(sb, executor, f"{executor}:{_socket.gethostname()}:{os.getpid()}", actie, meld=_meld_run)
+
+
+# ── Grootboek en agenda: alle jobs en taken van alle apps op één plek ────────
+
+@app.get("/ledger", dependencies=[AUTH])
+async def ledger(app_id: Optional[str] = None, source: Optional[str] = None, hours: int = 168, limit: int = 500):
+    if app_id is not None and app_id not in _planning.APPS:
+        raise HTTPException(400, f"app_id must be one of {_planning.APPS}")
+    if source is not None and source not in ("schedule", "planner", "launchd", "northsea", "manual", "pg_cron", "task"):
+        raise HTTPException(400, "invalid source")
+    since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 90)))
+    rows = sb().rpc("core_ledger", {"p_since": since.isoformat(), "p_app": app_id, "p_source": source,
+                                    "p_limit": max(1, min(limit, 2000))}).execute().data or []
+    return {"entries": rows, "since": since.isoformat(), "apps": list(_planning.APPS)}
+
+
+@app.get("/calendar/jobs", dependencies=[AUTH])
+async def calendar_jobs(van: Optional[str] = None, tot: Optional[str] = None, app_id: Optional[str] = None, tz: str = "Europe/Amsterdam"):
+    try:
+        start = datetime.fromisoformat(van.replace("Z", "+00:00")) if van else datetime.now(timezone.utc) - timedelta(days=1)
+        einde = datetime.fromisoformat(tot.replace("Z", "+00:00")) if tot else start + timedelta(days=8)
+    except ValueError:
+        raise HTTPException(400, "van/tot must be ISO timestamps")
+    if einde - start > timedelta(days=45):
+        raise HTTPException(400, "window max 45 days")
+    schedules = sb().table("core_schedules").select("*").limit(500).execute().data or []
+    pg = sb().rpc("core_pg_cron_jobs", {}).execute().data or []
+    items = _planning.agenda(schedules, pg, start, einde, tz)
+    if app_id:
+        items = [i for i in items if i["app"] == app_id]
+    jobs = [{"job_key": s.get("job_key") or f"schedule:{s['id']}", "id": s["id"], "bron": "schedule", "naam": s.get("name"),
+             "app": _planning.app_of(s.get("app")), "executor": s.get("executor"), "soort": s.get("action_type"), "cron": s.get("cron_expr"),
+             "timezone": s.get("timezone"), "enabled": s.get("enabled"), "next_run_at": s.get("next_run_at"), "last_run_at": s.get("last_run_at"),
+             "last_status": s.get("last_status"), "consecutive_failures": s.get("consecutive_failures"), "description": s.get("description")}
+            for s in schedules]
+    jobs += [{"job_key": f"pg_cron:{j['jobname']}", "id": None, "bron": "pg_cron", "naam": j["jobname"], "app": j["app"], "executor": "supabase",
+              "soort": "pg_cron", "cron": j["schedule"], "timezone": "UTC", "enabled": j["active"],
+              "next_run_at": _planning.volgende(j["schedule"]).isoformat() if j["active"] and _planning.geldig(j["schedule"]) else None,
+              "last_run_at": None, "last_status": None, "consecutive_failures": None, "description": None} for j in pg]
+    if app_id:
+        jobs = [j for j in jobs if j["app"] == app_id]
+    return {"items": items, "jobs": jobs, "van": start.isoformat(), "tot": einde.isoformat()}
+
+
+@app.post("/ledger/report", dependencies=[AUTH])
+async def ledger_report(body: dict = Body(...)):
+    """Een run die elders draaide (launchd op de Mac, de planner-lus) in het grootboek zetten."""
+    try:
+        rij = _planning.rapport_rij(body, datetime.now(timezone.utc))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    s = (sb().table("core_schedules").select("*").eq("job_key", rij["job_key"]).limit(1).execute().data or [None])[0]
+    if s:
+        rij["schedule_id"] = s["id"]
+        rij["app"] = _planning.app_of(s.get("app"))
+    try:
+        ins = sb().table("core_job_runs").insert(rij).execute()
+    except Exception as e:  # noqa: BLE001
+        if "23505" in str(e) or "duplicate key" in str(e):
+            return {"recorded": False, "duplicate": True}
+        raise
+    if s and rij["status"] != "running":
+        teller, uit = _planning.na_run(rij["status"], int(s.get("consecutive_failures") or 0))
+        patch = {"last_run_at": rij["finished_at"] or rij["started_at"], "last_status": rij["status"],
+                 "last_result": (rij.get("output") or rij.get("error") or "")[:4000], "consecutive_failures": teller}
+        try:
+            patch["next_run_at"] = _planning.volgende(s["cron_expr"], s.get("timezone") or "UTC").isoformat()
+        except ValueError:
+            pass
+        sb().table("core_schedules").update(patch).eq("id", s["id"]).execute()
+        if uit:
+            _meld_run(s.get("name") or rij["job_name"], {}, {"status": rij["status"], "output": rij.get("error") or "", "uitgezet": False})
+    return {"recorded": True, "run": (ins.data or [None])[0]}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3724,56 +3866,28 @@ async def cron_tick(
     # fast and loud on the first error is safer than limping through the
     # remaining schedules on a backend that has already shown it is down.
     try:
-        due = (
-            sb().table("core_schedules")
-            .select("*")
-            .eq("enabled", True)
-            .lte("next_run_at", now.isoformat())
-            .limit(50)
-            .execute()
-        )
-        ran = []
-        for s in due.data or []:
-            payload = s.get("action_payload") or {}
-            result = await _run_schedule_action(s["action_type"], payload)
-            update = {
-                "last_run_at": now.isoformat(),
-                "last_status": result["status"],
-                "last_result": result["output"][:4000],
-            }
-            try:
-                update["next_run_at"] = _compute_next_run(s["cron_expr"], s.get("timezone") or "UTC")
-            except ValueError:
-                # A schedule with a corrupt cron expr is disabled rather than retried
-                # every minute forever.
-                update["enabled"] = False
-                update["next_run_at"] = None
-            sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
-            _notify_if_requested(s["name"], payload, result)
-            ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
-            # cron_manager was registered as an agent with no write site of its
-            # own: this tick already ran real, unattended actions every minute,
-            # but nothing tagged that activity, so its hub stayed empty
-            # regardless of how much real work it did. Recorded per fired
-            # schedule, at the real outcome, not the UI edit that created it.
-            # Wrapped separately so a memory-write hiccup can never cost the
-            # schedule's own update/notify, which already completed above.
+        # Claim met lease (planning.py): een job die langer dan een minuut duurt start
+        # niet nog eens, en elke run staat in core_job_runs.
+        ran = await _uitvoerder("vps").tick()
+        for r in ran:
+            if r.get("status") == "skipped":
+                continue
             try:
                 sb().table("global_memory").upsert({
                     "user_id": AXE_CORE_DEFAULT_USER_ID,
                     "category": "system_event",
-                    "key": f"agent_run:cron:{s['id']}:{int(now.timestamp())}",
+                    "key": f"agent_run:cron:{r['id']}:{int(now.timestamp())}",
                     "value": json.dumps({
-                        "summary": f"Cron fired: {s['name']} ({s['action_type']}) -> {result['status']}",
-                        "schedule_id": s["id"], "name": s["name"], "action_type": s["action_type"],
-                        "status": result["status"], "at": now.isoformat(),
+                        "summary": f"Cron fired: {r['name']} -> {r['status']}",
+                        "schedule_id": r["id"], "name": r["name"], "status": r["status"], "run_id": r.get("run_id"),
+                        "at": now.isoformat(),
                     }),
                     "confidence": 1,
                     "metadata": {"kind": "agent_run", "agentId": "cron_manager",
-                                 "summary": f"Cron fired: {s['name']} -> {result['status']}"},
+                                 "summary": f"Cron fired: {r['name']} -> {r['status']}"},
                 }, on_conflict="user_id,key").execute()
             except Exception as mem_err:
-                print(f"[cron_tick] memory write failed for {s['id']}: {mem_err}", flush=True)
+                print(f"[cron_tick] memory write failed for {r['id']}: {mem_err}", flush=True)
         await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
         await run_always_awake_jobs()
         return {"ran": len(ran), "at": now.isoformat(), "details": ran}
@@ -3910,9 +4024,38 @@ class PlannerBesluit(BaseModel):
 
 @app.on_event("startup")
 async def _planner_start():
-    if _planner_mod is not None and _planner_mod.planner_aan():
+    if _deze_uitvoerder() == "mac":
+        # Eén planner: op de agent-host draait de planner als job in core_schedules
+        # (executor 'mac', action 'planner'), zichtbaar in agenda en grootboek. De oude
+        # eigen lus draait dan NIET, anders loopt hij dubbel.
+        if _planner_mod is not None and _planner_mod.planner_aan():
+            try:
+                bestaand = sb().table("core_schedules").select("id").eq("job_key", "axe_core:planner").limit(1).execute().data
+                if not bestaand:
+                    sb().table("core_schedules").insert({
+                        "name": "Planner: agents plannen hun werk", "job_key": "axe_core:planner", "app": "axe_core", "executor": "mac",
+                        "action_type": "planner", "action_payload": {}, "cron_expr": "10 */3 * * *", "timezone": "Europe/Amsterdam",
+                        "enabled": True, "max_runtime_s": 1800, "metadata": {"app": "axe_core"},
+                        "next_run_at": _planning.volgende("10 */3 * * *", "Europe/Amsterdam").isoformat(),
+                        "description": "AXE Core, Code Agent, AXE Algo en de Northsea Desk bedenken elk ≤3 taken (planner.py).",
+                    }).execute()
+            except Exception as e:  # noqa: BLE001
+                log.warning("[planner] schema registreren faalde: %s", e)
+        asyncio.create_task(_mac_lus())
+        log.info("[planner] Mac-uitvoerder aan: jobs met executor 'mac' uit core_schedules, elke minuut")
+    elif _planner_mod is not None and _planner_mod.planner_aan():
         asyncio.create_task(_planner_mod.lus(_planner))
         log.info("[planner] aan: eerste ronde over 10 minuten, daarna elke %ss", _planner_mod.INTERVAL_S)
+
+
+async def _mac_lus() -> None:
+    await asyncio.sleep(30)
+    while True:
+        try:
+            await _uitvoerder("mac").tick()
+        except Exception as e:  # noqa: BLE001 — de lus mag nooit stoppen
+            log.warning("[mac-uitvoerder] tick faalde: %s", str(e)[:300])
+        await asyncio.sleep(60)
 
 
 @app.get("/planner/status", dependencies=[AUTH])
