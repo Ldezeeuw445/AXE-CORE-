@@ -506,6 +506,54 @@ html:root[data-look],
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* ── Border-beam op de composer ──────────────────────────────────────────
+ *
+ * Een gloed die om de rand van de composer-doos loopt, puur in CSS: een
+ * roterende conic-gradient met één felle boog, weggemaskt tot alleen de rand-
+ * ring (de mask-xor laat alleen de padding-strook zien). Geen dependency, klein,
+ * en werkt in de Chromium-webview van Tauri. @property maakt de hoek animeerbaar;
+ * kan de browser dat niet, dan staat er een stille (niet-draaiende) gloedrand. */
+@property --axe-beam-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.axe-beam {
+  position: relative;
+  isolation: isolate;
+}
+.axe-beam::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 17px; /* 16px van de doos + 1px inset, zodat de hoeken uitlijnen */
+  padding: 1.5px;
+  background: conic-gradient(from var(--axe-beam-angle),
+    rgba(34, 211, 238, 0) 0deg,
+    rgba(34, 211, 238, 0) 210deg,
+    rgba(34, 211, 238, 0.95) 268deg,
+    rgba(129, 140, 248, 0.95) 300deg,
+    rgba(168, 85, 247, 0.95) 320deg,
+    rgba(168, 85, 247, 0) 360deg);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+  animation: axe-beam-spin 4.5s linear infinite;
+}
+@keyframes axe-beam-spin {
+  to { --axe-beam-angle: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .axe-beam::before { animation: none; }
+}
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
    een dichte kaart wordt. */
