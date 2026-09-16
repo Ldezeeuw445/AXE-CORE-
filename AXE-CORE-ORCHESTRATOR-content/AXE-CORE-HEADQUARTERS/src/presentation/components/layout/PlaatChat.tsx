@@ -494,6 +494,7 @@ export function PlaatChat() {
                   responseMode={voice.responseMode}
                   onToggleResponseMode={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
                   modelLabel={voice.primarySlot?.model || voice.activeProvider || 'AXE CORE'}
+                  voiceStatus={voice.voiceStatus}
                 />
               ) : (
               <HomeChatComposer>
