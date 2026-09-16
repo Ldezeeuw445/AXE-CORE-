@@ -49,7 +49,7 @@ export default function AICore() {
   // Mirror voiceStatus to logs
   useEffect(() => {
     if (voice.voiceStatus === 'processing') {
-      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ LangGraph Orchestrator analyzing...' }].slice(-200));
+      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ AXE thinking…' }].slice(-200));
     }
   }, [voice.voiceStatus]);
 

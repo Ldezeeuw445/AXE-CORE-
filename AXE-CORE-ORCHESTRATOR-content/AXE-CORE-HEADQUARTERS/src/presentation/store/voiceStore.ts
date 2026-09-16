@@ -820,7 +820,11 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       let orderedSlots:KeySlot[],activeAgentPrompt:string|null=null;
       await logRoute('capability classified',{capability:cap,mode:matchedCap?'matched':'fallback'});
 
-      if(matchedCap?.preferred_provider){
+      // For normal conversation the Supabase capability config (which can point
+      // "fast" at Ollama) must NOT decide the engine — that override is what made
+      // AXE answer on a dead local model and then fall through to a coding CLI.
+      // Only real specialist work honours a configured preferred_provider.
+      if(matchedCap?.preferred_provider && !isSimpleChatCapability(cap)){
         const preferred = matchedCap.preferred_provider;
         const fallback = matchedCap.fallback_provider;
         orderedSlots=[...allSlots.filter(s=>s.provider===preferred),...allSlots.filter(s=>s.provider===fallback&&s.provider!==preferred),...allSlots.filter(s=>s.provider!==preferred&&s.provider!==fallback)];
@@ -875,6 +879,17 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
             orderedSlots.unshift(primary);
           }
         }
+      }
+
+      // Coding CLIs (claude/codex/cursor via the 'abonnement' provider) are the
+      // Code agent's engines, not AXE's chat voice. In normal conversation they
+      // answer as a coder ("I'll treat this repo as..."), which never feels like
+      // AXE. Demote them to last resort so a real chat model wins — unless you
+      // explicitly made one your ★ Primary.
+      if(isSimpleChatCapability(cap) && get().primarySlot?.provider!=='abonnement'){
+        const chat=orderedSlots.filter(s=>s.provider!=='abonnement');
+        const coders=orderedSlots.filter(s=>s.provider==='abonnement');
+        if(chat.length) orderedSlots=[...chat,...coders];
       }
 
       // Specialist persona: Supabase's core_agents prompt (above) wins when
