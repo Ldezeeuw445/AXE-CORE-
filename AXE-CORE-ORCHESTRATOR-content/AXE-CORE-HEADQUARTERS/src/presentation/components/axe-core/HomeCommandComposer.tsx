@@ -23,6 +23,8 @@ import {
 import { BorderBeam } from 'border-beam';
 import { FileUploadButton, type NormalizedAttachment } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
+import { useLookValue } from '@/presentation/hooks/usePlaatInk';
+import type { VoiceStatus } from '@/presentation/store/voiceStore';
 
 interface Props {
   value: string;
@@ -39,7 +41,20 @@ interface Props {
   responseMode: 'speak' | 'type';
   onToggleResponseMode: () => void;
   modelLabel: string;
+  /** De live AXE-status; stuurt de border-beam zodat je altijd ziet wat AXE doet. */
+  voiceStatus: VoiceStatus;
 }
+
+// Per AXE-status een eigen beam-look, zodat je in één oogopslag ziet wat AXE
+// doet: rustig in ruststand, blauw & attent bij luisteren, fel & snel bij
+// nadenken, en warm & levendig als AXE terugpraat. (colorVariant/strength/
+// duration uit de border-beam-library.)
+const BEAM_BY_STATUS: Record<VoiceStatus, { colorVariant: 'colorful' | 'ocean' | 'sunset' | 'mono'; strength: number; duration: number }> = {
+  idle:       { colorVariant: 'colorful', strength: 0.5,  duration: 3.0 }, // rustig
+  listening:  { colorVariant: 'ocean',    strength: 0.75, duration: 1.6 }, // luistert
+  processing: { colorVariant: 'colorful', strength: 0.95, duration: 1.0 }, // denkt
+  speaking:   { colorVariant: 'sunset',   strength: 0.8,  duration: 1.9 }, // praat
+};
 
 // Korte labels zodat de vier chips náást elkaar op één rij passen (scheelt
 // ruimte en staat strakker). Icoon + kleur blijven; de prefix is de actie.
@@ -51,9 +66,14 @@ const CHIPS: Array<{ label: string; icon: typeof Brain; color: string; prefix: s
 ];
 
 export function HomeCommandComposer(props: Props) {
-  const { value, onChange, onSend, onRunChip, onHistory, onMic, isListening, attachments, onAttachments, responseMode, onToggleResponseMode, modelLabel } = props;
+  const { value, onChange, onSend, onRunChip, onHistory, onMic, isListening, attachments, onAttachments, responseMode, onToggleResponseMode, modelLabel, voiceStatus } = props;
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Light mode = pulse-inner (gloed ademt bínnen de rand), dark = pulse-outside
+  // (halo bloeit erbuiten). De rest van de beam volgt de AXE-status hieronder.
+  const look = useLookValue();
+  const beamSize = look === 'black' ? 'pulse-outside' : 'pulse-inner';
+  const beam = BEAM_BY_STATUS[voiceStatus] ?? BEAM_BY_STATUS.idle;
   // De modelpil is een dropdown: standaard ingeklapt tot alleen het groene
   // bolletje; tik = claude (+ pijltje) schuift open, tik weer = dicht.
   const [modelOpen, setModelOpen] = useState(false);
@@ -134,7 +154,14 @@ export function HomeCommandComposer(props: Props) {
           een kleurige halo die van áchter de doos naar buiten bloeit en golft
           (colorVariant="colorful"). De doos zelf blijft ondoorzichtig zodat de
           kern-gloed er niet doorheen schijnt; de eigen 1px-rand is de hairline. */}
-      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={0.55} theme="dark" borderRadius={16}>
+      <BorderBeam
+        size={beamSize}
+        colorVariant={beam.colorVariant}
+        strength={beam.strength}
+        duration={beam.duration}
+        theme={look === 'black' ? 'dark' : 'light'}
+        borderRadius={16}
+      >
       <div
         className="rounded-2xl px-3 pt-3 pb-2.5"
         style={{ background: 'rgba(9,11,13,0.94)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 16 }}
