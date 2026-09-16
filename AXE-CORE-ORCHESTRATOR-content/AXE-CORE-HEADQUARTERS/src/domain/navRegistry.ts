@@ -48,6 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/agents', label: 'Agents', keywords: ['agents', 'agent'], recordType: 'agent' },
   { path: '/crewai', label: 'CrewAI', keywords: ['crewai', 'crew ai', 'crew'] },
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },
+  { path: '/ledger', label: 'Ledger', keywords: ['ledger', 'grootboek', 'runs', 'job runs', 'logboek', 'alle taken', 'wat draaide er'] },
   { path: '/tasks', label: 'Tasks', keywords: ['tasks', 'todo', 'to-do', 'task'], recordType: 'task' },
   { path: '/finance', label: 'Finance', keywords: ['finance', 'financien', 'budget', 'money'] },
   { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets', 'trading os', 'trading desk'] },

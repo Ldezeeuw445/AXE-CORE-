@@ -109,6 +109,7 @@ export function northseaAgenda(items: readonly NorthseaAgendaItem[]): RoosterIte
       duurMin: 30,
       soort,
       kleur,
+      app: 'northsea',
     });
   }
   return uit;

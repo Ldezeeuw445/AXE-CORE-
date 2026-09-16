@@ -33,7 +33,7 @@ function naarKaartDeal(d: Record<string, unknown>): KaartDeal {
 describe('pariteit met de MCP (canon_fixtures.json)', () => {
   it('de landenlijst van de MCP is die van de kaart', () => {
     const topo = wereld as unknown as Parameters<typeof feature>[0];
-    const namen = (feature(topo, (topo as { objects: { countries: never } }).objects.countries) as unknown as { features: { properties: { name?: string } }[] })
+    const namen = (feature(topo, (topo as unknown as { objects: { countries: never } }).objects.countries) as unknown as { features: { properties: { name?: string } }[] })
       .features.map(f => f.properties?.name).filter(Boolean);
     expect([...new Set(namen)].sort()).toEqual(LANDEN);
   });

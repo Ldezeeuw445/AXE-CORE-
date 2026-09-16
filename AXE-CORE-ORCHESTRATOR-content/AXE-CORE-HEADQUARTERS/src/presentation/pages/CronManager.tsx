@@ -41,6 +41,9 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
   flow:    { label: 'CrewAI Flow', icon: Workflow,     color: '#c4b5fd' },
   exec:    { label: 'VPS Command', icon: Terminal,     color: 'var(--warning)' },
   webhook: { label: 'Webhook',    icon: Globe,         color: 'var(--success)' },
+  observed: { label: 'Draait elders', icon: Workflow,  color: 'var(--text-muted)' },
+  planner: { label: 'Planner (Mac)', icon: Bot,        color: '#F472B6' },
+  northsea: { label: 'NorthSea-desk', icon: Globe,     color: '#F472B6' },
 };
 
 /* ── App tabs ─────────────────────────────────────────────────────────────
@@ -108,6 +111,7 @@ function draftToPayload(d: Draft): Record<string, unknown> {
     }
     case 'flow':
       return { flow: d.flowName, inputs: { asset: d.flowAsset, topic: d.flowTopic, depth: d.flowDepth } };
+    default: return {};
   }
 }
 
@@ -218,8 +222,8 @@ export default function CronManager() {
     bezig: id => busy.has(id),
   };
   const kolomTekst: KolomTekst = {
-    soort: s => ACTION_META[s.action_type].label,
-    soortKleur: s => ACTION_META[s.action_type].color,
+    soort: s => `${(ACTION_META[s.action_type] ?? ACTION_META.exec).label}${s.executor === 'mac' ? ' · Mac' : ''}`,
+    soortKleur: s => (ACTION_META[s.action_type] ?? ACTION_META.exec).color,
     menselijk: cronToHuman,
     tijd: fmt,
   };
@@ -304,7 +308,7 @@ export default function CronManager() {
 
               {/* Action type */}
               <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(ACTION_META) as CronActionType[]).map(t => {
+                {(Object.keys(ACTION_META) as CronActionType[]).filter(t => !['observed', 'planner', 'northsea'].includes(t)).map(t => {
                   const M = ACTION_META[t]; const Icon = M.icon; const sel = draft.action_type === t;
                   return (
                     <button key={t} onClick={() => setDraft(d => ({ ...d, action_type: t }))}

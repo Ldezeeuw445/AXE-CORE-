@@ -55,7 +55,8 @@ function item(id: string, titel: string, wanneer: string | null | undefined, duu
   if (!wanneer) return null;
   const d = new Date(wanneer);
   if (Number.isNaN(d.getTime())) return null;
-  return { id, titel, datum: datumSleutel(d), tijd: tijdVan(d), duurMin, soort, kleur: appMeta(appVan(metadata)).kleur };
+  const app = appVan(metadata);
+  return { id, titel, datum: datumSleutel(d), tijd: tijdVan(d), duurMin, soort, kleur: appMeta(app).kleur, app };
 }
 
 export function werkAgenda(taken: readonly AgendaTaak[], crons: readonly AgendaCron[]): RoosterItem[] {

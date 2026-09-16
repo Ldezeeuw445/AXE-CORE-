@@ -50,7 +50,7 @@ export function CronTabel({
   opNieuw: () => void;
 }) {
   const draait = schemas.filter(s => s.enabled).length;
-  const stuk = schemas.filter(s => s.last_status === 'fail').length;
+  const stuk = schemas.filter(s => s.last_status === 'fail' || s.last_status === 'timeout').length;
 
   return (
     <section className="axe-cron">
@@ -140,7 +140,7 @@ export function CronTabel({
  */
 function stand(s: CronSchedule): 'uit' | 'stuk' | 'goed' | 'nieuw' {
   if (!s.enabled) return 'uit';
-  if (s.last_status === 'fail') return 'stuk';
+  if (s.last_status === 'fail' || s.last_status === 'timeout') return 'stuk';
   if (s.last_status === 'ok') return 'goed';
   return 'nieuw';
 }

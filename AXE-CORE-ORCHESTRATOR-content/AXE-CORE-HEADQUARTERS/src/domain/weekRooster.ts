@@ -29,6 +29,8 @@ export interface RoosterItem {
   duurMin: number;
   kleur: string;
   soort: string;
+  /** Van welke app (domain/apps.ts). Leeg bij je eigen afspraken; die horen bij geen app. */
+  app?: import('./apps').AppId;
 }
 
 /** De maandag van de week waar deze datum in valt. */

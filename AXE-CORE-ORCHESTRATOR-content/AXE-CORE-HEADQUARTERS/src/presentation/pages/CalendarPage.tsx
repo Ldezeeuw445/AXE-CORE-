@@ -11,7 +11,9 @@ import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster
 import { CalendarRange, LayoutGrid } from 'lucide-react';
 import { APPS } from '@/domain/apps';
 import { werkAgenda, type AgendaTaak, type AgendaCron } from '@/domain/werkAgenda';
-import { cronListSchedules, listDurableTasks, northseaTab, plannerTaken } from '@/infrastructure/gateways/axeCoreApiService';
+import { calendarJobs, listDurableTasks, northseaTab, plannerTaken, type CalendarJobItem } from '@/infrastructure/gateways/axeCoreApiService';
+import { agendaVanJobs, filterAgenda, type AppFilter } from '@/domain/grootboek';
+import { AppZuil } from '@/presentation/components/layout/AppZuil';
 import { northseaAgenda } from '@/domain/northsea/werk';
 import type { NorthseaAgendaItem } from '@/domain/northsea/tabs/typen';
 
@@ -34,8 +36,10 @@ const SOORTEN: ReadonlyArray<{ label: string; kleur: string }> = APPS.map(a => (
  * de agent-host), dan staat de rest er gewoon.
  */
 async function laadWerk(): Promise<{ taken: AgendaTaak[]; crons: AgendaCron[] }> {
-  const [taken, planner, crons] = await Promise.allSettled([
-    listDurableTasks({ limit: 200 }), plannerTaken(100), cronListSchedules(),
+  /* De cronjobs komen niet meer hier vandaan maar uit /calendar/jobs: dat rekent
+     elke run vooruit, ook van pg_cron, in plaats van alleen de volgende. */
+  const [taken, planner] = await Promise.allSettled([
+    listDurableTasks({ limit: 200 }), plannerTaken(100),
   ]);
   const uit: AgendaTaak[] = [];
   if (planner.status === 'fulfilled') {
@@ -44,7 +48,7 @@ async function laadWerk(): Promise<{ taken: AgendaTaak[]; crons: AgendaCron[] }>
   if (taken.status === 'fulfilled') {
     for (const t of taken.value.tasks) uit.push({ ...t, completed_at: null, planner: t.capability === 'planner' });
   }
-  return { taken: uit, crons: crons.status === 'fulfilled' ? crons.value : [] };
+  return { taken: uit, crons: [] };
 }
 
 /**
@@ -125,6 +129,10 @@ export default function CalendarPage() {
   /* De week die je bekijkt. Apart van de maand: bladeren door weken hoort de
      maandweergave niet te verzetten en andersom. */
   const [weekAnker, setWeekAnker] = useState<Date>(() => new Date());
+  /* Welke app je ziet. Eén agenda per app, en Alle voor het geheel; elke job in
+     de kleur van zijn app, dezelfde als in Taken, Cron en het grootboek. */
+  const [app, setApp] = useState<AppFilter>('alle');
+  const [jobItems, setJobItems] = useState<CalendarJobItem[]>([]);
 
   /* Het werk van de agents: taken met een deadline, wat de planner deed en
      wanneer de cronjobs draaien. Elke minuut opnieuw, zodat een afgeronde
@@ -145,6 +153,24 @@ export default function CalendarPage() {
     const t = setInterval(haal, 60_000);
     return () => { weg = true; clearInterval(t); };
   }, []);
+  /* De geplande runs van alle jobs (VPS, Mac, Supabase-cron) voor het venster dat
+     je bekijkt: de maand, of de week, met een week marge. */
+  const vensterSleutel = weergave === 'week' ? datumSleutel(weekAnker) : `${currentYear}-${currentMonth}`;
+  useEffect(() => {
+    let weg = false;
+    const basis = weergave === 'week' ? new Date(weekAnker) : new Date(currentYear, currentMonth, 1);
+    const van = new Date(basis.getTime() - 7 * 86400_000);
+    const tot = new Date(basis.getTime() + (weergave === 'week' ? 14 : 38) * 86400_000);
+    const haal = () => {
+      void calendarJobs(van, tot)
+        .then(r => { if (!weg) setJobItems(r.items); })
+        .catch(() => { if (!weg) setJobItems([]); });
+    };
+    haal();
+    const t = setInterval(haal, 5 * 60_000);
+    return () => { weg = true; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vensterSleutel, weergave]);
   useEffect(() => {
     let weg = false;
     const haal = () => { void laadWerk().then(w => { if (!weg) setWerk(w); }); };
@@ -161,10 +187,13 @@ export default function CalendarPage() {
           id: e.id, titel: e.title, datum: e.date, tijd: e.time,
           duurMin: duurInMinuten(e.duration), kleur: e.color, soort: e.type,
         })),
-      ...werkAgenda(werk.taken, werk.crons),
-      ...northseaAgenda(deskAgenda),
+      ...filterAgenda([
+        ...werkAgenda(werk.taken, werk.crons),
+        ...northseaAgenda(deskAgenda),
+        ...agendaVanJobs(jobItems),
+      ], app),
     ],
-    [werk, deskAgenda],
+    [werk, deskAgenda, jobItems, app],
   );
 
 
@@ -204,6 +233,10 @@ export default function CalendarPage() {
       {/* Maand of week, links in de band naast de composer -- net als de
           sub-tabs van de trading-desk, en met dezelfde component. Het is
           dezelfde handeling: kiezen wat je in het midden ziet. */}
+      <PlaatSlot slot="rechts">
+        <AppZuil actief={app} kies={setApp} />
+      </PlaatSlot>
+
       <PlaatSlot slot="links">
         <IcoonZuil
           items={WEERGAVEN}

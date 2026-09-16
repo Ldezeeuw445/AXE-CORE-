@@ -38,6 +38,7 @@ const CronManager = lazy(() => import('@/presentation/pages/CronManager'));
 const ControlPlane = lazy(() => import('@/presentation/pages/ControlPlane'));
 const Maps3D = lazy(() => import('@/presentation/pages/Maps3D'));
 const NorthseaDesk = lazy(() => import('@/presentation/pages/northsea/NorthseaDesk'));
+const Grootboek = lazy(() => import('@/presentation/pages/Grootboek'));
 const CrewAI = lazy(() => import('@/presentation/pages/CrewAI'));
 const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'));
 const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
@@ -183,6 +184,7 @@ export default function App() {
             <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="calendar" element={<CalendarPage />} />
+            <Route path="ledger" element={<Grootboek />} />
             <Route path="memory" element={<MemoryHub />} />
             <Route path="memory/explore" element={<Memory />} />
             <Route path="memory/trading" element={<TradingMemory />} />

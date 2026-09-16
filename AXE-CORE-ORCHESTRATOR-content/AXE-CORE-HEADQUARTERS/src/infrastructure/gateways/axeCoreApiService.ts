@@ -434,7 +434,9 @@ export async function n8nListExecutions(wfId?: string): Promise<unknown[]> {
 // SELF-HOSTED SCHEDULER (core_schedules) — replaces n8n for cron. AXE owns the
 // whole loop: schedules in Postgres, a CRON_KEY-secured tick on the VPS runs them.
 // ══════════════════════════════════════════════════════════════════════════════
-export type CronActionType = 'prompt' | 'exec' | 'webhook' | 'crew' | 'flow';
+export type CronActionType = 'prompt' | 'exec' | 'webhook' | 'crew' | 'flow' | 'observed' | 'planner' | 'northsea';
+/** Waar een job draait: de VPS, de Mac (agent-host) of Supabase zelf (pg_cron). */
+export type CronExecutor = 'vps' | 'mac' | 'supabase';
 
 export interface CronSchedule {
   id: string;
@@ -446,10 +448,17 @@ export interface CronSchedule {
   enabled: boolean;
   next_run_at: string | null;
   last_run_at: string | null;
-  last_status: 'ok' | 'fail' | null;
+  last_status: 'ok' | 'fail' | 'timeout' | 'skipped' | null;
   last_result: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  /** Sinds 16 sep 2026 kolommen (planning.py); oudere API's sturen ze niet. */
+  app?: string;
+  executor?: CronExecutor;
+  job_key?: string | null;
+  description?: string | null;
+  consecutive_failures?: number;
+  max_runtime_s?: number;
 }
 
 export interface CronScheduleInput {
@@ -483,6 +492,72 @@ export async function cronDeleteSchedule(id: string): Promise<void> {
 
 export async function cronRunNow(id: string): Promise<{ result: { status: string; output: string } }> {
   return call('POST', `/cron/schedules/${id}/run`);
+}
+
+// ── Grootboek en agenda: alle jobs en taken van alle apps ─────────────────────
+
+export type LedgerSource = 'schedule' | 'planner' | 'launchd' | 'northsea' | 'manual' | 'pg_cron' | 'task';
+
+export interface LedgerEntry {
+  at: string;
+  app: string;
+  source: LedgerSource;
+  /** 'run' voor een job, anders de capability van de taak. */
+  kind: string;
+  name: string;
+  status: string;
+  duration_ms: number | null;
+  detail: string;
+  ref_id: string;
+  /** vps, mac of supabase; leeg bij taken. */
+  executor?: string | null;
+}
+
+export async function ledgerList(opts: { app?: string; source?: LedgerSource; hours?: number; limit?: number } = {}): Promise<LedgerEntry[]> {
+  const q = new URLSearchParams();
+  if (opts.app) q.set('app_id', opts.app);
+  if (opts.source) q.set('source', opts.source);
+  q.set('hours', String(opts.hours ?? 168));
+  q.set('limit', String(opts.limit ?? 500));
+  const { entries } = await call<{ entries: LedgerEntry[] }>('GET', `/ledger?${q.toString()}`);
+  return entries ?? [];
+}
+
+export interface CalendarJobItem {
+  key: string;
+  job_key: string;
+  bron: 'schedule' | 'pg_cron';
+  app: string;
+  naam: string;
+  executor: CronExecutor;
+  soort: string;
+  at: string;
+  tot: string | null;
+  aantal: number;
+  herhaling: string | null;
+  cron: string;
+}
+
+export interface CalendarJob {
+  job_key: string;
+  id: string | null;
+  bron: 'schedule' | 'pg_cron';
+  naam: string;
+  app: string;
+  executor: CronExecutor;
+  soort: string;
+  cron: string;
+  enabled: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_status: string | null;
+  consecutive_failures: number | null;
+  description: string | null;
+}
+
+export async function calendarJobs(van: Date, tot: Date): Promise<{ items: CalendarJobItem[]; jobs: CalendarJob[] }> {
+  const q = new URLSearchParams({ van: van.toISOString(), tot: tot.toISOString() });
+  return call('GET', `/calendar/jobs?${q.toString()}`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

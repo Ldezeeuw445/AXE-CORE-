@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
-  Bot, Megaphone, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
+  Bot, Megaphone, BookOpenCheck, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, type LucideIcon,
   TerminalSquare,
 } from 'lucide-react';
@@ -40,6 +40,7 @@ const rightItems: NavItem[] = [
   { icon: Bot, label: navLabel('/agents'), path: '/agents' },
   { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
   { icon: CalendarDays, label: navLabel('/calendar'), path: '/calendar' },
+  { icon: BookOpenCheck, label: navLabel('/ledger'), path: '/ledger' },
   { icon: ListTodo, label: navLabel('/tasks'), path: '/tasks' },
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
   { icon: LineChart, label: navLabel('/trading-intel'), path: '/trading-intel' },
