@@ -146,6 +146,19 @@ class SupabaseRepository:
             raise RepositoryError(f"engine may not patch {table}")
         return await self._write("PATCH", table, filters, body)
 
+    async def find_crew_audit(self, event_id: str) -> dict | None:
+        """Idempotentie: bestaande crew_run met dit event_id, of None."""
+        if not event_id:
+            return None
+        rows = await self._get("northsea_audit_events", {
+            "action": "eq.crew_run", "select": "id,occurred_at,action,opportunity_id,details",
+            "order": "occurred_at.desc", "limit": "100",
+        })
+        for r in rows:
+            if (r.get("details") or {}).get("event_id") == event_id:
+                return r
+        return None
+
     # ── Gezondheid ────────────────────────────────────────────────────────────
     async def ping(self) -> bool:
         await self._get("opportunities", {"select": "id", "limit": "1"})

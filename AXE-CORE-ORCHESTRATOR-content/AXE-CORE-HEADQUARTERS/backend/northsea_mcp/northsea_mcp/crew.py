@@ -12,12 +12,16 @@ of servicemethode verandert.
 | PRIMAIR | De toegewijde NorthSea CrewAI-workforce (CrewAI Studio / AMP-deployment) | per crew een eigen URL + token: `POST /kickoff`, `GET /status/{id}`, `GET /inputs` |
 | FALLBACK | De bestaande algemene AXE CORE-crew | axe-core-api `/crew/run`, venv `/opt/axe-crew-venv`, slots in zuinig.py |
 
-Routes (expliciet, geen raden):
+Routes (expliciet, geen raden). De router wijst naar de VOLLEDIGE
+specialist-crews, niet naar de nested mini-crews in de Studio-flow:
 
-    discovery_run    -> NorthSea Discovery Crew     (Sourcing, Research, Matching)
-    deal_run         -> NorthSea Deal Crew          (Deal Qualification, Evidence, Communications)
-    intelligence_run -> NorthSea Intelligence Crew  (Market Intelligence, Research)
-    operations_run   -> NorthSea Operations Crew    (Operations, Deal Qualification)
+    discovery_run    -> NorthSea Counterparty Intelligence & Sourcing (7 YAML-agents)
+    deal_run         -> NorthSea Deal Execution Crew                  (8 agents)
+    intelligence_run -> NorthSea Intelligence & Operations            (8 agents)
+    operations_run   -> NorthSea Intelligence & Operations            (zelfde 8-agent crew)
+    unroutable       -> geen crew
+
+Studio-AMP is optioneel. De primaire uitvoerder is de lokale Python-runtime.
 
 ## Fallback is nooit stil
 
@@ -60,6 +64,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from .models import CrewRunInfo
+from .crews.catalog import CREW_DISPLAY_NAME, CREW_SPECS, SPECIALIST_FOR_ROUTE
 
 ROUTE_FOR_ACTION: dict[str, str] = {
     "research_counterparty": "discovery_run", "find_suppliers": "discovery_run", "find_buyers": "discovery_run",
@@ -69,17 +74,9 @@ ROUTE_FOR_ACTION: dict[str, str] = {
     "market_signal": "intelligence_run",
     "stale_deal": "operations_run", "provider_failure": "operations_run",
 }
-CREW_FOR_ROUTE: dict[str, str] = {
-    "discovery_run": "NorthSea Discovery Crew",
-    "deal_run": "NorthSea Deal Crew",
-    "intelligence_run": "NorthSea Intelligence Crew",
-    "operations_run": "NorthSea Operations Crew",
-}
+CREW_FOR_ROUTE: dict[str, str] = dict(CREW_DISPLAY_NAME)
 ROLES_FOR_ROUTE: dict[str, list[str]] = {
-    "discovery_run": ["Sourcing Specialist", "Research Specialist", "Matching Specialist"],
-    "deal_run": ["Deal Qualification Specialist", "Evidence Specialist", "Communications Specialist"],
-    "intelligence_run": ["Market Intelligence Specialist", "Research Specialist"],
-    "operations_run": ["Operations Specialist", "Deal Qualification Specialist"],
+    route: list(CREW_SPECS[cid].agent_roles) for route, cid in SPECIALIST_FOR_ROUTE.items()
 }
 # Korte naam in CrewRunInfo.crew (bestaand veld; tests en clients lezen "deal", "discovery").
 SHORT_NAME = {"discovery_run": "discovery", "deal_run": "deal", "intelligence_run": "intelligence", "operations_run": "operations"}
@@ -281,15 +278,22 @@ class CrewGateway:
     def __init__(self, *, axe_api_url: str, axe_api_key: str, crew_venv_py: str, timeout: float = 170.0,
                  client: httpx.AsyncClient | None = None, studio_routes: dict[str, StudioRoute] | None = None,
                  fallback_on: tuple[str, ...] | list[str] = FALLBACK_REASONS, studio_poll_s: float = 3.0,
-                 min_fallback_s: float = MIN_FALLBACK_S):
+                 min_fallback_s: float = MIN_FALLBACK_S, local=None, local_enabled: bool = True):
+        from .crews.runtime import LocalCrewBackend
         self._timeout = timeout
         self._client = client or httpx.AsyncClient(timeout=timeout)
+        self.local = local if local is not None else LocalCrewBackend(enabled=local_enabled)
+        if local is None:
+            self.local.enabled = local_enabled
         self.studio = StudioBackend(studio_routes or {}, self._client, poll_s=studio_poll_s)
         self.general = GeneralCrewBackend(axe_api_url=axe_api_url, axe_api_key=axe_api_key, crew_venv_py=crew_venv_py, client=self._client)
         self.fallback_on = tuple(r for r in fallback_on if r in FALLBACK_REASONS)
         self._min_fallback_s = min_fallback_s
 
     def available(self) -> tuple[bool, str]:
+        if getattr(self.local, "enabled", False):
+            return True, ("local specialist crews: Deal Execution 8, Intelligence & Operations 8, "
+                          "Counterparty Sourcing 7; Studio AMP optional")
         toegewijd = sorted(self.studio.routes)
         gen_ok, gen_reden = self.general.available()
         if toegewijd:
@@ -298,13 +302,28 @@ class CrewGateway:
 
     def status(self) -> dict:
         gen_ok, gen_reden = self.general.available()
-        return {"routes": {r: {"crew": CREW_FOR_ROUTE[r], "dedicated_configured": self.studio.configured(r)} for r in CREW_FOR_ROUTE},
-                "fallback": {"backend": "axe_general_crew", "available": gen_ok, "detail": gen_reden, "permitted_reasons": list(self.fallback_on)}}
+        local_on = bool(getattr(self.local, "enabled", False))
+        return {
+            "local": {
+                "enabled": local_on,
+                "specialists": {r: {"crew": CREW_FOR_ROUTE[r], "agents": len(ROLES_FOR_ROUTE[r]),
+                                    "specialist_id": SPECIALIST_FOR_ROUTE[r]} for r in SPECIALIST_FOR_ROUTE},
+            },
+            "routes": {r: {"crew": CREW_FOR_ROUTE[r], "dedicated_configured": self.studio.configured(r),
+                           "local": local_on and r in SPECIALIST_FOR_ROUTE,
+                           "nested_studio_copy": False} for r in CREW_FOR_ROUTE},
+            "fallback": {"backend": "axe_general_crew", "available": gen_ok, "detail": gen_reden,
+                         "permitted_reasons": list(self.fallback_on)},
+            "studio_optional": True,
+        }
 
     async def aclose(self) -> None:
         await self._client.aclose()
 
     async def run(self, action: str, handoff: dict[str, Any]) -> CrewRunInfo:
+        if action == "unroutable" or ROUTE_FOR_ACTION.get(action) == "unroutable":
+            return CrewRunInfo(used=False, status="unroutable", route="unroutable",
+                               reason="event is unroutable; no specialist crew executed", validation="not_validated")
         route = ROUTE_FOR_ACTION.get(action, "deal_run")
         gevraagd = CREW_FOR_ROUTE[route]
         t0 = time.monotonic()
@@ -313,7 +332,25 @@ class CrewGateway:
         timings: dict[str, float] = {}
         basis = dict(route=route, requested_crew=gevraagd, crew=SHORT_NAME[route])
 
-        # ── PRIMAIR: toegewijde NorthSea-crew ────────────────────────────────
+        # ── PRIMAIR: lokale specialist-crew (Studio mag down zijn) ───────────
+        if getattr(self.local, "enabled", False) and self.local.configured(route):
+            l0 = time.monotonic()
+            local_res = await self.local.run(route, action, handoff, deadline)
+            timings["local_run_s"] = round(time.monotonic() - l0, 2)
+            pogingen.append(Attempt("northsea_local", local_res.status, local_res.detail, time.monotonic() - l0))
+            if local_res.status == "ok" and local_res.output:
+                timings["total_s"] = round(time.monotonic() - t0, 2)
+                if local_res.execution_s is not None:
+                    timings["crew_execution_s"] = float(local_res.execution_s)
+                o = local_res.output
+                return CrewRunInfo(used=True, run_id=local_res.run_id, status="ok", analysis=o.analysis[:6000],
+                                   backend="northsea_local", actual_crew=gevraagd, fallback_used=False,
+                                   models=o.models, skills=o.skills, tools=o.tools, budget_usage=o.budget_usage,
+                                   timings=timings, validation="valid",
+                                   attempts=[p.as_dict() for p in pogingen], **basis)
+            # lokale fout: NorthSea stopt niet; Studio is optioneel, daarna zichtbare fallback
+
+        # ── OPTIONEEL: Studio-AMP als die geconfigureerd is ──────────────────
         reden: str | None
         if not self.studio.configured(route):
             reden = "dedicated_backend_not_configured"

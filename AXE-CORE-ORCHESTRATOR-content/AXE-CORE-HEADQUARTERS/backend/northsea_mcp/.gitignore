@@ -5,3 +5,6 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
+
+# lokale test-venv (uv, python 3.12) — niet committen
+.venv-test/

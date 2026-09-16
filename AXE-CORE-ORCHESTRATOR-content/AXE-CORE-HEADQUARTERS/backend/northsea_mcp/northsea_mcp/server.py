@@ -36,6 +36,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from . import __version__
+from . import orchestration
 from .audit import Auditor
 from .config import Settings
 from .crew import CrewGateway, StudioRoute
@@ -194,6 +195,14 @@ Id = Annotated[str, Field(description=UUID_DESC, min_length=36, max_length=36)]
 Key = Annotated[str, Field(description="Idempotency key (8-128 chars). Reuse the SAME key when retrying the same action.", min_length=8, max_length=128)]
 
 DESCRIPTIONS = {
+    "northsea_handle_event": (
+        "Push ONE canonical NorthSea event through the deterministic master orchestration: typed validation → "
+        "policy/permission/budget/approval gate → router → the dedicated NorthSea crew (Discovery, Operations or "
+        "Intelligence). Fails closed: a malformed, unauthorised, budget-exhausted or approval-requiring event NEVER "
+        "runs a crew. Provide event_type (e.g. new_signal, opportunity_qualification, market_signal), a budget_envelope, "
+        "requesting_principal and a payload; put opportunity_id in the payload to record the run as canonical provenance. "
+        "The crews reason only — they decide nothing about schema validity, permissions, DNC or approval. Returns the "
+        "typed orchestration decision (status ok / schema_invalid / policy_denied / approval_required / crew_*)."),
     "northsea_review_deal": (
         "Return the complete current operational state of ONE NorthSea deal (opportunity): stage, buyer and seller gate status, "
         "commercial fit and transaction readiness scores, latest communications, open blockers, evidence, tasks, deadlines and "
@@ -276,6 +285,24 @@ def _ann(title: str, risk: Risk, open_world: bool) -> ToolAnnotations:
 
 
 def register_tools(mcp: MCPServer, service: NorthSeaService, guard: Guard) -> None:
+
+    @mcp.tool(name="northsea_handle_event", title="Handle NorthSea event", description=DESCRIPTIONS["northsea_handle_event"],
+              annotations=_ann("Handle NorthSea event", Risk.RESEARCH, True), structured_output=True)
+    async def handle_event(
+        event_id: str, run_id: str, event_type: str, source: str, requesting_principal: str,
+        priority: PRIO = "P2",
+        entity_ids: list[str] | None = None,
+        budget_envelope: dict[str, Any] | None = None,
+        allowed_tools: list[str] | None = None,
+        approval_policy: Literal["none", "required", "auto_if_safe"] = "auto_if_safe",
+        payload: dict[str, Any] | None = None,
+    ) -> orchestration.OrchestrationResult:
+        ev = {"event_id": event_id, "run_id": run_id, "event_type": event_type, "source": source,
+              "requesting_principal": requesting_principal, "priority": priority,
+              "entity_ids": entity_ids or [], "budget_envelope": budget_envelope or {},
+              "allowed_tools": allowed_tools or [], "approval_policy": approval_policy, "payload": payload or {}}
+        return await guard.run("northsea_handle_event", {"opportunity_id": (payload or {}).get("opportunity_id")},
+                               lambda c: service.handle_event(c, ev), orchestration.OrchestrationResult, timeout=DEEP_TIMEOUT)
 
     @mcp.tool(name="northsea_review_deal", title="Review deal", description=DESCRIPTIONS["northsea_review_deal"],
               annotations=_ann("Review deal", Risk.READ_ONLY, False), structured_output=True)
@@ -500,7 +527,8 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
     crew = crew or CrewGateway(
         axe_api_url=settings.axe_api_url, axe_api_key=settings.axe_api_key, crew_venv_py=settings.crew_venv_py,
         studio_routes={r: StudioRoute(url=u, token=t) for r, (u, t) in settings.crew_routes.items()},
-        fallback_on=settings.crew_fallback_on, studio_poll_s=settings.crew_poll_s)
+        fallback_on=settings.crew_fallback_on, studio_poll_s=settings.crew_poll_s,
+        local_enabled=settings.crew_local_enabled)
     auditor = auditor or Auditor(axe_url=settings.axe_url, axe_key=settings.axe_key, store=store)
     service = NorthSeaService(repo, research, crew)
     oauth = OAuthServer(settings, store, http)

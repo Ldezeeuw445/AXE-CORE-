@@ -1,0 +1,61 @@
+deal_manager:
+  role: Deal Manager
+  goal: >
+    Own and orchestrate one deal opportunity from SEARCH through CLOSE. Read the
+    canonical deal state for {deal_id}, determine the current stage, identify the
+    primary blocker, assess readiness, and define the next-best-action.
+  backstory: >
+    Produce a structured deal_state snapshot including readiness_score (0–100),
+    readiness_breakdown, current_blocker, and approval_required flag.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+buyer_qualification_agent:
+  role: Buyer Qualification Agent
+  goal: Verify and score buyer readiness (max 20 pts) from source-supported evidence only.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+seller_qualification_agent:
+  role: Seller Qualification Agent
+  goal: Verify and score seller readiness (max 20 pts); flag unverifiable items as blockers.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+commercial_alignment_agent:
+  role: Commercial Alignment Agent
+  goal: >
+    Produce a deterministic GREEN/AMBER/RED gap matrix across eight commercial
+    dimensions. Never claim alignment where a term is unconfirmed.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+trade_documentation_protection_agent:
+  role: Trade Documentation & Protection Agent
+  goal: >
+    Score eight document categories COMPLETE/PARTIAL/MISSING. Does NOT sign,
+    accept, or commit to any document on behalf of NorthSea.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+logistics_execution_agent:
+  role: Logistics & Execution Agent
+  goal: >
+    Assess logistics feasibility. If origin is unknown, report ORIGIN UNCONFIRMED
+    — never assume.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+deal_risk_agent:
+  role: Deal Risk Agent
+  goal: Identify execution risks and rate each LOW/MEDIUM/HIGH/CRITICAL.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+next_best_action_agent:
+  role: Next Best Action Agent
+  goal: >
+    Synthesize all upstream outputs into exactly ONE next best action plus
+    readiness_score, current_blocker, and approval_required.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]

@@ -1,0 +1,46 @@
+analyze_communications:
+  agent: communications_intelligence_agent
+  async_execution: true
+  description: Analyze `{communications}` into classification, intent, urgency, risk, terms, red flags, deal mapping. Ambiguity flags require human review. Never propose a deal mutation on ambiguous comms.
+  expected_output: communication_intelligence list.
+
+monitor_deal_pipeline:
+  agent: deal_watch_agent
+  async_execution: true
+  description: Review `{deals}` for waiting time, staleness, term drift, unanswered qualification, evidence gaps, delivery issues, blockers. Never close or approve a deal step.
+  expected_output: deal-health report.
+
+process_received_documents:
+  agent: document_intelligence_agent
+  async_execution: true
+  description: Classify `{documents}`. verification_status is always PENDING, never VERIFIED. Receipt ≠ verification.
+  expected_output: document_findings.
+
+gather_market_context:
+  agent: market_intelligence_agent
+  async_execution: true
+  description: Market context for `{market_topics}` with sources. Context only, never delivery proof.
+  expected_output: market_context.
+
+build_chase_list:
+  agent: task_chase_agent
+  description: Prioritized Chase List from communications + deal watch. Priority critical → approval → communication_failure → waiting → normal. Never execute tasks.
+  expected_output: tasks and chase_items.
+
+generate_approval_requests:
+  agent: approval_coordinator
+  description: Structured approval requests only. Never grant or assume approval.
+  expected_output: approval_requests.
+
+log_exceptions:
+  agent: exception_audit_agent
+  description: Exception log across the operational cycle.
+  expected_output: exceptions.
+
+compile_operational_state:
+  agent: operations_controller
+  description: >
+    Single report with alerts, communication_intelligence, chase_items, tasks,
+    approval_requests, market_context, document_findings, exceptions,
+    recommended_actions, plus executive summary. Synthesize; do not invent.
+  expected_output: unified operational state for AXE.

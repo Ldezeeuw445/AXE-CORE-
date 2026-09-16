@@ -11,6 +11,7 @@ from fakes import OPP
 from northsea_mcp.read_catalog import READ_TOOL_SCOPES
 
 EXPECTED_TOOLS = {
+    "northsea_handle_event",
     "northsea_review_deal", "northsea_get_next_actions", "northsea_qualify_opportunity", "northsea_assess_match",
     "northsea_process_reply", "northsea_research_counterparty", "northsea_find_suppliers", "northsea_find_buyers",
     "northsea_investigate_blockers", "northsea_prepare_outreach", "northsea_create_task", "northsea_update_task",

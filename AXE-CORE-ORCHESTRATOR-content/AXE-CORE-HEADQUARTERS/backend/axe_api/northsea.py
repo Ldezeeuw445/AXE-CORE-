@@ -310,7 +310,22 @@ select json_build_object(
      'chase_open', (select count(*) from action_queue q where q.status in ('open','in_progress','waiting') and q.metadata ->> 'source' = 'northsea-engine'),
      'blokkades', (select coalesce(json_agg(r), '[]'::json) from (
         select coalesce(o.engine_blocker_code, '(niet beoordeeld)') as code, coalesce(o.engine_owner, '-') as eigenaar, count(*) as aantal
-        from opportunities o where o.stage <> 'lost' and not o.is_synthetic group by 1, 2) r)),
+        from opportunities o where o.stage <> 'lost' and not o.is_synthetic group by 1, 2) r),
+     'crewai', (select coalesce(json_agg(r order by r.op desc), '[]'::json) from (
+        select a.occurred_at as op,
+               a.details ->> 'actual_crew' as crew,
+               a.details ->> 'route' as route,
+               a.details ->> 'orchestration_status' as status,
+               a.details -> 'timings' as timings,
+               a.details -> 'budget_usage' as budget,
+               a.details ->> 'backend' as backend,
+               a.details ->> 'result_type' as result_type,
+               (a.details ->> 'fallback_used')::boolean as fallback,
+               a.details ->> 'error' as error,
+               a.details ->> 'next_action' as next_action,
+               (a.details ->> 'approval_required')::boolean as approval_required,
+               a.opportunity_id as deal_id
+        from northsea_audit_events a where a.action = 'crew_run' order by a.occurred_at desc limit 20) r)),
   'campagnes', (select coalesce(json_agg(r order by r.prioriteit desc nulls last, r.updated_at desc nulls last), '[]'::json) from (
      select sc.id, sc.direction as richting, sc.commodity, sc.product, sc.search_geographies as gebieden, sc.status,
             sc.priority as prioriteit, sc.candidates_found as gevonden, sc.candidates_screened as gescreend,
