@@ -16,7 +16,7 @@ import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gatew
 import { create } from 'zustand';
 import {
   PROVIDERS, isKeyOptional, classifyQuery, selectByCapability, prioritizeOllamaSlots,
-  capabilityToSpecialists, migrateModel,
+  capabilityToSpecialists, migrateModel, isSimpleChatCapability,
   type ProviderId, type ProviderCfg, type KeySlot, type QueryCapability,
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
@@ -839,7 +839,11 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       // own configured preferred_provider — that's a deliberate per-task
       // override, e.g. always use a coder model for "code", and should still
       // win over the general chat default).
-      if(!matchedCap?.preferred_provider){
+      // For normal conversation (fast/creative) the engine YOU picked must
+      // answer, even if a capability config maps chat elsewhere — otherwise AXE
+      // replies on a local model while you're on a subscription (the silent swap
+      // that feels like "it's not AXE"). Real specialist WORK still routes.
+      if(!matchedCap?.preferred_provider || isSimpleChatCapability(cap)){
         const primary=get().primarySlot;
         if(primary){
           const idx=orderedSlots.findIndex(s=>s.provider===primary.provider);
