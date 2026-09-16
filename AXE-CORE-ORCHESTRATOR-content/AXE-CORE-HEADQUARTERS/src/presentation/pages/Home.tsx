@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
@@ -145,8 +146,14 @@ export default function Home() {
               const label = statusLabel[coreStatus] ?? (hasError ? 'ERROR' : hasProvider ? 'CORE ACTIVE' : 'NO AI');
               const color = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--accent-cyan)' : 'var(--warning)');
               const dotColor = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--success)' : 'var(--warning)');
+              /* Het stipje zei alleen DAT er iets was; de orb zegt WAT. Zelfde
+                 teken als het midden van de onderbalk, hier op 20px. */
+              const orbStatus = coreStatus === 'listening' ? 'listening'
+                : coreStatus === 'speaking' ? 'speaking'
+                  : coreStatus === 'thinking' || coreStatus === 'awaiting-approval' ? 'processing'
+                    : 'idle';
               return (<>
-                <LiveIndicator size={6} color={dotColor} />
+                <AxeStatusOrb size={20} status={orbStatus} werk={{ schrijft: coreStatus === 'thinking' }} />
                 <span className="text-xs-custom font-mono-data" style={{ color }}>{label}</span>
               </>);
             })()}

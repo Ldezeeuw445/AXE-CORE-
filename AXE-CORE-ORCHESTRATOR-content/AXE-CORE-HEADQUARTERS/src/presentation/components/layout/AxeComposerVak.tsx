@@ -27,6 +27,8 @@
  * zetten en dan staan Terrain en Neural weer verkeerd.
  */
 import { useRef, type ReactNode, type KeyboardEvent } from 'react';
+import { BorderBeam } from 'border-beam';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { ComposerSnelacties } from './ComposerSnelacties';
 import type { Snelactie } from '@/domain/snelacties';
 
@@ -49,6 +51,12 @@ interface Props {
   kop?: ReactNode;
 }
 
+/* De lichtrand loopt alleen als AXE iets doet.
+ *
+ * Altijd laten lopen maakt er behang van: dan zegt hij niets meer en trekt hij
+ * de hele avond aandacht. Nu is de rand het antwoord op "hoort hij me?" -- hij
+ * gaat lopen zodra er geluisterd, gedacht of gesproken wordt, en staat stil als
+ * AXE stilstaat. Dezelfde bron als de orbs, dus ze kunnen niet uit de pas. */
 export function AxeComposerVak({
   waarde,
   opWaarde,
@@ -62,6 +70,8 @@ export function AxeComposerVak({
   kop,
 }: Props) {
   const veld = useRef<HTMLTextAreaElement>(null);
+  const status = useVoiceStore(s => s.voiceStatus);
+  const bezig = status !== 'idle';
 
   const opToets = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Shift+enter is de enige manier om een tweede regel te maken zolang enter
@@ -76,6 +86,7 @@ export function AxeComposerVak({
     <div className="axe-composer axe-vakcomposer flex-shrink-0">
       {kop && <div className="axe-vak-kop">{kop}</div>}
 
+      <BorderBeam size="md" colorVariant="colorful" strength={0.5} active={bezig}>
       <div className="axe-vak">
         <div className="axe-vak-boven">
           <textarea
@@ -96,6 +107,7 @@ export function AxeComposerVak({
           <div className="axe-vak-rechts">{rechts}</div>
         </div>
       </div>
+      </BorderBeam>
 
       {snelacties && (
         <ComposerSnelacties

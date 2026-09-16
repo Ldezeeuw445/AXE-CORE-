@@ -1577,6 +1577,11 @@ html:root[data-look],
 :root[data-look] .axe-eq i:nth-child(3) { animation-delay: -0.15s; }
 :root[data-look] .axe-eq i:nth-child(4) { animation-delay: -0.45s; }
 :root[data-look] .axe-eq i:nth-child(5) { animation-delay: -0.75s; }
+/* Zeven staafjes en niet vijf: de spreekstand staat naast de orbs van
+   thinking-orbs, en die hebben veel meer punten. Met vijf las de balk als een
+   ander soort ding dan de rest van de reeks. */
+:root[data-look] .axe-eq i:nth-child(6) { animation-delay: -0.3s; }
+:root[data-look] .axe-eq i:nth-child(7) { animation-delay: -1.05s; }
 @keyframes axe-eq {
   0%, 100% { height: 5px; }
   50%      { height: 26px; }

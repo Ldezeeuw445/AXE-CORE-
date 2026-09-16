@@ -11,6 +11,10 @@ import { useEffect, useState } from 'react';
 import { LineChart, Newspaper, CalendarDays } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { lseBalken, lseCatalogus } from '@/infrastructure/gateways/lseMarketData';
+import { lseSeries } from '@/infrastructure/gateways/lseGateway';
+import { binnenBand, koersUitBalken } from '@/domain/northsea/koers';
+import { laatsteWaarde, macroRegels, type MacroRegel, type SerieWaarde } from '@/domain/northsea/macro';
 import { DetailPaneel, Kengetal, KengetalRij, LegeStaat, Vlak } from './bouwstenen';
 
 interface Markt {
@@ -34,7 +38,13 @@ const MARKTEN: readonly Markt[] = [
   { symbool: 'DXY', label: 'US Dollar Index', eenheid: '', groep: 'Macro', band: [40, 200] },
 ];
 
-const VERVERS_MS = 5 * 60_000;
+/* Een half uur, niet vijf minuten.
+ *
+ * LSE's gratis laag geeft TIEN downloads per uur (zie lseMarketData). Zes
+ * symbolen elke vijf minuten is 72 per uur: dan is je uur op en staat de tabel
+ * leeg -- met een limietfout die eruitziet als een kapotte sleutel. Een half
+ * uur past ruim, en dagbalken veranderen niet sneller dan dat. */
+const VERVERS_MS = 30 * 60_000;
 
 type Koers = { last: number; pct: number | null; slot: number[]; bron: string } | 'geen' | 'ongeloofwaardig' | null;
 
@@ -66,30 +76,67 @@ const prijs = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 
 export function MarktTab() {
   const [koersen, setKoersen] = useState<Record<string, Koers>>({});
 
+  /* LSE eerst, de oude cascade als vangnet.
+   *
+   * LSE voert de instrumenten die deze desk handelt (XAU/USD, BCO/USD) en is
+   * voor AXE Core licentieel in orde: eigen onderzoek, geen doorgifte aan
+   * derden. De brokercascade blijft eronder staan voor wat LSE niet heeft --
+   * en de band blijft over allebei heen, want een onmogelijke prijs is
+   * onmogelijk ongeacht wie hem stuurde. */
   useEffect(() => {
     let weg = false;
-    const haal = () => {
-      for (const m of MARKTEN) {
-        fetchMarketSnapshot(m.symbool, 'd1', { priority: 'background' })
-          .then(s => {
-            const echt = s.source !== 'synthetic' && Number.isFinite(s.last);
-            const binnenBand = s.last >= m.band[0] && s.last <= m.band[1];
-            if (echt && !binnenBand) console.warn('[markt] koers buiten band, niet getoond', m.symbool, s.last, s.source);
-            if (!weg) {
-              setKoersen(k => ({
-                ...k,
-                [m.symbool]: !echt ? 'geen'
-                  : !binnenBand ? 'ongeloofwaardig'
-                    : { last: s.last, pct: s.changePct ?? null, slot: s.bars.slice(-30).map(b => b.c), bron: String(s.source) },
-              }));
-            }
-          })
-          .catch(() => { if (!weg) setKoersen(k => ({ ...k, [m.symbool]: 'geen' })); });
+    const zet = (symbool: string, k: Koers) => { if (!weg) setKoersen(vorig => ({ ...vorig, [symbool]: k })); };
+
+    const haalEen = async (m: Markt) => {
+      try {
+        const balken = await lseBalken(m.symbool, 'd1', 30);
+        const uitLse = koersUitBalken(balken, 'lse');
+        if (uitLse) {
+          zet(m.symbool, binnenBand(uitLse.last, m.band) ? uitLse : 'ongeloofwaardig');
+          if (!binnenBand(uitLse.last, m.band)) console.warn('[markt] LSE-koers buiten band', m.symbool, uitLse.last);
+          return;
+        }
+      } catch (e) {
+        console.warn('[markt] LSE niet bereikbaar, cascade eronder', m.symbool, e);
+      }
+      try {
+        const s = await fetchMarketSnapshot(m.symbool, 'd1', { priority: 'background' });
+        const echt = s.source !== 'synthetic' && Number.isFinite(s.last);
+        if (!echt) { zet(m.symbool, 'geen'); return; }
+        if (!binnenBand(s.last, m.band)) {
+          console.warn('[markt] koers buiten band, niet getoond', m.symbool, s.last, s.source);
+          zet(m.symbool, 'ongeloofwaardig');
+          return;
+        }
+        zet(m.symbool, { last: s.last, pct: s.changePct ?? null, slot: s.bars.slice(-30).map(b => b.c), bron: String(s.source) });
+      } catch {
+        zet(m.symbool, 'geen');
       }
     };
+
+    const haal = () => { for (const m of MARKTEN) void haalEen(m); };
     const eerste = setTimeout(haal, 0);
     const iv = setInterval(() => { if (!document.hidden) haal(); }, VERVERS_MS);
     return () => { weg = true; clearTimeout(eerste); clearInterval(iv); };
+  }, []);
+
+  /* De macroreeksen: zoeken in de catalogus die de koersen toch al ophalen,
+     en alleen de gekozen paar reeksen echt downloaden. Eén keer per sessie --
+     een reeks die per kwartaal ververst hoeft niet per minuut opnieuw. */
+  const [macro, setMacro] = useState<Array<MacroRegel & { waarde: SerieWaarde | null }> | null>(null);
+  useEffect(() => {
+    let weg = false;
+    void (async () => {
+      const cat = await lseCatalogus();
+      const regels = macroRegels(cat, undefined, 4);
+      if (!regels.length) { if (!weg) setMacro([]); return; }
+      const uit = await Promise.all(regels.map(async r => {
+        const res = await lseSeries({ series: r.symbol }).catch(() => null);
+        return { ...r, waarde: res?.ok ? laatsteWaarde(res.data) : null };
+      }));
+      if (!weg) setMacro(uit);
+    })();
+    return () => { weg = true; };
   }, []);
 
   const met = MARKTEN.filter(m => heeftKoers(koersen[m.symbool]));
@@ -146,11 +193,39 @@ export function MarktTab() {
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <Vlak titel={<span className="flex items-center gap-2"><Newspaper size={15} style={{ color: 'var(--text-secondary)' }} />Key news</span>}>
           <LegeStaat titel="No commodity news source connected"
-            uitleg="AXE CORE has no news feed for metals, energy or freight yet. Headlines appear here once a source is connected — none are made up in the meantime." />
+            uitleg="LSE delivers prices and macro series, but carries no news feed — its vault has candles, series, catalog and reference, and nothing else. Headlines appear here once a news source is connected; none are made up in the meantime." />
         </Vlak>
-        <Vlak titel={<span className="flex items-center gap-2"><CalendarDays size={15} style={{ color: 'var(--text-secondary)' }} />Economic calendar</span>}>
-          <LegeStaat titel="No economic calendar source connected"
-            uitleg="Events that move markets (inventories, central banks, PMIs) will show here when a calendar source is added to AXE CORE." />
+        {/* Geen "agenda": LSE heeft geen kalender van aankomende gebeurtenissen.
+            Wat het wél heeft zijn de reeksen zelf, en de laatste meting is wat
+            een desk aan zo'n agenda ontleent. Dus tonen we die, met hun datum. */}
+        <Vlak titel={<span className="flex items-center gap-2"><CalendarDays size={15} style={{ color: 'var(--text-secondary)' }} />Macro series · LSE</span>}
+          sub="Latest print per series. LSE has no calendar of upcoming events.">
+          {macro === null && <LegeStaat titel="Loading macro series…" />}
+          {macro?.length === 0 && (
+            <LegeStaat titel="No macro series matched"
+              uitleg="Nothing in the LSE catalog matched inventories, CPI, PMI, production or freight. The catalog is what it is — nothing is invented to fill this panel." />
+          )}
+          {macro && macro.length > 0 && (
+            <ul className="flex flex-col gap-1.5 px-4 pb-3">
+              {macro.map(r => {
+                const w = r.waarde;
+                const op = w?.vorige !== undefined ? w.waarde - w.vorige : null;
+                return (
+                  <li key={`${r.dataset}:${r.symbol}`} className="flex items-baseline gap-2 text-[12px]">
+                    <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text-secondary)' }} title={r.naam}>{r.naam}</span>
+                    <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                      {w ? w.waarde.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}
+                    </span>
+                    <span className="w-[54px] text-right tabular-nums text-[11px]"
+                      style={{ color: op === null ? 'var(--text-muted)' : op >= 0 ? '#34D399' : '#F87171' }}>
+                      {op === null ? '—' : `${op >= 0 ? '+' : ''}${op.toLocaleString('en-US', { maximumFractionDigits: 2 })}`}
+                    </span>
+                    <span className="w-[72px] text-right text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{w?.datum ?? 'no data'}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Vlak>
       </div>
 

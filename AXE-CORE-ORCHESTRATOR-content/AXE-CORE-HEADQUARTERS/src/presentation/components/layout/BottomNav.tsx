@@ -10,6 +10,7 @@ import {
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
+import { AxeStatusOrb } from './AxeStatusOrb';
 
 const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
@@ -193,12 +194,14 @@ function AxeVoiceOrb() {
 
      De canvas blijft bestaan voor de stand zonder plaat; welke je ziet is één
      voorwaarde, geen tweede component. */
+  /* Op de plaat: het gedeelde statusteken (AxeStatusOrb), 64px -- de maat die
+     thinking-orbs voert voor "groot". Elke stand heeft nu zijn eigen orb, dus
+     je ziet aan het midden van de balk wát AXE doet en niet alleen dát hij
+     bezig is. Spreken blijft de equalizer, met zeven staafjes. */
   if (opPlaat) {
     return (
       <div className="axe-voice-orb" title={STATUS_LABEL[status]}>
-        <span className="axe-eq" style={{ ['--eq-ink' as string]: STATUS_COLOR[status] }}>
-          <i /><i /><i /><i /><i />
-        </span>
+        <AxeStatusOrb size={64} />
       </div>
     );
   }

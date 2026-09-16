@@ -76,7 +76,12 @@ export function AxeShellChrome() {
         if (r.height > OPEN_VANAF) {
           const hoofd = document.querySelector('main');
           const top = hoofd ? hoofd.getBoundingClientRect().top : 0;
-          const vak = Math.max(0, Math.round(r.top - top));
+          /* De bol staat gecentreerd in dit vak, dus het vak iets korter maken
+             tilt hem op. Gevraagd op 16 september: meer lucht tussen de core en
+             de composer -- ze stonden zo dicht op elkaar dat de bol op de plaat
+             leek te rusten in plaats van erboven te zweven. */
+          const ADEM = 56;
+          const vak = Math.max(0, Math.round(r.top - top) - ADEM);
           if (vak > 0) wortel.style.setProperty('--axe-bol-vak', `${vak}px`);
         }
         wortel.style.setProperty('--axe-chat-hoog', `${Math.round(r.height)}px`);

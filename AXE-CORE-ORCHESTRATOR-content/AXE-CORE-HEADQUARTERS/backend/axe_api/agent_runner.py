@@ -191,6 +191,22 @@ ENGINES = {
         "login": "CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login",
         "alleen_lezen": True,
     },
+    "claude4": {
+        # Een vierde Claude-abonnement (16 september), zelfde opzet als claude3:
+        # een eigen CLAUDE_CONFIG_DIR is wat de limieten scheidt, dus een vierde
+        # map is een vierde limiet. Eenmalig inloggen in vak 3 (Mac - agents):
+        #   CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login
+        "label": "Claude Code 4",
+        "bin_env": "CLAUDE_BIN",
+        "bin_default": "claude",
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
+        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE4_CONFIG_DIR", "~/.claude-vierde"))},
+        "cmd": _claude_cmd,
+        "leest_bestand": False,
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "login": "CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login",
+        "alleen_lezen": True,
+    },
     "codex": {
         "label": "Codex",
         "bin_env": "CODEX_BIN",
