@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import matching
+from . import orchestration
 from .crew import PROHIBITED, CrewGateway
 from .models import (
     Blocker, BlockerInvestigation, CandidateSearch, CandidateView, Claim, CounterpartyResearch, CrewRunInfo,
@@ -443,6 +444,30 @@ class NorthSeaService:
         if depth != "deep":
             return CrewRunInfo(used=False, reason="deterministic analysis was sufficient (depth=standard)")
         return await self.crew.run(action, handoff)
+
+    async def handle_event(self, caller: Caller, event: dict[str, Any]) -> orchestration.OrchestrationResult:
+        """Canoniek event-instappunt — de deterministische master-orchestratie.
+
+        Eén weg naar binnen voor AXE CORE-events (en interne bronnen). De grens
+        wordt hier deterministisch bezeten, niet in fragiele CrewAI-Studio-
+        serialisatie: getypte validatie -> policy/budget/approval-gate -> router
+        -> crew. Elke grens faalt gesloten; een ongeldig of niet-toegestaan event
+        laat NOOIT een crew draaien. Draaide er wél een crew en is er een
+        opportunity in beeld, dan legt dit de run canoniek vast als `deal_event`
+        (provenance) — de analyse blijft ongeverifieerd, nooit een feit."""
+        result = await orchestration.handle_event(event, self.crew, caller.scopes)
+        payload = event.get("payload") if isinstance(event, dict) else None
+        opp_id = payload.get("opportunity_id") if isinstance(payload, dict) else None
+        if opp_id and result.status == "ok" and result.crew is not None:
+            await self.repo.insert_deal_event({
+                "opportunity_id": opp_id,
+                "event_type": "crew_run",
+                "actor": f"crew:{result.crew_family}"[:100],
+                "summary": f"NorthSea {result.crew_family} crew run via {result.route} (unverified analysis).",
+                "metadata": {"event_id": result.event_id, "run_id": result.run_id, "route": result.route,
+                             "backend": result.crew.backend, "validation": result.crew.validation},
+            })
+        return result
 
     # ── 1. research_counterparty ─────────────────────────────────────────────
     async def research_counterparty(self, caller: Caller, *, objective: str, counterparty_id: str | None = None,
