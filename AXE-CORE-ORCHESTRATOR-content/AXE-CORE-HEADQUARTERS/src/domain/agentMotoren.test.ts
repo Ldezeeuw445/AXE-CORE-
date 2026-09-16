@@ -27,7 +27,7 @@ describe('drie agents, drie abonnementen', () => {
 
   it('respecteert een bewuste keuze voor API-sleutels', () => {
     const t = normaliseer({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels' });
-    expect(t).toEqual({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels', 'maps-agent': 'sleutels' });
+    expect(t).toEqual({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels', 'maps-agent': 'sleutels', 'vrije-agent': 'codex2' });
   });
 
   it('overleeft onzin zonder uitzondering', () => {
@@ -36,11 +36,12 @@ describe('drie agents, drie abonnementen', () => {
   });
 
   it('toont in het menu geen abonnement dat al van een ander is', () => {
-    const t = STANDAARD_TOEWIJZING; // core=claude, code=cursor, algo=codex
+    const t = STANDAARD_TOEWIJZING; // core=claude, code=cursor, algo=codex, vrij=codex2
     // claude2 is vrij zolang niemand hem heeft, dus die mag iedereen kiezen.
-    expect(kiesbaar(t, 'axe-core')).toEqual(['claude', 'claude2', 'claude3', 'codex2', 'sleutels']);
-    expect(kiesbaar(t, 'code-agent')).toEqual(['claude2', 'claude3', 'codex2', 'cursor', 'sleutels']);
-    expect(kiesbaar(t, 'maps-agent')).toEqual(['claude2', 'claude3', 'codex2', 'sleutels']);
+    expect(kiesbaar(t, 'axe-core')).toEqual(['claude', 'claude2', 'claude3', 'sleutels']);
+    expect(kiesbaar(t, 'code-agent')).toEqual(['claude2', 'claude3', 'cursor', 'sleutels']);
+    expect(kiesbaar(t, 'maps-agent')).toEqual(['claude2', 'claude3', 'sleutels']);
+    expect(kiesbaar(t, 'vrije-agent')).toEqual(['claude2', 'claude3', 'codex2', 'sleutels']);
   });
 
   it('een nieuwe keuze wint en de vorige eigenaar krijgt API-sleutels', () => {

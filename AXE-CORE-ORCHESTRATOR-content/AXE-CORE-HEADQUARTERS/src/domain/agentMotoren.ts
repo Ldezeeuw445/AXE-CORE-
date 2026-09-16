@@ -35,20 +35,21 @@
  */
 import { ALLE_MOTOREN, ABONNEMENT_PROVIDER, zonderAbonnement, type AgentEngine } from '@/domain/abonnementChat';
 
-export type HoofdAgent = 'axe-core' | 'code-agent' | 'axe-algo' | 'maps-agent';
+export type HoofdAgent = 'axe-core' | 'code-agent' | 'axe-algo' | 'maps-agent' | 'vrije-agent';
 
 /** Een abonnement, of: je API-sleutels (de gewone cascade). */
 export type HoofdMotor = AgentEngine | 'sleutels';
 
 export type MotorToewijzing = Record<HoofdAgent, HoofdMotor>;
 
-export const HOOFD_AGENTS: readonly HoofdAgent[] = ['axe-core', 'code-agent', 'axe-algo', 'maps-agent'] as const;
+export const HOOFD_AGENTS: readonly HoofdAgent[] = ['axe-core', 'code-agent', 'axe-algo', 'maps-agent', 'vrije-agent'] as const;
 
 export const AGENT_LABEL: Record<HoofdAgent, string> = {
   'axe-core': 'AXE Core (chat)',
   'code-agent': 'Code Agent',
   'axe-algo': 'AXE Algo (eindbeslissing)',
   'maps-agent': 'Northsea Desk (3D Maps)',
+  'vrije-agent': 'Vrije agent (taak nog te kiezen)',
 };
 
 export const MOTOR_LABEL: Record<HoofdMotor, string> = {
@@ -67,6 +68,7 @@ export const TOEGESTAAN: Record<HoofdAgent, readonly HoofdMotor[]> = {
   'code-agent': [...ALLE_MOTOREN, 'sleutels'],
   'axe-algo': [...ALLE_MOTOREN, 'sleutels'],
   'maps-agent': [...ALLE_MOTOREN, 'sleutels'],
+  'vrije-agent': [...ALLE_MOTOREN, 'sleutels'],
 };
 
 /** Elk abonnement bij de agent die er het best bij past, geen enkele dubbel. */
@@ -75,6 +77,11 @@ export const STANDAARD_TOEWIJZING: MotorToewijzing = {
   'code-agent': 'cursor',
   'axe-algo': 'codex',
   'maps-agent': 'sleutels',
+  // Luka, 16 september: het tweede ChatGPT-abonnement moet ook een taak kunnen
+  // krijgen, welke beslist hij later. Tot dan heeft deze plek een motor maar
+  // geen werk: de planner kent hem niet (planner.py AGENTS), dus er draait
+  // niets op dit abonnement tot er een taak is.
+  'vrije-agent': 'codex2',
 };
 
 export const MOTOREN_SLEUTEL = 'axe_agent_motoren';

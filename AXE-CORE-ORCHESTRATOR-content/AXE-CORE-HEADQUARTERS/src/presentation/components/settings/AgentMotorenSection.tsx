@@ -24,6 +24,7 @@ const WAARVOOR: Record<HoofdAgent, string> = {
   'code-agent': 'Runs in de Code Editor. Mag bestanden bewerken.',
   'axe-algo': 'Alleen de eindbeslissing per cyclus. De elf desk-rollen blijven op sleutels.',
   'maps-agent': 'Northsea Commodity: bouwt en runt de desk op de 3D Maps-tab. Schrijftaken pas na jouw akkoord.',
+  'vrije-agent': 'Een eigen plek voor een abonnement dat nog geen taak heeft. Er draait niets tot je hem er een geeft.',
 };
 
 export function AgentMotorenSection() {
