@@ -104,7 +104,9 @@ export function TegenpartijenTab() {
         <Kengetal waarde={data ? (perSoort.supplier ?? 0) : '—'} label="Suppliers" />
         <Kengetal waarde={data ? (perSoort.both ?? 0) : '—'} label="Buyer & supplier" />
         <Kengetal waarde={data ? (perSoort.broker ?? 0) : '—'} label="Brokers" />
-        <Kengetal waarde={data ? (perVerificatie.verified ?? 0) : '—'} label="Verified" toon="groen"
+        <Kengetal waarde={data ? (perVerificatie.verified ?? 0) : '—'} label="Verified"
+          /* Groen belooft 'geverifieerd'. Bij nul is er niets te beloven. */
+          toon={(perVerificatie.verified ?? 0) > 0 ? 'groen' : 'grijs'}
           sub={data ? `${perVerificatie.reviewing ?? 0} in review` : undefined} />
       </KengetalRij>
 

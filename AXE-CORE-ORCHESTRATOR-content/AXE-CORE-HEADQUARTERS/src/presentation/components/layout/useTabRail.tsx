@@ -19,6 +19,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useUIStore } from '@/presentation/store/uiStore';
 
 const HOST_ID = { links: 'axe-rail-links', rechts: 'axe-rail-rechts' } as const;
 const VAST_SLEUTEL = { links: 'railVastL', rechts: 'railVastR' } as const;
@@ -34,6 +35,12 @@ const VAST_SLEUTEL = { links: 'railVastL', rechts: 'railVastR' } as const;
  *
  * Staat er een gekozen record in, dan zet het tabblad `vast` en blijft de lade
  * open tot je hem sluit. Zonder keuze blijft het gewoon de rand-lade.
+ *
+ * `vast` doet TWEE dingen, en het tweede is waar de eerste versie op stukliep:
+ * de rand-lade van de plaat opentrekken (data-rail-r) EN het rechterpaneel
+ * zelf. Staat dat ingeklapt, dan is de gastheer `hidden` en portaleert het
+ * tabblad zijn detail in een onzichtbare doos -- precies wat je zag: de rij
+ * lichtte op en verder gebeurde er niets.
  */
 export function TabRail({ kant, children, vast }: { kant: 'links' | 'rechts'; children: ReactNode; vast?: boolean }) {
   const [gastheer, setGastheer] = useState<HTMLElement | null>(
@@ -62,9 +69,15 @@ export function TabRail({ kant, children, vast }: { kant: 'links' | 'rechts'; ch
     return () => obs.disconnect();
   }, [kant]);
 
+  const setRightPanelOpen = useUIStore(st => st.setRightPanelOpen);
+  const setLeftPanelOpen = useUIStore(st => st.setLeftPanelOpen);
+
   useEffect(() => {
     const wortel = document.documentElement;
     const sleutel = VAST_SLEUTEL[kant];
+    /* Alleen op de overgang naar `vast`, niet elke render: daarna mag je het
+       paneel gewoon dichtklappen zonder dat het meteen terugkomt. */
+    if (vast) (kant === 'rechts' ? setRightPanelOpen : setLeftPanelOpen)(true);
     if (vast) {
       wortel.dataset[sleutel] = 'aan';
       wortel.dataset[kant === 'rechts' ? 'railR' : 'railL'] = 'open';
@@ -72,7 +85,7 @@ export function TabRail({ kant, children, vast }: { kant: 'links' | 'rechts'; ch
       delete wortel.dataset[sleutel];
     }
     return () => { delete wortel.dataset[sleutel]; };
-  }, [kant, vast]);
+  }, [kant, vast, setRightPanelOpen, setLeftPanelOpen]);
 
   return gastheer ? createPortal(children, gastheer) : null;
 }
