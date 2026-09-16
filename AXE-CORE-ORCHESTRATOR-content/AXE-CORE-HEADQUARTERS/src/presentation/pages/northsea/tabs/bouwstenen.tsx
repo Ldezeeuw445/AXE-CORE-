@@ -100,7 +100,7 @@ export function LegeStaat({ titel, uitleg, icoon }: { titel: string; uitleg?: Re
 
 export function FoutRegel({ fout }: { fout: string }) {
   return (
-    <div className="mx-4 my-2 flex gap-2 rounded-lg p-2 text-[11.5px]" style={{ background: 'rgba(248,113,113,0.08)', color: '#F87171' }}>
+    <div className="mx-4 my-2 flex gap-2 rounded-lg bg-white/[0.03] p-2 text-[11.5px]" style={{ border: '1px solid rgba(248,113,113,0.35)', color: '#F87171' }}>
       <AlertTriangle size={13} className="mt-0.5 shrink-0" />
       <span>NorthSea data unavailable: {fout}</span>
     </div>
@@ -139,7 +139,7 @@ export function Filters<T extends string>({ opties, actief, kies }: {
           <button key={o.id} type="button" onClick={() => kies(o.id)}
             className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px]"
             style={{
-              background: aan ? 'rgba(34,211,238,0.10)' : 'transparent',
+              background: aan ? 'rgba(255,255,255,0.06)' : 'transparent',
               border: `1px solid ${aan ? 'rgba(34,211,238,0.30)' : 'var(--axe-vak-lijn)'}`,
               color: aan ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}>

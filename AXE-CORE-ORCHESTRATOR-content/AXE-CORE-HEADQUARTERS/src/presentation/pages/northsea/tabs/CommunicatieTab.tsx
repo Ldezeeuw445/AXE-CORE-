@@ -105,7 +105,8 @@ export function CommunicatieTab() {
                 return (
                   <li key={b.id}>
                     <button type="button" onClick={() => setGekozen(b.id)} className="flex w-full gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.03]"
-                      style={{ background: aan ? 'rgba(34,211,238,0.06)' : undefined, borderBottom: '1px solid rgba(255,255,255,0.035)' }}>
+                      style={{ background: aan ? 'rgba(255,255,255,0.05)' : undefined, borderBottom: '1px solid rgba(255,255,255,0.035)',
+                        boxShadow: aan ? 'inset 2px 0 0 var(--accent-cyan)' : undefined }}>
                       <span className="mt-0.5 shrink-0"><RichtingIcoon b={b} /></span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline gap-2">
@@ -147,7 +148,7 @@ export function CommunicatieTab() {
         )}
       </Vlak>
 
-      <TabRail kant="rechts">
+      <TabRail kant="rechts" vast={!!bericht}>
         {bericht ? (
           <DetailPaneel titel={bericht.bedrijf || bericht.contact || 'Message'} sub={bericht.bedrijf_land || undefined}>
             <Veld label="Contact">{bericht.contact}</Veld>

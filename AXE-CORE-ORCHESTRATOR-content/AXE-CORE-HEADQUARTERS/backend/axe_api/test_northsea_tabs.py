@@ -7,7 +7,7 @@ import pytest
 
 import northsea as n
 
-TABS = ("deals", "pipeline", "tegenpartijen", "communicatie", "documenten", "bewijs", "automatisering", "rapporten")
+TABS = ("deals", "pipeline", "tegenpartijen", "communicatie", "documenten", "bewijs", "automatisering", "rapporten", "werk")
 
 
 def _antwoord(data):

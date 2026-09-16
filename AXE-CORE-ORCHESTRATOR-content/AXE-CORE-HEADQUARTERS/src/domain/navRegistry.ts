@@ -66,7 +66,9 @@ export const NAV_ITEMS: NavItem[] = [
       'trading agent',
     ],
   },
-  { path: '/maps-3d', label: '3D Maps', keywords: ['3d maps', 'maps', 'map'] },
+  /* Het pad blijft /maps-3d: dat staat in opgeslagen links, in de agenten en
+     in de systeemlijst. Alleen het etiket verandert -- de tab IS de desk. */
+  { path: '/maps-3d', label: 'Northsea Desk', keywords: ['northsea', 'northsea desk', 'desk', 'commodity', '3d maps', 'maps', 'map'] },
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
   { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'navigate', 'surf'] },

@@ -122,7 +122,9 @@ export function DocumentenTab() {
             <tbody>
               {rijen.map(r => (
                 <tr key={r.id} onClick={() => setGekozen(r.id)} className="cursor-pointer hover:bg-white/[0.03]"
-                  style={{ borderTop: '1px solid rgba(255,255,255,0.035)', background: gekozen === r.id ? 'rgba(34,211,238,0.06)' : undefined }}>
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.035)',
+                    background: gekozen === r.id ? 'rgba(255,255,255,0.05)' : undefined,
+                    boxShadow: gekozen === r.id ? 'inset 2px 0 0 var(--accent-cyan)' : undefined }}>
                   <td className="truncate px-3 py-2" style={{ color: 'var(--text-primary)' }}>
                     <span className="inline-flex max-w-full items-center gap-2">
                       {r.bron === 'bijlage' ? <Paperclip size={12} style={{ color: 'var(--text-muted)' }} /> : <FileText size={12} style={{ color: 'var(--text-muted)' }} />}
@@ -141,7 +143,7 @@ export function DocumentenTab() {
         )}
       </Vlak>
 
-      <TabRail kant="rechts">
+      <TabRail kant="rechts" vast={!!detail}>
         {detail ? (
           <DetailPaneel titel={detail.naam} sub={detail.soort} sluit={() => setGekozen(null)}>
             <div className="mb-3"><StatusChip badge={detail.status} /></div>

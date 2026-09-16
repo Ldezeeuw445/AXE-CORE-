@@ -132,7 +132,7 @@ export function AutomatiseringTab() {
           {beleid && (
             <>
               {gevoeligAan > 0 && (
-                <div className="mb-3 rounded-lg p-2 text-[11.5px]" style={{ background: 'rgba(248,113,113,0.08)', color: '#F87171' }}>
+                <div className="mb-3 rounded-lg bg-white/[0.03] p-2 text-[11.5px]" style={{ border: '1px solid rgba(248,113,113,0.35)', color: '#F87171' }}>
                   {gevoeligAan} sensitive action{gevoeligAan > 1 ? 's are' : ' is'} set to automatic. Binding commitments need approved authority.
                 </div>
               )}

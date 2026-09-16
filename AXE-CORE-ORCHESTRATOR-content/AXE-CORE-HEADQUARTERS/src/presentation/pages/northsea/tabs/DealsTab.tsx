@@ -170,7 +170,7 @@ export function DealsTab({ startId }: { startId?: string | null }) {
                 <li key={d.id}>
                   <button type="button" onClick={() => { setGekozen(d.id); setOnderdeel('overzicht'); }}
                     className="flex w-full flex-col gap-0.5 rounded-xl px-2.5 py-2 text-left hover:bg-white/[0.03]"
-                    style={{ background: aan ? 'rgba(34,211,238,0.07)' : undefined, border: `1px solid ${aan ? 'rgba(34,211,238,0.25)' : 'transparent'}` }}>
+                    style={{ background: aan ? 'rgba(255,255,255,0.05)' : undefined, border: `1px solid ${aan ? 'rgba(34,211,238,0.25)' : 'transparent'}` }}>
                     <span className="flex items-center gap-2">
                       <span className="font-mono-data text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>{code(d)}</span>
                       <span className="ml-auto"><Label toon={kolom.toon}>{kolom.label}</Label></span>
@@ -210,7 +210,7 @@ export function DealsTab({ startId }: { startId?: string | null }) {
               <Poorten d={deal} />
 
               {(deal.blokkade ?? '').trim() && (
-                <div className="flex gap-2 rounded-xl p-2.5 text-[12px]" style={{ background: 'rgba(248,113,113,0.08)', color: '#F87171' }}>
+                <div className="flex gap-2 rounded-xl bg-white/[0.03] p-2.5 text-[12px]" style={{ border: '1px solid rgba(248,113,113,0.35)', color: '#F87171' }}>
                   <AlertTriangle size={14} className="mt-0.5 shrink-0" /><span><b>Primary blocker:</b> {deal.blokkade}</span>
                 </div>
               )}

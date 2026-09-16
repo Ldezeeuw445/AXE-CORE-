@@ -8,9 +8,10 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { AppTaken, AppCijfers, type AppTaak } from './taken/AppTaken';
 import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
-  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask, plannerTaken,
+  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask, plannerTaken, northseaTab,
   type DurableTaskRun, type PlannerTaak,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { isNorthseaWerk, northseaTaken, type WerkTaak } from '@/domain/northsea/werk';
 import { PlannerTaken } from '@/presentation/components/tasks/PlannerTaken';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
@@ -115,6 +116,11 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
 
 export default function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  /* De open taken van de NorthSea-desk. Die staan in AXE Commodities en niet
+     in core_tasks, dus zonder dit blijft de NorthSea-kolom leeg terwijl er
+     werk ligt. Ze zijn hier te lezen, niet te beheren: afvinken doe je op de
+     desk, waar de deal omheen staat. */
+  const [nsTaken, setNsTaken] = useState<WerkTaak[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [filterStatus, setFilterStatus] = useState<TaskStatus | 'all'>('all');
@@ -131,7 +137,11 @@ export default function Tasks() {
     try {
       // Twee bronnen, elk apart: de takenlijst op de VPS en de planner op de
       // agent-host. Valt er één weg, dan staat de ander er nog.
-      const [lijst, planner] = await Promise.allSettled([listDurableTasks({ limit: 100 }), plannerTaken(60)]);
+      const [lijst, planner, desk] = await Promise.allSettled([
+        listDurableTasks({ limit: 100 }), plannerTaken(60), northseaTab('werk'),
+      ]);
+      // De desk is een extra bron: valt hij weg, dan blijft de rest staan.
+      setNsTaken(desk.status === 'fulfilled' ? northseaTaken(desk.value.taken) : []);
       const rows = lijst.status === 'fulfilled' ? lijst.value.tasks : [];
       const plannerRows = planner.status === 'fulfilled' ? planner.value.taken.map(plannerAlsRij) : [];
       // Planner-rijen alleen uit de planner zelf: die heeft de actuele status.
@@ -272,8 +282,8 @@ export default function Tasks() {
   /* De taken van één app, in de vorm die AppTaken leest. Het statusfilter uit
      de schuifbalk werkt gewoon door: kies je 'todo', dan tonen alle vijf de
      panelen alleen dat. */
-  const takenVan = (app: AppId): AppTaak[] =>
-    displayed
+  const takenVan = (app: AppId): AppTaak[] => {
+    const eigen = displayed
       .filter(t => t.app === app)
       .map(t => ({
         id: t.id,
@@ -285,6 +295,12 @@ export default function Tasks() {
         klaar: t.status === 'done',
         stand: t.status,
       }));
+    if (app !== 'northsea') return eigen;
+    // Hetzelfde statusfilter geldt voor de desk-taken; anders zou 'todo' bij
+    // NorthSea ineens alles tonen.
+    const desk = filterStatus === 'all' ? nsTaken : nsTaken.filter(t => t.stand === filterStatus);
+    return [...eigen, ...desk];
+  };
 
   /* Het formulier openen MET die app erin. Zonder dit moest je hem in het
      formulier nog eens kiezen terwijl je net op de + van die app klikte. */
@@ -458,8 +474,14 @@ export default function Tasks() {
               blurb={a.blurb}
               taken={takenVan(a.id)}
               opNieuw={() => nieuwVoor(a.id)}
-              opKlaar={t => { void updateStatus(t.id, 'done'); }}
-              opWeg={t => { void removeTask(t.id); }}
+              opKlaar={t => {
+                if (isNorthseaWerk(t.id)) { toast.info('Deze taak staat op de NorthSea-desk. Afvinken doe je daar, bij de deal.'); return; }
+                void updateStatus(t.id, 'done');
+              }}
+              opWeg={t => {
+                if (isNorthseaWerk(t.id)) { toast.info('Deze taak komt uit AXE Commodities en wordt daar beheerd.'); return; }
+                void removeTask(t.id);
+              }}
             />
           </div>
         ))}

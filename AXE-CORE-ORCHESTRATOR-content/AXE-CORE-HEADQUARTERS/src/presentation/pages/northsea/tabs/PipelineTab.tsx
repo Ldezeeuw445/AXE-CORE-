@@ -144,7 +144,7 @@ export function PipelineTab({ openDeal }: { openDeal?: (id: string) => void }) {
         )}
       </Vlak>
 
-      <TabRail kant="rechts">
+      <TabRail kant="rechts" vast={!!detail}>
         {detail ? (
           <DetailPaneel titel={detail.product || mensLabel(detail.commodity)} sub={code(detail)} sluit={() => setGekozen(null)}>
             <div className="flex flex-col gap-1 text-[12px]" style={{ color: 'var(--text-secondary)' }}>

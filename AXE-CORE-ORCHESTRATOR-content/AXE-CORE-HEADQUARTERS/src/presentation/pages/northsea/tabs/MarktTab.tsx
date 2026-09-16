@@ -13,20 +13,38 @@ import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
 import { DetailPaneel, Kengetal, KengetalRij, LegeStaat, Vlak } from './bouwstenen';
 
-interface Markt { symbool: string; label: string; eenheid: string; groep: 'Metals' | 'Energy' | 'Macro' }
+interface Markt {
+  symbool: string; label: string; eenheid: string; groep: 'Metals' | 'Energy' | 'Macro';
+  /* Wat een prijs voor dit ding ongeveer kan zijn.
+   *
+   * De QA van 16 september vond WTI op 4,12 per vat met +57%: onmogelijk (het
+   * vat doet tientallen dollars), maar de tabel toonde het als koers, met een
+   * groene pijl erbij. De bron kan een verkeerd symbool voeren of een andere
+   * eenheid; wat het ook is, een getal dat niet kan kloppen mag hier niet als
+   * koers staan. Buiten deze band tonen we geen prijs en zeggen we waarom. */
+  band: readonly [number, number];
+}
 
 const MARKTEN: readonly Markt[] = [
-  { symbool: 'XCUUSD', label: 'Copper', eenheid: '', groep: 'Metals' },
-  { symbool: 'XAUUSD', label: 'Gold', eenheid: '/ oz', groep: 'Metals' },
-  { symbool: 'XAGUSD', label: 'Silver', eenheid: '/ oz', groep: 'Metals' },
-  { symbool: 'BCOUSD', label: 'Brent Crude', eenheid: '/ bbl', groep: 'Energy' },
-  { symbool: 'WTIUSD', label: 'WTI Crude', eenheid: '/ bbl', groep: 'Energy' },
-  { symbool: 'DXY', label: 'US Dollar Index', eenheid: '', groep: 'Macro' },
+  { symbool: 'XCUUSD', label: 'Copper', eenheid: '', groep: 'Metals', band: [1, 20_000] },
+  { symbool: 'XAUUSD', label: 'Gold', eenheid: '/ oz', groep: 'Metals', band: [400, 20_000] },
+  { symbool: 'XAGUSD', label: 'Silver', eenheid: '/ oz', groep: 'Metals', band: [3, 500] },
+  { symbool: 'BCOUSD', label: 'Brent Crude', eenheid: '/ bbl', groep: 'Energy', band: [10, 400] },
+  { symbool: 'WTIUSD', label: 'WTI Crude', eenheid: '/ bbl', groep: 'Energy', band: [10, 400] },
+  { symbool: 'DXY', label: 'US Dollar Index', eenheid: '', groep: 'Macro', band: [40, 200] },
 ];
 
 const VERVERS_MS = 5 * 60_000;
 
-type Koers = { last: number; pct: number | null; slot: number[]; bron: string } | 'geen' | null;
+type Koers = { last: number; pct: number | null; slot: number[]; bron: string } | 'geen' | 'ongeloofwaardig' | null;
+
+/** Een echte koers, of een van de twee redenen waarom hij er niet is. */
+const heeftKoers = (k: Koers): k is Exclude<Koers, 'geen' | 'ongeloofwaardig' | null> =>
+  k !== null && k !== undefined && k !== 'geen' && k !== 'ongeloofwaardig';
+
+const zonderKoers = (k: Koers) => k === 'geen' || k === 'ongeloofwaardig';
+
+const geenTekst = (k: Koers) => (k === 'ongeloofwaardig' ? 'Price out of range — rejected' : 'No price feed');
 
 function Lijntje({ punten, kleur }: { punten: number[]; kleur: string }) {
   if (punten.length < 2) return null;
@@ -55,10 +73,14 @@ export function MarktTab() {
         fetchMarketSnapshot(m.symbool, 'd1', { priority: 'background' })
           .then(s => {
             const echt = s.source !== 'synthetic' && Number.isFinite(s.last);
+            const binnenBand = s.last >= m.band[0] && s.last <= m.band[1];
+            if (echt && !binnenBand) console.warn('[markt] koers buiten band, niet getoond', m.symbool, s.last, s.source);
             if (!weg) {
               setKoersen(k => ({
                 ...k,
-                [m.symbool]: echt ? { last: s.last, pct: s.changePct ?? null, slot: s.bars.slice(-30).map(b => b.c), bron: String(s.source) } : 'geen',
+                [m.symbool]: !echt ? 'geen'
+                  : !binnenBand ? 'ongeloofwaardig'
+                    : { last: s.last, pct: s.changePct ?? null, slot: s.bars.slice(-30).map(b => b.c), bron: String(s.source) },
               }));
             }
           })
@@ -70,8 +92,8 @@ export function MarktTab() {
     return () => { weg = true; clearTimeout(eerste); clearInterval(iv); };
   }, []);
 
-  const met = MARKTEN.filter(m => { const k = koersen[m.symbool]; return k && k !== 'geen'; });
-  const zonder = MARKTEN.filter(m => koersen[m.symbool] === 'geen');
+  const met = MARKTEN.filter(m => heeftKoers(koersen[m.symbool]));
+  const zonder = MARKTEN.filter(m => zonderKoers(koersen[m.symbool]));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 pt-2" data-axe-doel="northsea-markt">
@@ -80,9 +102,9 @@ export function MarktTab() {
           const k = koersen[m.symbool];
           return (
             <Kengetal key={m.symbool} label={m.label}
-              waarde={k === null || k === undefined ? '…' : k === 'geen' ? '—' : prijs(k.last)}
-              sub={k && k !== 'geen' && k.pct !== null ? `${k.pct >= 0 ? '+' : ''}${k.pct.toFixed(2)}%` : k === 'geen' ? 'No price feed' : undefined}
-              toon={k && k !== 'geen' && k.pct !== null ? (k.pct >= 0 ? 'groen' : 'rood') : undefined} />
+              waarde={k === null || k === undefined ? '…' : heeftKoers(k) ? prijs(k.last) : '—'}
+              sub={heeftKoers(k) && k.pct !== null ? `${k.pct >= 0 ? '+' : ''}${k.pct.toFixed(2)}%` : zonderKoers(k) ? geenTekst(k) : undefined}
+              toon={heeftKoers(k) && k.pct !== null ? (k.pct >= 0 ? 'groen' : 'rood') : undefined} />
           );
         })}
       </KengetalRij>
@@ -99,21 +121,21 @@ export function MarktTab() {
           <tbody>
             {MARKTEN.map(m => {
               const k = koersen[m.symbool];
-              const kleur = k && k !== 'geen' && (k.pct ?? 0) < 0 ? '#F87171' : '#34D399';
+              const kleur = heeftKoers(k) && (k.pct ?? 0) < 0 ? '#F87171' : '#34D399';
               return (
                 <tr key={m.symbool} style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
                   <td className="truncate px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>{m.label} <span className="font-mono-data text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{m.symbool}</span></td>
                   <td className="truncate px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>{m.groep}</td>
                   <td className="truncate px-4 py-2.5 tabular-nums" style={{ color: 'var(--text-primary)' }}>
                     {k === null || k === undefined ? <span style={{ color: 'var(--text-muted)' }}>Loading…</span>
-                      : k === 'geen' ? <span style={{ color: 'var(--text-muted)' }}>No price feed</span>
+                      : !heeftKoers(k) ? <span style={{ color: 'var(--text-muted)' }}>{geenTekst(k)}</span>
                         : <>{prijs(k.last)}{m.eenheid && <span className="ml-1 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{m.eenheid}</span>}</>}
                   </td>
-                  <td className="truncate px-4 py-2.5 tabular-nums" style={{ color: k && k !== 'geen' && k.pct !== null ? kleur : 'var(--text-muted)' }}>
-                    {k && k !== 'geen' && k.pct !== null ? `${k.pct >= 0 ? '+' : ''}${k.pct.toFixed(2)}%` : '—'}
+                  <td className="truncate px-4 py-2.5 tabular-nums" style={{ color: heeftKoers(k) && k.pct !== null ? kleur : 'var(--text-muted)' }}>
+                    {heeftKoers(k) && k.pct !== null ? `${k.pct >= 0 ? '+' : ''}${k.pct.toFixed(2)}%` : '—'}
                   </td>
-                  <td className="px-4 py-2.5">{k && k !== 'geen' ? <Lijntje punten={k.slot} kleur={kleur} /> : null}</td>
-                  <td className="truncate px-4 py-2.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>{k && k !== 'geen' ? k.bron : '—'}</td>
+                  <td className="px-4 py-2.5">{heeftKoers(k) ? <Lijntje punten={k.slot} kleur={kleur} /> : null}</td>
+                  <td className="truncate px-4 py-2.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>{heeftKoers(k) ? k.bron : '—'}</td>
                 </tr>
               );
             })}
@@ -140,9 +162,9 @@ export function MarktTab() {
               return (
                 <li key={m.symbool} className="flex items-center gap-2 text-[12px]">
                   <span className="flex-1 truncate" style={{ color: 'var(--text-secondary)' }}>{m.label}</span>
-                  <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>{k && k !== 'geen' ? prijs(k.last) : '—'}</span>
-                  <span className="w-[58px] text-right tabular-nums" style={{ color: k && k !== 'geen' && k.pct !== null ? ((k.pct ?? 0) >= 0 ? '#34D399' : '#F87171') : 'var(--text-muted)' }}>
-                    {k && k !== 'geen' && k.pct !== null ? `${k.pct >= 0 ? '+' : ''}${k.pct.toFixed(2)}%` : k === 'geen' ? 'no feed' : '…'}
+                  <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>{heeftKoers(k) ? prijs(k.last) : '—'}</span>
+                  <span className="w-[58px] text-right tabular-nums" style={{ color: heeftKoers(k) && k.pct !== null ? ((k.pct ?? 0) >= 0 ? '#34D399' : '#F87171') : 'var(--text-muted)' }}>
+                    {heeftKoers(k) && k.pct !== null ? `${k.pct >= 0 ? '+' : ''}${k.pct.toFixed(2)}%` : k === 'ongeloofwaardig' ? 'rejected' : k === 'geen' ? 'no feed' : '…'}
                   </span>
                 </li>
               );

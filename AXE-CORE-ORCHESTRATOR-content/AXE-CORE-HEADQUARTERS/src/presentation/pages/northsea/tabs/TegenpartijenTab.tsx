@@ -136,7 +136,9 @@ export function TegenpartijenTab() {
             <tbody>
               {rijen.map(b => (
                 <tr key={b.id} onClick={() => setGekozen(b.id)} className="cursor-pointer transition-colors hover:bg-white/[0.03]"
-                  style={{ borderTop: '1px solid rgba(255,255,255,0.035)', background: gekozen === b.id ? 'rgba(34,211,238,0.06)' : undefined }}>
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.035)',
+                    background: gekozen === b.id ? 'rgba(255,255,255,0.05)' : undefined,
+                    boxShadow: gekozen === b.id ? 'inset 2px 0 0 var(--accent-cyan)' : undefined }}>
                   <td className="truncate px-3 py-2 font-medium" style={{ color: 'var(--text-primary)' }} title={b.naam ?? undefined}>{b.naam || '—'}</td>
                   <td className="truncate px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{mensLabel(b.soort)}</td>
                   <td className="truncate px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{b.land || '—'}</td>
@@ -151,7 +153,7 @@ export function TegenpartijenTab() {
         )}
       </Vlak>
 
-      <TabRail kant="rechts">
+      <TabRail kant="rechts" vast={!!detail}>
         {detail ? <Detail b={detail} nu={nu} sluit={() => setGekozen(null)} /> : (
           <DetailPaneel titel="Counterparty distribution" sub="Select a company for details">
             <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>By country</div>

@@ -297,6 +297,39 @@ select json_build_object(
      from sourcing_campaigns sc limit 300) r)
 ) as data
 """,
+    # Het werk van de desk, in de vorm waarin de rest van AXE CORE het leest.
+    #
+    # De taken-, cron- en agenda-tabs groeperen per app (domain/apps.ts). De
+    # NorthSea-kolom was daar leeg: de desk schrijft niet in core_tasks maar in
+    # deal_tasks/action_queue van AXE Commodities. Die staan hier dus als lijst,
+    # zodat ze in dezelfde kolom komen als de rest -- in de kleur van de app.
+    "werk": """
+select json_build_object(
+  'taken', (select coalesce(json_agg(r order by r.prioriteit desc nulls last, r.due_at nulls last), '[]'::json) from (
+     select dt.id::text as id, 'deal_task' as bron, dt.title as titel, dt.status, dt.priority as prioriteit,
+            dt.due_at, dt.requires_approval as akkoord_nodig, dt.created_at,
+            o.deal_priority as deal_code, o.id::text as deal_id
+     from deal_tasks dt left join opportunities o on o.id = dt.opportunity_id
+     where dt.status in ('open','in_progress','waiting')
+     union all
+     select aq.id::text, 'action_queue', aq.title, aq.status, aq.priority,
+            aq.due_at, aq.requires_approval, aq.created_at,
+            o2.deal_priority, o2.id::text
+     from action_queue aq left join opportunities o2 on o2.id = aq.opportunity_id
+     where aq.status in ('open','in_progress','waiting')
+     limit 400) r),
+  'agenda', (select coalesce(json_agg(r order by r.wanneer), '[]'::json) from (
+     select 'deal:' || o.id::text as id, 'next_action' as soort, o.next_action_at as wanneer,
+            coalesce(nullif(o.next_action,''), o.next_best_action) as titel, o.deal_priority as deal_code
+     from opportunities o
+     where o.stage <> 'lost' and o.next_action_at is not null
+     union all
+     select 'campagne:' || sc.id::text, 'campagne', sc.next_action_at, sc.next_action, null
+     from sourcing_campaigns sc
+     where sc.next_action_at is not null
+     limit 400) r)
+) as data
+""",
     "rapporten": """
 select json_build_object(
   'fases', (select coalesce(json_agg(r), '[]'::json) from (

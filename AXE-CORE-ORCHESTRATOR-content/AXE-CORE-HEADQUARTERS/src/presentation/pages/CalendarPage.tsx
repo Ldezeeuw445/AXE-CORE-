@@ -11,7 +11,9 @@ import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster
 import { CalendarRange, LayoutGrid } from 'lucide-react';
 import { APPS } from '@/domain/apps';
 import { werkAgenda, type AgendaTaak, type AgendaCron } from '@/domain/werkAgenda';
-import { cronListSchedules, listDurableTasks, plannerTaken } from '@/infrastructure/gateways/axeCoreApiService';
+import { cronListSchedules, listDurableTasks, northseaTab, plannerTaken } from '@/infrastructure/gateways/axeCoreApiService';
+import { northseaAgenda } from '@/domain/northsea/werk';
+import type { NorthseaAgendaItem } from '@/domain/northsea/tabs/typen';
 
 /**
  * Maand of week. Als twee iconen in de band naast de composer, net als de
@@ -128,6 +130,21 @@ export default function CalendarPage() {
      wanneer de cronjobs draaien. Elke minuut opnieuw, zodat een afgeronde
      planner-taak vanzelf verschuift. */
   const [werk, setWerk] = useState<{ taken: AgendaTaak[]; crons: AgendaCron[] }>({ taken: [], crons: [] });
+  /* De geplande acties van de NorthSea-desk: volgende acties op deals en
+     sourcing-campagnes. Zelfde kleur als de rest van die app; het soort staat
+     in de tekst. */
+  const [deskAgenda, setDeskAgenda] = useState<NorthseaAgendaItem[]>([]);
+  useEffect(() => {
+    let weg = false;
+    const haal = () => {
+      void northseaTab('werk')
+        .then(w => { if (!weg) setDeskAgenda(w.agenda); })
+        .catch(() => { if (!weg) setDeskAgenda([]); });
+    };
+    haal();
+    const t = setInterval(haal, 60_000);
+    return () => { weg = true; clearInterval(t); };
+  }, []);
   useEffect(() => {
     let weg = false;
     const haal = () => { void laadWerk().then(w => { if (!weg) setWerk(w); }); };
@@ -145,8 +162,9 @@ export default function CalendarPage() {
           duurMin: duurInMinuten(e.duration), kleur: e.color, soort: e.type,
         })),
       ...werkAgenda(werk.taken, werk.crons),
+      ...northseaAgenda(deskAgenda),
     ],
-    [werk],
+    [werk, deskAgenda],
   );
 
 

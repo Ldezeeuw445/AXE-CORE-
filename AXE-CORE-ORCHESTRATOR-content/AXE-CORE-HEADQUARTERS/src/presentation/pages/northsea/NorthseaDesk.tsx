@@ -180,7 +180,7 @@ export default function NorthseaDesk() {
             {([['alle', 'All', tellers.alle], ['kritiek', 'Critical', tellers.kritiek], ['nieuw', 'New', tellers.nieuw]] as const).map(([id, label, n]) => (
               <button key={id} onClick={() => setFilter(id)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px]"
                 style={{
-                  background: filter === id ? 'rgba(34,211,238,0.10)' : 'transparent',
+                  background: filter === id ? 'rgba(255,255,255,0.06)' : 'transparent',
                   border: `1px solid ${filter === id ? 'rgba(34,211,238,0.30)' : 'var(--border-subtle)'}`,
                   color: filter === id ? 'var(--text-primary)' : 'var(--text-secondary)',
                 }}>
@@ -191,7 +191,7 @@ export default function NorthseaDesk() {
           </div>
 
           {fout && (
-            <div className="flex gap-2 rounded-lg p-2 text-[11px]" style={{ background: 'rgba(248,113,113,0.08)', color: '#F87171' }}>
+            <div className="flex gap-2 rounded-lg bg-white/[0.03] p-2 text-[11px]" style={{ border: '1px solid rgba(248,113,113,0.35)', color: '#F87171' }}>
               <AlertTriangle size={12} className="mt-0.5 shrink-0" />
               <span>NorthSea-data niet op te halen: {fout}</span>
             </div>
@@ -205,7 +205,7 @@ export default function NorthseaDesk() {
 
           {gefilterd.length > CHASE_ZICHTBAAR && (
             <button onClick={() => setAlles(v => !v)} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12px]"
-              style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.20)', color: 'var(--accent-cyan)' }}>
+              style={{ border: '1px solid rgba(34,211,238,0.20)', color: 'var(--accent-cyan)' }}>
               {alles ? 'Show fewer' : `View All Chase Actions (${gefilterd.length})`} <ArrowRight size={12} />
             </button>
           )}

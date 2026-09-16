@@ -72,7 +72,9 @@ export function BewijsTab() {
             <tbody>
               {rijen.map(b => (
                 <tr key={b.id} onClick={() => setGekozen(b.id)} className="cursor-pointer hover:bg-white/[0.03]"
-                  style={{ borderTop: '1px solid rgba(255,255,255,0.035)', background: gekozen === b.id ? 'rgba(34,211,238,0.06)' : undefined }}>
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.035)',
+                    background: gekozen === b.id ? 'rgba(255,255,255,0.05)' : undefined,
+                    boxShadow: gekozen === b.id ? 'inset 2px 0 0 var(--accent-cyan)' : undefined }}>
                   <td className="truncate px-3 py-2" style={{ color: 'var(--text-primary)' }} title={b.claim ?? undefined}>{b.claim || '—'}</td>
                   <td className="truncate px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{mensLabel(b.soort)}</td>
                   <td className="truncate px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{mensLabel(b.kant)}</td>
@@ -86,7 +88,7 @@ export function BewijsTab() {
         )}
       </Vlak>
 
-      <TabRail kant="rechts">
+      <TabRail kant="rechts" vast={!!detail}>
         {detail ? (
           <DetailPaneel titel={mensLabel(detail.soort)} sub={detail.deal_code || detail.product || undefined} sluit={() => setGekozen(null)}>
             <div className="mb-3"><StatusChip badge={bewijsBadge(detail.verificatie)} /></div>

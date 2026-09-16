@@ -10,7 +10,7 @@
 
 export type TabNaam =
   | 'deals' | 'pipeline' | 'tegenpartijen' | 'communicatie'
-  | 'documenten' | 'bewijs' | 'automatisering' | 'rapporten';
+  | 'documenten' | 'bewijs' | 'automatisering' | 'rapporten' | 'werk';
 
 type Tekst = string | null | undefined;
 type Getal = number | string | null | undefined;
@@ -291,6 +291,30 @@ export interface Telling {
   aantal: number;
 }
 
+/** Een open taak van de desk, zoals de Taken-tab hem leest. */
+export interface NorthseaTaak {
+  id: string;
+  bron: 'deal_task' | 'action_queue' | string;
+  titel?: Tekst;
+  status?: Tekst;
+  /** In AXE Commodities een getal (0-100), niet 'high'/'low'. */
+  prioriteit?: Getal;
+  due_at?: Tijd;
+  akkoord_nodig?: boolean | null;
+  created_at?: Tijd;
+  deal_code?: Tekst;
+  deal_id?: Tekst;
+}
+
+/** Iets van de desk dat op een moment staat: een volgende actie of een campagne. */
+export interface NorthseaAgendaItem {
+  id: string;
+  soort: 'next_action' | 'campagne' | string;
+  wanneer?: Tijd;
+  titel?: Tekst;
+  deal_code?: Tekst;
+}
+
 export interface TabData {
   deals: { deals: DealDetail[] };
   pipeline: { deals: PipelineDeal[] };
@@ -304,6 +328,7 @@ export interface TabData {
     deal_automatisering: Array<{ status: string; aantal: number; laatst?: Tijd }>;
     campagnes: Campagne[];
   };
+  werk: { taken: NorthseaTaak[]; agenda: NorthseaAgendaItem[] };
   rapporten: {
     fases: Telling[];
     uitvoering: Telling[];
