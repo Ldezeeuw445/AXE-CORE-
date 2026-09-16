@@ -507,65 +507,60 @@ html:root[data-look],
   -webkit-backdrop-filter: none !important;
 }
 
-/* ── Border-beam op de composer: "Pulse Outside, colorful" (roterend) ─────
+/* ── Border-beam op de composer: "Pulse Outside, colorful" ───────────────
  *
- * Een zachte KLEURIGE gloed die BUITEN de doos uitwaaiert (roze/paars/blauw/
- * groen/oranje). Niet de hele rand die tegelijk aan/uit pulseert, maar de
- * kleuren die héél subtiel rónd de doos draaien — de plek van elke kleur
- * schuift langzaam langs de rand. Zacht en niet opvallend. Puur CSS.
- * Twee lagen die samen draaien (dezelfde hoek-variabele):
- *   ::before = de wazige gloed-halo áchter de doos (z-index:-1, blur);
- *   ::after  = de zachte kleurige randring op de doos zelf (masked).
- * Geen `isolation` op de doos, zodat de negatieve z-index van ::before echt
- * áchter de doosachtergrond valt (de halo dus rondom zichtbaar is). */
-@property --axe-beam-a {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
+ * GEEN scherpe randlijn op de doos (dat was het probleem — een constante edge).
+ * Wat je wél wilt: een zachte KLEURIGE gloed die van áchter/onder de doos naar
+ * buiten straalt en pulseert — hij ademt (zwelt op en zakt terug), zoals de
+ * `border-beam`-library met size="pulse-outside", colorVariant="colorful".
+ * Puur CSS, geen dependency.
+ *
+ * Twee gloed-lagen áchter de doos (beide z-index:-1, geen mask, geen rand):
+ *   ::before = de brede wazige kleurwolk die naar buiten uitwaaiert;
+ *   ::after  = een strakkere kleurgloed vlak om de doos, zodat de rand-zone
+ *              wat feller oplicht. Ze pulseren samen (ademen), niet als lijn.
+ * Geen `isolation` op de doos, zodat de negatieve z-index echt áchter de
+ * doosachtergrond valt en de gloed rondom onder de doos vandaan komt. */
 .axe-beam { position: relative; }
 
-.axe-beam::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 20px;
-  background: conic-gradient(from var(--axe-beam-a),
-    #ec4899, #a855f7, #6366f1, #3b82f6, #22c55e, #f59e0b, #ec4899);
-  filter: blur(13px);
-  opacity: 0.34;
-  z-index: -1;
-  pointer-events: none;
-  animation: axe-beam-spin 11s linear infinite;
-}
-
+.axe-beam::before,
 .axe-beam::after {
   content: '';
   position: absolute;
-  inset: -1px;
-  border-radius: 17px;
-  padding: 1.1px;
-  background: conic-gradient(from var(--axe-beam-a),
+  border-radius: 22px;
+  background: conic-gradient(from 210deg,
     #ec4899, #a855f7, #6366f1, #3b82f6, #22c55e, #f59e0b, #ec4899);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  opacity: 0.5;
+  z-index: -1;
   pointer-events: none;
-  animation: axe-beam-spin 11s linear infinite;
+  transform-origin: center;
+  will-change: transform, opacity;
 }
 
-@keyframes axe-beam-spin {
-  to { --axe-beam-a: 360deg; }
+/* Brede, ver uitwaaierende wolk — zorgt voor de gloed die van onderen komt. */
+.axe-beam::before {
+  inset: -9px;
+  filter: blur(22px);
+  opacity: 0.32;
+  animation: axe-beam-breathe 3.6s ease-in-out infinite;
+}
+
+/* Strakkere gloed vlak om de doos — laat de rand-zone zachtjes oplichten,
+   maar zonder scherpe lijn (blur houdt hem wazig). */
+.axe-beam::after {
+  inset: -3px;
+  filter: blur(9px);
+  opacity: 0.4;
+  animation: axe-beam-breathe 3.6s ease-in-out infinite;
+}
+
+/* De pulse: de gloed zwelt op (schaal + dekking) en zakt terug — straalt van
+   onder de doos naar buiten, geen lijn die aan/uit gaat. */
+@keyframes axe-beam-breathe {
+  0%, 100% { opacity: 0.2;  transform: scale(0.985); }
+  50%      { opacity: 0.62; transform: scale(1.055); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .axe-beam::before, .axe-beam::after { animation: none; }
+  .axe-beam::before, .axe-beam::after { animation: none; opacity: 0.4; }
 }
 /* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
    dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
