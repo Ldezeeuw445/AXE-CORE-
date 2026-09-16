@@ -4085,6 +4085,7 @@ async def mcp_hub_sleutel(server_id: str, body: McpSleutel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 import northsea as _northsea
+import northsea_verstuur as _verstuur
 
 
 @app.get("/northsea/overzicht", dependencies=[AUTH])
@@ -4093,6 +4094,39 @@ async def northsea_overzicht(vers: bool = False):
         return await _northsea.overzicht(vers=vers)
     except _northsea.NorthseaFout as e:
         raise HTTPException(502, str(e))
+
+
+class NorthseaVerstuurRequest(BaseModel):
+    """Wie het vraagt. Het concept moet al goedgekeurd zijn MET menselijke
+    herkomst; dat controleert de edge function, niet deze route."""
+    requested_by: str = "axe-core-desk"
+
+
+@app.get("/northsea/verstuur/status", dependencies=[AUTH])
+async def northsea_verstuur_status():
+    """Kan deze Mac versturen? De desk vraagt dit voordat hij een knop toont."""
+    kan, reden = _verstuur.gereed()
+    return {"kan_versturen": kan, "reden": reden}
+
+
+@app.post("/northsea/concept/{draft_id}/verstuur", dependencies=[AUTH])
+async def northsea_verstuur_concept(draft_id: str, req: NorthseaVerstuurRequest):
+    """Eén goedgekeurd concept versturen.
+
+    Het antwoord van de edge function gaat ONVERANDERD terug, ook bij een
+    weigering: `human_approval_provenance_missing`, `contact_policy_blocked` en
+    `draft_not_approved` vragen elk om iets anders, en dat verschil mag niet
+    verdwijnen in een nette foutzin.
+    """
+    try:
+        status, body = await _verstuur.verstuur(draft_id, req.requested_by)
+    except _verstuur.VerstuurNietKlaar as e:
+        raise HTTPException(503, f"versturen niet ingesteld op deze Mac ({e})")
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"northsea_onbereikbaar: {str(e)[:200]}")
+    if status >= 400:
+        raise HTTPException(status, body.get("error", "verstuur_geweigerd") if isinstance(body, dict) else "verstuur_geweigerd")
+    return body
 
 
 @app.get("/northsea/tab/{naam}", dependencies=[AUTH])

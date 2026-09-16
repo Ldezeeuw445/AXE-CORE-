@@ -20,6 +20,7 @@ import {
   DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, Zoekveld,
 } from './bouwstenen';
 import { useNorthseaTab } from './useNorthseaTab';
+import { northseaVerstuurConcept, northseaVerstuurStatus } from '@/infrastructure/gateways/axeCoreApiService';
 
 const richtingToon = (r: string | null | undefined): Toon => (r === 'inbound' ? 'blauw' : r === 'outbound' ? 'grijs' : 'paars');
 
@@ -53,6 +54,32 @@ export function CommunicatieTab() {
   useEffect(() => { const t = setInterval(() => setNu(Date.now()), 60_000); return () => clearInterval(t); }, []);
 
   const alle = useMemo(() => data?.berichten ?? [], [data]);
+
+  /* Versturen kan alleen als deze Mac er een sleutel en een endpoint voor heeft.
+     Zonder dat geen knop, maar wél de reden: een knop die altijd faalt is erger
+     dan geen knop, en "werkt niet" zonder reden kost een avond. */
+  const [kanVersturen, setKanVersturen] = useState<{ kan: boolean; reden: string } | null>(null);
+  useEffect(() => {
+    let weg = false;
+    void northseaVerstuurStatus()
+      .then(r => { if (!weg) setKanVersturen({ kan: r.kan_versturen, reden: r.reden }); })
+      .catch(e => { if (!weg) setKanVersturen({ kan: false, reden: e instanceof Error ? e.message : 'onbekend' }); });
+    return () => { weg = true; };
+  }, []);
+
+  /* Per concept: bezig, of het antwoord van de server. De weigering blijft
+     staan zoals hij binnenkwam. */
+  const [verstuurd, setVerstuurd] = useState<Record<string, { bezig?: boolean; ok?: string; fout?: string }>>({});
+  const verstuur = async (id: string) => {
+    setVerstuurd(v => ({ ...v, [id]: { bezig: true } }));
+    try {
+      const r = await northseaVerstuurConcept(id);
+      setVerstuurd(v => ({ ...v, [id]: { ok: r.duplicate ? 'Already sent' : `Sent · ${r.resend_email_id ?? 'ok'}` } }));
+      ververs();
+    } catch (e) {
+      setVerstuurd(v => ({ ...v, [id]: { fout: e instanceof Error ? e.message : 'verstuur_geweigerd' } }));
+    }
+  };
   const rijen = useMemo(() => filterBerichten(alle, filter, zoek), [alle, filter, zoek]);
   const tellers = useMemo(() => ({
     alle: alle.length,
@@ -189,13 +216,36 @@ export function CommunicatieTab() {
                   <div className="mt-1 flex items-center gap-2">
                     <StatusChip badge={conceptBadge(c.akkoord, c.sent_at)} klein />
                     {c.gevoelig && <Label toon="oranje">Sensitive</Label>}
+                    {/* Alleen bij een concept dat AL goedgekeurd is en nog niet
+                        verstuurd. Goedkeuren gebeurt niet hier: dat eist
+                        menselijke herkomst, en die hoort bij de goedkeurder. */}
+                    {!c.sent_at && c.akkoord === 'approved' && kanVersturen?.kan && (
+                      <button type="button" onClick={() => { void verstuur(c.id); }}
+                        disabled={verstuurd[c.id]?.bezig}
+                        className="ml-auto rounded-lg px-2 py-0.5 text-[11px]"
+                        style={{ border: '1px solid rgba(52,211,153,0.35)', color: '#34D399' }}>
+                        {verstuurd[c.id]?.bezig ? 'Sending…' : 'Send approved reply'}
+                      </button>
+                    )}
                   </div>
+                  {verstuurd[c.id]?.ok && (
+                    <div className="mt-1 text-[11px]" style={{ color: '#34D399' }}>{verstuurd[c.id]?.ok}</div>
+                  )}
+                  {verstuurd[c.id]?.fout && (
+                    <div className="mt-1 text-[11px]" style={{ color: '#F87171' }}>{verstuurd[c.id]?.fout}</div>
+                  )}
                 </li>
               ))}
             </ul>
             {(bericht.concepten ?? []).some(c => !c.sent_at && c.akkoord === 'pending') && (
               <div className="mt-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Approve and send drafts from AXE Chase or the NorthSea MCP; this view does not send anything.
+                Pending drafts are approved elsewhere (AXE Chase or the NorthSea MCP): approval needs a human
+                approver on record, and that is not this screen.
+              </div>
+            )}
+            {kanVersturen && !kanVersturen.kan && (bericht.concepten ?? []).some(c => !c.sent_at && c.akkoord === 'approved') && (
+              <div className="mt-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                This Mac cannot send yet — {kanVersturen.reden}. Approved drafts stay here until it can.
               </div>
             )}
           </DetailPaneel>

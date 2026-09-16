@@ -993,6 +993,26 @@ export function northseaOverzicht(vers = false): Promise<NorthseaOverzicht> {
 
 // De tabbladen naast Live Map: één vaste query per tabblad (northsea.TAB_SQL).
 // Een lokale API van vóór deze tabbladen geeft 404; het tabblad zegt dat dan zelf.
+/** Kan deze Mac versturen? De desk vraagt dit voordat hij een knop toont. */
+export async function northseaVerstuurStatus(): Promise<{ kan_versturen: boolean; reden: string }> {
+  return call('GET', '/northsea/verstuur/status');
+}
+
+/**
+ * Eén goedgekeurd concept versturen.
+ *
+ * Gooit met de weigering van de edge function eráán vast
+ * (`human_approval_provenance_missing`, `contact_policy_blocked`,
+ * `draft_not_approved`). Die drie vragen om drie verschillende handelingen, dus
+ * het scherm toont ze onveranderd.
+ */
+export async function northseaVerstuurConcept(
+  draftId: string,
+  requestedBy = 'axe-core-desk',
+): Promise<{ ok: boolean; resend_email_id?: string; duplicate?: boolean }> {
+  return call('POST', `/northsea/concept/${encodeURIComponent(draftId)}/verstuur`, { requested_by: requestedBy });
+}
+
 export function northseaTab<T extends TabNaam>(naam: T, vers = false): Promise<TabData[T]> {
   return call('GET', `/northsea/tab/${naam}${vers ? '?vers=true' : ''}`);
 }
