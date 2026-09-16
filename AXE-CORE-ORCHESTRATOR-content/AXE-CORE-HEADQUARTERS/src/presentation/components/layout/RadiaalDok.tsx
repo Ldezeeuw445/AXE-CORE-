@@ -25,7 +25,6 @@
  * hij bij een ingeklapte chat ergens in het niets hangen.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Liquid } from 'liquid-gooey';
 import { useNavigate } from 'react-router';
 import { Bell, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
@@ -143,22 +142,11 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
           liggen en erboven mag niets gebeuren. */}
       <div className="axe-dok-ring" aria-hidden="true" />
 
-      {/* Vloeibaar uitvouwen: de tabs komen als druppels uit de hoofdknop en
-          laten pas los als ze ver genoeg weg zijn. De posities zijn dezelfde
-          (radiaalPosities); Liquid tekent de samengevoegde silhouet eronder,
-          de knoppen zelf blijven scherp bovenop. */}
-      <Liquid blur={7} fill="var(--axe-barbtn, #202020)" filterPadding={32} className="axe-dok-vloeibaar">
       {tabs.map((tab, i) => {
         const punt = punten[i];
         return (
-          <Liquid.Item
-            key={tab.id}
-            x={open ? punt.x : 0}
-            y={open ? punt.y : 0}
-            delay={open ? i * 30 : 0}
-            transition={{ duration: 550, ease: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }}
-          >
           <button
+            key={tab.id}
             type="button"
             className="axe-dok-tab"
             title={tab.label}
@@ -176,7 +164,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
               marginTop: -TAB / 2,
               // Dicht liggen ze op het midden, met een kleine vertraging per
               // tab zodat de ring uitvouwt in plaats van verschijnt.
-              transform: open ? 'scale(1)' : 'scale(0.4)',
+              transform: open ? `translate(${punt.x}px, ${punt.y}px)` : 'translate(0, 0) scale(0.4)',
               transitionDelay: `${open ? i * 30 : 0}ms`,
               opacity: open ? 1 : 0,
               pointerEvents: open ? 'auto' : 'none',
@@ -188,7 +176,6 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
                 geen tooltip. */}
             {zweeft === tab.id && <span className="axe-dok-label">{tab.label}</span>}
           </button>
-          </Liquid.Item>
         );
       })}
 
@@ -196,7 +183,6 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
           Hij is geen tab, en dat is precies waarom hij daar staat en niet
           ertussen. Links is dat de cyane driehoek, rechts op de trading-tab de
           kill switch. Wat hij doet komt van buiten (opHoek). */}
-      <Liquid.Item x={open ? hoekX : 0} y={0} transition={{ duration: 550, ease: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
       <button
         type="button"
         className="axe-dok-hoek"
@@ -205,16 +191,14 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
         tabIndex={open ? 0 : -1}
         onClick={() => { opHoek?.(); sluit(); }}
         style={{
-          transform: open ? 'scale(1)' : 'scale(0.4)',
+          transform: open ? `translate(${hoekX}px, 0) scale(1)` : 'translate(0, 0) scale(0.4)',
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
         }}
       >
         {hoek ?? <span className="axe-dok-driehoek-vorm" aria-hidden="true" />}
       </button>
-      </Liquid.Item>
 
-      <Liquid.Item>
       <button
         type="button"
         className="axe-dok-knop"
@@ -224,8 +208,6 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
       >
         {open ? <X size={19} /> : <Menu size={19} />}
       </button>
-      </Liquid.Item>
-      </Liquid>
     </div>
   );
 }

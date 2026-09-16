@@ -37,7 +37,15 @@ function verbindingen(): Record<string, { key?: string }> {
   catch { return {}; }
 }
 
-export function ChatModelKiezer() {
+/**
+ * `variant='stip'`: alleen het groene bolletje met een gloed eromheen.
+ *
+ * Boven de composer staat links AXE CORE; de modelnaam eronder maakte die regel
+ * druk terwijl je hem zelden leest. Het bolletje zegt "er staat iets aan" en
+ * geeft op klik dezelfde keuze als altijd. De naam zit in de tooltip, dus hij
+ * is er nog voor wie hem zoekt.
+ */
+export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' } = {}) {
   const primair = useVoiceStore(s => s.primarySlot);
   const setPrimair = useVoiceStore(s => s.setPrimarySlot);
   const [open, setOpen] = useState(false);
@@ -79,6 +87,22 @@ export function ChatModelKiezer() {
 
   return (
     <span className="relative">
+      {variant === 'stip' ? (
+        <button
+          onClick={() => { setOpen(v => !v); setMerk(null); }}
+          title={`${huidigLabel} — waar AXE mee denkt; geldt vanaf je volgende bericht`}
+          aria-label={`Model: ${huidigLabel}`}
+          className="flex items-center justify-center rounded-full"
+          style={{
+            width: 22, height: 22,
+            background: 'rgba(52,211,153,0.10)',
+            border: '1px solid rgba(52,211,153,0.35)',
+            boxShadow: '0 0 12px rgba(52,211,153,0.45)',
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: '#34D399', boxShadow: '0 0 8px rgba(52,211,153,0.9)' }} />
+        </button>
+      ) : (
       <button
         onClick={() => { setOpen(v => !v); setMerk(null); }}
         title="Waar AXE mee denkt — geldt vanaf je volgende bericht"
@@ -88,6 +112,7 @@ export function ChatModelKiezer() {
         {huidigLabel}
         <ChevronDown size={9} />
       </button>
+      )}
 
       {open && (
         <>

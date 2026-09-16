@@ -352,17 +352,17 @@ export function PlaatChat() {
           </div>
           ) : (
           <div className="axe-vak-kop">
+            {/* AXE CORE staat helemaal links, met het bolletje ernaast: dat
+                is de modelkeuze (klik erop) en tegelijk het teken dat er iets
+                aanstaat. De modelnaam zelf zat hier vóór de titel en duwde die
+                naar het midden; hij staat nu in de tooltip van het bolletje. */}
             <span className="axe-kop-links">
-              <span onClick={e => e.stopPropagation()}>
-                <ChatModelKiezer />
-              </span>
-              <span className="axe-kop-streep" aria-hidden="true" />
-              {/* De tegenhanger van "UX Researcher" in het voorbeeld: in welk
-                  gesprek je zit. Dat is hier de titel, en "AXE CORE" zolang er
-                  nog geen gesprek is. */}
               <span className="axe-kop-persona">
                 <Sparkles size={13} />
                 {voice.allConversations.find(c => c.id === voice.sessionId)?.title ?? 'AXE CORE'}
+              </span>
+              <span onClick={e => e.stopPropagation()}>
+                <ChatModelKiezer variant="stip" />
               </span>
             </span>
 

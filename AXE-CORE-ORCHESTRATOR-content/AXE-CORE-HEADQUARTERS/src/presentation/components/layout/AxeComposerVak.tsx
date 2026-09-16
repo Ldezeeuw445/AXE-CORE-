@@ -86,7 +86,7 @@ export function AxeComposerVak({
     <div className="axe-composer axe-vakcomposer flex-shrink-0">
       {kop && <div className="axe-vak-kop">{kop}</div>}
 
-      <BorderBeam size="md" colorVariant="colorful" strength={0.5} active={bezig}>
+      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={0.5} active={bezig}>
       <div className="axe-vak">
         <div className="axe-vak-boven">
           <textarea
