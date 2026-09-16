@@ -84,31 +84,11 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: 
     return cmd
 
 
-def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model: str = "") -> list:
-    cmd = [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
-    # Leeg = de CLI houdt zijn eigen standaard, die met een update meebeweegt.
-    return cmd + (["--model", model] if model else [])
-
-
-def _cursor_cmd(binary: str, prompt: str, _mode: str, _uitvoerbestand: str, model: str = "") -> list:
-    """Cursor-agent, niet-interactief.
-
-    Vlaggen nagelezen in Cursor's eigen documentatie (cursor.com/docs/cli/
-    reference/parameters, 11-9-2026): `-p/--print` voor niet-interactief,
-    `--output-format text|json|stream-json`, `-f/--force` om commando's toe te
-    staan zonder te vragen.
-
-    `--force` staat er altijd op en niet alleen buiten plan-modus, want zonder
-    die vlag blijft een headless run hangen op een goedkeuring die niemand
-    beantwoordt. Dat mag hier zonder voorbehoud, omdat plan-modus deze motor
-    helemaal niet bereikt -- zie "alleen_lezen" in ENGINES hieronder.
-
-    Geen werkmap-vlag: subprocess.run krijgt cwd=repo_path mee, net als bij
-    Claude. Codex heeft zijn `-C` omdat het daar wel nodig bleek.
-    """
-    return [binary, "-p", str(prompt), "--output-format", "json", "--force"]
-
-
+# Let op: hieronder stonden tot 16 september TWEE definities van _claude_cmd en
+# _cursor_cmd. Python houdt de laatste, dus de eerste twee waren dode code -- en
+# ze verschilden: de dode _cursor_cmd zette altijd --force en negeerde de modus,
+# de levende respecteert plan-modus (--mode ask --trust). Wie de bovenste las,
+# las het gedrag dat NIET draait. Weg, zodat er één waarheid staat.
 def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model: str = "") -> list:
     cmd = [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
     # Leeg = de CLI houdt zijn eigen standaard, die met een update meebeweegt.
