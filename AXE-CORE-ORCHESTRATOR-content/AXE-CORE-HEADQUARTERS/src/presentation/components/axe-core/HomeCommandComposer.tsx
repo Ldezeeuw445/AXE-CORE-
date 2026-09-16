@@ -128,10 +128,12 @@ export function HomeCommandComposer(props: Props) {
         </div>
       </div>
 
-      {/* De composer-doos: invoer + bliksem, dan de iconenrij. */}
+      {/* De composer-doos: invoer + bliksem, dan de iconenrij. Met de border-beam
+          (axe-beam): een gloed die om de rand loopt — puur CSS (roterende conic-
+          gradient in de rand), geen extra dependency. */}
       <div
-        className="rounded-2xl px-3 pt-3 pb-2.5"
-        style={{ background: 'rgba(10,12,14,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}
+        className="axe-beam rounded-2xl px-3 pt-3 pb-2.5"
+        style={{ background: 'rgba(10,12,14,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16 }}
       >
         <div className="flex items-center gap-2">
           <input
