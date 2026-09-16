@@ -63,8 +63,17 @@ class Caller:
     scopes: frozenset[str]
 
     @property
+    def is_human(self) -> bool:
+        """Een ingelogde gebruiker (OAuth) en geen service-token (principal/client 'service:...')."""
+        return not (self.principal.startswith("service:") or self.client_id.startswith("service:"))
+
+    @property
     def identity(self) -> bool:
         return may_see_identity(self.scopes)
+
+
+# Taken die op een DNC/synthetische deal WEL mogen (beoordelen/afsluiten); dezelfde lijst als de database-guard.
+REVIEW_TASK_TYPES = frozenset({"dnc_review", "manual_review", "close_out", "contact_policy_review"})
 
 
 def now() -> datetime:
@@ -825,7 +834,13 @@ class NorthSeaService:
             off = offers[0] if offers else None
             req = reqs[0] if reqs else None
         contacts = await self.repo.list_contacts(company["id"]) if company else []
+        contacts = [c for c in contacts if c.get("contact_policy") not in ("do_not_contact",)]
         primair = next((c for c in contacts if c.get("email")), None)
+        beleid = await self.repo.outbound_block_reason(company_id=(company or {}).get("id"), contact_id=(primair or {}).get("id"),
+                                                       email=(primair or {}).get("email"), opportunity_id=(opp or {}).get("id"))
+        if beleid in ("do_not_contact", "synthetic"):
+            raise PolicyDenied("contact_policy_blocked",
+                               f"Outreach is blocked by contact policy ({beleid}). No draft was prepared.")
         if template == "auto":
             gate_open = not (opp or {}).get(f"{'seller' if kant == 'supplier' else 'buyer'}_gate_passed")
             wacht = parse_ts((opp or {}).get("waiting_since"))
@@ -889,6 +904,8 @@ class NorthSeaService:
         gevoelig = is_sensitive_text(objective) or is_sensitive_text(tekst.replace(slot, ""))
         notes = ["Draft only. Nothing was sent.",
                  "Sending requires a human approval (northsea_approve_draft or the Deal Desk), then northsea_send_approved_communication."]
+        if beleid == "review_required":
+            notes.append("Contact policy is review_required: automation is blocked; only Luka can decide whether to contact this counterparty.")
         if objective.strip():
             notes.append("The objective was used to choose the template; it is not quoted into the message.")
         if gevoelig and (opp or {}).get("commission_agreement_status") != "signed":
@@ -1071,6 +1088,11 @@ class NorthSeaService:
         opp = await self.repo.get_opportunity(opportunity_id)
         if not opp:
             raise NotFound("opportunity")
+        if task_type not in REVIEW_TASK_TYPES:
+            beleid = await self.repo.outbound_block_reason(opportunity_id=opp["id"])
+            if beleid in ("do_not_contact", "synthetic"):
+                raise PolicyDenied("contact_policy_blocked",
+                                   f"This deal is blocked by contact policy ({beleid}); only review tasks ({', '.join(sorted(REVIEW_TASK_TYPES))}) can be created.")
         for t in await self.repo.list_deal_tasks(opp["id"], open_only=True):
             if (t.get("task_type") == task_type) and (t.get("title") or "").strip().casefold() == title.casefold():
                 return TaskResult(task_id=t["id"], opportunity_id=opp["id"], status=t.get("status") or "open", title=t["title"],
@@ -1135,11 +1157,20 @@ class NorthSeaService:
                                        sensitive=bool(d.get("sensitive_action")), message="Draft was already approved.")
         if d.get("approval_status") != "pending":
             raise PolicyDenied("not_pending", "Only pending drafts can be approved.")
+        if not caller.is_human:
+            raise PolicyDenied("human_approval_required",
+                               "Draft approval must come from a signed-in human user; a service credential cannot approve.")
         opp = await self.repo.get_opportunity(d["opportunity_id"]) if d.get("opportunity_id") else None
         check_sensitive_draft(d, opp)
+        beleid = await self.repo.outbound_block_reason(company_id=d.get("company_id"), contact_id=d.get("contact_id"),
+                                                       email=d.get("to_email"), opportunity_id=d.get("opportunity_id"))
+        if beleid in ("do_not_contact", "synthetic"):
+            raise PolicyDenied("contact_policy_blocked", f"This draft cannot be approved: contact policy ({beleid}).")
         tijd = now().isoformat()
         rij = await self.repo.update_draft_if(d["id"], expected_updated_at or d["updated_at"],
-                                              {"approval_status": "approved", "approved_at": tijd, "updated_at": tijd})
+                                              {"approval_status": "approved", "approved_at": tijd, "updated_at": tijd,
+                                               "approved_by": caller.principal, "approval_actor_type": "human",
+                                               "approval_channel": "northsea_mcp", "lifecycle_state": "human_approved"})
         if not rij:
             raise PolicyDenied("conflict", "The draft changed since it was read. Reload it and review it again.")
         if opp:
@@ -1159,9 +1190,16 @@ class NorthSeaService:
                               provider_message_id=d.get("resend_email_id"), message="This draft was already sent; nothing was sent again.")
         if d.get("approval_status") != "approved":
             raise PolicyDenied("draft_not_approved", "A human must approve the draft first (northsea_approve_draft or the Deal Desk).")
+        if d.get("approval_actor_type") != "human" or not str(d.get("approved_by") or "").strip():
+            raise PolicyDenied("human_approval_provenance_missing",
+                               "This draft has no recorded human approval (approver unknown). Reject and re-approve it before sending.")
         opp = await self.repo.get_opportunity(d["opportunity_id"]) if d.get("opportunity_id") else None
         check_sensitive_draft(d, opp)
-        res = await self.repo.send_approved_reply(d["id"])
+        beleid = await self.repo.outbound_block_reason(company_id=d.get("company_id"), contact_id=d.get("contact_id"),
+                                                       email=d.get("to_email"), opportunity_id=d.get("opportunity_id"))
+        if beleid in ("do_not_contact", "synthetic"):
+            raise PolicyDenied("contact_policy_blocked", f"Sending is blocked by contact policy ({beleid}). Nothing was sent.")
+        res = await self.repo.send_approved_reply(d["id"], requested_by=caller.principal)
         if res.get("ok"):
             if opp and not res.get("duplicate"):
                 await self.repo.insert_deal_event({"opportunity_id": opp["id"], "event_type": "approved_email_sent",
@@ -1174,7 +1212,10 @@ class NorthSeaService:
         code = str(res.get("error") or "send_failed")
         veilig = {"draft_not_approved": "The draft is not approved.", "draft_incomplete": "The draft is missing recipient, subject or body.",
                   "resend_not_configured": "Email sending is not configured.", "resend_send_failed": "The email provider rejected the message.",
-                  "forbidden": "The send function refused the server credentials."}
+                  "forbidden": "The send function refused the server credentials.",
+                  "contact_policy_blocked": "Contact policy blocks sending to this counterparty. Nothing was sent.",
+                  "human_approval_provenance_missing": "The draft has no recorded human approval. Nothing was sent.",
+                  "commission_protection_required": "Signed commission protection is required for this sensitive draft. Nothing was sent."}
         raise ServiceError(code if code in veilig else "send_failed",
                            veilig.get(code, "Sending could not be confirmed. Check the draft in the Deal Desk before retrying."))
 

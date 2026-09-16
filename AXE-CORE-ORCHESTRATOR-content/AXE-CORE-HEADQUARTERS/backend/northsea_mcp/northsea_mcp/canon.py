@@ -381,7 +381,14 @@ _DNC_MARKERS = re.compile(r"declined intermediary|rejected intermediary|do[- ]no
 
 
 def testcase_reason(record: dict, company: dict | None = None) -> str | None:
-    """Waarom een vraag/aanbod/bedrijf een interne test is, of None."""
+    """Waarom een vraag/aanbod/bedrijf een interne test is, of None.
+
+    Canoniek sinds P0 (2026-09-16): de kolom is_synthetic. De bekende id en de
+    tekstmarkeringen blijven als vangnet voor rijen van vóór die kolom."""
+    if record.get("is_synthetic") is True:
+        return f"Synthetic/test record (is_synthetic): {record.get('synthetic_reason') or 'no reason recorded'}"
+    if (company or {}).get("is_synthetic") is True:
+        return f"Synthetic/test counterparty (is_synthetic): {(company or {}).get('synthetic_reason') or 'no reason recorded'}"
     if str(record.get("id")) in KNOWN_TESTCASE_REQUIREMENTS:
         return "Known internal testcase (STRATO/Jasmine test call, Hamburg). Not genuine demand."
     for veld in ("evidence", "notes", "documentation"):
@@ -396,13 +403,27 @@ def testcase_reason(record: dict, company: dict | None = None) -> str | None:
 
 
 def do_not_contact_reason(company: dict | None) -> str | None:
+    """Machine-afgedwongen do-not-contact: companies.contact_policy (sinds P0). De database weigert
+    elk uitgaand pad naar zo'n partij. Bekende ABAKUS-id's blijven vangnet voor oude snapshots."""
     if not company:
         return None
-    if str(company.get("id")) in KNOWN_DO_NOT_CONTACT_COMPANIES:
+    if company.get("contact_policy") == "do_not_contact":
+        return f"contact_policy=do_not_contact: {company.get('contact_policy_reason') or 'no reason recorded'}"
+    if "contact_policy" not in company and str(company.get("id")) in KNOWN_DO_NOT_CONTACT_COMPANIES:
         return "ABAKUS explicitly declined intermediary involvement (inbound reply 2026-09-12). Do not contact."
+    return None
+
+
+def contact_review_reason(company: dict | None) -> str | None:
+    """review_required (automatisering geblokkeerd, mens beslist), of een notitie die op
+    geen-tussenpersoon/niet-contacteren wijst zonder dat het beleid al is gezet."""
+    if not company or do_not_contact_reason(company):
+        return None
+    if company.get("contact_policy") == "review_required":
+        return f"contact_policy=review_required: {company.get('contact_policy_reason') or 'no reason recorded'}"
     notes = company.get("notes")
     if isinstance(notes, str) and _DNC_MARKERS.search(notes):
-        return f"Notes say: '{_DNC_MARKERS.search(notes).group(0)}'. Do not contact."
+        return f"Notes say: '{_DNC_MARKERS.search(notes).group(0)}' — contact policy not set; needs Luka's review."
     return None
 
 

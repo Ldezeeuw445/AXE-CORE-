@@ -103,6 +103,8 @@ def seed() -> dict[str, list[dict]]:
              "created_at": ts(-2)},
             {"id": DRAFT_APPROVED, "communication_id": COMM, "company_id": SELLER_CO, "contact_id": CONTACT_S, "opportunity_id": OPP,
              "to_email": "chanda@mopani.com", "subject": "Re: documents", "body": "Please share the COA.", "approval_status": "approved",
+             "approval_actor_type": "human", "approved_by": "acff7a12-1111-481d-a7a9-cc07583b8069", "approval_channel": "deal_desk",
+             "lifecycle_state": "human_approved",
              "approved_at": ts(-1), "sensitive_action": False, "sent_at": None, "resend_email_id": None, "updated_at": ts(-1), "created_at": ts(-3)},
             {"id": DRAFT_SENSITIVE, "communication_id": COMM, "company_id": SELLER_CO, "contact_id": CONTACT_S, "opportunity_id": OPP,
              "to_email": "chanda@mopani.com", "subject": "Introduction", "body": "We will introduce you to the buyer.",
@@ -261,12 +263,40 @@ class FakeRepo:
     async def insert_deal_event(self, row):
         self.t["deal_events"].append({"id": len(self.t["deal_events"]) + 1, "created_at": ts(), **row})
 
-    async def send_approved_reply(self, draft_id):
-        """Gedraagt zich als de echte edge function send-approved-reply."""
+    async def outbound_block_reason(self, *, company_id=None, contact_id=None, email=None, opportunity_id=None):
+        """Zelfde regels als northsea_outbound_block_reason in de database."""
+        if self.fail_reads:
+            from northsea_mcp.repository import RepositoryError
+            raise RepositoryError("database read failed (simulated)")
+        companies, contacts, rang = ({company_id} if company_id else set()), [], []
+        for k in self.t["contacts"]:
+            if (contact_id and k["id"] == contact_id) or (email and (k.get("email") or "").lower() == email.lower()):
+                contacts.append(k)
+                companies.add(k["company_id"])
+        opp = next((o for o in self.t["opportunities"] if o["id"] == opportunity_id), None) if opportunity_id else None
+        recs = []
+        if opp:
+            rang.append(2 if opp.get("is_synthetic") else 9)
+            req = next((r for r in self.t["buyer_requirements"] if r["id"] == opp.get("buyer_requirement_id")), None)
+            off = next((r for r in self.t["supplier_offers"] if r["id"] == opp.get("supplier_offer_id")), None)
+            recs = [x for x in (req, off) if x]
+            companies |= {x["company_id"] for x in recs}
+        rang += [2 if x.get("is_synthetic") else 9 for x in recs]
+        pol = {"do_not_contact": 1, "review_required": 3}
+        for c in self.t["companies"]:
+            if c["id"] in companies:
+                rang += [pol.get(c.get("contact_policy"), 9), 2 if c.get("is_synthetic") else 9]
+        rang += [pol.get(k.get("contact_policy"), 9) for k in contacts]
+        return {1: "do_not_contact", 2: "synthetic", 3: "review_required"}.get(min(rang, default=9))
+
+    async def send_approved_reply(self, draft_id, requested_by=None):
+        """Gedraagt zich als de echte edge function send-approved-reply (v7)."""
         for r in self.t["reply_drafts"]:
             if r["id"] == uid(draft_id):
                 if r["approval_status"] != "approved":
                     return {"ok": False, "error": "draft_not_approved", "_status": 409}
+                if r.get("approval_actor_type") != "human" or not r.get("approved_by"):
+                    return {"ok": False, "error": "human_approval_provenance_missing", "_status": 409}
                 if r["sent_at"] or r["resend_email_id"]:
                     return {"ok": True, "duplicate": True, "resend_email_id": r["resend_email_id"], "_status": 200}
                 r["sent_at"] = ts()

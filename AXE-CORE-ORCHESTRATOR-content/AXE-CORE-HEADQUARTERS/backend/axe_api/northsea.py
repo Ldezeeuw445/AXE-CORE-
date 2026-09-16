@@ -52,7 +52,8 @@ select json_build_object(
   'tellers', json_build_object(
      'bedrijven', (select count(*) from companies),
      'contacten', (select count(*) from contacts),
-     'communicatie_7d', (select count(*) from communications where occurred_at > now() - interval '7 days'),
+     -- Testberichten (is_synthetic, P0 2026-09-16) tellen niet als echte activiteit.
+     'communicatie_7d', (select count(*) from communications where occurred_at > now() - interval '7 days' and not is_synthetic),
      'bewijs', (select count(*) from deal_evidence),
      'documenten', (select count(*) from deal_documents),
      'campagnes', (select count(*) from sourcing_campaigns)

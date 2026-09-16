@@ -30,13 +30,17 @@ SNAPSHOT_SELECT: dict[str, str] = {
     "buyer_requirements": "*",
     "supplier_offers": "*",
     "companies": "*",
-    "contacts": "id,company_id,full_name,role,email,phone,linkedin_url,is_primary,verification_status,created_at,updated_at",
+    "contacts": "id,company_id,full_name,role,email,phone,linkedin_url,is_primary,verification_status,contact_policy,contact_policy_reason,"
+                "created_at,updated_at",
     "communications": "id,company_id,contact_id,opportunity_id,direction,channel,subject,body,external_message_id,occurred_at,"
-                      "created_at,delivery_status,delivery_status_at",
+                      "created_at,delivery_status,delivery_status_at,is_synthetic,synthetic_reason,mapping_status,mapping_basis,"
+                      "mapping_candidates,from_address,reply_to_address,transport,actor_type,actor,approval_basis,reply_draft_id",
     "email_intelligence": "*",
     "call_intelligence": "id,communication_id,external_call_id,call_status,duration_seconds,summary,caller_type,commodity,product,"
-                         "grade,quantity_mt,frequency,origin,destination,incoterm,payment_terms,urgency,requires_human_review,created_at,updated_at",
+                         "grade,quantity_mt,frequency,origin,destination,incoterm,payment_terms,urgency,requires_human_review,is_synthetic,"
+                         "created_at,updated_at",
     "reply_drafts": "id,communication_id,company_id,contact_id,opportunity_id,to_email,subject,body,purpose,approval_status,"
+                    "lifecycle_state,approval_actor_type,approved_by,approval_channel,policy_decision,"
                     "sensitive_action,generated_by,approved_at,sent_at,resend_email_id,created_at,updated_at",
     "deal_tasks": "*",
     "action_queue": "*",
@@ -263,10 +267,26 @@ class SupabaseRepository:
     async def insert_deal_event(self, row: dict) -> None:
         await self._write("POST", "deal_events", None, row)
 
-    async def send_approved_reply(self, draft_id: str) -> dict:
+    async def outbound_block_reason(self, *, company_id: str | None = None, contact_id: str | None = None, email: str | None = None,
+                                    opportunity_id: str | None = None) -> str | None:
+        """Contactbeleid uit de database (dezelfde functie die de triggers gebruiken). Fout -> RepositoryError (dicht)."""
+        body = {"p_company_id": uid(company_id) if company_id else None, "p_contact_id": uid(contact_id) if contact_id else None,
+                "p_email": email or None, "p_opportunity_id": uid(opportunity_id) if opportunity_id else None}
+        try:
+            r = await self._client.post(f"{self._url}/rest/v1/rpc/northsea_outbound_block_reason", headers=self._headers, json=body)
+        except httpx.HTTPError as e:
+            raise RepositoryError(f"contact policy unreachable ({type(e).__name__})") from e
+        if r.status_code >= 400:
+            raise RepositoryError(f"contact policy check failed ({r.status_code})")
+        waarde = r.json()
+        if waarde in (None, "do_not_contact", "synthetic", "review_required"):
+            return waarde
+        return "do_not_contact"
+
+    async def send_approved_reply(self, draft_id: str, requested_by: str | None = None) -> dict:
         try:
             r = await self._client.post(f"{self._url}/functions/v1/send-approved-reply",
-                                        headers=self._headers, json={"draft_id": uid(draft_id, "draft_id")}, timeout=60)
+                                        headers=self._headers, json={"draft_id": uid(draft_id, "draft_id"), "requested_by": requested_by}, timeout=60)
         except httpx.HTTPError as e:
             raise RepositoryError(f"send function unreachable ({type(e).__name__})") from e
         try:

@@ -38,8 +38,13 @@ def test_testcase_en_do_not_contact():
     assert canon.testcase_reason({"id": "x", "evidence": "STRATO TEST CALL: synthetic Jasmine qualification test"})
     assert canon.testcase_reason({"id": "x", "evidence": "Public RFQ dated Jun 2026"}) is None
     assert canon.do_not_contact_reason({"id": "f5008747-2a96-4c84-b308-e7ae4670ee2f"})
-    assert "declined intermediary" in canon.do_not_contact_reason(
-        {"id": "y", "notes": "They explicitly declined intermediary involvement."})
+    # Sinds P0: notities dwingen niets af, ze vragen om beoordeling; companies.contact_policy dwingt af.
+    assert canon.do_not_contact_reason({"id": "y", "notes": "They explicitly declined intermediary involvement."}) is None
+    assert "declined intermediary" in canon.contact_review_reason({"id": "y", "notes": "They explicitly declined intermediary involvement."})
+    assert canon.do_not_contact_reason({"id": "z", "contact_policy": "do_not_contact", "contact_policy_reason": "declined"})
+    assert canon.contact_review_reason({"id": "z", "contact_policy": "review_required"})
+    assert canon.do_not_contact_reason({"id": "f5008747-2a96-4c84-b308-e7ae4670ee2f", "contact_policy": "allowed"}) is None
+    assert canon.testcase_reason({"id": "q", "is_synthetic": True, "synthetic_reason": "STRATO test"})
     assert canon.do_not_contact_reason({"id": "z", "notes": "Active buyer"}) is None
 
 

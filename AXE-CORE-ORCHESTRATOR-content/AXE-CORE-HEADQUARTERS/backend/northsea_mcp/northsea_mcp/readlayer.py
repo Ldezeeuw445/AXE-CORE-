@@ -185,6 +185,11 @@ class View:
             dnc = canon.do_not_contact_reason(co)
             if dnc:
                 vlaggen.append({"flag": "do_not_contact", "on": kant.split("_")[0], "reason": dnc})
+            review = canon.contact_review_reason(co)
+            if review:
+                vlaggen.append({"flag": "contact_review_required", "on": kant.split("_")[0], "reason": review})
+        if opp.get("is_synthetic") is True:
+            vlaggen.append({"flag": "internal_testcase", "on": "opportunity", "reason": f"Synthetic/test opportunity: {opp.get('synthetic_reason') or 'is_synthetic'}"})
         return vlaggen
 
     def company_flags(self, co: dict) -> list[dict]:
@@ -192,6 +197,9 @@ class View:
         dnc = canon.do_not_contact_reason(co)
         if dnc:
             vlaggen.append({"flag": "do_not_contact", "reason": dnc})
+        review = canon.contact_review_reason(co)
+        if review:
+            vlaggen.append({"flag": "contact_review_required", "reason": review})
         reden = canon.testcase_reason({"id": None, "notes": co.get("notes")}, co)
         if reden:
             vlaggen.append({"flag": "internal_testcase", "reason": reden})
@@ -334,8 +342,17 @@ class View:
             "contact": self.contact_ref(self.s.get("contacts", c.get("contact_id"))) if c.get("contact_id") and self.s.get("contacts", c.get("contact_id")) else None,
             "deal_id": c.get("opportunity_id"), "deal": canon.deal_label(opp) if opp else None,
             "thread_key": thread_key(c),
+            "is_synthetic": bool(c.get("is_synthetic")),
+            "mapping": {"status": c.get("mapping_status"), "basis": c.get("mapping_basis"), "candidates": c.get("mapping_candidates")}
+                       if c.get("mapping_status") else None,
             "analysis": None,
         }
+        if c.get("direction") == "outbound":
+            # Historische onbekenden blijven onbekend (null), nooit ingevuld.
+            uit["provenance"] = {"from": c.get("from_address"), "reply_to": c.get("reply_to_address"), "transport": c.get("transport"),
+                                 "provider_message_id": c.get("external_message_id"), "actor": c.get("actor"), "actor_type": c.get("actor_type"),
+                                 "approval_basis": c.get("approval_basis"), "reply_draft_id": c.get("reply_draft_id"),
+                                 "recorded": bool(c.get("approval_basis"))}
         uit["body" if full else "preview"] = body if full else body[:280]
         if ei:
             uit["analysis"] = {
@@ -348,8 +365,10 @@ class View:
             }
         drafts = [d for d in self.s.rows("reply_drafts") if d.get("communication_id") == c.get("id")]
         if drafts:
-            uit["reply_drafts"] = [{"draft_id": d.get("id"), "approval_status": d.get("approval_status"), "sent_at": d.get("sent_at"),
-                                    "sensitive_action": d.get("sensitive_action"), "subject": self.red(d.get("subject"))} for d in drafts]
+            uit["reply_drafts"] = [{"draft_id": d.get("id"), "approval_status": d.get("approval_status"), "lifecycle_state": d.get("lifecycle_state"),
+                                    "approval_actor_type": d.get("approval_actor_type"), "approval_channel": d.get("approval_channel"),
+                                    "sent_at": d.get("sent_at"), "sensitive_action": d.get("sensitive_action"), "subject": self.red(d.get("subject"))}
+                                   for d in drafts]
         call = next((x for x in self.s.rows("call_intelligence") if x.get("communication_id") == c.get("id")), None)
         if call:
             uit["call"] = {k: call.get(k) for k in ("call_status", "duration_seconds", "caller_type", "commodity", "product", "quantity_mt",
