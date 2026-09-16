@@ -5,14 +5,8 @@
  * when Fish is the active provider. Mindset, AXE quotes, chat, and previews
  * must all call speakGlobal so they never drift to a different voice.
  */
+import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import {
-  speakWithFishAudio,
-  isFishAudioConfigured,
-  stopFishAudio,
-  getFishVoiceId,
-} from '@/infrastructure/gateways/fishAudioService';
-import {
-  speakWithElevenLabs,
   stopTTS,
   speakWithBrowser,
 } from '@/infrastructure/gateways/elevenLabsService';
@@ -20,17 +14,20 @@ import {
   speakWithOpenAi,
   stopOpenAiTts,
   isOpenAiTtsConfigured,
+  STANDAARD_STEM as AXE_OPENAI_VOICE,
 } from '@/infrastructure/gateways/openAiTtsService';
 import { normalizeForSpeech } from '@/domain/speechText';
 
 export type TtsProvider = 'fish' | 'elevenlabs' | 'openai' | 'browser';
 
+/**
+ * AXE has ONE voice: OpenAI cedar (AXE_OPENAI_VOICE). There is no picker and no
+ * per-message provider guessing — a single, recognisable voice is the point.
+ * The browser voice is kept only as an emergency net for when there is no
+ * OpenAI key or no network; it is a fallback, never a choice.
+ */
 export function getActiveTtsProvider(): TtsProvider {
-  try {
-    const v = localStorage.getItem('axe_tts_provider') as TtsProvider | null;
-    if (v === 'fish' || v === 'elevenlabs' || v === 'openai' || v === 'browser') return v;
-  } catch { /* ignore */ }
-  return 'fish';
+  return 'openai';
 }
 
 /** Stop any in-flight TTS from any provider. */
@@ -81,40 +78,19 @@ export function speakGlobal(
   }
 
   stopGlobalTts();
-  const provider = getActiveTtsProvider();
 
-  if (provider === 'fish' && isFishAudioConfigured()) {
-    try {
-      localStorage.setItem('axe_tts_provider', 'fish');
-    } catch { /* ignore */ }
-    void speakWithFishAudio(
+  // The AXE voice: OpenAI cedar. If the key or network isn't there, drop to the
+  // browser voice so AXE keeps talking — but never to a different "real" voice.
+  if (isOpenAiTtsConfigured()) {
+    void speakWithOpenAi(
       line,
       onDone,
       (reason) => {
         speakWithBrowser(line, onDone);
         onError?.(reason);
       },
+      AXE_OPENAI_VOICE,
     );
-    return;
-  }
-
-  /* De stem van ChatGPT, voor zover die met een sleutel te draaien is: Arbor is
-     app-only, marin/cedar zijn OpenAI's eigen beste. Zie openAiTtsService.ts. */
-  if (provider === 'openai' && isOpenAiTtsConfigured()) {
-    void speakWithOpenAi(line, onDone, (reason) => {
-      speakWithBrowser(line, onDone);
-      onError?.(reason);
-    });
-    return;
-  }
-
-  if (provider === 'elevenlabs') {
-    void speakWithElevenLabs(line, onDone, onDone, () => speakWithBrowser(line, onDone));
-    return;
-  }
-
-  if (isFishAudioConfigured() && getFishVoiceId()) {
-    void speakWithFishAudio(line, onDone, () => speakWithBrowser(line, onDone));
     return;
   }
 

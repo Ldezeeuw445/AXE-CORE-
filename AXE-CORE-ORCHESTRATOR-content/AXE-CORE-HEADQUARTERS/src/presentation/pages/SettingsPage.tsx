@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
-import { speakGlobal } from '@/infrastructure/gateways/globalTts';
+import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
@@ -776,86 +776,49 @@ function ProviderKeysSection() {
  * kiezen terwijl Fish aan het praten was. Eén keuze, één uitkomst.
  */
 function VoiceSection() {
-  const [gekozen, setGekozen] = useState<string>(() => {
-    try { return localStorage.getItem(STEM_SLEUTEL) ?? STANDAARD_STEM; } catch { return STANDAARD_STEM; }
-  });
-  const [speelt, setSpeelt] = useState<string | null>(null);
-  const [melding, setMelding] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const kies = (id: string) => {
-    const stem = stemVan(id);
-    setGekozen(stem.id);
-    try {
-      localStorage.setItem(STEM_SLEUTEL, stem.id);
-      // De motor mee. Zonder dit kies je een ElevenLabs-stem terwijl Fish
-      // blijft praten -- de instelling die niets deed.
-      localStorage.setItem(TTS_PROVIDER_KEY, stem.motor);
-    } catch { /* volle opslag mag de keuze niet blokkeren */ }
-    if (stem.stemId) setSelectedVoiceId(stem.stemId);
-  };
-
-  const proef = (id: string) => {
-    stopTTS();
-    if (speelt === id) { setSpeelt(null); return; }
-    const stem = stemVan(id);
-    setSpeelt(id);
-    setMelding(null);
-    if (stem.motor === 'elevenlabs' && stem.stemId) {
-      setSelectedVoiceId(stem.stemId);
-      void speakWithElevenLabs(
-        'Hoi Luka, zo klinkt deze stem.',
-        () => setSpeelt(null),
-        () => setSpeelt(null),
-        (reden) => setMelding(`ElevenLabs speelde dit niet af — je hoorde de browser. Reden: ${reden}`),
-      );
-      return;
-    }
-    // Fish en browser lopen allebei via de globale TTS; die kiest op de
-    // provider die we net hebben gezet.
+  const listen = () => {
+    if (playing) { stopGlobalTts(); setPlaying(false); return; }
+    setError(null);
+    setPlaying(true);
     speakGlobal(
-      'Hoi Luka, zo klinkt deze stem.',
-      () => setSpeelt(null),
-      (reden) => { setSpeelt(null); setMelding(`Kon deze stem niet afspelen: ${reden}`); },
+      'Hi Luka, this is the AXE voice.',
+      () => setPlaying(false),
+      (reason) => { setPlaying(false); setError(`Could not play the voice: ${reason}`); },
     );
   };
 
   return (
-    <WidgetCard title="STEM" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
-      <div className="space-y-1.5">
-        <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
-          Welke stem AXE gebruikt. Dit staat los van welk model je vragen beantwoordt.
+    <WidgetCard title="VOICE" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
+      <div className="space-y-2">
+        <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+          AXE speaks with one fixed voice — OpenAI <strong>cedar</strong>. This is
+          separate from which model answers you. It needs your OpenAI key (set it
+          under Keys); without it AXE falls back to the browser voice.
         </p>
-        {melding && (
-          <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
+        {error && (
+          <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
             <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-            <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{melding}</p>
+            <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{error}</p>
           </div>
         )}
-        {STEMMEN.map(v => {
-          const aan = v.id === gekozen;
-          const bezig = v.id === speelt;
-          const kan = v.motor !== 'elevenlabs' || isElevenLabsConfigured();
-          return (
-            <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
-              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', opacity: kan ? 1 : 0.55 }}>
-              <button onClick={() => kan && kies(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0" disabled={!kan}>
-                <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: aan ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
-                <span className="min-w-0">
-                  <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{v.naam}</span>
-                  <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>
-                    {/* Waarom hij niet kan, in plaats van een knop die niets doet. */}
-                    {kan ? v.uitleg : 'Geen ElevenLabs-sleutel (VITE_ELEVENLABS_API_KEY)'}
-                  </p>
-                </span>
-              </button>
-              <button onClick={() => kan && proef(v.id)} disabled={!kan}
-                className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-                style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: bezig ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
-                <Play size={11} /> {bezig ? 'Speelt…' : 'Beluister'}
-              </button>
-            </div>
-          );
-        })}
+        <div className="flex items-center justify-between gap-2 p-2 rounded-lg"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: 'var(--accent-cyan)' }} />
+            <span className="min-w-0">
+              <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>AXE</span>
+              <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>OpenAI cedar — warm and natural.</p>
+            </span>
+          </span>
+          <button onClick={listen}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
+            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+            <Play size={11} /> {playing ? 'Playing…' : 'Listen'}
+          </button>
+        </div>
       </div>
     </WidgetCard>
   );
@@ -1941,11 +1904,8 @@ export default function SettingsPage() {
           </div>
         </WidgetCard>
 
-        {/* ── Voice (ElevenLabs TTS) ───────────────────────────────── */}
+        {/* ── Voice: one fixed AXE voice (OpenAI cedar), no picker ──── */}
         <VoiceSection />
-
-        {/* ── Fish Audio (second, optional voice provider) ──────────── */}
-        <FishAudioSection />
 
         {/* ── AXE Quotes (between voice and trust) ─────────────────── */}
         <MindsetQuotesSection />
