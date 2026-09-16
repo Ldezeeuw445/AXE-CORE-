@@ -11,6 +11,11 @@ use tauri::{
     WindowEvent,
 };
 
+// De achtergronddiensten (shell-server + lokale API) zijn desktop-only: ze
+// spawnen processen en horen niet in een telefoon-app. Zie diensten.rs.
+#[cfg(desktop)]
+mod diensten;
+
 #[derive(serde::Serialize)]
 struct VaultFile {
     relative_path: String,
@@ -182,18 +187,54 @@ fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String>
     Ok(())
 }
 
+/// De stand van de twee achtergronddiensten. Zie diensten.rs. Desktop-only.
+#[cfg(desktop)]
+#[tauri::command]
+fn diensten_stand() -> Vec<diensten::DienstStand> {
+    diensten::stand()
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn dienst_start(id: String) -> Result<String, String> {
+    diensten::start_dienst(&id)
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn dienst_stop(id: String) -> Result<String, String> {
+    diensten::stop_dienst(&id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            zet_plaat_materiaal,
-            write_vault_file,
-            read_vault_file,
-            vault_path_exists,
-            ensure_vault_dir,
-            list_vault_files,
-            show_main_window,
-        ])
+    let builder = tauri::Builder::default();
+    // De diensten-commando's bestaan alleen op desktop; op mobiel zit dat
+    // module-blok er niet, dus dan registreren we de kortere lijst.
+    #[cfg(desktop)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        zet_plaat_materiaal,
+        write_vault_file,
+        read_vault_file,
+        vault_path_exists,
+        ensure_vault_dir,
+        list_vault_files,
+        show_main_window,
+        diensten_stand,
+        dienst_start,
+        dienst_stop,
+    ]);
+    #[cfg(not(desktop))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        zet_plaat_materiaal,
+        write_vault_file,
+        read_vault_file,
+        vault_path_exists,
+        ensure_vault_dir,
+        list_vault_files,
+        show_main_window,
+    ]);
+    let builder = builder
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -291,9 +332,29 @@ pub fn run() {
                 .build(app)?;
             }
 
+            // De shell-server en de lokale API meteen aanzetten (desktop),
+            // tenzij er al iets op hun poort luistert.
+            #[cfg(desktop)]
+            diensten::start_bij_opstarten();
+
             let _ = handle;
             Ok(())
-        })
+        });
+
+    // Desktop bouwt+draait met een run-closure zodat we bij het afsluiten de
+    // achtergronddiensten weer neerhalen; mobiel houdt de eenvoudige run()
+    // exact zoals de werkende Android-build.
+    #[cfg(desktop)]
+    builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+                diensten::stop_alles();
+            }
+        });
+    #[cfg(not(desktop))]
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

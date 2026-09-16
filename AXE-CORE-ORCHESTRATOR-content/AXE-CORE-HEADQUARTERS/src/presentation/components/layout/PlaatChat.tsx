@@ -33,6 +33,7 @@ import { MissionControlStrip } from '@/presentation/components/axe-core/MissionC
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import { VermogensKnop } from '@/presentation/components/layout/VermogensKnop';
+import { HomeCommandComposer } from '@/presentation/components/axe-core/HomeCommandComposer';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
@@ -208,8 +209,8 @@ export function PlaatChat() {
     if (proj) showOnSphere(proj);
   };
 
-  const handleChatSend = async () => {
-    const t = chatText.trim();
+  const handleChatSend = async (override?: string) => {
+    const t = (override ?? chatText).trim();
     if (!t && attachments.length === 0) return;
 
     if (shouldDismissProjection(t)) {
@@ -514,6 +515,26 @@ export function PlaatChat() {
           echt heeft -- een icoon hoort te doen wat hij tekent. Links het
           gereedschap, rechts opnemen/spreken/versturen, en de toverstaf
           rechtsboven is de prompt-kiezer (de "/prompts" uit de placeholder). */}
+      {/* Op de telefoon: de échte AXE CORE-composer (kop + model-dropdown,
+          border-beam die met de AXE-status meebeweegt, en de vier tip-chips).
+          Op desktop blijft de bestaande AxeComposerVak ongewijzigd. */}
+      {isMobile ? (
+        <HomeCommandComposer
+          value={chatText}
+          onChange={setChatText}
+          onSend={() => void handleChatSend()}
+          onRunChip={(full) => void handleChatSend(full)}
+          onHistory={() => { void voice.loadAllConversations(); setChatCollapsed(false); }}
+          onMic={() => void handleChatMic()}
+          isListening={chatIsListening}
+          attachments={attachments}
+          onAttachments={setAttachments}
+          responseMode={voice.responseMode}
+          onToggleResponseMode={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
+          modelLabel={voice.primarySlot?.model || voice.activeProvider || 'AXE CORE'}
+          voiceStatus={voice.voiceStatus}
+        />
+      ) : (
       <AxeComposerVak
         waarde={chatText}
         opWaarde={setChatText}
@@ -558,6 +579,7 @@ export function PlaatChat() {
           </>
         }
       />
+      )}
     </>
   );
 }

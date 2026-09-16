@@ -3,7 +3,6 @@ import { HashRouter } from 'react-router'
 import { Toaster } from 'sonner'
 import '@/app/index.css'
 import { applyStoredLookEarly } from '@/presentation/hooks/useLook'
-import { isTauriRuntime } from '@/infrastructure/config/apiUrl'
 
 // Vóór de eerste render: anders ziet frame 1 de standaardstand en klapt het
 // scherm daarna om -- een flits die eruitziet als een fout.
