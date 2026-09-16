@@ -19,6 +19,7 @@ import {
   capabilityToSpecialists, migrateModel, isSimpleChatCapability,
   type ProviderId, type ProviderCfg, type KeySlot, type QueryCapability,
 } from '@/domain/providers';
+import { delegateFor, type AxeAgentId } from '@/domain/agents/roster';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { korteFaalReden } from '@/domain/faalReden';
 import { toProxied, callProvider } from '@/infrastructure/gateways/llmGateway';
@@ -368,7 +369,9 @@ function speakSafely(text:string,onDone?:()=>void){
   speakWithBrowser(text,onDone);
 }
 
-export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;}
+export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;
+  /** Which of the six agents handled this turn (see domain/agents/roster.ts). 'axe' = AXE answered directly. */
+  delegate?:AxeAgentId;}
 
 /** One routing decision — created per `sendMessage` call, populated as slots are tried. */
 export interface RoutingEvent{
@@ -378,6 +381,8 @@ export interface RoutingEvent{
   slotOrder:string[];
   attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
   winner?:string;winnerModel?:string;
+  /** Which of the six agents AXE used for this turn (see domain/agents/roster.ts). */
+  delegate?:AxeAgentId;
   via:'langgraph'|'fallback'|'crew'|'none';
   /** How many consecutive messages were coalesced into this entry (≥1). */
   count?:number;
@@ -884,7 +889,9 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }
 
       // ── Build a routing event that will be populated as slots are tried ──
-      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,specialist:specialistId,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none'};
+      // Which of the six agents is handling this turn — the visible hand-off.
+      const delegation=delegateFor(cap,text);
+      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,specialist:specialistId,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none',delegate:delegation.agent};
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
@@ -975,7 +982,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           const trimmed=resolved.trim();
           routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
           pushRouteEvt(routeEvt);
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model,delegate:delegation.agent}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
           speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,result.slot.provider,cap).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
@@ -988,7 +995,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           const skipped=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
           routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
           pushRouteEvt(routeEvt);
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,delegate:delegation.agent,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
           speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,slot.provider,cap).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
         }
         catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=korteFaalReden(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,600)});}

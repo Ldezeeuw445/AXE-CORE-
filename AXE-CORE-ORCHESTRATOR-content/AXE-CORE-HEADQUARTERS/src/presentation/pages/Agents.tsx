@@ -10,6 +10,7 @@ import { DEFAULT_AGENTS } from '@/domain/catalogs/defaultAgents';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { agentLoopHealth } from '@/infrastructure/persistence/agentFeedbackService';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
+import { WarRoom } from '@/presentation/components/axe-core/WarRoom';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -277,8 +278,8 @@ export default function Agents() {
     >
       <PageHeader
         eyebrow="Workforce"
-        title="Agent Center"
-        description={loading ? 'Loading agents…' : 'Full roster — status, skills, tools, models, and target tabs. Edit any card; add your own.'}
+        title="War Room"
+        description={loading ? 'Loading agents…' : 'The six agents AXE runs — see who is doing what. The full roster and settings are below.'}
       />
       <div className="flex flex-wrap gap-2 mt-3 mb-5">
         <StatPill label="Active" value={String(active)} tone="success" />
@@ -293,6 +294,12 @@ export default function Agents() {
           <Plus size={13} /> Add agent
         </button>
       </div>
+
+      <WarRoom />
+
+      <h2 className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
+        FULL ROSTER &amp; SETTINGS
+      </h2>
 
       <div className={LIST_GRID}>
         {agents.map(agent => {
