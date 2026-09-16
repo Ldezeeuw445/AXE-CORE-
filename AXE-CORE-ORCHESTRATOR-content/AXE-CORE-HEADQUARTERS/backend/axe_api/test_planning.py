@@ -77,9 +77,9 @@ def run(coro):
 
 # ── Agenda ─────────────────────────────────────────────────────────────────
 
-def test_hourly_job_gives_each_run():
-    items = p.agenda([sched()], [], NU, NU + timedelta(hours=3))
-    assert [i["at"][11:16] for i in items] == ["12:00", "13:00", "14:00"]
+def test_two_hourly_job_gives_each_run():
+    items = p.agenda([sched(cron_expr="0 */2 * * *")], [], NU, NU + timedelta(hours=5))
+    assert [i["at"][11:16] for i in items] == ["12:00", "14:00", "16:00"]
     assert all(i["app"] == "northsea" and i["herhaling"] is None for i in items)
 
 
@@ -98,8 +98,13 @@ def test_disabled_and_invalid_jobs_are_not_planned():
     assert items == []
 
 
+def test_hourly_job_collapses_per_day():
+    items = p.agenda([sched()], [], NU, NU + timedelta(hours=3))
+    assert len(items) == 1 and items[0]["aantal"] == 3 and items[0]["herhaling"] == "elke 60 min"
+
+
 def test_unknown_app_falls_back_to_core():
-    items = p.agenda([sched(app="bogus", metadata={})], [], NU, NU + timedelta(hours=1, minutes=1))
+    items = p.agenda([sched(app="bogus", metadata={}, cron_expr="0 */2 * * *")], [], NU, NU + timedelta(hours=1, minutes=1))
     assert items[0]["app"] == "axe_core"
 
 

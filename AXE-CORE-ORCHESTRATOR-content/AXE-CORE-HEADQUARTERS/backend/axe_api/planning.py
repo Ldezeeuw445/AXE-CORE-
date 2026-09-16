@@ -44,8 +44,8 @@ UITVOERBAAR = {
 }
 ALLE_SOORTEN = ("prompt", "exec", "webhook", "crew", "observed", "planner", "northsea")
 MAX_FAILS = 5
-# Jobs die vaker dan dit draaien krijgen in de agenda één regel per dag, niet honderd.
-SAMENVOEG_ONDER_MIN = 60
+# Jobs die elk uur of vaker draaien krijgen in de agenda één regel per dag, niet honderd.
+SAMENVOEG_TOT_MIN = 60
 
 
 def _tz(naam: Optional[str]):
@@ -109,7 +109,7 @@ def app_of(v: Any) -> str:
 def agenda(schedules: list[dict], pg_jobs: list[dict], van: datetime, tot: datetime, tz_naam: str = "Europe/Amsterdam") -> list[dict]:
     """Alle geplande runs van alle jobs tussen van en tot, per app gekleurd door de client.
 
-    Frequente jobs (< 60 min) worden per lokale dag samengevoegd tot één item met
+    Frequente jobs (elk uur of vaker) worden per lokale dag samengevoegd tot één item met
     `herhaling` en `aantal`, anders is de agenda onleesbaar (mt5-sync draait 144x per dag).
     """
     lokaal = _tz(tz_naam)
@@ -120,7 +120,7 @@ def agenda(schedules: list[dict], pg_jobs: list[dict], van: datetime, tot: datet
         if not runs:
             return
         stap = interval_minuten(cron_expr, tz_job, van)
-        if stap is not None and stap < SAMENVOEG_ONDER_MIN:
+        if stap is not None and stap <= SAMENVOEG_TOT_MIN:
             per_dag: dict[str, list[datetime]] = {}
             for r in runs:
                 per_dag.setdefault(r.astimezone(lokaal).date().isoformat(), []).append(r)
