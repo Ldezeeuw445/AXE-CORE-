@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AxeStatusOrb } from './AxeStatusOrb';
 import { useNavigate } from 'react-router';
 import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
@@ -117,7 +118,12 @@ export function TopNav() {
             kopbalk. Het is app-brede status, geen Home-status, dus hij hoort
             hier -- en op de demo-plaat staat hij op dezelfde lijn. Home's kopie
             wordt verborgen zodra data-look aan staat. */}
+        {/* Het statusteken hoort HIER en niet in Home: op de plaat verbergt
+            data-look Home's kopie, dus daar was hij onzichtbaar (gemeten in de
+            app, 16 september). Zelfde orb als het midden van de onderbalk,
+            20px -- de kleine maat die thinking-orbs voert. */}
         <div className="axe-tl axe-tl-core hidden md:flex items-center gap-2">
+          <AxeStatusOrb size={20} />
           <span>{coreLabel}</span>
         </div>
       </div>
