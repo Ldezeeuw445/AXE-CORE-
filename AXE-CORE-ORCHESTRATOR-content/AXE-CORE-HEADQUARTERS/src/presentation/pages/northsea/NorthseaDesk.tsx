@@ -168,7 +168,12 @@ export default function NorthseaDesk() {
 
         {tab === 'live' ? (
           <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-            <DeskKaartjes data={data} tellers={desk} routes={kaart ? kaart.routes.length : null} />
+            {/* DeskKaartjes positioneert zich absoluut (top-2) — bedoeld om over
+                de kaart te zweven. In een eigen relative band valt hij netjes
+                ónder de tab-balk i.p.v. eroverheen. */}
+            <div className="relative h-[92px] flex-none">
+              <DeskKaartjes data={data} tellers={desk} routes={kaart ? kaart.routes.length : null} />
+            </div>
             <div className="px-2 pt-1">
               <div
                 className="relative overflow-hidden rounded-xl"

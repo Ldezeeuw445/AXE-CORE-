@@ -127,13 +127,18 @@ export function AppShell() {
      standaard driehoek. Zie store/dokStore.ts. */
   const rechtsHoek = useDokStore(s => s.rechtsHoek);
   const setChatUserSet = useCoreViewStore(s => s.setChatUserSet);
+  const isMobile = useIsMobile();
   useEffect(() => {
-    setChatDicht(location.pathname !== '/');
+    // Desktop: de chat staat open op de home en dicht op elke andere tab.
+    // Telefoon: overal dicht starten, zodat de home clean is (sphere + AXE CORE-
+    // composer) net als de Tauri-app; PlaatChat opent de chat daar zodra je 'm
+    // gebruikt (typen/versturen/approval/bestand).
+    setChatDicht(isMobile ? true : location.pathname !== '/');
     // Elke navigatie begint schoon: op de telefoon is de home dan weer clean
     // (chat dicht, sphere + cijfers), tot je 'm daar zelf weer opent. De chat
     // leidt zijn zichtbare stand hiervan af — zie useChatCollapsed.
     setChatUserSet(false);
-  }, [location.pathname, setChatDicht, setChatUserSet]);
+  }, [location.pathname, setChatDicht, setChatUserSet, isMobile]);
 
   // Een pagina die opkomt bewijst dat de brokken kloppen. De herstelpoging mag
   // dan weer op scherp: zonder dit is de eerste update van een sessie de enige
@@ -145,7 +150,6 @@ export function AppShell() {
   // screen. Treat "inside the shell" exactly like the /mobile surface: hide
   // TopNav, Sidebar, RightPanel, BottomBar and BottomNav, and let the page
   // itself have the whole viewport.
-  const isMobile = useIsMobile();
   // Op een telefoon is ELKE route een command-surface: de desktop-chrome
   // (TopNav, Sidebar, RightPanel, PlaatChat, plaat-slots) gaat weg en de pagina
   // krijgt het hele scherm, met de lade als navigatie. Op een breed scherm
