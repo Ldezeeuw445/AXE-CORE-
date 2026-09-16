@@ -132,6 +132,25 @@ done
 
 # ── 3. Bouwen ────────────────────────────────────────────────────────────────
 zeg "Bouwen"
+# Ondertekenen met het eigen certificaat als dat er is (docs/MAC-ONDERTEKENEN.md).
+# Zonder: adhoc, en dan vraagt macOS na elke build opnieuw om de SSD -- en tot
+# iemand klikt geeft alles wat de kluis leest een 502. Met: één vaste identiteit
+# (com.axe.core + dit certificaat), en de toestemming blijft staan. Een
+# ingestelde APPLE_SIGNING_IDENTITY gaat altijd voor.
+if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  for naam in "AXE Core dev" "AXE Core Dev"; do
+    if security find-identity -p codesigning 2>/dev/null | grep -q "\"$naam\""; then
+      export APPLE_SIGNING_IDENTITY="$naam"
+      break
+    fi
+  done
+fi
+if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  printf '\033[36m▸ Ondertekenen met "%s"\033[0m\n' "$APPLE_SIGNING_IDENTITY"
+else
+  printf '\033[33m! Geen AXE-certificaat: adhoc ondertekend, macOS vraagt de SSD opnieuw. Zie docs/MAC-ONDERTEKENEN.md\033[0m\n'
+fi
+
 npm run tauri:build
 
 [[ -d "$APP" ]] || stop "De bouw gaf geen $APP. Lees de uitvoer hierboven."

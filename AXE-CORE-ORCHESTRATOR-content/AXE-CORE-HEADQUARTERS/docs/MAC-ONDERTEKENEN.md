@@ -32,7 +32,7 @@ Dit is een wijziging in je sleutelhanger; die maak je zelf, niet een agent.
 
 1. Open **Sleutelhangertoegang** (Keychain Access).
 2. Menu **Certificaatassistent → Maak een certificaat…**
-3. Naam: `AXE Core Dev`
+3. Naam: `AXE Core dev` (zo aangemaakt op 16 september; `AXE Core Dev` werkt ook)
 4. Identiteitstype: **Zelfondertekend basiscertificaat**
 5. Certificaattype: **Codeondertekening**
 6. Aanmaken, en klaar.
@@ -76,3 +76,19 @@ Al het andere gaat naar de VPS, die zijn eigen sleutels heeft.
 Een telefoon die NorthSea-data, de MCP-hub of de planner wil, hangt dus aan
 deze Mac: die moet aanstaan, met de schijf erin en de toestemming gegeven. De
 rest (chat, marktdata, geheugen) komt van de VPS en werkt los van deze Mac.
+
+
+## Stand 16 september 2026
+
+Certificaat `AXE Core dev` staat in de sleutelhanger "Inloggen". `security
+find-identity -v` meldt `0 valid identities` en zonder `-v` staat hij er met
+`CSSMERR_TP_NOT_TRUSTED`: dat is normaal voor een zelfgemaakt certificaat en
+geen probleem. Ondertekenen werkt, en de designated requirement is
+`identifier "com.axe.core" and certificate leaf = H"ffc4facc…"` -- vast per
+build. `scripts/axe-bijwerken.sh` pakt het certificaat nu zelf op; je hoeft
+`APPLE_SIGNING_IDENTITY` niet meer mee te geven.
+
+Let op: het script werkt `/Applications/AXE CORE.app` NIET bij, het start de
+bundel uit `src-tauri/target/release/bundle/macos/`. Een oude kopie in
+/Applications blijft adhoc en vraagt dus nog wel om toestemming als je die
+opent.
