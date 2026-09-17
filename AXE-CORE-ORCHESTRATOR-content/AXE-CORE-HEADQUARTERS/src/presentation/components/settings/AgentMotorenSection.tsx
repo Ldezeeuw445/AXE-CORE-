@@ -22,6 +22,25 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS } from '@/domain/providers';
 import { chatModelKeuzes, isActief, leesVerbindingen } from '@/domain/chatModelKeuzes';
 
+/** Een 0-100% balkje voor hoeveel van het dagbudget van deze motor al op is
+ *  (planner.gebruik_vandaag / planner.dagbudget) — de enige echte "usage"-
+ *  telling die dit apparaat heeft: Claude/Codex/Cursor geven zelf geen
+ *  quotum terug, dit is puur hoe vaak de PLANNER dit abonnement vandaag al
+ *  inzette. Handmatige runs (chat, code-editor) tellen hier niet in mee. */
+function GebruikBalk({ gebruik, budget }: { gebruik: number; budget: number }) {
+  if (!budget) return null;
+  const pct = Math.min(100, Math.round((gebruik / budget) * 100));
+  const kleur = pct >= 100 ? 'var(--error)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
+  return (
+    <div className="flex items-center gap-1.5 shrink-0" title={`Planner: ${gebruik} van ${budget} vandaag`}>
+      <div className="rounded-full overflow-hidden" style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.08)' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: kleur }} />
+      </div>
+      <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{pct}%</span>
+    </div>
+  );
+}
+
 const WAARVOOR: Record<HoofdAgent, string> = {
   wingman: 'Draait de gratis CrewAI-crew namens AXE, en helpt overal waar dat past.',
   northsea: 'Bouwt en runt de NorthSea-desk, beweegt deals. Schrijftaken pas na jouw akkoord.',
@@ -165,7 +184,12 @@ export function AgentMotorenSection() {
           {ALLE_MOTOREN.map((motor: AgentEngine) => (
             <div key={motor} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-xs-custom" style={{ color: 'var(--text-primary)' }}>{MOTOR_LABEL[motor]}</div>
+                <div className="text-xs-custom flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  {MOTOR_LABEL[motor]}
+                  {planner?.host_kan && (
+                    <GebruikBalk gebruik={planner.gebruik_vandaag[motor] ?? 0} budget={planner.dagbudget} />
+                  )}
+                </div>
                 <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                   {MODEL_VLAG[motor]} · suggesties: {MODEL_SUGGESTIES[motor].join(', ')}
                 </div>
@@ -190,21 +214,43 @@ export function AgentMotorenSection() {
 
       {/* De planner: dezelfde abonnementen, maar dan zonder dat je iets vraagt.
           Met een dagbudget per abonnement, zodat hij het niet opmaakt. */}
-      <div className="mt-3 pt-3 flex items-center justify-between gap-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <div className="min-w-0">
-          <div className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>Planner</div>
-          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            {!planner ? 'Agent-host niet bereikbaar.'
-              : !planner.host_kan ? 'Draait niet op deze host (AXE_PLANNER staat niet aan).'
-              : `Elke ${Math.round(planner.interval_s / 3600)} uur · max ${planner.dagbudget} runs per abonnement per dag · vandaag: ${
-                  Object.entries(planner.gebruik_vandaag).map(([m, n]) => `${m} ${n}`).join(', ') || 'nog niets'}${
-                  Object.keys(planner.koeling).length ? ` · koelt: ${Object.entries(planner.koeling).map(([m, t]) => `${m} tot ${new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`).join(', ')}` : ''}`}
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>Planner</div>
+            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {!planner ? 'Agent-host niet bereikbaar.'
+                : !planner.host_kan ? 'Draait niet op deze host (AXE_PLANNER staat niet aan).'
+                : `Elke ${Math.round(planner.interval_s / 3600)} uur · max ${planner.dagbudget} runs per abonnement per dag`}
+            </div>
           </div>
+          <label className="flex items-center gap-2 text-xs-custom shrink-0" style={{ color: 'var(--text-secondary)' }}>
+            <input type="checkbox" checked={!!planner?.aan} disabled={!planner?.host_kan} onChange={e => { void zetPlanner(e.target.checked); }} />
+            aan
+          </label>
         </div>
-        <label className="flex items-center gap-2 text-xs-custom shrink-0" style={{ color: 'var(--text-secondary)' }}>
-          <input type="checkbox" checked={!!planner?.aan} disabled={!planner?.host_kan} onChange={e => { void zetPlanner(e.target.checked); }} />
-          aan
-        </label>
+        {/* Per abonnement hoeveel de planner er vandaag al mee deed — dezelfde
+            balk als hierboven, zodat "hoeveel is er al gebruikt" in dit ene
+            scherm op precies twee plekken hetzelfde antwoord geeft. Alleen
+            motoren die vandaag iets deden of aan het koelen zijn — een rij
+            "0%" voor elk van de acht abonnementen is ruis, geen informatie. */}
+        {planner?.host_kan && (Object.keys(planner.gebruik_vandaag).length > 0 || Object.keys(planner.koeling).length > 0) && (
+          <div className="mt-2 space-y-1">
+            {ALLE_MOTOREN.filter(m => (planner.gebruik_vandaag[m] ?? 0) > 0 || planner.koeling[m]).map(motor => (
+              <div key={motor} className="flex items-center justify-between gap-3">
+                <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{MOTOR_LABEL[motor]}</span>
+                <div className="flex items-center gap-2">
+                  {planner.koeling[motor] && (
+                    <span className="text-[9px]" style={{ color: 'var(--warning)' }}>
+                      koelt tot {new Date(planner.koeling[motor]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                  <GebruikBalk gebruik={planner.gebruik_vandaag[motor] ?? 0} budget={planner.dagbudget} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
