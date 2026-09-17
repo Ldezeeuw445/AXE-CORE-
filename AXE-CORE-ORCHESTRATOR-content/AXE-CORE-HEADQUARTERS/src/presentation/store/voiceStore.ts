@@ -820,6 +820,16 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       let orderedSlots:KeySlot[],activeAgentPrompt:string|null=null;
       await logRoute('capability classified',{capability:cap,mode:matchedCap?'matched':'fallback'});
 
+      // AXE's voice is one real chat model. For normal conversation it never
+      // routes to a local runner (ollama) or a coding CLI (abonnement/openhands/
+      // hermes) — those are the Code agent's engines and cause the "ollama fails
+      // → codex answers" fight you can watch in the stream. Only fall back to the
+      // full set if there is no real chat provider at all.
+      const CHAT_EXCLUDE=new Set(['ollama','abonnement','openhands','hermes']);
+      const chatBase=isSimpleChatCapability(cap)&&allSlots.some(s=>!CHAT_EXCLUDE.has(s.provider))
+        ? allSlots.filter(s=>!CHAT_EXCLUDE.has(s.provider))
+        : allSlots;
+
       // For normal conversation the Supabase capability config (which can point
       // "fast" at Ollama) must NOT decide the engine — that override is what made
       // AXE answer on a dead local model and then fall through to a coding CLI.
@@ -838,7 +848,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           orderedSlots=orderedSlots.map(s=>s.provider===preferred?{...s,model:matchedCap.preferred_model!}:s);
         }
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
-      }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
+      }else{orderedSlots=selectByCapability(cap as QueryCapability,chatBase);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
       // Luka's explicit "★ Primair" choice in Settings (voiceStore.primarySlot)
       // used to only ever be read when zero providers were configured at all
@@ -879,17 +889,6 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
             orderedSlots.unshift(primary);
           }
         }
-      }
-
-      // Coding CLIs (claude/codex/cursor via the 'abonnement' provider) are the
-      // Code agent's engines, not AXE's chat voice. In normal conversation they
-      // answer as a coder ("I'll treat this repo as..."), which never feels like
-      // AXE. Demote them to last resort so a real chat model wins — unless you
-      // explicitly made one your ★ Primary.
-      if(isSimpleChatCapability(cap) && get().primarySlot?.provider!=='abonnement'){
-        const chat=orderedSlots.filter(s=>s.provider!=='abonnement');
-        const coders=orderedSlots.filter(s=>s.provider==='abonnement');
-        if(chat.length) orderedSlots=[...chat,...coders];
       }
 
       // Specialist persona: Supabase's core_agents prompt (above) wins when
