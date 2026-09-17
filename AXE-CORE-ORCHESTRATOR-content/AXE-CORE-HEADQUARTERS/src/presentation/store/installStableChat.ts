@@ -53,8 +53,7 @@ import {
   getDurableTask,
   type DurableTaskSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
-import { abonnementVan, cascadeVoorAgent } from '@/domain/agentMotoren';
-import { leesToewijzing } from '@/infrastructure/persistence/agentMotorenOpslag';
+import { zonderAbonnement } from '@/domain/abonnementChat';
 
 let installed = false;
 const ACTIVE_TASKS_KEY = 'axe_active_durable_tasks';
@@ -187,14 +186,17 @@ function chatCascade(): KeySlot[] {
   const all = collectAllSlots();
   if (all.length === 0) return [];
   const st = useVoiceStore.getState();
-  // Het abonnement dat AXE Core in Instellingen kreeg vooraan, en géén ander:
-  // anders valt de chat bij een limiet door op het abonnement van AXE Algo.
-  const cascade = cascadeVoorAgent(buildStableChatCascade(all, {
+  // AXE's voice is a fast chat model, never a coding subscription (claude/codex/
+  // cursor). Overlaying axe-core's subscription here is what made Codex answer
+  // as AXE. Strip subscriptions from the identity cascade — the same rule the
+  // trading chat already uses — so a real chat model (your picked ★ Primary, or
+  // Gemini/etc.) answers. Subscriptions belong to the Code agent and heavy work.
+  const cascade = zonderAbonnement(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
-  }), abonnementVan(leesToewijzing(), 'axe-core'));
-  return cascade.length ? cascade : cascadeVoorAgent(all, null).slice(0, 1);
+  }));
+  return cascade.length ? cascade : zonderAbonnement(all).slice(0, 1);
 }
 
 /** First choice only — for callers that need a slot to label a reply with,
@@ -469,17 +471,21 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   if (all.length === 0) return false;
 
   const st = useVoiceStore.getState();
-  let cascade = cascadeVoorAgent(buildStableChatCascade(all, {
+  // Same rule as chatCascade: AXE speaks through a real chat model, not a coding
+  // subscription. Strip subscriptions so your chosen brain answers.
+  let cascade = zonderAbonnement(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
-  }), abonnementVan(leesToewijzing(), 'axe-core'));
-  // "Local model first when home": when the Mac Mini's own Ollama is reachable
-  // and the toggle is on, put the local model at the front for simple chat.
-  // The gateway then serves it locally (fast, private, no key) and falls back
-  // to VPS/cloud — which is exactly what the rest of this cascade provides.
-  const reachableOllama = await resolveReachableOllama();
+  }));
+  // "Local model first when home" is a preference for AXE Native (no explicit
+  // pick). An explicitly chosen brain (primarySlot) is what you want AXE to be,
+  // so it must win over local-first — otherwise a small local model jumps ahead
+  // of the smart model you selected.
+  if (!st.primarySlot) {
+    const reachableOllama = await resolveReachableOllama();
     cascade = preferLocalOllamaFirst(cascade, !!reachableOllama, reachableOllama?.baseUrl);
+  }
   if (cascade.length === 0) return false;
 
   const history = st.conversation
