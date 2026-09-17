@@ -45,10 +45,20 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
 
   it('Wingman opent een episode per specialist bij een crew-run', () => {
     // CrewAI.tsx is "the only place the crew is invoked" (eigen commentaar
-    // daar) -- runCrewWithTools.ts is de niet-aangeroepen wrapper die de
-    // handoff hier noemde; dit is de echte ingang.
+    // daar) -- runCrewWithTools.ts was oorspronkelijk een niet-aangeroepen
+    // wrapper; die is nu de echte crew-gateway van deze pagina (zie de test
+    // hieronder).
     const roepers = aanroepersVan('openEpisode', 'agentFeedbackService');
     expect(roepers, 'niemand opent een episode voor Wingman\'s crew-run').toContain('presentation/pages/CrewAI.tsx');
+  });
+
+  it('Wingman loopt via de crew-gateway, niet via een kale crewRun()', () => {
+    // Zonder deze gateway kreeg de crew geen EXA/Firecrawl/BrightData/E2B/
+    // Qdrant-credentials mee (buildCrewToolEnv) -- een specialist die een tool
+    // nodig had, kon hem stilletjes niet gebruiken. Dat was de echte reden om
+    // runCrewWithTools hier aan te sluiten, niet alleen de episodes.
+    const roepers = aanroepersVan('runCrewWithTools', 'application/crew/runCrewWithTools');
+    expect(roepers, 'runCrewWithTools heeft geen aanroeper -- terug bij dode code').toContain('presentation/pages/CrewAI.tsx');
   });
 
   it('iets sluit episodes af', () => {

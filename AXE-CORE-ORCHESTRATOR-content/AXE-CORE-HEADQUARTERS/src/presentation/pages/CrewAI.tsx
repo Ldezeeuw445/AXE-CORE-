@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, Rocket, Send, Sparkles, Target, Users } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { crewRun, apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { runCrewWithTools } from '@/application/crew/runCrewWithTools';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { STAT_ROW } from '@/presentation/components/surface/Page';
@@ -30,6 +31,7 @@ export default function CrewAI() {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [taskMsg, setTaskMsg] = useState<string | null>(null);
+  const [tools, setTools] = useState<Record<string, boolean> | null>(null);
 
   const toggle = (id: string) =>
     setSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -39,6 +41,7 @@ export default function CrewAI() {
     setState('running');
     setResult(null);
     setError(null);
+    setTools(null);
     const startedAt = Date.now();
     // One episode per named specialist — Wingman is the agent that runs this
     // crew (roster.ts), so every run's outcome counts toward its loop-health
@@ -58,7 +61,12 @@ export default function CrewAI() {
     const sluitEpisodes = (verdict: 'good' | 'poor') =>
       episodeIds.forEach(id => { void closeEpisode(id, verdict); });
     try {
-      const res = await crewRun({ task: task.trim(), specialists: selected.length > 0 ? selected : undefined });
+      // Through the crew gateway, not a bare crewRun(): without it the run
+      // gets no EXA/Firecrawl/BrightData/E2B/Qdrant credentials at all, so a
+      // specialist that needs a tool silently can't use it. This was the real
+      // gap the handoff's "runCrewWithTools" pointer was actually about.
+      const res = await runCrewWithTools({ task: task.trim(), specialists: selected.length > 0 ? selected : undefined });
+      setTools(res.tools ?? null);
       if (res.status === 'ok' && res.result) {
         setState('done');
         setResult(res.result);
@@ -255,6 +263,25 @@ export default function CrewAI() {
           </WidgetCard>
 
           <WidgetCard className="flex-1" title={state === 'error' ? 'Crew Error' : 'Crew Result'}>
+            {/* What the run actually had, not what Settings says is configured —
+                a key can be saved and still be wrong, so this reads the crew
+                gateway's own report of what it attached to this specific run. */}
+            {tools && (state === 'done' || state === 'error') && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {Object.entries(tools).map(([name, on]) => (
+                  <span
+                    key={name}
+                    className="text-[9px] px-1.5 py-0.5 rounded-full font-mono"
+                    style={{
+                      background: on ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.04)',
+                      color: on ? '#4ade80' : 'var(--text-muted)',
+                    }}
+                  >
+                    {on ? '✓' : '·'} {name}
+                  </span>
+                ))}
+              </div>
+            )}
             {state === 'idle' && (
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
                 No run yet. The result shown here is exactly what the VPS crew returns — if the CrewAI runtime
