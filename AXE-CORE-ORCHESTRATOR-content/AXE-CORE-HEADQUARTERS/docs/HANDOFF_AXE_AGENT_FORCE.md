@@ -41,7 +41,47 @@ stuck on dead Ollama + out-of-credits OpenRouter and reported "unavailable". Now
 `PROVIDERS` entry via the exported `getProviderKeySlot` (localStorage OR ENV), so `buildStableChatCascade`
 prefers Gemini when its key exists. `getProviderKeySlot` is now exported from `voiceStore.ts`.
 
-## Next steps, in order
+## CONFIRMED ARCHITECTURE (Luka, this session — this rules everything)
+
+**AXE CORE** = top of the chain, the boss. Talks to Luka, understands intent, then either answers
+directly, does it himself, orchestrates via LangGraph, calls the Wingman, or delegates to a manager.
+Dropdown = ONLY best-for-AXE models (smart/fast); never a subscription, never Ollama.
+
+**Tier 1 — manager team (dropdown = ONLY subscriptions; the 6 CLIs belong here):**
+Wingman (runs the free CrewAI crew from the Crew tab on AXE's behalf; helps anywhere) · NorthSea Desk
+Manager (runs NorthSea crews, moves deals, decides-before-Luka when safe) · Trading Agent = AXE Algo
+(market analysis, positions, risk, final trade decision; owns the trading research crew) · **AXE
+Developer** (the code manager — reads/writes/builds/ships/deploys; *Code folds into this*, may use the
+Code Agent for simple/local work; keep its Supabase tables) · ThinkTank (runs the ThinkTank tab:
+score/rank ideas → build plan → Build → library → integrate plan → Integrate into the app).
+
+**Tier 2 — Agents-tab workers (auto-route by default; the "race" is fine here; optional pin dropdown):**
+Browser · Memory · Task · Cron Manager · Finance.
+
+**Tier 3 — cross-app assistants (dropdown = ONLY paid API keys: OpenAI, Anthropic):**
+AXE Intel · AXE Companion (live in the other apps, driven through AXE CORE, used in the Trading tab).
+
+**NOT agents — remove from the Agents tab:** Trading OS (an app), Ollama (a model), EVE (a framework),
+CrewAI Manager (redundant — Wingman/NorthSea Manager/AXE Algo run the crews). The CrewAI crews are
+resources those managers run.
+
+**THE ONE RULE:** the Settings "Motors per agent" panel is the SINGLE source of truth for which model
+each agent uses. The composer picker and the "local models first" toggle must obey it or be removed —
+no third/fourth opinion. Tier 1 + AXE run on their pinned engine (no race); Tier 2 auto-routes unless pinned.
+
+**Shared brain (universal):** every agent (all tiers) wired to the semantic learning loop + RAG + its
+Supabase namespace, all on ONE global memory layer (`catalog.ts` namespaces; loop built, connect for all).
+
+## DONE — AXE runs smart models via the VPS proxy (commit `eec853a1`)
+The smart keys (Gemini etc.) are NOT local and NOT in the vault's secrets.env — they live on the VPS AI
+proxy (`/api/proxy/ai/providers` → `keyless`, served with the VPS's own key). The chat only built slots
+from LOCAL keys, so it dropped VPS-only providers and fell to Ollama. Now Settings caches the served list
+(`axe_server_providers`) and `getProviderKeySlot` builds a keyless slot for VPS-served providers →
+callProvider's proxy path fills the key. Open Settings once to populate the cache.
+
+## Next steps, in order (the confirmed build)
+0. Rewrite `roster.ts`/`catalog.ts` to the tiers above (Code→AXE Developer, add ThinkTank, drop CrewAI
+   Manager, add Tier 3 Intel/Companion; mark Trading OS/Ollama/EVE non-agents).
 
 ### 1. Settings: the "7 lines" panel (Luka's last explicit request)
 Luka still sees the old picker in Settings and above the composer. Wanted:
