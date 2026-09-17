@@ -2,18 +2,23 @@ import { describe, it, expect } from 'vitest';
 import { AGENT_CATALOG, namespaceFor, agentsByKind } from './catalog';
 
 describe('agent catalog (the one force)', () => {
-  it('has the six core agents and the eight crew specialists', () => {
-    expect(agentsByKind('core').map((a) => a.id).sort())
-      .toEqual(['axe', 'code', 'finance', 'northsea', 'trading', 'wingman']);
+  it('has the thirteen core agents (AXE + twelve tiered) and the eight crew specialists', () => {
+    expect(agentsByKind('core').map((a) => a.id).sort()).toEqual([
+      'axe',
+      'browser', 'companion', 'cron', 'developer', 'finance',
+      'intel', 'memory', 'northsea', 'task', 'thinktank', 'trading', 'wingman',
+    ]);
     // nine specialists minus axe_core (which IS the core orchestrator) = eight
     expect(agentsByKind('crew')).toHaveLength(8);
     expect(agentsByKind('crew').some((a) => a.id === 'axe_core')).toBe(false);
   });
 
-  it('marks Trading OS as an app, not an agent', () => {
-    const tos = AGENT_CATALOG.find((a) => a.id === 'trading-os');
-    expect(tos?.kind).toBe('app');
-    expect(tos?.namespace).toBe(''); // an app has no agent memory of its own
+  it('marks Trading OS, Ollama and EVE as apps, not agents', () => {
+    for (const id of ['trading-os', 'ollama', 'eve']) {
+      const entry = AGENT_CATALOG.find((a) => a.id === id);
+      expect(entry?.kind).toBe('app');
+      expect(entry?.namespace).toBe(''); // an app has no agent memory of its own
+    }
   });
 
   it('gives every agent (not app) a memory namespace, and AXE the global layer', () => {
@@ -23,6 +28,12 @@ describe('agent catalog (the one force)', () => {
     }
     expect(namespaceFor('axe')).toBe('global');
     expect(namespaceFor('trading')).toBe('axe_trader');
+    expect(namespaceFor('developer')).toBe('axe_code');
+    // fresh tier-2/tier-3 agents fall through to the axe_<id> default
+    expect(namespaceFor('northsea')).toBe('axe_northsea');
+    expect(namespaceFor('intel')).toBe('axe_intel');
+    expect(namespaceFor('companion')).toBe('axe_companion');
+    expect(namespaceFor('thinktank')).toBe('axe_thinktank');
   });
 
   it('never collides two agents onto the same namespace (except the shared global for AXE)', () => {

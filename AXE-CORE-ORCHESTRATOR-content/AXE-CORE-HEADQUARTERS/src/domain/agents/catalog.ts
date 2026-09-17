@@ -32,14 +32,20 @@ export interface AgentEntry {
   description: string;
 }
 
-/** Where each of the six top-level agents keeps its memory. */
+/**
+ * Where each top-level agent keeps its memory. Only entries that must reuse
+ * an ALREADY-established namespace go here (axe's shared global layer, and
+ * trading/developer whose namespaces predate this catalog and already hold
+ * learning-loop history). Every other agent falls through to the `axe_<id>`
+ * default below — that already matches the namespaces the leerlus-doc
+ * lists (axe_northsea, axe_finance, axe_wingman, axe_intel, axe_companion),
+ * so a fresh tier-2/tier-3 agent (browser, memory, task, cron, thinktank)
+ * gets a consistent namespace for free.
+ */
 const CORE_NAMESPACE: Record<string, string> = {
-  axe: 'global',            // the orchestrator lives in the shared global layer
-  trading: 'axe_trader',    // existing namespace (see the learning-loop chain)
-  northsea: 'axe_northsea',
-  code: 'axe_code',
-  finance: 'axe_finance',
-  wingman: 'axe_wingman',
+  axe: 'global',           // the orchestrator lives in the shared global layer
+  trading: 'axe_trader',   // existing namespace (see the learning-loop chain)
+  developer: 'axe_code',   // existing namespace (was 'code' before the tier rewrite)
 };
 
 const coreEntries: AgentEntry[] = AXE_AGENTS.map((a) => ({
@@ -62,8 +68,10 @@ const crewEntries: AgentEntry[] = SPECIALISTS.filter((s) => s.id !== 'axe_core')
   description: `${s.role} — ${s.focus}`,
 }));
 
-// Not an agent: an application AXE acts inside. Kept in the catalog so the
-// Agents tab can show it correctly labelled instead of pretending it's an agent.
+// Not agents: an application AXE acts inside, a model, and a persona
+// framework. Kept in the catalog so the Agents tab can show them correctly
+// labelled instead of pretending they're agents — see roster.ts's "Not
+// agents" note (CONFIRMED ARCHITECTURE, 17 Sep 2026).
 const appEntries: AgentEntry[] = [
   {
     id: 'trading-os',
@@ -71,7 +79,23 @@ const appEntries: AgentEntry[] = [
     kind: 'app',
     namespace: '',
     canDecide: false,
-    description: 'The trading application (not an agent). AXE Algo — the Trading agent — acts inside it.',
+    description: 'The trading application (not an agent). The Trading agent (AXE Algo) acts inside it.',
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    kind: 'app',
+    namespace: '',
+    canDecide: false,
+    description: 'A local/VPS model, not an agent. Agents may run on it; it never appears as a row of its own.',
+  },
+  {
+    id: 'eve',
+    name: 'EVE',
+    kind: 'app',
+    namespace: '',
+    canDecide: false,
+    description: 'A persona framework (system-prompt supplements per slot), not an agent — see eveSkills.ts.',
   },
 ];
 
