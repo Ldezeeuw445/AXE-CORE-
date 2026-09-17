@@ -46,6 +46,12 @@ def test_every_write_tool_needs_idempotency_and_only_writes_can_mutate():
     assert TOOLS["northsea_review_deal"].risk == Risk.READ_ONLY
     assert TOOLS["northsea_prepare_outreach"].risk == Risk.DRAFT
     assert missing_scopes("northsea_find_suppliers", {"northsea.research"}) == ["northsea.read"]
+    assert TOOLS["northsea_handle_event"].risk == Risk.RESEARCH
+    assert TOOLS["northsea_handle_event"].uses_crew is True
+    assert TOOLS["northsea_handle_event"].scopes == ("northsea.research", "northsea.deal.read")
+    assert missing_scopes("northsea_handle_event", {"northsea.deal.read"}) == ["northsea.research"]
+    assert missing_scopes("northsea_handle_event", {"northsea.read", "northsea.deal.read"}) == ["northsea.research"]
+    assert missing_scopes("northsea_handle_event", {"northsea.research", "northsea.deal.read"}) == []
 
 
 def test_sensitive_rules_match_the_deal_desk():

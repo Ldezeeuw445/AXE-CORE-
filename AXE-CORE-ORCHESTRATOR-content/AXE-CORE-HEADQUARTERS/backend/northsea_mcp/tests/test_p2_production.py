@@ -4,7 +4,9 @@ Geen live LLM, geen live Exa, geen outbound.
 """
 from __future__ import annotations
 
+from northsea_mcp import __version__
 from northsea_mcp.crew import CREW_FOR_ROUTE, ROLES_FOR_ROUTE, CrewGateway
+from northsea_mcp.policy import TOOLS, missing_scopes
 from northsea_mcp.crews.catalog import (
     CONFIG_ROOT,
     CREW_SPECS,
@@ -26,6 +28,17 @@ ALL = frozenset({
     "northsea.communications.draft", "northsea.communications.send", "northsea.identity", "northsea.admin",
 })
 READ = frozenset({"northsea.read", "northsea.deal.read", "northsea.research"})
+
+
+def test_p2_mcp_version_is_1_4_0():
+    assert __version__ == "1.4.0"
+
+
+def test_handle_event_tool_requires_research_not_read_only():
+    assert TOOLS["northsea_handle_event"].scopes == ("northsea.research", "northsea.deal.read")
+    assert missing_scopes("northsea_handle_event", {"northsea.read", "northsea.deal.read"}) == ["northsea.research"]
+    assert missing_scopes("northsea_handle_event", {"northsea.research"}) == ["northsea.deal.read"]
+    assert missing_scopes("northsea_investigate_blockers", {"northsea.research", "northsea.deal.read"}) == []
 
 
 def caller(scopes=ALL) -> Caller:

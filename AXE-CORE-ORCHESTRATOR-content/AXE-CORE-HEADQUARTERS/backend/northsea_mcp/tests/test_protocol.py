@@ -144,8 +144,39 @@ async def test_discovery_metadata(app):
 
 
 async def test_public_health_exposes_no_internals(app):
+    from northsea_mcp import __version__
     async with _http(app) as h:
         health = (await h.get("/health")).json()
         ready = await h.get("/ready")
-    assert health == {"status": "ok", "version": health["version"]}
+    assert health == {"status": "ok", "version": "1.4.0"}
+    assert health["version"] == __version__
     assert set(ready.json()) == {"ready"}
+
+
+async def test_handle_event_refuses_read_only_scope(mcp_server):
+    with signed_in(READ):
+        async with Client(mcp_server) as c:
+            res = await c.call_tool("northsea_handle_event", {
+                "event_id": "evt-readonly-1", "run_id": "run-readonly-1",
+                "event_type": "opportunity_qualification", "source": "axe-core",
+                "requesting_principal": "user:luka",
+                "payload": {"opportunity_id": OPP},
+                "budget_envelope": {"research_calls": 1, "premium_calls": 0, "max_seconds": 30},
+            })
+    assert res.is_error
+    assert "insufficient_scope" in res.content[0].text
+    assert "northsea.research" in res.content[0].text
+
+
+async def test_handle_event_allows_research_and_deal_read(mcp_server):
+    with signed_in(READ | {"northsea.research"}):
+        async with Client(mcp_server) as c:
+            res = await c.call_tool("northsea_handle_event", {
+                "event_id": "evt-research-1", "run_id": "run-research-1",
+                "event_type": "opportunity_qualification", "source": "axe-core",
+                "requesting_principal": "user:luka",
+                "payload": {"opportunity_id": OPP},
+                "budget_envelope": {"research_calls": 1, "premium_calls": 0, "max_seconds": 30},
+            })
+    assert not res.is_error
+    assert res.structured_content["status"] in ("ok", "crew_unavailable", "unroutable")
