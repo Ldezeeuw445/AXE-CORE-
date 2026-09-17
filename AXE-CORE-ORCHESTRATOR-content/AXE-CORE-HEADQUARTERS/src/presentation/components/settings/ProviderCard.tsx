@@ -3,6 +3,24 @@ import { Check, ChevronRight, Eye, EyeOff, Loader2, Trash2 } from 'lucide-react'
 import { standTekst, standKleur, type KaartStand } from '@/domain/providerCardStand';
 
 /**
+ * A failed key-test's reason can arrive as a plain string OR as the provider's
+ * raw error object (e.g. `{ Error: "..." }` / `{ message: "..." }`). Rendering
+ * an object as a React child crashes the whole Settings page (React #31), so the
+ * card always turns whatever it got into one readable line.
+ */
+function foutRegel(f: unknown): string {
+  if (f == null) return '';
+  if (typeof f === 'string') return f;
+  if (typeof f === 'object') {
+    const o = f as Record<string, unknown>;
+    const m = o.Error ?? o.error ?? o.message ?? o.detail ?? o.reason;
+    if (typeof m === 'string') return m;
+    try { return JSON.stringify(f); } catch { return String(f); }
+  }
+  return String(f);
+}
+
+/**
  * One provider, one card — the same card for every one of them.
  *
  * Every card is built from the same four bands: who it is, how it is doing,
@@ -58,6 +76,7 @@ export function ProviderCard({
   onVerwijder?: () => void;
 }) {
   const Icoon = kaart.icon;
+  const foutTekst = foutRegel(fout);
   // Ollama heeft geen sleutel nodig om te werken, maar de externe box vraagt er
   // sinds 13 september wel een (zie config/ollamaSleutel.ts). Dus: een veld, en
   // optioneel -- leeg blijft de kaart gewoon "ingesteld".
@@ -125,10 +144,10 @@ export function ProviderCard({
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
               overflow: 'hidden', lineHeight: 1.35,
             }}
-            title={stand === 'fail' ? fout : undefined}
+            title={stand === 'fail' ? foutTekst : undefined}
           >
             {stand === 'fail'
-              ? (fout || 'no reason given')
+              ? (foutTekst || 'no reason given')
               : laatsteTest ? new Date(laatsteTest).toLocaleTimeString() : 'never'}
           </span>
         </div>
