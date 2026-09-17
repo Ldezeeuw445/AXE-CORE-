@@ -1,10 +1,58 @@
-# Handoff — AXE Core "one agent force" (17 Sep 2026)
+# Handoff — AXE Core "one agent force" (17 Sep 2026, updated same day — Stage 0/1/2b-part-1 done)
 
 For the next session (Claude, Cursor or Codex). Read this first, then memory
 `axe-core-agents-architecture` and `axe-leerlus-architectuur`.
 
 **Out of scope:** NorthSea P2 (Cursor, branch `origin/feat/northsea-crewai-p2`, reviewed separately).
-Never touch the NorthSea P0/P1 baseline (`docs/NORTHSEA_P0_P1_BASELINE.md`).
+Never touch the NorthSea P0/P1 baseline (`docs/NORTHSEA_P0_P1_BASELINE.md`, i.e.
+`backend/northsea_mcp/`, `supabase/northsea/*` and the `mcp.northseacommodity.com` deploy —
+NOT `backend/axe_api/northsea.py`, which is this app's own read-only desk API and is fair game).
+
+## Done since this doc was first written (same session, 17 Sep, commits `8e95fe8d`→`24e987e2`)
+
+- **Stage 0** (`8e95fe8d`): `roster.ts`/`catalog.ts` rewritten to the CONFIRMED ARCHITECTURE tiers
+  below — AXE + 5 tier-1 managers (wingman/northsea/trading/developer/thinktank) + 5 tier-2 workers
+  (browser/memory/task/cron/finance) + 2 tier-3 (intel/companion). Trading OS/Ollama/EVE are explicit
+  non-agent catalog entries. `delegateFor('code', …)` now returns `developer`, not `code`.
+- **Stage 1** (`dd719db0`): the "7 rows" ask, corrected to what's actually real — AXE's dropdown
+  (`domain/chatModelKeuzes.ts`, both the composer `ChatModelKiezer` and Settings' new "AXE Core" row
+  in `AgentMotorenSection`) now excludes the abonnement CLIs and Ollama, matching row 1's rule exactly
+  (verified live: the dropdown lists only anthropic/openai/google/groq/openrouter/openrouter2/cerebras).
+  `agentMotoren.ts`'s 5 subscription rows are now the tier-1 managers (AXE itself no longer has a row —
+  it never gets a subscription). `plannerKoppeling.ts` translates the new names back to `planner.py`'s
+  existing keys before sending, since that VPS script wasn't touched.
+- **Stage 2b, part 1** (`24e987e2`): the handoff below originally pointed at `runCrewWithTools.ts` for
+  crew-run episodes — that function has **zero callers**, dead code. The real, only entry point is
+  `CrewAI.tsx`'s `runCrew()` (its own comment already says so). Wired: one `agent_learning_episodes`
+  episode per selected specialist, opened before `crewRun()`, closed good/poor on the result. Added
+  `'wingman'` to `LOOP_AGENTS`. Fixed the stale `agentId: 'crewai_manager'` tag (retired in Stage 0) to
+  `'wingman'`.
+
+## Deliberately NOT done in Stage 2b — read before attempting
+
+- **NorthSea deal episodes**: investigated, not wired. There is no client-side decision point to hang
+  an episode on — `NorthseaDesk.tsx`/`domain/northsea/*` is a pure read/display layer over
+  `backend/axe_api/northsea.py` (a read-only aggregation endpoint), not somewhere an LLM decides
+  anything. The actual NorthSea Desk Manager reasoning happens server-side in
+  `backend/northsea_mcp/` — which is the protected P0/P1 baseline. Opening an episode purely because a
+  poll noticed `stage` flip to `won`/`lost`, with no decision behind it, would be exactly the
+  "looks wired, isn't" episode this whole system exists to avoid (see `axe-leerlus-architectuur`
+  memory). If this is still wanted, it likely belongs server-side in northsea_mcp as its own
+  P2/P3-scoped change — not a frontend change, and not this session.
+- **Code deploy episodes**: no deploy ACTION exists client-side to wire an episode around. `'deploy'`
+  only appears as a `toolset`/`capabilities` label in `defaultAgents.ts`/`OrganizationCanvas.tsx` —
+  there's no function that actually ships a build from this app. Building that action is a separate,
+  larger task than "wire the learning loop around it."
+- **`LOOP_AGENTS` for every catalog.ts namespace**: only `wingman` was added (12 other tiered agents
+  were not). Adding a `LoopAgent` entry with no real `openEpisode`/`closeEpisode` call site behind it
+  is the exact failure this codebase has been burned by twice already (see
+  `learningLoopWiring.test.ts`'s own commentary) — extend `LOOP_AGENTS` only alongside real wiring,
+  one entry per session at most, not as a batch rename.
+- **Settings UI not re-verified after Stage 2b** — Stage 0/1 were confirmed live in the browser
+  (logged in, screenshots + DOM read taken); Stage 2b part 1 was verified by running a real crew from
+  the CrewAI tab (no exception; Supabase unreachable in that sandboxed session so the episode write
+  itself wasn't observed succeeding, only failing silently and safely, same as the existing trading
+  episode wiring already does when offline).
 
 ## Where it stands (all on `orchestrator`, pushed)
 
@@ -80,28 +128,24 @@ from LOCAL keys, so it dropped VPS-only providers and fell to Ollama. Now Settin
 callProvider's proxy path fills the key. Open Settings once to populate the cache.
 
 ## Next steps, in order (the confirmed build)
-0. Rewrite `roster.ts`/`catalog.ts` to the tiers above (Code→AXE Developer, add ThinkTank, drop CrewAI
-   Manager, add Tier 3 Intel/Companion; mark Trading OS/Ollama/EVE non-agents).
 
-### 1. Settings: the "7 lines" panel (Luka's last explicit request)
-Luka still sees the old picker in Settings and above the composer. Wanted:
-- At the very top of Settings, **7 rows**. Row 1 **AXE Core**, with a dropdown of *only* fast/smart
-  chat models (Gemini, Grok, OpenRouter models; no subscriptions, no Ollama). The model set there is
-  **the one and only AXE**.
-- Rows 2–7 are the **six agents** (`roster.ts`: trading, northsea, code, finance, wingman + axe row
-  above). Each has a dropdown where a **subscription** (one of the 6 CLIs) or a model can be chosen.
-- The composer picker must show and write the same setting (one source of truth). No second store.
-- Check first: which live path reads the choice (`installStableChat` wraps `voiceStore.sendMessage`;
-  the obvious path is not always the live one).
-- Verify: in the app, type "axe" → the routing line shows the model chosen in row 1.
+~~0. Rewrite roster.ts/catalog.ts~~ — **done, Stage 0 (`8e95fe8d`).**
+~~1. Settings "7 lines" panel~~ — **done, Stage 1 (`dd719db0`), on the corrected tier list (AXE row +
+5 tier-1 rows, not the stale 6-agent count this section used to say).** Verified live: type a message,
+the routing line shows the model actually chosen in Settings' AXE Core row.
 
-### 2. Stage 2b — episodes for delayed-outcome agents
-- Wire `openEpisode`/`closeEpisode`/`applyAgentReinforcement` (`agent_learning_episodes`) for NorthSea
-  deals (read-only on outcome, no deal mutation), Code deploys, and crew runs (`runCrewWithTools`,
-  one episode per specialist).
-- Extend `LOOP_AGENTS` (`domain/memory/agentLoop`) to cover every namespace in `catalog.ts`.
-- The Agents tab loop health shows **turns and episodes** per agent, so "not wired yet" is truthful.
-- Keep `learningLoopWiring.test.ts` green; add a case per new entry point.
+### 2. Stage 2b — episodes for delayed-outcome agents (part 1 done, `24e987e2`)
+- ~~Crew runs~~ — **done**, wired into `CrewAI.tsx` (not `runCrewWithTools.ts`, which is dead code —
+  see "Deliberately NOT done" above for why the handoff's original pointer was wrong).
+- **Still open, and why they weren't just done here too** (see "Deliberately NOT done" above for the
+  full reasoning — don't re-attempt without reading it first):
+  - NorthSea deals — no client-side decision point exists to open an episode against; the real
+    decision-maker is server-side in the protected `backend/northsea_mcp/`.
+  - Code deploys — no deploy action exists client-side yet to wire an episode around.
+  - `LOOP_AGENTS` for the other 12 catalog.ts namespaces — only add one alongside real wiring, never
+    as a batch.
+- `applyAgentReinforcement` and the Agents-tab loop-health display were NOT touched this round — they
+  already worked before Stage 2b and don't need changes for the crew-run wiring to show up correctly.
 
 ### 3. Later, in the agreed order
 1. **Delegate on intent:** AXE says out loud that it hands over.
