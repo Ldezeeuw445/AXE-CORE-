@@ -37,6 +37,18 @@
 
 import type { KaartDeal } from '@/domain/northsea/kaart';
 
+/** Concepten die geen commerciële desk-actie zijn (platform, OTP, receptionist). */
+const CONCEPT_RUIS = /tradewheel|whatsapp-verificatie|verificatiecode|empty pawn shop|let’s get started|lets get started|kaicalls|nieuwe oproep|no-?reply@/i;
+
+/** Engine-codes die Chase nú moet tonen, ook als action_queue er geen deal_id op heeft. */
+const KAART_AANDACHT = new Set(['reply_needed', 'awaiting_reply_overdue', 'contact_policy_review', 'channel_bounced']);
+const KAART_PRIO: Record<string, number> = {
+  reply_needed: 100,
+  channel_bounced: 100,
+  awaiting_reply_overdue: 95,
+  contact_policy_review: 90,
+};
+
 export interface NorthseaRij {
   id: string;
   soort?: string | null;
@@ -146,6 +158,32 @@ function eersteAdres(aan: unknown): string | null {
   return typeof aan === 'string' ? aan : null;
 }
 
+export function isChaseConceptRuis(r: Pick<NorthseaRij, 'titel' | 'aan' | 'soort'>): boolean {
+  const t = `${r.titel ?? ''} ${r.soort ?? ''} ${eersteAdres(r.aan) ?? ''}`;
+  return CONCEPT_RUIS.test(t);
+}
+
+function kaartRij(k: KaartDeal): NorthseaRij {
+  const code = k.blokkade_code ?? '';
+  return {
+    id: k.id,
+    soort: code,
+    titel: k.huidige_blokkade || k.beste_actie || k.volgende,
+    prioriteit: KAART_PRIO[code] ?? 80,
+    akkoord_nodig: k.actie_eigenaar === 'luka' || !!k.akkoord_nodig,
+    due_at: code === 'awaiting_reply_overdue' ? (k.updated_at || k.created_at) : null,
+    created_at: k.created_at,
+    updated_at: k.beoordeeld_op || k.updated_at,
+    code: k.code,
+    blokkade: k.huidige_blokkade,
+    volgende: k.beste_actie || k.volgende,
+    koper: k.koper,
+    leverancier: k.leverancier,
+    product: k.product,
+    deal_id: k.id,
+  };
+}
+
 function naarItem(r: NorthseaRij, bron: ChaseBron, nu: number): ChaseItem {
   const prioriteit = Number(r.prioriteit ?? 0) || 0;
   const wanneer = r.updated_at || r.created_at || new Date(nu).toISOString();
@@ -185,12 +223,14 @@ function naarItem(r: NorthseaRij, bron: ChaseBron, nu: number): ChaseItem {
   };
 }
 
-export function chaseItems(o: Pick<NorthseaOverzicht, 'acties' | 'taken' | 'concepten' | 'bounces'>, nu: number): ChaseItem[] {
+export function chaseItems(o: Pick<NorthseaOverzicht, 'acties' | 'taken' | 'concepten' | 'bounces' | 'kaart'>, nu: number): ChaseItem[] {
+  const aandacht = (o.kaart ?? []).filter(k => KAART_AANDACHT.has(k.blokkade_code ?? ''));
   const items = [
     ...o.bounces.map(r => naarItem(r, 'bounce', nu)),
+    ...aandacht.map(k => naarItem(kaartRij(k), 'taak', nu)),
     ...o.acties.map(r => naarItem(r, 'actie', nu)),
     ...o.taken.map(r => naarItem(r, 'taak', nu)),
-    ...o.concepten.map(r => naarItem(r, 'concept', nu)),
+    ...o.concepten.filter(r => !isChaseConceptRuis(r)).map(r => naarItem(r, 'concept', nu)),
   ];
   return items.sort((a, b) =>
     Number(b.kritiek) - Number(a.kritiek)

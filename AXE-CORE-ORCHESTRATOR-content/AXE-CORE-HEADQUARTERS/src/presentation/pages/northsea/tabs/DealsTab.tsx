@@ -25,9 +25,10 @@ import {
 import { POORTEN, type BedrijfKort, type DealDetail } from '@/domain/northsea/tabs/typen';
 import { blokkadeToon, eigenaarLabel } from '@/domain/northsea/engine';
 import {
-  DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, Zoekveld,
+  DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, WerkstroomHint, Zoekveld,
 } from './bouwstenen';
 import { useNorthseaTab } from './useNorthseaTab';
+import { beoordeelKoppeling, berichtHoortBijDeal, isVolgendeActieVerlopen, koppelLabel, koppelToon } from '@/domain/northsea/koppeling';
 
 type Filter = 'alle' | KolomId;
 type Onderdeel = 'overzicht' | 'tijdlijn' | 'taken';
@@ -109,6 +110,7 @@ function Ring({ waarde }: { waarde: number | null | undefined }) {
 
 export function DealsTab({ startId, openComms }: { startId?: string | null; openComms?: (dealId: string) => void }) {
   const { data, fout, bezig, ververs } = useNorthseaTab('deals');
+  const commsTab = useNorthseaTab('communicatie');
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useState<Filter>('alle');
   const [gekozen, setGekozen] = useState<string | null>(startId ?? null);
@@ -139,9 +141,27 @@ export function DealsTab({ startId, openComms }: { startId?: string | null; open
     alle.map(d => ({ stage: d.stage, execution_state: d.execution_state, geblokkeerd: !!(d.blokkade ?? '').trim() })),
     'kwalificatie',
   );
+  const berichten = useMemo(() => commsTab.data?.berichten ?? [], [commsTab.data]);
+  const oordelen = useMemo(() => new Map(berichten.map(b => [b.id, beoordeelKoppeling(b, alle, berichten)])), [berichten, alle]);
+  const dealBerichten = useMemo(
+    () => (deal ? berichten.filter(b => berichtHoortBijDeal(b, deal.id, oordelen.get(b.id))) : []),
+    [deal, berichten, oordelen],
+  );
+  const kandidaatBerichten = useMemo(
+    () => dealBerichten.filter(b => !b.deal_id),
+    [dealBerichten],
+  );
+  const volgendeVerlopen = deal ? isVolgendeActieVerlopen(deal.volgende_op, nu) : false;
+  const latereInbound = useMemo(() => {
+    if (!deal?.updated_at) return [];
+    const t = Date.parse(deal.updated_at);
+    if (!Number.isFinite(t)) return [];
+    return kandidaatBerichten.filter(b => b.richting === 'inbound' && Date.parse(b.occurred_at ?? '') > t);
+  }, [deal, kandidaatBerichten]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-deals-tab">
+      <WerkstroomHint />
       <KengetalRij>
         <Kengetal waarde={data ? alle.length : '—'} label="Opportunities" sub="Not deals until executable" toon="blauw" />
         <Kengetal waarde={data ? (perKolom.get('kwalificatie') ?? 0) : '—'} label="Qualifying" toon="blauw"
@@ -235,6 +255,34 @@ export function DealsTab({ startId, openComms }: { startId?: string | null; open
                   </div>
                 </Kaartje>
               </div>
+
+              {volgendeVerlopen && (
+                <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)', color: '#FBBF24' }}>
+                  Stored next action is overdue ({new Date(deal.volgende_op!).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}). Qualification is not changed from this screen.
+                </div>
+              )}
+              {latereInbound.length > 0 && (
+                <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.28)', color: '#93C5FD' }}>
+                  {latereInbound.length} inbound message{latereInbound.length === 1 ? '' : 's'} arrived after the last deal update. Blocker and next action were not rewritten from that mail.
+                </div>
+              )}
+              {kandidaatBerichten.length > 0 && (
+                <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--axe-vak-lijn)' }}>
+                  <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Unwritten communication matches</div>
+                  <ul className="mt-1.5 flex flex-col gap-1">
+                    {kandidaatBerichten.slice(0, 5).map(b => {
+                      const k = oordelen.get(b.id);
+                      return (
+                        <li key={b.id} className="flex items-baseline gap-2 text-[12px]">
+                          {k && <Label toon={koppelToon(k.klasse)}>{koppelLabel(k.klasse)}</Label>}
+                          <span className="truncate" style={{ color: 'var(--text-secondary)' }}>{b.onderwerp || '(no subject)'}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>Shown as candidates. Opportunity_id is not written from the Desk.</div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2 2xl:grid-cols-4">
                 <Kaartje titel="Buyer">
@@ -387,6 +435,9 @@ export function DealsTab({ startId, openComms }: { startId?: string | null; open
             </div>
             <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Related</div>
             <Veld label="Communications">{deal.aantallen?.communicatie ?? 0}</Veld>
+            {kandidaatBerichten.length > 0 && (
+              <Veld label="Unwritten matches">{kandidaatBerichten.length}</Veld>
+            )}
             <Veld label="Evidence">{deal.aantallen?.bewijs ?? 0}</Veld>
             <Veld label="Documents">{deal.aantallen?.documenten ?? 0}</Veld>
             <Veld label="Open tasks">{deal.aantallen?.taken ?? 0}</Veld>

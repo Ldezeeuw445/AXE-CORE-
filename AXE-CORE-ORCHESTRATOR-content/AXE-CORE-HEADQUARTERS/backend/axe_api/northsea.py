@@ -229,6 +229,7 @@ select json_build_object('bedrijven', (select coalesce(json_agg(r order by r.upd
 select json_build_object('berichten', (select coalesce(json_agg(r order by r.occurred_at desc nulls last), '[]'::json) from (
   select cm.id, cm.direction as richting, cm.channel as kanaal, cm.subject as onderwerp, left(cm.body, 6000) as tekst,
          cm.occurred_at, cm.delivery_status as bezorging, cm.mapping_status as koppeling, cm.mapping_basis as koppeling_basis,
+         cm.mapping_candidates as koppeling_kandidaten, cm.rfc_message_id as rfc_id,
          cm.is_synthetic as test, cm.from_address as afzender, cm.approval_basis as akkoord_basis, cm.actor as verstuurd_door,
          cm.company_id as bedrijf_id, co.company_name as bedrijf, co.country as bedrijf_land,
          ct.full_name as contact, ct.email as contact_email,

@@ -239,6 +239,11 @@ export interface Bericht {
   bezorging?: Tekst;
   koppeling?: Tekst;
   koppeling_basis?: Tekst;
+  /** P0.7 kandidaten; aanwezig als inbound mapping ambiguous liet. Geen write. */
+  koppeling_kandidaten?: string[] | null;
+  rfc_id?: Tekst;
+  in_reply_to?: Tekst;
+  referenties?: Tekst;
   test?: boolean | null;
   afzender?: Tekst;
   akkoord_basis?: Tekst;

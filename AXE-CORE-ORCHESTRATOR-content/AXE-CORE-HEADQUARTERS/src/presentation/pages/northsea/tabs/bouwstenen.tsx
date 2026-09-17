@@ -53,6 +53,15 @@ export function Kengetal({ waarde, label, sub, toon }: { waarde: ReactNode; labe
   );
 }
 
+/** De dagelijkse NorthSea-werkstroom, als herinnering — geen nieuwe navigatie. */
+export function WerkstroomHint() {
+  return (
+    <p className="px-1 text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }} data-axe-doel="northsea-werkstroom">
+      Daily path: Chase → Deal → Blocker → Communication → Action/Draft → Approval → Updated state
+    </p>
+  );
+}
+
 /** Een rij kengetallen die in het midden staat en doorschuift als hij niet past. */
 export function KengetalRij({ children }: { children: ReactNode }) {
   return (

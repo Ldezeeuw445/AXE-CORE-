@@ -18,13 +18,17 @@ import { bezorgBadge, conceptBadge, mensLabel, TOON_KLEUR, type Toon } from '@/d
 import type { Bericht } from '@/domain/northsea/tabs/typen';
 import { conceptHerkomst, termenRegels } from '@/domain/northsea/engine';
 import { inferMailMode, mailReferenceFromKnown } from '@/domain/northsea/mail';
+import {
+  beoordeelKoppeling, berichtHoortBijDeal, koppelLabel, koppelTellers, koppelToon, type KoppelKlasse,
+} from '@/domain/northsea/koppeling';
 import { BerichtTekst, OntvangerPreview } from './BerichtTekst';
 import {
-  DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, Zoekveld,
+  DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, WerkstroomHint, Zoekveld,
 } from './bouwstenen';
 import { useNorthseaTab } from './useNorthseaTab';
 import { northseaVerstuurConcept, northseaVerstuurStatus } from '@/infrastructure/gateways/axeCoreApiService';
 
+type CommFilter = BerichtFilter | KoppelKlasse;
 const richtingToon = (r: string | null | undefined): Toon => (r === 'inbound' ? 'blauw' : r === 'outbound' ? 'grijs' : 'paars');
 
 function RichtingIcoon({ b }: { b: Bericht }) {
@@ -56,13 +60,20 @@ export function CommunicatieTab({
   openDeal?: (id: string) => void;
 }) {
   const { data, fout, bezig, ververs } = useNorthseaTab('communicatie');
-  const [filter, setFilter] = useState<BerichtFilter>(startFilter ?? 'alle');
+  const dealsTab = useNorthseaTab('deals');
+  const [filter, setFilter] = useState<CommFilter>(startFilter ?? 'alle');
   const [zoek, setZoek] = useState('');
   const [gekozen, setGekozen] = useState<string | null>(null);
   const [nu, setNu] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNu(Date.now()), 60_000); return () => clearInterval(t); }, []);
 
   const alle = useMemo(() => data?.berichten ?? [], [data]);
+  const deals = useMemo(() => dealsTab.data?.deals ?? [], [dealsTab.data]);
+  const oordelen = useMemo(() => {
+    const m = new Map(alle.map(b => [b.id, beoordeelKoppeling(b, deals, alle)]));
+    return m;
+  }, [alle, deals]);
+  const koppelTelling = useMemo(() => koppelTellers([...oordelen.values()]), [oordelen]);
 
   /* Versturen kan alleen als deze Mac er een sleutel en een endpoint voor heeft.
      Zonder dat geen knop, maar wél de reden: een knop die altijd faalt is erger
@@ -90,11 +101,18 @@ export function CommunicatieTab({
     }
   };
   const rijen = useMemo(() => {
-    const gefilterd = filterBerichten(alle, filter, zoek);
+    const basisFilter: BerichtFilter = (
+      filter === 'LINKED' || filter === 'HIGH_CONFIDENCE_MATCH' || filter === 'AMBIGUOUS' || filter === 'UNLINKED'
+        ? 'alle' : filter
+    );
+    let gefilterd = filterBerichten(alle, basisFilter, zoek);
+    if (filter === 'LINKED' || filter === 'HIGH_CONFIDENCE_MATCH' || filter === 'AMBIGUOUS' || filter === 'UNLINKED') {
+      gefilterd = gefilterd.filter(b => oordelen.get(b.id)?.klasse === filter);
+    }
     if (!startDealId) return gefilterd;
-    const inDeal = gefilterd.filter(b => b.deal_id === startDealId);
+    const inDeal = gefilterd.filter(b => berichtHoortBijDeal(b, startDealId, oordelen.get(b.id)));
     return inDeal.length ? inDeal : gefilterd;
-  }, [alle, filter, zoek, startDealId]);
+  }, [alle, filter, zoek, startDealId, oordelen]);
   const threads = useMemo(() => groepeerBerichten(rijen), [rijen]);
   const tellers = useMemo(() => ({
     alle: alle.length,
@@ -114,20 +132,24 @@ export function CommunicatieTab({
     ?? threads[0]
     ?? null;
   const bericht = (gekozen ? thread?.berichten.find(b => b.id === gekozen) : null) ?? thread?.laatste ?? null;
+  const oordeel = bericht ? oordelen.get(bericht.id) : undefined;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-communicatie">
+      <WerkstroomHint />
       <KengetalRij>
         <Kengetal waarde={data ? tellers.alle : '—'} label="Messages" sub="Last 300 recorded" toon="blauw" />
-        <Kengetal waarde={data ? tellers.inkomend : '—'} label="Inbound" />
-        <Kengetal waarde={data ? tellers.uitgaand : '—'} label="Outbound" />
+        <Kengetal waarde={data ? koppelTelling.LINKED : '—'} label="Linked" toon="groen" sub="Stored opportunity_id" />
+        <Kengetal waarde={data ? koppelTelling.HIGH_CONFIDENCE_MATCH : '—'} label="High-confidence" toon="blauw" sub="Shown only — not written" />
+        <Kengetal waarde={data ? koppelTelling.AMBIGUOUS : '—'} label="Ambiguous" toon="oranje" sub="Candidates, no choice" />
+        <Kengetal waarde={data ? koppelTelling.UNLINKED : '—'} label="Unlinked" toon="grijs" />
         <Kengetal waarde={data ? tellers.actie : '—'} label="Needs action" toon="oranje" sub={data ? (tellers.actie ? 'Drafts or approvals waiting' : 'Nothing waiting') : undefined} />
         <Kengetal waarde={data ? tellers.akkoord : '—'} label="Awaiting approval" toon="oranje" />
         <Kengetal waarde={data ? tellers.bounces : '—'} label="Not delivered" toon="rood" />
       </KengetalRij>
 
       <Vlak vul titel={<span className="flex items-center gap-2"><MessageSquare size={15} style={{ color: '#60A5FA' }} />Communications</span>}
-        sub="Emails, calls and notes linked to your deals and counterparties."
+        sub="Association is evidence-based. High-confidence matches are displayed, not written to the deal."
         acties={(
           <>
             <div className="w-[260px]"><Zoekveld waarde={zoek} zet={setZoek} plaats="Search communications…" /></div>
@@ -135,7 +157,7 @@ export function CommunicatieTab({
           </>
         )}>
         <div className="px-4 pb-2">
-          <Filters<BerichtFilter> opties={[
+          <Filters<CommFilter> opties={[
             { id: 'alle', label: 'All', aantal: tellers.alle },
             { id: 'inkomend', label: 'Inbound', aantal: tellers.inkomend },
             { id: 'uitgaand', label: 'Outbound', aantal: tellers.uitgaand },
@@ -145,6 +167,10 @@ export function CommunicatieTab({
             { id: 'actie', label: 'Needs action', aantal: tellers.actie },
             { id: 'akkoord', label: 'Approvals', aantal: tellers.akkoord },
             { id: 'niet_bezorgd', label: 'Not delivered', aantal: tellers.bounces },
+            { id: 'LINKED', label: 'Linked', aantal: koppelTelling.LINKED },
+            { id: 'HIGH_CONFIDENCE_MATCH', label: 'High-confidence', aantal: koppelTelling.HIGH_CONFIDENCE_MATCH },
+            { id: 'AMBIGUOUS', label: 'Ambiguous', aantal: koppelTelling.AMBIGUOUS },
+            { id: 'UNLINKED', label: 'Unlinked', aantal: koppelTelling.UNLINKED },
           ]} actief={filter} kies={setFilter} />
         </div>
         {fout && <FoutRegel fout={fout} />}
@@ -157,6 +183,7 @@ export function CommunicatieTab({
                 const b = t.laatste;
                 const aan = thread?.sleutel === t.sleutel;
                 const actie = t.berichten.some(vraagtActie);
+                const k = oordelen.get(b.id);
                 return (
                   <li key={t.sleutel}>
                     <button type="button" onClick={() => setGekozen(b.id)} className="flex w-full gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.03]"
@@ -172,6 +199,7 @@ export function CommunicatieTab({
                         <span className="mt-0.5 flex items-center gap-1.5">
                           {t.berichten.length > 1 && <Label toon="grijs">{t.berichten.length}</Label>}
                           {(b.deal_code || b.deal_id) && <Label toon="blauw">{b.deal_code || `#${(b.deal_id ?? '').slice(0, 6)}`}</Label>}
+                          {k && k.klasse !== 'LINKED' && <Label toon={koppelToon(k.klasse)}>{koppelLabel(k.klasse)}</Label>}
                           {actie && <Label toon="oranje">Needs action</Label>}
                           {t.berichten.some(nietBezorgd) && <Label toon="rood">Not delivered</Label>}
                           {b.test && <Label toon="grijs">Test</Label>}
@@ -189,6 +217,7 @@ export function CommunicatieTab({
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>{bericht.onderwerp || '(no subject)'}</h3>
                     {bericht.deal_code && <Label toon="blauw">{bericht.deal_code}</Label>}
+                    {oordeel && <Label toon={koppelToon(oordeel.klasse)}>{koppelLabel(oordeel.klasse)}</Label>}
                     <Label toon={richtingToon(bericht.richting)}>{mensLabel(bericht.richting)} · {mensLabel(bericht.kanaal)}</Label>
                     {bezorgBadge(bericht.bezorging) && <StatusChip badge={bezorgBadge(bericht.bezorging)!} klein />}
                   </div>
@@ -244,12 +273,12 @@ export function CommunicatieTab({
                   <div className="mt-3 text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>Message metadata</div>
                   <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
                     {[
-                      bericht.deal_code ? `Deal ${bericht.deal_code}` : (bericht.deal_id ? `Deal #${bericht.deal_id.slice(0, 6)}` : 'Deal unlinked'),
+                      bericht.deal_code ? `Deal ${bericht.deal_code}` : (bericht.deal_id ? `Deal #${bericht.deal_id.slice(0, 6)}` : (oordeel?.dealId ? `Candidate #${oordeel.dealId.slice(0, 6)}` : 'Deal unlinked')),
                       bericht.deal_product || null,
                       bericht.deal_volume != null && String(bericht.deal_volume).trim() ? `${bericht.deal_volume} MT` : null,
                       bericht.deal_bestemming || null,
                       bericht.deal_incoterm || null,
-                      bericht.koppeling ? `Mapping ${mensLabel(bericht.koppeling)}` : null,
+                      oordeel ? `${koppelLabel(oordeel.klasse)}${oordeel.basis ? ` · ${oordeel.basis}` : ''}` : (bericht.koppeling ? `Mapping ${mensLabel(bericht.koppeling)}` : null),
                       bericht.akkoord_basis ? `Approval ${mensLabel(bericht.akkoord_basis)}` : null,
                     ].filter(Boolean).join(' · ')}
                   </div>
@@ -272,13 +301,36 @@ export function CommunicatieTab({
           <DetailPaneel titel={bericht.bedrijf || bericht.contact || 'Message'} sub={bericht.bedrijf_land || undefined}>
             <Veld label="Contact">{bericht.contact}</Veld>
             <Veld label="Email">{bericht.contact_email}</Veld>
-            <Veld label="Deal">{bericht.deal_code || (bericht.deal_id ? `#${bericht.deal_id.slice(0, 6)}` : null)}</Veld>
-            {openDeal && bericht.deal_id && (
-              <button type="button" onClick={() => openDeal(bericht.deal_id!)} className="mb-2 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
+            <Veld label="Deal">{bericht.deal_code || (bericht.deal_id ? `#${bericht.deal_id.slice(0, 6)}` : (oordeel?.dealId ? `Candidate #${oordeel.dealId.slice(0, 6)}` : null))}</Veld>
+            {openDeal && (bericht.deal_id || oordeel?.dealId) && (
+              <button type="button" onClick={() => openDeal(bericht.deal_id || oordeel!.dealId!)} className="mb-2 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
                 Open Deal Room
               </button>
             )}
-            <Veld label="Mapping">{bericht.koppeling ? `${mensLabel(bericht.koppeling)}${bericht.koppeling_basis ? ` · ${bericht.koppeling_basis}` : ''}` : null}</Veld>
+            <Veld label="Association">{oordeel ? `${koppelLabel(oordeel.klasse)}${oordeel.basis ? ` · ${oordeel.basis}` : ''}` : (bericht.koppeling ? `${mensLabel(bericht.koppeling)}${bericht.koppeling_basis ? ` · ${bericht.koppeling_basis}` : ''}` : null)}</Veld>
+            {oordeel && (
+              <div className="mb-3 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>{oordeel.reden}</div>
+            )}
+            {oordeel && oordeel.kandidaten.length > 0 && oordeel.klasse !== 'LINKED' && (
+              <ul className="mb-3 flex flex-col gap-1">
+                {oordeel.kandidaten.map(k => (
+                  <li key={k.id} className="rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.025)' }}>
+                    <div className="text-[12px]" style={{ color: 'var(--text-primary)' }}>{k.label}</div>
+                    <div className="text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{k.waarom}</div>
+                    {openDeal && (
+                      <button type="button" onClick={() => openDeal(k.id)} className="mt-1 text-[11.5px]" style={{ color: 'var(--accent-cyan)' }}>
+                        Inspect deal
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {oordeel?.klasse === 'HIGH_CONFIDENCE_MATCH' && (
+              <div className="mb-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                Not written to the database. Inbound mapping or a human still has to store the opportunity_id.
+              </div>
+            )}
             {bericht.richting === 'outbound' && (
               <>
                 {/* Herkomst zoals vastgelegd; ontbrekend blijft "not recorded" (P0.9). */}

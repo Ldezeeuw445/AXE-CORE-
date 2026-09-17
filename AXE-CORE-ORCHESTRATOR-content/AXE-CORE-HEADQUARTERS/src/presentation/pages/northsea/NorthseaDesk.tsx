@@ -45,6 +45,7 @@ import { DocumentenTab } from './tabs/DocumentenTab';
 import { BewijsTab } from './tabs/BewijsTab';
 import { AutomatiseringTab } from './tabs/AutomatiseringTab';
 import { RapportenTab } from './tabs/RapportenTab';
+import { WerkstroomHint } from './tabs/bouwstenen';
 
 type Tab = 'live' | 'chase' | 'deals' | 'pipeline' | 'tegenpartijen' | 'communicatie' | 'markt' | 'documenten' | 'bewijs' | 'automatisering' | 'rapporten';
 type ChaseFilter = 'alle' | 'kritiek' | 'nieuw' | 'akkoord';
@@ -306,6 +307,12 @@ function ChasePaneel({
           <RefreshCw size={12} className={bezig ? 'animate-spin' : ''} />
         </button>
       </div>
+      <div className="mb-3"><WerkstroomHint /></div>
+      {zichtbaar.some(i => !i.dealId) && (
+        <div className="mb-3 text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }}>
+          Some Chase rows have no deal id yet. Restart axe_api on the Mac mini from this branch so click-through can open the Deal Room.
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-1.5 mb-3">
         {([['alle', 'All', tellers.alle], ['kritiek', 'Critical', tellers.kritiek], ['akkoord', 'Approvals', tellers.akkoord], ['nieuw', 'New', tellers.nieuw]] as const).map(([id, label, n]) => (

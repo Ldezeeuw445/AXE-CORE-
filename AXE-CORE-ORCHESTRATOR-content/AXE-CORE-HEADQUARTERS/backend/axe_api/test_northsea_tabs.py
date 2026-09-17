@@ -34,6 +34,8 @@ def test_communicatie_query_levert_concepttekst_voor_preview():
     assert "deal_product" in sql
     assert "buyer_requirements" in sql
     assert "supplier_offers" in sql
+    assert "mapping_candidates" in sql
+    assert "rfc_message_id" in sql
 
 
 def test_overzicht_chase_heeft_deal_id():
