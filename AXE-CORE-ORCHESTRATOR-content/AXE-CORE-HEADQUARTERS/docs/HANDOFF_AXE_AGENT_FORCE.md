@@ -1,4 +1,4 @@
-# Handoff — AXE Core "one agent force" (17 Sep 2026, updated same day — Stage 0/1/2b-part-1 done)
+# Handoff — AXE Core "one agent force" (17 Sep 2026, updated same day — Stage 0/1/2b done, consolidation audited)
 
 For the next session (Claude, Cursor or Codex). Read this first, then memory
 `axe-core-agents-architecture` and `axe-leerlus-architectuur`.
@@ -8,7 +8,7 @@ Never touch the NorthSea P0/P1 baseline (`docs/NORTHSEA_P0_P1_BASELINE.md`, i.e.
 `backend/northsea_mcp/`, `supabase/northsea/*` and the `mcp.northseacommodity.com` deploy —
 NOT `backend/axe_api/northsea.py`, which is this app's own read-only desk API and is fair game).
 
-## Done since this doc was first written (same session, 17 Sep, commits `8e95fe8d`→`24e987e2`)
+## Done since this doc was first written (same session, 17 Sep, commits `8e95fe8d`→`77c365fe`)
 
 - **Stage 0** (`8e95fe8d`): `roster.ts`/`catalog.ts` rewritten to the CONFIRMED ARCHITECTURE tiers
   below — AXE + 5 tier-1 managers (wingman/northsea/trading/developer/thinktank) + 5 tier-2 workers
@@ -27,6 +27,64 @@ NOT `backend/axe_api/northsea.py`, which is this app's own read-only desk API an
   episode per selected specialist, opened before `crewRun()`, closed good/poor on the result. Added
   `'wingman'` to `LOOP_AGENTS`. Fixed the stale `agentId: 'crewai_manager'` tag (retired in Stage 0) to
   `'wingman'`.
+- **Stage 2b, part 2** (`a16b0b05`): `runCrewWithTools.ts` turned out not to be just an unused episode
+  wrapper — it's the only thing that calls `buildCrewToolEnv()` (EXA/Firecrawl/BrightData/E2B/Qdrant
+  credentials). `CrewAI.tsx` called bare `crewRun()`, so **every Wingman crew run had zero tool
+  credentials attached** — a real functional gap, not just style. Switched `CrewAI.tsx` to call
+  `runCrewWithTools()`, and added a small tool-status row to the result card so a run that needed a
+  tool it didn't get is visible. This is "the existing generic CrewGateway" a later instruction asked
+  for — it wasn't generic yet (only this wrapper existed, unused); now Wingman is the first real caller.
+- **Doc-drift fix** (`77c365fe`): `catalog.ts`/`WarRoom.tsx`/`voiceStore.ts` still said "the six agents"
+  after Stage 0. Comments only.
+- **Consolidation audit** (no code change — see "Investigated, not built" below): a follow-up
+  instruction asked to also cover finance/budget routing, structured handoffs, durable task→outcome
+  flow, AXE Developer auto-routing, Agent SDK integration, and the three legacy agent lists. Traced
+  each to its real code; none had a wireable boundary without first building new infrastructure or
+  getting a product decision. Recorded precisely instead of building something hollow.
+
+## Investigated, not built — genuine integration requirements, each needs a decision or new work first
+
+These were asked for in a follow-up instruction. None were skipped for lack of effort — each was
+traced to real code and blocked on something concrete, listed below. Don't re-attempt any of these as
+a quick wire-up without reading the reason first.
+
+- **Finance/budget-aware routing**: `Finance.tsx` is a manual income ledger (Prime Opinion, trading,
+  apps) — zero relation to AI provider spend. There is no cost/credit/usage tracking for any provider
+  anywhere in this codebase to route on. Building "cheapest capable engine" needs a new per-provider
+  cost model first (pricing table + usage counters), not a routing function.
+- **AXE Developer auto-routing (simple→OpenHands/Qwen, heavy→Cursor/Claude)**: `Qwen` does not exist as
+  an engine option anywhere in `CodeEditorPage.tsx` (`AGENT_ENGINES` has `native`/`openhands` plus the
+  six subscriptions — no Qwen). Also: the agent's instruction text (`agentInput`) is never set from a
+  local textarea in that file — it arrives from the global composer through a path this session didn't
+  fully trace, so even a non-forcing "suggestion badge" risked being placed on a wrong assumption about
+  where the message actually originates. Needs: (a) decide what "Qwen" routing actually means without
+  the engine existing, (b) trace the composer→code-agent message path properly before touching the UI.
+- **Structured handoffs (AXE says out loud that it hands over)**: `delegateFor()`'s result already
+  reaches the UI (`WarRoom`, `AICore`'s routing line) — but only as a memory-namespace tag and a debug
+  label. It does not change the system prompt, tools, or announce itself in the reply text Luka reads.
+  Making it a real handoff (not just a label) means editing `voiceStore.ts`'s core message pipeline,
+  the single largest and most delicate file in this app — worth doing deliberately, not as one bullet
+  among ten in the same pass that also touched five other subsystems.
+- **Durable task→outcome flow**: tasks already carry `capability`/`assignee` and resolve through the
+  VPS `axe-task-worker`, so a task closing IS a real, traceable event. But "done" is not the same signal
+  as a trade's win/loss — marking a follow-up task complete usually means "someone did the work," not
+  "the agent's original call was validated." Wiring an episode verdict to task completion without that
+  distinction would manufacture a good/poor judgement that isn't really there. Needs a product decision
+  on what a task outcome even means before it's an engineering task.
+- **Provider/Agent SDK integration**: no `@anthropic-ai/claude-agent-sdk` or any Agent SDK dependency
+  exists anywhere in this repo (checked `package.json` and every source file). Nothing to integrate —
+  this is a from-scratch adoption decision, not a missing connection.
+- **Migrate/consolidate the three legacy agent lists** (`AGENT_SEEDS` in `agentRegistry.ts`,
+  `DEFAULT_AGENTS` in `defaultAgents.ts`, plus `catalog.ts`'s canonical list from Stage 0): these are
+  NOT simple duplicates of one list — `AGENT_SEEDS` seeds the real `agents` Supabase table (read by the
+  `NeuralBrain.tsx` visualization), `DEFAULT_AGENTS` is the offline fallback for the *different*
+  `core_agents` table that the Agents-tab "Full Roster" grid reads. Fully consolidating them means
+  either merging two live tables (a schema migration — this session has no authenticated Supabase
+  write access to verify or run one safely) or keeping the tables separate while still deriving both
+  seed lists from `catalog.ts` (safe, but doesn't fix already-seeded stale rows like `crewai_manager`/
+  `eve` sitting live in a table `ensureAgentsSeeded()` never touches by design — "existing rows... never
+  touched"). Needs live DB read access at minimum before touching this, so a fix can be verified rather
+  than assumed.
 
 ## Deliberately NOT done in Stage 2b — read before attempting
 
