@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chaseItems, chaseTellers, isDealCode, tijdGeleden, type NorthseaRij } from './chase';
+import { chaseDoel, chaseItems, chaseTellers, isDealCode, tijdGeleden, type NorthseaRij } from './chase';
 
 const NU = Date.parse('2026-09-14T12:00:00Z');
 const leeg = { acties: [] as NorthseaRij[], taken: [] as NorthseaRij[], concepten: [] as NorthseaRij[], bounces: [] as NorthseaRij[] };
@@ -50,7 +50,20 @@ describe('chaseItems', () => {
 
   it('telt alle, kritiek en nieuw', () => {
     const items = chaseItems({ ...leeg, bounces: [{ id: 'b', created_at: uurGeleden(1) }], acties: [{ id: 'x', created_at: uurGeleden(40) }] }, NU);
-    expect(chaseTellers(items)).toEqual({ alle: 2, kritiek: 1, nieuw: 1 });
+    expect(chaseTellers(items)).toEqual({ alle: 2, kritiek: 1, nieuw: 1, akkoord: 0 });
+  });
+
+  it('een bounce of concept opent Communications, een taak de Deal Room', () => {
+    const items = chaseItems({
+      ...leeg,
+      bounces: [{ id: 'b1', created_at: uurGeleden(1), deal_id: 'opp-1' }],
+      concepten: [{ id: 'c1', titel: 'Term sheet', deal_id: 'opp-2' }],
+      taken: [{ id: 't1', titel: 'Chase buyer', code: 'DEAL-002', deal_id: 'opp-3' }],
+    }, NU);
+    const per = Object.fromEntries(items.map(i => [i.id, i]));
+    expect(chaseDoel(per['bounce:b1'])).toEqual({ tab: 'communicatie', dealId: 'opp-1', filter: 'niet_bezorgd' });
+    expect(chaseDoel(per['concept:c1'])).toEqual({ tab: 'communicatie', dealId: 'opp-2', filter: 'akkoord' });
+    expect(chaseDoel(per['taak:t1'])).toEqual({ tab: 'deals', dealId: 'opp-3' });
   });
 });
 

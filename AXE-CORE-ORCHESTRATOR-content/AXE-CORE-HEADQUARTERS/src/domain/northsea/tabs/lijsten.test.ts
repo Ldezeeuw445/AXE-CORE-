@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  alsLijst, filterBedrijven, filterBerichten, geblokkeerdIn, groepeerPipeline, kolomZonderBlokkade, nietBezorgd, past, pipelineKolom, tel, volumeSom, vraagtActie, wachtOpAkkoord,
+  alsLijst, filterBedrijven, filterBerichten, geblokkeerdIn, groepeerBerichten, groepeerPipeline, kolomZonderBlokkade, nietBezorgd, past, pipelineKolom, tel, threadSleutel, volumeSom, vraagtActie, wachtOpAkkoord,
 } from './lijsten';
 import type { Bedrijf, Bericht, PipelineDeal } from './typen';
 
@@ -120,6 +120,22 @@ describe('berichten', () => {
     expect(nietBezorgd(berichten[4])).toBe(true);
     expect(wachtOpAkkoord(berichten[0])).toBe(true);
     expect(wachtOpAkkoord(berichten[2])).toBe(false);
+  });
+
+  it('groepeert een gesprek op deal, anders e-mail, anders bedrijf', () => {
+    expect(threadSleutel({ id: 'a', deal_id: 'opp-1', contact_email: 'x@y.z' })).toBe('deal:opp-1');
+    expect(threadSleutel({ id: 'b', contact_email: 'Info@Y.z' })).toBe('mail:info@y.z');
+    expect(threadSleutel({ id: 'c', bedrijf_id: 'co-1' })).toBe('co:co-1');
+    expect(threadSleutel({ id: 'd' })).toBe('msg:d');
+    const threads = groepeerBerichten([
+      { id: '1', deal_id: 'opp-1', occurred_at: '2026-09-10T00:00:00Z', onderwerp: 'oud' },
+      { id: '2', deal_id: 'opp-1', occurred_at: '2026-09-12T00:00:00Z', onderwerp: 'nieuw' },
+      { id: '3', contact_email: 'a@b.c', occurred_at: '2026-09-11T00:00:00Z' },
+    ]);
+    expect(threads).toHaveLength(2);
+    expect(threads[0].sleutel).toBe('deal:opp-1');
+    expect(threads[0].laatste.id).toBe('2');
+    expect(threads[0].berichten.map(b => b.id)).toEqual(['2', '1']);
   });
 });
 

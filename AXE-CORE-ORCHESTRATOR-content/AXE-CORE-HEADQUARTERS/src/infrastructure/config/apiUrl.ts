@@ -158,3 +158,18 @@ export function vpsAuthHeaders(url: string): Record<string, string> {
   const key = axeCoreApiKey();
   return key ? { Authorization: `Bearer ${key}` } : {};
 }
+
+/**
+ * Bearer voor een directe axe_api-URL (VPS of lokale agent). Relatieve
+ * `/proxy/*`-paden blijven leeg: Vite/Vercel hangen de sleutel server-side.
+ * Geen RLS-omzeiling — dezelfde AXE_CORE_API_KEY als de verpakte app.
+ */
+export function axeApiAuthHeaders(url: string): Record<string, string> {
+  if (!url || url.startsWith('/')) return {};
+  const lokale = (import.meta.env.VITE_LOKALE_AGENT_ORIGIN as string | undefined) ?? 'http://127.0.0.1:8001';
+  const naarLokale = url === lokale || url.startsWith(`${lokale}/`);
+  const naarVps = url.startsWith(`${VPS_API_ORIGIN}/`);
+  if (!naarLokale && !naarVps) return {};
+  const key = axeCoreApiKey();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}

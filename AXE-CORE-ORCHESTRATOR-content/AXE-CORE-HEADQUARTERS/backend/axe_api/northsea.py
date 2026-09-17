@@ -89,23 +89,23 @@ select json_build_object(
   'acties', (select coalesce(json_agg(r), '[]'::json) from (
      select a.id, a.action_type as soort, a.title as titel, a.status, a.priority as prioriteit,
             a.requires_approval as akkoord_nodig, a.due_at, a.created_at, a.updated_at,
-            d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
+            d.id as deal_id, d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
      from action_queue a left join deal d on d.id = a.opportunity_id
      where a.status in ('open','waiting')) r),
   'taken', (select coalesce(json_agg(r), '[]'::json) from (
      select t.id, t.task_type as soort, t.title as titel, t.status, t.priority as prioriteit,
             t.requires_approval as akkoord_nodig, t.due_at, t.created_at, t.updated_at,
-            t.execution_error as fout, d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
+            t.execution_error as fout, d.id as deal_id, d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
      from deal_tasks t left join deal d on d.id = t.opportunity_id
      where t.status = 'open') r),
   'concepten', (select coalesce(json_agg(r), '[]'::json) from (
      select r0.id, r0.subject as titel, r0.purpose as soort, r0.to_email as aan, r0.created_at, r0.updated_at,
-            r0.sensitive_action as gevoelig, d.code, d.koper, d.leverancier, d.product
+            r0.sensitive_action as gevoelig, d.id as deal_id, d.code, d.koper, d.leverancier, d.product
      from reply_drafts r0 left join deal d on d.id = r0.opportunity_id
      where r0.sent_at is null and r0.approval_status = 'pending') r),
   'bounces', (select coalesce(json_agg(r), '[]'::json) from (
      select c.id, c.subject as titel, c.occurred_at as created_at, c.provider_metadata->'to' as aan,
-            d.code, d.koper, d.leverancier, d.product
+            d.id as deal_id, d.code, d.koper, d.leverancier, d.product
      from communications c left join deal d on d.id = c.opportunity_id
      where c.delivery_status = 'bounced' and c.occurred_at > now() - interval '30 days') r)
 ) as data
@@ -144,6 +144,8 @@ select json_build_object('deals', (select coalesce(json_agg(r order by r.updated
          o.estimated_value as waarde, o.currency as valuta, o.commission_type as commissie_soort,
          o.commission_rate as commissie_pct, o.commission_amount as commissie_bedrag,
          o.commission_agreement_status as commissie_akkoord, o.notes as notities,
+         o.engine_blocker_code as blokkade_code, o.engine_blocker as huidige_blokkade,
+         o.engine_next_action as beste_actie, o.engine_owner as actie_eigenaar, o.engine_evaluated_at as beoordeeld_op,
          o.buyer_gate_passed as poort_koper, o.seller_gate_passed as poort_verkoper,
          o.commercial_gate_passed as poort_commercieel, o.evidence_gate_passed as poort_bewijs,
          o.protection_gate_passed as poort_bescherming, o.introduction_gate_passed as poort_introductie,

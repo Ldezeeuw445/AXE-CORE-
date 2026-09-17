@@ -36,6 +36,17 @@ def test_communicatie_query_levert_concepttekst_voor_preview():
     assert "supplier_offers" in sql
 
 
+def test_overzicht_chase_heeft_deal_id():
+    assert "d.id as deal_id" in n.OVERZICHT_SQL
+
+
+def test_deals_query_heeft_engine_velden():
+    sql = n.TAB_SQL["deals"]
+    assert "engine_next_action" in sql
+    assert "engine_owner" in sql
+    assert "engine_blocker" in sql
+
+
 @pytest.mark.parametrize("naam", TABS)
 def test_elke_query_leest_alleen(naam):
     sql = n.TAB_SQL[naam].lower()

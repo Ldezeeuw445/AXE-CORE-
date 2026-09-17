@@ -56,6 +56,7 @@ export interface NorthseaRij {
   product?: string | null;
   aan?: unknown;
   gevoelig?: boolean | null;
+  deal_id?: string | null;
 }
 
 export interface NorthseaOverzicht {
@@ -89,6 +90,22 @@ export interface ChaseItem {
   /** ISO-tijd waarop hij ontstond of voor het laatst veranderde. */
   wanneer: string;
   prioriteit: number;
+  dealId: string | null;
+  akkoord: boolean;
+}
+
+export type ChaseDoelTab = 'deals' | 'communicatie';
+export type ChaseDoel = {
+  tab: ChaseDoelTab;
+  dealId: string | null;
+  filter?: 'niet_bezorgd' | 'akkoord';
+};
+
+/** Waar een Chase-regel naartoe hoort: Deal Room, of Communications bij bounce/concept. */
+export function chaseDoel(item: Pick<ChaseItem, 'bron' | 'dealId'>): ChaseDoel {
+  if (item.bron === 'bounce') return { tab: 'communicatie', dealId: item.dealId, filter: 'niet_bezorgd' };
+  if (item.bron === 'concept') return { tab: 'communicatie', dealId: item.dealId, filter: 'akkoord' };
+  return { tab: 'deals', dealId: item.dealId };
 }
 
 const DAG_MS = 24 * 60 * 60 * 1000;
@@ -163,6 +180,8 @@ function naarItem(r: NorthseaRij, bron: ChaseBron, nu: number): ChaseItem {
     kop: kort(kop, 32), regel: kort(regel), stand: kort(stand, 60), toon,
     kritiek, nieuw: Number.isFinite(aangemaakt) && nu - aangemaakt < DAG_MS,
     wanneer, prioriteit,
+    dealId: r.deal_id?.trim() || null,
+    akkoord: bron === 'concept' || !!r.akkoord_nodig,
   };
 }
 
@@ -179,11 +198,12 @@ export function chaseItems(o: Pick<NorthseaOverzicht, 'acties' | 'taken' | 'conc
     || Date.parse(b.wanneer) - Date.parse(a.wanneer));
 }
 
-export function chaseTellers(items: readonly ChaseItem[]): { alle: number; kritiek: number; nieuw: number } {
+export function chaseTellers(items: readonly ChaseItem[]): { alle: number; kritiek: number; nieuw: number; akkoord: number } {
   return {
     alle: items.length,
     kritiek: items.filter(i => i.kritiek).length,
     nieuw: items.filter(i => i.nieuw).length,
+    akkoord: items.filter(i => i.akkoord).length,
   };
 }
 

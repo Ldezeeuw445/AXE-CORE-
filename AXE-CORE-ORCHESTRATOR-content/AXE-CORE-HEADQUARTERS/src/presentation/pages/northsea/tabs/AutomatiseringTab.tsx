@@ -273,6 +273,9 @@ export function AutomatiseringTab() {
           <Link to="/cron-manager" className="mt-1.5 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
             Scheduled jobs live in the Cron Manager <ArrowRight size={12} />
           </Link>
+          <Link to="/tasks" className="mt-1.5 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
+            Open AXE Tasks <ArrowRight size={12} />
+          </Link>
         </DetailPaneel>
       </TabRail>
     </div>

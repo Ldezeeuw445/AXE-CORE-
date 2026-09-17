@@ -15,7 +15,7 @@
 
 import type { NorthseaOverzicht } from '@/domain/northsea/chase';
 import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
-import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
+import { axeCoreApiUrl, axeCoreApiExtraHeaders, axeApiAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { agentBasis } from '@/infrastructure/config/agentHost';
 import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
 
@@ -63,11 +63,14 @@ async function call<T = unknown>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${await basisVoor(path)}${path}`, {
+  const basis = await basisVoor(path);
+  const url = `${basis}${path}`;
+  const res = await fetch(url, {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...axeCoreApiExtraHeaders(),
+      ...axeApiAuthHeaders(url),
       ...(path.startsWith('/preview/') ? editorRepoHeaders() : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

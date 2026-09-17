@@ -38,6 +38,19 @@ const SLEUTEL = 'axe_agent_host';
 export const LOKALE_AGENT_ORIGIN =
   (import.meta.env.VITE_LOKALE_AGENT_ORIGIN as string | undefined) ?? 'http://127.0.0.1:8001';
 
+/**
+ * Waar de browser /northsea/* vandaan haalt.
+ *
+ * In Vite-dev (ook tauri:dev) is dat `/proxy/lokale-agent`: de sleutel hangt
+ * server-side, anders 401't de Mac-mini-AUTH. De health-probe blijft de echte
+ * origin gebruiken — die is open, en moet blijven weten of de mini leeft.
+ * Verpakte app: Tailscale/localhost + Bearer via axeApiAuthHeaders.
+ */
+export function lokaleAgentFetchOrigin(): string {
+  if (import.meta.env.DEV) return '/proxy/lokale-agent';
+  return LOKALE_AGENT_ORIGIN;
+}
+
 /** Lang genoeg om niet elke aanroep te bevragen, kort genoeg om te merken dat
  *  je run-local.sh net gestart of gestopt hebt. */
 const PROBE_TTL_MS = 60_000;
@@ -104,9 +117,9 @@ export async function agentBasis(vpsBasis: string): Promise<string> {
   const voorkeur = agentHostVoorkeur();
 
   if (voorkeur === 'vps') { laatsteHost = 'vps'; return vpsBasis; }
-  if (voorkeur === 'lokaal') { laatsteHost = 'lokaal'; return LOKALE_AGENT_ORIGIN; }
+  if (voorkeur === 'lokaal') { laatsteHost = 'lokaal'; return lokaleAgentFetchOrigin(); }
 
-  if (await lokaalAntwoordt()) { laatsteHost = 'lokaal'; return LOKALE_AGENT_ORIGIN; }
+  if (await lokaalAntwoordt()) { laatsteHost = 'lokaal'; return lokaleAgentFetchOrigin(); }
   laatsteHost = 'vps';
   return vpsBasis;
 }

@@ -97,6 +97,12 @@ export type DealDetail = {
   commissie_bedrag?: Getal;
   commissie_akkoord?: Tekst;
   notities?: Tekst;
+  /** P1 engine-beoordeling; ontbreekt = UNKNOWN, nooit afgeleid. */
+  blokkade_code?: Tekst;
+  huidige_blokkade?: Tekst;
+  beste_actie?: Tekst;
+  actie_eigenaar?: Tekst;
+  beoordeeld_op?: Tijd;
   created_at?: Tijd;
   updated_at?: Tijd;
   koper?: BedrijfKort | null;

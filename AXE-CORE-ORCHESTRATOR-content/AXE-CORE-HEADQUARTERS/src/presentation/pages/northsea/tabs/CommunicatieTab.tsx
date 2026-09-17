@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, MessageSquare, NotebookPen, Phone } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { tijdGeleden } from '@/domain/northsea/chase';
-import { alsLijst, filterBerichten, nietBezorgd, vraagtActie, wachtOpAkkoord, type BerichtFilter } from '@/domain/northsea/tabs/lijsten';
+import { alsLijst, filterBerichten, groepeerBerichten, nietBezorgd, vraagtActie, wachtOpAkkoord, type BerichtFilter } from '@/domain/northsea/tabs/lijsten';
 import { bezorgBadge, conceptBadge, mensLabel, TOON_KLEUR, type Toon } from '@/domain/northsea/tabs/status';
 import type { Bericht } from '@/domain/northsea/tabs/typen';
 import { conceptHerkomst, termenRegels } from '@/domain/northsea/engine';
@@ -48,9 +48,15 @@ function Lijstje({ titel, regels, toon }: { titel: string; regels: string[]; too
   );
 }
 
-export function CommunicatieTab() {
+export function CommunicatieTab({
+  startDealId, startFilter, openDeal,
+}: {
+  startDealId?: string | null;
+  startFilter?: 'niet_bezorgd' | 'akkoord';
+  openDeal?: (id: string) => void;
+}) {
   const { data, fout, bezig, ververs } = useNorthseaTab('communicatie');
-  const [filter, setFilter] = useState<BerichtFilter>('alle');
+  const [filter, setFilter] = useState<BerichtFilter>(startFilter ?? 'alle');
   const [zoek, setZoek] = useState('');
   const [gekozen, setGekozen] = useState<string | null>(null);
   const [nu, setNu] = useState(() => Date.now());
@@ -83,7 +89,13 @@ export function CommunicatieTab() {
       setVerstuurd(v => ({ ...v, [id]: { fout: e instanceof Error ? e.message : 'verstuur_geweigerd' } }));
     }
   };
-  const rijen = useMemo(() => filterBerichten(alle, filter, zoek), [alle, filter, zoek]);
+  const rijen = useMemo(() => {
+    const gefilterd = filterBerichten(alle, filter, zoek);
+    if (!startDealId) return gefilterd;
+    const inDeal = gefilterd.filter(b => b.deal_id === startDealId);
+    return inDeal.length ? inDeal : gefilterd;
+  }, [alle, filter, zoek, startDealId]);
+  const threads = useMemo(() => groepeerBerichten(rijen), [rijen]);
   const tellers = useMemo(() => ({
     alle: alle.length,
     email: filterBerichten(alle, 'email', '').length,
@@ -95,7 +107,13 @@ export function CommunicatieTab() {
     bounces: alle.filter(nietBezorgd).length,
     akkoord: alle.filter(wachtOpAkkoord).length,
   }), [alle]);
-  const bericht = (gekozen ? alle.find(b => b.id === gekozen) : null) ?? rijen[0] ?? null;
+  const startSleutel = startDealId ? `deal:${startDealId}` : null;
+  const thread = (gekozen
+    ? threads.find(t => t.sleutel === gekozen || t.berichten.some(b => b.id === gekozen))
+    : (startSleutel ? threads.find(t => t.sleutel === startSleutel) : null))
+    ?? threads[0]
+    ?? null;
+  const bericht = (gekozen ? thread?.berichten.find(b => b.id === gekozen) : null) ?? thread?.laatste ?? null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-communicatie">
@@ -133,13 +151,14 @@ export function CommunicatieTab() {
         {!fout && !data && <LegeStaat titel="Loading communications…" />}
         {data && rijen.length === 0 && <LegeStaat icoon={<MessageSquare size={22} />} titel="No messages match" />}
         {rijen.length > 0 && (
-          <div className="grid h-full min-h-[360px] grid-cols-[minmax(260px,380px)_1fr]" style={{ borderTop: '1px solid var(--axe-vak-lijn)' }}>
+          <div className="grid h-full min-h-[360px] grid-cols-1 lg:grid-cols-[minmax(260px,380px)_1fr]" style={{ borderTop: '1px solid var(--axe-vak-lijn)' }}>
             <ul className="min-h-0 overflow-y-auto" style={{ borderRight: '1px solid var(--axe-vak-lijn)' }}>
-              {rijen.map(b => {
-                const aan = bericht?.id === b.id;
-                const actie = vraagtActie(b);
+              {threads.map(t => {
+                const b = t.laatste;
+                const aan = thread?.sleutel === t.sleutel;
+                const actie = t.berichten.some(vraagtActie);
                 return (
-                  <li key={b.id}>
+                  <li key={t.sleutel}>
                     <button type="button" onClick={() => setGekozen(b.id)} className="flex w-full gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.03]"
                       style={{ background: aan ? 'rgba(255,255,255,0.05)' : undefined, borderBottom: '1px solid rgba(255,255,255,0.035)',
                         boxShadow: aan ? 'inset 2px 0 0 var(--accent-cyan)' : undefined }}>
@@ -151,9 +170,10 @@ export function CommunicatieTab() {
                         </span>
                         <span className="block truncate text-[12px]" style={{ color: 'var(--text-secondary)' }}>{b.onderwerp || '(no subject)'}</span>
                         <span className="mt-0.5 flex items-center gap-1.5">
-                          {b.deal_code && <Label toon="blauw">{b.deal_code}</Label>}
+                          {t.berichten.length > 1 && <Label toon="grijs">{t.berichten.length}</Label>}
+                          {(b.deal_code || b.deal_id) && <Label toon="blauw">{b.deal_code || `#${(b.deal_id ?? '').slice(0, 6)}`}</Label>}
                           {actie && <Label toon="oranje">Needs action</Label>}
-                          {bezorgBadge(b.bezorging)?.toon === 'rood' && <Label toon="rood">Not delivered</Label>}
+                          {t.berichten.some(nietBezorgd) && <Label toon="rood">Not delivered</Label>}
                           {b.test && <Label toon="grijs">Test</Label>}
                           {b.intelligentie?.engine?.soort && <Label toon="paars">{mensLabel(b.intelligentie.engine.soort)}</Label>}
                         </span>
@@ -183,6 +203,19 @@ export function CommunicatieTab() {
                     {bericht.intelligentie?.classificatie && <span>Class: {mensLabel(bericht.intelligentie.classificatie)}</span>}
                     {bericht.intelligentie?.intentie && <span>Intent: {mensLabel(bericht.intelligentie.intentie)}</span>}
                   </div>
+                  {thread && thread.berichten.length > 1 && (
+                    <ul className="mt-3 flex flex-col gap-1 rounded-xl px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--axe-vak-lijn)' }}>
+                      {[...thread.berichten].reverse().map(b => (
+                        <li key={b.id}>
+                          <button type="button" onClick={() => setGekozen(b.id)} className="flex w-full items-baseline gap-2 rounded-lg px-1 py-1 text-left hover:bg-white/[0.03]"
+                            style={{ color: b.id === bericht.id ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                            <span className="w-[4.5rem] shrink-0 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{b.occurred_at ? tijdGeleden(b.occurred_at, nu) : ''}</span>
+                            <span className="truncate text-[11.5px]">{mensLabel(b.richting)} · {b.onderwerp || '(no subject)'}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <BerichtTekst tekst={bericht.tekst} />
                   {(() => {
                     const termen = [
@@ -240,6 +273,11 @@ export function CommunicatieTab() {
             <Veld label="Contact">{bericht.contact}</Veld>
             <Veld label="Email">{bericht.contact_email}</Veld>
             <Veld label="Deal">{bericht.deal_code || (bericht.deal_id ? `#${bericht.deal_id.slice(0, 6)}` : null)}</Veld>
+            {openDeal && bericht.deal_id && (
+              <button type="button" onClick={() => openDeal(bericht.deal_id!)} className="mb-2 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
+                Open Deal Room
+              </button>
+            )}
             <Veld label="Mapping">{bericht.koppeling ? `${mensLabel(bericht.koppeling)}${bericht.koppeling_basis ? ` · ${bericht.koppeling_basis}` : ''}` : null}</Veld>
             {bericht.richting === 'outbound' && (
               <>

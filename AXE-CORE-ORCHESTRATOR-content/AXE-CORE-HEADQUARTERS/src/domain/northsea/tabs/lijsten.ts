@@ -170,6 +170,41 @@ export function filterBerichten(berichten: readonly Bericht[], filter: BerichtFi
   });
 }
 
+/**
+ * Groepeer berichten tot één gesprek: dezelfde deal, anders hetzelfde adres,
+ * anders hetzelfde bedrijf. Losse rijen zonder koppeling blijven alleen.
+ */
+export function threadSleutel(b: Pick<Bericht, 'id' | 'deal_id' | 'contact_email' | 'bedrijf_id'>): string {
+  if (b.deal_id) return `deal:${b.deal_id}`;
+  const mail = (b.contact_email ?? '').trim().toLowerCase();
+  if (mail) return `mail:${mail}`;
+  if (b.bedrijf_id) return `co:${b.bedrijf_id}`;
+  return `msg:${b.id}`;
+}
+
+export interface BerichtThread {
+  sleutel: string;
+  berichten: Bericht[];
+  laatste: Bericht;
+}
+
+export function groepeerBerichten(berichten: readonly Bericht[]): BerichtThread[] {
+  const m = new Map<string, Bericht[]>();
+  for (const b of berichten) {
+    const k = threadSleutel(b);
+    const lijst = m.get(k);
+    if (lijst) lijst.push(b);
+    else m.set(k, [b]);
+  }
+  const threads: BerichtThread[] = [];
+  for (const [sleutel, lijst] of m) {
+    lijst.sort((a, b) => tijd(b.occurred_at) - tijd(a.occurred_at));
+    threads.push({ sleutel, berichten: lijst, laatste: lijst[0] });
+  }
+  threads.sort((a, b) => tijd(b.laatste.occurred_at) - tijd(a.laatste.occurred_at));
+  return threads;
+}
+
 /** Een lijst die de backend als JSON-waarde stuurt (jsonb-array of losse tekst) als strings. */
 export function alsLijst(v: unknown): string[] {
   if (Array.isArray(v)) {

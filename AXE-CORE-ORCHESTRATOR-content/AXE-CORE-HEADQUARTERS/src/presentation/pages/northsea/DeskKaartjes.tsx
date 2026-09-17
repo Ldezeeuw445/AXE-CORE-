@@ -53,17 +53,23 @@ function Tegel({ children, breed }: { children: ReactNode; breed?: boolean }) {
   );
 }
 
-function Getal({ waarde, label, sub, kleur, subKleur }: {
-  waarde: ReactNode; label: string; sub?: ReactNode; kleur?: string; subKleur?: string;
+function Getal({ waarde, label, sub, kleur, subKleur, onKies }: {
+  waarde: ReactNode; label: string; sub?: ReactNode; kleur?: string; subKleur?: string; onKies?: () => void;
 }) {
-  return (
-    <Tegel>
+  const inhoud = (
+    <>
       <div className="text-[21px] font-semibold leading-none tabular-nums" style={{ color: kleur ?? 'var(--text-primary)' }}>{waarde}</div>
       <div className="mt-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-secondary)' }}>{label}</div>
       {sub !== undefined && (
         <div className="mt-0.5 max-w-[170px] truncate text-[10.5px]" style={{ color: subKleur ?? 'var(--text-muted)' }}>{sub}</div>
       )}
-    </Tegel>
+    </>
+  );
+  if (!onKies) return <Tegel>{inhoud}</Tegel>;
+  return (
+    <button type="button" onClick={onKies} className="text-left">
+      <Tegel>{inhoud}</Tegel>
+    </button>
   );
 }
 
@@ -109,10 +115,18 @@ function MarktTegel({ markt, koers }: { markt: Markt; koers: Koers }) {
   );
 }
 
-export function DeskKaartjes({ data, tellers, routes }: {
+export function DeskKaartjes({ data, tellers, routes, kies }: {
   data: NorthseaOverzicht | null;
   tellers: DeskTellers | null;
   routes: number | null;
+  kies?: {
+    actief?: () => void;
+    akkoord?: () => void;
+    geblokkeerd?: () => void;
+    bounces?: () => void;
+    afgerond?: () => void;
+    tegenpartijen?: () => void;
+  };
 }) {
   const rijRef = useRef<HTMLDivElement | null>(null);
   const [randen, setRanden] = useState({ links: false, rechts: false });
@@ -176,20 +190,22 @@ export function DeskKaartjes({ data, tellers, routes }: {
       <div ref={rijRef} className="ns-kaartrij pointer-events-auto flex min-w-0 flex-1 snap-x scroll-px-2 overflow-x-auto px-2 py-3">
         <div className="mx-auto flex w-max gap-2.5">
         <Getal waarde={tellers?.actief ?? leeg} label="Active deals" kleur="#22D3EE"
-          sub={tellers ? `+${tellers.nieuwDezeWeek} this week` : undefined} subKleur="#34D399" />
+          sub={tellers ? `+${tellers.nieuwDezeWeek} this week` : undefined} subKleur="#34D399" onKies={kies?.actief} />
         <Getal waarde={tellers?.akkoord ?? leeg} label="Awaiting approval" kleur="#FBBF24"
           sub={tellers ? (tellers.akkoordNamen.join(', ') || 'Nothing waiting') : undefined}
-          subKleur={tellers?.akkoord ? '#22D3EE' : undefined} />
+          subKleur={tellers?.akkoord ? '#22D3EE' : undefined} onKies={kies?.akkoord} />
         <Getal waarde={data ? (data.concepten?.length ?? 0) : leeg} label="Pending drafts" kleur="#FBBF24"
-          sub={data ? ((data.concepten?.length ?? 0) ? 'Human approval before send' : 'None waiting') : undefined} />
+          sub={data ? ((data.concepten?.length ?? 0) ? 'Human approval before send' : 'None waiting') : undefined} onKies={kies?.akkoord} />
         <Getal waarde={tellers?.geblokkeerd ?? leeg} label="Blocked" kleur="#F87171"
-          sub={tellers ? (tellers.geblokkeerd ? 'Action required' : 'Nothing blocked') : undefined} />
+          sub={tellers ? (tellers.geblokkeerd ? 'Action required' : 'Nothing blocked') : undefined} onKies={kies?.geblokkeerd} />
         <Getal waarde={data ? (data.bounces?.length ?? 0) : leeg} label="Delivery failures" kleur="#F87171"
-          sub={data ? ((data.bounces?.length ?? 0) ? 'Last 30 days' : 'None in 30 days') : undefined} />
+          sub={data ? ((data.bounces?.length ?? 0) ? 'Last 30 days' : 'None in 30 days') : undefined} onKies={kies?.bounces} />
+        <Getal waarde={tellers?.afgerond ?? leeg} label="Closed deals"
+          sub={tellers ? (tellers.afgerond ? 'Won / completed' : 'None closed yet') : undefined} onKies={kies?.afgerond} />
         <Getal waarde={tellers?.commissie != null ? geld(tellers.commissie) : leeg} label="Potential commission"
           sub={tellers ? (tellers.commissie != null ? `${tellers.commissieDeals} deals with an amount` : 'No amounts on deals yet') : undefined} />
         <Getal waarde={data?.tellers.bedrijven ?? leeg} label="Counterparties"
-          sub={data ? `${data.tellers.communicatie_7d} messages · 7d` : undefined} />
+          sub={data ? `${data.tellers.communicatie_7d} messages · 7d` : undefined} onKies={kies?.tegenpartijen} />
         <Getal waarde={routes ?? leeg} label="Active routes" sub={routes !== null ? 'On the map' : undefined} />
         {MARKTEN.map(m => <MarktTegel key={m.symbool} markt={m} koers={koersen[m.symbool] ?? null} />)}
         </div>
