@@ -18,8 +18,32 @@ const IN_GEHEUGEN_SLEUTEL = 'axe_planner_in_geheugen';
 const GEZIEN_SLEUTEL = 'axe_planner_gezien';
 const POLL_MS = 90_000;
 
+/**
+ * De agent-host (planner.py) kent alleen zijn eigen oude sleutels
+ * (`code-agent`/`axe-algo`/`maps-agent`) — die server-kant is deze sessie niet
+ * aan te passen. `agentMotoren.ts` heet zijn tier-1 rijen sinds de CONFIRMED
+ * ARCHITECTURE (17 sep) `developer`/`trading`/`northsea`, dus deze vertaling
+ * houdt de opgeslagen NAMEN nieuw en de VERZONDEN sleutels oud. `wingman` en
+ * `thinktank` hebben geen oud equivalent — die stuurt hij door zoals eerder
+ * `vrije-agent` al deed: de planner kent ze niet en negeert ze stilletjes.
+ */
+const PLANNER_SLEUTEL: Partial<Record<string, string>> = {
+  developer: 'code-agent',
+  trading: 'axe-algo',
+  northsea: 'maps-agent',
+};
+
+export function naarPlannerSleutels(toewijzing: Record<string, string>): Record<string, string> {
+  const uit: Record<string, string> = {};
+  for (const [agent, motor] of Object.entries(toewijzing)) {
+    uit[PLANNER_SLEUTEL[agent] ?? agent] = motor;
+  }
+  return uit;
+}
+
 function geefMotorenDoor(): void {
-  void plannerZetMotoren(leesToewijzing() as unknown as Record<string, string>).catch(() => { /* host zonder planner */ });
+  void plannerZetMotoren(naarPlannerSleutels(leesToewijzing() as unknown as Record<string, string>))
+    .catch(() => { /* host zonder planner */ });
 }
 
 /** Wat er nieuw is sinds de vorige blik, als melding. Puur, zodat het te testen is. */

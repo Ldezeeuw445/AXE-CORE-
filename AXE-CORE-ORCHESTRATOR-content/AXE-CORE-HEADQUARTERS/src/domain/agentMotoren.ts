@@ -1,14 +1,25 @@
 /**
- * Welke hoofdmotor elke hoofdagent heeft.
+ * Welke hoofdmotor elke tier-1 manager heeft.
  *
  * ## Waarom dit bestaat
  *
- * Luka heeft drie abonnementen -- Claude, ChatGPT (Codex) en Cursor -- en drie
- * agents die ertoe doen: AXE Core (de chat), de Code Agent en AXE Algo
- * (trading). Zonder verdeling pakken ze allemaal wat er in de cascade staat, en
+ * Luka heeft zes abonnementen -- drie Claude, twee ChatGPT (Codex) en Cursor --
+ * en (sinds de CONFIRMED ARCHITECTURE van 17 sep 2026,
+ * docs/HANDOFF_AXE_AGENT_FORCE.md) vijf tier-1 managers die er een mogen
+ * dragen: Wingman, NorthSea Desk Manager, Trading Agent, AXE Developer,
+ * ThinkTank. Zonder verdeling pakken ze allemaal wat er in de cascade staat, en
  * dan vechten ze om hetzelfde abonnement. Gemeten 13 september: de trading-desk
  * startte zes `codex exec`-sessies tegelijk en binnen een uur was Codex op, ook
- * voor de chat en de editor.
+ * voor de editor.
+ *
+ * ## AXE zelf draagt hier geen rij
+ *
+ * Tot 17 sep stond AXE Core (de chat) hier ook bij, met een abonnement als
+ * mogelijke motor. Dat is de fout die de CONFIRMED ARCHITECTURE rechtzet: AXE's
+ * dropdown is ALLEEN snelle/slimme chat-modellen, nooit een abonnement, nooit
+ * Ollama (zie domain/chatModelKeuzes.ts, rij 1 in Settings). Een abonnement is
+ * voor een tier-1 manager die een CLI-sessie draait, niet voor AXE's eigen
+ * model-antwoord.
  *
  * ## De twee regels
  *
@@ -17,39 +28,49 @@
  *    opgeslagen waarde of een tweede venster kan het niet omzeilen.
  * 2. **Subtaken draaien nooit op een abonnement.** De elf desk-rollen,
  *    embeddings, samenvattingen: die gaan over je API-sleutels. Een abonnement
- *    is voor de hoofdbeurt -- het chatantwoord, de code-run, de eindbeslissing
- *    van AXE Algo. Zie zonderAbonnement() in abonnementChat.ts.
+ *    is voor de hoofdbeurt -- de code-run, de eindbeslissing van de Trading
+ *    Agent. Zie zonderAbonnement() in abonnementChat.ts.
  *
  * ## Cursor mag overal
  *
- * Tot 14 september alleen bij de Code Agent, omdat de chat en AXE Algo in
- * `plan` draaien en Cursor geen alleen-lezen stand had. Die heeft hij nu
- * (`--mode ask`, zie abonnementChat.ts). Elke agent kan dus elk abonnement.
+ * Tot 14 september alleen bij de Code Agent (nu: AXE Developer), omdat andere
+ * agents in `plan` draaiden en Cursor geen alleen-lezen stand had. Die heeft
+ * hij nu (`--mode ask`, zie abonnementChat.ts). Elke agent kan dus elk
+ * abonnement.
  *
- * ## De Northsea Desk
+ * ## Wingman en ThinkTank zijn nieuw hier
  *
- * De vierde agent. Northsea Commodity Partners is geen eigen app: de hele desk
- * wordt een dashboard op de 3D Maps-tab van AXE CORE, en deze agent plant en
- * bouwt daaraan (planner.py, taken in de kolom Northsea). Zijn standaard is
- * API-sleutels, zodat hij niemand zijn abonnement afpakt.
+ * Beide waren al agents (roster.ts), maar droegen nog geen motor-rij. Wingman
+ * en NorthSea Desk Manager beginnen op API-sleutels, net als de oude
+ * Northsea-rij dat deed. ThinkTank erft de tweede ChatGPT-stoel (`codex2`) die
+ * eerder braak lag op de plek "vrije agent, taak nog te kiezen" — die stoel
+ * heeft nu een echte taak.
+ *
+ * ## De planner-brug blijft de oude namen spreken
+ *
+ * `plannerKoppeling.ts` vertaalt deze nieuwe ids terug naar de sleutels die
+ * `planner.py` op de agent-host al kent (`code-agent`, `axe-algo`,
+ * `maps-agent`) — die server-kant is in deze sessie niet aan te passen, dus de
+ * BUITENKANT van de opslag verandert niet, alleen de namen die Luka in de UI
+ * ziet.
  */
 import { ALLE_MOTOREN, ABONNEMENT_PROVIDER, zonderAbonnement, type AgentEngine } from '@/domain/abonnementChat';
 
-export type HoofdAgent = 'axe-core' | 'code-agent' | 'axe-algo' | 'maps-agent' | 'vrije-agent';
+export type HoofdAgent = 'wingman' | 'northsea' | 'trading' | 'developer' | 'thinktank';
 
 /** Een abonnement, of: je API-sleutels (de gewone cascade). */
 export type HoofdMotor = AgentEngine | 'sleutels';
 
 export type MotorToewijzing = Record<HoofdAgent, HoofdMotor>;
 
-export const HOOFD_AGENTS: readonly HoofdAgent[] = ['axe-core', 'code-agent', 'axe-algo', 'maps-agent', 'vrije-agent'] as const;
+export const HOOFD_AGENTS: readonly HoofdAgent[] = ['wingman', 'northsea', 'trading', 'developer', 'thinktank'] as const;
 
 export const AGENT_LABEL: Record<HoofdAgent, string> = {
-  'axe-core': 'AXE Core (chat)',
-  'code-agent': 'Code Agent',
-  'axe-algo': 'AXE Algo (eindbeslissing)',
-  'maps-agent': 'Northsea Desk (3D Maps)',
-  'vrije-agent': 'Vrije agent (taak nog te kiezen)',
+  wingman: 'Wingman',
+  northsea: 'NorthSea Desk Manager',
+  trading: 'Trading Agent (AXE Algo)',
+  developer: 'AXE Developer',
+  thinktank: 'ThinkTank',
 };
 
 export const MOTOR_LABEL: Record<HoofdMotor, string> = {
@@ -64,24 +85,22 @@ export const MOTOR_LABEL: Record<HoofdMotor, string> = {
 
 /** Wat elke agent überhaupt mag: sinds Cursor alleen-lezen kan, alles. */
 export const TOEGESTAAN: Record<HoofdAgent, readonly HoofdMotor[]> = {
-  'axe-core': [...ALLE_MOTOREN, 'sleutels'],
-  'code-agent': [...ALLE_MOTOREN, 'sleutels'],
-  'axe-algo': [...ALLE_MOTOREN, 'sleutels'],
-  'maps-agent': [...ALLE_MOTOREN, 'sleutels'],
-  'vrije-agent': [...ALLE_MOTOREN, 'sleutels'],
+  wingman: [...ALLE_MOTOREN, 'sleutels'],
+  northsea: [...ALLE_MOTOREN, 'sleutels'],
+  trading: [...ALLE_MOTOREN, 'sleutels'],
+  developer: [...ALLE_MOTOREN, 'sleutels'],
+  thinktank: [...ALLE_MOTOREN, 'sleutels'],
 };
 
 /** Elk abonnement bij de agent die er het best bij past, geen enkele dubbel. */
 export const STANDAARD_TOEWIJZING: MotorToewijzing = {
-  'axe-core': 'claude',
-  'code-agent': 'cursor',
-  'axe-algo': 'codex',
-  'maps-agent': 'sleutels',
-  // Luka, 16 september: het tweede ChatGPT-abonnement moet ook een taak kunnen
-  // krijgen, welke beslist hij later. Tot dan heeft deze plek een motor maar
-  // geen werk: de planner kent hem niet (planner.py AGENTS), dus er draait
-  // niets op dit abonnement tot er een taak is.
-  'vrije-agent': 'codex2',
+  wingman: 'sleutels',
+  northsea: 'sleutels',
+  trading: 'codex',
+  developer: 'cursor',
+  // De tweede ChatGPT-stoel: lag eerder braak op "vrije agent, taak nog te
+  // kiezen", nu ThinkTank's echte motor.
+  thinktank: 'codex2',
 };
 
 export const MOTOREN_SLEUTEL = 'axe_agent_motoren';

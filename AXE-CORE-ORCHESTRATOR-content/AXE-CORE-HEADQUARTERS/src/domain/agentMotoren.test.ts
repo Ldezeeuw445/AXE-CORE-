@@ -4,8 +4,8 @@ import {
   STANDAARD_TOEWIJZING, TOEGESTAAN, HOOFD_AGENTS,
 } from '@/domain/agentMotoren';
 
-describe('drie agents, drie abonnementen', () => {
-  it('begint met elk abonnement bij één agent', () => {
+describe('vijf tier-1 managers, zes abonnementen', () => {
+  it('begint met elk abonnement bij hooguit één agent', () => {
     const t = normaliseer(null);
     expect(t).toEqual(STANDAARD_TOEWIJZING);
     const abonnementen = HOOFD_AGENTS.map(a => t[a]).filter(m => m !== 'sleutels');
@@ -13,42 +13,43 @@ describe('drie agents, drie abonnementen', () => {
   });
 
   it('laat een abonnement nooit bij twee agents staan, ook niet uit een oude opgeslagen waarde', () => {
-    const t = normaliseer({ 'axe-core': 'codex', 'code-agent': 'codex', 'axe-algo': 'codex' });
-    expect(t['axe-core']).toBe('codex');
-    expect(t['code-agent']).toBe('cursor');   // valt terug op zijn standaard, die vrij is
-    expect(t['axe-algo']).toBe('sleutels');   // zijn standaard (codex) is bezet
+    const t = normaliseer({ wingman: 'codex', trading: 'codex', developer: 'codex' });
+    expect(t.wingman).toBe('codex');       // eerst in HOOFD_AGENTS-volgorde, wint
+    expect(t.developer).toBe('cursor');    // valt terug op zijn standaard, die vrij is
+    expect(t.trading).toBe('sleutels');    // zijn standaard (codex) is bezet
   });
 
-  it('elke agent mag elk abonnement, ook Cursor, en de Maps Agent begint op sleutels', () => {
+  it('elke agent mag elk abonnement, ook Cursor, en de NorthSea Desk Manager begint op sleutels', () => {
     for (const agent of HOOFD_AGENTS) expect(TOEGESTAAN[agent]).toContain('cursor');
-    expect(normaliseer({ 'axe-core': 'cursor', 'code-agent': 'claude' })['axe-core']).toBe('cursor');
-    expect(normaliseer(null)['maps-agent']).toBe('sleutels');
+    expect(normaliseer({ wingman: 'cursor', developer: 'claude' }).wingman).toBe('cursor');
+    expect(normaliseer(null).northsea).toBe('sleutels');
   });
 
   it('respecteert een bewuste keuze voor API-sleutels', () => {
-    const t = normaliseer({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels' });
-    expect(t).toEqual({ 'axe-core': 'sleutels', 'code-agent': 'cursor', 'axe-algo': 'sleutels', 'maps-agent': 'sleutels', 'vrije-agent': 'codex2' });
+    const t = normaliseer({ wingman: 'sleutels', developer: 'cursor', trading: 'sleutels' });
+    expect(t).toEqual({ wingman: 'sleutels', northsea: 'sleutels', trading: 'sleutels', developer: 'cursor', thinktank: 'codex2' });
   });
 
   it('overleeft onzin zonder uitzondering', () => {
     expect(normaliseer('kapot')).toEqual(STANDAARD_TOEWIJZING);
-    expect(normaliseer({ 'axe-core': 42, 'code-agent': 'gpt-9' })).toEqual(STANDAARD_TOEWIJZING);
+    expect(normaliseer({ wingman: 42, developer: 'gpt-9' })).toEqual(STANDAARD_TOEWIJZING);
   });
 
   it('toont in het menu geen abonnement dat al van een ander is', () => {
-    const t = STANDAARD_TOEWIJZING; // core=claude, code=cursor, algo=codex, vrij=codex2
-    // claude2 is vrij zolang niemand hem heeft, dus die mag iedereen kiezen.
-    expect(kiesbaar(t, 'axe-core')).toEqual(['claude', 'claude2', 'claude3', 'sleutels']);
-    expect(kiesbaar(t, 'code-agent')).toEqual(['claude2', 'claude3', 'cursor', 'sleutels']);
-    expect(kiesbaar(t, 'maps-agent')).toEqual(['claude2', 'claude3', 'sleutels']);
-    expect(kiesbaar(t, 'vrije-agent')).toEqual(['claude2', 'claude3', 'codex2', 'sleutels']);
+    const t = STANDAARD_TOEWIJZING; // trading=codex, developer=cursor, thinktank=codex2, wingman/northsea=sleutels
+    // claude/claude2/claude3 zijn vrij zolang niemand ze heeft, dus die mag iedereen kiezen.
+    expect(kiesbaar(t, 'wingman')).toEqual(['claude', 'claude2', 'claude3', 'sleutels']);
+    expect(kiesbaar(t, 'northsea')).toEqual(['claude', 'claude2', 'claude3', 'sleutels']);
+    expect(kiesbaar(t, 'trading')).toEqual(['claude', 'claude2', 'claude3', 'codex', 'sleutels']);
+    expect(kiesbaar(t, 'developer')).toEqual(['claude', 'claude2', 'claude3', 'cursor', 'sleutels']);
+    expect(kiesbaar(t, 'thinktank')).toEqual(['claude', 'claude2', 'claude3', 'codex2', 'sleutels']);
   });
 
   it('een nieuwe keuze wint en de vorige eigenaar krijgt API-sleutels', () => {
-    const t = wijsToe(STANDAARD_TOEWIJZING, 'axe-core', 'codex');
-    expect(t['axe-core']).toBe('codex');
-    expect(t['axe-algo']).toBe('sleutels');
-    expect(abonnementVan(t, 'axe-algo')).toBeNull();
+    const t = wijsToe(STANDAARD_TOEWIJZING, 'wingman', 'codex');
+    expect(t.wingman).toBe('codex');
+    expect(t.trading).toBe('sleutels');
+    expect(abonnementVan(t, 'trading')).toBeNull();
   });
 });
 

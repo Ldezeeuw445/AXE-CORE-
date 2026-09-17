@@ -23,19 +23,14 @@
  * naar het model in plaats van naar de sleutel.
  */
 import { useState, useMemo, useCallback } from 'react';
-import { ChevronDown, Check, Infinity as InfinityIcon } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
 import {
   chatModelKeuzes, isActief, modelLabel, merkenMetKeuzes, keuzesVanMerk,
-  actiefMerk, MERK_LABEL, MERK_UITLEG,
+  actiefMerk, MERK_LABEL, MERK_UITLEG, leesVerbindingen,
   type ChatModelKeuze, type Merk,
 } from '@/domain/chatModelKeuzes';
-
-function verbindingen(): Record<string, { key?: string }> {
-  try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); }
-  catch { return {}; }
-}
 
 /**
  * `variant='stip'`: alleen het groene bolletje met een gloed eromheen.
@@ -54,7 +49,7 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
   // Bij het openen opnieuw lezen: heb je net in Settings een sleutel ingevuld,
   // dan hoort die provider hier meteen te staan.
   const keuzes = useMemo(
-    () => (open ? chatModelKeuzes(verbindingen(), PROVIDERS.map(p => p.id)) : []),
+    () => (open ? chatModelKeuzes(leesVerbindingen(), PROVIDERS.map(p => p.id)) : []),
     [open],
   );
   const merken = useMemo(() => merkenMetKeuzes(keuzes), [keuzes]);
@@ -64,7 +59,7 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
   const getoondMerk: Merk = merk ?? huidigMerk;
 
   const kies = useCallback((k: ChatModelKeuze) => {
-    const conns = verbindingen();
+    const conns = leesVerbindingen();
     setPrimair({
       provider: k.provider,
       key: conns[k.provider]?.key ?? '',
@@ -171,12 +166,9 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
                         {aan && <Check size={10} style={{ color: 'var(--accent-cyan)' }} />}
                       </span>
                       <span className="min-w-0">
-                        <span className="text-[11px] flex items-center gap-1"
+                        <span className="text-[11px]"
                           style={{ color: aan ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>
                           {k.label}
-                          {/* Het teken dat deze weg je niets per token kost.
-                              Kleur in de letters, niet in een vlak -- Law 10. */}
-                          {k.opAbonnement && <InfinityIcon size={9} style={{ color: 'var(--m-happened)' }} />}
                         </span>
                         <span className="text-[9px] block truncate" style={{ color: 'var(--text-muted)' }}>
                           {k.toelichting}

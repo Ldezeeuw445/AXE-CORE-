@@ -451,10 +451,10 @@ export function useTradingDeskState() {
     }));
     const roep = (s: ProviderKeySlot, msgs: Array<{ role: string; content: string }>) =>
       callProvider(s, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>);
-    // Elf rollen op sleutels; de eindbeslissing op het abonnement van AXE Algo.
+    // Elf rollen op sleutels; de eindbeslissing op het abonnement van de Trading Agent.
     return {
       callLlm: buildCallLlmFromSlots(cascade, roep),
-      callLlmBeslissing: buildBeslissingCallLlm(cascade, abonnementVan(leesToewijzing(), 'axe-algo'), roep),
+      callLlmBeslissing: buildBeslissingCallLlm(cascade, abonnementVan(leesToewijzing(), 'trading'), roep),
     };
   }, []);
 

@@ -532,9 +532,10 @@ export default function CodeEditorPage() {
   const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
   useEffect(() => { localStorage.setItem('axe_code_agent_mode', agentMode ? 'on' : 'off'); }, [agentMode]);
   const agentAbortRef = useRef<AbortController | null>(null);
-  // De abonnementen zijn verdeeld over drie agents (Instellingen → Motoren per
-  // agent). Het abonnement van de Code Agent komt daarvandaan; Native en Hands
-  // zijn geen abonnement en blijven een keuze hier. Zie domain/agentMotoren.ts.
+  // De abonnementen zijn verdeeld over de vijf tier-1 managers (Instellingen →
+  // Motoren per agent). Het abonnement van AXE Developer komt daarvandaan;
+  // Native en Hands zijn geen abonnement en blijven een keuze hier. Zie
+  // domain/agentMotoren.ts.
   const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
   useEffect(() => {
     const bij = () => setToewijzing(leesToewijzing());
@@ -543,7 +544,7 @@ export default function CodeEditorPage() {
     return () => { window.removeEventListener('axe:agent-motoren', bij); window.removeEventListener('storage', bij); };
   }, []);
   const [agentEngine, setAgentEngineRauw] = useState<AgentEngine>(() => {
-    const eigen = leesToewijzing()['code-agent'];
+    const eigen = leesToewijzing()['developer'];
     if (eigen !== 'sleutels') return eigen;
     // Zonder abonnement: Native of Hands, zoals de vorige keer. Een opgeslagen
     // CLI telt niet meer -- die komt uit de toewijzing.
@@ -557,20 +558,20 @@ export default function CodeEditorPage() {
   agentEngineRef.current = agentEngine;
   const setAgentEngine = useCallback((volgende: AgentEngine | ((huidig: AgentEngine) => AgentEngine)) => {
     const motor = typeof volgende === 'function' ? volgende(agentEngineRef.current) : volgende;
-    setToewijzing(kiesMotor('code-agent', CLI_MOTOREN.has(motor) ? motor as CliMotor : 'sleutels'));
+    setToewijzing(kiesMotor('developer', CLI_MOTOREN.has(motor) ? motor as CliMotor : 'sleutels'));
     setAgentEngineRauw(motor);
   }, []);
   // Verandert de verdeling elders (Instellingen, een ander venster), dan schuift
   // de motor hier mee -- anders draait de editor op een abonnement dat inmiddels
   // van een andere agent is.
-  const eigenMotor = toewijzing['code-agent'];
+  const eigenMotor = toewijzing['developer'];
   useEffect(() => {
     if (eigenMotor !== 'sleutels') setAgentEngineRauw(eigenMotor);
     else setAgentEngineRauw(huidig => (huidig === 'native' || huidig === 'openhands') ? huidig : 'native');
   }, [eigenMotor]);
   // Van welke andere agent dit abonnement is, of null als het vrij is.
   const eigenaarVan = (motor: string): string | null => {
-    const ander = HOOFD_AGENTS.find(a => a !== 'code-agent' && toewijzing[a] === motor);
+    const ander = HOOFD_AGENTS.find(a => a !== 'developer' && toewijzing[a] === motor);
     return ander ? AGENT_LABEL[ander] : null;
   };
 

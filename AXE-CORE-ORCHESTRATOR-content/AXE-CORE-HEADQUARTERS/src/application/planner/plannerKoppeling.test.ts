@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nieuweMeldingen } from './plannerKoppeling';
+import { nieuweMeldingen, naarPlannerSleutels } from './plannerKoppeling';
 import type { PlannerTaak } from '@/infrastructure/gateways/axeCoreApiService';
 
 const taak = (id: string, status: string, meta: PlannerTaak['metadata']): PlannerTaak => ({
@@ -26,5 +26,17 @@ describe('wat de bol over de planner meldt', () => {
     const gezien = { a: 'gepland' };
     expect(nieuweMeldingen([taak('a', 'completed', { agent: 'axe-core' })], gezien)[0].stand).toBe('klaar');
     expect(nieuweMeldingen([taak('x', 'failed', { agent: 'axe-core' }), taak('y', 'cancelled', { agent: 'axe-core' })], {})).toEqual([]);
+  });
+});
+
+describe('wat de planner-host nog steeds verstaat', () => {
+  it('vertaalt de nieuwe tier-1 namen terug naar de oude planner.py-sleutels', () => {
+    expect(naarPlannerSleutels({ developer: 'cursor', trading: 'codex', northsea: 'sleutels' }))
+      .toEqual({ 'code-agent': 'cursor', 'axe-algo': 'codex', 'maps-agent': 'sleutels' });
+  });
+
+  it('stuurt een agent zonder oud equivalent gewoon door, zoals vrije-agent eerder', () => {
+    expect(naarPlannerSleutels({ wingman: 'sleutels', thinktank: 'codex2' }))
+      .toEqual({ wingman: 'sleutels', thinktank: 'codex2' });
   });
 });

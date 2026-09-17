@@ -984,11 +984,11 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
       ),
     );
     const timedOut = Symbol('timeout');
-    // Alleen de eindbeslissing mag het abonnement van AXE Algo (Instellingen →
-    // Motoren per agent); de elf rollen hierboven blijven op sleutels.
+    // Alleen de eindbeslissing mag het abonnement van de Trading Agent
+    // (Instellingen → Motoren per agent); de elf rollen hierboven blijven op sleutels.
     const callLlmBeslissing = buildBeslissingCallLlm(
       cascade,
-      abonnementVan(leesToewijzing(), 'axe-algo'),
+      abonnementVan(leesToewijzing(), 'trading'),
       (slot, msgs) => callProvider(
         slot as Parameters<typeof callProvider>[0],
         msgs as Parameters<typeof callProvider>[1],

@@ -7,7 +7,7 @@
  * hier bewust niet: die draaien altijd op je API-sleutels.
  * Zie domain/agentMotoren.ts.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Cpu } from 'lucide-react';
 import {
   HOOFD_AGENTS, AGENT_LABEL, MOTOR_LABEL, TOEGESTAAN, kiesbaar,
@@ -18,13 +18,16 @@ import { leesModellen, zetModel } from '@/infrastructure/persistence/motorModell
 import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motorModellen';
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import { claudeRepos, plannerStatus, plannerZetAan, type PlannerStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { PROVIDERS } from '@/domain/providers';
+import { chatModelKeuzes, isActief, leesVerbindingen } from '@/domain/chatModelKeuzes';
 
 const WAARVOOR: Record<HoofdAgent, string> = {
-  'axe-core': 'Het antwoord in de chat. Alleen-lezen in je repo.',
-  'code-agent': 'Runs in de Code Editor. Mag bestanden bewerken.',
-  'axe-algo': 'Alleen de eindbeslissing per cyclus. De elf desk-rollen blijven op sleutels.',
-  'maps-agent': 'Northsea Commodity: bouwt en runt de desk op de 3D Maps-tab. Schrijftaken pas na jouw akkoord.',
-  'vrije-agent': 'Een eigen plek voor een abonnement dat nog geen taak heeft. Er draait niets tot je hem er een geeft.',
+  wingman: 'Draait de gratis CrewAI-crew namens AXE, en helpt overal waar dat past.',
+  northsea: 'Bouwt en runt de NorthSea-desk, beweegt deals. Schrijftaken pas na jouw akkoord.',
+  trading: 'Alleen de eindbeslissing per cyclus. De elf desk-rollen blijven op sleutels.',
+  developer: 'Leest, schrijft, bouwt en deployt de codebase. Mag bestanden bewerken.',
+  thinktank: 'Score/rank ideeën → bouwplan → Build → bibliotheek → integratieplan.',
 };
 
 export function AgentMotorenSection() {
@@ -32,6 +35,30 @@ export function AgentMotorenSection() {
   const [aanwezig, setAanwezig] = useState<Record<string, boolean> | null>(null);
   const [modellen, setModellen] = useState<MotorModellen>(() => leesModellen());
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
+
+  // Rij 1: AXE Core. Zelfde opslag (voiceStore.primarySlot) als de
+  // ChatModelKiezer boven de composer -- één bron van waarheid, geen tweede
+  // instelling die het ooit oneens kan zijn met de eerste. De lijst zelf sluit
+  // abonnementen en Ollama al uit (domain/chatModelKeuzes.ts) — dat is de regel
+  // uit de CONFIRMED ARCHITECTURE: AXE's brein is nooit een abonnement, nooit
+  // Ollama.
+  const primair = useVoiceStore(s => s.primarySlot);
+  const setPrimair = useVoiceStore(s => s.setPrimarySlot);
+  const axeKeuzes = useMemo(
+    () => chatModelKeuzes(leesVerbindingen(), PROVIDERS.map(p => p.id)),
+    // Herleest bij elke render van deze sectie (Settings blijft open terwijl je
+    // sleutels invult) — een lijst van hooguit enkele tientallen regels, geen
+    // kostbare berekening.
+    [toewijzing],
+  );
+  const kiesAxe = (waarde: string) => {
+    if (!waarde) { setPrimair(null); return; }
+    const k = axeKeuzes.find(x => `${x.provider}:${x.model}` === waarde);
+    if (!k) return;
+    const conns = leesVerbindingen();
+    setPrimair({ provider: k.provider, key: conns[k.provider]?.key ?? '', model: k.model });
+  };
+  const axeHuidig = primair ? axeKeuzes.find(k => isActief(k, primair)) : undefined;
   useEffect(() => { plannerStatus().then(setPlanner).catch(() => setPlanner(null)); }, []);
   const zetPlanner = async (aan: boolean) => {
     try { await plannerZetAan(aan); setPlanner(await plannerStatus()); } catch { /* host onbereikbaar */ }
@@ -57,9 +84,39 @@ export function AgentMotorenSection() {
         <Cpu size={15} style={{ color: 'var(--accent-cyan)' }} /> Motoren per agent
       </h2>
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Elk abonnement hoort bij één agent, zodat ze niet om hetzelfde limiet vechten. Subtaken
-        draaien altijd op je API-sleutels hieronder.
+        Elk abonnement hoort bij één tier-1 manager, zodat ze niet om hetzelfde limiet vechten.
+        Subtaken draaien altijd op je API-sleutels hieronder.
       </p>
+
+      {/* Rij 1 — AXE Core. Los van de rijen eronder: nooit een abonnement, nooit
+          Ollama, alleen snelle/slimme chat-modellen. Zelfde opgeslagen keuze als
+          de ChatModelKiezer boven de composer. */}
+      <div
+        className="flex items-center justify-between gap-3 pb-2 mb-2"
+        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+      >
+        <div className="min-w-0">
+          <div className="text-xs-custom font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE Core</div>
+          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            Het antwoord in de chat. Nooit een abonnement, nooit Ollama.
+          </div>
+        </div>
+        <select
+          value={axeHuidig ? `${axeHuidig.provider}:${axeHuidig.model}` : ''}
+          onChange={e => kiesAxe(e.target.value)}
+          className="rounded-lg px-2 py-1 text-xs-custom"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+          aria-label="Model voor AXE Core"
+        >
+          <option value="">AXE Native (kiest zelf)</option>
+          {axeKeuzes.map(k => (
+            <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>
+              {k.provider} · {k.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="space-y-2">
         {HOOFD_AGENTS.map(agent => {
           const huidig = toewijzing[agent];
