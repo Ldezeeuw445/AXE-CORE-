@@ -43,12 +43,21 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(roepers, 'niemand opent een episode -- agent_learning_episodes blijft leeg').not.toHaveLength(0);
   });
 
+  it('Wingman opent een episode per specialist bij een crew-run', () => {
+    // CrewAI.tsx is "the only place the crew is invoked" (eigen commentaar
+    // daar) -- runCrewWithTools.ts is de niet-aangeroepen wrapper die de
+    // handoff hier noemde; dit is de echte ingang.
+    const roepers = aanroepersVan('openEpisode', 'agentFeedbackService');
+    expect(roepers, 'niemand opent een episode voor Wingman\'s crew-run').toContain('presentation/pages/CrewAI.tsx');
+  });
+
   it('iets sluit episodes af', () => {
     const roepers = [
       ...aanroepersVan('closeEpisode', 'agentFeedbackService'),
       ...aanroepersVan('closeTradingEpisodeForTrade', 'agentFeedbackService'),
     ];
     expect(roepers, 'episodes worden geopend maar nooit gesloten').not.toHaveLength(0);
+    expect(roepers, 'Wingman opent een episode maar sluit hem nooit').toContain('presentation/pages/CrewAI.tsx');
   });
 
   it('iets voert de versterking daadwerkelijk uit', () => {

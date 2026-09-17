@@ -36,6 +36,7 @@ const LOOP_AGENT_BY_NAME: Record<string, LoopHealth['agent']> = {
   code_agent: 'code-editor',
   browser_agent: 'browser',
   axe_algo: 'trading',
+  'wingman-agent': 'wingman',
 };
 
 function loadOverrides(): Record<string, Partial<CoreAgent>> {

@@ -6,6 +6,7 @@ import { crewRun, apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gat
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { STAT_ROW } from '@/presentation/components/surface/Page';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
 /**
  * CrewAI — run the REAL multi-specialist crew as an explicit background job.
@@ -39,14 +40,34 @@ export default function CrewAI() {
     setResult(null);
     setError(null);
     const startedAt = Date.now();
+    // One episode per named specialist — Wingman is the agent that runs this
+    // crew (roster.ts), so every run's outcome counts toward its loop-health
+    // even when it's kicked off from a different machine than the one that
+    // later reads Agents -> loop health. No memoryIds: this page doesn't
+    // retrieve memory into the crew's context yet, so there is nothing to
+    // reinforce -- these episodes prove the loop is real (opened, closed,
+    // counted), not that it feeds memory back in. When `selected` is empty
+    // the VPS picks its own roster, so there is no honest per-specialist
+    // subject to tag -- one episode for the whole run instead.
+    const episodeSubjects = selected.length > 0
+      ? selected.map(id => `${SPECIALISTS.find(s => s.id === id)?.name ?? id}: ${task.trim().slice(0, 200)}`)
+      : [`crew (auto-selected): ${task.trim().slice(0, 200)}`];
+    const episodeIds = await Promise.all(
+      episodeSubjects.map(subject => openEpisode({ agent: 'wingman', subject })),
+    );
+    const sluitEpisodes = (verdict: 'good' | 'poor') =>
+      episodeIds.forEach(id => { void closeEpisode(id, verdict); });
     try {
       const res = await crewRun({ task: task.trim(), specialists: selected.length > 0 ? selected : undefined });
       if (res.status === 'ok' && res.result) {
         setState('done');
         setResult(res.result);
+        sluitEpisodes('good');
         // The crewai_manager hub was registered but had no write site of its
         // own — this is that site. Only real, completed runs are recorded;
         // an idle page click that never fires runCrew() writes nothing.
+        // Tagged 'wingman', not the retired 'crewai_manager' (CONFIRMED
+        // ARCHITECTURE, 17 sep — Wingman runs this crew, not a fourth agent).
         recordEvent({
           kind: 'agent_run',
           summary: `Crew run: ${task.trim().slice(0, 120)}`,
@@ -56,28 +77,30 @@ export default function CrewAI() {
             result: res.result.slice(0, 2000),
             ms: Date.now() - startedAt,
           },
-          agentId: 'crewai_manager',
+          agentId: 'wingman',
         });
       } else {
         setState('error');
         const errMsg = res.error || `Crew returned status "${res.status}" without a result.`;
         setError(errMsg);
+        sluitEpisodes('poor');
         recordEvent({
           kind: 'error',
           summary: `Crew run failed: ${errMsg.slice(0, 120)}`,
           details: { task: task.trim(), specialists: selected, error: errMsg, ms: Date.now() - startedAt },
-          agentId: 'crewai_manager',
+          agentId: 'wingman',
         });
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setState('error');
       setError(msg);
+      sluitEpisodes('poor');
       recordEvent({
         kind: 'error',
         summary: `Crew run threw: ${msg.slice(0, 120)}`,
         details: { task: task.trim(), specialists: selected, error: msg, ms: Date.now() - startedAt },
-        agentId: 'crewai_manager',
+        agentId: 'wingman',
       });
     }
   };
