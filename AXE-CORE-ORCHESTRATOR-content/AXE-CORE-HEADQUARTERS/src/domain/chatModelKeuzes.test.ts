@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   chatModelKeuzes, providersMetSleutel, modelLabel, isActief,
-  merkVan, merkenMetKeuzes, keuzesVanMerk, actiefMerk,
+  merkVan, merkenMetKeuzes, keuzesVanMerk, actiefMerk, paidApiKeuzes,
 } from '@/domain/chatModelKeuzes';
 import type { ProviderId } from '@/domain/providers';
 
@@ -89,6 +89,20 @@ describe('welke actief is', () => {
   it('behandelt een ontbrekend model als leeg', () => {
     expect(isActief(keuze, { provider: 'openai', model: null })).toBe(false);
     expect(isActief(keuze, null)).toBe(false);
+  });
+});
+
+describe('tier-3 (AXE Intel / AXE Companion): alleen betaalde Anthropic/OpenAI', () => {
+  it('laat Google, Groq en de rest weg, ook met een sleutel', () => {
+    const lijst = paidApiKeuzes({ anthropic: { key: 'x' }, openai: { key: 'x' }, google: { key: 'x' }, groq: { key: 'x' } }, ALLE);
+    expect(lijst.every(k => k.provider === 'anthropic' || k.provider === 'openai')).toBe(true);
+    expect(lijst.some(k => k.provider === 'google')).toBe(false);
+  });
+
+  it('nooit lager dan gpt-4o-mini in de OpenAI-lijst', () => {
+    const lijst = paidApiKeuzes({ openai: { key: 'x' } }, ALLE).filter(k => k.provider === 'openai');
+    expect(lijst.some(k => k.model === 'gpt-4o-mini')).toBe(true);
+    expect(lijst.some(k => /gpt-3|gpt-4o-nano|gpt-4-turbo-mini/.test(k.model))).toBe(false);
   });
 });
 

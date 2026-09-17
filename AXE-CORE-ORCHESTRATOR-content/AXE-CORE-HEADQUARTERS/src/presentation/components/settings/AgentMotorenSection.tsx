@@ -19,8 +19,29 @@ import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motor
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import { claudeRepos, plannerStatus, plannerZetAan, type PlannerStatus } from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { PROVIDERS } from '@/domain/providers';
-import { chatModelKeuzes, isActief, leesVerbindingen } from '@/domain/chatModelKeuzes';
+import { PROVIDERS, type ProviderId } from '@/domain/providers';
+import { chatModelKeuzes, paidApiKeuzes, isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
+import { agentsByTier } from '@/domain/agents/roster';
+import { leesOverrides, zetOverride, type OverrideMap } from '@/infrastructure/persistence/agentEngineOverrides';
+
+/** Een klein bolletje: heeft de provider die hier gekozen staat een sleutel,
+ *  en werkte hij de laatste keer dat hij getest is? Dezelfde `lastTest` die de
+ *  Provider Keys-kaarten verderop op dit scherm ook tonen — geen tweede
+ *  waarheid, alleen een kleinere weergave ervan naast de agent die hem
+ *  gebruikt. */
+function VerbindingBadge({ provider, verbindingen }: { provider?: ProviderId; verbindingen: Record<string, Verbinding> }) {
+  if (!provider) return null;
+  const v = verbindingen[provider];
+  if (!v?.key) return <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>geen sleutel</span>;
+  const kleur = v.lastTest === 'ok' ? 'var(--success)' : v.lastTest === 'fail' ? 'var(--error)' : 'var(--text-muted)';
+  const tekst = v.lastTest === 'ok' ? 'werkt' : v.lastTest === 'fail' ? 'faalt' : 'nog niet getest';
+  return (
+    <span className="flex items-center gap-1 text-[9px]" style={{ color: kleur }} title={v.lastTestAt ? `Laatst getest ${new Date(v.lastTestAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : undefined}>
+      <span className="rounded-full" style={{ width: 5, height: 5, background: kleur, display: 'inline-block' }} />
+      {tekst}
+    </span>
+  );
+}
 
 /** Een 0-100% balkje voor hoeveel van het dagbudget van deze motor al op is
  *  (planner.gebruik_vandaag / planner.dagbudget) — de enige echte "usage"-
@@ -54,6 +75,21 @@ export function AgentMotorenSection() {
   const [aanwezig, setAanwezig] = useState<Record<string, boolean> | null>(null);
   const [modellen, setModellen] = useState<MotorModellen>(() => leesModellen());
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
+  const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
+  const verbindingen = useMemo(() => leesVerbindingen(), [toewijzing, overrides]);
+  const tier2Keuzes = useMemo(
+    () => chatModelKeuzes(verbindingen, PROVIDERS.map(p => p.id)),
+    [verbindingen],
+  );
+  const tier3Keuzes = useMemo(
+    () => paidApiKeuzes(verbindingen, PROVIDERS.map(p => p.id)),
+    [verbindingen],
+  );
+  const kiesOverride = (agentId: string, waarde: string) => {
+    if (!waarde) { setOverrides(zetOverride(agentId, null)); return; }
+    const [provider, ...rest] = waarde.split(':');
+    setOverrides(zetOverride(agentId, { provider: provider as ProviderId, model: rest.join(':') }));
+  };
 
   // Rij 1: AXE Core. Zelfde opslag (voiceStore.primarySlot) als de
   // ChatModelKiezer boven de composer -- één bron van waarheid, geen tweede
@@ -84,7 +120,7 @@ export function AgentMotorenSection() {
   };
 
   useEffect(() => {
-    const bij = () => setToewijzing(leesToewijzing());
+    const bij = () => { setToewijzing(leesToewijzing()); setOverrides(leesOverrides()); };
     window.addEventListener('axe:agent-motoren', bij);
     window.addEventListener('storage', bij);
     // Welke CLI's staan op de host waar de agents draaien. Aanwezig, niet of je
@@ -169,6 +205,86 @@ export function AgentMotorenSection() {
           );
         })}
       </div>
+
+      {/* Tier 2 — Agents-tab workers. Geen abonnement-uitsluiting nodig: dit
+          zijn gewone API-modellen, en twee agents die dezelfde Gemini-sleutel
+          gebruiken botsen niet zoals twee agents op één ingelogde CLI-sessie
+          dat wel doen. Standaard "Auto" (races tussen capabele engines, zoals
+          AXE's eigen cascade dat al doet); vastzetten is optioneel. */}
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Agents-tab workers</div>
+        <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+          Auto-routeert tussen capabele engines. Vastzetten kan, maar hoeft niet.
+        </div>
+        <div className="space-y-2">
+          {agentsByTier('tier2').map(agent => {
+            const ov = overrides[agent.id];
+            return (
+              <div key={agent.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs-custom font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    {agent.name}
+                    <VerbindingBadge provider={ov?.provider} verbindingen={verbindingen} />
+                  </div>
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{agent.handles}</div>
+                </div>
+                <select
+                  value={ov ? `${ov.provider}:${ov.model}` : ''}
+                  onChange={e => kiesOverride(agent.id, e.target.value)}
+                  className="rounded-lg px-2 py-1 text-xs-custom"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  aria-label={`Motor voor ${agent.name}`}
+                >
+                  <option value="">Auto (races)</option>
+                  {tier2Keuzes.map(k => (
+                    <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tier 3 — cross-app assistants. Dezelfde agent als in Companion/
+          Trading OS, hier alleen zichtbaar en instelbaar. Alleen betaalde
+          Anthropic/OpenAI (nooit lager dan gpt-4o-mini) — geen abonnement,
+          geen Ollama, geen "auto": Luka's eigen regel voor deze twee. */}
+      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Cross-app assistants</div>
+        <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+          Dezelfde agent als in je andere apps. Alleen betaalde Anthropic/OpenAI, minimaal gpt-4o-mini.
+        </div>
+        <div className="space-y-2">
+          {agentsByTier('tier3').map(agent => {
+            const ov = overrides[agent.id];
+            return (
+              <div key={agent.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs-custom font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    {agent.name}
+                    <VerbindingBadge provider={ov?.provider} verbindingen={verbindingen} />
+                  </div>
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{agent.handles}</div>
+                </div>
+                <select
+                  value={ov ? `${ov.provider}:${ov.model}` : ''}
+                  onChange={e => kiesOverride(agent.id, e.target.value)}
+                  className="rounded-lg px-2 py-1 text-xs-custom"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  aria-label={`Model voor ${agent.name}`}
+                >
+                  <option value="">kies een model (min. gpt-4o-mini)</option>
+                  {tier3Keuzes.map(k => (
+                    <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Het model per abonnement.
           Hoort bij de MOTOR en niet bij de agent: Claude Code draait een
           Claude-model, Codex een OpenAI-model. Per agent instellen zou je een

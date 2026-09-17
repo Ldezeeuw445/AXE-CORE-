@@ -64,10 +64,19 @@ export function modelLabel(_provider: ProviderId, model: string): string {
   return model;
 }
 
+export interface Verbinding {
+  key?: string;
+  model?: string;
+  lastTest?: 'ok' | 'fail' | 'testing';
+  lastTestAt?: string;
+}
+
 /** Hoe de chat zijn opgeslagen connecties leest (`axe_llm_connections`) — het
  *  scherm en de composer lezen dezelfde plek, zodat een sleutel die je net in
- *  Settings intypte meteen in beide pickers verschijnt. */
-export function leesVerbindingen(): Record<string, { key?: string }> {
+ *  Settings intypte meteen in beide pickers verschijnt. Ook `lastTest`, zodat
+ *  Instellingen-panelen elders (Motoren per agent) kunnen tonen of een
+ *  provider niet alleen een sleutel heeft maar ook echt antwoordde. */
+export function leesVerbindingen(): Record<string, Verbinding> {
   try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); }
   catch { return {}; }
 }
@@ -83,6 +92,23 @@ export function chatModelKeuzes(
     label: p.model,
     toelichting: p.note,
   }));
+}
+
+/**
+ * De lijst voor een tier-3 cross-app agent (AXE Intel, AXE Companion):
+ * uitsluitend betaalde Anthropic/OpenAI-modellen — Luka's eigen regel is
+ * "minstens gpt-4o-mini of vergelijkbaar, nooit minder". `MODEL_CATALOG.openai`
+ * bevat toevallig al niets zwakkers dan gpt-4o-mini, dus filteren op merk is
+ * genoeg; een toekomstig zwakker OpenAI-model in die catalogus zou deze regel
+ * wél moeten uitsluiten en doet dat nu niet automatisch — zie modelCatalog.ts
+ * als je daar ooit iets aan toevoegt.
+ */
+export function paidApiKeuzes(
+  connecties: Record<string, { key?: string }> | null | undefined,
+  alleProviders: readonly ProviderId[],
+): ChatModelKeuze[] {
+  return chatModelKeuzes(connecties, alleProviders)
+    .filter(k => k.provider === 'anthropic' || k.provider === 'openai');
 }
 
 /** Of deze keuze nu actief is. Provider én model, want hetzelfde model-id kan
