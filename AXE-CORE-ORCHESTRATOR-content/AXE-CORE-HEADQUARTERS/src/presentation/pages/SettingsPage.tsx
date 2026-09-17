@@ -759,12 +759,6 @@ function ProviderKeysSection() {
               onModel={(model) => update(cat.id, 'model', model)}
               onTest={() => testProvider(cat.id, isCustom)}
               onToonSleutel={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))}
-              onPrimair={() => voice.setPrimarySlot(isPrimary ? null : {
-                provider: cat.id as ProviderId,
-                key: conn.key ?? '',
-                model: conn.model || standaardModel || '',
-                baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
-              })}
               onVerwijder={isCustom ? () => removeCustomProvider(cat.id) : undefined}
             />
           );
@@ -1162,7 +1156,6 @@ function OllamaModelsSection() {
                 onModel={() => {}}
                 onTest={() => testModel(model.name)}
                 onToonSleutel={() => {}}
-                onPrimair={() => {}}
               />
             );
           })}

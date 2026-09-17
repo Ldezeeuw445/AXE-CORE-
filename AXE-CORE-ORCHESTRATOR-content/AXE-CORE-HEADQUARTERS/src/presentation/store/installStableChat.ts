@@ -16,13 +16,11 @@ import {
   buildStableChatCascade,
   classifyQuery,
   isSimpleChatCapability,
-  preferLocalOllamaFirst,
   type KeySlot,
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
-import { isLocalOllamaUp, resolveReachableOllama } from '@/infrastructure/gateways/localOllama';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
 import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
@@ -483,19 +481,17 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   const st = useVoiceStore.getState();
   // Same rule as chatCascade: AXE speaks through a real chat model, not a coding
   // subscription. Strip subscriptions so your chosen brain answers.
-  let cascade = zonderAbonnement(buildStableChatCascade(all, {
+  //
+  // "Local model first" used to also apply here when nothing was pinned
+  // (AXE Native) -- that's exactly the "AXE never gets Ollama" rule (Settings'
+  // AXE Core row, domain/chatModelKeuzes.ts) being quietly overruled the one
+  // time you left AXE on auto. The toggle is for the tier-2 workers/CrewAI,
+  // not for AXE's own brain -- removed here, not repurposed here.
+  const cascade = zonderAbonnement(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
   }));
-  // "Local model first when home" is a preference for AXE Native (no explicit
-  // pick). An explicitly chosen brain (primarySlot) is what you want AXE to be,
-  // so it must win over local-first — otherwise a small local model jumps ahead
-  // of the smart model you selected.
-  if (!st.primarySlot) {
-    const reachableOllama = await resolveReachableOllama();
-    cascade = preferLocalOllamaFirst(cascade, !!reachableOllama, reachableOllama?.baseUrl);
-  }
   if (cascade.length === 0) return false;
 
   const history = st.conversation

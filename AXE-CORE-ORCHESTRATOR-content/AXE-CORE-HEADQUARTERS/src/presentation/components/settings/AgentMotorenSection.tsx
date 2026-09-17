@@ -20,7 +20,7 @@ import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import { claudeRepos, plannerStatus, plannerZetAan, type PlannerStatus } from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
-import { chatModelKeuzes, paidApiKeuzes, isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
+import { chatModelKeuzes, workerKeuzes, paidApiKeuzes, isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
 import { agentsByTier } from '@/domain/agents/roster';
 import { leesOverrides, zetOverride, type OverrideMap } from '@/infrastructure/persistence/agentEngineOverrides';
 
@@ -78,7 +78,7 @@ export function AgentMotorenSection() {
   const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
   const verbindingen = useMemo(() => leesVerbindingen(), [toewijzing, overrides]);
   const tier2Keuzes = useMemo(
-    () => chatModelKeuzes(verbindingen, PROVIDERS.map(p => p.id)),
+    () => workerKeuzes(verbindingen, PROVIDERS.map(p => p.id)),
     [verbindingen],
   );
   const tier3Keuzes = useMemo(
@@ -209,12 +209,14 @@ export function AgentMotorenSection() {
       {/* Tier 2 — Agents-tab workers. Geen abonnement-uitsluiting nodig: dit
           zijn gewone API-modellen, en twee agents die dezelfde Gemini-sleutel
           gebruiken botsen niet zoals twee agents op één ingelogde CLI-sessie
-          dat wel doen. Standaard "Auto" (races tussen capabele engines, zoals
-          AXE's eigen cascade dat al doet); vastzetten is optioneel. */}
+          dat wel doen. Standaard "Auto"; vastzetten is optioneel. Mag, anders
+          dan AXE's eigen rij hierboven, wél Ollama -- routinewerk (cron-tik,
+          task-check) hoeft niet het slimste model te zijn, en dat is precies
+          waar "local models first" voor bedoeld is (workerKeuzes). */}
       <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Agents-tab workers</div>
         <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
-          Auto-routeert tussen capabele engines. Vastzetten kan, maar hoeft niet.
+          Auto-routeert tussen capabele engines, Ollama inbegrepen. Vastzetten kan, maar hoeft niet.
         </div>
         <div className="space-y-2">
           {agentsByTier('tier2').map(agent => {

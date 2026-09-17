@@ -28,6 +28,7 @@ import {
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
 import { openLeerbeurt, metGeheugen, sluitLeerbeurt } from '@/application/agents/abonnementLeerlus';
+import { classifyCodeTaskComplexity } from '@/domain/codeTaskComplexity';
 import {
   agentHostVoorkeur, zetAgentHostVoorkeur, agentHostStand,
   LOKALE_AGENT_ORIGIN, type AgentHostVoorkeur,
@@ -143,6 +144,10 @@ interface AgentMessage {
   filesRead?: string[];
   autoApplied?: boolean;
   ranCommand?: AgentTurn['ranCommand'];
+  /** Eén knop onder een 'status'-melding — nu alleen gebruikt om de
+   *  gratis-voor-simpel-substitutie (zie classifyCodeTaskComplexity) in één
+   *  klik terug te draaien naar het gepinde abonnement. */
+  action?: { label: string; run: () => void };
 }
 
 type SidebarMode = 'files' | 'search' | 'git';
@@ -891,18 +896,36 @@ export default function CodeEditorPage() {
     [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot, voice.fallback3Slot]
       .filter((s): s is KeySlot => s !== null);
 
-  const handleAgentSubmit = useCallback(async (overrideInstruction?: string) => {
+  const handleAgentSubmit = useCallback(async (overrideInstruction?: string, negeerClassificatie = false) => {
     const instruction = (overrideInstruction ?? agentInput).trim();
     if (!instruction || agentBusy) return;
     setAgentInput('');
     setAgentBusy(true);
     setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
+
+    // Simpele taken op een gepind abonnement: OpenHands is gratis en is voor
+    // een typo, hernoem of ander klein ding vaak genoeg. Nooit stilzwijgend
+    // -- de melding hieronder zegt wat er gebeurde, met één knop om het
+    // abonnement alsnog te forceren voor precies déze beurt (negeerClassificatie
+    // laat het bij een herhaalde aanroep niet weer omslaan naar OpenHands).
+    // Zie domain/codeTaskComplexity.ts voor waarom dit conservatief is.
+    let werkelijkeEngine = agentEngine;
+    if (!negeerClassificatie && CLI_MOTOREN.has(agentEngine) && classifyCodeTaskComplexity(instruction) === 'simple') {
+      werkelijkeEngine = 'openhands';
+      const motorLabel = MOTOR_LABEL[agentEngine] ?? agentEngine;
+      setAgentMessages(prev => [...prev, {
+        role: 'status',
+        text: `Dit lijkt een simpele taak — OpenHands gebruikt (gratis) in plaats van ${motorLabel}.`,
+        action: { label: `Toch ${motorLabel} gebruiken`, run: () => { void handleAgentSubmit(instruction, true); } },
+      }]);
+    }
+
     meldActiviteit({
       doelen: ['editor', '/code-editor'],
-      label: `${agentEngine === 'native' ? 'AXE Native' : agentEngine === 'openhands' ? 'OpenHands' : MOTOR_LABEL[agentEngine] ?? agentEngine} werkt in ${claudeRepo || 'de repo'}: ${instruction.slice(0, 48)}`,
+      label: `${werkelijkeEngine === 'native' ? 'AXE Native' : werkelijkeEngine === 'openhands' ? 'OpenHands' : MOTOR_LABEL[werkelijkeEngine] ?? werkelijkeEngine} werkt in ${claudeRepo || 'de repo'}: ${instruction.slice(0, 48)}`,
     });
 
-    if (agentEngine === 'openhands') {
+    if (werkelijkeEngine === 'openhands') {
       setAgentMessages(prev => [...prev, { role: 'status', text: 'Sending task to OpenHands…' }]);
       try {
         const context = activeTab ? `Active file: ${activeTab.path}\n\n${activeTab.content.slice(0, 8000)}` : undefined;
@@ -916,8 +939,8 @@ export default function CodeEditorPage() {
       return;
     }
 
-    if (CLI_MOTOREN.has(agentEngine)) {
-      const motorLabel = MOTOR_LABEL[agentEngine] ?? agentEngine;
+    if (CLI_MOTOREN.has(werkelijkeEngine)) {
+      const motorLabel = MOTOR_LABEL[werkelijkeEngine] ?? werkelijkeEngine;
       if (!claudeRepo) {
         setAgentMessages(prev => [...prev, {
           role: 'agent',
@@ -945,7 +968,7 @@ export default function CodeEditorPage() {
         // Zie application/agents/abonnementLeerlus.ts.
         const leer = await openLeerbeurt(`${instruction} ${claudeRepo} ${activeTab?.path ?? ''}`, 'code-editor');
         const prompt = metGeheugen(opdracht, leer);
-        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as CliMotor });
+        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: werkelijkeEngine as CliMotor });
         // A refusal comes back as HTTP 200 with status 'error' — reading the
         // body is the only way to tell a guarded refusal from a finished run.
         const text = res.status === 'ok'
@@ -959,7 +982,7 @@ export default function CodeEditorPage() {
         if (res.status === 'ok') setRunTeller(n => n + 1);
         sluitLeerbeurt(leer, res.status === 'ok', {
           wie: `Code Agent · ${motorLabel} · ${claudeRepo}`, opdracht: instruction, uitkomst: text,
-          metadata: { repo: claudeRepo, branch: res.branch, motor: agentEngine },
+          metadata: { repo: claudeRepo, branch: res.branch, motor: werkelijkeEngine },
         });
         // It edited files on disk directly, so what is open here is now stale.
         if (res.status === 'ok' && activeTab) {
@@ -1682,8 +1705,23 @@ export default function CodeEditorPage() {
                             </ol>
                           )}
                           {msg.role === 'status' && (
-                            <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                              <RefreshCw size={8} className="animate-spin flex-shrink-0" /><span>{msg.text}</span>
+                            <div className="flex items-center gap-1.5 text-[9px] flex-wrap" style={{ color: 'var(--text-muted)' }}>
+                              {/* Een melding met een knop is een blijvende notitie
+                                  (bijv. "simpele taak, OpenHands gebruikt"), geen
+                                  "bezig"-regel die zo verdwijnt -- die krijgt dus
+                                  geen draaiend icoon. */}
+                              {!msg.action && <RefreshCw size={8} className="animate-spin flex-shrink-0" />}
+                              <span>{msg.text}</span>
+                              {msg.action && (
+                                <button
+                                  type="button"
+                                  onClick={msg.action.run}
+                                  className="rounded-full px-1.5 py-0.5"
+                                  style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}
+                                >
+                                  {msg.action.label}
+                                </button>
+                              )}
                             </div>
                           )}
                           {msg.role === 'user' && (

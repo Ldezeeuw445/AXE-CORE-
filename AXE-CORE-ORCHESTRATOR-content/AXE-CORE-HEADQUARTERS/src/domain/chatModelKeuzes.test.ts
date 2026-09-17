@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   chatModelKeuzes, providersMetSleutel, modelLabel, isActief,
-  merkVan, merkenMetKeuzes, keuzesVanMerk, actiefMerk, paidApiKeuzes,
+  merkVan, merkenMetKeuzes, keuzesVanMerk, actiefMerk, paidApiKeuzes, workerKeuzes,
 } from '@/domain/chatModelKeuzes';
 import type { ProviderId } from '@/domain/providers';
 
@@ -89,6 +89,26 @@ describe('welke actief is', () => {
   it('behandelt een ontbrekend model als leeg', () => {
     expect(isActief(keuze, { provider: 'openai', model: null })).toBe(false);
     expect(isActief(keuze, null)).toBe(false);
+  });
+});
+
+describe('tier-2 (Agents-tab workers): mag wél Ollama, anders dan AXE zelf', () => {
+  it('zet Ollama vooraan als het meedoet in de providerlijst', () => {
+    const lijst = workerKeuzes({}, ALLE);
+    expect(lijst[0].provider).toBe('ollama');
+  });
+
+  it('laat Ollama weg als het niet in de providerlijst zit', () => {
+    const zonderOllama = ['anthropic', 'openai'] as ProviderId[];
+    const lijst = workerKeuzes({ anthropic: { key: 'x' } }, zonderOllama);
+    expect(lijst.some(k => k.provider === 'ollama')).toBe(false);
+  });
+
+  it('bevat verder dezelfde keuzes als chatModelKeuzes', () => {
+    const conns = { anthropic: { key: 'x' } };
+    const basis = chatModelKeuzes(conns, ALLE);
+    const workers = workerKeuzes(conns, ALLE).filter(k => k.provider !== 'ollama');
+    expect(workers).toEqual(basis);
   });
 });
 

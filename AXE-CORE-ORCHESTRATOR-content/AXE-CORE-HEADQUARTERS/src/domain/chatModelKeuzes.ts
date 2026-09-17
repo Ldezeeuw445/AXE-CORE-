@@ -31,6 +31,7 @@
  */
 
 import type { ProviderId } from '@/domain/providers';
+import { resolveOllamaModel } from '@/domain/providers';
 import { catalogPairs } from '@/domain/modelCatalog';
 
 export interface ChatModelKeuze {
@@ -92,6 +93,25 @@ export function chatModelKeuzes(
     label: p.model,
     toelichting: p.note,
   }));
+}
+
+/**
+ * De lijst voor een tier-2 Agents-tab worker (Browser, Memory, Task, Cron,
+ * Finance): dezelfde snelle/slimme modellen als AXE's eigen rij, plús Ollama
+ * vooraan. Dat laatste is precies waar AXE's eigen lijst het NIET mag hebben
+ * (zie de kop van dit bestand) — voor routinewerk als een cron-tik of een
+ * task-check is een gratis lokaal model precies goed genoeg, en dat is
+ * waarvoor Luka "local models first" wilde behouden nadat het uit AXE's eigen
+ * pad gehaald is (installStableChat.ts, 17 sep).
+ */
+export function workerKeuzes(
+  connecties: Record<string, { key?: string }> | null | undefined,
+  alleProviders: readonly ProviderId[],
+): ChatModelKeuze[] {
+  const rest = chatModelKeuzes(connecties, alleProviders);
+  if (!alleProviders.includes('ollama')) return rest;
+  const model = resolveOllamaModel();
+  return [{ provider: 'ollama', model, label: model, toelichting: 'Lokaal/VPS, gratis' }, ...rest];
 }
 
 /**
