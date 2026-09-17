@@ -20,6 +20,8 @@ import {
   type ProviderId, type ProviderCfg, type KeySlot, type QueryCapability,
 } from '@/domain/providers';
 import { delegateFor, type AxeAgentId } from '@/domain/agents/roster';
+import { namespaceFor } from '@/domain/agents/catalog';
+import { latestOpenTurnId, noteTurnOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { korteFaalReden } from '@/domain/faalReden';
 import { toProxied, callProvider } from '@/infrastructure/gateways/llmGateway';
@@ -905,6 +907,11 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       // ── Build a routing event that will be populated as slots are tried ──
       // Which of the six agents is handling this turn — the visible hand-off.
       const delegation=delegateFor(cap,text);
+      // The learning loop, keyed to the handling agent's catalog namespace: the
+      // turn opens in this namespace (memory recall below) and is closed with an
+      // outcome once AXE replies. Before this, chat opened turns and never closed
+      // them, so the loop never completed — now every agent learns in its own space.
+      const memOwner=namespaceFor(delegation.agent);
       const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,specialist:specialistId,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none',delegate:delegation.agent};
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
@@ -945,7 +952,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const raceTimeout = <T>(p: Promise<T>, ms: number, fb: T): Promise<T> =>
         Promise.race([p, new Promise<T>(r => setTimeout(() => r(fb), ms))]);
       const [ragCtx,tavilyResults]=await Promise.all([
-        raceTimeout(buildGlobalMemoryContext(AXE_USER_ID,text,900).catch(()=>''), memBudgetMs, ''),
+        raceTimeout(buildGlobalMemoryContext(AXE_USER_ID,text,900,memOwner).catch(()=>''), memBudgetMs, ''),
         shouldSearch?tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'}).catch(()=>[]):Promise.resolve([]),
       ]);
       if(ragCtx) systemContent+=`\n\n${ragCtx}`;
@@ -1004,7 +1011,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
           pushRouteEvt(routeEvt);
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model,delegate:delegation.agent}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
-          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,result.slot.provider,cap).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,result.slot.provider,cap).catch(()=>{});noteTurnOutcome(latestOpenTurnId(memOwner),'good');await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
@@ -1017,13 +1024,14 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
           pushRouteEvt(routeEvt);
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,delegate:delegation.agent,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
-          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,slot.provider,cap).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,slot.provider,cap).catch(()=>{});noteTurnOutcome(latestOpenTurnId(memOwner),'good');await logRoute('provider success',{provider:slot.provider});return;
         }
         catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=korteFaalReden(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,600)});}
       }
 
       await logRoute('all providers failed',{error:lastError.slice(0,600)});
       const slotSummary=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
+      noteTurnOutcome(latestOpenTurnId(memOwner),'poor');
       routeEvt.via='none';pushRouteEvt(routeEvt);
 
       // LAST resort, and this one really is last: LangGraph has failed, every
