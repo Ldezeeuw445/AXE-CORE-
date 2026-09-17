@@ -26,11 +26,20 @@ Decisions already taken with Luka:
 - The **6 subscriptions** (`claude/claude2/claude3/codex/codex2/cursor`) are coding CLIs and belong
   to the agents.
 
-## Uncommitted work in the tree (unfinished — finish or discard, don't commit as is)
+## Branch governance (from the consolidation directive, 17 Sep)
 
-`installStableChat.ts` imports `getProviderKeySlot` + `PROVIDERS`, and `voiceStore.ts` exports
-`getProviderKeySlot`. It is the start of a `collectAllSlots` fix: the slot resolver still has to use
-them. Without that loop it's dead code.
+This work now lives on **`feat/axe-agent-force`** (branched from `orchestrator` @ `bb5f484a`). Do NOT
+merge to `orchestrator` yourself — an integration pass reviews the AXE and NorthSea branches together
+first. The local app can still be built/run from this branch to test (that is not a merge). NorthSea P2
+is Cursor's on `origin/feat/northsea-crewai-p2`; leave it alone.
+
+## DONE — the `collectAllSlots` fix (commit `e4eb7a10`)
+
+`collectAllSlots` (live stable-chat path) read keys only from localStorage, so vault/ENV-keyed
+providers (Gemini via `VITE_GEMINI_API_KEY`) were "Connected" but invisible to AXE's chat → AXE was
+stuck on dead Ollama + out-of-credits OpenRouter and reported "unavailable". Now it also resolves every
+`PROVIDERS` entry via the exported `getProviderKeySlot` (localStorage OR ENV), so `buildStableChatCascade`
+prefers Gemini when its key exists. `getProviderKeySlot` is now exported from `voiceStore.ts`.
 
 ## Next steps, in order
 
