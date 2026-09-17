@@ -333,19 +333,16 @@ export function buildStableChatCascade(
   push(resolve(fb1));
   push(resolve(fb2));
 
-  // 2) If no primary configured: prefer Google Gemini when a key exists
+  // 2) No primary pinned: fill AXE's cascade from a priority list of fast,
+  //    reliable chat models, so if the first is out of credits AXE still lands
+  //    on a working one. Order: fast+free first (Groq/Cerebras), then smart
+  //    (Anthropic/OpenAI), then Gemini (great but its free key runs out), then
+  //    the rest. Whatever the user pins in Settings overrides this via `primary`.
   if (out.length === 0) {
-    const google = allSlots.find(s => s.provider === 'google');
-    push(google ?? null);
-  }
-
-  // 3) One extra multi-capable cloud if cascade still short
-  if (out.length < 2) {
-    for (const s of allSlots) {
-      if (CLOUD_IDENTITY_PROVIDERS.has(s.provider) && !seen.has(s.provider)) {
-        push(s);
-        if (out.length >= 2) break;
-      }
+    const AXE_PREF = ['groq', 'cerebras', 'anthropic', 'openai', 'google', 'xai', 'openrouter'];
+    for (const id of AXE_PREF) {
+      const s = allSlots.find(x => x.provider === id);
+      if (s) { push(s); if (out.length >= 3) break; }
     }
   }
 
