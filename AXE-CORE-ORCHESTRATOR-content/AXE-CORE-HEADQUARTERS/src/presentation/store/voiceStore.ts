@@ -383,7 +383,7 @@ function speakSafely(text:string,onDone?:()=>void){
 }
 
 export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;
-  /** Which of the six agents handled this turn (see domain/agents/roster.ts). 'axe' = AXE answered directly. */
+  /** Which of the tiered agents handled this turn (see domain/agents/roster.ts). 'axe' = AXE answered directly. */
   delegate?:AxeAgentId;}
 
 /** One routing decision — created per `sendMessage` call, populated as slots are tried. */
@@ -394,7 +394,7 @@ export interface RoutingEvent{
   slotOrder:string[];
   attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
   winner?:string;winnerModel?:string;
-  /** Which of the six agents AXE used for this turn (see domain/agents/roster.ts). */
+  /** Which of the tiered agents AXE used for this turn (see domain/agents/roster.ts). */
   delegate?:AxeAgentId;
   via:'langgraph'|'fallback'|'crew'|'none';
   /** How many consecutive messages were coalesced into this entry (≥1). */
@@ -916,7 +916,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }
 
       // ── Build a routing event that will be populated as slots are tried ──
-      // Which of the six agents is handling this turn — the visible hand-off.
+      // Which of the tiered agents is handling this turn — the visible hand-off.
       const delegation=delegateFor(cap,text);
       // The learning loop, keyed to the handling agent's catalog namespace: the
       // turn opens in this namespace (memory recall below) and is closed with an

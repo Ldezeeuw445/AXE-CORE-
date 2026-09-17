@@ -3,8 +3,8 @@
  * memory namespace each one learns in.
  *
  * This is Stage 1 of turning a scattered set of agents into one working force:
- * a single source of truth built FROM the pieces that already exist (the six
- * top-level agents in roster.ts and the nine CrewAI specialists in
+ * a single source of truth built FROM the pieces that already exist (AXE plus
+ * the twelve tiered agents in roster.ts, and the nine CrewAI specialists in
  * catalogs/specialists.ts) rather than a fourth hand-kept list. The War Room,
  * the Agents tab, the learning loop and EVE all read from here, so an agent is
  * defined once and shows up everywhere the same.
