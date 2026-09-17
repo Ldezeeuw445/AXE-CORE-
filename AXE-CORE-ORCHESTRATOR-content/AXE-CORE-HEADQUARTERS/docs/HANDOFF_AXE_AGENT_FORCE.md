@@ -3,6 +3,42 @@
 For the next session (Claude, Cursor or Codex). Read this first, then memory
 `axe-core-agents-architecture` and `axe-leerlus-architectuur`.
 
+## FULL Definition-of-Done audit (17 Sep 2026, verified against code, not claims)
+
+Re-run: `1359` tests / `164` files green, `tsc` clean (only the 5 known pre-existing
+errors: PreviewPanel.tsx + zweef/ingebed.test.ts), `vite build` ✓, `tauri:build` ✓.
+
+| # | DoD item | Status | Where it is real / what blocks the rest |
+|---|----------|--------|-----------------------------------------|
+| 1 | Canonical registry + hierarchy | **COMPLETE** | `roster.ts` 13 agents, 3 tiers + axe; `catalog.ts` adds crew + app entries. Tests lock tiers/scopes. |
+| 2 | Authoritative engine assignments | **COMPLETE** | `AgentMotorenSection` AXE row writes `voiceStore.primarySlot` — the ONE source. ProviderCard "Make primary" is now a label only; local-first no longer a competing brain selector (moved to workers, `ce3624fa`). |
+| 3 | Truthful requested-vs-actual provenance/fallback | **COMPLETE** (finished this session, `8572ccf7`) | Cognitive stream shows one truthful `model · provider/model` line; cascade now ALWAYS keeps working engines behind a pinned primary so a broke pin (Gemini out of credits) falls through instead of dying on Ollama. Locked by 3 new tests. |
+| 4 | Capability routing | **COMPLETE** | `classifyQuery` + `delegateFor` (code→developer) drive `selectByCapability`. |
+| 5 | Durable tasks | **PARTIAL** | Mechanism exists (`core_tasks`/`core_schedules`, capability+assignee, VPS worker claims). Task "done" ≠ validated outcome — outcome-grounding is item 8's boundary. |
+| 6 | Structured handoffs | **PARTIAL** | `delegateFor` result reaches the UI as a truthful `AXE → <agent> · via LangGraph` label. A real pipeline handoff (system-prompt swap / tool scoping in `voiceStore` core) is unbuilt — a product decision, not a fake. |
+| 7 | Results / events / outcomes | **PARTIAL** | Routing events + `agent_learning_episodes` open/close are wired; full per-agent outcome coverage tracks with item 8. |
+| 8 | Stage 2b outcome-grounded learning | **PARTIAL** | Crew runs close episodes (`CrewAI.tsx`), trading desk decisions close episodes (`deskDecisionsService`). `LOOP_AGENTS` = chat/trading/code-editor/browser/research/wingman. NorthSea deal + code-deploy episodes deliberately deferred (decision-maker is server-side / no client deploy action). |
+| 9 | Global memory / RAG namespaces | **COMPLETE** (namespaces) / PARTIAL (universal wiring) | `CORE_NAMESPACE` + `namespaceFor`; each agent reads its own + `global` (`buildGlobalMemoryContext`). Chat + crew are wired to the loop; not every tier-2/3 worker writes episodes yet (item 8). |
+| 10 | Finance / budget-aware routing | **NOT DONE — integration requirement** | Verified: no cost/usage/budget model exists anywhere in `src/`. Finance.tsx is a manual income ledger. Budget routing needs a token-cost accounting layer first (new work). |
+| 11 | Wingman + generic CrewGateway | **COMPLETE** | `runCrewWithTools` → `/crew/run`; Wingman opens/closes an episode per specialist (`a16b0b05`). |
+| 12 | AXE Developer / coding routing | **PARTIAL — integration requirement** | `delegateFor('code')→developer` and the label land. The composer→code-agent execution path and a real code engine (the "Qwen" engine referenced does not exist) are untraced/unbuilt. |
+| 13 | Provider / Agent SDK integration | **NOT DONE — integration requirement** | Verified: no Agent SDK dependency in `package.json`. Adopting one is a from-scratch decision, not a wiring gap. |
+| 14 | Legacy agent/model/router consolidation | **PARTIAL — integration requirement** | Verified both legacy lists still live: `AGENT_SEEDS` (agentRegistry.ts) + `DEFAULT_AGENTS` (defaultAgents.ts). Collapsing them into the roster needs live Supabase write access / a schema migration this sandbox cannot do safely. |
+| 15 | Runtime verification | **PARTIAL** | Stage 0/1 verified live in prior sessions; the fallback fix is locked deterministically by unit tests (the live path needs VPS providers + Supabase, not reachable from here with credentials). |
+
+**Genuine execution boundaries recorded as CROSS-SESSION INTEGRATION REQUIREMENTS** (items 10, 12, 13, 14, and the deferred halves of 5–9): each is blocked on a product decision, live DB/credential access, or net-new infrastructure — NOT faked. See the section "Investigated, not built" below for the concrete first step of each.
+
+### Declaration
+
+**AXE AGENT FORCE: INTEGRATION READY** — for the confirmed foundation (items 1–4, 11
+COMPLETE; 3 finished and test-locked this session; 9 namespaces COMPLETE). The agent
+force, its hierarchy, the one source of truth for engines, capability routing, the crew
+gateway and the chat/crew learning loop are wired to real execution paths and green
+across tests + build. The advanced items (finance/budget routing, code execution path,
+Agent SDK, legacy DB consolidation, and full per-agent outcome grounding) remain
+explicit integration requirements and are the next session's scope. Not merged to
+`orchestrator`.
+
 **Out of scope:** NorthSea P2 (Cursor, branch `origin/feat/northsea-crewai-p2`, reviewed separately).
 Never touch the NorthSea P0/P1 baseline (`docs/NORTHSEA_P0_P1_BASELINE.md`, i.e.
 `backend/northsea_mcp/`, `supabase/northsea/*` and the `mcp.northseacommodity.com` deploy —
