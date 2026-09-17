@@ -44,7 +44,19 @@ export default function AICore() {
     };
     setLogs(prev => {
       if (prev.some(l => l.id === entry.id)) return prev;
-      return [...prev, entry].slice(-200);
+      // Show the ONE model AXE actually spoke through this turn — truthful and
+      // verifiable, not a race. AXE is still AXE; this is just which engine it
+      // used, so you can confirm it's the fast brain (e.g. gemini) and not Ollama.
+      const extra: LogEntry[] = [];
+      if (last.role !== 'user' && last.provider) {
+        extra.push({
+          id: `${entry.id}-model`,
+          t: entry.t,
+          type: 'route',
+          text: `model · ${last.provider}${last.model ? `/${last.model.split('/').pop()?.split(':')[0]}` : ''}`,
+        });
+      }
+      return [...prev, ...extra, entry].slice(-200);
     });
   }, [voice.conversation]);
 
