@@ -282,7 +282,7 @@ const ENV_KEYS: Partial<Record<string,string>> = {
 };
 
 
-function getProviderKeySlot(providerId:string):KeySlot|null {
+export function getProviderKeySlot(providerId:string):KeySlot|null {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections')??'{}') as Record<string,{key?:string;model?:string;baseUrl?:string}|undefined>;
     const conn = conns[providerId];

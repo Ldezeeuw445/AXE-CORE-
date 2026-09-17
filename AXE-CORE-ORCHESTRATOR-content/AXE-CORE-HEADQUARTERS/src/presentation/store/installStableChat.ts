@@ -9,9 +9,10 @@
  * 5. Inject Architecture-assigned skills into system prompt.
  * 6. Living Display owned by installSpherePresent (no double project).
  */
-import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
+import { useVoiceStore, getProviderKeySlot, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
+  PROVIDERS,
   buildStableChatCascade,
   classifyQuery,
   isSimpleChatCapability,
@@ -155,6 +156,15 @@ function collectAllSlots(): KeySlot[] {
       });
     }
   } catch { /* ignore */ }
+
+  // Also include every known provider whose key comes from the vault/ENV, not
+  // only localStorage — getProviderKeySlot resolves both, exactly like Settings.
+  // Without this, a vault-keyed provider (e.g. Gemini via VITE_GEMINI_API_KEY)
+  // shows "Connected" in Settings but is invisible to AXE's chat cascade, so AXE
+  // fell back to whatever localStorage happened to hold (Ollama/OpenRouter).
+  for (const p of PROVIDERS) {
+    push(getProviderKeySlot(p.id));
+  }
 
   return slots;
 }
