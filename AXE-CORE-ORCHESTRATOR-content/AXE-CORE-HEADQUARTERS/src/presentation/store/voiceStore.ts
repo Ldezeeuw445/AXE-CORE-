@@ -937,8 +937,15 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const SEARCH_RE=/\b(zoek op|search for|zoek|search|nieuws|news|vandaag('s)?\s+(nieuws|koers|weer)|today's|recent|latest|actueel|wat betekent|verklaar|explain|define|tell me about|prijs van|price of|koers van|stock price|crypto|bitcoin|weather|weer (in|vandaag)|score van|stand van)\b/i;
       const shouldSearch=tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code';
 
+      // AXE answers fast and remembers around it: cap how long memory recall may
+      // block the reply. Slow recall must never delay AXE — the turn is still
+      // written to memory afterwards (writeConversationMemory), so nothing is lost;
+      // it just isn't recalled in-line this one time. Simple chat: tight budget.
+      const memBudgetMs = isSimpleChatCapability(cap) ? 500 : 2500;
+      const raceTimeout = <T>(p: Promise<T>, ms: number, fb: T): Promise<T> =>
+        Promise.race([p, new Promise<T>(r => setTimeout(() => r(fb), ms))]);
       const [ragCtx,tavilyResults]=await Promise.all([
-        buildGlobalMemoryContext(AXE_USER_ID,text,900).catch(()=>''),
+        raceTimeout(buildGlobalMemoryContext(AXE_USER_ID,text,900).catch(()=>''), memBudgetMs, ''),
         shouldSearch?tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'}).catch(()=>[]):Promise.resolve([]),
       ]);
       if(ragCtx) systemContent+=`\n\n${ragCtx}`;
