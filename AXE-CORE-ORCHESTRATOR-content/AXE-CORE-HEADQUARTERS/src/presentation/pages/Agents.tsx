@@ -11,6 +11,7 @@ import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { agentLoopHealth } from '@/infrastructure/persistence/agentFeedbackService';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
 import { WarRoom } from '@/presentation/components/axe-core/WarRoom';
+import { agentsByKind } from '@/domain/agents/catalog';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -422,6 +423,28 @@ export default function Agents() {
             </div>
           );
         })}
+      </div>
+
+      {/* The Wingman's CrewAI specialists — the free-model crews AXE delegates
+          to. Shown here so every agent in the force is visible in one place,
+          each with the memory namespace it learns in. */}
+      <h2 className="text-small font-semibold tracking-wide mt-6 mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
+        CREW — THE WINGMAN&apos;S SPECIALISTS
+      </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+        {agentsByKind('crew').map((a) => (
+          <div key={a.id} className="rounded-xl p-3" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: '#38BDF8' }} />
+              <span className="text-small font-medium truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</span>
+            </div>
+            <p className="text-xs-custom" style={{ color: 'var(--text-muted)', lineHeight: 1.35 }}>{a.description}</p>
+            <div className="mt-2 pt-2 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <span className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>memory · {a.namespace}</span>
+              <span className="text-xs-custom flex-shrink-0" style={{ color: 'var(--text-muted)' }}>via Wingman</span>
+            </div>
+          </div>
+        ))}
       </div>
     </motion.div>
   );
