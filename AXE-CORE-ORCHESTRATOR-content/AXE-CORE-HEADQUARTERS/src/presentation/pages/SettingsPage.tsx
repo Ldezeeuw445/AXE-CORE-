@@ -352,7 +352,13 @@ function ProviderKeysSection() {
         if (!res.ok) { if (!cancelled) setServerProviders(new Set()); return; }
         const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
         if (cancelled) return;
-        setServerProviders(new Set([...(body.providers ?? []), ...(body.keyless ?? [])]));
+        const served = [...(body.providers ?? []), ...(body.keyless ?? [])];
+        setServerProviders(new Set(served));
+        // Cache for the chat runtime: it must know which providers the VPS serves
+        // (with the VPS's own key), so AXE can route e.g. Gemini through the proxy
+        // even though there is no local key on this device. Without this the chat
+        // cascade silently drops every VPS-only provider and falls to Ollama.
+        try { localStorage.setItem('axe_server_providers', JSON.stringify(served)); } catch { /* ignore */ }
       } catch {
         // Server onbereikbaar. Een lege set is hier beter dan null blijven:
         // het scherm valt terug op het oude gedrag, en de automatische meting

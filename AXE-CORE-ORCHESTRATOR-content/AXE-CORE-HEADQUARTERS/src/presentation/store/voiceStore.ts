@@ -282,6 +282,14 @@ const ENV_KEYS: Partial<Record<string,string>> = {
 };
 
 
+/** Providers the VPS AI proxy serves with its OWN key (cached from Settings'
+ *  /api/proxy/ai/providers fetch). AXE can route these through the proxy even
+ *  with no local key — the VPS fills the key. Empty until Settings is opened. */
+function serverServedProviders(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem('axe_server_providers') ?? '[]') as string[]); }
+  catch { return new Set(); }
+}
+
 export function getProviderKeySlot(providerId:string):KeySlot|null {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections')??'{}') as Record<string,{key?:string;model?:string;baseUrl?:string}|undefined>;
@@ -290,7 +298,10 @@ export function getProviderKeySlot(providerId:string):KeySlot|null {
     const key = conn?.key || (providerId!=='ollama' ? (ENV_KEYS[providerId]??'') : '');
     const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl);
     if (isKeyOptional(providerId) && providerId!=='ollama' && !baseUrl) return null;
-    if (!isKeyOptional(providerId) && !key) return null;
+    // A provider with no local key is still usable when the VPS proxy serves it
+    // with its own key (e.g. Gemini): build a keyless slot and let callProvider's
+    // proxy path fill the key. Only truly-unavailable providers return null.
+    if (!isKeyOptional(providerId) && !key && !serverServedProviders().has(providerId)) return null;
     // migrateModel() maps stale/deprecated model names (saved in localStorage,
     // possibly months ago) to the current canonical one for this provider —
     // see providers.ts's _MODEL_MIGRATIONS. Applying it here, at the one spot
