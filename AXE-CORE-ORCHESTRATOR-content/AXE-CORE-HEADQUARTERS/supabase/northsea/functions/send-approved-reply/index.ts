@@ -6,7 +6,7 @@
 // - de uitgaande communicatie krijgt volledige herkomst (canonieke afzender, transport, actor, basis, draft).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { inferMailMode, renderNorthSeaMail } from "../_shared/mail.ts";
+import { inferMailMode, mailReferenceFromKnown, renderNorthSeaMail } from "../_shared/mail.ts";
 import { guardCode, outboundProvenance, resendPayload } from "../_shared/canonical.ts";
 import { audit, outboundBlockReason } from "../_shared/db.ts";
 import { blocksHumanSend } from "../_shared/policy.ts";
@@ -55,7 +55,27 @@ Deno.serve(async (req) => {
     }
     const hdr: Record<string, string> = {};
     if (mid) { hdr["In-Reply-To"] = mid; hdr["References"] = mid; }
-    const mail = renderNorthSeaMail({ body: String(d.body), mode: inferMailMode(String(d.purpose ?? d.subject ?? "")) });
+    let reference = null as ReturnType<typeof mailReferenceFromKnown>;
+    if (d.opportunity_id) {
+      const { data: opp } = await sb.from("opportunities").select("deal_priority, buyer_requirements(commodity,product,quantity_mt,destination,incoterm), supplier_offers(commodity,product,quantity_mt,incoterm)").eq("id", d.opportunity_id).maybeSingle();
+      const row = opp && typeof opp === "object" ? opp as Record<string, unknown> : null;
+      const asRec = (v: unknown): Record<string, unknown> | null => {
+        if (!v) return null;
+        if (Array.isArray(v)) return v[0] && typeof v[0] === "object" ? v[0] as Record<string, unknown> : null;
+        return typeof v === "object" ? v as Record<string, unknown> : null;
+      };
+      const br = asRec(row?.buyer_requirements);
+      const so = asRec(row?.supplier_offers);
+      const qty = br?.quantity_mt ?? so?.quantity_mt;
+      reference = mailReferenceFromKnown({
+        deal: typeof row?.deal_priority === "string" ? row.deal_priority : null,
+        commodity: String(br?.product || so?.product || br?.commodity || so?.commodity || "").trim() || null,
+        quantity: typeof qty === "number" || typeof qty === "string" ? qty : null,
+        destination: typeof br?.destination === "string" ? br.destination : null,
+        incoterm: String(br?.incoterm || so?.incoterm || "").trim() || null,
+      });
+    }
+    const mail = renderNorthSeaMail({ body: String(d.body), mode: inferMailMode(String(d.purpose ?? d.subject ?? "")), reference });
     const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json",
       "Idempotency-Key": `northsea-draft-${d.id}` }, body: JSON.stringify(resendPayload(d.to_email, d.subject, mail.text, mail.html, hdr)) });
     const tx = await r.text();

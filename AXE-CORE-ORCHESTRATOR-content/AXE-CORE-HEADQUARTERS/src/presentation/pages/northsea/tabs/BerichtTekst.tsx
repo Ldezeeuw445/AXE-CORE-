@@ -12,8 +12,10 @@ import {
   renderNorthSeaMail,
   sanitizeEmailHtml,
   splitEmailBody,
+  splitHtmlQuotedHistory,
   stripQuotePrefixes,
   type MailMode,
+  type MailReference,
 } from '@/domain/northsea/mail';
 
 function Blok({ titel, children }: { titel: string; children: React.ReactNode }) {
@@ -31,11 +33,25 @@ export function BerichtTekst({ tekst }: { tekst?: string | null }) {
     return <div className="mt-4 text-[12.5px]" style={{ color: 'var(--text-muted)' }}>No message body recorded.</div>;
   }
   if (looksLikeHtml(raw)) {
+    const split = splitHtmlQuotedHistory(sanitizeEmailHtml(raw));
     return (
-      <Blok titel="Message">
-        <div className="ns-mail-html max-w-[640px] text-[12.5px] leading-relaxed" style={{ color: 'var(--text-primary)' }}
-          dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(raw) }} />
-      </Blok>
+      <div className="mt-4">
+        <Blok titel="New message">
+          <div className="ns-mail-html max-w-[640px] text-[12.5px] leading-relaxed" style={{ color: 'var(--text-primary)' }}
+            dangerouslySetInnerHTML={{ __html: split.newHtml }} />
+        </Blok>
+        {split.quotedHtml ? (
+          <details className="mt-4" open={false}>
+            <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
+              Quoted history
+            </summary>
+            <blockquote className="mt-2 text-[12px] leading-relaxed"
+              style={{ color: 'var(--text-muted)', borderLeft: '2px solid rgba(165,111,58,0.55)', paddingLeft: 12 }}>
+              <div className="ns-mail-html" dangerouslySetInnerHTML={{ __html: split.quotedHtml }} />
+            </blockquote>
+          </details>
+        ) : null}
+      </div>
     );
   }
   const parts = splitEmailBody(raw);
@@ -72,9 +88,9 @@ export function BerichtTekst({ tekst }: { tekst?: string | null }) {
   );
 }
 
-export function OntvangerPreview({ body, mode }: { body: string; mode?: MailMode }) {
+export function OntvangerPreview({ body, mode, reference }: { body: string; mode?: MailMode; reference?: MailReference | null }) {
   const [open, setOpen] = useState(false);
-  const mail = renderNorthSeaMail({ body, mode });
+  const mail = renderNorthSeaMail({ body, mode, reference });
   return (
     <div className="mt-2">
       <button type="button" onClick={() => setOpen(v => !v)}

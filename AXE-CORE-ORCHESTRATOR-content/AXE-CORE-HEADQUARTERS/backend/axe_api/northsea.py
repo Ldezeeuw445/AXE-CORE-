@@ -231,6 +231,10 @@ select json_build_object('berichten', (select coalesce(json_agg(r order by r.occ
          cm.company_id as bedrijf_id, co.company_name as bedrijf, co.country as bedrijf_land,
          ct.full_name as contact, ct.email as contact_email,
          cm.opportunity_id as deal_id, o.deal_priority as deal_code,
+         coalesce(br.product, so.product, br.commodity, so.commodity) as deal_product,
+         coalesce(br.quantity_mt, so.quantity_mt) as deal_volume,
+         br.destination as deal_bestemming,
+         coalesce(br.incoterm, so.incoterm) as deal_incoterm,
          (select json_build_object('classificatie', ei.classification, 'intentie', ei.commercial_intent, 'urgentie', ei.urgency,
                                    'risico', ei.risk_level, 'score', ei.qualification_score, 'samenvatting', ei.summary,
                                    'termen', ei.extracted_terms, 'ontbreekt', ei.missing_information, 'rode_vlaggen', ei.red_flags,
@@ -250,6 +254,8 @@ select json_build_object('berichten', (select coalesce(json_agg(r order by r.occ
   left join companies co on co.id = cm.company_id
   left join contacts ct on ct.id = cm.contact_id
   left join opportunities o on o.id = cm.opportunity_id
+  left join buyer_requirements br on br.id = o.buyer_requirement_id
+  left join supplier_offers so on so.id = o.supplier_offer_id
   order by cm.occurred_at desc nulls last
   limit 300) r)) as data
 """,

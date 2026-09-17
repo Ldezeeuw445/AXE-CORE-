@@ -180,8 +180,12 @@ export function DeskKaartjes({ data, tellers, routes }: {
         <Getal waarde={tellers?.akkoord ?? leeg} label="Awaiting approval" kleur="#FBBF24"
           sub={tellers ? (tellers.akkoordNamen.join(', ') || 'Nothing waiting') : undefined}
           subKleur={tellers?.akkoord ? '#22D3EE' : undefined} />
+        <Getal waarde={data ? (data.concepten?.length ?? 0) : leeg} label="Pending drafts" kleur="#FBBF24"
+          sub={data ? ((data.concepten?.length ?? 0) ? 'Human approval before send' : 'None waiting') : undefined} />
         <Getal waarde={tellers?.geblokkeerd ?? leeg} label="Blocked" kleur="#F87171"
           sub={tellers ? (tellers.geblokkeerd ? 'Action required' : 'Nothing blocked') : undefined} />
+        <Getal waarde={data ? (data.bounces?.length ?? 0) : leeg} label="Delivery failures" kleur="#F87171"
+          sub={data ? ((data.bounces?.length ?? 0) ? 'Last 30 days' : 'None in 30 days') : undefined} />
         <Getal waarde={tellers?.commissie != null ? geld(tellers.commissie) : leeg} label="Potential commission"
           sub={tellers ? (tellers.commissie != null ? `${tellers.commissieDeals} deals with an amount` : 'No amounts on deals yet') : undefined} />
         <Getal waarde={data?.tellers.bedrijven ?? leeg} label="Counterparties"

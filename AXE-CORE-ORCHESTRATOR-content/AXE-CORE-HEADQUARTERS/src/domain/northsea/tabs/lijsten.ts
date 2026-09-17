@@ -14,7 +14,7 @@
  */
 import { getal } from '../desk';
 import type { Bedrijf, Bericht, PipelineDeal, Telling } from './typen';
-import type { Toon } from './status';
+import { bezorgBadge, type Toon } from './status';
 
 export type KolomId = 'nieuw' | 'gematcht' | 'kwalificatie' | 'wacht' | 'voorwaarden' | 'geblokkeerd' | 'afronding';
 
@@ -135,12 +135,21 @@ export function filterBedrijven(bedrijven: readonly Bedrijf[], f: BedrijfFilter)
   );
 }
 
-export type BerichtFilter = 'alle' | 'email' | 'telefoon' | 'intern' | 'actie';
+export type BerichtFilter = 'alle' | 'email' | 'telefoon' | 'intern' | 'actie' | 'inkomend' | 'uitgaand' | 'niet_bezorgd' | 'akkoord';
 
 /** Heeft dit bericht iets van Luka nodig: een concept dat wacht, of intelligentie die om akkoord vraagt. */
 export function vraagtActie(b: Bericht): boolean {
   if ((b.concepten ?? []).some(c => !c.sent_at && norm(c.akkoord) === 'pending')) return true;
   return norm(b.richting) === 'inbound' && b.intelligentie?.akkoord_nodig === true && norm(b.intelligentie?.status) !== 'handled';
+}
+
+export function nietBezorgd(b: Bericht): boolean {
+  return bezorgBadge(b.bezorging)?.toon === 'rood';
+}
+
+export function wachtOpAkkoord(b: Bericht): boolean {
+  if ((b.concepten ?? []).some(c => !c.sent_at && norm(c.akkoord) === 'pending')) return true;
+  return b.intelligentie?.akkoord_nodig === true && norm(b.intelligentie?.status) !== 'handled';
 }
 
 export function filterBerichten(berichten: readonly Bericht[], filter: BerichtFilter, zoek: string): Bericht[] {
@@ -152,7 +161,11 @@ export function filterBerichten(berichten: readonly Bericht[], filter: BerichtFi
         : filter === 'email' ? kanaal === 'email'
           : filter === 'telefoon' ? kanaal === 'phone'
             : filter === 'intern' ? richting === 'internal'
-              : vraagtActie(b);
+              : filter === 'inkomend' ? richting === 'inbound'
+                : filter === 'uitgaand' ? richting === 'outbound'
+                  : filter === 'niet_bezorgd' ? nietBezorgd(b)
+                    : filter === 'akkoord' ? wachtOpAkkoord(b)
+                      : vraagtActie(b);
     return inFilter && past(zoek, b.onderwerp, b.bedrijf, b.contact, b.contact_email, b.deal_code, b.tekst);
   });
 }

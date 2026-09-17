@@ -95,6 +95,28 @@ export function knownReference(ref?: MailReference | null): Array<{ label: strin
   return rows;
 }
 
+/** Alleen ingevulde transactievelden. Leeg/null wordt weggelaten, nooit verzonnen. */
+export function mailReferenceFromKnown(fields: {
+  deal?: string | null;
+  commodity?: string | null;
+  quantity?: string | number | null;
+  destination?: string | null;
+  incoterm?: string | null;
+}): MailReference | null {
+  const qty = fields.quantity;
+  const quantity = typeof qty === 'number' && Number.isFinite(qty)
+    ? `${qty} MT`
+    : (typeof qty === 'string' && qty.trim() ? qty.trim() : null);
+  const ref: MailReference = {
+    deal: fields.deal ?? null,
+    commodity: fields.commodity ?? null,
+    quantity,
+    destination: fields.destination ?? null,
+    incoterm: fields.incoterm ?? null,
+  };
+  return knownReference(ref).length ? ref : null;
+}
+
 export function looksLikeHtml(text: string): boolean {
   const t = (text || '').trim();
   if (t.length < 12) return false;
@@ -199,6 +221,19 @@ export function sanitizeEmailHtml(html: string): string {
     return '<a>';
   });
   return s;
+}
+
+/**
+ * Gmail/Outlook-HTML zet de thread in <blockquote>. Splits dat van de nieuwe
+ * inhoud; als het hele bericht een citaat is blijft het zichtbaar als bericht.
+ */
+export function splitHtmlQuotedHistory(html: string): { newHtml: string; quotedHtml: string | null } {
+  const match = /<blockquote\b/i.exec(html);
+  if (!match || match.index == null) return { newHtml: html, quotedHtml: null };
+  const newHtml = html.slice(0, match.index).replace(/\s+$/, '');
+  const quotedHtml = html.slice(match.index).trim();
+  if (!newHtml.trim() || !quotedHtml) return { newHtml: html, quotedHtml: null };
+  return { newHtml, quotedHtml };
 }
 
 function parasHtml(text: string): string {

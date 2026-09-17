@@ -51,4 +51,14 @@ def test_corporate_mail_renderer_is_the_html_source_for_send():
     assert "Chamber of Commerce" not in footer
     send = (FUNCTIONS / "send-approved-reply" / "index.ts").read_text()
     assert "renderNorthSeaMail" in send
+    assert "mailReferenceFromKnown" in send
     assert "brandedHtml(d.body)" not in send
+    assert "In-Reply-To" in send
+    assert "References" in send
+
+
+def test_hq_and_edge_mail_share_identity_and_splitters():
+    hq = (ROOT / "src" / "domain" / "northsea" / "mail.ts").read_text()
+    edge = (FUNCTIONS / "_shared" / "mail.ts").read_text()
+    for needle in ("mailReferenceFromKnown", "splitHtmlQuotedHistory", "NORTHSEA_IDENTITY", "LEGAL_FOOTER", "renderNorthSeaMail"):
+        assert needle in hq and needle in edge

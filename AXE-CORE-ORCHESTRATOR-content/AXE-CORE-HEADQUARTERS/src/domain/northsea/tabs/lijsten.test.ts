@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  alsLijst, filterBedrijven, filterBerichten, geblokkeerdIn, groepeerPipeline, kolomZonderBlokkade, past, pipelineKolom, tel, volumeSom, vraagtActie,
+  alsLijst, filterBedrijven, filterBerichten, geblokkeerdIn, groepeerPipeline, kolomZonderBlokkade, nietBezorgd, past, pipelineKolom, tel, volumeSom, vraagtActie, wachtOpAkkoord,
 } from './lijsten';
 import type { Bedrijf, Bericht, PipelineDeal } from './typen';
 
@@ -97,6 +97,7 @@ describe('berichten', () => {
     { id: 'uit', richting: 'outbound', kanaal: 'email', onderwerp: 'Qualification', concepten: [{ id: 'c', akkoord: 'pending' }] },
     { id: 'bel', richting: 'inbound', kanaal: 'phone', onderwerp: 'Call' },
     { id: 'int', richting: 'internal', kanaal: 'other', onderwerp: 'Note' },
+    { id: 'bounce', richting: 'outbound', kanaal: 'email', onderwerp: 'Bounce', bezorging: 'bounced' },
   ];
 
   it('vraagtActie ziet een wachtend concept of intelligentie die om akkoord vraagt', () => {
@@ -106,12 +107,19 @@ describe('berichten', () => {
     expect(vraagtActie({ id: 'x', richting: 'inbound', intelligentie: { akkoord_nodig: true, status: 'handled' } })).toBe(false);
   });
 
-  it('filtert op kanaal, richting en actie', () => {
-    expect(filterBerichten(berichten, 'email', '').map(b => b.id)).toEqual(['in', 'uit']);
+  it('filtert op kanaal, richting, bezorging en akkoord', () => {
+    expect(filterBerichten(berichten, 'email', '').map(b => b.id)).toEqual(['in', 'uit', 'bounce']);
     expect(filterBerichten(berichten, 'telefoon', '').map(b => b.id)).toEqual(['bel']);
     expect(filterBerichten(berichten, 'intern', '').map(b => b.id)).toEqual(['int']);
     expect(filterBerichten(berichten, 'actie', '').map(b => b.id)).toEqual(['in', 'uit']);
+    expect(filterBerichten(berichten, 'inkomend', '').map(b => b.id)).toEqual(['in', 'bel']);
+    expect(filterBerichten(berichten, 'uitgaand', '').map(b => b.id)).toEqual(['uit', 'bounce']);
+    expect(filterBerichten(berichten, 'niet_bezorgd', '').map(b => b.id)).toEqual(['bounce']);
+    expect(filterBerichten(berichten, 'akkoord', '').map(b => b.id)).toEqual(['in', 'uit']);
     expect(filterBerichten(berichten, 'alle', 'cif').map(b => b.id)).toEqual(['in']);
+    expect(nietBezorgd(berichten[4])).toBe(true);
+    expect(wachtOpAkkoord(berichten[0])).toBe(true);
+    expect(wachtOpAkkoord(berichten[2])).toBe(false);
   });
 });
 

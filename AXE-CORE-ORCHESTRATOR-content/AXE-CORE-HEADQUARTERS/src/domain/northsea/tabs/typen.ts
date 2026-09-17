@@ -244,6 +244,11 @@ export interface Bericht {
   contact_email?: Tekst;
   deal_id?: Tekst;
   deal_code?: Tekst;
+  /** Gekoppelde dealvelden; alleen aanwezig als de opportunity ze echt heeft. */
+  deal_product?: Tekst;
+  deal_volume?: Getal;
+  deal_bestemming?: Tekst;
+  deal_incoterm?: Tekst;
   intelligentie?: EmailIntelligentie | null;
   concepten?: Concept[] | null;
 }

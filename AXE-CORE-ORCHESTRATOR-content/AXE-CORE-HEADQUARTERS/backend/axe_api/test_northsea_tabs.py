@@ -31,6 +31,9 @@ def test_communicatie_query_levert_concepttekst_voor_preview():
     sql = n.TAB_SQL["communicatie"]
     assert "rd.body" in sql
     assert "left(rd.body" in sql.lower() or "left(rd.body" in sql
+    assert "deal_product" in sql
+    assert "buyer_requirements" in sql
+    assert "supplier_offers" in sql
 
 
 @pytest.mark.parametrize("naam", TABS)

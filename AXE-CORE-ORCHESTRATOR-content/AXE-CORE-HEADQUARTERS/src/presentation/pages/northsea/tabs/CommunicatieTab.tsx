@@ -13,11 +13,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, MessageSquare, NotebookPen, Phone } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { tijdGeleden } from '@/domain/northsea/chase';
-import { alsLijst, filterBerichten, vraagtActie, type BerichtFilter } from '@/domain/northsea/tabs/lijsten';
+import { alsLijst, filterBerichten, nietBezorgd, vraagtActie, wachtOpAkkoord, type BerichtFilter } from '@/domain/northsea/tabs/lijsten';
 import { bezorgBadge, conceptBadge, mensLabel, TOON_KLEUR, type Toon } from '@/domain/northsea/tabs/status';
 import type { Bericht } from '@/domain/northsea/tabs/typen';
 import { conceptHerkomst, termenRegels } from '@/domain/northsea/engine';
-import { inferMailMode } from '@/domain/northsea/mail';
+import { inferMailMode, mailReferenceFromKnown } from '@/domain/northsea/mail';
 import { BerichtTekst, OntvangerPreview } from './BerichtTekst';
 import {
   DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, Zoekveld,
@@ -92,7 +92,8 @@ export function CommunicatieTab() {
     actie: alle.filter(vraagtActie).length,
     inkomend: alle.filter(b => b.richting === 'inbound').length,
     uitgaand: alle.filter(b => b.richting === 'outbound').length,
-    bounces: alle.filter(b => bezorgBadge(b.bezorging)?.toon === 'rood').length,
+    bounces: alle.filter(nietBezorgd).length,
+    akkoord: alle.filter(wachtOpAkkoord).length,
   }), [alle]);
   const bericht = (gekozen ? alle.find(b => b.id === gekozen) : null) ?? rijen[0] ?? null;
 
@@ -103,6 +104,7 @@ export function CommunicatieTab() {
         <Kengetal waarde={data ? tellers.inkomend : '—'} label="Inbound" />
         <Kengetal waarde={data ? tellers.uitgaand : '—'} label="Outbound" />
         <Kengetal waarde={data ? tellers.actie : '—'} label="Needs action" toon="oranje" sub={data ? (tellers.actie ? 'Drafts or approvals waiting' : 'Nothing waiting') : undefined} />
+        <Kengetal waarde={data ? tellers.akkoord : '—'} label="Awaiting approval" toon="oranje" />
         <Kengetal waarde={data ? tellers.bounces : '—'} label="Not delivered" toon="rood" />
       </KengetalRij>
 
@@ -117,10 +119,14 @@ export function CommunicatieTab() {
         <div className="px-4 pb-2">
           <Filters<BerichtFilter> opties={[
             { id: 'alle', label: 'All', aantal: tellers.alle },
+            { id: 'inkomend', label: 'Inbound', aantal: tellers.inkomend },
+            { id: 'uitgaand', label: 'Outbound', aantal: tellers.uitgaand },
             { id: 'email', label: 'Emails', aantal: tellers.email },
             { id: 'telefoon', label: 'Calls', aantal: tellers.telefoon },
             { id: 'intern', label: 'Notes', aantal: tellers.intern },
             { id: 'actie', label: 'Needs action', aantal: tellers.actie },
+            { id: 'akkoord', label: 'Approvals', aantal: tellers.akkoord },
+            { id: 'niet_bezorgd', label: 'Not delivered', aantal: tellers.bounces },
           ]} actief={filter} kies={setFilter} />
         </div>
         {fout && <FoutRegel fout={fout} />}
@@ -178,18 +184,46 @@ export function CommunicatieTab() {
                     {bericht.intelligentie?.intentie && <span>Intent: {mensLabel(bericht.intelligentie.intentie)}</span>}
                   </div>
                   <BerichtTekst tekst={bericht.tekst} />
+                  {(() => {
+                    const termen = [
+                      ...termenRegels(bericht.intelligentie?.engine?.termen ?? null),
+                      ...alsLijst(bericht.intelligentie?.termen),
+                    ].filter((v, i, a) => a.indexOf(v) === i);
+                    const ontbreekt = [
+                      ...(bericht.intelligentie?.engine?.ontbreekt ?? []),
+                      ...alsLijst(bericht.intelligentie?.ontbreekt),
+                    ].filter((v, i, a) => a.indexOf(v) === i);
+                    const vlaggen = alsLijst(bericht.intelligentie?.rode_vlaggen);
+                    const advies = bericht.intelligentie?.advies?.trim() || null;
+                    const akkoord = bericht.intelligentie?.akkoord_nodig === true;
+                    if (!termen.length && !ontbreekt.length && !vlaggen.length && !advies && !akkoord) return null;
+                    return (
+                      <div className="mt-4 rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--axe-vak-lijn)' }}>
+                        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>Operational reading — unverified</div>
+                        {akkoord && <div className="mb-1 text-[12px]" style={{ color: '#FBBF24' }}>Approval required before a binding or protected action.</div>}
+                        {advies && <div className="text-[12px]" style={{ color: 'var(--text-secondary)' }}><span style={{ color: 'var(--text-muted)' }}>Recommended: </span>{advies}</div>}
+                        <Lijstje titel="Extracted terms" regels={termen} />
+                        <Lijstje titel="Missing information" regels={ontbreekt} toon="geel" />
+                        <Lijstje titel="Red flags" regels={vlaggen} toon="rood" />
+                      </div>
+                    );
+                  })()}
                   <div className="mt-3 text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>Message metadata</div>
                   <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
                     {[
                       bericht.deal_code ? `Deal ${bericht.deal_code}` : (bericht.deal_id ? `Deal #${bericht.deal_id.slice(0, 6)}` : 'Deal unlinked'),
+                      bericht.deal_product || null,
+                      bericht.deal_volume != null && String(bericht.deal_volume).trim() ? `${bericht.deal_volume} MT` : null,
+                      bericht.deal_bestemming || null,
+                      bericht.deal_incoterm || null,
                       bericht.koppeling ? `Mapping ${mensLabel(bericht.koppeling)}` : null,
                       bericht.akkoord_basis ? `Approval ${mensLabel(bericht.akkoord_basis)}` : null,
                     ].filter(Boolean).join(' · ')}
                   </div>
                   {bericht.intelligentie && (
                     <div className="mt-3 rounded-xl px-3 py-2.5 text-[12px]" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--axe-vak-lijn)' }}>
-                      {bericht.intelligentie.akkoord_nodig && <div className="mb-1" style={{ color: '#FBBF24' }}>Approval required before a binding or protected action.</div>}
-                      {bericht.intelligentie.advies && <div style={{ color: 'var(--text-secondary)' }}><span style={{ color: 'var(--text-muted)' }}>Recommended: </span>{bericht.intelligentie.advies}</div>}
+                      {bericht.intelligentie.classificatie && <div style={{ color: 'var(--text-secondary)' }}><span style={{ color: 'var(--text-muted)' }}>Class: </span>{mensLabel(bericht.intelligentie.classificatie)}</div>}
+                      {bericht.intelligentie.intentie && <div style={{ color: 'var(--text-secondary)' }}><span style={{ color: 'var(--text-muted)' }}>Intent: </span>{mensLabel(bericht.intelligentie.intentie)}</div>}
                       {bericht.intelligentie.risico && <div className="mt-1" style={{ color: 'var(--text-muted)' }}>Risk: {mensLabel(bericht.intelligentie.risico)} — unverified</div>}
                     </div>
                   )}
@@ -283,7 +317,17 @@ export function CommunicatieTab() {
                     )}
                   </div>
                   {c.tekst && !c.sent_at && (
-                    <OntvangerPreview body={c.tekst} mode={inferMailMode(c.doel || c.onderwerp)} />
+                    <OntvangerPreview
+                      body={c.tekst}
+                      mode={inferMailMode(c.doel || c.onderwerp)}
+                      reference={mailReferenceFromKnown({
+                        deal: bericht.deal_code,
+                        commodity: bericht.deal_product,
+                        quantity: bericht.deal_volume,
+                        destination: bericht.deal_bestemming,
+                        incoterm: bericht.deal_incoterm,
+                      })}
+                    />
                   )}
                   {conceptHerkomst(c) && (
                     <div className="mt-1 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{conceptHerkomst(c)}</div>

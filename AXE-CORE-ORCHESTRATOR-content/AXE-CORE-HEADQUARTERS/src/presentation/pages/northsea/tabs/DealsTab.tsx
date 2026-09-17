@@ -367,13 +367,18 @@ export function DealsTab({ startId }: { startId?: string | null }) {
             <Veld label="Communications">{deal.aantallen?.communicatie ?? 0}</Veld>
             <Veld label="Evidence">{deal.aantallen?.bewijs ?? 0}</Veld>
             <Veld label="Documents">{deal.aantallen?.documenten ?? 0}</Veld>
-            {deal.poort_introductie !== true && (
-              <div className="mt-3 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
-                Protected introduction is not open. Identity disclosure, controlled introduction and binding
-                acceptance stay human-approved.
-              </div>
-            )}
             <Veld label="Open tasks">{deal.aantallen?.taken ?? 0}</Veld>
+            <div className="mt-3 rounded-xl px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.025)' }}>
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Protected introduction</div>
+              <div className="mt-1 text-[12px]" style={{ color: deal.poort_introductie === true ? '#34D399' : 'var(--text-secondary)' }}>
+                {deal.poort_introductie === true ? 'Gate recorded as passed' : deal.poort_introductie === false ? 'CLOSED' : 'UNKNOWN / UNCONFIRMED'}
+              </div>
+              {deal.poort_introductie !== true && (
+                <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                  Identity disclosure, controlled introduction, SPA/signing, fee agreement and NCNDA/IMFPA stay human-approved. Not inferred from agent text.
+                </div>
+              )}
+            </div>
             {deal.volgende && (
               <div className="mt-3 flex items-start gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
                 <ArrowRight size={13} className="mt-0.5 shrink-0" /><span>{deal.volgende}</span>

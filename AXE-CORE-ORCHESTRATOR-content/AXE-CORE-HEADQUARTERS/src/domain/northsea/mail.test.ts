@@ -7,10 +7,12 @@ import {
   inferMailMode,
   knownReference,
   looksLikeHtml,
+  mailReferenceFromKnown,
   newContentHasQuotePrefixes,
   renderNorthSeaMail,
   sanitizeEmailHtml,
   splitEmailBody,
+  splitHtmlQuotedHistory,
   stripQuotePrefixes,
 } from './mail';
 
@@ -135,6 +137,28 @@ describe('renderNorthSeaMail', () => {
     const mail = renderNorthSeaMail({ body: DRAFT });
     const hits = mail.html.split(NORTHSEA_IDENTITY.name).length - 1;
     expect(hits).toBe(1);
+  });
+});
+
+describe('mailReferenceFromKnown', () => {
+  it('laat lege transactievelden weg en verzint niets', () => {
+    expect(mailReferenceFromKnown({})).toBeNull();
+    expect(mailReferenceFromKnown({ deal: '  ', commodity: null, quantity: '', destination: undefined })).toBeNull();
+    const ref = mailReferenceFromKnown({ deal: 'DEAL-001', quantity: 500, destination: '' });
+    expect(knownReference(ref)).toEqual([
+      { label: 'Reference', value: 'DEAL-001' },
+      { label: 'Quantity', value: '500 MT' },
+    ]);
+  });
+});
+
+describe('splitHtmlQuotedHistory', () => {
+  it('zet HTML-blockquote als geciteerde geschiedenis, niet in de nieuwe inhoud', () => {
+    const html = '<p>We can supply 500 MT.</p><blockquote><p>Earlier qualification request</p></blockquote>';
+    const s = splitHtmlQuotedHistory(html);
+    expect(s.newHtml).toContain('We can supply 500 MT');
+    expect(s.newHtml).not.toContain('Earlier qualification');
+    expect(s.quotedHtml).toContain('Earlier qualification');
   });
 });
 
