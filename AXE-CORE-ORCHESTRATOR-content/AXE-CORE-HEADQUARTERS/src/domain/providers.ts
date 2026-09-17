@@ -333,17 +333,19 @@ export function buildStableChatCascade(
   push(resolve(fb1));
   push(resolve(fb2));
 
-  // 2) No primary pinned: fill AXE's cascade from a priority list of fast,
-  //    reliable chat models, so if the first is out of credits AXE still lands
-  //    on a working one. Order: fast+free first (Groq/Cerebras), then smart
-  //    (Anthropic/OpenAI), then Gemini (great but its free key runs out), then
-  //    the rest. Whatever the user pins in Settings overrides this via `primary`.
-  if (out.length === 0) {
-    const AXE_PREF = ['groq', 'cerebras', 'anthropic', 'openai', 'google', 'xai', 'openrouter'];
-    for (const id of AXE_PREF) {
-      const s = allSlots.find(x => x.provider === id);
-      if (s) { push(s); if (out.length >= 3) break; }
-    }
+  // 2) Top up the cascade from a priority list of fast, reliable chat models,
+  //    so behind whatever the user pinned there are always real working engines
+  //    to fall through to. This runs even WITH a pinned primary: a pin that is
+  //    out of credits (Gemini's free key) must fall through to a live model, not
+  //    die on empty fallbacks. `push` dedups by provider, so the pinned primary
+  //    stays first (the ★ / one source of truth) and is simply not repeated.
+  //    Order: fast+free first (Groq/Cerebras), then smart (Anthropic/OpenAI),
+  //    then Gemini (great but its free key runs out), then the rest.
+  const AXE_PREF = ['groq', 'cerebras', 'anthropic', 'openai', 'google', 'xai', 'openrouter'];
+  for (const id of AXE_PREF) {
+    if (out.length >= 3) break;
+    const s = allSlots.find(x => x.provider === id);
+    if (s) push(s);
   }
 
   // 4) Ollama only as third/last resort — never ahead of cloud identity

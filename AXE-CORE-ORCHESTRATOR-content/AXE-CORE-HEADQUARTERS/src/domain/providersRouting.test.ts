@@ -3,6 +3,7 @@ import {
   isSimpleChatCapability,
   selectByCapability,
   classifyQuery,
+  buildStableChatCascade,
   type KeySlot,
 } from './providers';
 
@@ -36,5 +37,34 @@ describe('capability boundary for AXE-in-front routing', () => {
   it('does front-load Ollama for privacy', () => {
     const ordered = selectByCapability('privacy', [slot('google'), slot('ollama')]);
     expect(ordered[0].provider).toBe('ollama');
+  });
+});
+
+/**
+ * A pinned primary is the one source of truth for who AXE is -- but a pin that
+ * is out of credits (Gemini's free key was the live example) must fall THROUGH
+ * to a working engine, not die on empty fallbacks with only Ollama behind it.
+ * These lock that: the pin stays first, and real cloud engines sit behind it.
+ */
+describe('buildStableChatCascade falls through a broke pinned primary', () => {
+  it('keeps the pinned primary first (still the one source of truth)', () => {
+    const all = [slot('groq'), slot('cerebras'), slot('anthropic'), slot('google')];
+    const cascade = buildStableChatCascade(all, { primary: slot('google') });
+    expect(cascade[0].provider).toBe('google');
+  });
+
+  it('puts working cloud engines behind the pin, not just Ollama', () => {
+    const all = [slot('groq'), slot('cerebras'), slot('anthropic'), slot('google'), slot('ollama')];
+    const cascade = buildStableChatCascade(all, { primary: slot('google') });
+    const behind = cascade.slice(1).map(s => s.provider);
+    // At least one real cloud engine must back the pin (the bug left only Ollama).
+    expect(behind.some(p => ['groq', 'cerebras', 'anthropic', 'openai'].includes(p))).toBe(true);
+  });
+
+  it('never repeats the pinned provider in its own fallbacks', () => {
+    const all = [slot('groq'), slot('google')];
+    const cascade = buildStableChatCascade(all, { primary: slot('google') });
+    const googles = cascade.filter(s => s.provider === 'google');
+    expect(googles).toHaveLength(1);
   });
 });
