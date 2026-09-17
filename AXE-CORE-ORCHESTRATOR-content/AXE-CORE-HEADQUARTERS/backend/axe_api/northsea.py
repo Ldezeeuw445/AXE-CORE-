@@ -242,7 +242,7 @@ select json_build_object('berichten', (select coalesce(json_agg(r order by r.occ
                                       'redenen', ei.engine_reasons, 'versie', ei.engine_version, 'op', ei.engine_evaluated_at) end)
             from email_intelligence ei where ei.communication_id = cm.id order by ei.analyzed_at desc nulls last limit 1) as intelligentie,
          (select coalesce(json_agg(d order by d.created_at desc), '[]'::json) from (
-            select rd.id, rd.subject as onderwerp, rd.to_email as aan, rd.purpose as doel, rd.approval_status as akkoord,
+            select rd.id, rd.subject as onderwerp, rd.to_email as aan, left(rd.body, 8000) as tekst, rd.purpose as doel, rd.approval_status as akkoord,
                    rd.sensitive_action as gevoelig, rd.sent_at, rd.created_at, rd.lifecycle_state as levensloop,
                    rd.approval_actor_type as akkoord_door_soort, rd.approved_by as akkoord_door, rd.generated_by as gemaakt_door
             from reply_drafts rd where rd.communication_id = cm.id limit 5) d) as concepten

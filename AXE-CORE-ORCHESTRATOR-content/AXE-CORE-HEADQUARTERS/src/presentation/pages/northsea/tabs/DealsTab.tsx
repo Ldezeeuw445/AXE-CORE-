@@ -367,6 +367,12 @@ export function DealsTab({ startId }: { startId?: string | null }) {
             <Veld label="Communications">{deal.aantallen?.communicatie ?? 0}</Veld>
             <Veld label="Evidence">{deal.aantallen?.bewijs ?? 0}</Veld>
             <Veld label="Documents">{deal.aantallen?.documenten ?? 0}</Veld>
+            {deal.poort_introductie !== true && (
+              <div className="mt-3 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                Protected introduction is not open. Identity disclosure, controlled introduction and binding
+                acceptance stay human-approved.
+              </div>
+            )}
             <Veld label="Open tasks">{deal.aantallen?.taken ?? 0}</Veld>
             {deal.volgende && (
               <div className="mt-3 flex items-start gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>

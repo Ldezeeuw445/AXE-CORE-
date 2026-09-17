@@ -1,6 +1,8 @@
 // Pure logica van resend-inbound: afzender, classificatie, extractie, concept-tekst.
 // Overgenomen uit v10 (gedrag van de classificatie ongewijzigd), zonder bijwerkingen.
 
+import { renderNorthSeaMail } from "./mail.ts";
+
 export const FREE_MAIL_DOMAINS = new Set([
   "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com", "icloud.com", "me.com",
   "aol.com", "proton.me", "protonmail.com", "gmx.com", "gmx.de", "web.de", "mail.com", "yandex.com", "qq.com", "163.com",
@@ -89,10 +91,9 @@ export function draftText(i: Intel, to: string | null, s: string | null): { to: 
   return { to, subject: s?.toLowerCase().startsWith("re:") ? s : `Re: ${s ?? "Your commodity inquiry"}`, body: b };
 }
 
-/** Neutrale HTML voor een geautomatiseerd bericht: geen persoonlijke handtekening. */
+/** Zelfde corporate shell als send-approved-reply; qualification-modus. */
 export function automatedHtml(t: string): string {
-  const e = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body><table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#17202b;max-width:600px">${e}<br><br><strong>NorthSea Commodity Partners</strong><br>trade@northseacommodity.com</td></tr></table></body></html>`;
+  return renderNorthSeaMail({ body: t, mode: "qualification" }).html;
 }
 
 export function isStratoNotification(senderDomain: string | null, subject: string | null): boolean {

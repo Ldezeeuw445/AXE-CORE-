@@ -211,6 +211,7 @@ export interface Concept {
   id: string;
   onderwerp?: Tekst;
   aan?: Tekst;
+  tekst?: Tekst;
   doel?: Tekst;
   akkoord?: Tekst;
   gevoelig?: boolean | null;

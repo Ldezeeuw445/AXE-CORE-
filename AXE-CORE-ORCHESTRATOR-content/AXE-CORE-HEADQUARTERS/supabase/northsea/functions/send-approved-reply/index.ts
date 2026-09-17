@@ -6,7 +6,7 @@
 // - de uitgaande communicatie krijgt volledige herkomst (canonieke afzender, transport, actor, basis, draft).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { brandedHtml } from "../_shared/branded.ts";
+import { inferMailMode, renderNorthSeaMail } from "../_shared/mail.ts";
 import { guardCode, outboundProvenance, resendPayload } from "../_shared/canonical.ts";
 import { audit, outboundBlockReason } from "../_shared/db.ts";
 import { blocksHumanSend } from "../_shared/policy.ts";
@@ -55,8 +55,9 @@ Deno.serve(async (req) => {
     }
     const hdr: Record<string, string> = {};
     if (mid) { hdr["In-Reply-To"] = mid; hdr["References"] = mid; }
+    const mail = renderNorthSeaMail({ body: String(d.body), mode: inferMailMode(String(d.purpose ?? d.subject ?? "")) });
     const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json",
-      "Idempotency-Key": `northsea-draft-${d.id}` }, body: JSON.stringify(resendPayload(d.to_email, d.subject, d.body, brandedHtml(d.body), hdr)) });
+      "Idempotency-Key": `northsea-draft-${d.id}` }, body: JSON.stringify(resendPayload(d.to_email, d.subject, mail.text, mail.html, hdr)) });
     const tx = await r.text();
     // deno-lint-ignore no-explicit-any
     let sent: any = null;

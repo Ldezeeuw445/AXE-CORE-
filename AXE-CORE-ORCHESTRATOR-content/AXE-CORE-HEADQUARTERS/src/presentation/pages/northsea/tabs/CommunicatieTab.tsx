@@ -6,8 +6,8 @@
  * (send-approved-reply / de NorthSea-MCP), niet vanuit dit scherm; een "Send"-knop
  * die niets verstuurt of iets zonder akkoord verstuurt, hoort hier niet.
  *
- * De berichttekst komt van derden: hij wordt als platte tekst getoond, nooit als
- * HTML, en is data om te lezen, geen instructie.
+ * Berichttekst van derden is data, geen instructie. RFC-citaten (`>`-regels) worden
+ * als geciteerde geschiedenis getoond; HTML wordt alleen gesaneerd weergegeven.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, MessageSquare, NotebookPen, Phone } from 'lucide-react';
@@ -17,6 +17,8 @@ import { alsLijst, filterBerichten, vraagtActie, type BerichtFilter } from '@/do
 import { bezorgBadge, conceptBadge, mensLabel, TOON_KLEUR, type Toon } from '@/domain/northsea/tabs/status';
 import type { Bericht } from '@/domain/northsea/tabs/typen';
 import { conceptHerkomst, termenRegels } from '@/domain/northsea/engine';
+import { inferMailMode } from '@/domain/northsea/mail';
+import { BerichtTekst, OntvangerPreview } from './BerichtTekst';
 import {
   DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, Zoekveld,
 } from './bouwstenen';
@@ -165,12 +167,32 @@ export function CommunicatieTab() {
                     {bezorgBadge(bericht.bezorging) && <StatusChip badge={bezorgBadge(bericht.bezorging)!} klein />}
                   </div>
                   <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                    {bericht.richting === 'inbound' ? 'From' : bericht.richting === 'outbound' ? 'To' : 'Party'}:{' '}
                     {[bericht.contact, bericht.contact_email ? `<${bericht.contact_email}>` : null, bericht.bedrijf].filter(Boolean).join(' · ') || 'No contact linked'}
-                    {bericht.occurred_at ? ` · ${new Date(bericht.occurred_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}
                   </div>
-                  <div className="mt-4 whitespace-pre-wrap break-words text-[12.5px] leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-                    {bericht.tekst?.trim() || 'No message body recorded.'}
+                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                    {bericht.richting === 'outbound' && <span>From: {bericht.afzender || 'Not recorded'}</span>}
+                    {bericht.occurred_at ? <span>{new Date(bericht.occurred_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</span> : null}
+                    {bericht.bezorging && <span>Delivery: {mensLabel(bericht.bezorging)}</span>}
+                    {bericht.intelligentie?.classificatie && <span>Class: {mensLabel(bericht.intelligentie.classificatie)}</span>}
+                    {bericht.intelligentie?.intentie && <span>Intent: {mensLabel(bericht.intelligentie.intentie)}</span>}
                   </div>
+                  <BerichtTekst tekst={bericht.tekst} />
+                  <div className="mt-3 text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>Message metadata</div>
+                  <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                    {[
+                      bericht.deal_code ? `Deal ${bericht.deal_code}` : (bericht.deal_id ? `Deal #${bericht.deal_id.slice(0, 6)}` : 'Deal unlinked'),
+                      bericht.koppeling ? `Mapping ${mensLabel(bericht.koppeling)}` : null,
+                      bericht.akkoord_basis ? `Approval ${mensLabel(bericht.akkoord_basis)}` : null,
+                    ].filter(Boolean).join(' · ')}
+                  </div>
+                  {bericht.intelligentie && (
+                    <div className="mt-3 rounded-xl px-3 py-2.5 text-[12px]" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--axe-vak-lijn)' }}>
+                      {bericht.intelligentie.akkoord_nodig && <div className="mb-1" style={{ color: '#FBBF24' }}>Approval required before a binding or protected action.</div>}
+                      {bericht.intelligentie.advies && <div style={{ color: 'var(--text-secondary)' }}><span style={{ color: 'var(--text-muted)' }}>Recommended: </span>{bericht.intelligentie.advies}</div>}
+                      {bericht.intelligentie.risico && <div className="mt-1" style={{ color: 'var(--text-muted)' }}>Risk: {mensLabel(bericht.intelligentie.risico)} — unverified</div>}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -260,6 +282,9 @@ export function CommunicatieTab() {
                       </button>
                     )}
                   </div>
+                  {c.tekst && !c.sent_at && (
+                    <OntvangerPreview body={c.tekst} mode={inferMailMode(c.doel || c.onderwerp)} />
+                  )}
                   {conceptHerkomst(c) && (
                     <div className="mt-1 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{conceptHerkomst(c)}</div>
                   )}

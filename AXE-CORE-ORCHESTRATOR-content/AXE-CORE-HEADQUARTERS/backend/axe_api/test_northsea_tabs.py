@@ -27,6 +27,12 @@ def test_elk_tabblad_heeft_een_query():
     assert set(n.TAB_SQL) == set(TABS)
 
 
+def test_communicatie_query_levert_concepttekst_voor_preview():
+    sql = n.TAB_SQL["communicatie"]
+    assert "rd.body" in sql
+    assert "left(rd.body" in sql.lower() or "left(rd.body" in sql
+
+
 @pytest.mark.parametrize("naam", TABS)
 def test_elke_query_leest_alleen(naam):
     sql = n.TAB_SQL[naam].lower()

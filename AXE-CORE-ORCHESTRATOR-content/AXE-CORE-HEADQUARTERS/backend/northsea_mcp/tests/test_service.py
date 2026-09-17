@@ -155,6 +155,7 @@ async def test_prepare_outreach_to_supplier_never_names_the_buyer_and_never_send
     assert d.template in ("supplier_qualification", "follow_up") and d.sent is False and d.approval_required
     assert "Qinzhou Harbour" not in d.body and "qhmetals" not in d.body and "Li Wei" not in d.body
     assert "No counterparty introduction or binding commercial commitment" in d.body
+    assert not any(line.lstrip().startswith(">") for line in d.body.splitlines())
     assert d.to_email is None and d.saved_draft_id is None
     assert repo.sends == [] and len(repo.t["reply_drafts"]) == 3
 

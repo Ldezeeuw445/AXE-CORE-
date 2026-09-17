@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
 import { CANONICAL_FROM, CANONICAL_REPLY_TO, guardCode, outboundProvenance, resendPayload } from "../../functions/_shared/canonical.ts";
-import { draftText, intel, isStratoNotification } from "../../functions/_shared/inbound.ts";
+import { automatedHtml, draftText, intel, isStratoNotification } from "../../functions/_shared/inbound.ts";
 
 Deno.test("outbound provenance is canonical and mandatory", () => {
   const p = outboundProvenance({ providerMessageId: "re_1", actor: "send-approved-reply", actorType: "service", approvalBasis: "human_approved_draft", replyDraftId: "d1" });
@@ -28,6 +28,19 @@ Deno.test("plain buyer requirement is eligible for a (pending) draft; missing fa
   assertEquals([i.classification, i.sensitive], ["buyer", false]);
   const d = draftText(i, "a@b.test", "Requirement")!;
   assert(d.body.includes("No counterparty introduction or binding commercial commitment"));
+  assert(!d.body.split("\n").some((line) => line.trimStart().startsWith(">")));
+});
+Deno.test("corporate HTML uses the official identity and does not prefix new lines with >", () => {
+  const d = draftText(intel("Requirement", "We require 100 MT copper cathode CIF Qinzhou, payment LC.", "buyer.test"), "a@b.test", "Requirement")!;
+  const html = automatedHtml(d.body);
+  assert(html.includes("Luka de Zeeuw"));
+  assert(html.includes("Managing Director"));
+  assert(html.includes("trade@northseacommodity.com"));
+  assert(html.includes("max-width:620px"));
+  assert(html.includes("viewport"));
+  assert(!html.includes("KvK"));
+  const nieuw = html.split("Previous correspondence")[0];
+  assert(!/&gt;\s*(Thank you|To progress|Kind regards)/.test(nieuw));
 });
 Deno.test("STRATO notifications are recognized", () => {
   assert(isStratoNotification("ai-voicereceptionist.com", "x"));

@@ -13,6 +13,7 @@ import { Webhook } from "npm:svix@1.42.0";
 import { guardCode, outboundProvenance, resendPayload } from "../_shared/canonical.ts";
 import { audit, outboundBlockReason, readPolicy } from "../_shared/db.ts";
 import { automatedHtml, domain, draftText, email, FREE_MAIL_DOMAINS, intel, isStratoNotification, strip } from "../_shared/inbound.ts";
+import { renderNorthSeaMail } from "../_shared/mail.ts";
 import { type CompanyOpportunity, mapCommunication, normalizeMessageId, threadMessageIds, type ThreadMatch } from "../_shared/mapping.ts";
 import { blocksHumanSend, decideAutoQualificationReply } from "../_shared/policy.ts";
 
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
       const hdr: Record<string, string> = { "X-NorthSea-Automation": "policy-allowed-qualification" };
       if (rfcId) { hdr["In-Reply-To"] = `<${rfcId}>`; hdr["References"] = `<${rfcId}>`; }
       const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json",
-        "Idempotency-Key": `northsea-auto-${rd.id}` }, body: JSON.stringify(resendPayload(d.to, d.subject, d.body, automatedHtml(d.body), hdr)) });
+        "Idempotency-Key": `northsea-auto-${rd.id}` }, body: JSON.stringify(resendPayload(d.to, d.subject, renderNorthSeaMail({ body: d.body, mode: "qualification" }).text, automatedHtml(d.body), hdr)) });
       const x = await r.json().catch(() => null);
       if (!r.ok || !x?.id) {
         await sb.from("reply_drafts").update({ lifecycle_state: "failed", updated_at: new Date().toISOString() }).eq("id", rd.id);
