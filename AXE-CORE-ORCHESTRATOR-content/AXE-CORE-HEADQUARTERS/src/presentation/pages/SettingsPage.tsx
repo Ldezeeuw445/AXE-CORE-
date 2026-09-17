@@ -379,7 +379,16 @@ function ProviderKeysSection() {
       const storedCustom = await loadSetting<CustomProvider[]>(CUSTOM_PROVIDERS_KEY, []);
       if (!alive) return;
       cloudSnapshot = stored;
-      if (Object.keys(stored).length > 0) setKeys(prev => ({ ...prev, ...stored }));
+      if (Object.keys(stored).length > 0) setKeys(prev => {
+        const merged = { ...prev, ...stored };
+        // Persist the Supabase-synced keys to THIS device's localStorage. The
+        // chat runtime (getProviderKeySlot / collectAllSlots) reads localStorage
+        // only, so a key set on another device (or synced from the cloud) shows
+        // "Connected" here but was invisible to AXE's chat — which is why AXE
+        // fell back to Ollama instead of using Gemini. Now they share one source.
+        try { localStorage.setItem('axe_llm_connections', JSON.stringify(merged)); } catch { /* ignore */ }
+        return merged;
+      });
       if (storedCustom.length > 0) setCustomProviders(storedCustom);
     };
     void hydrate();
