@@ -200,13 +200,16 @@ class TestTweedeClaude:
         c3 = a.ENGINES["claude3"]
         assert c3["cmd"] is a.ENGINES["claude"]["cmd"]
         assert c3["extra_env"]["CLAUDE_CONFIG_DIR"].endswith(".claude-derde")
+        c4 = a.ENGINES["claude4"]
+        assert c4["cmd"] is a.ENGINES["claude"]["cmd"]
+        assert c4["extra_env"]["CLAUDE_CONFIG_DIR"].endswith(".claude-vierde")
         env = a._subprocess_env(c2["blocked_env"], c2["extra_env"])
         assert env["CLAUDE_CONFIG_DIR"] == c2["extra_env"]["CLAUDE_CONFIG_DIR"]
 
     def test_geen_sessieproxy_naar_een_claude_motor(self, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:1")
         monkeypatch.setenv("CLAUDECODE", "1")
-        for naam in ("claude", "claude2", "claude3"):
+        for naam in ("claude", "claude2", "claude3", "claude4"):
             env = a._subprocess_env(a.ENGINES[naam]["blocked_env"], a.ENGINES[naam].get("extra_env"))
             assert "ANTHROPIC_BASE_URL" not in env and "CLAUDECODE" not in env
 
@@ -262,4 +265,11 @@ class TestModelVlag:
         import agent_runner as a
         motor = a.ENGINES["codex2"]
         assert motor["extra_env"]["CODEX_HOME"].endswith(".codex-tweede")
+        assert motor["bin_default"] == "codex"
+
+    def test_codex3_is_een_derde_chatgpt_abonnement(self):
+        import agent_runner as a
+        motor = a.ENGINES["codex3"]
+        assert motor["cmd"] is a.ENGINES["codex"]["cmd"]
+        assert motor["extra_env"]["CODEX_HOME"].endswith(".codex-derde")
         assert motor["bin_default"] == "codex"

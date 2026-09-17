@@ -56,7 +56,7 @@ import { meldActiviteit } from '@/shared/axeActiviteit';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'codex', 'codex2', 'cursor'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
 type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
 
@@ -69,15 +69,18 @@ type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
 
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'codex', 'codex2', 'cursor']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', codex: 'Codex', codex2: 'Codex 2', cursor: 'Cursor' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', claude4: 'Claude 4', codex: 'Codex', codex2: 'Codex 2', codex3: 'Codex 3', cursor: 'Cursor' };
 
 /** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
 const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [
   { id: 'claude', uitleg: 'Claude Code — de echte CLI in een gewhiteliste checkout, op je Anthropic-abonnement' },
   { id: 'claude2', uitleg: 'Claude Code op je tweede Claude-abonnement (eigen login in ~/.claude-tweede)' },
   { id: 'claude3', uitleg: 'Claude Code op je derde Claude-abonnement (eigen login in ~/.claude-derde)' },
+  { id: 'claude4', uitleg: 'Claude Code op je vierde Claude-abonnement (eigen login in ~/.claude-vierde)' },
   { id: 'codex', uitleg: 'Codex — dezelfde opzet, op je ChatGPT-abonnement' },
+  { id: 'codex2', uitleg: 'Codex op je tweede ChatGPT-abonnement (eigen login in ~/.codex-tweede)' },
+  { id: 'codex3', uitleg: 'Codex op je derde ChatGPT-abonnement (eigen login in ~/.codex-derde)' },
   { id: 'cursor', uitleg: 'Cursor — dezelfde opzet, op je Cursor-abonnement' },
 ];
 
@@ -1231,10 +1234,12 @@ export default function CodeEditorPage() {
   };
   const MOTOR_ICOON: Record<string, React.ReactNode> = {
     native: <Cpu size={17} />, openhands: <Hand size={17} />, claude: <Sparkle size={17} />,
-    claude2: <Sparkles size={17} />, claude3: <Sparkles size={17} />, codex: <Braces size={17} />, cursor: <MousePointerClick size={17} />,
+    claude2: <Sparkles size={17} />, claude3: <Sparkles size={17} />, claude4: <Sparkles size={17} />,
+    codex: <Braces size={17} />, codex2: <Braces size={17} />, codex3: <Braces size={17} />, cursor: <MousePointerClick size={17} />,
   };
   const MOTOR_KLEUR: Record<string, string> = {
-    native: '#22D3EE', openhands: '#F5A524', claude: '#D97757', claude2: '#E8A488', claude3: '#F4C7B0', codex: '#E5E7EB', cursor: '#8B7CF6',
+    native: '#22D3EE', openhands: '#F5A524', claude: '#D97757', claude2: '#E8A488', claude3: '#F4C7B0', claude4: '#FADCD0',
+    codex: '#E5E7EB', codex2: '#C7CACE', codex3: '#A9ADB3', cursor: '#8B7CF6',
   };
   const motorItems: ZuilItem[] = (['native', 'openhands', ...CLI_MOTOR_KNOPPEN.map(k => k.id)] as AgentEngine[]).map(id => {
     const cli = CLI_MOTOR_KNOPPEN.find(k => k.id === id);

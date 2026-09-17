@@ -77,8 +77,10 @@ export const MOTOR_LABEL: Record<HoofdMotor, string> = {
   claude: 'Claude-abonnement',
   claude2: 'Claude-abonnement 2',
   claude3: 'Claude-abonnement 3',
+  claude4: 'Claude-abonnement 4',
   codex2: 'ChatGPT-abonnement 2 (Codex)',
   codex: 'ChatGPT-abonnement (Codex)',
+  codex3: 'ChatGPT-abonnement 3 (Codex)',
   cursor: 'Cursor-abonnement',
   sleutels: 'API-sleutels',
 };

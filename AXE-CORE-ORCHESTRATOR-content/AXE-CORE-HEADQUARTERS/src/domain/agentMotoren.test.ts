@@ -37,12 +37,12 @@ describe('vijf tier-1 managers, zes abonnementen', () => {
 
   it('toont in het menu geen abonnement dat al van een ander is', () => {
     const t = STANDAARD_TOEWIJZING; // trading=codex, developer=cursor, thinktank=codex2, wingman/northsea=sleutels
-    // claude/claude2/claude3 zijn vrij zolang niemand ze heeft, dus die mag iedereen kiezen.
-    expect(kiesbaar(t, 'wingman')).toEqual(['claude', 'claude2', 'claude3', 'sleutels']);
-    expect(kiesbaar(t, 'northsea')).toEqual(['claude', 'claude2', 'claude3', 'sleutels']);
-    expect(kiesbaar(t, 'trading')).toEqual(['claude', 'claude2', 'claude3', 'codex', 'sleutels']);
-    expect(kiesbaar(t, 'developer')).toEqual(['claude', 'claude2', 'claude3', 'cursor', 'sleutels']);
-    expect(kiesbaar(t, 'thinktank')).toEqual(['claude', 'claude2', 'claude3', 'codex2', 'sleutels']);
+    // claude/claude2/claude3/claude4/codex3 zijn vrij zolang niemand ze heeft.
+    expect(kiesbaar(t, 'wingman')).toEqual(['claude', 'claude2', 'claude3', 'claude4', 'codex3', 'sleutels']);
+    expect(kiesbaar(t, 'northsea')).toEqual(['claude', 'claude2', 'claude3', 'claude4', 'codex3', 'sleutels']);
+    expect(kiesbaar(t, 'trading')).toEqual(['claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex3', 'sleutels']);
+    expect(kiesbaar(t, 'developer')).toEqual(['claude', 'claude2', 'claude3', 'claude4', 'codex3', 'cursor', 'sleutels']);
+    expect(kiesbaar(t, 'thinktank')).toEqual(['claude', 'claude2', 'claude3', 'claude4', 'codex2', 'codex3', 'sleutels']);
   });
 
   it('een nieuwe keuze wint en de vorige eigenaar krijgt API-sleutels', () => {
