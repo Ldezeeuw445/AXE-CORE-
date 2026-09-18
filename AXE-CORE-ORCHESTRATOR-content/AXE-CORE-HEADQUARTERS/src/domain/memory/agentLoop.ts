@@ -35,6 +35,12 @@ export const LOOP_AGENTS = [
   'code-editor',
   'browser',
   'research',
+  // Wingman's crew-runs (CrewAI.tsx): één episode per specialist, gesloten
+  // zodra het (synchrone) /crew/run-resultaat terugkomt. Episodes en niet
+  // beurten, ondanks het directe antwoord: een crew gestart op de Mac Mini
+  // moet ook meetellen in de loop-health op de iMac, en dat is precies
+  // waar localStorage-beurten niet voor gemaakt zijn.
+  'wingman',
 ] as const;
 
 export type LoopAgent = (typeof LOOP_AGENTS)[number];

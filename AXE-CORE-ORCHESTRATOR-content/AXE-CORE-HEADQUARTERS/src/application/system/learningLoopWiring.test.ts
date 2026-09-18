@@ -43,12 +43,31 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(roepers, 'niemand opent een episode -- agent_learning_episodes blijft leeg').not.toHaveLength(0);
   });
 
+  it('Wingman opent een episode per specialist bij een crew-run', () => {
+    // CrewAI.tsx is "the only place the crew is invoked" (eigen commentaar
+    // daar) -- runCrewWithTools.ts was oorspronkelijk een niet-aangeroepen
+    // wrapper; die is nu de echte crew-gateway van deze pagina (zie de test
+    // hieronder).
+    const roepers = aanroepersVan('openEpisode', 'agentFeedbackService');
+    expect(roepers, 'niemand opent een episode voor Wingman\'s crew-run').toContain('presentation/pages/CrewAI.tsx');
+  });
+
+  it('Wingman loopt via de crew-gateway, niet via een kale crewRun()', () => {
+    // Zonder deze gateway kreeg de crew geen EXA/Firecrawl/BrightData/E2B/
+    // Qdrant-credentials mee (buildCrewToolEnv) -- een specialist die een tool
+    // nodig had, kon hem stilletjes niet gebruiken. Dat was de echte reden om
+    // runCrewWithTools hier aan te sluiten, niet alleen de episodes.
+    const roepers = aanroepersVan('runCrewWithTools', 'application/crew/runCrewWithTools');
+    expect(roepers, 'runCrewWithTools heeft geen aanroeper -- terug bij dode code').toContain('presentation/pages/CrewAI.tsx');
+  });
+
   it('iets sluit episodes af', () => {
     const roepers = [
       ...aanroepersVan('closeEpisode', 'agentFeedbackService'),
       ...aanroepersVan('closeTradingEpisodeForTrade', 'agentFeedbackService'),
     ];
     expect(roepers, 'episodes worden geopend maar nooit gesloten').not.toHaveLength(0);
+    expect(roepers, 'Wingman opent een episode maar sluit hem nooit').toContain('presentation/pages/CrewAI.tsx');
   });
 
   it('iets voert de versterking daadwerkelijk uit', () => {

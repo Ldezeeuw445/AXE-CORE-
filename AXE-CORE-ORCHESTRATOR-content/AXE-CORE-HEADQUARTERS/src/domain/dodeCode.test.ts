@@ -77,6 +77,13 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/domain/navRegistry.ts', 'loadDynamicNavItems'],
   ['src/domain/providers.ts', 'applyPrimarySlot'],
   ['src/domain/providers.ts', 'limitChatIdentityCascade'],
+  // 17 sep 2026: dit was AXE's eigen "no primary pinned" chat-cascade
+  // stilzwijgend Ollama-first maken -- precies wat de "AXE nooit Ollama"-regel
+  // (chatModelKeuzes.ts, Settings' AXE Core-rij) doorbrak. Weggehaald uit
+  // installStableChat.ts, bewust hier gelaten: Luka wil "local models first"
+  // behouden maar dan voor de tier-2 workers/CrewAI, die nog geen eigen
+  // cascade-uitvoering hebben om op aan te sluiten. Niet weggooien.
+  ['src/domain/providers.ts', 'preferLocalOllamaFirst'],
   ['src/domain/providers.ts', 'resolveOllamaModel'],
   ['src/domain/proxyProvider.ts', 'wordtHernoemd'],
   ['src/domain/replyLanguage.ts', 'ttsPreviewLine'],
@@ -145,6 +152,8 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/localBridgeService.ts', 'localList'],
   ['src/infrastructure/gateways/localOllama.ts', 'invalidateLocalOllamaProbe'],
   ['src/infrastructure/gateways/localOllama.ts', 'listLocalOllamaModels'],
+  // Same removal as preferLocalOllamaFirst above -- its only caller.
+  ['src/infrastructure/gateways/localOllama.ts', 'resolveReachableOllama'],
   ['src/infrastructure/gateways/lseGateway.ts', 'lseSeries'],
   ['src/infrastructure/gateways/maps3d/ollamaApi.ts', 'isOllamaAvailable'],
   ['src/infrastructure/gateways/maps3d/ollamaApi.ts', 'listOllamaModels'],

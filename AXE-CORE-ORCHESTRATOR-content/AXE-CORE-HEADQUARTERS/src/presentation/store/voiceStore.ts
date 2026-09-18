@@ -282,7 +282,15 @@ const ENV_KEYS: Partial<Record<string,string>> = {
 };
 
 
-function getProviderKeySlot(providerId:string):KeySlot|null {
+/** Providers the VPS AI proxy serves with its OWN key (cached from Settings'
+ *  /api/proxy/ai/providers fetch). AXE can route these through the proxy even
+ *  with no local key — the VPS fills the key. Empty until Settings is opened. */
+function serverServedProviders(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem('axe_server_providers') ?? '[]') as string[]); }
+  catch { return new Set(); }
+}
+
+export function getProviderKeySlot(providerId:string):KeySlot|null {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections')??'{}') as Record<string,{key?:string;model?:string;baseUrl?:string}|undefined>;
     const conn = conns[providerId];
@@ -290,7 +298,10 @@ function getProviderKeySlot(providerId:string):KeySlot|null {
     const key = conn?.key || (providerId!=='ollama' ? (ENV_KEYS[providerId]??'') : '');
     const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl);
     if (isKeyOptional(providerId) && providerId!=='ollama' && !baseUrl) return null;
-    if (!isKeyOptional(providerId) && !key) return null;
+    // A provider with no local key is still usable when the VPS proxy serves it
+    // with its own key (e.g. Gemini): build a keyless slot and let callProvider's
+    // proxy path fill the key. Only truly-unavailable providers return null.
+    if (!isKeyOptional(providerId) && !key && !serverServedProviders().has(providerId)) return null;
     // migrateModel() maps stale/deprecated model names (saved in localStorage,
     // possibly months ago) to the current canonical one for this provider —
     // see providers.ts's _MODEL_MIGRATIONS. Applying it here, at the one spot
@@ -372,7 +383,7 @@ function speakSafely(text:string,onDone?:()=>void){
 }
 
 export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;
-  /** Which of the six agents handled this turn (see domain/agents/roster.ts). 'axe' = AXE answered directly. */
+  /** Which of the tiered agents handled this turn (see domain/agents/roster.ts). 'axe' = AXE answered directly. */
   delegate?:AxeAgentId;}
 
 /** One routing decision — created per `sendMessage` call, populated as slots are tried. */
@@ -383,7 +394,7 @@ export interface RoutingEvent{
   slotOrder:string[];
   attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
   winner?:string;winnerModel?:string;
-  /** Which of the six agents AXE used for this turn (see domain/agents/roster.ts). */
+  /** Which of the tiered agents AXE used for this turn (see domain/agents/roster.ts). */
   delegate?:AxeAgentId;
   via:'langgraph'|'fallback'|'crew'|'none';
   /** How many consecutive messages were coalesced into this entry (≥1). */
@@ -905,7 +916,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }
 
       // ── Build a routing event that will be populated as slots are tried ──
-      // Which of the six agents is handling this turn — the visible hand-off.
+      // Which of the tiered agents is handling this turn — the visible hand-off.
       const delegation=delegateFor(cap,text);
       // The learning loop, keyed to the handling agent's catalog namespace: the
       // turn opens in this namespace (memory recall below) and is closed with an

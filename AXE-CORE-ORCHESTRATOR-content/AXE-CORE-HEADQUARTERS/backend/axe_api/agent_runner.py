@@ -179,6 +179,21 @@ ENGINES = {
         "login": "CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login",
         "alleen_lezen": True,
     },
+    "claude4": {
+        # Een vierde Claude-abonnement, zelfde opzet als claude2/claude3.
+        # Eenmalig inloggen in vak 3:
+        #   CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login
+        "label": "Claude Code 4",
+        "bin_env": "CLAUDE_BIN",
+        "bin_default": "claude",
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
+        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE4_CONFIG_DIR", "~/.claude-vierde"))},
+        "cmd": _claude_cmd,
+        "leest_bestand": False,
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "login": "CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login",
+        "alleen_lezen": True,
+    },
     "codex": {
         "label": "Codex",
         "bin_env": "CODEX_BIN",
@@ -211,6 +226,21 @@ ENGINES = {
         "leest_bestand": True,
         "install": "npm i -g @openai/codex",
         "login": "CODEX_HOME=~/.codex-tweede codex login",
+        "alleen_lezen": True,
+    },
+    "codex3": {
+        # Een derde ChatGPT-abonnement, zelfde opzet als codex2. Eenmalig
+        # inloggen in vak 3 (Mac - agents):
+        #   CODEX_HOME=~/.codex-derde codex login
+        "label": "Codex 3",
+        "bin_env": "CODEX_BIN",
+        "bin_default": "codex",
+        "blocked_env": ("OPENAI_API_KEY", "OPENAI_BASE_URL"),
+        "extra_env": {"CODEX_HOME": os.path.expanduser(os.environ.get("CODEX3_HOME", "~/.codex-derde"))},
+        "cmd": _codex_cmd,
+        "leest_bestand": True,
+        "install": "npm i -g @openai/codex",
+        "login": "CODEX_HOME=~/.codex-derde codex login",
         "alleen_lezen": True,
     },
     "cursor": {

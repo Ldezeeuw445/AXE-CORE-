@@ -28,6 +28,7 @@ import {
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
 import { openLeerbeurt, metGeheugen, sluitLeerbeurt } from '@/application/agents/abonnementLeerlus';
+import { classifyCodeTaskComplexity } from '@/domain/codeTaskComplexity';
 import {
   agentHostVoorkeur, zetAgentHostVoorkeur, agentHostStand,
   LOKALE_AGENT_ORIGIN, type AgentHostVoorkeur,
@@ -56,7 +57,7 @@ import { meldActiviteit } from '@/shared/axeActiviteit';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'codex', 'codex2', 'cursor'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
 type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
 
@@ -69,15 +70,18 @@ type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
 
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'codex', 'codex2', 'cursor']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', codex: 'Codex', codex2: 'Codex 2', cursor: 'Cursor' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', claude4: 'Claude 4', codex: 'Codex', codex2: 'Codex 2', codex3: 'Codex 3', cursor: 'Cursor' };
 
 /** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
 const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [
   { id: 'claude', uitleg: 'Claude Code — de echte CLI in een gewhiteliste checkout, op je Anthropic-abonnement' },
   { id: 'claude2', uitleg: 'Claude Code op je tweede Claude-abonnement (eigen login in ~/.claude-tweede)' },
   { id: 'claude3', uitleg: 'Claude Code op je derde Claude-abonnement (eigen login in ~/.claude-derde)' },
+  { id: 'claude4', uitleg: 'Claude Code op je vierde Claude-abonnement (eigen login in ~/.claude-vierde)' },
   { id: 'codex', uitleg: 'Codex — dezelfde opzet, op je ChatGPT-abonnement' },
+  { id: 'codex2', uitleg: 'Codex op je tweede ChatGPT-abonnement (eigen login in ~/.codex-tweede)' },
+  { id: 'codex3', uitleg: 'Codex op je derde ChatGPT-abonnement (eigen login in ~/.codex-derde)' },
   { id: 'cursor', uitleg: 'Cursor — dezelfde opzet, op je Cursor-abonnement' },
 ];
 
@@ -140,6 +144,10 @@ interface AgentMessage {
   filesRead?: string[];
   autoApplied?: boolean;
   ranCommand?: AgentTurn['ranCommand'];
+  /** Eén knop onder een 'status'-melding — nu alleen gebruikt om de
+   *  gratis-voor-simpel-substitutie (zie classifyCodeTaskComplexity) in één
+   *  klik terug te draaien naar het gepinde abonnement. */
+  action?: { label: string; run: () => void };
 }
 
 type SidebarMode = 'files' | 'search' | 'git';
@@ -532,9 +540,10 @@ export default function CodeEditorPage() {
   const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
   useEffect(() => { localStorage.setItem('axe_code_agent_mode', agentMode ? 'on' : 'off'); }, [agentMode]);
   const agentAbortRef = useRef<AbortController | null>(null);
-  // De abonnementen zijn verdeeld over drie agents (Instellingen → Motoren per
-  // agent). Het abonnement van de Code Agent komt daarvandaan; Native en Hands
-  // zijn geen abonnement en blijven een keuze hier. Zie domain/agentMotoren.ts.
+  // De abonnementen zijn verdeeld over de vijf tier-1 managers (Instellingen →
+  // Motoren per agent). Het abonnement van AXE Developer komt daarvandaan;
+  // Native en Hands zijn geen abonnement en blijven een keuze hier. Zie
+  // domain/agentMotoren.ts.
   const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
   useEffect(() => {
     const bij = () => setToewijzing(leesToewijzing());
@@ -543,7 +552,7 @@ export default function CodeEditorPage() {
     return () => { window.removeEventListener('axe:agent-motoren', bij); window.removeEventListener('storage', bij); };
   }, []);
   const [agentEngine, setAgentEngineRauw] = useState<AgentEngine>(() => {
-    const eigen = leesToewijzing()['code-agent'];
+    const eigen = leesToewijzing()['developer'];
     if (eigen !== 'sleutels') return eigen;
     // Zonder abonnement: Native of Hands, zoals de vorige keer. Een opgeslagen
     // CLI telt niet meer -- die komt uit de toewijzing.
@@ -557,20 +566,20 @@ export default function CodeEditorPage() {
   agentEngineRef.current = agentEngine;
   const setAgentEngine = useCallback((volgende: AgentEngine | ((huidig: AgentEngine) => AgentEngine)) => {
     const motor = typeof volgende === 'function' ? volgende(agentEngineRef.current) : volgende;
-    setToewijzing(kiesMotor('code-agent', CLI_MOTOREN.has(motor) ? motor as CliMotor : 'sleutels'));
+    setToewijzing(kiesMotor('developer', CLI_MOTOREN.has(motor) ? motor as CliMotor : 'sleutels'));
     setAgentEngineRauw(motor);
   }, []);
   // Verandert de verdeling elders (Instellingen, een ander venster), dan schuift
   // de motor hier mee -- anders draait de editor op een abonnement dat inmiddels
   // van een andere agent is.
-  const eigenMotor = toewijzing['code-agent'];
+  const eigenMotor = toewijzing['developer'];
   useEffect(() => {
     if (eigenMotor !== 'sleutels') setAgentEngineRauw(eigenMotor);
     else setAgentEngineRauw(huidig => (huidig === 'native' || huidig === 'openhands') ? huidig : 'native');
   }, [eigenMotor]);
   // Van welke andere agent dit abonnement is, of null als het vrij is.
   const eigenaarVan = (motor: string): string | null => {
-    const ander = HOOFD_AGENTS.find(a => a !== 'code-agent' && toewijzing[a] === motor);
+    const ander = HOOFD_AGENTS.find(a => a !== 'developer' && toewijzing[a] === motor);
     return ander ? AGENT_LABEL[ander] : null;
   };
 
@@ -887,18 +896,36 @@ export default function CodeEditorPage() {
     [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot, voice.fallback3Slot]
       .filter((s): s is KeySlot => s !== null);
 
-  const handleAgentSubmit = useCallback(async (overrideInstruction?: string) => {
+  const handleAgentSubmit = useCallback(async (overrideInstruction?: string, negeerClassificatie = false) => {
     const instruction = (overrideInstruction ?? agentInput).trim();
     if (!instruction || agentBusy) return;
     setAgentInput('');
     setAgentBusy(true);
     setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
+
+    // Simpele taken op een gepind abonnement: OpenHands is gratis en is voor
+    // een typo, hernoem of ander klein ding vaak genoeg. Nooit stilzwijgend
+    // -- de melding hieronder zegt wat er gebeurde, met één knop om het
+    // abonnement alsnog te forceren voor precies déze beurt (negeerClassificatie
+    // laat het bij een herhaalde aanroep niet weer omslaan naar OpenHands).
+    // Zie domain/codeTaskComplexity.ts voor waarom dit conservatief is.
+    let werkelijkeEngine = agentEngine;
+    if (!negeerClassificatie && CLI_MOTOREN.has(agentEngine) && classifyCodeTaskComplexity(instruction) === 'simple') {
+      werkelijkeEngine = 'openhands';
+      const motorLabel = MOTOR_LABEL[agentEngine] ?? agentEngine;
+      setAgentMessages(prev => [...prev, {
+        role: 'status',
+        text: `Dit lijkt een simpele taak — OpenHands gebruikt (gratis) in plaats van ${motorLabel}.`,
+        action: { label: `Toch ${motorLabel} gebruiken`, run: () => { void handleAgentSubmit(instruction, true); } },
+      }]);
+    }
+
     meldActiviteit({
       doelen: ['editor', '/code-editor'],
-      label: `${agentEngine === 'native' ? 'AXE Native' : agentEngine === 'openhands' ? 'OpenHands' : MOTOR_LABEL[agentEngine] ?? agentEngine} werkt in ${claudeRepo || 'de repo'}: ${instruction.slice(0, 48)}`,
+      label: `${werkelijkeEngine === 'native' ? 'AXE Native' : werkelijkeEngine === 'openhands' ? 'OpenHands' : MOTOR_LABEL[werkelijkeEngine] ?? werkelijkeEngine} werkt in ${claudeRepo || 'de repo'}: ${instruction.slice(0, 48)}`,
     });
 
-    if (agentEngine === 'openhands') {
+    if (werkelijkeEngine === 'openhands') {
       setAgentMessages(prev => [...prev, { role: 'status', text: 'Sending task to OpenHands…' }]);
       try {
         const context = activeTab ? `Active file: ${activeTab.path}\n\n${activeTab.content.slice(0, 8000)}` : undefined;
@@ -912,8 +939,8 @@ export default function CodeEditorPage() {
       return;
     }
 
-    if (CLI_MOTOREN.has(agentEngine)) {
-      const motorLabel = MOTOR_LABEL[agentEngine] ?? agentEngine;
+    if (CLI_MOTOREN.has(werkelijkeEngine)) {
+      const motorLabel = MOTOR_LABEL[werkelijkeEngine] ?? werkelijkeEngine;
       if (!claudeRepo) {
         setAgentMessages(prev => [...prev, {
           role: 'agent',
@@ -941,7 +968,7 @@ export default function CodeEditorPage() {
         // Zie application/agents/abonnementLeerlus.ts.
         const leer = await openLeerbeurt(`${instruction} ${claudeRepo} ${activeTab?.path ?? ''}`, 'code-editor');
         const prompt = metGeheugen(opdracht, leer);
-        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as CliMotor });
+        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: werkelijkeEngine as CliMotor });
         // A refusal comes back as HTTP 200 with status 'error' — reading the
         // body is the only way to tell a guarded refusal from a finished run.
         const text = res.status === 'ok'
@@ -955,7 +982,7 @@ export default function CodeEditorPage() {
         if (res.status === 'ok') setRunTeller(n => n + 1);
         sluitLeerbeurt(leer, res.status === 'ok', {
           wie: `Code Agent · ${motorLabel} · ${claudeRepo}`, opdracht: instruction, uitkomst: text,
-          metadata: { repo: claudeRepo, branch: res.branch, motor: agentEngine },
+          metadata: { repo: claudeRepo, branch: res.branch, motor: werkelijkeEngine },
         });
         // It edited files on disk directly, so what is open here is now stale.
         if (res.status === 'ok' && activeTab) {
@@ -1230,10 +1257,12 @@ export default function CodeEditorPage() {
   };
   const MOTOR_ICOON: Record<string, React.ReactNode> = {
     native: <Cpu size={17} />, openhands: <Hand size={17} />, claude: <Sparkle size={17} />,
-    claude2: <Sparkles size={17} />, claude3: <Sparkles size={17} />, codex: <Braces size={17} />, cursor: <MousePointerClick size={17} />,
+    claude2: <Sparkles size={17} />, claude3: <Sparkles size={17} />, claude4: <Sparkles size={17} />,
+    codex: <Braces size={17} />, codex2: <Braces size={17} />, codex3: <Braces size={17} />, cursor: <MousePointerClick size={17} />,
   };
   const MOTOR_KLEUR: Record<string, string> = {
-    native: '#22D3EE', openhands: '#F5A524', claude: '#D97757', claude2: '#E8A488', claude3: '#F4C7B0', codex: '#E5E7EB', cursor: '#8B7CF6',
+    native: '#22D3EE', openhands: '#F5A524', claude: '#D97757', claude2: '#E8A488', claude3: '#F4C7B0', claude4: '#FADCD0',
+    codex: '#E5E7EB', codex2: '#C7CACE', codex3: '#A9ADB3', cursor: '#8B7CF6',
   };
   const motorItems: ZuilItem[] = (['native', 'openhands', ...CLI_MOTOR_KNOPPEN.map(k => k.id)] as AgentEngine[]).map(id => {
     const cli = CLI_MOTOR_KNOPPEN.find(k => k.id === id);
@@ -1676,8 +1705,23 @@ export default function CodeEditorPage() {
                             </ol>
                           )}
                           {msg.role === 'status' && (
-                            <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                              <RefreshCw size={8} className="animate-spin flex-shrink-0" /><span>{msg.text}</span>
+                            <div className="flex items-center gap-1.5 text-[9px] flex-wrap" style={{ color: 'var(--text-muted)' }}>
+                              {/* Een melding met een knop is een blijvende notitie
+                                  (bijv. "simpele taak, OpenHands gebruikt"), geen
+                                  "bezig"-regel die zo verdwijnt -- die krijgt dus
+                                  geen draaiend icoon. */}
+                              {!msg.action && <RefreshCw size={8} className="animate-spin flex-shrink-0" />}
+                              <span>{msg.text}</span>
+                              {msg.action && (
+                                <button
+                                  type="button"
+                                  onClick={msg.action.run}
+                                  className="rounded-full px-1.5 py-0.5"
+                                  style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}
+                                >
+                                  {msg.action.label}
+                                </button>
+                              )}
                             </div>
                           )}
                           {msg.role === 'user' && (

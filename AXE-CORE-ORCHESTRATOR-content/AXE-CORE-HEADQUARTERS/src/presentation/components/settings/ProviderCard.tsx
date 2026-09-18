@@ -55,7 +55,7 @@ export interface ProviderKaart {
 export function ProviderCard({
   kaart, stand, sleutel, model, fout, laatsteTest, sleutelZichtbaar, opServer,
   modellen, isPrimair, aangepast,
-  onSleutel, onModel, onTest, onToonSleutel, onPrimair, onVerwijder,
+  onSleutel, onModel, onTest, onToonSleutel, onVerwijder,
 }: {
   kaart: ProviderKaart;
   stand: KaartStand;
@@ -66,13 +66,16 @@ export function ProviderCard({
   sleutelZichtbaar: boolean;
   opServer: boolean;
   modellen: string[];
+  /** Alleen nog een label ("· primary slot") -- zetten gebeurt sinds de
+   *  CONFIRMED ARCHITECTURE op precies één plek: Settings' "AXE Core"-rij in
+   *  Motoren per agent (AgentMotorenSection.tsx). Een tweede knop hier ernaast
+   *  was zelf de tegenstrijdigheid die "één bron van waarheid" moest oplossen. */
   isPrimair: boolean;
   aangepast: boolean;
   onSleutel: (waarde: string) => void;
   onModel: (model: string) => void;
   onTest: () => void;
   onToonSleutel: () => void;
-  onPrimair: () => void;
   onVerwijder?: () => void;
 }) {
   const Icoon = kaart.icon;
@@ -215,9 +218,6 @@ export function ProviderCard({
         <button onClick={onTest} className="axe-chip !text-[11px]" disabled={stand === 'testing'}>
           {stand === 'testing' ? 'Testing…' : 'Test'}
         </button>
-        {!isPrimair && ingesteld && (
-          <button onClick={onPrimair} className="axe-chip !text-[11px]">Make primary</button>
-        )}
         <div className="flex-1" />
         {aangepast && onVerwijder && (
           <button onClick={onVerwijder} aria-label="Remove provider" style={{ color: 'var(--text-muted)' }}>

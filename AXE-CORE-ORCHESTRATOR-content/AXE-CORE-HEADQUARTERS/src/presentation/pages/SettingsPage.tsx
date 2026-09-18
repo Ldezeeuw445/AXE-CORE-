@@ -352,7 +352,13 @@ function ProviderKeysSection() {
         if (!res.ok) { if (!cancelled) setServerProviders(new Set()); return; }
         const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
         if (cancelled) return;
-        setServerProviders(new Set([...(body.providers ?? []), ...(body.keyless ?? [])]));
+        const served = [...(body.providers ?? []), ...(body.keyless ?? [])];
+        setServerProviders(new Set(served));
+        // Cache for the chat runtime: it must know which providers the VPS serves
+        // (with the VPS's own key), so AXE can route e.g. Gemini through the proxy
+        // even though there is no local key on this device. Without this the chat
+        // cascade silently drops every VPS-only provider and falls to Ollama.
+        try { localStorage.setItem('axe_server_providers', JSON.stringify(served)); } catch { /* ignore */ }
       } catch {
         // Server onbereikbaar. Een lege set is hier beter dan null blijven:
         // het scherm valt terug op het oude gedrag, en de automatische meting
@@ -379,7 +385,16 @@ function ProviderKeysSection() {
       const storedCustom = await loadSetting<CustomProvider[]>(CUSTOM_PROVIDERS_KEY, []);
       if (!alive) return;
       cloudSnapshot = stored;
-      if (Object.keys(stored).length > 0) setKeys(prev => ({ ...prev, ...stored }));
+      if (Object.keys(stored).length > 0) setKeys(prev => {
+        const merged = { ...prev, ...stored };
+        // Persist the Supabase-synced keys to THIS device's localStorage. The
+        // chat runtime (getProviderKeySlot / collectAllSlots) reads localStorage
+        // only, so a key set on another device (or synced from the cloud) shows
+        // "Connected" here but was invisible to AXE's chat — which is why AXE
+        // fell back to Ollama instead of using Gemini. Now they share one source.
+        try { localStorage.setItem('axe_llm_connections', JSON.stringify(merged)); } catch { /* ignore */ }
+        return merged;
+      });
       if (storedCustom.length > 0) setCustomProviders(storedCustom);
     };
     void hydrate();
@@ -744,12 +759,6 @@ function ProviderKeysSection() {
               onModel={(model) => update(cat.id, 'model', model)}
               onTest={() => testProvider(cat.id, isCustom)}
               onToonSleutel={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))}
-              onPrimair={() => voice.setPrimarySlot(isPrimary ? null : {
-                provider: cat.id as ProviderId,
-                key: conn.key ?? '',
-                model: conn.model || standaardModel || '',
-                baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
-              })}
               onVerwijder={isCustom ? () => removeCustomProvider(cat.id) : undefined}
             />
           );
@@ -1147,7 +1156,6 @@ function OllamaModelsSection() {
                 onModel={() => {}}
                 onTest={() => testModel(model.name)}
                 onToonSleutel={() => {}}
-                onPrimair={() => {}}
               />
             );
           })}

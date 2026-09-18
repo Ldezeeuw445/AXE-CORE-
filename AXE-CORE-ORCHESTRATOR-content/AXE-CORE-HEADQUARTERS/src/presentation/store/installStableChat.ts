@@ -9,19 +9,18 @@
  * 5. Inject Architecture-assigned skills into system prompt.
  * 6. Living Display owned by installSpherePresent (no double project).
  */
-import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
+import { useVoiceStore, getProviderKeySlot, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
+  PROVIDERS,
   buildStableChatCascade,
   classifyQuery,
   isSimpleChatCapability,
-  preferLocalOllamaFirst,
   type KeySlot,
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
-import { isLocalOllamaUp, resolveReachableOllama } from '@/infrastructure/gateways/localOllama';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
 import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
@@ -155,6 +154,15 @@ function collectAllSlots(): KeySlot[] {
       });
     }
   } catch { /* ignore */ }
+
+  // Also include every known provider whose key comes from the vault/ENV, not
+  // only localStorage — getProviderKeySlot resolves both, exactly like Settings.
+  // Without this, a vault-keyed provider (e.g. Gemini via VITE_GEMINI_API_KEY)
+  // shows "Connected" in Settings but is invisible to AXE's chat cascade, so AXE
+  // fell back to whatever localStorage happened to hold (Ollama/OpenRouter).
+  for (const p of PROVIDERS) {
+    push(getProviderKeySlot(p.id));
+  }
 
   return slots;
 }
@@ -473,19 +481,17 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   const st = useVoiceStore.getState();
   // Same rule as chatCascade: AXE speaks through a real chat model, not a coding
   // subscription. Strip subscriptions so your chosen brain answers.
-  let cascade = zonderAbonnement(buildStableChatCascade(all, {
+  //
+  // "Local model first" used to also apply here when nothing was pinned
+  // (AXE Native) -- that's exactly the "AXE never gets Ollama" rule (Settings'
+  // AXE Core row, domain/chatModelKeuzes.ts) being quietly overruled the one
+  // time you left AXE on auto. The toggle is for the tier-2 workers/CrewAI,
+  // not for AXE's own brain -- removed here, not repurposed here.
+  const cascade = zonderAbonnement(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
   }));
-  // "Local model first when home" is a preference for AXE Native (no explicit
-  // pick). An explicitly chosen brain (primarySlot) is what you want AXE to be,
-  // so it must win over local-first — otherwise a small local model jumps ahead
-  // of the smart model you selected.
-  if (!st.primarySlot) {
-    const reachableOllama = await resolveReachableOllama();
-    cascade = preferLocalOllamaFirst(cascade, !!reachableOllama, reachableOllama?.baseUrl);
-  }
   if (cascade.length === 0) return false;
 
   const history = st.conversation

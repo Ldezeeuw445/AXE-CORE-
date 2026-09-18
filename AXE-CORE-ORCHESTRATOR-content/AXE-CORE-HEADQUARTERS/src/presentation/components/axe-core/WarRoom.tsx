@@ -2,10 +2,11 @@
  * WarRoom — one glance at who is doing what.
  *
  * The Agents tab used to be a flat list of ~29 boxes with no sense of who runs
- * the show or who is busy right now. This is the opposite: the six agents AXE
- * actually delegates to (domain/agents/roster.ts), each showing whether it is
- * working this second and what it last handled. AXE is always at the head —
- * it runs and delegates; the other five light up only when AXE hands them work.
+ * the show or who is busy right now. This is the opposite: the twelve tiered
+ * agents AXE actually delegates to (domain/agents/roster.ts), each showing
+ * whether it is working this second and what it last handled. AXE is always
+ * at the head — it runs and delegates; the rest light up only when AXE hands
+ * them work.
  *
  * Data comes from the live routing log (voiceStore.routingLog), which now tags
  * every turn with the agent that handled it. No new plumbing, no polling — the
