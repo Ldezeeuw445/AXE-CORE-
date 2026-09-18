@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.axe.core",
+  "app": {
+    "macOSPrivateApi": false,
+    "windows": [
+      {
+        "title": "AXE CORE",
+        "width": 360,
+        "height": 800,
+        "minWidth": 0,
+        "minHeight": 0,
+        "resizable": true,
+        "fullscreen": false,
+        "transparent": false,
+        "theme": "Dark",
+        "titleBarStyle": "Visible",
+        "hiddenTitle": false
+      }
+    ]
+  },
+  "bundle": {
+    "android": {
+      "minSdkVersion": 24,
+      "autoIncrementVersionCode": false
+    }
+  }
+}

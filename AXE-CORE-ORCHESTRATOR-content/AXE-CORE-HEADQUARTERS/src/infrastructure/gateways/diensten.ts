@@ -11,7 +11,7 @@
  * "kan hier niet" kan tonen in plaats van een lege lijst die op een storing
  * lijkt.
  */
-import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { isAndroidRuntime, isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
 export interface DienstStand {
   id: string;
@@ -27,7 +27,7 @@ export interface DienstStand {
 }
 
 export function beschikbaar(): boolean {
-  return isTauriRuntime();
+  return isTauriRuntime() && !isAndroidRuntime();
 }
 
 async function roep<T>(naam: string, args?: Record<string, unknown>): Promise<T> {

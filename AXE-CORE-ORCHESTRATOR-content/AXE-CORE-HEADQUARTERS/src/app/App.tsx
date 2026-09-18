@@ -12,6 +12,7 @@ import { NotificationProvider } from '@/presentation/contexts/NotificationContex
 import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
 import { isIngebed } from '@/presentation/components/layout/zweef/ingebed';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
+import { useAxeDeviceHeartbeat } from '@/presentation/hooks/useAxeDeviceHeartbeat';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
 const AICore = lazy(() => import('@/presentation/pages/AICore'));
@@ -49,6 +50,7 @@ const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
 const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
+const AxeDevicesPage = lazy(() => import('@/presentation/pages/AxeDevices'));
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
@@ -113,6 +115,7 @@ export default function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [clapEnabled, setClapEnabled] = useState(false);
+  useAxeDeviceHeartbeat();
 
   useEffect(() => {
     useVoiceStore.getState().loadConversation().catch(() => {});
@@ -215,6 +218,7 @@ export default function App() {
             <Route path="organization" element={<Organization />} />
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />
+            <Route path="devices" element={<AxeDevicesPage />} />
           </Route>
         </Routes>
       </NotificationProvider>

@@ -5,7 +5,7 @@ import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
   Bot, Megaphone, BookOpenCheck, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, type LucideIcon,
-  TerminalSquare,
+  TerminalSquare, Smartphone,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -52,6 +52,7 @@ const rightItems: NavItem[] = [
   // regel levert een tab op die bestaat maar nergens te vinden is. Precies wat
   // er met /terminals gebeurde.
   { icon: TerminalSquare, label: navLabel('/terminals'), path: '/terminals' },
+  { icon: Smartphone, label: navLabel('/devices'), path: '/devices' },
   { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
@@ -69,7 +70,7 @@ const rightItems: NavItem[] = [
  * Desktop is untouched — everything fits there, and the left/right split
  * around the voice orb is deliberate.
  */
-const MOBILE_FIRST = ['/', '/browser', '/ai-core', '/thinkthanks', '/agents', '/tasks', '/trading-intel'];
+const MOBILE_FIRST = ['/', '/maps-3d', '/tasks', '/calendar', '/terminals', '/devices', '/ai-core', '/browser'];
 
 function orderForMobile(items: NavItem[]): NavItem[] {
   const rank = (p: string) => {

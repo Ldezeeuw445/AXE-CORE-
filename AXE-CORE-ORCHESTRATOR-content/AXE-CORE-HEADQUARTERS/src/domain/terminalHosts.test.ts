@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  alleHosts, kiesHost, maakHost, geldigWsAdres, INGEBOUWDE_HOSTS, hostVanDeEditor,
+  alleHosts, kiesHost, maakHost, geldigWsAdres, INGEBOUWDE_HOSTS, hostVanDeEditor, hostsOpDezePlek,
 } from '@/domain/terminalHosts';
 import { snelactiesVoor } from '@/domain/terminalSnelacties';
 
@@ -181,5 +181,20 @@ describe('de terminal onder de code-editor', () => {
 
   it('leest een lokale API op poort als deze machine', () => {
     expect(hostVanDeEditor('http://127.0.0.1:8001').wsUrl).toContain('127.0.0.1:4022');
+  });
+});
+
+describe('hosts op deze plek', () => {
+  it('houdt op desktop alle Mac-vakken', () => {
+    const alle = alleHosts([]);
+    expect(hostsOpDezePlek(alle, 'this-machine').map(h => h.id)).toEqual(alle.map(h => h.id));
+  });
+
+  it('haalt op Android de loopback-Mac weg, VPS blijft', () => {
+    const ids = hostsOpDezePlek(alleHosts([]), 'android-shell').map(h => h.id);
+    expect(ids).not.toContain('deze-mac');
+    expect(ids).not.toContain('mac-api');
+    expect(ids).toContain('vps-strato');
+    expect(ids).toContain('imac');
   });
 });

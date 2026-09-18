@@ -53,7 +53,7 @@ const isReplit = process.env.REPL_ID !== undefined;
  * updater installed a new build, which is the exact problem the updater exists
  * to solve. Web and Tauri builds are untouched.
  */
-const isAndroidShell = process.env.ANDROID_SHELL === '1';
+const isAndroidShell = process.env.ANDROID_SHELL === '1' || process.env.TAURI_ENV_PLATFORM === 'android';
 
 /**
  * Draait deze bouw onder `tauri build`?
@@ -117,7 +117,12 @@ const BUILD_STAMP = {
 // nagemeten, de nepdata stond gewoon in dist/public toen ik daarop vertrouwde.
 export default defineConfig(async ({ command }) => ({
   base: basePath,
-  define: { __BUILD_STAMP__: JSON.stringify(BUILD_STAMP) },
+  define: {
+    __BUILD_STAMP__: JSON.stringify(BUILD_STAMP),
+    // Samsung-build: nooit de VPS-sleutel in de APK bakken. De desktop-app
+    // blijft hem wél inbakken (zie apiUrl.ts); Android praat via Vercel.
+    ...(isAndroidShell ? { 'import.meta.env.VITE_AXE_CORE_API_KEY': 'undefined' } : {}),
+  },
   plugins: [
     react(),
     VitePWA({
