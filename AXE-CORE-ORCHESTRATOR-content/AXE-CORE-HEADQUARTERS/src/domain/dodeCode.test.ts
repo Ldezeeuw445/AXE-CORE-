@@ -75,6 +75,16 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/domain/chatRouting.ts', 'limitSimpleChatSlots'],
   ['src/domain/memory/hubClassifier.ts', 'hubForAgentRow'],
   ['src/domain/navRegistry.ts', 'loadDynamicNavItems'],
+  // 18 sep 2026 (AXE × NorthSea integratie): koppeling.ts is wél gekoppeld --
+  // DealsTab/CommunicatieTab gebruiken beoordeelKoppeling, koppelLabel enz. --
+  // maar deze twee helpers hebben nog géén aanroeper: `normalizeMessageId`
+  // (Message-ID-normalisatie voor threading) en `berichtTermen` (qty/incoterm/
+  // dest-extractie voor match-scoring) zijn met unit-tests bewezen maar nog
+  // niet aangesloten op beoordeelKoppeling. Bewust NIET geforceerd aangeroepen
+  // (dat zou de matching-uitkomst stilletjes veranderen); staat als open
+  // NorthSea-koppeling in het integratierapport. Niet weggooien.
+  ['src/domain/northsea/koppeling.ts', 'berichtTermen'],
+  ['src/domain/northsea/koppeling.ts', 'normalizeMessageId'],
   ['src/domain/providers.ts', 'applyPrimarySlot'],
   ['src/domain/providers.ts', 'limitChatIdentityCascade'],
   // 17 sep 2026: dit was AXE's eigen "no primary pinned" chat-cascade
