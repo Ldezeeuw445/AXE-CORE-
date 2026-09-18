@@ -141,7 +141,10 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {
         win.show().map_err(|e| e.to_string())?;
         win.set_focus().map_err(|e| e.to_string())?;
-        win.unminimize().ok();
+        #[cfg(desktop)]
+        {
+            win.unminimize().ok();
+        }
     }
     Ok(())
 }
