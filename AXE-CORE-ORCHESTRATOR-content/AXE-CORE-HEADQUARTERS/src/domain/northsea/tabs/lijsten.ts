@@ -14,7 +14,7 @@
  */
 import { getal } from '../desk';
 import type { Bedrijf, Bericht, PipelineDeal, Telling } from './typen';
-import type { Toon } from './status';
+import { bezorgBadge, type Toon } from './status';
 
 export type KolomId = 'nieuw' | 'gematcht' | 'kwalificatie' | 'wacht' | 'voorwaarden' | 'geblokkeerd' | 'afronding';
 
@@ -135,12 +135,21 @@ export function filterBedrijven(bedrijven: readonly Bedrijf[], f: BedrijfFilter)
   );
 }
 
-export type BerichtFilter = 'alle' | 'email' | 'telefoon' | 'intern' | 'actie';
+export type BerichtFilter = 'alle' | 'email' | 'telefoon' | 'intern' | 'actie' | 'inkomend' | 'uitgaand' | 'niet_bezorgd' | 'akkoord';
 
 /** Heeft dit bericht iets van Luka nodig: een concept dat wacht, of intelligentie die om akkoord vraagt. */
 export function vraagtActie(b: Bericht): boolean {
   if ((b.concepten ?? []).some(c => !c.sent_at && norm(c.akkoord) === 'pending')) return true;
   return norm(b.richting) === 'inbound' && b.intelligentie?.akkoord_nodig === true && norm(b.intelligentie?.status) !== 'handled';
+}
+
+export function nietBezorgd(b: Bericht): boolean {
+  return bezorgBadge(b.bezorging)?.toon === 'rood';
+}
+
+export function wachtOpAkkoord(b: Bericht): boolean {
+  if ((b.concepten ?? []).some(c => !c.sent_at && norm(c.akkoord) === 'pending')) return true;
+  return b.intelligentie?.akkoord_nodig === true && norm(b.intelligentie?.status) !== 'handled';
 }
 
 export function filterBerichten(berichten: readonly Bericht[], filter: BerichtFilter, zoek: string): Bericht[] {
@@ -152,9 +161,48 @@ export function filterBerichten(berichten: readonly Bericht[], filter: BerichtFi
         : filter === 'email' ? kanaal === 'email'
           : filter === 'telefoon' ? kanaal === 'phone'
             : filter === 'intern' ? richting === 'internal'
-              : vraagtActie(b);
+              : filter === 'inkomend' ? richting === 'inbound'
+                : filter === 'uitgaand' ? richting === 'outbound'
+                  : filter === 'niet_bezorgd' ? nietBezorgd(b)
+                    : filter === 'akkoord' ? wachtOpAkkoord(b)
+                      : vraagtActie(b);
     return inFilter && past(zoek, b.onderwerp, b.bedrijf, b.contact, b.contact_email, b.deal_code, b.tekst);
   });
+}
+
+/**
+ * Groepeer berichten tot één gesprek: dezelfde deal, anders hetzelfde adres,
+ * anders hetzelfde bedrijf. Losse rijen zonder koppeling blijven alleen.
+ */
+export function threadSleutel(b: Pick<Bericht, 'id' | 'deal_id' | 'contact_email' | 'bedrijf_id'>): string {
+  if (b.deal_id) return `deal:${b.deal_id}`;
+  const mail = (b.contact_email ?? '').trim().toLowerCase();
+  if (mail) return `mail:${mail}`;
+  if (b.bedrijf_id) return `co:${b.bedrijf_id}`;
+  return `msg:${b.id}`;
+}
+
+export interface BerichtThread {
+  sleutel: string;
+  berichten: Bericht[];
+  laatste: Bericht;
+}
+
+export function groepeerBerichten(berichten: readonly Bericht[]): BerichtThread[] {
+  const m = new Map<string, Bericht[]>();
+  for (const b of berichten) {
+    const k = threadSleutel(b);
+    const lijst = m.get(k);
+    if (lijst) lijst.push(b);
+    else m.set(k, [b]);
+  }
+  const threads: BerichtThread[] = [];
+  for (const [sleutel, lijst] of m) {
+    lijst.sort((a, b) => tijd(b.occurred_at) - tijd(a.occurred_at));
+    threads.push({ sleutel, berichten: lijst, laatste: lijst[0] });
+  }
+  threads.sort((a, b) => tijd(b.laatste.occurred_at) - tijd(a.laatste.occurred_at));
+  return threads;
 }
 
 /** Een lijst die de backend als JSON-waarde stuurt (jsonb-array of losse tekst) als strings. */

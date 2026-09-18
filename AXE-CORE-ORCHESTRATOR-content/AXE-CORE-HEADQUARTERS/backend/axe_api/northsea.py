@@ -89,23 +89,23 @@ select json_build_object(
   'acties', (select coalesce(json_agg(r), '[]'::json) from (
      select a.id, a.action_type as soort, a.title as titel, a.status, a.priority as prioriteit,
             a.requires_approval as akkoord_nodig, a.due_at, a.created_at, a.updated_at,
-            d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
+            d.id as deal_id, d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
      from action_queue a left join deal d on d.id = a.opportunity_id
      where a.status in ('open','waiting')) r),
   'taken', (select coalesce(json_agg(r), '[]'::json) from (
      select t.id, t.task_type as soort, t.title as titel, t.status, t.priority as prioriteit,
             t.requires_approval as akkoord_nodig, t.due_at, t.created_at, t.updated_at,
-            t.execution_error as fout, d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
+            t.execution_error as fout, d.id as deal_id, d.code, d.blokkade, d.volgende, d.koper, d.leverancier, d.product
      from deal_tasks t left join deal d on d.id = t.opportunity_id
      where t.status = 'open') r),
   'concepten', (select coalesce(json_agg(r), '[]'::json) from (
      select r0.id, r0.subject as titel, r0.purpose as soort, r0.to_email as aan, r0.created_at, r0.updated_at,
-            r0.sensitive_action as gevoelig, d.code, d.koper, d.leverancier, d.product
+            r0.sensitive_action as gevoelig, d.id as deal_id, d.code, d.koper, d.leverancier, d.product
      from reply_drafts r0 left join deal d on d.id = r0.opportunity_id
      where r0.sent_at is null and r0.approval_status = 'pending') r),
   'bounces', (select coalesce(json_agg(r), '[]'::json) from (
      select c.id, c.subject as titel, c.occurred_at as created_at, c.provider_metadata->'to' as aan,
-            d.code, d.koper, d.leverancier, d.product
+            d.id as deal_id, d.code, d.koper, d.leverancier, d.product
      from communications c left join deal d on d.id = c.opportunity_id
      where c.delivery_status = 'bounced' and c.occurred_at > now() - interval '30 days') r)
 ) as data
@@ -144,6 +144,8 @@ select json_build_object('deals', (select coalesce(json_agg(r order by r.updated
          o.estimated_value as waarde, o.currency as valuta, o.commission_type as commissie_soort,
          o.commission_rate as commissie_pct, o.commission_amount as commissie_bedrag,
          o.commission_agreement_status as commissie_akkoord, o.notes as notities,
+         o.engine_blocker_code as blokkade_code, o.engine_blocker as huidige_blokkade,
+         o.engine_next_action as beste_actie, o.engine_owner as actie_eigenaar, o.engine_evaluated_at as beoordeeld_op,
          o.buyer_gate_passed as poort_koper, o.seller_gate_passed as poort_verkoper,
          o.commercial_gate_passed as poort_commercieel, o.evidence_gate_passed as poort_bewijs,
          o.protection_gate_passed as poort_bescherming, o.introduction_gate_passed as poort_introductie,
@@ -227,10 +229,15 @@ select json_build_object('bedrijven', (select coalesce(json_agg(r order by r.upd
 select json_build_object('berichten', (select coalesce(json_agg(r order by r.occurred_at desc nulls last), '[]'::json) from (
   select cm.id, cm.direction as richting, cm.channel as kanaal, cm.subject as onderwerp, left(cm.body, 6000) as tekst,
          cm.occurred_at, cm.delivery_status as bezorging, cm.mapping_status as koppeling, cm.mapping_basis as koppeling_basis,
+         cm.mapping_candidates as koppeling_kandidaten, cm.rfc_message_id as rfc_id,
          cm.is_synthetic as test, cm.from_address as afzender, cm.approval_basis as akkoord_basis, cm.actor as verstuurd_door,
          cm.company_id as bedrijf_id, co.company_name as bedrijf, co.country as bedrijf_land,
          ct.full_name as contact, ct.email as contact_email,
          cm.opportunity_id as deal_id, o.deal_priority as deal_code,
+         coalesce(br.product, so.product, br.commodity, so.commodity) as deal_product,
+         coalesce(br.quantity_mt, so.quantity_mt) as deal_volume,
+         br.destination as deal_bestemming,
+         coalesce(br.incoterm, so.incoterm) as deal_incoterm,
          (select json_build_object('classificatie', ei.classification, 'intentie', ei.commercial_intent, 'urgentie', ei.urgency,
                                    'risico', ei.risk_level, 'score', ei.qualification_score, 'samenvatting', ei.summary,
                                    'termen', ei.extracted_terms, 'ontbreekt', ei.missing_information, 'rode_vlaggen', ei.red_flags,
@@ -242,7 +249,7 @@ select json_build_object('berichten', (select coalesce(json_agg(r order by r.occ
                                       'redenen', ei.engine_reasons, 'versie', ei.engine_version, 'op', ei.engine_evaluated_at) end)
             from email_intelligence ei where ei.communication_id = cm.id order by ei.analyzed_at desc nulls last limit 1) as intelligentie,
          (select coalesce(json_agg(d order by d.created_at desc), '[]'::json) from (
-            select rd.id, rd.subject as onderwerp, rd.to_email as aan, rd.purpose as doel, rd.approval_status as akkoord,
+            select rd.id, rd.subject as onderwerp, rd.to_email as aan, left(rd.body, 8000) as tekst, rd.purpose as doel, rd.approval_status as akkoord,
                    rd.sensitive_action as gevoelig, rd.sent_at, rd.created_at, rd.lifecycle_state as levensloop,
                    rd.approval_actor_type as akkoord_door_soort, rd.approved_by as akkoord_door, rd.generated_by as gemaakt_door
             from reply_drafts rd where rd.communication_id = cm.id limit 5) d) as concepten
@@ -250,6 +257,8 @@ select json_build_object('berichten', (select coalesce(json_agg(r order by r.occ
   left join companies co on co.id = cm.company_id
   left join contacts ct on ct.id = cm.contact_id
   left join opportunities o on o.id = cm.opportunity_id
+  left join buyer_requirements br on br.id = o.buyer_requirement_id
+  left join supplier_offers so on so.id = o.supplier_offer_id
   order by cm.occurred_at desc nulls last
   limit 300) r)) as data
 """,
@@ -310,7 +319,22 @@ select json_build_object(
      'chase_open', (select count(*) from action_queue q where q.status in ('open','in_progress','waiting') and q.metadata ->> 'source' = 'northsea-engine'),
      'blokkades', (select coalesce(json_agg(r), '[]'::json) from (
         select coalesce(o.engine_blocker_code, '(niet beoordeeld)') as code, coalesce(o.engine_owner, '-') as eigenaar, count(*) as aantal
-        from opportunities o where o.stage <> 'lost' and not o.is_synthetic group by 1, 2) r)),
+        from opportunities o where o.stage <> 'lost' and not o.is_synthetic group by 1, 2) r),
+     'crewai', (select coalesce(json_agg(r order by r.op desc), '[]'::json) from (
+        select a.occurred_at as op,
+               a.details ->> 'actual_crew' as crew,
+               a.details ->> 'route' as route,
+               a.details ->> 'orchestration_status' as status,
+               a.details -> 'timings' as timings,
+               a.details -> 'budget_usage' as budget,
+               a.details ->> 'backend' as backend,
+               a.details ->> 'result_type' as result_type,
+               (a.details ->> 'fallback_used')::boolean as fallback,
+               a.details ->> 'error' as error,
+               a.details ->> 'next_action' as next_action,
+               (a.details ->> 'approval_required')::boolean as approval_required,
+               a.opportunity_id as deal_id
+        from northsea_audit_events a where a.action = 'crew_run' order by a.occurred_at desc limit 20) r)),
   'campagnes', (select coalesce(json_agg(r order by r.prioriteit desc nulls last, r.updated_at desc nulls last), '[]'::json) from (
      select sc.id, sc.direction as richting, sc.commodity, sc.product, sc.search_geographies as gebieden, sc.status,
             sc.priority as prioriteit, sc.candidates_found as gevonden, sc.candidates_screened as gescreend,

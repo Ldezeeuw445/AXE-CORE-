@@ -27,6 +27,28 @@ def test_elk_tabblad_heeft_een_query():
     assert set(n.TAB_SQL) == set(TABS)
 
 
+def test_communicatie_query_levert_concepttekst_voor_preview():
+    sql = n.TAB_SQL["communicatie"]
+    assert "rd.body" in sql
+    assert "left(rd.body" in sql.lower() or "left(rd.body" in sql
+    assert "deal_product" in sql
+    assert "buyer_requirements" in sql
+    assert "supplier_offers" in sql
+    assert "mapping_candidates" in sql
+    assert "rfc_message_id" in sql
+
+
+def test_overzicht_chase_heeft_deal_id():
+    assert "d.id as deal_id" in n.OVERZICHT_SQL
+
+
+def test_deals_query_heeft_engine_velden():
+    sql = n.TAB_SQL["deals"]
+    assert "engine_next_action" in sql
+    assert "engine_owner" in sql
+    assert "engine_blocker" in sql
+
+
 @pytest.mark.parametrize("naam", TABS)
 def test_elke_query_leest_alleen(naam):
     sql = n.TAB_SQL[naam].lower()

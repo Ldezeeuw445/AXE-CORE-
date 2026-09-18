@@ -67,6 +67,11 @@ TOOLS: dict[str, ToolPolicy] = {p.name: p for p in (
     ToolPolicy("northsea_find_suppliers", Risk.RESEARCH, ("northsea.research", "northsea.read")),
     ToolPolicy("northsea_find_buyers", Risk.RESEARCH, ("northsea.research", "northsea.read")),
     ToolPolicy("northsea_investigate_blockers", Risk.RESEARCH, ("northsea.research", "northsea.deal.read"), uses_crew=True),
+    # Canoniek event-instappunt: de deterministische master-orchestratie (validate ->
+    # policy/budget/approval -> router -> crew). Zelfde research/crew-drempel als de
+    # andere crew-tools: niet bereikbaar met alleen leesrechten. De interne gate
+    # handhaaft daarnaast de scopes van de concrete actie én de approval-plicht.
+    ToolPolicy("northsea_handle_event", Risk.RESEARCH, ("northsea.research", "northsea.deal.read"), uses_crew=True),
     ToolPolicy("northsea_prepare_outreach", Risk.DRAFT, ("northsea.communications.draft",)),
     ToolPolicy("northsea_create_task", Risk.LOW_RISK_WRITE, ("northsea.deal.write",), needs_idempotency_key=True),
     ToolPolicy("northsea_update_task", Risk.LOW_RISK_WRITE, ("northsea.deal.write",), needs_idempotency_key=True),

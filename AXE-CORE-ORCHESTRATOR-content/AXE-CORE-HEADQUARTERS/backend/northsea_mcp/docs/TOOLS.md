@@ -18,6 +18,7 @@ schema. Errors are `code: message` (for example `insufficient_scope`,
 | `northsea_find_suppliers` | RESEARCH | research + read | spends search budget | — |
 | `northsea_find_buyers` | RESEARCH | research + read | spends search budget | — |
 | `northsea_investigate_blockers` | RESEARCH | research + deal.read | spends research budget | — |
+| `northsea_handle_event` | RESEARCH | research + deal.read | crew audit/event/Chase outputs only; never send or mutate deal state | action-level; sensitive events stay approval_required |
 | `northsea_prepare_outreach` | DRAFT | communications.draft | optional: pending draft in Deal Desk | sending always needs approval |
 | `northsea_create_task` | LOW_RISK_WRITE | deal.write | inserts `deal_tasks` + `deal_events` | if `requires_approval` |
 | `northsea_update_task` | LOW_RISK_WRITE | deal.write | updates `deal_tasks` + `deal_events` | completing approval tasks needs admin |
@@ -43,6 +44,8 @@ All write tools require `idempotency_key` (8–128 chars).
 **northsea_find_suppliers** `(buyer_requirement_id, geography?, priority)` / **northsea_find_buyers** `(supplier_offer_id, geography?, priority)` → `CandidateSearch`: anchor summary, candidates (database offers/requirements scored with the intake rule; web candidates keyword-scored and capped at 80), dedupe summary (found, duplicates removed, already in database, new), verification gaps, `persisted=false`. Web search runs the chain Tavily → Zenserp → Perplexity; `research.provider` names the provider that answered and `research.message` lists earlier failures (for example `tavily: budget_exhausted`).
 
 **northsea_investigate_blockers** `(opportunity_id, blocker_codes?, priority, depth)` → `BlockerInvestigation`: investigated codes, resolved (only codes not open), unresolved with reason, new_evidence (unverified claims with cited sources), recommended actions. Research never clears a blocker.
+
+**northsea_handle_event** `(event_id, run_id, event_type, source, requesting_principal, budget_envelope, payload, …)` → `OrchestrationResult`. Requires `northsea.research` **and** `northsea.deal.read`; a read-only token is refused before a crew runs.
 
 **northsea_prepare_outreach** `(objective, opportunity_id | counterparty_id, channel, template=auto|supplier_qualification|buyer_qualification|follow_up|document_request, save_as_pending_draft=false, idempotency_key?)` → `OutreachDraft`: subject, body (never names the other party; non-binding footer), facts_used, unknowns, sensitive, approval_required=true, sent=false, saved_draft_id/saved_status, notes. Saving needs an existing inbound email from that counterparty (Deal Desk drafts are replies).
 

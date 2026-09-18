@@ -53,6 +53,7 @@ class Settings:
     crew_fallback_on: tuple[str, ...] = ("dedicated_backend_not_configured", "dedicated_backend_unavailable",
                                          "health_check_failed", "capacity_exhausted", "timeout")
     crew_poll_s: float = 3.0
+    crew_local_enabled: bool = True
     access_token_ttl_s: int = 3600
     refresh_token_ttl_s: int = 30 * 24 * 3600
     auth_code_ttl_s: int = 300
@@ -116,6 +117,7 @@ class Settings:
             tavily_key=env.get("TAVILY_API_KEY", ""),
             zenserp_key=env.get("ZENSERP_API_KEY", ""),
             crew_venv_py=env.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3"),
+            crew_local_enabled=(env.get("NORTHSEA_CREW_LOCAL") or "1").strip() not in ("0", "false", "no", "off"),
             access_token_ttl_s=getal("NORTHSEA_MCP_ACCESS_TTL_S", 3600),
             refresh_token_ttl_s=getal("NORTHSEA_MCP_REFRESH_TTL_S", 30 * 24 * 3600),
         )

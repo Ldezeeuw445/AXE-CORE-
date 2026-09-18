@@ -1,10 +1,10 @@
 // commodity-intake v5 (P0.9 S4 + P0.5/P0.6/P0.8): herkomstcontrole, niet-spoofbare limieten, geen testdata of
 // geblokkeerde partijen in matching, ontvangstbevestiging alleen volgens beleid en met canonieke herkomst.
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { outboundProvenance, resendPayload } from '../_shared/canonical.ts'
+import { CANONICAL_REPLY_TO, outboundProvenance, resendPayload } from '../_shared/canonical.ts'
 import { audit, outboundBlockReason, readPolicy } from '../_shared/db.ts'
 import { constantTimeEqual } from '../_shared/auth.ts'
-import { CANONICAL_REPLY_TO } from '../_shared/canonical.ts'
+import { renderNorthSeaMail } from '../_shared/mail.ts'
 
 const allowedOrigins = new Set([
   'https://northseacommodity.com',
@@ -115,9 +115,10 @@ Deno.serve(async(req)=>{
     const ackAllowed=!!resendKey&&policy.ok&&policy.policy.auto_reply_nonbinding===true&&(policy.policy.operational_mailbox||'').trim().toLowerCase()===CANONICAL_REPLY_TO&&!blok
     let acknowledged=false
     if(ackAllowed){
-      const ack=`Dear ${contactName},\n\nThank you for contacting NorthSea Commodity Partners. We have received your ${type==='buyer'?'buying requirement':'supply submission'} for ${product}.\n\nOur process is qualification-first: submitted information is reviewed before any counterparty introduction or commercial commitment. We may contact you for company, product, payment, logistics or compliance information where required.\n\nReference: ${record.id}\n\nKind regards,\nNorthSea Commodity Partners\nIndependent Commodity Sourcing & Commercial Intermediation`
+      const ack=`Dear ${contactName},\n\nThank you for contacting NorthSea Commodity Partners. We have received your ${type==='buyer'?'buying requirement':'supply submission'} for ${product}.\n\nOur process is qualification-first: submitted information is reviewed before any counterparty introduction or commercial commitment. We may contact you for company, product, payment, logistics or compliance information where required.\n\nReference: ${record.id}\n\nKind regards,\nNorthSea Commodity Partners`
       const onderwerp=`NorthSea — ${type==='buyer'?'Requirement':'Supply Submission'} Received`
-      const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${resendKey}`,'Content-Type':'application/json','Idempotency-Key':`northsea-intake-${record.id}`},body:JSON.stringify({...resendPayload(email,onderwerp,ack,ack.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>'))})})
+      const mail=renderNorthSeaMail({body:ack,mode:'qualification',reference:{deal:String(record.id),commodity:product||null}})
+      const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${resendKey}`,'Content-Type':'application/json','Idempotency-Key':`northsea-intake-${record.id}`},body:JSON.stringify({...resendPayload(email,onderwerp,mail.text,mail.html)})})
       if(r.ok){const sent=await r.json(); acknowledged=true; await supabase.from('communications').insert({company_id:companyId,contact_id:contactId,direction:'outbound',channel:'email',subject:onderwerp,body:ack,occurred_at:new Date().toISOString(),...outboundProvenance({providerMessageId:sent.id,actor:'commodity-intake',actorType:'automation',approvalBasis:'system_acknowledgement'})})}
       else console.error('Acknowledgement send failed',r.status)
     }

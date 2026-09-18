@@ -160,6 +160,22 @@ export function AutomatiseringTab() {
                   <Label key={f.status} toon={f.status === 'blocked' ? 'rood' : f.status === 'draft_created' ? 'oranje' : 'grijs'}>{mensLabel(f.status)} {f.aantal}</Label>
                 ))}
               </div>
+              <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>CrewAI runs</div>
+              {(engine?.crewai ?? []).length === 0 && <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>No CrewAI run recorded.</div>}
+              <ul className="flex flex-col">
+                {(engine?.crewai ?? []).slice(0, 12).map(r => (
+                  <li key={`${r.op}:${r.route}:${r.deal_id}`} className="flex flex-col gap-0.5 py-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
+                    <div className="flex items-baseline gap-2 text-[12px]">
+                      <Label toon={r.status === 'ok' ? 'groen' : r.fallback ? 'oranje' : 'rood'}>{mensLabel(r.status || 'unknown')}</Label>
+                      <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{r.crew || r.route || 'crew'}</span>
+                      <span className="shrink-0 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{tijdGeleden(r.op, nu)}</span>
+                    </div>
+                    <div className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {[r.backend, r.fallback ? 'fallback' : null, r.approval_required ? 'approval required' : null, r.next_action, r.error].filter(Boolean).join(' · ')}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </section>
           </div>
         )}
@@ -256,6 +272,9 @@ export function AutomatiseringTab() {
           </Link>
           <Link to="/cron-manager" className="mt-1.5 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
             Scheduled jobs live in the Cron Manager <ArrowRight size={12} />
+          </Link>
+          <Link to="/tasks" className="mt-1.5 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
+            Open AXE Tasks <ArrowRight size={12} />
           </Link>
         </DetailPaneel>
       </TabRail>

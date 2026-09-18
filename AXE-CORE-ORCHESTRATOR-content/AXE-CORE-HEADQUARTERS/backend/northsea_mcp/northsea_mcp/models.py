@@ -90,8 +90,8 @@ class CrewRunInfo(BaseModel):
     reason: str | None = None
     route: str | None = Field(default=None, description="discovery_run, deal_run, intelligence_run or operations_run.")
     requested_crew: str | None = None
-    backend: Literal["northsea_crewai", "axe_general_crew"] | None = Field(
-        default=None, description="northsea_crewai = dedicated NorthSea workforce; axe_general_crew = fallback.")
+    backend: Literal["northsea_crewai", "northsea_local", "axe_general_crew"] | None = Field(
+        default=None, description="northsea_local = in-process specialist crews; northsea_crewai = optional Studio AMP; axe_general_crew = fallback.")
     actual_crew: str | None = None
     fallback_used: bool = False
     fallback_reason: str | None = None

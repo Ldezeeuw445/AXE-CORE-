@@ -15,3 +15,5 @@ dist
 # logs: het script stopt bij ELKE lokale wijziging, en dan kan hij de fix die
 # dit oplost nooit binnenhalen.
 .axe-logs/
+# Lokale NorthSea-snapshots (inbox-JSON + backlog). Niet naar GitHub.
+.local/

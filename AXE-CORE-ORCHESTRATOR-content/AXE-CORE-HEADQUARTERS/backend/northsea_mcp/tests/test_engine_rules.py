@@ -180,3 +180,12 @@ def test_platform_newsletter_is_spam_not_rejection():
 def test_operational_limits_are_not_rejections():
     assert e.classify("Re: qualification", "We can supply 500 MT but we are not able to offer FOB, only CIF.").primary == "supplier"
     assert e.classify("Re: LC", "The bank declined the draft wording; we will send a corrected version.").primary != "rejection"
+
+
+def test_followup_draft_does_not_prefix_new_lines_with_quotes():
+    d = e.followup_draft(blocker_code="seller_unqualified", role="supplier", missing=["origin"],
+                         product="Copper Cathode", attempt=1, original_subject="Copper")
+    assert d["body"]
+    assert not any(line.lstrip().startswith(">") for line in d["body"].splitlines())
+    assert "Kind regards" in d["body"]
+

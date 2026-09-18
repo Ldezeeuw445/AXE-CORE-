@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chaseItems, chaseTellers, isDealCode, tijdGeleden, type NorthseaRij } from './chase';
+import { chaseDoel, chaseItems, chaseTellers, isChaseConceptRuis, isDealCode, tijdGeleden, type NorthseaRij } from './chase';
 
 const NU = Date.parse('2026-09-14T12:00:00Z');
 const leeg = { acties: [] as NorthseaRij[], taken: [] as NorthseaRij[], concepten: [] as NorthseaRij[], bounces: [] as NorthseaRij[] };
@@ -50,7 +50,60 @@ describe('chaseItems', () => {
 
   it('telt alle, kritiek en nieuw', () => {
     const items = chaseItems({ ...leeg, bounces: [{ id: 'b', created_at: uurGeleden(1) }], acties: [{ id: 'x', created_at: uurGeleden(40) }] }, NU);
-    expect(chaseTellers(items)).toEqual({ alle: 2, kritiek: 1, nieuw: 1 });
+    expect(chaseTellers(items)).toEqual({ alle: 2, kritiek: 1, nieuw: 1, akkoord: 0 });
+  });
+
+  it('platform- en OTP-concepten tellen niet als Chase', () => {
+    expect(isChaseConceptRuis({ titel: 'Re: Welcome to Tradewheel — Verify your email', aan: 'no-reply@tradewheel.com' })).toBe(true);
+    expect(isChaseConceptRuis({ titel: 'Re: WhatsApp-verificatiecode: 310-802', aan: 'noreply@support.whatsapp.com' })).toBe(true);
+    expect(isChaseConceptRuis({ titel: 'Re: Nieuwe oproep', aan: 'noreply@ai-voicereceptionist.com' })).toBe(true);
+    expect(isChaseConceptRuis({ titel: 'Copper cathode qualification', aan: 'sales@harcros.example' })).toBe(false);
+    const items = chaseItems({
+      ...leeg,
+      concepten: [
+        { id: 'junk', titel: 'Re: Welcome to Tradewheel — Verify your email', aan: 'no-reply@tradewheel.com', gevoelig: true },
+        { id: 'real', titel: 'Re: 100 MT Copper Cathode Trial', aan: 'sales@harcros.example' },
+      ],
+    }, NU);
+    expect(items.map(i => i.id)).toEqual(['concept:real']);
+  });
+
+  it('engine reply_needed en overdue wait staan bovenaan met de deal-id', () => {
+    const items = chaseItems({
+      ...leeg,
+      kaart: [
+        { id: 'opp-qinzhou', code: 'DEAL-002', product: 'Copper Cathode', koper: 'Preston', leverancier: 'Harcros',
+          blokkade_code: 'reply_needed', huidige_blokkade: "The counterparty's latest email has not been answered.",
+          beste_actie: "Prepare a reply addressing the counterparty's latest message.", actie_eigenaar: 'axe',
+          updated_at: uurGeleden(5) },
+        { id: 'opp-ramaax', product: 'Copper Cathode', koper: 'Arpad', leverancier: 'Ramaax',
+          blokkade_code: 'awaiting_reply_overdue', huidige_blokkade: 'No reply for 77h after our last email.',
+          beste_actie: 'Prepare a follow-up on the open qualification points (requires approval).',
+          updated_at: uurGeleden(80) },
+        { id: 'opp-noise', product: 'Copper Cathode', blokkade_code: 'seller_unqualified',
+          huidige_blokkade: 'Seller legal entity, authority and live allocation are not evidenced.' },
+      ],
+      taken: [{ id: 't1', titel: 'Resolve current primary blocker', product: 'Copper Cathode', prioriteit: 70 }],
+    }, NU);
+    expect(items.find(i => i.dealId === 'opp-noise')).toBeUndefined();
+    const reply = items.find(i => i.dealId === 'opp-qinzhou');
+    const wait = items.find(i => i.dealId === 'opp-ramaax');
+    expect(reply).toMatchObject({ kop: 'DEAL-002', kritiek: true, dealId: 'opp-qinzhou' });
+    expect(wait).toMatchObject({ stand: 'Follow up required', toon: 'rood', kritiek: true, dealId: 'opp-ramaax' });
+    expect(items.slice(0, 2).map(i => i.dealId)).toEqual(['opp-qinzhou', 'opp-ramaax']);
+  });
+
+  it('een bounce of concept opent Communications, een taak de Deal Room', () => {
+    const items = chaseItems({
+      ...leeg,
+      bounces: [{ id: 'b1', created_at: uurGeleden(1), deal_id: 'opp-1' }],
+      concepten: [{ id: 'c1', titel: 'Term sheet', deal_id: 'opp-2' }],
+      taken: [{ id: 't1', titel: 'Chase buyer', code: 'DEAL-002', deal_id: 'opp-3' }],
+    }, NU);
+    const per = Object.fromEntries(items.map(i => [i.id, i]));
+    expect(chaseDoel(per['bounce:b1'])).toEqual({ tab: 'communicatie', dealId: 'opp-1', filter: 'niet_bezorgd' });
+    expect(chaseDoel(per['concept:c1'])).toEqual({ tab: 'communicatie', dealId: 'opp-2', filter: 'akkoord' });
+    expect(chaseDoel(per['taak:t1'])).toEqual({ tab: 'deals', dealId: 'opp-3' });
   });
 });
 

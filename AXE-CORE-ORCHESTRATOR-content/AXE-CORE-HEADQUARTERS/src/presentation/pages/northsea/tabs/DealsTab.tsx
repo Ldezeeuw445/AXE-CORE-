@@ -14,7 +14,7 @@
  * alleen gehaald als hij expliciet `true` is.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, Target } from 'lucide-react';
+import { ArrowRight, Target } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { isDealCode, tijdGeleden } from '@/domain/northsea/chase';
 import { geld, getal } from '@/domain/northsea/desk';
@@ -23,15 +23,21 @@ import {
   gebeurtenisToon, mensLabel, poortStappen, taakBadge, TOON_KLEUR, verificatieBadge,
 } from '@/domain/northsea/tabs/status';
 import { POORTEN, type BedrijfKort, type DealDetail } from '@/domain/northsea/tabs/typen';
+import { blokkadeToon, eigenaarLabel } from '@/domain/northsea/engine';
 import {
-  DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, Zoekveld,
+  DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, StatusChip, Veld, VerversKnop, Vlak, WerkstroomHint, Zoekveld,
 } from './bouwstenen';
 import { useNorthseaTab } from './useNorthseaTab';
+import { beoordeelKoppeling, berichtHoortBijDeal, isVolgendeActieVerlopen, koppelLabel, koppelToon } from '@/domain/northsea/koppeling';
 
 type Filter = 'alle' | KolomId;
 type Onderdeel = 'overzicht' | 'tijdlijn' | 'taken';
 
 const code = (d: DealDetail) => (isDealCode(d.code) ? d.code!.trim() : `#${d.id.slice(0, 6)}`);
+const prioriteitTekst = (c: DealDetail['code']) => {
+  const t = c?.trim();
+  return t && !isDealCode(t) ? t : null;
+};
 const kolomVan = (d: DealDetail) => pipelineKolom({ stage: d.stage, execution_state: d.execution_state, geblokkeerd: !!(d.blokkade ?? '').trim() });
 const product = (d: DealDetail) => d.aanbod?.product || d.vraag?.product || mensLabel(d.aanbod?.commodity || d.vraag?.commodity);
 const volume = (d: DealDetail) => getal(d.aanbod?.volume_mt) ?? getal(d.vraag?.volume_mt);
@@ -102,8 +108,9 @@ function Ring({ waarde }: { waarde: number | null | undefined }) {
   );
 }
 
-export function DealsTab({ startId }: { startId?: string | null }) {
+export function DealsTab({ startId, openComms }: { startId?: string | null; openComms?: (dealId: string) => void }) {
   const { data, fout, bezig, ververs } = useNorthseaTab('deals');
+  const commsTab = useNorthseaTab('communicatie');
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useState<Filter>('alle');
   const [gekozen, setGekozen] = useState<string | null>(startId ?? null);
@@ -134,9 +141,27 @@ export function DealsTab({ startId }: { startId?: string | null }) {
     alle.map(d => ({ stage: d.stage, execution_state: d.execution_state, geblokkeerd: !!(d.blokkade ?? '').trim() })),
     'kwalificatie',
   );
+  const berichten = useMemo(() => commsTab.data?.berichten ?? [], [commsTab.data]);
+  const oordelen = useMemo(() => new Map(berichten.map(b => [b.id, beoordeelKoppeling(b, alle, berichten)])), [berichten, alle]);
+  const dealBerichten = useMemo(
+    () => (deal ? berichten.filter(b => berichtHoortBijDeal(b, deal.id, oordelen.get(b.id))) : []),
+    [deal, berichten, oordelen],
+  );
+  const kandidaatBerichten = useMemo(
+    () => dealBerichten.filter(b => !b.deal_id),
+    [dealBerichten],
+  );
+  const volgendeVerlopen = deal ? isVolgendeActieVerlopen(deal.volgende_op, nu) : false;
+  const latereInbound = useMemo(() => {
+    if (!deal?.updated_at) return [];
+    const t = Date.parse(deal.updated_at);
+    if (!Number.isFinite(t)) return [];
+    return kandidaatBerichten.filter(b => b.richting === 'inbound' && Date.parse(b.occurred_at ?? '') > t);
+  }, [deal, kandidaatBerichten]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" data-axe-doel="northsea-deals-tab">
+      <WerkstroomHint />
       <KengetalRij>
         <Kengetal waarde={data ? alle.length : '—'} label="Opportunities" sub="Not deals until executable" toon="blauw" />
         <Kengetal waarde={data ? (perKolom.get('kwalificatie') ?? 0) : '—'} label="Qualifying" toon="blauw"
@@ -149,7 +174,7 @@ export function DealsTab({ startId }: { startId?: string | null }) {
         <Kengetal waarde={data ? openTaken : '—'} label="Open deal tasks" />
       </KengetalRij>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(250px,320px)_1fr] gap-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(250px,320px)_1fr]">
         <Vlak vul titel={<span className="flex items-center gap-2"><Target size={15} style={{ color: '#34D399' }} />Active Deals ({alle.length})</span>}
           acties={<VerversKnop bezig={bezig} ververs={ververs} />}>
           <div className="flex flex-col gap-2 px-3 pb-2">
@@ -200,8 +225,10 @@ export function DealsTab({ startId }: { startId?: string | null }) {
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Label toon="blauw">{mensLabel(deal.execution_state || deal.stage)}</Label>
                     {deal.kwalificatie && <Label toon="grijs">Qualification: {mensLabel(deal.kwalificatie)}</Label>}
+                    {prioriteitTekst(deal.code) && <Label toon="grijs">Priority: {mensLabel(prioriteitTekst(deal.code))}</Label>}
                     {deal.akkoord_nodig && <Label toon="oranje">Approval required{deal.akkoord_soort ? ` · ${mensLabel(deal.akkoord_soort)}` : ''}</Label>}
-                    {(deal.blokkade ?? '').trim() && <Label toon="rood">Blocked</Label>}
+                    {(deal.huidige_blokkade || deal.blokkade || '').trim() && <Label toon="rood">Blocked</Label>}
+                    {deal.actie_eigenaar && <Label toon="grijs">Owner: {eigenaarLabel(deal.actie_eigenaar)}</Label>}
                     <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{deal.updated_at ? `Updated ${tijdGeleden(deal.updated_at, nu)}` : ''}</span>
                   </div>
                 </div>
@@ -209,9 +236,51 @@ export function DealsTab({ startId }: { startId?: string | null }) {
 
               <Poorten d={deal} />
 
-              {(deal.blokkade ?? '').trim() && (
-                <div className="flex gap-2 rounded-xl bg-white/[0.03] p-2.5 text-[12px]" style={{ border: '1px solid rgba(248,113,113,0.35)', color: '#F87171' }}>
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" /><span><b>Primary blocker:</b> {deal.blokkade}</span>
+              <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-3">
+                <Kaartje titel="CURRENT BLOCKER">
+                  <div className="text-[12.5px]" style={{ color: deal.huidige_blokkade || deal.blokkade ? TOON_KLEUR[blokkadeToon(deal.blokkade_code)] : 'var(--text-muted)' }}>
+                    {(deal.huidige_blokkade || deal.blokkade || 'UNKNOWN / UNCONFIRMED').trim()}
+                  </div>
+                  {deal.blokkade_code && <div className="mt-1"><Label toon={blokkadeToon(deal.blokkade_code)}>{mensLabel(deal.blokkade_code)}</Label></div>}
+                </Kaartje>
+                <Kaartje titel="AXE NEXT BEST ACTION">
+                  <div className="text-[12.5px]" style={{ color: deal.beste_actie || deal.volgende ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                    {(deal.beste_actie || deal.volgende || 'UNKNOWN / UNCONFIRMED').trim()}
+                  </div>
+                </Kaartje>
+                <Kaartje titel="Owner / lifecycle">
+                  <div className="text-[12.5px]" style={{ color: 'var(--text-primary)' }}>{eigenaarLabel(deal.actie_eigenaar)}</div>
+                  <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-secondary)' }}>
+                    {[mensLabel(deal.stage), mensLabel(deal.execution_state)].filter(Boolean).join(' · ') || 'UNKNOWN / UNCONFIRMED'}
+                  </div>
+                </Kaartje>
+              </div>
+
+              {volgendeVerlopen && (
+                <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)', color: '#FBBF24' }}>
+                  Stored next action is overdue ({new Date(deal.volgende_op!).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}). Qualification is not changed from this screen.
+                </div>
+              )}
+              {latereInbound.length > 0 && (
+                <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.28)', color: '#93C5FD' }}>
+                  {latereInbound.length} inbound message{latereInbound.length === 1 ? '' : 's'} arrived after the last deal update. Blocker and next action were not rewritten from that mail.
+                </div>
+              )}
+              {kandidaatBerichten.length > 0 && (
+                <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--axe-vak-lijn)' }}>
+                  <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Unwritten communication matches</div>
+                  <ul className="mt-1.5 flex flex-col gap-1">
+                    {kandidaatBerichten.slice(0, 5).map(b => {
+                      const k = oordelen.get(b.id);
+                      return (
+                        <li key={b.id} className="flex items-baseline gap-2 text-[12px]">
+                          {k && <Label toon={koppelToon(k.klasse)}>{koppelLabel(k.klasse)}</Label>}
+                          <span className="truncate" style={{ color: 'var(--text-secondary)' }}>{b.onderwerp || '(no subject)'}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>Shown as candidates. Opportunity_id is not written from the Desk.</div>
                 </div>
               )}
 
@@ -268,7 +337,8 @@ export function DealsTab({ startId }: { startId?: string | null }) {
                   <Kaartje titel="Deal summary">
                     <Veld label="Stage">{mensLabel(deal.stage)}</Veld>
                     <Veld label="Execution">{mensLabel(deal.execution_state)}</Veld>
-                    <Veld label="Next action">{deal.volgende}</Veld>
+                    <Veld label="Next action">{deal.beste_actie || deal.volgende}</Veld>
+                    <Veld label="Owner">{deal.actie_eigenaar ? eigenaarLabel(deal.actie_eigenaar) : null}</Veld>
                     <Veld label="Next action due">{deal.volgende_op ? new Date(deal.volgende_op).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : null}</Veld>
                     <Veld label="Waiting since">{deal.wacht_sinds ? tijdGeleden(deal.wacht_sinds, nu) : null}</Veld>
                     <Veld label="Follow-ups sent">{deal.opvolgingen}</Veld>
@@ -365,12 +435,31 @@ export function DealsTab({ startId }: { startId?: string | null }) {
             </div>
             <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Related</div>
             <Veld label="Communications">{deal.aantallen?.communicatie ?? 0}</Veld>
+            {kandidaatBerichten.length > 0 && (
+              <Veld label="Unwritten matches">{kandidaatBerichten.length}</Veld>
+            )}
             <Veld label="Evidence">{deal.aantallen?.bewijs ?? 0}</Veld>
             <Veld label="Documents">{deal.aantallen?.documenten ?? 0}</Veld>
             <Veld label="Open tasks">{deal.aantallen?.taken ?? 0}</Veld>
-            {deal.volgende && (
+            {openComms && (
+              <button type="button" onClick={() => openComms(deal.id)} className="mt-2 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
+                Open communications <ArrowRight size={12} />
+              </button>
+            )}
+            <div className="mt-3 rounded-xl px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.025)' }}>
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Protected introduction</div>
+              <div className="mt-1 text-[12px]" style={{ color: deal.poort_introductie === true ? '#34D399' : 'var(--text-secondary)' }}>
+                {deal.poort_introductie === true ? 'Gate recorded as passed' : deal.poort_introductie === false ? 'CLOSED' : 'UNKNOWN / UNCONFIRMED'}
+              </div>
+              {deal.poort_introductie !== true && (
+                <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                  Identity disclosure, controlled introduction, SPA/signing, fee agreement and NCNDA/IMFPA stay human-approved. Not inferred from agent text.
+                </div>
+              )}
+            </div>
+            {(deal.beste_actie || deal.volgende) && (
               <div className="mt-3 flex items-start gap-1.5 text-[12px]" style={{ color: 'var(--accent-cyan)' }}>
-                <ArrowRight size={13} className="mt-0.5 shrink-0" /><span>{deal.volgende}</span>
+                <ArrowRight size={13} className="mt-0.5 shrink-0" /><span>{deal.beste_actie || deal.volgende}</span>
               </div>
             )}
           </DetailPaneel>

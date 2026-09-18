@@ -300,6 +300,14 @@ class FakeRepo:
     async def insert_deal_event(self, row):
         self.t["deal_events"].append({"id": len(self.t["deal_events"]) + 1, "created_at": ts(), **row})
 
+    async def find_crew_audit(self, event_id: str):
+        if not event_id:
+            return None
+        for r in self.t.get("northsea_audit_events") or []:
+            if r.get("action") == "crew_run" and (r.get("details") or {}).get("event_id") == event_id:
+                return r
+        return None
+
     async def outbound_block_reason(self, *, company_id=None, contact_id=None, email=None, opportunity_id=None):
         """Zelfde regels als northsea_outbound_block_reason in de database."""
         if self.fail_reads:

@@ -72,11 +72,12 @@ function Cel({ children, titel, className = '', stijl }: { children: ReactNode; 
   );
 }
 
-export function DealsTabel({ deals, tellers, nu, fout }: {
+export function DealsTabel({ deals, tellers, nu, fout, openDeal }: {
   deals: KaartDeal[] | null;
   tellers: DeskTellers | null;
   nu: number;
   fout?: string | null;
+  openDeal?: (id: string) => void;
 }) {
   const [tab, setTab] = useState<DealTab>('actief');
   const [open, setOpen] = useState(true);
@@ -143,7 +144,13 @@ export function DealsTabel({ deals, tellers, nu, fout }: {
                   const route = `${herkomst(d)} → ${bestemming(d)}`;
                   const commissie = commissieTekst(d);
                   return (
-                    <tr key={d.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
+                    <tr key={d.id}
+                      className={`transition-colors hover:bg-white/[0.03] ${openDeal ? 'cursor-pointer' : ''}`}
+                      style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}
+                      onClick={openDeal ? () => openDeal(d.id) : undefined}
+                      onKeyDown={openDeal ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDeal(d.id); } } : undefined}
+                      tabIndex={openDeal ? 0 : undefined}
+                      role={openDeal ? 'button' : undefined}>
                       <Cel className="font-mono-data font-semibold" stijl={{ color: kleur }} titel={d.id}>{dealId(d)}</Cel>
                       <Cel titel={d.product ?? undefined} stijl={{ color: 'var(--text-primary)' }}>{d.product?.trim() || '—'}</Cel>
                       <Cel className="tabular-nums" stijl={{ color: 'var(--text-secondary)' }}>{volumeTekst(d)}</Cel>

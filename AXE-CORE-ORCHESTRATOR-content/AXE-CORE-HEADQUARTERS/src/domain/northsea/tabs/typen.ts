@@ -97,6 +97,12 @@ export type DealDetail = {
   commissie_bedrag?: Getal;
   commissie_akkoord?: Tekst;
   notities?: Tekst;
+  /** P1 engine-beoordeling; ontbreekt = UNKNOWN, nooit afgeleid. */
+  blokkade_code?: Tekst;
+  huidige_blokkade?: Tekst;
+  beste_actie?: Tekst;
+  actie_eigenaar?: Tekst;
+  beoordeeld_op?: Tijd;
   created_at?: Tijd;
   updated_at?: Tijd;
   koper?: BedrijfKort | null;
@@ -211,6 +217,7 @@ export interface Concept {
   id: string;
   onderwerp?: Tekst;
   aan?: Tekst;
+  tekst?: Tekst;
   doel?: Tekst;
   akkoord?: Tekst;
   gevoelig?: boolean | null;
@@ -232,6 +239,11 @@ export interface Bericht {
   bezorging?: Tekst;
   koppeling?: Tekst;
   koppeling_basis?: Tekst;
+  /** P0.7 kandidaten; aanwezig als inbound mapping ambiguous liet. Geen write. */
+  koppeling_kandidaten?: string[] | null;
+  rfc_id?: Tekst;
+  in_reply_to?: Tekst;
+  referenties?: Tekst;
   test?: boolean | null;
   afzender?: Tekst;
   akkoord_basis?: Tekst;
@@ -243,6 +255,11 @@ export interface Bericht {
   contact_email?: Tekst;
   deal_id?: Tekst;
   deal_code?: Tekst;
+  /** Gekoppelde dealvelden; alleen aanwezig als de opportunity ze echt heeft. */
+  deal_product?: Tekst;
+  deal_volume?: Getal;
+  deal_bestemming?: Tekst;
+  deal_incoterm?: Tekst;
   intelligentie?: EmailIntelligentie | null;
   concepten?: Concept[] | null;
 }
@@ -357,6 +374,22 @@ export interface TabData {
       followups: Array<{ status: string; aantal: number; eerstvolgende?: Tijd }>;
       chase_open: number;
       blokkades: Array<{ code: string; eigenaar: string; aantal: number }>;
+      /** P2: CrewAI-runs uit northsea_audit_events (action=crew_run). */
+      crewai?: Array<{
+        op: string;
+        crew?: Tekst;
+        route?: Tekst;
+        status?: Tekst;
+        timings?: Record<string, number> | null;
+        budget?: Record<string, unknown> | null;
+        backend?: Tekst;
+        result_type?: Tekst;
+        fallback?: boolean | null;
+        error?: Tekst;
+        next_action?: Tekst;
+        approval_required?: boolean | null;
+        deal_id?: Tekst;
+      }>;
     } | null;
   };
   werk: { taken: NorthseaTaak[]; agenda: NorthseaAgendaItem[] };
