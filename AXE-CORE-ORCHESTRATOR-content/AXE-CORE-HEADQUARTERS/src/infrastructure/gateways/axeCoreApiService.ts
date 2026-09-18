@@ -1095,6 +1095,25 @@ export function northseaTab<T extends TabNaam>(naam: T, vers = false): Promise<T
   return call('GET', `/northsea/tab/${naam}${vers ? '?vers=true' : ''}`);
 }
 
+/**
+ * Eén governed NorthSea-actie (backend/axe_api/northsea_gateway.py): AXE CORE
+ * als MCP-client van de NorthSea MCP, dezelfde grens als ChatGPT/Claude al
+ * gebruiken. Geen eigen crew, geen eigen research -- de NorthSea MCP-tool
+ * doet het werk en dit geeft zijn structured result ongewijzigd terug,
+ * inclusief het `crew`-blok (route/backend/actual_crew/fallback_used) als de
+ * tool CrewAI gebruikte. Alleen lees-/onderzoeksacties: zie ACTIONS in
+ * northsea_gateway.py -- versturen/goedkeuren/schrijven staan hier niet in.
+ */
+export type NorthseaActie =
+  | 'get_next_actions' | 'review_deal' | 'qualify_opportunity' | 'investigate_blockers'
+  | 'assess_match' | 'process_reply' | 'research_counterparty' | 'prepare_outreach';
+
+export async function northseaActie(actie: NorthseaActie, params: Record<string, unknown>): Promise<{
+  action: string; tool: string; result: Record<string, unknown>;
+}> {
+  return call('POST', `/northsea/action/${actie}`, { params });
+}
+
 export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }
 export function mcpHubLijst(): Promise<{ servers: McpHubServer[]; sjablonen: McpHubSjabloon[] }> { return call('GET', '/mcp/hub'); }
 export function mcpHubVoegToe(sjabloon: string, label: string, velden: Record<string, string>): Promise<McpHubServer> {

@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Target } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { northseaActie, type NorthseaActie } from '@/infrastructure/gateways/axeCoreApiService';
 import { isDealCode, tijdGeleden } from '@/domain/northsea/chase';
 import { geld, getal } from '@/domain/northsea/desk';
 import { alsLijst, geblokkeerdIn, past, pipelineKolom, PIPELINE_KOLOMMEN, type KolomId } from '@/domain/northsea/tabs/lijsten';
@@ -90,6 +91,62 @@ function Poorten({ d }: { d: DealDetail }) {
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Governed NorthSea-acties: AXE CORE als MCP-client van de NorthSea MCP
+ * (backend/axe_api/northsea_gateway.py), dezelfde grens als ChatGPT/Claude al
+ * gebruiken. Alleen lees-/onderzoeksacties op déze deal -- versturen,
+ * goedkeuren en schrijven staan hier bewust niet als knop.
+ */
+type ActieStaat = { bezig: boolean; fout: string | null; resultaat: Record<string, unknown> | null };
+
+function GovernedActions({ deal }: { deal: DealDetail }) {
+  const [staten, setStaten] = useState<Record<string, ActieStaat>>({});
+  const [open, setOpen] = useState<string | null>(null);
+
+  const run = (key: string, actie: NorthseaActie, params: Record<string, unknown>) => {
+    setStaten(s => ({ ...s, [key]: { bezig: true, fout: null, resultaat: null } }));
+    setOpen(key);
+    void northseaActie(actie, params).then(
+      uit => setStaten(s => ({ ...s, [key]: { bezig: false, fout: null, resultaat: uit.result } })),
+      e => setStaten(s => ({ ...s, [key]: { bezig: false, fout: e instanceof Error ? e.message : String(e), resultaat: null } })),
+    );
+  };
+
+  const heeftBlokkade = !!(deal.huidige_blokkade || deal.blokkade || '').trim();
+  const knoppen: Array<{ key: string; label: string; actie: NorthseaActie; params: Record<string, unknown> }> = [
+    { key: 'next', label: 'Get next actions', actie: 'get_next_actions', params: { opportunity_id: deal.id } },
+    ...(heeftBlokkade
+      ? [{ key: 'blockers', label: 'Investigate blocker', actie: 'investigate_blockers' as const, params: { opportunity_id: deal.id } }]
+      : []),
+    { key: 'qualify', label: 'Qualify opportunity', actie: 'qualify_opportunity' as const, params: { opportunity_id: deal.id, depth: 'deep' } },
+  ];
+  const huidig = open ? staten[open] : undefined;
+
+  return (
+    <Kaartje titel="Governed NorthSea actions">
+      <div className="flex flex-wrap gap-1.5">
+        {knoppen.map(k => (
+          <button key={k.key} type="button" onClick={() => run(k.key, k.actie, k.params)} disabled={staten[k.key]?.bezig}
+            className="rounded-lg px-2.5 py-1 text-[11.5px]"
+            style={{ border: '1px solid var(--axe-vak-lijn)', color: staten[k.key]?.bezig ? 'var(--text-muted)' : 'var(--accent-cyan)' }}>
+            {staten[k.key]?.bezig ? 'Running…' : k.label}
+          </button>
+        ))}
+      </div>
+      {huidig && (
+        <div className="mt-2 max-h-64 overflow-auto rounded-lg px-2.5 py-2 text-[11px]"
+          style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid var(--axe-vak-lijn)' }}>
+          {huidig.fout && <div style={{ color: '#F87171' }}>{huidig.fout}</div>}
+          {huidig.resultaat && <pre className="whitespace-pre-wrap break-words font-mono-data">{JSON.stringify(huidig.resultaat, null, 2)}</pre>}
+        </div>
+      )}
+      <div className="mt-1.5 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>
+        Read/research only, via the governed NorthSea boundary. Sending, approving and writing stay behind the existing approval screens.
+      </div>
+    </Kaartje>
   );
 }
 
@@ -255,6 +312,8 @@ export function DealsTab({ startId, openComms }: { startId?: string | null; open
                   </div>
                 </Kaartje>
               </div>
+
+              <GovernedActions deal={deal} />
 
               {volgendeVerlopen && (
                 <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)', color: '#FBBF24' }}>

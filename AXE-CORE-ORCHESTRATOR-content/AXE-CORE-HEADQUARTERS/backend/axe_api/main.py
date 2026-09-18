@@ -4251,6 +4251,7 @@ async def mcp_hub_sleutel(server_id: str, body: McpSleutel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 import northsea as _northsea
+import northsea_gateway as _gateway
 import northsea_verstuur as _verstuur
 
 
@@ -4304,3 +4305,23 @@ async def northsea_tab(naam: str, vers: bool = False):
         raise HTTPException(404, str(e))
     except _northsea.NorthseaFout as e:
         raise HTTPException(502, str(e))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NORTHSEA GOVERNED ACTIONS -- AXE CORE als MCP-client van de NorthSea MCP.
+# Geen tweede CrewGateway: dit zet één toegestane business-actie door naar
+# dezelfde governed grens die ChatGPT/Claude al gebruiken. Zie northsea_gateway.py.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class NorthseaActionRequest(BaseModel):
+    params: dict = {}
+
+
+@app.post("/northsea/action/{action}", dependencies=[AUTH])
+async def northsea_action(action: str, req: NorthseaActionRequest):
+    try:
+        return await _gateway.call_action(action, req.params)
+    except _gateway.NorthSeaGatewayError as e:
+        status = {"unknown_action": 404, "missing_params": 422, "not_configured": 503,
+                  "upstream_unreachable": 502, "tool_error": 502, "bad_response": 502}.get(e.code, 502)
+        raise HTTPException(status, f"{e.code}: {e.message}")

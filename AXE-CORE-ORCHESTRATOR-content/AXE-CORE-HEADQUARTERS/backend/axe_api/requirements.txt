@@ -1,6 +1,7 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 httpx>=0.27,<1
+mcp==2.2.0  # NorthSea MCP client (northsea_gateway.py); pinned to match backend/northsea_mcp's own pin
 supabase>=2.7,<3
 python-dotenv>=1.0,<2
 pydantic>=2.11,<3
