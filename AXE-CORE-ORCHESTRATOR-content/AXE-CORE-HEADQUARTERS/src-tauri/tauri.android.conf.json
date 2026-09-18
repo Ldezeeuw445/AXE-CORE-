@@ -18,21 +18,6 @@
       }
     ]
   },
-      {
-        "title": "AXE CORE",
-        "width": 360,
-        "height": 800,
-        "minWidth": 0,
-        "minHeight": 0,
-        "resizable": true,
-        "fullscreen": false,
-        "transparent": false,
-        "theme": "Dark",
-        "titleBarStyle": "Visible",
-        "hiddenTitle": false
-      }
-    ]
-  },
   "bundle": {
     "android": {
       "minSdkVersion": 24,
