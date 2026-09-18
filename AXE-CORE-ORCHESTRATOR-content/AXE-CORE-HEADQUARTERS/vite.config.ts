@@ -115,13 +115,34 @@ const BUILD_STAMP = {
 // Functievorm, niet een plat object: alleen zo vertelt Vite ons of dit een
 // bouw is of een dev-server. process.env.NODE_ENV is hier nog niet gezet --
 // nagemeten, de nepdata stond gewoon in dist/public toen ik daarop vertrouwde.
+const ANDROID_STRIP_ENV = [
+  'VITE_AXE_CORE_API_KEY',
+  'VITE_FISH_AUDIO_API_KEY',
+  'VITE_ELEVENLABS_API_KEY',
+  'VITE_TAVILY_API_KEY',
+  'VITE_OPENAI_API_KEY',
+  'VITE_ANTHROPIC_API_KEY',
+  'VITE_GROQ_API_KEY',
+  'VITE_GEMINI_API_KEY',
+  'VITE_XAI_API_KEY',
+  'VITE_OPENROUTER_API_KEY',
+  'VITE_N8N_API_KEY',
+  'VITE_AXE_BRIDGE_TOKEN',
+  'VITE_AXE_COMPANION_TOOLS_SECRET',
+] as const;
+
+const androidEnvDefines = Object.fromEntries(
+  ANDROID_STRIP_ENV.map((k) => [`import.meta.env.${k}`, 'undefined']),
+);
+
 export default defineConfig(async ({ command }) => ({
   base: basePath,
   define: {
     __BUILD_STAMP__: JSON.stringify(BUILD_STAMP),
-    // Samsung-build: nooit de VPS-sleutel in de APK bakken. De desktop-app
-    // blijft hem wél inbakken (zie apiUrl.ts); Android praat via Vercel.
-    ...(isAndroidShell ? { 'import.meta.env.VITE_AXE_CORE_API_KEY': 'undefined' } : {}),
+    // Samsung-build: geen providersleutels of VPS/bridge-tokens in de APK.
+    // De desktop-app blijft ze inbakken (zie apiUrl.ts). Android praat via
+    // Vercel + ingelogde Supabase-sessie.
+    ...(isAndroidShell ? androidEnvDefines : {}),
   },
   plugins: [
     react(),
