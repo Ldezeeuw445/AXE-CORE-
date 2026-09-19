@@ -13,6 +13,8 @@ import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
 import { isIngebed } from '@/presentation/components/layout/zweef/ingebed';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { useAxeDeviceHeartbeat } from '@/presentation/hooks/useAxeDeviceHeartbeat';
+import { AndroidLockGate } from '@/presentation/hooks/useAndroidLock';
+import { isAndroidTauriRuntime, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
 const AICore = lazy(() => import('@/presentation/pages/AICore'));
@@ -51,6 +53,12 @@ const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
 const AxeDevicesPage = lazy(() => import('@/presentation/pages/AxeDevices'));
+const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
+const ParticlePinScreen = lazy(() => import('@/presentation/pages/ParticlePinScreen'));
+
+function androidNaLogin(): string {
+  return (isAndroidTauriRuntime() || isAndroidShellRuntime()) ? '/lock' : '/';
+}
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
@@ -172,13 +180,13 @@ export default function App() {
           {/* Once there is a session — live or restored — the login form is the one
               page that must not stay on screen. Without this, anything that had
               already redirected here stayed here. */}
-          <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+          <Route path="/login" element={user ? <Navigate to={androidNaLogin()} replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
           <Route path="/dev-browser-preview" element={<div className="h-[100dvh] w-full overflow-hidden"><BrowserPage /></div>} />
           {/* Standalone desktop browser — no AppShell chrome */}
           <Route path="/dev-browser-standalone" element={<StandaloneBrowserPage />} />
           <Route path="/browser-desktop" element={<RequireAuth><StandaloneBrowserPage /></RequireAuth>} />
-          <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+          <Route element={<RequireAuth><AndroidLockGate><AppShell /></AndroidLockGate></RequireAuth>}>
             <Route index element={<Home />} />
             {/* The page that answers "what actually works". */}
             <Route path="status" element={<StatusPage />} />
@@ -219,6 +227,8 @@ export default function App() {
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />
             <Route path="devices" element={<AxeDevicesPage />} />
+            <Route path="lock" element={<LockScreen />} />
+            <Route path="lock/pin" element={<ParticlePinScreen />} />
           </Route>
         </Routes>
       </NotificationProvider>

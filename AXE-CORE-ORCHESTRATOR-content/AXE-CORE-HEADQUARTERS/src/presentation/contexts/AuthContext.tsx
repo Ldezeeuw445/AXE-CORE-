@@ -301,6 +301,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setUser(null);
     setDegraded(false);
+    try {
+      const { vergrendel } = await import('@/domain/androidPin');
+      vergrendel();
+    } catch { /* PIN-laag ontbreekt niet in tests */ }
   };
 
   return (

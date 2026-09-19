@@ -49,6 +49,19 @@ export function isAndroidRuntime(): boolean {
   return /Android/i.test(navigator.userAgent);
 }
 
+/** De Samsung Tauri-app, niet een telefoonbrowser en niet de Mac. */
+export function isAndroidTauriRuntime(): boolean {
+  return isTauriRuntime() && isAndroidRuntime();
+}
+
+/**
+ * Native matglas zit alleen in de macOS-webview. Android en de browser
+ * moeten de plaat zelf tekenen (MobileGlass), anders is de lichte stand zwart.
+ */
+export function hasNativeGlass(): boolean {
+  return isTauriRuntime() && !isAndroidRuntime();
+}
+
 /**
  * Which of the three hosts this is, for the purpose of reaching a local
  * service. See domain/loopback.ts for what the answer is used for.
