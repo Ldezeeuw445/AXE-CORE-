@@ -85,3 +85,20 @@ class Auditor:
         r = await self._client.get(f"{self._url}/rest/v1/core_audit_log", params={"select": "id", "limit": "1"},
                                    headers=self._headers)
         return r.status_code < 400
+
+    async def get_schedule(self, app: str) -> dict | None:
+        """Read-only: the core_schedules row for this app (the one shared AXE planner, not a second one).
+        Used only for observability (northsea_get_system_health); never raises -- a scheduler read failing
+        must never break a read tool, so any problem here is reported as None, not an exception."""
+        try:
+            r = await self._client.get(
+                f"{self._url}/rest/v1/core_schedules",
+                params={"app": f"eq.{app}", "select": "name,cron_expr,enabled,next_run_at,last_run_at,last_status,"
+                                                       "consecutive_failures,updated_at", "order": "updated_at.desc", "limit": "1"},
+                headers=self._headers)
+            if r.status_code >= 400:
+                return None
+            rows = r.json()
+            return rows[0] if rows else None
+        except Exception:  # noqa: BLE001 -- observability read, never fatal
+            return None

@@ -245,3 +245,29 @@ async def test_approval_gates_still_enforced(mcp_server):
     res = await call(mcp_server, "northsea_approve_draft", {"draft_id": DRAFT_PENDING, "idempotency_key": "test-key-123"},
                      ALL - {"northsea.admin"})
     assert res.is_error and "insufficient_scope" in res.content[0].text
+
+
+async def test_system_health_reports_scheduler_crew_and_research_gate(mcp_server, auditor, repo):
+    auditor.schedule = {"next_run_at": "2026-09-19T13:00:00+00:00", "last_run_at": "2026-09-19T12:45:00+00:00",
+                        "last_status": "ok", "enabled": True, "consecutive_failures": 0}
+    repo.t["deal_automation_policy"] = [{"id": 1, "auto_investigate_blockers": True, "auto_investigate_blockers_max_calls_per_day": 5}]
+    repo.t["action_queue"] += [
+        {"id": str(uuid.uuid4()), "action_type": "research_approval", "status": "open",
+         "metadata": {"source": "northsea-engine", "kind": "research_approval", "blocker_code": "seller_authority_unverified"}},
+        {"id": str(uuid.uuid4()), "action_type": "research_approval", "status": "completed",
+         "metadata": {"executed_at": ts(0), "execution_result": "not_wired", "kind": "research_approval", "approved_via": "policy"}},
+    ]
+    data = await ok(mcp_server, "northsea_get_system_health")
+    assert data["scheduler"]["next_run_at"] == "2026-09-19T13:00:00+00:00" and data["scheduler"]["last_status"] == "ok"
+    assert data["crewai"]["fallback"]["backend"] == "axe_general_crew" and data["crewai"]["studio_optional"] is True
+    poort = data["research"]["governed_research_gate"]
+    assert poort["policy_auto_investigate_blockers"] is True and poort["policy_max_calls_per_day"] == 5
+    assert poort["pending_approval"] == 1 and poort["approved_not_yet_executed"] == 1
+    assert data["research"]["cost_usd_tracked_here"] is False
+
+
+async def test_system_health_reports_unknown_scheduler_when_no_schedule_row_found(mcp_server, auditor):
+    # auditor.schedule is None by default: mirrors the real Auditor.get_schedule() returning None when
+    # core_schedules has no 'northsea' row yet, or the AXE project is unreachable -- must not raise or fake data.
+    data = await ok(mcp_server, "northsea_get_system_health")
+    assert "next_run_at" not in data["scheduler"] and "note" in data["scheduler"]

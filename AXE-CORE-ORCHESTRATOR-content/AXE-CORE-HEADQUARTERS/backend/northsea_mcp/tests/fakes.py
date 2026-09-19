@@ -399,10 +399,15 @@ class FakeCrew:
         return CrewRunInfo(used=True, crew="deal", run_id=str(uuid.uuid4()), status="ok",
                            analysis="Risk: Mopani Copper Mines PLC authority unproven; ask chanda@mopani.com for mandate.")
 
+    def status(self) -> dict:
+        return {"routes": {}, "fallback": {"backend": "axe_general_crew", "available": self._available, "permitted_reasons": []},
+                "studio_optional": True}
+
 
 class FakeAuditor:
     def __init__(self):
         self.rows: list[dict] = []
+        self.schedule: dict | None = None  # test sets this to simulate core_schedules' northsea row
 
     async def record(self, *, tool, resource, principal, ip, details):
         self.rows.append({"tool": tool, "resource": resource, "principal": principal, "details": details})
@@ -412,6 +417,9 @@ class FakeAuditor:
 
     async def flush(self):
         return 0
+
+    async def get_schedule(self, app: str) -> dict | None:
+        return self.schedule
 
     async def aclose(self):
         pass

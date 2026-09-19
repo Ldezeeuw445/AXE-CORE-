@@ -545,7 +545,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                           required_scopes=None, validate_token_resource=True),
     )
     register_tools(mcp, service, guard)
-    register_read_tools(mcp, ReadTools(InspectService(repo, crew=crew, research=research), store=store), guard)
+    register_read_tools(mcp, ReadTools(InspectService(repo, crew=crew, research=research, auditor=auditor), store=store), guard)
     register_resources(mcp)
 
     route = mcp.custom_route

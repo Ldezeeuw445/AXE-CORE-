@@ -106,10 +106,12 @@ class Snapshot:
 
 
 class InspectService:
-    def __init__(self, repo: SupabaseRepository, *, crew: Any = None, research: Any = None, cache_s: float = CACHE_S):
+    def __init__(self, repo: SupabaseRepository, *, crew: Any = None, research: Any = None, auditor: Any = None,
+                 cache_s: float = CACHE_S):
         self.repo = repo
         self.crew = crew
         self.research = research
+        self.auditor = auditor  # optioneel: alleen voor observability (scheduler-status lezen), zie system_health()
         self.cache_s = cache_s
         self._snap: Snapshot | None = None
         self._t = 0.0

@@ -91,16 +91,39 @@ class ReadTools:
     async def system_health(self, caller: Caller) -> dict:
         s = await self.i.snapshot(fresh=True)
         crew = getattr(self.i.crew, "available", None)
+        crew_status = self.i.crew.status() if self.i.crew else None
+        schema = await self.i.auditor.get_schedule("northsea") if self.i.auditor else None
+        beleid = (s.rows("deal_automation_policy") or [{}])[0]
+        onderzoek = [q for q in s.rows("action_queue") if q.get("action_type") == "research_approval"]
         return {
             "generated_at": iso(s.loaded_at), "mcp_version": __version__,
             "database": {"reachable": True, "tables_loaded": len(s.t) - len(s.errors), "load_ms": s.load_ms,
                          "table_errors": s.errors, "truncated_tables": sorted(s.truncated)},
+            "scheduler": ({"next_run_at": schema.get("next_run_at"), "last_run_at": schema.get("last_run_at"),
+                          "last_status": schema.get("last_status"), "enabled": schema.get("enabled"),
+                          "consecutive_failures": schema.get("consecutive_failures"),
+                          "source": "core_schedules (AXE Companion project, app='northsea'); read-only, this MCP never writes it."}
+                         if schema else {"note": "No core_schedules row found for app='northsea', or the AXE project was unreachable."}) \
+                         if self.i.auditor else {"note": "No auditor wired into this process; next/last scheduled run is unknown here."},
             "crewai": {"available": bool(crew()) if callable(crew) else None,
-                       "note": "Availability of the CrewGateway configuration only; a run is not performed by this check."},
-            "research": {"configured": self.i.research is not None},
-            "not_covered": ["AXE CORE desktop app runtime", "Resend delivery service health", "cron/scheduler health",
+                       "note": "Availability of the CrewGateway configuration only; a run is not performed by this check.",
+                       "routes": (crew_status or {}).get("routes"), "fallback": (crew_status or {}).get("fallback"),
+                       "studio_optional": (crew_status or {}).get("studio_optional")},
+            "research": {"configured": self.i.research is not None,
+                        "governed_research_gate": {
+                            "policy_auto_investigate_blockers": bool(beleid.get("auto_investigate_blockers")),
+                            "policy_max_calls_per_day": beleid.get("auto_investigate_blockers_max_calls_per_day"),
+                            "pending_approval": sum(1 for q in onderzoek if q.get("status") == "open"),
+                            "approved_not_yet_executed": sum(1 for q in onderzoek if q.get("status") == "completed"
+                                                             and (q.get("metadata") or {}).get("execution_result") == "not_wired")},
+                        "cost_usd_tracked_here": False,
+                        "note": "The engine's research gate does not yet execute real research (see approved_not_yet_executed); "
+                                "no engine-triggered spend has occurred, so no cost_usd is aggregated here. "
+                                "northsea_investigate_blockers can still spend real money when called directly with depth='deep' "
+                                "-- that path is unaffected by the gate and its cost is only visible in that tool's own response."},
+            "not_covered": ["AXE CORE desktop app runtime", "Resend delivery service health",
                             "edge function health (send-approved-reply, resend-inbound)"],
-            "source": ["all snapshot tables"],
+            "source": ["all snapshot tables", "action_queue", "deal_automation_policy"] + (["core_schedules (AXE project)"] if self.i.auditor else []),
         }
 
     async def data_freshness(self, caller: Caller) -> dict:
