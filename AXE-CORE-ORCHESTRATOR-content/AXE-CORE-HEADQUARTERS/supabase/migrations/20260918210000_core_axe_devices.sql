@@ -3,6 +3,14 @@
 -- wat ze zijn; deze tabel is alleen inventory/presence/capability.
 --
 -- Online wordt NIET opgeslagen. De app leidt het af van last_seen.
+--
+-- Beveiliging (nagekeken, nog niet live toepassen tot NorthSea V1 stabiel is):
+--   * RLS aan
+--   * policy alleen TO authenticated
+--   * using/with check = Luka's uid (zelfde id als core_tasks / planner)
+--   * geen policy voor anon, dus de anon-sleutel leest niets
+--   * geen service_role in deze migratie
+--   * geen mock-rijen, geen online-vlag
 
 create table if not exists public.core_axe_devices (
   device_id     text primary key,
