@@ -82,19 +82,21 @@ export function BrowserAgentPanel({
   };
 
   const guideAction = useCallback((turn: BrowserAgentTurn) => {
-    if (turn.action.type !== 'click' || turn.action.x == null || turn.action.y == null) return;
-    const img = screenshotImgRef.current;
-    if (!img || !img.naturalWidth || !img.naturalHeight) return;
-
-    const rect = img.getBoundingClientRect();
-    const x = rect.left + turn.action.x * (rect.width / img.naturalWidth);
-    const y = rect.top + turn.action.y * (rect.height / img.naturalHeight);
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+    let punt: { x: number; y: number } | undefined;
+    if (turn.action.type === 'click' && turn.action.x != null && turn.action.y != null) {
+      const img = screenshotImgRef.current;
+      if (img?.naturalWidth && img.naturalHeight) {
+        const rect = img.getBoundingClientRect();
+        const x = rect.left + turn.action.x * (rect.width / img.naturalWidth);
+        const y = rect.top + turn.action.y * (rect.height / img.naturalHeight);
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) punt = { x, y };
+      }
+    }
 
     meldActiviteit({
       doelen: ['/browser'],
-      label: turn.message || 'AXE acts here',
-      punt: { x, y },
+      label: turn.message || `Browser agent · ${turn.action.type}`,
+      punt,
     });
   }, []);
 
