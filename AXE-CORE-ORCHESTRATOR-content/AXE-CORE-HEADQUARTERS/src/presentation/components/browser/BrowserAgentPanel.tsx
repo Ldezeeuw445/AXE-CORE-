@@ -6,7 +6,7 @@ import {
   browserAgentStart, browserAgentNavigate, browserAgentScreenshot, browserAgentClose,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { runBrowserAgentLoop, type BrowserAgentTurn } from '@/application/agents/browserAgentLoop';
-import { AXE_BROWSER_GUIDE_EVENT, type AxeBrowserGuideDetail } from '@/presentation/components/browser/AxeBrowserGuide';
+import { meldActiviteit } from '@/shared/axeActiviteit';
 
 interface LogEntry {
   role: 'user' | 'agent';
@@ -91,9 +91,11 @@ export function BrowserAgentPanel({
     const y = rect.top + turn.action.y * (rect.height / img.naturalHeight);
     if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
 
-    window.dispatchEvent(new CustomEvent<AxeBrowserGuideDetail>(AXE_BROWSER_GUIDE_EVENT, {
-      detail: { x, y, label: turn.message || 'AXE acts here', durationMs: 1700 },
-    }));
+    meldActiviteit({
+      doelen: ['/browser'],
+      label: turn.message || 'AXE acts here',
+      punt: { x, y },
+    });
   }, []);
 
   const handleSend = useCallback(async (overrideText?: string) => {
