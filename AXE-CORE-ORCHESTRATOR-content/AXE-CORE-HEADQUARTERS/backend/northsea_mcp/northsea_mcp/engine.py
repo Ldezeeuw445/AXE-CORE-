@@ -92,7 +92,7 @@ class EngineService:
 
     async def _load(self) -> dict[str, list[dict]]:
         namen = ["communications", "email_intelligence", "opportunities", "buyer_requirements", "supplier_offers", "companies",
-                 "contacts", "reply_drafts", "northsea_followups", "deal_automation_policy", "action_queue", "deal_tasks"]
+                 "contacts", "reply_drafts", "northsea_followups", "deal_automation_policy", "action_queue", "deal_tasks", "deal_evidence"]
         rijen = await asyncio.gather(*(self.repo.fetch_all(n) for n in namen))
         return {n: r[0] for n, r in zip(namen, rijen)}
 
@@ -189,10 +189,21 @@ class EngineService:
             belangrijk = {k2: v for k2, v in terms.items() if v and not k2.startswith("_") and k2 != "quantities_mentioned"}
             if opp_id and belangrijk and co.get("contact_policy", "allowed") != "do_not_contact" and not co.get("is_synthetic"):
                 zijde = "buyer" if rol == "buyer" else ("seller" if rol == "supplier" else ("buyer" if co.get("company_type") == "buyer" else "seller"))
+                eerder_bewijs = [ev for ev in d["deal_evidence"] if ev.get("opportunity_id") == opp_id and ev.get("party_side") == zijde
+                                 and ev.get("evidence_type") == "stated_terms"]
+                tegenstrijdig = rules.contradicted_fields(belangrijk, eerder_bewijs)
                 plan["evidence"].append({"opportunity_id": opp_id, "party_side": zijde, "evidence_type": "stated_terms", "source_type": "email",
-                                         "source_reference": c["id"], "verification_status": "counterparty_stated",
+                                         "source_reference": c["id"],
+                                         "verification_status": "contradicted" if tegenstrijdig else "counterparty_stated",
                                          "claim": "Terms stated by the counterparty in email: " + ", ".join(sorted(belangrijk))[:900],
-                                         "metadata": {"terms": belangrijk, "engine_version": rules.ENGINE_VERSION, "communication_id": c["id"]}})
+                                         "metadata": {"terms": belangrijk, "engine_version": rules.ENGINE_VERSION, "communication_id": c["id"],
+                                                     **({"contradicts_fields": tegenstrijdig} if tegenstrijdig else {})}})
+                if tegenstrijdig:
+                    plan["chase"].append({"dedupe_key": f"evidence_contradicted:{c['id']}", "action_type": "review_contradiction",
+                                          "company_id": c.get("company_id"), "opportunity_id": opp_id, "priority": 85,
+                                          "title": f"Contradicts earlier stated terms: {', '.join(tegenstrijdig)}",
+                                          "description": "The counterparty's latest email states different values for "
+                                                         f"{', '.join(tegenstrijdig)} than an earlier message. Review before relying on either."})
             if not dry_run:
                 try:
                     if i:

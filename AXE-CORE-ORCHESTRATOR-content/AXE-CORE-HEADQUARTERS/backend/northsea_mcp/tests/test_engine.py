@@ -413,6 +413,29 @@ async def test_evaluation_event_flags_a_supplier_offer_updated_since_last_look()
     assert tweede["metadata"]["changed_since_last_evaluation"] == ["supplier_offer"]
 
 
+async def test_contradicting_stated_terms_are_flagged_and_raise_a_chase_item():
+    repo = FakeRepo()
+    next(c for c in repo.t["communications"] if c["id"] == COMM).update(mapping_status="mapped", mapping_basis="thread")
+    await eng(repo).tick()  # legt de eerste claim vast: 800 MT (uit de seed-body)
+    eerste = next(e for e in repo.t["deal_evidence"] if e.get("evidence_type") == "stated_terms")
+    assert eerste["verification_status"] == "counterparty_stated"
+
+    tegen_cid = str(uuid.uuid4())
+    repo.t["communications"].append({"id": tegen_cid, "company_id": SELLER_CO, "contact_id": CONTACT_S, "opportunity_id": OPP,
+                                     "direction": "inbound", "channel": "email", "subject": "Re: allocation update",
+                                     "body": "Correction: we can only supply 500 MT monthly FOB Ndola.", "occurred_at": iso(-1),
+                                     "mapping_status": "mapped", "mapping_basis": "thread"})
+    await eng(repo).tick()
+    tweede = next(e for e in repo.t["deal_evidence"] if e.get("source_reference") == tegen_cid)
+    assert tweede["verification_status"] == "contradicted" and "quantity_mt" in tweede["metadata"]["contradicts_fields"]
+    chase = [q for q in repo.t["action_queue"] if q.get("action_type") == "review_contradiction"]
+    assert len(chase) == 1 and chase[0]["opportunity_id"] == OPP
+
+    await eng(repo).tick()  # herhaling: geen tweede Chase-item, geen nieuwe evidence-rij voor dezelfde communicatie
+    assert len([q for q in repo.t["action_queue"] if q.get("action_type") == "review_contradiction"]) == 1
+    assert len([e for e in repo.t["deal_evidence"] if e.get("source_reference") == tegen_cid]) == 1
+
+
 async def test_second_tick_on_unchanged_state_creates_no_new_evaluation_or_deadline_duplicate():
     repo = FakeRepo()
     eerste = await eng(repo).tick()

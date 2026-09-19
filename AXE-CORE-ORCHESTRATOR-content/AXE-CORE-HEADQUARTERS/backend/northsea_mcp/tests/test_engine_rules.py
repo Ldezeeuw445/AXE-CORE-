@@ -168,6 +168,19 @@ def test_research_gate_standing_policy_skips_the_chase_step_entirely():
     assert g.state == "approved_ready_to_execute" and g.create_chase is False
 
 
+def test_contradicted_fields_flags_a_genuinely_different_value():
+    prior = [{"metadata": {"terms": {"quantity_mt": 500, "incoterm": "FOB"}}}]
+    assert e.contradicted_fields({"quantity_mt": 800}, prior) == ["quantity_mt"]
+    assert e.contradicted_fields({"incoterm": "FOB"}, prior) == []  # zelfde waarde: geen tegenspraak
+    assert e.contradicted_fields({"payment_terms": "TT"}, prior) == []  # nooit eerder genoemd: niets om tegen te spreken
+
+
+def test_contradicted_fields_ignores_missing_or_empty_values():
+    prior = [{"metadata": {"terms": {"quantity_mt": None}}}]
+    assert e.contradicted_fields({"quantity_mt": 500}, prior) == []
+    assert e.contradicted_fields({}, [{"metadata": {}}]) == []
+
+
 def test_changed_since_last_evaluation_reports_only_newer_updates():
     req = {"updated_at": iso(-1)}
     off = {"updated_at": iso(-100)}

@@ -493,6 +493,19 @@ def research_gate(blocker_code: str, *, opportunity_id: str, policy_allows: bool
     return ResearchGate("approved_ready_to_execute", "the Chase approval request was resolved by a human", dedupe_key=sleutel)
 
 
+# ── 3d-2. Tegenstrijdig bewijs: dezelfde partij, ander getal ─────────────────
+# Puur vergelijken van termdicts (zoals extract_terms() ze al aanlevert); geen
+# oordeel over WIE gelijk heeft, alleen dat de twee claims niet allebei kunnen kloppen.
+def contradicted_fields(new_terms: dict, prior_evidence: list[dict]) -> list[str]:
+    eerder: dict[str, Any] = {}
+    for ev in prior_evidence:
+        for veld, waarde in ((ev.get("metadata") or {}).get("terms") or {}).items():
+            if veld not in eerder and waarde not in (None, ""):
+                eerder[veld] = waarde
+    return [veld for veld, waarde in new_terms.items()
+            if veld in eerder and waarde not in (None, "") and str(eerder[veld]) != str(waarde)]
+
+
 # ── 3e. Nieuwe informatie sinds de laatste evaluatie: geen nieuw watermerk-
 # mechanisme, alleen wat al per opportunity wordt bijgehouden (engine_evaluated_at)
 # vergelijken met wat elke tick toch al laadt (buyer_requirements/supplier_offers.
