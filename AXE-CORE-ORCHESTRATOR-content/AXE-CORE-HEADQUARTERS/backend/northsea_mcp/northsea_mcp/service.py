@@ -1074,8 +1074,9 @@ class NorthSeaService:
             wacht = parse_ts((opp or {}).get("waiting_since"))
             template = "follow_up" if wacht and now() - wacht > timedelta(hours=72) else (
                 f"{kant}_qualification" if gate_open else "document_request")
-        if template not in ("supplier_qualification", "buyer_qualification", "follow_up", "document_request"):
-            raise ServiceError("invalid_input", "template must be auto, supplier_qualification, buyer_qualification, follow_up or document_request")
+        if template not in ("supplier_qualification", "buyer_qualification", "follow_up", "document_request", "decline_not_executable"):
+            raise ServiceError("invalid_input", "template must be auto, supplier_qualification, buyer_qualification, follow_up, "
+                                                "document_request or decline_not_executable")
 
         eigen = (off if kant == "supplier" else req) or {}
         andere = (req if kant == "supplier" else off) or {}
@@ -1118,6 +1119,10 @@ class NorthSeaService:
             tekst = f"Following up on our previous message regarding {product}."
             if onbekend:
                 tekst += "\n\nTo move forward we still need: " + ", ".join(o.replace("_", " ") for o in onbekend) + "."
+        elif template == "decline_not_executable":
+            onderwerp = f"Re: {product}"
+            tekst = (f"Thank you for the information provided regarding {product}. "
+                     "Based on what we currently hold, NorthSea Commodity Partners is not in a position to progress this further at this time.")
         else:
             onderwerp = f"{product} — documentation request"
             tekst = (f"To continue our review of {product}, please share the documentation you can provide at this stage "
@@ -1125,9 +1130,12 @@ class NorthSeaService:
                      f"{'authority to sell and allocation' if kant == 'supplier' else 'purchasing authority and payment capability'}).")
         if ref and template in ("supplier_qualification", "buyer_qualification"):
             tekst += "\n\nFor reference, the " + ("requirement" if kant == "supplier" else "offer") + " under review concerns: " + ", ".join(map(str, ref)) + "."
-        if onbekend and template != "follow_up":
+        if onbekend and template not in ("follow_up", "decline_not_executable"):
             tekst += "\n\nFrom the information we hold, the following points are still open: " + ", ".join(o.replace("_", " ") for o in onbekend) + "."
-        tekst += f"\n\n{slot}\n\nKind regards,\nNorthSea Commodity Partners"
+        if template == "decline_not_executable":
+            tekst += "\n\nWe appreciate your time and will keep your details on file should this change.\n\nKind regards,\nNorthSea Commodity Partners"
+        else:
+            tekst += f"\n\n{slot}\n\nKind regards,\nNorthSea Commodity Partners"
 
         gevoelig = is_sensitive_text(objective) or is_sensitive_text(tekst.replace(slot, ""))
         notes = ["Draft only. Nothing was sent.",

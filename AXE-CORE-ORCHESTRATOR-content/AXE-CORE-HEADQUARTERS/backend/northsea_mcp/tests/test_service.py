@@ -184,6 +184,16 @@ async def test_prepare_outreach_flags_sensitive_objective(service):
     assert "commission" not in d.body.lower().replace("no counterparty introduction", "")
 
 
+async def test_decline_not_executable_template_never_sends_and_omits_open_points(service, repo):
+    d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="decline_not_executable",
+                                       objective="close out this file", counterparty_id=SELLER_CO)
+    assert d.template == "decline_not_executable" and d.sent is False and d.approval_required
+    assert "not in a position to progress" in d.body
+    # Geen "still open"-lijst: een afwijzing vraagt niet alsnog om ontbrekende informatie.
+    assert "still open" not in d.body
+    assert repo.sends == []
+
+
 async def test_process_reply_extracts_facts_questions_and_changed_terms(service):
     r = await service.process_reply(caller(READ), communication_id=COMM)
     assert r.classification == "supplier" and r.analysis_source == "email_intelligence"
