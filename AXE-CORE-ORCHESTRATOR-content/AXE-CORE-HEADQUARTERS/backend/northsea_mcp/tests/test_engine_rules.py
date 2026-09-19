@@ -102,6 +102,30 @@ def test_synthetic_messages_do_not_drive_state():
     assert ev(comms=[{"channel": "email", "direction": "inbound", "occurred_at": iso(-1), "is_synthetic": True}]).blocker_code == "seller_unqualified"
 
 
+# ── Closed-loop stop categories ──────────────────────────────────────────────
+
+def test_loop_stop_category_covers_every_blocker_evaluate_deal_can_return():
+    # Elke blocker_code die evaluate_deal() daadwerkelijk kan teruggeven, moet een
+    # bekende categorie hebben -- "unknown" hier zou een gat in de closed-loop zijn.
+    codes = {"synthetic", "closed", "do_not_contact", "contact_policy_review", "channel_bounced",
+             "approval_pending", "reply_needed", "awaiting_reply_overdue", "awaiting_reply",
+             "seller_unqualified", "buyer_unqualified", "protection_missing", "ready_for_review"}
+    for code in codes:
+        assert e.loop_stop_category(code) != "unknown", f"{code} has no loop_stop_category"
+
+
+def test_loop_stop_category_terminal_vs_approval_vs_wait_vs_continuing():
+    assert e.loop_stop_category("do_not_contact") == "terminal_state"
+    assert e.loop_stop_category("approval_pending") == "approval_required"
+    assert e.loop_stop_category("awaiting_reply") == "external_wait"
+    assert e.loop_stop_category("reply_needed") == "continuing"
+    assert e.loop_stop_category("something-nobody-wrote-yet") == "unknown"
+
+
+def test_evaluation_as_dict_includes_loop_stop_category():
+    assert ev(contact_policy="do_not_contact").as_dict()["loop_stop_category"] == "terminal_state"
+
+
 # ── Deadlines ─────────────────────────────────────────────────────────────────
 
 def test_deadline_approaching_and_overdue():

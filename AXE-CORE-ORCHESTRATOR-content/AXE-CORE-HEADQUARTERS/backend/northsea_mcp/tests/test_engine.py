@@ -268,3 +268,29 @@ async def test_reclassification_cancels_stale_engine_chase_item_but_not_human_it
     assert mens["status"] == "open"
     assert uit["summary"]["chase_cancelled"] == 1
     assert (await eng(repo).tick())["summary"]["chase_cancelled"] == 0
+
+
+# ── Closed-loop: stop-reden zichtbaar, geen dubbele acties op een herhaalde tick ─
+
+async def test_evaluation_event_carries_loop_stop_category():
+    repo = FakeRepo()
+    next(c for c in repo.t["companies"] if c["id"] == SELLER_CO)["contact_policy"] = "review_required"
+    await eng(repo).tick()
+    ev = next(e for e in repo.t["deal_events"] if e["event_type"] == "engine_evaluation_changed")
+    assert ev["metadata"]["loop_stop_category"] == "approval_required"
+
+
+async def test_second_tick_on_unchanged_state_creates_no_new_evaluation_or_deadline_duplicate():
+    repo = FakeRepo()
+    eerste = await eng(repo).tick()
+    assert eerste["summary"]["evaluations"] >= 1  # de seed-deal krijgt zijn eerste engine_* velden
+    assert eerste["summary"]["deadlines"] >= 1  # de seed-deal_task is al verlopen (due_at in het verleden)
+    voor = len(repo.t["deal_events"])
+    voor_queue = len(repo.t["action_queue"])
+    tweede = await eng(repo).tick()
+    # Ongewijzigde staat: geen nieuwe engine_evaluation_changed (evaluate_deal() geeft
+    # hetzelfde resultaat), en het deadline-Chase-item bestaat al (dedupe_key), dus
+    # geen tweede exemplaar in action_queue.
+    assert tweede["summary"]["evaluations"] == 0
+    assert len(repo.t["deal_events"]) == voor
+    assert len(repo.t["action_queue"]) == voor_queue

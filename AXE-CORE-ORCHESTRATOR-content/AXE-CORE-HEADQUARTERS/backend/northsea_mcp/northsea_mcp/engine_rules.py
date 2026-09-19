@@ -227,7 +227,8 @@ class DealEvaluation:
 
     def as_dict(self) -> dict[str, Any]:
         return {"blocker_code": self.blocker_code, "blocker": self.blocker, "next_action_code": self.next_action_code,
-                "next_action": self.next_action, "owner": self.owner, "reasons": self.reasons, "engine_version": ENGINE_VERSION}
+                "next_action": self.next_action, "owner": self.owner, "reasons": self.reasons, "engine_version": ENGINE_VERSION,
+                "loop_stop_category": loop_stop_category(self.blocker_code)}
 
 
 def _ts(v: Any) -> Optional[datetime]:
@@ -285,6 +286,35 @@ def evaluate_deal(opp: dict, *, contact_policy: Optional[str], comms: list[dict]
                               "Luka: decide on and secure commission protection before any introduction.", "luka", ["protection not signed"])
     return DealEvaluation("ready_for_review", "Qualification gates passed; next step needs a human decision.", "human_review",
                           "Luka: review the deal for a controlled introduction.", "luka", ["gates passed"])
+
+
+# ── 3c. Waarom de lus hier stopt/wacht/doorgaat: één label per blocker_code ──
+# Verplicht voor de closed-loop: elke tick moet EXPLICIET kunnen zeggen waarom een
+# deal niet verder komt, in plaats van dat een mens dat uit de tekst van `blocker`
+# moet raden. Geen nieuwe staatsmachine: dit hertaalt alleen de bestaande
+# blocker_code's uit evaluate_deal() (hierboven) naar de vaste stopcategorieën.
+LOOP_STOP_CATEGORY: dict[str, str] = {
+    "synthetic": "terminal_state",
+    "closed": "terminal_state",
+    "do_not_contact": "terminal_state",
+    "contact_policy_review": "approval_required",
+    "approval_pending": "approval_required",
+    "protection_missing": "approval_required",
+    "ready_for_review": "approval_required",
+    "channel_bounced": "missing_evidence",
+    "seller_unqualified": "missing_evidence",
+    "buyer_unqualified": "missing_evidence",
+    "awaiting_reply": "external_wait",
+    "reply_needed": "continuing",
+    "awaiting_reply_overdue": "continuing",  # de tick plant zelf al een follow-up (stap 3)
+}
+
+
+def loop_stop_category(blocker_code: str) -> str:
+    """`continuing` als de tick zelf al de volgende stap zet (follow-up plannen,
+    een reply-blocker markeren); elke andere waarde is een expliciete, geldige
+    reden om NIET verder te gaan zonder een mens of een extern signaal."""
+    return LOOP_STOP_CATEGORY.get(blocker_code, "unknown")
 
 
 # ── 3b. Deadlines: naderend of verstreken, per open taak ─────────────────────
