@@ -493,6 +493,22 @@ def research_gate(blocker_code: str, *, opportunity_id: str, policy_allows: bool
     return ResearchGate("approved_ready_to_execute", "the Chase approval request was resolved by a human", dedupe_key=sleutel)
 
 
+# ── 3e. Nieuwe informatie sinds de laatste evaluatie: geen nieuw watermerk-
+# mechanisme, alleen wat al per opportunity wordt bijgehouden (engine_evaluated_at)
+# vergelijken met wat elke tick toch al laadt (buyer_requirements/supplier_offers.
+# updated_at). Dit dekt "new buyer requirement" en "new supplier offer" uit de
+# vereiste lijst zonder een globale cursor over een groeiende tabel te scannen.
+def changed_since_last_evaluation(req: Optional[dict], off: Optional[dict], evaluated_at: Optional[str]) -> list[str]:
+    if not evaluated_at:
+        return []  # nog nooit geëvalueerd: dat is geen "wijziging", dat is de eerste keer (aparte state)
+    uit = []
+    if req and req.get("updated_at") and str(req["updated_at"]) > str(evaluated_at):
+        uit.append("buyer_requirement")
+    if off and off.get("updated_at") and str(off["updated_at"]) > str(evaluated_at):
+        uit.append("supplier_offer")
+    return uit
+
+
 def is_transient_repository_error(message: str) -> bool:
     """Puur op de foutmelding van RepositoryError (repository.py bouwt hem als
     "database unreachable (...)" of "database write failed for X (status)": nooit

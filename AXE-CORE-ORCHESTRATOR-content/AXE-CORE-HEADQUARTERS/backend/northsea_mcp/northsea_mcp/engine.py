@@ -440,10 +440,13 @@ class EngineService:
                     "engine_blocker_code": uitkomst.blocker_code, "engine_blocker": uitkomst.blocker,
                     "engine_next_action_code": uitkomst.next_action_code, "engine_next_action": uitkomst.next_action,
                     "engine_owner": uitkomst.owner, "engine_reasons": uitkomst.reasons, "engine_evaluated_at": nu.isoformat()}))
-                await self._resilient(lambda: self.repo.engine_insert("deal_events", {
+                gewijzigd = rules.changed_since_last_evaluation(req.get(opp.get("buyer_requirement_id")), off.get(opp.get("supplier_offer_id")),
+                                                                opp.get("engine_evaluated_at"))
+                await self._resilient(lambda gewijzigd=gewijzigd: self.repo.engine_insert("deal_events", {
                     "opportunity_id": opp["id"], "event_type": "engine_evaluation_changed", "actor": "northsea-engine",
                     "summary": f"Current blocker: {uitkomst.blocker} Next: {uitkomst.next_action}"[:900],
-                    "metadata": {**uitkomst.as_dict(), "previous_blocker_code": opp.get("engine_blocker_code")}}))
+                    "metadata": {**uitkomst.as_dict(), "previous_blocker_code": opp.get("engine_blocker_code"),
+                                "changed_since_last_evaluation": gewijzigd}}))
                 # Was de vorige blokkade "een concept wacht op goedkeuring" en is dat nu niet meer
                 # zo? Dan is er sinds de vorige tick een besluit genomen -- welk concept en welk
                 # besluit staat al in reply_drafts.approval_status, alleen niet als eigen event.

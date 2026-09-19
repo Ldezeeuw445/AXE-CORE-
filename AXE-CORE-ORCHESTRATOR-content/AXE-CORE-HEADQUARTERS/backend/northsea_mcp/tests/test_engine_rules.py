@@ -168,6 +168,18 @@ def test_research_gate_standing_policy_skips_the_chase_step_entirely():
     assert g.state == "approved_ready_to_execute" and g.create_chase is False
 
 
+def test_changed_since_last_evaluation_reports_only_newer_updates():
+    req = {"updated_at": iso(-1)}
+    off = {"updated_at": iso(-100)}
+    assert e.changed_since_last_evaluation(req, off, iso(-50)) == ["buyer_requirement"]
+    assert e.changed_since_last_evaluation(req, off, iso(10)) == []  # geëvalueerd NA de laatste wijziging: niets nieuws
+    assert e.changed_since_last_evaluation(None, None, iso(-50)) == []
+
+
+def test_changed_since_last_evaluation_first_ever_look_is_not_a_change():
+    assert e.changed_since_last_evaluation({"updated_at": iso(-1)}, None, None) == []
+
+
 def test_guard_and_client_errors_are_never_transient():
     assert e.is_transient_repository_error("database write failed for reply_drafts (400): NS_CONTACT_POLICY: draft blocked") is False
     assert e.is_transient_repository_error("database write failed for action_queue (409): duplicate") is False

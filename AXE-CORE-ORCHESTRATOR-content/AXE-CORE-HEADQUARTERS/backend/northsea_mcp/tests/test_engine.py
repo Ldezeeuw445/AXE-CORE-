@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-from fakes import COMM, CONTACT_S, OPP, SELLER_CO, FakeRepo
+from fakes import COMM, CONTACT_S, OFFER, OPP, SELLER_CO, FakeRepo
 from northsea_mcp import engine_rules as rules
 from northsea_mcp.engine import EngineService
 
@@ -395,6 +395,22 @@ async def test_research_gate_standing_policy_never_shows_an_open_chase_item():
     await eng(repo).tick()  # ook met beleid AAN: geen tweede uitvoering
     assert len([q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval"]) == 1
     assert len([e for e in repo.t["deal_events"] if e["event_type"] == "research_approved_execution_not_wired"]) == 1
+
+
+async def test_evaluation_event_flags_a_supplier_offer_updated_since_last_look():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    await eng(repo).tick()  # eerste keer: engine_evaluated_at wordt gezet, nog geen "changed"
+    eerste = next(e for e in repo.t["deal_events"] if e["event_type"] == "engine_evaluation_changed")
+    assert eerste["metadata"]["changed_since_last_evaluation"] == []
+
+    next(o for o in repo.t["supplier_offers"] if o["id"] == OFFER)["updated_at"] = iso(0.5)  # ná tick 1, vóór tick 2
+    next(c for c in repo.t["companies"] if c["id"] == SELLER_CO)["contact_policy"] = "do_not_contact"  # forceert een nieuwe blokkade
+    later = NU + timedelta(hours=1)
+    await EngineService(repo, now=lambda: later).tick()
+    tweede = [e for e in repo.t["deal_events"] if e["event_type"] == "engine_evaluation_changed"][-1]
+    assert tweede["metadata"]["blocker_code"] == "do_not_contact"
+    assert tweede["metadata"]["changed_since_last_evaluation"] == ["supplier_offer"]
 
 
 async def test_second_tick_on_unchanged_state_creates_no_new_evaluation_or_deadline_duplicate():
