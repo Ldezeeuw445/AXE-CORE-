@@ -1074,9 +1074,10 @@ class NorthSeaService:
             wacht = parse_ts((opp or {}).get("waiting_since"))
             template = "follow_up" if wacht and now() - wacht > timedelta(hours=72) else (
                 f"{kant}_qualification" if gate_open else "document_request")
-        if template not in ("supplier_qualification", "buyer_qualification", "follow_up", "document_request", "decline_not_executable"):
-            raise ServiceError("invalid_input", "template must be auto, supplier_qualification, buyer_qualification, follow_up, "
-                                                "document_request or decline_not_executable")
+        ALLE_TEMPLATES = ("supplier_qualification", "buyer_qualification", "follow_up", "document_request", "decline_not_executable",
+                         "deal_alignment", "controlled_introduction", "tender_specific_request", "delivery_failure", "bounce_handling")
+        if template not in ALLE_TEMPLATES:
+            raise ServiceError("invalid_input", f"template must be auto or one of {', '.join(ALLE_TEMPLATES)}")
 
         eigen = (off if kant == "supplier" else req) or {}
         andere = (req if kant == "supplier" else off) or {}
@@ -1123,17 +1124,43 @@ class NorthSeaService:
             onderwerp = f"Re: {product}"
             tekst = (f"Thank you for the information provided regarding {product}. "
                      "Based on what we currently hold, NorthSea Commodity Partners is not in a position to progress this further at this time.")
+        elif template == "deal_alignment":
+            onderwerp = f"Re: {product} — confirming alignment"
+            tekst = (f"Before we proceed further on {product}, we would like to confirm alignment on the terms discussed so far.")
+        elif template == "controlled_introduction":
+            onderwerp = f"{product} — proposed introduction"
+            tekst = (f"NorthSea Commodity Partners is considering a controlled introduction between the parties on {product}. "
+                     "This message does not itself disclose either party's identity, confirm any commercial term, or make any "
+                     "commitment on behalf of NorthSea Commodity Partners or either party. An introduction proceeds only after "
+                     "commission protection is signed and with explicit human approval.")
+        elif template == "tender_specific_request":
+            onderwerp = f"{product} — tender/RFT compliance request"
+            tekst = (f"This enquiry relates to a formal tender/RFT process for {product}. To assess eligibility, please confirm "
+                     "your trading history and references for this material, certification and traceability capability, "
+                     "compliance with the stated specification, and your ability to meet the tender's submission method and deadline.")
+        elif template == "delivery_failure":
+            onderwerp = f"{product} — confirming receipt"
+            tekst = (f"A previous message from NorthSea Commodity Partners regarding {product} may not have reached the intended "
+                     "recipient. If you are the correct contact for this matter, please confirm receipt; if not, please advise "
+                     "who we should address instead.")
+        elif template == "bounce_handling":
+            onderwerp = f"{product} — alternate contact requested"
+            tekst = (f"Our previous message regarding {product} could not be delivered to the address on file. Could you provide "
+                     "an alternate, verified contact channel (email, phone or LinkedIn) so we can continue this conversation?")
         else:
             onderwerp = f"{product} — documentation request"
             tekst = (f"To continue our review of {product}, please share the documentation you can provide at this stage "
                      "(company registration, product specification and certificate of analysis, and evidence of "
                      f"{'authority to sell and allocation' if kant == 'supplier' else 'purchasing authority and payment capability'}).")
-        if ref and template in ("supplier_qualification", "buyer_qualification"):
+        NARROW_TEMPLATES = ("decline_not_executable", "deal_alignment", "controlled_introduction", "delivery_failure", "bounce_handling")
+        if ref and template in ("supplier_qualification", "buyer_qualification", "deal_alignment"):
             tekst += "\n\nFor reference, the " + ("requirement" if kant == "supplier" else "offer") + " under review concerns: " + ", ".join(map(str, ref)) + "."
-        if onbekend and template not in ("follow_up", "decline_not_executable"):
+        if onbekend and template not in ("follow_up", *NARROW_TEMPLATES):
             tekst += "\n\nFrom the information we hold, the following points are still open: " + ", ".join(o.replace("_", " ") for o in onbekend) + "."
         if template == "decline_not_executable":
             tekst += "\n\nWe appreciate your time and will keep your details on file should this change.\n\nKind regards,\nNorthSea Commodity Partners"
+        elif template == "controlled_introduction":
+            tekst += "\n\nKind regards,\nNorthSea Commodity Partners"  # eigen, sterkere disclaimer staat al in de hoofdtekst hierboven
         else:
             tekst += f"\n\n{slot}\n\nKind regards,\nNorthSea Commodity Partners"
 

@@ -384,7 +384,8 @@ def register_tools(mcp: MCPServer, service: NorthSeaService, guard: Guard) -> No
         opportunity_id: Annotated[str | None, Field(description="Deal UUID.")] = None,
         counterparty_id: Annotated[str | None, Field(description="Company UUID of the recipient.")] = None,
         channel: Literal["email", "phone", "linkedin", "whatsapp"] = "email",
-        template: Literal["auto", "supplier_qualification", "buyer_qualification", "follow_up", "document_request", "decline_not_executable"] = "auto",
+        template: Literal["auto", "supplier_qualification", "buyer_qualification", "follow_up", "document_request", "decline_not_executable",
+                         "deal_alignment", "controlled_introduction", "tender_specific_request", "delivery_failure", "bounce_handling"] = "auto",
         save_as_pending_draft: Annotated[bool, Field(description="Store as a PENDING email draft in the Deal Desk. Never sends.")] = False,
         idempotency_key: Annotated[str | None, Field(description="Required when save_as_pending_draft is true.", max_length=128)] = None,
     ) -> OutreachDraft:

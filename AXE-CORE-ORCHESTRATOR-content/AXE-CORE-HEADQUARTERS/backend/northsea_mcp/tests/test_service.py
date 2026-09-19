@@ -194,6 +194,51 @@ async def test_decline_not_executable_template_never_sends_and_omits_open_points
     assert repo.sends == []
 
 
+async def test_deal_alignment_template_never_sends(service, repo):
+    d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="deal_alignment",
+                                       objective="confirm alignment before proceeding", counterparty_id=SELLER_CO)
+    assert d.template == "deal_alignment" and d.sent is False and d.approval_required
+    assert "confirm alignment" in d.body
+    assert repo.sends == []
+
+
+async def test_controlled_introduction_template_is_always_sensitive_and_never_sends(service, repo):
+    d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="controlled_introduction",
+                                       objective="propose a controlled introduction", counterparty_id=SELLER_CO)
+    assert d.template == "controlled_introduction" and d.sent is False and d.approval_required
+    assert d.sensitive  # bevat "introduction": is_sensitive_text pakt dat automatisch op
+    assert "commission protection is signed and with explicit human approval" in d.body
+    assert repo.sends == []
+
+
+async def test_tender_specific_request_template_asks_for_tender_eligibility(service, repo):
+    d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="tender_specific_request",
+                                       objective="assess tender eligibility", counterparty_id=SELLER_CO)
+    assert d.template == "tender_specific_request" and d.sent is False
+    assert "trading history and references" in d.body and "submission method and deadline" in d.body
+    assert repo.sends == []
+
+
+async def test_delivery_failure_template_asks_to_confirm_receipt(service, repo):
+    d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="delivery_failure",
+                                       objective="confirm the right contact received our message", counterparty_id=SELLER_CO)
+    assert d.template == "delivery_failure" and "confirm receipt" in d.body
+    assert repo.sends == []
+
+
+async def test_bounce_handling_template_asks_for_an_alternate_channel(service, repo):
+    d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="bounce_handling",
+                                       objective="get a working contact channel after a bounce", counterparty_id=SELLER_CO)
+    assert d.template == "bounce_handling" and "alternate, verified contact channel" in d.body
+    assert repo.sends == []
+
+
+async def test_invalid_template_name_lists_all_real_options(service):
+    with pytest.raises(ServiceError) as exc:
+        await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="not_a_real_template", objective="x")
+    assert "bounce_handling" in str(exc.value) and "controlled_introduction" in str(exc.value)
+
+
 async def test_process_reply_extracts_facts_questions_and_changed_terms(service):
     r = await service.process_reply(caller(READ), communication_id=COMM)
     assert r.classification == "supplier" and r.analysis_source == "email_intelligence"
