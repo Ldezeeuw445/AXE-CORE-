@@ -102,6 +102,33 @@ def test_synthetic_messages_do_not_drive_state():
     assert ev(comms=[{"channel": "email", "direction": "inbound", "occurred_at": iso(-1), "is_synthetic": True}]).blocker_code == "seller_unqualified"
 
 
+# ── Deadlines ─────────────────────────────────────────────────────────────────
+
+def test_deadline_approaching_and_overdue():
+    tasks = [
+        {"id": "t1", "status": "open", "due_at": iso(10), "opportunity_id": "o1", "title": "Review PMP response"},
+        {"id": "t2", "status": "open", "due_at": iso(-5), "opportunity_id": "o2", "title": "Overdue check"},
+        {"id": "t3", "status": "open", "due_at": iso(200), "opportunity_id": "o3", "title": "Far away"},
+    ]
+    uit = e.deadline_chase_items(tasks, now=NU, warn_hours=48)
+    by_id = {i["dedupe_key"]: i for i in uit}
+    assert "deadline_approaching:t1" in by_id and by_id["deadline_approaching:t1"]["priority"] == 70
+    assert "deadline_overdue:t2" in by_id and by_id["deadline_overdue:t2"]["priority"] == 95
+    assert not any(k.endswith(":t3") for k in by_id)
+
+
+def test_deadline_skips_closed_and_undated_tasks():
+    tasks = [{"id": "t1", "status": "done", "due_at": iso(1)}, {"id": "t2", "status": "open", "due_at": None}]
+    assert e.deadline_chase_items(tasks, now=NU) == []
+
+
+def test_deadline_dedupe_key_is_stable_per_task():
+    tasks = [{"id": "t1", "status": "open", "due_at": iso(1), "opportunity_id": "o1"}]
+    first = e.deadline_chase_items(tasks, now=NU)
+    second = e.deadline_chase_items(tasks, now=NU)
+    assert first == second  # zelfde invoer -> zelfde dedupe_key, dus nooit dubbel via de open_keys-check in engine.py
+
+
 def test_gates_then_protection():
     assert ev(opp={"id": "o", "stage": "identified", "seller_gate_passed": True}).blocker_code == "buyer_unqualified"
     r = ev(opp={"id": "o", "stage": "identified", "seller_gate_passed": True, "buyer_gate_passed": True})

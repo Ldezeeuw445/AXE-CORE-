@@ -344,7 +344,7 @@ class CrewGateway:
                     timings["crew_execution_s"] = float(local_res.execution_s)
                 o = local_res.output
                 return CrewRunInfo(used=True, run_id=local_res.run_id, status="ok", analysis=o.analysis[:6000],
-                                   backend="northsea_local", actual_crew=gevraagd, fallback_used=False,
+                                   backend="northsea_local", execution_mode="deterministic", actual_crew=gevraagd, fallback_used=False,
                                    models=o.models, skills=o.skills, tools=o.tools, budget_usage=o.budget_usage,
                                    timings=timings, validation="valid",
                                    attempts=[p.as_dict() for p in pogingen], **basis)
@@ -375,7 +375,7 @@ class CrewGateway:
                         timings["crew_execution_s"] = float(res.execution_s)
                     o = res.output
                     return CrewRunInfo(used=True, run_id=res.run_id, status="ok", analysis=o.analysis[:6000], backend="northsea_crewai",
-                                       actual_crew=gevraagd, fallback_used=False, models=o.models, skills=o.skills, tools=o.tools,
+                                       execution_mode="llm", actual_crew=gevraagd, fallback_used=False, models=o.models, skills=o.skills, tools=o.tools,
                                        budget_usage=o.budget_usage, timings=timings, validation="valid",
                                        attempts=[p.as_dict() for p in pogingen], **basis)
                 if res.status == "invalid":
@@ -415,6 +415,7 @@ class CrewGateway:
         return CrewRunInfo(
             used=True, run_id=res.run_id or str(uuid.uuid4()), status=res.status if res.status in ("ok", "busy", "timeout") else "error",
             analysis=res.analysis if res.status == "ok" else None, backend="axe_general_crew",
+            execution_mode="llm" if res.status == "ok" else None,
             actual_crew=GENERAL_CREW, fallback_used=True, fallback_reason=reden,
             models=[], skills=[], tools=[f"specialist:{s}" for s in res.specialists], budget_usage={}, timings=timings,
             validation="not_validated", attempts=[p.as_dict() for p in pogingen],

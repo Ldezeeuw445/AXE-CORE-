@@ -74,7 +74,7 @@ class EngineService:
 
     async def _load(self) -> dict[str, list[dict]]:
         namen = ["communications", "email_intelligence", "opportunities", "buyer_requirements", "supplier_offers", "companies",
-                 "contacts", "reply_drafts", "northsea_followups", "deal_automation_policy", "action_queue"]
+                 "contacts", "reply_drafts", "northsea_followups", "deal_automation_policy", "action_queue", "deal_tasks"]
         rijen = await asyncio.gather(*(self.repo.fetch_all(n) for n in namen))
         return {n: r[0] for n, r in zip(namen, rijen)}
 
@@ -371,6 +371,11 @@ class EngineService:
                     "metadata": {**uitkomst.as_dict(), "previous_blocker_code": opp.get("engine_blocker_code")}})
             except RepositoryError as e:
                 fouten.append(f"evaluation {opp['id']}: {e}")
+
+        # ── 4b. Deadlines: naderend of verstreken (open taken met due_at) ────────
+        deadline_items = rules.deadline_chase_items(d["deal_tasks"], now=nu)
+        plan["chase"].extend(deadline_items)
+        plan["deadlines"] = deadline_items
 
         # ── 5. Bewijs en Chase ────────────────────────────────────────────────
         if not dry_run:

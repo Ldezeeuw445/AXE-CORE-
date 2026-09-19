@@ -259,7 +259,11 @@ async def test_reclassification_cancels_stale_engine_chase_item_but_not_human_it
         {"id": str(uuid.uuid4()), "dedupe_key": f"review_rejection:{cid}-human", "status": "open", "metadata": {"source": "luka"}},
     ]
     uit = await eng(repo).tick()
-    engine_item, mens = repo.t["action_queue"][-2:]
+    # Op dedupe_key zoeken, niet op positie: de seed heeft een verlopen deal_task
+    # (due_at in het verleden), dus deze tick voegt er ook een deadline-Chase-item
+    # aan action_queue toe -- de laatste twee rijen zijn dan niet meer per se deze twee.
+    by_key = {r["dedupe_key"]: r for r in repo.t["action_queue"] if r.get("dedupe_key", "").startswith("review_rejection:")}
+    engine_item, mens = by_key[f"review_rejection:{cid}"], by_key[f"review_rejection:{cid}-human"]
     assert engine_item["status"] == "cancelled" and "spam_noise" in engine_item["metadata"]["cancelled_reason"]
     assert mens["status"] == "open"
     assert uit["summary"]["chase_cancelled"] == 1

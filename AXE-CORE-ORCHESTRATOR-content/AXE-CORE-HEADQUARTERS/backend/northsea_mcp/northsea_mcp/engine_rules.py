@@ -287,6 +287,39 @@ def evaluate_deal(opp: dict, *, contact_policy: Optional[str], comms: list[dict]
                           "Luka: review the deal for a controlled introduction.", "luka", ["gates passed"])
 
 
+# ── 3b. Deadlines: naderend of verstreken, per open taak ─────────────────────
+def deadline_chase_items(tasks: list[dict], *, now: datetime, warn_hours: int = 48) -> list[dict]:
+    """Eén Chase-kandidaat per open taak met een due_at binnen warn_hours, of al voorbij.
+
+    Puur: geeft alleen kandidaten terug, met dezelfde dedupe_key vorm als de andere
+    Chase-paden in engine.py (`f"{prefix}:{task_id}"`); de aanroeper filtert tegen
+    open_keys precies zoals de rest van de tick al doet. Een taak zonder due_at
+    (de meeste) levert nooit een item op -- geen deadline geraden die er niet is."""
+    uit: list[dict] = []
+    for t in tasks:
+        if t.get("status") not in ("open", "in_progress", "waiting"):
+            continue
+        due = _ts(t.get("due_at"))
+        if not due:
+            continue
+        rest_h = (due - now).total_seconds() / 3600
+        if rest_h > warn_hours:
+            continue
+        verstreken = rest_h < 0
+        titel = t.get("title") or t.get("type") or "task"
+        uit.append({
+            "dedupe_key": f"{'deadline_overdue' if verstreken else 'deadline_approaching'}:{t.get('id')}",
+            "action_type": "deadline_overdue" if verstreken else "deadline_approaching",
+            "company_id": None,
+            "opportunity_id": t.get("opportunity_id"),
+            "priority": 95 if verstreken else 70,
+            "title": f"{'Overdue' if verstreken else 'Deadline approaching'}: {titel}",
+            "description": f"Task due {t.get('due_at')} is "
+                           f"{'overdue' if verstreken else f'due within {warn_hours}h'}.",
+        })
+    return uit
+
+
 # ── 4. Follow-ups: duurzaam, idempotent, zonder stormen ──────────────────────
 @dataclass
 class FollowupPlan:

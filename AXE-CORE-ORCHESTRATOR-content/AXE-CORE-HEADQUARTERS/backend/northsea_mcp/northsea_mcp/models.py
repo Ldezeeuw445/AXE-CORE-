@@ -92,6 +92,10 @@ class CrewRunInfo(BaseModel):
     requested_crew: str | None = None
     backend: Literal["northsea_crewai", "northsea_local", "axe_general_crew"] | None = Field(
         default=None, description="northsea_local = in-process specialist crews; northsea_crewai = optional Studio AMP; axe_general_crew = fallback.")
+    execution_mode: Literal["deterministic", "llm"] | None = Field(
+        default=None, description="deterministic = GoldenRuntime ran real crew logic without an LLM call; "
+                                  "llm = an actual language-model crew ran (Studio AMP or the AXE general crew). "
+                                  "Never infer LLM execution from `backend` alone -- read this field.")
     actual_crew: str | None = None
     fallback_used: bool = False
     fallback_reason: str | None = None
