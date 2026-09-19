@@ -6,6 +6,7 @@ import {
   browserAgentStart, browserAgentNavigate, browserAgentScreenshot, browserAgentClose,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { runBrowserAgentLoop, type BrowserAgentTurn } from '@/application/agents/browserAgentLoop';
+import { AXE_BROWSER_GUIDE_EVENT, type AxeBrowserGuideDetail } from '@/presentation/components/browser/AxeBrowserGuide';
 
 interface LogEntry {
   role: 'user' | 'agent';
@@ -35,6 +36,7 @@ export function BrowserAgentPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const screenshotUrlRef = useRef<string | null>(null);
+  const screenshotImgRef = useRef<HTMLImageElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const seededRef = useRef(false);
 
@@ -79,6 +81,21 @@ export function BrowserAgentPanel({
     }
   };
 
+  const guideAction = useCallback((turn: BrowserAgentTurn) => {
+    if (turn.action.type !== 'click' || turn.action.x == null || turn.action.y == null) return;
+    const img = screenshotImgRef.current;
+    if (!img || !img.naturalWidth || !img.naturalHeight) return;
+
+    const rect = img.getBoundingClientRect();
+    const x = rect.left + turn.action.x * (rect.width / img.naturalWidth);
+    const y = rect.top + turn.action.y * (rect.height / img.naturalHeight);
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+
+    window.dispatchEvent(new CustomEvent<AxeBrowserGuideDetail>(AXE_BROWSER_GUIDE_EVENT, {
+      detail: { x, y, label: turn.message || 'AXE acts here', durationMs: 1700 },
+    }));
+  }, []);
+
   const handleSend = useCallback(async (overrideText?: string) => {
     const text = (overrideText ?? instruction).trim();
     if (!text || busy) return;
@@ -100,6 +117,7 @@ export function BrowserAgentPanel({
       await runBrowserAgentLoop(text, sid, slots, {
         signal: abortRef.current.signal,
         onTurn: turn => {
+          guideAction(turn);
           setLog(prev => [...prev, {
             role: 'agent',
             text: turn.message || turn.reasoning,
@@ -117,7 +135,7 @@ export function BrowserAgentPanel({
     } finally {
       setBusy(false);
     }
-  }, [instruction, busy, ensureSession, refreshScreenshot]);
+  }, [instruction, busy, ensureSession, refreshScreenshot, guideAction]);
 
   // Auto-run seed instruction once when panel opens from WebView CTA
   useEffect(() => {
@@ -160,7 +178,7 @@ export function BrowserAgentPanel({
           </div>
           <div className="flex-1 flex items-center justify-center overflow-auto p-2">
             {screenshotUrl ? (
-              <img src={screenshotUrl} alt="Live browser view" className="max-w-full max-h-full rounded" style={{ border: '1px solid rgba(255,255,255,0.08)' }} />
+              <img ref={screenshotImgRef} src={screenshotUrl} alt="Live browser view" className="max-w-full max-h-full rounded" style={{ border: '1px solid rgba(255,255,255,0.08)' }} />
             ) : (
               <div className="text-center space-y-2">
                 <Bot size={28} style={{ margin: '0 auto', color: 'rgba(255,255,255,0.15)' }} />
