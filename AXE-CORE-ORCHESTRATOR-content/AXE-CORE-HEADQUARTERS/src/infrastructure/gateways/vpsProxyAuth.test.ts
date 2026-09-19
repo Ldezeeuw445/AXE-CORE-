@@ -102,6 +102,14 @@ describe('verpakte Tauri-app: elke proxy-aanroeper stuurt de Bearer mee', () => 
     expect(naarVps().map(a => a.url)).toEqual([`${VPS}/proxy/fish-tts`]);
     expect(naarVps()[0].headers.Authorization).toBe(`Bearer ${SLEUTEL}`);
   });
+
+  it('perplexityResearchService.testPerplexityOpServer → /research/perplexity', async () => {
+    const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+    await testPerplexityOpServer();
+    const research = aanroepen.filter(a => a.url === `${VPS}/research/perplexity`);
+    expect(research.length).toBeGreaterThan(0);
+    expect(research[0].headers.Authorization).toBe(`Bearer ${SLEUTEL}`);
+  });
 });
 
 describe('buiten de verpakte app gaat de sleutel nergens heen', () => {

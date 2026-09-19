@@ -179,6 +179,26 @@ def schrijf_staat(staat: dict) -> None:
 router = APIRouter()
 
 
+@router.get("/perplexity")
+async def perplexity_stand():
+    """Of de sleutel er is, zonder een vraag te stellen.
+
+    Instellingen moet kunnen laten zien of onderzoek verbonden is. De POST
+    hieronder is de enige weg die Perplexity aanroept, en die kost geld.
+    """
+    key = os.environ.get("PERPLEXITY_API_KEY", "")
+    dag = vandaag()
+    staat = lees_staat()
+    plafond = dagbudget_usd()
+    return {
+        "configured": bool(key.strip()),
+        "daily_usd": plafond,
+        "daily_questions": dagvragen(),
+        "usd_left": budget_over(staat, dag, plafond),
+        "questions_left": vragen_over(staat, dag, dagvragen()),
+    }
+
+
 @router.post("/perplexity")
 async def perplexity_onderzoek(body: dict = Body(...)):
     key = os.environ.get("PERPLEXITY_API_KEY", "")
