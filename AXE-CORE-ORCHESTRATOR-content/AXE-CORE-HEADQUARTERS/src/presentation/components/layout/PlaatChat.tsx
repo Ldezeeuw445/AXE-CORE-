@@ -310,9 +310,9 @@ export function PlaatChat() {
    * onderin één rij balken, en dan horen alle drie de namen op dezelfde hoogte
    * te staan. Eén attribuut is genoeg; de rest is opmaak. */
   useEffect(() => {
-    document.documentElement.dataset.chat = chatCollapsed ? 'dicht' : 'open';
+    document.documentElement.dataset.chat = kopAlleen ? 'dicht' : 'open';
     return () => { delete document.documentElement.dataset.chat; };
-  }, [chatCollapsed]);
+  }, [kopAlleen]);
 
   return (
     <>
