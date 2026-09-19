@@ -40,10 +40,11 @@ import { motion } from 'framer-motion';
 import { Plus, X, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import {
-  alleHosts, maakHost, geldigWsAdres, metAdres, isKlaar,
+  alleHosts, maakHost, geldigWsAdres, metAdres, isKlaar, hostsOpDezePlek,
   HOSTS_SLEUTEL, ADRESSEN_SLEUTEL, TERMINAL_POORT,
   type TerminalHost,
 } from '@/domain/terminalHosts';
+import { currentHostKind } from '@/infrastructure/config/apiUrl';
 import {
   snelactiesVoor, actiesVanGroep, blijvendDraaiend, GROEP_LABEL,
   type Groep, type Snelactie,
@@ -75,7 +76,7 @@ export default function TerminalsPage() {
   const [toevoegen, setToevoegen] = useState(false);
 
   const hosts = useMemo(
-    () => alleHosts(eigen).map(h => metAdres(h, adressen)),
+    () => hostsOpDezePlek(alleHosts(eigen).map(h => metAdres(h, adressen)), currentHostKind()),
     [eigen, adressen],
   );
 

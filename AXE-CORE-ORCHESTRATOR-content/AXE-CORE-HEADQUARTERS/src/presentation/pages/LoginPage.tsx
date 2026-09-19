@@ -3,6 +3,11 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/presentation/contexts/AuthContext';
 import { TriangleLogo } from '@/presentation/components/axe-core/TriangleLogo';
+import { isAndroidTauriRuntime, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+
+function naLogin(): string {
+  return (isAndroidTauriRuntime() || isAndroidShellRuntime()) ? '/lock' : '/';
+}
 
 /**
  * The first surface, and now the first one on AXE Surface.
@@ -31,7 +36,7 @@ export default function LoginPage() {
 
   // Already logged in → redirect to home
   useEffect(() => {
-    if (!authLoading && user) navigate('/', { replace: true });
+    if (!authLoading && user) navigate(naLogin(), { replace: true });
   }, [user, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,7 +49,7 @@ export default function LoginPage() {
       setError(error);
       setLoading(false);
     } else {
-      navigate('/', { replace: true });
+      navigate(naLogin(), { replace: true });
     }
   };
 

@@ -37,6 +37,32 @@ export function isAndroidShellRuntime(): boolean {
 }
 
 /**
+ * Elke Android-host: de oude native shell én Tauri v2 Android.
+ *
+ * Loopback (127.0.0.1) is op allebei de telefoon zelf. Zonder deze tak zou
+ * Tauri-Android als "this-machine" tellen en de Mac-bridge, Ollama en de
+ * lokale terminal-poort op het toestel zoeken.
+ */
+export function isAndroidRuntime(): boolean {
+  if (isAndroidShellRuntime()) return true;
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent);
+}
+
+/** De Samsung Tauri-app, niet een telefoonbrowser en niet de Mac. */
+export function isAndroidTauriRuntime(): boolean {
+  return isTauriRuntime() && isAndroidRuntime();
+}
+
+/**
+ * Native matglas zit alleen in de macOS-webview. Android en de browser
+ * moeten de plaat zelf tekenen (MobileGlass), anders is de lichte stand zwart.
+ */
+export function hasNativeGlass(): boolean {
+  return isTauriRuntime() && !isAndroidRuntime();
+}
+
+/**
  * Which of the three hosts this is, for the purpose of reaching a local
  * service. See domain/loopback.ts for what the answer is used for.
  *
@@ -47,7 +73,7 @@ export function isAndroidShellRuntime(): boolean {
  * the phone gets and worth keeping apart.
  */
 export function currentHostKind(): HostKind {
-  if (isAndroidShellRuntime()) return 'android-shell';
+  if (isAndroidRuntime()) return 'android-shell';
   if (isTauriRuntime() || import.meta.env.DEV) return 'this-machine';
   return 'remote';
 }
@@ -80,13 +106,13 @@ export const VPS_API_ORIGIN = (import.meta.env.VITE_VPS_API_ORIGIN as string | u
 /** Resolves the AI-provider proxy: VPS directly when packaged, else the
  *  normal apiUrl('/api/proxy/ai') (Vercel prod, or the dev proxy). */
 export function aiProxyUrl(): string {
-  if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/ai`;
+  if (import.meta.env.PROD && isPackagedShell() && axeCoreApiKey()) return `${VPS_API_ORIGIN}/proxy/ai`;
   return apiUrl('/api/proxy/ai');
 }
 
 /** Resolves the Exa search proxy the same way. */
 export function exaProxyUrl(): string {
-  if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/exa`;
+  if (import.meta.env.PROD && isPackagedShell() && axeCoreApiKey()) return `${VPS_API_ORIGIN}/proxy/exa`;
   return apiUrl('/api/exa');
 }
 

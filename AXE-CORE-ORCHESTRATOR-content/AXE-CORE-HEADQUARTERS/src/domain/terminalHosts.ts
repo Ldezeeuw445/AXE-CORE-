@@ -188,6 +188,26 @@ export function maakHost(naam: string, waarvoor: string, wsUrl: string): Termina
 }
 
 /**
+ * Op de telefoon (en in een remote build) is 127.0.0.1 het toestel zelf.
+ * De Mac-vakken vallen dan weg; VPS/iMac over wss blijven. Desktop ongewijzigd.
+ */
+export function hostsOpDezePlek(
+  hosts: readonly TerminalHost[],
+  plek: import('@/domain/loopback').HostKind,
+): TerminalHost[] {
+  if (plek === 'this-machine') return [...hosts];
+  return hosts.filter((h) => {
+    if (!h.wsUrl) return true;
+    try {
+      const host = new URL(h.wsUrl).hostname;
+      return host !== '127.0.0.1' && host !== 'localhost';
+    } catch {
+      return true;
+    }
+  });
+}
+
+/**
  * De volledige lijst: ingebouwd eerst, daarna wat de gebruiker toevoegde.
  *
  * Een zelf toegevoegde host met een id dat al bestaat wordt genegeerd in plaats
