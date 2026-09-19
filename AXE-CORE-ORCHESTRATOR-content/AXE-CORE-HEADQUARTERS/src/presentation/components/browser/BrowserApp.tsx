@@ -10,6 +10,7 @@ import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
 import { BrowserStartPage } from '@/presentation/components/browser/BrowserStartPage';
 import { AxeFloatingPresence } from '@/presentation/components/browser/AxeFloatingPresence';
+import { AxeBrowserGuide } from '@/presentation/components/browser/AxeBrowserGuide';
 import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
 import { BrowserUnifiedSidebar } from '@/presentation/components/browser/BrowserUnifiedSidebar';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
@@ -582,6 +583,10 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
           )}
         </div>
       </div>
+
+      {/* Temporary 64px AXE presence used only when the browser agent has
+          a real screen coordinate to point at. It never intercepts input. */}
+      <AxeBrowserGuide />
 
       {/* AI Settings Modal */}
       <AISettingsModal
