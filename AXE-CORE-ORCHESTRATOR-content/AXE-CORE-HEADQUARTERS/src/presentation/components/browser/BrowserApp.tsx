@@ -540,48 +540,38 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
           ref={contentRef}
           className={`flex-1 relative flex flex-col min-h-0 ${isOnHome ? '' : 'axe-browser-vak'}`}
         >
-          <div className="flex-1 relative overflow-hidden min-h-0">
-          {isOnHome ? (
-            <div ref={homeRef} className="h-full w-full">
-              <BrowserStartPage
-                quickLinks={quickLinks}
-                onNavigate={handleNavigate}
-                onAddFavorite={handleAddFavorite}
-                onAIProviderSubmit={handleAIProviderSubmit}
-                loadingProvider={loadingProvider}
-              />
+          <div className="flex-1 relative overflow-hidden min-h-0 flex">
+            <div className="flex-1 min-w-0 relative overflow-hidden">
+            {isOnHome ? (
+              <div ref={homeRef} className="h-full w-full">
+                <BrowserStartPage
+                  quickLinks={quickLinks}
+                  onNavigate={handleNavigate}
+                  onAddFavorite={handleAddFavorite}
+                  onAIProviderSubmit={handleAIProviderSubmit}
+                  loadingProvider={loadingProvider}
+                />
+              </div>
+            ) : (
+              /* The website/start page owns the remaining width. AXE's chat is
+                 a real sibling rail now, never a fixed overlay over content. */
+              <div ref={mainRef} className="h-full w-full">
+                <WebView url={activeTab.url} mobile={isMobile} />
+              </div>
+            )}
             </div>
-          ) : (
-            /* De pagina op een plaat, net als de code-editor.
-             *
-             * Hij liep van rand tot rand en botste onderaan strak tegen de
-             * chatplaat -- twee vlakken die elkaar raken zonder scheiding
-             * lezen als een fout. Een marge en ronde hoeken geven hem een
-             * eigen vlak, en de donkere ondergrond vangt de pagina op zolang
-             * die nog laadt.
-             *
-             * De pagina zelf komt donker binnen: de Chromium op de VPS draait
-             * sinds vandaag met color_scheme="dark". */
-            /* Geen tweede plaat meer om de pagina: het vak eromheen IS de
-               plaat. Een doos in een doos gaf een dubbele rand, en de pagina
-               werd twee keer ingeperkt -- daar kwam de rare uitrekking
-               vandaan. */
-            <div ref={mainRef} className="h-full w-full">
-              <WebView url={activeTab.url} mobile={isMobile} />
-            </div>
-          )}
-          </div>
 
-          {!isMobile && (
-            <AxeFloatingPresence
-              visible={showAIPanel}
-              messages={aiMessages}
-              onSendMessage={sendAIMessage}
-              aiConfig={config}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              isLoading={loadingProvider !== null}
-            />
-          )}
+            {!isMobile && (
+              <AxeFloatingPresence
+                visible={showAIPanel}
+                messages={aiMessages}
+                onSendMessage={sendAIMessage}
+                aiConfig={config}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                isLoading={loadingProvider !== null}
+              />
+            )}
+          </div>
 
           {isMobile && (
             <MobileBrowserChat
