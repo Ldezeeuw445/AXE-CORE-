@@ -5812,3 +5812,145 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    zonder eigen stapelcontext zakt hij achter de glasplaat en zie je alleen een
    dun randje. isolation houdt hem achter het invoervak maar vóór de plaat. */
 .axe-vakcomposer [data-beam] { isolation: isolate; }
+
+
+/* ══ AXE GLOBAL PRESENCE ══════════════════════════════════════════════════
+ * Home keeps the full Core Sphere. This compact 64px presence belongs to the
+ * shell and therefore follows every workspace without sitting on top of its
+ * map, browser, chart or editor.
+ *
+ * The right radial dock's closed button is centred 150px from the edge. Its
+ * left edge is therefore ~180px from the edge. The presence ends exactly
+ * there; the composer ends 15px before the presence starts. Nothing overlaps.
+ */
+@media (min-width: 1280px) {
+  :root[data-look] .axe-shell .axe-chatplaat,
+  :root[data-look] .axe-shell .axe-composer {
+    width: calc(100% - var(--axe-onder, 75px) - 405px);
+    margin-left: var(--axe-onder, 75px) !important;
+    margin-right: 405px !important;
+  }
+
+  :root[data-look] .axe-presence-dock {
+    position: fixed;
+    right: 180px;
+    bottom: var(--axe-composer-onder, 104px);
+    width: 210px;
+    min-height: 104px;
+    max-height: 154px;
+    z-index: 104;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px 8px 4px;
+    pointer-events: auto;
+    border-radius: 22px;
+    border: 1px solid var(--axe-vak-lijn);
+    background: color-mix(in srgb, var(--axe-vak-vlak) 92%, transparent);
+    box-shadow: var(--axe-vak-zweef);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+
+  :root[data-look] .axe-presence-dock__orb {
+    width: 68px;
+    min-width: 68px;
+    height: 68px;
+    display: grid;
+    place-items: center;
+  }
+
+  :root[data-look] .axe-presence-dock__body {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  :root[data-look] .axe-presence-dock__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+    font: 600 9px/1.2 var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+  }
+  :root[data-look] .axe-presence-dock__head > :last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  :root[data-look] .axe-presence-dock__exchange {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+  :root[data-look] .axe-presence-dock__exchange p {
+    margin: 0;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 9px;
+    line-height: 1.3;
+    color: var(--text-secondary);
+  }
+  :root[data-look] .axe-presence-dock__exchange p[data-van='mij'] {
+    color: var(--text-muted);
+  }
+  :root[data-look] .axe-presence-dock__exchange p[data-van='axe'] {
+    color: color-mix(in srgb, var(--accent-cyan) 78%, var(--text-primary));
+  }
+
+  :root[data-look] .axe-presence-dock__approval {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 24px 24px;
+    align-items: center;
+    gap: 3px;
+  }
+  :root[data-look] .axe-presence-dock__approval > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9px;
+    color: var(--warning);
+  }
+  :root[data-look] .axe-presence-dock__approval button {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    background: var(--axe-barbtn);
+    color: var(--text-secondary);
+    box-shadow: var(--axe-tegel-op);
+  }
+  :root[data-look] .axe-presence-dock__approval button:active {
+    box-shadow: var(--axe-tegel-in);
+  }
+
+  /* Opening the right radial ring temporarily owns this exact piece of space. */
+  :root[data-look] .axe-shell:has(.axe-dok[data-kant='rechts'][data-open='ja']) .axe-presence-dock {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.96);
+    pointer-events: none;
+  }
+}
+
+@media (max-width: 1279px) {
+  :root[data-look] .axe-presence-dock { display: none; }
+}
