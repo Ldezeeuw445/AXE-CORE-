@@ -25,8 +25,7 @@ import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFlo
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
 import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
-import { ZwevendeBol } from '@/presentation/components/layout/zweef/ZwevendeBol';
-import { wisselBol } from '@/presentation/components/layout/zweef/bolZichtbaar';
+import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDock';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -224,6 +223,7 @@ export function AppShell() {
           je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
           elke pagina Home met de dingen van die tab erbij. */}
       {!mobileCommandSurface && opPlaat && <PlaatChat />}
+      {!mobileCommandSurface && opPlaat && <AxePresenceDock />}
 
       {/* Het radiaal menu linksonder. Naast de chat en niet erin: het zijn
           sprongen naar ergens anders, en die horen niet tussen de knoppen
@@ -252,18 +252,20 @@ export function AppShell() {
         />
       )}
 
-      {/* De zwevende iPhone en de zwevende bol, op elke pagina met plaat. Het
-          telefoon-icoon en de cyaan driehoek in het dok hieronder zetten ze aan
-          en uit. */}
+      {/* De telefoon blijft een vrije tool. AXE zelf is geen losse grote
+          zweefbol meer: de compacte presence hierboven is shell-owned. Home
+          behoudt zijn eigen grote Core Sphere in Home.tsx. */}
       {!mobileCommandSurface && opPlaat && (
         <ZweefLaag>
           <ZwevendeTelefoon />
-          <ZwevendeBol />
         </ZweefLaag>
       )}
 
       {!mobileCommandSurface && opPlaat && (
-        <RadiaalDok opHoek={wisselBol} hoekLabel="AXE Core" />
+        <RadiaalDok
+          opHoek={() => window.dispatchEvent(new CustomEvent('axe-focus-composer'))}
+          hoekLabel="Praat met AXE"
+        />
       )}
 
       {/* De oude onderbalk alleen nog zonder plaat. Met plaat levert PlaatChat

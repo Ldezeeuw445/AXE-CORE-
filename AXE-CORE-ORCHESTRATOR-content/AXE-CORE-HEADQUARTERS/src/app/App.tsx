@@ -43,6 +43,7 @@ const CrewAI = lazy(() => import('@/presentation/pages/CrewAI'));
 const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'));
 const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
 const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
+const ComputerUse = lazy(() => import('@/presentation/pages/ComputerUse'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
@@ -212,6 +213,7 @@ export default function App() {
             <Route path="code-editor" element={<CodeEditorPage />} />
             <Route path="eve" element={<EveFramework />} />
             <Route path="browser" element={<BrowserPage />} />
+            <Route path="computer-use" element={<ComputerUse />} />
             <Route path="organization" element={<Organization />} />
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />

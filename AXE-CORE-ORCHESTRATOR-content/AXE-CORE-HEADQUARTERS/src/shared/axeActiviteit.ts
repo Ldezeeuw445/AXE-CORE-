@@ -18,6 +18,8 @@ export interface AxeActiviteit {
   label: string;
   /** Kleur van de vlucht, als css-kleur. Standaard het cyaan van AXE. */
   kleur?: string;
+  /** Exact viewport point when AXE has a trustworthy on-screen coordinate. */
+  punt?: { x: number; y: number };
 }
 
 export const ACTIVITEIT_GEBEURTENIS = 'axe:activiteit';

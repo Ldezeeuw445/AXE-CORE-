@@ -69,10 +69,11 @@ export const NAV_ITEMS: NavItem[] = [
   },
   /* Het pad blijft /maps-3d: dat staat in opgeslagen links, in de agenten en
      in de systeemlijst. Alleen het etiket verandert -- de tab IS de desk. */
-  { path: '/maps-3d', label: 'Northsea Desk', keywords: ['northsea', 'northsea desk', 'desk', 'commodity', '3d maps', 'maps', 'map'] },
+  { path: '/maps-3d', label: 'Northsea Desk', keywords: ['northsea', 'northsea desk', 'northsea deals', 'deals', 'deal desk', 'commodity', 'commodity desk', '3d maps', 'maps', 'map'] },
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
-  { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'navigate', 'surf'] },
+  { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'browser use', 'navigate', 'surf'] },
+  { path: '/computer-use', label: 'Computer Use', keywords: ['computer use', 'personal computer use', 'my computer', 'mijn computer', 'mac control', 'control my mac'] },
   { path: '/organization', label: 'Organization', keywords: ['organization', 'org', 'team', 'org chart'] },
   { path: '/terminal', label: 'Terminal', keywords: ['terminal', 'console', 'shell', 'command line'] },
   { path: '/terminals', label: 'Terminals', keywords: ['terminals', 'machines', 'mac mini', 'imac', 'vps', 'ssh', 'hosts', 'worker starten'] },
