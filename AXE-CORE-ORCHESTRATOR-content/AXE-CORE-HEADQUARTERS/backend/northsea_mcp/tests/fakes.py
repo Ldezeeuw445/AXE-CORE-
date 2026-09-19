@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from northsea_mcp.models import CrewRunInfo, SourceRef
-from northsea_mcp.repository import uid
+from northsea_mcp.repository import RepositoryError, uid
 from northsea_mcp.research import Answer, ResearchError, SearchHit, SearchResult
 
 
@@ -125,6 +125,8 @@ class FakeRepo:
         self.fail_reads = False
         self.guard_block = False
         self.engine_writes: list[tuple[str, str]] = []
+        self.fail_insert_match_assessment = False
+        self.fail_delete_opportunity = False
 
     def _find(self, table: str, **eq) -> list[dict]:
         if self.fail_reads:
@@ -312,6 +314,8 @@ class FakeRepo:
         return copy.deepcopy(r)
 
     async def insert_match_assessment(self, row):
+        if self.fail_insert_match_assessment:
+            raise RepositoryError("database write failed for match_assessments (400): column \"matching_fields\" does not exist")
         r = {"id": str(uuid.uuid4()), "assessed_at": ts(), **row}
         self.t["match_assessments"].append(r)
         return copy.deepcopy(r)
@@ -319,6 +323,16 @@ class FakeRepo:
     async def count_events_since(self, *, event_type, actor, since):
         return sum(1 for e in self.t["deal_events"] if e.get("event_type") == event_type and e.get("actor") == actor
                   and str(e.get("created_at") or "") >= since)
+
+    async def list_opportunity_pairs(self, limit=5000):
+        return [{"buyer_requirement_id": o.get("buyer_requirement_id"), "supplier_offer_id": o.get("supplier_offer_id")}
+                for o in self.t["opportunities"]]
+
+    async def delete_opportunity(self, opportunity_id):
+        oid = uid(opportunity_id)
+        if self.fail_delete_opportunity:
+            raise RepositoryError("database write failed for opportunities (500): simulated outage")
+        self.t["opportunities"] = [o for o in self.t["opportunities"] if o["id"] != oid]
 
     async def find_crew_audit(self, event_id: str):
         if not event_id:

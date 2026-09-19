@@ -329,6 +329,17 @@ class SupabaseRepository:
                                                 "created_at": f"gte.{since}", "select": "id", "limit": "1000"})
         return len(rows)
 
+    async def list_opportunity_pairs(self, limit: int = 5000) -> list[dict]:
+        """Elke (buyer_requirement_id, supplier_offer_id) die al een opportunity heeft, ongeacht stage --
+        één query voor dedup tijdens discovery-selectie, in plaats van één aanroep per kandidaat-paar."""
+        return await self._get("opportunities", {"select": "buyer_requirement_id,supplier_offer_id", "limit": str(limit)})
+
+    async def delete_opportunity(self, opportunity_id: str) -> None:
+        """Compenserend terugdraaien: PostgREST heeft geen cross-table transactie, dus als een
+        vervolgschrijfactie (match_assessment/event) mislukt, verwijdert dit de zojuist aangemaakte
+        opportunity weer -- nooit een opportunity zonder zijn assessment/event laten staan."""
+        await self._write("DELETE", "opportunities", {"id": f"eq.{uid(opportunity_id)}"}, {})
+
     async def outbound_block_reason(self, *, company_id: str | None = None, contact_id: str | None = None, email: str | None = None,
                                     opportunity_id: str | None = None) -> str | None:
         """Contactbeleid uit de database (dezelfde functie die de triggers gebruiken). Fout -> RepositoryError (dicht)."""

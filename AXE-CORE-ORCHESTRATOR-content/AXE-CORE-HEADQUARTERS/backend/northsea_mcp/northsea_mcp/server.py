@@ -620,7 +620,8 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
     async def discovery_sweep(request: Request) -> Response:
         """LOOP A/B discovery (deterministic cross-match; creates internal opportunities from existing
         requirements/offers only, never invents a company). Service-token + northsea.discovery only, never OAuth.
-        `?dry_run=1` reports what would be created without writing anything."""
+        `?dry_run=1` reports what would be created without writing anything. `?max_new=N` can only LOWER
+        this run's cap below the configured max_new_per_run (a controlled proof run), never raise it."""
         auth = request.headers.get("authorization", "")
         rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
         if rec is None:
@@ -628,11 +629,17 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         if "northsea.discovery" not in rec.scopes:
             return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
         dry = request.query_params.get("dry_run") in ("1", "true", "yes")
+        override = None
+        if request.query_params.get("max_new"):
+            try:
+                override = int(request.query_params["max_new"])
+            except ValueError:
+                return JSONResponse({"error": "max_new must be an integer"}, status_code=400, headers={"Cache-Control": "no-store"})
         if discovery_lock.locked():
             return JSONResponse({"skipped": True, "reason": "a sweep is already running"}, status_code=409)
         async with discovery_lock:
             try:
-                uit = await asyncio.wait_for(discovery.sweep(dry_run=dry), timeout=120)
+                uit = await asyncio.wait_for(discovery.sweep(dry_run=dry, max_new_override=override), timeout=120)
             except asyncio.TimeoutError:
                 return JSONResponse({"error": "timeout"}, status_code=504)
             except RepositoryError:
