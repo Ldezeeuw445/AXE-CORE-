@@ -139,8 +139,8 @@ journalctl -u ollama -n 40 --no-pager
 ### iMac — `main-imac-luka` (gebruiker `lukadezeeuw`)
 
 **Terminal (vak 7):** `wss://main-imac-luka.tail03735e.ts.net:4022/terminal` —
-vul dat één keer in het invulveld van vak 7 in. Het staat niet in de code, want
-een tailnet-adres hoort niet in een gedeelde bundel.
+staat in `terminalHosts.ts`. Zonder dat in de bundel is het vak na een herstart
+van de Mac-mini-app leeg, omdat een lokaal ingevuld adres daar niet overleeft.
 
 - Draait als LaunchAgent `com.axe.terminal` uit `~/.axe-terminal` (los van de
   checkout in `~/Projects/AXE-CORE-`, zodat een pull of lokale wijziging daar

@@ -56,6 +56,7 @@ export function ProviderCard({
   kaart, stand, sleutel, model, fout, laatsteTest, sleutelZichtbaar, opServer,
   modellen, isPrimair, aangepast,
   onSleutel, onModel, onTest, onToonSleutel, onPrimair, onVerwijder,
+  toonPrimair = true,
 }: {
   kaart: ProviderKaart;
   stand: KaartStand;
@@ -74,6 +75,8 @@ export function ProviderCard({
   onToonSleutel: () => void;
   onPrimair: () => void;
   onVerwijder?: () => void;
+  /** Search/TTS/memory cards are not chat models — starring them as primary breaks the cascade. */
+  toonPrimair?: boolean;
 }) {
   const Icoon = kaart.icon;
   const foutTekst = foutRegel(fout);
@@ -215,7 +218,7 @@ export function ProviderCard({
         <button onClick={onTest} className="axe-chip !text-[11px]" disabled={stand === 'testing'}>
           {stand === 'testing' ? 'Testing…' : 'Test'}
         </button>
-        {!isPrimair && ingesteld && (
+        {!isPrimair && ingesteld && toonPrimair && (
           <button onClick={onPrimair} className="axe-chip !text-[11px]">Make primary</button>
         )}
         <div className="flex-1" />

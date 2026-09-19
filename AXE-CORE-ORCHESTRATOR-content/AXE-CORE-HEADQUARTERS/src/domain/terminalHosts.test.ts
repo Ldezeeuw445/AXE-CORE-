@@ -62,6 +62,12 @@ describe('de lijst', () => {
   it('overleeft null', () => {
     expect(alleHosts(null).length).toBe(INGEBOUWDE_HOSTS.length);
   });
+
+  it('heeft het iMac-adres ingebouwd, zodat vak 7 na een herstart blijft', () => {
+    const imac = INGEBOUWDE_HOSTS.find(h => h.id === 'imac');
+    expect(imac?.wsUrl).toBe('wss://main-imac-luka.tail03735e.ts.net:4022/terminal');
+    expect(geldigWsAdres(imac!.wsUrl)).toBe(true);
+  });
 });
 
 describe('welke host geselecteerd is', () => {

@@ -123,7 +123,7 @@ const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crew
  * once already; a fifth entry would have had to be added four times, and
  * missing one of them is invisible until a good key reads as broken.
  */
-const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon']);
+const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon', 'perplexity']);
 
 /** The subset that needs nothing but a key — no base URL, no model to pick. */
 
@@ -347,18 +347,44 @@ function ProviderKeysSection() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const namen = new Set<string>();
       try {
         const res = await fetch(apiUrl('/api/proxy/ai/providers'));
-        if (!res.ok) { if (!cancelled) setServerProviders(new Set()); return; }
-        const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
-        if (cancelled) return;
-        setServerProviders(new Set([...(body.providers ?? []), ...(body.keyless ?? [])]));
+        if (res.ok) {
+          const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
+          for (const n of [...(body.providers ?? []), ...(body.keyless ?? [])]) namen.add(n);
+        }
       } catch {
         // Server onbereikbaar. Een lege set is hier beter dan null blijven:
         // het scherm valt terug op het oude gedrag, en de automatische meting
         // hieronder blijft niet eeuwig wachten op een antwoord dat niet komt.
-        if (!cancelled) setServerProviders(new Set());
       }
+      try {
+        const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+        const pplx = await testPerplexityOpServer();
+        if (pplx.ok) {
+          namen.add('perplexity');
+          if (!cancelled) {
+            setKeys(prev => {
+              const next = {
+                ...prev,
+                perplexity: {
+                  ...prev.perplexity,
+                  lastTest: 'ok' as const,
+                  lastTestAt: new Date().toISOString(),
+                  lastError: undefined,
+                },
+              };
+              saveProviderKeys(next);
+              return next;
+            });
+          }
+        }
+      } catch {
+        // Onderzoekszijde apart: een fout hier mag OpenAI/Groq niet op "geen
+        // server-sleutel" zetten.
+      }
+      if (!cancelled) setServerProviders(namen);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -454,6 +480,22 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (elOk) delete n[id]; else n[id] = elErr ?? 'ElevenLabs test mislukt'; return n; });
+      return;
+    }
+
+    // Perplexity is research on the VPS, not an LLM. Never probe it as chat
+    // (that would spend a paid question) and never send a browser key — the
+    // key lives on the server.
+    if (id === 'perplexity') {
+      const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+      const { ok: pxOk, error: pxErr } = await testPerplexityOpServer();
+      setTesting(t => ({ ...t, [id]: pxOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: pxOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: pxOk ? undefined : pxErr } };
+        saveConnections(next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (pxOk) delete n[id]; else n[id] = pxErr ?? 'Perplexity test mislukt'; return n; });
       return;
     }
 
@@ -744,12 +786,16 @@ function ProviderKeysSection() {
               onModel={(model) => update(cat.id, 'model', model)}
               onTest={() => testProvider(cat.id, isCustom)}
               onToonSleutel={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))}
-              onPrimair={() => voice.setPrimarySlot(isPrimary ? null : {
-                provider: cat.id as ProviderId,
-                key: conn.key ?? '',
-                model: conn.model || standaardModel || '',
-                baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
-              })}
+              toonPrimair={!NON_LLM_PROVIDERS.has(cat.id)}
+              onPrimair={() => {
+                if (NON_LLM_PROVIDERS.has(cat.id)) return;
+                voice.setPrimarySlot(isPrimary ? null : {
+                  provider: cat.id as ProviderId,
+                  key: conn.key ?? '',
+                  model: conn.model || standaardModel || '',
+                  baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
+                });
+              }}
               onVerwijder={isCustom ? () => removeCustomProvider(cat.id) : undefined}
             />
           );
