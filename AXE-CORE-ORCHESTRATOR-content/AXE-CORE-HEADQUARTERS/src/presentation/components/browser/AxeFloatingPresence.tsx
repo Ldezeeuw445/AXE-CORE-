@@ -1,15 +1,9 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, ImagePlus, Mic, Send, Settings } from 'lucide-react';
-import { Panel, IconButton } from '@/presentation/components/surface/Surface';
+import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
+import { IconButton } from '@/presentation/components/surface/Surface';
 import type { AIMessage } from '@/domain/types/browser';
 import type { AIConfig } from '@/presentation/hooks/useAIConfig';
-
-/** Lazy — keeps postprocessing/three stage code out of initial browser paint */
-const AxeCoreSphere = lazy(
-  // Dezelfde bol als op Home. De browser had een eigen variant
-  // (FloatingParticleSphere), waardoor AXE er per tab anders uitzag.
-  () => import('@/presentation/components/axe-core/sphere/AxeCoreSphere').then(m => ({ default: m.AxeCoreSphere })),
-);
 
 interface AxeFloatingPresenceProps {
   visible: boolean;
@@ -20,6 +14,18 @@ interface AxeFloatingPresenceProps {
   isLoading?: boolean;
 }
 
+/**
+ * AXE's browser presence.
+ *
+ * This deliberately uses the SAME 64px status particle used by the rest of
+ * AXE. The old browser-only sphere was large, visually unrelated to AXE's
+ * state language and lived in a fixed overlay that could cover the page.
+ *
+ * The browser now reserves a real right-hand rail for AXE. Nothing here is
+ * fixed over the web page: conversation, particle and composer all occupy
+ * layout space. The status orb still reads the global voice state and gets a
+ * browser-work signal while a provider request is active.
+ */
 export function AxeFloatingPresence({
   visible,
   messages,
@@ -29,28 +35,8 @@ export function AxeFloatingPresence({
   isLoading = false,
 }: AxeFloatingPresenceProps) {
   const [inputValue, setInputValue] = useState('');
-  // sphereVisible is weg: de bol zat in een zwevend blok dat je kon
-  // wegklikken. In de onderband heeft hij een vaste plek, dus verbergen
-  // hoort daar niet meer bij -- dat is wat het paneel zelf doet.
-  const [sphereReady, setSphereReady] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Hier stond een effect dat een 'thinking'-stand bijhield voor de oude
-  // FloatingParticleSphere. Home's bol kent die stand niet -- dat het aan het
-  // denken is, blijkt uit de stippen onder de tekst. Een stand bijhouden die
-  // niemand leest is precies hoe je gaat geloven dat er iets gebeurt.
-
-  // Defer WebGL until panel is open + idle (prevents tab crash on load)
-  // WebGL pas na 400ms starten, zodat het openen van de tab niet stokt.
-  //
-  // Dit hing eerder aan `visible` en zette de bol weer op false zodra dat
-  // wegviel -- dan verdween hij. Op Home staat hij er altijd, dus hier ook:
-  // de vertraging spreidt alleen het laden, ze verbergt niets.
-  useEffect(() => {
-    const id = window.setTimeout(() => setSphereReady(true), 400);
-    return () => window.clearTimeout(id);
-  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -63,82 +49,77 @@ export function AxeFloatingPresence({
     if (!inputValue.trim() || isLoading) return;
     onSendMessage(inputValue.trim());
     setInputValue('');
-    setSphereReady(true);
   };
 
-
   return (
-    <>
-      {/* ── AXE staat naast de band, niet erboven ──────────────────────────
-       *
-       * Eerst zweefde dit `fixed` over de pagina en liep het overal doorheen.
-       * Daarna probeerde ik het in een PlaatPanel te hangen, maar dat paneel
-       * hoort bij de onderband van de schil en rendert hier niet -- de bol
-       * verdween daardoor helemaal.
-       *
-       * De indeling houdt de plek al vrij: de chatplaat, de composer en de
-       * nav zijn gecentreerd met een uitgerekende breedte, dus links en
-       * rechts blijft (100% - band)/2 over. De css noemt die ruimte zelf
-       * "niet leegte: daar kan iets naast". Daar staat AXE nu: de bol naast
-       * de composer, en zijn chat daarnaast. */}
-      {/* Onder elkaar in plaats van naast elkaar.
-       *
-       * De ruimte naast de band is smal. Zette ik de bol en de tekst daar op
-       * een rij, dan hield de bol nog geen zestig pixels over -- een propje
-       * waarvan de deeltjes tot een waas versmelten. Boven elkaar krijgt hij
-       * de volle breedte van die kolom, en dan is hij weer scherp. */}
-      <div className="axe-naast-band fixed bottom-0 right-0 z-40 h-[clamp(150px,20vh,240px)] flex flex-col items-center justify-end gap-1.5 pb-3 pr-3 pointer-events-none">
-        {/* De bol van Home, zonder vak eromheen. Alleen een maat, want een
-            canvas zonder maat is nul groot.
-
-            items-start hierboven: de tekst hoort RECHTSBOVEN te beginnen en
-            naar beneden te groeien als er een antwoord komt. Met items-center
-            zweefde alles halverwege en sprong het bij elk bericht omhoog. */}
-        <div className="relative w-full max-w-[190px] aspect-square shrink-0">
-          {/* Geen `visible`-poort meer om de bol heen: hij hoort er altijd te
-              staan, zoals op Home. De vertraging blijft alleen om het WebGL-
-              laden na het openen van de tab te spreiden -- niet om hem te
-              verbergen. */}
-          {sphereReady && (
-            <Suspense fallback={null}>
-              <AxeCoreSphere />
-            </Suspense>
-          )}
+    <aside
+      className="w-[300px] xl:w-[330px] min-w-[260px] h-full shrink-0 border-l border-axe-line bg-black/20 backdrop-blur-sm flex flex-col pointer-events-auto"
+      aria-label="AXE browser assistant"
+    >
+      <div className="shrink-0 flex items-center gap-3 px-3 py-3 border-b border-axe-line">
+        <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+          <AxeStatusOrb size={64} werk={{ zoekt: isLoading }} toonLabel />
         </div>
-
-        <div className="w-full min-w-0 max-h-[38%] overflow-y-auto scrollbar-thin flex flex-col gap-1.5 pointer-events-auto text-center">
-          {messages.slice(-6).map((msg, idx) => (
-            <div key={msg.id + idx}>
-              {msg.role === 'user' ? (
-                <p className="text-axe-meta text-axe-text-primary/90 whitespace-pre-wrap">{msg.content}</p>
-              ) : (
-                <div>
-                  <span className="text-axe-label text-axe-accent-cyan">AXE</span>
-                  <p className="text-axe-meta text-axe-text-secondary/95 whitespace-pre-wrap mt-0.5">{msg.content}</p>
-                </div>
-              )}
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce" />
-              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:150ms]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:300ms]" />
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+        <div className="min-w-0 flex-1">
+          <div className="text-axe-label text-axe-text-primary">AXE</div>
+          <div className="mt-1 text-axe-meta text-axe-text-muted leading-relaxed">
+            Browser companion · same live state as AXE Core
+          </div>
         </div>
+        <IconButton type="button" onClick={onOpenSettings} aria-label="AI settings" title="Settings">
+          <Settings className="w-4 h-4" />
+        </IconButton>
       </div>
 
-      {/* Onderaan in de stroom, en even breed als de AXE-composer.
-       *
-       * Hij stond `absolute` en zweefde over de pagina; nu krimpt de inhoud
-       * erboven er netjes voor in. De breedte volgt de band en niet het vak:
-       * over de volle breedte van een geopende site werd het een lange sleuf,
-       * terwijl hij hoort te rijmen met de composer eronder. */}
-      <div className="axe-bandbreed shrink-0 pb-3 pt-2 z-50 pointer-events-auto">
-        <Panel focus className="px-3 py-2.5">
-          <form onSubmit={handleSubmit} className="flex items-end gap-2">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-3 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-axe-meta text-axe-text-muted leading-relaxed">
+            Ask AXE about the page, research something, or hand work to the browser agent.
+          </div>
+        )}
+        {messages.map((msg, idx) => (
+          <div key={msg.id + idx} className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+            {msg.role === 'user' ? (
+              <div className="max-w-[92%] rounded-2xl rounded-br-md border border-white/[0.07] bg-white/[0.06] px-3 py-2 text-axe-meta text-axe-text-primary/90 whitespace-pre-wrap">
+                {msg.content}
+              </div>
+            ) : (
+              <div className="max-w-[96%]">
+                <span className="text-axe-label text-axe-accent-cyan">AXE</span>
+                <p className="mt-1 text-axe-meta text-axe-text-secondary/95 leading-relaxed whitespace-pre-wrap">
+                  {msg.content}
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
+        {isLoading && (
+          <div className="flex items-center gap-1.5" aria-label="AXE is working">
+            <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce" />
+            <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:150ms]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:300ms]" />
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <form onSubmit={handleSubmit} className="shrink-0 border-t border-axe-line p-3">
+        <div className="rounded-2xl border border-axe-line bg-white/[0.035] p-2">
+          <textarea
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder="Ask AXE about this page…"
+            disabled={isLoading}
+            rows={3}
+            className="w-full resize-none bg-transparent px-1 py-1 text-surface-input text-axe-text-primary placeholder:text-axe-text-muted outline-none"
+          />
+          <div className="mt-1 flex items-center gap-1.5">
             <IconButton type="button" accent aria-label="Photo search" title="Photo search">
               <Camera className="w-4 h-4" />
             </IconButton>
@@ -146,25 +127,16 @@ export function AxeFloatingPresence({
               <ImagePlus className="w-4 h-4" />
             </IconButton>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" />
-            <input
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask AXE anything about the web…"
-              disabled={isLoading}
-              className="axe-field flex-1 min-w-0 text-surface-input py-2"
-            />
             <IconButton type="button" aria-label="Voice" title="Voice">
               <Mic className="w-4 h-4" />
             </IconButton>
-            <IconButton type="button" onClick={onOpenSettings} aria-label="AI settings" title="Settings">
-              <Settings className="w-4 h-4" />
-            </IconButton>
+            <div className="flex-1" />
             <IconButton type="submit" accent disabled={!inputValue.trim() || isLoading} aria-label="Send">
               <Send className="w-4 h-4" />
             </IconButton>
-          </form>
-        </Panel>
-      </div>
-    </>
+          </div>
+        </div>
+      </form>
+    </aside>
   );
 }
