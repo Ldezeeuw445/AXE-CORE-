@@ -239,6 +239,48 @@ async def test_invalid_template_name_lists_all_real_options(service):
     assert "bounce_handling" in str(exc.value) and "controlled_introduction" in str(exc.value)
 
 
+async def test_legal_document_requires_identity_scope(service):
+    from northsea_mcp.policy import PolicyDenied
+    with pytest.raises(PolicyDenied):
+        await service.prepare_legal_document(caller({"northsea.communications.draft"}), opportunity_id=OPP, document_type="ncnda")
+
+
+async def test_legal_document_rejects_unknown_type(service):
+    with pytest.raises(ServiceError) as exc:
+        await service.prepare_legal_document(caller(ALL), opportunity_id=OPP, document_type="not_a_real_type")
+    assert "ncnda" in str(exc.value) and "imfpa" in str(exc.value)
+
+
+async def test_ncnda_draft_names_both_parties_and_is_tagged_unreviewed(service, repo):
+    d = await service.prepare_legal_document(caller(ALL), opportunity_id=OPP, document_type="ncnda")
+    assert d.status == "unreviewed_draft" and d.approval_required and d.sent is False
+    assert "UNREVIEWED DRAFT" in d.disclaimer and "HUMAN/LEGAL REVIEW REQUIRED" in d.disclaimer
+    assert "Qinzhou Harbour Metals Ltd" in d.body and "Mopani Copper Mines PLC" in d.body
+    assert d.template_version == "1.0.0" and d.saved_document_id
+    saved = next(x for x in repo.t["deal_documents"] if x["id"] == d.saved_document_id)
+    assert saved["status"] == "unreviewed_draft" and saved["document_type"] == "ncnda"
+    assert saved["metadata"]["template_version"] == "1.0.0" and saved["metadata"]["content"] == d.body
+
+
+async def test_imfpa_draft_includes_commission_rate_when_on_file(service):
+    d = await service.prepare_legal_document(caller(ALL), opportunity_id=OPP, document_type="imfpa")
+    assert "IRREVOCABLE" in d.body.upper()
+    if "commission_rate" not in d.unknowns:
+        assert any(f.field == "commission_rate" for f in d.facts_used)
+
+
+async def test_kyc_kyb_request_never_marks_anything_verified(service):
+    d = await service.prepare_legal_document(caller(ALL), opportunity_id=OPP, document_type="kyc_kyb_request")
+    assert "never mark" in d.body.lower() or "never marks" in d.body.lower()
+    assert d.document_type == "kyc_kyb_request"
+
+
+async def test_legal_document_unknown_counterparty_is_not_found(service):
+    with pytest.raises(NotFound):
+        await service.prepare_legal_document(caller(ALL), opportunity_id=OPP, document_type="ncnda",
+                                             counterparty_id="99999999-9999-4999-8999-999999999999")
+
+
 async def test_process_reply_extracts_facts_questions_and_changed_terms(service):
     r = await service.process_reply(caller(READ), communication_id=COMM)
     assert r.classification == "supplier" and r.analysis_source == "email_intelligence"

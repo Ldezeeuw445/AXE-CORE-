@@ -42,8 +42,8 @@ from .config import Settings
 from .crew import CrewGateway, StudioRoute
 from .engine import EngineService
 from .models import (
-    BlockerInvestigation, CandidateSearch, CounterpartyResearch, DealReview, DraftApprovalResult, MatchAssessmentResult,
-    NextActions, OutreachDraft, QualificationResult, ReplyAnalysis, SendResult, TaskResult,
+    BlockerInvestigation, CandidateSearch, CounterpartyResearch, DealReview, DraftApprovalResult, LegalDocumentDraft,
+    MatchAssessmentResult, NextActions, OutreachDraft, QualificationResult, ReplyAnalysis, SendResult, TaskResult,
 )
 from .oauth import NorthSeaTokenVerifier, OAuthServer, client_ip
 from .policy import SCOPES, TOOLS, PolicyDenied, Risk, require_scopes
@@ -254,6 +254,13 @@ DESCRIPTIONS = {
         "email but do not send it'. Requires opportunity_id or counterparty_id plus the objective. THIS TOOL NEVER SENDS. "
         "With save_as_pending_draft=true it stores the email as a PENDING draft in the Deal Desk (needs idempotency_key); "
         "sending then requires human approval and northsea_send_approved_communication."),
+    "northsea_prepare_legal_document": (
+        "Prepare a legal/commercial document skeleton (NCNDA, IMFPA, SPA fee clause, introduction authorization, mandate/authority "
+        "confirmation, KYC/KYB request, or tender checklist) for a deal, filled in only from this deal's own recorded facts. "
+        "ALWAYS returned tagged UNREVIEWED DRAFT -- HUMAN/LEGAL REVIEW REQUIRED; this is a template assembly, not legal advice or a "
+        "final instrument. Requires opportunity_id, document_type and northsea.identity (a document must name the real parties). "
+        "Saved as a deal_documents row with status=unreviewed_draft, versioned by template_version. THIS TOOL NEVER SENDS OR SIGNS "
+        "anything; a human with legal authority must review, complete and re-issue it before any use."),
     "northsea_create_task": (
         "Create a NorthSea deal task in the existing Deal Desk task list (the same record the AXE CORE desk shows). Use only when "
         "the user asks to create or schedule a follow-up. Requires opportunity_id, title and idempotency_key; retries with the "
@@ -415,6 +422,19 @@ def register_tools(mcp: MCPServer, service: NorthSeaService, guard: Guard) -> No
         return await guard.run("northsea_prepare_outreach", {"opportunity_id": opportunity_id, "counterparty_id": counterparty_id},
                                doe, OutreachDraft, args=args)
 
+    @mcp.tool(name="northsea_prepare_legal_document", title="Prepare legal document draft",
+              description=DESCRIPTIONS["northsea_prepare_legal_document"],
+              annotations=_ann("Prepare legal document draft", Risk.DRAFT, False), structured_output=True)
+    async def prepare_legal_document(
+        opportunity_id: Id,
+        document_type: Literal["ncnda", "imfpa", "spa_fee_clause", "introduction_authorization",
+                              "mandate_authority_confirmation", "kyc_kyb_request", "tender_checklist"],
+        counterparty_id: Annotated[str | None, Field(description="Optional: restrict to one named party (buyer or seller company UUID).")] = None,
+    ) -> LegalDocumentDraft:
+        args = dict(opportunity_id=opportunity_id, document_type=document_type, counterparty_id=counterparty_id)
+        return await guard.run("northsea_prepare_legal_document", {"opportunity_id": opportunity_id},
+                               lambda c: service.prepare_legal_document(c, **args), LegalDocumentDraft, args=args)
+
     @mcp.tool(name="northsea_create_task", title="Create deal task", description=DESCRIPTIONS["northsea_create_task"],
               annotations=_ann("Create deal task", Risk.LOW_RISK_WRITE, False), structured_output=True)
     async def create_task(opportunity_id: Id,
@@ -505,8 +525,9 @@ INSTRUCTIONS = (
     "paginated (limit/offset, next_offset) and filterable; deals can be referenced as DEAL-001, UUID or '#idprefix', counterparties "
     "by name or UUID, and ambiguous references return candidates instead of a guess. northsea_get_dashboard_snapshot explains every "
     "dashboard number with definition, source and record ids (data verification, not a visual check of the app). "
-    "RESEARCH tools cost budget and return unverified findings. SAFE WRITE: northsea_create_task/northsea_update_task and "
-    "northsea_prepare_outreach (pending draft only). APPROVAL-GATED: northsea_approve_draft needs northsea.admin and an explicit human "
+    "RESEARCH tools cost budget and return unverified findings. SAFE WRITE: northsea_create_task/northsea_update_task, "
+    "northsea_prepare_outreach (pending draft only) and northsea_prepare_legal_document (always UNREVIEWED DRAFT -- HUMAN/LEGAL "
+    "REVIEW REQUIRED, needs northsea.identity, never sent or signed). APPROVAL-GATED: northsea_approve_draft needs northsea.admin and an explicit human "
     "decision; northsea_send_approved_communication only sends a human-approved draft from trade@northseacommodity.com. "
     "Rules: unknown stays unknown; an opportunity is NOT an executable deal; matched, qualifying, blocked and verified are distinct; "
     "never present research as verified; never claim NorthSea owns inventory; never accept prices, payment terms, commissions, "

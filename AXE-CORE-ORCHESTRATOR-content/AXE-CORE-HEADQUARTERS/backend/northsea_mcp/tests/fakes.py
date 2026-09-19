@@ -95,6 +95,7 @@ def seed() -> dict[str, list[dict]]:
         "action_queue": [{"id": str(uuid.uuid4()), "opportunity_id": OPP, "action_type": "qualify_match", "title": "Qualify buyer",
                           "status": "open", "priority": 60, "requires_approval": False, "due_at": ts(30)}],
         "deal_events": [],
+        "deal_documents": [],
         "match_assessments": [],
         "reply_drafts": [
             {"id": DRAFT_PENDING, "communication_id": COMM, "company_id": SELLER_CO, "contact_id": CONTACT_S, "opportunity_id": OPP,
@@ -299,6 +300,11 @@ class FakeRepo:
 
     async def insert_deal_event(self, row):
         self.t["deal_events"].append({"id": len(self.t["deal_events"]) + 1, "created_at": ts(), **row})
+
+    async def insert_deal_document(self, row):
+        r = {"id": str(uuid.uuid4()), "created_at": ts(), "updated_at": ts(), "file_path": None, "external_url": None, **row}
+        self.t["deal_documents"].append(r)
+        return copy.deepcopy(r)
 
     async def find_crew_audit(self, event_id: str):
         if not event_id:

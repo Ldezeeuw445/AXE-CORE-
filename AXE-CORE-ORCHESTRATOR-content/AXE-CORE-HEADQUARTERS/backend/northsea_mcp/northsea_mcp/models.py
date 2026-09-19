@@ -234,6 +234,25 @@ class OutreachDraft(BaseModel):
     notes: list[str]
 
 
+class LegalDocumentDraft(BaseModel):
+    """A generated legal/commercial document skeleton. Always a draft: this server has no legal review capability,
+    so every instance carries `disclaimer` and is never sent, signed, or treated as a final instrument."""
+    opportunity_id: str
+    document_type: Literal["ncnda", "imfpa", "spa_fee_clause", "introduction_authorization",
+                           "mandate_authority_confirmation", "kyc_kyb_request", "tender_checklist"]
+    template_version: str
+    status: Literal["unreviewed_draft"] = "unreviewed_draft"
+    disclaimer: str
+    subject: str
+    body: str
+    facts_used: list[Claim]
+    unknowns: list[str]
+    approval_required: bool = True
+    sent: bool = False
+    saved_document_id: str | None = None
+    notes: list[str]
+
+
 class ReplyAnalysis(BaseModel):
     communication_id: str
     channel: str | None

@@ -315,6 +315,9 @@ class SupabaseRepository:
     async def insert_deal_event(self, row: dict) -> None:
         await self._write("POST", "deal_events", None, row)
 
+    async def insert_deal_document(self, row: dict) -> dict:
+        return (await self._write("POST", "deal_documents", None, row))[0]
+
     async def outbound_block_reason(self, *, company_id: str | None = None, contact_id: str | None = None, email: str | None = None,
                                     opportunity_id: str | None = None) -> str | None:
         """Contactbeleid uit de database (dezelfde functie die de triggers gebruiken). Fout -> RepositoryError (dicht)."""

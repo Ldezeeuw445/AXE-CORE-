@@ -73,6 +73,9 @@ TOOLS: dict[str, ToolPolicy] = {p.name: p for p in (
     # handhaaft daarnaast de scopes van de concrete actie én de approval-plicht.
     ToolPolicy("northsea_handle_event", Risk.RESEARCH, ("northsea.research", "northsea.deal.read"), uses_crew=True),
     ToolPolicy("northsea_prepare_outreach", Risk.DRAFT, ("northsea.communications.draft",)),
+    # Identity is required (not just draft): a legal/commercial document that redacted the
+    # parties' names would look complete while being unusable, which is worse than refusing.
+    ToolPolicy("northsea_prepare_legal_document", Risk.DRAFT, ("northsea.communications.draft", "northsea.identity")),
     ToolPolicy("northsea_create_task", Risk.LOW_RISK_WRITE, ("northsea.deal.write",), needs_idempotency_key=True),
     ToolPolicy("northsea_update_task", Risk.LOW_RISK_WRITE, ("northsea.deal.write",), needs_idempotency_key=True),
     ToolPolicy("northsea_approve_draft", Risk.HIGH_IMPACT_WRITE, ("northsea.admin",), needs_idempotency_key=True),

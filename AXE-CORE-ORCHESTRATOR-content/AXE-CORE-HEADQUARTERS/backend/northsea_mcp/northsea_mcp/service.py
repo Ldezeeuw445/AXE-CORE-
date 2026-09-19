@@ -36,8 +36,8 @@ from . import orchestration
 from .crew import PROHIBITED, CrewGateway
 from .models import (
     Blocker, BlockerInvestigation, CandidateSearch, CandidateView, Claim, CounterpartyResearch, CrewRunInfo,
-    DealReview, DedupeSummary, DraftApprovalResult, GateState, MatchAssessmentResult, NextActions, OutreachDraft,
-    PartyView, QualificationResult, RankedAction, ReplyAnalysis, ResearchRun, SendResult, SourceRef, TaskResult,
+    DealReview, DedupeSummary, DraftApprovalResult, GateState, LegalDocumentDraft, MatchAssessmentResult, NextActions,
+    OutreachDraft, PartyView, QualificationResult, RankedAction, ReplyAnalysis, ResearchRun, SendResult, SourceRef, TaskResult,
 )
 from .policy import PolicyDenied, check_sensitive_draft, is_sensitive_text, may_see_identity
 from .repository import SupabaseRepository
@@ -118,6 +118,134 @@ SUPPLIER_GAPS = ["legal selling entity", "principal or authorised-seller status"
                  "product documentation and inspection"]
 BUYER_GAPS = ["legal buying entity and authorised contact", "exact grade and purity", "trial and recurring quantity",
               "destination port and Incoterm", "payment instrument and issuing bank", "shipment window"]
+
+
+# ── Juridische/commerciële sjablonen (UNREVIEWED DRAFT) ─────────────────────
+# Standaard-vormen uit de intermediair-commodity-handel (NCNDA/IMFPA-paar, mandaatbevestiging,
+# KYC/KYB, tender-checklist): generieke marktpraktijk, geen tekst van een specifieke bron.
+# Elke instantie is bewust onvolledig (haakjes = wat deze database niet weet) en NOOIT eindtekst --
+# zie UNREVIEWED_DRAFT_NOTICE. Versienummer bumpen bij elke inhoudelijke wijziging aan een sjabloon.
+LEGAL_TEMPLATE_VERSION = "1.0.0"
+LEGAL_DOCUMENT_TYPES = ("ncnda", "imfpa", "spa_fee_clause", "introduction_authorization",
+                       "mandate_authority_confirmation", "kyc_kyb_request", "tender_checklist")
+LEGAL_DOCUMENT_LABELS = {"ncnda": "NCNDA (Non-Circumvention, Non-Disclosure & Working Agreement)",
+                         "imfpa": "IMFPA (Irrevocable Master Fee Protection Agreement)",
+                         "spa_fee_clause": "SPA commission/fee clause",
+                         "introduction_authorization": "Introduction Authorization",
+                         "mandate_authority_confirmation": "Mandate / Authority Confirmation Request",
+                         "kyc_kyb_request": "KYC/KYB Information Request",
+                         "tender_checklist": "Tender/RFT Compliance Checklist"}
+UNREVIEWED_DRAFT_NOTICE = (
+    "UNREVIEWED DRAFT -- HUMAN/LEGAL REVIEW REQUIRED. Generated from a template and this deal's own recorded "
+    "facts; not reviewed by a lawyer and not a final instrument. Do not sign, send or rely on this until a "
+    "qualified human has reviewed, completed and re-issued it."
+)
+
+
+def _ncnda_body(buyer: str, seller: str, product: str, opp: dict) -> str:
+    return (f"NON-CIRCUMVENTION, NON-DISCLOSURE & WORKING AGREEMENT (NCNDA) -- DRAFT\n\n"
+           f"Between NorthSea Commodity Partners (\"Intermediary\") and the receiving party in respect of "
+           f"{product}, involving {buyer} and {seller}.\n\n"
+           "1. Non-Circumvention: The receiving party shall not contact, negotiate or transact directly or "
+           "indirectly with any party introduced by the Intermediary, or with that party's principals, "
+           "affiliates or assigns, without the Intermediary's prior written consent, for [TERM NOT ON FILE] "
+           "from the date of this Agreement.\n"
+           "2. Non-Disclosure: Names, contact details, commercial terms and this Agreement itself are "
+           "confidential and shall not be disclosed to any third party without prior written consent.\n"
+           "3. Working Agreement: The parties agree to work exclusively through the Intermediary for the "
+           "duration of this transaction and any repeat transactions arising from it.\n"
+           f"4. Governing law: [NOT ON FILE]. Jurisdiction: [NOT ON FILE].\n\n"
+           "Signed for and on behalf of:\n[BUYER SIGNATORY -- NOT ON FILE]        [SELLER SIGNATORY -- NOT ON FILE]")
+
+
+def _imfpa_body(buyer: str, seller: str, product: str, opp: dict) -> str:
+    tarief = opp.get("commission_rate")
+    tariefregel = f"{tarief}" if tarief else "[COMMISSION RATE NOT ON FILE]"
+    return (f"IRREVOCABLE MASTER FEE PROTECTION AGREEMENT (IMFPA) -- DRAFT\n\n"
+           f"In respect of the transaction for {product} between {buyer} and {seller}, arranged through "
+           "NorthSea Commodity Partners and any co-intermediaries in the chain.\n\n"
+           f"1. Commission: {tariefregel} of the gross contract value, payable irrevocably and without "
+           "deduction, set-off or delay upon each successful shipment and receipt of payment.\n"
+           "2. Payment instruction: Commission is to be paid by irrevocable, unconditional, divisible and "
+           "assignable Telegraphic Transfer directly from the paying bank to each named beneficiary's account, "
+           "simultaneously with payment for each shipment.\n"
+           "3. This Agreement is irrevocable for the duration of the underlying contract and any of its "
+           "extensions, amendments or renewals, and survives any renegotiation of price or quantity.\n"
+           "4. Beneficiary details: [NOT ON FILE -- bank, account holder, IBAN/SWIFT for each intermediary "
+           "in the chain].\n\n"
+           "Signed for and on behalf of:\n[PAYING PARTY SIGNATORY -- NOT ON FILE]        [BENEFICIARY SIGNATORY -- NOT ON FILE]")
+
+
+def _spa_fee_clause_body(buyer: str, seller: str, product: str, opp: dict) -> str:
+    tarief = opp.get("commission_rate")
+    tariefregel = f"{tarief}" if tarief else "[COMMISSION RATE NOT ON FILE]"
+    return (f"SALE AND PURCHASE AGREEMENT -- COMMISSION/FEE CLAUSE (DRAFT, for insertion into the SPA for "
+           f"{product} between {buyer} and {seller})\n\n"
+           f"\"Buyer and Seller acknowledge that NorthSea Commodity Partners acted as introducing intermediary "
+           f"to this Agreement and is entitled to a commission of {tariefregel} of the gross contract value. "
+           "This commission is payable directly by the paying bank by irrevocable Telegraphic Transfer "
+           "simultaneously with each payment made under this Agreement, and this clause shall not be amended, "
+           "waived or removed without NorthSea Commodity Partners' prior written consent. This obligation "
+           "survives any amendment, extension, assignment or renegotiation of this Agreement.\"\n\n"
+           "[FULL SPA TERMS -- PRICE, QUANTITY, DELIVERY, INSPECTION, PAYMENT MECHANISM -- ARE NOT DRAFTED "
+           "HERE; this is a fee-protection clause only, to be inserted into the parties' own SPA by counsel.]")
+
+
+def _introduction_authorization_body(buyer: str, seller: str, product: str, opp: dict) -> str:
+    return (f"INTRODUCTION AUTHORIZATION -- DRAFT\n\n"
+           f"NorthSea Commodity Partners requests written authorization to make a controlled introduction "
+           f"between {buyer} and {seller} in respect of {product}.\n\n"
+           "This authorization does not itself disclose either party's identity, confirm any commercial term, "
+           "or bind either party to transact. It records only that the signatory permits NorthSea Commodity "
+           "Partners to proceed with the introduction, subject to the NCNDA/IMFPA already in place with that "
+           "signatory's party.\n\n"
+           "Authorized by: [SIGNATORY NAME, TITLE -- NOT ON FILE]        Date: [NOT ON FILE]\n"
+           "Scope: [single introduction / this transaction only -- NOT ON FILE]")
+
+
+def _mandate_authority_confirmation_body(buyer: str, seller: str, product: str, opp: dict) -> str:
+    return (f"MANDATE / AUTHORITY CONFIRMATION REQUEST -- DRAFT\n\n"
+           f"To: {seller}\nRe: {product}\n\n"
+           "Please confirm, on your company letterhead and signed by an authorised officer:\n"
+           "1. Whether you are the Principal (owner of the goods) or hold a valid, current Mandate from the "
+           "Principal to offer and sell this material;\n"
+           "2. If mandated: the Principal's full legal name, and a copy of the Mandate letter naming you as "
+           "authorised representative, its scope and expiry date;\n"
+           "3. The signatory's name, title and authority to bind the company;\n"
+           "4. Confirmation that the offered quantity and terms are within the scope of that Mandate.\n\n"
+           "[MANDATE DOCUMENT ITSELF -- NOT ON FILE; this is only the request for it.]")
+
+
+def _kyc_kyb_request_body(buyer: str, seller: str, product: str, opp: dict) -> str:
+    return ("KYC/KYB INFORMATION REQUEST -- DRAFT\n\n"
+           "To proceed, please provide the following Know-Your-Customer / Know-Your-Business documentation:\n"
+           "1. Certificate of Incorporation and current Certificate of Good Standing (or local equivalent);\n"
+           "2. Register of Directors and Register of (Ultimate Beneficial) Shareholders;\n"
+           "3. Passport copy and proof of address for each director and beneficial owner holding 25% or more;\n"
+           "4. Company bank reference letter (issuing bank, account name, no account numbers over this channel);\n"
+           "5. Trade reference(s) for comparable transactions in this commodity;\n"
+           "6. Confirmation of sanctions/PEP status for the company and its beneficial owners.\n\n"
+           "[NO DOCUMENTS ARE ATTACHED OR VERIFIED BY THIS REQUEST; verification happens after receipt, by a "
+           "human, per POLICIES.md -- this server never marks a KYC/KYB claim 'verified' itself.]")
+
+
+def _tender_checklist_body(buyer: str, seller: str, product: str, opp: dict) -> str:
+    return (f"TENDER/RFT COMPLIANCE CHECKLIST -- DRAFT\n\nFor: {product} ({buyer} as issuing/receiving party)\n\n"
+           "[ ] Tender/RFT reference number and closing date: [NOT ON FILE]\n"
+           "[ ] Eligibility criteria met (trading history, references, certifications): [NOT ON FILE]\n"
+           "[ ] Product specification matches the tender's stated specification exactly\n"
+           "[ ] Traceability / certificate of origin capability confirmed\n"
+           "[ ] Submission method and format confirmed (portal, sealed bid, email)\n"
+           "[ ] Required bid bond / performance guarantee identified: [NOT ON FILE]\n"
+           "[ ] Pricing basis matches the tender's required Incoterm and currency\n"
+           "[ ] Internal sign-off obtained before submission (this checklist does not itself authorise submission)\n\n"
+           "[This checklist tracks compliance points only; it is not the tender submission itself.]")
+
+
+LEGAL_TEMPLATE_BODIES = {"ncnda": _ncnda_body, "imfpa": _imfpa_body, "spa_fee_clause": _spa_fee_clause_body,
+                         "introduction_authorization": _introduction_authorization_body,
+                         "mandate_authority_confirmation": _mandate_authority_confirmation_body,
+                         "kyc_kyb_request": _kyc_kyb_request_body, "tender_checklist": _tender_checklist_body}
 
 
 # ── Maskering ────────────────────────────────────────────────────────────────
@@ -1206,6 +1334,61 @@ class NorthSeaService:
                              subject=onderwerp, body=tekst, facts_used=feiten, unknowns=[o.replace("_", " ") for o in onbekend] or list(gaps[:3]),
                              sensitive=gevoelig, approval_required=True, sent=False, saved_draft_id=saved_id,
                              saved_status=saved_status, notes=notes)
+
+    # ── 7b. prepare_legal_document ──────────────────────────────────────────
+    async def prepare_legal_document(self, caller: Caller, *, opportunity_id: str, document_type: str,
+                                     counterparty_id: str | None = None) -> LegalDocumentDraft:
+        if document_type not in LEGAL_DOCUMENT_TYPES:
+            raise ServiceError("invalid_input", f"document_type must be one of {', '.join(LEGAL_DOCUMENT_TYPES)}")
+        if not caller.identity:
+            raise PolicyDenied("identity_scope_required",
+                               "A legal/commercial document must name the real parties; northsea.identity is required to prepare one. "
+                               "A redacted draft would look complete while silently omitting the parties it needs to bind.")
+        opp = await self.repo.get_opportunity(opportunity_id)
+        if not opp:
+            raise NotFound("opportunity")
+        req, off = req_of(opp), offer_of(opp)
+        buyer_co, seller_co = company_of(req), company_of(off)
+        if counterparty_id:
+            teken = buyer_co if buyer_co and buyer_co["id"] == counterparty_id else (
+                seller_co if seller_co and seller_co["id"] == counterparty_id else None)
+            if not teken:
+                raise NotFound("counterparty")
+        product = off.get("product") or req.get("product") or off.get("commodity") or req.get("commodity") or "[PRODUCT NOT ON FILE]"
+        feiten: list[Claim] = []
+
+        def voeg(veld: str, waarde: Any, basis: str) -> None:
+            if waarde not in (None, "", [], {}):
+                feiten.append(Claim(field=veld, value=waarde, state="unverified", basis=basis))
+
+        def naam(co: dict | None, label: str) -> str:
+            return co.get("company_name") if co else f"[{label} NOT ON FILE]"
+
+        buyer_naam, seller_naam = naam(buyer_co, "BUYER"), naam(seller_co, "SELLER")
+        voeg("buyer.company_name", buyer_co.get("company_name") if buyer_co else None, "buyer_requirements.companies.company_name")
+        voeg("buyer.country", buyer_co.get("country") if buyer_co else None, "buyer_requirements.companies.country")
+        voeg("seller.company_name", seller_co.get("company_name") if seller_co else None, "supplier_offers.companies.company_name")
+        voeg("seller.country", seller_co.get("country") if seller_co else None, "supplier_offers.companies.country")
+        voeg("product", off.get("product") or req.get("product"), "supplier_offers/buyer_requirements.product")
+        voeg("quantity_mt", off.get("quantity_mt") or req.get("quantity_mt"), "supplier_offers/buyer_requirements.quantity_mt")
+        voeg("commission_rate", opp.get("commission_rate"), "opportunities.commission_rate")
+        voeg("commission_type", opp.get("commission_type"), "opportunities.commission_type")
+        onbekend = [v for v in ("commission_rate", "commission_type") if not opp.get(v)]
+
+        onderwerp = f"{LEGAL_DOCUMENT_LABELS[document_type]} -- {product}"
+        tekst = LEGAL_TEMPLATE_BODIES[document_type](buyer_naam, seller_naam, product, opp)
+        notes = [UNREVIEWED_DRAFT_NOTICE, "This template was assembled from this deal's own recorded facts only; nothing was invented. "
+                "Bracketed placeholders mark facts this database does not hold.",
+                "Never sent, signed or relied upon: a human with legal authority must review, complete and re-issue this before use."]
+        rij = await self.repo.insert_deal_document({
+            "opportunity_id": opp["id"], "document_type": document_type, "status": "unreviewed_draft",
+            "metadata": {"content": tekst, "subject": onderwerp, "template_version": LEGAL_TEMPLATE_VERSION,
+                        "generated_by": "northsea-mcp", "disclaimer": UNREVIEWED_DRAFT_NOTICE,
+                        "facts_used": [f.model_dump() for f in feiten], "unknowns": onbekend, "requires_approval": True}})
+        return LegalDocumentDraft(opportunity_id=opp["id"], document_type=document_type, template_version=LEGAL_TEMPLATE_VERSION,
+                                  status="unreviewed_draft", disclaimer=UNREVIEWED_DRAFT_NOTICE, subject=onderwerp, body=tekst,
+                                  facts_used=feiten, unknowns=onbekend, approval_required=True, sent=False,
+                                  saved_document_id=rij.get("id"), notes=notes)
 
     # ── 8. process_reply ─────────────────────────────────────────────────────
     async def process_reply(self, caller: Caller, *, communication_id: str) -> ReplyAnalysis:
