@@ -129,6 +129,9 @@ const ANDROID_STRIP_ENV = [
   'VITE_N8N_API_KEY',
   'VITE_AXE_BRIDGE_TOKEN',
   'VITE_AXE_COMPANION_TOOLS_SECRET',
+  // Rest van .env, niet van de live app: /maps-3d is de NorthSea desk.
+  'VITE_GOOGLE_MAPS_API_KEY',
+  'VITE_GOOGLE_MAPS_MAP_ID',
 ] as const;
 
 const androidEnvDefines = Object.fromEntries(

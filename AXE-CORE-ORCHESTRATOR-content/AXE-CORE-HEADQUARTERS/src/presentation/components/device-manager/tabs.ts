@@ -40,7 +40,7 @@ export const DEVICE_TABS: readonly DeviceTab[] = [
   { path: '/tasks', label: 'Tasks', groep: 'run' },
   { path: '/finance', label: 'Finance', groep: 'trade' },
   { path: '/trading-intel', label: 'Trading', groep: 'trade' },
-  { path: '/maps-3d', label: 'Maps', groep: 'build' },
+  { path: '/maps-3d', label: 'Northsea Desk', groep: 'build' },
   { path: '/code-editor', label: 'Code', groep: 'build' },
   { path: '/terminals', label: 'Terminals', groep: 'build' },
   { path: '/devices', label: 'Devices', groep: 'build' },
