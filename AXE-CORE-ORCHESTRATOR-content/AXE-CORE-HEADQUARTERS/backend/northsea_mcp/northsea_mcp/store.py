@@ -230,14 +230,14 @@ class Store:
                 for r in rows]
 
     # ── Idempotentie ───────────────────────────────────────────────────────────
-    def idem_begin(self, principal: str, tool: str, key: str, args_hash: str) -> tuple[str, dict | None]:
+    def idem_begin(self, principal: str, tool: str, key: str, args_hash: str, *, now: float | None = None) -> tuple[str, dict | None]:
         """('new', None) | ('done', result) | ('running', None) | ('conflict', None)."""
         with self.tx() as db:
             r = db.execute("select args_hash, result, status from idempotency where principal=? and tool=? and key=?",
                            (principal, tool, key)).fetchone()
             if r is None:
                 db.execute("insert into idempotency values (?,?,?,?,null,'running',?)",
-                           (principal, tool, key, args_hash, int(time.time())))
+                           (principal, tool, key, args_hash, int(now if now is not None else time.time())))
                 return "new", None
         if r[0] != args_hash:
             return "conflict", None
@@ -255,6 +255,28 @@ class Store:
         with self.tx() as db:
             db.execute("delete from idempotency where principal=? and tool=? and key=? and status='running'",
                        (principal, tool, key))
+
+    def list_stuck(self, older_than_s: float = 300.0, now: float | None = None) -> list[dict]:
+        """'running' rijen ouder dan older_than_s: het proces stierf tussen idem_begin en
+        idem_finish/idem_abort in (bv. een crash midden in een tool-call). Alleen lezen --
+        gebruikt voor zichtbaarheid (northsea_get_engine_status/health), sweep_stuck() ruimt op."""
+        grens = (now if now is not None else time.time()) - older_than_s
+        with self._lock:
+            rows = self._db.execute(
+                "select principal, tool, key, created_at from idempotency where status='running' and created_at < ? "
+                "order by created_at asc", (int(grens),)).fetchall()
+        return [dict(zip(("principal", "tool", "key", "created_at"), r)) for r in rows]
+
+    def sweep_stuck(self, older_than_s: float = 300.0, now: float | None = None) -> int:
+        """Ruimt 'running' rijen ouder dan older_than_s op (de aanroeper crashte kennelijk
+        vóór idem_finish/idem_abort). Verwijderen, niet op 'failed' zetten: dat laat een
+        latere, legitieme poging met dezelfde idempotency_key gewoon opnieuw beginnen in
+        plaats van voor altijd 'in_progress' te blijven. Geeft het aantal opgeruimde rijen
+        terug zodat de aanroeper het kan loggen/auditen."""
+        grens = (now if now is not None else time.time()) - older_than_s
+        with self.tx() as db:
+            cur = db.execute("delete from idempotency where status='running' and created_at < ?", (int(grens),))
+            return cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else 0
 
     # ── Limieten (glijdend venster) ───────────────────────────────────────────
     def hit(self, bucket: str, window_s: float, limit: int, now: float | None = None) -> tuple[bool, int, float]:

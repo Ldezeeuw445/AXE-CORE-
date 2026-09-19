@@ -126,6 +126,21 @@ def test_evaluation_as_dict_includes_loop_stop_category():
     assert ev(contact_policy="do_not_contact").as_dict()["loop_stop_category"] == "terminal_state"
 
 
+# ── Retries: alleen op een aantoonbaar tijdelijke fout ───────────────────────
+
+def test_transient_errors_are_unreachable_or_5xx():
+    assert e.is_transient_repository_error("database unreachable (ConnectError)") is True
+    assert e.is_transient_repository_error("database write failed for opportunities (503)") is True
+    assert e.is_transient_repository_error("database read failed for opportunities (502)") is True
+
+
+def test_guard_and_client_errors_are_never_transient():
+    assert e.is_transient_repository_error("database write failed for reply_drafts (400): NS_CONTACT_POLICY: draft blocked") is False
+    assert e.is_transient_repository_error("database write failed for action_queue (409): duplicate") is False
+    assert e.is_transient_repository_error("engine may not write opportunities") is False
+    assert e.is_transient_repository_error("") is False
+
+
 # ── Deadlines ─────────────────────────────────────────────────────────────────
 
 def test_deadline_approaching_and_overdue():

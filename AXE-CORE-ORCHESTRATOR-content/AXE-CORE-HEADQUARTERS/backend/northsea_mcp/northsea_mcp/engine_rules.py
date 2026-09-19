@@ -444,3 +444,24 @@ def followup_draft(*, blocker_code: str, role: str, missing: list[str], product:
              "No counterparty introduction or binding commercial commitment is being made by this email.\n\n"
              "Kind regards,\nNorthSea Commodity Partners\ntrade@northseacommodity.com")
     return {"subject": onderwerp[:300], "body": tekst}
+
+
+# ── 6. Terugkomen na een schrijffout: alleen op een echt tijdelijke fout ─────
+# Een P0-guard (NS_...) of een 4xx is een BESLISSING van de database ("dit mag
+# niet"); die opnieuw proberen verandert niets en verbergt de echte reden. Alleen
+# "unreachable" (geen HTTP-antwoord) of een 5xx ("server error") is tijdelijk.
+_TRANSIENT_5XX = re.compile(r"\((5\d\d)\)")
+_GUARD_CODE = re.compile(r"\bNS_[A-Z_]+\b")
+
+
+def is_transient_repository_error(message: str) -> bool:
+    """Puur op de foutmelding van RepositoryError (repository.py bouwt hem als
+    "database unreachable (...)" of "database write failed for X (status)": nooit
+    op de exception-klasse, die is voor elke database-fout hetzelfde."""
+    tekst = str(message or "")
+    if _GUARD_CODE.search(tekst):
+        return False  # een P0-guard weigert met opzet; nooit herhalen
+    if "unreachable" in tekst:
+        return True
+    m = _TRANSIENT_5XX.search(tekst)
+    return bool(m)

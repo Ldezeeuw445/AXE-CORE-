@@ -36,8 +36,9 @@ def _metric(metric: str, value: Any, definition: str, source: list[str], ids: li
 
 
 class ReadTools:
-    def __init__(self, inspect: InspectService):
+    def __init__(self, inspect: InspectService, *, store: Any = None):
         self.i = inspect
+        self.store = store  # optioneel: alleen voor lokale watchdog-zichtbaarheid (stuck idempotency runs)
 
     async def v(self, caller: Caller) -> View:
         return await self.i.view(caller)
@@ -697,12 +698,16 @@ class ReadTools:
         fu = v.s.rows("northsea_followups")
         chase = [q for q in v.s.rows("action_queue") if (q.get("metadata") or {}).get("source") == "northsea-engine" and q.get("status") in OPEN_TASK]
         bounced = [c for c in v.s.rows("contacts") if c.get("email_status") in ("bounced", "complained")]
+        laatste_fout = next((t for t in ticks if (t.get("details") or {}).get("errors")), None)
+        stuck = self.store.list_stuck(older_than_s=600.0) if self.store else None
         return {
             "generated_at": v.generated_at,
             "engine": {"last_tick_at": ticks[0].get("occurred_at") if ticks else None,
                        "last_summary": (ticks[0].get("details") or {}).get("summary") if ticks else None,
                        "last_errors": (ticks[0].get("details") or {}).get("errors") if ticks else None,
+                       "last_failed_tick_at": laatste_fout.get("occurred_at") if laatste_fout else None,
                        "ticks_recorded": len(ticks), "sends": 0,
+                       "stuck_runs": stuck if stuck is not None else "not_available_from_this_process",
                        "guarantees": ["never sends", "never approves", "never passes a gate or changes stage",
                                       "follow-ups are pending drafts that need human approval",
                                       "ambiguous mappings are never resolved automatically"]},

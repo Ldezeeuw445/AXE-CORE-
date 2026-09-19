@@ -38,6 +38,36 @@ def test_rate_window_slides(tmp_path):
     assert s.hit("b", 10, 2, now=t + 10.5)[0]
 
 
+def test_stuck_running_rows_are_listed_and_swept_after_the_threshold(tmp_path):
+    s = Store(str(tmp_path / "s.db"))
+    t = 1_000_000.0
+    # Een call die begon en nooit idem_finish/idem_abort haalde (het proces crashte).
+    assert s.idem_begin("axe-core", "northsea_create_task", "k1", "h1", now=t)[0] == "new"
+    # Nog vers: niet stuck.
+    assert s.list_stuck(older_than_s=600, now=t) == []
+    # 601s later: wel stuck, maar list_stuck ruimt niets op.
+    later = t + 601
+    stuck = s.list_stuck(older_than_s=600, now=later)
+    assert len(stuck) == 1 and stuck[0]["tool"] == "northsea_create_task" and stuck[0]["key"] == "k1"
+    assert s.idem_begin("axe-core", "northsea_create_task", "k1", "h1", now=later)[0] == "running"  # nog steeds geblokkeerd
+    swept = s.sweep_stuck(older_than_s=600, now=later)
+    assert swept == 1
+    assert s.list_stuck(older_than_s=600, now=later) == []
+    # De sleutel is vrij: een nieuwe, legitieme poging met dezelfde idempotency_key mag nu wél.
+    assert s.idem_begin("axe-core", "northsea_create_task", "k1", "h1", now=later)[0] == "new"
+
+
+def test_sweep_stuck_never_touches_a_genuinely_running_or_finished_call(tmp_path):
+    s = Store(str(tmp_path / "s.db"))
+    t = 2_000_000.0
+    s.idem_begin("axe-core", "northsea_update_task", "k2", "h2", now=t)
+    s.idem_finish("axe-core", "northsea_update_task", "k2", {"ok": True})
+    s.idem_begin("axe-core", "northsea_update_task", "k3", "h3", now=t)  # blijft 'running', maar is vers
+    assert s.sweep_stuck(older_than_s=600, now=t + 1) == 0
+    assert s.idem_begin("axe-core", "northsea_update_task", "k2", "h2", now=t)[0] == "done"
+    assert s.idem_begin("axe-core", "northsea_update_task", "k3", "h3", now=t)[0] == "running"
+
+
 def test_every_write_tool_needs_idempotency_and_only_writes_can_mutate():
     for naam, p in TOOLS.items():
         if p.risk in (Risk.LOW_RISK_WRITE, Risk.HIGH_IMPACT_WRITE):

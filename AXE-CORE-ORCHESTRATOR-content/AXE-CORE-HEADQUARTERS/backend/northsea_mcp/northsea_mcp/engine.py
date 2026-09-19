@@ -67,10 +67,28 @@ def _metadata_ontvangers(o: dict) -> list[str]:
 
 
 class EngineService:
-    def __init__(self, repo: Any, *, now=_now, max_followups_per_run: int = 10):
+    def __init__(self, repo: Any, *, now=_now, max_followups_per_run: int = 10, sleep=None, max_write_attempts: int = 3):
         self.repo = repo
         self.now = now
         self.max_followups_per_run = max_followups_per_run
+        self._sleep = sleep or asyncio.sleep
+        self.max_write_attempts = max_write_attempts
+
+    async def _resilient(self, fn):
+        """Voer één schrijfactie uit met begrensde retries en backoff, alleen bij een
+        aantoonbaar tijdelijke fout (rules.is_transient_repository_error). Een P0-guard
+        of 4xx is een beslissing van de database, geen storing: die gaat direct door
+        naar de aanroeper, die 'm al afhandelt zoals voorheen (bv. blocked_by_guard)."""
+        laatste: RepositoryError | None = None
+        for poging in range(1, self.max_write_attempts + 1):
+            try:
+                return await fn()
+            except RepositoryError as e:
+                laatste = e
+                if poging >= self.max_write_attempts or not rules.is_transient_repository_error(str(e)):
+                    raise
+                await self._sleep(0.25 * (2 ** (poging - 1)))
+        raise laatste  # type: ignore[misc]  -- onbereikbaar: de lus raise't of return't altijd
 
     async def _load(self) -> dict[str, list[dict]]:
         namen = ["communications", "email_intelligence", "opportunities", "buyer_requirements", "supplier_offers", "companies",
@@ -361,27 +379,27 @@ class EngineService:
             if dry_run:
                 continue
             try:
-                await self.repo.engine_patch("opportunities", {"id": f"eq.{opp['id']}"}, {
+                await self._resilient(lambda: self.repo.engine_patch("opportunities", {"id": f"eq.{opp['id']}"}, {
                     "engine_blocker_code": uitkomst.blocker_code, "engine_blocker": uitkomst.blocker,
                     "engine_next_action_code": uitkomst.next_action_code, "engine_next_action": uitkomst.next_action,
-                    "engine_owner": uitkomst.owner, "engine_reasons": uitkomst.reasons, "engine_evaluated_at": nu.isoformat()})
-                await self.repo.engine_insert("deal_events", {
+                    "engine_owner": uitkomst.owner, "engine_reasons": uitkomst.reasons, "engine_evaluated_at": nu.isoformat()}))
+                await self._resilient(lambda: self.repo.engine_insert("deal_events", {
                     "opportunity_id": opp["id"], "event_type": "engine_evaluation_changed", "actor": "northsea-engine",
                     "summary": f"Current blocker: {uitkomst.blocker} Next: {uitkomst.next_action}"[:900],
-                    "metadata": {**uitkomst.as_dict(), "previous_blocker_code": opp.get("engine_blocker_code")}})
+                    "metadata": {**uitkomst.as_dict(), "previous_blocker_code": opp.get("engine_blocker_code")}}))
                 # Was de vorige blokkade "een concept wacht op goedkeuring" en is dat nu niet meer
                 # zo? Dan is er sinds de vorige tick een besluit genomen -- welk concept en welk
                 # besluit staat al in reply_drafts.approval_status, alleen niet als eigen event.
                 if opp.get("engine_blocker_code") == "approval_pending" and uitkomst.blocker_code != "approval_pending":
                     for dft in drafts:
                         if dft.get("opportunity_id") == opp["id"] and dft.get("approval_status") in ("approved", "rejected"):
-                            await self.repo.engine_insert("deal_events", {
+                            await self._resilient(lambda dft=dft: self.repo.engine_insert("deal_events", {
                                 "opportunity_id": opp["id"],
                                 "event_type": "approval_granted" if dft.get("approval_status") == "approved" else "approval_rejected",
                                 "actor": "northsea-engine",
                                 "summary": f"Draft {dft.get('subject') or dft.get('id')} was {dft.get('approval_status')}."[:900],
                                 "metadata": {"draft_id": dft.get("id"), "approval_status": dft.get("approval_status"),
-                                            "approved_by": dft.get("approved_by"), "approval_channel": dft.get("approval_channel")}})
+                                            "approved_by": dft.get("approved_by"), "approval_channel": dft.get("approval_channel")}}))
             except RepositoryError as e:
                 fouten.append(f"evaluation {opp['id']}: {e}")
 

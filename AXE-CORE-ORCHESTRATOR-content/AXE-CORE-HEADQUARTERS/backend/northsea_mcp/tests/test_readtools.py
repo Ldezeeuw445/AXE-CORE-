@@ -83,6 +83,15 @@ async def test_unknown_document_is_not_found(mcp_server):
     assert res.is_error and "not_found" in res.content[0].text
 
 
+async def test_engine_status_surfaces_stuck_runs_from_the_real_store(mcp_server, store):
+    data = await ok(mcp_server, "northsea_get_engine_status", {})
+    assert data["engine"]["stuck_runs"] == []  # niets stuck: een lege lijst, geen "not_available"
+    store.idem_begin("axe-core", "northsea_create_task", "stuck-key", "h", now=0.0)
+    data = await ok(mcp_server, "northsea_get_engine_status", {})
+    stuck = data["engine"]["stuck_runs"]
+    assert len(stuck) == 1 and stuck[0]["tool"] == "northsea_create_task" and stuck[0]["key"] == "stuck-key"
+
+
 # ── Acceptatiescenario's ──────────────────────────────────────────────────────
 
 async def test_get_deal_by_code_matches_uuid(mcp_server):

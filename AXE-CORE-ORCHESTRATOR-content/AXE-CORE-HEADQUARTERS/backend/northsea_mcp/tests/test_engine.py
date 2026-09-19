@@ -302,6 +302,47 @@ async def test_approval_resolution_becomes_its_own_event_once():
     assert len([e for e in repo.t["deal_events"] if e["event_type"] == "approval_granted"]) == 1
 
 
+async def test_transient_write_failure_is_retried_and_succeeds():
+    repo = FakeRepo()
+    origineel = repo.engine_patch
+    pogingen = {"n": 0}
+
+    async def flaky(table, filters, body):
+        if table == "opportunities" and pogingen["n"] == 0:
+            pogingen["n"] += 1
+            from northsea_mcp.repository import RepositoryError
+            raise RepositoryError("database unreachable (ConnectError)")
+        return await origineel(table, filters, body)
+
+    repo.engine_patch = flaky
+    uit = await eng(repo, sleep=lambda s: _no_sleep()).tick()
+    opp = next(o for o in repo.t["opportunities"] if o["id"] == OPP)
+    assert pogingen["n"] == 1 and opp["engine_blocker_code"]  # tweede poging is doorgegaan
+    assert not uit["errors"]  # geen fout gerapporteerd: de retry loste het zelf op
+
+
+async def test_guard_rejection_is_never_retried_and_surfaces_immediately():
+    repo = FakeRepo()
+    origineel = repo.engine_patch
+    pogingen = {"n": 0}
+
+    async def altijd_guard(table, filters, body):
+        if table != "opportunities":
+            return await origineel(table, filters, body)
+        pogingen["n"] += 1
+        from northsea_mcp.repository import RepositoryError
+        raise RepositoryError("database write failed for opportunities (400): NS_CONTACT_POLICY: blocked")
+
+    repo.engine_patch = altijd_guard
+    uit = await eng(repo, sleep=lambda s: _no_sleep()).tick()
+    assert pogingen["n"] == 1  # geen enkele retry op een guard-weigering
+    assert any("evaluation" in f for f in uit["errors"])
+
+
+async def _no_sleep():
+    return None
+
+
 async def test_second_tick_on_unchanged_state_creates_no_new_evaluation_or_deadline_duplicate():
     repo = FakeRepo()
     eerste = await eng(repo).tick()

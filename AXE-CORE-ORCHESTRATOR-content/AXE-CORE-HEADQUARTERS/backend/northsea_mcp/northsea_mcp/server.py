@@ -544,7 +544,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                           required_scopes=None, validate_token_resource=True),
     )
     register_tools(mcp, service, guard)
-    register_read_tools(mcp, ReadTools(InspectService(repo, crew=crew, research=research)), guard)
+    register_read_tools(mcp, ReadTools(InspectService(repo, crew=crew, research=research), store=store), guard)
     register_resources(mcp)
 
     route = mcp.custom_route
@@ -571,6 +571,13 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         if "northsea.engine" not in rec.scopes:
             return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
         dry = request.query_params.get("dry_run") in ("1", "true", "yes")
+        # Watchdog: een tool-call die crashte tussen idem_begin en idem_finish/idem_abort
+        # laat een 'running'-rij achter die een latere, legitieme herhaling voorgoed
+        # "in_progress" zou melden. Elke tick (elke 15 min) ruimt rijen ouder dan 10
+        # minuten op -- ruim boven DEEP_TIMEOUT (190s), dus nooit een echt lopende call.
+        geveegd = store.sweep_stuck(older_than_s=600.0)
+        if geveegd:
+            log.warning("swept %d stuck idempotency row(s) older than 600s", geveegd)
         if engine_lock.locked():
             return JSONResponse({"skipped": True, "reason": "a tick is already running"}, status_code=409)
         async with engine_lock:
@@ -580,6 +587,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 return JSONResponse({"error": "timeout"}, status_code=504)
             except RepositoryError:
                 return JSONResponse({"error": "upstream_error"}, status_code=502)
+        uit["stuck_runs_swept"] = geveegd
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
 
     @route("/", methods=["GET"])
