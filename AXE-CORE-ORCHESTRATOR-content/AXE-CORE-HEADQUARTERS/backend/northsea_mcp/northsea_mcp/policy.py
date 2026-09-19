@@ -42,6 +42,9 @@ SCOPES: dict[str, str] = {
 # dus ook niet in scopes_supported en niet te kiezen in het toestemmingsscherm).
 INTERNAL_SCOPES: dict[str, str] = {
     "northsea.engine": "Run the deterministic Communication Engine tick (no sending, no LLM). Service tokens only.",
+    "northsea.discovery": "Run the deterministic discovery sweep (creates internal opportunities from existing "
+                          "requirements/offers that already clear the match threshold; never sends, never invents a "
+                          "company). Service tokens only.",
 }
 
 # Wat een nieuwe ChatGPT-verbinding standaard aanvraagt als de client niets vraagt.

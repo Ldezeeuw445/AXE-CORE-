@@ -40,6 +40,7 @@ from . import orchestration
 from .audit import Auditor
 from .config import Settings
 from .crew import CrewGateway, StudioRoute
+from .discovery import DiscoveryService
 from .engine import EngineService
 from .models import (
     BlockerInvestigation, CandidateSearch, CounterpartyResearch, DealReview, DraftApprovalResult, LegalDocumentDraft,
@@ -610,6 +611,32 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             except RepositoryError:
                 return JSONResponse({"error": "upstream_error"}, status_code=502)
         uit["stuck_runs_swept"] = geveegd
+        return JSONResponse(uit, headers={"Cache-Control": "no-store"})
+
+    discovery = DiscoveryService(repo, max_new_per_run=5, max_new_per_day=25)
+    discovery_lock = asyncio.Lock()
+
+    @route("/internal/discovery/sweep", methods=["POST"])
+    async def discovery_sweep(request: Request) -> Response:
+        """LOOP A/B discovery (deterministic cross-match; creates internal opportunities from existing
+        requirements/offers only, never invents a company). Service-token + northsea.discovery only, never OAuth.
+        `?dry_run=1` reports what would be created without writing anything."""
+        auth = request.headers.get("authorization", "")
+        rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
+        if rec is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        if "northsea.discovery" not in rec.scopes:
+            return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
+        dry = request.query_params.get("dry_run") in ("1", "true", "yes")
+        if discovery_lock.locked():
+            return JSONResponse({"skipped": True, "reason": "a sweep is already running"}, status_code=409)
+        async with discovery_lock:
+            try:
+                uit = await asyncio.wait_for(discovery.sweep(dry_run=dry), timeout=120)
+            except asyncio.TimeoutError:
+                return JSONResponse({"error": "timeout"}, status_code=504)
+            except RepositoryError:
+                return JSONResponse({"error": "upstream_error"}, status_code=502)
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
 
     @route("/", methods=["GET"])

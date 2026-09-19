@@ -306,6 +306,20 @@ class FakeRepo:
         self.t["deal_documents"].append(r)
         return copy.deepcopy(r)
 
+    async def insert_opportunity(self, row):
+        r = {"id": str(uuid.uuid4()), "created_at": ts(), "updated_at": ts(), "is_synthetic": False, **row}
+        self.t["opportunities"].append(r)
+        return copy.deepcopy(r)
+
+    async def insert_match_assessment(self, row):
+        r = {"id": str(uuid.uuid4()), "assessed_at": ts(), **row}
+        self.t["match_assessments"].append(r)
+        return copy.deepcopy(r)
+
+    async def count_events_since(self, *, event_type, actor, since):
+        return sum(1 for e in self.t["deal_events"] if e.get("event_type") == event_type and e.get("actor") == actor
+                  and str(e.get("created_at") or "") >= since)
+
     async def find_crew_audit(self, event_id: str):
         if not event_id:
             return None

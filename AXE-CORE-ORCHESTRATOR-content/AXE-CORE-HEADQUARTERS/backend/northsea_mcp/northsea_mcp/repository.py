@@ -318,6 +318,17 @@ class SupabaseRepository:
     async def insert_deal_document(self, row: dict) -> dict:
         return (await self._write("POST", "deal_documents", None, row))[0]
 
+    async def insert_opportunity(self, row: dict) -> dict:
+        return (await self._write("POST", "opportunities", None, row))[0]
+
+    async def insert_match_assessment(self, row: dict) -> dict:
+        return (await self._write("POST", "match_assessments", None, row))[0]
+
+    async def count_events_since(self, *, event_type: str, actor: str, since: str) -> int:
+        rows = await self._get("deal_events", {"event_type": f"eq.{event_type}", "actor": f"eq.{actor}",
+                                                "created_at": f"gte.{since}", "select": "id", "limit": "1000"})
+        return len(rows)
+
     async def outbound_block_reason(self, *, company_id: str | None = None, contact_id: str | None = None, email: str | None = None,
                                     opportunity_id: str | None = None) -> str | None:
         """Contactbeleid uit de database (dezelfde functie die de triggers gebruiken). Fout -> RepositoryError (dicht)."""
