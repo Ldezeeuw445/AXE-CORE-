@@ -369,6 +369,19 @@ class EngineService:
                     "opportunity_id": opp["id"], "event_type": "engine_evaluation_changed", "actor": "northsea-engine",
                     "summary": f"Current blocker: {uitkomst.blocker} Next: {uitkomst.next_action}"[:900],
                     "metadata": {**uitkomst.as_dict(), "previous_blocker_code": opp.get("engine_blocker_code")}})
+                # Was de vorige blokkade "een concept wacht op goedkeuring" en is dat nu niet meer
+                # zo? Dan is er sinds de vorige tick een besluit genomen -- welk concept en welk
+                # besluit staat al in reply_drafts.approval_status, alleen niet als eigen event.
+                if opp.get("engine_blocker_code") == "approval_pending" and uitkomst.blocker_code != "approval_pending":
+                    for dft in drafts:
+                        if dft.get("opportunity_id") == opp["id"] and dft.get("approval_status") in ("approved", "rejected"):
+                            await self.repo.engine_insert("deal_events", {
+                                "opportunity_id": opp["id"],
+                                "event_type": "approval_granted" if dft.get("approval_status") == "approved" else "approval_rejected",
+                                "actor": "northsea-engine",
+                                "summary": f"Draft {dft.get('subject') or dft.get('id')} was {dft.get('approval_status')}."[:900],
+                                "metadata": {"draft_id": dft.get("id"), "approval_status": dft.get("approval_status"),
+                                            "approved_by": dft.get("approved_by"), "approval_channel": dft.get("approval_channel")}})
             except RepositoryError as e:
                 fouten.append(f"evaluation {opp['id']}: {e}")
 

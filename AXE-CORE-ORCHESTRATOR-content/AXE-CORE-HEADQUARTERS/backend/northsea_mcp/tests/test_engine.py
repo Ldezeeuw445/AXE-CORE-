@@ -280,6 +280,28 @@ async def test_evaluation_event_carries_loop_stop_category():
     assert ev["metadata"]["loop_stop_category"] == "approval_required"
 
 
+async def test_approval_resolution_becomes_its_own_event_once():
+    repo = FakeRepo()
+    draft_id = str(uuid.uuid4())
+    repo.t["reply_drafts"] = [{"id": draft_id, "communication_id": COMM, "company_id": SELLER_CO, "contact_id": CONTACT_S,
+                              "opportunity_id": OPP, "to_email": "chanda@mopani.com", "subject": "Re: allocation",
+                              "body": "Please confirm the loading point.", "approval_status": "pending", "sensitive_action": False,
+                              "sent_at": None, "resend_email_id": None, "updated_at": iso(-1), "created_at": iso(-1)}]
+    await eng(repo).tick()
+    opp = next(o for o in repo.t["opportunities"] if o["id"] == OPP)
+    assert opp["engine_blocker_code"] == "approval_pending"
+    assert not any(e["event_type"] in ("approval_granted", "approval_rejected") for e in repo.t["deal_events"])
+
+    repo.t["reply_drafts"][0]["approval_status"] = "approved"
+    repo.t["reply_drafts"][0]["approved_by"] = "luka"
+    await eng(repo).tick()
+    goedgekeurd = [e for e in repo.t["deal_events"] if e["event_type"] == "approval_granted"]
+    assert len(goedgekeurd) == 1 and goedgekeurd[0]["metadata"]["draft_id"] == draft_id and goedgekeurd[0]["metadata"]["approved_by"] == "luka"
+
+    await eng(repo).tick()  # herhaling: geen tweede approval_granted voor hetzelfde besluit
+    assert len([e for e in repo.t["deal_events"] if e["event_type"] == "approval_granted"]) == 1
+
+
 async def test_second_tick_on_unchanged_state_creates_no_new_evaluation_or_deadline_duplicate():
     repo = FakeRepo()
     eerste = await eng(repo).tick()
