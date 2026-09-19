@@ -126,6 +126,15 @@ export function PlaatChat() {
   }, []);
 
   useEffect(() => {
+    const focusComposer = () => {
+      const veld = document.querySelector<HTMLTextAreaElement>('.axe-vak-invoer');
+      veld?.focus();
+    };
+    window.addEventListener('axe-focus-composer', focusComposer);
+    return () => window.removeEventListener('axe-focus-composer', focusComposer);
+  }, []);
+
+  useEffect(() => {
     const action = voice.pendingAction;
     if (!action) return;
     if (action.kind === 'navigate') {
@@ -287,7 +296,11 @@ export function PlaatChat() {
    * De composer gaat daar naar de code-agent (zie handleSend); de kop zegt dat,
    * met welke motor en in welke repo. Geen gespreksrol eronder -- het gesprek
    * met de agent staat in de editor zelf. */
-  const kopAlleen = opEditor || chatCollapsed;
+  /* Conversation history now lives in AxePresenceDock beside the composer.
+   * Keep this shell strip compact on every route; Home's large Core Sphere is
+   * independent and remains untouched. */
+  const gesprekInPresence = true;
+  const kopAlleen = gesprekInPresence || opEditor || chatCollapsed;
   const chatHeight = kopAlleen ? collapsedChatHeight : expandedChatHeight;
 
   /* De stand van de chat op <html>, zodat de panelen ernaast hem kennen.
