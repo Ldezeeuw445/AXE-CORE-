@@ -10,7 +10,6 @@ import {
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
-import { AxeStatusOrb } from './AxeStatusOrb';
 
 const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
@@ -201,8 +200,8 @@ function AxeVoiceOrb() {
      bezig is. Spreken blijft de equalizer, met zeven staafjes. */
   if (opPlaat) {
     return (
-      <div className="axe-voice-orb" title={STATUS_LABEL[status]}>
-        <AxeStatusOrb size={64} />
+      <div className="axe-voice-orb" title="AXE presence is beside the composer">
+        <span className="text-[9px] font-mono tracking-[0.18em] uppercase" style={{ color: 'var(--text-muted)' }}>AXE</span>
       </div>
     );
   }
