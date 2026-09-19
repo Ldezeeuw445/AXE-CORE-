@@ -1,7 +1,21 @@
-# AXE × NorthSea — activation runbook (pre-promotion)
+# AXE × NorthSea — activation runbook
+
+**Part 1 below is HISTORICAL and CLOSED.** `integration/axe-agent-force-northsea`
+was promoted to `orchestrator` (step 6 done); steps 1–5's gates were met at
+promotion time. Everything built since — event coverage, communication
+templates, CrewRunResult provenance, unified observability, the legal-document
+draft layer, and the governed real research-execution path — happened directly
+on `orchestrator`. **Part 2 (bottom of this file) is the current, open runbook.**
+Part 1 is kept for its still-relevant detail (Studio AMP project IDs, the
+EXA_API_KEY gap, the Global Trade Center check) rather than deleted.
+
+---
+
+# Part 1 — pre-promotion (historical)
 
 **Branch:** `integration/axe-agent-force-northsea` @ `daf226f5` (31 ahead of
-`orchestrator` @ `bb5f484a`, 0 behind). Pushed. **Not merged. Not deployed.**
+`orchestrator` @ `bb5f484a`, 0 behind). Pushed. **Merged 2026-09 (see Part 2 for
+what shipped afterward).**
 
 This is the ordered checklist to take the integrated branch from "verified in a
 build" to "live and promoted". Every step is Luka's to run and authorize; the
@@ -166,6 +180,153 @@ Only after the integrated runtime is accepted, process the preserved backlog
 **through the live crews and the governed send path**, one item at a time, each
 with your explicit approval. Nothing autonomous: no send, accept, sign,
 commission, or identity disclosure without you in the loop.
+
+---
+
+---
+
+# Part 2 — V1 governed automation (current, open)
+
+Everything below landed directly on `orchestrator` (no separate integration
+branch this time), one tested slice per commit. Confirmed via `deploy/deploy.sh
+check` (2026-09-19): the live `northsea-mcp` service (port 8040 on the API box,
+`212.227.91.79`) still runs the code from before this build. **Nothing in this
+section is live yet.**
+
+## 0. What changed (12 files)
+
+`audit.py, crew.py, engine.py, engine_rules.py, models.py, policy.py,
+readlayer.py, readtools.py, repository.py, server.py, service.py, store.py` —
+in `backend/northsea_mcp/northsea_mcp/`. Feature summary:
+
+1. **Event coverage**: deadline detection (`deadline_chase_items`), approval
+   granted/rejected events, evidence-contradiction detection
+   (`contradicted_fields`, raises a `review_contradiction` Chase item),
+   requirement/offer-changed-since-last-look visibility
+   (`changed_since_last_evaluation`).
+2. **Retries/watchdog**: `EngineService._resilient()` (bounded retry+backoff on
+   genuinely transient repository errors only), `Store.sweep_stuck()` (deletes
+   idempotency rows stuck in `running` past a threshold, called from
+   `/internal/engine/tick` before every tick).
+3. **10 communication templates** on `northsea_prepare_outreach` (5 pre-existing
+   + `decline_not_executable`, `deal_alignment`, `controlled_introduction`,
+   `tender_specific_request`, `delivery_failure`, `bounce_handling`).
+4. **CrewRunResult provenance**: `requested_specialists`, `actual_specialists`,
+   `entities_examined`, `retries`, `audit_references` on every `CrewGateway.run()`
+   return path.
+5. **Unified observability**: `northsea_get_system_health` now reports
+   `scheduler` (next/last run from `core_schedules`, via a read-only
+   `Auditor.get_schedule()` reusing the existing AXE-project credential),
+   `crewai.routes`/`crewai.fallback` (from `CrewGateway.status()`), and
+   `research.governed_research_gate` (policy budget config, pending-approval and
+   approved-not-yet-executed counts) with an explicit `cost_usd_tracked_here:
+   false` note.
+6. **Legal/commercial UNREVIEWED DRAFT layer**: new tool
+   `northsea_prepare_legal_document` (NCNDA, IMFPA, SPA fee clause, introduction
+   authorization, mandate/authority confirmation, KYC/KYB request, tender
+   checklist). Requires `northsea.identity`. Always
+   `status=unreviewed_draft`, `approval_required=true`, `sent=false`; persisted
+   into `deal_documents` (existing table, `metadata.template_version`).
+7. **Governed research gate — now with real execution**: the
+   `approved_ready_to_execute` branch calls the existing `self.research.ask()`
+   exactly once per deal+blocker, gated by a configured daily budget
+   (`deal_automation_policy.auto_investigate_blockers_max_calls_per_day`,
+   missing/zero = no spend), bounded retries (`MAX_RESEARCH_ATTEMPTS = 3`), and
+   only marks the intent consumed on a genuine success or a permanently
+   exhausted failure. On success: `provider`, `cost_usd`, `sources` persisted on
+   the action_queue row AND as a new `deal_evidence` row (still `unverified` —
+   a human verifies it).
+8. A new, additive, **unapplied** migration:
+   `supabase/northsea/migrations/20260919120000_p1_c_research_gate.sql` adds
+   `deal_automation_policy.auto_investigate_blockers` (bool, default false) and
+   `.auto_investigate_blockers_max_calls_per_day` (int, default 0). Until this
+   is applied, the governed research gate can still raise Chase approvals and a
+   human can resolve them, but the daily-budget check always reads 0 → **no
+   real research call fires**, by design ("a missing configured budget is not
+   permission to spend").
+
+## 1. Pre-flight
+
+- [ ] `git -C ~/AXE-CORE- fetch origin && git log --oneline -3 origin/orchestrator`
+      and confirm the three commits for items 3–6 above are present (CrewRunResult
+      completion, unified observability, legal-document layer, real research
+      execution).
+- [ ] Fresh green, offline:
+      - MCP: `backend/northsea_mcp/.venv/bin/python -m pytest -q` (321 tests)
+      - axe_api: `backend/axe_api/.venv-local/bin/python -m pytest -q` (136 tests)
+      - frontend: `npx vitest run` (1399 tests, 167 files)
+      - frontend build: `npm run build`
+- [ ] `bash backend/northsea_mcp/deploy/deploy.sh check` — confirm the file list
+      still matches what you expect to ship (no surprise local changes).
+
+**Gate:** all four green/clean, `check` shows only the expected files.
+
+## 2. Apply the research-gate migration (optional but recommended before relying on policy-driven research)
+
+- [ ] Review `supabase/northsea/migrations/20260919120000_p1_c_research_gate.sql`
+      (additive, backward-compatible: missing columns already read as falsy).
+- [ ] Apply it to the NorthSea Supabase project (not the AXE Companion project —
+      different project, see memory `axe-mcp-hub`).
+- [ ] Decide `auto_investigate_blockers` (off by default) and
+      `auto_investigate_blockers_max_calls_per_day` (0 = no spend even if the
+      flag above is on) deliberately. **This is a real spending-authorization
+      decision, not a technical step** — leave both at their safe defaults
+      (false / 0) if you are not ready to authorize automatic paid research.
+
+**Gate:** either explicitly skipped (safe defaults stay in effect: gate still
+raises Chase approvals, never spends), or applied with values you chose on
+purpose.
+
+## 3. Deploy
+
+- [ ] `bash backend/northsea_mcp/deploy/deploy.sh deploy` — backs up the current
+      `/opt/northsea-mcp/app/northsea_mcp`, syncs the new code, restarts
+      `northsea-mcp.service`, polls `/health`, and **automatically rolls back**
+      if health doesn't come back within 30s.
+- [ ] `curl -s https://mcp.northseacommodity.com/health` → confirm it responds
+      (version string is unchanged at 1.4.0 for this build — no version bump was
+      made; the deploy is verified by content, not by version number).
+
+**Gate:** deploy script reports `uitgerold (backup ...)`, not a rollback.
+
+## 4. Runtime verification (one check per feature above)
+
+- [ ] **Observability**: `northsea_get_system_health` → response now has a
+      `scheduler` key (not absent), `crewai.routes`, and
+      `research.governed_research_gate`.
+- [ ] **CrewRunResult**: any `northsea_qualify_opportunity` or
+      `northsea_investigate_blockers` call → `crew.requested_specialists`,
+      `crew.retries`, `crew.audit_references` are present and non-default.
+- [ ] **Legal documents**: `northsea_prepare_legal_document` (with
+      `northsea.identity`) on any real deal with a named buyer and/or seller →
+      response `status = "unreviewed_draft"`, `disclaimer` contains "HUMAN/LEGAL
+      REVIEW REQUIRED", `saved_document_id` is set, and
+      `northsea_get_document_metadata` on that id shows it.
+- [ ] **Event coverage**: after the next scheduled `/internal/engine/tick`,
+      `northsea_get_deal_events` on any deal with an overdue `deal_tasks` row
+      shows a deadline-chase event; a deal with a resolved pending draft shows
+      `approval_granted`/`approval_rejected`.
+- [ ] **Governed research gate**: do **not** manufacture a test run against a
+      real deal just to see it fire (that spends real money if a budget is
+      configured). Instead confirm passively: `northsea_get_system_health`'s
+      `governed_research_gate.pending_approval` /
+      `.approved_not_yet_executed` counts move over the following days as real
+      deals hit researchable blockers, and any `action_queue` row with
+      `action_type = research_approval` and `metadata.execution_result =
+      "completed"` carries `provider`, `cost_usd`, and `sources` — proof it was
+      a real call, not the old `not_wired` stub.
+- [ ] Re-run the `#4cbc2a` regression from Part 2 §0's history:
+      `northsea_get_deal 4cbc2ade` → `communications: []` still (TradeWheel
+      marketing mail stays detached), gates/blockers still derive only from the
+      real buyer RFQ and supplier offer.
+
+**Gate:** every checkbox above observed on the live system, not inferred from
+tests.
+
+## 5. Rollback (if anything above fails)
+
+- [ ] `bash backend/northsea_mcp/deploy/deploy.sh rollback` — restores the most
+      recent timestamped backup and restarts the service.
 
 ---
 
