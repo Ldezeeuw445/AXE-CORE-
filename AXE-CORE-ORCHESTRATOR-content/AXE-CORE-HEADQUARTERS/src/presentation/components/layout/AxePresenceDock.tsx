@@ -47,7 +47,10 @@ export function AxePresenceDock() {
       if (timer.current !== null) window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => setActiviteit(null), 3200);
 
-      const direct = a.punt
+      const puntInBeeld = a.punt
+        && a.punt.x >= 0 && a.punt.x <= window.innerWidth
+        && a.punt.y >= 0 && a.punt.y <= window.innerHeight;
+      const direct = puntInBeeld && a.punt
         ? { rect: { x: a.punt.x - 18, y: a.punt.y - 18, b: 36, h: 36 }, doel: 'punt' }
         : kiesDoel(a.doelen, vindDoel, { b: window.innerWidth, h: window.innerHeight });
       if (!direct) return;
