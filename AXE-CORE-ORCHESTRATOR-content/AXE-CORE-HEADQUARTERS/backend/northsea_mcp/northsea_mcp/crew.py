@@ -323,14 +323,16 @@ class CrewGateway:
     async def run(self, action: str, handoff: dict[str, Any]) -> CrewRunInfo:
         if action == "unroutable" or ROUTE_FOR_ACTION.get(action) == "unroutable":
             return CrewRunInfo(used=False, status="unroutable", route="unroutable",
-                               reason="event is unroutable; no specialist crew executed", validation="not_validated")
+                               reason="event is unroutable; no specialist crew executed", validation="not_validated",
+                               entities_examined=handoff.get("entity_ids") or {})
         route = ROUTE_FOR_ACTION.get(action, "deal_run")
         gevraagd = CREW_FOR_ROUTE[route]
         t0 = time.monotonic()
         deadline = t0 + self._timeout
         pogingen: list[Attempt] = []
         timings: dict[str, float] = {}
-        basis = dict(route=route, requested_crew=gevraagd, crew=SHORT_NAME[route])
+        basis = dict(route=route, requested_crew=gevraagd, crew=SHORT_NAME[route],
+                    requested_specialists=list(ROLES_FOR_ROUTE.get(route, ())), entities_examined=handoff.get("entity_ids") or {})
 
         # ── PRIMAIR: lokale specialist-crew (Studio mag down zijn) ───────────
         if getattr(self.local, "enabled", False) and self.local.configured(route):
@@ -346,7 +348,8 @@ class CrewGateway:
                 return CrewRunInfo(used=True, run_id=local_res.run_id, status="ok", analysis=o.analysis[:6000],
                                    backend="northsea_local", execution_mode="deterministic", actual_crew=gevraagd, fallback_used=False,
                                    models=o.models, skills=o.skills, tools=o.tools, budget_usage=o.budget_usage,
-                                   timings=timings, validation="valid",
+                                   timings=timings, validation="valid", actual_specialists=local_res.specialists,
+                                   retries=max(0, len(pogingen) - 1), audit_references=[local_res.run_id] if local_res.run_id else [],
                                    attempts=[p.as_dict() for p in pogingen], **basis)
             # lokale fout: NorthSea stopt niet; Studio is optioneel, daarna zichtbare fallback
 
@@ -376,26 +379,29 @@ class CrewGateway:
                     o = res.output
                     return CrewRunInfo(used=True, run_id=res.run_id, status="ok", analysis=o.analysis[:6000], backend="northsea_crewai",
                                        execution_mode="llm", actual_crew=gevraagd, fallback_used=False, models=o.models, skills=o.skills, tools=o.tools,
-                                       budget_usage=o.budget_usage, timings=timings, validation="valid",
+                                       budget_usage=o.budget_usage, timings=timings, validation="valid", actual_specialists=res.specialists,
+                                       retries=max(0, len(pogingen) - 1), audit_references=[res.run_id] if res.run_id else [],
                                        attempts=[p.as_dict() for p in pogingen], **basis)
                 if res.status == "invalid":
                     # Ongeldige uitvoer is geen reden om stil iets anders te draaien: melden.
                     timings["total_s"] = round(time.monotonic() - t0, 2)
                     return CrewRunInfo(used=True, run_id=res.run_id, status="invalid_output", backend="northsea_crewai",
                                        actual_crew=gevraagd, fallback_used=False, validation="invalid", timings=timings,
+                                       retries=max(0, len(pogingen) - 1), audit_references=[res.run_id] if res.run_id else [],
                                        reason=res.detail, attempts=[p.as_dict() for p in pogingen], **basis)
                 reden = {"capacity": "capacity_exhausted", "timeout": "timeout", "unavailable": "dedicated_backend_unavailable"}.get(res.status)
                 if reden is None:  # crew-uitvoerfout: geen toegestane fallbackreden
                     timings["total_s"] = round(time.monotonic() - t0, 2)
                     return CrewRunInfo(used=True, run_id=res.run_id, status="error", backend="northsea_crewai", actual_crew=gevraagd,
                                        fallback_used=False, validation="not_validated", timings=timings, reason=res.detail,
+                                       retries=max(0, len(pogingen) - 1), audit_references=[res.run_id] if res.run_id else [],
                                        attempts=[p.as_dict() for p in pogingen], **basis)
 
         # ── FALLBACK: algemene AXE CORE-crew, alleen als het beleid het toestaat ──
         if reden not in self.fallback_on:
             timings["total_s"] = round(time.monotonic() - t0, 2)
             return CrewRunInfo(used=False, status="unavailable", backend=None, fallback_used=False, validation="not_validated",
-                               timings=timings, attempts=[p.as_dict() for p in pogingen],
+                               timings=timings, attempts=[p.as_dict() for p in pogingen], retries=max(0, len(pogingen) - 1),
                                reason=f"{gevraagd} not executed ({reden}); fallback to the general crew is not permitted by policy", **basis)
         gen_ok, gen_reden = self.general.available()
         rest = deadline - time.monotonic()
@@ -404,7 +410,7 @@ class CrewGateway:
             pogingen.append(Attempt("axe_general_crew", "not_attempted", waarom))
             timings["total_s"] = round(time.monotonic() - t0, 2)
             return CrewRunInfo(used=gen_ok, status="unavailable" if not gen_ok else "timeout", backend=None, fallback_used=False,
-                               fallback_reason=reden, validation="not_validated", timings=timings,
+                               fallback_reason=reden, validation="not_validated", timings=timings, retries=max(0, len(pogingen) - 1),
                                attempts=[p.as_dict() for p in pogingen],
                                reason=f"{gevraagd} not executed ({reden}); fallback not possible: {waarom}", **basis)
         f0 = time.monotonic()
@@ -412,11 +418,12 @@ class CrewGateway:
         timings["fallback_run_s"] = round(time.monotonic() - f0, 2)
         timings["total_s"] = round(time.monotonic() - t0, 2)
         pogingen.append(Attempt("axe_general_crew", res.status, res.detail, time.monotonic() - f0))
+        run_id = res.run_id or str(uuid.uuid4())
         return CrewRunInfo(
-            used=True, run_id=res.run_id or str(uuid.uuid4()), status=res.status if res.status in ("ok", "busy", "timeout") else "error",
+            used=True, run_id=run_id, status=res.status if res.status in ("ok", "busy", "timeout") else "error",
             analysis=res.analysis if res.status == "ok" else None, backend="axe_general_crew",
             execution_mode="llm" if res.status == "ok" else None,
-            actual_crew=GENERAL_CREW, fallback_used=True, fallback_reason=reden,
+            actual_crew=GENERAL_CREW, fallback_used=True, fallback_reason=reden, actual_specialists=res.specialists,
             models=[], skills=[], tools=[f"specialist:{s}" for s in res.specialists], budget_usage={}, timings=timings,
-            validation="not_validated", attempts=[p.as_dict() for p in pogingen],
-            reason=None if res.status == "ok" else res.detail, **basis)
+            validation="not_validated", attempts=[p.as_dict() for p in pogingen], retries=max(0, len(pogingen) - 1),
+            audit_references=[run_id], reason=None if res.status == "ok" else res.detail, **basis)

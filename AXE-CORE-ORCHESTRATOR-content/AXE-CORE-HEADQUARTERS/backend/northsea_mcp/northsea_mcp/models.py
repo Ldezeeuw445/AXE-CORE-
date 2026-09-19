@@ -97,6 +97,14 @@ class CrewRunInfo(BaseModel):
                                   "llm = an actual language-model crew ran (Studio AMP or the AXE general crew). "
                                   "Never infer LLM execution from `backend` alone -- read this field.")
     actual_crew: str | None = None
+    requested_specialists: list[str] = Field(default_factory=list, description="Agent roles the requested route would use (ROLES_FOR_ROUTE).")
+    actual_specialists: list[str] = Field(default_factory=list, description="Agent roles that actually ran, from whichever backend executed.")
+    entities_examined: dict[str, Any] = Field(default_factory=dict, description="entity_ids from the handoff payload (e.g. opportunity_id).")
+    retries: int = Field(default=0, description="len(attempts) - 1: how many backends beyond the first were tried for this one call. "
+                                                "Not a same-backend retry loop -- CrewGateway does not retry a backend, it falls back per policy.")
+    audit_references: list[str] = Field(default_factory=list, description="run_id(s) to search for in core_audit_log/northsea_audit_events. "
+                                        "The audit row itself is written by Guard.run after this object is returned, so this is the "
+                                        "correlating key (already stored there as details.northsea_run_id), not a row id.")
     fallback_used: bool = False
     fallback_reason: str | None = None
     models: list[str] = Field(default_factory=list)

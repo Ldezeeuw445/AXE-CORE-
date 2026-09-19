@@ -79,6 +79,11 @@ async def test_without_dedicated_deployment_the_general_crew_is_an_explicit_fall
     assert info.fallback_used is True and info.fallback_reason == "dedicated_backend_not_configured"
     assert info.validation == "not_validated" and info.attempts[0]["outcome"] == "not_configured"
     assert "total_s" in info.timings and "Do not send any message." in gezien["body"]["task"]
+    assert info.entities_examined == {"opportunity_id": "x"}
+    assert info.requested_specialists and info.requested_specialists == list(info.requested_specialists)  # niet leeg
+    assert info.actual_specialists == ["Intel"]  # uit general_ok()'s gemockte 'specialists'
+    assert info.retries == 1  # 2 pogingen (dedicated: not_configured, dan general: ok) -> 1 retry
+    assert info.audit_references == [info.run_id] and info.run_id
 
 
 async def test_dedicated_crew_runs_first_and_returns_validated_provenance():
@@ -90,6 +95,11 @@ async def test_dedicated_crew_runs_first_and_returns_validated_provenance():
     assert info.models == ["gpt-5-mini"] and info.skills == [{"name": "assess_match", "version": 1}]
     assert info.tools == ["supabase:read"] and info.budget_usage == {"research_calls": 1}
     assert info.timings["crew_execution_s"] == 42.5 and "seller authority" in info.analysis.lower()
+    assert info.actual_specialists == ["Evidence Specialist"]  # uit result.tasks[].agent
+    assert info.requested_specialists  # ROLES_FOR_ROUTE["deal_run"], niet leeg
+    assert info.entities_examined == {}  # handoff {"x": 1} heeft geen "entity_ids"-sleutel
+    assert info.retries == 0  # één poging (dedicated), meteen ok
+    assert info.audit_references == ["k-123"]  # run_id == kickoff_id
 
 
 async def test_health_check_failure_falls_back_visibly():
