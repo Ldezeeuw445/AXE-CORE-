@@ -174,6 +174,16 @@ class TestRoute:
         monkeypatch.setenv("PERPLEXITY_API_KEY", "k")
         assert app.post("/research/perplexity", json={"question": "  "}).status_code == 400
 
+    def test_get_zegt_of_de_sleutel_er_is_zonder_perplexity_aan_te_roepen(self, app, monkeypatch):
+        gezien = []
+        monkeypatch.setattr(pa.httpx, "AsyncClient", nep_client(NepAntwoord(200, ANTWOORD), gezien))
+        r = app.get("/research/perplexity")
+        assert r.status_code == 200
+        assert r.json()["configured"] is True
+        assert gezien == []
+        monkeypatch.delenv("PERPLEXITY_API_KEY")
+        assert app.get("/research/perplexity").json()["configured"] is False
+
     def test_overbelasting_geeft_429_met_retry_after_door(self, app, monkeypatch):
         fout = NepAntwoord(429, {"error": {"message": "model overloaded"}}, {"Retry-After": "7"})
         monkeypatch.setattr(pa.httpx, "AsyncClient", nep_client(fout, []))

@@ -4,6 +4,7 @@ import {
   formatteerOnderzoek,
   leesAgentAntwoord,
   leesPerplexityFout,
+  leesPerplexityStand,
 } from '@/domain/perplexityAgent';
 
 /**
@@ -172,5 +173,23 @@ describe('waarom een vraag niet doorging', () => {
   it('laat een budgetstop nooit lezen als een leeg zoekresultaat', () => {
     const zin = formatteerFout(leesPerplexityFout(402, 'Daily Perplexity budget of $1.00 is spent.'));
     expect(zin).toMatch(/budget stop, not an empty result/);
+  });
+});
+
+describe('of de server-sleutel er is, zonder een vraag te stellen', () => {
+  it('gelooft GET { configured: true } en weigert configured: false', () => {
+    expect(leesPerplexityStand(200, '', { configured: true }).ok).toBe(true);
+    expect(leesPerplexityStand(200, '', { configured: false }).ok).toBe(false);
+  });
+
+  it('leest POST zonder vraag als bewijs dat de sleutel er is', () => {
+    // 400 Missing question komt ná de sleutelcheck. 503 ervoor.
+    expect(leesPerplexityStand(400, 'Missing question').ok).toBe(true);
+    expect(leesPerplexityStand(503, 'Perplexity not configured (set PERPLEXITY_API_KEY on the server).').ok).toBe(false);
+  });
+
+  it('kent 405 als "probeer POST" en 404 als nog niet gedeployd', () => {
+    expect(leesPerplexityStand(405, 'Method Not Allowed').error).toBe('GET-niet-ondersteund');
+    expect(leesPerplexityStand(404, 'Not Found').ok).toBe(false);
   });
 });

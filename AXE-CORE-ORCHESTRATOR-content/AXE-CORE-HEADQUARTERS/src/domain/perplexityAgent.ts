@@ -143,6 +143,32 @@ export interface PerplexityFout {
   retryAfterSec?: number;
 }
 
+/**
+ * Of de server-sleutel er is, gelezen uit een statusantwoord.
+ *
+ * Instellingen mag dit niet als chat-completion testen: dat brandt quota
+ * en faalt op een goede sleutel. GET /research/perplexity geeft
+ * `{ configured }` zonder Perplexity aan te roepen. Zolang de VPS die GET
+ * nog niet kent (405), is POST zonder vraag hetzelfde bewijs: 400 Missing
+ * question komt ná de sleutelcheck, 503 ervoor.
+ */
+export function leesPerplexityStand(status: number, detail: string, body?: unknown): { ok: boolean; error?: string } {
+  if (status === 200 && body && typeof body === 'object' && body !== null && 'configured' in body) {
+    return (body as { configured: unknown }).configured === true
+      ? { ok: true }
+      : { ok: false, error: 'Perplexity not configured (set PERPLEXITY_API_KEY on the server).' };
+  }
+  if (status === 405) return { ok: false, error: 'GET-niet-ondersteund' };
+  if (status === 400 && /missing question/i.test(detail)) return { ok: true };
+  if (status === 503 && /not configured/i.test(detail)) {
+    return { ok: false, error: detail };
+  }
+  if (status === 404) {
+    return { ok: false, error: 'Perplexity research is not set up on the server yet.' };
+  }
+  return { ok: false, error: detail || `HTTP ${status}` };
+}
+
 export function leesPerplexityFout(status: number, detail: string, retryAfter?: string | null): PerplexityFout {
   const bericht = detail || `HTTP ${status}`;
   if (status === 503 && /not configured/i.test(detail)) return { reden: 'niet-ingesteld', status, bericht };

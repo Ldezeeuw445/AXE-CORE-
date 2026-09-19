@@ -20,6 +20,7 @@ import { axeCoreApiExtraHeaders, axeCoreApiUrl } from '@/infrastructure/config/a
 import {
   leesAgentAntwoord,
   leesPerplexityFout,
+  leesPerplexityStand,
   type PerplexityFout,
   type PerplexityOnderzoek,
 } from '@/domain/perplexityAgent';
@@ -63,4 +64,38 @@ export async function perplexityResearch(
   }
 
   return { ok: true, result: leesAgentAntwoord(await res.json()) };
+}
+
+/**
+ * Of de VPS een Perplexity-sleutel heeft, zonder een betaalde vraag te stellen.
+ *
+ * GET is de nette weg. Zolang de VPS die nog niet kent (405), is POST zonder
+ * vraag hetzelfde bewijs: 400 Missing question komt ná de sleutelcheck.
+ */
+export async function testPerplexityOpServer(): Promise<{ ok: boolean; error?: string }> {
+  const url = `${basis()}/research/perplexity`;
+  const headers = { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() };
+  try {
+    const get = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(10_000) });
+    if (get.status !== 405) {
+      const body = await get.json().catch(() => ({}));
+      const detail = typeof (body as { detail?: unknown }).detail === 'string'
+        ? (body as { detail: string }).detail
+        : get.statusText;
+      return leesPerplexityStand(get.status, detail, body);
+    }
+    const post = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ question: '' }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = await post.json().catch(() => ({}));
+    const detail = typeof (body as { detail?: unknown }).detail === 'string'
+      ? (body as { detail: string }).detail
+      : post.statusText;
+    return leesPerplexityStand(post.status, detail, body);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'AXE API unreachable' };
+  }
 }

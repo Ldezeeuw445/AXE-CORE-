@@ -123,7 +123,7 @@ const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crew
  * once already; a fifth entry would have had to be added four times, and
  * missing one of them is invisible until a good key reads as broken.
  */
-const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon']);
+const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon', 'perplexity']);
 
 /** The subset that needs nothing but a key — no base URL, no model to pick. */
 
@@ -347,24 +347,48 @@ function ProviderKeysSection() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const served: string[] = [];
       try {
         const res = await fetch(apiUrl('/api/proxy/ai/providers'));
-        if (!res.ok) { if (!cancelled) setServerProviders(new Set()); return; }
-        const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
-        if (cancelled) return;
-        const served = [...(body.providers ?? []), ...(body.keyless ?? [])];
-        setServerProviders(new Set(served));
-        // Cache for the chat runtime: it must know which providers the VPS serves
-        // (with the VPS's own key), so AXE can route e.g. Gemini through the proxy
-        // even though there is no local key on this device. Without this the chat
-        // cascade silently drops every VPS-only provider and falls to Ollama.
-        try { localStorage.setItem('axe_server_providers', JSON.stringify(served)); } catch { /* ignore */ }
+        if (res.ok) {
+          const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
+          served.push(...(body.providers ?? []), ...(body.keyless ?? []));
+          // Cache for the chat runtime: it must know which providers the VPS serves
+          // (with the VPS's own key), so AXE can route e.g. Gemini through the proxy
+          // even though there is no local key on this device. Without this the chat
+          // cascade silently drops every VPS-only provider and falls to Ollama.
+          // Perplexity hoort hier NIET in: dat is onderzoek, geen chat-slot.
+          try { localStorage.setItem('axe_server_providers', JSON.stringify(served)); } catch { /* ignore */ }
+        }
       } catch {
-        // Server onbereikbaar. Een lege set is hier beter dan null blijven:
-        // het scherm valt terug op het oude gedrag, en de automatische meting
-        // hieronder blijft niet eeuwig wachten op een antwoord dat niet komt.
-        if (!cancelled) setServerProviders(new Set());
+        // Server onbereikbaar. De lijst hieronder mag leeg blijven; een
+        // onderzoek-probe mag Gemini/Groq niet van het scherm vegen.
       }
+      const namen = new Set(served);
+      try {
+        const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+        const pplx = await testPerplexityOpServer();
+        if (pplx.ok) namen.add('perplexity');
+        if (!cancelled) {
+          setKeys(prev => {
+            const next = {
+              ...prev,
+              perplexity: {
+                ...prev.perplexity,
+                lastTest: pplx.ok ? 'ok' as const : 'fail' as const,
+                lastTestAt: new Date().toISOString(),
+                lastError: pplx.ok ? undefined : (pplx.error || 'Not configured'),
+              },
+            };
+            saveProviderKeys(next);
+            return next;
+          });
+        }
+      } catch {
+        // Onderzoekszijde apart: een fout hier mag OpenAI/Groq niet op "geen
+        // server-sleutel" zetten.
+      }
+      if (!cancelled) setServerProviders(namen);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -454,6 +478,22 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (stOk) delete n[id]; else n[id] = msg; return n; });
+      return;
+    }
+
+    // Perplexity is research on the VPS, not an LLM. Never probe it as chat
+    // (that would spend a paid question) and never send a browser key — the
+    // key lives on the server.
+    if (id === 'perplexity') {
+      const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+      const { ok: pxOk, error: pxErr } = await testPerplexityOpServer();
+      setTesting(t => ({ ...t, [id]: pxOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: pxOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: pxOk ? undefined : pxErr } };
+        saveConnections(next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (pxOk) delete n[id]; else n[id] = pxErr ?? 'Not configured'; return n; });
       return;
     }
 
