@@ -1,72 +1,59 @@
 /**
- * Particle PIN — bestaande FloatingParticleSphere, met cijferpad eroverheen.
+ * Particle-gesture PIN — recovered from AxeGestureLock / GestureLockScreen.
  *
- * Alleen op Android na het lockscreen. Geen tweede authenticatie naar AXE:
- * de hash blijft op het toestel.
+ * Lockscreen → circular particle field → four unistroke inputs → unlock.
+ * No keypad. The field is the PIN.
  */
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Delete } from 'lucide-react';
 import {
-  PIN_LENGTE, ontgrendel, pinIsGezet, pinKlopt, zetPin,
+  CODE_LENGTE, ontgrendel, pinIsGezet, verifieerCode, zetPin, codeLengte,
 } from '@/domain/androidPin';
+import { lockAlphabet } from '@/domain/gestureTemplates';
+import { UnistrokeRecognizer, isClearWinner } from '@/domain/unistrokeRecognizer';
+import type { GesturePoint } from '@/domain/gestureTemplates';
+import { ParticleGestureField } from '@/presentation/components/android/ParticleGestureField';
 import { MobileGlass } from '@/presentation/components/layout/MobileGlass';
-
-const FloatingParticleSphere = lazy(
-  () => import('@/presentation/components/axe-core/FloatingParticleSphere').then(m => ({ default: m.FloatingParticleSphere })),
-);
-
-const TOETSEN = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'] as const;
 
 export default function ParticlePinScreen() {
   const navigate = useNavigate();
   const setup = useMemo(() => !pinIsGezet(), []);
-  const [pin, setPin] = useState('');
-  const [bevestig, setBevestig] = useState<string | null>(null);
+  const nodig = useMemo(() => (setup ? CODE_LENGTE : codeLengte()), [setup]);
+  const herkenner = useMemo(() => new UnistrokeRecognizer(lockAlphabet()), []);
+  const [ingevoerd, setIngevoerd] = useState<string[]>([]);
+  const [bevestig, setBevestig] = useState<string[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
 
   const titel = setup
-    ? (bevestig == null ? 'Choose a PIN' : 'Confirm PIN')
-    : 'Enter PIN';
+    ? (bevestig == null ? 'Draw your code' : 'Draw it again')
+    : 'Draw your code';
 
-  const tik = (t: (typeof TOETSEN)[number]) => {
-    if (bezig) return;
-    setFout(null);
-    if (t === '') return;
-    if (t === 'del') {
-      setPin((p) => p.slice(0, -1));
-      return;
-    }
-    const next = (pin + t).slice(0, PIN_LENGTE);
-    setPin(next);
-    if (next.length === PIN_LENGTE) void klaar(next);
-  };
-
-  const klaar = async (waarde: string) => {
+  const klaar = async (reeks: string[]) => {
     setBezig(true);
     try {
       if (setup) {
         if (bevestig == null) {
-          setBevestig(waarde);
-          setPin('');
+          setBevestig(reeks);
+          setIngevoerd([]);
           return;
         }
-        if (waarde !== bevestig) {
-          setFout('PINs did not match');
+        if (reeks.length !== bevestig.length || reeks.some((g, i) => g !== bevestig[i])) {
+          setFout('Codes did not match');
           setBevestig(null);
-          setPin('');
+          setIngevoerd([]);
           return;
         }
-        const r = await zetPin(waarde);
-        if (!r.ok) { setFout(r.fout); setPin(''); return; }
+        const r = await zetPin(reeks);
+        if (!r.ok) { setFout(r.fout); setIngevoerd([]); return; }
         ontgrendel();
         navigate('/devices', { replace: true });
         return;
       }
-      if (!(await pinKlopt(waarde))) {
-        setFout('Wrong PIN');
-        setPin('');
+      const r = await verifieerCode(reeks);
+      if (!r.ok) {
+        setFout(r.fout);
+        setIngevoerd([]);
         return;
       }
       ontgrendel();
@@ -76,31 +63,42 @@ export default function ParticlePinScreen() {
     }
   };
 
+  const slag = (points: GesturePoint[]) => {
+    if (bezig) return;
+    const result = herkenner.recognize(points);
+    if (!isClearWinner(result) || !result) {
+      setFout('Not clear enough — try again');
+      return;
+    }
+    setFout(null);
+    const next = [...ingevoerd, result.name];
+    setIngevoerd(next);
+    if (next.length >= nodig) void klaar(next);
+  };
+
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
       <MobileGlass />
-      <div className="pointer-events-none absolute inset-0 z-[1] opacity-80">
-        <Suspense fallback={null}>
-          <FloatingParticleSphere status={fout ? 'awaiting-approval' : 'idle'} />
-        </Suspense>
+      <div className="absolute inset-0 z-[1]">
+        <ParticleGestureField onStroke={slag} disabled={bezig} />
       </div>
       <div
-        className="relative z-[2] mx-auto flex h-full w-full max-w-sm flex-col px-6"
+        className="pointer-events-none relative z-[2] mx-auto flex h-full w-full max-w-sm flex-col px-6"
         style={{
           paddingTop: 'max(20px, env(safe-area-inset-top))',
           paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         }}
       >
         <img src="/axe-logo.png" alt="AXE CORE" className="ml-auto h-8 w-auto" />
-        <div className="mt-6 text-center">
+        <div className="mt-4 text-center">
           <div className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{titel}</div>
           <div className="mt-4 flex justify-center gap-3">
-            {Array.from({ length: PIN_LENGTE }, (_, i) => (
+            {Array.from({ length: nodig }, (_, i) => (
               <span
                 key={i}
                 className="size-3 rounded-full"
                 style={{
-                  background: i < pin.length ? 'var(--text-primary)' : 'transparent',
+                  background: i < ingevoerd.length ? 'var(--text-primary)' : 'transparent',
                   border: '1px solid color-mix(in srgb, var(--text-primary) 45%, transparent)',
                 }}
               />
@@ -110,25 +108,14 @@ export default function ParticlePinScreen() {
             <p className="mt-3 text-[12px]" style={{ color: 'var(--error, #EF4444)' }}>{fout}</p>
           )}
         </div>
-        <div className="mt-auto grid grid-cols-3 gap-3 pb-4">
-          {TOETSEN.map((t, i) => (
-            <button
-              key={`${t}-${i}`}
-              type="button"
-              disabled={t === '' || bezig}
-              onClick={() => tik(t)}
-              className="flex h-14 items-center justify-center rounded-full text-xl font-medium disabled:opacity-0"
-              style={{
-                color: 'var(--text-primary)',
-                background: t === '' ? 'transparent' : 'color-mix(in srgb, var(--kaart, #111) 55%, transparent)',
-                backdropFilter: t === '' ? undefined : 'blur(18px)',
-              }}
-              aria-label={t === 'del' ? 'Delete' : t}
-            >
-              {t === 'del' ? <Delete size={20} /> : t}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          className="pointer-events-auto mt-auto mb-2 self-center text-[12px]"
+          style={{ color: 'var(--text-muted)' }}
+          onClick={() => { setIngevoerd([]); setFout(null); }}
+        >
+          Clear
+        </button>
       </div>
     </div>
   );

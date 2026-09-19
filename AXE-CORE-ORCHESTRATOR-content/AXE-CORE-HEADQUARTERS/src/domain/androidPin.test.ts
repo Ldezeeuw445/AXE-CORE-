@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  PIN_LENGTE, pinCijfersGeldig, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
-  zetPin, pinKlopt, wisPin, androidSlotLaatDoor,
+  PIN_LENGTE, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
+  zetPin, pinKlopt, wisPin, androidSlotLaatDoor, verifieerCode, MINIMUM_LENGTE,
 } from './androidPin';
 
 function geheugen(): Storage {
@@ -16,25 +16,31 @@ function geheugen(): Storage {
   };
 }
 
-describe('android PIN', () => {
-  it('aanvaardt alleen vier cijfers', () => {
-    expect(pinCijfersGeldig('1234')).toBe(true);
-    expect(pinCijfersGeldig('12')).toBe(false);
-    expect(pinCijfersGeldig('12345')).toBe(false);
-    expect(pinCijfersGeldig('12ab')).toBe(false);
+const CODE = ['swipeRight', 'triangle', '1', 'check'];
+
+describe('android particle-gesture PIN', () => {
+  it('vier gebaren is de standaardlengte, minstens drie', () => {
     expect(PIN_LENGTE).toBe(4);
+    expect(MINIMUM_LENGTE).toBe(3);
   });
 
-  it('zet en herkent een PIN, slaat hem niet in klare tekst op', async () => {
+  it('zet en herkent een gebarenreeks, slaat namen niet in klare tekst op', async () => {
     const opslag = geheugen();
     expect(pinIsGezet(opslag)).toBe(false);
-    const r = await zetPin('2580', opslag);
+    const r = await zetPin(CODE, opslag);
     expect(r.ok).toBe(true);
     expect(pinIsGezet(opslag)).toBe(true);
-    expect(opslag.getItem('axe_android_pin_hash')).not.toBe('2580');
-    expect(opslag.getItem('axe_android_pin_hash') ?? '').not.toContain('2580');
-    expect(await pinKlopt('2580', opslag)).toBe(true);
-    expect(await pinKlopt('0000', opslag)).toBe(false);
+    const raw = opslag.getItem('axe_particle_gesture_lock') ?? '';
+    expect(raw).not.toContain('swipeRight');
+    expect(raw).not.toContain('triangle');
+    expect(await pinKlopt(CODE, opslag)).toBe(true);
+    expect(await pinKlopt(['swipeLeft', 'triangle', '1', 'check'], opslag)).toBe(false);
+  });
+
+  it('wijst te korte codes af', async () => {
+    const opslag = geheugen();
+    const r = await zetPin(['v', 'caret'], opslag);
+    expect(r.ok).toBe(false);
   });
 
   it('ontgrendelen is sessie, geen permanente vlag', () => {
@@ -49,11 +55,24 @@ describe('android PIN', () => {
   it('wisPin haalt hash én ontgrendeling weg', async () => {
     const opslag = geheugen();
     const sessie = geheugen();
-    await zetPin('1111', opslag);
+    await zetPin(CODE, opslag);
     ontgrendel(sessie);
     wisPin(opslag, sessie);
     expect(pinIsGezet(opslag)).toBe(false);
     expect(isOntgrendeld(sessie)).toBe(false);
+  });
+
+  it('meldt lock-out na vijf foute pogingen', async () => {
+    const opslag = geheugen();
+    await zetPin(CODE, opslag);
+    const fout = ['square', 'square', 'square', 'square'];
+    for (let i = 0; i < 5; i++) {
+      const r = await verifieerCode(fout, opslag);
+      expect(r.ok).toBe(false);
+    }
+    const locked = await verifieerCode(CODE, opslag);
+    expect(locked.ok).toBe(false);
+    expect(locked.ok === false && locked.fout.includes('Too many')).toBe(true);
   });
 
   it('op slot alleen lock, pin en login door', () => {

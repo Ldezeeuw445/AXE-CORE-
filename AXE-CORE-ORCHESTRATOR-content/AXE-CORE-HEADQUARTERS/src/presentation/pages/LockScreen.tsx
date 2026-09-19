@@ -1,10 +1,10 @@
 /**
- * AXE lockscreen — Samsung, na inloggen, vóór de PIN.
+ * AXE lockscreen — Samsung, na inloggen, vóór de particle-gesture PIN.
  *
- * Glasplaat + echte glance (taken/follow-ups, geen mock). Logo rechtsboven
- * zoals de desktop-kop. Tikken opent het bestaande particle-PIN-scherm.
+ * Glasplaat + echte glance. Swipe omhoog opent het particle-veld
+ * (AxeLockLanding: "SWIPE UP TO UNLOCK").
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Clock, ListChecks, CheckCircle2 } from 'lucide-react';
 import { getAwarenessSnapshot, type AwarenessSnapshot } from '@/application/awareness/axeAwareness';
@@ -50,9 +50,18 @@ export default function LockScreen() {
   const allClear = aware != null && waiting === 0;
 
   const openPin = () => navigate('/lock/pin');
+  const startY = useRef<number | null>(null);
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div
+      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
+      onPointerDown={(e) => { startY.current = e.clientY; }}
+      onPointerUp={(e) => {
+        if (startY.current != null && startY.current - e.clientY > 56) openPin();
+        startY.current = null;
+      }}
+      onPointerCancel={() => { startY.current = null; }}
+    >
       <MobileGlass />
       <div
         className="relative z-[1] mx-auto flex h-full w-full max-w-md flex-col px-5"
@@ -70,7 +79,7 @@ export default function LockScreen() {
           type="button"
           onClick={openPin}
           className="mt-8 flex flex-1 flex-col items-center text-center"
-          aria-label={pinIsGezet() ? 'Unlock AXE' : 'Set PIN'}
+          aria-label={pinIsGezet() ? 'Swipe up to unlock AXE' : 'Swipe up to set your particle code'}
         >
           <div
             className="text-7xl font-semibold tabular-nums leading-none tracking-tight"
@@ -112,13 +121,10 @@ export default function LockScreen() {
         <button
           type="button"
           onClick={openPin}
-          className="mb-2 rounded-full py-3 text-[13px] font-semibold"
-          style={{
-            ...FROSTED,
-            color: 'var(--text-primary)',
-          }}
+          className="mb-2 py-3 text-[13px] font-semibold tracking-[0.14em]"
+          style={{ color: 'var(--text-muted)' }}
         >
-          {pinIsGezet() ? 'Unlock' : 'Set PIN'}
+          {pinIsGezet() ? '^  SWIPE UP TO UNLOCK' : '^  SWIPE UP TO SET CODE'}
         </button>
       </div>
     </div>
