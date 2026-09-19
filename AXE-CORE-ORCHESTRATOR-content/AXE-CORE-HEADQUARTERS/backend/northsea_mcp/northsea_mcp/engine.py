@@ -348,6 +348,10 @@ class EngineService:
             opp_id = deal_van(c, gekoppeld=False)
             if opp_id:
                 per_opp_comm.setdefault(opp_id, []).append(c)
+        chase_by_key = {q.get("dedupe_key"): q for q in d["action_queue"] if q.get("dedupe_key")}
+        onderzoek_beleid = bool(policy.get("auto_investigate_blockers"))
+        plan["research_gate"] = []
+
         for opp in d["opportunities"]:
             if opp.get("stage") == "lost" and not opp.get("engine_blocker_code"):
                 continue
@@ -371,6 +375,59 @@ class EngineService:
                 drafts=[x for x in drafts if x.get("opportunity_id") == opp["id"]],
                 followups=[p for p in plans if p.get("opportunity_id") == opp["id"]], bounced_channel=bounced, now=nu,
                 interval_hours=interval if policy_ok else 48)
+            # ── Governed research gate: nooit stilzwijgend betalen ────────────────────
+            # Vóór de veranderd-check: een Chase-goedkeuring kan zijn afgerond zonder dat
+            # de blokkade zelf deze tick verandert, en dat moet dan alsnog opgepakt worden.
+            gate = rules.research_gate(uitkomst.blocker_code, opportunity_id=opp["id"], policy_allows=onderzoek_beleid,
+                                       existing_chase=chase_by_key.get(rules.research_gate_dedupe_key(opp["id"], uitkomst.blocker_code)))
+            plan["research_gate"].append({"opportunity_id": opp["id"], "blocker_code": uitkomst.blocker_code, "state": gate.state})
+            if not dry_run and gate.dedupe_key:
+                bestaand = chase_by_key.get(gate.dedupe_key)
+                try:
+                    if gate.create_chase:
+                        rij = await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate: self.repo.engine_insert("action_queue", {
+                            "dedupe_key": gate.dedupe_key, "action_type": "research_approval", "opportunity_id": opp["id"], "company_id": None,
+                            "priority": 65, "title": f"Approve external research: {uitkomst.blocker}"[:200],
+                            "description": "The engine wants to run one bounded, paid research call to resolve this blocker. Mark this "
+                                          "item done to approve it once for this deal, or set deal_automation_policy."
+                                          "auto_investigate_blockers to allow it automatically for every deal.",
+                            "status": "open", "requires_approval": True,
+                            "metadata": {"source": "northsea-engine", "kind": "research_approval", "blocker_code": uitkomst.blocker_code}},
+                                                                                        ignore_duplicates=True))
+                        if rij:
+                            chase_by_key[gate.dedupe_key] = rij[0]
+                            await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate: self.repo.engine_insert("deal_events", {
+                                "opportunity_id": opp["id"], "event_type": "research_approval_requested", "actor": "northsea-engine",
+                                "summary": f"Research approval requested for blocker: {uitkomst.blocker}"[:900],
+                                "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key}}))
+                    elif gate.state == "approved_ready_to_execute":
+                        # De uitvoering zelf (een echte, betaalde Perplexity-aanroep) is BEWUST
+                        # nog niet aangesloten: dat is de ene stap die een eigen, apart
+                        # beoordeelde koppeling verdient (welke Caller/scope, echte kosten op een
+                        # cron), niet iets wat hier stilzwijgend meegaat. Wel volledig geaudit en
+                        # gedempt: dit codepad kan nooit twee keer voor dezelfde deal+blokkade
+                        # vuren, met of zonder mensen ertussen.
+                        stempel = {"executed_at": nu.isoformat(), "execution_result": "not_wired",
+                                  "blocker_code": uitkomst.blocker_code, "kind": "research_approval",
+                                  "approved_via": "policy" if onderzoek_beleid and bestaand is None else "chase_item"}
+                        if bestaand is None:
+                            await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert(
+                                "action_queue", {"dedupe_key": gate.dedupe_key, "action_type": "research_approval", "opportunity_id": opp["id"],
+                                                 "company_id": None, "priority": 65, "title": f"Research approved by policy: {uitkomst.blocker}"[:200],
+                                                 "description": "Approved automatically by deal_automation_policy.auto_investigate_blockers.",
+                                                 "status": "completed", "requires_approval": False, "metadata": stempel}, ignore_duplicates=True))
+                        else:
+                            await self._resilient(lambda bestaand=bestaand, stempel=stempel: self.repo.engine_patch(
+                                "action_queue", {"id": f"eq.{bestaand['id']}"},
+                                {"metadata": {**(bestaand.get("metadata") or {}), **stempel}}))
+                        await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert("deal_events", {
+                            "opportunity_id": opp["id"], "event_type": "research_approved_execution_not_wired", "actor": "northsea-engine",
+                            "summary": f"Research for '{uitkomst.blocker}' is approved but the live paid research call "
+                                      "is not yet wired into the engine."[:900],
+                            "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key, "approved_via": stempel["approved_via"]}}))
+                except RepositoryError as e:
+                    fouten.append(f"research_gate {opp['id']}: {e}")
+
             veranderd = (opp.get("engine_blocker_code"), opp.get("engine_next_action_code")) != (uitkomst.blocker_code, uitkomst.next_action_code)
             if not veranderd:
                 continue

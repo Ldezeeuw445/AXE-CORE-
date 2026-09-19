@@ -134,6 +134,40 @@ def test_transient_errors_are_unreachable_or_5xx():
     assert e.is_transient_repository_error("database read failed for opportunities (502)") is True
 
 
+def test_research_gate_not_needed_for_a_non_researchable_blocker():
+    g = e.research_gate("awaiting_reply", opportunity_id="o1", policy_allows=False, existing_chase=None)
+    assert g.state == "not_needed"
+
+
+def test_research_gate_raises_one_chase_item_then_never_asks_again_while_open():
+    eerste = e.research_gate("seller_unqualified", opportunity_id="o1", policy_allows=False, existing_chase=None)
+    assert eerste.state == "awaiting_approval" and eerste.create_chase is True
+    open_chase = {"status": "open", "metadata": {}}
+    tweede = e.research_gate("seller_unqualified", opportunity_id="o1", policy_allows=False, existing_chase=open_chase)
+    assert tweede.state == "awaiting_approval" and tweede.create_chase is False
+    assert eerste.dedupe_key == tweede.dedupe_key == "research_approval:o1:seller_unqualified"
+
+
+def test_research_gate_executes_once_after_human_resolves_the_chase_item():
+    resolved = {"status": "completed", "metadata": {}}
+    g = e.research_gate("seller_unqualified", opportunity_id="o1", policy_allows=False, existing_chase=resolved)
+    assert g.state == "approved_ready_to_execute"
+
+
+def test_research_gate_never_executes_twice_for_the_same_opportunity_and_blocker():
+    al_uitgevoerd = {"status": "completed", "metadata": {"executed_at": "2026-09-19T00:00:00Z"}}
+    g = e.research_gate("seller_unqualified", opportunity_id="o1", policy_allows=False, existing_chase=al_uitgevoerd)
+    assert g.state == "already_executed"
+    # Zelfs met beleid AAN blijft het uitgevoerd: nooit een tweede keer voor dezelfde deal+blokkade.
+    g2 = e.research_gate("seller_unqualified", opportunity_id="o1", policy_allows=True, existing_chase=al_uitgevoerd)
+    assert g2.state == "already_executed"
+
+
+def test_research_gate_standing_policy_skips_the_chase_step_entirely():
+    g = e.research_gate("buyer_unqualified", opportunity_id="o2", policy_allows=True, existing_chase=None)
+    assert g.state == "approved_ready_to_execute" and g.create_chase is False
+
+
 def test_guard_and_client_errors_are_never_transient():
     assert e.is_transient_repository_error("database write failed for reply_drafts (400): NS_CONTACT_POLICY: draft blocked") is False
     assert e.is_transient_repository_error("database write failed for action_queue (409): duplicate") is False

@@ -454,6 +454,45 @@ _TRANSIENT_5XX = re.compile(r"\((5\d\d)\)")
 _GUARD_CODE = re.compile(r"\bNS_[A-Z_]+\b")
 
 
+# ── 3d. Governed research gate: nooit stilzwijgend betalen ──────────────────
+# Alleen deze twee blokkades vragen om externe verificatie (entiteit/gezag van een
+# partij); alle andere blokkades zijn al deterministisch/gratis op te lossen (wacht
+# op antwoord, goedkeuring, contactbeleid, ...) en komen hier dus nooit binnen.
+RESEARCHABLE_BLOCKERS = ("seller_unqualified", "buyer_unqualified")
+
+
+def research_gate_dedupe_key(opportunity_id: str, blocker_code: str) -> str:
+    return f"research_approval:{opportunity_id}:{blocker_code}"
+
+
+@dataclass
+class ResearchGate:
+    state: str          # not_needed | awaiting_approval | approved_ready_to_execute | already_executed
+    reason: str
+    create_chase: bool = False    # deze tick moet het Chase-item aanmaken (eerste keer)
+    dedupe_key: Optional[str] = None
+
+
+def research_gate(blocker_code: str, *, opportunity_id: str, policy_allows: bool, existing_chase: Optional[dict]) -> ResearchGate:
+    """Bepaalt of, en hoe, een onderzoekbare blokkade extern (betaald) onderzocht mag
+    worden. Puur: leest alleen zijn argumenten, doet geen enkele aanroep of schrijfactie
+    zelf -- de aanroeper (engine.py) voert de beslissing uit en bepaalt 'existing_chase'
+    (het action_queue-item met dedupe_key research_gate_dedupe_key(...), als dat er is)
+    en 'policy_allows' (deal_automation_policy.auto_investigate_blockers)."""
+    if blocker_code not in RESEARCHABLE_BLOCKERS:
+        return ResearchGate("not_needed", "blocker is not a researchable type (resolved deterministically or waiting on a human/counterparty)")
+    sleutel = research_gate_dedupe_key(opportunity_id, blocker_code)
+    if existing_chase is not None and (existing_chase.get("metadata") or {}).get("executed_at"):
+        return ResearchGate("already_executed", "research already ran once for this opportunity+blocker; never repeated automatically", dedupe_key=sleutel)
+    if policy_allows:
+        return ResearchGate("approved_ready_to_execute", "deal_automation_policy.auto_investigate_blockers explicitly allows it", dedupe_key=sleutel)
+    if existing_chase is None:
+        return ResearchGate("awaiting_approval", "no standing policy permission; raising one Chase approval request", create_chase=True, dedupe_key=sleutel)
+    if existing_chase.get("status") in ("open", "in_progress", "waiting"):
+        return ResearchGate("awaiting_approval", "Chase approval request already raised and still open; not asking again", dedupe_key=sleutel)
+    return ResearchGate("approved_ready_to_execute", "the Chase approval request was resolved by a human", dedupe_key=sleutel)
+
+
 def is_transient_repository_error(message: str) -> bool:
     """Puur op de foutmelding van RepositoryError (repository.py bouwt hem als
     "database unreachable (...)" of "database write failed for X (status)": nooit

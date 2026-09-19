@@ -343,6 +343,60 @@ async def _no_sleep():
     return None
 
 
+def _kaal_voor_onderzoekbare_blokkade(repo):
+    """Zet de seed-deal zo dat evaluate_deal() 'seller_unqualified' teruggeeft: geen
+    pending drafts, geen e-mailgeschiedenis, geen contactbeleid-blokkade, geen bounce."""
+    repo.t["reply_drafts"] = []
+    repo.t["communications"] = []
+    repo.t["email_intelligence"] = []
+
+
+async def test_research_gate_raises_one_chase_item_and_never_duplicates_it():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    await eng(repo).tick()
+    verzoeken = [q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval"]
+    assert len(verzoeken) == 1 and verzoeken[0]["status"] == "open" and verzoeken[0]["requires_approval"] is True
+    assert any(e["event_type"] == "research_approval_requested" for e in repo.t["deal_events"])
+
+    await eng(repo).tick()  # nog steeds open: geen tweede verzoek
+    assert len([q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval"]) == 1
+    assert len([e for e in repo.t["deal_events"] if e["event_type"] == "research_approval_requested"]) == 1
+
+
+async def test_research_gate_executes_once_after_human_approves_and_never_again():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    await eng(repo).tick()
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    verzoek["status"] = "completed"  # het besluit van een mens, zoals northsea_update_task dat zou zetten
+
+    await eng(repo).tick()
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert verzoek["metadata"]["executed_at"] and verzoek["metadata"]["execution_result"] == "not_wired"
+    assert verzoek["metadata"]["approved_via"] == "chase_item"
+    uitgevoerd = [e for e in repo.t["deal_events"] if e["event_type"] == "research_approved_execution_not_wired"]
+    assert len(uitgevoerd) == 1
+
+    await eng(repo).tick()  # al uitgevoerd: geen tweede keer, geen nieuw event
+    assert len([e for e in repo.t["deal_events"] if e["event_type"] == "research_approved_execution_not_wired"]) == 1
+    assert len([q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval"]) == 1
+
+
+async def test_research_gate_standing_policy_never_shows_an_open_chase_item():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    repo.t["deal_automation_policy"][0]["auto_investigate_blockers"] = True
+    await eng(repo).tick()
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert verzoek["status"] == "completed" and verzoek["requires_approval"] is False  # nooit als open Chase-item getoond
+    assert verzoek["metadata"]["approved_via"] == "policy" and verzoek["metadata"]["executed_at"]
+
+    await eng(repo).tick()  # ook met beleid AAN: geen tweede uitvoering
+    assert len([q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval"]) == 1
+    assert len([e for e in repo.t["deal_events"] if e["event_type"] == "research_approved_execution_not_wired"]) == 1
+
+
 async def test_second_tick_on_unchanged_state_creates_no_new_evaluation_or_deadline_duplicate():
     repo = FakeRepo()
     eerste = await eng(repo).tick()
