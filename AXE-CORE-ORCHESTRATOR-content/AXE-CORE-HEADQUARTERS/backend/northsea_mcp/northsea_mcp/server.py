@@ -579,7 +579,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
     route("/oauth/token", methods=["POST"])(oauth.token)
     route("/oauth/revoke", methods=["POST"])(oauth.revoke)
 
-    engine = EngineService(repo)
+    engine = EngineService(repo, research=research)
     engine_lock = asyncio.Lock()
 
     @route("/internal/engine/tick", methods=["POST"])

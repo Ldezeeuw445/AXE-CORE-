@@ -168,6 +168,33 @@ def test_research_gate_standing_policy_skips_the_chase_step_entirely():
     assert g.state == "approved_ready_to_execute" and g.create_chase is False
 
 
+def test_research_question_asks_about_the_right_party():
+    seller_q = e.research_question("seller_unqualified", company_name="Mopani Copper Mines PLC", country="Zambia", product="copper cathode")
+    assert "Mopani Copper Mines PLC" in seller_q and "Zambia" in seller_q and "seller" in seller_q.lower()
+    buyer_q = e.research_question("buyer_unqualified", company_name="Qinzhou Harbour Metals Ltd", country="China", product="copper cathode")
+    assert "Qinzhou Harbour Metals Ltd" in buyer_q and "buy" in buyer_q.lower()
+
+
+def test_research_question_handles_missing_facts_without_inventing_them():
+    q = e.research_question("seller_unqualified", company_name=None, country=None, product="copper cathode")
+    assert "the counterparty" in q and "country unknown" in q
+
+
+def test_research_question_rejects_a_non_researchable_blocker():
+    import pytest
+    with pytest.raises(ValueError):
+        e.research_question("awaiting_reply", company_name="x", country="y", product="z")
+
+
+def test_research_calls_used_today_counts_only_todays_real_attempts():
+    action_queue = [
+        {"action_type": "research_approval", "metadata": {"call_log": [iso(-1), iso(0)]}},   # beide vandaag
+        {"action_type": "research_approval", "metadata": {"call_log": [iso(-30 * 24)]}},      # 30 dagen geleden
+        {"action_type": "qualify_match", "metadata": {"call_log": [iso(0)]}},                 # ander type: telt niet mee
+    ]
+    assert e.research_calls_used_today(action_queue, NU) == 2
+
+
 def test_contradicted_fields_flags_a_genuinely_different_value():
     prior = [{"metadata": {"terms": {"quantity_mt": 500, "incoterm": "FOB"}}}]
     assert e.contradicted_fields({"quantity_mt": 800}, prior) == ["quantity_mt"]

@@ -7,9 +7,10 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-from fakes import COMM, CONTACT_S, OFFER, OPP, SELLER_CO, FakeRepo
+from fakes import COMM, CONTACT_S, OFFER, OPP, SELLER_CO, FakeRepo, FakeResearch
 from northsea_mcp import engine_rules as rules
 from northsea_mcp.engine import EngineService
+from northsea_mcp.research import ResearchError
 
 NU = datetime.now(timezone.utc)
 
@@ -395,6 +396,104 @@ async def test_research_gate_standing_policy_never_shows_an_open_chase_item():
     await eng(repo).tick()  # ook met beleid AAN: geen tweede uitvoering
     assert len([q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval"]) == 1
     assert len([e for e in repo.t["deal_events"] if e["event_type"] == "research_approved_execution_not_wired"]) == 1
+
+
+def _beleid_aan_met_budget(repo, max_per_dag=10):
+    repo.t["deal_automation_policy"][0]["auto_investigate_blockers"] = True
+    repo.t["deal_automation_policy"][0]["auto_investigate_blockers_max_calls_per_day"] = max_per_dag
+
+
+async def test_research_gate_executes_real_research_and_records_evidence_with_provenance():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    _beleid_aan_met_budget(repo)
+    research = FakeResearch()
+    await eng(repo, research=research).tick()
+
+    assert research.asks and "Mopani Copper Mines PLC" in research.asks[0] and "seller" in research.asks[0].lower()
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    md = verzoek["metadata"]
+    assert md["execution_result"] == "completed" and md["executed_at"] and md["provider"] == "perplexity"
+    assert md["cost_usd"] == 0.012 and len(md["sources"]) == 3 and md["call_log"] == [iso(0)]
+    bewijs = [e for e in repo.t["deal_evidence"] if e["evidence_type"] == "engine_research:seller_unqualified"]
+    assert len(bewijs) == 1 and bewijs[0]["party_side"] == "seller" and bewijs[0]["verification_status"] == "unverified"
+    assert bewijs[0]["metadata"]["cost_usd"] == 0.012 and len(bewijs[0]["metadata"]["sources"]) == 3
+    assert any(e["event_type"] == "research_executed" for e in repo.t["deal_events"])
+
+    await eng(repo, research=research).tick()  # already_executed: nooit een tweede echte aanroep
+    assert len(research.asks) == 1
+    assert len([e for e in repo.t["deal_events"] if e["event_type"] == "research_executed"]) == 1
+
+
+async def test_research_gate_retries_bounded_then_flags_a_human_after_max_attempts():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    _beleid_aan_met_budget(repo)
+    research = FakeResearch(fail=ResearchError("provider_error", "Research provider is rate limited; retry later."))
+    for _ in range(rules.MAX_RESEARCH_ATTEMPTS):
+        await eng(repo, research=research).tick()
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert len(research.asks) == rules.MAX_RESEARCH_ATTEMPTS
+    assert verzoek["status"] == "completed" and "executed_at" not in verzoek["metadata"]  # nog niet opgegeven
+    assert len(verzoek["metadata"]["call_log"]) == rules.MAX_RESEARCH_ATTEMPTS
+
+    await eng(repo, research=research).tick()  # de pogingen zijn op: nu pas opgeven, geen nieuwe aanroep
+    assert len(research.asks) == rules.MAX_RESEARCH_ATTEMPTS  # geen extra aanroep
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert verzoek["status"] == "open" and verzoek["requires_approval"] is True
+    assert verzoek["metadata"]["execution_result"] == "failed_permanently" and verzoek["metadata"]["executed_at"]
+    assert any(e["event_type"] == "research_execution_failed_permanently" for e in repo.t["deal_events"])
+
+    await eng(repo, research=research).tick()  # already_executed (gefaald telt ook als afgesloten): geen vijfde aanroep
+    assert len(research.asks) == rules.MAX_RESEARCH_ATTEMPTS
+
+
+async def test_research_gate_never_spends_past_the_configured_daily_budget():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    _beleid_aan_met_budget(repo, max_per_dag=1)
+    # Een andere deal verbruikte de enige toegestane aanroep van vandaag al.
+    repo.t["action_queue"].append({"id": str(uuid.uuid4()), "opportunity_id": "other", "action_type": "research_approval",
+                                   "dedupe_key": "research_approval:other:buyer_unqualified", "status": "completed",
+                                   "requires_approval": False, "metadata": {"call_log": [iso(0)], "execution_result": "completed"}})
+    research = FakeResearch()
+    await eng(repo, research=research).tick()
+    assert research.asks == []  # geen aanroep: dagbudget is op
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval" and q.get("opportunity_id") == OPP)
+    assert verzoek["metadata"]["execution_result"] == "budget_exhausted_today" and "executed_at" not in verzoek["metadata"]
+    assert any(e["event_type"] == "research_budget_exhausted_today" for e in repo.t["deal_events"])
+
+
+async def test_daily_budget_is_shared_across_deals_within_a_single_tick():
+    from fakes import OTHER_OFFER
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    _beleid_aan_met_budget(repo, max_per_dag=1)
+    tweede = {**repo.t["opportunities"][0], "id": "66666666-6666-4666-8666-666666666666", "supplier_offer_id": OTHER_OFFER,
+             "deal_priority": "DEAL-002"}
+    repo.t["opportunities"].append(tweede)
+    research = FakeResearch()
+    await eng(repo, research=research).tick()
+    # Twee deals zijn allebei approved_ready_to_execute in dezelfde tick, maar het dagbudget is 1:
+    # de tweede mag de eerste niet "niet zien" omdat action_queue maar één keer geladen is.
+    assert len(research.asks) == 1
+    verzoeken = [q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval"]
+    assert len(verzoeken) == 2
+    uitgevoerd = [q for q in verzoeken if q["metadata"].get("execution_result") == "completed"]
+    wachtend = [q for q in verzoeken if q["metadata"].get("execution_result") == "budget_exhausted_today"]
+    assert len(uitgevoerd) == 1 and len(wachtend) == 1
+
+
+async def test_a_missing_configured_daily_budget_is_not_permission_to_spend():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    repo.t["deal_automation_policy"][0]["auto_investigate_blockers"] = True
+    # auto_investigate_blockers_max_calls_per_day is NOOIT gezet (geen migratie toegepast, of nooit ingevuld).
+    research = FakeResearch()
+    await eng(repo, research=research).tick()
+    assert research.asks == []
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert verzoek["metadata"]["execution_result"] == "budget_exhausted_today"
 
 
 async def test_evaluation_event_flags_a_supplier_offer_updated_since_last_look():

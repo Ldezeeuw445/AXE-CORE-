@@ -460,6 +460,35 @@ _GUARD_CODE = re.compile(r"\bNS_[A-Z_]+\b")
 # op antwoord, goedkeuring, contactbeleid, ...) en komen hier dus nooit binnen.
 RESEARCHABLE_BLOCKERS = ("seller_unqualified", "buyer_unqualified")
 
+# Hoeveel keer de engine zelf een ECHTE aanroep probeert voor dezelfde deal+blokkade
+# voordat hij het opgeeft en een mens vraagt te kijken. Geen open lus: elke poging
+# staat in metadata.call_log (research_calls_used_today telt ze ook voor het dagbudget).
+MAX_RESEARCH_ATTEMPTS = 3
+
+
+def research_question(blocker_code: str, *, company_name: Optional[str], country: Optional[str], product: str) -> str:
+    """Dezelfde soort vraag als NorthSeaService._vraag_voor_blocker voor entiteitscontrole,
+    hertaald naar de blokkade-codes van de motor (seller_unqualified/buyer_unqualified zijn
+    geen ander onderwerp dan service.py's seller/buyer entity-blokkades, alleen een andere naam)."""
+    naam = company_name or "the counterparty"
+    land = country or "country unknown"
+    if blocker_code == "seller_unqualified":
+        return (f"Is '{naam}' ({land}) a registered legal entity and a producer, refinery, or authorised seller of {product}? "
+               "Look for company registry records, LME brand listings, the official website and credible trade press. "
+               "Report what is confirmed and what is not.")
+    if blocker_code == "buyer_unqualified":
+        return (f"Is '{naam}' ({land}) a registered legal entity that genuinely buys or processes {product}? "
+               "Look for registry records, official website, import records and trade press.")
+    raise ValueError(f"no research question defined for blocker_code {blocker_code!r}")
+
+
+def research_calls_used_today(action_queue: list[dict], now: datetime) -> int:
+    """Telt ECHTE pogingen (metadata.call_log, gezet ongeacht succes/fout) van vandaag,
+    over ALLE deals -- het dagbudget is systeembreed, niet per deal."""
+    vandaag = now.date().isoformat()
+    return sum(1 for q in action_queue if q.get("action_type") == "research_approval"
+              for iso in ((q.get("metadata") or {}).get("call_log") or []) if str(iso)[:10] == vandaag)
+
 
 def research_gate_dedupe_key(opportunity_id: str, blocker_code: str) -> str:
     return f"research_approval:{opportunity_id}:{blocker_code}"

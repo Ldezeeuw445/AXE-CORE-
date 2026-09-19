@@ -25,6 +25,8 @@ from typing import Any, Optional
 
 from . import engine_rules as rules
 from .repository import RepositoryError
+from .research import ResearchError
+from .service import RESEARCH_INSTRUCTIONS
 
 log = logging.getLogger("northsea_mcp.engine")
 
@@ -67,12 +69,16 @@ def _metadata_ontvangers(o: dict) -> list[str]:
 
 
 class EngineService:
-    def __init__(self, repo: Any, *, now=_now, max_followups_per_run: int = 10, sleep=None, max_write_attempts: int = 3):
+    def __init__(self, repo: Any, *, now=_now, max_followups_per_run: int = 10, sleep=None, max_write_attempts: int = 3,
+                research: Any = None):
         self.repo = repo
         self.now = now
         self.max_followups_per_run = max_followups_per_run
         self._sleep = sleep or asyncio.sleep
         self.max_write_attempts = max_write_attempts
+        # Optioneel: zonder research blijft de gate op 'approved_ready_to_execute' staan (nooit
+        # geslaagd doen alsof) -- zo blijven tests en omgevingen zonder sleutel veilig.
+        self.research = research
 
     async def _resilient(self, fn):
         """Voer één schrijfactie uit met begrensde retries en backoff, alleen bij een
@@ -362,6 +368,10 @@ class EngineService:
         chase_by_key = {q.get("dedupe_key"): q for q in d["action_queue"] if q.get("dedupe_key")}
         onderzoek_beleid = bool(policy.get("auto_investigate_blockers"))
         plan["research_gate"] = []
+        # Lopende teller binnen DEZE tick: d["action_queue"] is één keer geladen, dus als twee
+        # deals in dezelfde tick allebei mogen uitvoeren, moet de tweede de aanroep van de eerste
+        # al meetellen -- anders omzeilt een enkele tick het dagbudget met het aantal open deals.
+        onderzoek_budget_gebruikt = rules.research_calls_used_today(d["action_queue"], nu)
 
         for opp in d["opportunities"]:
             if opp.get("stage") == "lost" and not opp.get("engine_blocker_code"):
@@ -412,30 +422,154 @@ class EngineService:
                                 "summary": f"Research approval requested for blocker: {uitkomst.blocker}"[:900],
                                 "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key}}))
                     elif gate.state == "approved_ready_to_execute":
-                        # De uitvoering zelf (een echte, betaalde Perplexity-aanroep) is BEWUST
-                        # nog niet aangesloten: dat is de ene stap die een eigen, apart
-                        # beoordeelde koppeling verdient (welke Caller/scope, echte kosten op een
-                        # cron), niet iets wat hier stilzwijgend meegaat. Wel volledig geaudit en
-                        # gedempt: dit codepad kan nooit twee keer voor dezelfde deal+blokkade
-                        # vuren, met of zonder mensen ertussen.
-                        stempel = {"executed_at": nu.isoformat(), "execution_result": "not_wired",
-                                  "blocker_code": uitkomst.blocker_code, "kind": "research_approval",
-                                  "approved_via": "policy" if onderzoek_beleid and bestaand is None else "chase_item"}
-                        if bestaand is None:
-                            await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert(
-                                "action_queue", {"dedupe_key": gate.dedupe_key, "action_type": "research_approval", "opportunity_id": opp["id"],
-                                                 "company_id": None, "priority": 65, "title": f"Research approved by policy: {uitkomst.blocker}"[:200],
-                                                 "description": "Approved automatically by deal_automation_policy.auto_investigate_blockers.",
-                                                 "status": "completed", "requires_approval": False, "metadata": stempel}, ignore_duplicates=True))
+                        # De ene echte, begrensde uitvoering. Nooit stilzwijgend geld uitgeven:
+                        # goedkeuring alleen mag een geconfigureerd dagbudget niet omzeilen (dus
+                        # eerst het budget checken), begrensde pogingen (MAX_RESEARCH_ATTEMPTS) zodat
+                        # een falende aanroep niet voor altijd elke 15 minuten opnieuw probeert, en
+                        # nooit tweemaal voor dezelfde deal+blokkade als het ooit lukte (executed_at).
+                        goedgekeurd_via = "policy" if onderzoek_beleid and bestaand is None else "chase_item"
+                        meta_bestaand = (bestaand or {}).get("metadata") or {}
+                        call_log = list(meta_bestaand.get("call_log") or [])
+                        if len(call_log) >= rules.MAX_RESEARCH_ATTEMPTS:
+                            stempel = {"executed_at": nu.isoformat(), "execution_result": "failed_permanently",
+                                      "blocker_code": uitkomst.blocker_code, "kind": "research_approval", "approved_via": goedgekeurd_via,
+                                      "call_log": call_log, "last_error": meta_bestaand.get("last_error")}
+                            if bestaand is not None:
+                                await self._resilient(lambda bestaand=bestaand, stempel=stempel, call_log=call_log: self.repo.engine_patch(
+                                    "action_queue", {"id": f"eq.{bestaand['id']}"},
+                                    {"status": "open", "requires_approval": True,
+                                     "description": f"Research for '{uitkomst.blocker}' failed {len(call_log)} time(s) and the engine will not "
+                                                    "retry automatically; investigate manually (northsea_investigate_blockers) or resolve "
+                                                    "this blocker without research."[:2000],
+                                     "metadata": {**meta_bestaand, **stempel}}))
+                            await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, call_log=call_log: self.repo.engine_insert(
+                                "deal_events", {"opportunity_id": opp["id"], "event_type": "research_execution_failed_permanently",
+                                               "actor": "northsea-engine",
+                                               "summary": f"Research for '{uitkomst.blocker}' failed after {len(call_log)} attempt(s); "
+                                                         "needs human attention."[:900],
+                                               "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key,
+                                                           "attempts": len(call_log)}}))
+                        elif self.research is None:
+                            # Geen research-service aangesloten in DIT proces (alleen mogelijk als iemand
+                            # EngineService rechtstreeks bouwt zonder research= -- create_app geeft hem
+                            # altijd mee). execution_result blijft eerlijk 'not_wired', nooit 'completed':
+                            # geen fake/stub-succes. Wel executed_at, zoals vóór deze wijziging: dit is een
+                            # constante van het PROCES, niet iets wat een volgende tick kan oplossen, dus
+                            # elke tick opnieuw proberen is alleen ruis. Een proces MET research (de normale
+                            # productiepad) belandt hieronder, nooit in deze tak.
+                            stempel = {"executed_at": nu.isoformat(), "blocker_code": uitkomst.blocker_code, "kind": "research_approval",
+                                      "approved_via": goedgekeurd_via, "execution_result": "not_wired", "call_log": call_log}
+                            if bestaand is None:
+                                await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert(
+                                    "action_queue", {"dedupe_key": gate.dedupe_key, "action_type": "research_approval", "opportunity_id": opp["id"],
+                                                     "company_id": None, "priority": 65,
+                                                     "title": f"Research approved, no research service: {uitkomst.blocker}"[:200],
+                                                     "description": "Approved, but this engine process has no research service configured.",
+                                                     "status": "completed", "requires_approval": False, "metadata": stempel}, ignore_duplicates=True))
+                            else:
+                                await self._resilient(lambda bestaand=bestaand, stempel=stempel: self.repo.engine_patch(
+                                    "action_queue", {"id": f"eq.{bestaand['id']}"}, {"metadata": {**meta_bestaand, **stempel}}))
+                            await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, goedgekeurd_via=goedgekeurd_via: self.repo.engine_insert(
+                                "deal_events", {"opportunity_id": opp["id"], "event_type": "research_approved_execution_not_wired",
+                                               "actor": "northsea-engine",
+                                               "summary": f"Research for '{uitkomst.blocker}' is approved but this engine process has no "
+                                                         "research service configured."[:900],
+                                               "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key,
+                                                           "approved_via": goedgekeurd_via}}))
                         else:
-                            await self._resilient(lambda bestaand=bestaand, stempel=stempel: self.repo.engine_patch(
-                                "action_queue", {"id": f"eq.{bestaand['id']}"},
-                                {"metadata": {**(bestaand.get("metadata") or {}), **stempel}}))
-                        await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert("deal_events", {
-                            "opportunity_id": opp["id"], "event_type": "research_approved_execution_not_wired", "actor": "northsea-engine",
-                            "summary": f"Research for '{uitkomst.blocker}' is approved but the live paid research call "
-                                      "is not yet wired into the engine."[:900],
-                            "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key, "approved_via": stempel["approved_via"]}}))
+                            max_per_dag = int(policy.get("auto_investigate_blockers_max_calls_per_day") or 0)
+                            gebruikt_vandaag = onderzoek_budget_gebruikt
+                            if max_per_dag <= 0 or gebruikt_vandaag >= max_per_dag:
+                                # Goedkeuring alleen (beleid of een mens) mag een geconfigureerd hard
+                                # kostenplafond nooit omzeilen: wachten tot het dagbudget weer ruimte heeft.
+                                stempel = {"blocker_code": uitkomst.blocker_code, "kind": "research_approval", "approved_via": goedgekeurd_via,
+                                          "execution_result": "budget_exhausted_today", "call_log": call_log, "checked_at": nu.isoformat()}
+                                if bestaand is None:
+                                    await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert(
+                                        "action_queue", {"dedupe_key": gate.dedupe_key, "action_type": "research_approval",
+                                                         "opportunity_id": opp["id"], "company_id": None, "priority": 65,
+                                                         "title": f"Research approved, budget exhausted today: {uitkomst.blocker}"[:200],
+                                                         "description": "Approved, but today's configured research budget "
+                                                                        "(auto_investigate_blockers_max_calls_per_day) is used up; will "
+                                                                        "retry once the daily budget resets.",
+                                                         "status": "completed", "requires_approval": False, "metadata": stempel}, ignore_duplicates=True))
+                                else:
+                                    await self._resilient(lambda bestaand=bestaand, stempel=stempel: self.repo.engine_patch(
+                                        "action_queue", {"id": f"eq.{bestaand['id']}"}, {"metadata": {**meta_bestaand, **stempel}}))
+                                await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, max_per_dag=max_per_dag,
+                                                      gebruikt_vandaag=gebruikt_vandaag: self.repo.engine_insert("deal_events", {
+                                    "opportunity_id": opp["id"], "event_type": "research_budget_exhausted_today", "actor": "northsea-engine",
+                                    "summary": f"Research for '{uitkomst.blocker}' is approved but today's research budget is used up."[:900],
+                                    "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key,
+                                                "max_calls_per_day": max_per_dag, "used_today": gebruikt_vandaag}}))
+                            else:
+                                r_req, r_off = req.get(opp.get("buyer_requirement_id")) or {}, off.get(opp.get("supplier_offer_id")) or {}
+                                zijde_bedrijf = (companies.get(r_off.get("company_id")) if uitkomst.blocker_code == "seller_unqualified"
+                                                else companies.get(r_req.get("company_id")))
+                                product = (r_off.get("product") or r_req.get("product") or r_off.get("commodity")
+                                          or r_req.get("commodity") or "the commodity")
+                                vraag = rules.research_question(uitkomst.blocker_code, company_name=(zijde_bedrijf or {}).get("company_name"),
+                                                                country=(zijde_bedrijf or {}).get("country"), product=product)
+                                nieuw_log = call_log + [nu.isoformat()]
+                                onderzoek_budget_gebruikt += 1  # vóór de aanroep: telt ook mee als hij zo dadelijk faalt
+                                try:
+                                    antwoord = await self.research.ask(vraag, instructions=RESEARCH_INSTRUCTIONS, priority="P2")
+                                except ResearchError as e:
+                                    stempel = {"blocker_code": uitkomst.blocker_code, "kind": "research_approval", "approved_via": goedgekeurd_via,
+                                              "call_log": nieuw_log, "last_error": e.message[:300], "last_error_status": e.status}
+                                    beschrijving = f"Research attempt {len(nieuw_log)}/{rules.MAX_RESEARCH_ATTEMPTS} failed: {e.message}"[:2000]
+                                    if bestaand is None:
+                                        await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel,
+                                                              beschrijving=beschrijving: self.repo.engine_insert(
+                                            "action_queue", {"dedupe_key": gate.dedupe_key, "action_type": "research_approval",
+                                                             "opportunity_id": opp["id"], "company_id": None, "priority": 65,
+                                                             "title": f"Research approved, attempt failed: {uitkomst.blocker}"[:200],
+                                                             "description": beschrijving, "status": "completed", "requires_approval": False,
+                                                             "metadata": stempel}, ignore_duplicates=True))
+                                    else:
+                                        await self._resilient(lambda bestaand=bestaand, stempel=stempel, beschrijving=beschrijving: self.repo.engine_patch(
+                                            "action_queue", {"id": f"eq.{bestaand['id']}"},
+                                            {"description": beschrijving, "metadata": {**meta_bestaand, **stempel}}))
+                                    await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, e=e, nieuw_log=nieuw_log: self.repo.engine_insert(
+                                        "deal_events", {"opportunity_id": opp["id"], "event_type": "research_execution_failed_retryable",
+                                                       "actor": "northsea-engine",
+                                                       "summary": f"Research for '{uitkomst.blocker}' failed (attempt {len(nieuw_log)}/"
+                                                                 f"{rules.MAX_RESEARCH_ATTEMPTS}): {e.message}"[:900],
+                                                       "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key,
+                                                                   "status": e.status}}))
+                                else:
+                                    bronnen = [s.model_dump() for s in antwoord.sources]
+                                    stempel = {"executed_at": nu.isoformat(), "execution_result": "completed", "provider": "perplexity",
+                                              "cost_usd": antwoord.cost_usd, "sources": bronnen, "result_text": antwoord.text[:2000],
+                                              "blocker_code": uitkomst.blocker_code, "kind": "research_approval",
+                                              "approved_via": goedgekeurd_via, "call_log": nieuw_log}
+                                    if bestaand is None:
+                                        await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert(
+                                            "action_queue", {"dedupe_key": gate.dedupe_key, "action_type": "research_approval",
+                                                             "opportunity_id": opp["id"], "company_id": None, "priority": 65,
+                                                             "title": f"Research completed: {uitkomst.blocker}"[:200],
+                                                             "description": "Research completed by the engine; a human must still verify "
+                                                                            "this evidence before the blocker is cleared.",
+                                                             "status": "completed", "requires_approval": False, "metadata": stempel},
+                                                                                                    ignore_duplicates=True))
+                                    else:
+                                        await self._resilient(lambda bestaand=bestaand, stempel=stempel: self.repo.engine_patch(
+                                            "action_queue", {"id": f"eq.{bestaand['id']}"},
+                                            {"status": "completed", "metadata": {**meta_bestaand, **stempel}}))
+                                    zijde = "seller" if uitkomst.blocker_code == "seller_unqualified" else "buyer"
+                                    await self._resilient(lambda opp=opp, zijde=zijde, antwoord=antwoord, bronnen=bronnen,
+                                                          uitkomst=uitkomst: self.repo.engine_insert("deal_evidence", {
+                                        "opportunity_id": opp["id"], "party_side": zijde, "evidence_type": f"engine_research:{uitkomst.blocker_code}",
+                                        "claim": antwoord.text[:2000], "verification_status": "unverified", "source_type": "web",
+                                        "metadata": {"provider": "perplexity", "cost_usd": antwoord.cost_usd, "sources": bronnen,
+                                                    "generated_by": "northsea-engine", "blocker_code": uitkomst.blocker_code}}))
+                                    await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, antwoord=antwoord,
+                                                          bronnen=bronnen: self.repo.engine_insert("deal_events", {
+                                        "opportunity_id": opp["id"], "event_type": "research_executed", "actor": "northsea-engine",
+                                        "summary": f"Research for '{uitkomst.blocker}' completed (cost ${antwoord.cost_usd:.4f}); a human "
+                                                  "must verify it."[:900],
+                                        "metadata": {"blocker_code": uitkomst.blocker_code, "dedupe_key": gate.dedupe_key,
+                                                    "cost_usd": antwoord.cost_usd, "provider": "perplexity", "source_count": len(bronnen)}}))
                 except RepositoryError as e:
                     fouten.append(f"research_gate {opp['id']}: {e}")
 
