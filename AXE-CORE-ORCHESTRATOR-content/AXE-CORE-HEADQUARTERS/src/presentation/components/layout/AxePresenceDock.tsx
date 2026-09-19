@@ -70,6 +70,13 @@ export function AxePresenceDock() {
   }, []);
 
   const pending = voice.pendingExec;
+  const activiteitTekst = activiteit?.label.toLowerCase() ?? '';
+  const werk = {
+    zoekt: /search|zoek|research|find|scan|onderzoek/.test(activiteitTekst),
+    verbindt: /connect|verbind|navigate|open|session|sessie/.test(activiteitTekst),
+    schrijft: /write|schrijf|draft|compose|reply|antwoord/.test(activiteitTekst),
+  };
+  const presenceStatus = activiteit && voice.voiceStatus === 'idle' ? 'processing' as const : undefined;
   const statusText = pending
     ? 'Approval required'
     : activiteit?.label
@@ -82,7 +89,7 @@ export function AxePresenceDock() {
     <>
       <aside className="axe-presence-dock" aria-label="AXE presence" data-axe-doel="axe-presence">
         <div ref={orbRef} className="axe-presence-dock__orb">
-          <AxeStatusOrb size={64} toonLabel={false} />
+          <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
         </div>
         <div className="axe-presence-dock__body">
           <div className="axe-presence-dock__head">
