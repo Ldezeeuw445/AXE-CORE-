@@ -6,25 +6,35 @@
  * wrapped by com.axecore.core.lock.AxeGestureLock.
  *
  * Four unistroke names (lock alphabet) are joined with U+001F, then
- * PBKDF2-HMAC-SHA256 (120000, 32-byte salt, 256-bit key). The APK wrapped
- * that JSON with Android KeyStore AES-GCM; the web client stores the same
- * record in localStorage. Session unlock stays in sessionStorage.
+ * PBKDF2-HMAC-SHA256 (120000, 32-byte salt, 256-bit key). On Android the
+ * JSON record is wrapped by Android KeyStore AES-GCM (Tauri command →
+ * Kotlin GestureLockStore → SharedPreferences blob). Tests inject memory
+ * Storage of the same JSON. Session unlock stays in sessionStorage.
  *
  * This is not a second account. Supabase remains authentication.
  */
+
+import {
+  nativeLeesRecord,
+  nativeSchrijfRecord,
+  nativeWisRecord,
+  OPSLAG_DICHT,
+  RECORD_SLEUTEL,
+  OUD_HASH,
+  OUD_SALT,
+  wisWebPinRest,
+  type PinOpslag,
+} from './gestureLockNative';
+
+export { RECORD_SLEUTEL, OPSLAG_DICHT };
+export type { PinOpslag };
 
 export const PIN_LENGTE = 4;
 export const CODE_LENGTE = 4;
 export const MINIMUM_LENGTE = 3;
 export const ITERATIONS = 120_000;
 const SEPARATOR = '\u001f';
-const RECORD_SLEUTEL = 'axe_particle_gesture_lock';
 const OPEN_SLEUTEL = 'axe_android_unlocked';
-/** Oude keypad-hashes — wissen zodat ze niet naast de echte code blijven staan. */
-const OUD_HASH = 'axe_android_pin_hash';
-const OUD_SALT = 'axe_android_pin_salt';
-
-export type PinOpslag = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 type Record = {
   salt: string;
@@ -90,10 +100,9 @@ function lockoutMillis(failedAttempts: number): number | null {
   return 3_600_000;
 }
 
-function load(opslag: PinOpslag): Record | null {
+function parseRecord(raw: string | null): Record | null {
+  if (!raw) return null;
   try {
-    const raw = opslag.getItem(RECORD_SLEUTEL);
-    if (!raw) return null;
     const j = JSON.parse(raw) as Record;
     if (!j.salt || !j.hash || typeof j.length !== 'number') return null;
     return j;
@@ -102,16 +111,29 @@ function load(opslag: PinOpslag): Record | null {
   }
 }
 
-function save(opslag: PinOpslag, rec: Record): void {
-  opslag.setItem(RECORD_SLEUTEL, JSON.stringify(rec));
+async function load(opslag?: PinOpslag): Promise<Record | null> {
+  if (opslag) return parseRecord(opslag.getItem(RECORD_SLEUTEL));
+  const raw = await nativeLeesRecord();
+  const rec = parseRecord(raw);
+  if (raw != null && rec == null) throw new Error(OPSLAG_DICHT);
+  return rec;
 }
 
-export function pinIsGezet(opslag: PinOpslag = localStorage): boolean {
-  return load(opslag) != null;
+async function save(rec: Record, opslag?: PinOpslag): Promise<void> {
+  const raw = JSON.stringify(rec);
+  if (opslag) {
+    opslag.setItem(RECORD_SLEUTEL, raw);
+    return;
+  }
+  await nativeSchrijfRecord(raw);
 }
 
-export function codeLengte(opslag: PinOpslag = localStorage): number {
-  return load(opslag)?.length ?? CODE_LENGTE;
+export async function pinIsGezet(opslag?: PinOpslag): Promise<boolean> {
+  return (await load(opslag)) != null;
+}
+
+export async function codeLengte(opslag?: PinOpslag): Promise<number> {
+  return (await load(opslag))?.length ?? CODE_LENGTE;
 }
 
 export function isOntgrendeld(sessie: PinOpslag = sessionStorage): boolean {
@@ -130,12 +152,17 @@ export function vergrendel(sessie: PinOpslag = sessionStorage): void {
   try { sessie.removeItem(OPEN_SLEUTEL); } catch { /* private mode */ }
 }
 
-export function wisPin(opslag: PinOpslag = localStorage, sessie: PinOpslag = sessionStorage): void {
-  try {
-    opslag.removeItem(RECORD_SLEUTEL);
-    opslag.removeItem(OUD_HASH);
-    opslag.removeItem(OUD_SALT);
-  } catch { /* */ }
+export async function wisPin(opslag?: PinOpslag, sessie: PinOpslag = sessionStorage): Promise<void> {
+  if (opslag) {
+    try {
+      opslag.removeItem(RECORD_SLEUTEL);
+      opslag.removeItem(OUD_HASH);
+      opslag.removeItem(OUD_SALT);
+    } catch { /* */ }
+  } else {
+    await nativeWisRecord();
+  }
+  wisWebPinRest(opslag);
   vergrendel(sessie);
 }
 
@@ -149,7 +176,7 @@ export function codeGeldig(gestures: string[]): boolean {
 
 export async function zetPin(
   gestures: string[],
-  opslag: PinOpslag = localStorage,
+  opslag?: PinOpslag,
 ): Promise<{ ok: boolean; fout: string | null }> {
   if (gestures.length < MINIMUM_LENGTE) {
     return { ok: false, fout: `Code too short (min ${MINIMUM_LENGTE})` };
@@ -159,27 +186,38 @@ export async function zetPin(
   crypto.getRandomValues(salt);
   const hash = await pbkdf2(secret(gestures), salt, ITERATIONS);
   try {
-    opslag.removeItem(OUD_HASH);
-    opslag.removeItem(OUD_SALT);
-    save(opslag, {
+    if (opslag) {
+      try {
+        opslag.removeItem(OUD_HASH);
+        opslag.removeItem(OUD_SALT);
+      } catch { /* */ }
+    } else {
+      wisWebPinRest();
+    }
+    await save({
       salt: bytesNaarB64(salt),
       hash: bytesNaarB64(hash),
       length: gestures.length,
       iterations: ITERATIONS,
       failedAttempts: 0,
       lockedUntil: 0,
-    });
+    }, opslag);
   } catch {
-    return { ok: false, fout: 'could not store PIN' };
+    return { ok: false, fout: OPSLAG_DICHT };
   }
   return { ok: true, fout: null };
 }
 
 export async function verifieerCode(
   gestures: string[],
-  opslag: PinOpslag = localStorage,
+  opslag?: PinOpslag,
 ): Promise<PinCheck> {
-  const rec = load(opslag);
+  let rec: Record | null;
+  try {
+    rec = await load(opslag);
+  } catch {
+    return { ok: false, fout: OPSLAG_DICHT };
+  }
   if (!rec) return { ok: false, fout: 'No code set yet' };
   const now = Date.now();
   if (rec.lockedUntil > now) {
@@ -187,16 +225,20 @@ export async function verifieerCode(
     return { ok: false, fout: s < 60 ? `Too many attempts — ${s} s` : `Too many attempts — ${Math.ceil(s / 60)} min` };
   }
   const candidate = await pbkdf2(secret(gestures), b64NaarBytes(rec.salt), rec.iterations || ITERATIONS);
-  if (constantTimeEquals(candidate, b64NaarBytes(rec.hash))) {
-    save(opslag, { ...rec, failedAttempts: 0, lockedUntil: 0 });
-    return { ok: true };
+  try {
+    if (constantTimeEquals(candidate, b64NaarBytes(rec.hash))) {
+      await save({ ...rec, failedAttempts: 0, lockedUntil: 0 }, opslag);
+      return { ok: true };
+    }
+    const attempts = rec.failedAttempts + 1;
+    const wait = lockoutMillis(attempts);
+    await save({ ...rec, failedAttempts: attempts, lockedUntil: wait ? now + wait : 0 }, opslag);
+    return { ok: false, fout: 'Wrong code' };
+  } catch {
+    return { ok: false, fout: OPSLAG_DICHT };
   }
-  const attempts = rec.failedAttempts + 1;
-  const wait = lockoutMillis(attempts);
-  save(opslag, { ...rec, failedAttempts: attempts, lockedUntil: wait ? now + wait : 0 });
-  return { ok: false, fout: 'Wrong code' };
 }
 
-export async function pinKlopt(gestures: string[], opslag: PinOpslag = localStorage): Promise<boolean> {
+export async function pinKlopt(gestures: string[], opslag?: PinOpslag): Promise<boolean> {
   return (await verifieerCode(gestures, opslag)).ok;
 }

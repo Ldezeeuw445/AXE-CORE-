@@ -4,10 +4,10 @@
  * Lockscreen → circular particle field → four unistroke inputs → unlock.
  * No keypad. The field is the PIN.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  CODE_LENGTE, ontgrendel, pinIsGezet, verifieerCode, zetPin, codeLengte,
+  CODE_LENGTE, ontgrendel, pinIsGezet, verifieerCode, zetPin, codeLengte, OPSLAG_DICHT,
 } from '@/domain/androidPin';
 import { lockAlphabet } from '@/domain/gestureTemplates';
 import { UnistrokeRecognizer, isClearWinner } from '@/domain/unistrokeRecognizer';
@@ -17,19 +17,40 @@ import { MobileGlass } from '@/presentation/components/layout/MobileGlass';
 
 export default function ParticlePinScreen() {
   const navigate = useNavigate();
-  const setup = useMemo(() => !pinIsGezet(), []);
-  const nodig = useMemo(() => (setup ? CODE_LENGTE : codeLengte()), [setup]);
+  const [modus, setModus] = useState<'laden' | 'setup' | 'unlock' | 'dicht'>('laden');
+  const [nodig, setNodig] = useState(CODE_LENGTE);
   const herkenner = useMemo(() => new UnistrokeRecognizer(lockAlphabet()), []);
   const [ingevoerd, setIngevoerd] = useState<string[]>([]);
   const [bevestig, setBevestig] = useState<string[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
 
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const gezet = await pinIsGezet();
+        const n = gezet ? await codeLengte() : CODE_LENGTE;
+        if (!alive) return;
+        setNodig(n);
+        setModus(gezet ? 'unlock' : 'setup');
+      } catch {
+        if (alive) {
+          setModus('dicht');
+          setFout(OPSLAG_DICHT);
+        }
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const setup = modus === 'setup';
   const titel = setup
     ? (bevestig == null ? 'Draw your code' : 'Draw it again')
     : 'Draw your code';
 
   const klaar = async (reeks: string[]) => {
+    if (modus !== 'setup' && modus !== 'unlock') return;
     setBezig(true);
     try {
       if (setup) {
@@ -64,7 +85,7 @@ export default function ParticlePinScreen() {
   };
 
   const slag = (points: GesturePoint[]) => {
-    if (bezig) return;
+    if (bezig || modus === 'laden' || modus === 'dicht') return;
     const result = herkenner.recognize(points);
     if (!isClearWinner(result) || !result) {
       setFout('Not clear enough — try again');
@@ -80,7 +101,7 @@ export default function ParticlePinScreen() {
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
       <MobileGlass />
       <div className="absolute inset-0 z-[1]">
-        <ParticleGestureField onStroke={slag} disabled={bezig} />
+        <ParticleGestureField onStroke={slag} disabled={bezig || modus === 'laden' || modus === 'dicht'} />
       </div>
       <div
         className="pointer-events-none relative z-[2] mx-auto flex h-full w-full max-w-sm flex-col px-6"
@@ -112,7 +133,7 @@ export default function ParticlePinScreen() {
           type="button"
           className="pointer-events-auto mt-auto mb-2 self-center text-[12px]"
           style={{ color: 'var(--text-muted)' }}
-          onClick={() => { setIngevoerd([]); setFout(null); }}
+          onClick={() => { setIngevoerd([]); setFout(modus === 'dicht' ? OPSLAG_DICHT : null); }}
         >
           Clear
         </button>

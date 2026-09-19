@@ -35,6 +35,7 @@ export default function LockScreen() {
   const navigate = useNavigate();
   const now = useClock();
   const [aware, setAware] = useState<AwarenessSnapshot | null>(null);
+  const [gezet, setGezet] = useState<boolean | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -44,6 +45,14 @@ export default function LockScreen() {
     load();
     const id = setInterval(load, 30_000);
     return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void pinIsGezet()
+      .then((v) => { if (alive) setGezet(v); })
+      .catch(() => { if (alive) setGezet(true); });
+    return () => { alive = false; };
   }, []);
 
   const waiting = (aware?.openTasks ?? 0) + (aware?.followUps ?? 0);
@@ -79,7 +88,7 @@ export default function LockScreen() {
           type="button"
           onClick={openPin}
           className="mt-8 flex flex-1 flex-col items-center text-center"
-          aria-label={pinIsGezet() ? 'Swipe up to unlock AXE' : 'Swipe up to set your particle code'}
+          aria-label={gezet === false ? 'Swipe up to set your particle code' : 'Swipe up to unlock AXE'}
         >
           <div
             className="text-7xl font-semibold tabular-nums leading-none tracking-tight"
@@ -124,7 +133,7 @@ export default function LockScreen() {
           className="mb-2 py-3 text-[13px] font-semibold tracking-[0.14em]"
           style={{ color: 'var(--text-muted)' }}
         >
-          {pinIsGezet() ? '^  SWIPE UP TO UNLOCK' : '^  SWIPE UP TO SET CODE'}
+          {gezet === false ? '^  SWIPE UP TO SET CODE' : '^  SWIPE UP TO UNLOCK'}
         </button>
       </div>
     </div>

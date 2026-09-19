@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   PIN_LENGTE, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
   zetPin, pinKlopt, wisPin, androidSlotLaatDoor, verifieerCode, MINIMUM_LENGTE,
+  RECORD_SLEUTEL, OPSLAG_DICHT,
 } from './androidPin';
 
 function geheugen(): Storage {
@@ -26,11 +27,11 @@ describe('android particle-gesture PIN', () => {
 
   it('zet en herkent een gebarenreeks, slaat namen niet in klare tekst op', async () => {
     const opslag = geheugen();
-    expect(pinIsGezet(opslag)).toBe(false);
+    expect(await pinIsGezet(opslag)).toBe(false);
     const r = await zetPin(CODE, opslag);
     expect(r.ok).toBe(true);
-    expect(pinIsGezet(opslag)).toBe(true);
-    const raw = opslag.getItem('axe_particle_gesture_lock') ?? '';
+    expect(await pinIsGezet(opslag)).toBe(true);
+    const raw = opslag.getItem(RECORD_SLEUTEL) ?? '';
     expect(raw).not.toContain('swipeRight');
     expect(raw).not.toContain('triangle');
     expect(await pinKlopt(CODE, opslag)).toBe(true);
@@ -57,8 +58,8 @@ describe('android particle-gesture PIN', () => {
     const sessie = geheugen();
     await zetPin(CODE, opslag);
     ontgrendel(sessie);
-    wisPin(opslag, sessie);
-    expect(pinIsGezet(opslag)).toBe(false);
+    await wisPin(opslag, sessie);
+    expect(await pinIsGezet(opslag)).toBe(false);
     expect(isOntgrendeld(sessie)).toBe(false);
   });
 
@@ -82,5 +83,45 @@ describe('android particle-gesture PIN', () => {
     expect(androidSlotLaatDoor('/devices')).toBe(false);
     expect(androidSlotLaatDoor('/maps-3d')).toBe(false);
     expect(androidSlotLaatDoor('/')).toBe(false);
+  });
+});
+
+describe('geen localStorage-fallback', () => {
+  const bak = new Map<string, string>();
+  const web: Storage = {
+    get length() { return bak.size; },
+    clear() { bak.clear(); },
+    getItem(k) { return bak.has(k) ? bak.get(k)! : null; },
+    setItem(k, v) { bak.set(k, String(v)); },
+    removeItem(k) { bak.delete(k); },
+    key(i) { return [...bak.keys()][i] ?? null; },
+  };
+
+  beforeEach(() => {
+    bak.clear();
+    vi.stubGlobal('localStorage', web);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('zetPin zonder native brug schrijft het record niet naar localStorage', async () => {
+    const r = await zetPin(CODE);
+    expect(r.ok).toBe(false);
+    expect(r.fout).toBe(OPSLAG_DICHT);
+    expect(web.getItem(RECORD_SLEUTEL)).toBeNull();
+    expect(JSON.stringify([...bak.entries()])).not.toContain('swipeRight');
+  });
+
+  it('pinIsGezet gooit als KeyStore ontbreekt in plaats van "niet gezet"', async () => {
+    await expect(pinIsGezet()).rejects.toThrow(OPSLAG_DICHT);
+    expect(web.getItem(RECORD_SLEUTEL)).toBeNull();
+  });
+
+  it('veegt een oude plaintext-record uit localStorage bij native-poging', async () => {
+    web.setItem(RECORD_SLEUTEL, JSON.stringify({ hash: 'lek', salt: 'x', length: 4 }));
+    const r = await zetPin(CODE);
+    expect(r.ok).toBe(false);
+    expect(web.getItem(RECORD_SLEUTEL)).toBeNull();
   });
 });

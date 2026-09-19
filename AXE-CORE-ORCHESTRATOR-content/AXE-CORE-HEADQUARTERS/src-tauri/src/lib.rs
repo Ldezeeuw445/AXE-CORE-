@@ -1,5 +1,6 @@
 #[cfg_attr(not(desktop), allow(dead_code))]
 mod diensten;
+mod gesture_lock;
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -257,6 +258,7 @@ fn dienst_stop(id: String) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(gesture_lock::plugin())
         .invoke_handler(tauri::generate_handler![
             zet_plaat_materiaal,
             write_vault_file,
@@ -269,6 +271,9 @@ pub fn run() {
             diensten_stand,
             dienst_start,
             dienst_stop,
+            gesture_lock::gesture_lock_load,
+            gesture_lock::gesture_lock_save,
+            gesture_lock::gesture_lock_clear,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# JNI loads GestureLockPlugin by class name; minify would make KeyStore
+# storage fail closed and lock the user out of setup.
+-keep class com.axe.core.GestureLockPlugin { *; }
+-keep class com.axe.core.GestureLockStore { *; }
+-keep class com.axe.core.GestureLockSaveArgs { *; }
+-keep @app.tauri.annotation.TauriPlugin class * { *; }
