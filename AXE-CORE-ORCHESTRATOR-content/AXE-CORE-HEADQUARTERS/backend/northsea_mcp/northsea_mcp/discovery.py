@@ -36,7 +36,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import matching
+from . import canon, matching
 from .repository import RepositoryError
 
 log = logging.getLogger("northsea_mcp.discovery")
@@ -88,10 +88,14 @@ class DiscoveryService:
            without its assessment and event."""
         nu = self.now()
         vandaag = nu.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-        reqs, offers, bestaande_paren, al_vandaag = await asyncio.gather(
+        ruwe_reqs, ruwe_offers, bestaande_paren, al_vandaag = await asyncio.gather(
             self.repo.list_active_requirements(), self.repo.list_active_offers(),
             self.repo.list_opportunity_pairs(), self.repo.count_events_since(event_type="opportunity_discovered", actor=ACTOR, since=vandaag))
         bekende_paren = {(p.get("buyer_requirement_id"), p.get("supplier_offer_id")) for p in bestaande_paren}
+        # Interne testcases (STRATO/Jasmine, is_synthetic, "Test "-bedrijven) zijn geen echte vraag/aanbod --
+        # dezelfde herkenning als overal elders in deze server (canon.testcase_reason), nooit een eigen regel.
+        reqs = [r for r in ruwe_reqs if not canon.testcase_reason(r, r.get("companies"))]
+        offers = [o for o in ruwe_offers if not canon.testcase_reason(o, o.get("companies"))]
 
         overwogen = 0
         kandidaten: list[dict] = []

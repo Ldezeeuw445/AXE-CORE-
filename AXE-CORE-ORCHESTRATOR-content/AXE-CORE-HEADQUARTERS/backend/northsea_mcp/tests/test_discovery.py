@@ -101,6 +101,24 @@ async def test_dry_run_creates_nothing():
     assert repo.t["match_assessments"] == [] and repo.t["deal_events"] == []
 
 
+async def test_testcase_requirements_and_offers_are_never_paired():
+    """Found during the live controlled proof after the incident: the dry-run's top candidates were
+    ALL against a real STRATO/Jasmine test fixture (buyer_requirement 7c328c1a...), which the codebase
+    already knows how to recognise (canon.testcase_reason) everywhere else. Discovery must use the
+    same recognition, not invent its own."""
+    repo = FakeRepo()
+    testcase_req = {**repo.t["buyer_requirements"][0], "id": "7c328c1a-fd41-4592-86bb-de954a384e2b",
+                    "evidence": "STRATO TEST CALL: synthetic Jasmine qualification test; caller-stated details only.",
+                    "companies": None}
+    repo.t["buyer_requirements"].append(testcase_req)
+    synthetic_offer = {**repo.t["supplier_offers"][0], "id": "99999999-0000-4000-8000-000000000001",
+                       "is_synthetic": True, "synthetic_reason": "load test fixture", "companies": None}
+    repo.t["supplier_offers"].append(synthetic_offer)
+    uit = await disc(repo).sweep(dry_run=True)
+    paren = {(p["buyer_requirement_id"], p["supplier_offer_id"]) for p in uit["would_create_pairs"]}
+    assert not any(p[0] == testcase_req["id"] or p[1] == synthetic_offer["id"] for p in paren)
+
+
 async def test_below_threshold_pairs_are_never_created():
     repo = FakeRepo()
     for o in repo.t["supplier_offers"]:
