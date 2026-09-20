@@ -98,9 +98,9 @@ function Dot({ tone }: { tone: 'ok' | 'err' | 'muted' }) {
   return <span className="inline-block size-1.5 rounded-full" style={{ background: kleur }} />;
 }
 
-function Kaart({ style, children }: { style: React.CSSProperties; children: ReactNode }) {
+function Kaart({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <section className="rounded-[20px] p-3.5" style={style}>
+    <section className={`axe-lock-kaart rounded-[20px] p-3.5 ${className}`.trim()}>
       {children}
     </section>
   );
@@ -188,23 +188,23 @@ export default function LockScreen() {
             </div>
           </div>
 
-          <Kaart style={{ ...mat.kaart, marginTop: 16 }}>
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: mat.gedempt }}>
+          <Kaart className="mt-4">
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
               Markets
             </div>
             <div className="grid grid-cols-4 gap-1.5">
               {MARKTEN.map((sym) => (
-                <div key={sym} className="rounded-[12px] px-1.5 py-2" style={mat.binnen}>
-                  <div className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: mat.gedempt }}>{sym}</div>
-                  <div className="mt-1 text-[13px] font-semibold tabular-nums" style={{ color: mat.tekst }}>—</div>
+                <div key={sym} className="axe-lock-binnen rounded-[12px] px-1.5 py-2">
+                  <div className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{sym}</div>
+                  <div className="mt-1 text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>—</div>
                 </div>
               ))}
             </div>
           </Kaart>
 
-          <Kaart style={{ ...mat.kaart, marginTop: 10 }}>
+          <Kaart className="mt-2.5">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: mat.gedempt }}>Your systems</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>Your systems</span>
               <span className="text-[10px] font-semibold" style={{ color: 'var(--success)' }}>
                 {systemen.length ? `${onlineN}/${systemen.length} online` : '—'}
               </span>
@@ -214,14 +214,14 @@ export default function LockScreen() {
                 const Ico = d ? systeemIcoon(d) : Monitor;
                 const on = d ? isOnline(d.last_seen) : false;
                 return (
-                  <div key={d?.device_id ?? i} className="rounded-[12px] px-2 py-2" style={mat.binnen}>
+                  <div key={d?.device_id ?? i} className="axe-lock-binnen rounded-[12px] px-2 py-2">
                     <div className="flex items-center gap-1.5">
-                      <Ico size={13} style={{ color: mat.gedempt }} />
-                      <span className="truncate text-[11px] font-medium" style={{ color: mat.tekst }}>
+                      <Ico size={13} style={{ color: 'var(--text-muted)' }} />
+                      <span className="truncate text-[11px] font-medium" style={{ color: 'var(--text-primary)' }}>
                         {d?.device_name ?? '—'}
                       </span>
                     </div>
-                    <div className="mt-1.5 text-[10px] font-semibold" style={{ color: d ? (on ? 'var(--success)' : 'var(--error)') : mat.gedempt }}>
+                    <div className="mt-1.5 text-[10px] font-semibold" style={{ color: d ? (on ? 'var(--success)' : 'var(--error)') : 'var(--text-muted)' }}>
                       {d ? (on ? 'Online' : 'Offline') : '—'}
                     </div>
                   </div>
@@ -230,10 +230,10 @@ export default function LockScreen() {
             </div>
           </Kaart>
 
-          <Kaart style={{ ...mat.kaart, marginTop: 10 }}>
+          <Kaart className="mt-2.5">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: mat.gedempt }}>Core services</span>
-              <span className="text-[10px] font-semibold" style={{ color: kernOk ? 'var(--success)' : mat.gedempt }}>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>Core services</span>
+              <span className="text-[10px] font-semibold" style={{ color: kernOk ? 'var(--success)' : 'var(--text-muted)' }}>
                 {kernOk}/{kern.length} healthy
               </span>
             </div>
@@ -242,18 +242,18 @@ export default function LockScreen() {
                 const Ico = k.icoon;
                 const tone = k.status === 'online' ? 'ok' : k.status === 'offline' ? 'err' : 'muted';
                 return (
-                  <div key={k.label} className="flex flex-col items-center gap-1 rounded-[12px] px-1 py-2" style={mat.binnen}>
+                  <div key={k.label} className="axe-lock-binnen flex flex-col items-center gap-1 rounded-[12px] px-1 py-2">
                     <Dot tone={tone} />
-                    <Ico size={14} style={{ color: mat.gedempt }} />
-                    <span className="text-center text-[8px] leading-tight" style={{ color: mat.gedempt }}>{k.label}</span>
+                    <Ico size={14} style={{ color: 'var(--text-muted)' }} />
+                    <span className="text-center text-[8px] leading-tight" style={{ color: 'var(--text-muted)' }}>{k.label}</span>
                   </div>
                 );
               })}
             </div>
           </Kaart>
 
-          <Kaart style={{ ...mat.kaart, marginTop: 10 }}>
-            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: aandacht.length ? 'var(--error)' : mat.gedempt }}>
+          <Kaart className="mt-2.5">
+            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: aandacht.length ? 'var(--error)' : 'var(--text-muted)' }}>
               <Bell size={12} />
               Attention {aware ? `(${aandacht.length})` : ''}
             </div>
@@ -262,7 +262,7 @@ export default function LockScreen() {
             ) : (
               <div className="space-y-1.5">
                 {aandacht.map((a) => (
-                  <div key={a} className="rounded-[12px] px-2.5 py-2 text-[12px] leading-snug" style={{ ...mat.binnen, color: mat.tekst }}>
+                  <div key={a} className="axe-lock-binnen rounded-[12px] px-2.5 py-2 text-[12px] leading-snug" style={{ color: 'var(--text-primary)' }}>
                     {a}
                   </div>
                 ))}
@@ -278,12 +278,11 @@ export default function LockScreen() {
                   key={t.pad}
                   type="button"
                   onClick={() => naarPin(t.pad)}
-                  className="flex flex-col items-start rounded-[16px] px-2.5 py-2.5 text-left"
-                  style={mat.kaart}
+                  className="axe-lock-kaart flex flex-col items-start rounded-[16px] px-2.5 py-2.5 text-left"
                 >
-                  <Ico size={15} style={{ color: 'var(--accent-cyan)' }} />
-                  <span className="mt-2 text-[11px] font-semibold leading-tight" style={{ color: mat.tekst }}>{t.label}</span>
-                  <span className="mt-0.5 text-[9px] leading-tight" style={{ color: mat.gedempt }}>{t.sub}</span>
+                  <Ico size={15} style={{ color: 'var(--accent)' }} />
+                  <span className="mt-2 text-[11px] font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>{t.label}</span>
+                  <span className="mt-0.5 text-[9px] leading-tight" style={{ color: 'var(--text-muted)' }}>{t.sub}</span>
                 </button>
               );
             })}
@@ -292,11 +291,10 @@ export default function LockScreen() {
           <button
             type="button"
             onClick={() => naarPin('/')}
-            className="mt-3 flex w-full items-center gap-2 rounded-full px-3.5 py-2.5"
-            style={mat.kaart}
+            className="axe-lock-kaart mt-3 flex w-full items-center gap-2 rounded-full px-3.5 py-2.5"
           >
-            <Mic size={14} style={{ color: 'var(--accent-cyan)' }} />
-            <span className="flex-1 text-left text-[12px]" style={{ color: mat.gedempt }}>Ask AXE anything…</span>
+            <Mic size={14} style={{ color: 'var(--accent)' }} />
+            <span className="flex-1 text-left text-[12px]" style={{ color: 'var(--text-muted)' }}>Ask AXE anything…</span>
           </button>
         </div>
 
