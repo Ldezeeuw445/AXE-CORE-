@@ -46,7 +46,7 @@ function waitUntilIdle(timeoutMs = 120_000): Promise<void> {
 
 async function whisperTurn(gen: number): Promise<'ok' | 'empty' | 'stop' | 'fail'> {
   try {
-    const text = await listenAndTranscribe({ lang: 'nl' });
+    const text = await listenAndTranscribe();
     if (!conversationActive || gen !== loopGeneration) return 'stop';
     if (!text) return 'empty';
     useVoiceStore.setState({ transcript: text, voiceStatus: 'processing', error: null });
