@@ -35,6 +35,9 @@ export const MINIMUM_LENGTE = 3;
 export const ITERATIONS = 120_000;
 const SEPARATOR = '\u001f';
 const OPEN_SLEUTEL = 'axe_android_unlocked';
+const TERUG_SLEUTEL = 'axe_android_return';
+/** Na ontgrendelen: bestaande Android-schil, niet Device Manager. */
+export const SCHIL_START = '/';
 
 type Record = {
   salt: string;
@@ -168,6 +171,24 @@ export async function wisPin(opslag?: PinOpslag, sessie: PinOpslag = sessionStor
 
 export function androidSlotLaatDoor(path: string): boolean {
   return path === '/lock' || path === '/lock/pin' || path === '/login';
+}
+
+function padIsSchil(path: string): boolean {
+  return path.startsWith('/') && !androidSlotLaatDoor(path);
+}
+
+/** Onthoudt de tab onder het slot, zodat unlock de schil terugzet. */
+export function bewaarTerugPad(path: string, sessie: PinOpslag = sessionStorage): void {
+  if (!padIsSchil(path)) return;
+  try { sessie.setItem(TERUG_SLEUTEL, path); } catch { /* private mode */ }
+}
+
+export function naOntgrendelenPad(sessie: PinOpslag = sessionStorage): string {
+  try {
+    const p = sessie.getItem(TERUG_SLEUTEL);
+    if (p && padIsSchil(p)) return p;
+  } catch { /* private mode */ }
+  return SCHIL_START;
 }
 
 export function codeGeldig(gestures: string[]): boolean {

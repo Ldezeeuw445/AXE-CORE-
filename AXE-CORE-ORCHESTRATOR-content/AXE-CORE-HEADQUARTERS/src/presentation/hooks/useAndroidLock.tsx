@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { isAndroidTauriRuntime, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
-import { androidSlotLaatDoor, isOntgrendeld, vergrendel } from '@/domain/androidPin';
+import { androidSlotLaatDoor, bewaarTerugPad, isOntgrendeld, vergrendel } from '@/domain/androidPin';
 
 function androidOppervlakActief(): boolean {
   return isAndroidTauriRuntime() || isAndroidShellRuntime();
@@ -14,6 +14,11 @@ function androidOppervlakActief(): boolean {
 export function AndroidLockGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [, setTik] = useState(0);
+
+  useEffect(() => {
+    if (!androidOppervlakActief()) return;
+    if (!androidSlotLaatDoor(location.pathname)) bewaarTerugPad(location.pathname);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!androidOppervlakActief()) return;

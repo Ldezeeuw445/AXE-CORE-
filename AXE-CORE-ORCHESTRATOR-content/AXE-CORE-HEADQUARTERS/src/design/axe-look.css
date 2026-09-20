@@ -1787,6 +1787,18 @@ html:root[data-look],
   background: rgba(255, 255, 255, 0.14) !important;
   color: #FEBC2E;
 }
+/* Slot heeft geen topbar; dezelfde actieve zon/maan, naast de knop zelf. */
+:root[data-look] .axe-lock-look .axe-dn-btn[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.14);
+  color: #FEBC2E;
+}
+:root[data-look='glass'] .axe-lock-look .axe-dn-btn {
+  color: rgba(12, 20, 34, 0.55);
+}
+:root[data-look='glass'] .axe-lock-look .axe-dn-btn[aria-pressed='true'] {
+  background: rgba(12, 20, 34, 0.10);
+  color: #FEBC2E;
+}
 
 /* ── De tellers in de kop ────────────────────────────────────────────────
    Geen omlijning: een kader om twee getallen maakt er knoppen van terwijl het

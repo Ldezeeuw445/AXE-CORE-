@@ -143,6 +143,12 @@ export function ParticleGestureField({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    let glass = document.documentElement.dataset.look === 'glass';
+    const lookWatch = new MutationObserver(() => {
+      glass = document.documentElement.dataset.look === 'glass';
+    });
+    lookWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-look'] });
+
     const lus = (nu: number) => {
       raf = requestAnimationFrame(lus);
       const dt = last ? Math.min(0.033, (nu - last) / 1000) : 0.016;
@@ -195,17 +201,29 @@ export function ParticleGestureField({
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = glass ? 'source-over' : 'lighter';
       for (const p of particles) {
         const speed = Math.hypot(p.vx, p.vy);
         const glow = Math.min(1.4, speed * 1.1);
         const k = Math.max(0, Math.min(1, (0.13 - p.tint) / 0.13));
-        const r = 0.80 + (0.28 - 0.80) * k;
-        const g = 0.86 + (0.94 - 0.86) * k;
-        const b = 0.89 + (1.00 - 0.89) * k;
-        const alpha = 0.5 * (0.30 + 0.70 * hash11(p.seed * 3)) * (1 + k * 0.45) * (1 + glow * 0.5);
+        let r: number;
+        let g: number;
+        let b: number;
+        let alpha: number;
+        if (glass) {
+          r = 0.10 + (0.22 - 0.10) * k;
+          g = 0.22 + (0.40 - 0.22) * k;
+          b = 0.36 + (0.52 - 0.36) * k;
+          alpha = 0.42 * (0.35 + 0.65 * hash11(p.seed * 3)) * (1 + k * 0.35) * (1 + glow * 0.35);
+        } else {
+          r = 0.80 + (0.28 - 0.80) * k;
+          g = 0.86 + (0.94 - 0.86) * k;
+          b = 0.89 + (1.00 - 0.89) * k;
+          alpha = 0.5 * (0.30 + 0.70 * hash11(p.seed * 3)) * (1 + k * 0.45) * (1 + glow * 0.5);
+        }
         const size = Math.max(1, POINT_SIZE * (0.7 + 0.7 * hash11(p.seed * 11)));
-        ctx.fillStyle = `rgba(${Math.round((r * (1 + glow * 0.75)) * 255)},${Math.round((g * (1 + glow * 0.75)) * 255)},${Math.round((b * (1 + glow * 0.75)) * 255)},${Math.min(1, alpha)})`;
+        const lift = glass ? 1 + glow * 0.25 : 1 + glow * 0.75;
+        ctx.fillStyle = `rgba(${Math.round(r * lift * 255)},${Math.round(g * lift * 255)},${Math.round(b * lift * 255)},${Math.min(1, alpha)})`;
         ctx.beginPath();
         ctx.arc(cx + p.x * scale, cy + p.y * scale, size * 0.55, 0, Math.PI * 2);
         ctx.fill();
@@ -219,6 +237,7 @@ export function ParticleGestureField({
     ro.observe(wrap);
     return () => {
       cancelAnimationFrame(raf);
+      lookWatch.disconnect();
       ro.disconnect();
       canvas.removeEventListener('pointerdown', omlaag);
       canvas.removeEventListener('pointermove', beweeg);

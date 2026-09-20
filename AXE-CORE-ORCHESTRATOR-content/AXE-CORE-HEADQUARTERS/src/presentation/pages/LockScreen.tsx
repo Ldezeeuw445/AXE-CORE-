@@ -10,6 +10,7 @@ import { Clock, ListChecks, CheckCircle2 } from 'lucide-react';
 import { getAwarenessSnapshot, type AwarenessSnapshot } from '@/application/awareness/axeAwareness';
 import { LookToggle } from '@/presentation/components/layout/LookToggle';
 import { MobileGlass } from '@/presentation/components/layout/MobileGlass';
+import { useLook } from '@/presentation/hooks/useLook';
 import { pinIsGezet } from '@/domain/androidPin';
 
 function useClock(): Date {
@@ -25,7 +26,7 @@ const TIME_FMT = new Intl.DateTimeFormat('nl-NL', { hour: '2-digit', minute: '2-
 const DATE_FMT = new Intl.DateTimeFormat('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
 
 const FROSTED = {
-  background: 'color-mix(in srgb, var(--kaart, rgba(14,17,23,0.74)) 88%, transparent)',
+  background: 'color-mix(in srgb, var(--kaart, rgba(14,17,23,0.74)) 82%, transparent)',
   backdropFilter: 'blur(26px) saturate(160%)',
   WebkitBackdropFilter: 'blur(26px) saturate(160%)',
   border: '1px solid var(--kaart-rand, rgba(255,255,255,0.10))',
@@ -33,9 +34,13 @@ const FROSTED = {
 
 export default function LockScreen() {
   const navigate = useNavigate();
+  const [look] = useLook();
   const now = useClock();
   const [aware, setAware] = useState<AwarenessSnapshot | null>(null);
   const [gezet, setGezet] = useState<boolean | null>(null);
+  const glas = look === 'glass';
+  const plaatTekst = glas ? 'rgba(12, 20, 34, 0.92)' : 'var(--text-primary)';
+  const plaatGedempt = glas ? 'rgba(12, 20, 34, 0.55)' : 'var(--text-muted)';
 
   useEffect(() => {
     let alive = true;
@@ -79,7 +84,7 @@ export default function LockScreen() {
           paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         }}
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="axe-lock-look flex items-center justify-between gap-3">
           <LookToggle />
           <img src="/axe-logo.png" alt="AXE CORE" className="h-8 w-auto" />
         </div>
@@ -92,14 +97,14 @@ export default function LockScreen() {
         >
           <div
             className="text-7xl font-semibold tabular-nums leading-none tracking-tight"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: plaatTekst }}
           >
             {TIME_FMT.format(now)}
           </div>
-          <div className="mt-2 text-sm capitalize" style={{ color: 'var(--text-muted)' }}>
+          <div className="mt-2 text-sm capitalize" style={{ color: plaatGedempt }}>
             {DATE_FMT.format(now)}
           </div>
-          <div className="mt-2 inline-flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+          <div className="mt-2 inline-flex items-center gap-1.5 text-[12px]" style={{ color: plaatGedempt }}>
             <Clock size={13} />
             {aware?.alerts?.[0] ?? 'Nothing urgent'}
           </div>
@@ -107,7 +112,7 @@ export default function LockScreen() {
 
         <div
           className="mb-4 rounded-[18px] p-4"
-          style={{ ...FROSTED, boxShadow: '0 8px 30px rgba(0,0,0,0.18)' }}
+          style={{ ...FROSTED, boxShadow: glas ? 'var(--axe-lift, 0 10px 30px rgba(12,20,34,0.22))' : '0 8px 30px rgba(0,0,0,0.18)' }}
         >
           <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.1em]" style={{ color: 'var(--text-muted)' }}>
             <ListChecks size={14} /> Waiting
@@ -131,7 +136,7 @@ export default function LockScreen() {
           type="button"
           onClick={openPin}
           className="mb-2 py-3 text-[13px] font-semibold tracking-[0.14em]"
-          style={{ color: 'var(--text-muted)' }}
+          style={{ color: plaatGedempt }}
         >
           {gezet === false ? '^  SWIPE UP TO SET CODE' : '^  SWIPE UP TO UNLOCK'}
         </button>

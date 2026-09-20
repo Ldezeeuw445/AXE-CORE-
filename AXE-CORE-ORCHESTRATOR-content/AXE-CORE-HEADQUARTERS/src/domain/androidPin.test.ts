@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   PIN_LENGTE, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
   zetPin, pinKlopt, wisPin, androidSlotLaatDoor, verifieerCode, MINIMUM_LENGTE,
-  RECORD_SLEUTEL, OPSLAG_DICHT,
+  RECORD_SLEUTEL, OPSLAG_DICHT, bewaarTerugPad, naOntgrendelenPad, SCHIL_START,
 } from './androidPin';
 
 function geheugen(): Storage {
@@ -83,6 +83,20 @@ describe('android particle-gesture PIN', () => {
     expect(androidSlotLaatDoor('/devices')).toBe(false);
     expect(androidSlotLaatDoor('/maps-3d')).toBe(false);
     expect(androidSlotLaatDoor('/')).toBe(false);
+  });
+
+  it('na ontgrendelen terug naar de schil, niet Device Manager', () => {
+    const sessie = geheugen();
+    expect(naOntgrendelenPad(sessie)).toBe(SCHIL_START);
+    expect(SCHIL_START).toBe('/');
+    bewaarTerugPad('/lock', sessie);
+    bewaarTerugPad('/lock/pin', sessie);
+    bewaarTerugPad('/login', sessie);
+    expect(naOntgrendelenPad(sessie)).toBe('/');
+    bewaarTerugPad('/tasks', sessie);
+    expect(naOntgrendelenPad(sessie)).toBe('/tasks');
+    bewaarTerugPad('/lock', sessie);
+    expect(naOntgrendelenPad(sessie)).toBe('/tasks');
   });
 });
 
