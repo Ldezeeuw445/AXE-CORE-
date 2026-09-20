@@ -496,6 +496,38 @@ async def test_a_missing_configured_daily_budget_is_not_permission_to_spend():
     assert verzoek["metadata"]["execution_result"] == "budget_exhausted_today"
 
 
+async def test_a_preexisting_chase_item_is_not_left_stale_once_policy_resolves_it():
+    """Found live in production (2026-09-20): a Chase item raised BEFORE the policy flag was turned on
+    kept its original status='open'/requires_approval=true forever, even once the policy approved it and
+    it was correctly deferred to budget_exhausted_today (or a retryable failure) -- looking, to Luka,
+    exactly like it still needed his approval when it did not."""
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    research = FakeResearch()
+    await eng(repo, research=research).tick()  # policy nog UIT: raise een open Chase-item op de gewone manier
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert verzoek["status"] == "open" and verzoek["requires_approval"] is True
+
+    _beleid_aan_met_budget(repo, max_per_dag=0)  # nu AAN, maar dagbudget meteen op
+    await eng(repo, research=research).tick()
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert verzoek["metadata"]["execution_result"] == "budget_exhausted_today"
+    assert verzoek["status"] == "completed" and verzoek["requires_approval"] is False  # niet meer stale
+
+
+async def test_a_preexisting_chase_item_is_not_left_stale_after_a_retryable_failure():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    await eng(repo).tick()  # open Chase-item, nog geen beleid
+    _beleid_aan_met_budget(repo)
+    research = FakeResearch(fail=ResearchError("provider_error", "temporary provider hiccup"))
+    await eng(repo, research=research).tick()
+    verzoek = next(q for q in repo.t["action_queue"] if q.get("action_type") == "research_approval")
+    assert verzoek["metadata"].get("execution_result") is None  # nog geen terminale staat, alleen een mislukte poging
+    assert len(verzoek["metadata"]["call_log"]) == 1
+    assert verzoek["status"] == "completed" and verzoek["requires_approval"] is False  # niet stale ondanks de mislukking
+
+
 async def test_evaluation_event_flags_a_supplier_offer_updated_since_last_look():
     repo = FakeRepo()
     _kaal_voor_onderzoekbare_blokkade(repo)

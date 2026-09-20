@@ -468,7 +468,8 @@ class EngineService:
                                                      "status": "completed", "requires_approval": False, "metadata": stempel}, ignore_duplicates=True))
                             else:
                                 await self._resilient(lambda bestaand=bestaand, stempel=stempel: self.repo.engine_patch(
-                                    "action_queue", {"id": f"eq.{bestaand['id']}"}, {"metadata": {**meta_bestaand, **stempel}}))
+                                    "action_queue", {"id": f"eq.{bestaand['id']}"},
+                                    {"status": "completed", "requires_approval": False, "metadata": {**meta_bestaand, **stempel}}))
                             await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, goedgekeurd_via=goedgekeurd_via: self.repo.engine_insert(
                                 "deal_events", {"opportunity_id": opp["id"], "event_type": "research_approved_execution_not_wired",
                                                "actor": "northsea-engine",
@@ -494,8 +495,12 @@ class EngineService:
                                                                         "retry once the daily budget resets.",
                                                          "status": "completed", "requires_approval": False, "metadata": stempel}, ignore_duplicates=True))
                                 else:
+                                    # Een chase-item van vóór het beleid AAN ging kan hier nog op "open,
+                                    # requires_approval" staan van zijn allereerste aanmaak -- dat is stale
+                                    # zodra het beleid het al heeft goedgekeurd; niets voor Luka om te doen.
                                     await self._resilient(lambda bestaand=bestaand, stempel=stempel: self.repo.engine_patch(
-                                        "action_queue", {"id": f"eq.{bestaand['id']}"}, {"metadata": {**meta_bestaand, **stempel}}))
+                                        "action_queue", {"id": f"eq.{bestaand['id']}"},
+                                        {"status": "completed", "requires_approval": False, "metadata": {**meta_bestaand, **stempel}}))
                                 await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, max_per_dag=max_per_dag,
                                                       gebruikt_vandaag=gebruikt_vandaag: self.repo.engine_insert("deal_events", {
                                     "opportunity_id": opp["id"], "event_type": "research_budget_exhausted_today", "actor": "northsea-engine",
@@ -529,7 +534,8 @@ class EngineService:
                                     else:
                                         await self._resilient(lambda bestaand=bestaand, stempel=stempel, beschrijving=beschrijving: self.repo.engine_patch(
                                             "action_queue", {"id": f"eq.{bestaand['id']}"},
-                                            {"description": beschrijving, "metadata": {**meta_bestaand, **stempel}}))
+                                            {"status": "completed", "requires_approval": False, "description": beschrijving,
+                                             "metadata": {**meta_bestaand, **stempel}}))
                                     await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, e=e, nieuw_log=nieuw_log: self.repo.engine_insert(
                                         "deal_events", {"opportunity_id": opp["id"], "event_type": "research_execution_failed_retryable",
                                                        "actor": "northsea-engine",
