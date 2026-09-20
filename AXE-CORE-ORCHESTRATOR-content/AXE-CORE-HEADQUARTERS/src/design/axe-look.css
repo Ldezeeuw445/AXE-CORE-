@@ -5819,37 +5819,39 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * shell and therefore follows every workspace without sitting on top of its
  * map, browser, chart or editor.
  *
- * The right radial dock's closed button is centred 150px from the edge. Its
- * left edge is therefore ~180px from the edge. The presence ends exactly
- * there; the composer ends 15px before the presence starts. Nothing overlaps.
+ * Luka, 20 sep 2026 (live review): the composer/chatplaat must stay exactly
+ * where axe-look.css already puts it -- the SAME centred, bottomnav-matching
+ * width as always (.axe-chatplaat/.axe-composer/.axe-shell .axe-bottomnav
+ * share one width formula elsewhere in this file). Squeezing it left with a
+ * dedicated right margin here was wrong: the presence dock is fixed and
+ * floats on top of whatever is beneath it, it does not need the composer to
+ * shrink away from it.
  */
 @media (min-width: 1280px) {
-  :root[data-look] .axe-shell .axe-chatplaat,
-  :root[data-look] .axe-shell .axe-composer {
-    width: calc(100% - var(--axe-onder, 75px) - 405px);
-    margin-left: var(--axe-onder, 75px) !important;
-    margin-right: 405px !important;
-  }
-
+  /* Luka, 20 sep 2026 (live review): no card/panel behind this -- it sits
+     directly on the shell, like the "AXE CORE" label beside the composer
+     does. A bordered box here reads as a second little chat window next to
+     the real composer, which is exactly the "second AXE UI" this feature is
+     supposed to avoid. */
+  /* Luka, 20 sep 2026 (live review, round 2): beside the composer only worked
+     when the composer was squeezed left for it (just reverted). At the
+     composer's real, centred, bottomnav-matching width there is no gap on
+     the right to sit in without overlapping it -- so this floats just ABOVE
+     the composer instead, right-aligned over the plaat, never on top of the
+     input itself. */
   :root[data-look] .axe-presence-dock {
     position: fixed;
-    right: 180px;
-    bottom: var(--axe-composer-onder, 104px);
+    right: max(16px, var(--axe-onder, 75px));
+    bottom: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 14px);
     width: 210px;
-    min-height: 104px;
-    max-height: 154px;
+    min-height: 0;
+    max-height: 90px;
     z-index: 104;
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 8px 8px 8px 4px;
     pointer-events: auto;
-    border-radius: 22px;
-    border: 1px solid var(--axe-vak-lijn);
-    background: color-mix(in srgb, var(--axe-vak-vlak) 92%, transparent);
-    box-shadow: var(--axe-vak-zweef);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
     transition: opacity 160ms ease, transform 160ms ease;
   }
 
@@ -6051,22 +6053,30 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   -webkit-backdrop-filter: blur(28px) saturate(1.15);
   padding: 14px;
 }
+/* Luka, 20 sep 2026 (live review): this was a hardcoded light/white pill
+   regardless of the app's actual theme -- the same --axe-bar pill the real
+   composer uses (axe-look.css's .axe-composer), so light/dark follows the
+   shell instead of always looking like a white messaging-app bubble. */
 .computer-use-overlay__composer {
-  height: 66px;
+  height: 78px;
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: 22px;
+  border-radius: 999px;
   padding: 0 12px;
-  background: rgba(245,247,248,.92);
-  color: #111827;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.65), 0 10px 28px rgba(0,0,0,.18);
+  background: var(--axe-bar);
+  backdrop-filter: var(--axe-bar-filter);
+  -webkit-backdrop-filter: var(--axe-bar-filter);
+  color: var(--text-primary);
+  box-shadow: var(--axe-bar-schaduw);
 }
-.computer-use-overlay__particle { width: 42px; height: 42px; display: grid; place-items: center; flex: none; }
-.computer-use-overlay__composer input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #111827; font-size: 16px; }
-.computer-use-overlay__composer input::placeholder { color: rgba(17,24,39,.52); }
-.computer-use-overlay__icon,.computer-use-overlay__plus { display:grid; place-items:center; width:34px; height:34px; border:0; border-radius:50%; background:transparent; color:rgba(17,24,39,.58); }
-.computer-use-overlay__plus { background:rgba(17,24,39,.08); color:#111827; }
+/* AxeStatusOrb only ships two tuned presets (20 inline-text, 64 chat-avatar) --
+   this is the chat-avatar scale, so the slot is sized to match it exactly. */
+.computer-use-overlay__particle { width: 64px; height: 64px; display: grid; place-items: center; flex: none; }
+.computer-use-overlay__composer input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text-primary); font-size: 16px; }
+.computer-use-overlay__composer input::placeholder { color: var(--text-muted); }
+.computer-use-overlay__icon,.computer-use-overlay__plus { display:grid; place-items:center; width:34px; height:34px; border:0; border-radius:50%; background:transparent; color:var(--text-secondary); }
+.computer-use-overlay__plus { background: var(--axe-barbtn); color: var(--text-primary); }
 .computer-use-overlay__plus:disabled { opacity:.35; }
 .computer-use-overlay__meta { display:flex; justify-content:space-between; gap:12px; padding:10px 8px 4px; font-size:10px; letter-spacing:.04em; color:var(--text-muted); }
 .computer-use-overlay__meta .is-online { color:var(--success); }
@@ -6077,7 +6087,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .computer-use-overlay__quick button:hover { background:rgba(255,255,255,.07); color:var(--text-primary); }
 .computer-use-overlay__footer { display:flex; justify-content:flex-end; gap:8px; padding:8px 4px 0; }
 .computer-use-overlay__footer button { display:inline-flex; align-items:center; gap:5px; border:0; background:transparent; color:var(--text-muted); font-size:10px; }
-.standalone-axe-particle { position:absolute; top:62px; right:18px; z-index:60; width:42px; height:42px; display:grid; place-items:center; border-radius:50%; background:rgba(5,10,12,.42); border:1px solid rgba(255,255,255,.08); backdrop-filter:blur(16px); pointer-events:auto; }
+/* AxeStatusOrb only ships two tuned presets (20 inline-text, 64 chat-avatar) --
+   this is the chat-avatar scale, so the badge is sized to match it exactly. */
+.standalone-axe-particle { position:absolute; top:56px; right:14px; z-index:60; width:64px; height:64px; display:grid; place-items:center; border-radius:50%; background:rgba(5,10,12,.42); border:1px solid rgba(255,255,255,.08); backdrop-filter:blur(16px); pointer-events:auto; }
 @media (max-width: 680px) {
   .computer-use-overlay { padding:10px; }
   .computer-use-overlay__card { border-radius:24px; }

@@ -90,7 +90,10 @@ export function AxePresenceDock() {
 
   return (
     <>
-      <aside className="axe-presence-dock" aria-label="AXE presence" data-axe-doel="axe-presence">
+      {/* A <div>, not <aside>: axe-look.css turns every .axe-shell aside into a hidden,
+          off-screen drawer by default (the same rule CodeEditorPage's file tree avoids for
+          the same reason) -- this widget needs to be visible by default, not opt-in-visible. */}
+      <div className="axe-presence-dock" role="complementary" aria-label="AXE presence" data-axe-doel="axe-presence">
         <div ref={orbRef} className="axe-presence-dock__orb">
           <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
         </div>
@@ -118,7 +121,7 @@ export function AxePresenceDock() {
             </div>
           )}
         </div>
-      </aside>
+      </div>
       <BolVlucht vlucht={vlucht} klaar={() => setVlucht(null)} />
     </>
   );
