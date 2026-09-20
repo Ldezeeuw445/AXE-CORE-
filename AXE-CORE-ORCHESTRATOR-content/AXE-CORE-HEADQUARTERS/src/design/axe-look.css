@@ -6026,3 +6026,60 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* ── Personal Computer Use compact Tauri surface ─────────────────────── */
+.computer-use-overlay {
+  height: 100dvh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: transparent;
+  color: var(--text-primary);
+}
+.computer-use-overlay__card {
+  width: min(744px, 100%);
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: color-mix(in srgb, var(--bg-base) 72%, transparent);
+  box-shadow: 0 24px 80px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.08);
+  backdrop-filter: blur(28px) saturate(1.15);
+  -webkit-backdrop-filter: blur(28px) saturate(1.15);
+  padding: 14px;
+}
+.computer-use-overlay__composer {
+  height: 66px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 22px;
+  padding: 0 12px;
+  background: rgba(245,247,248,.92);
+  color: #111827;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.65), 0 10px 28px rgba(0,0,0,.18);
+}
+.computer-use-overlay__particle { width: 42px; height: 42px; display: grid; place-items: center; flex: none; }
+.computer-use-overlay__composer input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #111827; font-size: 16px; }
+.computer-use-overlay__composer input::placeholder { color: rgba(17,24,39,.52); }
+.computer-use-overlay__icon,.computer-use-overlay__plus { display:grid; place-items:center; width:34px; height:34px; border:0; border-radius:50%; background:transparent; color:rgba(17,24,39,.58); }
+.computer-use-overlay__plus { background:rgba(17,24,39,.08); color:#111827; }
+.computer-use-overlay__plus:disabled { opacity:.35; }
+.computer-use-overlay__meta { display:flex; justify-content:space-between; gap:12px; padding:10px 8px 4px; font-size:10px; letter-spacing:.04em; color:var(--text-muted); }
+.computer-use-overlay__meta .is-online { color:var(--success); }
+.computer-use-overlay__meta .is-offline { color:var(--warning); }
+.computer-use-overlay__reply { margin:5px 6px 0; max-height:64px; overflow:auto; font-size:12px; line-height:1.45; color:var(--text-secondary); }
+.computer-use-overlay__quick { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:10px 4px 4px; }
+.computer-use-overlay__quick button { min-width:0; height:70px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; border:1px solid rgba(255,255,255,.08); border-radius:16px; background:rgba(255,255,255,.035); color:var(--text-secondary); font-size:11px; }
+.computer-use-overlay__quick button:hover { background:rgba(255,255,255,.07); color:var(--text-primary); }
+.computer-use-overlay__footer { display:flex; justify-content:flex-end; gap:8px; padding:8px 4px 0; }
+.computer-use-overlay__footer button { display:inline-flex; align-items:center; gap:5px; border:0; background:transparent; color:var(--text-muted); font-size:10px; }
+.standalone-axe-particle { position:absolute; top:16px; right:18px; z-index:60; width:42px; height:42px; display:grid; place-items:center; border-radius:50%; background:rgba(5,10,12,.42); border:1px solid rgba(255,255,255,.08); backdrop-filter:blur(16px); pointer-events:auto; }
+@media (max-width: 680px) {
+  .computer-use-overlay { padding:10px; }
+  .computer-use-overlay__card { border-radius:24px; }
+  .computer-use-overlay__quick { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

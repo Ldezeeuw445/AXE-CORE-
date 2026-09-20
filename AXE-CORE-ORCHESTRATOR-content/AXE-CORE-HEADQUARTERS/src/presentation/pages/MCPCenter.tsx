@@ -234,8 +234,8 @@ export default function MCPCenter() {
             const t = stand?.test;
             const kleur = CATEGORY_COLORS[server.categorie];
             return (
-              <motion.div key={server.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <WidgetCard title="">
+              <motion.div key={server.id} className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                <WidgetCard title="" className="h-full">
                   <div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">

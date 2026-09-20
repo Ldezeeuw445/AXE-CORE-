@@ -4,6 +4,7 @@ import { PageHeader, StatPill } from '@/presentation/components/ui/AxeUI';
 import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { voorkeurMachine, kiesVoorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
+import { multiMonitorAvailable, openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 
 type ComputerTask = {
   id: string;
@@ -46,6 +47,7 @@ export default function ComputerUse() {
 
   useEffect(() => {
     void refresh();
+    if (multiMonitorAvailable()) void openPersonalComputerUse().catch(console.error);
     const timer = window.setInterval(() => void refresh(), 5_000);
     return () => window.clearInterval(timer);
   }, []);
@@ -67,6 +69,12 @@ export default function ComputerUse() {
         subtitle="Live hands on your Macs — device-bound, audited and approval-gated"
         icon={Monitor}
         actions={
+          <div className="flex items-center gap-2">
+          {multiMonitorAvailable() && (
+            <button type="button" onClick={() => void openPersonalComputerUse()} className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-400/[0.06] px-3 py-2 text-xs text-cyan-200 hover:bg-cyan-400/[0.1]">
+              Compact mode
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void refresh()}
@@ -74,6 +82,7 @@ export default function ComputerUse() {
           >
             <RefreshCw size={14} /> Refresh
           </button>
+          </div>
         }
       />
 

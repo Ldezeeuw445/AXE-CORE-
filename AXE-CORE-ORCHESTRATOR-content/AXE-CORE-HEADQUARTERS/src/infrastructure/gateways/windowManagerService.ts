@@ -122,6 +122,52 @@ export async function restoreWindowLayout(): Promise<void> {
 
 /** Open the AXE Browser in its own OS window — Arc-style standalone desktop browser.
  *  Uses the `browser-desktop` route which renders without AppShell chrome. */
+export async function openPersonalComputerUse(): Promise<void> {
+  if (!isTauriRuntime()) {
+    window.open(`${window.location.origin}${window.location.pathname}#/computer-use-overlay`, '_blank', 'width=780,height=360');
+    return;
+  }
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  const label = 'axe-personal-computer';
+  const existing = await WebviewWindow.getByLabel(label);
+  if (existing) {
+    await existing.show();
+    await existing.setFocus();
+  } else {
+    const win = new WebviewWindow(label, {
+      url: 'index.html#/computer-use-overlay',
+      title: 'AXE Personal Computer Use',
+      width: 780,
+      height: 360,
+      minWidth: 620,
+      minHeight: 220,
+      decorations: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: true,
+      center: true,
+      shadow: true,
+    });
+    await new Promise<void>((resolve, reject) => {
+      win.once('tauri://created', () => resolve());
+      win.once('tauri://error', e => reject(new Error(String(e.payload))));
+    });
+  }
+  const current = getCurrentWindow();
+  if (current.label === 'main') await current.minimize();
+}
+
+export async function restoreMainWindow(): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  const main = await WebviewWindow.getByLabel('main');
+  if (!main) return;
+  await main.unminimize();
+  await main.show();
+  await main.setFocus();
+}
+
 export async function openStandaloneBrowser(monitorIndex = 0): Promise<void> {
   if (!isTauriRuntime()) {
     window.open(`${window.location.origin}${window.location.pathname}#/browser-desktop`, '_blank');
