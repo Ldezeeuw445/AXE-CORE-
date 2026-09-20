@@ -59,7 +59,7 @@ export async function listMonitors(): Promise<MonitorInfo[]> {
  *  name fails loudly instead of opening a blank or wrong window. */
 export const OPENABLE_PAGES = [
   'home', 'ai-core', 'apps', 'agents', 'tasks', 'calendar', 'memory', 'obsidian', 'knowledge',
-  'trading', 'finance', 'mcp', 'infrastructure', 'command', 'terminal', 'settings',
+  'trading', 'trading-intel', 'finance', 'mcp', 'infrastructure', 'command', 'terminal', 'settings',
   'table-editor', 'cron-manager', 'control-plane', 'maps-3d', 'crewai', 'developer',
   'code-editor', 'eve', 'browser', 'browser-desktop', 'organization',
 ] as const;
