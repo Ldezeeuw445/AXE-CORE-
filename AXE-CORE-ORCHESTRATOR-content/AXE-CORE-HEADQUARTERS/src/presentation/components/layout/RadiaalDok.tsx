@@ -26,11 +26,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Bell, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
+import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
 import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
-import { openStandaloneBrowser, openStandaloneNorthsea } from '@/infrastructure/gateways/windowManagerService';
+import { openPageOnMonitor, openStandaloneBrowser, openStandaloneNorthsea } from '@/infrastructure/gateways/windowManagerService';
+import { openRegisteredProductShell } from '@/infrastructure/gateways/productWindowService';
 
 /** Afstand van het midden tot een tab. */
 const STRAAL = 92;
@@ -111,13 +112,18 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
     { id: 'browser', label: 'Browser shell', teken: <PanelRightOpen size={18} />, doe: () => { void openStandaloneBrowser(); } },
     { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
   ];
-  // Rechts blijft bewust de bestaande set totdat die kant een eigen opdracht heeft.
+  const openProduct = (name: string) => {
+    void openRegisteredProductShell(name).catch(err => {
+      console.error('[RadiaalDok] product shell failed', name, err);
+      navigate('/apps');
+    });
+  };
   const rechterTabs: DokTab[] = [
-    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },
-    { id: 'notities', label: 'Notities', teken: <StickyNote size={18} />, doe: () => navigate('/obsidian') },
-    { id: 'notion', label: 'Knowledge', teken: <span className="axe-dok-n">N</span>, doe: () => navigate('/knowledge') },
-    { id: 'venster', label: 'Extra venster', teken: <PanelRightOpen size={18} />, doe: () => navigate('/browser-desktop') },
-    { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
+    { id: 'code', label: 'Code Studio window', teken: <Code2 size={18} />, doe: () => { void openPageOnMonitor('code-editor', 0); } },
+    { id: 'axon', label: 'AXON Memory', teken: <BrainCircuit size={18} />, doe: () => openProduct('AXON Memory') },
+    { id: 'companion', label: 'AXE Companion', teken: <Bot size={18} />, doe: () => openProduct('AXE Companion') },
+    { id: 'trading-os', label: 'Trading OS', teken: <span className="axe-dok-n">T</span>, doe: () => openProduct('Trading OS') },
+    { id: 'apps', label: 'Apps', teken: <AppWindow size={18} />, doe: () => navigate('/apps') },
   ];
   const standaardTabs = kant === 'links' ? linkerTabs : rechterTabs;
 
