@@ -13,22 +13,16 @@ export type ReplyLanguage = 'en' | 'nl' | 'auto';
 const KEY = 'axe_reply_language';
 
 export function getReplyLanguage(): ReplyLanguage {
-  try {
-    const v = localStorage.getItem(KEY);
-    if (v === 'nl' || v === 'auto' || v === 'en') return v;
-  } catch { /* ignore */ }
+  // AXE has one spoken/written identity: English. Input may be Dutch or English,
+  // but output stays English so every surface sounds like the same assistant.
   return 'en';
 }
 
-export function setReplyLanguage(mode: ReplyLanguage): void {
-  try {
-    localStorage.setItem(KEY, mode);
-  } catch { /* ignore */ }
+export function setReplyLanguage(_mode: ReplyLanguage): void {
+  const mode: ReplyLanguage = 'en';
+  try { localStorage.setItem(KEY, mode); } catch { /* ignore */ }
   void saveSetting(KEY, mode);
-  // Notify UI (Mindset/AXE buttons, chat) without a full reload
-  try {
-    window.dispatchEvent(new CustomEvent('axe-reply-language', { detail: { mode } }));
-  } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent('axe-reply-language', { detail: { mode } })); } catch { /* ignore */ }
 }
 
 /** Appended to the system prompt every turn — applies to chat + any agent that injects it. */
