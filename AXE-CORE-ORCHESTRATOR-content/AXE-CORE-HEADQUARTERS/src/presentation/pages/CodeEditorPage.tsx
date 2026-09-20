@@ -222,6 +222,16 @@ function removeNode(nodes: FileNode[], target: string): FileNode[] {
 
 function uid(): string { return Math.random().toString(36).slice(2, 8); }
 
+function repoKleur(naam: string): string {
+  const n = naam.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (n.includes('axon')) return '#A78BFA';
+  if (n.includes('companion')) return '#34D399';
+  if (n.includes('trading')) return '#F5A524';
+  if (n.includes('northsea')) return '#B87333';
+  if (n.includes('axecore') || n.includes('axehq')) return '#22D3EE';
+  return '#94A3B8';
+}
+
 function fuzzyScore(query: string, text: string): number {
   const q = query.toLowerCase();
   const t = text.toLowerCase();
@@ -1406,7 +1416,32 @@ export default function CodeEditorPage() {
                   </div>
                 )}
                 {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
-                {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
+                {claudeRepoMap && Object.entries(claudeRepoMap).map(([naam, info]) => {
+                        const actief = naam === claudeRepo;
+                        const kleur = repoKleur(naam);
+                        return (
+                          <div key={naam} className="axe-code-repo-root">
+                            <button
+                              type="button"
+                              className="axe-code-repo-root__button"
+                              data-open={actief ? 'ja' : 'nee'}
+                              onClick={() => kiesRepo(naam)}
+                              title={`${naam} · ${info.branch || 'no branch'}`}
+                              style={{ '--repo-color': kleur } as React.CSSProperties}
+                            >
+                              <ChevronRight size={10} />
+                              <Folder size={12} />
+                              <strong>{naam}</strong>
+                              <span>{info.branch || '—'}</span>
+                            </button>
+                            {actief && (
+                              <div className="axe-code-repo-root__tree">
+                                {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={1} {...treeProps} />)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
               </div>
             )}
             {sidebarMode === 'git' && (
@@ -1505,7 +1540,32 @@ export default function CodeEditorPage() {
                         </div>
                       )}
                       {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
-                      {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
+                      {claudeRepoMap && Object.entries(claudeRepoMap).map(([naam, info]) => {
+                        const actief = naam === claudeRepo;
+                        const kleur = repoKleur(naam);
+                        return (
+                          <div key={naam} className="axe-code-repo-root">
+                            <button
+                              type="button"
+                              className="axe-code-repo-root__button"
+                              data-open={actief ? 'ja' : 'nee'}
+                              onClick={() => kiesRepo(naam)}
+                              title={`${naam} · ${info.branch || 'no branch'}`}
+                              style={{ '--repo-color': kleur } as React.CSSProperties}
+                            >
+                              <ChevronRight size={10} />
+                              <Folder size={12} />
+                              <strong>{naam}</strong>
+                              <span>{info.branch || '—'}</span>
+                            </button>
+                            {actief && (
+                              <div className="axe-code-repo-root__tree">
+                                {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={1} {...treeProps} />)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {sidebarMode === 'search' && (
