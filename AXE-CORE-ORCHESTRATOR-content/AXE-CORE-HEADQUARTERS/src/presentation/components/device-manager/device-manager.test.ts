@@ -10,7 +10,7 @@ describe('de tabs van de device manager', () => {
       '/knowledge', '/mcp', '/infrastructure', '/control-plane', '/table-editor',
       '/cron-manager', '/browser', '/agents', '/crewai', '/calendar', '/tasks',
       '/finance', '/trading-intel', '/maps-3d', '/code-editor', '/terminals',
-      '/eve', '/settings',
+      '/devices', '/eve', '/settings',
     ];
     expect([...DEVICE_TAB_PADEN].sort()).toEqual([...onderbalk].sort());
     expect(new Set(DEVICE_TABS.map((t) => t.path)).size).toBe(DEVICE_TABS.length);

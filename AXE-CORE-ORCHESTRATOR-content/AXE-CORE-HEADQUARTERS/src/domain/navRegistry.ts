@@ -78,6 +78,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/terminals', label: 'Terminals', keywords: ['terminals', 'machines', 'mac mini', 'imac', 'vps', 'ssh', 'hosts', 'worker starten'] },
   { path: '/developer', label: 'Command Center', keywords: ['command center', 'developer', 'dev tools', 'developer tools'] },
   { path: '/settings', label: 'Settings', keywords: ['settings', 'preferences', 'configuration'] },
+  { path: '/devices', label: 'Devices', keywords: ['devices', 'device manager', 'samsung', 'mac mini', 'installations', 'presence'] },
 ];
 
 const DYNAMIC_NAV_KEY = 'axe_dynamic_nav_v1';

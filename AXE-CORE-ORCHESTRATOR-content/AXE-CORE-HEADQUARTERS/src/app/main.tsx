@@ -14,7 +14,11 @@ applyStoredLookEarly()
 try {
   const w = window as unknown as Record<string, unknown>
   if (w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined) {
-    document.documentElement.classList.add("axe-tauri")
+    // De 82px-padding van .axe-tauri is voor de macOS-verkeerslichten.
+    // Op Android zou die een lege strook linksboven geven.
+    if (!/Android/i.test(navigator.userAgent)) {
+      document.documentElement.classList.add("axe-tauri")
+    }
   }
 } catch { /* geen window */ }
 import App from '@/app/App.tsx'

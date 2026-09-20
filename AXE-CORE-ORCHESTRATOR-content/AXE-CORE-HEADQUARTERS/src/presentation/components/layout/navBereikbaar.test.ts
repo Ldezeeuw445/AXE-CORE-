@@ -36,6 +36,8 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-standalone': 'Ontwikkelvoorbeeld',
+  '/lock': 'Samsung lockscreen — alleen Android Tauri, lade Lock',
+  '/lock/pin': 'Samsung particle-gesture PIN — alleen via lockscreen',
 
   // NAGEMETEN 11-9-2026: deze twee hebben NUL verwijzingen in de hele broncode
   // en staan niet in de balk. Ze zijn dus vanuit de app niet te bereiken --

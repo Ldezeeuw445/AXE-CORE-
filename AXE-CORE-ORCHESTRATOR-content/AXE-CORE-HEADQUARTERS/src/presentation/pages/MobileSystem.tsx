@@ -13,7 +13,7 @@ import {
   BookMarked, Bot, Brain, Cable, CalendarDays, Clock, Compass, Cpu,
   Database, FileCode, Globe, Home, LayoutGrid, Lightbulb, LineChart,
   ListTodo, Megaphone, Network, Settings, Settings2, Share2, Sparkles,
-  Table2, TerminalSquare, Wallet, Workflow, type LucideIcon,
+  Table2, TerminalSquare, Wallet, Workflow, Smartphone, type LucideIcon,
 } from 'lucide-react';
 import { useLook } from '@/presentation/hooks/useLook';
 import type { Look } from '@/domain/look';
@@ -59,6 +59,7 @@ const TAB_ICON: Record<string, LucideIcon> = {
   '/maps-3d': Globe,
   '/code-editor': FileCode,
   '/terminals': TerminalSquare,
+  '/devices': Smartphone,
   '/eve': Sparkles,
   '/settings': Settings,
 };

@@ -1,2 +1,11 @@
 /target
-/gen
+/gen/schemas
+/gen/android/.gradle
+/gen/android/.idea
+/gen/android/build
+/gen/android/app/build
+/gen/android/app/src/main/jniLibs
+/gen/android/app/src/main/assets
+/gen/android/app/.cxx
+/gen/android/local.properties
+

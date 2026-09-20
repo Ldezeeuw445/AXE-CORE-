@@ -1787,6 +1787,43 @@ html:root[data-look],
   background: rgba(255, 255, 255, 0.14) !important;
   color: #FEBC2E;
 }
+/* Slot heeft geen topbar; dezelfde actieve zon/maan, naast de knop zelf. */
+:root[data-look] .axe-lock-look .axe-dn-btn[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.14);
+  color: #FEBC2E;
+}
+:root[data-look='glass'] .axe-lock-look .axe-dn-btn {
+  color: rgba(12, 20, 34, 0.55);
+}
+:root[data-look='glass'] .axe-lock-look .axe-dn-btn[aria-pressed='true'] {
+  background: rgba(12, 20, 34, 0.10);
+  color: #FEBC2E;
+}
+/* Zelfde driehoek als het dok, kleiner, op één lijn met zon/maan. */
+:root[data-look] .axe-lock-driehoek {
+  width: 18px;
+  height: 16px;
+  display: block;
+  background: var(--accent, #22D3EE);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.45));
+}
+/* Slotkaarten: het echte --kaart-materiaal, zwevend. Licht verandert de
+   PLAAT (grijs frost), niet de blokken tot wit. */
+:root[data-look] .axe-lock-kaart {
+  background: var(--kaart);
+  backdrop-filter: var(--kaart-filter);
+  -webkit-backdrop-filter: var(--kaart-filter);
+  box-shadow: var(--kaart-rand), var(--kaart-schaduw);
+  border: 0;
+}
+:root[data-look='glass'] .axe-lock-kaart {
+  box-shadow: var(--kaart-rand), var(--axe-lift);
+}
+:root[data-look] .axe-lock-binnen {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent);
+}
 
 /* ── De tellers in de kop ────────────────────────────────────────────────
    Geen omlijning: een kader om twee getallen maakt er knoppen van terwijl het

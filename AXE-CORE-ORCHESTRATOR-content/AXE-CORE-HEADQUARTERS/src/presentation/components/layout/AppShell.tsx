@@ -12,9 +12,11 @@ import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
 import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
-import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { isAndroidShellRuntime, isAndroidTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { isIngebed, schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
+import { MobileGlass } from '@/presentation/components/layout/MobileGlass';
+import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { describeFailure } from '@/domain/globalFailure';
@@ -136,8 +138,10 @@ export function AppShell() {
   // screen. Treat "inside the shell" exactly like the /mobile surface: hide
   // TopNav, Sidebar, RightPanel, BottomBar and BottomNav, and let the page
   // itself have the whole viewport.
+  const androidOppervlak = isAndroidTauriRuntime() || isAndroidShellRuntime();
+  const opSlot = location.pathname === '/lock' || location.pathname === '/lock/pin';
   const mobileCommandSurface = schilZonderChroom(location.pathname, {
-    android: isAndroidShellRuntime(),
+    android: androidOppervlak,
     ingebed: isIngebed(),
   });
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
@@ -161,6 +165,7 @@ export function AppShell() {
           het is de snelste weg tussen Core, Neural, Terrain en Architecture,
           en hij ligt op de plaat in plaats van in een balk, dus hij zit
           niets in de weg. */}
+      {androidOppervlak && <MobileGlass />}
       {!mobileCommandSurface && opPlaat && <PlaatViewSwitch />}
 
     <div
@@ -275,6 +280,7 @@ export function AppShell() {
           is up so the composer sits directly above the keyboard instead of the
           tab bar wedging in between. */}
       {!mobileCommandSurface && keyboardInset === 0 && <BottomNav />}
+      {androidOppervlak && !opSlot && <MobileNav />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
