@@ -1799,6 +1799,15 @@ html:root[data-look],
   background: rgba(12, 20, 34, 0.10);
   color: #FEBC2E;
 }
+/* Zelfde driehoek als het dok, kleiner, op één lijn met zon/maan. */
+:root[data-look] .axe-lock-driehoek {
+  width: 18px;
+  height: 16px;
+  display: block;
+  background: var(--accent-cyan, #22D3EE);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.45));
+}
 
 /* ── De tellers in de kop ────────────────────────────────────────────────
    Geen omlijning: een kader om twee getallen maakt er knoppen van terwijl het

@@ -18,7 +18,7 @@ const POINT_SIZE = 2.4;
 
 type Particle = {
   x: number; y: number; vx: number; vy: number;
-  bx: number; by: number; seed: number; tint: number;
+  bx: number; by: number; seed: number; tint: number; cyan: boolean;
 };
 
 function hash11(p: number): number {
@@ -57,6 +57,7 @@ export function ParticleGestureField({
         by: Math.sin(a) * r,
         seed: Math.random(),
         tint: Math.random(),
+        cyan: hash11(i * 0.173 + 0.4) < 0.11,
       });
     }
 
@@ -210,19 +211,24 @@ export function ParticleGestureField({
         let g: number;
         let b: number;
         let alpha: number;
-        if (glass) {
+        if (p.cyan) {
+          r = 0.13;
+          g = 0.83;
+          b = 0.93;
+          alpha = (glass ? 0.38 : 0.55) * (0.45 + 0.55 * hash11(p.seed * 3)) * (1 + glow * 0.4);
+        } else if (glass) {
           r = 0.10 + (0.22 - 0.10) * k;
-          g = 0.22 + (0.40 - 0.22) * k;
-          b = 0.36 + (0.52 - 0.36) * k;
-          alpha = 0.42 * (0.35 + 0.65 * hash11(p.seed * 3)) * (1 + k * 0.35) * (1 + glow * 0.35);
+          g = 0.18 + (0.32 - 0.18) * k;
+          b = 0.28 + (0.40 - 0.28) * k;
+          alpha = 0.28 * (0.30 + 0.70 * hash11(p.seed * 3)) * (1 + glow * 0.25);
         } else {
-          r = 0.80 + (0.28 - 0.80) * k;
-          g = 0.86 + (0.94 - 0.86) * k;
-          b = 0.89 + (1.00 - 0.89) * k;
-          alpha = 0.5 * (0.30 + 0.70 * hash11(p.seed * 3)) * (1 + k * 0.45) * (1 + glow * 0.5);
+          r = 0.72 + (0.88 - 0.72) * k;
+          g = 0.76 + (0.90 - 0.76) * k;
+          b = 0.80 + (0.92 - 0.80) * k;
+          alpha = 0.32 * (0.28 + 0.72 * hash11(p.seed * 3)) * (1 + glow * 0.35);
         }
         const size = Math.max(1, POINT_SIZE * (0.7 + 0.7 * hash11(p.seed * 11)));
-        const lift = glass ? 1 + glow * 0.25 : 1 + glow * 0.75;
+        const lift = p.cyan ? 1 + glow * 0.35 : 1 + glow * 0.2;
         ctx.fillStyle = `rgba(${Math.round(r * lift * 255)},${Math.round(g * lift * 255)},${Math.round(b * lift * 255)},${Math.min(1, alpha)})`;
         ctx.beginPath();
         ctx.arc(cx + p.x * scale, cy + p.y * scale, size * 0.55, 0, Math.PI * 2);

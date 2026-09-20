@@ -2,7 +2,8 @@
  * Particle-gesture PIN — recovered from AxeGestureLock / GestureLockScreen.
  *
  * Lockscreen → circular particle field → four unistroke inputs → unlock.
- * No keypad. The field is the PIN.
+ * No keypad. The field is the PIN. Particles sit on the dark glass plate;
+ * only a thin mix is cyan.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -13,8 +14,8 @@ import {
 import { lockAlphabet } from '@/domain/gestureTemplates';
 import { UnistrokeRecognizer, isClearWinner } from '@/domain/unistrokeRecognizer';
 import type { GesturePoint } from '@/domain/gestureTemplates';
+import { LockChrome } from '@/presentation/components/android/LockChrome';
 import { ParticleGestureField } from '@/presentation/components/android/ParticleGestureField';
-import { LookToggle } from '@/presentation/components/layout/LookToggle';
 import { MobileGlass } from '@/presentation/components/layout/MobileGlass';
 import { useLook } from '@/presentation/hooks/useLook';
 
@@ -120,9 +121,8 @@ export default function ParticlePinScreen() {
           paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         }}
       >
-        <div className="axe-lock-look pointer-events-auto flex items-center justify-between gap-3">
-          <LookToggle />
-          <img src="/axe-logo.png" alt="AXE CORE" className="h-8 w-auto" />
+        <div className="pointer-events-auto">
+          <LockChrome />
         </div>
         <div className="mt-4 text-center">
           <div className="text-lg font-semibold" style={{ color: plaatTekst }}>{titel}</div>
