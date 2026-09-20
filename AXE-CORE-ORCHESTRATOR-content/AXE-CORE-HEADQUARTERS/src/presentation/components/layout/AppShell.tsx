@@ -1,4 +1,5 @@
 import { useEffect, Suspense } from 'react';
+import { Triangle } from 'lucide-react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
@@ -244,6 +245,7 @@ export function AppShell() {
       {!mobileCommandSurface && opPlaat && (
         <RadiaalDok
           kant="rechts"
+          hoek={<Triangle size={28} fill="none" strokeWidth={1.7} style={{ color: 'var(--accent-cyan)' }} />}
           hoekLabel="Trading — open in separate window"
           opHoek={() => { void openPageOnMonitor('trading', 0); }}
         />
