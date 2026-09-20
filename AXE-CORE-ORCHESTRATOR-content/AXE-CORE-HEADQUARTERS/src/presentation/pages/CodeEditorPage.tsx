@@ -4,7 +4,7 @@
  * code-agent via de AXE-composer. Monaco, echte xterm, echte motoren.
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, type CSSProperties } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { PlaatRail, PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
 import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
@@ -1427,7 +1427,7 @@ export default function CodeEditorPage() {
                               data-open={actief ? 'ja' : 'nee'}
                               onClick={() => kiesRepo(naam)}
                               title={`${naam} · ${info.branch || 'no branch'}`}
-                              style={{ '--repo-color': kleur } as React.CSSProperties}
+                              style={{ '--repo-color': kleur } as CSSProperties}
                             >
                               <ChevronRight size={10} />
                               <Folder size={12} />
