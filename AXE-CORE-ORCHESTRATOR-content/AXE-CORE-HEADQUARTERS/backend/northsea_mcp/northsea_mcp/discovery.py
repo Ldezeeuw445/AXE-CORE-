@@ -234,9 +234,12 @@ class DiscoveryService:
                 payload["web_hits_provider"] = resultaat.provider
                 zoek_status = f"ok:{resultaat.provider}"
             except ResearchError as e:
-                # Zelfde eerlijke aanpak als de onderzoeksgate: een lege lijst is een eerlijk antwoord,
-                # nooit verzonnen kandidaten. web_hits blijft weg zodat de crew dit onderscheidt van "0
-                # kandidaten gevonden" (wat wel echt geprobeerd is).
+                # web_hits MOET hier op [] staan (niet ontbreken): specialists.py onderscheidt "wel
+                # geprobeerd, niets/niks gevonden" (web_hits aanwezig, evt. leeg) van "helemaal niet
+                # geprobeerd" (web_hits ontbreekt -> valt terug op de kapotte exa_search). Zonder dit
+                # meldt een mislukte zoekketen zich alsnog als "EXA_API_KEY not configured" -- precies de
+                # verwarrende fout die deze hele wijziging moest oplossen (gevonden bij de live proef).
+                payload["web_hits"] = []
                 payload["web_hits_warning"] = f"Search chain exhausted ({e.status}): {e.message}"
                 zoek_status = f"failed:{e.status}"
         handoff = {"entity_ids": {"buyer_requirement_id": kandidaat["id"]}, "payload": payload}

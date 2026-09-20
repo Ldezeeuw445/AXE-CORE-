@@ -317,13 +317,17 @@ async def test_crew_review_feeds_real_search_hits_into_the_crew_handoff():
 
 
 async def test_crew_review_reports_a_failed_search_chain_honestly():
+    """Regression: web_hits must be [] (not absent) on failure, or specialists.py's exa fallback
+    kicks in and reports the confusing, unrelated 'EXA_API_KEY not configured' -- found live in
+    production right after the initial fix (the search chain itself failed with budget_exhausted,
+    but the Chase item still said EXA_API_KEY, because web_hits was never set on this path)."""
     repo = FakeRepo()
     crew = _StubCrew(_ok_crew_info())
     research = FakeResearch(search_fail=ResearchError("not_configured", "no search provider configured"))
     uit = await disc(repo, crew=crew, research=research).crew_assisted_review()
     assert uit["search_status"] == "failed:not_configured"
     handoff = crew.calls[0][1]
-    assert "web_hits" not in handoff["payload"]  # geen lege lijst doen alsof er gezocht is
+    assert handoff["payload"]["web_hits"] == []  # aanwezig en leeg: WEL geprobeerd, niets gevonden -- geen exa-fallback
     assert "Search chain exhausted" in handoff["payload"]["web_hits_warning"]
 
 
