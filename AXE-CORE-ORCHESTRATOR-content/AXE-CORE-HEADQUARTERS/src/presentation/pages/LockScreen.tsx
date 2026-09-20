@@ -1,16 +1,27 @@
 /**
- * AXE lockscreen — Samsung, na inloggen, vóór de particle-gesture PIN.
+ * AXE lockscreen — glance-dashboard vóór de particle-PIN.
  *
- * Donkere glasplaat (zelfde ruit als de Tauri-schil) met blokken van wat
- * je snel moet zien. Swipe omhoog opent het particle-veld.
+ * Frosted blokken zweven op de plaat. Geen bollen. Kleur alleen in accent
+ * (cyaan merkteken, groen/rood betekenis). Licht is dezelfde indeling in
+ * grijs matglas, geen wit.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
+import {
+  MessageSquare, Smartphone, Anchor, Users, LayoutGrid, ListChecks,
+  CalendarDays, FileText, Monitor, Cloud, Server, Database, Hexagon,
+  Radio, Bell, Mic,
+} from 'lucide-react';
 import { getAwarenessSnapshot, type AwarenessSnapshot } from '@/application/awareness/axeAwareness';
+import { getSystemState, type ServiceState } from '@/application/system/systemService';
+import { laadDevices } from '@/infrastructure/gateways/axeDeviceService';
+import { isOnline, type AxeDevice } from '@/domain/axeDevices';
+import { bewaarTerugPad, pinIsGezet } from '@/domain/androidPin';
 import { LockChrome } from '@/presentation/components/android/LockChrome';
+import { lockMateriaal } from '@/presentation/components/android/lockMateriaal';
 import { MobileGlass } from '@/presentation/components/layout/MobileGlass';
 import { useLook } from '@/presentation/hooks/useLook';
-import { pinIsGezet } from '@/domain/androidPin';
+import { useAuth } from '@/presentation/contexts/AuthContext';
 
 function useClock(): Date {
   const [now, setNow] = useState(() => new Date());
@@ -22,88 +33,96 @@ function useClock(): Date {
 }
 
 const TIME_FMT = new Intl.DateTimeFormat('nl-NL', { hour: '2-digit', minute: '2-digit' });
-const DATE_FMT = new Intl.DateTimeFormat('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+const DATE_FMT = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
 
-const PLAAT = {
-  background: 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 22%), rgba(10,11,14,0.55)',
-  backdropFilter: 'blur(28px) saturate(140%)',
-  WebkitBackdropFilter: 'blur(28px) saturate(140%)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  boxShadow: '0 1px 0 rgba(255,255,255,0.10) inset, 0 24px 60px rgba(0,0,0,0.35)',
-} as const;
+const MARKTEN = ['XAUUSD', 'US500', 'NAS100', 'BTCUSD'] as const;
 
-const BLOK = {
-  background: 'rgba(255,255,255,0.045)',
-  border: '1px solid rgba(255,255,255,0.06)',
-} as const;
-
-const SFEREN: Array<{ size: number; top: string; left?: string; right?: string; opacity: number }> = [
-  { size: 220, top: '6%', left: '-22%', opacity: 0.55 },
-  { size: 190, top: '12%', right: '-18%', opacity: 0.42 },
-  { size: 140, top: '58%', left: '-16%', opacity: 0.38 },
-  { size: 170, top: '62%', right: '-20%', opacity: 0.48 },
-  { size: 90, top: '78%', left: '18%', opacity: 0.32 },
-  { size: 70, top: '8%', right: '22%', opacity: 0.28 },
+const KERN: Array<{ keys: string[]; label: string; icoon: typeof Database }> = [
+  { keys: ['axe_core_api'], label: 'AXE API', icoon: Radio },
+  { keys: [], label: 'NorthSea', icoon: Anchor },
+  { keys: ['supabase'], label: 'Database', icoon: Database },
+  { keys: [], label: 'Caddy', icoon: Hexagon },
+  { keys: ['terminal'], label: 'Workers', icoon: Server },
+  { keys: ['mcp'], label: 'MCP', icoon: Hexagon },
 ];
 
-function LockSpheres({ licht }: { licht: boolean }) {
-  const tint = licht ? '210, 218, 228' : '28, 30, 36';
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      {SFEREN.map((s, i) => (
-        <span
-          key={i}
-          style={{
-            position: 'absolute',
-            top: s.top,
-            left: s.left,
-            right: s.right,
-            width: s.size,
-            height: s.size,
-            borderRadius: '50%',
-            opacity: s.opacity,
-            background: `radial-gradient(circle at 32% 28%, rgba(${tint},0.95), rgba(${tint},0.35) 42%, rgba(${tint},0) 70%)`,
-            filter: 'blur(2px)',
-          }}
-        />
-      ))}
-    </div>
-  );
+const TEGELS: Array<{ pad: string; label: string; sub: string; icoon: typeof MessageSquare }> = [
+  { pad: '/', label: 'AXE', sub: 'Ask or command', icoon: MessageSquare },
+  { pad: '/devices', label: 'Device Manager', sub: 'Systems & services', icoon: Smartphone },
+  { pad: '/maps-3d', label: 'NorthSea Desk', sub: 'Deals & Chase', icoon: Anchor },
+  { pad: '/agents', label: 'Agents', sub: 'Crew & Tasks', icoon: Users },
+  { pad: '/apps', label: 'Apps', sub: 'Open workspace', icoon: LayoutGrid },
+  { pad: '/tasks', label: 'Tasks', sub: 'Active jobs', icoon: ListChecks },
+  { pad: '/calendar', label: 'Calendar', sub: 'Today / Week', icoon: CalendarDays },
+  { pad: '/memory', label: 'Notes', sub: 'Quick capture', icoon: FileText },
+];
+
+function voornaam(email: string | null | undefined): string {
+  const local = (email ?? '').split('@')[0].toLowerCase();
+  if (local.includes('luka')) return 'Luka';
+  if (!local) return 'Luka';
+  return local.charAt(0).toUpperCase() + local.slice(1);
 }
 
-function Blok({
-  waarde,
-  label,
-  kleur,
-}: {
-  waarde: string;
-  label: string;
-  kleur?: string;
-}) {
+function dienstStatus(rows: ServiceState[], keys: string[]): 'online' | 'offline' | 'unknown' {
+  if (keys.length === 0) return 'unknown';
+  const hit = rows.find((r) => keys.includes(r.service));
+  if (!hit) return 'unknown';
+  if (hit.status === 'online') return 'online';
+  if (hit.status === 'unknown') return 'unknown';
+  return 'offline';
+}
+
+function systeemIcoon(d: AxeDevice) {
+  if (d.device_type === 'server') return Cloud;
+  if (d.device_type === 'mobile') return Smartphone;
+  return Monitor;
+}
+
+function kiesSystemen(devices: AxeDevice[]): AxeDevice[] {
+  const voorkeur = ['mac mini', 'imac', 'vps'];
+  const gekozen: AxeDevice[] = [];
+  for (const naam of voorkeur) {
+    const hit = devices.find((d) => d.device_name.toLowerCase().includes(naam) && !gekozen.includes(d));
+    if (hit) gekozen.push(hit);
+  }
+  for (const d of devices) {
+    if (gekozen.length >= 3) break;
+    if (!gekozen.includes(d) && d.device_type !== 'mobile') gekozen.push(d);
+  }
+  return gekozen.slice(0, 3);
+}
+
+function Dot({ tone }: { tone: 'ok' | 'err' | 'muted' }) {
+  const kleur = tone === 'ok' ? 'var(--success)' : tone === 'err' ? 'var(--error)' : 'var(--text-muted)';
+  return <span className="inline-block size-1.5 rounded-full" style={{ background: kleur }} />;
+}
+
+function Kaart({ style, children }: { style: React.CSSProperties; children: ReactNode }) {
   return (
-    <div className="rounded-[16px] px-3 py-3" style={BLOK}>
-      <div className="text-[22px] font-semibold tabular-nums leading-none" style={{ color: kleur ?? 'var(--text-primary)' }}>
-        {waarde}
-      </div>
-      <div className="mt-1.5 text-[11px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>
-        {label}
-      </div>
-    </div>
+    <section className="rounded-[20px] p-3.5" style={style}>
+      {children}
+    </section>
   );
 }
 
 export default function LockScreen() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [look] = useLook();
+  const mat = lockMateriaal(look);
   const now = useClock();
   const [aware, setAware] = useState<AwarenessSnapshot | null>(null);
+  const [diensten, setDiensten] = useState<ServiceState[]>([]);
+  const [devices, setDevices] = useState<AxeDevice[]>([]);
   const [gezet, setGezet] = useState<boolean | null>(null);
-  const glas = look === 'glass';
 
   useEffect(() => {
     let alive = true;
     const load = () => {
       void getAwarenessSnapshot().then((s) => { if (alive) setAware(s); }).catch(() => {});
+      void getSystemState().then((s) => { if (alive) setDiensten(s); }).catch(() => {});
+      void laadDevices().then((o) => { if (alive) setDevices(o.devices); }).catch(() => {});
     };
     load();
     const id = setInterval(load, 30_000);
@@ -118,78 +137,174 @@ export default function LockScreen() {
     return () => { alive = false; };
   }, []);
 
-  const waiting = (aware?.openTasks ?? 0) + (aware?.followUps ?? 0);
-  const allClear = aware != null && waiting === 0 && (aware.overdueTasks ?? 0) === 0;
-  const overdue = aware?.overdueTasks ?? 0;
+  const naarPin = (pad = '/') => {
+    bewaarTerugPad(pad);
+    navigate('/lock/pin');
+  };
 
-  const openPin = () => navigate('/lock/pin');
-  const startY = useRef<number | null>(null);
+  const systemen = kiesSystemen(devices);
+  const onlineN = systemen.filter((d) => isOnline(d.last_seen)).length;
+  const kern = KERN.map((k) => ({ ...k, status: dienstStatus(diensten, k.keys) }));
+  const kernOk = kern.filter((k) => k.status === 'online').length;
+  const alerts = aware?.alerts ?? [];
+  const aandacht = [
+    ...alerts,
+    ...(aware?.nextItem && !alerts.includes(aware.nextItem) ? [aware.nextItem] : []),
+  ].slice(0, 3);
 
   return (
-    <div
-      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
-      onPointerDown={(e) => { startY.current = e.clientY; }}
-      onPointerUp={(e) => {
-        if (startY.current != null && startY.current - e.clientY > 56) openPin();
-        startY.current = null;
-      }}
-      onPointerCancel={() => { startY.current = null; }}
-    >
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
       <MobileGlass />
-      <LockSpheres licht={glas} />
       <div
         className="relative z-[1] mx-auto flex h-full w-full max-w-md flex-col px-4"
         style={{
-          paddingTop: 'max(12px, env(safe-area-inset-top))',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+          paddingTop: 'max(10px, env(safe-area-inset-top))',
+          paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
         }}
       >
         <LockChrome />
 
-        <button
-          type="button"
-          onClick={openPin}
-          className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[28px] p-5 text-left"
-          style={PLAAT}
-          aria-label={gezet === false ? 'Swipe up to set your particle code' : 'Swipe up to unlock AXE'}
-        >
-          <div className="text-6xl font-semibold tabular-nums leading-none tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            {TIME_FMT.format(now)}
-          </div>
-          <div className="mt-2 text-sm capitalize" style={{ color: 'var(--text-muted)' }}>
-            {DATE_FMT.format(now)}
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-2.5">
-            <Blok waarde={aware ? String(aware.openTasks) : '—'} label="Open" />
-            <Blok
-              waarde={aware ? String(overdue) : '—'}
-              label="Overdue"
-              kleur={overdue > 0 ? 'var(--warning)' : undefined}
-            />
-            <Blok waarde={aware ? String(aware.followUps) : '—'} label="Follow-ups" />
-            <Blok
-              waarde={aware ? String(aware.alerts.length) : '—'}
-              label="Alerts"
-              kleur={allClear ? 'var(--success)' : overdue > 0 ? 'var(--warning)' : undefined}
-            />
-          </div>
-
-          <div className="mt-3 rounded-[16px] px-3 py-3" style={BLOK}>
-            <div className="text-[11px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>
-              Next
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pb-2" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: mat.gedempt }}>
+                {DATE_FMT.format(now)}
+              </div>
+              <div className="mt-1 text-[56px] font-semibold leading-none tracking-tight tabular-nums" style={{ color: mat.tekst }}>
+                {TIME_FMT.format(now)}
+              </div>
+              <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: mat.gedempt }}>
+                Discipline compounds
+              </div>
             </div>
-            <div className="mt-1.5 text-sm leading-snug" style={{ color: 'var(--text-primary)' }}>
-              {aware?.nextItem ?? (allClear ? 'Nothing waiting' : (aware?.alerts?.[0] ?? '—'))}
+            <div className="mb-1 text-right">
+              <div className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--success)' }}>
+                <Dot tone="ok" />
+                I'm right here, {voornaam(user?.email)}
+              </div>
+              <div className="mt-1.5 text-[9px] uppercase tracking-[0.16em]" style={{ color: mat.gedempt }}>
+                Plan · Execute · Evolve
+              </div>
             </div>
           </div>
-        </button>
+
+          <Kaart style={{ ...mat.kaart, marginTop: 16 }}>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: mat.gedempt }}>
+              Markets
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {MARKTEN.map((sym) => (
+                <div key={sym} className="rounded-[12px] px-1.5 py-2" style={mat.binnen}>
+                  <div className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: mat.gedempt }}>{sym}</div>
+                  <div className="mt-1 text-[13px] font-semibold tabular-nums" style={{ color: mat.tekst }}>—</div>
+                </div>
+              ))}
+            </div>
+          </Kaart>
+
+          <Kaart style={{ ...mat.kaart, marginTop: 10 }}>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: mat.gedempt }}>Your systems</span>
+              <span className="text-[10px] font-semibold" style={{ color: 'var(--success)' }}>
+                {systemen.length ? `${onlineN}/${systemen.length} online` : '—'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(systemen.length ? systemen : [null, null, null]).map((d, i) => {
+                const Ico = d ? systeemIcoon(d) : Monitor;
+                const on = d ? isOnline(d.last_seen) : false;
+                return (
+                  <div key={d?.device_id ?? i} className="rounded-[12px] px-2 py-2" style={mat.binnen}>
+                    <div className="flex items-center gap-1.5">
+                      <Ico size={13} style={{ color: mat.gedempt }} />
+                      <span className="truncate text-[11px] font-medium" style={{ color: mat.tekst }}>
+                        {d?.device_name ?? '—'}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-[10px] font-semibold" style={{ color: d ? (on ? 'var(--success)' : 'var(--error)') : mat.gedempt }}>
+                      {d ? (on ? 'Online' : 'Offline') : '—'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Kaart>
+
+          <Kaart style={{ ...mat.kaart, marginTop: 10 }}>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: mat.gedempt }}>Core services</span>
+              <span className="text-[10px] font-semibold" style={{ color: kernOk ? 'var(--success)' : mat.gedempt }}>
+                {kernOk}/{kern.length} healthy
+              </span>
+            </div>
+            <div className="grid grid-cols-6 gap-1">
+              {kern.map((k) => {
+                const Ico = k.icoon;
+                const tone = k.status === 'online' ? 'ok' : k.status === 'offline' ? 'err' : 'muted';
+                return (
+                  <div key={k.label} className="flex flex-col items-center gap-1 rounded-[12px] px-1 py-2" style={mat.binnen}>
+                    <Dot tone={tone} />
+                    <Ico size={14} style={{ color: mat.gedempt }} />
+                    <span className="text-center text-[8px] leading-tight" style={{ color: mat.gedempt }}>{k.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Kaart>
+
+          <Kaart style={{ ...mat.kaart, marginTop: 10 }}>
+            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: aandacht.length ? 'var(--error)' : mat.gedempt }}>
+              <Bell size={12} />
+              Attention {aware ? `(${aandacht.length})` : ''}
+            </div>
+            {aandacht.length === 0 ? (
+              <div className="text-[12px]" style={{ color: 'var(--success)' }}>All quiet</div>
+            ) : (
+              <div className="space-y-1.5">
+                {aandacht.map((a) => (
+                  <div key={a} className="rounded-[12px] px-2.5 py-2 text-[12px] leading-snug" style={{ ...mat.binnen, color: mat.tekst }}>
+                    {a}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Kaart>
+
+          <div className="mt-2.5 grid grid-cols-4 gap-2">
+            {TEGELS.map((t) => {
+              const Ico = t.icoon;
+              return (
+                <button
+                  key={t.pad}
+                  type="button"
+                  onClick={() => naarPin(t.pad)}
+                  className="flex flex-col items-start rounded-[16px] px-2.5 py-2.5 text-left"
+                  style={mat.kaart}
+                >
+                  <Ico size={15} style={{ color: 'var(--accent-cyan)' }} />
+                  <span className="mt-2 text-[11px] font-semibold leading-tight" style={{ color: mat.tekst }}>{t.label}</span>
+                  <span className="mt-0.5 text-[9px] leading-tight" style={{ color: mat.gedempt }}>{t.sub}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => naarPin('/')}
+            className="mt-3 flex w-full items-center gap-2 rounded-full px-3.5 py-2.5"
+            style={mat.kaart}
+          >
+            <Mic size={14} style={{ color: 'var(--accent-cyan)' }} />
+            <span className="flex-1 text-left text-[12px]" style={{ color: mat.gedempt }}>Ask AXE anything…</span>
+          </button>
+        </div>
 
         <button
           type="button"
-          onClick={openPin}
-          className="mb-1 py-3 text-[13px] font-semibold tracking-[0.14em]"
-          style={{ color: 'var(--text-muted)' }}
+          onClick={() => naarPin('/')}
+          className="py-2.5 text-[12px] font-semibold tracking-[0.14em]"
+          style={{ color: mat.gedempt }}
         >
           {gezet === false ? '^  SWIPE UP TO SET CODE' : '^  SWIPE UP TO UNLOCK'}
         </button>
