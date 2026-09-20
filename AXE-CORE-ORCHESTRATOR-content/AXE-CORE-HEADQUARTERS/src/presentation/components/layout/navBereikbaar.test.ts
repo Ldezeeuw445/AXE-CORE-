@@ -36,6 +36,13 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-standalone': 'Ontwikkelvoorbeeld',
+  // integration/axe-desktop-final: eigen vensters, geregistreerd in App.tsx
+  // BUITEN de AppShell-routes, en geopend via windowManagerService.ts
+  // (openPersonalComputerUse/openStandaloneNorthsea), niet via een klik in de
+  // balk van het hoofdvenster. /computer-use zelf (de volle pagina, WEL binnen
+  // de AppShell) staat gewoon in rightItems hierboven.
+  '/computer-use-overlay': 'Los venster (Personal Computer Use compact), geopend via windowManagerService',
+  '/northsea-desktop': 'Los venster (NorthSea Global Trade Center), geopend via windowManagerService',
 
   // NAGEMETEN 11-9-2026: deze twee hebben NUL verwijzingen in de hele broncode
   // en staan niet in de balk. Ze zijn dus vanuit de app niet te bereiken --

@@ -19,7 +19,7 @@ describe('de indeling van de Code Editor', () => {
 
   it('toont op de code-tab alleen de kop: CODE AGENT met motor en repo, geen gesprek', () => {
     const chat = lees('../components/layout/PlaatChat.tsx');
-    expect(chat).toMatch(/const kopAlleen = opEditor \|\| chatCollapsed/);
+    expect(chat).toMatch(/const kopAlleen = gesprekInPresence \|\| opEditor \|\| chatCollapsed/);
     expect(chat).toMatch(/CODE AGENT/);
     expect(chat).toMatch(/snelactieLijst=\{opEditor \? codeKop\?\.snelacties : undefined\}/);
   });

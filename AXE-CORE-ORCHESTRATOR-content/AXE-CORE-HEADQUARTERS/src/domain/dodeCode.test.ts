@@ -145,6 +145,10 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/geminiLiveService.ts', 'isGeminiLiveAvailable'],
   ['src/infrastructure/gateways/geminiLiveService.ts', 'stopGeminiLive'],
   ['src/infrastructure/gateways/globalTts.ts', 'getActiveTtsProvider'],
+  // Only called internally by speakGlobal() today; exported alongside it (like
+  // getActiveTtsProvider/stopGlobalTts above) so the markdown/chrome-stripping
+  // step is independently unit-testable without exercising real TTS playback.
+  ['src/infrastructure/gateways/globalTts.ts', 'sanitizeForSpeech'],
   ['src/infrastructure/gateways/globalTts.ts', 'stopGlobalTts'],
   ['src/infrastructure/gateways/kimiClawService.ts', 'browserCloseSession'],
   ['src/infrastructure/gateways/kimiClawService.ts', 'browserHealth'],
@@ -296,6 +300,16 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/presentation/components/browser/AxeSpherePanel.tsx', 'AxeSpherePanel'],
   ['src/presentation/components/browser/NavigationBar.tsx', 'NavigationBar'],
   ['src/presentation/components/browser/SidebarPanels.tsx', 'SidebarPanels'],
+  // 20 sep 2026 (integration/axe-desktop-final, a6f43cda): the left radial's
+  // corner triangle used to call wisselBol() (AppShell.tsx's opHoek prop) to
+  // toggle the floating sphere; that commit repurposed the corner for Personal
+  // Computer Use instead, per the desktop-integration acceptance spec. The
+  // floating sphere itself (bolZichtbaar/useBolZichtbaar/ZwevendeBol.tsx,
+  // still mounted in BrowserPage.tsx) is unaffected -- only its on/off switch
+  // lost its caller. Not deleted: whether it gets a new home (e.g. Settings)
+  // or is retired for good is a product decision, not this verification pass's
+  // call. Flagged to Luka in the acceptance report.
+  ['src/presentation/components/layout/zweef/bolZichtbaar.ts', 'wisselBol'],
   ['src/presentation/components/shared/GlassPanel.tsx', 'GlassPanel'],
   ['src/presentation/components/surface/Surface.tsx', 'Chip'],
   ['src/presentation/components/surface/Surface.tsx', 'GhostButton'],

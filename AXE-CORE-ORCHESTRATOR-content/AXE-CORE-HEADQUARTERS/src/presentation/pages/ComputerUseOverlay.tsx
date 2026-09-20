@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Folder, Image, Mic, Paperclip, Plus, SquareArrowOutUpRight, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -52,7 +52,7 @@ export default function ComputerUseOverlay() {
       <section className="computer-use-overlay__card" data-axe-doel="computer-use-composer">
         <form className="computer-use-overlay__composer" onSubmit={onSubmit}>
           <div className="computer-use-overlay__particle">
-            <AxeStatusOrb size={40} toonLabel={false} status={busy ? 'processing' : undefined} />
+            <AxeStatusOrb size={64} toonLabel={false} status={busy ? 'processing' : undefined} />
           </div>
           <input
             autoFocus

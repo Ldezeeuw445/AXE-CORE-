@@ -31,7 +31,7 @@ export function StandaloneAxeParticle() {
 
   return (
     <div className="standalone-axe-particle" title={activity?.label ?? `AXE · ${voiceStatus}`} data-axe-doel="axe-presence">
-      <AxeStatusOrb size={40} toonLabel={false} werk={work} status={status} />
+      <AxeStatusOrb size={64} toonLabel={false} werk={work} status={status} />
     </div>
   );
 }

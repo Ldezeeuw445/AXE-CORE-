@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Cpu, Monitor, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Cpu, RefreshCw, ShieldCheck } from 'lucide-react';
 import { PageHeader, StatPill } from '@/presentation/components/ui/AxeUI';
 import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
@@ -66,8 +66,7 @@ export default function ComputerUse() {
     <div className="h-full min-h-0 overflow-y-auto p-4 md:p-6">
       <PageHeader
         title="Personal Computer Use"
-        subtitle="Live hands on your Macs — device-bound, audited and approval-gated"
-        icon={Monitor}
+        description="Live hands on your Macs — device-bound, audited and approval-gated"
         actions={
           <div className="flex items-center gap-2">
           {multiMonitorAvailable() && (

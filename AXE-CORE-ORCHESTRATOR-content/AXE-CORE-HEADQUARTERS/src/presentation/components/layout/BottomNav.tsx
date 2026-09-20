@@ -5,7 +5,7 @@ import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
   Bot, Megaphone, BookOpenCheck, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, type LucideIcon,
-  TerminalSquare,
+  TerminalSquare, Monitor,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -45,6 +45,12 @@ const rightItems: NavItem[] = [
   { icon: LineChart, label: navLabel('/trading-intel'), path: '/trading-intel' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
   { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
+  // In navRegistry sinds integration/axe-desktop-final maar zonder deur hier --
+  // precies wat de comment hierboven waarschuwt. /computer-use-overlay en
+  // /northsea-desktop horen hier NIET bij: die zijn losse vensters (App.tsx
+  // buiten de AppShell-routes) en staan in navBereikbaar.test.ts's
+  // BEWUST_VERBORGEN, niet hier.
+  { icon: Monitor, label: navLabel('/computer-use'), path: '/computer-use' },
   // Naast de code-editor, want dat is waar je hem nodig hebt: een bouw draaien,
   // de lokale API herstarten, een poort vrijmaken. Deze lijst is met de hand
   // gemaakt en staat los van navRegistry -- een route toevoegen zonder deze

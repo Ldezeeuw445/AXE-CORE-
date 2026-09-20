@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, StickyNote, X } from 'lucide-react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 
