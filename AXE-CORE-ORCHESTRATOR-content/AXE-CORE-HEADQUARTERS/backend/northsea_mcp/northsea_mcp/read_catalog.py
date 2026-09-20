@@ -127,6 +127,11 @@ READ_TOOLS: list[tuple[str, str, str]] = [
      "State of the NorthSea Communication Engine: when it last ran, what it did (classified, evidence, follow-ups, chase items, "
      "errors), deals per current blocker and per owner (Luka / AXE / counterparty), follow-up plans per status, open engine "
      "chase items and bounced channels. The engine never sends or approves. Read-only."),
+    ("northsea_get_live_operations", "northsea.read",
+     "Consolidated operational view: recently completed engine/discovery/crew runs, what's waiting (follow-ups, Chase replies), "
+     "what needs Luka's approval (including governed crew-candidate reviews), what failed (permanently-failed research, skipped "
+     "crew reviews), and the next scheduled run. Re-groups data already visible via northsea_get_engine_status, "
+     "northsea_list_pending_approvals and northsea_get_system_health by operational state instead of by table. Read-only."),
     ("northsea_list_followups", "northsea.deal.read",
      "Durable follow-up plans: status (scheduled, draft_created, replied, cancelled, blocked, expired), attempt, due time, deal, "
      "counterparty (redacted without northsea.identity) and the pending draft awaiting approval. Filter by status or deal. Read-only."),

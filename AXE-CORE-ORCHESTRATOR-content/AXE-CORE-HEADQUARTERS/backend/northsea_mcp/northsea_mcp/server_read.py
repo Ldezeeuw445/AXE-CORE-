@@ -252,6 +252,10 @@ def register_read_tools(mcp: MCPServer, rt: ReadTools, guard: Any) -> None:
     async def engine_status() -> ReadResult:
         return await run("northsea_get_engine_status", {}, rt.engine_status)
 
+    @tool("northsea_get_live_operations", "Live operations view (running/waiting/approval/failed/next)")
+    async def live_operations() -> ReadResult:
+        return await run("northsea_get_live_operations", {}, rt.live_operations)
+
     @tool("northsea_list_followups", "Follow-up plans")
     async def followups(status: Literal["scheduled", "draft_created", "replied", "cancelled", "blocked", "expired"] | None = None,
                         deal: Annotated[str | None, Field(description="Deal code or UUID")] = None,

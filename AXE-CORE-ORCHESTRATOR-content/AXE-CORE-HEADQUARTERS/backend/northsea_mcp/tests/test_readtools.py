@@ -271,3 +271,35 @@ async def test_system_health_reports_unknown_scheduler_when_no_schedule_row_foun
     # core_schedules has no 'northsea' row yet, or the AXE project is unreachable -- must not raise or fake data.
     data = await ok(mcp_server, "northsea_get_system_health")
     assert "next_run_at" not in data["scheduler"] and "note" in data["scheduler"]
+
+
+async def test_live_operations_groups_existing_state_by_operational_category(mcp_server, auditor, repo):
+    auditor.schedule = {"next_run_at": "2026-09-20T08:00:00+00:00", "last_run_at": "2026-09-20T07:45:00+00:00", "last_status": "ok"}
+    repo.t["northsea_audit_events"] += [
+        {"action": "engine_tick", "occurred_at": "2026-09-20T07:45:00+00:00", "details": {"summary": {"chase": 2}, "errors": []}},
+        {"action": "discovery_sweep", "occurred_at": "2026-09-20T07:26:00+00:00", "details": {"created": 5, "candidates_found": 866}},
+        {"action": "crew_candidate_review_requested", "occurred_at": "2026-09-20T07:26:45+00:00",
+         "details": {"buyer_requirement_id": "x", "crew_backend": "northsea_local"}},
+        {"action": "crew_candidate_review_skipped", "occurred_at": "2026-09-20T03:00:00+00:00",
+         "details": {"buyer_requirement_id": "y", "reason": "dedicated backend not configured"}},
+        {"action": "engine_tick", "occurred_at": "2026-09-20T00:00:00+00:00", "details": {"summary": {}, "errors": ["upstream_error"]}},
+    ]
+    repo.t["northsea_followups"].append({"id": str(uuid.uuid4()), "status": "scheduled", "opportunity_id": OPP,
+                                         "due_at": "2026-09-21T00:00:00+00:00", "reason": "follow-up window"})
+    repo.t["action_queue"] += [
+        {"id": str(uuid.uuid4()), "action_type": "research_approval", "status": "open", "requires_approval": True,
+         "title": "needs a human", "opportunity_id": OPP, "metadata": {}},
+        {"id": str(uuid.uuid4()), "action_type": "research_approval", "status": "waiting", "opportunity_id": OPP, "metadata": {}},
+        {"id": str(uuid.uuid4()), "action_type": "research_approval", "status": "completed", "opportunity_id": OPP,
+         "metadata": {"execution_result": "failed_permanently", "blocker_code": "seller_unqualified"}},
+    ]
+    data = await ok(mcp_server, "northsea_get_live_operations")
+    assert data["next_scheduled"]["next_run_at"] == "2026-09-20T08:00:00+00:00"
+    acties = {x["action"] for x in data["recently_completed"]}
+    assert acties == {"engine_tick", "discovery_sweep", "crew_candidate_review_requested"}  # nieuwste per soort, niet de oudste tick
+    assert data["waiting"]["followups_scheduled"] == 1 and data["waiting"]["chase_waiting_reply"] == 1
+    assert data["approval_required"]["count"] >= 1
+    assert data["failed"]["last_failed_tick_at"] == "2026-09-20T00:00:00+00:00"
+    assert len(data["failed"]["research_failed_permanently"]) == 1
+    assert data["failed"]["research_failed_permanently"][0]["blocker"] == "seller_unqualified"
+    assert any(c["reason"] == "dedicated backend not configured" for c in data["failed"]["crew_reviews_skipped_recent"])

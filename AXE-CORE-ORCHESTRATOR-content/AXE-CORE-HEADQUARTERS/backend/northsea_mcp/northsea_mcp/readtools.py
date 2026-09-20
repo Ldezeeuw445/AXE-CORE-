@@ -746,6 +746,58 @@ class ReadTools:
             "source": ["northsea_audit_events", "opportunities", "northsea_followups", "action_queue", "contacts"],
         }
 
+    async def live_operations(self, caller: Caller) -> dict:
+        """Consolidated operational view across everything already tracked separately: the deterministic
+        engine (northsea_get_engine_status), discovery + governed crew invocation, and Chase approvals
+        (northsea_list_pending_approvals). No new data source -- this only re-groups existing rows by
+        operational state, so the picture matches those tools exactly. Read-only."""
+        v = await self.v(caller)
+        audits = sorted(v.s.rows("northsea_audit_events"), key=lambda a: str(a.get("occurred_at") or ""), reverse=True)
+        laatste_tick = next((a for a in audits if a.get("action") == "engine_tick"), None)
+        laatste_sweep = next((a for a in audits if a.get("action") == "discovery_sweep"), None)
+        laatste_crew = next((a for a in audits if a.get("action") in ("crew_candidate_review_requested", "crew_candidate_review_skipped")), None)
+        recent_gebeurtenissen = [x for x in [
+            {"actor": "engine", "action": "engine_tick", "at": laatste_tick.get("occurred_at"),
+             "summary": (laatste_tick.get("details") or {}).get("summary")} if laatste_tick else None,
+            {"actor": "discovery", "action": "discovery_sweep", "at": laatste_sweep.get("occurred_at"),
+             "summary": laatste_sweep.get("details")} if laatste_sweep else None,
+            {"actor": "discovery+crew", "action": laatste_crew.get("action"), "at": laatste_crew.get("occurred_at"),
+             "summary": laatste_crew.get("details")} if laatste_crew else None,
+        ] if x]
+
+        fu = v.s.rows("northsea_followups")
+        wachtend_fu = [f for f in fu if f.get("status") == "scheduled"]
+        wachtend_chase = [q for q in v.s.rows("action_queue") if q.get("status") == "waiting"]
+        approvals = self._approval_rows(v)
+        laatste_fout_tick = next((a for a in audits if a.get("action") == "engine_tick" and (a.get("details") or {}).get("errors")), None)
+        research_mislukt = [q for q in v.s.rows("action_queue") if q.get("action_type") == "research_approval"
+                            and (q.get("metadata") or {}).get("execution_result") == "failed_permanently"]
+        crew_overgeslagen = [a for a in audits if a.get("action") == "crew_candidate_review_skipped"][:10]
+        schema = await self.i.auditor.get_schedule("northsea") if self.i.auditor else None
+
+        return {
+            "generated_at": v.generated_at,
+            "now_running": {"note": "Not directly observable from a read-only database snapshot (no process lock state here). "
+                                    "Compare last_run_at (below) to next_scheduled: if next_scheduled is already in the past, a "
+                                    "run may be in progress or the schedule may be stuck -- see northsea_get_system_health."},
+            "recently_completed": recent_gebeurtenissen,
+            "waiting": {"followups_scheduled": len(wachtend_fu), "chase_waiting_reply": len(wachtend_chase),
+                       "items": [{"deal_id": f.get("opportunity_id"), "due_at": f.get("due_at"), "reason": f.get("reason")}
+                                 for f in wachtend_fu[:10]]},
+            "approval_required": {"count": len(approvals), "items": approvals[:10]},
+            "failed": {"last_failed_tick_at": laatste_fout_tick.get("occurred_at") if laatste_fout_tick else None,
+                      "research_failed_permanently": [{"action_queue_id": q.get("id"), "deal_id": q.get("opportunity_id"),
+                                                       "blocker": (q.get("metadata") or {}).get("blocker_code")} for q in research_mislukt],
+                      "crew_reviews_skipped_recent": [{"at": a.get("occurred_at"), "reason": (a.get("details") or {}).get("reason")}
+                                                      for a in crew_overgeslagen]},
+            "next_scheduled": schema if schema else {"note": "No core_schedules row found for app='northsea', or unreachable."},
+            "definition": "Consolidates engine/discovery/crew/chase state that already exists individually via "
+                          "northsea_get_engine_status, northsea_list_pending_approvals and northsea_get_system_health -- "
+                          "grouped by operational state (running/completed/waiting/approval/failed/next) instead of by table.",
+            "source": ["northsea_audit_events", "northsea_followups", "action_queue", "reply_drafts", "opportunities",
+                      "email_intelligence", "core_schedules (AXE project)"],
+        }
+
     async def list_followups(self, caller: Caller, *, status: str | None = None, deal: str | None = None, limit=25, offset=0) -> dict:
         v = await self.v(caller)
         rijen = v.s.rows("northsea_followups")
