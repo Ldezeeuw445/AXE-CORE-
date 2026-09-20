@@ -64,7 +64,7 @@ export function isWhisperAvailable(): boolean {
   return !!resolveWhisperConfig();
 }
 
-export async function transcribeAudio(blob: Blob, lang = 'nl'): Promise<string> {
+export async function transcribeAudio(blob: Blob, lang?: string): Promise<string> {
   const cfg = resolveWhisperConfig();
   if (!cfg) {
     throw new Error(
@@ -76,7 +76,7 @@ export async function transcribeAudio(blob: Blob, lang = 'nl'): Promise<string> 
   const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
   form.append('file', blob, `axe-voice.${ext}`);
   form.append('model', cfg.model);
-  form.append('language', lang);
+  if (lang) form.append('language', lang);
   form.append('response_format', 'json');
 
   const res = await fetch(cfg.endpoint, {
@@ -287,5 +287,5 @@ export async function listenAndTranscribe(opts?: {
     onSpeechStart: opts?.onSpeechStart,
   });
   if (!blob || blob.size < 800) return '';
-  return transcribeAudio(blob, opts?.lang ?? 'nl');
+  return transcribeAudio(blob, opts?.lang);
 }
