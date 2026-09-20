@@ -9,6 +9,7 @@ import {
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import AppLogo from '@/presentation/components/apps/AppLogo';
 import AddAppDialog from '@/presentation/components/apps/AddAppDialog';
+import { IPhoneAppHost, type IPhoneAppSource } from '@/presentation/components/apps/IPhoneAppHost';
 import {
   PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
 } from '@/presentation/components/ui/AxeUI';
@@ -48,7 +49,35 @@ export default function AppsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveState>>({});
   const [adding, setAdding] = useState(false);
+  const [phoneApp, setPhoneApp] = useState<{ name: string; source: IPhoneAppSource } | null>(null);
   const onPhone = androidShellAvailable();
+
+  const openInIPhone = (app: RegisteredApp) => {
+    if (app.internal_path) {
+      setPhoneApp({
+        name: app.name,
+        source: { kind: 'route', path: app.internal_path.replace(/^\//, ''), title: app.name },
+      });
+      return;
+    }
+    if (app.prod_url) {
+      setPhoneApp({
+        name: app.name,
+        source: { kind: 'url', url: app.prod_url, title: app.name },
+      });
+      return;
+    }
+    setPhoneApp({
+      name: app.name,
+      source: {
+        kind: 'blank',
+        title: app.name,
+        message: app.android_package
+          ? `Native package ${app.android_package} — open on the Android shell, or add a URL / internal path to preview in iPhone.`
+          : 'Add a prod URL or internal path to open this app in the iPhone frame.',
+      },
+    });
+  };
 
   const load = async () => {
     try {
@@ -259,6 +288,11 @@ export default function AppsPage() {
                           <Smartphone size={11} /> Open app
                         </AxeButton>
                       )}
+                      {(app.prod_url || app.internal_path || app.android_package) && (
+                        <AxeButton size="sm" variant="secondary" onClick={() => openInIPhone(app)}>
+                          <Smartphone size={11} /> iPhone
+                        </AxeButton>
+                      )}
                       {app.internal_path && (
                         <AxeButton size="sm" variant="primary" onClick={() => navigate(app.internal_path)}>
                           Open <ArrowRight size={11} />
@@ -319,6 +353,15 @@ export default function AppsPage() {
 
       {adding && (
         <AddAppDialog onClose={() => setAdding(false)} onAdded={() => void load()} />
+      )}
+
+      {phoneApp && (
+        <IPhoneAppHost
+          modal
+          size="md"
+          source={phoneApp.source}
+          onClose={() => setPhoneApp(null)}
+        />
       )}
       </div>
     </div>
