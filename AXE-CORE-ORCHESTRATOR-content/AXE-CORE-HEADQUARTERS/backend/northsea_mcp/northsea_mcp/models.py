@@ -114,6 +114,11 @@ class CrewRunInfo(BaseModel):
     timings: dict[str, float] = Field(default_factory=dict)
     validation: Literal["valid", "invalid", "not_validated"] = "not_validated"
     attempts: list[dict[str, Any]] = Field(default_factory=list, description="Every backend attempt, in order.")
+    structured_output: dict[str, Any] = Field(default_factory=dict, description="Extra fields the dedicated crew's own JSON "
+                                              "contract carried beyond analysis/models/skills/tools/budget_usage (e.g. "
+                                              "counterparty-sourcing's candidates/rejected/evidence/strategy) -- the contract "
+                                              "allows unknown fields (model_config extra='allow') specifically so callers can "
+                                              "read structured results back, not just prose. Still unverified analysis, never fact.")
 
 
 CrewRunResult = CrewRunInfo

@@ -350,7 +350,7 @@ class CrewGateway:
                                    models=o.models, skills=o.skills, tools=o.tools, budget_usage=o.budget_usage,
                                    timings=timings, validation="valid", actual_specialists=local_res.specialists,
                                    retries=max(0, len(pogingen) - 1), audit_references=[local_res.run_id] if local_res.run_id else [],
-                                   attempts=[p.as_dict() for p in pogingen], **basis)
+                                   attempts=[p.as_dict() for p in pogingen], structured_output=o.model_extra or {}, **basis)
             # lokale fout: NorthSea stopt niet; Studio is optioneel, daarna zichtbare fallback
 
         # ── OPTIONEEL: Studio-AMP als die geconfigureerd is ──────────────────
@@ -381,7 +381,7 @@ class CrewGateway:
                                        execution_mode="llm", actual_crew=gevraagd, fallback_used=False, models=o.models, skills=o.skills, tools=o.tools,
                                        budget_usage=o.budget_usage, timings=timings, validation="valid", actual_specialists=res.specialists,
                                        retries=max(0, len(pogingen) - 1), audit_references=[res.run_id] if res.run_id else [],
-                                       attempts=[p.as_dict() for p in pogingen], **basis)
+                                       attempts=[p.as_dict() for p in pogingen], structured_output=o.model_extra or {}, **basis)
                 if res.status == "invalid":
                     # Ongeldige uitvoer is geen reden om stil iets anders te draaien: melden.
                     timings["total_s"] = round(time.monotonic() - t0, 2)

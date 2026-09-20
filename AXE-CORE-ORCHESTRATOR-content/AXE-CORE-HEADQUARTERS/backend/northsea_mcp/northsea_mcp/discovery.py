@@ -250,6 +250,8 @@ class DiscoveryService:
             return {"created_review": False, "buyer_requirement_id": kandidaat["id"], "crew_status": info.status,
                     "reason": info.reason, "search_status": zoek_status}
 
+        kandidaten_gevonden = (info.structured_output or {}).get("candidates") or []
+        afgewezen = (info.structured_output or {}).get("rejected") or []
         rij = await self._resilient(lambda info=info: self.repo.engine_insert("action_queue", {
             "dedupe_key": dedupe_key, "action_type": "crew_candidate_review", "opportunity_id": None, "company_id": None,
             "priority": 55, "title": f"Crew-assisted candidate review: {kandidaat.get('product') or kandidaat.get('commodity')}"[:200],
@@ -262,7 +264,10 @@ class DiscoveryService:
                         "validation": info.validation, "audit_references": info.audit_references,
                         "timings": info.timings, "budget_usage": info.budget_usage,
                         "search_status": zoek_status, "search_provider": payload.get("web_hits_provider"),
-                        "search_hits": len(payload.get("web_hits") or [])}}, ignore_duplicates=True))
+                        "search_hits": len(payload.get("web_hits") or []),
+                        # De echte kandidaten zelf -- zonder dit kan niemand deze Chase-item beoordelen,
+                        # alleen het AANTAL ("6 ranked candidate(s)") zonder wie of waarom.
+                        "candidates": kandidaten_gevonden[:10], "rejected": afgewezen[:10]}}, ignore_duplicates=True))
         await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
             "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_requested",
             "details": {"buyer_requirement_id": kandidaat["id"], "crew_route": info.route, "crew_backend": info.backend,

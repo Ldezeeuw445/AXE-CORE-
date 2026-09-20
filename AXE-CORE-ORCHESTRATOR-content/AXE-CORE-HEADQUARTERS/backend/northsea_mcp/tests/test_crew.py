@@ -102,6 +102,22 @@ async def test_dedicated_crew_runs_first_and_returns_validated_provenance():
     assert info.audit_references == ["k-123"]  # run_id == kickoff_id
 
 
+async def test_extra_contract_fields_survive_as_structured_output():
+    """DedicatedCrewOutput allows extra fields (model_config extra='allow') specifically so a crew like
+    counterparty-sourcing can return candidates/rejected/evidence, not just prose. Without this, a caller
+    reading CrewRunInfo has no way to see WHO the crew found, only the analysis text's summary count."""
+    output_met_kandidaten = json.dumps({
+        "analysis": "Sourcing find_supplier for Copper: 1 ranked candidate(s), 0 rejected.", "models": [], "skills": [], "tools": [],
+        "budget_usage": {}, "candidates": [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}],
+        "rejected": [], "strategy": {"direction": "find_supplier", "commodity": "Copper"}})
+    handler = studio([{"status": "completed", "result": {"output": output_met_kandidaten}, "execution_time": 1.0}])
+    info = await make(handler, routes=ROUTE).run("qualify_opportunity", {})
+    assert info.status == "ok"
+    assert info.structured_output["candidates"] == [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}]
+    assert info.structured_output["strategy"]["commodity"] == "Copper"
+    assert "analysis" not in info.structured_output and "models" not in info.structured_output  # bekende velden niet dubbel
+
+
 async def test_health_check_failure_falls_back_visibly():
     info = await make(studio([{"status": "completed"}], inputs=500), routes=ROUTE).run("qualify_opportunity", {})
     assert info.backend == "axe_general_crew" and info.fallback_used and info.fallback_reason == "health_check_failed"

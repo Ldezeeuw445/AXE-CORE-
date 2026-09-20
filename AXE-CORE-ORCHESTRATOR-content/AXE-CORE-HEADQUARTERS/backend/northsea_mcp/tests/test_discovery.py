@@ -220,6 +220,19 @@ async def test_crew_review_is_skipped_without_a_crew_gateway():
     assert uit["skipped"] is True and "no crew gateway" in uit["reason"]
 
 
+async def test_crew_review_persists_the_actual_candidates_not_just_a_count():
+    """Without this, the Chase item's description only says '6 ranked candidate(s)' and a human has
+    nothing concrete to approve or reject -- the structured_output carries the real names/urls/scores."""
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info(structured_output={
+        "candidates": [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}],
+        "rejected": [{"name": "Some Broker Ltd", "fit_score": 0}]}))
+    await disc(repo, crew=crew).crew_assisted_review()
+    rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
+    assert rij["metadata"]["candidates"] == [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}]
+    assert rij["metadata"]["rejected"] == [{"name": "Some Broker Ltd", "fit_score": 0}]
+
+
 async def test_crew_review_creates_a_chase_item_never_a_fact():
     repo = FakeRepo()
     voor_bedrijven = len(repo.t["companies"])
