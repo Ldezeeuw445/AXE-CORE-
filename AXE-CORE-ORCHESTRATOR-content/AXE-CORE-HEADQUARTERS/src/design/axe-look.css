@@ -6088,18 +6088,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-quick-note__head,.axe-quick-note__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px}.axe-quick-note__head{border-bottom:1px solid rgba(255,255,255,.05)}.axe-quick-note__head span{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--text-secondary)}.axe-quick-note__head button,.axe-quick-note__foot button{border:0;background:transparent;color:var(--text-muted)}.axe-quick-note textarea{flex:1;min-height:100px;resize:none;border:0;outline:0;padding:11px;background:transparent;color:var(--text-primary);font:13px/1.5 var(--ui)}.axe-quick-note textarea::placeholder{color:var(--text-muted)}.axe-quick-note__foot{border-top:1px solid rgba(255,255,255,.05);font-size:10px;color:var(--text-muted)}.axe-quick-note__foot button{display:inline-flex;align-items:center;gap:5px;border-radius:9px;padding:5px 9px;background:rgba(34,211,238,.09);color:var(--accent-cyan)}.axe-quick-note__foot button:disabled{opacity:.38}
 .northsea-standalone-shell{position:relative;display:flex;flex-direction:column;color:var(--text-primary)}.northsea-standalone-shell__top{height:52px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;background:rgba(10,12,15,.72);border-bottom:1px solid rgba(255,255,255,.06);backdrop-filter:blur(18px)}.northsea-standalone-shell__top strong{color:var(--accent-cyan);font-size:11px;letter-spacing:.16em}.northsea-standalone-shell__top>span{color:var(--text-muted);font-size:9px;letter-spacing:.12em}.northsea-standalone-shell__top #axe-slot-topbalk,.northsea-standalone-shell__top #axe-slot-topbalk-rechts{display:flex;align-items:center;gap:6px}.northsea-standalone-shell__main{min-height:0;flex:1;display:flex;overflow:hidden}.northsea-standalone-shell__main>*{min-height:0;flex:1}
 
-/* Right radial = workspace launcher: outline triangle distinguishes it from
-   the filled Personal Computer Use triangle on the left. */
-.axe-dok[data-kant="rechts"] .axe-dok-driehoek-vorm{background:transparent!important;border-left-color:transparent!important;border-right-color:transparent!important;filter:none}
-.axe-dok[data-kant="rechts"] .axe-dok-hoek::before,.axe-dok[data-kant="rechts"] .axe-dok-hoek::after{content:"";position:absolute;width:18px;height:1.5px;background:var(--accent-cyan);top:20px;pointer-events:none}
-.axe-dok[data-kant="rechts"] .axe-dok-hoek::before{left:8px;transform:rotate(30deg);transform-origin:right center}.axe-dok[data-kant="rechts"] .axe-dok-hoek::after{right:8px;transform:rotate(-30deg);transform-origin:left center}
 
-/* Code Studio app/repo roots: same semantic product colors as Tasks/Cron. */
-.axe-code-repo-root{border-bottom:1px solid rgba(255,255,255,.035)}
-.axe-code-repo-root__button{--repo-color:#94A3B8;width:100%;height:30px;display:flex;align-items:center;gap:6px;padding:0 7px;border:0;border-left:3px solid transparent;background:transparent;color:var(--text-muted);text-align:left}
-.axe-code-repo-root__button:hover{background:rgba(255,255,255,.025)}
-.axe-code-repo-root__button[data-open="ja"]{border-left-color:var(--repo-color);background:color-mix(in srgb,var(--repo-color) 8%,transparent);color:var(--repo-color)}
-.axe-code-repo-root__button>svg:first-child{transition:transform .15s}.axe-code-repo-root__button[data-open="ja"]>svg:first-child{transform:rotate(90deg)}
-.axe-code-repo-root__button strong{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:650;color:inherit}
-.axe-code-repo-root__button span{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:8px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;color:rgba(255,255,255,.28)}
-.axe-code-repo-root__tree{padding-bottom:3px}
+/* Right radial uses an explicit Lucide outline triangle from AppShell. */
+.axe-dok[data-kant="rechts"] .axe-dok-hoek{color:var(--accent-cyan)}
+.axe-dok[data-kant="rechts"] .axe-dok-hoek:hover>svg{filter:drop-shadow(0 0 9px rgba(34,211,238,.55));transform:scale(1.06)}
