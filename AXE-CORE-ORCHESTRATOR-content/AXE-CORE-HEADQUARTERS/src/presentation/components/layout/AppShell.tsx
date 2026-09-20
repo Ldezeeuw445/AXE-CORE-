@@ -6,7 +6,6 @@ import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitc
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
 import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
-import { useDokStore } from '@/presentation/store/dokStore';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -27,7 +26,7 @@ import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
 import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
 import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDock';
 import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
-import { openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
+import { openPageOnMonitor, openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -120,9 +119,6 @@ export function AppShell() {
    * naar Home en terug, dan hoort het weer te kloppen.
    */
   const setChatDicht = useCoreViewStore(s => s.setChatDicht);
-  /* Wat de huidige pagina in het gat van de rechter dok wil. Null = de
-     standaard driehoek. Zie store/dokStore.ts. */
-  const rechtsHoek = useDokStore(s => s.rechtsHoek);
   useEffect(() => {
     setChatDicht(location.pathname !== '/');
   }, [location.pathname, setChatDicht]);
@@ -248,9 +244,8 @@ export function AppShell() {
       {!mobileCommandSurface && opPlaat && (
         <RadiaalDok
           kant="rechts"
-          hoek={rechtsHoek?.teken}
-          hoekLabel={rechtsHoek?.label}
-          opHoek={rechtsHoek?.doe}
+          hoekLabel="Trading — open in separate window"
+          opHoek={() => { void openPageOnMonitor('trading', 0); }}
         />
       )}
 
