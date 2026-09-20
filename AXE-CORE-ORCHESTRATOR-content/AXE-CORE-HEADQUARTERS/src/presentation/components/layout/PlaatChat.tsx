@@ -296,10 +296,23 @@ export function PlaatChat() {
    * De composer gaat daar naar de code-agent (zie handleSend); de kop zegt dat,
    * met welke motor en in welke repo. Geen gespreksrol eronder -- het gesprek
    * met de agent staat in de editor zelf. */
+  const [widePresence, setWidePresence] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)');
+    const sync = () => setWidePresence(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   /* Conversation history now lives in AxePresenceDock beside the composer.
    * Keep this shell strip compact on every route; Home's large Core Sphere is
    * independent and remains untouched. */
-  const gesprekInPresence = true;
+  // Home keeps its original conversation treatment and compact presence is
+  // hidden below 1280px, so never hide history when the dock is not visible.
+  const gesprekInPresence = widePresence && location.pathname !== '/';
   const kopAlleen = gesprekInPresence || opEditor || chatCollapsed;
   const chatHeight = kopAlleen ? collapsedChatHeight : expandedChatHeight;
 

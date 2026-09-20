@@ -223,7 +223,7 @@ export function AppShell() {
           je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
           elke pagina Home met de dingen van die tab erbij. */}
       {!mobileCommandSurface && opPlaat && <PlaatChat />}
-      {!mobileCommandSurface && opPlaat && <AxePresenceDock />}
+      {!mobileCommandSurface && opPlaat && location.pathname !== '/' && <AxePresenceDock />}
 
       {/* Het radiaal menu linksonder. Naast de chat en niet erin: het zijn
           sprongen naar ergens anders, en die horen niet tussen de knoppen
