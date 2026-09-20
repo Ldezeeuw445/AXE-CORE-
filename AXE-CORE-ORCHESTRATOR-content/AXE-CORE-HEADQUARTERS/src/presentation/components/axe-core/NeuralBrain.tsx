@@ -46,7 +46,7 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
 <div id="composer">
   <div class="box">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><path d="M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3z"/></svg>
-    <input id="neural-input" type="text" placeholder="Ask anything..." />
+    <input id="neural-input" type="text" placeholder="Search memories or ask AXE Core..." />
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
   </div>
   <div class="reply" id="neural-reply"></div>
@@ -56,15 +56,6 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
   <div class="panel">
     <h1 class="title">GLOBAL MEMORY</h1>
     <div class="status"><span class="d"></span> ACTIVE</div>
-  </div>
-  <div class="panel">
-    <div class="search-box">
-      <span style="display:flex; align-items:center; gap:9px;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        Search memories...
-      </span>
-      <span>⌘K</span>
-    </div>
   </div>
   <div class="panel">
     <h2>MEMORY OVERVIEW</h2>
@@ -128,7 +119,8 @@ const NeuralShell = memo(function NeuralShell(
    ze daar dezelfde plek en hetzelfde materiaal krijgen als op elke andere tab.
    Buiten de module, want een nieuw object per render zou de haak elke keer
    opnieuw laten verhuizen. */
-const NEURAL_SLOTS = { links: '#sidebar-left', rechts: '#sidebar-right' } as const;
+const NEURAL_SIDE_SLOTS = { links: '#sidebar-left', rechts: '#sidebar-right' } as const;
+const NEURAL_DOCK_SLOT = { dock: '#depthbar' } as const;
 
 export default function NeuralBrain() {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -137,7 +129,8 @@ export default function NeuralBrain() {
      weergave zich te gedragen zoals hij altijd deed. */
   const opPlaat = useHeeftPlaat();
   /* De hoge stand: kolommen naast het beeld, niet de onderband naast de chat. */
-  useSlotAdoptie(NEURAL_SLOTS, opPlaat, true);
+  useSlotAdoptie(NEURAL_SIDE_SLOTS, opPlaat, true);
+  useSlotAdoptie(NEURAL_DOCK_SLOT, opPlaat, false);
   // The scene build is expensive and must not re-run when counts refresh every
   // 45s, so the effect below stays on an empty dep list and reads stats through
   // a ref; a second effect pushes new numbers into the DOM it already built.

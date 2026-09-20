@@ -121,6 +121,7 @@ export default function TradingMemory() {
 
   return (
     <Page
+      className="axe-tabruimte axe-trading-memory"
       title="Trading Memory"
       subtitle={
         data?.error
@@ -159,7 +160,7 @@ export default function TradingMemory() {
       )}
 
       {/* De trechter, in de volgorde waarin de agent werkt. */}
-      <Grid rowHeight={116} min={150} className="mb-3">
+      <Grid rowHeight={116} min={150} className="axe-trading-memory-funnel mb-3">
         {FUNNEL.map(f => {
           // The lesson block is the one place a raw row count lies. The agent
           // writes 3,537 rows it calls lessons; 3,059 of them are the string
@@ -186,7 +187,7 @@ export default function TradingMemory() {
         })}
       </Grid>
 
-      <Grid rowHeight={392} min={340}>
+      <Grid rowHeight={392} min={340} className="axe-trading-memory-grid">
         <Block
           title="Per symbool"
           action={
