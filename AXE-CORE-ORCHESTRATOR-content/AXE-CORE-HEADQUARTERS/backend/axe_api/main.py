@@ -90,6 +90,7 @@ except Exception as _e:  # noqa: BLE001
     def claude_cli_available(*_a, **_k) -> bool:  # type: ignore[misc]
         return False
 from task_runtime import TaskRepository
+from browser_ai_agents import router as browser_ai_router
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -163,6 +164,11 @@ def require_auth(
     return credentials.credentials
 
 AUTH = Depends(require_auth)
+
+# Browser AI providers share the AXE API auth wall.  The router existed for
+# DeepSeek, Browser Use and Camofox but was never mounted, so the three Browser
+# composers could render while every VPS request ended at a 404.
+app.include_router(browser_ai_router, dependencies=[AUTH])
 
 # ── Supabase (service_role) ───────────────────────────────────────────────────
 #
