@@ -134,8 +134,12 @@ export function AutomatiseringTab() {
             <VerversKnop bezig={bezig} ververs={ververs} />
           </>
         )}>
-        {fout && <FoutRegel fout={fout} />}
-        {!fout && !data && <LegeStaat titel="Loading automation…" />}
+        {/* Operations heeft zijn eigen, onafhankelijke bron (northsea_get_live_operations + het
+            Perplexity-budget, via de governed actiepoort) -- niet TAB_SQL. Een 502 op de TAB_SQL-kant
+            (bv. de externe-SSD-sleutels zijn niet gemount) mag Operations dus niet blokkeren: `ops`/
+            `budget` hebben allebei hun eigen foutregel binnen dat blok. */}
+        {weergave !== 'operations' && fout && <FoutRegel fout={fout} />}
+        {weergave !== 'operations' && !fout && !data && <LegeStaat titel="Loading automation…" />}
         {data && weergave === 'engine' && (
           <div className="grid gap-4 px-4 pb-3 lg:grid-cols-2">
             <section>
@@ -215,7 +219,7 @@ export function AutomatiseringTab() {
             </section>
           </div>
         )}
-        {data && weergave === 'operations' && (
+        {weergave === 'operations' && (
           <div className="grid gap-4 px-4 pb-3 lg:grid-cols-2">
             <section>
               <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>
