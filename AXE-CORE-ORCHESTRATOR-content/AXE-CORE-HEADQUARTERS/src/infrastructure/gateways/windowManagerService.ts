@@ -168,6 +168,31 @@ export async function restoreMainWindow(): Promise<void> {
   await main.setFocus();
 }
 
+export async function openStandaloneNorthsea(monitorIndex = 0): Promise<void> {
+  if (!isTauriRuntime()) { window.open(`${window.location.origin}${window.location.pathname}#/northsea-desktop`, '_blank'); return; }
+  const monitors = await listMonitors();
+  const monitor = monitors[monitorIndex] ?? monitors[0];
+  if (!monitor) throw new Error('No monitor available');
+  const { availableMonitors } = await import('@tauri-apps/api/window');
+  const rawMonitors = (await availableMonitors()).sort((a, b) => a.position.x - b.position.x);
+  const raw = rawMonitors[monitorIndex] ?? rawMonitors[0];
+  const scale = raw.scaleFactor;
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  const label = 'northsea-global-trade-center';
+  const existing = await WebviewWindow.getByLabel(label);
+  if (existing) { await existing.show(); await existing.setFocus(); return; }
+  const win = new WebviewWindow(label, {
+    url: 'index.html#/northsea-desktop', title: 'NorthSea Global Trade Center',
+    x: raw.position.x / scale + 32, y: raw.position.y / scale + 32,
+    width: Math.min(1480, raw.size.width / scale - 64), height: Math.min(940, raw.size.height / scale - 64),
+    theme: 'dark', decorations: true, resizable: true, center: false,
+  });
+  await new Promise<void>((resolve, reject) => {
+    win.once('tauri://created', () => resolve());
+    win.once('tauri://error', e => reject(new Error(String(e.payload))));
+  });
+}
+
 export async function openStandaloneBrowser(monitorIndex = 0): Promise<void> {
   if (!isTauriRuntime()) {
     window.open(`${window.location.origin}${window.location.pathname}#/browser-desktop`, '_blank');

@@ -26,6 +26,8 @@ import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
 import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
 import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDock';
+import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
+import { openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -261,10 +263,12 @@ export function AppShell() {
         </ZweefLaag>
       )}
 
+      {!mobileCommandSurface && opPlaat && <QuickNoteDock />}
+
       {!mobileCommandSurface && opPlaat && (
         <RadiaalDok
-          opHoek={() => window.dispatchEvent(new CustomEvent('axe-focus-composer'))}
-          hoekLabel="Praat met AXE"
+          opHoek={() => { void openPersonalComputerUse(); }}
+          hoekLabel="Personal Computer Use"
         />
       )}
 

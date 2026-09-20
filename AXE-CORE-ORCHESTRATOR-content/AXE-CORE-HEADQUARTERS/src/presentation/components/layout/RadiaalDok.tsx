@@ -30,6 +30,7 @@ import { Bell, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-re
 import { radiaalPosities } from '@/domain/radiaal';
 import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { openStandaloneBrowser, openStandaloneNorthsea } from '@/infrastructure/gateways/windowManagerService';
 
 /** Afstand van het midden tot een tab. */
 const STRAAL = 92;
@@ -103,19 +104,22 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
     };
   }, [open, sluit]);
 
-  const standaardTabs: DokTab[] = [
-    // Zet de zwevende iPhone aan en uit. De pagina /mobile blijft bestaan, maar
-    // dit icoon was bedoeld om de telefoon zelf te laten komen.
+  const linkerTabs: DokTab[] = [
+    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },
+    { id: 'notities', label: 'Quick Note', teken: <StickyNote size={18} />, doe: () => window.dispatchEvent(new CustomEvent('axe-toggle-quick-note')) },
+    { id: 'northsea', label: 'NorthSea shell', teken: <span className="axe-dok-n">N</span>, doe: () => { void openStandaloneNorthsea(); } },
+    { id: 'browser', label: 'Browser shell', teken: <PanelRightOpen size={18} />, doe: () => { void openStandaloneBrowser(); } },
+    { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
+  ];
+  // Rechts blijft bewust de bestaande set totdat die kant een eigen opdracht heeft.
+  const rechterTabs: DokTab[] = [
     { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },
     { id: 'notities', label: 'Notities', teken: <StickyNote size={18} />, doe: () => navigate('/obsidian') },
-    // Een sierlijke hoofdletter N, geen icoon. Als letterteken en niet als svg:
-    // hij hoort mee te kleuren en mee te schalen met de rest van de ring.
-    { id: 'notion', label: 'Notion', teken: <span className="axe-dok-n">N</span>, doe: () => navigate('/knowledge') },
-    // Dit was een route zonder deur: /browser-desktop stond in App.tsx en was
-    // vanuit de app nergens te bereiken. Nu wel.
+    { id: 'notion', label: 'Knowledge', teken: <span className="axe-dok-n">N</span>, doe: () => navigate('/knowledge') },
     { id: 'venster', label: 'Extra venster', teken: <PanelRightOpen size={18} />, doe: () => navigate('/browser-desktop') },
     { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
   ];
+  const standaardTabs = kant === 'links' ? linkerTabs : rechterTabs;
 
   const tabs = eigenTabs ?? standaardTabs;
   const punten = radiaalPosities(tabs.length, {
