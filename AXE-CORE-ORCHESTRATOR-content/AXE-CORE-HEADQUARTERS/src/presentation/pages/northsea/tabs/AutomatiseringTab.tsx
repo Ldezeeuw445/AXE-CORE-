@@ -15,18 +15,34 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowRight, Workflow } from 'lucide-react';
+import { ArrowRight, DollarSign, Workflow } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { tijdGeleden } from '@/domain/northsea/chase';
 import { past, tel } from '@/domain/northsea/tabs/lijsten';
 import { gebeurtenisToon, mensLabel, TOON_KLEUR, type Toon } from '@/domain/northsea/tabs/status';
 import type { AutomatiseringsBeleid } from '@/domain/northsea/tabs/typen';
 import { blokkadeToon, eigenaarLabel } from '@/domain/northsea/engine';
-import { ledgerList, type LedgerEntry } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  ledgerList, northseaLiveOperations, type LedgerEntry, type NorthseaLiveOperations,
+} from '@/infrastructure/gateways/axeCoreApiService';
+import { perplexityBudgetStand } from '@/infrastructure/gateways/perplexityResearchService';
+import type { PerplexityBudget } from '@/domain/perplexityAgent';
 import {
   DetailPaneel, Filters, FoutRegel, Kengetal, KengetalRij, Label, LegeStaat, VerversKnop, Vlak, Zoekveld,
 } from './bouwstenen';
 import { useNorthseaTab } from './useNorthseaTab';
+
+/** "in 12m" / "overdue": voor een toekomstige `next_run_at`. tijdGeleden (chase.ts) is voor het verleden. */
+function tijdTot(iso: string | null | undefined, nu: number): string {
+  if (!iso) return '—';
+  const ms = Date.parse(iso) - nu;
+  if (!Number.isFinite(ms)) return '—';
+  if (ms <= 0) return 'overdue';
+  const min = Math.round(ms / 60_000);
+  if (min < 60) return `in ${min}m`;
+  const uur = Math.round(min / 60);
+  return uur < 24 ? `in ${uur}h` : `in ${Math.round(uur / 24)}d`;
+}
 
 const SCHAKELAARS: ReadonlyArray<{ sleutel: keyof AutomatiseringsBeleid; label: string; gevoelig: boolean }> = [
   { sleutel: 'auto_send_qualification', label: 'Send qualification emails', gevoelig: false },
@@ -46,7 +62,7 @@ function schakelaarToon(aan: boolean | null | undefined, gevoelig: boolean): { t
 
 export function AutomatiseringTab() {
   const { data, fout, bezig, ververs } = useNorthseaTab('automatisering');
-  const [weergave, setWeergave] = useState<'engine' | 'log' | 'campagnes'>('engine');
+  const [weergave, setWeergave] = useState<'engine' | 'operations' | 'log' | 'campagnes'>('engine');
   /* De planner-runs komen van de VPS (/ledger), los van de tabdata: faalt dat,
      dan blijft de rest van het scherm staan en staat de reden erbij. */
   const [planner, setPlanner] = useState<{ runs: LedgerEntry[]; fout?: string } | null>(null);
@@ -55,6 +71,26 @@ export function AutomatiseringTab() {
     void ledgerList({ app: 'northsea', source: 'schedule', hours: 72, limit: 60 })
       .then(runs => { if (!weg) setPlanner({ runs }); })
       .catch(e => { if (!weg) setPlanner({ runs: [], fout: e instanceof Error ? e.message : 'ledger onbereikbaar' }); });
+    return () => { weg = true; };
+  }, [data]);
+  /* Live operations (northsea_get_live_operations) en het gedeelde Perplexity-dagbudget komen via
+     de governed MCP-actiepoort, niet via TAB_SQL: geen tweede databron, wel een tweede aanroep, dus
+     elk los met zijn eigen foutafhandeling zodat de rest van het scherm blijft staan als één faalt. */
+  const [ops, setOps] = useState<{ data: NorthseaLiveOperations | null; fout?: string }>({ data: null });
+  useEffect(() => {
+    let weg = false;
+    void northseaLiveOperations()
+      .then(d => { if (!weg) setOps({ data: d }); })
+      .catch(e => { if (!weg) setOps({ data: null, fout: e instanceof Error ? e.message : 'live operations onbereikbaar' }); });
+    return () => { weg = true; };
+  }, [data]);
+  const [budget, setBudget] = useState<{ waarde: PerplexityBudget | null; fout?: string }>({ waarde: null });
+  useEffect(() => {
+    let weg = false;
+    void perplexityBudgetStand().then(u => {
+      if (weg) return;
+      setBudget(u.ok ? { waarde: u.budget } : { waarde: null, fout: u.error });
+    });
     return () => { weg = true; };
   }, [data]);
   const [zoek, setZoek] = useState('');
@@ -93,7 +129,7 @@ export function AutomatiseringTab() {
         acties={(
           <>
             <div className="w-[240px]"><Zoekveld waarde={zoek} zet={setZoek} plaats={weergave === 'log' ? 'Search activity…' : 'Search campaigns…'} /></div>
-            <Filters opties={[{ id: 'engine', label: 'Engine', aantal: engine?.runs.length ?? 0 }, { id: 'log', label: 'Activity', aantal: alleLog.length }, { id: 'campagnes', label: 'Sourcing campaigns', aantal: alleCampagnes.length }] as const}
+            <Filters opties={[{ id: 'engine', label: 'Engine', aantal: engine?.runs.length ?? 0 }, { id: 'operations', label: 'Operations', aantal: ops.data?.approval_required.count }, { id: 'log', label: 'Activity', aantal: alleLog.length }, { id: 'campagnes', label: 'Sourcing campaigns', aantal: alleCampagnes.length }] as const}
               actief={weergave} kies={setWeergave} />
             <VerversKnop bezig={bezig} ververs={ververs} />
           </>
@@ -176,6 +212,116 @@ export function AutomatiseringTab() {
                   </li>
                 ))}
               </ul>
+            </section>
+          </div>
+        )}
+        {data && weergave === 'operations' && (
+          <div className="grid gap-4 px-4 pb-3 lg:grid-cols-2">
+            <section>
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>
+                <DollarSign size={11} />Research budget · shared with discovery
+              </div>
+              {ops.fout && <div className="mb-2 text-[11.5px]" style={{ color: TOON_KLEUR.rood }}>Live operations unavailable — {ops.fout}</div>}
+              {budget.fout && <div className="mb-2 text-[11.5px]" style={{ color: TOON_KLEUR.rood }}>Budget unavailable — {budget.fout}</div>}
+              {!budget.waarde && !budget.fout && <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+              {budget.waarde && (
+                budget.waarde.configured ? (
+                  <div className="flex gap-2.5 pb-2">
+                    <Kengetal waarde={`$${budget.waarde.usdLeft.toFixed(2)}`} label="USD left today"
+                      sub={`of $${budget.waarde.dailyUsd.toFixed(2)}/day`} toon={budget.waarde.usdLeft <= 0 ? 'rood' : 'paars'} />
+                    <Kengetal waarde={budget.waarde.questionsLeft} label="Perplexity calls left"
+                      sub={`of ${budget.waarde.dailyQuestions}/day`} toon={budget.waarde.questionsLeft <= 0 ? 'rood' : 'paars'} />
+                  </div>
+                ) : <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Perplexity is not configured on the server.</div>
+              )}
+
+              <div className="mb-1.5 mt-3 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Recently completed</div>
+              {ops.data && ops.data.recently_completed.length === 0 && <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Nothing recorded yet.</div>}
+              <ul className="flex flex-col">
+                {(ops.data?.recently_completed ?? []).map((r, i) => (
+                  <li key={`${r.actor}:${r.action}:${i}`} className="flex flex-col gap-0.5 py-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
+                    <div className="flex items-baseline gap-2 text-[12px]">
+                      <Label toon="blauw">{mensLabel(r.actor)}</Label>
+                      <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{mensLabel(r.action)}</span>
+                      <span className="shrink-0 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{r.at ? tijdGeleden(r.at, nu) : '—'}</span>
+                    </div>
+                    {r.summary != null && (
+                      <div className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}
+                        title={typeof r.summary === 'string' ? r.summary : JSON.stringify(r.summary)}>
+                        {typeof r.summary === 'string' ? r.summary : JSON.stringify(r.summary)}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Next scheduled run · northsea:engine</div>
+              {ops.data && 'next_run_at' in ops.data.next_scheduled ? (
+                <div className="flex flex-col gap-1 text-[11.5px]" style={{ color: 'var(--text-secondary)' }}>
+                  <div className="flex items-center gap-2">
+                    <Label toon={ops.data.next_scheduled.last_status === 'ok' ? 'groen' : ops.data.next_scheduled.last_status ? 'rood' : 'grijs'}>
+                      {mensLabel(ops.data.next_scheduled.last_status || 'unknown')}
+                    </Label>
+                    <span>Next run {tijdTot(ops.data.next_scheduled.next_run_at, nu)}</span>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    Last ran {ops.data.next_scheduled.last_run_at ? tijdGeleden(ops.data.next_scheduled.last_run_at, nu) : '—'}
+                    {(ops.data.next_scheduled.consecutive_failures ?? 0) > 0 && (
+                      <span style={{ color: TOON_KLEUR.rood }}> · {ops.data.next_scheduled.consecutive_failures} consecutive failure{ops.data.next_scheduled.consecutive_failures === 1 ? '' : 's'}</span>
+                    )}
+                  </span>
+                </div>
+              ) : (
+                <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>{ops.data?.next_scheduled.note ?? (ops.data ? 'No schedule found.' : 'Loading…')}</div>
+              )}
+            </section>
+            <section>
+              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>
+                Waiting {ops.data ? `(${ops.data.waiting.followups_scheduled} follow-ups · ${ops.data.waiting.chase_waiting_reply} Chase)` : ''}
+              </div>
+              {ops.data && ops.data.waiting.items.length === 0 && <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Nothing waiting on a reply.</div>}
+              <ul className="flex flex-col gap-1">
+                {(ops.data?.waiting.items ?? []).map((w, i) => (
+                  <li key={`${w.deal_id}:${i}`} className="flex items-center gap-2 text-[11.5px]" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: TOON_KLEUR.blauw }} />
+                    <span className="min-w-0 flex-1 truncate" title={w.reason ?? undefined}>{w.reason || 'Follow-up scheduled'}</span>
+                    <span className="shrink-0 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{w.due_at ? tijdTot(w.due_at, nu) : '—'}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>
+                Approval required {ops.data ? `(${ops.data.approval_required.count})` : ''}
+              </div>
+              {ops.data && ops.data.approval_required.items.length === 0 && <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Nothing waiting on a human.</div>}
+              <ul className="flex flex-col">
+                {(ops.data?.approval_required.items ?? []).slice(0, 10).map(a => (
+                  <li key={a.approval_id} className="flex items-baseline gap-2 py-1 text-[11.5px]" style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}>
+                    <Label toon="oranje">{mensLabel(a.kind)}</Label>
+                    <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text-secondary)' }} title={a.gate ?? undefined}>{a.subject || a.gate || '—'}</span>
+                    <span className="shrink-0 text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{a.updated_at ? tijdGeleden(a.updated_at, nu) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mb-1.5 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Failed / retries</div>
+              {ops.data && !ops.data.failed.last_failed_tick_at && ops.data.failed.research_failed_permanently.length === 0
+                && ops.data.failed.crew_reviews_skipped_recent.length === 0 && (
+                <div className="text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Nothing failed recently.</div>
+              )}
+              {ops.data?.failed.last_failed_tick_at && (
+                <div className="text-[11.5px]" style={{ color: TOON_KLEUR.rood }}>Engine tick failed {tijdGeleden(ops.data.failed.last_failed_tick_at, nu)}.</div>
+              )}
+              {(ops.data?.failed.research_failed_permanently ?? []).map(r => (
+                <div key={r.action_queue_id} className="truncate text-[11.5px]" style={{ color: TOON_KLEUR.rood }} title={r.blocker ?? undefined}>
+                  Research gave up: {mensLabel(r.blocker || 'unknown blocker')}
+                </div>
+              ))}
+              {(ops.data?.failed.crew_reviews_skipped_recent ?? []).slice(0, 5).map((s, i) => (
+                <div key={i} className="truncate text-[11.5px]" style={{ color: 'var(--text-muted)' }} title={s.reason ?? undefined}>
+                  Crew review skipped {s.at ? tijdGeleden(s.at, nu) : ''}: {s.reason || 'no reason recorded'}
+                </div>
+              ))}
             </section>
           </div>
         )}

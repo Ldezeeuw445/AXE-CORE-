@@ -1106,12 +1106,62 @@ export function northseaTab<T extends TabNaam>(naam: T, vers = false): Promise<T
  */
 export type NorthseaActie =
   | 'get_next_actions' | 'review_deal' | 'qualify_opportunity' | 'investigate_blockers'
-  | 'assess_match' | 'process_reply' | 'research_counterparty' | 'prepare_outreach';
+  | 'assess_match' | 'process_reply' | 'research_counterparty' | 'prepare_outreach'
+  | 'get_live_operations';
 
 export async function northseaActie(actie: NorthseaActie, params: Record<string, unknown>): Promise<{
   action: string; tool: string; result: Record<string, unknown>;
 }> {
   return call('POST', `/northsea/action/${actie}`, { params });
+}
+
+/**
+ * northsea_get_live_operations, ongewijzigd doorgegeven (backend/northsea_mcp/
+ * northsea_mcp/readtools.py::live_operations). Veldnamen blijven Engels/snake_case,
+ * exact zoals de tool ze teruggeeft -- dit is geen SQL-aliascontract zoals TabData,
+ * maar een passthrough van één bestaande MCP-tool.
+ */
+export interface NorthseaApprovalRow {
+  approval_id: string;
+  kind: string;
+  deal_id?: string | null;
+  deal?: string | null;
+  subject?: string | null;
+  gate?: string | null;
+  status?: string | null;
+  approval_type?: string | null;
+  sensitive_action?: boolean;
+  communication_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface NorthseaLiveOperations {
+  generated_at: string;
+  now_running: { note: string };
+  recently_completed: Array<{ actor: string; action: string; at: string | null; summary: unknown }>;
+  waiting: {
+    followups_scheduled: number;
+    chase_waiting_reply: number;
+    items: Array<{ deal_id: string | null; due_at: string | null; reason: string | null }>;
+  };
+  approval_required: { count: number; items: NorthseaApprovalRow[] };
+  failed: {
+    last_failed_tick_at: string | null;
+    research_failed_permanently: Array<{ action_queue_id: string; deal_id: string | null; blocker: string | null }>;
+    crew_reviews_skipped_recent: Array<{ at: string | null; reason: string | null }>;
+  };
+  next_scheduled: {
+    next_run_at?: string | null; last_run_at?: string | null; last_status?: string | null;
+    enabled?: boolean; consecutive_failures?: number; source?: string; note?: string;
+  };
+  definition: string;
+  source: string[];
+}
+
+export async function northseaLiveOperations(): Promise<NorthseaLiveOperations> {
+  const { result } = await northseaActie('get_live_operations', {});
+  return result as unknown as NorthseaLiveOperations;
 }
 
 export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }

@@ -152,6 +152,33 @@ export interface PerplexityFout {
  * nog niet kent (405), is POST zonder vraag hetzelfde bewijs: 400 Missing
  * question komt ná de sleutelcheck, 503 ervoor.
  */
+/** GET /research/perplexity's volledige stand: het gedeelde dagbudget dat elke Perplexity-aanroep
+ *  binnen AXE CORE deelt -- inclusief de governed research-poort die NorthSea's discovery en engine
+ *  gebruiken (backend/northsea_mcp/northsea_mcp/research.py::ask, via dezelfde route). */
+export interface PerplexityBudget {
+  configured: boolean;
+  dailyUsd: number;
+  dailyQuestions: number;
+  usdLeft: number;
+  questionsLeft: number;
+}
+
+export function leesPerplexityBudget(status: number, body: unknown): { ok: true; budget: PerplexityBudget } | { ok: false; error: string } {
+  if (status === 200 && isObj(body) && 'configured' in body) {
+    return {
+      ok: true,
+      budget: {
+        configured: body.configured === true,
+        dailyUsd: Number(body.daily_usd) || 0,
+        dailyQuestions: Number(body.daily_questions) || 0,
+        usdLeft: Number(body.usd_left) || 0,
+        questionsLeft: Number(body.questions_left) || 0,
+      },
+    };
+  }
+  return { ok: false, error: `HTTP ${status}` };
+}
+
 export function leesPerplexityStand(status: number, detail: string, body?: unknown): { ok: boolean; error?: string } {
   if (status === 200 && body && typeof body === 'object' && body !== null && 'configured' in body) {
     return (body as { configured: unknown }).configured === true

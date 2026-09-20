@@ -71,6 +71,21 @@ def test_prepare_outreach_forceert_save_as_pending_draft_false(monkeypatch):
     assert gezien["arguments"]["save_as_pending_draft"] is False
 
 
+def test_get_live_operations_heeft_geen_verplichte_velden(monkeypatch):
+    gezien = {}
+
+    async def fake_run_tool_call(tool, arguments):
+        gezien["tool"] = tool
+        gezien["arguments"] = arguments
+        return FakeResult(structured_content={"waiting": {}, "approval_required": {"count": 0}})
+
+    monkeypatch.setattr(g, "_run_tool_call", fake_run_tool_call)
+    uit = asyncio.run(g.call_action("get_live_operations", {}))
+    assert gezien["tool"] == "northsea_get_live_operations"
+    assert gezien["arguments"] == {}
+    assert uit["result"] == {"waiting": {}, "approval_required": {"count": 0}}
+
+
 def test_tool_fout_wordt_een_gatewayfout_met_de_tooltekst(monkeypatch):
     async def fake_run_tool_call(tool, arguments):
         return FakeResult(is_error=True, content=[FakeBlock(text="insufficient_scope: this tool requires scope(s): northsea.research")])

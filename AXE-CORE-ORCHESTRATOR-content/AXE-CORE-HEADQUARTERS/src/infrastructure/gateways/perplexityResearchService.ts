@@ -19,8 +19,10 @@
 import { axeCoreApiExtraHeaders, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 import {
   leesAgentAntwoord,
+  leesPerplexityBudget,
   leesPerplexityFout,
   leesPerplexityStand,
+  type PerplexityBudget,
   type PerplexityFout,
   type PerplexityOnderzoek,
 } from '@/domain/perplexityAgent';
@@ -95,6 +97,24 @@ export async function testPerplexityOpServer(): Promise<{ ok: boolean; error?: s
       ? (body as { detail: string }).detail
       : post.statusText;
     return leesPerplexityStand(post.status, detail, body);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'AXE API unreachable' };
+  }
+}
+
+/**
+ * Het gedeelde dagbudget zelf (dollars/vragen, gebruikt en over), niet alleen of de sleutel er is.
+ *
+ * Gebruikt door de NorthSea Desk om te laten zien hoeveel van het $3/dag-plafond de governed
+ * discovery/research-poort vandaag al heeft opgemaakt -- hetzelfde budget als deze functie hierboven,
+ * want beide gaan over dezelfde VPS-route.
+ */
+export async function perplexityBudgetStand(): Promise<{ ok: true; budget: PerplexityBudget } | { ok: false; error: string }> {
+  const url = `${basis()}/research/perplexity`;
+  try {
+    const res = await fetch(url, { method: 'GET', headers: axeCoreApiExtraHeaders(), signal: AbortSignal.timeout(10_000) });
+    const body = await res.json().catch(() => ({}));
+    return leesPerplexityBudget(res.status, body);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'AXE API unreachable' };
   }

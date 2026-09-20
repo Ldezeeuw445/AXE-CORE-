@@ -81,6 +81,9 @@ ACTIONS: dict[str, ActionSpec] = {
         "northsea_prepare_outreach", ("objective",), ("opportunity_id", "counterparty_id", "channel", "template"),
         fixed={"save_as_pending_draft": False},
     ),
+    # Consolidated Desk visibility (running/waiting/approval/failed/next-scheduled).
+    # No parameters, no side effects -- re-groups rows the other actions already expose.
+    "get_live_operations": ActionSpec("northsea_get_live_operations", ()),
 }
 
 
