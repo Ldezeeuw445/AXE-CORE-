@@ -613,7 +613,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         uit["stuck_runs_swept"] = geveegd
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
 
-    discovery = DiscoveryService(repo, max_new_per_run=5, max_new_per_day=25, crew=crew, max_crew_calls_per_day=3)
+    discovery = DiscoveryService(repo, max_new_per_run=5, max_new_per_day=25, crew=crew, research=research, max_crew_calls_per_day=3)
     discovery_lock = asyncio.Lock()
 
     @route("/internal/discovery/sweep", methods=["POST"])

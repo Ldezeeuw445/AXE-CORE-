@@ -13,6 +13,15 @@ This also covers LOOP B's "find an alternative route": the same requirement or o
 already has a BLOCKED opportunity is checked against every OTHER counterparty too, so a
 better pairing surfaces automatically, without waiting for a human to think to look.
 
+`crew_assisted_review()` covers the net-new tier: it feeds the EXISTING Tavily -> Zenserp ->
+Perplexity search chain (research.py's `ResearchGateway.search`, the same one
+find_suppliers/find_buyers already use) into the discovery crew's existing evidence/dedupe/fit
+pipeline, instead of that crew's own `exa_search` tool, which has never had a working live
+implementation (EXA_API_KEY was never enough on its own -- the "live" path raises). One search
+chain, reused everywhere; never a second, EXA-only discovery mechanism. The Perplexity tier of
+that chain goes through the same shared, capped `/research/perplexity` endpoint as the governed
+research gate, so the existing daily $-cap and call-cap apply automatically here too.
+
 ## What this NEVER does
 
 Never invents a company, requirement or offer -- it only pairs rows that already exist and
@@ -38,6 +47,7 @@ from typing import Any
 
 from . import canon, matching
 from .repository import RepositoryError
+from .research import ResearchError
 
 log = logging.getLogger("northsea_mcp.discovery")
 
@@ -50,12 +60,15 @@ def _now() -> datetime:
 
 class DiscoveryService:
     def __init__(self, repo: Any, *, now=_now, max_new_per_run: int = 5, max_new_per_day: int = 25,
-                crew: Any = None, max_crew_calls_per_day: int = 3, sleep=None, max_write_attempts: int = 3):
+                crew: Any = None, research: Any = None, max_crew_calls_per_day: int = 3,
+                sleep=None, max_write_attempts: int = 3):
         self.repo = repo
         self.now = now
         self.max_new_per_run = max_new_per_run
         self.max_new_per_day = max_new_per_day
         self.crew = crew  # optioneel: CrewGateway, alleen voor crew_assisted_review() (net-new, governed)
+        self.research = research  # optioneel: ResearchGateway -- ZELFDE Tavily/Zenserp/Perplexity-keten als
+                                  # find_suppliers/find_buyers, nooit een tweede zoeksysteem voor de crew alleen
         self.max_crew_calls_per_day = max_crew_calls_per_day
         self._sleep = sleep or asyncio.sleep
         self.max_write_attempts = max_write_attempts
@@ -208,16 +221,34 @@ class DiscoveryService:
             return {"dry_run": True, "would_review": {"buyer_requirement_id": kandidaat["id"],
                                                        "product": kandidaat.get("product") or kandidaat.get("commodity")}}
 
-        handoff = {"entity_ids": {"buyer_requirement_id": kandidaat["id"]},
-                  "requirement": {k: kandidaat.get(k) for k in
-                                 ("commodity", "product", "grade", "quantity_mt", "destination", "incoterm", "origin_preference")}}
+        commodity = kandidaat.get("commodity") or kandidaat.get("product") or ""
+        geografie = kandidaat.get("origin_preference") or ""
+        payload: dict[str, Any] = {"direction": "find_supplier", "commodity": commodity, "product": kandidaat.get("product"),
+                                   "geography": geografie, "requirement_id": kandidaat["id"]}
+        zoek_status = "no_research_service"
+        if self.research is not None:
+            try:
+                resultaat = await self.research.search(f"{commodity} exporter producer supplier {geografie}".strip(),
+                                                        max_results=6, priority="P2")
+                payload["web_hits"] = [{"title": h.title, "url": h.url} for h in resultaat.hits]
+                payload["web_hits_provider"] = resultaat.provider
+                zoek_status = f"ok:{resultaat.provider}"
+            except ResearchError as e:
+                # Zelfde eerlijke aanpak als de onderzoeksgate: een lege lijst is een eerlijk antwoord,
+                # nooit verzonnen kandidaten. web_hits blijft weg zodat de crew dit onderscheidt van "0
+                # kandidaten gevonden" (wat wel echt geprobeerd is).
+                payload["web_hits_warning"] = f"Search chain exhausted ({e.status}): {e.message}"
+                zoek_status = f"failed:{e.status}"
+        handoff = {"entity_ids": {"buyer_requirement_id": kandidaat["id"]}, "payload": payload}
         info = await self.crew.run("find_suppliers", handoff)
         dedupe_key = f"crew_candidate_review:{kandidaat['id']}"
         if not info.used or info.status != "ok":
             await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
                 "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_skipped",
-                "details": {"buyer_requirement_id": kandidaat["id"], "crew_status": info.status, "reason": info.reason}}))
-            return {"created_review": False, "buyer_requirement_id": kandidaat["id"], "crew_status": info.status, "reason": info.reason}
+                "details": {"buyer_requirement_id": kandidaat["id"], "crew_status": info.status, "reason": info.reason,
+                           "search_status": zoek_status}}))
+            return {"created_review": False, "buyer_requirement_id": kandidaat["id"], "crew_status": info.status,
+                    "reason": info.reason, "search_status": zoek_status}
 
         rij = await self._resilient(lambda info=info: self.repo.engine_insert("action_queue", {
             "dedupe_key": dedupe_key, "action_type": "crew_candidate_review", "opportunity_id": None, "company_id": None,
@@ -229,11 +260,13 @@ class DiscoveryService:
                         "requested_specialists": info.requested_specialists, "actual_specialists": info.actual_specialists,
                         "fallback_used": info.fallback_used, "fallback_reason": info.fallback_reason,
                         "validation": info.validation, "audit_references": info.audit_references,
-                        "timings": info.timings, "budget_usage": info.budget_usage}}, ignore_duplicates=True))
+                        "timings": info.timings, "budget_usage": info.budget_usage,
+                        "search_status": zoek_status, "search_provider": payload.get("web_hits_provider"),
+                        "search_hits": len(payload.get("web_hits") or [])}}, ignore_duplicates=True))
         await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
             "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_requested",
             "details": {"buyer_requirement_id": kandidaat["id"], "crew_route": info.route, "crew_backend": info.backend,
-                       "execution_mode": info.execution_mode}}))
+                       "execution_mode": info.execution_mode, "search_status": zoek_status}}))
         return {"created_review": bool(rij), "buyer_requirement_id": kandidaat["id"], "crew_route": info.route,
-                "crew_backend": info.backend, "execution_mode": info.execution_mode, "used_today": al_vandaag + 1,
-                "max_crew_calls_per_day": self.max_crew_calls_per_day}
+                "crew_backend": info.backend, "execution_mode": info.execution_mode, "search_status": zoek_status,
+                "used_today": al_vandaag + 1, "max_crew_calls_per_day": self.max_crew_calls_per_day}

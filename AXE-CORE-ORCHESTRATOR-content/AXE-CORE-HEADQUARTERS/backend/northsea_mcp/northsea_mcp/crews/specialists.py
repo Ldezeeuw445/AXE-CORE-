@@ -433,12 +433,20 @@ def run_counterparty_sourcing(
         "unknown_fields": [k for k, v in (("commodity", commodity), ("geography", geography), ("direction", direction)) if not v or v == "UNKNOWN"],
     }
 
-    exa = exa or MockExaTool()
     scrape = scrape or MockScrapeTool()
     query = f"{commodity} {direction} {geography}"
-    raw = exa.search(query)
-    hits = list(raw.get("hits") or [])
-    warning = raw.get("warning")
+    # Echte hits gaan VOOR exa: de bestaande Tavily/Zenserp/Perplexity-keten (research.py, al gebruikt door
+    # find_suppliers/find_buyers) haalt echt op vóórdat de deterministische runtime draait -- exa_search is
+    # nooit live geïmplementeerd (raise op live=True) en zou anders een tweede, stille zoekweg zijn.
+    voorgehaald = payload.get("web_hits")
+    if voorgehaald is not None:
+        hits = list(voorgehaald)
+        warning = payload.get("web_hits_warning")
+    else:
+        exa = exa or MockExaTool()
+        raw = exa.search(query)
+        hits = list(raw.get("hits") or [])
+        warning = raw.get("warning")
 
     buyers_raw: list[dict[str, Any]] = []
     suppliers_raw: list[dict[str, Any]] = []
@@ -517,10 +525,16 @@ def run_counterparty_sourcing(
                 f["level"] = "INFERRED"  # never VERIFIED without source
             evidence.append(f)
 
+    if warning:
+        bron_omschrijving = warning
+    elif voorgehaald is not None:
+        provider = payload.get("web_hits_provider")
+        bron_omschrijving = f"Source: {provider} search ({len(hits)} raw hit(s))." if provider else "Web search ran; no provider recorded."
+    else:
+        bron_omschrijving = "Mock/local research only; no live search."
     analysis = (
         f"Sourcing {strategy['direction']} for {strategy['commodity']}: "
-        f"{len(ranked)} ranked candidate(s), {len(rejected)} rejected. "
-        + (warning or "Mock/local research only; no live Exa.")
+        f"{len(ranked)} ranked candidate(s), {len(rejected)} rejected. " + bron_omschrijving
     )
     return {
         "analysis": analysis,

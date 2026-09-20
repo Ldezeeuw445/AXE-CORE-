@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fakes import OFFER, OTHER_OFFER, OTHER_SELLER_CO, REQ, FakeCrew, FakeRepo
+from fakes import OFFER, OTHER_OFFER, OTHER_SELLER_CO, REQ, FakeCrew, FakeRepo, FakeResearch
 from northsea_mcp.discovery import DiscoveryService
 from northsea_mcp.models import CrewRunInfo
+from northsea_mcp.research import ResearchError
 
 NU = datetime(2026, 9, 19, 18, 0, tzinfo=timezone.utc)
 
@@ -282,6 +283,42 @@ async def test_a_failed_or_unavailable_crew_run_creates_no_review_but_is_audited
     assert uit["created_review"] is False and uit["crew_status"] == "unavailable"
     assert not any(q["action_type"] == "crew_candidate_review" for q in repo.t["action_queue"])
     assert any(e["action"] == "crew_candidate_review_skipped" for e in repo.t["northsea_audit_events"])
+
+
+async def test_crew_review_feeds_real_search_hits_into_the_crew_handoff():
+    """Closes the EXA_API_KEY gap: the crew's own exa_search was never live-implemented, so
+    net-new discovery must reuse the same Tavily/Zenserp/Perplexity chain find_suppliers/
+    find_buyers already use, not a second, EXA-only search path."""
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info())
+    research = FakeResearch()  # returns real-shaped tavily hits, see fakes.py
+    uit = await disc(repo, crew=crew, research=research).crew_assisted_review()
+    assert uit["created_review"] is True and uit["search_status"] == "ok:tavily"
+    assert research.searches  # de zoekketen werd echt aangeroepen
+    handoff = crew.calls[0][1]
+    assert handoff["payload"]["web_hits_provider"] == "tavily"
+    assert len(handoff["payload"]["web_hits"]) > 0
+    assert handoff["payload"]["web_hits"][0]["title"] == "Mopani Copper Mines"
+    rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
+    assert rij["metadata"]["search_provider"] == "tavily" and rij["metadata"]["search_hits"] > 0
+
+
+async def test_crew_review_reports_a_failed_search_chain_honestly():
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info())
+    research = FakeResearch(search_fail=ResearchError("not_configured", "no search provider configured"))
+    uit = await disc(repo, crew=crew, research=research).crew_assisted_review()
+    assert uit["search_status"] == "failed:not_configured"
+    handoff = crew.calls[0][1]
+    assert "web_hits" not in handoff["payload"]  # geen lege lijst doen alsof er gezocht is
+    assert "Search chain exhausted" in handoff["payload"]["web_hits_warning"]
+
+
+async def test_crew_review_still_works_without_a_research_gateway():
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info())
+    uit = await disc(repo, crew=crew).crew_assisted_review()  # research=None (default)
+    assert uit["created_review"] is True and uit["search_status"] == "no_research_service"
 
 
 async def test_crew_review_excludes_testcase_requirements():
