@@ -5839,20 +5839,36 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
      the right to sit in without overlapping it -- so this floats just ABOVE
      the composer instead, right-aligned over the plaat, never on top of the
      input itself. */
+  /* Resting: just the particle, centred in the bottom nav -- a glance, not a
+     panel. Talking/thinking/waiting on approval ([data-actief='ja']): it
+     grows and moves up beside the composer to show what it's saying. */
   :root[data-look] .axe-presence-dock {
     position: fixed;
-    right: max(16px, var(--axe-onder, 75px));
-    bottom: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 14px);
-    width: 210px;
+    left: 50%;
+    right: auto;
+    bottom: 22px;
+    transform: translateX(-50%);
+    width: auto;
     min-height: 0;
-    max-height: 90px;
+    max-height: none;
     z-index: 104;
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease, transform 200ms ease, bottom 200ms ease;
+  }
+  :root[data-look] .axe-presence-dock .axe-presence-dock__orb { pointer-events: auto; }
+
+  :root[data-look] .axe-presence-dock[data-actief='ja'] {
+    left: auto;
+    right: max(16px, var(--axe-onder, 75px));
+    bottom: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 14px);
+    transform: none;
+    width: 210px;
     padding: 8px 8px 8px 4px;
     pointer-events: auto;
-    transition: opacity 160ms ease, transform 160ms ease;
   }
 
   :root[data-look] .axe-presence-dock__orb {
@@ -5861,6 +5877,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     height: 68px;
     display: grid;
     place-items: center;
+  }
+  :root[data-look] .axe-presence-dock:not([data-actief='ja']) .axe-presence-dock__orb {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
   }
 
   :root[data-look] .axe-presence-dock__body {

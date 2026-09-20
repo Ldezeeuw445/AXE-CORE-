@@ -87,40 +87,50 @@ export function AxePresenceDock() {
         : voice.voiceStatus === 'processing' ? 'Working'
           : voice.voiceStatus === 'speaking' ? 'Speaking'
             : 'Ready');
+  /* Luka, 20 sep 2026 (live review, round 3): resting spot is the middle of the
+     bottom nav -- just the particle, no card. The moment AXE is actually doing
+     something (talking, thinking, waiting on approval), it moves up beside the
+     composer and shows what it's saying. Idle is a glance; busy is a read. */
+  const actief = Boolean(pending) || Boolean(activiteit) || voice.voiceStatus !== 'idle';
 
   return (
     <>
       {/* A <div>, not <aside>: axe-look.css turns every .axe-shell aside into a hidden,
           off-screen drawer by default (the same rule CodeEditorPage's file tree avoids for
           the same reason) -- this widget needs to be visible by default, not opt-in-visible. */}
-      <div className="axe-presence-dock" role="complementary" aria-label="AXE presence" data-axe-doel="axe-presence">
+      <div className="axe-presence-dock" data-actief={actief ? 'ja' : undefined} role="complementary" aria-label="AXE presence" data-axe-doel="axe-presence">
         <div ref={orbRef} className="axe-presence-dock__orb">
-          <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
+          {/* Only 20 (inline-text) or 64 (chat-avatar) exist -- thinking-orbs ships exactly
+              two tuned presets, not a scale factor (see AxeStatusOrb's own doc comment).
+              Resting in the nav it's the small one; talking, it grows into the real one. */}
+          <AxeStatusOrb size={actief ? 64 : 20} toonLabel={false} werk={werk} status={presenceStatus} />
         </div>
-        <div className="axe-presence-dock__body">
-          <div className="axe-presence-dock__head">
-            <span>AXE</span>
-            <span>{statusText}</span>
-          </div>
+        {actief && (
+          <div className="axe-presence-dock__body">
+            <div className="axe-presence-dock__head">
+              <span>AXE</span>
+              <span>{statusText}</span>
+            </div>
 
-          {pending ? (
-            <div className="axe-presence-dock__approval">
-              <span title={pending.detail}>{pending.title}</span>
-              <button type="button" title="Approve" onClick={() => voice.resolvePendingExec(pending.id, true)}>
-                <Check size={13} />
-              </button>
-              <button type="button" title="Deny" onClick={() => voice.resolvePendingExec(pending.id, false)}>
-                <X size={13} />
-              </button>
-            </div>
-          ) : (
-            <div className="axe-presence-dock__exchange" aria-live="polite">
-              {laatste.user && <p data-van="mij">{laatste.user.text}</p>}
-              {laatste.axe && <p data-van="axe">{laatste.axe.text}</p>}
-              {!laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
-            </div>
-          )}
-        </div>
+            {pending ? (
+              <div className="axe-presence-dock__approval">
+                <span title={pending.detail}>{pending.title}</span>
+                <button type="button" title="Approve" onClick={() => voice.resolvePendingExec(pending.id, true)}>
+                  <Check size={13} />
+                </button>
+                <button type="button" title="Deny" onClick={() => voice.resolvePendingExec(pending.id, false)}>
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              <div className="axe-presence-dock__exchange" aria-live="polite">
+                {laatste.user && <p data-van="mij">{laatste.user.text}</p>}
+                {laatste.axe && <p data-van="axe">{laatste.axe.text}</p>}
+                {!laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <BolVlucht vlucht={vlucht} klaar={() => setVlucht(null)} />
     </>
