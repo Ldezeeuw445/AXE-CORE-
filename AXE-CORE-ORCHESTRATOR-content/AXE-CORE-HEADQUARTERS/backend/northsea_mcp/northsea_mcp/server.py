@@ -613,15 +613,17 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         uit["stuck_runs_swept"] = geveegd
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
 
-    discovery = DiscoveryService(repo, max_new_per_run=5, max_new_per_day=25)
+    discovery = DiscoveryService(repo, max_new_per_run=5, max_new_per_day=25, crew=crew, max_crew_calls_per_day=3)
     discovery_lock = asyncio.Lock()
 
     @route("/internal/discovery/sweep", methods=["POST"])
     async def discovery_sweep(request: Request) -> Response:
-        """LOOP A/B discovery (deterministic cross-match; creates internal opportunities from existing
-        requirements/offers only, never invents a company). Service-token + northsea.discovery only, never OAuth.
-        `?dry_run=1` reports what would be created without writing anything. `?max_new=N` can only LOWER
-        this run's cap below the configured max_new_per_run (a controlled proof run), never raise it."""
+        """LOOP A/B discovery: (1) deterministic cross-match (creates internal opportunities from
+        existing requirements/offers only, never invents a company), then (2) ONE governed crew call
+        for a genuinely new candidate review (never auto-persisted as fact -- a Chase item only).
+        Service-token + northsea.discovery only, never OAuth. `?dry_run=1` reports what would be
+        created/reviewed without writing anything. `?max_new=N` can only LOWER this run's cross-match
+        cap below max_new_per_run (a controlled proof run), never raise it. `?skip_crew=1` skips step 2."""
         auth = request.headers.get("authorization", "")
         rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
         if rec is None:
@@ -629,6 +631,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         if "northsea.discovery" not in rec.scopes:
             return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
         dry = request.query_params.get("dry_run") in ("1", "true", "yes")
+        skip_crew = request.query_params.get("skip_crew") in ("1", "true", "yes")
         override = None
         if request.query_params.get("max_new"):
             try:
@@ -639,7 +642,9 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             return JSONResponse({"skipped": True, "reason": "a sweep is already running"}, status_code=409)
         async with discovery_lock:
             try:
-                uit = await asyncio.wait_for(discovery.sweep(dry_run=dry, max_new_override=override), timeout=120)
+                uit = await asyncio.wait_for(discovery.sweep(dry_run=dry, max_new_override=override), timeout=100)
+                if not skip_crew:
+                    uit["crew_review"] = await asyncio.wait_for(discovery.crew_assisted_review(dry_run=dry), timeout=20)
             except asyncio.TimeoutError:
                 return JSONResponse({"error": "timeout"}, status_code=504)
             except RepositoryError:

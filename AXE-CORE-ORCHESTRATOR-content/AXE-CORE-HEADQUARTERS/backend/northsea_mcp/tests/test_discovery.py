@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fakes import OFFER, OTHER_OFFER, OTHER_SELLER_CO, REQ, FakeRepo
+from fakes import OFFER, OTHER_OFFER, OTHER_SELLER_CO, REQ, FakeCrew, FakeRepo
 from northsea_mcp.discovery import DiscoveryService
+from northsea_mcp.models import CrewRunInfo
 
 NU = datetime(2026, 9, 19, 18, 0, tzinfo=timezone.utc)
 
@@ -189,6 +190,107 @@ async def test_max_new_override_can_only_lower_the_run_cap_never_raise_it():
     assert laag["would_create"] == 1  # override verlaagt de configured cap (5) naar 1
     hoog = await disc(repo, max_new_per_run=1).sweep(dry_run=True, max_new_override=99)
     assert hoog["would_create"] == 1  # override mag de configured cap (1) nooit optillen
+
+
+# ── Governed crew invocation (net-new candidates) ───────────────────────────────
+
+class _StubCrew:
+    def __init__(self, info: CrewRunInfo):
+        self._info = info
+        self.calls: list[tuple[str, dict]] = []
+
+    async def run(self, action, handoff):
+        self.calls.append((action, handoff))
+        return self._info
+
+
+def _ok_crew_info(**overrides):
+    velden = dict(used=True, status="ok", route="discovery_run", backend="northsea_local", execution_mode="deterministic",
+                 analysis="Found 2 plausible producers via public registry search; neither confirmed as authorised seller.",
+                 requested_specialists=["Sourcing Analyst"], actual_specialists=["Sourcing Analyst"],
+                 fallback_used=False, validation="valid", audit_references=["run-1"])
+    velden.update(overrides)
+    return CrewRunInfo(**velden)
+
+
+async def test_crew_review_is_skipped_without_a_crew_gateway():
+    repo = FakeRepo()
+    uit = await disc(repo).crew_assisted_review()
+    assert uit["skipped"] is True and "no crew gateway" in uit["reason"]
+
+
+async def test_crew_review_creates_a_chase_item_never_a_fact():
+    repo = FakeRepo()
+    voor_bedrijven = len(repo.t["companies"])
+    voor_reqs = len(repo.t["buyer_requirements"])
+    voor_offers = len(repo.t["supplier_offers"])
+    voor_opps = len(repo.t["opportunities"])
+    crew = _StubCrew(_ok_crew_info())
+    uit = await disc(repo, crew=crew).crew_assisted_review()
+    assert uit["created_review"] is True and len(crew.calls) == 1
+    assert crew.calls[0][0] == "find_suppliers"
+    rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
+    assert rij["status"] == "open" and rij["requires_approval"] is True  # nooit automatisch uitgevoerd
+    assert "Found 2 plausible producers" in rij["description"]
+    md = rij["metadata"]
+    assert md["crew_route"] == "discovery_run" and md["crew_backend"] == "northsea_local"
+    assert md["execution_mode"] == "deterministic" and md["actual_specialists"] == ["Sourcing Analyst"]
+    assert md["audit_references"] == ["run-1"]
+    # geen enkele company/requirement/offer/opportunity is aangemaakt uit de crew-analyse zelf
+    assert len(repo.t["companies"]) == voor_bedrijven and len(repo.t["buyer_requirements"]) == voor_reqs
+    assert len(repo.t["supplier_offers"]) == voor_offers and len(repo.t["opportunities"]) == voor_opps
+
+
+async def test_crew_review_never_reviews_the_same_requirement_twice():
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info())
+    eerste = await disc(repo, crew=crew).crew_assisted_review()
+    assert eerste["created_review"] is True and eerste["buyer_requirement_id"] == REQ
+    tweede = await disc(repo, crew=crew).crew_assisted_review()
+    # met maar één actieve requirement in de seed, nu al gereviewed, is er niets nieuws
+    assert tweede["skipped"] is True and len(crew.calls) == 1
+
+
+async def test_crew_review_moves_to_the_next_requirement_once_the_first_is_reviewed():
+    repo = FakeRepo()
+    repo.t["buyer_requirements"].append(_tweede_req(repo))
+    crew = _StubCrew(_ok_crew_info())
+    eerste = await disc(repo, crew=crew).crew_assisted_review()
+    tweede = await disc(repo, crew=crew).crew_assisted_review()
+    assert eerste["created_review"] is True and tweede["created_review"] is True
+    assert eerste["buyer_requirement_id"] != tweede["buyer_requirement_id"]
+    derde = await disc(repo, crew=crew).crew_assisted_review()
+    assert derde["skipped"] is True  # beide requirements nu al gereviewed
+
+
+async def test_crew_review_respects_the_daily_cap():
+    repo = FakeRepo()
+    repo.t["buyer_requirements"].append(_tweede_req(repo))
+    crew = _StubCrew(_ok_crew_info())
+    d = disc(repo, crew=crew, max_crew_calls_per_day=1)
+    eerste = await d.crew_assisted_review()
+    tweede = await d.crew_assisted_review()
+    assert eerste["created_review"] is True
+    assert tweede["skipped"] is True and "budget" in tweede["reason"]
+    assert len(crew.calls) == 1  # de tweede poging riep de crew niet eens aan
+
+
+async def test_a_failed_or_unavailable_crew_run_creates_no_review_but_is_audited():
+    repo = FakeRepo()
+    crew = _StubCrew(CrewRunInfo(used=False, status="unavailable", reason="dedicated backend not configured and fallback denied"))
+    uit = await disc(repo, crew=crew).crew_assisted_review()
+    assert uit["created_review"] is False and uit["crew_status"] == "unavailable"
+    assert not any(q["action_type"] == "crew_candidate_review" for q in repo.t["action_queue"])
+    assert any(e["action"] == "crew_candidate_review_skipped" for e in repo.t["northsea_audit_events"])
+
+
+async def test_crew_review_excludes_testcase_requirements():
+    repo = FakeRepo()
+    repo.t["buyer_requirements"] = [{**repo.t["buyer_requirements"][0], "id": "7c328c1a-fd41-4592-86bb-de954a384e2b",
+                                    "evidence": "STRATO TEST CALL: synthetic Jasmine qualification test."}]
+    crew = _StubCrew(_ok_crew_info())
+    uit = await disc(repo, crew=crew).crew_assisted_review()
+    assert uit["skipped"] is True and len(crew.calls) == 0
 
 
 async def test_idempotent_rerun_creates_no_duplicates_even_after_a_rollback():

@@ -334,6 +334,14 @@ class SupabaseRepository:
         één query voor dedup tijdens discovery-selectie, in plaats van één aanroep per kandidaat-paar."""
         return await self._get("opportunities", {"select": "buyer_requirement_id,supplier_offer_id", "limit": str(limit)})
 
+    async def get_action_queue_by_dedupe_key(self, dedupe_key: str) -> dict | None:
+        return await self._one("action_queue", {"dedupe_key": f"eq.{dedupe_key}", "select": "id,status"})
+
+    async def count_action_queue_since(self, *, action_type: str, since: str) -> int:
+        rows = await self._get("action_queue", {"action_type": f"eq.{action_type}", "created_at": f"gte.{since}",
+                                                "select": "id", "limit": "1000"})
+        return len(rows)
+
     async def delete_opportunity(self, opportunity_id: str) -> None:
         """Compenserend terugdraaien: PostgREST heeft geen cross-table transactie, dus als een
         vervolgschrijfactie (match_assessment/event) mislukt, verwijdert dit de zojuist aangemaakte

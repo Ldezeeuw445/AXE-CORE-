@@ -328,6 +328,14 @@ class FakeRepo:
         return [{"buyer_requirement_id": o.get("buyer_requirement_id"), "supplier_offer_id": o.get("supplier_offer_id")}
                 for o in self.t["opportunities"]]
 
+    async def get_action_queue_by_dedupe_key(self, dedupe_key):
+        rows = self._find("action_queue", dedupe_key=dedupe_key)
+        return {"id": rows[0]["id"], "status": rows[0]["status"]} if rows else None
+
+    async def count_action_queue_since(self, *, action_type, since):
+        return sum(1 for q in self.t["action_queue"] if q.get("action_type") == action_type
+                  and str(q.get("created_at") or "") >= since)
+
     async def delete_opportunity(self, opportunity_id):
         oid = uid(opportunity_id)
         if self.fail_delete_opportunity:

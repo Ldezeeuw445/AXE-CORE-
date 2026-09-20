@@ -50,11 +50,13 @@ def _now() -> datetime:
 
 class DiscoveryService:
     def __init__(self, repo: Any, *, now=_now, max_new_per_run: int = 5, max_new_per_day: int = 25,
-                sleep=None, max_write_attempts: int = 3):
+                crew: Any = None, max_crew_calls_per_day: int = 3, sleep=None, max_write_attempts: int = 3):
         self.repo = repo
         self.now = now
         self.max_new_per_run = max_new_per_run
         self.max_new_per_day = max_new_per_day
+        self.crew = crew  # optioneel: CrewGateway, alleen voor crew_assisted_review() (net-new, governed)
+        self.max_crew_calls_per_day = max_crew_calls_per_day
         self._sleep = sleep or asyncio.sleep
         self.max_write_attempts = max_write_attempts
 
@@ -168,3 +170,70 @@ class DiscoveryService:
         return {"at": nu.isoformat(), "dry_run": False, "considered_pairs": overwogen, "candidates_found": len(kandidaten),
                 "selected": len(geselecteerd), "created": len(gemaakt), "created_ids": [o.get("id") for o in gemaakt],
                 "created_today_total": al_vandaag + len(gemaakt), "max_new_per_day": self.max_new_per_day, "errors": fouten}
+
+    async def crew_assisted_review(self, *, dry_run: bool = False) -> dict[str, Any]:
+        """Governed crew invocation for genuinely NEW candidates -- the higher-risk tier the
+        deterministic cross-match above deliberately does not attempt (it only pairs rows that
+        already exist). Bounded to `max_crew_calls_per_day` real crew calls, system-wide, because
+        crew analysis is not free and not deterministic like the cross-match is.
+
+        The crew's output is NEVER auto-persisted as a company/requirement/offer/opportunity --
+        CrewAI output is analysis, never fact (see crew.py's own hard rule). It is surfaced as a
+        `crew_candidate_review` Chase item (requires_approval=true) with full provenance (route,
+        backend, execution_mode, actual specialists, fallback, audit_references), for a human to
+        act on. Deduped per requirement via dedupe_key, so the same requirement is never
+        crew-reviewed twice."""
+        if self.crew is None:
+            return {"skipped": True, "reason": "no crew gateway configured for this process"}
+        nu = self.now()
+        vandaag = nu.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        al_vandaag = await self.repo.count_action_queue_since(action_type="crew_candidate_review", since=vandaag)
+        if al_vandaag >= self.max_crew_calls_per_day:
+            return {"skipped": True, "reason": "daily crew-review budget already used", "used_today": al_vandaag,
+                    "max_crew_calls_per_day": self.max_crew_calls_per_day}
+
+        ruwe_reqs = await self.repo.list_active_requirements()
+        reqs = [r for r in ruwe_reqs if not canon.testcase_reason(r, r.get("companies"))]
+        reqs.sort(key=lambda r: str(r.get("created_at") or ""))  # de langst genegeerde vraag eerst
+        kandidaat = None
+        for r in reqs:
+            bestaand = await self.repo.get_action_queue_by_dedupe_key(f"crew_candidate_review:{r['id']}")
+            if not bestaand:
+                kandidaat = r
+                break
+        if kandidaat is None:
+            return {"skipped": True, "reason": "no eligible requirement (all already crew-reviewed or none active)"}
+
+        if dry_run:
+            return {"dry_run": True, "would_review": {"buyer_requirement_id": kandidaat["id"],
+                                                       "product": kandidaat.get("product") or kandidaat.get("commodity")}}
+
+        handoff = {"entity_ids": {"buyer_requirement_id": kandidaat["id"]},
+                  "requirement": {k: kandidaat.get(k) for k in
+                                 ("commodity", "product", "grade", "quantity_mt", "destination", "incoterm", "origin_preference")}}
+        info = await self.crew.run("find_suppliers", handoff)
+        dedupe_key = f"crew_candidate_review:{kandidaat['id']}"
+        if not info.used or info.status != "ok":
+            await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
+                "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_skipped",
+                "details": {"buyer_requirement_id": kandidaat["id"], "crew_status": info.status, "reason": info.reason}}))
+            return {"created_review": False, "buyer_requirement_id": kandidaat["id"], "crew_status": info.status, "reason": info.reason}
+
+        rij = await self._resilient(lambda info=info: self.repo.engine_insert("action_queue", {
+            "dedupe_key": dedupe_key, "action_type": "crew_candidate_review", "opportunity_id": None, "company_id": None,
+            "priority": 55, "title": f"Crew-assisted candidate review: {kandidaat.get('product') or kandidaat.get('commodity')}"[:200],
+            "description": (info.analysis or "No analysis text returned.")[:2000],
+            "status": "open", "requires_approval": True,
+            "metadata": {"source": ACTOR, "kind": "crew_candidate_review", "buyer_requirement_id": kandidaat["id"],
+                        "crew_route": info.route, "crew_backend": info.backend, "execution_mode": info.execution_mode,
+                        "requested_specialists": info.requested_specialists, "actual_specialists": info.actual_specialists,
+                        "fallback_used": info.fallback_used, "fallback_reason": info.fallback_reason,
+                        "validation": info.validation, "audit_references": info.audit_references,
+                        "timings": info.timings, "budget_usage": info.budget_usage}}, ignore_duplicates=True))
+        await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
+            "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_requested",
+            "details": {"buyer_requirement_id": kandidaat["id"], "crew_route": info.route, "crew_backend": info.backend,
+                       "execution_mode": info.execution_mode}}))
+        return {"created_review": bool(rij), "buyer_requirement_id": kandidaat["id"], "crew_route": info.route,
+                "crew_backend": info.backend, "execution_mode": info.execution_mode, "used_today": al_vandaag + 1,
+                "max_crew_calls_per_day": self.max_crew_calls_per_day}
