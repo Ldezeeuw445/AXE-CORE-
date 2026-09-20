@@ -561,10 +561,6 @@ export function installStableChat(): void {
   if (installed) return;
   installed = true;
 
-  try {
-    if (!getFishVoiceId()) setFishVoiceId(LEWIS_VOICE_ID);
-  } catch { /* ignore */ }
-
   const original = useVoiceStore.getState().sendMessage;
   const resumeSlot = pickPrimarySlot();
   if (resumeSlot) {
