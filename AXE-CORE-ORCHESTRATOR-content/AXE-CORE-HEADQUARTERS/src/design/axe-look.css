@@ -6077,7 +6077,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .computer-use-overlay__quick button:hover { background:rgba(255,255,255,.07); color:var(--text-primary); }
 .computer-use-overlay__footer { display:flex; justify-content:flex-end; gap:8px; padding:8px 4px 0; }
 .computer-use-overlay__footer button { display:inline-flex; align-items:center; gap:5px; border:0; background:transparent; color:var(--text-muted); font-size:10px; }
-.standalone-axe-particle { position:absolute; top:16px; right:18px; z-index:60; width:42px; height:42px; display:grid; place-items:center; border-radius:50%; background:rgba(5,10,12,.42); border:1px solid rgba(255,255,255,.08); backdrop-filter:blur(16px); pointer-events:auto; }
+.standalone-axe-particle { position:absolute; top:62px; right:18px; z-index:60; width:42px; height:42px; display:grid; place-items:center; border-radius:50%; background:rgba(5,10,12,.42); border:1px solid rgba(255,255,255,.08); backdrop-filter:blur(16px); pointer-events:auto; }
 @media (max-width: 680px) {
   .computer-use-overlay { padding:10px; }
   .computer-use-overlay__card { border-radius:24px; }
