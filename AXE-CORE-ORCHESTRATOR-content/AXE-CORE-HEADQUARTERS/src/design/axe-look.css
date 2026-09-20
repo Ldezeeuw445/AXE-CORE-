@@ -6093,3 +6093,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-dok[data-kant="rechts"] .axe-dok-driehoek-vorm{background:transparent!important;border-left-color:transparent!important;border-right-color:transparent!important;filter:none}
 .axe-dok[data-kant="rechts"] .axe-dok-hoek::before,.axe-dok[data-kant="rechts"] .axe-dok-hoek::after{content:"";position:absolute;width:18px;height:1.5px;background:var(--accent-cyan);top:20px;pointer-events:none}
 .axe-dok[data-kant="rechts"] .axe-dok-hoek::before{left:8px;transform:rotate(30deg);transform-origin:right center}.axe-dok[data-kant="rechts"] .axe-dok-hoek::after{right:8px;transform:rotate(-30deg);transform-origin:left center}
+
+/* Code Studio app/repo roots: same semantic product colors as Tasks/Cron. */
+.axe-code-repo-root{border-bottom:1px solid rgba(255,255,255,.035)}
+.axe-code-repo-root__button{--repo-color:#94A3B8;width:100%;height:30px;display:flex;align-items:center;gap:6px;padding:0 7px;border:0;border-left:3px solid transparent;background:transparent;color:var(--text-muted);text-align:left}
+.axe-code-repo-root__button:hover{background:rgba(255,255,255,.025)}
+.axe-code-repo-root__button[data-open="ja"]{border-left-color:var(--repo-color);background:color-mix(in srgb,var(--repo-color) 8%,transparent);color:var(--repo-color)}
+.axe-code-repo-root__button>svg:first-child{transition:transform .15s}.axe-code-repo-root__button[data-open="ja"]>svg:first-child{transform:rotate(90deg)}
+.axe-code-repo-root__button strong{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:650;color:inherit}
+.axe-code-repo-root__button span{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:8px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;color:rgba(255,255,255,.28)}
+.axe-code-repo-root__tree{padding-bottom:3px}
