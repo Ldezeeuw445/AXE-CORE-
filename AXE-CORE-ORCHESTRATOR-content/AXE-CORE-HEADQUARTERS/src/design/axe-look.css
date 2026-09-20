@@ -5954,3 +5954,75 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 @media (max-width: 1279px) {
   :root[data-look] .axe-presence-dock { display: none; }
 }
+
+/* ── Spatial unification: content lives ON the Tauri shell ─────────────── */
+:root[data-look] .axe-trading-memory {
+  /* Same usable shell area as browser content; no quarter-width dashboard. */
+  width: auto;
+  min-width: 0;
+  height: 100%;
+}
+:root[data-look] .axe-trading-memory > div:last-child {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+:root[data-look] .axe-trading-memory-grid {
+  flex: 1;
+  min-height: 0;
+  align-content: stretch;
+  grid-auto-rows: minmax(180px, 1fr) !important;
+}
+
+/* Month is an operational calendar: show what happens, not just that something happens. */
+:root[data-look] .axe-maand-items {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+:root[data-look] .axe-maand-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+  padding-left: 5px;
+  border-left: 2px solid currentColor;
+  text-align: left;
+  line-height: 1.2;
+}
+:root[data-look] .axe-maand-item time {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 8.5px;
+  color: var(--text-muted);
+}
+:root[data-look] .axe-maand-item b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 550;
+  color: var(--text-secondary);
+}
+:root[data-look] .axe-maand-items em {
+  font-size: 8.5px;
+  font-style: normal;
+  color: var(--text-muted);
+  text-align: left;
+}
+:root[data-look] .axe-week-blok {
+  min-height: 28px;
+  padding: 3px 5px 3px 7px;
+}
+:root[data-look] .axe-week-bloktitel,
+:root[data-look] .axe-week-bloktijd {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

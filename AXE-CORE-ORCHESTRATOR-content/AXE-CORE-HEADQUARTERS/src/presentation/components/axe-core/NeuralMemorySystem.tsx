@@ -14,7 +14,7 @@ import { OrbitControls, Html, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
-  Search, Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
+  Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
   RotateCw, Sparkles, Database, Link2, Clock, ShieldCheck, Lock, X,
   MessageSquare, Settings2, Zap, Lightbulb, Users, Activity, Layers,
 } from 'lucide-react';
@@ -1353,11 +1353,6 @@ function LeftSidebar({
         <div className="nm-status"><span className="nm-dot" />ACTIVE</div>
       </div>
 
-      <div className="nm-search">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Search size={12} /> Search memories…</span>
-        <span style={{ fontSize: 9, opacity: 0.6 }}>⌘K</span>
-      </div>
-
       <div className="nm-panel">
         <h2>Memory Overview</h2>
         <div className="nm-stat-row"><span className="k">Total Memories</span><span className="v">{counts.total}</span></div>
@@ -1366,6 +1361,12 @@ function LeftSidebar({
         <div className="nm-stat-row"><span className="k">Depth Level</span><span className="v">{depthLevel}</span></div>
         <div className="nm-stat-row"><span className="k">Integrity</span><span className="v">{integrityPct}%</span></div>
         <div className="nm-bar"><i style={{ width: `${integrityPct}%` }} /></div>
+        <div className="nm-side-summary">
+          <span><small>GLOBAL</small><b>{counts.global.toLocaleString()}</b></span>
+          <span><small>RAG</small><b>{counts.rag.toLocaleString()}</b></span>
+          <span><small>OBSIDIAN</small><b>{counts.notes.toLocaleString()}</b></span>
+          <span><small>TOTAL</small><b>{counts.total.toLocaleString()}</b></span>
+        </div>
       </div>
 
       <div className="nm-panel" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -1450,6 +1451,8 @@ function RightSidebar({
         </div>
       </div>
 
+      <Legend />
+
       <div className="nm-panel">
         <div className="nm-sync">
           {integrityPct >= 90 ? <ShieldCheck size={16} className="ok" /> : <ShieldCheck size={16} className="warn" />}
@@ -1510,7 +1513,7 @@ function Composer({ onSend, lastReply }: { onSend: (text: string) => void; lastR
               setText('');
             }
           }}
-          placeholder="Ask AXE Core anything…"
+          placeholder="Search memories or ask AXE Core…"
         />
         <button
           type="button"
@@ -1666,19 +1669,7 @@ export function NeuralMemorySystem() {
         counts={counts}
       />
 
-      <Legend />
       <DepthBar depthLevel={depthLevel} unlockedFive={everFocused} onSet={setDepthLevel} />
-
-      {/* Bottom stats like reference */}
-      <div className="nm-bottom-stats">
-        {/* Labelled by the store they actually count. "CONVERSATIONS" sat
-            over the global_memory total and "KNOWLEDGE" over rag_memories,
-            so two of the three names described neither the number beneath
-            them nor the hub of the same name on the terrain. */}
-        <div className="nm-stat-card"><span className="k">GLOBAL</span><b>{counts.global.toLocaleString()}</b><span className="s">memories</span></div>
-        <div className="nm-stat-card"><span className="k">RAG</span><b>{counts.rag.toLocaleString()}</b><span className="s">facts</span></div>
-        <div className="nm-stat-card"><span className="k">OBSIDIAN</span><b>{counts.notes.toLocaleString()}</b><span className="s">notes</span></div>
-      </div>
 
       {counts.total === 0 && !loading && (
         <div className="nm-empty">
