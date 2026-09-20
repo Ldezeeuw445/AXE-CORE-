@@ -64,18 +64,14 @@
    Staat hier ooit weer een reden om ze te verbergen: lees eerst die comment in
    de tsx. */
 .nm-sidebar {
-  position: absolute;
-  top: 64px;
-  /* Altijd boven de chatplaat eindigen. Dit stond op 14px -- de onderkant van
-     het venster -- dus liep de kolom achter de plaat door en was de onderste
-     kaart half weg. --axe-chat-onder is de maat die AxeShellChrome hiervoor
-     meet, en die beweegt mee als de plaat in- of uitklapt. */
-  bottom: calc(var(--axe-chat-onder, 14px) + 8px);
-  /* Smal, zoals de referentie. 218 was breed genoeg om het terrein af te
-     dekken; 168 laat de scene ademen en is nog steeds leesbaar. Zelfde maat als
-     in NeuralBrain.css -- twee kolommen naast hetzelfde beeld horen dezelfde
-     breedte te hebben, anders staat het scheef. */
-  width: 168px;
+  /* PlaatSlot is the positioning authority. Once this node is portaled into
+     the shell, viewport offsets here create a second coordinate system and
+     make the widgets drift/clip. Fill the shell slot instead. */
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   z-index: 15;
   display: flex;
   flex-direction: column;
@@ -86,11 +82,10 @@
 .nm-sidebar::-webkit-scrollbar {
   width: 0;
 }
-.nm-sidebar-left {
-  left: 14px;
-}
+ .nm-sidebar-left,
 .nm-sidebar-right {
-  right: 14px;
+  left: auto;
+  right: auto;
 }
 
 .nm-title {
@@ -903,4 +898,29 @@
   .axe-neural-embed .nm-legend {
     left: 14px;
   }
+}
+
+/* Consolidated shell-side readout: the scene itself stays free of loose cards. */
+.nm-side-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+}
+.nm-side-summary > span {
+  min-width: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--nm-border);
+}
+.nm-side-summary small {
+  display: block;
+  font-size: 8px;
+  letter-spacing: .08em;
+  color: var(--nm-dim);
+}
+.nm-side-summary b {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--nm-text);
 }

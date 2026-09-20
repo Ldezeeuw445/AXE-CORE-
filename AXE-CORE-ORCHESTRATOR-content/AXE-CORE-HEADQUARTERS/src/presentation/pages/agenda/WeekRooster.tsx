@@ -118,8 +118,8 @@ export function WeekRooster({
                     borderLeftColor: b.item.kleur,
                   }}
                 >
-                  <span className="axe-week-bloktitel" style={{ color: b.item.kleur }}>{b.item.titel}</span>
                   <span className="axe-week-bloktijd">{b.item.tijd}</span>
+                  <span className="axe-week-bloktitel" style={{ color: b.item.kleur }} title={b.item.titel}>{b.item.titel}</span>
                 </button>
               ))}
             </div>
