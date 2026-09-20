@@ -27,16 +27,7 @@ import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
 import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
 import { nativeToolsEnabled, requestActionApproval } from '@/presentation/store/voiceStore';
 import { TOOL_RUNTIMES } from '@/application/tools/toolRegistry';
-import {
-  speakWithFishAudio,
-  isFishAudioConfigured,
-  stopFishAudio,
-  LEWIS_VOICE_ID,
-  setFishVoiceId,
-  getFishVoiceId,
-} from '@/infrastructure/gateways/fishAudioService';
-import { speakWithBrowser, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
-import { sanitizeForSpeech } from '@/infrastructure/gateways/globalTts';
+import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import {
   applyPendingCodeEdit,
   loadPendingEdit,
@@ -58,51 +49,12 @@ let installed = false;
 const ACTIVE_TASKS_KEY = 'axe_active_durable_tasks';
 const taskMonitors = new Set<string>();
 
-const TTS_PROVIDER_KEY = 'axe_tts_provider';
-const FISH_VOICE_KEY = 'axe_fish_voice_id';
-
-function forceFishTtsDefaults(): void {
+function speakAxe(text: string, onDone?: () => void): void {
   try {
-    const voice = (localStorage.getItem(FISH_VOICE_KEY) ?? '').trim();
-    if (!voice) localStorage.setItem(FISH_VOICE_KEY, LEWIS_VOICE_ID);
-    const prov = localStorage.getItem(TTS_PROVIDER_KEY);
-    if (!prov || prov === 'fish') localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
+    if (localStorage.getItem('axe_response_mode') === 'type') { onDone?.(); return; }
   } catch { /* ignore */ }
-}
-
-function speakFishFirst(text: string, onDone?: () => void): void {
-  try {
-    if (localStorage.getItem('axe_response_mode') === 'type') {
-      onDone?.();
-      return;
-    }
-  } catch { /* ignore */ }
-
-  const clean = sanitizeForSpeech(text);
-  if (!clean) {
-    onDone?.();
-    return;
-  }
-
-  stopTTS();
-  stopFishAudio();
-
-  try {
-    if (isFishAudioConfigured()) localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
-  } catch { /* ignore */ }
-
-  if (isFishAudioConfigured() && getFishVoiceId()) {
-    void speakWithFishAudio(
-      clean,
-      onDone,
-      (err) => {
-        console.warn('[AXE TTS] Fish failed, browser fallback:', err);
-        speakWithBrowser(clean, onDone);
-      },
-    );
-    return;
-  }
-  speakWithBrowser(clean, onDone);
+  stopGlobalTts();
+  speakGlobal(text, onDone);
 }
 
 function recordChatTurn(q: string, a: string, provider: string, capability: string): void {
@@ -263,7 +215,7 @@ function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: strin
       void presentAssistantReplyOnSphere(answer, lastUserText).catch(() => {});
     }
   }
-  speakFishFirst(answer, () => {
+  speakAxe(answer, () => {
     useVoiceStore.setState({ voiceStatus: 'idle' });
   });
 }
@@ -609,7 +561,6 @@ export function installStableChat(): void {
   if (installed) return;
   installed = true;
 
-  forceFishTtsDefaults();
   try {
     if (!getFishVoiceId()) setFishVoiceId(LEWIS_VOICE_ID);
   } catch { /* ignore */ }
