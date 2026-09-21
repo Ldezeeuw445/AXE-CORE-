@@ -160,7 +160,15 @@ export async function loadTradingAgentMemory(limit = 80): Promise<GlobalMemoryEn
     confidence: r.confidence ?? 0.7,
     created_at: r.created_at,
     updated_at: r.created_at,
-    metadata: { agent: TRADING_AGENT_ID, symbol: r.symbol ?? undefined, kind: r.kind },
+    metadata: {
+      agent: TRADING_AGENT_ID,
+      symbol: r.symbol ?? undefined,
+      kind: r.kind,
+      // `importance` is the durable learning signal for this namespace.
+      // Keep it on the mapped row so context selection can prefer memories that
+      // actually helped, instead of always selecting only the newest twenty.
+      importance: r.importance ?? 5,
+    },
   })) as GlobalMemoryEntry[];
 }
 
@@ -173,7 +181,14 @@ async function selectTradingMemories(symbol?: string) {
         return !s || s === symbol.toUpperCase() || (m.value || '').includes(symbol.toUpperCase());
       })
     : mem;
-  return filtered.slice(0, 20);
+  return [...filtered]
+    .sort((a, b) => {
+      const ai = Number(a.metadata?.importance ?? 5);
+      const bi = Number(b.metadata?.importance ?? 5);
+      if (bi !== ai) return bi - ai;
+      return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
+    })
+    .slice(0, 20);
 }
 
 function renderContext(used: GlobalMemoryEntry[]): string {
@@ -212,7 +227,14 @@ export async function buildTradingAgentContextWithEpisode(
   const episodeId = await openEpisode({
     agent: 'trading',
     subject: symbol || 'desk',
-    memoryKeys: used.map(m => m.key).filter(Boolean),
+    // `memory_ids` belongs to rag_memories. These rows come from the
+    // namespaced `memory` table, so keep them in the key/ref lane but use
+    // the stable row id. Legacy episodes still contain raw keys and remain
+    // resolvable; new episodes cannot become ambiguous when two namespaces
+    // happen to share a key.
+    memoryKeys: used
+      .map(m => m.id ? `memory-id:${m.id}` : (m.key ? `memory-key:${m.key}` : ''))
+      .filter(Boolean),
   });
   return { context: renderContext(used), episodeId };
 }
