@@ -1,7 +1,7 @@
-/**
- * HTTP client for the Camofox anti-detection browser server.
- * API docs: https://github.com/jo-inc/camofox-browser
- */
+"""
+HTTP client for the Camofox anti-detection browser server.
+API docs: https://github.com/jo-inc/camofox-browser
+"""
 import os
 import httpx
 from fastapi import HTTPException
