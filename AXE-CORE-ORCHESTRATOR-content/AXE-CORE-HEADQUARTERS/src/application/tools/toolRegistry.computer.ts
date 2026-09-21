@@ -31,6 +31,7 @@ import {
   resolveWorkspace,
   onlineDevices,
   isTierRemembered,
+  attemptLocalWorkerRecovery,
   type ComputerCall,
 } from '@/infrastructure/gateways/computerRelay';
 import { kiesUit, voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
@@ -125,10 +126,26 @@ async function execute(
   // cannot be left to whoever polls first: the same workspace name is a
   // different checkout on each, so the wrong machine gives a confidently
   // wrong answer rather than an error.
-  const devices = await onlineDevices();
+  let devices = await onlineDevices();
   if (!devices.length) {
-    return 'COMPUTER failed: no computer worker is running on any of Luka\'s machines, '
-         + 'so nothing was read or changed. Say exactly that — do not answer from memory.';
+    // Bounded self-heal, once, before giving up: the worker is managed by
+    // launchd (com.axe.computer-worker), so "not answering" is very often
+    // "stopped, and nobody has looked" rather than a real outage. One
+    // kickstart + one bounded wait; attemptLocalWorkerRecovery() itself
+    // refuses to retry beyond that, so a genuinely broken worker still fails
+    // loudly instead of stalling the chat turn.
+    const recovery = await attemptLocalWorkerRecovery();
+    if (recovery.recovered) {
+      devices = await onlineDevices();
+    } else {
+      return 'COMPUTER failed: no computer worker is running on any of Luka\'s machines, '
+           + `so nothing was read or changed. Self-recovery was attempted: ${recovery.detail} `
+           + 'Report that outcome plainly — do not answer from memory, and do not retry silently.';
+    }
+  }
+  if (!devices.length) {
+    return 'COMPUTER failed: no computer worker is running on any of Luka\'s machines, even after a restart attempt. '
+         + 'This needs Luka\'s attention — say so plainly.';
   }
 
   const asked = String(parsed.args.device ?? '').trim().toLowerCase();

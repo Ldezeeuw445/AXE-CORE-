@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod diensten;
+mod launchd;
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -197,6 +198,16 @@ fn dienst_stop(id: String) -> Result<String, String> {
     diensten::stop_dienst(&id)
 }
 
+#[tauri::command]
+fn worker_dienst_stand(id: String) -> Result<launchd::LaunchdStand, String> {
+    launchd::status(&id)
+}
+
+#[tauri::command]
+fn worker_dienst_herstart(id: String) -> Result<String, String> {
+    launchd::kickstart(&id)
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -210,6 +221,8 @@ fn main() {
             diensten_stand,
             dienst_start,
             dienst_stop,
+            worker_dienst_stand,
+            worker_dienst_herstart,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
