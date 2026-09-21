@@ -215,21 +215,31 @@ function notSynced(key: string, reason: string): SaveOutcome {
 export async function loadSetting<T>(key: string, fallback: T): Promise<T> {
   // Fast path: localStorage.
   //
-  // Found 21 sep in the standalone Personal Computer Use window (its own
-  // WKWebView, opened via Tauri's WebviewWindow): `localStorage` itself came
-  // back null there instead of throwing on access, so this read — the only
-  // unguarded localStorage call in a file whose every other one already
-  // learned that lesson (see writeLocalCopy above) — threw synchronously.
-  // Because loadSetting is async, that turned into a rejected promise; every
-  // caller that does not chain its own .catch() (several exist, e.g. via
+  // Corrected 21 sep: the earlier comment here said "null caused a
+  // rejection", which conflates two separate things. `null` on its own does
+  // nothing. What actually happens: the standalone Personal Computer Use
+  // window's `localStorage` evaluated to `null` (confirmed by the exact
+  // WebKit error text this produced: "null is not an object (evaluating
+  // 'localStorage.getItem')" — that phrasing only occurs when the base
+  // value truly is `null`, not `undefined` and not a thrown SecurityError
+  // from the getter). Reading `.getItem` off that `null` is what threw a
+  // TypeError, synchronously, at the property-access step. THIS function
+  // being `async` is the second, separate fact that turned that synchronous
+  // throw into a rejected promise for whoever awaits it — the same throw in
+  // a non-async function would have been an ordinary uncaught exception,
+  // not a rejection. Every caller that doesn't chain its own .catch() (e.g.
   // voorkeurMachine on ComputerUseOverlay's 5s poll) sent that straight to
   // the global unhandledrejection handler in ErrorBoundary.tsx, which
-  // toasts it — reappearing every poll cycle since the underlying read never
-  // stops failing. A missing local cache falling through to Supabase is the
-  // correct, harmless behaviour; a window where localStorage is simply
-  // unavailable is exactly that case, not an error to surface.
+  // toasts it — reappearing every poll cycle since the underlying read
+  // never stopped failing. See loadSetting.regression.test.ts, which
+  // reproduces exactly this (stubs localStorage as null, asserts no
+  // rejection) rather than just asserting the story in prose.
+  //
+  // The line below the Supabase call had the identical unguarded shape
+  // (localStorage.setItem) and would fail the same way on the "Supabase had
+  // a value" path — fixed here too, not just the read.
   let local: string | null = null;
-  try { local = localStorage.getItem(key); } catch { /* treat as cache miss */ }
+  try { local = localStorage.getItem(key); } catch { /* localStorage unavailable: treat as cache miss */ }
   if (local !== null) {
     try { return JSON.parse(local) as T; } catch { /* ignore */ }
   }
@@ -248,7 +258,7 @@ export async function loadSetting<T>(key: string, fallback: T): Promise<T> {
     .single();
 
   if (data?.value !== undefined) {
-    localStorage.setItem(key, JSON.stringify(data.value));
+    try { localStorage.setItem(key, JSON.stringify(data.value)); } catch { /* localStorage unavailable: the durable copy already landed */ }
     return data.value as T;
   }
   return fallback;
