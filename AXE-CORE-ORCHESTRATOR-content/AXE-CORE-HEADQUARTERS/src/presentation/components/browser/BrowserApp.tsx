@@ -16,7 +16,10 @@ import { MobileBrowserChat } from '@/presentation/components/browser/MobileBrows
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
 import { useAIConfig } from '@/presentation/hooks/useAIConfig';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
-import { sendBrowserAIMessage } from '@/application/browser/browserAIService';
+import {
+  sendBrowserAIMessage,
+  type BrowserAIResponse,
+} from '@/application/browser/browserAIService';
 import type { BrowserAIProviderId } from '@/domain/browser/browserAIProviders';
 import { StandaloneBrowserShell, OpenStandaloneBrowserButton } from '@/presentation/components/browser/StandaloneBrowserShell';
 
@@ -64,6 +67,9 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
   const [showBrowserAgent, setShowBrowserAgent] = useState(false);
   const [agentSeed, setAgentSeed] = useState<string | undefined>(undefined);
   const [loadingProvider, setLoadingProvider] = useState<BrowserAIProviderId | null>(null);
+  const [providerFeedback, setProviderFeedback] = useState<
+    Partial<Record<BrowserAIProviderId, { status: BrowserAIResponse['status']; message: string }>>
+  >({});
   const [isLoading, setIsLoading] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
@@ -137,6 +143,10 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
 
   const handleAIProviderSubmit = useCallback(async (provider: BrowserAIProviderId, message: string, mode?: string) => {
     setLoadingProvider(provider);
+    setProviderFeedback(prev => ({
+      ...prev,
+      [provider]: { status: 'running', message: 'Opdracht verstuurd — wachten op de provider…' },
+    }));
     appendAIMessage('user', `[${provider}] ${message}`);
 
     try {
@@ -146,13 +156,24 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
       });
 
       appendAIMessage('assistant', result.message);
+      setProviderFeedback(prev => ({
+        ...prev,
+        [provider]: { status: result.status, message: result.message },
+      }));
 
-      if (result.status === 'agent_started' || result.status === 'running' || provider === 'browser-use' || provider === 'camofox') {
-        setAgentSeed(message);
-        setShowBrowserAgent(true);
-      }
+      /* Do NOT open BrowserAgentPanel with the same prompt here.
+         Browser Use/Camofox already received this task through their own API.
+         Seeding the generic Playwright panel afterwards executed the request a
+         second time in a different browser session, while the actual provider
+         result remained invisible on the card. The manual Browser Agent button
+         still opens that separate tool explicitly. */
     } catch (err) {
-      appendAIMessage('assistant', `Error: ${err instanceof Error ? err.message : String(err)}`);
+      const messageText = err instanceof Error ? err.message : String(err);
+      appendAIMessage('assistant', `Error: ${messageText}`);
+      setProviderFeedback(prev => ({
+        ...prev,
+        [provider]: { status: 'error', message: messageText },
+      }));
     } finally {
       setLoadingProvider(null);
     }
@@ -549,6 +570,7 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
                   onAddFavorite={handleAddFavorite}
                   onAIProviderSubmit={handleAIProviderSubmit}
                   loadingProvider={loadingProvider}
+                  providerFeedback={providerFeedback}
                 />
               </div>
             ) : (
