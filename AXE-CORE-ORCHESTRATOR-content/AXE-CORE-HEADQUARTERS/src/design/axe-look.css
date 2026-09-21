@@ -3165,7 +3165,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 /* De kopregel: model · persona links, gereedschap rechts. Geen vlak, geen
    lijn -- in het voorbeeld zweeft die tekst boven het vak. */
-:root[data-look] .axe-vak-kop {
+ :root[data-look] .axe-vak-kop {
+  position: relative;
+  z-index: 12;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6192,3 +6195,17 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 /* Right radial uses an explicit Lucide outline triangle from AppShell. */
 .axe-dok[data-kant="rechts"] .axe-dok-hoek{color:var(--accent-cyan)}
 .axe-dok[data-kant="rechts"] .axe-dok-hoek:hover>svg{filter:drop-shadow(0 0 9px rgba(34,211,238,.55));transform:scale(1.06)}
+
+
+/* Main desktop composer owns its header when the conversation itself lives in
+   AxePresenceDock. Keeping this popover anchored here prevents the zero-height
+   chat strip from sliding AXE CORE / model / history / settings behind the
+   composer. */
+:root[data-look] .axe-kop-paneel--composer {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 40;
+  min-width: min(520px, 82vw);
+  max-width: min(640px, 90vw);
+}
