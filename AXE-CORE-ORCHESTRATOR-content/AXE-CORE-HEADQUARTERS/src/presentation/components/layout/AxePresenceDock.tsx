@@ -13,6 +13,7 @@ import { Check, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { ACTIVITEIT_GEBEURTENIS, type AxeActiviteit } from '@/shared/axeActiviteit';
+import { VOICE_STATUS_LABEL } from '@/presentation/store/voiceStatusLabel';
 import { kiesDoel, type Rechthoek } from '@/domain/bolVlucht';
 import { BolVlucht, type Vlucht } from '@/presentation/components/layout/zweef/BolVlucht';
 
@@ -127,10 +128,7 @@ export function AxePresenceDock() {
   const statusText = pending
     ? 'Approval required'
     : activiteit?.label
-      ?? (voice.voiceStatus === 'listening' ? 'Listening'
-        : voice.voiceStatus === 'processing' ? 'Working'
-          : voice.voiceStatus === 'speaking' ? 'Speaking'
-            : 'Ready');
+      ?? (voice.voiceStatus === 'idle' ? 'Ready' : VOICE_STATUS_LABEL[voice.voiceStatus]);
   /* Luka, 20 sep 2026 (live review, round 3): resting spot is the middle of the
      bottom nav -- just the particle, no card. The moment AXE is actually doing
      something (talking, thinking, waiting on approval), it moves up beside the
@@ -186,12 +184,15 @@ export function AxePresenceDock() {
             {/* Only 20 (inline-text) or 64 (chat-avatar) exist -- thinking-orbs ships exactly
                 two tuned presets, not a scale factor (see AxeStatusOrb's own doc comment). */}
             <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
+            {/* Under the particle, not beside "AXE" in the head row (round 5 live
+                review): the status is what the particle is doing, so it reads as
+                part of the particle rather than a caption for the card header. */}
+            <span className="axe-presence-dock__orbstatus">{statusText}</span>
           </div>
           {modus !== 'mini' && (
             <div className="axe-presence-dock__body">
               <div className="axe-presence-dock__head">
                 <span>AXE</span>
-                <span>{statusText}</span>
               </div>
 
               {pending ? (

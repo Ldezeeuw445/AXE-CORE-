@@ -213,8 +213,23 @@ function notSynced(key: string, reason: string): SaveOutcome {
 
 /** Load a setting. Checks localStorage first (fast), then Supabase. */
 export async function loadSetting<T>(key: string, fallback: T): Promise<T> {
-  // Fast path: localStorage
-  const local = localStorage.getItem(key);
+  // Fast path: localStorage.
+  //
+  // Found 21 sep in the standalone Personal Computer Use window (its own
+  // WKWebView, opened via Tauri's WebviewWindow): `localStorage` itself came
+  // back null there instead of throwing on access, so this read — the only
+  // unguarded localStorage call in a file whose every other one already
+  // learned that lesson (see writeLocalCopy above) — threw synchronously.
+  // Because loadSetting is async, that turned into a rejected promise; every
+  // caller that does not chain its own .catch() (several exist, e.g. via
+  // voorkeurMachine on ComputerUseOverlay's 5s poll) sent that straight to
+  // the global unhandledrejection handler in ErrorBoundary.tsx, which
+  // toasts it — reappearing every poll cycle since the underlying read never
+  // stops failing. A missing local cache falling through to Supabase is the
+  // correct, harmless behaviour; a window where localStorage is simply
+  // unavailable is exactly that case, not an error to surface.
+  let local: string | null = null;
+  try { local = localStorage.getItem(key); } catch { /* treat as cache miss */ }
   if (local !== null) {
     try { return JSON.parse(local) as T; } catch { /* ignore */ }
   }

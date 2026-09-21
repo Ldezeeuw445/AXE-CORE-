@@ -10,6 +10,7 @@ import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { NotificationBell } from '@/presentation/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
+import { VOICE_STATUS_LABEL } from '@/presentation/store/voiceStatusLabel';
 
 /**
  * One row per voice state, instead of the same ternary written three times
@@ -18,9 +19,9 @@ import { useIsTablet } from '@/presentation/hooks/use-tablet';
  * because it only shows up in the state you weren't looking at.
  */
 const VOICE_STATE = {
-  listening:  { label: 'LISTENING', ink: 'var(--accent-cyan)' },
-  processing: { label: 'THINKING',  ink: 'var(--warning)' },
-  speaking:   { label: 'SPEAKING',  ink: 'var(--accent-blue)' },
+  listening:  { label: VOICE_STATUS_LABEL.listening.toUpperCase(),  ink: 'var(--accent-cyan)' },
+  processing: { label: VOICE_STATUS_LABEL.processing.toUpperCase(), ink: 'var(--warning)' },
+  speaking:   { label: VOICE_STATUS_LABEL.speaking.toUpperCase(),   ink: 'var(--accent-blue)' },
 } as const;
 
 export function TopNav() {

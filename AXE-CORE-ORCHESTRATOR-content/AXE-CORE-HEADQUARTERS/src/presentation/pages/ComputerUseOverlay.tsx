@@ -1,10 +1,33 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Folder, Image, Mic, Paperclip, Plus, SquareArrowOutUpRight, X } from 'lucide-react';
+import { Folder, GripHorizontal, Image, Mic, Paperclip, Plus, SquareArrowOutUpRight, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
 import { restoreMainWindow } from '@/infrastructure/gateways/windowManagerService';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+
+/**
+ * This card is a real, undecorated (decorations:false) Tauri window, not a
+ * div in the main window's DOM — see openPersonalComputerUse() in
+ * windowManagerService.ts. Without a title bar there is no native way to
+ * move or resize it, so both handles below call the window's own drag APIs
+ * directly rather than tracking mouse deltas in JS: startDragging() and
+ * startResizeDragging() hand the OS-level drag session to the window
+ * manager, which is both correct (matches every other window on the Mac)
+ * and far less code than reimplementing it.
+ */
+async function beginWindowDrag() {
+  if (!isTauriRuntime()) return;
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  await getCurrentWindow().startDragging();
+}
+
+async function beginWindowResize() {
+  if (!isTauriRuntime()) return;
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  await getCurrentWindow().startResizeDragging('SouthEast');
+}
 
 const QUICK = [
   { label: 'Downloads', prompt: 'Show me what is in Downloads.', icon: Folder },
@@ -50,6 +73,13 @@ export default function ComputerUseOverlay() {
   return (
     <main className="computer-use-overlay">
       <section className="computer-use-overlay__card" data-axe-doel="computer-use-composer">
+        <div
+          className="computer-use-overlay__draghandle"
+          onMouseDown={() => void beginWindowDrag()}
+          title="Drag to move"
+        >
+          <GripHorizontal size={14} />
+        </div>
         <form className="computer-use-overlay__composer" onSubmit={onSubmit}>
           <div className="computer-use-overlay__particle">
             <AxeStatusOrb size={64} toonLabel={false} status={busy ? 'processing' : undefined} />
@@ -91,6 +121,12 @@ export default function ComputerUseOverlay() {
           <button type="button" onClick={() => void restoreMainWindow()}><SquareArrowOutUpRight size={14} /> AXE Core</button>
           <button type="button" onClick={() => window.close()}><X size={14} /> Close</button>
         </div>
+
+        <div
+          className="computer-use-overlay__resizehandle"
+          onMouseDown={() => void beginWindowResize()}
+          title="Drag to resize"
+        />
       </section>
     </main>
   );

@@ -145,6 +145,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
       className="axe-dok"
       data-open={open ? 'ja' : 'nee'}
       data-kant={kant}
+      data-axe-doel={kant === 'links' ? 'radiaal-links' : undefined}
       style={{ width: vak, height: vak }}
     >
       {/* De ring zelf: een schijf met een dikke rand, puur decor. Als eigen

@@ -128,7 +128,6 @@ export async function openPersonalComputerUse(): Promise<void> {
     return;
   }
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-  const { getCurrentWindow } = await import('@tauri-apps/api/window');
   const label = 'axe-personal-computer';
   const existing = await WebviewWindow.getByLabel(label);
   if (existing) {
@@ -154,8 +153,14 @@ export async function openPersonalComputerUse(): Promise<void> {
       win.once('tauri://error', e => reject(new Error(String(e.payload))));
     });
   }
-  const current = getCurrentWindow();
-  if (current.label === 'main') await current.minimize();
+  // By label, not getCurrentWindow().label === 'main': this always runs from
+  // the main window's own UI (AppShell's corner button, ComputerUse.tsx), so
+  // both should be equivalent — but a check keyed to that exact identity is
+  // one silent label drift away from never minimizing anything, with no error
+  // to say why. Going by label makes the intent ("hide the main window,
+  // whichever object represents it") unambiguous either way.
+  const main = await WebviewWindow.getByLabel('main');
+  if (main) await main.minimize();
 }
 
 export async function restoreMainWindow(): Promise<void> {

@@ -5875,13 +5875,29 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     width: 68px;
     min-width: 68px;
     height: 68px;
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
   }
   :root[data-look] .axe-presence-dock[data-modus='mini'] .axe-presence-dock__orb {
     width: 32px;
     min-width: 32px;
     height: 32px;
+  }
+  /* The status word belongs to the particle, not to the card header (round 5
+     live review) -- a caption directly under the orb it describes. Omitted
+     in mini mode: there is no room, and mini already has no body text either. */
+  :root[data-look] .axe-presence-dock__orbstatus {
+    font: 600 8px/1 var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  :root[data-look] .axe-presence-dock[data-modus='mini'] .axe-presence-dock__orbstatus {
+    display: none;
   }
 
   :root[data-look] .axe-presence-dock__body {
@@ -5897,22 +5913,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   :root[data-look] .axe-presence-dock__head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 6px;
     min-width: 0;
     font: 600 9px/1.2 var(--mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--accent-cyan);
-  }
-  :root[data-look] .axe-presence-dock__head > :last-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-muted);
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    text-transform: none;
   }
 
   :root[data-look] .axe-presence-dock__exchange {
@@ -6069,6 +6075,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   color: var(--text-primary);
 }
 .computer-use-overlay__card {
+  position: relative;
   width: min(744px, 100%);
   max-height: calc(100dvh - 36px);
   overflow: hidden;
@@ -6079,6 +6086,38 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   backdrop-filter: blur(28px) saturate(1.15);
   -webkit-backdrop-filter: blur(28px) saturate(1.15);
   padding: 14px;
+}
+/* Frameless window (decorations:false) — no native title bar to grab or edge
+   to resize from, so both handles are explicit and call the window's own
+   drag APIs (see beginWindowDrag/beginWindowResize in ComputerUseOverlay.tsx). */
+.computer-use-overlay__draghandle {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: grab;
+  z-index: 2;
+}
+.computer-use-overlay__draghandle:active { cursor: grabbing; }
+.computer-use-overlay__resizehandle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
+  z-index: 2;
+  /* A subtle corner grip, not an icon — this sits over the footer's own
+     buttons, so anything louder would compete with "Close" for attention. */
+  background:
+    linear-gradient(135deg, transparent 0 50%, rgba(255,255,255,.22) 50% 58%, transparent 58% 100%),
+    linear-gradient(135deg, transparent 0 68%, rgba(255,255,255,.22) 68% 76%, transparent 76% 100%);
 }
 /* Luka, 20 sep 2026 (live review): this was a hardcoded light/white pill
    regardless of the app's actual theme -- the same --axe-bar pill the real
@@ -6130,8 +6169,20 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    Width: 290px is ~15% over the previous 252px, with a viewport clamp so it
    never fights for space on a narrow window. Same background/border/shadow
    as before -- only size and the toolbar are new. */
-.axe-quick-note{position:fixed;z-index:106;left:calc(var(--axe-chat-links,320px) - 286px);bottom:calc(var(--axe-composer-onder,78px) + 6px);width:min(290px, calc(100vw - 32px));height:calc(var(--axe-composer-hoog,90px) + var(--axe-composer-onder,104px));min-height:176px;display:flex;flex-direction:column;overflow:hidden;border-radius:20px;background:linear-gradient(180deg,rgba(27,27,31,.98),rgba(12,12,14,.98));border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.07);color:var(--text-primary)}
-.axe-quick-note__head,.axe-quick-note__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px}.axe-quick-note__head{border-bottom:1px solid rgba(255,255,255,.05)}.axe-quick-note__head span{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--text-secondary)}.axe-quick-note__head button,.axe-quick-note__foot button{border:0;background:transparent;color:var(--text-muted)}
+/* 21 sep: top/left/width/height come from the component's own inline style
+   now (a real measured position — see standaardPositie() in
+   QuickNoteDock.tsx — plus whatever the drag/resize handles moved it to
+   since), not a CSS calc() approximation. The calc() version drifted onto
+   the bottom nav's own icon row on some layouts because it approximated
+   "composer + the gap below it" from custom properties instead of the
+   composer's and bottom nav's real measured edges. position:fixed with
+   plain top/left (not bottom) is required for that JS-driven position to
+   apply directly. */
+.axe-quick-note{position:fixed;z-index:106;min-height:176px;display:flex;flex-direction:column;overflow:hidden;border-radius:20px;background:linear-gradient(180deg,rgba(27,27,31,.98),rgba(12,12,14,.98));border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.07);color:var(--text-primary)}
+.axe-quick-note__sleepgreep{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:48px;height:14px;display:grid;place-items:center;color:var(--text-muted);cursor:grab;z-index:2}
+.axe-quick-note__sleepgreep:active{cursor:grabbing}
+.axe-quick-note__formaatgreep{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:se-resize;z-index:2;background:linear-gradient(135deg,transparent 0 50%,rgba(255,255,255,.2) 50% 58%,transparent 58% 100%),linear-gradient(135deg,transparent 0 68%,rgba(255,255,255,.2) 68% 76%,transparent 76% 100%)}
+.axe-quick-note__head,.axe-quick-note__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px}.axe-quick-note__head{padding-top:15px;border-bottom:1px solid rgba(255,255,255,.05)}.axe-quick-note__head span{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--text-secondary)}.axe-quick-note__head button,.axe-quick-note__foot button{border:0;background:transparent;color:var(--text-muted)}
 /* Toolbar: bold/italic/underline + the six colour dots, one compact row
    between the header and the note body. onMouseDown={preventDefault} in the
    component (not CSS) is what keeps the note's own text selection alive when
