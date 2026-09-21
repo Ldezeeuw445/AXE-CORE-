@@ -187,10 +187,11 @@ async function prepareRagReinforcement(
 /**
  * Resolve one reference into the namespaced `memory` table.
  *
- * New Trading episodes use `memory-id:<uuid>`, which is exact. Older
- * episodes contain raw keys. Those are accepted only when they resolve to
- * exactly one row inside the episode agent's own/global namespaces. Ambiguous
- * historical keys stay pending rather than reinforcing a guessed row.
+ * New Trading episodes use `memory-id:<uuid>`, which is exact. Historical
+ * episodes contain unversioned raw keys. Those are deliberately NOT replayed
+ * automatically: resolving a key today does not prove it identifies the same
+ * row/context that was intended when the old episode ran. They remain pending
+ * for a separate audited backfill instead of silently rewriting history.
  */
 async function prepareAgentMemoryReinforcement(
   ref: string,
@@ -199,9 +200,14 @@ async function prepareAgentMemoryReinforcement(
   const namespaces = new Set(namespacesForLoopAgent(agent));
   const byId = ref.startsWith('memory-id:');
   const explicitKey = ref.startsWith('memory-key:');
+
+  if (!byId && !explicitKey) {
+    throw new Error(`legacy unversioned memory key requires audited backfill: ${ref}`);
+  }
+
   const value = byId
     ? ref.slice('memory-id:'.length)
-    : explicitKey ? ref.slice('memory-key:'.length) : ref;
+    : ref.slice('memory-key:'.length);
 
   if (!value) throw new Error('empty memory reference');
 
@@ -240,8 +246,9 @@ async function prepareAgentMemoryReinforcement(
  *
  * Cruciaal: `memory_ids` zijn RAG ids; `memory_keys` zijn references naar
  * de namespaced `memory` store. Een episode wordt alleen `applied=true`
- * nadat ALLE bedoelde references zijn resolved en geschreven. De 42 historische
- * episodes die al applied zijn worden bewust niet opnieuw afgespeeld.
+ * nadat ALLE bedoelde references zijn resolved en geschreven. Reeds toegepaste
+ * historie en oude ongeversioneerde raw-key episodes worden bewust niet
+ * opnieuw afgespeeld.
  */
 export async function applyAgentReinforcement(): Promise<AgentReinforcementReport> {
   const report: AgentReinforcementReport = { episodes: 0, memories: 0, failed: 0 };
