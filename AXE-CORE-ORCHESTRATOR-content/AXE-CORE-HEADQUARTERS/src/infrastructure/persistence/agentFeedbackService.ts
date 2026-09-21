@@ -336,16 +336,27 @@ export async function agentLoopHealth(): Promise<LoopHealth[]> {
   const userId = await currentUserId(sb);
   if (!userId) return [];
 
-  const { data, error } = await sb.from(TABLE)
-    .select('*').eq('user_id', userId)
-    .order('opened_at', { ascending: false }).limit(1000);
+  const rows: Row[] = [];
+  const PAGE = 1000;
+  // PostgREST commonly caps a response at 1000 rows. Trading already has
+  // >4,000 episodes, so a single .limit(1000) made the Agents tab report a
+  // sample as though it were the whole loop.
+  for (let from = 0; from < 20_000; from += PAGE) {
+    const { data, error } = await sb.from(TABLE)
+      .select('*').eq('user_id', userId)
+      .order('opened_at', { ascending: false })
+      .range(from, from + PAGE - 1);
 
-  if (error) {
-    console.error('[agentLoop] could not read health', error.message);
-    return [];
+    if (error) {
+      console.error('[agentLoop] could not read health', error.message);
+      return [];
+    }
+    const page = (data ?? []) as Row[];
+    rows.push(...page);
+    if (page.length < PAGE) break;
   }
 
-  const episodes = (data ?? []).map(r => toEpisode(r as Row));
+  const episodes = rows.map(toEpisode);
   return LOOP_AGENTS.map(a => loopHealth(a, episodes));
 }
 
