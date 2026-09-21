@@ -53,6 +53,12 @@ import subprocess
 import tempfile
 import threading
 import time
+import re
+
+try:
+    import fcntl  # macOS/Linux; both supported agent hosts
+except ImportError:  # pragma: no cover
+    fcntl = None
 
 log = logging.getLogger("axe_core_api.agent_runner")
 
@@ -390,6 +396,125 @@ def _binary(engine: dict) -> str | None:
     return naam if os.path.isabs(naam) and os.path.exists(naam) else None
 
 
+
+# ── Subscription usage ledger ────────────────────────────────────────────────
+# The CLIs do not expose a trustworthy "47% of weekly subscription left"
+# endpoint. AXE therefore records what IT actually used and any real limit
+# message the CLI emitted. No prompt/result content is persisted here.
+_AGENT_USAGE_FILE = os.path.expanduser(
+    os.environ.get("AXE_AGENT_USAGE_FILE", "~/.axe/agent-usage.json")
+)
+_AGENT_USAGE_LOCK = threading.Lock()
+_AGENT_USAGE_MAX_EVENTS = 2000
+
+
+def _usage_state() -> dict:
+    try:
+        with open(_AGENT_USAGE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {"events": []}
+    except (OSError, ValueError, TypeError):
+        return {"events": []}
+
+
+def _usage_transaction(mutator):
+    directory = os.path.dirname(_AGENT_USAGE_FILE) or "."
+    os.makedirs(directory, exist_ok=True)
+    lock_path = _AGENT_USAGE_FILE + ".lock"
+    with _AGENT_USAGE_LOCK:
+        with open(lock_path, "a+", encoding="utf-8") as lock:
+            if fcntl is not None:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                state = _usage_state()
+                result = mutator(state)
+                tmp = _AGENT_USAGE_FILE + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as out:
+                    json.dump(state, out, separators=(",", ":"))
+                os.replace(tmp, _AGENT_USAGE_FILE)
+                return result
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def _limit_message(text: str) -> str | None:
+    if not re.search(r"usage limit|rate limit|quota exceeded|too many requests|\b429\b", text or "", re.I):
+        return None
+    # Keep the useful clause (often contains "try again at …"), never the whole
+    # stderr transcript.
+    clean = " ".join((text or "").split())
+    m = re.search(r"(.{0,90}(?:usage limit|rate limit|quota exceeded|too many requests|\b429\b).{0,180})", clean, re.I)
+    return (m.group(1) if m else clean)[:280]
+
+
+def _record_agent_usage(engine: str, repo: str, result: dict, started_at: float, model: str = "") -> None:
+    meta = result.get("meta") if isinstance(result, dict) else None
+    usage = meta.get("usage") if isinstance(meta, dict) and isinstance(meta.get("usage"), dict) else {}
+    errorish = str(result.get("error") or (result.get("result") if result.get("status") == "error" else "") or "")
+    event = {
+        "ts": time.time(),
+        "engine": engine,
+        "repo": repo,
+        "status": result.get("status") or "error",
+        "duration_s": round(max(0.0, time.time() - started_at), 2),
+        "model": model or None,
+        "input_tokens": usage.get("input_tokens"),
+        "output_tokens": usage.get("output_tokens"),
+        "cache_read_tokens": usage.get("cache_read_input_tokens"),
+        "limit_message": _limit_message(errorish),
+    }
+
+    def mutate(state):
+        events = state.setdefault("events", [])
+        events.append(event)
+        state["events"] = events[-_AGENT_USAGE_MAX_EVENTS:]
+
+    try:
+        _usage_transaction(mutate)
+    except Exception as e:  # noqa: BLE001
+        log.warning("agent usage ledger write failed: %s", str(e)[:160])
+
+
+def agent_usage_status() -> dict:
+    """Privacy-safe observed usage per subscription seat.
+
+    Counts are AXE runs, not vendor billing percentages. Exact remaining plan
+    quota is deliberately reported as unavailable unless a CLI starts exposing
+    it machine-readably.
+    """
+    state = _usage_state()
+    events = state.get("events") if isinstance(state.get("events"), list) else []
+    now = time.time()
+    out = {}
+    for name, motor in ENGINES.items():
+        own = [e for e in events if isinstance(e, dict) and e.get("engine") == name]
+        day = [e for e in own if float(e.get("ts") or 0) >= now - 86400]
+        week = [e for e in own if float(e.get("ts") or 0) >= now - 7 * 86400]
+        last = max(own, key=lambda e: float(e.get("ts") or 0), default=None)
+        limits = [e for e in own if e.get("limit_message")]
+        last_limit = max(limits, key=lambda e: float(e.get("ts") or 0), default=None)
+
+        def isum(rows, key):
+            return sum(int(e.get(key) or 0) for e in rows)
+
+        out[name] = {
+            "label": motor["label"],
+            "runs_24h": len(day),
+            "runs_7d": len(week),
+            "ok_7d": sum(1 for e in week if e.get("status") == "ok"),
+            "failed_7d": sum(1 for e in week if e.get("status") != "ok"),
+            "input_tokens_7d": isum(week, "input_tokens"),
+            "output_tokens_7d": isum(week, "output_tokens"),
+            "last_run_at": last.get("ts") if last else None,
+            "last_status": last.get("status") if last else None,
+            "last_limit_at": last_limit.get("ts") if last_limit else None,
+            "last_limit_message": last_limit.get("limit_message") if last_limit else None,
+            "exact_remaining_available": False,
+            "remaining_note": "De CLI geeft geen exact resterend abonnementssaldo machine-readable terug.",
+        }
+    return out
+
 def run_agent(
     repo: str,
     prompt: str,
@@ -486,6 +611,12 @@ def run_agent(
     if gewacht >= 1:
         log.info("%s: %.1fs gewacht op een andere run", motornaam, gewacht)
 
+    run_started = time.time()
+
+    def finish(result: dict) -> dict:
+        _record_agent_usage(motornaam, repo, result, run_started, (model or "").strip())
+        return result
+
     uitvoer = ""
     tmp = None
     try:
@@ -506,9 +637,9 @@ def run_agent(
             except Exception as e:  # noqa: BLE001
                 log.warning("kon %s niet lezen: %s", tmp, e)
     except subprocess.TimeoutExpired:
-        return {"status": "error", "error": f"{motor['label']} liep langer dan {limit}s", "repo": repo, "branch": branch, "engine": motornaam}
+        return finish({"status": "error", "error": f"{motor['label']} liep langer dan {limit}s", "repo": repo, "branch": branch, "engine": motornaam})
     except Exception as e:  # noqa: BLE001
-        return {"status": "error", "error": f"{type(e).__name__}: {e}", "repo": repo, "branch": branch, "engine": motornaam}
+        return finish({"status": "error", "error": f"{type(e).__name__}: {e}", "repo": repo, "branch": branch, "engine": motornaam})
     finally:
         slot.release()
         if tmp and os.path.exists(tmp):
@@ -522,15 +653,15 @@ def run_agent(
 
     if motor["leest_bestand"]:
         if proc.returncode != 0 and not uitvoer:
-            return {**basis, "status": "error",
-                    "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"}
-        return {**basis, "status": "error" if proc.returncode != 0 else "ok",
-                "result": (uitvoer or stdout)[:8000]}
+            return finish({**basis, "status": "error",
+                    "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"})
+        return finish({**basis, "status": "error" if proc.returncode != 0 else "ok",
+                "result": (uitvoer or stdout)[:8000]})
 
     # Claude: JSON op stdout.
     if proc.returncode != 0 and not stdout:
-        return {**basis, "status": "error",
-                "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"}
+        return finish({**basis, "status": "error",
+                "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"})
 
     try:
         parsed = json.loads(stdout) if stdout else None
@@ -540,8 +671,8 @@ def run_agent(
     if parsed is None:
         # --output-format json houdt normaal stand, maar een versiewissel of een
         # wrapper op PATH mag geen verzonnen succes worden.
-        return {**basis, "status": "error" if proc.returncode != 0 else "ok",
-                "result": stdout[:8000], "raw": True}
+        return finish({**basis, "status": "error" if proc.returncode != 0 else "ok",
+                "result": stdout[:8000], "raw": True})
 
     mislukt = proc.returncode != 0
     result_text = ""
@@ -554,9 +685,9 @@ def run_agent(
         if parsed.get("is_error") is True:
             mislukt = True
 
-    return {**basis, "status": "error" if mislukt else "ok",
+    return finish({**basis, "status": "error" if mislukt else "ok",
             "result": result_text or stdout[:8000],
-            "meta": parsed if isinstance(parsed, dict) else None}
+            "meta": parsed if isinstance(parsed, dict) else None})
 
 
 def _git(repo_path: str, *args: str, timeout: int = 120) -> subprocess.CompletedProcess:
