@@ -380,7 +380,7 @@ export function PlaatChat() {
               twee rechts. Ze zijn niet verdwenen -- ze staan onder de klok,
               samen met de gesprekken, want dat is allemaal "welk gesprek kijk
               je en hoe staat het ervoor". */}
-          {opEditor ? (
+          {!gesprekInPresence && (opEditor ? (
           <div className="axe-vak-kop">
             <span className="axe-kop-links">
               <span className="axe-kop-persona" style={{ color: 'var(--accent-cyan)', letterSpacing: '0.08em' }}>
@@ -430,7 +430,7 @@ export function PlaatChat() {
                   ooit toch dicht zet. */}
             </span>
           </div>
-          )}
+          ))}
 
           {/* Achter de klok: de gesprekken en de status. Eén paneel in plaats
               van vier dingen op de kopregel. */}
@@ -554,6 +554,46 @@ export function PlaatChat() {
         plaatshouder={attachments.length ? 'Send · show · chart · done' : 'Ask anything, @models, /prompts …'}
         snelacties={!isMobile && (opEditor || !chatCollapsed)}
         snelactieLijst={opEditor ? codeKop?.snelacties : undefined}
+        kop={gesprekInPresence ? (
+          <>
+            <span className="axe-kop-links">
+              <span className="axe-kop-persona">
+                <Sparkles size={13} />
+                {voice.allConversations.find(c => c.id === voice.sessionId)?.title ?? 'AXE CORE'}
+              </span>
+              <span onClick={e => e.stopPropagation()}>
+                <ChatModelKiezer variant="stip" />
+              </span>
+            </span>
+            <span className="axe-kop-rechts">
+              <button onClick={() => setPaneelOpen(v => !v)} title="Gesprekken en status" aria-expanded={paneelOpen}>
+                <Clock size={15} />
+              </button>
+              <button onClick={() => navigate('/settings')} title="Instellingen">
+                <SlidersHorizontal size={15} />
+              </button>
+            </span>
+            {paneelOpen && (
+              <div className="axe-kop-paneel axe-kop-paneel--composer">
+                <span className="axe-cpills"><MissionControlStrip /></span>
+                <span className="axe-cstat">
+                  <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
+                  <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}><Wifi size={10} />Online</span>
+                  {voice.apiKeyValid === true && <span style={{ color: 'var(--success)' }}>API OK</span>}
+                </span>
+                <span className="axe-convs">
+                  {voice.allConversations.slice(0, 6).map(conv => (
+                    <button key={conv.id} onClick={() => voice.switchConversation(conv.id)} className="axe-conv" data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}>
+                      {conv.title}
+                    </button>
+                  ))}
+                </span>
+                <button onClick={() => voice.loadAllConversations()} title="Verversen" className="axe-kop-mini"><RotateCcw size={12} /></button>
+                <button onClick={() => voice.startNewConversation()} title="Nieuw gesprek" className="axe-kop-mini"><Plus size={12} /></button>
+              </div>
+            )}
+          </>
+        ) : undefined}
         staf={<VermogensKnop onKies={t => setChatText(t)} />}
         links={
           <>
