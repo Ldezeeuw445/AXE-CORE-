@@ -47,7 +47,9 @@ export default function ComputerUse() {
 
   useEffect(() => {
     void refresh();
-    if (multiMonitorAvailable()) void openPersonalComputerUse().catch(console.error);
+    // The page is the management/overview surface. The floating Computer Use
+    // window is opened explicitly from the radial dock or "Compact mode".
+    // Auto-opening it here made one navigation produce two Computer Use UIs.
     const timer = window.setInterval(() => void refresh(), 5_000);
     return () => window.clearInterval(timer);
   }, []);
