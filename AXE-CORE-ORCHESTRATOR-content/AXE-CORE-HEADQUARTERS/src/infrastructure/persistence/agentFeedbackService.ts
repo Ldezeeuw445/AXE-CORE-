@@ -25,6 +25,9 @@
  * bleek dat 24.629 trading-rijen onder één generieke categorie stonden.
  */
 import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
+import { sbGetRows, sbUpdateRow } from '@/infrastructure/gateways/axeCoreApiService';
+import type { MemoryRow } from '@/infrastructure/persistence/agentMemoryService';
+import { AGENT_CATALOG } from '@/domain/agents/catalog';
 import {
   type Episode, type LoopAgent, type Verdict,
   pendingForReinforcement, tallyHits, reinforcedImportance, loopHealth,
@@ -122,17 +125,123 @@ export async function closeEpisode(
 }
 
 export interface AgentReinforcementReport {
+  /** Episodes that were fully reinforced AND marked applied. */
   episodes: number;
+  /** Individual memory references successfully reinforced. */
   memories: number;
+  /** Failed/unresolved references or episode state writes. */
   failed: number;
+}
+
+type PreparedReinforcement = {
+  label: string;
+  apply: () => Promise<void>;
+  rollback: () => Promise<void>;
+};
+
+/**
+ * Namespace(s) an episode is allowed to reinforce in the namespaced memory
+ * table. This is derived from the canonical catalog wherever one exists;
+ * only the two pre-catalog identities (chat/research) and the developer's
+ * historical loop name need aliases.
+ */
+function namespacesForLoopAgent(agent: LoopAgent): string[] {
+  if (agent === 'chat') return ['global'];
+  if (agent === 'research') return ['axe_research', 'global'];
+
+  const catalogId = agent === 'code-editor' ? 'developer' : agent;
+  const entry = AGENT_CATALOG.find(a => a.kind === 'core' && a.id === catalogId);
+  const own = entry?.namespace;
+  return own && own !== 'global' ? [own, 'global'] : ['global'];
+}
+
+async function prepareRagReinforcement(
+  id: string,
+  hits = 1,
+): Promise<PreparedReinforcement> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase unavailable');
+
+  const { data, error } = await sb
+    .from('rag_memories').select('importance').eq('id', id).single();
+  if (error) throw new Error(error.message);
+
+  const before = Number.isFinite(Number(data?.importance)) ? Number(data?.importance) : 5;
+  const after = reinforcedImportance(before, hits);
+
+  return {
+    label: `rag:${id}`,
+    apply: async () => {
+      const { error: upErr } = await sb
+        .from('rag_memories').update({ importance: after }).eq('id', id);
+      if (upErr) throw new Error(upErr.message);
+    },
+    rollback: async () => {
+      const { error: rollErr } = await sb
+        .from('rag_memories').update({ importance: before }).eq('id', id);
+      if (rollErr) throw new Error(rollErr.message);
+    },
+  };
+}
+
+/**
+ * Resolve one reference into the namespaced `memory` table.
+ *
+ * New Trading episodes use `memory-id:<uuid>`, which is exact. Older
+ * episodes contain raw keys. Those are accepted only when they resolve to
+ * exactly one row inside the episode agent's own/global namespaces. Ambiguous
+ * historical keys stay pending rather than reinforcing a guessed row.
+ */
+async function prepareAgentMemoryReinforcement(
+  ref: string,
+  agent: LoopAgent,
+): Promise<PreparedReinforcement> {
+  const namespaces = new Set(namespacesForLoopAgent(agent));
+  const byId = ref.startsWith('memory-id:');
+  const explicitKey = ref.startsWith('memory-key:');
+  const value = byId
+    ? ref.slice('memory-id:'.length)
+    : explicitKey ? ref.slice('memory-key:'.length) : ref;
+
+  if (!value) throw new Error('empty memory reference');
+
+  const rows = await sbGetRows<MemoryRow>('memory', {
+    limit: byId ? 2 : 100,
+    filterCol: byId ? 'id' : 'key',
+    filterVal: value,
+  });
+  const candidates = (rows ?? []).filter(row => namespaces.has(row.agent));
+
+  if (candidates.length !== 1) {
+    throw new Error(
+      candidates.length === 0
+        ? `memory ref not found in ${[...namespaces].join(',')}: ${ref}`
+        : `ambiguous legacy memory ref (${candidates.length} rows): ${ref}`,
+    );
+  }
+
+  const row = candidates[0];
+  const before = Number.isFinite(Number(row.importance)) ? Number(row.importance) : 5;
+  const after = reinforcedImportance(before, 1);
+
+  return {
+    label: `memory:${row.id}`,
+    apply: async () => {
+      await sbUpdateRow('memory', row.id, { importance: after });
+    },
+    rollback: async () => {
+      await sbUpdateRow('memory', row.id, { importance: before });
+    },
+  };
 }
 
 /**
  * Versterkt wat in de kamer stond toen het goed ging.
  *
- * Alleen omhoog, nooit omlaag: een verkeerde beslissing ligt veel vaker aan
- * het model, de markt of het toeval dan aan de opgehaalde herinnering. Wie
- * daarvoor het geheugen straft, leert het systeem minder te onthouden.
+ * Cruciaal: `memory_ids` zijn RAG ids; `memory_keys` zijn references naar
+ * de namespaced `memory` store. Een episode wordt alleen `applied=true`
+ * nadat ALLE bedoelde references zijn resolved en geschreven. De 42 historische
+ * episodes die al applied zijn worden bewust niet opnieuw afgespeeld.
  */
 export async function applyAgentReinforcement(): Promise<AgentReinforcementReport> {
   const report: AgentReinforcementReport = { episodes: 0, memories: 0, failed: 0 };
@@ -156,32 +265,61 @@ export async function applyAgentReinforcement(): Promise<AgentReinforcementRepor
 
   const pending = pendingForReinforcement((data ?? []).map(r => toEpisode(r as Row)));
   if (!pending.length) return report;
-  report.episodes = pending.length;
 
-  for (const [id, hits] of tallyHits(pending)) {
+  for (const episode of pending) {
+    const prepared: PreparedReinforcement[] = [];
     try {
-      const { data: mem, error: readErr } = await sb
-        .from('rag_memories').select('importance').eq('id', id).single();
-      if (readErr) throw new Error(readErr.message);
-
-      const next = reinforcedImportance(mem?.importance ?? 5, hits);
-      const { error: upErr } = await sb
-        .from('rag_memories').update({ importance: next }).eq('id', id);
-      if (upErr) throw new Error(upErr.message);
-      report.memories++;
+      // Resolve every reference BEFORE writing anything. That makes stale or
+      // ambiguous legacy keys a clean no-op rather than a partially learned
+      // episode.
+      for (const id of new Set(episode.memoryIds)) {
+        prepared.push(await prepareRagReinforcement(id, 1));
+      }
+      for (const ref of new Set(episode.memoryKeys)) {
+        prepared.push(await prepareAgentMemoryReinforcement(ref, episode.agent));
+      }
+      if (!prepared.length) continue;
     } catch (err) {
-      // Geteld en gelogd. Een versterking die stil faalt is precies hoe je
-      // gaat geloven dat een lus rondloopt terwijl dat niet zo is.
       report.failed++;
-      console.error('[agentLoop] could not reinforce', id, err);
+      console.error('[agentLoop] could not resolve episode references', episode.id, err);
+      continue;
+    }
+
+    const applied: PreparedReinforcement[] = [];
+    try {
+      for (const op of prepared) {
+        await op.apply();
+        applied.push(op);
+      }
+
+      // Mark ONE episode only after every reference succeeded. This replaces
+      // the old bulk update that checked off key-only episodes even when zero
+      // memories had changed.
+      const { error: markErr } = await sb.from(TABLE)
+        .update({ applied: true })
+        .eq('user_id', userId)
+        .eq('id', episode.id)
+        .eq('applied', false);
+      if (markErr) throw new Error(markErr.message);
+
+      report.episodes++;
+      report.memories += applied.length;
+    } catch (err) {
+      report.failed++;
+      console.error('[agentLoop] reinforcement failed; rolling episode back', episode.id, err);
+
+      // Compensate in reverse order so a transient failure does not leave half
+      // an episode reinforced and then reinforce those rows again next pass.
+      for (const op of [...applied].reverse()) {
+        try {
+          await op.rollback();
+        } catch (rollbackErr) {
+          report.failed++;
+          console.error('[agentLoop] reinforcement rollback failed', episode.id, op.label, rollbackErr);
+        }
+      }
     }
   }
-
-  // Pas markeren als toegepast nadat de versterking is gelukt: andersom zou
-  // een mislukte pas de episodes verbruiken zonder dat er iets veranderde.
-  const ids = pending.map(e => e.id);
-  const { error: markErr } = await sb.from(TABLE).update({ applied: true }).in('id', ids);
-  if (markErr) console.error('[agentLoop] could not tick off episodes', markErr.message);
 
   return report;
 }
