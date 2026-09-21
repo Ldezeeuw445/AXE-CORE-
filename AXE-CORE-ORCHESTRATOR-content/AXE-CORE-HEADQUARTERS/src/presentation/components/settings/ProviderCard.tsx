@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { Check, ChevronRight, Eye, EyeOff, Loader2, Trash2 } from 'lucide-react';
 import { standTekst, standKleur, type KaartStand } from '@/domain/providerCardStand';
+import type { ProviderUsageSnapshot } from '@/infrastructure/persistence/providerUsageService';
 
 /**
  * A failed key-test's reason can arrive as a plain string OR as the provider's
@@ -18,6 +19,70 @@ function foutRegel(f: unknown): string {
     try { return JSON.stringify(f); } catch { return String(f); }
   }
   return String(f);
+}
+
+
+function usageTekst(snapshot?: ProviderUsageSnapshot | null): { kop: string; regel: string; detail: string } {
+  if (!snapshot) return {
+    kop: 'USAGE',
+    regel: 'Nog geen echte meting',
+    detail: 'Wordt gevuld door echte calls of Refresh usage.',
+  };
+
+  const b = snapshot.balance;
+  if (b?.supported && b.kind === 'balance') {
+    if ((b.provider === 'openrouter' || b.provider === 'openrouter2') && typeof b.limit_remaining === 'number') {
+      const windowText = b.limit_reset ? ` · reset ${b.limit_reset}` : '';
+      const week = typeof b.usage_weekly === 'number' ? ` · week gebruikt ${b.usage_weekly.toFixed(2)}` : '';
+      return {
+        kop: 'BALANCE',
+        regel: `${b.limit_remaining.toFixed(2)} credits resterend`,
+        detail: `limiet ${typeof b.limit === 'number' ? b.limit.toFixed(2) : '—'}${week}${windowText}`,
+      };
+    }
+    if (b.provider === 'elevenlabs' && typeof b.remaining === 'number') {
+      const reset = b.reset_unix ? new Date(b.reset_unix * 1000).toLocaleDateString() : '—';
+      return {
+        kop: 'BALANCE',
+        regel: `${b.remaining.toLocaleString()} credits resterend`,
+        detail: `${(b.used ?? 0).toLocaleString()} / ${(b.limit ?? 0).toLocaleString()} gebruikt · reset ${reset}${b.tier ? ` · ${b.tier}` : ''}`,
+      };
+    }
+    if (b.provider === 'deepseek' && b.balances?.length) {
+      const first = b.balances[0];
+      return {
+        kop: 'BALANCE',
+        regel: `${first.total_balance ?? '—'} ${first.currency ?? ''} beschikbaar`.trim(),
+        detail: `gekocht ${first.topped_up_balance ?? '—'} · grant ${first.granted_balance ?? '—'}`,
+      };
+    }
+  }
+
+  const quota = snapshot.quota ?? {};
+  const vind = (suffix: string) => Object.entries(quota).find(([k]) => k.endsWith(suffix))?.[1];
+  const req = vind('remaining-requests') ?? vind('requests-remaining');
+  const tok = vind('remaining-tokens') ?? vind('tokens-remaining');
+  const reqReset = vind('reset-requests') ?? vind('requests-reset');
+  const tokReset = vind('reset-tokens') ?? vind('tokens-reset');
+  if (req || tok) {
+    return {
+      kop: 'RATE LIMIT',
+      regel: [req ? `${req} requests` : '', tok ? `${tok} tokens` : ''].filter(Boolean).join(' · ') + ' resterend',
+      detail: [reqReset ? `requests reset ${reqReset}` : '', tokReset ? `tokens reset ${tokReset}` : ''].filter(Boolean).join(' · ') || 'laatste echte providerresponse',
+    };
+  }
+
+  if (b && b.supported === false) return {
+    kop: 'USAGE',
+    regel: 'Exact saldo niet via deze key beschikbaar',
+    detail: 'AXE toont hier automatisch rate-limit headroom zodra de provider die bij een echte call teruggeeft.',
+  };
+
+  return {
+    kop: 'USAGE',
+    regel: 'Provider gaf geen resterend quota terug',
+    detail: snapshot.updatedAt ? `laatst bekeken ${new Date(snapshot.updatedAt).toLocaleTimeString()}` : '—',
+  };
 }
 
 /**
@@ -54,7 +119,7 @@ export interface ProviderKaart {
 
 export function ProviderCard({
   kaart, stand, sleutel, model, fout, laatsteTest, sleutelZichtbaar, opServer,
-  modellen, isPrimair, aangepast,
+  modellen, isPrimair, aangepast, gebruik,
   onSleutel, onModel, onTest, onToonSleutel, onVerwijder,
 }: {
   kaart: ProviderKaart;
@@ -72,6 +137,7 @@ export function ProviderCard({
    *  was zelf de tegenstrijdigheid die "één bron van waarheid" moest oplossen. */
   isPrimair: boolean;
   aangepast: boolean;
+  gebruik?: ProviderUsageSnapshot | null;
   onSleutel: (waarde: string) => void;
   onModel: (model: string) => void;
   onTest: () => void;
@@ -86,6 +152,7 @@ export function ProviderCard({
   const sleutelOptioneel = kaart.id === 'ollama';
   const ingesteld = !kaart.needsKey || !!sleutel || opServer;
   const kleur = standKleur(stand, ingesteld);
+  const usage = usageTekst(gebruik);
 
   return (
     <div
@@ -183,6 +250,19 @@ export function ProviderCard({
             )}
           </div>
         </div>
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border-default)' }} />
+
+      <div className="px-4 py-2.5" style={{ minHeight: 55 }}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[9px] font-mono tracking-[0.12em]" style={{ color: 'var(--accent-cyan)' }}>{usage.kop}</span>
+          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+            {gebruik?.updatedAt ? new Date(gebruik.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+          </span>
+        </div>
+        <div className="text-[11px] font-medium mt-1" style={{ color: 'var(--text-primary)' }}>{usage.regel}</div>
+        <div className="text-[9px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }} title={usage.detail}>{usage.detail}</div>
       </div>
 
       <div style={{ height: 1, background: 'var(--border-default)' }} />
