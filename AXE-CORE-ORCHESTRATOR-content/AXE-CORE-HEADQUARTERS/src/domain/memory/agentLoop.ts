@@ -35,6 +35,8 @@ export const LOOP_AGENTS = [
   'code-editor',
   'browser',
   'research',
+  'intel',
+  'companion',
   // Wingman's crew-runs (CrewAI.tsx): één episode per specialist, gesloten
   // zodra het (synchrone) /crew/run-resultaat terugkomt. Episodes en niet
   // beurten, ondanks het directe antwoord: een crew gestart op de Mac Mini
