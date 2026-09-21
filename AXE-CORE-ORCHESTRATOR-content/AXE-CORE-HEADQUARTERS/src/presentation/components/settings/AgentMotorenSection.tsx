@@ -17,7 +17,10 @@ import { leesToewijzing, kiesMotor } from '@/infrastructure/persistence/agentMot
 import { leesModellen, zetModel } from '@/infrastructure/persistence/motorModellenOpslag';
 import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motorModellen';
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
-import { claudeRepos, plannerStatus, plannerZetAan, type PlannerStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  claudeRepos, plannerStatus, plannerZetAan,
+  type PlannerStatus, type AgentSubscriptionUsage,
+} from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
 import { chatModelKeuzes, workerKeuzes, paidApiKeuzes, isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
@@ -62,6 +65,30 @@ function GebruikBalk({ gebruik, budget }: { gebruik: number; budget: number }) {
   );
 }
 
+function AbonnementGebruik({ gebruik }: { gebruik?: AgentSubscriptionUsage }) {
+  if (!gebruik) {
+    return <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>AXE usage: nog geen meting van deze agent-host.</div>;
+  }
+  const tokens = gebruik.input_tokens_7d + gebruik.output_tokens_7d;
+  return (
+    <div className="mt-1 space-y-0.5">
+      <div className="text-[9px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+        AXE OBSERVED · {gebruik.runs_24h} runs / 24h · {gebruik.runs_7d} runs / 7d
+        {tokens > 0 ? ` · ${tokens.toLocaleString()} tokens / 7d` : ''}
+      </div>
+      <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+        Plan-restant: niet machine-readable door deze CLI
+        {gebruik.last_run_at ? ` · laatste run ${new Date(gebruik.last_run_at * 1000).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+      </div>
+      {gebruik.last_limit_message && (
+        <div className="text-[9px] line-clamp-2" style={{ color: 'var(--warning)' }} title={gebruik.last_limit_message}>
+          LIMIT GEZIEN · {gebruik.last_limit_message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const WAARVOOR: Record<HoofdAgent, string> = {
   wingman: 'Draait de gratis CrewAI-crew namens AXE, en helpt overal waar dat past.',
   northsea: 'Bouwt en runt de NorthSea-desk, beweegt deals. Schrijftaken pas na jouw akkoord.',
@@ -75,6 +102,7 @@ export function AgentMotorenSection() {
   const [aanwezig, setAanwezig] = useState<Record<string, boolean> | null>(null);
   const [modellen, setModellen] = useState<MotorModellen>(() => leesModellen());
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
+  const [abonnementGebruik, setAbonnementGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
   const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
   const verbindingen = useMemo(() => leesVerbindingen(), [toewijzing, overrides]);
   const tier2Keuzes = useMemo(
@@ -123,12 +151,26 @@ export function AgentMotorenSection() {
     const bij = () => { setToewijzing(leesToewijzing()); setOverrides(leesOverrides()); };
     window.addEventListener('axe:agent-motoren', bij);
     window.addEventListener('storage', bij);
-    // Welke CLI's staan op de host waar de agents draaien. Aanwezig, niet of je
-    // ingelogd bent -- dat laatste zie je pas bij de eerste run.
-    claudeRepos()
-      .then(r => setAanwezig(Object.fromEntries(Object.entries(r.engines ?? {}).map(([k, v]) => [k, v.aanwezig]))))
-      .catch(() => setAanwezig(null));
-    return () => { window.removeEventListener('axe:agent-motoren', bij); window.removeEventListener('storage', bij); };
+
+    let alive = true;
+    const laadHost = () => {
+      void claudeRepos()
+        .then(r => {
+          if (!alive) return;
+          setAanwezig(Object.fromEntries(Object.entries(r.engines ?? {}).map(([k, v]) => [k, v.aanwezig])));
+          setAbonnementGebruik(r.usage ?? {});
+        })
+        .catch(() => { if (alive) setAanwezig(null); });
+    };
+    laadHost();
+    const timer = window.setInterval(laadHost, 60_000);
+
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener('axe:agent-motoren', bij);
+      window.removeEventListener('storage', bij);
+    };
   }, []);
 
   const kies = (agent: HoofdAgent, motor: HoofdMotor) => setToewijzing(kiesMotor(agent, motor));
@@ -311,6 +353,7 @@ export function AgentMotorenSection() {
                 <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                   {MODEL_VLAG[motor]} · suggesties: {MODEL_SUGGESTIES[motor].join(', ')}
                 </div>
+                <AbonnementGebruik gebruik={abonnementGebruik[motor]} />
               </div>
               <input
                 value={modellen[motor] ?? ''}

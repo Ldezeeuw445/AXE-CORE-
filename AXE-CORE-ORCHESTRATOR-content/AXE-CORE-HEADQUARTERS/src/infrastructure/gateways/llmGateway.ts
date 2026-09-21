@@ -23,6 +23,7 @@ import { aiProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
 import { proxyErrorMessage } from '@/domain/proxyError';
+import { quotaFromHeaders, recordProviderUsage } from '@/infrastructure/persistence/providerUsageService';
 import {
   LIMIET_SLEUTEL, isLimietFout, koelingTot, koeltNog, koelingTekst,
 } from '@/domain/gebruikslimiet';
@@ -219,14 +220,20 @@ function onthoudKoeling(motor:string,tot:number):void{
     // the VPS proxy always returns a single {text} JSON body since it isn't
     // under that constraint. Try JSON first, fall back to raw text.
     const raw=await pr.text();
-    try{const d=JSON.parse(raw) as{text?:string};return sanitizeLlmText(d.text??raw);}catch{return sanitizeLlmText(raw);}
+    try{
+      const d=JSON.parse(raw) as{text?:string;quota?:Record<string,string>;usage?:Record<string,unknown>};
+      if(d.quota||d.usage)recordProviderUsage(slot.provider,{quota:d.quota,usage:d.usage});
+      return sanitizeLlmText(d.text??raw);
+    }catch{return sanitizeLlmText(raw);}
   }
 
   if(cfg.format==='anthropic'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
     const r=await fetch(`${anthropicBase(base)}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:4096,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return sanitizeLlmText(d.content?.[0]?.text??'');
+    const d=await r.json();
+    recordProviderUsage(slot.provider,{quota:quotaFromHeaders(r.headers),usage:d.usage});
+    return sanitizeLlmText(d.content?.[0]?.text??'');
   }
 
   if(cfg.format==='google'){
@@ -236,7 +243,9 @@ function onthoudKoeling(motor:string,tot:number):void{
     // formats, so this isn't conditional on which one the user has.
     const r=await fetch(`${base}/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':slot.key},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:8192}})});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return sanitizeLlmText(d.candidates?.[0]?.content?.parts?.[0]?.text??'');
+    const d=await r.json();
+    recordProviderUsage(slot.provider,{quota:quotaFromHeaders(r.headers),usage:d.usageMetadata});
+    return sanitizeLlmText(d.candidates?.[0]?.content?.parts?.[0]?.text??'');
   }
 
   const chatPath=slot.provider==='groq'?`${base}/chat/completions`:`${base}/v1/chat/completions`;
@@ -257,7 +266,9 @@ function onthoudKoeling(motor:string,tot:number):void{
     }
     throw new Error(vanProvider||`HTTP ${r.status}`);
   }
-  const d=await r.json();return sanitizeLlmText(d.choices?.[0]?.message?.content??'');
+  const d=await r.json();
+  recordProviderUsage(slot.provider,{quota:quotaFromHeaders(r.headers),usage:d.usage});
+  return sanitizeLlmText(d.choices?.[0]?.message?.content??'');
 }
 
 /**

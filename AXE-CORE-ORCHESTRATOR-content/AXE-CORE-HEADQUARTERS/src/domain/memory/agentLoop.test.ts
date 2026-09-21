@@ -87,13 +87,31 @@ describe('loopHealth', () => {
   });
 
   it('geeft 0 en geen NaN als er niets is', () => {
-    expect(loopHealth('code-editor', []).closeRate).toBe(0);
+    const h = loopHealth('code-editor', []);
+    expect(h.closeRate).toBe(0);
+    expect(h.applyRate).toBe(0);
+    expect(h.applied).toBe(0);
+  });
+
+  it('onderscheidt een gesloten episode van werkelijk toegepast leren', () => {
+    const h = loopHealth('trading', [
+      ep({ id: 'a', verdict: 'good', memoryIds: [], memoryKeys: ['memory-id:1'], applied: true }),
+      ep({ id: 'b', verdict: 'good', memoryIds: [], memoryKeys: ['memory-id:2'], applied: false }),
+      ep({ id: 'c', verdict: 'poor', applied: false }),
+    ]);
+    expect(h.closed).toBe(3);
+    expect(h.good).toBe(2);
+    expect(h.reinforceable).toBe(2);
+    expect(h.applied).toBe(1);
+    expect(h.applyRate).toBe(0.5);
   });
 });
 
 describe('isLoopAgent', () => {
   it('kent de agents die meedoen', () => {
     expect(isLoopAgent('trading')).toBe(true);
+    expect(isLoopAgent('intel')).toBe(true);
+    expect(isLoopAgent('companion')).toBe(true);
     expect(isLoopAgent('Trading')).toBe(false);
     expect(isLoopAgent('verzonnen')).toBe(false);
     expect(isLoopAgent(null)).toBe(false);

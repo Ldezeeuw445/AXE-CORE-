@@ -27,6 +27,12 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-full min-h-0">
       <div className="w-full lg:w-[260px] shrink-0 space-y-1.5 overflow-y-auto">
+        <div className="rounded-lg p-2.5 mb-2" style={{ border: '1px solid rgba(167,139,250,0.16)', background: 'rgba(255,255,255,0.03)' }}>
+          <div className="text-[9px] uppercase tracking-wider" style={{ color: '#c4b5fd' }}>Manual / backtest bench</div>
+          <div className="text-[9px] leading-snug mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Selecting a card changes manual Run agent and backtests. Autopilot does not use this selection; it ranks the ledger independently for every pair.
+          </div>
+        </div>
         {STRATEGIES.map(s => (
           <button
             key={s.id}

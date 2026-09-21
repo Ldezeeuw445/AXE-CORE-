@@ -9,6 +9,7 @@ import { AgentCard } from '@/presentation/components/widgets/AgentCard';
 import { DEFAULT_AGENTS } from '@/domain/catalogs/defaultAgents';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { agentLoopHealth } from '@/infrastructure/persistence/agentFeedbackService';
+import { loopAgentVoor } from '@/infrastructure/persistence/memoryFeedbackService';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
 import { WarRoom } from '@/presentation/components/axe-core/WarRoom';
 import { agentsByKind } from '@/domain/agents/catalog';
@@ -24,20 +25,14 @@ const ROLE_ACCENT: Record<string, string> = {
   privacy: '#fb923c',
 };
 
-// Welke rij in core_agents hoort bij welke naam in de leerlus
-// (agent_learning_episodes, via LOOP_AGENTS in domain/memory/agentLoop.ts)?
-// Alleen namen die met bewijs uit de code te herleiden zijn -- zie de
-// bestandsverwijzingen in agentRegistry.ts (codeEditorAgent.ts,
-// browserAgentLoop.ts, tradingAgentEngine.ts) en AXE Core als de agent die
-// de chat draait. Geen gok voor de rest: een agent die hier niet in staat
-// heeft gewoon nog geen eigen leerlus, en dat is wat de tab dan ook toont.
-const LOOP_AGENT_BY_NAME: Record<string, LoopHealth['agent']> = {
-  axe_core: 'chat',
-  code_agent: 'code-editor',
-  browser_agent: 'browser',
-  axe_algo: 'trading',
-  'wingman-agent': 'wingman',
-};
+// Loop identity comes from the same canonical namespace/name resolver used by
+// retrieval itself. The page must not maintain a second agent list: that is how
+// real agents were previously shown as "not wired" while their code was live.
+function loopAgentForRow(agent: CoreAgent): LoopHealth['agent'] | null {
+  return loopAgentVoor(agent.memory_namespace || undefined)
+    ?? loopAgentVoor(agent.name)
+    ?? null;
+}
 
 function loadOverrides(): Record<string, Partial<CoreAgent>> {
   try {
@@ -310,7 +305,7 @@ export default function Agents() {
           const note = statusNote(agent.status);
           const skills = Array.isArray(agent.capabilities) ? agent.capabilities : [];
           const tools = Array.isArray(agent.toolset) ? agent.toolset : [];
-          const loopName = LOOP_AGENT_BY_NAME[agent.name];
+          const loopName = loopAgentForRow(agent);
           const health = loopName ? loopHealthByAgent[loopName] : undefined;
           return (
             <div
@@ -376,7 +371,7 @@ export default function Agents() {
                     ? 'Learning loop (agent_learning_episodes): not wired yet.'
                     : !health || health.opened === 0
                       ? 'Learning loop (agent_learning_episodes): 0 episodes.'
-                      : `Learning loop (agent_learning_episodes): ${health.opened} episodes · ${Math.round(health.closeRate * 100)}% closed`}
+                      : `Learning loop: ${health.opened} episodes · ${Math.round(health.closeRate * 100)}% outcomes · ${health.applied}/${health.reinforceable} learned`}
                 </div>
 
                 {!editing ? (

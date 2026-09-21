@@ -4,7 +4,7 @@ import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
-import { restoreMainWindow } from '@/infrastructure/gateways/windowManagerService';
+import { closeCurrentAuxWindow, restoreMainWindow } from '@/infrastructure/gateways/windowManagerService';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
 /**
@@ -119,7 +119,7 @@ export default function ComputerUseOverlay() {
 
         <div className="computer-use-overlay__footer">
           <button type="button" onClick={() => void restoreMainWindow()}><SquareArrowOutUpRight size={14} /> AXE Core</button>
-          <button type="button" onClick={() => window.close()}><X size={14} /> Close</button>
+          <button type="button" onClick={() => void closeCurrentAuxWindow()}><X size={14} /> Close</button>
         </div>
 
         <div

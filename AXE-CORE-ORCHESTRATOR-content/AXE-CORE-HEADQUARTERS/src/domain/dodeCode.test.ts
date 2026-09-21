@@ -142,8 +142,6 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/e2bService.ts', 'e2bRunPython'],
   ['src/infrastructure/gateways/exaSearchService.ts', 'saveExaApiKey'],
   ['src/infrastructure/gateways/firecrawlService.ts', 'firecrawlSearch'],
-  ['src/infrastructure/gateways/geminiLiveService.ts', 'isGeminiLiveAvailable'],
-  ['src/infrastructure/gateways/geminiLiveService.ts', 'stopGeminiLive'],
   ['src/infrastructure/gateways/globalTts.ts', 'getActiveTtsProvider'],
   // Only called internally by speakGlobal() today; exported alongside it (like
   // getActiveTtsProvider/stopGlobalTts above) so the markdown/chrome-stripping
@@ -229,6 +227,13 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/persistence/memoryStatsService.ts', 'getMemoryGrowthHistory'],
   ['src/infrastructure/persistence/obsidianMemoryService.ts', 'extractWikilinks'],
   ['src/infrastructure/persistence/obsidianVaultSyncService.ts', 'noteToMarkdown'],
+  // 21 sep 2026 (PR #153 integratie): symmetrische paar-functie van
+  // recordProviderUsage (die wél wordt aangeroepen, vanuit llmGateway.ts).
+  // SettingsPage.tsx leest vandaag de hele store via readAllProviderUsage()
+  // en indexeert zelf per provider; deze single-provider getter blijft
+  // bewust bestaan als publieke, symmetrische API -- niet weggooien, niet
+  // kunstmatig een aanroeper forceren.
+  ['src/infrastructure/persistence/providerUsageService.ts', 'readProviderUsage'],
   ['src/infrastructure/persistence/obsidianVaultSyncService.ts', 'pullNotesFromVault'],
   ['src/infrastructure/persistence/obsidianVaultSyncService.ts', 'syncAllNotesToVault'],
   ['src/infrastructure/persistence/ragMemoryService.ts', 'initializeRagMemory'],

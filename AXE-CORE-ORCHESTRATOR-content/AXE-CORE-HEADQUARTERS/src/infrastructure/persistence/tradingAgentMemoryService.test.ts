@@ -18,16 +18,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const remember = vi.fn(async (_entry: Record<string, unknown>) => true);
 const recall = vi.fn(async (_query: unknown) => [] as unknown[]);
 const saveGlobalMemory = vi.fn(async (_entry: Record<string, unknown>) => {});
+const openEpisode = vi.fn(async (_entry: Record<string, unknown>) => 'episode-1');
 
 vi.mock('@/infrastructure/persistence/agentMemoryService', () => ({ remember, recall }));
 vi.mock('@/infrastructure/persistence/globalMemoryService', () => ({ saveGlobalMemory }));
 vi.mock('@/infrastructure/persistence/chatPersistence', () => ({ AXE_USER_ID: 'u-axe-core' }));
+vi.mock('@/infrastructure/persistence/agentFeedbackService', () => ({ openEpisode }));
 
 const {
   rememberLesson, rememberOpenThesis, rememberTradeDecision, loadTradingAgentMemory,
+  buildTradingAgentContextWithEpisode,
 } = await import('./tradingAgentMemoryService');
 
-beforeEach(() => { remember.mockClear(); recall.mockClear(); saveGlobalMemory.mockClear(); });
+beforeEach(() => {
+  remember.mockClear();
+  recall.mockClear();
+  saveGlobalMemory.mockClear();
+  openEpisode.mockClear();
+});
 
 describe('the trader writes where it reads', () => {
   it('sends a lesson to its own namespace', async () => {
@@ -72,5 +80,40 @@ describe('the trader writes where it reads', () => {
     // the assertion that would have failed on 23 August.
     await rememberLesson('EURUSD', 'x');
     expect(remember.mock.calls[0][0].agent).toBe(recall.mock.calls[0][0]);
+  });
+
+  it('puts reinforced memories ahead of equally relevant newer memories', async () => {
+    recall.mockResolvedValueOnce([
+      {
+        id: 'newer', agent: 'axe_trader', user_id: 'u', kind: 'lesson',
+        key: 'ta:axe_trading_agent:lesson:XAUUSD:newer', content: 'NEWER',
+        category: null, tags: null, symbol: 'XAUUSD', importance: 5,
+        confidence: 0.8, source: 'axe', created_at: '2026-09-21T12:00:00Z',
+      },
+      {
+        id: 'learned', agent: 'axe_trader', user_id: 'u', kind: 'lesson',
+        key: 'ta:axe_trading_agent:lesson:XAUUSD:learned', content: 'LEARNED',
+        category: null, tags: null, symbol: 'XAUUSD', importance: 7,
+        confidence: 0.8, source: 'axe', created_at: '2026-09-20T12:00:00Z',
+      },
+    ] as never);
+
+    const { context } = await buildTradingAgentContextWithEpisode('XAUUSD');
+    expect(context.indexOf('LEARNED')).toBeLessThan(context.indexOf('NEWER'));
+  });
+
+  it('records stable memory-table ids instead of ambiguous raw keys', async () => {
+    recall.mockResolvedValueOnce([{
+      id: 'memory-row-123', agent: 'axe_trader', user_id: 'u', kind: 'lesson',
+      key: 'same-key-could-exist-elsewhere', content: 'stable reference',
+      category: null, tags: null, symbol: 'XAUUSD', importance: 6,
+      confidence: 0.8, source: 'axe', created_at: '2026-09-21T12:00:00Z',
+    }] as never);
+
+    await buildTradingAgentContextWithEpisode('XAUUSD');
+    expect(openEpisode).toHaveBeenCalledWith(expect.objectContaining({
+      agent: 'trading',
+      memoryKeys: ['memory-id:memory-row-123'],
+    }));
   });
 });

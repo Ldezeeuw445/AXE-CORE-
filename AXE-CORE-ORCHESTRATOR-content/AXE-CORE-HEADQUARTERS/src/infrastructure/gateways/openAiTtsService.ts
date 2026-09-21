@@ -37,6 +37,30 @@ export const STANDAARD_STEM: OpenAiStem = 'cedar';
 const STEM_SLEUTEL = 'axe_openai_stem';
 const MODEL = 'gpt-4o-mini-tts';
 
+/**
+ * AXE's speaking character. Voice identity comes from Cedar; this controls the
+ * delivery so it stays calm and easy to listen to instead of drifting into an
+ * over-animated assistant cadence.
+ */
+export const AXE_SPEECH_INSTRUCTIONS =
+  'Speak in the language of the input, using a calm, low, warm adult male voice. ' +
+  'Sound natural, grounded and understated, like a trusted technical copilot sitting nearby. ' +
+  'Use a relaxed, moderately slow natural pace with short pauses, stable pitch and subtle warmth. ' +
+  'Sound attentive, not sleepy. Avoid announcer cadence, exaggerated enthusiasm, sales tone, ' +
+  'over-enunciation, theatrical emphasis, singing or whispering. ' +
+  'For Dutch use fluent neutral Dutch; for English use a neutral natural accent. ' +
+  'Do not add or remove information.';
+
+export function buildOpenAiSpeechRequest(input: string, voice: OpenAiStem) {
+  return {
+    model: MODEL,
+    voice,
+    input,
+    instructions: AXE_SPEECH_INSTRUCTIONS,
+    response_format: 'mp3' as const,
+  };
+}
+
 export function getOpenAiStem(): OpenAiStem {
   try {
     const v = localStorage.getItem(STEM_SLEUTEL);
@@ -94,7 +118,7 @@ export async function speakWithOpenAi(
     const res = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, voice: stemOverride ?? getOpenAiStem(), input: spoken, response_format: 'mp3' }),
+      body: JSON.stringify(buildOpenAiSpeechRequest(spoken, stemOverride ?? getOpenAiStem())),
     });
     if (!res.ok) {
       opFout?.(`openai_tts_${res.status}: ${(await res.text()).slice(0, 200)}`);

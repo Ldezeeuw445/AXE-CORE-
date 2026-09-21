@@ -937,12 +937,29 @@ export async function agentCommit(
   return call('POST', '/claude/commit', { repo, bericht, push });
 }
 
+export interface AgentSubscriptionUsage {
+  label: string;
+  runs_24h: number;
+  runs_7d: number;
+  ok_7d: number;
+  failed_7d: number;
+  input_tokens_7d: number;
+  output_tokens_7d: number;
+  last_run_at: number | null;
+  last_status: string | null;
+  last_limit_at: number | null;
+  last_limit_message: string | null;
+  exact_remaining_available: boolean;
+  remaining_note: string;
+}
+
 /** Which repos this host will let Claude Code touch, and their live branches. */
 export async function claudeRepos(): Promise<{
   repos: Record<string, ClaudeRepoInfo>;
   permission_modes: ClaudePermissionMode[];
   /** Welke CLI's op de host staan. Aanwezigheid, niet of je ingelogd bent. */
-  engines?: Record<string, { label: string; aanwezig: boolean; login: string }>;
+  engines?: Record<string, { label: string; aanwezig: boolean; login: string; alleen_lezen?: boolean }>;
+  usage?: Record<string, AgentSubscriptionUsage>;
 }> {
   return call('GET', '/claude/repos');
 }
@@ -1546,6 +1563,10 @@ export async function fetchMarketNews(category = 'forex', limit = 20): Promise<{
 // ══════════════════════════════════════════════════════════════════════════════
 export interface PlannerAgentVerslag {
   motor: string;
+  /** Motor used to THINK of proposals; execution still uses `motor`. */
+  plan_motor?: string;
+  /** Explicit fallback when the cheap planning route could not produce valid JSON. */
+  plan_terugval?: { van: string; naar: string; reden: string };
   voorstellen?: string[];
   fout?: string;
   uitgevoerd?: { taak: string; ok?: boolean; fout?: string | null; overgeslagen?: string };
@@ -1570,7 +1591,15 @@ export interface PlannerTaak {
   status: string;
   priority: string;
   assignee: string | null;
-  metadata: { agent?: string; motor?: string; risico?: 'lezen' | 'schrijven'; goedkeuring?: 'niet_nodig' | 'nodig' | 'ja' | 'afgewezen'; pogingen?: number } | null;
+  metadata: {
+    agent?: string;
+    motor?: string;
+    risico?: 'lezen' | 'schrijven';
+    goedkeuring?: 'niet_nodig' | 'nodig' | 'ja' | 'afgewezen';
+    pogingen?: number;
+    uiStatus?: string;
+    app?: string;
+  } | null;
   result: { output?: string } | null;
   error: { message?: string } | null;
   created_at: string;

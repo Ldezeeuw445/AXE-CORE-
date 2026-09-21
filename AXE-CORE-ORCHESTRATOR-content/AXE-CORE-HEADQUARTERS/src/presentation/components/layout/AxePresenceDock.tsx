@@ -2,8 +2,8 @@
  * AXE Presence — the compact, persistent AXE that follows every workspace.
  *
  * Home keeps its full Core Sphere. This is not a replacement for that scene.
- * The presence owns the small 20px idle particle (parked under the "AXE"
- * label in the bottom nav) and the 64px active card (beside the composer)
+ * The presence owns the 64px idle orb (centred over the "AXE" label in the
+ * bottom nav, so the word sits inside the orb) and the 64px active card (beside the composer)
  * with the latest exchange and activity flight. It lives in shell chrome, so
  * workspaces (NorthSea map, browser, charts, editors) never have to host an
  * AXE overlay of their own.
@@ -130,11 +130,16 @@ export function AxePresenceDock() {
      own colour/pulse (presenceStatus/werk above) is the state now, and the
      word lives in exactly one place, TopNav's badge, reading the same
      VOICE_STATUS_LABEL so it can never drift from what the particle shows. */
-  /* Luka, 20 sep 2026 (live review, round 3): resting spot is the middle of the
-     bottom nav -- just the particle, no card. The moment AXE is actually doing
+  /* Luka, 21 sep 2026 (live review): resting spot is the middle of the bottom
+     nav -- the full 64px orb centred over the AXE word, no card. The moment AXE is actually doing
      something (talking, thinking, waiting on approval), it moves up beside the
      composer and shows what it's saying. Idle is a glance; busy is a read. */
-  const actief = Boolean(pending) || Boolean(activiteit) || voice.voiceStatus !== 'idle';
+  const liveTranscript = voice.transcript.trim();
+  const heeftGesprek = Boolean(laatste.user || laatste.axe || liveTranscript);
+  // The exchange is now the shell's persistent conversation glance. Do not
+  // make it vanish the millisecond TTS finishes; that recreates the old
+  // "where did my message go?" problem above the composer.
+  const actief = Boolean(pending) || Boolean(activiteit) || voice.voiceStatus !== 'idle' || heeftGesprek;
   // An approval must stay reachable no matter how little room there is --
   // never drop to the text-less mini variant while one is pending.
   const minModus: ActievePositie['modus'] = pending ? 'compact' : 'mini';
@@ -175,7 +180,7 @@ export function AxePresenceDock() {
     <>
       {!actief && (
         <div className="axe-presence-idle" style={anker ? { left: anker.x, top: anker.y } : undefined} aria-hidden="true">
-          <AxeStatusOrb size={20} toonLabel={false} werk={werk} status={presenceStatus} />
+          <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
         </div>
       )}
       {actief && (
@@ -209,9 +214,11 @@ export function AxePresenceDock() {
                 </div>
               ) : modus === 'vol' && (
                 <div className="axe-presence-dock__exchange" aria-live="polite">
-                  {laatste.user && <p data-van="mij">{laatste.user.text}</p>}
+                  {(liveTranscript || laatste.user) && (
+                    <p data-van="mij">{liveTranscript || laatste.user?.text}</p>
+                  )}
                   {laatste.axe && <p data-van="axe">{laatste.axe.text}</p>}
-                  {!laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
+                  {!liveTranscript && !laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
                 </div>
               )}
             </div>

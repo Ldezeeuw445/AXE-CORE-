@@ -29,6 +29,16 @@ function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: corsHeaders });
 }
 
+
+function quotaHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    const k = key.toLowerCase();
+    if (k.includes("ratelimit") || k === "retry-after") out[k] = value.slice(0, 120);
+  });
+  return out;
+}
+
 export default async function handler(request: Request): Promise<Response> {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -125,6 +135,8 @@ export default async function handler(request: Request): Promise<Response> {
 
   try {
     let text = "";
+    let usage: Record<string, unknown> | undefined;
+    let quota: Record<string, string> | undefined;
 
     // ── Anthropic ──────────────────────────────────────────────────────
     if (format === "anthropic") {
@@ -149,8 +161,10 @@ export default async function handler(request: Request): Promise<Response> {
         const e = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
         return json({ error: e.error?.message ?? `Anthropic HTTP ${r.status}` }, 502);
       }
-      const d = (await r.json()) as { content?: Array<{ text?: string }> };
+      const d = (await r.json()) as { content?: Array<{ text?: string }>; usage?: Record<string, unknown> };
       text = d.content?.[0]?.text ?? "";
+      usage = d.usage;
+      quota = quotaHeaders(r.headers);
 
     // ── Google Gemini ──────────────────────────────────────────────────
     } else if (format === "google") {
@@ -171,8 +185,13 @@ export default async function handler(request: Request): Promise<Response> {
         const e = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
         return json({ error: e.error?.message ?? `Google HTTP ${r.status}` }, 502);
       }
-      const d = (await r.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      const d = (await r.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        usageMetadata?: Record<string, unknown>;
+      };
       text = d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      usage = d.usageMetadata;
+      quota = quotaHeaders(r.headers);
 
     // ── OpenAI-compatible (OpenAI, OpenRouter, Groq, xAI, Krater, Ollama) ──
     } else {
@@ -191,11 +210,16 @@ export default async function handler(request: Request): Promise<Response> {
         const e = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
         return json({ error: e.error?.message ?? `${provider} HTTP ${r.status}` }, 502);
       }
-      const d = (await r.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const d = (await r.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: Record<string, unknown>;
+      };
       text = d.choices?.[0]?.message?.content ?? "";
+      usage = d.usage;
+      quota = quotaHeaders(r.headers);
     }
 
-    return json({ text });
+    return json({ text, ...(usage ? { usage } : {}), ...(quota && Object.keys(quota).length ? { quota } : {}) });
   } catch (err: unknown) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 502);
   }

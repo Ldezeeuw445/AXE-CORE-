@@ -27,7 +27,8 @@
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
-import { LOOP_AGENTS, type LoopAgent } from '@/domain/memory/agentLoop';
+import { type LoopAgent, isLoopAgent } from '@/domain/memory/agentLoop';
+import { AGENT_CATALOG } from '@/domain/agents/catalog';
 
 const LS_KEY = 'axe_memory_feedback_v1';
 const MAX_TURNS = 60;
@@ -113,8 +114,29 @@ function newTurnId(): string {
  */
 export function loopAgentVoor(owner: string | undefined): LoopAgent | null {
   if (!owner) return null;
-  if (owner === 'local-code') return 'code-editor';
-  return (LOOP_AGENTS as readonly string[]).includes(owner) ? (owner as LoopAgent) : null;
+
+  // Legacy names that predate the canonical roster. Keep these at the boundary
+  // rather than growing another hand-maintained agent list.
+  if (
+    owner === 'local-code' || owner === 'code-editor' || owner === 'code_agent'
+    || owner === 'axe_code' || owner === 'axe_developer'
+  ) return 'code-editor';
+  if (owner === 'chat' || owner === 'global' || owner === 'axe_core') return 'chat';
+  if (owner === 'research' || owner === 'axe_research') return 'research';
+  if (owner === 'axe_algo') return 'trading';
+  if (owner === 'browser_agent') return 'browser';
+  if (owner === 'crewai_manager') return 'wingman';
+
+  // Current chat/routing code passes namespaceFor(agent), not the agent id.
+  // Resolve that namespace through the canonical catalog so adding/renaming a
+  // roster agent does not require a second status list here.
+  const catalog = AGENT_CATALOG.find(a =>
+    a.kind === 'core' && (a.id === owner || a.namespace === owner),
+  );
+  if (!catalog) return isLoopAgent(owner) ? owner : null;
+  if (catalog.id === 'axe') return 'chat';
+  if (catalog.id === 'developer') return 'code-editor';
+  return isLoopAgent(catalog.id) ? catalog.id : null;
 }
 
 export function noteRetrieval(
@@ -226,13 +248,22 @@ export function noteTurnOutcomeByQuery(userText: string, verdict: TurnVerdict): 
   if (needle.length < 8) return 0;
   const turns = load();
   let hit = 0;
+  const episodesToClose: string[] = [];
   for (const t of turns) {
     if (t.verdict !== 'unknown') continue;
     if (t.query.slice(0, 60).toLowerCase().trim() !== needle) continue;
     t.verdict = verdict;
+    if (t.episodeId) episodesToClose.push(t.episodeId);
     hit++;
   }
   if (hit) save(turns);
+
+  // Keep only the episodes changed by THIS review in lockstep. The same
+  // question may have been asked earlier; already-judged historical turns must
+  // not be re-closed just because their wording matches again.
+  for (const episodeId of episodesToClose) {
+    void closeEpisode(episodeId, verdict).catch(() => { /* non-fatal side effect */ });
+  }
   return hit;
 }
 

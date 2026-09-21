@@ -41,6 +41,11 @@ import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } fro
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
 import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import {
+  readAllProviderUsage,
+  refreshProviderBalance,
+  type ProviderUsageSnapshot,
+} from '@/infrastructure/persistence/providerUsageService';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -332,6 +337,8 @@ function ProviderKeysSection() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   const [addProviderError, setAddProviderError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<Record<string, ProviderUsageSnapshot>>(() => readAllProviderUsage());
+  const [usageRefreshing, setUsageRefreshing] = useState(false);
 
   // Welke providers de VPS zelf kan bedienen.
   //
@@ -392,6 +399,44 @@ function ProviderKeysSection() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const sync = () => setUsage(readAllProviderUsage());
+    window.addEventListener('axe:provider-usage', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('axe:provider-usage', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  const BALANCE_PROVIDERS = new Set(['openrouter', 'openrouter2', 'elevenlabs', 'deepseek']);
+  const refreshUsage = async (onlyId?: string) => {
+    if (usageRefreshing) return;
+    setUsageRefreshing(true);
+    try {
+      const ids = onlyId
+        ? [onlyId]
+        : PROVIDER_KEY_CATALOGUE.map(p => p.id).filter(id => BALANCE_PROVIDERS.has(id));
+      for (const id of ids) {
+        if (!BALANCE_PROVIDERS.has(id)) continue;
+        const key = keys[id]?.key;
+        if (!key && !(serverProviders?.has(id) ?? false)) continue;
+        try { await refreshProviderBalance(id, key); } catch { /* one provider must not block the rest */ }
+      }
+      setUsage(readAllProviderUsage());
+    } finally {
+      setUsageRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (serverProviders === null) return;
+    void refreshUsage();
+    // Settings-open + manual refresh is deliberate: exact balance endpoints
+    // should not become a background poller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverProviders]);
 
 
   // Known-format defaults — there's exactly one real endpoint for these two
@@ -622,6 +667,10 @@ function ProviderKeysSection() {
         return next;
       });
     }
+    if (!isAutoTest && BALANCE_PROVIDERS.has(id)) {
+      void refreshUsage(id);
+    }
+
     // Only an explicit, manual "Test" click may promote a provider to
     // primary. The background self-test on Settings load used to do this
     // too — silently swapping AXE's actual chat provider to whichever one
@@ -720,6 +769,14 @@ function ProviderKeysSection() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => { void refreshUsage(); }}
+            disabled={usageRefreshing}
+            title="Refresh exact provider balances where supported"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+            style={{ border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)', opacity: usageRefreshing ? 0.6 : 1 }}>
+            <RefreshCw size={12} className={usageRefreshing ? 'animate-spin' : ''} /> Usage
+          </button>
+          <button
             onClick={() => { voice.clearRoutingLog(); }}
             title="Wis routing history (ROUTER TRACE)"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
@@ -795,6 +852,7 @@ function ProviderKeysSection() {
               modellen={MODEL_CHIPS[cat.id] ?? []}
               isPrimair={isPrimary}
               aangepast={isCustom}
+              gebruik={usage[cat.id] ?? null}
               onSleutel={(waarde) => update(cat.id, 'key', waarde)}
               onModel={(model) => update(cat.id, 'model', model)}
               onTest={() => testProvider(cat.id, isCustom)}

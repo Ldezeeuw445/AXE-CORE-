@@ -63,6 +63,7 @@ try:
     from agent_runner import (  # noqa: E402
         run_agent,
         engine_status as agent_engine_status,
+        agent_usage_status,
         repo_status as claude_repo_status,
         cli_available as claude_cli_available,
         ALLOWED_PERMISSION_MODES,
@@ -82,6 +83,9 @@ except Exception as _e:  # noqa: BLE001
     run_agent = werkboom_status = commit_en_push = _geen_agent_runner  # type: ignore[assignment]
 
     def agent_engine_status(*_a, **_k) -> dict:  # type: ignore[misc]
+        return {}
+
+    def agent_usage_status(*_a, **_k) -> dict:  # type: ignore[misc]
         return {}
 
     def claude_repo_status(*_a, **_k) -> dict:  # type: ignore[misc]
@@ -533,6 +537,7 @@ _SERVER_KEYS: dict[str, tuple[str, ...]] = {
     "grok":        ("XAI_API_KEY", "GROK_API_KEY"),
     "cerebras":    ("CEREBRAS_API_KEY",),
     "deepseek":    ("DEEPSEEK_API_KEY",),
+    "elevenlabs":  ("ELEVENLABS_API_KEY",),
     # ollama heeft geen sleutel nodig en staat hier bewust niet in.
 }
 
@@ -570,6 +575,111 @@ async def proxy_ai_providers():
     }
 
 
+def _rate_limit_headers(headers) -> dict:
+    """Sanitized provider quota telemetry; never return auth/cookie headers."""
+    out = {}
+    for k, v in headers.items():
+        lk = str(k).lower()
+        if "ratelimit" in lk or lk == "retry-after":
+            out[lk] = str(v)[:120]
+    return out
+
+
+@app.post("/proxy/ai/usage", dependencies=[AUTH])
+async def proxy_ai_usage(body: dict = Body(...)):
+    """Exact balance/credit information where the provider exposes it.
+
+    Important distinction: a provider's purchased balance is NOT the same as
+    its per-minute/day rate limit. Providers without a balance endpoint return
+    supported=false; the frontend then shows last-known rate-limit telemetry
+    from real model calls instead of inventing a percentage.
+    """
+    provider = str(body.get("provider") or "").strip().lower()
+    key = str(body.get("key") or "").strip() or _server_key_for(provider)
+    if not provider:
+        raise HTTPException(400, "provider is required")
+    if not key:
+        return {"provider": provider, "configured": False, "supported": False, "reason": "no_key"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            if provider in {"openrouter", "openrouter2"}:
+                r = await client.get(
+                    "https://openrouter.ai/api/v1/key",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                if r.is_error:
+                    return {"provider": provider, "configured": True, "supported": True,
+                            "error": f"OpenRouter HTTP {r.status_code}"}
+                data = (r.json() or {}).get("data") or {}
+                return {
+                    "provider": provider, "configured": True, "supported": True,
+                    "kind": "balance", "unit": "credits",
+                    "usage": data.get("usage"),
+                    "usage_daily": data.get("usage_daily"),
+                    "usage_weekly": data.get("usage_weekly"),
+                    "usage_monthly": data.get("usage_monthly"),
+                    "limit": data.get("limit"),
+                    "limit_remaining": data.get("limit_remaining"),
+                    "limit_reset": data.get("limit_reset"),
+                    "is_free_tier": data.get("is_free_tier"),
+                    "rate_limit": data.get("rate_limit"),
+                }
+
+            if provider == "deepseek":
+                r = await client.get(
+                    "https://api.deepseek.com/user/balance",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                if r.is_error:
+                    return {"provider": provider, "configured": True, "supported": True,
+                            "error": f"DeepSeek HTTP {r.status_code}"}
+                data = r.json() or {}
+                return {
+                    "provider": provider, "configured": True, "supported": True,
+                    "kind": "balance", "unit": "currency",
+                    "is_available": data.get("is_available"),
+                    "balances": data.get("balance_infos") or [],
+                }
+
+            if provider == "elevenlabs":
+                r = await client.get(
+                    "https://api.elevenlabs.io/v1/user/subscription",
+                    headers={"xi-api-key": key},
+                )
+                if r.is_error:
+                    return {"provider": provider, "configured": True, "supported": True,
+                            "error": f"ElevenLabs HTTP {r.status_code}"}
+                data = r.json() or {}
+                used = data.get("character_count")
+                limit = data.get("character_limit")
+                remaining = (max(0, limit - used)
+                             if isinstance(limit, int) and isinstance(used, int) else None)
+                return {
+                    "provider": provider, "configured": True, "supported": True,
+                    "kind": "balance", "unit": "credits",
+                    "tier": data.get("tier"),
+                    "status": data.get("status"),
+                    "used": used,
+                    "limit": limit,
+                    "remaining": remaining,
+                    "reset_unix": data.get("next_character_count_reset_unix"),
+                    "billing_period": data.get("billing_period"),
+                    "current_overage": data.get("current_overage"),
+                }
+
+        return {
+            "provider": provider,
+            "configured": True,
+            "supported": False,
+            "kind": "rate_limit",
+            "reason": "provider_does_not_expose_balance_via_standard_key",
+        }
+    except httpx.HTTPError as e:
+        return {"provider": provider, "configured": True, "supported": False,
+                "error": str(e)[:200]}
+
+
 @app.post("/proxy/ai", dependencies=[AUTH])
 async def proxy_ai(body: dict = Body(...)):
     provider = body.get("provider")
@@ -590,6 +700,8 @@ async def proxy_ai(body: dict = Body(...)):
 
     raw_content = None
     stop_reason = None
+    usage = None
+    quota = None
     try:
         # Ollama cold-loads a model on first use after it's been evicted
         # (expected often now — OLLAMA_MAX_LOADED_MODELS=1 on the Hetzner
@@ -644,6 +756,8 @@ async def proxy_ai(body: dict = Body(...)):
                 text = next((b.get("text", "") for b in _blocks if b.get("type") == "text"), "")
                 raw_content = _blocks
                 stop_reason = _d.get("stop_reason")
+                usage = _d.get("usage")
+                quota = _rate_limit_headers(r.headers)
 
             elif fmt == "google":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
@@ -662,8 +776,11 @@ async def proxy_ai(body: dict = Body(...)):
                 if r.is_error:
                     err = r.json().get("error", {}).get("message", f"Google HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"Google HTTP {r.status_code}"
                     raise HTTPException(502, err)
-                cands = r.json().get("candidates") or [{}]
+                _g = r.json()
+                cands = _g.get("candidates") or [{}]
                 text = ((cands[0].get("content") or {}).get("parts") or [{}])[0].get("text", "")
+                usage = _g.get("usageMetadata")
+                quota = _rate_limit_headers(r.headers)
 
             else:  # openai-compatible: OpenAI, OpenRouter, Groq, xAI, Krater, Ollama
                 chat_url = _openai_chat_url(base_url)
@@ -679,6 +796,8 @@ async def proxy_ai(body: dict = Body(...)):
                 text = _msg.get("content", "") or ""
                 raw_content = _msg.get("tool_calls") or []
                 stop_reason = ((_j.get("choices") or [{}])[0]).get("finish_reason")
+                usage = _j.get("usage")
+                quota = _rate_limit_headers(r.headers)
 
         # "text" blijft ongewijzigd het eerste veld, dus elke bestaande
         # aanroeper werkt precies hetzelfde. De rest leest alleen de tool-lus.
@@ -687,6 +806,10 @@ async def proxy_ai(body: dict = Body(...)):
             out["content"] = raw_content
         if stop_reason:
             out["stopReason"] = stop_reason
+        if usage:
+            out["usage"] = usage
+        if quota:
+            out["quota"] = quota
         return out
     except httpx.HTTPError as e:
         raise HTTPException(502, str(e)[:300])
@@ -1075,6 +1198,7 @@ async def frameworks_status():
             "vbt": {"installed": os.path.exists("/opt/axe-trading/venv/bin/python")
                     and os.path.exists("/opt/axe-trading/vbt_backtest.py")},
             "nt": {"installed": os.path.exists(NAUTILUS_PY) and os.path.exists(NAUTILUS_SCRIPT)},
+            "kr": {"installed": os.path.exists(KRONOS_PY) and os.path.exists(KRONOS_SCRIPT)},
             "ta": {"installed": os.path.exists(TA_PY) and os.path.exists(TA_SCRIPT)},
         },
     }
@@ -2843,6 +2967,7 @@ async def claude_repos():
         # ingelogd bent kost een echte aanroep, en een statuspaneel hoort geen
         # sessie van je abonnement op te maken.
         "engines": agent_engine_status(),
+        "usage": agent_usage_status(),
     }
 
 

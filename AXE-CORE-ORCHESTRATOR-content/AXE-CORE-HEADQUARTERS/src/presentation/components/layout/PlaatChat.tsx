@@ -84,6 +84,8 @@ export function PlaatChat() {
   const [paneelOpen, setPaneelOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const lastProjectedMsgRef = useRef<string>('');
+  const lastProjectedUserTsRef = useRef<number>(0);
+  const mountedAtRef = useRef(Date.now());
   const lastUserTextRef = useRef<string>('');
 
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,6 +114,43 @@ export function PlaatChat() {
     })();
     return () => { cancelled = true; };
   }, [voice.conversation]);
+
+  /* One user-turn director for BOTH typing and speech.
+   *
+   * Previously handleChatSend() projected typed requests before send, while
+   * SpeechRecognition called voice.sendMessage() directly and skipped this
+   * entire path. "Laat New York zien" therefore depended on the input method.
+   * Watch the canonical conversation instead: every input path lands there.
+   *
+   * Old persisted messages are ignored by timestamp so opening AXE does not
+   * suddenly replay yesterday's map. */
+  useEffect(() => {
+    const last = [...voice.conversation].reverse().find(m => m.role === 'user');
+    if (!last?.text || last.timestamp < mountedAtRef.current - 1000) return;
+    if (last.timestamp === lastProjectedUserTsRef.current) return;
+    lastProjectedUserTsRef.current = last.timestamp;
+    lastUserTextRef.current = last.text;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (shouldDismissProjection(last.text)) {
+          if (!cancelled) dismiss();
+          return;
+        }
+        let directed = await directFromChat({ text: last.text, attachments: [] });
+        if (!directed && looksLikeChartRequest(last.text)) directed = await resolveChart(last.text);
+        if (!directed && looksLikeMapRequest(last.text)) directed = await resolveMap(last.text);
+        if (!directed && (/laat(\s+\S+){1,10}\s+zien/i.test(last.text) || /\b(show|toon)\s+/i.test(last.text))) {
+          directed = await resolveMap(last.text);
+        }
+        if (!cancelled && directed) showOnSphere(directed);
+      } catch (err) {
+        console.warn('[AXE] sphere director failed for user turn', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [voice.conversation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onScrollToApproval = () => {
@@ -216,34 +255,7 @@ export function PlaatChat() {
     const t = chatText.trim();
     if (!t && attachments.length === 0) return;
 
-    if (shouldDismissProjection(t)) {
-      dismiss();
-      setChatText('');
-      return;
-    }
-
     lastUserTextRef.current = t;
-
-    try {
-      let directed = await directFromChat({ text: t, attachments });
-      if (!directed && looksLikeChartRequest(t)) {
-        directed = await resolveChart(t);
-      }
-      if (!directed && looksLikeMapRequest(t)) {
-        directed = await resolveMap(t);
-      }
-      // Ultimate fallback: any "laat … zien" / "show …" → map resolve
-      if (!directed && (/laat(\s+\S+){1,10}\s+zien/i.test(t) || /\b(show|toon)\s+/i.test(t))) {
-        directed = await resolveMap(t);
-      }
-      if (directed) {
-        showOnSphere(directed);
-      } else {
-        console.warn('[Home] no sphere projection resolved for:', t);
-      }
-    } catch (err) {
-      console.warn('[Home] sphere director failed', err);
-    }
 
     const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
@@ -306,25 +318,25 @@ export function PlaatChat() {
    * De composer gaat daar naar de code-agent (zie handleSend); de kop zegt dat,
    * met welke motor en in welke repo. Geen gespreksrol eronder -- het gesprek
    * met de agent staat in de editor zelf. */
-  const [widePresence, setWidePresence] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches
+  const [presenceNaastComposer, setPresenceNaastComposer] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
   );
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1280px)');
-    const sync = () => setWidePresence(mq.matches);
+    const mq = window.matchMedia('(min-width: 640px)');
+    const sync = () => setPresenceNaastComposer(mq.matches);
     sync();
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  /* Conversation history now lives in AxePresenceDock beside the composer.
-   * Keep this shell strip compact on every route; Home's large Core Sphere is
-   * independent and remains untouched. */
-  // Home keeps its original conversation treatment and compact presence is
-  // hidden below 1280px, so never hide history when the dock is not visible.
-  const gesprekInPresence = widePresence && location.pathname !== '/';
+  /* Desktop/tablet conversation lives BESIDE the composer in AxePresenceDock,
+   * including Home. The old 72px chat strip above the composer was still a
+   * second place for the same exchange. On narrow phones the dock is hidden,
+   * so the normal chat history remains the fallback there. Code Editor keeps
+   * its own header because it carries motor/repo context, not conversation. */
+  const gesprekInPresence = presenceNaastComposer && !opEditor;
   const kopAlleen = gesprekInPresence || opEditor || chatCollapsed;
-  const chatHeight = kopAlleen ? collapsedChatHeight : expandedChatHeight;
+  const chatHeight = gesprekInPresence ? 0 : kopAlleen ? collapsedChatHeight : expandedChatHeight;
 
   /* De stand van de chat op <html>, zodat de panelen ernaast hem kennen.
    *
