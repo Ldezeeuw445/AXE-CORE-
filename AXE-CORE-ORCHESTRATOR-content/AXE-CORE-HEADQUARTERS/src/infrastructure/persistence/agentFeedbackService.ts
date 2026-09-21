@@ -30,7 +30,7 @@ import type { MemoryRow } from '@/infrastructure/persistence/agentMemoryService'
 import { AGENT_CATALOG } from '@/domain/agents/catalog';
 import {
   type Episode, type LoopAgent, type Verdict,
-  pendingForReinforcement, tallyHits, reinforcedImportance, loopHealth,
+  pendingForReinforcement, reinforcedImportance, loopHealth,
   type LoopHealth, LOOP_AGENTS,
 } from '@/domain/memory/agentLoop';
 
