@@ -8,7 +8,10 @@ import { Settings, OctagonAlert, ShieldAlert } from 'lucide-react';
 import type { TradingDeskState } from './useTradingDeskState';
 
 export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; onOpenSettings: () => void }) {
-  const { autopilot, autopilotBusy, toggleAutopilot, mt5Balance, eq, upnl, broker, circuitBreaker, killSwitchBusy, triggerKillSwitch, resetBreaker } = desk;
+  const {
+    autopilot, autopilotBusy, toggleAutopilot, mt5Balance, eq, upnl, broker,
+    circuitBreaker, killSwitchBusy, triggerKillSwitch, resetBreaker, liveStrategies,
+  } = desk;
 
   // "next in ~Nm" needs a live clock, but reading Date.now() directly during
   // render is an impure read (unstable across re-renders/Strict Mode double
@@ -78,6 +81,14 @@ export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; 
         {nextCycleText && (
           <span className="text-[10px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>{nextCycleText}</span>
         )}
+
+        <span
+          className="text-[10px] px-2 py-0.5 rounded-full"
+          style={{ background: 'rgba(167,139,250,0.08)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.18)' }}
+          title="Autopilot ignores the manual/backtest card selection. It ranks strategies independently per pair from the live/self-test ledger."
+        >
+          AUTO STRATEGY · per-pair ledger{liveStrategies.size ? ` · open: ${[...liveStrategies].join(', ')}` : ''}
+        </span>
 
         <div className="w-px h-4" style={{ background: 'rgba(255,255,255,0.08)' }} />
 
