@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Folder, GripHorizontal, Image, Mic, Paperclip, Plus, SquareArrowOutUpRight, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
+import { BorderBeam } from 'border-beam';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
@@ -72,6 +73,7 @@ export default function ComputerUseOverlay() {
 
   return (
     <main className="computer-use-overlay">
+      <BorderBeam size="pulse-outside" colorVariant="mono" active strength={0.9}>
       <section className="computer-use-overlay__card" data-axe-doel="computer-use-composer">
         <div
           className="computer-use-overlay__draghandle"
@@ -128,6 +130,7 @@ export default function ComputerUseOverlay() {
           title="Drag to resize"
         />
       </section>
+      </BorderBeam>
     </main>
   );
 }
