@@ -222,7 +222,11 @@ export function AppShell() {
           je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
           elke pagina Home met de dingen van die tab erbij. */}
       {!mobileCommandSurface && opPlaat && <PlaatChat />}
-      {!mobileCommandSurface && opPlaat && location.pathname !== '/' && <AxePresenceDock />}
+      {/* Luka, 21 sep 2026: on every page including Home now -- the idle particle
+          anchors to the bottom nav's own AXE label (see AxePresenceDock.tsx), which
+          Home already has, and Home's own big Core Sphere is a separate element
+          entirely, so the two never compete. */}
+      {!mobileCommandSurface && opPlaat && <AxePresenceDock />}
 
       {/* Het radiaal menu linksonder. Naast de chat en niet erin: het zijn
           sprongen naar ergens anders, en die horen niet tussen de knoppen

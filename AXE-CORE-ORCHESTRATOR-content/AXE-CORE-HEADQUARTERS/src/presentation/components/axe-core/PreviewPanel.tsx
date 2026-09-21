@@ -442,7 +442,7 @@ export function PreviewPanel({
         <span className="axe-preview-kop text-[10px] font-medium flex-1">PREVIEW</span>
         {running && url && (
           <button
-            onClick={() => setDesignMode(v => !v)}
+            onClick={() => setDesignMode(!designMode)}
             title="Design Mode — click elements, drag to reorder, edit styles"
             className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]"
             style={{

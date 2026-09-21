@@ -5815,60 +5815,60 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 
 /* ══ AXE GLOBAL PRESENCE ══════════════════════════════════════════════════
- * Home keeps the full Core Sphere. This compact 64px presence belongs to the
+ * Home keeps the full Core Sphere. This compact presence belongs to the
  * shell and therefore follows every workspace without sitting on top of its
  * map, browser, chart or editor.
  *
- * Luka, 20 sep 2026 (live review): the composer/chatplaat must stay exactly
- * where axe-look.css already puts it -- the SAME centred, bottomnav-matching
- * width as always (.axe-chatplaat/.axe-composer/.axe-shell .axe-bottomnav
- * share one width formula elsewhere in this file). Squeezing it left with a
- * dedicated right margin here was wrong: the presence dock is fixed and
- * floats on top of whatever is beneath it, it does not need the composer to
- * shrink away from it.
+ * Luka, 20-21 sep 2026 (live review, rounds 1-4): the composer/chatplaat
+ * must stay exactly where axe-look.css already puts it -- the SAME centred,
+ * bottomnav-matching width as always. This presence never makes the
+ * composer shrink or move; it positions ITSELF, measured in JS against real
+ * anchors (AxePresenceDock.tsx: the bottom nav's AXE-label slot for idle,
+ * the composer's own right edge and any visible right rail for active) --
+ * `left`/`width`/`top-anchor` below come from inline style, not a guessed
+ * per-page offset. This stylesheet only supplies what does NOT vary: the
+ * look, and the two things JS does not compute (idle's bottom offset,
+ * active's vertical band).
  */
-@media (min-width: 1280px) {
-  /* Luka, 20 sep 2026 (live review): no card/panel behind this -- it sits
-     directly on the shell, like the "AXE CORE" label beside the composer
-     does. A bordered box here reads as a second little chat window next to
-     the real composer, which is exactly the "second AXE UI" this feature is
-     supposed to avoid. */
-  /* Luka, 20 sep 2026 (live review, round 2): beside the composer only worked
-     when the composer was squeezed left for it (just reverted). At the
-     composer's real, centred, bottomnav-matching width there is no gap on
-     the right to sit in without overlapping it -- so this floats just ABOVE
-     the composer instead, right-aligned over the plaat, never on top of the
-     input itself. */
-  /* Resting: just the particle, centred in the bottom nav -- a glance, not a
-     panel. Talking/thinking/waiting on approval ([data-actief='ja']): it
-     grows and moves up beside the composer to show what it's saying. */
-  :root[data-look] .axe-presence-dock {
+@media (min-width: 640px) {
+  /* Idle: just the particle, resting under the "AXE" label in the bottom nav
+     (aria-hidden, non-interactive -- it is a status glance, not a control).
+     `left` is set inline once measured; 50% is only the pre-measurement
+     fallback for the first paint. */
+  :root[data-look] .axe-presence-idle {
     position: fixed;
     left: 50%;
-    right: auto;
     bottom: 22px;
     transform: translateX(-50%);
-    width: auto;
-    min-height: 0;
-    max-height: none;
+    z-index: 104;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    transition: opacity 200ms ease, left 200ms ease;
+  }
+
+  /* Active: beside the composer, in the space before the right radial (or any
+     currently-open right rail). `left`/`width` are set inline per the
+     vol/compact/mini measurement in AxePresenceDock.tsx; this only supplies
+     the vertical band, matched to the composer's own measured box so the two
+     sit on the same line. */
+  :root[data-look] .axe-presence-dock {
+    position: fixed;
+    bottom: var(--axe-composer-onder, 104px);
+    height: var(--axe-composer-hoog, 90px);
     z-index: 104;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0;
-    pointer-events: none;
-    transition: opacity 200ms ease, transform 200ms ease, bottom 200ms ease;
-  }
-  :root[data-look] .axe-presence-dock .axe-presence-dock__orb { pointer-events: auto; }
-
-  :root[data-look] .axe-presence-dock[data-actief='ja'] {
-    left: auto;
-    right: max(16px, var(--axe-onder, 75px));
-    bottom: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 14px);
-    transform: none;
-    width: 210px;
     padding: 8px 8px 8px 4px;
     pointer-events: auto;
+    transition: opacity 200ms ease, left 200ms ease, width 200ms ease;
+  }
+  /* Compact/mini: no left-padding slack to spare -- the orb sits flush. */
+  :root[data-look] .axe-presence-dock[data-modus='compact'],
+  :root[data-look] .axe-presence-dock[data-modus='mini'] {
+    padding: 4px;
+    gap: 6px;
   }
 
   :root[data-look] .axe-presence-dock__orb {
@@ -5878,10 +5878,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     display: grid;
     place-items: center;
   }
-  :root[data-look] .axe-presence-dock:not([data-actief='ja']) .axe-presence-dock__orb {
-    width: 26px;
-    min-width: 26px;
-    height: 26px;
+  :root[data-look] .axe-presence-dock[data-modus='mini'] .axe-presence-dock__orb {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
   }
 
   :root[data-look] .axe-presence-dock__body {
@@ -5974,7 +5974,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   }
 }
 
-@media (max-width: 1279px) {
+/* Luka, 21 sep 2026 (round 4): the active card now has a compact/mini variant
+   specifically for "not enough room", so a hard cutoff at 1280px undid the
+   point of building it -- narrowed to where even the 40px mini badge would
+   crowd a composer that has itself gone edge-to-edge (see the <1100px
+   composer-width rule elsewhere in this file). The idle particle is a plain
+   20px dot in the bottom nav and was never the problem; it is not gated here. */
+@media (max-width: 640px) {
   :root[data-look] .axe-presence-dock { display: none; }
 }
 
@@ -6117,8 +6123,28 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   .computer-use-overlay__quick { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 
-.axe-quick-note{position:fixed;z-index:106;left:calc(var(--axe-chat-links,320px) - 286px);bottom:calc(var(--axe-composer-onder,78px) + 6px);width:252px;min-height:176px;display:flex;flex-direction:column;overflow:hidden;border-radius:20px;background:linear-gradient(180deg,rgba(27,27,31,.98),rgba(12,12,14,.98));border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.07);color:var(--text-primary)}
-.axe-quick-note__head,.axe-quick-note__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px}.axe-quick-note__head{border-bottom:1px solid rgba(255,255,255,.05)}.axe-quick-note__head span{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--text-secondary)}.axe-quick-note__head button,.axe-quick-note__foot button{border:0;background:transparent;color:var(--text-muted)}.axe-quick-note textarea{flex:1;min-height:100px;resize:none;border:0;outline:0;padding:11px;background:transparent;color:var(--text-primary);font:13px/1.5 var(--ui)}.axe-quick-note textarea::placeholder{color:var(--text-muted)}.axe-quick-note__foot{border-top:1px solid rgba(255,255,255,.05);font-size:10px;color:var(--text-muted)}.axe-quick-note__foot button{display:inline-flex;align-items:center;gap:5px;border-radius:9px;padding:5px 9px;background:rgba(34,211,238,.09);color:var(--accent-cyan)}.axe-quick-note__foot button:disabled{opacity:.38}
+/* Luka, 21 sep 2026: height = composer's own height + everything below it
+   down to the window edge (gap + bottom nav + its margin) -- the same two
+   measured variables AxeShellChrome.tsx already exposes, so this is exactly
+   "bottom nav + composer + the gap between them", not a guessed pixel count.
+   Width: 290px is ~15% over the previous 252px, with a viewport clamp so it
+   never fights for space on a narrow window. Same background/border/shadow
+   as before -- only size and the toolbar are new. */
+.axe-quick-note{position:fixed;z-index:106;left:calc(var(--axe-chat-links,320px) - 286px);bottom:calc(var(--axe-composer-onder,78px) + 6px);width:min(290px, calc(100vw - 32px));height:calc(var(--axe-composer-hoog,90px) + var(--axe-composer-onder,104px));min-height:176px;display:flex;flex-direction:column;overflow:hidden;border-radius:20px;background:linear-gradient(180deg,rgba(27,27,31,.98),rgba(12,12,14,.98));border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.07);color:var(--text-primary)}
+.axe-quick-note__head,.axe-quick-note__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px}.axe-quick-note__head{border-bottom:1px solid rgba(255,255,255,.05)}.axe-quick-note__head span{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--text-secondary)}.axe-quick-note__head button,.axe-quick-note__foot button{border:0;background:transparent;color:var(--text-muted)}
+/* Toolbar: bold/italic/underline + the six colour dots, one compact row
+   between the header and the note body. onMouseDown={preventDefault} in the
+   component (not CSS) is what keeps the note's own text selection alive when
+   these are clicked -- this block is only appearance. */
+.axe-quick-note__toolbar{display:flex;align-items:center;gap:3px;padding:6px 9px;border-bottom:1px solid rgba(255,255,255,.05)}
+.axe-quick-note__toolbar>button{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:var(--text-secondary)}
+.axe-quick-note__toolbar>button:hover{background:rgba(255,255,255,.06);color:var(--text-primary)}
+.axe-quick-note__kleuren{display:flex;align-items:center;gap:4px;margin-left:4px;padding-left:7px;border-left:1px solid rgba(255,255,255,.08)}
+.axe-quick-note__kleur{width:13px;height:13px;border-radius:50%;border:1px solid rgba(255,255,255,.25);padding:0}
+.axe-quick-note__kleur:hover{transform:scale(1.15)}
+.axe-quick-note__vak{flex:1;overflow-y:auto;outline:0;padding:11px;color:var(--text-primary);font:13px/1.5 var(--ui);cursor:text}
+.axe-quick-note__vak[data-leeg='ja']::before{content:attr(data-placeholder);color:var(--text-muted)}
+.axe-quick-note__foot{border-top:1px solid rgba(255,255,255,.05);font-size:10px;color:var(--text-muted)}.axe-quick-note__foot button{display:inline-flex;align-items:center;gap:5px;border-radius:9px;padding:5px 9px;background:rgba(34,211,238,.09);color:var(--accent-cyan)}.axe-quick-note__foot button:disabled{opacity:.38}
 .northsea-standalone-shell{position:relative;display:flex;flex-direction:column;color:var(--text-primary)}.northsea-standalone-shell__top{height:52px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;background:rgba(10,12,15,.72);border-bottom:1px solid rgba(255,255,255,.06);backdrop-filter:blur(18px)}.northsea-standalone-shell__top strong{color:var(--accent-cyan);font-size:11px;letter-spacing:.16em}.northsea-standalone-shell__top>span{color:var(--text-muted);font-size:9px;letter-spacing:.12em}.northsea-standalone-shell__top #axe-slot-topbalk,.northsea-standalone-shell__top #axe-slot-topbalk-rechts{display:flex;align-items:center;gap:6px}.northsea-standalone-shell__main{min-height:0;flex:1;display:flex;overflow:hidden}.northsea-standalone-shell__main>*{min-height:0;flex:1}
 
 

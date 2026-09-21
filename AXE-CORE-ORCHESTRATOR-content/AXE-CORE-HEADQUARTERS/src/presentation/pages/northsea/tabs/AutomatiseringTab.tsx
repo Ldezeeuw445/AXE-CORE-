@@ -129,7 +129,12 @@ export function AutomatiseringTab() {
         acties={(
           <>
             <div className="w-[240px]"><Zoekveld waarde={zoek} zet={setZoek} plaats={weergave === 'log' ? 'Search activity…' : 'Search campaigns…'} /></div>
-            <Filters opties={[{ id: 'engine', label: 'Engine', aantal: engine?.runs.length ?? 0 }, { id: 'operations', label: 'Operations', aantal: ops.data?.approval_required.count }, { id: 'log', label: 'Activity', aantal: alleLog.length }, { id: 'campagnes', label: 'Sourcing campaigns', aantal: alleCampagnes.length }] as const}
+            {/* Explicit type argument: TS's inference for Filters<T> here otherwise widens T to
+                plain string (mixing a `number` and a `number | undefined` aantal across the
+                array's entries defeats per-element literal inference), which then rejects the
+                narrowly-typed setWeergave. Naming T is simpler and more robust than reshaping
+                the data just to satisfy inference. */}
+            <Filters<'engine' | 'operations' | 'log' | 'campagnes'> opties={[{ id: 'engine', label: 'Engine', aantal: engine?.runs.length ?? 0 }, { id: 'operations', label: 'Operations', aantal: ops.data?.approval_required.count }, { id: 'log', label: 'Activity', aantal: alleLog.length }, { id: 'campagnes', label: 'Sourcing campaigns', aantal: alleCampagnes.length }] as const}
               actief={weergave} kies={setWeergave} />
             <VerversKnop bezig={bezig} ververs={ververs} />
           </>

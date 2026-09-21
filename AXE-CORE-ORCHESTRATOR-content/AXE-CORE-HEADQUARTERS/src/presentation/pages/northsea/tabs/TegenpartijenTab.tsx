@@ -119,9 +119,9 @@ export function TegenpartijenTab() {
           </>
         )}>
         <div className="flex flex-col gap-2 px-4 pb-2">
-          <Filters opties={SOORTEN.filter(s => s === 'alle' || perSoort[s]).map(s => ({ id: s, label: s === 'alle' ? 'All types' : mensLabel(s), aantal: s === 'alle' ? alle.length : perSoort[s] }))}
+          <Filters<typeof SOORTEN[number]> opties={SOORTEN.filter(s => s === 'alle' || perSoort[s]).map(s => ({ id: s, label: s === 'alle' ? 'All types' : mensLabel(s), aantal: s === 'alle' ? alle.length : perSoort[s] }))}
             actief={soort} kies={setSoort} />
-          <Filters opties={VERIFICATIES.filter(s => s === 'alle' || perVerificatie[s]).map(s => ({ id: s, label: s === 'alle' ? 'Any verification' : verificatieBadge(s).label, aantal: s === 'alle' ? undefined : perVerificatie[s] }))}
+          <Filters<typeof VERIFICATIES[number]> opties={VERIFICATIES.filter(s => s === 'alle' || perVerificatie[s]).map(s => ({ id: s, label: s === 'alle' ? 'Any verification' : verificatieBadge(s).label, aantal: s === 'alle' ? undefined : perVerificatie[s] }))}
             actief={verificatie} kies={setVerificatie} />
         </div>
         {fout && <FoutRegel fout={fout} />}

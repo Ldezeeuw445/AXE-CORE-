@@ -83,7 +83,7 @@ export function AxeComposerVak({
   };
 
   return (
-    <div className="axe-composer axe-vakcomposer flex-shrink-0">
+    <div className="axe-composer axe-vakcomposer flex-shrink-0" data-axe-doel="axe-composer">
       {kop && <div className="axe-vak-kop">{kop}</div>}
 
       {/* Altijd aan, zacht in rust en voller zodra AXE werkt. Stond op

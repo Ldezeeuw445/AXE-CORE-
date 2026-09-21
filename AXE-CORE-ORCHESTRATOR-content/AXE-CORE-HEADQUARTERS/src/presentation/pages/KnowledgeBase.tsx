@@ -49,6 +49,14 @@ function highlightMatches(text: string, query: string): React.ReactNode {
   );
 }
 
+// Quick Notes (QuickNoteDock.tsx) can now store a little sanitized HTML for
+// bold/italic/underline/colour -- plain rows are untouched, but a rich one
+// would otherwise show its literal <b>/<span> tags here, since this preview
+// renders content as text, not markup.
+function platteVoorvertoning(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function fromRow(row: KbDocRow): Doc {
   return {
     id: row.id,
@@ -738,7 +746,7 @@ export default function KnowledgeBase() {
                         {editing === doc.id ? (
                           <textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={3} className="w-full text-xs-custom px-2 py-1.5 rounded mt-1 outline-none resize-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }} />
                         ) : (
-                          doc.content && <p className="text-xs-custom mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{highlightMatches(doc.content, search)}</p>
+                          doc.content && <p className="text-xs-custom mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{highlightMatches(platteVoorvertoning(doc.content), search)}</p>
                         )}
                         <span className="text-[9px] mt-1 block" style={{ color: 'var(--text-muted)' }}>{new Date(doc.updatedAt).toLocaleDateString()}</span>
                       </div>

@@ -359,6 +359,7 @@ export function BottomNav() {
 
         <div
           className="hidden sm:flex flex-shrink-0 w-28 h-full items-center justify-center"
+          data-axe-doel="axe-voice-orb-anchor"
           style={{
             borderLeft: '1px solid rgba(255,255,255,0.05)',
             borderRight: '1px solid rgba(255,255,255,0.05)',

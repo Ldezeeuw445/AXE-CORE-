@@ -91,7 +91,7 @@ export function PipelineTab({ openDeal }: { openDeal?: (id: string) => void }) {
         acties={(
           <>
             <div className="w-[240px]"><Zoekveld waarde={zoek} zet={setZoek} plaats="Search pipeline…" /></div>
-            <Filters opties={[{ id: 'kanban', label: 'Kanban' }, { id: 'lijst', label: 'List' }] as const} actief={weergave} kies={setWeergave} />
+            <Filters<'kanban' | 'lijst'> opties={[{ id: 'kanban', label: 'Kanban' }, { id: 'lijst', label: 'List' }] as const} actief={weergave} kies={setWeergave} />
             <VerversKnop bezig={bezig} ververs={ververs} />
           </>
         )}>

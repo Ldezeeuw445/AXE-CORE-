@@ -99,7 +99,7 @@ export function DocumentenTab() {
           </>
         )}>
         <div className="px-4 pb-2">
-          <Filters opties={[
+          <Filters<'alle' | 'document' | 'bijlage'> opties={[
             { id: 'alle', label: 'All', aantal: alle.length },
             { id: 'document', label: 'Deal documents', aantal: aantalDocs },
             { id: 'bijlage', label: 'Email attachments', aantal: aantalBijlagen },
