@@ -125,8 +125,14 @@ export interface LoopHealth {
   closed: number;
   good: number;
   poor: number;
+  /** Good episodes that actually contained memory references to learn from. */
+  reinforceable: number;
+  /** Episodes whose reinforcement was successfully completed. */
+  applied: number;
   /** Aandeel geopende episodes dat ooit een oordeel kreeg. */
   closeRate: number;
+  /** Aandeel reinforceable good episodes dat echt is toegepast. */
+  applyRate: number;
 }
 
 /**
@@ -141,12 +147,18 @@ export interface LoopHealth {
 export function loopHealth(agent: LoopAgent, episodes: Episode[]): LoopHealth {
   const mine = episodes.filter(e => e.agent === agent);
   const closed = mine.filter(e => e.verdict !== 'unknown');
+  const good = closed.filter(e => e.verdict === 'good');
+  const reinforceable = good.filter(e => e.memoryIds.length > 0 || e.memoryKeys.length > 0);
+  const applied = reinforceable.filter(e => e.applied);
   return {
     agent,
     opened: mine.length,
     closed: closed.length,
-    good: closed.filter(e => e.verdict === 'good').length,
+    good: good.length,
     poor: closed.filter(e => e.verdict === 'poor').length,
+    reinforceable: reinforceable.length,
+    applied: applied.length,
     closeRate: mine.length ? closed.length / mine.length : 0,
+    applyRate: reinforceable.length ? applied.length / reinforceable.length : 0,
   };
 }
