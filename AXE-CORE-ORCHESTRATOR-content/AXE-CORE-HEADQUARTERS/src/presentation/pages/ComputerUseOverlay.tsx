@@ -33,10 +33,10 @@ async function beginWindowResize() {
 }
 
 const QUICK = [
-  { label: 'Downloads', prompt: 'Show me what is in Downloads.', icon: Folder },
-  { label: 'Documents', prompt: 'Show me the Documents folder.', icon: Folder },
-  { label: 'Screenshots', prompt: 'Find my recent screenshots.', icon: Image },
-  { label: 'Desktop', prompt: 'Show me what is on the Desktop.', icon: Folder },
+  { label: 'Downloads', prompt: 'Use [COMPUTER:] personal.files.list for Downloads on my selected Mac and show me the real current contents.', icon: Folder },
+  { label: 'Documents', prompt: 'Use [COMPUTER:] personal.files.list for Documents on my selected Mac and show me the real current contents.', icon: Folder },
+  { label: 'Screenshots', prompt: 'Use [COMPUTER:] personal.files.list for Desktop on my selected Mac and identify recent screenshot files from the real listing.', icon: Image },
+  { label: 'Desktop', prompt: 'Use [COMPUTER:] personal.files.list for Desktop on my selected Mac and show me the real current contents.', icon: Folder },
 ] as const;
 
 export default function ComputerUseOverlay() {
