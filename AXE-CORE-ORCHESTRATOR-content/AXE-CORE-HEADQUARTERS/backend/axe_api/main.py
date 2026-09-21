@@ -63,6 +63,7 @@ try:
     from agent_runner import (  # noqa: E402
         run_agent,
         engine_status as agent_engine_status,
+        agent_usage_status,
         repo_status as claude_repo_status,
         cli_available as claude_cli_available,
         ALLOWED_PERMISSION_MODES,
@@ -82,6 +83,9 @@ except Exception as _e:  # noqa: BLE001
     run_agent = werkboom_status = commit_en_push = _geen_agent_runner  # type: ignore[assignment]
 
     def agent_engine_status(*_a, **_k) -> dict:  # type: ignore[misc]
+        return {}
+
+    def agent_usage_status(*_a, **_k) -> dict:  # type: ignore[misc]
         return {}
 
     def claude_repo_status(*_a, **_k) -> dict:  # type: ignore[misc]
@@ -2962,6 +2966,7 @@ async def claude_repos():
         # ingelogd bent kost een echte aanroep, en een statuspaneel hoort geen
         # sessie van je abonnement op te maken.
         "engines": agent_engine_status(),
+        "usage": agent_usage_status(),
     }
 
 
