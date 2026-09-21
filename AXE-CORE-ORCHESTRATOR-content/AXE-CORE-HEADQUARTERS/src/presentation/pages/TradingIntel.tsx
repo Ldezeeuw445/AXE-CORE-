@@ -106,8 +106,9 @@ export default function TradingIntel() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full flex flex-col overflow-hidden"
-      style={{ background: '#050505' }}
+      className="h-full flex flex-col overflow-hidden bg-transparent"
+      /* Trading is a workspace ON the AXE shell. A page-wide #050505 layer
+         turned every room into a black sheet and hid the shell material. */
     >
       {/* De eigen kopbalk en de statusstrook zijn weg. Ze stonden bovenop de
           pagina en zeiden wat er in de topbalk hoort: waar je bent, of de
