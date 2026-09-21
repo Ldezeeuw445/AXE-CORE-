@@ -641,38 +641,34 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
     startListening:async()=>{
       try{
-        // ── Gemini Live (if Google slot is configured) ──────────────────
-        const gState=get();
-        const googleSlot=[gState.primarySlot,gState.fallback1Slot,gState.fallback2Slot,gState.fallback3Slot].find(s=>s?.provider==='google');
-        if(googleSlot?.key){
-          try{
-            const{setGeminiLiveApiKey,getGeminiLiveService,startGeminiLive}=await import('@/infrastructure/gateways/geminiLiveService');
-            setGeminiLiveApiKey(googleSlot.key);
-            const svc=getGeminiLiveService();
-            svc.setCallbacks({
-              onStart:()=>set({voiceStatus:'listening',transcript:'',error:null,isGeminiLive:true}),
-              onListening:()=>set({voiceStatus:'listening'}),
-              onSpeaking:()=>set({voiceStatus:'speaking'}),
-              onIdle:()=>set({voiceStatus:'idle'}),
-              onStop:()=>set({voiceStatus:'idle',isGeminiLive:false}),
-              // Gemini Live streams audio directly via WebSocket — do NOT call speakSafely
-              // here or TTS will double-play. Just store the transcript.
-              onText:(text)=>{
-                const trimmed=text.trim();if(!trimmed)return;
-                set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'google',model:'gemini-live'}],response:trimmed,voiceStatus:'idle',error:null}));
-              },
-              onError:(err)=>set({voiceStatus:'idle',isGeminiLive:false,error:`Gemini Live: ${err}`}),
-            });
-            await startGeminiLive();
-            set({isGeminiLive:true});
-            return;
-          }catch(liveErr){console.warn('[GeminiLive] startup failed, falling back to browser STT:',liveErr);set({isGeminiLive:false});}
-        }
-        // ── Browser SpeechRecognition fallback ──────────────────────────
+        // One AXE voice means one audio-output path. Gemini Live used to take
+        // over here whenever a Google slot existed, which made AXE literally
+        // sound like a different assistant depending on routing configuration.
+        // Speech input stays provider-neutral; every reply goes through
+        // speakGlobal() and therefore the single AXE voice profile.
+        stopGlobalTts();
+
         const rec=getRec();if(!rec){set({error:'Speech recognition not supported.'});return;}
         try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});stream.getTracks().forEach(t=>t.stop());set({micPermission:'granted'});}catch{set({error:'Microphone permission denied.'});return;}
-        stopGlobalTts();set({transcript:'',response:'',voiceStatus:'listening',error:null});
-        rec.onresult=(event:SpeechRecognitionEvent)=>{let final='';for(let i=0;i<event.results.length;i++)if(event.results[i].isFinal)final+=event.results[i][0].transcript;set({transcript:final||get().transcript});if(final){set({voiceStatus:'processing'});get().sendMessage(final).catch(()=>set({voiceStatus:'idle'}));}};
+
+        set({transcript:'',response:'',voiceStatus:'listening',error:null,isGeminiLive:false});
+        rec.onresult=(event:SpeechRecognitionEvent)=>{
+          let final='',interim='';
+          for(let i=0;i<event.results.length;i++){
+            const piece=event.results[i][0]?.transcript??'';
+            if(event.results[i].isFinal)final+=piece;
+            else interim+=piece;
+          }
+          // Show what Luka is saying WHILE he is saying it. The final text is
+          // still the only thing sent to AXE, so an interim hypothesis can
+          // never accidentally become a command.
+          const visible=(final||interim).trim();
+          if(visible)set({transcript:visible});
+          if(final.trim()){
+            set({voiceStatus:'processing',transcript:final.trim()});
+            get().sendMessage(final.trim()).catch(()=>set({voiceStatus:'idle'}));
+          }
+        };
         rec.onerror=(event:SpeechRecognitionErrorEvent)=>{if(event.error==='not-allowed')set({voiceStatus:'idle',micPermission:'denied',error:'Microphone blocked.'});else if(event.error!=='no-speech')set({voiceStatus:'idle',error:`Speech error: ${event.error}`});else set({voiceStatus:'idle'});};
         rec.onend=()=>{if(get().voiceStatus==='listening')set({voiceStatus:'idle'});};
         rec.start();
