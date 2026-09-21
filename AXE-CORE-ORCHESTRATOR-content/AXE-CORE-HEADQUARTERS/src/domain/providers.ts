@@ -470,6 +470,12 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     'gemma4:e2b-mlx': 'qwen3.5:2b',
     'gemma4:e2b':     'qwen3.5:2b',
   },
+  cerebras: {
+    // Cerebras no longer serves gemma-4-31b on the shared Inference API.
+    // A stale saved Settings card must not override the verified provider default
+    // and turn an otherwise usable Cerebras key into a permanently failing slot.
+    'gemma-4-31b': 'gpt-oss-120b',
+  },
   groq: {
     // Groq shut both of these down on 2026-08-16 (llama-3.3-70b-versatile —
     // this app's old default) and qwen/qwen3-32b, which was already gone
