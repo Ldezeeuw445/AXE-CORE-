@@ -134,7 +134,12 @@ export function AxePresenceDock() {
      bottom nav -- just the particle, no card. The moment AXE is actually doing
      something (talking, thinking, waiting on approval), it moves up beside the
      composer and shows what it's saying. Idle is a glance; busy is a read. */
-  const actief = Boolean(pending) || Boolean(activiteit) || voice.voiceStatus !== 'idle';
+  const liveTranscript = voice.transcript.trim();
+  const heeftGesprek = Boolean(laatste.user || laatste.axe || liveTranscript);
+  // The exchange is now the shell's persistent conversation glance. Do not
+  // make it vanish the millisecond TTS finishes; that recreates the old
+  // "where did my message go?" problem above the composer.
+  const actief = Boolean(pending) || Boolean(activiteit) || voice.voiceStatus !== 'idle' || heeftGesprek;
   // An approval must stay reachable no matter how little room there is --
   // never drop to the text-less mini variant while one is pending.
   const minModus: ActievePositie['modus'] = pending ? 'compact' : 'mini';
@@ -209,9 +214,11 @@ export function AxePresenceDock() {
                 </div>
               ) : modus === 'vol' && (
                 <div className="axe-presence-dock__exchange" aria-live="polite">
-                  {laatste.user && <p data-van="mij">{laatste.user.text}</p>}
+                  {(liveTranscript || laatste.user) && (
+                    <p data-van="mij">{liveTranscript || laatste.user?.text}</p>
+                  )}
                   {laatste.axe && <p data-van="axe">{laatste.axe.text}</p>}
-                  {!laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
+                  {!liveTranscript && !laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
                 </div>
               )}
             </div>
