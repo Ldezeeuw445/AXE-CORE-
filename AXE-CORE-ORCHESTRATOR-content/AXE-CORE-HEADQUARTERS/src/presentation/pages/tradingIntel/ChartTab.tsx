@@ -26,7 +26,12 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
   return (
     <div className={`flex flex-col lg:flex-row gap-3 h-full min-h-0 lg:overflow-visible ${inShell ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       <div className={`w-full lg:w-[168px] shrink-0 lg:block gap-1.5 overflow-x-auto lg:overflow-visible lg:space-y-1.5 pb-1 lg:pb-0 ${inShell ? 'hidden' : 'flex'}`}>
-        <p className="hidden lg:block text-[9px] uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Strategies</p>
+        <div className="hidden lg:block px-1 mb-1">
+          <p className="text-[9px] uppercase tracking-wider" style={{ color: '#c4b5fd' }}>Manual / backtest selection</p>
+          <p className="text-[8px] leading-snug mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            This controls Run agent + backtests only. Autopilot chooses per pair from the ledger.
+          </p>
+        </div>
         {STRATEGIES.map(s => (
           <button
             key={s.id}
@@ -130,7 +135,7 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
             style={{ background: 'rgba(52,211,153,0.12)', color: '#6ee7b7', border: '1px solid rgba(52,211,153,0.28)' }}
           >
             {agentRunning ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
-            Run agent
+            Run agent · {STRATEGIES.find(s => s.id === activeStrategy)?.label ?? activeStrategy}
           </button>
         </div>
 
