@@ -46,23 +46,15 @@ function sanitizeVoiceId(raw: string): string {
 
 /** A Fish Audio "reference_id" — defaults to the configured AXE voice. */
 export function getFishVoiceId(): string {
-  try {
-    const stored = sanitizeVoiceId(localStorage.getItem(FISH_VOICE_KEY) ?? '');
-    return stored || LEWIS_VOICE_ID;
-  } catch {
-    return LEWIS_VOICE_ID;
-  }
+  // Fixed emergency AXE fallback identity; legacy saved choices cannot drift it.
+  return LEWIS_VOICE_ID;
 }
 
 /** Persist voice id and switch active TTS provider to Fish. */
-export function setFishVoiceId(voiceId: string): void {
-  const clean = sanitizeVoiceId(voiceId) || LEWIS_VOICE_ID;
-  try {
-    localStorage.setItem(FISH_VOICE_KEY, clean);
-    localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
-  } catch { /* ignore */ }
-  void saveSetting(FISH_VOICE_KEY, clean);
-  void saveSetting(TTS_PROVIDER_KEY, 'fish');
+export function setFishVoiceId(_voiceId: string): void {
+  // Compatibility no-op. AXE exposes one identity, not a provider voice picker.
+  try { localStorage.removeItem(FISH_VOICE_KEY); } catch { /* ignore */ }
+  void saveSetting(FISH_VOICE_KEY, LEWIS_VOICE_ID);
 }
 
 /** Packaged Tauri needs a voice id (proxy may hold the API key). */
