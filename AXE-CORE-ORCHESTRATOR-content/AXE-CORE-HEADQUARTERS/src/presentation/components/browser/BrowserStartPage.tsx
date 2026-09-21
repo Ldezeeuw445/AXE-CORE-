@@ -3,7 +3,10 @@ import {
   BROWSER_AI_PROVIDER_LIST,
   type BrowserAIProviderId,
 } from '@/domain/browser/browserAIProviders';
-import { BrowserAIComposer } from '@/presentation/components/browser/BrowserAIComposer';
+import {
+  BrowserAIComposer,
+  type BrowserComposerFeedback,
+} from '@/presentation/components/browser/BrowserAIComposer';
 import QuickLinksGrid from '@/presentation/components/browser/QuickLinksGrid';
 import { Label, Panel } from '@/presentation/components/surface/Surface';
 import type { QuickLink } from '@/domain/types/browser';
@@ -14,6 +17,7 @@ interface BrowserStartPageProps {
   onAddFavorite: () => void;
   onAIProviderSubmit: (provider: BrowserAIProviderId, message: string, mode?: string) => void;
   loadingProvider?: BrowserAIProviderId | null;
+  providerFeedback?: Partial<Record<BrowserAIProviderId, BrowserComposerFeedback>>;
 }
 
 function CompactClock() {
@@ -56,6 +60,7 @@ export function BrowserStartPage({
   onAddFavorite,
   onAIProviderSubmit,
   loadingProvider,
+  providerFeedback,
 }: BrowserStartPageProps) {
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
@@ -86,6 +91,7 @@ export function BrowserStartPage({
               compact
               isActive
               isLoading={loadingProvider === p.id}
+              feedback={providerFeedback?.[p.id]}
               onFocus={() => {}}
               onSubmit={(msg, mode) => onAIProviderSubmit(p.id, msg, mode)}
             />
