@@ -8,7 +8,11 @@
  *
  * Never derive a fake "credits remaining" percentage from token rate limits.
  */
-import { apiUrl } from '@/infrastructure/config/apiUrl';
+import {
+  axeCoreApiExtraHeaders,
+  axeCoreApiUrl,
+  axeApiAuthHeaders,
+} from '@/infrastructure/config/apiUrl';
 
 const STORAGE_KEY = 'axe_provider_usage_v1';
 
@@ -113,9 +117,19 @@ export function quotaFromHeaders(headers: Headers): Record<string, string> {
  * providers return supported=false rather than a guessed value.
  */
 export async function refreshProviderBalance(provider: string, key?: string): Promise<ProviderUsageSnapshot> {
-  const res = await fetch(apiUrl('/api/proxy/ai/usage'), {
+  // Same privileged path as axeCoreApiService:
+  // - web/dev -> same-origin /api|/proxy/axecore, which adds the server secret
+  // - packaged Tauri/Android -> direct VPS only when the shell has the key
+  // This avoids the desktop build accidentally calling a web-only route.
+  const base = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
+  const url = `${base}/proxy/ai/usage`;
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...axeCoreApiExtraHeaders(),
+      ...axeApiAuthHeaders(url),
+    },
     body: JSON.stringify({ provider, ...(key ? { key } : {}) }),
   });
   if (!res.ok) throw new Error(`usage probe HTTP ${res.status}`);
