@@ -112,5 +112,10 @@ describe('welke agent hoort bij welke eigenaar', () => {
     expect(loopAgentVoor('axe_intel')).toBe('intel');
     expect(loopAgentVoor('axe_companion')).toBe('companion');
     expect(loopAgentVoor('axe_browser')).toBe('browser');
+    expect(loopAgentVoor('axe_core')).toBe('chat');
+    expect(loopAgentVoor('axe_algo')).toBe('trading');
+    expect(loopAgentVoor('code_agent')).toBe('code-editor');
+    expect(loopAgentVoor('browser_agent')).toBe('browser');
+    expect(loopAgentVoor('crewai_manager')).toBe('wingman');
   });
 });
