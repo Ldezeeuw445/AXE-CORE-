@@ -27,7 +27,7 @@
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
-import { LOOP_AGENTS, type LoopAgent, isLoopAgent } from '@/domain/memory/agentLoop';
+import { type LoopAgent, isLoopAgent } from '@/domain/memory/agentLoop';
 import { AGENT_CATALOG } from '@/domain/agents/catalog';
 
 const LS_KEY = 'axe_memory_feedback_v1';
@@ -244,21 +244,21 @@ export function noteTurnOutcomeByQuery(userText: string, verdict: TurnVerdict): 
   if (needle.length < 8) return 0;
   const turns = load();
   let hit = 0;
+  const episodesToClose: string[] = [];
   for (const t of turns) {
     if (t.verdict !== 'unknown') continue;
     if (t.query.slice(0, 60).toLowerCase().trim() !== needle) continue;
     t.verdict = verdict;
+    if (t.episodeId) episodesToClose.push(t.episodeId);
     hit++;
   }
   if (hit) save(turns);
 
-  // Keep the durable episode in lockstep with the local turn. Reviews run on
-  // their own schedule and historically only changed localStorage, leaving the
-  // Supabase episode open forever even though the turn had been judged.
-  for (const t of turns) {
-    if (t.verdict !== verdict || !t.episodeId) continue;
-    if (t.query.slice(0, 60).toLowerCase().trim() !== needle) continue;
-    void closeEpisode(t.episodeId, verdict).catch(() => { /* non-fatal side effect */ });
+  // Keep only the episodes changed by THIS review in lockstep. The same
+  // question may have been asked earlier; already-judged historical turns must
+  // not be re-closed just because their wording matches again.
+  for (const episodeId of episodesToClose) {
+    void closeEpisode(episodeId, verdict).catch(() => { /* non-fatal side effect */ });
   }
   return hit;
 }
