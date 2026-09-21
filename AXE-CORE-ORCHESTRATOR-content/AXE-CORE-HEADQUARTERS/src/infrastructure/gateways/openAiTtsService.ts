@@ -45,7 +45,7 @@ const MODEL = 'gpt-4o-mini-tts';
 export const AXE_SPEECH_INSTRUCTIONS =
   'Speak in the language of the input, using a calm, low, warm adult male voice. ' +
   'Sound natural, grounded and understated, like a trusted technical copilot sitting nearby. ' +
-  'Use a relaxed medium-slow pace with short natural pauses, stable pitch and subtle warmth. ' +
+  'Use a relaxed, moderately slow natural pace with short pauses, stable pitch and subtle warmth. ' +
   'Sound attentive, not sleepy. Avoid announcer cadence, exaggerated enthusiasm, sales tone, ' +
   'over-enunciation, theatrical emphasis, singing or whispering. ' +
   'For Dutch use fluent neutral Dutch; for English use a neutral natural accent. ' +
