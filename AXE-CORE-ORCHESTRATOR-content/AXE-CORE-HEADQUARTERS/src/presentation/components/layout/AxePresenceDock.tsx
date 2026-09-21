@@ -2,8 +2,8 @@
  * AXE Presence — the compact, persistent AXE that follows every workspace.
  *
  * Home keeps its full Core Sphere. This is not a replacement for that scene.
- * The presence owns the small 20px idle particle (parked under the "AXE"
- * label in the bottom nav) and the 64px active card (beside the composer)
+ * The presence owns the 64px idle orb (centred over the "AXE" label in the
+ * bottom nav, so the word sits inside the orb) and the 64px active card (beside the composer)
  * with the latest exchange and activity flight. It lives in shell chrome, so
  * workspaces (NorthSea map, browser, charts, editors) never have to host an
  * AXE overlay of their own.
@@ -130,8 +130,8 @@ export function AxePresenceDock() {
      own colour/pulse (presenceStatus/werk above) is the state now, and the
      word lives in exactly one place, TopNav's badge, reading the same
      VOICE_STATUS_LABEL so it can never drift from what the particle shows. */
-  /* Luka, 20 sep 2026 (live review, round 3): resting spot is the middle of the
-     bottom nav -- just the particle, no card. The moment AXE is actually doing
+  /* Luka, 21 sep 2026 (live review): resting spot is the middle of the bottom
+     nav -- the full 64px orb centred over the AXE word, no card. The moment AXE is actually doing
      something (talking, thinking, waiting on approval), it moves up beside the
      composer and shows what it's saying. Idle is a glance; busy is a read. */
   const liveTranscript = voice.transcript.trim();
@@ -180,7 +180,7 @@ export function AxePresenceDock() {
     <>
       {!actief && (
         <div className="axe-presence-idle" style={anker ? { left: anker.x, top: anker.y } : undefined} aria-hidden="true">
-          <AxeStatusOrb size={20} toonLabel={false} werk={werk} status={presenceStatus} />
+          <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
         </div>
       )}
       {actief && (
