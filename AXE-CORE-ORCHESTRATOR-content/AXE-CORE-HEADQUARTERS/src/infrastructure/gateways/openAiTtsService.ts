@@ -38,6 +38,22 @@ const STEM_SLEUTEL = 'axe_openai_stem';
 const MODEL = 'gpt-4o-mini-tts';
 
 /**
+ * One speaking identity for AXE.
+ *
+ * The voice token alone is not the identity: gpt-4o-mini-tts can follow
+ * instructions for cadence, tone and intonation. Keep this centralized so
+ * chat, Computer Use and every standalone shell sound like the same person.
+ */
+export const AXE_VOICE_INSTRUCTIONS = [
+  'Speak in a calm, low, warm adult male voice.',
+  'Sound natural and understated, like a trusted technical copilot sitting nearby.',
+  'Use a relaxed medium-slow pace with short natural pauses.',
+  'Keep emotional range restrained and confident; never sound like a radio host or salesperson.',
+  'Do not over-enunciate, sing, whisper, or add theatrical emphasis.',
+  'For Dutch, speak fluent neutral Dutch. For English, use a neutral natural accent.',
+].join(' ');
+
+/**
  * AXE's speaking character. Voice identity comes from Cedar; this controls the
  * delivery so it stays calm and easy to listen to instead of drifting into an
  * over-animated assistant cadence.
