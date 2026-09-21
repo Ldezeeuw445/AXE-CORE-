@@ -1198,6 +1198,7 @@ async def frameworks_status():
             "vbt": {"installed": os.path.exists("/opt/axe-trading/venv/bin/python")
                     and os.path.exists("/opt/axe-trading/vbt_backtest.py")},
             "nt": {"installed": os.path.exists(NAUTILUS_PY) and os.path.exists(NAUTILUS_SCRIPT)},
+            "kr": {"installed": os.path.exists(KRONOS_PY) and os.path.exists(KRONOS_SCRIPT)},
             "ta": {"installed": os.path.exists(TA_PY) and os.path.exists(TA_SCRIPT)},
         },
     }
