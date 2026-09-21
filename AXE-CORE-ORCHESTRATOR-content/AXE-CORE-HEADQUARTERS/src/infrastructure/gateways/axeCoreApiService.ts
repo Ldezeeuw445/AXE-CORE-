@@ -1546,6 +1546,10 @@ export async function fetchMarketNews(category = 'forex', limit = 20): Promise<{
 // ══════════════════════════════════════════════════════════════════════════════
 export interface PlannerAgentVerslag {
   motor: string;
+  /** Motor used to THINK of proposals; execution still uses `motor`. */
+  plan_motor?: string;
+  /** Explicit fallback when the cheap planning route could not produce valid JSON. */
+  plan_terugval?: { van: string; naar: string; reden: string };
   voorstellen?: string[];
   fout?: string;
   uitgevoerd?: { taak: string; ok?: boolean; fout?: string | null; overgeslagen?: string };
@@ -1570,7 +1574,15 @@ export interface PlannerTaak {
   status: string;
   priority: string;
   assignee: string | null;
-  metadata: { agent?: string; motor?: string; risico?: 'lezen' | 'schrijven'; goedkeuring?: 'niet_nodig' | 'nodig' | 'ja' | 'afgewezen'; pogingen?: number } | null;
+  metadata: {
+    agent?: string;
+    motor?: string;
+    risico?: 'lezen' | 'schrijven';
+    goedkeuring?: 'niet_nodig' | 'nodig' | 'ja' | 'afgewezen';
+    pogingen?: number;
+    uiStatus?: string;
+    app?: string;
+  } | null;
   result: { output?: string } | null;
   error: { message?: string } | null;
   created_at: string;
