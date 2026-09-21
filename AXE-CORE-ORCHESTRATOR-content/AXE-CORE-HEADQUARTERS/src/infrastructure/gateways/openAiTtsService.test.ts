@@ -10,8 +10,10 @@ vi.stubGlobal('localStorage', {
   clear: () => geheugen.clear(),
 });
 
-const { OPENAI_STEMMEN, STANDAARD_STEM, getOpenAiStem, isOpenAiTtsConfigured, setOpenAiStem } =
-  await import('./openAiTtsService');
+const {
+  OPENAI_STEMMEN, STANDAARD_STEM, AXE_SPEECH_INSTRUCTIONS,
+  buildOpenAiSpeechRequest, getOpenAiStem, isOpenAiTtsConfigured, setOpenAiStem,
+} = await import('./openAiTtsService');
 
 beforeEach(() => geheugen.clear());
 
@@ -32,6 +34,20 @@ describe('OpenAI-stemmen', () => {
     expect(getOpenAiStem()).toBe(STANDAARD_STEM);
     setOpenAiStem('cedar');
     expect(getOpenAiStem()).toBe('cedar');
+  });
+
+  it('stuurt de vaste rustige AXE-cadans mee naar gpt-4o-mini-tts', () => {
+    const req = buildOpenAiSpeechRequest('Goedemorgen.', 'cedar');
+    expect(req).toMatchObject({
+      model: 'gpt-4o-mini-tts',
+      voice: 'cedar',
+      input: 'Goedemorgen.',
+      instructions: AXE_SPEECH_INSTRUCTIONS,
+      response_format: 'mp3',
+    });
+    expect(AXE_SPEECH_INSTRUCTIONS).toContain('calm');
+    expect(AXE_SPEECH_INSTRUCTIONS).toContain('moderately slow');
+    expect(AXE_SPEECH_INSTRUCTIONS).toContain('Avoid announcer cadence');
   });
 
   it('zonder sleutel meldt hij dat, in plaats van stil te blijven', () => {
