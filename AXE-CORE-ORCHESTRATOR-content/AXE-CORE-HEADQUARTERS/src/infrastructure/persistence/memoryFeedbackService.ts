@@ -117,11 +117,15 @@ export function loopAgentVoor(owner: string | undefined): LoopAgent | null {
 
   // Legacy names that predate the canonical roster. Keep these at the boundary
   // rather than growing another hand-maintained agent list.
-  if (owner === 'local-code' || owner === 'code-editor' || owner === 'axe_code' || owner === 'axe_developer') {
-    return 'code-editor';
-  }
-  if (owner === 'chat' || owner === 'global') return 'chat';
+  if (
+    owner === 'local-code' || owner === 'code-editor' || owner === 'code_agent'
+    || owner === 'axe_code' || owner === 'axe_developer'
+  ) return 'code-editor';
+  if (owner === 'chat' || owner === 'global' || owner === 'axe_core') return 'chat';
   if (owner === 'research' || owner === 'axe_research') return 'research';
+  if (owner === 'axe_algo') return 'trading';
+  if (owner === 'browser_agent') return 'browser';
+  if (owner === 'crewai_manager') return 'wingman';
 
   // Current chat/routing code passes namespaceFor(agent), not the agent id.
   // Resolve that namespace through the canonical catalog so adding/renaming a
