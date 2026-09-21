@@ -74,6 +74,7 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'files.list': 'observe',
   'files.read': 'observe',
   'files.search': 'observe',
+  'personal.files.list': 'observe',
   'git.status': 'observe',
   'git.branch': 'observe',
   'git.diff': 'observe',

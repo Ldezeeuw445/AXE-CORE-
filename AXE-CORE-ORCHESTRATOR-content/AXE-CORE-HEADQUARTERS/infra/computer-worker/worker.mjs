@@ -160,7 +160,7 @@ const COMMANDS = {
 };
 
 const READ_ONLY = new Set([
-  'system.info', 'files.list', 'files.read', 'files.search',
+  'system.info', 'files.list', 'files.read', 'files.search', 'personal.files.list',
   'git.status', 'git.branch', 'git.diff', 'git.log',
   // Raakt de repo niet: de foto gaat naar de privé-bucket, dus ook toegestaan op orchestrator.
   'camera.snapshot',
@@ -415,6 +415,23 @@ async function execute(payload) {
     case 'git.status':  return git(root, 'status', '--porcelain', '-b');
     case 'git.diff':    return git(root, 'diff', '--stat');
     case 'git.log':     return git(root, 'log', '-5', '--oneline');
+
+    case 'personal.files.list': {
+      const requested = String(args.path ?? '').trim();
+      const allowed = new Map([
+        ['Desktop', join(homedir(), 'Desktop')],
+        ['Documents', join(homedir(), 'Documents')],
+        ['Downloads', join(homedir(), 'Downloads')],
+      ]);
+      const dir = allowed.get(requested);
+      if (!dir) throw new Error(`personal.files.list only allows Desktop, Documents, or Downloads; got '${requested}'`);
+      const entries = await readdir(dir, { withFileTypes: true });
+      return entries
+        .filter(e => !e.name.startsWith('.') && !DENY_NAMES.test(e.name))
+        .slice(0, 200)
+        .map(e => (e.isDirectory() ? `${e.name}/` : e.name))
+        .join('\n') || '(empty)';
+    }
 
     case 'files.list': {
       const dir = safePath(root, args.path ?? '.');

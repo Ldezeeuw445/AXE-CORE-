@@ -134,6 +134,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "thinking-orbs": "^0.3.1",
+    "voice-glow": "^0.2.0",
     "three": "^0.185.1",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"

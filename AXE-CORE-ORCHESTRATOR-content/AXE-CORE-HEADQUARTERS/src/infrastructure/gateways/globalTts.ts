@@ -5,11 +5,8 @@
  * when Fish is the active provider. Mindset, AXE quotes, chat, and previews
  * must all call speakGlobal so they never drift to a different voice.
  */
-import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
-import {
-  stopTTS,
-  speakWithBrowser,
-} from '@/infrastructure/gateways/elevenLabsService';
+import { stopFishAudio, speakWithFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import {
   speakWithOpenAi,
   stopOpenAiTts,
@@ -79,20 +76,26 @@ export function speakGlobal(
 
   stopGlobalTts();
 
-  // The AXE voice: OpenAI cedar. If the key or network isn't there, drop to the
-  // browser voice so AXE keeps talking — but never to a different "real" voice.
+  // The AXE voice: OpenAI cedar. Emergency fallback is the one fixed Fish
+  // identity (Lewis), never the OS/browser voice: that path can silently swap
+  // gender/accent and breaks AXE's identity.
   if (isOpenAiTtsConfigured()) {
     void speakWithOpenAi(
       line,
       onDone,
       (reason) => {
-        speakWithBrowser(line, onDone);
-        onError?.(reason);
+        void speakWithFishAudio(line, onDone, (fallbackReason) => {
+          onError?.(`${reason}; fallback: ${fallbackReason}`);
+          onDone?.();
+        });
       },
       AXE_OPENAI_VOICE,
     );
     return;
   }
 
-  speakWithBrowser(line, onDone);
+  void speakWithFishAudio(line, onDone, (reason) => {
+    onError?.(reason);
+    onDone?.();
+  });
 }

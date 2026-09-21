@@ -48,7 +48,7 @@ export const AXE_SPEECH_INSTRUCTIONS =
   'Use a relaxed, moderately slow natural pace with short pauses, stable pitch and subtle warmth. ' +
   'Sound attentive, not sleepy. Avoid announcer cadence, exaggerated enthusiasm, sales tone, ' +
   'over-enunciation, theatrical emphasis, singing or whispering. ' +
-  'For Dutch use fluent neutral Dutch; for English use a neutral natural accent. ' +
+  'For Dutch use fluent neutral Dutch; for English use a subtle calm British accent without caricature. ' +
   'Do not add or remove information.';
 
 export function buildOpenAiSpeechRequest(input: string, voice: OpenAiStem) {
@@ -62,15 +62,13 @@ export function buildOpenAiSpeechRequest(input: string, voice: OpenAiStem) {
 }
 
 export function getOpenAiStem(): OpenAiStem {
-  try {
-    const v = localStorage.getItem(STEM_SLEUTEL);
-    if (v && (OPENAI_STEMMEN as readonly string[]).includes(v)) return v as OpenAiStem;
-  } catch { /* privémodus */ }
+  // AXE has one voice identity. Legacy saved voice choices must never override it.
   return STANDAARD_STEM;
 }
 
-export function setOpenAiStem(stem: OpenAiStem): void {
-  try { localStorage.setItem(STEM_SLEUTEL, stem); } catch { /* privémodus */ }
+export function setOpenAiStem(_stem: OpenAiStem): void {
+  // Kept as a compatibility no-op for older Settings callers. AXE voice is fixed.
+  try { localStorage.removeItem(STEM_SLEUTEL); } catch { /* privémodus */ }
 }
 
 function sleutel(): string {
@@ -87,6 +85,18 @@ export function isOpenAiTtsConfigured(): boolean {
 }
 
 let huidige: HTMLAudioElement | null = null;
+let axeAudioContext: AudioContext | null = null;
+let axeAnalyser: AnalyserNode | null = null;
+let axeLevelData: Uint8Array<ArrayBuffer> | null = null;
+
+/** Live 0..1 RMS of AXE's actual TTS playback, sampled by VoiceBeam. */
+export function getAxeTtsLevel(): number {
+  if (!axeAnalyser || !axeLevelData || !huidige || huidige.paused) return 0;
+  axeAnalyser.getByteTimeDomainData(axeLevelData);
+  let sum = 0;
+  for (const v of axeLevelData) { const x = (v - 128) / 128; sum += x * x; }
+  return Math.min(1, Math.sqrt(sum / axeLevelData.length) * 3.2);
+}
 
 export function stopOpenAiTts(): void {
   if (huidige) {
@@ -127,6 +137,15 @@ export async function speakWithOpenAi(
     const url = URL.createObjectURL(await res.blob());
     const audio = new Audio(url);
     huidige = audio;
+    // Route playback through one analyser so the AXE composer reacts to the
+    // voice that is actually coming out of the speakers, not a fake timer.
+    axeAudioContext ??= new AudioContext();
+    const source = axeAudioContext.createMediaElementSource(audio);
+    axeAnalyser = axeAudioContext.createAnalyser();
+    axeAnalyser.fftSize = 512;
+    axeLevelData = new Uint8Array(axeAnalyser.fftSize);
+    source.connect(axeAnalyser);
+    axeAnalyser.connect(axeAudioContext.destination);
     audio.onended = () => { URL.revokeObjectURL(url); huidige = null; opKlaar?.(); };
     audio.onerror = () => { URL.revokeObjectURL(url); huidige = null; opFout?.('audio_kon_niet_spelen'); };
     await audio.play();

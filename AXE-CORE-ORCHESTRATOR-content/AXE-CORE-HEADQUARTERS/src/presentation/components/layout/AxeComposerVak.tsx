@@ -26,9 +26,11 @@
  * de chat hangen daaraan. Een nieuwe klassenaam zou de meting stil op nul
  * zetten en dan staan Terrain en Neural weer verkeerd.
  */
-import { useRef, type ReactNode, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type ReactNode, type KeyboardEvent } from 'react';
 import { BorderBeam } from 'border-beam';
+import { VoiceBeam, useMicrophone } from 'voice-glow';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { getAxeTtsLevel } from '@/infrastructure/gateways/openAiTtsService';
 import { ComposerSnelacties } from './ComposerSnelacties';
 import type { Snelactie } from '@/domain/snelacties';
 
@@ -71,7 +73,16 @@ export function AxeComposerVak({
 }: Props) {
   const veld = useRef<HTMLTextAreaElement>(null);
   const status = useVoiceStore(s => s.voiceStatus);
-  const bezig = status !== 'idle';
+  const mic = useMicrophone({ autoStart: false });
+  const speaking = status === 'listening' || status === 'speaking';
+
+  // SpeechRecognition owns transcription; VoiceBeam only borrows a raw stream
+  // while Luka is speaking so the visual follows the real microphone dynamics.
+  useEffect(() => {
+    if (status === 'listening') { void mic.start(); }
+    else if (mic.state === 'live') { mic.stop(); }
+  }, [status]); // voice-glow owns stream cleanup on unmount
+
 
   const opToets = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Shift+enter is de enige manier om een tweede regel te maken zolang enter
@@ -90,7 +101,17 @@ export function AxeComposerVak({
           active={bezig}: dan bewoog hij alleen tijdens een antwoord, en in rust
           was er niets van te zien -- terwijl Luka hem juist rustig zichtbaar
           wilde (16 september). */}
-      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={bezig ? 1 : 0.75} active>
+      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={speaking ? 0 : 0.75} active={!speaking}>
+      <VoiceBeam
+        stream={status === 'listening' ? mic.stream : null}
+        level={status === 'speaking' ? getAxeTtsLevel : 0}
+        idle={0}
+        active={speaking}
+        attack={0.12}
+        release={0.72}
+        colorVariant="colorful"
+        theme="dark"
+      >
       <div className="axe-vak">
         <div className="axe-vak-boven">
           <textarea
@@ -111,6 +132,7 @@ export function AxeComposerVak({
           <div className="axe-vak-rechts">{rechts}</div>
         </div>
       </div>
+      </VoiceBeam>
       </BorderBeam>
 
       {snelacties && (

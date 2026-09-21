@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Folder, GripHorizontal, Image, Mic, Paperclip, Plus, SquareArrowOutUpRight, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
+import { BorderBeam } from 'border-beam';
+import { VoiceBeam, useMicrophone } from 'voice-glow';
+import { getAxeTtsLevel } from '@/infrastructure/gateways/openAiTtsService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
@@ -30,14 +33,15 @@ async function beginWindowResize() {
 }
 
 const QUICK = [
-  { label: 'Downloads', prompt: 'Show me what is in Downloads.', icon: Folder },
-  { label: 'Documents', prompt: 'Show me the Documents folder.', icon: Folder },
-  { label: 'Screenshots', prompt: 'Find my recent screenshots.', icon: Image },
-  { label: 'Desktop', prompt: 'Show me what is on the Desktop.', icon: Folder },
+  { label: 'Downloads', prompt: 'Use [COMPUTER:] personal.files.list for Downloads on my selected Mac and show me the real current contents.', icon: Folder },
+  { label: 'Documents', prompt: 'Use [COMPUTER:] personal.files.list for Documents on my selected Mac and show me the real current contents.', icon: Folder },
+  { label: 'Screenshots', prompt: 'Use [COMPUTER:] personal.files.list for Desktop on my selected Mac and identify recent screenshot files from the real listing.', icon: Image },
+  { label: 'Desktop', prompt: 'Use [COMPUTER:] personal.files.list for Desktop on my selected Mac and show me the real current contents.', icon: Folder },
 ] as const;
 
 export default function ComputerUseOverlay() {
   const voice = useVoiceStore();
+  const mic = useMicrophone({ autoStart: false });
   const [text, setText] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [preferred, setPreferred] = useState<string | null>(null);
@@ -57,6 +61,12 @@ export default function ComputerUseOverlay() {
   const machine = useMemo(() => devices.find(d => d.id === preferred) ?? devices[0] ?? null, [devices, preferred]);
   const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
   const busy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'listening';
+  const speaking = voice.voiceStatus === 'listening' || voice.voiceStatus === 'speaking';
+
+  useEffect(() => {
+    if (voice.voiceStatus === 'listening') { void mic.start(); }
+    else if (mic.state === 'live') { mic.stop(); }
+  }, [voice.voiceStatus]); // visual stream only; transcription stays in voiceStore
 
   async function submit(value = text) {
     const task = value.trim();
@@ -72,6 +82,7 @@ export default function ComputerUseOverlay() {
 
   return (
     <main className="computer-use-overlay">
+      <BorderBeam size="pulse-outside" colorVariant="mono" active strength={0.9}>
       <section className="computer-use-overlay__card" data-axe-doel="computer-use-composer">
         <div
           className="computer-use-overlay__draghandle"
@@ -80,6 +91,16 @@ export default function ComputerUseOverlay() {
         >
           <GripHorizontal size={14} />
         </div>
+        <VoiceBeam
+          stream={voice.voiceStatus === 'listening' ? mic.stream : null}
+          level={voice.voiceStatus === 'speaking' ? getAxeTtsLevel : 0}
+          idle={0}
+          active={speaking}
+          attack={0.12}
+          release={0.72}
+          colorVariant="colorful"
+          theme="dark"
+        >
         <form className="computer-use-overlay__composer" onSubmit={onSubmit}>
           <div className="computer-use-overlay__particle">
             <AxeStatusOrb size={64} toonLabel={false} status={busy ? 'processing' : undefined} />
@@ -95,6 +116,7 @@ export default function ComputerUseOverlay() {
           <button type="button" className="computer-use-overlay__icon" title={voice.voiceStatus !== 'idle' ? 'Stop talking to AXE' : 'Talk to AXE'} onClick={() => void (voice.voiceStatus !== 'idle' ? voice.stopListening() : voice.startListening())}><Mic size={17} /></button>
           <button type="submit" className="computer-use-overlay__plus" title="Run task" disabled={!text.trim() || busy}><Plus size={20} /></button>
         </form>
+        </VoiceBeam>
 
         <div className="computer-use-overlay__meta">
           <span className={machine ? 'is-online' : 'is-offline'}>
@@ -128,6 +150,7 @@ export default function ComputerUseOverlay() {
           title="Drag to resize"
         />
       </section>
+      </BorderBeam>
     </main>
   );
 }
