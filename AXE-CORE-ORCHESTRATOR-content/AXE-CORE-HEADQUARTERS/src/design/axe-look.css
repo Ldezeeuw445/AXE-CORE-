@@ -5835,16 +5835,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
      (aria-hidden, non-interactive -- it is a status glance, not a control).
      `left` is set inline once measured; 50% is only the pre-measurement
      fallback for the first paint. */
+  /* `top`/`left` are the anchor slot's real measured centre (AxePresenceDock.tsx),
+     not this fixed bottom: 22px guess -- that put the particle right on the
+     bottom nav's own top edge on some window heights instead of centred in
+     the slot (round 5 live review). translate(-50%, -50%) treats left/top as
+     the CENTRE point, matching how the horizontal half already worked. */
   :root[data-look] .axe-presence-idle {
     position: fixed;
     left: 50%;
-    bottom: 22px;
-    transform: translateX(-50%);
+    top: 50%;
+    transform: translate(-50%, -50%);
     z-index: 104;
     display: grid;
     place-items: center;
     pointer-events: none;
-    transition: opacity 200ms ease, left 200ms ease;
+    transition: opacity 200ms ease, left 200ms ease, top 200ms ease;
   }
 
   /* Active: beside the composer, in the space before the right radial (or any
@@ -5875,29 +5880,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     width: 68px;
     min-width: 68px;
     height: 68px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1px;
+    display: grid;
+    place-items: center;
   }
   :root[data-look] .axe-presence-dock[data-modus='mini'] .axe-presence-dock__orb {
     width: 32px;
     min-width: 32px;
     height: 32px;
-  }
-  /* The status word belongs to the particle, not to the card header (round 5
-     live review) -- a caption directly under the orb it describes. Omitted
-     in mini mode: there is no room, and mini already has no body text either. */
-  :root[data-look] .axe-presence-dock__orbstatus {
-    font: 600 8px/1 var(--mono);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-  :root[data-look] .axe-presence-dock[data-modus='mini'] .axe-presence-dock__orbstatus {
-    display: none;
   }
 
   :root[data-look] .axe-presence-dock__body {

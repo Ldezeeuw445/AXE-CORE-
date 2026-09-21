@@ -13,7 +13,6 @@ import { Check, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { ACTIVITEIT_GEBEURTENIS, type AxeActiviteit } from '@/shared/axeActiviteit';
-import { VOICE_STATUS_LABEL } from '@/presentation/store/voiceStatusLabel';
 import { kiesDoel, type Rechthoek } from '@/domain/bolVlucht';
 import { BolVlucht, type Vlucht } from '@/presentation/components/layout/zweef/BolVlucht';
 
@@ -125,10 +124,12 @@ export function AxePresenceDock() {
     schrijft: /write|schrijf|draft|compose|reply|antwoord/.test(activiteitTekst),
   };
   const presenceStatus = activiteit && voice.voiceStatus === 'idle' ? 'processing' as const : undefined;
-  const statusText = pending
-    ? 'Approval required'
-    : activiteit?.label
-      ?? (voice.voiceStatus === 'idle' ? 'Ready' : VOICE_STATUS_LABEL[voice.voiceStatus]);
+  /* Luka, 21 sep 2026 (round 5 live review): the "Thinking"/"Working" word
+     used to sit in a caption under the particle here too, styled too heavy
+     and cramped against the orb. Removed rather than restyled -- the orb's
+     own colour/pulse (presenceStatus/werk above) is the state now, and the
+     word lives in exactly one place, TopNav's badge, reading the same
+     VOICE_STATUS_LABEL so it can never drift from what the particle shows. */
   /* Luka, 20 sep 2026 (live review, round 3): resting spot is the middle of the
      bottom nav -- just the particle, no card. The moment AXE is actually doing
      something (talking, thinking, waiting on approval), it moves up beside the
@@ -143,12 +144,17 @@ export function AxePresenceDock() {
      label slot; the composer; any visible right rail) -- never a hardcoded
      per-page offset. Re-measured on mount, on resize, and whenever `actief`
      flips, since that's exactly when the right answer changes. */
-  const [ankerX, setAnkerX] = useState<number | null>(null);
+  const [anker, setAnker] = useState<{ x: number; y: number } | null>(null);
   const [actievePositie, setActievePositie] = useState<ActievePositie>(() => metingActievePositie());
   useEffect(() => {
     const meet = () => {
+      // Both axes, not just X (round 5 live review): a fixed `bottom: 22px`
+      // guessed where the anchor slot's own vertical centre would land and
+      // put the idle particle right on the bottom nav's top edge instead --
+      // exactly the kind of drift measuring was supposed to prevent. Same
+      // fix as the composer/rail measurements above: read the real slot.
       const r = vindDoel('axe-voice-orb-anchor');
-      setAnkerX(r ? r.x + r.b / 2 : null);
+      setAnker(r ? { x: r.x + r.b / 2, y: r.y + r.h / 2 } : null);
       setActievePositie(prev => {
         const next = metingActievePositie();
         return next.links === prev.links && next.modus === prev.modus ? prev : next;
@@ -168,7 +174,7 @@ export function AxePresenceDock() {
   return (
     <>
       {!actief && (
-        <div className="axe-presence-idle" style={ankerX !== null ? { left: ankerX } : undefined} aria-hidden="true">
+        <div className="axe-presence-idle" style={anker ? { left: anker.x, top: anker.y } : undefined} aria-hidden="true">
           <AxeStatusOrb size={20} toonLabel={false} werk={werk} status={presenceStatus} />
         </div>
       )}
@@ -184,10 +190,6 @@ export function AxePresenceDock() {
             {/* Only 20 (inline-text) or 64 (chat-avatar) exist -- thinking-orbs ships exactly
                 two tuned presets, not a scale factor (see AxeStatusOrb's own doc comment). */}
             <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
-            {/* Under the particle, not beside "AXE" in the head row (round 5 live
-                review): the status is what the particle is doing, so it reads as
-                part of the particle rather than a caption for the card header. */}
-            <span className="axe-presence-dock__orbstatus">{statusText}</span>
           </div>
           {modus !== 'mini' && (
             <div className="axe-presence-dock__body">
