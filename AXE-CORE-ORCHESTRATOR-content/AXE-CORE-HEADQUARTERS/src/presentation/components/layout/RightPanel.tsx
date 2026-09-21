@@ -381,7 +381,7 @@ export function RightPanel() {
   const quickActions = [
     { id: '1', label: 'Start New Task', icon: 'plus' },
     { id: '2', label: 'Open Calendar', icon: 'calendar' },
-    { id: '3', label: voice.voiceStatus === 'listening' ? 'Stop Voice Chat' : 'Start Voice Chat', icon: 'mic' },
+    { id: '3', label: voice.voiceStatus !== 'idle' ? 'Stop Voice Chat' : 'Start Voice Chat', icon: 'mic' },
     { id: '4', label: 'Run Workflow', icon: 'play' },
     { id: '5', label: 'Open Command', icon: 'terminal' },
     { id: '6', label: 'Create Note', icon: 'file-plus' },

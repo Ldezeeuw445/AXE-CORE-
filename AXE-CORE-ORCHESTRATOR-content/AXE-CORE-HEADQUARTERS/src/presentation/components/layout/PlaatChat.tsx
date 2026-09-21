@@ -187,6 +187,16 @@ export function PlaatChat() {
   }); // geen deps: ingestFiles leest verse attachments
 
   const chatIsListening = voice.voiceStatus === 'listening';
+  /* De mic-knop moet een gesprek op elk moment kunnen ophangen, niet alleen
+     terwijl je zelf aan het woord bent. Vóór deze fix keek de knop alleen naar
+     chatIsListening: klik hem in tijdens 'processing' of 'speaking' en
+     startListening() deed niets (de loop draaide al, zie
+     installWhisperVoice.ts), dus je zat vast tot AXE uitgesproken was.
+     runConversationLoop zet voiceStatus terug naar 'idle' zodra het gesprek
+     echt stopt, dus 'niet idle' is precies "gesprek loopt", ongeacht welke
+     substatus. Zelfde fix nodig (en gedaan) in BottomBar.tsx, RightPanel.tsx
+     en SidebarChat.tsx -- die hadden precies dezelfde aanname. */
+  const chatGesprekActief = voice.voiceStatus !== 'idle';
 
   const showOnSphere = (proj: NonNullable<Awaited<ReturnType<typeof directFromChat>>>) => {
     setCoreView('axe');
@@ -247,7 +257,7 @@ export function PlaatChat() {
   };
 
   const handleChatMic = async () => {
-    try { if (chatIsListening) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ }
+    try { if (chatGesprekActief) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ }
   };
 
   const onDragOver = (e: React.DragEvent) => {

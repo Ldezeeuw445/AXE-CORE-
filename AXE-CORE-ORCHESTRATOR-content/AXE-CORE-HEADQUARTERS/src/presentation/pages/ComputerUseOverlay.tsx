@@ -62,7 +62,7 @@ export default function ComputerUseOverlay() {
             aria-label="Personal Computer Use task"
           />
           <button type="button" className="computer-use-overlay__icon" title="Attach"><Paperclip size={17} /></button>
-          <button type="button" className="computer-use-overlay__icon" title="Talk to AXE" onClick={() => void voice.startListening()}><Mic size={17} /></button>
+          <button type="button" className="computer-use-overlay__icon" title={voice.voiceStatus !== 'idle' ? 'Stop talking to AXE' : 'Talk to AXE'} onClick={() => void (voice.voiceStatus !== 'idle' ? voice.stopListening() : voice.startListening())}><Mic size={17} /></button>
           <button type="submit" className="computer-use-overlay__plus" title="Run task" disabled={!text.trim() || busy}><Plus size={20} /></button>
         </form>
 
