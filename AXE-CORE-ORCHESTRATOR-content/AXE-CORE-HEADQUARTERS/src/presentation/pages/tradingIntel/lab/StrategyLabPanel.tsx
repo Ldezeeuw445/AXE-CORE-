@@ -20,6 +20,7 @@ import { LabEquityChart } from './LabEquityChart';
 import { LabTradeTable } from './LabTradeTable';
 import { LabReplay } from './LabReplay';
 import { StrategyMatrix } from './StrategyMatrix';
+import { FrameworkEnginesPanel } from './FrameworkEnginesPanel';
 
 const INPUT = 'rounded px-2 py-1.5 text-[12px] w-full';
 const INPUT_STYLE = { background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
@@ -279,6 +280,7 @@ export function StrategyLabPanel({ symbol, timeframe, limit, strategy }: {
       )}
 
       <StrategyMatrix base={baseConfig} />
+      <FrameworkEnginesPanel symbol={symbol} timeframe={timeframe} labResult={result && 'run' in result ? result : null} />
 
       {saved.length > 0 && (
         <div className="mt-4 pt-3 space-y-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>

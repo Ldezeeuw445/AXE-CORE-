@@ -30,7 +30,7 @@ here.
 | 7 | Visual replay with no-look-ahead regression tests | ✅ done | `abc8fc0b` |
 | — | Runtime check in a browser + lab currency fix + DEV preview route | ✅ done | see `git log` |
 | 8 | Multi-chart (2 → 1/2/4) + strategy × pair × timeframe matrix | ✅ done | see `git log` |
-| 9 | Formal typed framework adapter (vbt/nt/kr/ta) in the interactive lab | ⏳ not started | |
+| 9 | Formal typed framework adapter (vbt/nt/kr/ta) in the interactive lab | ✅ done | see `git log` |
 | 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ⏳ not started | |
 | 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ⏳ not started (trace data already richer, see below) | |
 | 12 | Remote read-only cockpit backend (`/trading/*`) | ⏳ not started | |
@@ -235,6 +235,20 @@ absent from the production bundle — checked with grep on `dist/`):
 - Runtime on real data (12 cells): volumetric-ob XAUUSD 1h −14.2% (119 trades),
   ifvg EURUSD 1h +18.9% (126 trades, avg R 0.14) — realistic costs = 0 there.
 
+### Phase 9 — Framework adapter
+- `src/application/tradingIntel/frameworkEngines.ts` — `FRAMEWORK_ENGINES`
+  (per engine: kind, allowed timeframes, assumptions for fills/stops/costs/
+  sizing/returns) and `FrameworkResult` (engine, strategy, kind, symbol,
+  timeframe, bars, date range or null, sample, assumptions, metrics,
+  live-eligibility, warnings). `runFrameworkEngine` calls the existing
+  endpoints; `labResultToFramework` puts an AXE Lab run in the same shape.
+- Kronos refuses anything but h1, TradingAgents anything but d1 (no number
+  without meaning). vectorbt results carry "no costs / no stop" warnings.
+- `lab/FrameworkEnginesPanel.tsx` — engine picker in the Lab, one comparison
+  table with the AXE run first.
+- Runtime (real VPS, XAUUSD h1, Nautilus): ema-bracket PF 3.91 on 21 trades →
+  "not eligible: sample too small"; atr-breakout 30 trades PF 0.97; donchian 43.
+
 ## Behaviour changes that need your approval before production / live
 
 1. **Position sizes change.** Risk % now means money at the stop via the broker's
@@ -255,9 +269,6 @@ absent from the production bundle — checked with grep on `dist/`):
 
 ## Not done yet — concrete next steps
 
-- **Phase 9** — typed adapter over `backtestVectorbt/Nautilus/Kronos/TradingAgents`
-  (`axeCoreApiService.ts`) returning the `LabMeta`-shaped metadata; add an engine
-  picker to `StrategyLabPanel`. The backend `_run_engine()` stays.
 - **Phase 10** — robustness on top of `simulateAccount`: parameter sweeps
   (atrMultiple, rewardRisk), train/validation/test split by date, walk-forward,
   bootstrap of trade sequence, regime split (ATR/trend), sample-size warnings
