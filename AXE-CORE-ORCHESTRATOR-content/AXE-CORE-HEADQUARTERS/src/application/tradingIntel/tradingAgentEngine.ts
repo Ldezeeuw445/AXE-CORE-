@@ -38,6 +38,8 @@ import {
   saveThinkingTrace,
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
+import { evaluatePreTradeGate } from '@/domain/tradingIntel/preTradeGate';
+import { resolveOrderAccount } from '@/application/tradingIntel/preTradeGateService';
 import {
   brokerPlaceOrder,
   getEffectiveAccountState,
@@ -605,20 +607,31 @@ export async function runTradingAgent(input: {
     paperCount: account.trades.filter(t => t.createdAt.startsWith(today)).length,
   });
 
-  let blockedByRisk: string | undefined;
-  if (breaker.tripped) {
-    blockedByRisk = breaker.trippedReason ?? 'Circuit breaker tripped — reset manually to resume';
-  } else if (dayCountUnverified) {
-    // A real account whose broker trade count could not be read this cycle has
-    // no working day-limit. Holding is the safe answer — this only ever stops an
-    // OPEN, never an exit — and it clears itself the next cycle the broker reads.
-    blockedByRisk = `Day-limit unreadable at broker — holding rather than trading blind [${risk.mode}]`;
-  } else if (tradesToday >= risk.maxTradesPerDay) {
-    blockedByRisk = `Max trades/day (${risk.maxTradesPerDay}) [${risk.mode}]`;
-  }
-  if (!blockedByRisk && confidence < minConf && (action === 'buy' || action === 'sell')) {
-    blockedByRisk = `Confidence ${(confidence * 100).toFixed(0)}% < floor ${(minConf * 100).toFixed(0)}%`;
-  }
+  // DE ENE POORT. Dezelfde evaluatePreTradeGate die de handmatige knoppen op de
+  // grafiek gebruiken (preTradeGateService); de controles stonden hier eerst
+  // inline, en daardoor kon de grafiek ze overslaan. Volgorde en teksten zijn
+  // ongewijzigd: breaker, onleesbare dag, volle dag, vertrouwen.
+  //
+  // Een onleesbare broker-telling houdt alleen een OPENING tegen, nooit een
+  // exit, en herstelt zichzelf de volgende cyclus dat de broker antwoordt.
+  const orderAccount = effective.isReal ? await resolveOrderAccount(input.account) : null;
+  const gate = evaluatePreTradeGate({
+    origin: 'agent',
+    symbol,
+    // Bij HOLD wordt er niets verstuurd; de poort draait toch, zodat breaker en
+    // dagmaximum in het spoor staan zoals voorheen.
+    side: action === 'sell' ? 'sell' : 'buy',
+    accountId: orderAccount?.accountId ?? null,
+    mode: risk.mode,
+    // Een onbeschikbaar account is hierboven al teruggekeerd.
+    account: { known: true, available: true },
+    breaker: { tripped: breaker.tripped, reason: breaker.trippedReason },
+    dayLimit: { tradesToday, unverified: dayCountUnverified, max: risk.maxTradesPerDay },
+    allowShort: risk.allowShort,
+    longPositionQty: posQty,
+    confidence: action === 'buy' || action === 'sell' ? { value: confidence, floor: minConf } : undefined,
+  });
+  const blockedByRisk: string | undefined = gate.allowed ? undefined : gate.reason;
 
   steps.push(step(
     'risk',
@@ -782,6 +795,8 @@ export async function runTradingAgent(input: {
       takeProfit,
       strategy: input.strategyName ?? input.strategy,
       timeframe: input.timeframe,
+      // shouldExec vereist !blockedByRisk, dus de poort heeft toegelaten.
+      clearance: gate.clearance!,
     });
     if (!placed.ok) {
       error = placed.error;

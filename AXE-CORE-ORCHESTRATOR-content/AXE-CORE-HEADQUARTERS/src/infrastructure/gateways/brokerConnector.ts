@@ -11,6 +11,7 @@ import {
 } from '@/infrastructure/persistence/demoTradingService';
 import { accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
 import type { DemoSide } from '@/domain/tradingIntel/demoTypes';
+import { verifyClearance, type PreTradeClearance } from '@/domain/tradingIntel/preTradeGate';
 import {
   getMetaApiConfig,
   metaApiGetAccount,
@@ -360,12 +361,25 @@ export async function brokerPlaceOrder(input: {
   timeframe?: string;
   /** Place on THIS account. Defaults to the active one. */
   account?: MetaApiConfig;
+  /**
+   * Bewijs dat de pre-trade poort deze order heeft doorgelaten (zie
+   * domain/tradingIntel/preTradeGate). Verplicht: zonder toelating voor precies
+   * dit symbool, deze kant en dit account gaat er niets naar de broker.
+   */
+  clearance: PreTradeClearance;
 }): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number; venue?: string }> {
+  const meta = input.account ?? await getMetaApiConfig();
+  const live = Boolean(meta?.enabled && meta.token && meta.accountId);
+  // Vóór alles, ook vóór de koersaanvraag: een geweigerde order kost niets.
+  const cleared = verifyClearance(input.clearance, {
+    symbol: input.symbol, side: input.side, accountId: live ? meta!.accountId : null,
+  });
+  if (!cleared.ok) return { ok: false, error: cleared.error, venue: 'gate' };
+
   const snap = await fetchMarketSnapshot(input.symbol);
   await markPositions({ [input.symbol.toUpperCase()]: snap.last });
 
-  const meta = input.account ?? await getMetaApiConfig();
-  if (meta?.enabled && meta.token && meta.accountId) {
+  if (meta && live) {
     const lots = qtyToLots(input.symbol, input.qty, snap.last);
     const placed = await metaApiMarketOrder({
       account: meta,
@@ -429,6 +443,11 @@ export async function brokerPlaceOrder(input: {
   };
 }
 
+/** Welke kant een wachtende order opent. */
+export function pendingSide(type: PendingOrderType): DemoSide {
+  return type.startsWith('sell') ? 'sell' : 'buy';
+}
+
 /** Pending (limit/stop) order path — MetaAPI only, no paper equivalent (paper book has no resting-order book). */
 export async function brokerPlacePendingOrder(input: {
   symbol: string;
@@ -440,6 +459,9 @@ export async function brokerPlacePendingOrder(input: {
   slippagePoints?: number;
   reason: string;
   confidence: number;
+  /** Zie brokerPlaceOrder: een wachtende order opent later een positie, dus
+   *  hij gaat door dezelfde poort. De kant volgt uit het ordertype. */
+  clearance: PreTradeClearance;
 }): Promise<{ ok: boolean; orderId?: string; error?: string; venue?: string }> {
   const meta = await getMetaApiConfig();
   if (!(meta?.enabled && meta.token && meta.accountId)) {
@@ -448,6 +470,10 @@ export async function brokerPlacePendingOrder(input: {
       error: 'Pending orders need MetaAPI (connect MT5 in Agent tab) — the paper book only fills at market.',
     };
   }
+  const cleared = verifyClearance(input.clearance, {
+    symbol: input.symbol, side: pendingSide(input.type), accountId: meta.accountId,
+  });
+  if (!cleared.ok) return { ok: false, error: cleared.error, venue: 'gate' };
   const snap = await fetchMarketSnapshot(input.symbol);
   const lots = qtyToLots(input.symbol, input.qty, input.openPrice || snap.last);
   const placed = await metaApiPendingOrder({

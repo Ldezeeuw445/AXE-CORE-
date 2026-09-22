@@ -33,9 +33,8 @@ import { FibAnnotationLayer } from "./annotations/FibAnnotationLayer";
 import type { AnnotationPoint, ChartAnnotation } from "./annotations/types";
 import { appendAnnotation, loadAnnotations, removeAnnotation, saveAnnotations } from "./annotations/store";
 import { metaApiGetHistoricalCandles } from "@/infrastructure/gateways/metaApiMarketData";
-import { metaApiMarketOrder, toMt5Symbol, type PendingOrderType } from "@/infrastructure/gateways/metaApiService";
-import { brokerPlaceOrder, brokerPlacePendingOrder } from "@/infrastructure/gateways/brokerConnector";
-import { executeDemoTrade } from "@/infrastructure/persistence/demoTradingService";
+import { toMt5Symbol, type PendingOrderType } from "@/infrastructure/gateways/metaApiService";
+import { placeManualMarketOrder, placeManualPendingOrder } from "@/application/tradingIntel/manualOrders";
 import { detectAllSmc, type Bar } from "@/presentation/components/trading/smcDetect";
 import { sma, rsi } from "@/infrastructure/gateways/marketDataService";
 import type { IndicatorSnapshot } from "@/presentation/components/trading/CompanionStyleChart";
@@ -311,7 +310,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
           setConfirmStatus({ kind: "error", message: "Missing entry price for pending order." });
           return;
         }
-        const pending = await brokerPlacePendingOrder({
+        const pending = await placeManualPendingOrder({
           symbol,
           type: confirmInput.orderType as PendingOrderType,
           qty: confirmInput.volume,
@@ -319,60 +318,38 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
           stopLoss: confirmInput.stopLoss,
           takeProfit: confirmInput.takeProfit,
           slippagePoints: confirmInput.slippagePoints,
-          reason: "Manual desk pending order",
-          confidence: 1,
         });
         if (pending.ok) {
           setConfirmStatus({ kind: "ok", message: `Pending ${confirmInput.orderType} placed @ ${confirmInput.openPrice}` });
           toast.success(`${confirmInput.orderType.toUpperCase()} ${confirmInput.volume} ${symbol} @ ${confirmInput.openPrice}`);
           setTimeout(() => setConfirmInput(null), 900);
         } else {
-          setConfirmStatus({ kind: "error", message: pending.error || "Pending order rejected" });
+          setConfirmStatus({ kind: "error", message: pending.stage === "gate" ? `Risk gate: ${pending.error}` : pending.error });
         }
         return;
       }
-      const broker = await brokerPlaceOrder({
+      // Eén route: poort, dan broker. Geen MetaAPI- of papieren terugval meer
+      // na een weigering — die omzeilde precies de controles die weigerden.
+      const res = await placeManualMarketOrder({
         symbol,
         side: confirmInput.side,
         qty: confirmInput.volume,
-        reason: "Manual desk execution",
-        confidence: 1,
+        stopLoss: confirmInput.stopLoss,
+        takeProfit: confirmInput.takeProfit,
       });
-      if (broker.ok) {
-        setConfirmStatus({ kind: "ok", message: `Sent via ${broker.venue || "broker"} @ ${broker.price ?? "mkt"}` });
+      if (res.ok) {
+        setConfirmStatus({ kind: "ok", message: `Sent via ${res.venue} @ ${res.price ?? "mkt"}` });
         toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol}`);
         setTimeout(() => setConfirmInput(null), 900);
-        return;
-      }
-      const meta = await metaApiMarketOrder({ symbol, side: confirmInput.side, volume: confirmInput.volume });
-      if (meta.ok) {
-        setConfirmStatus({ kind: "ok", message: "Sent to MetaAPI" });
-        toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol} via MetaAPI`);
-        setTimeout(() => setConfirmInput(null), 900);
-        return;
-      }
-      const price = lastPrice ?? 0;
-      const paper = await executeDemoTrade({
-        symbol,
-        side: confirmInput.side,
-        qty: confirmInput.volume,
-        price,
-        reason: "Manual desk (paper)",
-        confidence: 1,
-      });
-      if ("error" in paper) {
-        setConfirmStatus({ kind: "error", message: paper.error });
       } else {
-        setConfirmStatus({ kind: "ok", message: `Paper fill @ ${price}` });
-        toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol} (paper)`);
-        setTimeout(() => setConfirmInput(null), 900);
+        setConfirmStatus({ kind: "error", message: res.stage === "gate" ? `Risk gate: ${res.error}` : res.error });
       }
     } catch (e) {
       setConfirmStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusy(false);
     }
-  }, [confirmInput, symbol, lastPrice]);
+  }, [confirmInput, symbol]);
 
   return (
     <div className={className} style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
