@@ -195,7 +195,11 @@ async function nativeComputerUse(command, args = {}) {
     await new Promise((res, rej) => {
       execFile(
         '/usr/bin/open',
-        ['-W', '-n', '-g', '-a', COMPUTER_USE_APP, '--args', command, out, JSON.stringify(args)],
+        // Pass the exact bundle path as the target. Using -a is for resolving an
+        // application name and can select a different installed copy with the
+        // same display name — precisely the ambiguity this native runtime work
+        // is eliminating.
+        ['-W', '-n', '-g', COMPUTER_USE_APP, '--args', command, out, JSON.stringify(args)],
         { timeout: 150_000 },
         (err) => err ? rej(err) : res(),
       );
