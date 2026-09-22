@@ -29,6 +29,7 @@ import {
 } from '@/domain/gebruikslimiet';
 import { proxyProviderNaam } from '@/domain/proxyProvider';
 import { herstelModelNaam, isModelBestaatNiet } from '@/domain/modelHerstel';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
@@ -55,9 +56,35 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   const custom=builtin?undefined:findCustomProvider(slot.provider);
   const cfg:ProviderCfg|undefined=builtin??(custom?{id:custom.id as ProviderCfg['id'],name:custom.name,baseUrl:custom.baseUrl,defaultModel:custom.defaultModel,format:custom.format,needsKey:custom.needsKey}:undefined);
   if(!cfg) throw new Error(`Unknown provider: ${slot.provider}`);
-  const base=toProxied(slot.baseUrl||cfg.baseUrl), model=herstelModelNaam(slot.provider,slot.model)||cfg.defaultModel;
-  const isOllama=slot.provider==='ollama';
-  const signal=AbortSignal.timeout(isOllama?90_000:15_000);
+  const rawBase=slot.baseUrl||cfg.baseUrl;
+  const base=toProxied(rawBase), model=herstelModelNaam(slot.provider,slot.model)||cfg.defaultModel;
+  // Hermes is not a separate daemon/provider. It is hermes3:8b served by
+  // Ollama, so it must use the exact same native Ollama transport.
+  const isOllama=slot.provider==='ollama'||slot.provider==='hermes';
+  const signal=AbortSignal.timeout(isOllama?180_000:15_000);
+
+  const callNativeOllama=async(target:string):Promise<string>=>{
+    const root=target.replace(/\/+$/,'');
+    const r=await fetch(`${root}/api/chat`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json',...ollamaHeaders(root)},
+      body:JSON.stringify({
+        model,messages,stream:false,think:false,keep_alive:LOCAL_KEEP_ALIVE,
+        options:{num_predict:2048,temperature:0.7},
+      }),
+      signal:AbortSignal.timeout(180_000),
+    });
+    const raw=await r.text();
+    if(!r.ok){
+      const detail=raw.replace(/\s+/g,' ').trim().slice(0,240);
+      throw new Error(`Ollama ${model} HTTP ${r.status}${detail?`: ${detail}`:''}`);
+    }
+    let d:{message?:{content?:string};response?:string};
+    try{d=JSON.parse(raw);}catch{throw new Error(`Ollama ${model} returned invalid JSON.`);}
+    const text=d.message?.content??d.response??'';
+    if(!text.trim())throw new Error(`Ollama ${model} returned no content.`);
+    return sanitizeLlmText(text);
+  };
 
 /**
  * De koeling per motor, in localStorage.
@@ -181,18 +208,30 @@ function onthoudKoeling(motor:string,tot:number):void{
   //   2) only if up, a real completion with a proper timeout + keep_alive
   // Any failure falls through to the unchanged VPS/cloud path below, so it
   // still "just works" when away from home or with Ollama stopped.
+  let ollamaDirectError='';
   if(isOllama && await isLocalOllamaUp()){
     try{
-      // Ollama's NATIVE /api/chat (not the OpenAI /v1 shim) with think:false.
-      // qwen3.5 is a reasoning model: via the OpenAI endpoint the hidden
-      // "thinking" eats the token budget and message.content comes back empty.
-      // Native chat + think:false returns a clean, fast answer (the point of
-      // a *local fast* model). keep_alive pins it in memory between turns.
-      const r=await fetch(`${LOCAL_OLLAMA_URL}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,messages,stream:false,think:false,keep_alive:LOCAL_KEEP_ALIVE,options:{num_predict:2048,temperature:0.7}}),signal:AbortSignal.timeout(120_000)});
-      if(r.ok){const d=await r.json();const text=d.message?.content;if(text)return sanitizeLlmText(text);}
-    }catch{
-      // Model still cold-loading past the timeout, or a transient local error
-      // — fall through to the VPS path rather than failing the whole turn.
+      // Local native Ollama first. If this Mac does not have the requested
+      // model, continue to the configured remote Ollama box.
+      return await callNativeOllama(LOCAL_OLLAMA_URL);
+    }catch(e){
+      ollamaDirectError=e instanceof Error?e.message:String(e);
+    }
+  }
+
+  if(isOllama && /^https?:\/\//i.test(rawBase) && !rawBase.includes('localhost') && !rawBase.includes('127.0.0.1')){
+    try{
+      // The Settings page can already reach /api/tags on this exact URL
+      // directly. Use the same route for real chat instead of bouncing an
+      // Ollama model through the generic OpenAI-provider proxy. This is
+      // especially important for hermes3:8b cold starts.
+      return await callNativeOllama(rawBase);
+    }catch(e){
+      ollamaDirectError=e instanceof Error?e.message:String(e);
+      // Hermes has no second transport: it *is* an Ollama model. Returning a
+      // truthful Ollama error is better than falling into a fictitious Hermes
+      // provider route.
+      if(slot.provider==='hermes') throw new Error(ollamaDirectError);
     }
   }
 
@@ -253,6 +292,9 @@ function onthoudKoeling(motor:string,tot:number):void{
   if(!r.ok){
     const e=await r.json().catch(()=>({}));
     const vanProvider=e.error?.message as string|undefined;
+    if(slot.provider==='cerebras'&&r.status===402){
+      throw new Error('Cerebras HTTP 402 (payment required): the model is valid, but this account/key has no usable inference credit. Check Cerebras Billing / free-trial balance or add funds.');
+    }
     // Een 404 op een chat-endpoint betekent bijna altijd: dít model bestaat
     // daar niet. De kale tekst was "HTTP 404", en dan ga je de URL, de sleutel
     // en het netwerk controleren terwijl er een modelnaam in het slot staat die
