@@ -1,11 +1,11 @@
 /**
  * globalTts.ts — single entry for spoken output anywhere in the app.
  *
- * Always uses the Settings Fish voice id (getFishVoiceId / LEWIS default)
- * when Fish is the active provider. Mindset, AXE quotes, chat, and previews
- * must all call speakGlobal so they never drift to a different voice.
+ * Canonical AXE speech has one identity: OpenAI Cedar. Every surface that
+ * speaks as AXE calls this module so a provider failure can never silently
+ * swap the assistant to a different voice, accent or playback engine.
  */
-import { getFishTtsLevel, stopFishAudio, speakWithFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import {
   speakWithOpenAi,
@@ -19,10 +19,10 @@ import { normalizeForSpeech } from '@/domain/speechText';
 export type TtsProvider = 'fish' | 'elevenlabs' | 'openai' | 'browser';
 
 /**
- * AXE has ONE voice: OpenAI cedar (AXE_OPENAI_VOICE). There is no picker and no
- * per-message provider guessing — a single, recognisable voice is the point.
- * The browser voice is kept only as an emergency net for when there is no
- * OpenAI key or no network; it is a fallback, never a choice.
+ * AXE has ONE voice: OpenAI cedar (AXE_OPENAI_VOICE). There is no picker,
+ * provider guessing or voice fallback. If Cedar is unavailable AXE keeps the
+ * text reply visible and reports the TTS error instead of impersonating a
+ * second identity.
  */
 export function getActiveTtsProvider(): TtsProvider {
   return 'openai';
@@ -60,10 +60,7 @@ export function sanitizeForSpeech(text: string): string {
   return normalizeForSpeech(withoutChrome);
 }
 
-/**
- * Speak text with the globally configured provider + Fish voice id.
- * Fish path always passes getFishVoiceId() (already inside speakWithFishAudio).
- */
+/** Speak with the single canonical AXE voice. */
 export function speakGlobal(
   text: string,
   onDone?: () => void,
@@ -77,32 +74,25 @@ export function speakGlobal(
 
   stopGlobalTts();
 
-  // The AXE voice: OpenAI cedar. Emergency fallback is the one fixed Fish
-  // identity (Lewis), never the OS/browser voice: that path can silently swap
-  // gender/accent and breaks AXE's identity.
-  if (isOpenAiTtsConfigured()) {
-    void speakWithOpenAi(
-      line,
-      onDone,
-      (reason) => {
-        void speakWithFishAudio(line, onDone, (fallbackReason) => {
-          onError?.(`${reason}; fallback: ${fallbackReason}`);
-          onDone?.();
-        });
-      },
-      AXE_OPENAI_VOICE,
-    );
+  if (!isOpenAiTtsConfigured()) {
+    onError?.('AXE voice unavailable: OpenAI TTS is not configured.');
+    onDone?.();
     return;
   }
 
-  void speakWithFishAudio(line, onDone, (reason) => {
-    onError?.(reason);
-    onDone?.();
-  });
+  void speakWithOpenAi(
+    line,
+    onDone,
+    (reason) => {
+      onError?.(`AXE Cedar TTS failed: ${reason}`);
+      onDone?.();
+    },
+    AXE_OPENAI_VOICE,
+  );
 }
 
 
-/** Real 0..1 playback energy regardless of which fixed AXE TTS path is active. */
+/** Real 0..1 playback energy from the one canonical Cedar playback path. */
 export function getGlobalTtsLevel(): number {
-  return Math.max(getAxeTtsLevel(), getFishTtsLevel());
+  return getAxeTtsLevel();
 }
