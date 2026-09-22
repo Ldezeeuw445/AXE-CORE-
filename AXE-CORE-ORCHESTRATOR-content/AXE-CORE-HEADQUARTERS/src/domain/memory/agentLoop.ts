@@ -43,6 +43,30 @@ export const LOOP_AGENTS = [
   // moet ook meetellen in de loop-health op de iMac, en dat is precies
   // waar localStorage-beurten niet voor gemaakt zijn.
   'wingman',
+  // Toegevoegd na het War Room-onderzoek van 22-23 sep 2026: task/cron/
+  // memory/thinktank hadden allemaal al een echte, niet-verzonnen afloop
+  // (task: done/blocked in Tasks.tsx; cron: ok/fail/timeout/skipped per
+  // run op de VPS; memory: ok/warning/error uit checkMemoryHealth(); think-
+  // tank: een echte GitHub branch/PR/merge-uitslag) maar geen lus. 'finance'
+  // en 'apps' staan hier expliciet nog NIET in -- daar bestaat nog geen
+  // echte actie om een afloop aan op te hangen, en een lus zonder een echte
+  // afloop is precies het verzonnen-koppeling-probleem dat dit bestand
+  // bovenaan beschrijft.
+  'task',
+  'cron',
+  'memory',
+  'thinktank',
+  // Trading's eigen desk-lane "tweede mening" (deskAgents.ts) leende tot
+  // 22-23 sep 2026 de identiteit 'intel'/'companion' -- dezelfde als de
+  // echte AXE Intel/AXE Companion product-agents in de andere apps. Die
+  // agents zeggen zelf al "not the AXE Companion application" in hun eigen
+  // system prompt (deskAgents.ts), maar de loop-health werd toch onder
+  // dezelfde emmer geteld, dus de kaart van het echte product-agent toonde
+  // Trading's interne simulatie als was het zijn eigen activiteit. Eigen
+  // identiteit hier lost dat op zonder de echte 'intel'/'companion' agents
+  // aan te raken.
+  'trading-desk-intel',
+  'trading-desk-companion',
 ] as const;
 
 export type LoopAgent = (typeof LOOP_AGENTS)[number];

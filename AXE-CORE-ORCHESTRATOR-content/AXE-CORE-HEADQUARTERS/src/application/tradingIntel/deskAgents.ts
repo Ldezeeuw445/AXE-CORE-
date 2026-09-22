@@ -325,7 +325,7 @@ export async function runDeskIntel(
     confidence: 0.6,
     source: `${DESK_AGENT_IDENTITY.intel.sourceTag}:${sourceAge}`,
   });
-  const scored = await openLaneEpisode('intel', symbol, stance, stored ? readKey : null);
+  const scored = await openLaneEpisode('trading-desk-intel', symbol, stance, stored ? readKey : null);
   if (handoffLine) {
     await rememberForTeam({
       by: 'axe_intel',
@@ -440,7 +440,7 @@ export async function runDeskCompanion(
     confidence: 0.6,
     source: `${DESK_AGENT_IDENTITY.companion.sourceTag}:${sourceAge}`,
   });
-  const scored = await openLaneEpisode('companion', symbol, stance, stored ? readKey : null);
+  const scored = await openLaneEpisode('trading-desk-companion', symbol, stance, stored ? readKey : null);
   if (handoffLine) {
     await rememberForTeam({
       by: 'axe_companion',
@@ -467,7 +467,7 @@ export async function runDeskCompanion(
  * lezing raakt en geen andere.
  */
 async function openLaneEpisode(
-  lane: 'intel' | 'companion',
+  lane: 'trading-desk-intel' | 'trading-desk-companion',
   symbol: string,
   stance: LaneStance | null,
   readKey: string | null,

@@ -16,6 +16,14 @@ import { agentsByKind } from '@/domain/agents/catalog';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
+// core_agents rows that are not agents at all and must never render as a
+// card here. 'axe_trader'/"Trading OS" names AXE CORE's own in-process
+// trading agent after a completely separate standalone application
+// (see ECOSYSTEM.md) -- the real agent is DEFAULT_AGENTS' 'trading-agent'.
+// 'axe_ollama'/"Ollama (Local)" is a model provider (providers.ts), not a
+// reasoning agent -- no agent runs "as" Ollama, agents merely may use it.
+const NON_AGENT_ROW_NAMES = new Set(['axe_trader', 'axe_ollama']);
+
 const ROLE_ACCENT: Record<string, string> = {
   orchestrator: '#c084fc',
   assistant: 'var(--accent-cyan)',
@@ -165,7 +173,7 @@ export default function Agents() {
           agentLoopHealth().catch(() => [] as LoopHealth[]),
         ]);
         if (error) throw new Error(error.message);
-        const remote = (data as CoreAgent[]) || [];
+        const remote = ((data as CoreAgent[]) || []).filter(a => !NON_AGENT_ROW_NAMES.has(a.name));
         setLoopHealthByAgent(Object.fromEntries(health.map(h => [h.agent, h])));
         setUsingFallback(remote.length === 0);
         setAgents(mergeAgents(remote));

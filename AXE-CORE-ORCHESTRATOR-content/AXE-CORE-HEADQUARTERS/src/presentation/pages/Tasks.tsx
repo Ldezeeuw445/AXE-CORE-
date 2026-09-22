@@ -13,6 +13,7 @@ import {
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { isNorthseaWerk, northseaTaken, type WerkTaak } from '@/domain/northsea/werk';
 import { PlannerTaken } from '@/presentation/components/tasks/PlannerTaken';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -32,6 +33,14 @@ interface Task {
   dueAt?: number;
   /** Welke van de vijf apps. Uit metadata.app; onbekend valt terug op AXE Core. */
   app: AppId;
+  /**
+   * Leerlus-episode (agent 'task'), uit metadata.episodeId. Alleen gezet voor
+   * taken die via addTask() op deze pagina zijn aangemaakt -- planner-taken
+   * (plannerAlsRij) en NorthSea-desk-taken (nsTaken) krijgen er nooit een,
+   * dus deze aanwezigheid is meteen de eigenaarschapstoets: geen episode, dan
+   * raakt updateStatus/removeTask hem niet aan.
+   */
+  episodeId?: string;
 }
 
 const STATUS_CFG: Record<TaskStatus, { color: string; label: string }> = {
@@ -111,6 +120,7 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
     routedBy: row.assignee === 'AXE Core' ? 'user' : 'axe-core',
     dueAt: dueFromRow(row),
     app: appVan(row.metadata),
+    episodeId: typeof row.metadata?.episodeId === 'string' ? row.metadata.episodeId : undefined,
   }));
 }
 
@@ -184,6 +194,13 @@ export default function Tasks() {
     // it, and leaves a memory trail tagged agentId 'task_agent' — the same
     // pattern cron_manager/crewai_manager already use.
     const dueIso = newTask.dueAt ? new Date(newTask.dueAt).toISOString() : undefined;
+    // Loop wiring (LOOP_AGENTS 'task'): this is the one place a task the user
+    // actually manages here gets created, so it's the one place an episode
+    // opens. Opened before the create call (same order as CrewAI.tsx's
+    // wingman wiring) so the id can ride along in the row's own metadata --
+    // that's what lets updateStatus/removeTask find it again later without a
+    // parallel map that `refresh()` would just overwrite anyway.
+    const episodeId = await openEpisode({ agent: 'task', subject: newTask.title.trim() });
     try {
       await createDurableTask({
         title: newTask.title.trim(),
@@ -198,6 +215,7 @@ export default function Tasks() {
           uiStatus: 'todo', progress: 0,
           routedBy: newTask.assignee === 'AXE Core' ? 'user' : 'axe-core',
           ...(dueIso ? { dueAt: dueIso } : {}),
+          ...(episodeId ? { episodeId } : {}),
         }),
       });
       // De app blijft staan: maak je er twee achter elkaar voor Companion,
@@ -211,17 +229,31 @@ export default function Tasks() {
   };
 
   const updateStatus = async (id: string, status: TaskStatus) => {
+    const task = tasks.find(t => t.id === id);
     try {
       await updateDurableTask(id, {
         /* De app MOET mee. metadata wordt vervangen en niet samengevoegd:
            zonder dit veld verliest een taak zijn app zodra je hem afvinkt, en
            springt hij naar de AXE Core-kolom. Dat is precies het soort stille
-           verhuizing waar je nooit achter komt. */
+           verhuizing waar je nooit achter komt. Dezelfde reden geldt voor
+           episodeId: zonder herhalen hier verdwijnt de leerlus-koppeling
+           zodra een taak twee keer van status wisselt. */
         metadata: metMetaApp(
-          tasks.find(t => t.id === id)?.app ?? 'axe_core',
-          { uiStatus: status, progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0 },
+          task?.app ?? 'axe_core',
+          {
+            uiStatus: status,
+            progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0,
+            ...(task?.episodeId ? { episodeId: task.episodeId } : {}),
+          },
         ),
       });
+      // Alleen sluiten voor taken die deze pagina zelf opende (episodeId
+      // gezet in addTask) -- planner- en NorthSea-desk-taken hebben er nooit
+      // een, dus dit raakt ze niet.
+      if (task?.episodeId) {
+        if (status === 'done') void closeEpisode(task.episodeId, 'good');
+        else if (status === 'blocked') void closeEpisode(task.episodeId, 'poor');
+      }
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not update task');
@@ -230,8 +262,15 @@ export default function Tasks() {
 
 
   const removeTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
     try {
       await deleteDurableTask(id);
+      // 'unknown' en niet 'poor': verwijderen is niet per se mislukken (kan
+      // een duplicaat zijn, of niet meer nodig). Alleen sluiten als hij nog
+      // openstond -- was hij al done/blocked, dan sloot updateStatus hem al.
+      if (task?.episodeId && task.status !== 'done' && task.status !== 'blocked') {
+        void closeEpisode(task.episodeId, 'unknown');
+      }
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not delete task');

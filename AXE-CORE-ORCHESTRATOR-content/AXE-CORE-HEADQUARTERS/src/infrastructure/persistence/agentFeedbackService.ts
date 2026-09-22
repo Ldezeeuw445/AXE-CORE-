@@ -452,7 +452,7 @@ export async function closeDeskEpisodesForTrade(input: {
   const symbol = input.symbol.trim().toUpperCase();
 
   let closed = 0;
-  for (const agent of ['intel', 'companion'] as const) {
+  for (const agent of ['trading-desk-intel', 'trading-desk-companion'] as const) {
     const { data, error } = await sb.from(TABLE)
       .select('id, subject')
       .eq('user_id', userId)

@@ -2812,6 +2812,17 @@ async def vps_agents_status():
 # crew runs land in the same memory stream as chat instead of a separate one.
 AXE_CORE_DEFAULT_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
 
+# The bare uuid (chatPersistence.ts's AXE_USER_BASE / AXE_USER_UUID) — NOT the
+# "-axe-core" suffixed AXE_CORE_DEFAULT_USER_ID above. agent_learning_episodes.user_id
+# happens to be a text column, so the suffixed id would insert without error, but
+# agentLoopHealth() (agentFeedbackService.ts) filters episodes by currentUserId(sb),
+# which is the signed-in session's bare auth uid — never the app-suffixed one (that
+# suffix exists only for global_memory's cross-app namespacing; see
+# axe-core-user-id-valkuil). Confirmed against the live table: every existing
+# agent_learning_episodes row (trading/wingman/intel/companion/chat) already uses
+# this exact bare uuid.
+AXE_CORE_EPISODE_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069"
+
 @app.post("/crew/run", dependencies=[AUTH])
 async def crew_run(req: CrewRunRequest, request: Request):
     """
@@ -4067,6 +4078,33 @@ async def cron_tick(
                 }, on_conflict="user_id,key").execute()
             except Exception as mem_err:
                 print(f"[cron_tick] memory write failed for {r['id']}: {mem_err}", flush=True)
+            try:
+                # Gives cron a real learning-loop episode, same table and shape
+                # as openEpisode()/closeEpisode() in agentFeedbackService.ts
+                # (agent_learning_episodes). Open+close happen back-to-back
+                # here because the whole tick — and so the run's outcome — has
+                # already completed by the time we get here; CrewAI.tsx's
+                # wingman wiring does the same open-then-immediately-close for
+                # a synchronous result. No memoryIds/memoryKeys: this loop
+                # never retrieves memory before firing a schedule, so there is
+                # nothing to reinforce — same reasoning as wingman's episodes.
+                verdict = "good" if r["status"] == "ok" else ("poor" if r["status"] in ("fail", "timeout") else "unknown")
+                ins = sb().table("agent_learning_episodes").insert({
+                    "user_id": AXE_CORE_EPISODE_USER_ID,
+                    "agent": "cron",
+                    "subject": str(r.get("name") or r["id"])[:500],
+                    "memory_ids": [],
+                    "memory_keys": [],
+                }).execute()
+                ep_id = (ins.data or [{}])[0].get("id")
+                if ep_id:
+                    sb().table("agent_learning_episodes").update({
+                        "verdict": verdict,
+                        "outcome_note": f"{r['name']} -> {r['status']}"[:500],
+                        "closed_at": now.isoformat(),
+                    }).eq("id", ep_id).execute()
+            except Exception as ep_err:
+                print(f"[cron_tick] episode write failed for {r['id']}: {ep_err}", flush=True)
         await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
         await run_always_awake_jobs()
         return {"ran": len(ran), "at": now.isoformat(), "details": ran}

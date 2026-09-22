@@ -121,6 +121,13 @@ export interface ThinkThanksItem {
   integratedAt?: number;
   enrichedText?: string;
   lastReanalysedAt?: number;
+  /**
+   * RAG memory ids pulled from the global brain while analysing this drop
+   * (see analyseThinkThanksItem). Carried forward so BUILD/MERGE can attach
+   * the memories that actually informed this item to their learning-loop
+   * episodes instead of opening episodes with nothing to reinforce.
+   */
+  retrievedMemoryIds?: string[];
 }
 
 export interface MergeSuggestion {
@@ -612,11 +619,36 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
 
   upsertThinkThanksItem({ ...item, analysisStatus: 'analysing' });
 
+  // Pull past ThinkTank learning (and any other global-brain memory) that
+  // might bear on this drop, before asking the model anything. This both
+  // informs the analysis and gives BUILD/MERGE real memories to reinforce
+  // when this item's episode eventually closes — without it, every episode
+  // opens empty and pendingForReinforcement() never has anything to act on.
+  let retrievedMemoryIds: string[] = [];
+  let memoryContext = '';
+  try {
+    const { searchGlobalBrain } = await import('@/infrastructure/persistence/globalBrainService');
+    const retrievalQuery = [item.name, item.url, item.textExcerpt?.slice(0, 300)]
+      .filter(Boolean)
+      .join(' — ')
+      .slice(0, 500) || item.name;
+    // owner 'thinktank' matches the LOOP_AGENTS id directly (loopAgentVoor
+    // falls back to the raw owner when no catalog entry claims it), so this
+    // retrieval is attributed to the ThinkTank loop rather than left unowned.
+    const hits = await searchGlobalBrain(retrievalQuery, 6, 'thinktank');
+    retrievedMemoryIds = hits.map(h => h.id).filter((x): x is string => !!x);
+    if (hits.length) {
+      memoryContext = hits.map(h => `- ${h.content.replace(/\s+/g, ' ').slice(0, 220)}`).join('\n');
+    }
+  } catch (e) {
+    console.warn('[thinkthanks] global-brain retrieval failed', e);
+  }
+
   const slots = analysisCascade();
   if (!slots.length) {
     const analysis = heuristicAnalysis(item);
     analysis.enrichmentSummary = enrichNotes.join(' · ') || analysis.enrichmentSummary;
-    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now() };
+    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now(), retrievedMemoryIds };
     upsertThinkThanksItem(done);
     return done;
   }
@@ -639,6 +671,7 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
     item.previewUrl?.startsWith('data:')
       ? 'IMAGE ATTACHED — OCR every visible product name, claim, model list, button, UI structure. Base the action plan on what you read.'
       : 'No image bytes — mine URL + text for product value. Do not invent a different product.',
+    memoryContext ? `## Related ThinkTank / global memory (may or may not be relevant — use only what actually applies)\n${memoryContext}` : '',
     'Forbidden generic phases: Extract, Fit, Design, Build, Integrate (as sole phase names).',
   ].filter(Boolean).join('\n');
 
@@ -658,14 +691,14 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
       } catch { /* keep first pass */ }
     }
 
-    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now() };
+    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now(), retrievedMemoryIds };
     upsertThinkThanksItem(done);
     return done;
   } catch (e) {
     const analysis = heuristicAnalysis(item);
     analysis.enrichmentSummary = enrichNotes.join(' · ') || analysis.enrichmentSummary;
     const err = e instanceof Error ? e.message : String(e);
-    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', analysisError: err, lastReanalysedAt: Date.now() };
+    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', analysisError: err, lastReanalysedAt: Date.now(), retrievedMemoryIds };
     upsertThinkThanksItem(done);
     return done;
   }
@@ -1551,6 +1584,18 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     analysis.tags?.[0] ||
     (opts.apps.includes('trading-os') ? 'Trading' : opts.apps.includes('axon-memory') ? 'Memory' : 'Product');
 
+  // Learning-loop episode for this BUILD attempt. Closed below once we know
+  // whether publishThinkTankBranch actually produced a branch + PR — that
+  // real GitHub outcome is the verdict, not "did the function throw".
+  const { openEpisode, closeEpisode } = await import(
+    '@/infrastructure/persistence/agentFeedbackService'
+  );
+  const buildEpisodeId = await openEpisode({
+    agent: 'thinktank',
+    subject: (analysis.title || item.name || 'ThinkTank build').slice(0, 500),
+    memoryIds: item.retrievedMemoryIds ?? [],
+  });
+
   const integratePlan = buildIntegrateActionPlan(
     { ...item, builtApps: opts.apps, libraryCategory: category },
     analysis,
@@ -1747,6 +1792,18 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
         'Workspace patches applied but no GitHub PR was created — check token/push rights.',
       ];
     }
+
+    const published = (codeBuild.publishedApps?.length ?? 0) > 0;
+    void closeEpisode(
+      buildEpisodeId,
+      published ? 'good' : 'poor',
+      published
+        ? `Published ${codeBuild.publishedApps!.length} thinktank branch/PR(s): ${codeBuild.publishedApps!.map(p => `${p.appId}#${p.prNumber}`).join(', ')}`
+        : 'Patches applied but no GitHub branch/PR was created',
+    );
+  } else {
+    // No patches at all — BUILD never reached a real outcome to reinforce.
+    void closeEpisode(buildEpisodeId, 'poor', codeBuild.message || '0 patches — BUILD did not write code');
   }
 
   if (liveArtifact?.kind === 'agent' && codeBuild.skillId) {
@@ -2092,6 +2149,15 @@ export async function mergeThinkTankItem(id: string): Promise<ThinkThanksItem> {
     throw new Error('No PR found — BUILD must publish a thinktank branch + PR first');
   }
 
+  const { openEpisode, closeEpisode } = await import(
+    '@/infrastructure/persistence/agentFeedbackService'
+  );
+  const mergeEpisodeId = await openEpisode({
+    agent: 'thinktank',
+    subject: (item.analysis?.title || item.name || 'ThinkTank merge').slice(0, 500),
+    memoryIds: item.retrievedMemoryIds ?? [],
+  });
+
   const { mergeThinkTankPullRequest } = await import('@/infrastructure/persistence/thinkTankGit');
   const mergeResults: NonNullable<ThinkThanksItem['codeBuild']>['mergeResults'] = [];
 
@@ -2128,6 +2194,15 @@ export async function mergeThinkTankItem(id: string): Promise<ThinkThanksItem> {
   }
 
   const anyMerged = mergeResults.some(r => r.merged);
+  // Verdict comes from the real mergeThinkTankPullRequest outcome above, not
+  // from whether this function threw — a "poor" merge still returns normally.
+  void closeEpisode(
+    mergeEpisodeId,
+    anyMerged ? 'good' : 'poor',
+    anyMerged
+      ? `Merged: ${mergeResults.filter(r => r.merged).map(r => `${r.appId}#${r.prNumber}`).join(', ')}`
+      : `Merge failed: ${mergeResults.map(r => r.message).join('; ')}`,
+  );
   const updated: ThinkThanksItem = {
     ...item,
     codeBuild: {

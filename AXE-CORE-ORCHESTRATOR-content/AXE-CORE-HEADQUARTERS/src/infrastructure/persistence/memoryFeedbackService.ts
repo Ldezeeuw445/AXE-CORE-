@@ -121,11 +121,20 @@ export function loopAgentVoor(owner: string | undefined): LoopAgent | null {
     owner === 'local-code' || owner === 'code-editor' || owner === 'code_agent'
     || owner === 'axe_code' || owner === 'axe_developer'
   ) return 'code-editor';
-  if (owner === 'chat' || owner === 'global' || owner === 'axe_core') return 'chat';
+  if (owner === 'chat' || owner === 'global' || owner === 'axe_core' || owner === 'axe-core') return 'chat';
   if (owner === 'research' || owner === 'axe_research') return 'research';
   if (owner === 'axe_algo') return 'trading';
   if (owner === 'browser_agent') return 'browser';
   if (owner === 'crewai_manager') return 'wingman';
+  // defaultAgents.ts's memory_namespace strings drift from this file's/
+  // roster.ts's own naming ('tasks' vs 'task', 'thinkthanks' vs 'thinktank')
+  // -- found by hand-tracing loopAgentVoor for every DEFAULT_AGENTS row after
+  // the 22-23 sep 2026 wiring pass, the same class of false "not wired yet"
+  // that AXE Core's own 'axe-core'/'axe_core' mismatch (fixed just above)
+  // already caused once. Aliased here rather than renaming defaultAgents.ts,
+  // since that id is also the Supabase memory table prefix in places.
+  if (owner === 'tasks') return 'task';
+  if (owner === 'thinkthanks' || owner === 'thinkthanks-agent') return 'thinktank';
 
   // Current chat/routing code passes namespaceFor(agent), not the agent id.
   // Resolve that namespace through the canonical catalog so adding/renaming a

@@ -92,6 +92,30 @@ export const DEFAULT_AGENTS: CoreAgent[] = [
     tags: ['wingman', 'tab:crewai'],
   },
   {
+    // Toegevoegd 23 sep 2026: staat al langer als echte, werkende tier-1
+    // agent in roster.ts (id 'northsea', "CONFIRMED ARCHITECTURE" 17 sep
+    // 2026) maar ontbrak hier -- dus een echte agent was onzichtbaar op het
+    // Agents-tabblad terwijl app-manager, die niets doet, wel een kaart
+    // had. Nog GEEN leerlus (grep bevestigt: nergens een openEpisode voor
+    // 'northsea') -- dat volgt in dezelfde ronde als de andere zes.
+    id: 'northsea-agent',
+    name: 'northsea-agent',
+    display_name: 'NorthSea Desk Manager',
+    role: 'analyst',
+    description: 'Runs the NorthSea crews and moves deals — decides before you where it safely can.',
+    system_prompt: 'You are the NorthSea Desk Manager. You run the NorthSea trade-desk crews, move deals through their gates, and decide only where it is safe to.',
+    memory_namespace: 'northsea',
+    toolset: ['northsea-mcp', 'crews', 'deal-gates'],
+    model_provider: 'abonnement',
+    model_name: '',
+    status: 'active',
+    version: '1.0',
+    capabilities: ['deal-pipeline', 'crew-run', 'counterparty-research'],
+    supabase_tables: [],
+    app_url: null,
+    tags: ['northsea', 'tab:maps-3d'],
+  },
+  {
     id: 'trading-agent',
     name: 'trading-agent',
     display_name: 'Trading Agent',
