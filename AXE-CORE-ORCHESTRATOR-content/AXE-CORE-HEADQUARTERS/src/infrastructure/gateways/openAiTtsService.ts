@@ -140,6 +140,7 @@ export async function speakWithOpenAi(
     // Route playback through one analyser so the AXE composer reacts to the
     // voice that is actually coming out of the speakers, not a fake timer.
     axeAudioContext ??= new AudioContext();
+    void axeAudioContext.resume().catch(() => {});
     const source = axeAudioContext.createMediaElementSource(audio);
     axeAnalyser = axeAudioContext.createAnalyser();
     axeAnalyser.fftSize = 512;
