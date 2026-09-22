@@ -34,6 +34,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/trading': 'Sneltoets r, en de ThinkThanks-router linkt ernaartoe',
   '/memory/explore': 'Vanuit Terrain — NeuralMemorySystem linkt de hubs ernaartoe',
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
+  '/dev-strategy-lab-preview': 'Ontwikkelvoorbeeld, alleen in npm run dev (Strategy Lab buiten de login)',
   '/dev-browser-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-standalone': 'Ontwikkelvoorbeeld',
   // integration/axe-desktop-final: eigen vensters, geregistreerd in App.tsx

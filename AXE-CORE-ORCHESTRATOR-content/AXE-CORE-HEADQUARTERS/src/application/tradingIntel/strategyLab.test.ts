@@ -38,6 +38,9 @@ vi.mock('@/application/tradingIntel/historyService', () => ({
     coverage: { provider: 'metaapi', timeframe: 'h1', count: h.cache.length, from: h.cache[0].time, to: h.cache[h.cache.length - 1].time, exhaustedBefore: false },
   } : { ok: false, error: 'no MetaAPI' })),
 }));
+vi.mock('@/infrastructure/gateways/metaApiService', () => ({
+  metaApiAccountInfoFor: vi.fn(async () => ({ ok: true, info: { currency: 'EUR' } })),
+}));
 vi.mock('@/infrastructure/gateways/researchSources', () => ({ fetchEconomicReleases: vi.fn(async () => []) }));
 vi.mock('@/infrastructure/persistence/userSettingsService', () => ({ loadSetting: vi.fn(async (_k: string, fb: unknown) => fb), saveSetting: vi.fn() }));
 

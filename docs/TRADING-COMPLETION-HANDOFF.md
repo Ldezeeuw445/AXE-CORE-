@@ -27,7 +27,8 @@ here.
 | 4 | Strategy Lab: trades + equity surfaced; realistic account simulation | ✅ done | `bb4f0c9b` |
 | 5 | Funded account simulator (PASS / ACTIVE / BREACHED) | ✅ done | `bb4f0c9b` |
 | 6 | Durable candle cache, incremental backfill, honest depth | ✅ done | `811c6947` |
-| 7 | Visual replay with no-look-ahead regression tests | ✅ done (this commit) | see `git log` |
+| 7 | Visual replay with no-look-ahead regression tests | ✅ done | `abc8fc0b` |
+| — | Runtime check in a browser + lab currency fix + DEV preview route | ✅ done | see `git log` |
 | 8 | Multi-chart (2 → 1/2/4) + strategy × pair × timeframe matrix | ⏳ not started | |
 | 9 | Formal typed framework adapter (vbt/nt/kr/ta) in the interactive lab | ⏳ not started | |
 | 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ⏳ not started | |
@@ -202,6 +203,25 @@ Paths below are relative to `AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
   and `signalNoLookahead.test.ts` (all 8 distinct strategies are causal).
 
 ---
+
+## Runtime evidence (real data, no trades)
+
+Dev server + in-app browser, route `#/dev-strategy-lab-preview` (DEV-only,
+absent from the production bundle — checked with grep on `dist/`):
+
+- Strategy Lab on real MetaAPI XAUUSD h1: first run fetched 3 pages and cached
+  2 998 bars (2026-03-13 → 09-22); the rerun fetched **1** page (only new bars).
+- 46 trades: stop-outs at exactly −1.00R, targets at +1.50R, one −1.84R gap
+  through a stop, signal-flip exits — the simulator behaving as tested.
+- `metaApiInstrumentSpecFor` against the real account: XAUUSD tick 0.01,
+  contract 100, lossTickValue 0.8723 (EUR account) → sizing works live. The
+  first cold call once failed (404) and the lab fell back to the labelled
+  estimate; the live engine in that case refuses to open (fail closed).
+- Funded mode with the real "MT5 100K DEMO" profile (5% daily, 12% trailing):
+  ACTIVE, max DD 4.65%, P&L in EUR.
+- Replay: jump to trade #19 → chart ends at its entry bar with #18/#19 markers
+  and the open position line; three steps later the gap stop has happened
+  (0 open, 19 closed), and not before.
 
 ## Behaviour changes that need your approval before production / live
 

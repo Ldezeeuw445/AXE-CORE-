@@ -35,6 +35,7 @@ import {
 import { currenciesOf, COVERED_CURRENCIES, isHighImpact } from '@/domain/tradingIntel/economicCalendar';
 import { loadInstrumentSpec, resolveOrderAccount } from '@/application/tradingIntel/preTradeGateService';
 import { fetchEconomicReleases } from '@/infrastructure/gateways/researchSources';
+import { metaApiAccountInfoFor } from '@/infrastructure/gateways/metaApiService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export type LabStrategy =
@@ -176,7 +177,10 @@ export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: tru
   if (input.useBrokerSpec !== false) {
     const account = await resolveOrderAccount().catch(() => null);
     if (account) {
-      const spec = await loadInstrumentSpec(account, symbol).catch(() => null);
+      // De valuta van het account, zodat P&L en risico hun echte eenheid dragen.
+      const info = await metaApiAccountInfoFor(account).catch(() => null);
+      const currency = info?.ok ? info.info.currency : null;
+      const spec = await loadInstrumentSpec(account, symbol, currency).catch(() => null);
       if (spec?.ok) instrument = brokerInstrument(spec.spec);
     }
   }
