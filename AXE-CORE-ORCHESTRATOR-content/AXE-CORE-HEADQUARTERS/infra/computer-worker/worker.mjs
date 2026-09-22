@@ -230,7 +230,18 @@ async function screenObserve(args = {}) {
       path: file,
     });
     const stored = await uploadPrivateCapture(file, 'image/png', 'screen');
-    return JSON.stringify({ ...stored, display_index: meta.display_index, width: meta.width, height: meta.height });
+    return JSON.stringify({
+      ...stored,
+      display_index: meta.display_index,
+      width: meta.width,
+      height: meta.height,
+      logical_x: meta.logical_x,
+      logical_y: meta.logical_y,
+      logical_width: meta.logical_width,
+      logical_height: meta.logical_height,
+      pixel_width: meta.pixel_width,
+      pixel_height: meta.pixel_height,
+    });
   } finally {
     await unlink(file).catch(() => {});
   }
