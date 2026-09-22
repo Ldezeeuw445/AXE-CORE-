@@ -29,7 +29,7 @@ here.
 | 6 | Durable candle cache, incremental backfill, honest depth | ✅ done | `811c6947` |
 | 7 | Visual replay with no-look-ahead regression tests | ✅ done | `abc8fc0b` |
 | — | Runtime check in a browser + lab currency fix + DEV preview route | ✅ done | see `git log` |
-| 8 | Multi-chart (2 → 1/2/4) + strategy × pair × timeframe matrix | ⏳ not started | |
+| 8 | Multi-chart (2 → 1/2/4) + strategy × pair × timeframe matrix | ✅ done | see `git log` |
 | 9 | Formal typed framework adapter (vbt/nt/kr/ta) in the interactive lab | ⏳ not started | |
 | 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ⏳ not started | |
 | 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ⏳ not started (trace data already richer, see below) | |
@@ -223,6 +223,18 @@ absent from the production bundle — checked with grep on `dist/`):
   and the open position line; three steps later the gap stop has happened
   (0 open, 19 closed), and not before.
 
+### Phase 8 — Multi-chart + matrix
+- `ChartGrid.tsx` / `useChartLayout.ts` — Chart tab layout 1/2/4 (per device);
+  each cell an independent `CompanionChart`; cell 1 keeps feeding "Run agent".
+- `multiChartLoads.test.ts` — 8 concurrent loads all succeed, ≤ 2 in flight.
+- Runtime: 2 charts (XAUUSD + EURUSD) both "400 bars"; 4 charts: 3 loaded, the
+  4th reported "Symbol BTCUSD does not exist" on the active broker → default
+  changed to GBPUSD.
+- `runStrategyMatrix` + `lab/StrategyMatrix.tsx` — same lab settings for every
+  cell; small samples (< 30 trades) dimmed and excluded from the ranking.
+- Runtime on real data (12 cells): volumetric-ob XAUUSD 1h −14.2% (119 trades),
+  ifvg EURUSD 1h +18.9% (126 trades, avg R 0.14) — realistic costs = 0 there.
+
 ## Behaviour changes that need your approval before production / live
 
 1. **Position sizes change.** Risk % now means money at the stop via the broker's
@@ -243,11 +255,6 @@ absent from the production bundle — checked with grep on `dist/`):
 
 ## Not done yet — concrete next steps
 
-- **Phase 8** — mount two `CompanionChart` instances side by side first (check the
-  global candle semaphore `MAX_CONCURRENT_CANDLE_REQUESTS=2` and the dedup cache
-  in `metaApiMarketData.ts`), then 1/2/4 layouts. Matrix: loop
-  `runStrategyLab` (or `simulateAccount` on cached candles) over
-  strategy × pair × timeframe, sequentially, reusing `historyService`.
 - **Phase 9** — typed adapter over `backtestVectorbt/Nautilus/Kronos/TradingAgents`
   (`axeCoreApiService.ts`) returning the `LabMeta`-shaped metadata; add an engine
   picker to `StrategyLabPanel`. The backend `_run_engine()` stays.

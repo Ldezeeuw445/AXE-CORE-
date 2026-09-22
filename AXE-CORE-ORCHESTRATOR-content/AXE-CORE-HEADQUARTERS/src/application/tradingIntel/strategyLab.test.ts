@@ -44,7 +44,7 @@ vi.mock('@/infrastructure/gateways/metaApiService', () => ({
 vi.mock('@/infrastructure/gateways/researchSources', () => ({ fetchEconomicReleases: vi.fn(async () => []) }));
 vi.mock('@/infrastructure/persistence/userSettingsService', () => ({ loadSetting: vi.fn(async (_k: string, fb: unknown) => fb), saveSetting: vi.fn() }));
 
-import { runStrategyLab } from './strategyLab';
+import { runStrategyLab, runStrategyMatrix } from './strategyLab';
 
 const BASE = {
   symbol: 'eurusd', timeframe: '1h', limit: 400, strategy: { kind: 'single' as const, strategy: 'ifvg' as never },
@@ -95,5 +95,29 @@ describe('runStrategyLab', () => {
     expect(res.result.meta.source).toBe('metaapi');
     expect(res.result.meta.history).toMatch(/metaapi h1: 500 bars cached, 2025-06-01 → 2025-06-21 · from cache/);
     expect(res.result.meta.warnings.join()).not.toMatch(/TwelveData/);
+  });
+});
+
+describe('runStrategyMatrix', () => {
+  const base = { limit: 400, startingBalance: 10_000, sizing: { mode: 'risk' as const, riskPct: 0.01 }, costs: { spread: 0, commissionPerLot: 0, slippage: 0 } };
+
+  it('één cel per strategie × paar × timeframe, met een waarschuwing bij te weinig trades', async () => {
+    const progress: string[] = [];
+    const cells = await runStrategyMatrix({
+      strategies: ['ifvg' as never, 'pdh' as never], symbols: ['EURUSD'], timeframes: ['1h', '4h'], base,
+      onProgress: (_d, _t, label) => progress.push(label),
+    });
+    expect(cells.map(c => `${c.strategy}@${c.timeframe}`)).toEqual(['ifvg@1h', 'pdh@1h', 'ifvg@4h', 'pdh@4h']);
+    expect(cells.every(c => c.ok && c.trades === 1 && c.smallSample)).toBe(true);
+    expect(progress.filter(Boolean)).toHaveLength(4);
+  });
+
+  it('stoppen houdt op na de lopende cel', async () => {
+    let n = 0;
+    const cells = await runStrategyMatrix({
+      strategies: ['ifvg' as never, 'pdh' as never], symbols: ['EURUSD', 'XAUUSD'], timeframes: ['1h'], base,
+      shouldStop: () => ++n > 2,
+    });
+    expect(cells).toHaveLength(2);
   });
 });

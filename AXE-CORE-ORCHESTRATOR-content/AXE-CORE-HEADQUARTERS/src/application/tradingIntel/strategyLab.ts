@@ -304,3 +304,69 @@ export async function deleteLabRun(id: string): Promise<SavedLabRun[]> {
   await saveSetting(LAB_RUNS_KEY, next);
   return next;
 }
+
+// ── Matrix: strategie × paar × timeframe ─────────────────────────────────────
+
+export interface MatrixCell {
+  strategy: StrategyId;
+  symbol: string;
+  timeframe: string;
+  ok: boolean;
+  error?: string;
+  trades: number;
+  netReturnPct: number;
+  profitFactor: number;
+  maxDrawdownPct: number;
+  avgR: number;
+  expectancy: number;
+  funded: 'PASS' | 'ACTIVE' | 'BREACHED' | null;
+  /** Te weinig trades om iets over een edge te zeggen. */
+  smallSample: boolean;
+}
+
+/** Onder dit aantal trades is een cel ruis, geen edge (zelfde grens als de lab-waarschuwing). */
+export const MATRIX_MIN_TRADES = 30;
+
+/**
+ * Dezelfde lab-run voor elke combinatie, na elkaar. Na elkaar omdat elke eerste
+ * keer per (paar, timeframe) MetaAPI-pagina's kost; de cache maakt elke volgende
+ * strategie op dezelfde reeks gratis.
+ */
+export async function runStrategyMatrix(input: {
+  strategies: StrategyId[];
+  symbols: string[];
+  timeframes: string[];
+  base: Omit<StrategyLabInput, 'symbol' | 'timeframe' | 'strategy'>;
+  onProgress?: (done: number, total: number, label: string) => void;
+  shouldStop?: () => boolean;
+}): Promise<MatrixCell[]> {
+  const cells: MatrixCell[] = [];
+  const total = input.strategies.length * input.symbols.length * input.timeframes.length;
+  let done = 0;
+  for (const symbol of input.symbols) {
+    for (const timeframe of input.timeframes) {
+      for (const strategy of input.strategies) {
+        if (input.shouldStop?.()) return cells;
+        input.onProgress?.(done, total, `${strategy} · ${symbol} ${timeframe}`);
+        const res = await runStrategyLab({ ...input.base, symbol, timeframe, strategy: { kind: 'single', strategy } });
+        done += 1;
+        if (!res.ok) {
+          cells.push({
+            strategy, symbol, timeframe, ok: false, error: res.error, trades: 0, netReturnPct: 0,
+            profitFactor: 0, maxDrawdownPct: 0, avgR: 0, expectancy: 0, funded: null, smallSample: true,
+          });
+          continue;
+        }
+        const m = res.result.run.metrics;
+        cells.push({
+          strategy, symbol: res.result.meta.symbol, timeframe, ok: true, trades: m.totalTrades,
+          netReturnPct: m.netReturnPct, profitFactor: m.profitFactor, maxDrawdownPct: m.maxDrawdownPct,
+          avgR: m.avgR, expectancy: m.expectancy, funded: res.result.run.funded?.status ?? null,
+          smallSample: m.totalTrades < MATRIX_MIN_TRADES,
+        });
+      }
+    }
+  }
+  input.onProgress?.(done, total, '');
+  return cells;
+}

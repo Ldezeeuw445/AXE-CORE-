@@ -8,6 +8,8 @@ import { Suspense, useState } from 'react';
 import { StrategyLabPanel } from './StrategyLabPanel';
 import { HistoryPanel } from './HistoryPanel';
 import type { StrategyId } from '@/application/tradingIntel/strategySignals';
+import { ChartGrid, ChartLayoutToggle } from '../ChartGrid';
+import type { ChartLayout } from '../useChartLayout';
 
 const STRATS: StrategyId[] = ['volumetric-ob', 'ifvg', 'smc-structure', 'trend-follow', 'mean-reversion', 'pdh', 'golden-pocket', 'fib-retracement'];
 
@@ -16,6 +18,7 @@ export default function StrategyLabDevPreview() {
   const [timeframe, setTimeframe] = useState('1h');
   const [strategy, setStrategy] = useState<StrategyId>('trend-follow');
   const [limit, setLimit] = useState(2000);
+  const [grid, setGrid] = useState<ChartLayout | 0>(0);
   const style = { background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
   return (
     <div className="min-h-[100dvh] p-4 space-y-3" style={{ background: 'var(--bg-base, #0b0c0e)', color: '#F5F0E6' }}>
@@ -31,7 +34,15 @@ export default function StrategyLabDevPreview() {
         <select value={limit} onChange={e => setLimit(Number(e.target.value))} className="rounded px-2 py-1" style={style} aria-label="Bars">
           {[500, 1000, 2000, 5000].map(n => <option key={n} value={n}>{n} bars</option>)}
         </select>
+        <span style={{ color: 'rgba(255,255,255,0.5)' }}>charts:</span>
+        <button type="button" onClick={() => setGrid(0)} style={{ color: grid === 0 ? '#c4b5fd' : 'rgba(255,255,255,0.5)' }}>off</button>
+        <ChartLayoutToggle layout={(grid || 1) as ChartLayout} onChange={setGrid} />
       </div>
+      {grid !== 0 && (
+        <div style={{ height: grid === 4 ? 760 : 420 }}>
+          <ChartGrid layout={grid} symbol={symbol} />
+        </div>
+      )}
       <Suspense fallback={null}>
         <StrategyLabPanel symbol={symbol} timeframe={timeframe} limit={limit} strategy={{ kind: 'single', strategy }} />
         <HistoryPanel symbol={symbol} timeframe={timeframe} />

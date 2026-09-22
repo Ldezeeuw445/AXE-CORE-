@@ -19,6 +19,7 @@ import { AccountRulesFields } from '../AccountRulesFields';
 import { LabEquityChart } from './LabEquityChart';
 import { LabTradeTable } from './LabTradeTable';
 import { LabReplay } from './LabReplay';
+import { StrategyMatrix } from './StrategyMatrix';
 
 const INPUT = 'rounded px-2 py-1.5 text-[12px] w-full';
 const INPUT_STYLE = { background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
@@ -87,21 +88,24 @@ export function StrategyLabPanel({ symbol, timeframe, limit, strategy }: {
   const profileLabel = profileSource === 'none' ? null : profileSource === 'custom' ? 'custom rules'
     : `${accounts.find(a => a.accountId === profileSource)?.label ?? profileSource.slice(0, 8)} rules`;
 
+  // Eén bron voor de instellingen: de enkele run en de matrix gebruiken dezelfde.
+  const baseConfig = () => ({
+    limit,
+    from: from ? new Date(`${from}T00:00:00Z`).toISOString() : null,
+    to: to ? new Date(`${to}T23:59:59Z`).toISOString() : null,
+    startingBalance,
+    sizing: sizingMode === 'fixed' ? { mode: 'fixed' as const, lots } : { mode: 'risk' as const, riskPct: riskPct / 100 },
+    costs: { spread, commissionPerLot: commission, slippage },
+    maxConcurrent, maxTradesPerDay: maxTradesPerDay > 0 ? maxTradesPerDay : null,
+    rewardRisk: rewardRisk > 0 ? rewardRisk : null, atrMultiple, allowShort,
+    profile, profileLabel,
+  });
+
   const run = async () => {
     if (!strategy) return;
     setRunning(true); setError(null);
     try {
-      const res = await runStrategyLab({
-        symbol, timeframe, limit, strategy,
-        from: from ? new Date(`${from}T00:00:00Z`).toISOString() : null,
-        to: to ? new Date(`${to}T23:59:59Z`).toISOString() : null,
-        startingBalance,
-        sizing: sizingMode === 'fixed' ? { mode: 'fixed', lots } : { mode: 'risk', riskPct: riskPct / 100 },
-        costs: { spread, commissionPerLot: commission, slippage },
-        maxConcurrent, maxTradesPerDay: maxTradesPerDay > 0 ? maxTradesPerDay : null,
-        rewardRisk: rewardRisk > 0 ? rewardRisk : null, atrMultiple, allowShort,
-        profile, profileLabel,
-      });
+      const res = await runStrategyLab({ ...baseConfig(), symbol, timeframe, strategy });
       if (res.ok) setResult(res.result); else setError(res.error);
     } finally {
       setRunning(false);
@@ -273,6 +277,8 @@ export function StrategyLabPanel({ symbol, timeframe, limit, strategy }: {
           )}
         </div>
       )}
+
+      <StrategyMatrix base={baseConfig} />
 
       {saved.length > 0 && (
         <div className="mt-4 pt-3 space-y-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
