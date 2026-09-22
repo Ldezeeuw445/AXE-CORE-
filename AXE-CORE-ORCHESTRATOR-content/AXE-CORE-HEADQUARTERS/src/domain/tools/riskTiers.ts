@@ -75,6 +75,14 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'files.read': 'observe',
   'files.search': 'observe',
   'personal.files.list': 'observe',
+  'camera.snapshot': 'observe',
+  'computer.permissions': 'observe',
+  'screen.displays': 'observe',
+  'screen.observe': 'observe',
+  'pointer.position': 'observe',
+  'app.list': 'observe',
+  'app.frontmost': 'observe',
+  'window.list': 'observe',
   'git.status': 'observe',
   'git.branch': 'observe',
   'git.diff': 'observe',
@@ -88,6 +96,11 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'terminal.test': 'safe_execute',
   'terminal.build': 'safe_execute',
   'git.create_branch': 'safe_execute',
+  'computer.permissions.request_screen': 'safe_execute',
+  'computer.permissions.request_accessibility': 'safe_execute',
+  'pointer.move': 'safe_execute',
+  'app.open': 'safe_execute',
+  'app.focus': 'safe_execute',
 
   // ── write ──────────────────────────────────────────────────────────────
   'files.write': 'write',
@@ -96,6 +109,13 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'cursor.run': 'write',
   'codex.run': 'write',
   'memory.write': 'write',
+  'pointer.click': 'write',
+  'pointer.double_click': 'write',
+  'pointer.right_click': 'write',
+  'pointer.drag': 'write',
+  'pointer.scroll': 'write',
+  'keyboard.type': 'write',
+  'keyboard.key': 'write',
 
   // ── consequential ──────────────────────────────────────────────────────
   'git.commit': 'consequential',
@@ -107,6 +127,40 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'db.migrate': 'consequential',
   'files.delete': 'consequential',
 };
+
+
+/**
+ * Tools that operate on the selected Mac itself, not on a source checkout.
+ * They must never inherit protected-branch semantics from whichever repo happens
+ * to be open on that machine.
+ */
+export const DEVICE_SCOPED_TOOLS = new Set<string>([
+  'personal.files.list',
+  'camera.snapshot',
+  'computer.permissions',
+  'computer.permissions.request_screen',
+  'computer.permissions.request_accessibility',
+  'screen.displays',
+  'screen.observe',
+  'pointer.position',
+  'pointer.move',
+  'pointer.click',
+  'pointer.double_click',
+  'pointer.right_click',
+  'pointer.drag',
+  'pointer.scroll',
+  'keyboard.type',
+  'keyboard.key',
+  'app.list',
+  'app.frontmost',
+  'app.open',
+  'app.focus',
+  'window.list',
+]);
+
+export function isDeviceScopedTool(tool: string): boolean {
+  return DEVICE_SCOPED_TOOLS.has(tool);
+}
 
 /** Read-only tools, so the catalog and the worker agree on what may auto-run. */
 export const OBSERVE_TOOLS: readonly string[] = Object.entries(TOOL_TIERS)
