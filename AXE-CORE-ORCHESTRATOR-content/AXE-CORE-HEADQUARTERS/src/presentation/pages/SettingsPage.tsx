@@ -1052,7 +1052,6 @@ function FishAudioSection() {
 }
 
 function OllamaModelsSection() {
-  const voice = useVoiceStore();
   const [registry, setRegistry] = useState(getStoredLlmModelRegistry());
   const [health, setHealth] = useState<Record<string, OllamaModelHealth>>(loadOllamaModelHealth());
   const [syncing, setSyncing] = useState(false);
@@ -1128,12 +1127,47 @@ function OllamaModelsSection() {
       ...health,
       [modelName]: { ...health[modelName], status: 'testing', lastTestAt: new Date().toISOString(), baseUrl },
     });
-    const ok = await voice.testSlot({ provider: 'ollama', key: '', model: modelName, baseUrl });
-    const err = ok ? undefined : (useVoiceStore.getState().error ?? 'Test mislukt').slice(0, 180);
-    if (!ok) useVoiceStore.setState({ error: null }); // see the Gemini test above — don't leak into the shared live-chat error banner
+
+    let ok = false;
+    let err: string | undefined;
+    try {
+      // Test the model on Ollama itself. The generic provider test went through
+      // AXE's proxy and could abort while an 8B model was still cold-loading,
+      // producing "Fetch is aborted" even though /api/tags proved the box was
+      // reachable. A model-health card should test the model, not the proxy.
+      const root = baseUrl.replace(/\/+$/, '');
+      const res = await fetch(`${root}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...ollamaHeaders(root) },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: 'user', content: 'Reply only with OK' }],
+          stream: false,
+          think: false,
+          keep_alive: '5m',
+          options: { num_predict: 8, temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(180_000),
+      });
+      const raw = await res.text();
+      if (!res.ok) {
+        const detail = raw.replace(/\s+/g, ' ').trim().slice(0, 180);
+        throw new Error(`Ollama HTTP ${res.status}${detail ? `: ${detail}` : ''}`);
+      }
+      const data = JSON.parse(raw) as { message?: { content?: string }; response?: string };
+      if (!(data.message?.content ?? data.response ?? '').trim()) throw new Error('Ollama returned no content');
+      ok = true;
+    } catch (e) {
+      err = e instanceof Error
+        ? (e.name === 'TimeoutError' || /abort/i.test(e.message)
+          ? `Ollama model ${modelName} did not answer within 180s`
+          : e.message)
+        : String(e);
+    }
+
     saveHealth({
       ...health,
-      [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err, baseUrl },
+      [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err?.slice(0, 180), baseUrl },
     });
     setTesting(prev => ({ ...prev, [modelName]: false }));
   };
