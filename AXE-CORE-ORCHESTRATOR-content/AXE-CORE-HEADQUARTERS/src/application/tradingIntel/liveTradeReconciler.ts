@@ -270,6 +270,9 @@ async function reconcileAccount(account: MetaApiConfig, activeAccountId: string 
         symbol: pair,
         pnl,
         confidence,
+        // De spiegelrij van de fill: hetzelfde id dat de beslissing als
+        // tradeId kreeg, zodat de uitkomst op zijn kaart landt.
+        tradeId: match?.localTradeId ?? undefined,
         exitReason: 'broker_close',
         strategy,
         timeframe,

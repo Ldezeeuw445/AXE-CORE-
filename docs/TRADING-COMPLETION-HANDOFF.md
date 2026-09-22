@@ -32,7 +32,7 @@ here.
 | 8 | Multi-chart (2 → 1/2/4) + strategy × pair × timeframe matrix | ✅ done | see `git log` |
 | 9 | Formal typed framework adapter (vbt/nt/kr/ta) in the interactive lab | ✅ done | see `git log` |
 | 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ✅ done | see `git log` |
-| 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ⏳ not started (trace data already richer, see below) | |
+| 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ✅ done | see `git log` |
 | 12 | Remote read-only cockpit backend (`/trading/*`) | ⏳ not started | |
 | 24/7 | Server-side scheduler (Tauri not required), lock, watchdog | ⏳ not started | |
 | Event impact | `gebeurtenisImpact` measured by the desk heartbeat → desk facts → AXE Algo context + trace | ✅ done | see `git log` |
@@ -297,6 +297,30 @@ absent from the production bundle — checked with grep on `dist/`):
   call, rotation/20 h, no calendar → nothing written, no history → skipped),
   `deskFeitenBlok.test.ts` (+1 per-pair filter).
 
+### Phase 11 — Decision cards (PASS / BLOCK / WAIT)
+- `src/domain/tradingIntel/decisionVerdict.ts` — `buildDecisionVerdict`: state,
+  action, symbol, strategy, timeframe, confidence vs floor, Research (report
+  signal/conf/thesis), AXE Intel + AXE Companion (STANCE + first line), every
+  pre-trade gate check, sizing (lots, money at stop, SL/TP, spec note),
+  account (id, environment, live/paper), block reason, execution
+  (filled/closed/rejected/not-sent/autoexecute-off, trade id, price).
+  BLOCK whenever something stopped it — including HOLD with a tripped breaker,
+  the funnel, no order account, and a broker rejection. `withOutcome` attaches
+  the closed P&L later.
+- `tradingAgentEngine.ts` — both trace paths carry `verdict` (the early
+  "account unavailable" path now also records strategy/timeframe).
+- Outcome: `liveTradeReconciler` now passes `tradeId: match.localTradeId` (the
+  same mirror id `brokerPlaceOrder` returned) → `recordTradeOutcome` →
+  `attachOutcomeToTrace`. Trace budget 40 → 60 kB (still under the 101 kB at
+  which sync stopped before).
+- UI: `DecisionLog.tsx` in the Brain tab (last 20 decisions, expandable);
+  pre-verdict traces are shown as "recorded before structured verdicts", not
+  reconstructed. Also on the DEV preview ("decisions" button).
+- Tests: `decisionVerdict.test.ts` (7).
+- Runtime: one real engine cycle with `autoExecute: false` (no order possible)
+  on EURUSD h1 trend-follow → WAIT, conf 35 % / floor 58 %, gates account/
+  breaker/dayLimit PASS, rendered in the card.
+
 ## Behaviour changes that need your approval before production / live
 
 1. **Position sizes change.** Risk % now means money at the stop via the broker's
@@ -317,10 +341,6 @@ absent from the production bundle — checked with grep on `dist/`):
 
 ## Not done yet — concrete next steps
 
-- **Phase 11** — trace already carries: Strategy selection, Evidence, Account
-  rules (PASS/BLOCK lines), sizing with money at stop. Still to do: render as
-  structured PASS/BLOCK/WAIT cards (`AgentOverviewPanel.tsx`, `BrainTab.tsx`),
-  show strategy/timeframe as fields, Intel/Companion stance + later verdict.
 - **Phase 12** — authenticated read-only `/trading/*` routes in
   `backend/axe_api/main.py` (accounts, risk, positions, decisions, crew, P&L,
   evidence). Never return MetaAPI tokens.

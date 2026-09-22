@@ -21,6 +21,7 @@
 import { closeDeskEpisodesForTrade, closeTradingEpisodeForTrade } from '@/infrastructure/persistence/agentFeedbackService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { AgentLearningStats, LearningOutcome, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
+import { withOutcome, type DecisionVerdict } from '@/domain/tradingIntel/decisionVerdict';
 import { rememberLesson } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import { recordOutcome } from '@/infrastructure/persistence/tradingAgentBrain';
 import { writeTradeNote } from '@/infrastructure/persistence/tradeNotesService';
@@ -31,7 +32,9 @@ import type { EvidenceEnv, EvidencePolicy } from '@/domain/tradingIntel/evidence
 const STATS_KEY = 'axe_trading_agent_learning';
 const TRACE_KEY = 'axe_trading_decision_traces';
 /** See the note at the call site — bytes, because a count did not bound it. */
-const TRACE_BYTE_BUDGET = 40 * 1024;
+// 40 → 60 kB: elk spoor draagt nu ook een gestructureerd oordeel (~1,5 kB).
+// Ruim onder de 101 kB waarbij de sync eerder stopte.
+const TRACE_BYTE_BUDGET = 60 * 1024;
 
 /** Closed trades needed before the knobs move off their neutral defaults. */
 const MIN_SAMPLE = 15;
@@ -188,6 +191,13 @@ export async function recordTradeOutcome(input: {
     closedAt: new Date().toISOString(),
   });
 
+  // De uitkomst op de kaart van de beslissing die hem opende (decisionVerdict).
+  if (input.tradeId) {
+    await attachOutcomeToTrace(input.tradeId, {
+      pnl: input.pnl, closedAt: new Date().toISOString(), exitReason: input.exitReason ?? null,
+    }).catch(() => { /* non-fatal */ });
+  }
+
   // Per-(pair × strategy) ledger — the structured "what works where" record.
   // Falls back to a win/loss-only count when returnPct wasn't supplied.
   const returnPct = typeof input.returnPct === 'number'
@@ -257,6 +267,17 @@ export async function saveThinkingTrace(trace: ThinkingTrace): Promise<void> {
   const { kept: list } = capBySize([trace, ...parsed], TRACE_BYTE_BUDGET, 50);
   localStorage.setItem(TRACE_KEY, JSON.stringify(list));
   void saveSetting(TRACE_KEY, list);
+}
+
+async function attachOutcomeToTrace(
+  tradeId: string,
+  outcome: NonNullable<DecisionVerdict['outcome']>,
+): Promise<void> {
+  const list = await listThinkingTraces(50);
+  const next = withOutcome(list, tradeId, outcome);
+  if (!next) return;
+  localStorage.setItem(TRACE_KEY, JSON.stringify(next));
+  await saveSetting(TRACE_KEY, next);
 }
 
 export async function listThinkingTraces(limit = 20): Promise<ThinkingTrace[]> {

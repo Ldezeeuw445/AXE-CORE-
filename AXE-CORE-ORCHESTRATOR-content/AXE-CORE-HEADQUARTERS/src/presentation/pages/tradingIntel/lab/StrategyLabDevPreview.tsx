@@ -5,6 +5,9 @@
  * als in de app (MetaAPI als die geconfigureerd is, anders TwelveData via de VPS).
  */
 import { Suspense, useState } from 'react';
+import { DecisionLog } from '../DecisionLog';
+import type { ThinkingTrace } from '@/domain/tradingIntel/botTypes';
+import { listThinkingTraces } from '@/infrastructure/persistence/tradingLearningService';
 import { StrategyLabPanel } from './StrategyLabPanel';
 import { HistoryPanel } from './HistoryPanel';
 import type { StrategyId } from '@/application/tradingIntel/strategySignals';
@@ -19,6 +22,7 @@ export default function StrategyLabDevPreview() {
   const [strategy, setStrategy] = useState<StrategyId>('trend-follow');
   const [limit, setLimit] = useState(2000);
   const [grid, setGrid] = useState<ChartLayout | 0>(0);
+  const [traces, setTraces] = useState<ThinkingTrace[] | null>(null);
   const style = { background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
   return (
     <div className="min-h-[100dvh] p-4 space-y-3" style={{ background: 'var(--bg-base, #0b0c0e)', color: '#F5F0E6' }}>
@@ -37,7 +41,9 @@ export default function StrategyLabDevPreview() {
         <span style={{ color: 'rgba(255,255,255,0.5)' }}>charts:</span>
         <button type="button" onClick={() => setGrid(0)} style={{ color: grid === 0 ? '#c4b5fd' : 'rgba(255,255,255,0.5)' }}>off</button>
         <ChartLayoutToggle layout={(grid || 1) as ChartLayout} onChange={setGrid} />
+        <button type="button" onClick={() => void listThinkingTraces(10).then(setTraces)} style={{ color: '#c4b5fd' }}>decisions</button>
       </div>
+      {traces && <DecisionLog traces={traces} />}
       {grid !== 0 && (
         <div style={{ height: grid === 4 ? 760 : 420 }}>
           <ChartGrid layout={grid} symbol={symbol} />

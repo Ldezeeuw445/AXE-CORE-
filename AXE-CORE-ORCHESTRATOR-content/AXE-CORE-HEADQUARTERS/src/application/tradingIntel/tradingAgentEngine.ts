@@ -39,6 +39,7 @@ import {
   saveThinkingTrace,
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
+import { buildDecisionVerdict } from '@/domain/tradingIntel/decisionVerdict';
 import { evaluatePreTradeGate } from '@/domain/tradingIntel/preTradeGate';
 import {
   loadInstrumentSpec,
@@ -413,6 +414,15 @@ export async function runTradingAgent(input: {
       confidence: 0,
       blockedByRisk: reason,
       createdAt: new Date().toISOString(),
+      strategy: input.strategyName ?? input.strategy,
+      timeframe: input.timeframe,
+      verdict: buildDecisionVerdict({
+        symbol, action: 'hold', confidence: 0,
+        strategy: input.strategyName ?? input.strategy, timeframe: input.timeframe,
+        intelText: input.upstream?.intel, companionText: input.upstream?.companion,
+        account: { id: input.account?.accountId ?? null, environment: null, live: false },
+        blockReason: reason, autoExecute: Boolean(input.autoExecute),
+      }),
     };
     await saveThinkingTrace(blockedTrace);
     return {
@@ -868,6 +878,7 @@ export async function runTradingAgent(input: {
 
   let tradeId: string | undefined;
   let error: string | undefined;
+  let placedResult: { ok: boolean; error?: string; tradeId?: string | null; price?: number | null; closed?: boolean } | null = null;
 
   if (shouldExec) {
     // Een long sluiten is een sluiting per positie-id, geen nieuwe SELL-order:
@@ -891,6 +902,7 @@ export async function runTradingAgent(input: {
       // shouldExec vereist !blockedByRisk, dus de poort heeft toegelaten.
       clearance: gate.clearance!,
     });
+    placedResult = { ok: placed.ok, error: placed.error, tradeId: placed.tradeId ?? null, price: placed.price ?? null, closed: closesLong };
     if (!placed.ok) {
       error = placed.error;
       steps.push(step('execute', 'Order rejected', placed.error || 'unknown', 0));
@@ -929,6 +941,14 @@ export async function runTradingAgent(input: {
     learning.winRate,
   ));
 
+  // Wat een opening tegenhield zonder blockedByRisk te zetten: de funnel, of
+  // geen orderaccount om tegen te sizen. Zonder deze regel las een geweigerde
+  // koop als "BLOCK: No size" en moest je het spoor lezen om te weten waarom.
+  const wantsOpen = opensLong || opensShort;
+  const verdictBlock = blockedByRisk
+    ?? (wantsOpen && mandate.binding && !mandate.mayOpen ? `Funnel: ${mandate.reason}` : undefined)
+    ?? (wantsOpen && !orderAccount ? 'No live order account — nothing sized or sent' : undefined);
+
   const trace: ThinkingTrace = {
     decisionId: decision.id,
     symbol,
@@ -941,6 +961,27 @@ export async function runTradingAgent(input: {
     // trace and the decision can no longer disagree about who decided.
     strategy: input.strategyName ?? input.strategy,
     timeframe: input.timeframe,
+    verdict: buildDecisionVerdict({
+      symbol,
+      action,
+      strategy: input.strategyName ?? input.strategy,
+      timeframe: input.timeframe,
+      confidence,
+      confidenceFloor: minConf,
+      research: intel ? { signal: intel.signal, confidence: intel.confidence, thesis: intel.thesis.slice(0, 280) } : null,
+      intelText: input.upstream?.intel,
+      companionText: input.upstream?.companion,
+      gates: gate.checks,
+      sizing: action === 'hold' ? null : {
+        lots, riskPct, riskAtStop,
+        stopDistance: closesLong ? null : slDistance,
+        stopLoss, takeProfit, note: closesLong ? 'closing the existing long' : sizingNote,
+      },
+      account: { id: orderAccount?.accountId ?? input.account?.accountId ?? null, environment: envInfo.env, live: effective.isReal },
+      blockReason: verdictBlock,
+      autoExecute: Boolean(input.autoExecute),
+      placed: placedResult,
+    }),
   };
   await saveThinkingTrace(trace);
 

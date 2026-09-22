@@ -158,6 +158,8 @@ export function useTradingDeskState() {
   const [learning, setLearning] = useState<AgentLearningStats | null>(null);
   const [broker, setBroker] = useState<BrokerConnection | null>(null);
   const [lastTrace, setLastTrace] = useState<ThinkingTrace | null>(null);
+  // De laatste beslissingen als kaarten (DecisionLog); lastTrace blijft de eerste.
+  const [recentTraces, setRecentTraces] = useState<ThinkingTrace[]>([]);
   const [metaToken, setMetaToken] = useState('');
   const [metaAccountId, setMetaAccountId] = useState('');
   const [metaRegion, setMetaRegion] = useState<MetaApiRegion>('london');
@@ -252,7 +254,7 @@ export function useTradingDeskState() {
         // whole time (saveThinkingTrace in tradingAgentEngine), the tab
         // just never loaded them back. This is why it showed "No cycle run
         // yet" even while autopilot had clearly been running.
-        listThinkingTraces(1),
+        listThinkingTraces(20),
         // Same fix, different symptom: the strategy picker was pure local
         // state, so autopilot (which runs outside this component entirely)
         // never knew what you'd selected.
@@ -276,6 +278,7 @@ export function useTradingDeskState() {
       setAutopilot(pilot);
       setCircuitBreaker(breaker);
       if (traces[0]) setLastTrace(traces[0]);
+      setRecentTraces(traces);
       if (meta) {
         setMetaToken(meta.token || '');
         setMetaAccountId(meta.accountId || '');
@@ -391,12 +394,13 @@ export function useTradingDeskState() {
       const [status, breaker, traces] = await Promise.all([
         getAutopilotStatus(),
         getCircuitBreakerState(meta?.accountId),
-        listThinkingTraces(1),
+        listThinkingTraces(20),
       ]);
       if (cancelled) return;
       setAutopilot(status);
       setCircuitBreaker(breaker);
       if (traces[0]) setLastTrace(traces[0]);
+      setRecentTraces(traces);
     };
     const t = setInterval(poll, 10_000);
     return () => {
@@ -529,7 +533,11 @@ export function useTradingDeskState() {
             }
           : undefined,
       } as Parameters<typeof runTradingAgent>[0]);
-      if (result.trace) setLastTrace(result.trace);
+      if (result.trace) {
+        const t = result.trace;
+        setLastTrace(t);
+        setRecentTraces(prev => [t, ...prev.filter(p => p.decisionId !== t.decisionId)].slice(0, 20));
+      }
       toast.success(
         result.error
           ?? (result.decision ? `${result.decision.action.toUpperCase()} · ${result.decision.rationale}` : 'Agent cycle complete'),
@@ -797,7 +805,7 @@ export function useTradingDeskState() {
     comboRunning, comboResult, runComboBacktestNow,
     setups, saveSetup, loadSetup, deleteSetup,
     account, snapshot, eq, upnl,
-    memory, risk, learning, broker, lastTrace,
+    memory, risk, learning, broker, lastTrace, recentTraces,
     metaToken, setMetaToken, metaAccountId, setMetaAccountId, metaRegion, setMetaRegion,
     metaAccounts, metaAccountsLoading, refreshMetaAccounts,
     showNewMetaAccount, setShowNewMetaAccount,

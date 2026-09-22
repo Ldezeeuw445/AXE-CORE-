@@ -2,6 +2,7 @@
  * Professional trading-bot domain types.
  * Paper / demo first; live brokers plug in via connectors.
  */
+import type { DecisionVerdict } from '@/domain/tradingIntel/decisionVerdict';
 
 /**
  * Welk soort account dit is. 'custom' bestond niet: wie een preset aanpaste,
@@ -139,6 +140,9 @@ export interface ThinkingTrace {
    * written before this carry neither. */
   strategy?: string;
   timeframe?: string;
+  /** Dezelfde beslissing in velden: PASS/BLOCK/WAIT, poorten, sizing, account,
+   *  uitvoering en — later — de uitkomst. Ontbreekt op oudere sporen. */
+  verdict?: DecisionVerdict;
 }
 
 /** One closed trade's outcome, kept only for the rolling learning window. */
