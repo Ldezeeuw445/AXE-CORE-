@@ -26,6 +26,7 @@ export function useAudioActivity(
     if (stream?.getAudioTracks().some(t => t.readyState === 'live')) {
       try {
         ctx = new AudioContext();
+        void ctx.resume().catch(() => {});
         analyser = ctx.createAnalyser();
         analyser.fftSize = 512;
         data = new Uint8Array(analyser.fftSize);
