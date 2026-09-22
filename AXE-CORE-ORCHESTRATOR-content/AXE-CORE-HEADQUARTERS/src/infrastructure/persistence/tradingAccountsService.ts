@@ -29,6 +29,7 @@
 import { saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
 import { memList } from '@/infrastructure/gateways/axeCoreApiService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import type { FrameworkId } from '@/domain/tradingIntel/strategyColors';
 import {
   environmentFromBrokerTradeMode,
   type AccountEnvironment,
@@ -71,6 +72,15 @@ export interface TradingAccount {
    * op 'live', anders telt hij als demo.
    */
   environment?: AccountEnvironment;
+  /**
+   * Welke frameworks live mogen meedingen op dit account. Weggelaten = AXE en
+   * vectorbt, precies wat altijd al kon. Nautilus, Kronos of TradingAgents
+   * komen er alleen bij als je ze hier aanzet — en dan nog alleen als
+   * frameworkEligibility ze geschikt vindt.
+   */
+  liveFrameworks?: FrameworkId[];
+  /** Mag een framework meedingen op een instrument dat het maar gedeeltelijk dekt (TradingAgents buiten aandelen)? */
+  allowPartialCoverage?: boolean;
   addedAt: string;
 }
 
@@ -427,4 +437,24 @@ export async function accountEnvironment(accountId: string): Promise<{
   const env = info?.ok ? environmentFromBrokerTradeMode(info.info.tradeMode) : null;
   if (info?.ok) brokerEnvCache.set(accountId, { at: Date.now(), env });
   return { env, source: env ? 'broker' : 'unknown' };
+}
+
+export async function setAccountLiveFrameworks(
+  id: string,
+  patch: { liveFrameworks?: FrameworkId[]; allowPartialCoverage?: boolean },
+): Promise<AccountsState> {
+  const state = await getAccounts();
+  return persist({
+    ...state,
+    accounts: state.accounts.map(a => a.id === id ? { ...a, ...patch } : a),
+  });
+}
+
+/** De live-framework-instellingen van een account, of de standaard als het onbekend is. */
+export async function accountFrameworkSettings(accountId: string): Promise<{
+  liveFrameworks?: FrameworkId[]; allowPartialCoverage?: boolean;
+}> {
+  const state = await getAccounts().catch(() => null);
+  const row = state?.accounts.find(a => a.accountId === accountId);
+  return { liveFrameworks: row?.liveFrameworks, allowPartialCoverage: row?.allowPartialCoverage };
 }

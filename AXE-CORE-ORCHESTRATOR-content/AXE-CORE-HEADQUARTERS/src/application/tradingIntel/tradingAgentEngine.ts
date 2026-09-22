@@ -248,6 +248,9 @@ export async function runTradingAgent(input: {
   /** Which experiment round this account trades in. Decides whether edge
    *  sizing applies at all — see edgeMultiplierFor. */
   run?: string;
+  /** Why this strategy/timeframe was chosen, and which framework candidates
+   *  were not eligible — from agentAutopilot.strategyForSymbol. */
+  selection?: string;
   indicatorHint?: {
     sma20?: number | null;
     sma50?: number | null;
@@ -484,6 +487,7 @@ export async function runTradingAgent(input: {
     intel ? intel.confidence : 0.3,
   ));
 
+  if (input.selection) steps.push(step('score', 'Strategy selection', input.selection.slice(0, 900), 1));
   steps.push(step('memory', 'Agent memory', memCtx.slice(0, 320), 0.5));
 
   // The desk lanes, as this cycle's own input rather than as archaeology.
