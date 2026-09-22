@@ -117,33 +117,65 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+async function inspectPrivateImage(
+  meta: { bucket: string; path: string; mime?: string; width?: number; height?: number },
+  prompt: unknown,
+  systemPrompt: string,
+  defaultQuestion: string,
+  label: string,
+  deleteAfter: boolean,
+): Promise<string> {
+  const sb = getSupabase();
+  if (!sb) return `${label} capture succeeded, but AXE is not signed in so the private image cannot be inspected.`;
+  try {
+    const { data, error } = await sb.storage.from(meta.bucket).download(meta.path);
+    if (error || !data) return `${label} capture could not be downloaded for vision: ${error?.message ?? 'missing image'}`;
+    const imageBase64 = await blobToBase64(data);
+    const slots = configuredVisionSlots();
+    const question = typeof prompt === 'string' && prompt.trim() ? prompt.trim() : defaultQuestion;
+    const vision = await callVision(slots, {
+      prompt: question,
+      imageBase64,
+      mimeType: meta.mime ?? 'image/jpeg',
+      systemPrompt,
+    });
+    const size = meta.width && meta.height ? ` (${meta.width}×${meta.height})` : '';
+    return `${label}${size}:\n${vision.text}`;
+  } finally {
+    if (deleteAfter) {
+      // Screen captures are sensitive and transient. Best-effort delete as soon
+      // as vision has consumed them; never leave a public URL or task-row blob.
+      await sb.storage.from(meta.bucket).remove([meta.path]).catch(() => {});
+    }
+  }
+}
+
 async function groundScreenObservation(raw: string, prompt: unknown): Promise<string> {
   let meta: { bucket?: string; path?: string; mime?: string; width?: number; height?: number };
   try { meta = JSON.parse(raw); } catch { return `SCREEN capture returned invalid metadata: ${raw.slice(0, 300)}`; }
   if (!meta.bucket || !meta.path) return 'SCREEN capture returned no private storage location.';
+  return inspectPrivateImage(
+    { bucket: meta.bucket, path: meta.path, mime: meta.mime ?? 'image/png', width: meta.width, height: meta.height },
+    prompt,
+    'You are AXE observing Luka\'s CURRENT Mac screen from a newly captured image. Ground every claim in visible pixels. If something is not visible, say that plainly. Give actionable coordinates only when they are visually unambiguous.',
+    'Describe the current screen precisely. Read visible text and name the frontmost app/window if clear. Do not infer anything not visible.',
+    'CURRENT SCREEN',
+    true,
+  );
+}
 
-  const sb = getSupabase();
-  if (!sb) return 'SCREEN capture succeeded, but AXE is not signed in so the private image cannot be inspected.';
-  try {
-    const { data, error } = await sb.storage.from(meta.bucket).download(meta.path);
-    if (error || !data) return `SCREEN capture could not be downloaded for vision: ${error?.message ?? 'missing image'}`;
-    const imageBase64 = await blobToBase64(data);
-    const slots = configuredVisionSlots();
-    const question = typeof prompt === 'string' && prompt.trim()
-      ? prompt.trim()
-      : 'Describe the current screen precisely. Read visible text and name the frontmost app/window if clear. Do not infer anything not visible.';
-    const vision = await callVision(slots, {
-      prompt: question,
-      imageBase64,
-      mimeType: meta.mime ?? 'image/png',
-      systemPrompt: 'You are AXE observing Luka\'s CURRENT Mac screen from a newly captured image. Ground every claim in visible pixels. If something is not visible, say that plainly. Give actionable coordinates only when they are visually unambiguous.',
-    });
-    return `CURRENT SCREEN (${meta.width ?? '?'}×${meta.height ?? '?'}):\n${vision.text}`;
-  } finally {
-    // Screen captures are sensitive and transient. Best-effort delete as soon
-    // as vision has consumed them; never leave a public URL or task-row blob.
-    await sb.storage.from(meta.bucket).remove([meta.path]).catch(() => {});
-  }
+async function groundCameraSnapshot(raw: string, prompt: unknown): Promise<string> {
+  const bucket = /^bucket\s+(.+)$/mi.exec(raw)?.[1]?.trim();
+  const path = /^pad\s+(.+)$/mi.exec(raw)?.[1]?.trim();
+  if (!bucket || !path) return raw;
+  return inspectPrivateImage(
+    { bucket, path, mime: 'image/jpeg' },
+    prompt,
+    'You are AXE looking through Luka\'s selected Mac camera at a newly captured image. Ground every claim in the actual image and do not infer off-camera details.',
+    'Describe what the current Mac camera snapshot actually shows.',
+    'CURRENT CAMERA',
+    false,
+  );
 }
 
 async function execute(
@@ -258,6 +290,9 @@ async function execute(
   if (!r.ok) return `COMPUTER: ${r.text}`;
   if (parsed.tool === 'screen.observe') {
     return groundScreenObservation(r.text, parsed.args.prompt);
+  }
+  if (parsed.tool === 'camera.snapshot') {
+    return groundCameraSnapshot(r.text, parsed.args.prompt);
   }
   return r.text;
 }
