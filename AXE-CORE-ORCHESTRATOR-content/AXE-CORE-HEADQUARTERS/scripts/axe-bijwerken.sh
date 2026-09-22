@@ -207,7 +207,14 @@ for poort in 4022 8001; do
   done
 done
 
-# ── 4c. launchd-workers herstarten ───────────────────────────────────────────
+# ── 4c. canonical launchd-workers ───────────────────────────────────────────
+#
+# De computer-worker krijgt bij IEDERE canonical update opnieuw zijn launchd
+# plist uit deze checkout. Daardoor kan launchd niet maanden later nog naar een
+# oud worktree-pad wijzen terwijl /Applications al nieuw is.
+zeg "Canonical computer-worker registreren"
+bash scripts/install-computer-worker-launchd.sh
+
 #
 # De computer-worker en browser-agent leven LOS van AXE CORE. Een app-rebuild
 # vervangt hun proces dus niet. Dat was precies de reden dat een nieuw venster
@@ -245,7 +252,6 @@ restart_launchd_agent() {
   fi
 }
 
-restart_launchd_agent "com.axe.computer-worker" "$HIER/infra/computer-worker/worker.mjs"
 restart_launchd_agent "com.axe.browser-agent"
 
 # ── 5. Starten ───────────────────────────────────────────────────────────────
