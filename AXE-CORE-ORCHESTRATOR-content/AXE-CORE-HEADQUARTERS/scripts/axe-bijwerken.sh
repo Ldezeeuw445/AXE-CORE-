@@ -99,8 +99,8 @@ else
   git log --oneline "$VOOR..$NA" | sed 's/^/    /'
 fi
 
-zeg "Pakketten"
-npm install
+zeg "Pakketten (exact uit package-lock)"
+npm ci --no-audit --no-fund
 
 # ── 2. Oude rommel weg vóór de bouw ──────────────────────────────────────────
 # De tijdelijke images van afgebroken dmg-stappen. Die zijn 40 MB per stuk en
