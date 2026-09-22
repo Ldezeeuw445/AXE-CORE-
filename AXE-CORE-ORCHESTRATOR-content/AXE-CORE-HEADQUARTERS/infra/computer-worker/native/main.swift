@@ -245,7 +245,7 @@ func captureDisplay(index: Int, path: String) throws -> [String: Any] {
         throw ToolError(message: "macOS did not return a display image.")
     }
     let rep = NSBitmapImageRep(cgImage: image)
-    guard let data = rep.representation(using: .png, properties: [:]) else {
+    guard let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.78]) else {
         throw ToolError(message: "Could not encode the display image.")
     }
     try data.write(to: URL(fileURLWithPath: path), options: .atomic)
@@ -262,7 +262,7 @@ func captureDisplay(index: Int, path: String) throws -> [String: Any] {
         "pixel_width": Int(CGDisplayPixelsWide(id)),
         "pixel_height": Int(CGDisplayPixelsHigh(id)),
         "bytes": data.count,
-        "mime": "image/png",
+        "mime": "image/jpeg",
     ]
 }
 
