@@ -18,6 +18,8 @@
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { beschikbaar as tauriBeschikbaar, workerDienstStand, workerDienstHerstart } from '@/infrastructure/gateways/launchdWorkers';
+import { buildStamp } from '@/domain/buildStamp';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
 /**
  * The repo hands out its client through getSupabase(), which returns null when
@@ -262,6 +264,11 @@ export async function dispatchComputerTask(call: ComputerCall): Promise<Computer
         tier: call.tier,
         workspace: call.workspace,
         args: call.args,
+        // A local packaged AXE app and its local launchd worker are one native
+        // runtime contract. The worker fail-closes when these commits differ.
+        // Remote web/phone clients deliberately do not require equality.
+        client_runtime: isTauriRuntime() ? 'tauri' : 'remote',
+        client_build: buildStamp()?.commit ?? null,
       },
     })
     .select('id')
