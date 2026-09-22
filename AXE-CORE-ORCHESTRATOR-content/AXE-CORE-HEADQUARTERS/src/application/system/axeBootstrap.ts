@@ -45,8 +45,9 @@ export async function maybeDailyGreeting(): Promise<void> {
     return;
   }
 
-  // Same provider choice as chat (Settings → Voice) — Fish Audio by default
-  // (no paid ElevenLabs account), straight to browser speech otherwise.
+  // Same canonical identity as every chat reply: OpenAI Cedar through
+  // globalTts. A startup greeting must never resurrect a legacy Fish/browser
+  // voice simply because an old localStorage preference survived an update.
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
