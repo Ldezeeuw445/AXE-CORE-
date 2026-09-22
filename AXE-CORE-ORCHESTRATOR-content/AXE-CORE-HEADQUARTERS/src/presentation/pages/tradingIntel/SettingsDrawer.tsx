@@ -388,6 +388,16 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
             {autopilot?.lastRunAt ? `Last cycle ${new Date(autopilot.lastRunAt).toLocaleString('en-US')}` : 'No cycle run yet.'}
             {autopilot?.lastResult ? ` · ${autopilot.lastResult}` : ''}
           </p>
+          {autopilot && (
+            <p className="text-[10px] mt-1 font-mono-data" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              {`This instance ${autopilot.instance}`}
+              {autopilot.nextDueAt ? ` · next due ${new Date(autopilot.nextDueAt).toLocaleString('en-US')}` : ''}
+              {autopilot.lease
+                ? ` · last claimed by ${autopilot.lease.holder} (lease until ${new Date(autopilot.lease.expiresAt).toLocaleTimeString('en-US')})`
+                : ' · no cross-device lease yet'}
+              {autopilot.lastSkip ? ` · ${autopilot.lastSkip}` : ''}
+            </p>
+          )}
         </WidgetCard>
 
         <WidgetCard title="Trading model">

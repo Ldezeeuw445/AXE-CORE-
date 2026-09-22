@@ -1,0 +1,9 @@
+# Herstart de runner als zijn health-file ouder is dan 5 minuten: een proces
+# dat nog leeft maar niet meer tikt, ziet systemd anders als gezond.
+[Unit]
+Description=AXE CORE desk runner watchdog
+
+[Service]
+Type=oneshot
+Environment=AXE_RUNNER_HEALTH_FILE=/var/lib/axe-desk-runner/health.json
+ExecStart=/bin/sh -c '/usr/bin/node /opt/axe-desk-runner/deskRunner.mjs --check || systemctl restart axe-desk-runner.service'

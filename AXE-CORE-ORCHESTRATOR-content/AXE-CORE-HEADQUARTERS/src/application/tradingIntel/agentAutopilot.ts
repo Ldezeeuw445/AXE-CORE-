@@ -14,6 +14,10 @@
  */
 import { ALL_EVIDENCE, evidencePolicyFor, type EvidencePolicy } from '@/domain/tradingIntel/evidence';
 import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService';
+import { LEASE_TTL_S, cycleSlot } from '@/domain/tradingIntel/autopilotLease';
+import {
+  myHolderId, readAutopilotLease, releaseAutopilotLease, tryAcquireAutopilotLease, type LeaseRow,
+} from '@/infrastructure/persistence/autopilotLeaseStore';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
 import { tradablePairsForAccount } from '@/infrastructure/gateways/metaApiSymbolResolver';
@@ -259,12 +263,22 @@ export interface AutopilotStatus {
   lastRunAt: string | null;
   lastResult: string | null;
   running: boolean;
+  /** Wanneer de volgende cyclus due is (laatste start + interval), of null als hij nooit liep. */
+  nextDueAt: string | null;
+  /** Deze instantie, zoals ze in de lease heet ('desktop:…', 'vps:…'). */
+  instance: string;
+  /** Wie de cyclus het laatst claimde, en tot wanneer; null = geen lease-tabel of nog nooit. */
+  lease: LeaseRow | null;
+  /** Waarom deze instantie de laatste tik niet draaide, als dat zo was. */
+  lastSkip: string | null;
 }
 
 // Re-entrancy guard: a cycle across N watchlist symbols can outlast the
 // 1-minute check interval, and starting a second one on top would double
 // up broker calls and CrewAI runs for the same tick.
 let cycleInFlight = false;
+/** Waarom de laatste tik van déze instantie niets draaide (lease bezet, fout). */
+let lastSkip: string | null = null;
 
 export async function isAutopilotEnabled(): Promise<boolean> {
   return loadSetting(KEY_ENABLED, false);
@@ -294,7 +308,12 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
     loadSetting<string | null>(KEY_LAST_RUN, null),
     loadSetting<string | null>(KEY_LAST_RESULT, null),
   ]);
-  return { enabled, intervalMin, lastRunAt, lastResult, running: cycleInFlight };
+  const lease = await readAutopilotLease().catch(() => null);
+  const nextDueAt = lastRunAt ? new Date(Date.parse(lastRunAt) + intervalMin * 60_000).toISOString() : null;
+  return {
+    enabled, intervalMin, lastRunAt, lastResult, running: cycleInFlight,
+    nextDueAt, instance: myHolderId(), lease, lastSkip,
+  };
 }
 
 /**
@@ -1585,12 +1604,41 @@ export async function maybeRunTradingAutopilot(): Promise<void> {
   const dueAt = last ? Date.parse(last) + intervalMin * 60_000 : 0;
   if (Date.now() < dueAt) return;
 
+  // ÉÉN CYCLUS OVER ALLE APPARATEN. Desktop, Android en de VPS-runner lezen
+  // dezelfde laatste start en zien dezelfde "due"; zonder lease draaiden ze de
+  // cyclus alle drie. De slot is de due-minuut, dus dezelfde cyclus wordt ook
+  // na een crash of herstart nooit twee keer uitgegeven.
+  const slot = cycleSlot(last, intervalMin, Date.now());
+  const claim = await tryAcquireAutopilotLease(slot, LEASE_TTL_S)
+    .catch((e: unknown) => ({ kind: 'error' as const, reason: e instanceof Error ? e.message : String(e) }));
+  if (claim.kind === 'held') {
+    lastSkip = `slot ${slot} held by ${claim.lease.holder} until ${claim.lease.expiresAt}`;
+    return;
+  }
+  if (claim.kind === 'error') {
+    // Niet weten wie de cyclus heeft is geen vrijbrief om hem zelf te draaien.
+    lastSkip = `lease check failed: ${claim.reason}`;
+    console.warn('[autopilot] lease check failed — not running this tick:', claim.reason);
+    return;
+  }
+  lastSkip = claim.kind === 'unavailable' ? claim.reason : null;
+
   cycleInFlight = true;
   cycleStartedAt = Date.now();
+  let failure: string | null = null;
   try {
     await runAutopilotCycle();
+  } catch (e) {
+    failure = e instanceof Error ? e.message : String(e);
+    throw e;
   } finally {
     cycleInFlight = false;
+    if (claim.kind === 'acquired') {
+      await releaseAutopilotLease({
+        slot, startedAt: new Date(cycleStartedAt).toISOString(), finishedAt: new Date().toISOString(),
+        failure, nextDueAt: new Date(Date.now() + intervalMin * 60_000).toISOString(),
+      }).catch(() => { /* de lease verloopt vanzelf */ });
+    }
   }
 }
 
@@ -1633,6 +1681,11 @@ export async function runCycleForAccount(accountId: string): Promise<string> {
   // still a cycle.
   if (cycleInFlight && Date.now() - cycleStartedAt < CYCLE_WATCHDOG_MS) {
     throw new Error('A cycle is already running — wait for it to finish.');
+  }
+  // Een andere instantie (VPS, telefoon) die nu een cyclus draait, telt ook.
+  const held = await readAutopilotLease().catch(() => null);
+  if (held && held.holder !== myHolderId() && Date.parse(held.expiresAt) > Date.now()) {
+    throw new Error(`A cycle is running on ${held.holder} until ${held.expiresAt} — wait for it to finish.`);
   }
   cycleInFlight = true;
   cycleStartedAt = Date.now();

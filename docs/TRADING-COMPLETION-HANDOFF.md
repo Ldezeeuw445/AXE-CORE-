@@ -34,7 +34,7 @@ here.
 | 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ✅ done | see `git log` |
 | 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ✅ done | see `git log` |
 | 12 | Remote read-only cockpit backend (`/trading/*`) | ⏳ not started | |
-| 24/7 | Server-side scheduler (Tauri not required), lock, watchdog | ⏳ not started | |
+| 24/7 | Cross-device lease + idempotent slots; headless VPS runner of the same cycle; watchdog | ✅ built, **not deployed** (needs migration + VPS secret) | see `git log` |
 | Event impact | `gebeurtenisImpact` measured by the desk heartbeat → desk facts → AXE Algo context + trace | ✅ done | see `git log` |
 
 Verification at the last checkpoint: `npx tsc --noEmit` clean · `npx vitest run`
@@ -321,6 +321,43 @@ absent from the production bundle — checked with grep on `dist/`):
   on EURUSD h1 trend-follow → WAIT, conf 35 % / floor 58 %, gates account/
   breaker/dayLimit PASS, rendered in the card.
 
+### 24/7 — lease, idempotency, headless runner
+- **Problem found:** the only guard was the in-process `cycleInFlight` flag.
+  Desktop, the Android build and any second window read the same
+  `axe_trading_autopilot_last_run` and could run the same cycle at once.
+- `supabase/migrations/20260922120000_trading_autopilot_lease.sql` — table
+  `core_autopilot_lease` + RPC `try_autopilot_lease` (one atomic
+  `INSERT … ON CONFLICT … WHERE`). Slot = due minute (last start + interval);
+  a slot is never issued twice, even after release/crash; TTL 25 min (> the
+  20-min cycle watchdog). RLS: only Luka's uid; anon has no execute.
+  **Executed on a real Postgres (pgserver)**: 8 lease scenarios + RLS (Luka ok,
+  other uid refused by policy, anon denied).
+- `domain/tradingIntel/autopilotLease.ts` (`cycleSlot`, `LEASE_TTL_S`),
+  `infrastructure/persistence/autopilotLeaseStore.ts` (claim/release/read,
+  holder `desktop|android|browser|vps:<instance>`).
+- `agentAutopilot.maybeRunTradingAutopilot`: due → claim slot → run → release
+  with status {slot, startedAt, finishedAt, failure, nextDueAt}. Held by
+  another → skip; lease check error → skip (never run blind); table missing →
+  run as before with the warning in status (so merging this does not stop the
+  desktop desk before the migration is applied). Manual per-account run refuses
+  while another instance holds the lease. `getAutopilotStatus` adds
+  `nextDueAt`, `instance`, `lease`, `lastSkip`; shown in Settings → Autopilot.
+- `src/app/deskRunner.ts` + `vite.runner.config.ts` (`npm run build:runner` →
+  `dist-runner/deskRunner.mjs`, one 1.1 MB file, no node_modules). Calls the
+  SAME `maybeRunTradingAutopilot`; `installServerIdentity` (service role, bound
+  to the desk uid, refuses in a browser); file-backed localStorage; JSON logs;
+  health file; `--check` for the watchdog; `AXE_RUNNER_DRY=1` claims nothing.
+- `infra/axe-desk-runner/` — systemd service (Restart=always, hardened),
+  watchdog service+timer (restart when health > 5 min old), runbook README.
+- Tests: `autopilotLease.test.ts` (9): slot maths, held → no cycle, error → no
+  cycle, acquired → cycle + release with slot, missing table → runs + warns,
+  not due → no claim.
+- Runtime: runner refuses without identity (exit 2); `--check` exit 1 with no
+  health, 0 after a tick; dry `--once` tick logged (with a deliberately wrong
+  key — no real secret was used, so settings read as defaults). Bundle holds one
+  JWT, role `anon`. Production Supabase answers PGRST202/PGRST205 for the
+  missing function/table → detected as "not migrated".
+
 ## Behaviour changes that need your approval before production / live
 
 1. **Position sizes change.** Risk % now means money at the stop via the broker's
@@ -336,6 +373,11 @@ absent from the production bundle — checked with grep on `dist/`):
    "live or funded" in the Accounts tab, or they count as demo evidence.
 6. **Backend deploy** of the Phase 0A crew fix to the VPS (not done).
 7. **Desktop build/install** (`npm run tauri:build`) — not run yet in this work.
+8. **Apply migration `20260922120000_trading_autopilot_lease.sql`** (new table +
+   RPC). Until then the desk runs as before, with a status warning.
+9. **VPS runner**: put the service-role key in `/etc/axe-desk-runner.env`, run
+   dry first, then enable (see `infra/axe-desk-runner/README.md`). Decide
+   whether the desk heartbeat moves to the VPS (then switch it off in the app).
 
 ---
 
@@ -344,10 +386,6 @@ absent from the production bundle — checked with grep on `dist/`):
 - **Phase 12** — authenticated read-only `/trading/*` routes in
   `backend/axe_api/main.py` (accounts, risk, positions, decisions, crew, P&L,
   evidence). Never return MetaAPI tokens.
-- **24/7** — the loop is `setInterval` in `axeBootstrap.ts` →
-  `maybeRunTradingAutopilot()` (`agentAutopilot.ts`). Needs a VPS-side runner of
-  the SAME cycle (not a second engine), a distributed lock, watchdog, idempotency,
-  status (last/next cycle, failure reason).
 
 ---
 

@@ -1,0 +1,29 @@
+# AXE CORE — headless trading-cyclus op de VPS (src/app/deskRunner.ts).
+# Dezelfde maybeRunTradingAutopilot als de app; de Supabase-lease voorkomt dat
+# hij tegelijk met de desktop of de telefoon dezelfde cyclus draait.
+[Unit]
+Description=AXE CORE desk runner (trading autopilot, headless)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=axe-desk
+Group=axe-desk
+WorkingDirectory=/opt/axe-desk-runner
+# AXE_SUPABASE_SERVICE_ROLE_KEY, AXE_RUNNER_USER_ID, optioneel AXE_RUNNER_DRY=1 / AXE_RUNNER_HEARTBEAT=1.
+# Alleen root en axe-desk mogen dit bestand lezen (chmod 600).
+EnvironmentFile=/etc/axe-desk-runner.env
+Environment=AXE_RUNNER_STATE_FILE=/var/lib/axe-desk-runner/state.json
+Environment=AXE_RUNNER_HEALTH_FILE=/var/lib/axe-desk-runner/health.json
+ExecStart=/usr/bin/node /opt/axe-desk-runner/deskRunner.mjs
+Restart=always
+RestartSec=15
+StateDirectory=axe-desk-runner
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
