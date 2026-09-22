@@ -253,6 +253,9 @@ function onthoudKoeling(motor:string,tot:number):void{
       // aan hebt. Een geweigerde sleutel zag er zo hetzelfde uit als een
       // platte server.
       const body=await pr.json().catch(()=>({}));
+      if(slot.provider==='cerebras'&&pr.status===402){
+        throw new Error('Cerebras HTTP 402 (payment required): the model is valid, but this account/key has no usable inference credit. Check Cerebras Billing / free-trial balance or add funds.');
+      }
       throw new Error(proxyErrorMessage(body,pr.status));
     }
     // Ollama replies as a plain-text stream on Vercel (25s cold-start cap);
