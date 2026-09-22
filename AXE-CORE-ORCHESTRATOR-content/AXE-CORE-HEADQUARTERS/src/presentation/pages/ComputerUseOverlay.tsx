@@ -152,7 +152,16 @@ export default function ComputerUseOverlay() {
     const task = value.trim();
     if (!task || busy) return;
     setText('');
-    await voice.sendMessage(`Use Personal Computer Use on my selected Mac for this task: ${task}`);
+    // This surface is explicitly for machine actions. Give this one turn the
+    // structured/native tool loop even when Luka keeps ordinary chat on the
+    // legacy marker route; clear it immediately afterwards so the preference
+    // never leaks into unrelated conversations.
+    try { localStorage.setItem('axe_native_tools_once', '1'); } catch { /* private mode */ }
+    try {
+      await voice.sendMessage(`Use Personal Computer Use on my selected Mac for this task: ${task}`);
+    } finally {
+      try { localStorage.removeItem('axe_native_tools_once'); } catch { /* private mode */ }
+    }
   }
 
   return (
