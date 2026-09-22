@@ -131,13 +131,14 @@ export async function speakWithFishAudio(
     // one-time source and analyser.
     try {
       fishAudioContext ??= new AudioContext();
-      if (!fishSource) fishSource = fishAudioContext.createMediaElementSource(audio);
-      fishAnalyser ??= fishAudioContext.createAnalyser();
-      fishAnalyser.fftSize = 512;
-      fishLevelData ??= new Uint8Array(fishAnalyser.fftSize);
-      try { fishSource.disconnect(); } catch { /* noop */ }
-      fishSource.connect(fishAnalyser);
-      fishAnalyser.connect(fishAudioContext.destination);
+      if (!fishSource) {
+        fishSource = fishAudioContext.createMediaElementSource(audio);
+        fishAnalyser = fishAudioContext.createAnalyser();
+        fishAnalyser.fftSize = 512;
+        fishLevelData = new Uint8Array(fishAnalyser.fftSize);
+        fishSource.connect(fishAnalyser);
+        fishAnalyser.connect(fishAudioContext.destination);
+      }
     } catch {
       fishAnalyser = null;
       fishLevelData = null;
