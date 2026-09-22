@@ -130,6 +130,7 @@ export function AxeComposerVak({
     '--axe-voice-alpha': Math.min(0.78, presence.mix * 0.78).toFixed(3),
     '--axe-voice-alpha-soft': Math.min(0.39, presence.mix * 0.39).toFixed(3),
     '--axe-voice-spread': `${Math.round(12 + presence.mix * 34)}px`,
+    '--axe-voice-spread-soft': `${Math.round(18 + presence.mix * 48)}px`,
   } as CSSProperties;
 
   return (
