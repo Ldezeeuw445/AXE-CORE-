@@ -67,11 +67,40 @@ func mouseEvent(_ type: CGEventType, point: CGPoint, button: CGMouseButton = .le
     event.post(tap: .cghidEventTap)
 }
 
-func point(_ args: [String: Any]) throws -> CGPoint {
-    guard let x = args["x"] as? NSNumber, let y = args["y"] as? NSNumber else {
-        throw ToolError(message: "x and y are required.")
+func imagePointToGlobal(displayIndex: Int, imageX: Double, imageY: Double) throws -> CGPoint {
+    let ids = activeDisplays()
+    guard ids.indices.contains(displayIndex) else {
+        throw ToolError(message: "No display at index \(displayIndex).")
     }
-    return CGPoint(x: x.doubleValue, y: y.doubleValue)
+    let id = ids[displayIndex]
+    let bounds = CGDisplayBounds(id)
+    let pixelW = Double(CGDisplayPixelsWide(id))
+    let pixelH = Double(CGDisplayPixelsHigh(id))
+    guard pixelW > 0, pixelH > 0 else {
+        throw ToolError(message: "Display pixel geometry is unavailable.")
+    }
+    // CGDisplayCreateImage produces physical pixels while CGEvent consumes the
+    // global Quartz coordinate space in logical points. Keep this conversion in
+    // exactly one place so Retina and multi-monitor origins cannot drift.
+    return CGPoint(
+        x: bounds.origin.x + CGFloat(imageX / pixelW) * bounds.width,
+        y: bounds.origin.y + CGFloat(imageY / pixelH) * bounds.height
+    )
+}
+
+func point(_ args: [String: Any], prefix: String = "") throws -> CGPoint {
+    if let x = args["\(prefix)x"] as? NSNumber, let y = args["\(prefix)y"] as? NSNumber {
+        return CGPoint(x: x.doubleValue, y: y.doubleValue)
+    }
+
+    let imageXKey = "\(prefix)image_x"
+    let imageYKey = "\(prefix)image_y"
+    if let x = args[imageXKey] as? NSNumber, let y = args[imageYKey] as? NSNumber {
+        let displayIndex = (args["display_index"] as? NSNumber)?.intValue ?? 0
+        return try imagePointToGlobal(displayIndex: displayIndex, imageX: x.doubleValue, imageY: y.doubleValue)
+    }
+
+    throw ToolError(message: "\(prefix)x/\(prefix)y or \(prefix)image_x/\(prefix)image_y are required.")
 }
 
 func keyCode(_ name: String) -> CGKeyCode? {
@@ -220,11 +249,18 @@ func captureDisplay(index: Int, path: String) throws -> [String: Any] {
         throw ToolError(message: "Could not encode the display image.")
     }
     try data.write(to: URL(fileURLWithPath: path), options: .atomic)
+    let bounds = CGDisplayBounds(id)
     return [
         "path": path,
         "display_index": index,
         "width": image.width,
         "height": image.height,
+        "logical_x": Double(bounds.origin.x),
+        "logical_y": Double(bounds.origin.y),
+        "logical_width": Double(bounds.width),
+        "logical_height": Double(bounds.height),
+        "pixel_width": Int(CGDisplayPixelsWide(id)),
+        "pixel_height": Int(CGDisplayPixelsHigh(id)),
         "bytes": data.count,
         "mime": "image/png",
     ]
@@ -279,12 +315,8 @@ func execute(_ command: String, _ args: [String: Any]) throws -> Any {
         return ["x": Double(p.x), "y": Double(p.y), "clicks": clicks, "button": button == .right ? "right" : "left"]
     case "pointer.drag":
         try requireAccessibility()
-        guard let fx = args["from_x"] as? NSNumber, let fy = args["from_y"] as? NSNumber,
-              let tx = args["to_x"] as? NSNumber, let ty = args["to_y"] as? NSNumber else {
-            throw ToolError(message: "from_x, from_y, to_x and to_y are required.")
-        }
-        let a = CGPoint(x: fx.doubleValue, y: fy.doubleValue)
-        let b = CGPoint(x: tx.doubleValue, y: ty.doubleValue)
+        let a = try point(args, prefix: "from_")
+        let b = try point(args, prefix: "to_")
         try mouseEvent(.mouseMoved, point: a)
         try mouseEvent(.leftMouseDown, point: a)
         for i in 1...12 {
