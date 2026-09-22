@@ -16,7 +16,9 @@
  */
 import type { RiskProfile } from '@/domain/tradingIntel/botTypes';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
-import { loadBacktestSeries } from '@/application/tradingIntel/backtestEngine';
+import { buildSeriesFromCandles, loadBacktestSeries } from '@/application/tradingIntel/backtestEngine';
+import { getHistory } from '@/application/tradingIntel/historyService';
+import { barMs } from '@/domain/tradingIntel/candleCache';
 import {
   simulateAccount,
   type LabBar,
@@ -63,6 +65,8 @@ export interface StrategyLabInput {
   profileLabel?: string | null;
   /** Probeer de specificatie van de broker (standaard ja). */
   useBrokerSpec?: boolean;
+  /** Lees uit de candle-cache (standaard ja). */
+  useCache?: boolean;
 }
 
 export interface LabMeta {
@@ -81,6 +85,8 @@ export interface LabMeta {
   costs: LabCosts;
   stop: { atrMultiple: number; rewardRisk: number | null };
   profileLabel: string | null;
+  /** Hoe diep de gebruikte geschiedenis werkelijk is, en of ze uit de cache kwam. */
+  history: string | null;
   sample: number;
   warnings: string[];
   ranAt: string;
@@ -103,10 +109,38 @@ async function highImpactDaysFor(symbol: string): Promise<Set<string> | null> {
   return new Set(events.filter(e => isHighImpact(e.name)).map(e => e.date));
 }
 
+/**
+ * Candles voor de lab: eerst de cache (historyService), die alleen het
+ * ontbrekende bij MetaAPI ophaalt — met From/To zo ver terug als MetaAPI gaat.
+ * Lukt dat niet (geen MT5 verbonden, broker kent het symbool niet), dan de oude
+ * route via loadBacktestSeries met de TwelveData-terugval.
+ */
+async function loadLabSeries(input: StrategyLabInput & { limit: number }): Promise<
+  | { ok: true; candles: Array<{ time: string; open: number; high: number; low: number; close: number; volume?: number }>; series: ReturnType<typeof buildSeriesFromCandles>; source: 'metaapi' | 'twelvedata'; depth: string | null }
+  | { ok: false; error: string }
+> {
+  if (input.useCache !== false) {
+    // Opwarmen: 60 bars vóór From meenemen, zodat de eerste bar in de periode een signaal kan hebben.
+    const warmFrom = input.from ? new Date(Date.parse(input.from) - 60 * barMs(input.timeframe)).toISOString() : null;
+    const hist = await getHistory({ symbol: input.symbol, timeframe: input.timeframe, from: warmFrom, to: input.to ?? null, minBars: input.limit });
+    if (hist.ok && hist.candles.length >= 60) {
+      const candles = input.from ? hist.candles : hist.candles.slice(-input.limit);
+      const c = hist.coverage;
+      return {
+        ok: true, candles, series: buildSeriesFromCandles(candles), source: 'metaapi',
+        depth: `${c.provider} ${c.timeframe}: ${c.count} bars cached, ${c.from?.slice(0, 10)} → ${c.to?.slice(0, 10)}${c.exhaustedBefore ? ' (all the provider has)' : ''}${hist.fromCache ? ' · from cache' : ` · ${hist.pagesFetched} page(s) fetched`}`,
+      };
+    }
+  }
+  const loaded = await loadBacktestSeries(input.symbol, input.timeframe, input.limit);
+  if (!loaded.ok) return loaded;
+  return { ok: true, candles: loaded.candles, series: loaded.series, source: loaded.source, depth: null };
+}
+
 export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: true; result: StrategyLabResult } | { ok: false; error: string }> {
   const symbol = input.symbol.trim().toUpperCase();
   const limit = Math.min(Math.max(input.limit, 100), 20_000);
-  const loaded = await loadBacktestSeries(symbol, input.timeframe, limit);
+  const loaded = await loadLabSeries({ ...input, symbol, limit });
   if (!loaded.ok) return { ok: false, error: loaded.error };
 
   // From/To: alleen bars binnen de periode, maar de signalen blijven op de hele
@@ -197,6 +231,7 @@ export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: tru
         costs: input.costs,
         stop: { atrMultiple: input.atrMultiple ?? 1.5, rewardRisk: input.rewardRisk === undefined ? 1.5 : input.rewardRisk },
         profileLabel: input.profileLabel ?? (input.profile ? input.profile.mode : null),
+        history: loaded.depth,
         sample: run.metrics.totalTrades,
         warnings,
         ranAt: new Date().toISOString(),

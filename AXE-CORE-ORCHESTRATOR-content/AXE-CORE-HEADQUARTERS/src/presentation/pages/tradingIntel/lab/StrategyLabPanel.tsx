@@ -227,6 +227,7 @@ export function StrategyLabPanel({ symbol, timeframe, limit, strategy }: {
             {' · '}stop {view.meta.stop.atrMultiple}×ATR, target {view.meta.stop.rewardRisk ?? 'none'}R
             {' · '}spread {view.meta.costs.spread} · commission {view.meta.costs.commissionPerLot}/lot/side · slippage {view.meta.costs.slippage}
             {view.meta.profileLabel ? ` · ${view.meta.profileLabel}` : ''}
+            {view.meta.history ? <><br />History: {view.meta.history}</> : null}
           </p>
           {Object.keys(view.metrics.blockedByRule).length > 0 && (
             <p className="text-[10px]" style={DIM}>

@@ -99,16 +99,25 @@ export async function loadBacktestSeries(
       };
     }
   }
+  return { ok: true, candles, series: buildSeriesFromCandles(candles), source };
+}
+
+/**
+ * De StrategySeries die strategySignals leest, uit candles — één definitie
+ * voor de signaaltest, de zelftest en de Strategy Lab (die uit de cache leest).
+ */
+export function buildSeriesFromCandles(
+  candles: ReadonlyArray<{ time: string; open: number; high: number; low: number; close: number; tickVolume?: number; volume?: number }>,
+): StrategySeries {
   const closes = candles.map(c => c.close);
   // volumetric-ob needs real volume — MetaAPI candles carry tickVolume/volume,
   // TwelveData's fallback always has a `volume` field (often 0 for FX, which
   // the strategy's own averaging naturally treats as "no signal" rather than
   // a fabricated one). Only attach the series when every bar actually has a
   // value at all.
-  const volumeOf = (c: (typeof candles)[number]): number | undefined =>
-    'tickVolume' in c ? (c.tickVolume ?? c.volume) : c.volume;
+  const volumeOf = (c: (typeof candles)[number]): number | undefined => c.tickVolume ?? c.volume;
   const volumes = candles.every(c => volumeOf(c) != null) ? candles.map(c => volumeOf(c) as number) : undefined;
-  const series: StrategySeries = {
+  return {
     closes,
     highs: candles.map(c => c.high),
     lows: candles.map(c => c.low),
@@ -119,7 +128,6 @@ export async function loadBacktestSeries(
     sma50: smaSeries(closes, 50),
     rsi14: rsiSeries(closes, 14),
   };
-  return { ok: true, candles, series, source };
 }
 
 /**
