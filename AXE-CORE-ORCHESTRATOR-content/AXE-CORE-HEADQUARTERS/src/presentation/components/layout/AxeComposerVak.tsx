@@ -30,7 +30,8 @@ import { useEffect, useRef, type ReactNode, type KeyboardEvent } from 'react';
 import { BorderBeam } from 'border-beam';
 import { VoiceBeam, useMicrophone } from 'voice-glow';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { getAxeTtsLevel } from '@/infrastructure/gateways/openAiTtsService';
+import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
+import { useAudioActivity } from '@/presentation/hooks/useAudioActivity';
 import { ComposerSnelacties } from './ComposerSnelacties';
 import type { Snelactie } from '@/domain/snelacties';
 
@@ -74,7 +75,11 @@ export function AxeComposerVak({
   const veld = useRef<HTMLTextAreaElement>(null);
   const status = useVoiceStore(s => s.voiceStatus);
   const mic = useMicrophone({ autoStart: false });
-  const speaking = status === 'listening' || status === 'speaking';
+  const voiceChannelOpen = status === 'listening' || status === 'speaking';
+  const presence = useAudioActivity(
+    status === 'listening' ? mic.stream : null,
+    status === 'speaking' ? getGlobalTtsLevel : undefined,
+  );
 
   // SpeechRecognition owns transcription; VoiceBeam only borrows a raw stream
   // while Luka is speaking so the visual follows the real microphone dynamics.
@@ -97,16 +102,22 @@ export function AxeComposerVak({
     <div className="axe-composer axe-vakcomposer flex-shrink-0" data-axe-doel="axe-composer">
       {kop && <div className="axe-vak-kop">{kop}</div>}
 
-      {/* Altijd aan, zacht in rust en voller zodra AXE werkt. Stond op
-          active={bezig}: dan bewoog hij alleen tijdens een antwoord, en in rust
-          was er niets van te zien -- terwijl Luka hem juist rustig zichtbaar
-          wilde (16 september). */}
-      <BorderBeam size="pulse-outside" colorVariant="colorful" strength={speaking ? 0 : 0.75} active={!speaking}>
+      {/* Locked presence contract:
+          idle/silent mic = existing colorful outside pulse;
+          actual microphone/TTS energy = smoothly yield to VoiceBeam;
+          silence = release back to the colorful pulse.
+          The crossfade is driven by measured RMS, never by a listening boolean. */}
+      <BorderBeam
+        size="pulse-outside"
+        colorVariant="colorful"
+        strength={0.75 * (1 - presence.mix)}
+        active
+      >
       <VoiceBeam
         stream={status === 'listening' ? mic.stream : null}
-        level={status === 'speaking' ? getAxeTtsLevel : 0}
+        level={status === 'speaking' ? getGlobalTtsLevel : 0}
         idle={0}
-        active={speaking}
+        active={voiceChannelOpen || presence.mix > 0.01}
         attack={0.12}
         release={0.72}
         colorVariant="colorful"
