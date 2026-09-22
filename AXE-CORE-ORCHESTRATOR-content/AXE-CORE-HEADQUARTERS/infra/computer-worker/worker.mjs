@@ -448,6 +448,20 @@ const git = (root, ...a) => run('git', a, root);
 async function execute(payload) {
   const { tool, workspace, args = {} } = payload;
 
+  // A packaged AXE CORE and its local launchd worker are one runtime. Refuse a
+  // mixed-generation local pair instead of letting an old UI talk confidently
+  // to a newer worker (or vice versa). Remote phone/web clients are allowed to
+  // differ because they intentionally control this Mac across deployments.
+  if (payload.client_runtime === 'tauri' && tool !== 'system.info') {
+    const appBuild = String(payload.client_build ?? '').trim();
+    const workerBuild = (await git(REPO, 'rev-parse', '--short', 'HEAD')).trim();
+    if (appBuild && appBuild !== 'unknown' && workerBuild && appBuild !== workerBuild) {
+      throw new Error(
+        `AXE native runtime mismatch: app=${appBuild}, computer-worker=${workerBuild}. Run 'npm run bijwerken' from orchestrator; no computer action was executed.`,
+      );
+    }
+  }
+
   // Device-scoped Personal Computer Use never inherits git/worktree branch
   // semantics. Those protections remain mandatory for repo tools below.
   if (tool === 'computer.permissions') return JSON.stringify(await nativeComputerUse('permissions.status', args));
