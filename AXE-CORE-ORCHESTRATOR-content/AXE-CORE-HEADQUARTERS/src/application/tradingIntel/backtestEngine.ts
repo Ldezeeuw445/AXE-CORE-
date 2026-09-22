@@ -10,7 +10,7 @@
  */
 import { metaApiGetHistoricalCandles, metaApiGetHistoricalCandlesPaged, type MetaApiCandle } from '@/infrastructure/gateways/metaApiMarketData';
 import { fetchHistoricalCandles } from '@/infrastructure/gateways/axeCoreApiService';
-import { smaSeries, rsiSeries } from '@/presentation/components/trading/companion/indicatorMath';
+import { smaSeries, rsiSeries } from '@/domain/tradingIntel/indicatorMath';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries, type StrategySignal } from '@/application/tradingIntel/strategySignals';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 

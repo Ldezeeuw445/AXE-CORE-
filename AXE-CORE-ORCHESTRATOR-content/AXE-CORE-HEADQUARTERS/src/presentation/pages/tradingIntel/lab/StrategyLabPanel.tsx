@@ -18,6 +18,7 @@ import {
 import { AccountRulesFields } from '../AccountRulesFields';
 import { LabEquityChart } from './LabEquityChart';
 import { LabTradeTable } from './LabTradeTable';
+import { LabReplay } from './LabReplay';
 
 const INPUT = 'rounded px-2 py-1.5 text-[12px] w-full';
 const INPUT_STYLE = { background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
@@ -65,6 +66,7 @@ export function StrategyLabPanel({ symbol, timeframe, limit, strategy }: {
   const [result, setResult] = useState<StrategyLabResult | SavedLabRun | null>(null);
   const [saved, setSaved] = useState<SavedLabRun[]>([]);
   const [note, setNote] = useState('');
+  const [replayOpen, setReplayOpen] = useState(false);
 
   useEffect(() => {
     void getAccounts().then(s => setAccounts(s.accounts)).catch(() => undefined);
@@ -238,6 +240,25 @@ export function StrategyLabPanel({ symbol, timeframe, limit, strategy }: {
             <ul className="text-[10px] space-y-0.5" style={{ color: '#fcd34d' }}>
               {view.meta.warnings.map(w => <li key={w}>⚠ {w}</li>)}
             </ul>
+          )}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setReplayOpen(o => !o)} className="px-3 py-1.5 rounded text-[11px]"
+              style={{ border: '1px solid rgba(167,139,250,0.3)', color: '#c4b5fd' }}>
+              {replayOpen ? 'Hide replay' : 'Replay this run on the chart'}
+            </button>
+            <span className="text-[10px]" style={DIM}>Step bar by bar; indicators only ever see the bars up to the cursor.</span>
+          </div>
+          {replayOpen && (
+            <LabReplay
+              symbol={view.meta.symbol}
+              timeframe={view.meta.timeframe}
+              from={view.meta.from}
+              to={view.meta.to}
+              strategy={view.meta.strategyLabel.startsWith('combo') ? null : view.meta.strategyLabel}
+              trades={view.trades}
+              equity={view.equity}
+              onClose={() => setReplayOpen(false)}
+            />
           )}
           <LabTradeTable trades={view.trades} currency={view.meta.pnlCurrency} />
           {'run' in (result as object) && (

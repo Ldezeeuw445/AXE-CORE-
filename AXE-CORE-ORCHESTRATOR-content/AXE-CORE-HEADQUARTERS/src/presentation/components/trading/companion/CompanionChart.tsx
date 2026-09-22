@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Palette, Sliders, Zap, Crosshair, Star } from "lucide-react";
 import { toast } from "sonner";
-import { ChartCanvas, type ChartCanvasHandle } from "./ChartCanvas";
+import { ChartCanvas, type ChartCanvasHandle, type ChartTradeMarker } from "./ChartCanvas";
 import { ChartIndicatorLayer } from "./ChartIndicatorLayer";
 import { IndicatorPane } from "./IndicatorPane";
 import { ChartToolsDrawer, DEFAULT_CHART_TOOLS_STATE, type ChartToolsState } from "./ChartToolsDrawer";
@@ -47,6 +47,12 @@ type Props = {
   onIndicators?: (snap: IndicatorSnapshot) => void;
   /** Star button — opens the strategies/most-profitable-setups picker. */
   onOpenStrategies?: () => void;
+  /**
+   * Replay: de grafiek toont precies deze candles (bars 0..cursor, zie
+   * domain/tradingIntel/replay) met deze posities en pijlen. Laden, live pollen
+   * en orders plaatsen staan dan uit — een replay is alleen-lezen.
+   */
+  replay?: { candles: MetaApiCandle[]; overlays: ChartOverlayRow[]; markers: ChartTradeMarker[] };
 };
 
 const TFS = ["m5", "m15", "h1", "h4", "d1"] as const;
@@ -58,7 +64,7 @@ const PAIRS = [
  *  matching MT5 (and Companion) rather than forcing one to always be visible. */
 type ExecutionMode = "market" | "limit" | null;
 
-export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies }: Props) {
+export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies, replay }: Props) {
   // Renaming the prop rather than threading a second variable through: every
   // existing `symbol` read -- broker symbol, digits, ticket, annotations, all
   // 38 of them -- then follows the picker. A chart showing one pair while the
@@ -101,8 +107,11 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
   const [tick, setTick] = useState<{ mid: number | null; bid: number | null; ask: number | null }>({ mid: null, bid: null, ask: null });
   const lastPrice = tick.mid ?? lastCandle?.close ?? null;
 
-  // Initial (and symbol/tf-change) candle load.
+  // Initial (and symbol/tf-change) candle load. Niet in replay: dan komen de
+  // candles van de replay en zou een eigen lading ze overschrijven.
+  const replayMode = replay != null;
   useEffect(() => {
+    if (replayMode) return;
     let cancelled = false;
     setLoadStatus("Loading candles…");
     void (async () => {
@@ -125,10 +134,28 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
     return () => {
       cancelled = true;
     };
-  }, [symbol, tf]);
+  }, [symbol, tf, replayMode]);
+
+  // Replay: de getoonde candles zijn precies die van de replay (bars 0..cursor).
+  // Eén bar vooruit = de nieuwe bar toevoegen (zoom blijft staan); elke andere
+  // sprong (terug, scrubben) = de data vervangen. Geen eigen state: de replay is
+  // de bron, en alles wat indicatoren tekent leest shownCandles.
+  const replayCandles = replay?.candles;
+  const shownCandles = replayCandles ?? candles;
+  const replayPrevRef = useRef<{ len: number; last: string | null }>({ len: 0, last: null });
+  useEffect(() => {
+    if (!replayCandles) return;
+    const prev = replayPrevRef.current;
+    const lastC = replayCandles[replayCandles.length - 1] ?? null;
+    const oneForward = prev.len > 0 && replayCandles.length === prev.len + 1
+      && replayCandles[prev.len - 1]?.time === prev.last;
+    replayPrevRef.current = { len: replayCandles.length, last: lastC?.time ?? null };
+    if (oneForward && lastC) canvasRef.current?.updateLastCandle(lastC);
+    else canvasRef.current?.replaceData(replayCandles);
+  }, [replayCandles]);
 
   const { status: liveStatus, reason: liveReason } = useLiveChartPolling({
-    enabled: true,
+    enabled: !replayMode,
     displaySymbol: symbol,
     brokerSymbol,
     timeframeKey: tf,
@@ -151,15 +178,15 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
 
   const bars: Bar[] = useMemo(
     () =>
-      candles
+      shownCandles
         .map((c) => ({ time: Math.floor(Date.parse(c.time) / 1000), open: c.open, high: c.high, low: c.low, close: c.close }))
         .filter((b) => Number.isFinite(b.time) && b.time > 0)
         .sort((a, b) => a.time - b.time),
-    [candles],
+    [shownCandles],
   );
   const smc = useMemo(() => detectAllSmc(bars), [bars]);
   useEffect(() => {
-    if (!onIndicators || !bars.length) return;
+    if (replayMode || !onIndicators || !bars.length) return;
     const ohlc = bars.map((b) => ({ t: b.time * 1000, o: b.open, h: b.high, l: b.low, c: b.close }));
     const closes = bars.map((b) => b.close);
     const last = closes[closes.length - 1] ?? 0;
@@ -186,7 +213,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
       bars: bars.length,
       lastVolume: candles[candles.length - 1]?.tickVolume ?? candles[candles.length - 1]?.volume ?? null,
     });
-  }, [bars, smc, symbol, tf, onIndicators]);
+  }, [bars, smc, symbol, tf, onIndicators, replayMode]);
 
   useEffect(() => {
     setAnnotations(loadAnnotations(symbol, tf));
@@ -555,16 +582,17 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
       <div className="relative flex-1 min-h-[200px] lg:min-h-[420px]">
         <ChartCanvas
           ref={canvasRef}
-          candles={candles}
+          candles={shownCandles}
           reloadKey={reloadKey}
-          overlays={overlays}
-          pendingOrders={pendingOrders}
+          overlays={replay ? replay.overlays : overlays}
+          pendingOrders={replay ? [] : pendingOrders}
+          markers={replay?.markers}
           symbol={symbol}
           themeKey={themeKey}
           drawingMode={toolsState.drawingMode}
           onPointClick={handlePointClick}
         />
-        <ChartIndicatorLayer candles={candles} canvasRef={canvasRef} active={toolsState.active} isDark={isDark} />
+        <ChartIndicatorLayer candles={shownCandles} canvasRef={canvasRef} active={toolsState.active} isDark={isDark} />
         <div className="pointer-events-none absolute inset-0 z-[25]">
           <FibAnnotationLayer
             annotations={annotations}
@@ -777,21 +805,21 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
 
       {toolsState.panes.includes("vol") ? (
         <ResizablePane id="vol">
-          <IndicatorPane mode="volume" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+          <IndicatorPane mode="volume" candles={shownCandles} canvasRef={canvasRef} isDark={isDark} />
         </ResizablePane>
       ) : null}
       {toolsState.panes.includes("rsi") ? (
         <ResizablePane id="rsi">
-          <IndicatorPane mode="rsi" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+          <IndicatorPane mode="rsi" candles={shownCandles} canvasRef={canvasRef} isDark={isDark} />
         </ResizablePane>
       ) : null}
       {toolsState.panes.includes("macd") ? (
         <ResizablePane id="macd">
-          <IndicatorPane mode="macd" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+          <IndicatorPane mode="macd" candles={shownCandles} canvasRef={canvasRef} isDark={isDark} />
         </ResizablePane>
       ) : null}
 
-      {executionMode === null ? null : executionMode === "market" ? (
+      {replayMode || executionMode === null ? null : executionMode === "market" ? (
         <ChartExecutionBar
           symbol={symbol}
           bid={tick.bid ?? lastPrice}
