@@ -46,3 +46,16 @@ Deno.test("STRATO notifications are recognized", () => {
   assert(isStratoNotification("ai-voicereceptionist.com", "x"));
   assert(isStratoNotification("other.test", "Nieuwe oproep van +31"));
 });
+
+
+Deno.test("reply-thread role hint keeps terse supplier replies actionable without overriding explicit text", () => {
+  const terse = intel("Re: Copper qualification", "Please find the requested documents attached.", "supplier.test", "supplier");
+  assertEquals([terse.classification, terse.safe], ["supplier", true]);
+  assert(draftText(terse, "sales@supplier.test", "Re: Copper qualification"));
+
+  const explicitBuyer = intel("Re: Copper qualification", "We require 100 MT copper cathode CIF Rotterdam, payment LC.", "supplier.test", "supplier");
+  assertEquals(explicitBuyer.classification, "buyer");
+
+  const unrelated = intel("Newsletter", "Here is our monthly update.", "supplier.test");
+  assertEquals(unrelated.classification, "unknown");
+});
