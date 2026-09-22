@@ -18,7 +18,7 @@
  * demoTradingService.executeDemoTrade on every realized close, so it
  * actually runs now.
  */
-import { closeTradingEpisodeForTrade } from '@/infrastructure/persistence/agentFeedbackService';
+import { closeDeskEpisodesForTrade, closeTradingEpisodeForTrade } from '@/infrastructure/persistence/agentFeedbackService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { AgentLearningStats, LearningOutcome, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
 import { rememberLesson } from '@/infrastructure/persistence/tradingAgentMemoryService';
@@ -26,6 +26,7 @@ import { recordOutcome } from '@/infrastructure/persistence/tradingAgentBrain';
 import { writeTradeNote } from '@/infrastructure/persistence/tradeNotesService';
 import { recordLedgerTrade } from '@/infrastructure/persistence/tradingLedgerService';
 import { capBySize } from '@/domain/tradingIntel/boundedHistory';
+import type { EvidenceEnv, EvidencePolicy } from '@/domain/tradingIntel/evidence';
 
 const STATS_KEY = 'axe_trading_agent_learning';
 const TRACE_KEY = 'axe_trading_decision_traces';
@@ -102,6 +103,20 @@ function recomputeLearningKnobs(recentOutcomes: LearningOutcome[]): { learnedMin
   return { learnedMinConfidence, aggressiveness };
 }
 
+/**
+ * De geleerde vloer voor één account, alleen uit het bewijs dat dat account
+ * mag gebruiken. Een reeks winsten op papier of demo mag de vertrouwensvloer
+ * van een funded account niet verlagen; te weinig eigen uitkomsten = neutraal.
+ */
+export function learnedKnobsFor(
+  stats: AgentLearningStats,
+  policy: EvidencePolicy,
+): { learnedMinConfidence: number; aggressiveness: number; sample: number } {
+  const own = stats.recentOutcomes.filter(o =>
+    o.environment ? policy.envs.includes(o.environment) : policy.includeLegacy);
+  return { ...recomputeLearningKnobs(own), sample: own.length };
+}
+
 /** Call when a position is closed with realized PnL. */
 export async function recordTradeOutcome(input: {
   symbol: string;
@@ -124,6 +139,13 @@ export async function recordTradeOutcome(input: {
   side?: string | null;
   /** Which account it ran on; the two brokers behave differently. */
   account?: string | null;
+  /**
+   * Waar deze uitkomst vandaan komt: papier, demo, live/funded, of onbekend.
+   * Bepaalt voor welke accounts ze als bewijs telt (evidence.ts).
+   */
+  environment?: EvidenceEnv;
+  /** Welke ronde (run) het account draait. Zonder dit belandde elke ronde in run-1. */
+  run?: string;
 }): Promise<AgentLearningStats> {
   const s = await getLearningStats();
   s.tradesClosed += 1;
@@ -132,7 +154,10 @@ export async function recordTradeOutcome(input: {
   else if (input.pnl < 0) s.losses += 1;
   s.winRate = s.tradesClosed > 0 ? s.wins / s.tradesClosed : 0;
 
-  const outcome: LearningOutcome = { pnl: input.pnl, win, symbol: input.symbol, closedAt: new Date().toISOString() };
+  const outcome: LearningOutcome = {
+    pnl: input.pnl, win, symbol: input.symbol, closedAt: new Date().toISOString(),
+    environment: input.environment ?? 'unknown',
+  };
   s.recentOutcomes = [outcome, ...s.recentOutcomes].slice(0, WINDOW_SIZE);
 
   const before = { learnedMinConfidence: s.learnedMinConfidence, aggressiveness: s.aggressiveness };
@@ -168,7 +193,10 @@ export async function recordTradeOutcome(input: {
   const returnPct = typeof input.returnPct === 'number'
     ? input.returnPct
     : (win ? 0.001 : input.pnl < 0 ? -0.001 : 0);
-  void recordLedgerTrade({ pair: input.symbol, strategy: input.strategy, timeframe: input.timeframe, returnPct }).catch(() => { /* non-fatal */ });
+  void recordLedgerTrade({
+    pair: input.symbol, strategy: input.strategy, timeframe: input.timeframe, returnPct,
+    run: input.run, environment: input.environment ?? 'unknown',
+  }).catch(() => { /* non-fatal */ });
 
   // De leerlus rondmaken. Dit is het enige moment waarop er een OBJECTIEF
   // oordeel is: de markt heeft betaald of niet. Een chatbeurt laat zich door
@@ -182,6 +210,19 @@ export async function recordTradeOutcome(input: {
     win,
     note: s.lastLesson ?? undefined,
   }).catch(() => { /* non-fatal */ });
+
+  // En de lanes: had AXE Intel en AXE Companion de richting goed? Gemeten aan
+  // deze gerealiseerde trade, niet aan wat de lanes over zichzelf zeiden. Alleen
+  // met een bekende kant — een geraden kant zou een lane voor de verkeerde
+  // richting belonen.
+  if (input.side === 'buy' || input.side === 'sell') {
+    void closeDeskEpisodesForTrade({
+      symbol: input.symbol,
+      side: input.side,
+      pnl: input.pnl,
+      holdingMinutes: input.holdingMinutes ?? 0,
+    }).catch(() => { /* non-fatal */ });
+  }
 
   // One vault note per closed trade — the nodes the funnel graph is built from.
   // This is the only moment where pair, strategy, timeframe, side and outcome

@@ -24,6 +24,8 @@ const h = vi.hoisted(() => ({
   balance: 100_000,
   positions: [] as Array<Record<string, unknown>>,
   deals: [] as Array<Record<string, unknown>>,
+  env: 'demo' as 'demo' | 'live',
+  outcomes: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('@/infrastructure/persistence/userSettingsService', () => ({
@@ -68,10 +70,15 @@ vi.mock('@/infrastructure/persistence/tradingAgentMemoryService', () => ({
 vi.mock('@/infrastructure/persistence/tradingAgentBrain', () => ({
   recordTrade: vi.fn(), recordIntelSnapshot: vi.fn(), recordThesis: vi.fn(), recordMistake: vi.fn(),
 }));
-vi.mock('@/infrastructure/persistence/tradingLearningService', () => ({
-  getLearningStats: vi.fn(async () => ({ tradesClosed: 0, wins: 0, losses: 0, winRate: 0, learnedMinConfidence: 0.5, aggressiveness: 0, recentOutcomes: [], updatedAt: '' })),
-  saveThinkingTrace: vi.fn(),
-}));
+vi.mock('@/infrastructure/persistence/tradingLearningService', async (orig) => {
+  const real = await orig<typeof import('@/infrastructure/persistence/tradingLearningService')>();
+  return {
+    // Het echte learnedKnobsFor: het beleid per account is wat hier getest wordt.
+    learnedKnobsFor: real.learnedKnobsFor,
+    getLearningStats: vi.fn(async () => ({ tradesClosed: 0, wins: 0, losses: 0, winRate: 0, learnedMinConfidence: 0.5, aggressiveness: 0, recentOutcomes: h.outcomes, updatedAt: '' })),
+    saveThinkingTrace: vi.fn(),
+  };
+});
 vi.mock('@/infrastructure/persistence/tradingLedgerService', () => ({
   getLedgerEntry: vi.fn(async () => null), DEFAULT_RUN: 'run-1',
 }));
@@ -79,6 +86,7 @@ vi.mock('@/application/tradingIntel/runDecisionFunnel', () => ({ loadLastFunnelR
 vi.mock('@/infrastructure/persistence/tradingAccountsService', () => ({
   getAccounts: vi.fn(async () => ({ accounts: [{ id: 'r', label: 'A', token: 'tok', accountId: 'acct-A', region: 'london', enabled: true, addedAt: '' }], activeId: 'r' })),
   accountLabel: vi.fn(async (id: string) => id),
+  accountEnvironment: vi.fn(async () => ({ env: h.env, source: 'configured' })),
 }));
 vi.mock('@/infrastructure/gateways/researchSources', () => ({ fetchEconomicReleases: vi.fn(async () => []) }));
 
@@ -102,6 +110,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   h.settings.clear(); mem.clear();
   h.equity = 100_000; h.balance = 100_000; h.positions = []; h.deals = [];
+  h.env = 'demo'; h.outcomes = [];
   __resetPlacedToday();
   await saveRiskProfile(PROFILE, 'acct-A');
 });
@@ -169,5 +178,25 @@ describe('runTradingAgent — sizing op de stop', () => {
     const res = await run();
     expect(res.blockedByRisk).toMatch(/Equity drawdown 12\.5% from peak/);
     expect(meta.metaApiMarketOrder).not.toHaveBeenCalled();
+  });
+
+  it('demo-uitkomsten sturen de vertrouwensvloer van een live/funded account niet', async () => {
+    // 20 demo-verliezen: op een demo-account stijgt de geleerde vloer naar 73%,
+    // en een beslissing met 61% vertrouwen wordt tegengehouden. Voor een live
+    // account telt geen enkele van die uitkomsten: neutrale vloer, en hij handelt.
+    h.outcomes = Array.from({ length: 20 }, () => ({ pnl: -1, win: false, symbol: 'XAUUSD', closedAt: '', environment: 'demo' }));
+    await saveRiskProfile({ ...PROFILE, minConfidence: 0.55 }, 'acct-A');
+
+    const demo = await run();
+    expect(demo.blockedByRisk).toMatch(/Confidence 61% < floor 73%/);
+    expect(meta.metaApiMarketOrder).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    h.env = 'live';
+    const live = await run();
+    expect(live.trace.steps.find(s => s.title === 'Evidence')?.detail)
+      .toMatch(/account environment live \(configured\) · using live\/funded evidence only · learned floor 58% from 0 outcome/);
+    expect(live.blockedByRisk).toBeUndefined();
+    expect(meta.metaApiMarketOrder).toHaveBeenCalledTimes(1);
   });
 });

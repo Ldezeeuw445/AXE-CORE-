@@ -30,7 +30,7 @@ import { AccountsBar } from './AccountsBar';
 import { Loader2, Plus, RefreshCw, Trash2, Check } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import {
-  getAccounts, addAccount, removeAccount, activateAccount, setAccountEnabled, setAccountRun,
+  getAccounts, addAccount, removeAccount, activateAccount, setAccountEnabled, setAccountRun, setAccountEnvironment,
   maskToken, type TradingAccount, type AccountsState,
 } from '@/infrastructure/persistence/tradingAccountsService';
 import {
@@ -280,6 +280,30 @@ export function AccountsTab() {
                 {(a.run || 'run-1') === 'run-1'
                   ? 'the control — keeps everything learned so far'
                   : 'ranks on its own record only, starting empty'}
+              </span>
+            </div>
+
+            {/* Welk bewijs dit account mag gebruiken. Een live/funded account
+                kiest en sized alleen op live/funded uitkomsten; demo en papier
+                tellen daar niet als bewijs. Leeg = wat de broker zegt. */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Evidence</span>
+              <select
+                value={a.environment ?? ''}
+                disabled={busy}
+                onChange={e => void act(() => setAccountEnvironment(a.id, (e.target.value || null) as 'demo' | 'live' | null))}
+                className="text-[10px] rounded px-1.5 py-0.5"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                title="Which outcomes count as evidence for this account"
+              >
+                <option value="">as the broker reports</option>
+                <option value="demo">demo / practice</option>
+                <option value="live">live or funded</option>
+              </select>
+              <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                {a.environment === 'live'
+                  ? 'selects strategies on live/funded results only'
+                  : 'a funded challenge on a demo server: set it to live or funded'}
               </span>
             </div>
           </WidgetCard>

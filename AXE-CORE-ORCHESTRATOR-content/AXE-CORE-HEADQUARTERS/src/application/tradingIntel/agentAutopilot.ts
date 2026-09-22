@@ -12,6 +12,7 @@
  * (which itself writes memory/journal/learning — see tradingAgentEngine.ts).
  * Off by default; the user arms it from the Agent tab.
  */
+import { ALL_EVIDENCE, evidencePolicyFor, type EvidencePolicy } from '@/domain/tradingIntel/evidence';
 import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
@@ -35,7 +36,7 @@ import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, bac
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
 import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
-import { tradeableAccounts, accountLabel, accountRun, getAccounts } from '@/infrastructure/persistence/tradingAccountsService';
+import { tradeableAccounts, accountLabel, accountRun, getAccounts, accountEnvironment } from '@/infrastructure/persistence/tradingAccountsService';
 import { runDecisionFunnel, loadLastFunnelRun, type FunnelVote } from '@/application/tradingIntel/runDecisionFunnel';
 import { listIntelReports } from '@/infrastructure/persistence/tradingIntelService';
 import { moetResearchDraaien } from '@/domain/tradingIntel/researchVers';
@@ -561,10 +562,14 @@ const VBT_STRATEGIES = ['vbt:ma-cross', 'vbt:rsi-meanrev', 'vbt:bbands', 'vbt:ma
 async function strategyForSymbol(
   symbol: string,
   run = 'run-1',
+  /** Welk live-bewijs dit account mag gebruiken (evidence.ts). Een funded/live
+   *  account rangschikt alleen op live/funded uitkomsten en backtest-priors,
+   *  nooit op wat een strategie op papier of demo deed. */
+  evidence: EvidencePolicy = ALL_EVIDENCE,
 ): Promise<{ strategy: string; timeframe: string }> {
   try {
     const candidates = [...DISTINCT_STRATEGIES, ...VBT_STRATEGIES];
-    const ranked = await rankStrategiesForPair(symbol, candidates, [...ALGO_TIMEFRAMES], run);
+    const ranked = await rankStrategiesForPair(symbol, candidates, [...ALGO_TIMEFRAMES], run, evidence);
     const top = ranked[0];
     if (top?.tested) return { strategy: top.strategy, timeframe: top.timeframe };
     // Nothing tested on this pair yet. rankStrategiesForPair still ordered the
@@ -1069,7 +1074,8 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
     // three.
     const chosen: string[] = [];
     const fanned = await runOnEveryAccount(symbol, async ({ account, run }) => {
-      const { strategy, timeframe } = await strategyForSymbol(symbol, run);
+      const envInfo = account ? await accountEnvironment(account.accountId).catch(() => null) : null;
+      const { strategy, timeframe } = await strategyForSymbol(symbol, run, evidencePolicyFor(envInfo?.env));
       chosen.push(`${run}:${strategy}@${timeframe}`);
 
       if (strategy.includes(':')) {

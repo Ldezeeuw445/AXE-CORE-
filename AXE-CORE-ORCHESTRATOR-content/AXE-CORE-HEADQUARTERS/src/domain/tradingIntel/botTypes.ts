@@ -147,6 +147,8 @@ export interface LearningOutcome {
   win: boolean;
   symbol: string;
   closedAt: string;
+  /** Waar de uitkomst vandaan komt (evidence.ts). Ontbreekt op oudere uitkomsten = legacy. */
+  environment?: 'paper' | 'demo' | 'live' | 'unknown';
 }
 
 export interface AgentLearningStats {

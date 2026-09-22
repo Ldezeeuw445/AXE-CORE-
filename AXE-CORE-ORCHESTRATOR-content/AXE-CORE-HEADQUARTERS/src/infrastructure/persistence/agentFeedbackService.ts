@@ -34,6 +34,8 @@ import {
   type LoopHealth, LOOP_AGENTS,
 } from '@/domain/memory/agentLoop';
 
+import { laneVerdict, marketDirectionFromTrade, parseDeskEpisodeSubject } from '@/domain/tradingIntel/laneStance';
+
 const TABLE = 'agent_learning_episodes';
 
 interface Row {
@@ -421,4 +423,59 @@ export async function closeTradingEpisodeForTrade(input: {
   if (!id) return false;
 
   return closeEpisode(id, input.win ? 'good' : 'poor', input.note);
+}
+
+/**
+ * Sluit de lane-episodes van AXE Intel en AXE Companion op een gesloten trade.
+ *
+ * Dezelfde tabel en dezelfde versterking als elke andere episode; alleen het
+ * oordeel is anders gemaakt. Niet "won de trade", maar "had de lane de richting
+ * goed": de stance die de lane vóór de opening gaf, tegen de richting die de
+ * gerealiseerde trade laat zien (laneStance.ts). Per lane alleen de laatste
+ * lezing vóór de opening — dat is de lezing die de beslissing kon beïnvloeden.
+ */
+export async function closeDeskEpisodesForTrade(input: {
+  symbol: string;
+  side: 'buy' | 'sell';
+  pnl: number;
+  holdingMinutes: number;
+}): Promise<{ closed: number }> {
+  const direction = marketDirectionFromTrade(input.side, input.pnl);
+  if (!direction) return { closed: 0 };
+  const sb = getSupabase();
+  if (!sb) return { closed: 0 };
+  const userId = await currentUserId(sb);
+  if (!userId) return { closed: 0 };
+
+  const held = Number.isFinite(input.holdingMinutes) ? Math.max(0, input.holdingMinutes) : 0;
+  const openedBefore = new Date(Date.now() - held * 60_000).toISOString();
+  const symbol = input.symbol.trim().toUpperCase();
+
+  let closed = 0;
+  for (const agent of ['intel', 'companion'] as const) {
+    const { data, error } = await sb.from(TABLE)
+      .select('id, subject')
+      .eq('user_id', userId)
+      .eq('agent', agent)
+      .like('subject', `${symbol}|%`)
+      .eq('verdict', 'unknown')
+      .lte('opened_at', openedBefore)
+      .order('opened_at', { ascending: false })
+      .limit(1);
+    if (error) {
+      console.error('[agentLoop] could not look up a desk episode for', agent, symbol, error.message);
+      continue;
+    }
+    const row = data?.[0] as { id: string; subject: string } | undefined;
+    const parsed = row ? parseDeskEpisodeSubject(row.subject) : null;
+    if (!row || !parsed) continue;
+    const verdict = laneVerdict(parsed.stance, direction);
+    if (!verdict) continue;
+    const ok = await closeEpisode(
+      row.id, verdict,
+      `${agent} said ${parsed.stance.toUpperCase()}; market went ${direction} (${input.side} closed ${input.pnl >= 0 ? '+' : ''}${input.pnl.toFixed(2)})`,
+    );
+    if (ok) closed += 1;
+  }
+  return { closed };
 }

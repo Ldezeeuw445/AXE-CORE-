@@ -35,6 +35,7 @@ import { fetchTradeableSnapshot, rsi, sma, atr } from '@/infrastructure/gateways
 import { getRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import {
   getLearningStats,
+  learnedKnobsFor,
   saveThinkingTrace,
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
@@ -49,6 +50,8 @@ import {
 import { readAccountRiskSnapshot } from '@/infrastructure/gateways/accountRiskSnapshot';
 import { sizeLotsForRisk } from '@/domain/tradingIntel/positionSizing';
 import { trailingBreakerThreshold } from '@/domain/tradingIntel/accountRules';
+import { evidencePolicyFor, type EvidencePolicy } from '@/domain/tradingIntel/evidence';
+import { accountEnvironment } from '@/infrastructure/persistence/tradingAccountsService';
 import {
   brokerPlaceOrder,
   getEffectiveAccountState,
@@ -124,13 +127,16 @@ import { loadLastFunnelRun } from '@/application/tradingIntel/runDecisionFunnel'
  */
 async function edgeMultiplierFor(
   symbol: string, strategy: string | undefined, run: string | undefined,
+  /** Alleen bewijs dat dit account mag gebruiken (evidence.ts): een funded
+   *  account wordt niet groter gesized op demo- of papieren uitkomsten. */
+  evidence: EvidencePolicy,
 ): Promise<SizingDecision> {
   const r = run ?? DEFAULT_RUN;
   if (!strategy || r === DEFAULT_RUN) return { multiplier: 1, reason: 'control round — flat size' };
   try {
-    const own = await getLedgerEntry(symbol, strategy, r);
+    const own = await getLedgerEntry(symbol, strategy, r, evidence);
     if (own && own.liveTrusted && own.trades >= MIN_TRADES) return sizeMultiplier(own);
-    const control = await getLedgerEntry(symbol, strategy, DEFAULT_RUN);
+    const control = await getLedgerEntry(symbol, strategy, DEFAULT_RUN, evidence);
     if (!control?.liveTrusted) return { multiplier: 1, reason: 'no trusted record yet — flat size' };
     const d = sizeMultiplier(control);
     return { multiplier: d.multiplier, reason: `${d.reason} (from ${DEFAULT_RUN})` };
@@ -590,10 +596,24 @@ export async function runTradingAgent(input: {
     steps.push(step('risk', 'No short', 'Sell signal but no long position and shorts disabled.', 0));
   }
 
+  // HET BEWIJS DAT DIT ACCOUNT MAG GEBRUIKEN. Een funded/live account leert
+  // zijn vertrouwensvloer en zijn sizing alleen van live/funded uitkomsten; een
+  // reeks winsten op papier of demo maakt hem niet brutaler (evidence.ts).
+  const envInfo = input.account
+    ? await accountEnvironment(input.account.accountId).catch(() => ({ env: null, source: 'unknown' as const }))
+    : { env: null, source: 'unknown' as const };
+  const evidence = evidencePolicyFor(envInfo.env);
+  const knobs = learnedKnobsFor(learning, evidence);
   const minConf = Math.max(
     input.minConfidence ?? risk.minConfidence,
-    learning.learnedMinConfidence,
+    knobs.learnedMinConfidence,
   );
+  steps.push(step(
+    'learn',
+    'Evidence',
+    `account environment ${envInfo.env ?? 'unknown'} (${envInfo.source}) · using ${evidence.label} · learned floor ${(knobs.learnedMinConfidence * 100).toFixed(0)}% from ${knobs.sample} outcome(s)`,
+    envInfo.env ? 1 : 0.5,
+  ));
   const riskPct = input.riskPct ?? risk.riskPerTradePct;
   const today = new Date().toISOString().slice(0, 10);
 
@@ -692,7 +712,7 @@ export async function runTradingAgent(input: {
   // XAUUSD). It is sized exactly like a long below.
   const opensShort = action === 'sell' && posQty <= 0 && risk.allowShort;
   const closesLong = action === 'sell' && posQty > 0;
-  const edge = await edgeMultiplierFor(symbol, input.strategyName ?? input.strategy, input.run);
+  const edge = await edgeMultiplierFor(symbol, input.strategyName ?? input.strategy, input.run, evidence);
 
   let lots = 0;
   let unitsPerLot = 1;
@@ -779,7 +799,7 @@ export async function runTradingAgent(input: {
       : 'Tape-only (no completed intel).',
     `Score ${score.toFixed(3)} → ${action.toUpperCase()} conf ${(confidence * 100).toFixed(0)}%.`,
     blockedByRisk ? `RISK: ${blockedByRisk}` : `Size ${lots} lots${riskAtStop > 0 ? ` (${riskAtStop.toFixed(2)} at stop)` : ''}.`,
-    `Learn: winRate ${(learning.winRate * 100).toFixed(0)}% minConf ${learning.learnedMinConfidence.toFixed(2)}.`,
+    `Learn: winRate ${(learning.winRate * 100).toFixed(0)}% minConf ${knobs.learnedMinConfidence.toFixed(2)} (${evidence.label}).`,
   ].join(' ');
 
   const decision: TradingAgentDecision = {

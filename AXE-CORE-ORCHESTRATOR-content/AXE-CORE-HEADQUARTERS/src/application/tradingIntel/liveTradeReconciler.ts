@@ -28,7 +28,8 @@ import { metaApiGetHistoryDealsFor, metaApiAccountInfoFor, getMetaApiConfig, typ
 import { metaApiDealsToJournalTrades } from '@/application/tradingIntel/csvJournalAnalytics';
 import { recordTradeOutcome } from '@/infrastructure/persistence/tradingLearningService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
-import { tradeableAccounts, accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
+import { tradeableAccounts, accountLabel, accountEnvironment, accountRun } from '@/infrastructure/persistence/tradingAccountsService';
+import { evidenceEnvForAccount } from '@/domain/tradingIntel/evidence';
 import { matchOpenTradeForReconcile, recordTradeClosed } from '@/infrastructure/persistence/tradingTradesService';
 
 /**
@@ -212,6 +213,11 @@ async function reconcileAccount(account: MetaApiConfig, activeAccountId: string 
     .sort((a, b) => String(a.closeTime).localeCompare(String(b.closeTime)));
 
   const label = await accountLabel(account.accountId).catch(() => account.accountId);
+  // Waar deze uitkomsten vandaan komen, en in welke ronde. Beide ontbraken:
+  // elke broker-close telde als "live" in run-1, ook van een demo-account en
+  // ook van een account in een nieuwe ronde.
+  const environment = evidenceEnvForAccount((await accountEnvironment(account.accountId).catch(() => null))?.env);
+  const run = await accountRun(account.accountId).catch(() => undefined);
 
   let recorded = 0;
   let unattributed = 0;
@@ -254,6 +260,11 @@ async function reconcileAccount(account: MetaApiConfig, activeAccountId: string 
     const confidence = match?.confidence ?? 0;
     if (!strategy) unattributed += 1;
 
+    // De echte kant en looptijd van de positie. Beide werden weggegooid: elke
+    // close heette 'buy', en zonder looptijd zocht de leerlus de episode van de
+    // LAATSTE beslissing vóór nu in plaats van die van de opening.
+    const opened = Date.parse(String(t.openTime ?? ''));
+    const holdingMinutes = Number.isFinite(opened) ? Math.max(0, (Date.parse(closed) - opened) / 60_000) : undefined;
     try {
       await recordTradeOutcome({
         symbol: pair,
@@ -263,8 +274,11 @@ async function reconcileAccount(account: MetaApiConfig, activeAccountId: string 
         strategy,
         timeframe,
         returnPct,
-        side: 'buy',
+        side: t.side,
+        holdingMinutes,
         account: label,
+        environment,
+        run,
       });
       await recordTradeClosed({
         localTradeId: match?.localTradeId ?? null,
@@ -272,7 +286,7 @@ async function reconcileAccount(account: MetaApiConfig, activeAccountId: string 
         accountLabel: label,
         venue: 'metaapi',
         symbol: pair,
-        side: 'buy',
+        side: t.side ?? undefined,
         qty: t.volume ?? match?.qty ?? undefined,
         entryPrice: t.openPrice ?? match?.entryPrice ?? undefined,
         exitPrice: t.closePrice ?? undefined,

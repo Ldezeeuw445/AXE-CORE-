@@ -548,6 +548,8 @@ export interface MetaApiAccountBalance {
   margin: number | null;
   freeMargin: number | null;
   currency: string | null;
+  /** MT5-handelsmodus volgens de broker: ACCOUNT_TRADE_MODE_DEMO / _CONTEST / _REAL. */
+  tradeMode?: string | null;
 }
 
 /** Live balance/equity/margin for the connected MT5 account (not the paper/demo book). */
@@ -563,7 +565,7 @@ export async function metaApiAccountInfoFor(cfg: MetaApiConfig): Promise<
       return { ok: false, error: `account-information ${res.status}: ${t.slice(0, 200)}` };
     }
     const data = (await res.json()) as {
-      balance?: number; equity?: number; margin?: number; freeMargin?: number; currency?: string;
+      balance?: number; equity?: number; margin?: number; freeMargin?: number; currency?: string; type?: string;
     };
     return {
       ok: true,
@@ -573,6 +575,7 @@ export async function metaApiAccountInfoFor(cfg: MetaApiConfig): Promise<
         margin: typeof data.margin === 'number' ? data.margin : null,
         freeMargin: typeof data.freeMargin === 'number' ? data.freeMargin : null,
         currency: data.currency ?? null,
+        tradeMode: data.type ?? null,
       },
     };
   } catch (e) {
