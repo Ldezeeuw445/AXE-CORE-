@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Folder, GripHorizontal, Image, Mic, Paperclip, Plus, SquareArrowOutUpRight, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { BorderBeam } from 'border-beam';
-import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
+import { VoiceBeam, useMicrophone } from 'voice-glow';
+import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { dispatchComputerTask, onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
@@ -40,6 +41,7 @@ const QUICK = [
 
 export default function ComputerUseOverlay() {
   const voice = useVoiceStore();
+  const mic = useMicrophone({ autoStart: false });
   const [text, setText] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [preferred, setPreferred] = useState<string | null>(null);
@@ -62,6 +64,15 @@ export default function ComputerUseOverlay() {
   const machine = useMemo(() => devices.find(d => d.id === preferred) ?? devices[0] ?? null, [devices, preferred]);
   const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
   const busy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'listening' || toolBusy;
+  const voiceReactive = voice.voiceStatus === 'listening' || voice.voiceStatus === 'speaking';
+
+  // The compact Computer Use composer owns its visual microphone stream.
+  // SpeechRecognition/transcription remains in voiceStore; this raw stream is
+  // only for the audio-reactive beam and is released as soon as listening ends.
+  useEffect(() => {
+    if (voice.voiceStatus === 'listening') { void mic.start(); }
+    else if (mic.state === 'live') { mic.stop(); }
+  }, [voice.voiceStatus]); // voice-glow owns final stream cleanup on unmount
 
   useEffect(() => {
     if (!machine) {
@@ -175,39 +186,47 @@ export default function ComputerUseOverlay() {
         >
           <GripHorizontal size={14} />
         </div>
-        <AxeComposerVak
-          waarde={text}
-          opWaarde={setText}
-          opVerstuur={() => void submit()}
-          plaatshouder="Start a task on your Mac…"
-          links={
+        {/* Keep the Computer Use composer in its original compact pill shape.
+            The OUTER shell has the mono idle pulse; this inner beam exists only
+            while real microphone/TTS audio is present. */}
+        <VoiceBeam
+          stream={voice.voiceStatus === 'listening' ? mic.stream : null}
+          level={voice.voiceStatus === 'speaking' ? getGlobalTtsLevel : 0}
+          idle={0}
+          active={voiceReactive}
+          attack={0.12}
+          release={0.72}
+          colorVariant="colorful"
+          theme="dark"
+        >
+          <form
+            className="computer-use-overlay__composer"
+            onSubmit={(e: FormEvent) => { e.preventDefault(); void submit(); }}
+          >
             <div className="computer-use-overlay__particle">
-              <AxeStatusOrb size={20} toonLabel={false} status={busy ? 'processing' : undefined} />
+              <AxeStatusOrb size={64} toonLabel={false} status={busy ? 'processing' : undefined} />
             </div>
-          }
-          rechts={
-            <>
-              <button type="button" className="computer-use-overlay__icon" title="Attach"><Paperclip size={17} /></button>
-              <button
-                type="button"
-                className="computer-use-overlay__icon"
-                title={voice.voiceStatus !== 'idle' ? 'Stop talking to AXE' : 'Talk to AXE'}
-                onClick={() => void (voice.voiceStatus !== 'idle' ? voice.stopListening() : voice.startListening())}
-              >
-                <Mic size={17} />
-              </button>
-              <button
-                type="button"
-                className="computer-use-overlay__plus"
-                title="Run task"
-                disabled={!text.trim() || busy}
-                onClick={() => void submit()}
-              >
-                <Plus size={20} />
-              </button>
-            </>
-          }
-        />
+            <input
+              autoFocus
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="Start a task on your Mac…"
+              aria-label="Personal Computer Use task"
+            />
+            <button type="button" className="computer-use-overlay__icon" title="Attach"><Paperclip size={17} /></button>
+            <button
+              type="button"
+              className="computer-use-overlay__icon"
+              title={voice.voiceStatus !== 'idle' ? 'Stop talking to AXE' : 'Talk to AXE'}
+              onClick={() => void (voice.voiceStatus !== 'idle' ? voice.stopListening() : voice.startListening())}
+            >
+              <Mic size={17} />
+            </button>
+            <button type="submit" className="computer-use-overlay__plus" title="Run task" disabled={!text.trim() || busy}>
+              <Plus size={20} />
+            </button>
+          </form>
+        </VoiceBeam>
 
         <div className="computer-use-overlay__meta">
           <span className={machine ? 'is-online' : 'is-offline'}>
