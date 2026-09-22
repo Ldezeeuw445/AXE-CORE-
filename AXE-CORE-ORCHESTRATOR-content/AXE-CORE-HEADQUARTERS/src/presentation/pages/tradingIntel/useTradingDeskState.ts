@@ -635,6 +635,18 @@ export function useTradingDeskState() {
     toast.success(`Saved ${toSave.strategy} on ${toSave.symbol}`);
   }, [backtestResult]);
 
+  /** Een bewaarde run weer openen, met zijn trades en curve als die bewaard zijn. */
+  const openSavedStrategy = useCallback((run: SavedStrategyRun) => {
+    setBacktestResult({
+      symbol: run.symbol, strategy: run.strategy, timeframe: run.timeframe,
+      candleCount: run.candleCount ?? 0, trades: run.trades ?? [], totalTrades: run.totalTrades,
+      wins: Math.round(run.winRate * run.totalTrades), losses: run.totalTrades - Math.round(run.winRate * run.totalTrades),
+      winRate: run.winRate, avgWinPct: 0, avgLossPct: 0, profitFactor: run.profitFactor,
+      netReturnPct: run.netReturnPct, maxDrawdownPct: run.maxDrawdownPct, equityCurve: run.equityCurve ?? [],
+      note: `Saved ${run.savedAt.slice(0, 10)}${run.note ? ` — ${run.note}` : ''}${run.trades ? '' : ' · saved before trades were kept'}`,
+    });
+  }, []);
+
   const deleteSavedStrategy = useCallback(async (id: string) => {
     const next = await deleteSavedStrategyRun(id);
     setSavedStrategies(next);
@@ -780,7 +792,7 @@ export function useTradingDeskState() {
     backtestRunning, backtestResult,
     backtestTimeframe, setBacktestTimeframe, backtestLimit, setBacktestLimit,
     allPairsRunning, allPairsResults, runBacktestAllPairsNow,
-    savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
+    savedStrategies, saveCurrentBacktest, deleteSavedStrategy, openSavedStrategy,
     comboStrategies, toggleComboStrategy, comboMinAgree, setComboMinAgree,
     comboRunning, comboResult, runComboBacktestNow,
     setups, saveSetup, loadSetup, deleteSetup,

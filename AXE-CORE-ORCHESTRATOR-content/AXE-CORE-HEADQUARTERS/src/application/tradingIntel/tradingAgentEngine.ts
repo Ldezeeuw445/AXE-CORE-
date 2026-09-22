@@ -49,6 +49,7 @@ import {
 } from '@/application/tradingIntel/preTradeGateService';
 import { readAccountRiskSnapshot } from '@/infrastructure/gateways/accountRiskSnapshot';
 import { sizeLotsForRisk } from '@/domain/tradingIntel/positionSizing';
+import { LIVE_REWARD_RISK, LIVE_SL_ATR_MULTIPLE, protectiveLevels } from '@/domain/tradingIntel/strategyLab/tradePlan';
 import { trailingBreakerThreshold } from '@/domain/tradingIntel/accountRules';
 import { evidencePolicyFor, type EvidencePolicy } from '@/domain/tradingIntel/evidence';
 import { accountEnvironment } from '@/infrastructure/persistence/tradingAccountsService';
@@ -88,8 +89,9 @@ function signalToBias(signal: string): number {
 // ATR-based sizing (1.5x recent volatility for the stop, 1.5R for the
 // target) instead of a fixed %, so the stop distance actually reflects how
 // much this specific symbol has been moving.
-const SL_ATR_MULTIPLE = 1.5;
-const REWARD_RISK_RATIO = 1.5;
+// Eén definitie, gedeeld met de Strategy Lab (strategyLab/tradePlan).
+const SL_ATR_MULTIPLE = LIVE_SL_ATR_MULTIPLE;
+const REWARD_RISK_RATIO = LIVE_REWARD_RISK;
 
 /**
  * Builds the same StrategySeries shape backtestEngine uses, from live bars —
@@ -708,8 +710,8 @@ export async function runTradingAgent(input: {
   // het geld dat verloren gaat als deze stop raakt, met de tickwaarde die de
   // broker voor dit account opgeeft (positionSizing). ATR-stop zoals voorheen,
   // met 1% van de koers als terugval bij te weinig historie.
-  const slDistance = (atr14 ?? last * 0.01) * SL_ATR_MULTIPLE;
-  const tpDistance = slDistance * REWARD_RISK_RATIO;
+  const plannedLong = protectiveLevels({ side: 'buy', entry: last, atr: atr14 });
+  const slDistance = plannedLong.stopDistance;
   const opensLong = action === 'buy';
   // OPENING A SHORT — the case that once silently did not exist: allowShort
   // gated the action and sizing had no branch for it, so a SELL with shorts on
@@ -728,8 +730,9 @@ export async function runTradingAgent(input: {
   let takeProfit: number | null = null;
 
   if ((opensLong || opensShort) && !blockedByRisk && mandate.mayOpen && orderAccount) {
-    stopLoss = opensLong ? last - slDistance : last + slDistance;
-    takeProfit = opensLong ? last + tpDistance : last - tpDistance;
+    const plan = protectiveLevels({ side: opensLong ? 'buy' : 'sell', entry: last, atr: atr14 });
+    stopLoss = plan.stopLoss;
+    takeProfit = plan.takeProfit;
     const [spec, snap] = await Promise.all([
       loadInstrumentSpec(orderAccount, symbol),
       readAccountRiskSnapshot(orderAccount, risk),

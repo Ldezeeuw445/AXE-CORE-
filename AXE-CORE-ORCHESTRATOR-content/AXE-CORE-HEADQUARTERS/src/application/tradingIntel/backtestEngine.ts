@@ -31,6 +31,8 @@ export interface BacktestTrade {
 export interface BacktestResult {
   symbol: string;
   strategy: BacktestStrategyId;
+  /** Op welke timeframe getest is — ontbrak, dus een bewaarde run zei het niet. */
+  timeframe?: string;
   candleCount: number;
   trades: BacktestTrade[];
   totalTrades: number;
@@ -55,7 +57,7 @@ const WARMUP_BARS = 51;
  * they replay the exact same candles instead of two independently-fetched
  * (and potentially inconsistent) series.
  */
-async function loadBacktestSeries(
+export async function loadBacktestSeries(
   symbol: string,
   timeframe: string,
   limit: number,
@@ -228,6 +230,7 @@ export async function runBacktest(input: {
   const result: BacktestResult = {
     symbol,
     strategy: input.strategy,
+    timeframe,
     ...metrics,
     note:
       (DISTINCT_STRATEGIES.has(input.strategy)
@@ -287,6 +290,7 @@ export async function runComboBacktest(input: {
   const result: BacktestResult = {
     symbol,
     strategy: comboId,
+    timeframe,
     ...metrics,
     note:
       `Confluence backtest — requires ${minAgree}/${strategies.length} of [${strategies.join(', ')}] to agree on direction at the same bar.` +
@@ -345,6 +349,25 @@ export interface SavedStrategyRun {
   totalTrades: number;
   profitFactor: number;
   maxDrawdownPct: number;
+  /**
+   * Genoeg om de run later te heropenen. Bewaarde runs hielden alleen
+   * samenvattende cijfers; de trades en de equitycurve waren weg zodra je een
+   * andere strategie aanklikte. Optioneel: runs van vóór dit veld hebben het niet.
+   */
+  timeframe?: string;
+  candleCount?: number;
+  trades?: BacktestTrade[];
+  equityCurve?: number[];
+}
+
+/** Hooguit `max` punten, met het laagste punt per emmer en het laatste punt. */
+function thinCurve(curve: number[], max = 400): number[] {
+  if (curve.length <= max) return curve;
+  const size = Math.ceil(curve.length / max);
+  const out: number[] = [];
+  for (let k = 0; k < curve.length; k += size) out.push(Math.min(...curve.slice(k, k + size)));
+  out.push(curve[curve.length - 1]);
+  return out;
 }
 
 const SAVED_STRATEGIES_KEY = 'axe_trading_saved_strategies';
@@ -366,6 +389,10 @@ export async function saveStrategyRun(result: BacktestResult, note?: string): Pr
     totalTrades: result.totalTrades,
     profitFactor: result.profitFactor,
     maxDrawdownPct: result.maxDrawdownPct,
+    timeframe: result.timeframe,
+    candleCount: result.candleCount,
+    trades: result.trades.slice(-1000),
+    equityCurve: thinCurve(result.equityCurve),
   };
   const next = [entry, ...existing].slice(0, 100);
   await saveSetting(SAVED_STRATEGIES_KEY, next);
