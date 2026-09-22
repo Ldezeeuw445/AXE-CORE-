@@ -5,13 +5,14 @@
  * when Fish is the active provider. Mindset, AXE quotes, chat, and previews
  * must all call speakGlobal so they never drift to a different voice.
  */
-import { stopFishAudio, speakWithFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { getFishTtsLevel, stopFishAudio, speakWithFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import {
   speakWithOpenAi,
   stopOpenAiTts,
   isOpenAiTtsConfigured,
   STANDAARD_STEM as AXE_OPENAI_VOICE,
+  getAxeTtsLevel,
 } from '@/infrastructure/gateways/openAiTtsService';
 import { normalizeForSpeech } from '@/domain/speechText';
 
@@ -98,4 +99,10 @@ export function speakGlobal(
     onError?.(reason);
     onDone?.();
   });
+}
+
+
+/** Real 0..1 playback energy regardless of which fixed AXE TTS path is active. */
+export function getGlobalTtsLevel(): number {
+  return Math.max(getAxeTtsLevel(), getFishTtsLevel());
 }
