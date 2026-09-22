@@ -39,7 +39,16 @@ import {
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
 import { evaluatePreTradeGate } from '@/domain/tradingIntel/preTradeGate';
-import { resolveOrderAccount } from '@/application/tradingIntel/preTradeGateService';
+import {
+  loadInstrumentSpec,
+  resolveOrderAccount,
+  rulesFromSnapshot,
+  sizingBaseAmount,
+  tripOnHardBreach,
+} from '@/application/tradingIntel/preTradeGateService';
+import { readAccountRiskSnapshot } from '@/infrastructure/gateways/accountRiskSnapshot';
+import { sizeLotsForRisk } from '@/domain/tradingIntel/positionSizing';
+import { trailingBreakerThreshold } from '@/domain/tradingIntel/accountRules';
 import {
   brokerPlaceOrder,
   getEffectiveAccountState,
@@ -424,7 +433,7 @@ export async function runTradingAgent(input: {
   // account it named sat flat at its starting balance.
   const breaker = await checkAndUpdateCircuitBreaker(
     eqForBreaker,
-    risk.maxDrawdownPct ?? 0.12,
+    trailingBreakerThreshold(risk),
     effective.isReal ? 'live' : 'paper',
     input.account?.accountId ?? null,
   );
@@ -581,7 +590,6 @@ export async function runTradingAgent(input: {
     steps.push(step('risk', 'No short', 'Sell signal but no long position and shorts disabled.', 0));
   }
 
-  const eq = eqForBreaker;
   const minConf = Math.max(
     input.minConfidence ?? risk.minConfidence,
     learning.learnedMinConfidence,
@@ -597,30 +605,32 @@ export async function runTradingAgent(input: {
   // real opens today (null if unreadable → hold, never trade blind), and the
   // in-process tally covers a fill that hasn't surfaced in history yet, so a
   // burst inside one run cannot slip past its own orders. See dayLimitState.
+  const tz = risk.resetTimezone || 'UTC';
   const brokerOpensToday = effective.isReal
-    ? await brokerOpeningsTodayFor(input.account)
+    ? await brokerOpeningsTodayFor(input.account, tz)
     : null;
   const { tradesToday, unverified: dayCountUnverified } = dayLimitState({
     isReal: effective.isReal,
     brokerCount: brokerOpensToday,
-    inProcessCount: placedTodayInProcess(input.account?.accountId ?? null),
+    inProcessCount: placedTodayInProcess(input.account?.accountId ?? null, tz),
     paperCount: account.trades.filter(t => t.createdAt.startsWith(today)).length,
   });
 
   // DE ENE POORT. Dezelfde evaluatePreTradeGate die de handmatige knoppen op de
   // grafiek gebruiken (preTradeGateService); de controles stonden hier eerst
   // inline, en daardoor kon de grafiek ze overslaan. Volgorde en teksten zijn
-  // ongewijzigd: breaker, onleesbare dag, volle dag, vertrouwen.
+  // ongewijzigd: breaker, onleesbare dag, volle dag, vertrouwen. Daarna, voor
+  // een opening, de accountregels — zie verderop.
   //
   // Een onleesbare broker-telling houdt alleen een OPENING tegen, nooit een
   // exit, en herstelt zichzelf de volgende cyclus dat de broker antwoordt.
   const orderAccount = effective.isReal ? await resolveOrderAccount(input.account) : null;
-  const gate = evaluatePreTradeGate({
-    origin: 'agent',
+  const gateBase = {
+    origin: 'agent' as const,
     symbol,
     // Bij HOLD wordt er niets verstuurd; de poort draait toch, zodat breaker en
     // dagmaximum in het spoor staan zoals voorheen.
-    side: action === 'sell' ? 'sell' : 'buy',
+    side: (action === 'sell' ? 'sell' : 'buy') as 'buy' | 'sell',
     accountId: orderAccount?.accountId ?? null,
     mode: risk.mode,
     // Een onbeschikbaar account is hierboven al teruggekeerd.
@@ -630,8 +640,9 @@ export async function runTradingAgent(input: {
     allowShort: risk.allowShort,
     longPositionQty: posQty,
     confidence: action === 'buy' || action === 'sell' ? { value: confidence, floor: minConf } : undefined,
-  });
-  const blockedByRisk: string | undefined = gate.allowed ? undefined : gate.reason;
+  };
+  let gate = evaluatePreTradeGate(gateBase);
+  let blockedByRisk: string | undefined = gate.allowed ? undefined : gate.reason;
 
   steps.push(step(
     'risk',
@@ -656,37 +667,6 @@ export async function runTradingAgent(input: {
     symbol,
     ranking: await loadLastFunnelRun().catch(() => null),
   });
-
-  const edge = await edgeMultiplierFor(symbol, input.strategyName ?? input.strategy, input.run);
-  const riskBudget = eq * riskPct * edge.multiplier;
-  let qty = 0;
-  if (action === 'buy' && !blockedByRisk && mandate.mayOpen) {
-    qty = Math.floor((riskBudget / last) * 1000) / 1000;
-    if (qty * last < 10) qty = 0;
-  } else if (action === 'sell' && posQty > 0 && !blockedByRisk) {
-    // Closing is never gated by the funnel — a pair that stopped being a
-    // finalist is exactly the one most likely to need an exit.
-    qty = Math.min(posQty, Math.floor((riskBudget / last) * 1000) / 1000 || posQty);
-  } else if (action === 'sell' && posQty <= 0 && risk.allowShort && !blockedByRisk && mandate.mayOpen) {
-    // OPENING A SHORT — the case that silently did not exist.
-    //
-    // allowShort gated the ACTION a hundred lines up, and sizing never learned
-    // about it: the only two branches were "open a long" and "close a long",
-    // so a short survived the risk gate, matched neither, and kept qty = 0.
-    // Measured 2026-08-21 with allowShort already switched on in Settings:
-    //   LTCUSD  Score -0.400 -> SELL conf 61%.  Size qty=0
-    //   XAUUSD  SELL conf 68%                   never reached the broker
-    // The desk showed a decision, the ledger recorded a decision, and no order
-    // existed — the worst of the three possible outcomes, because it looks
-    // exactly like working.
-    //
-    // Sized identically to a long: the risk budget buys the same notional
-    // whichever way it points. The protective levels below already mirror for
-    // a sell, so this needed no second rule there.
-    qty = Math.floor((riskBudget / last) * 1000) / 1000;
-    if (qty * last < 10) qty = 0;
-  }
-
   if (mandate.binding) {
     steps.push(step(
       'risk',
@@ -696,22 +676,101 @@ export async function runTradingAgent(input: {
     ));
   }
 
-  steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} (${effective.isReal ? 'live MT5' : 'paper'}) budget=$${riskBudget.toFixed(0)} qty=${qty} · sizing: ${edge.reason}`, qty));
-
-  // ATR-based protective stop + target — falls back to a flat 1% of price
-  // when there isn't enough bar history for a real ATR yet (new symbol,
-  // thin data), rather than shipping the order with no stop at all.
+  // STOP EERST, DAN DE GROOTTE.
+  //
+  // De stop werd pas uitgerekend nadat qty al vaststond uit equity × risk% /
+  // koers — een notionele blootstelling. Risk/trade betekent nu wat het zegt:
+  // het geld dat verloren gaat als deze stop raakt, met de tickwaarde die de
+  // broker voor dit account opgeeft (positionSizing). ATR-stop zoals voorheen,
+  // met 1% van de koers als terugval bij te weinig historie.
   const slDistance = (atr14 ?? last * 0.01) * SL_ATR_MULTIPLE;
   const tpDistance = slDistance * REWARD_RISK_RATIO;
-  const stopLoss = qty > 0 ? (action === 'buy' ? last - slDistance : last + slDistance) : null;
-  const takeProfit = qty > 0 ? (action === 'buy' ? last + tpDistance : last - tpDistance) : null;
-  if (qty > 0) {
+  const opensLong = action === 'buy';
+  // OPENING A SHORT — the case that once silently did not exist: allowShort
+  // gated the action and sizing had no branch for it, so a SELL with shorts on
+  // reached the ledger with qty = 0 and never the broker (2026-08-21, LTCUSD /
+  // XAUUSD). It is sized exactly like a long below.
+  const opensShort = action === 'sell' && posQty <= 0 && risk.allowShort;
+  const closesLong = action === 'sell' && posQty > 0;
+  const edge = await edgeMultiplierFor(symbol, input.strategyName ?? input.strategy, input.run);
+
+  let lots = 0;
+  let unitsPerLot = 1;
+  let riskBudget = 0;
+  let riskAtStop = 0;
+  let sizingNote = edge.reason;
+  let stopLoss: number | null = null;
+  let takeProfit: number | null = null;
+
+  if ((opensLong || opensShort) && !blockedByRisk && mandate.mayOpen && orderAccount) {
+    stopLoss = opensLong ? last - slDistance : last + slDistance;
+    takeProfit = opensLong ? last + tpDistance : last - tpDistance;
+    const [spec, snap] = await Promise.all([
+      loadInstrumentSpec(orderAccount, symbol),
+      readAccountRiskSnapshot(orderAccount, risk),
+    ]);
+    if (!spec.ok) {
+      blockedByRisk = `Instrument spec unreadable (${spec.error}) — cannot size by risk`;
+    } else if (!snap.ok) {
+      blockedByRisk = `Account rules unreadable (${snap.error}) — refusing to open blind`;
+    } else {
+      unitsPerLot = spec.spec.contractSize;
+      riskBudget = sizingBaseAmount(risk, snap.snapshot) * riskPct * edge.multiplier;
+      const sized = sizeLotsForRisk({ riskBudget, entry: last, stop: stopLoss, spec: spec.spec });
+      if (sized.refused) {
+        blockedByRisk = `Sizing: ${sized.refused}`;
+      } else {
+        lots = sized.lots;
+        riskAtStop = sized.riskAtStop;
+        sizingNote = `${edge.reason} · ${spec.spec.source} spec tick=${spec.spec.tickSize} tickValue=${spec.spec.lossTickValue.toFixed(4)} ${snap.snapshot.currency ?? ''}`.trim();
+        // De accountregels, met het risico van DEZE order tot zijn stop.
+        gate = evaluatePreTradeGate({
+          ...gateBase,
+          rules: await rulesFromSnapshot(risk, snap.snapshot, symbol, sized.riskAtStop),
+        });
+        await tripOnHardBreach(gate, orderAccount, snap.snapshot.equity);
+        if (!gate.allowed) {
+          blockedByRisk = gate.reason;
+          lots = 0;
+        }
+        const ruleChecks = gate.checks.filter(c => !['account', 'breaker', 'dayLimit', 'allowShort', 'confidence'].includes(c.id));
+        if (ruleChecks.length) {
+          steps.push(step(
+            'risk',
+            gate.allowed ? 'Account rules OK' : 'Account rules blocked',
+            ruleChecks.map(c => `${c.status} ${c.id}: ${c.detail}`).join(' · '),
+            gate.allowed ? 1 : 0,
+          ));
+        }
+      }
+    }
+    if (lots <= 0) { stopLoss = null; takeProfit = null; }
+  } else if (closesLong && !blockedByRisk) {
+    // Closing is never gated by the funnel or the account rules — a pair that
+    // stopped being a finalist is exactly the one most likely to need an exit.
+    // posQty is the broker's own volume in lots, so the whole long is closed.
+    lots = posQty;
+  }
+
+  steps.push(step(
+    'size',
+    'Position sizing',
+    lots > 0 && !closesLong
+      ? `risk budget ${riskBudget.toFixed(2)} (${(riskPct * 100).toFixed(2)}% of ${risk.sizingBase ?? 'equity'}) → ${lots} lots · ${riskAtStop.toFixed(2)} lost at stop (${slDistance.toFixed(5)} away) · sizing: ${sizingNote}`
+      : closesLong && lots > 0
+        ? `close ${lots} lots (existing long)`
+        : `no size — ${blockedByRisk ?? (action === 'hold' ? 'HOLD' : 'not opening')}`,
+    lots,
+  ));
+  if (lots > 0 && stopLoss != null) {
     steps.push(step(
       'size',
       'Protective levels',
-      `ATR14=${atr14?.toFixed(4) ?? 'n/a (flat 1% fallback)'} · SL=${stopLoss?.toFixed(4)} (${SL_ATR_MULTIPLE}x) · TP=${takeProfit?.toFixed(4)} (${REWARD_RISK_RATIO}R)`,
+      `ATR14=${atr14?.toFixed(4) ?? 'n/a (flat 1% fallback)'} · SL=${stopLoss.toFixed(5)} (${SL_ATR_MULTIPLE}x) · TP=${takeProfit?.toFixed(5)} (${REWARD_RISK_RATIO}R)`,
     ));
   }
+  // Het papieren spiegelboek rekent in eenheden, de broker in lots.
+  const qty = lots > 0 ? lots * unitsPerLot : 0;
 
   const rationale = [
     `Agent ${symbol} @ ${last.toFixed(4)} (${snap.source}).`,
@@ -719,7 +778,7 @@ export async function runTradingAgent(input: {
       ? `Intel ${intel.signal} ${(intel.confidence * 100).toFixed(0)}%: ${intel.thesis.slice(0, 160)}`
       : 'Tape-only (no completed intel).',
     `Score ${score.toFixed(3)} → ${action.toUpperCase()} conf ${(confidence * 100).toFixed(0)}%.`,
-    blockedByRisk ? `RISK: ${blockedByRisk}` : `Size qty=${qty}.`,
+    blockedByRisk ? `RISK: ${blockedByRisk}` : `Size ${lots} lots${riskAtStop > 0 ? ` (${riskAtStop.toFixed(2)} at stop)` : ''}.`,
     `Learn: winRate ${(learning.winRate * 100).toFixed(0)}% minConf ${learning.learnedMinConfidence.toFixed(2)}.`,
   ].join(' ');
 
@@ -788,6 +847,7 @@ export async function runTradingAgent(input: {
       symbol,
       side: action === 'buy' ? 'buy' : 'sell',
       qty,
+      lots,
       reason: rationale.slice(0, 400),
       confidence,
       intelReportId: intel?.id,
@@ -814,9 +874,9 @@ export async function runTradingAgent(input: {
     } else {
       tradeId = placed.tradeId;
       decision.executedTradeId = tradeId;
-      steps.push(step('execute', 'Demo fill', `${action.toUpperCase()} ${qty} @ ${placed.price}`, 1));
+      steps.push(step('execute', 'Demo fill', `${action.toUpperCase()} ${lots} lots @ ${placed.price}`, 1));
       await rememberTradeDecision(decision);
-      await rememberLesson(symbol, `Filled ${action} ${qty} @ ${placed.price}`, confidence);
+      await rememberLesson(symbol, `Filled ${action} ${lots} lots @ ${placed.price}`, confidence);
     }
   } else {
     steps.push(step(

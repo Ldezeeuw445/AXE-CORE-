@@ -34,7 +34,13 @@ export async function placeManualMarketOrder(input: {
   if (!Number.isFinite(input.qty) || input.qty <= 0) {
     return { ok: false, stage: 'gate', error: 'Invalid quantity', checks: [] };
   }
-  const verdict = await assessPreTrade({ symbol: input.symbol, side: input.side, origin: 'manual' });
+  // qty is hier het volume in LOTS, zoals de grafiek het invoert. Het ging
+  // voorheen door qtyToLots, dat 0,1 lot EURUSD als "notioneel onder $50" las
+  // en er 0,01 van maakte.
+  const verdict = await assessPreTrade({
+    symbol: input.symbol, side: input.side, origin: 'manual',
+    order: { lots: input.qty, stopLoss: input.stopLoss ?? null },
+  });
   if (!verdict.allowed || !verdict.clearance) {
     return { ok: false, stage: 'gate', error: verdict.reason ?? 'Blocked by risk gate', checks: verdict.checks };
   }
@@ -43,6 +49,7 @@ export async function placeManualMarketOrder(input: {
     symbol: input.symbol,
     side: input.side,
     qty: input.qty,
+    lots: input.qty,
     reason: 'Manual desk execution',
     confidence: 1,
     stopLoss: input.stopLoss,
@@ -67,7 +74,10 @@ export async function placeManualPendingOrder(input: {
   }
   // Wachtende orders gaan altijd naar het actieve account (brokerPlacePendingOrder
   // kent geen ander), dus de poort beoordeelt ook dat account.
-  const verdict = await assessPreTrade({ symbol: input.symbol, side: pendingSide(input.type), origin: 'manual' });
+  const verdict = await assessPreTrade({
+    symbol: input.symbol, side: pendingSide(input.type), origin: 'manual',
+    order: { lots: input.qty, stopLoss: input.stopLoss ?? null, entry: input.openPrice },
+  });
   if (!verdict.allowed || !verdict.clearance) {
     return { ok: false, stage: 'gate', error: verdict.reason ?? 'Blocked by risk gate', checks: verdict.checks };
   }
@@ -75,6 +85,7 @@ export async function placeManualPendingOrder(input: {
     symbol: input.symbol,
     type: input.type,
     qty: input.qty,
+    lots: input.qty,
     openPrice: input.openPrice,
     stopLoss: input.stopLoss,
     takeProfit: input.takeProfit,

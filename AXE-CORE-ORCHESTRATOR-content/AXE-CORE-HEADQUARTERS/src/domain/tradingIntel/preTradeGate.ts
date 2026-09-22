@@ -15,16 +15,26 @@
  * waarmee brokerPlaceOrder nog een order verstuurt.
  */
 
+import type { RiskProfile } from '@/domain/tradingIntel/botTypes';
+import {
+  evaluateAccountRules,
+  type AccountRiskSnapshot,
+  type AccountRuleContext,
+  type RuleCheckId,
+} from '@/domain/tradingIntel/accountRules';
+
 export type OrderSide = 'buy' | 'sell';
 export type OrderOrigin = 'agent' | 'manual';
 
-export type GateCheckId = 'account' | 'breaker' | 'dayLimit' | 'allowShort' | 'confidence';
+export type GateCheckId = 'account' | 'breaker' | 'dayLimit' | 'allowShort' | 'confidence' | RuleCheckId;
 export type GateStatus = 'PASS' | 'BLOCK' | 'SKIP';
 
 export interface GateCheck {
   id: GateCheckId;
   status: GateStatus;
   detail: string;
+  /** Een grens is echt overschreden (zie accountRules.RuleCheck.breach). */
+  breach?: boolean;
 }
 
 export interface PreTradeGateInput {
@@ -52,6 +62,12 @@ export interface PreTradeGateInput {
    * geldt geen vertrouwensvloer van de agent. De harde grenzen wel.
    */
   confidence?: { value: number; floor: number };
+  /**
+   * De accountregels (dagverlies, statische drawdown, open risico, posities,
+   * doelen, consistentie, sessie, nieuws). Alleen voor een OPENING; een
+   * sluitende order verkleint risico en hoort hier niet op te stuiten.
+   */
+  rules?: { profile: RiskProfile; snapshot: AccountRiskSnapshot; context: AccountRuleContext };
 }
 
 declare const clearanceBrand: unique symbol;
@@ -109,6 +125,7 @@ export function evaluatePreTradeGate(input: PreTradeGateInput, now: number = Dat
   }
 
   const opensShort = input.side === 'sell' && input.longPositionQty <= 0;
+  const reducesLong = input.side === 'sell' && input.longPositionQty > 0;
   if (!opensShort) {
     checks.push({ id: 'allowShort', status: 'SKIP', detail: input.side === 'buy' ? 'long' : 'reduces an existing long' });
   } else if (!input.allowShort) {
@@ -126,6 +143,10 @@ export function evaluatePreTradeGate(input: PreTradeGateInput, now: number = Dat
     });
   } else {
     checks.push({ id: 'confidence', status: 'PASS', detail: `${(input.confidence.value * 100).toFixed(0)}% ≥ ${(input.confidence.floor * 100).toFixed(0)}%` });
+  }
+
+  if (input.rules && !reducesLong) {
+    checks.push(...evaluateAccountRules(input.rules.profile, input.rules.snapshot, input.rules.context));
   }
 
   const block = checks.find(c => c.status === 'BLOCK');

@@ -12,6 +12,7 @@ import {
 import { accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
 import type { DemoSide } from '@/domain/tradingIntel/demoTypes';
 import { verifyClearance, type PreTradeClearance } from '@/domain/tradingIntel/preTradeGate';
+import { tradingDayKey, tradingDayStart } from '@/domain/tradingIntel/accountRules';
 import {
   getMetaApiConfig,
   metaApiGetAccount,
@@ -130,10 +131,6 @@ function unavailable(reason: string): EffectiveAccountState {
 // order leaving for the broker and surfacing in that history, so a run can't
 // outrun its own fills.
 
-function utcDay(d: Date = new Date()): string {
-  return d.toISOString().slice(0, 10);
-}
-
 /**
  * Positions OPENED on `day` (UTC yyyy-mm-dd) from a deal history.
  *
@@ -145,11 +142,16 @@ function utcDay(d: Date = new Date()): string {
  *
  * Pure so the brake can be tested without a live account.
  */
-export function countBrokerOpeningsToday(deals: MetaApiDeal[], day: string): number {
+export function countBrokerOpeningsToday(deals: MetaApiDeal[], day: string, timeZone = 'UTC'): number {
   return deals.filter(d => {
     const isTrade = d.type === 'DEAL_TYPE_BUY' || d.type === 'DEAL_TYPE_SELL';
     const isOpen = d.entryType === 'DEAL_ENTRY_IN' || d.entryType === 'DEAL_ENTRY_INOUT';
-    return isTrade && isOpen && String(d.time ?? '').slice(0, 10) === day;
+    if (!(isTrade && isOpen)) return false;
+    // De dag van de deal in de resettijdzone van het account, niet altijd UTC:
+    // een prop-account dat om middernacht Praag omslaat telt zijn dag zo.
+    const t = Date.parse(String(d.time ?? ''));
+    const key = Number.isFinite(t) ? tradingDayKey(t, timeZone) : String(d.time ?? '').slice(0, 10);
+    return key === day;
   }).length;
 }
 
@@ -179,19 +181,21 @@ export function dayLimitState(input: {
 // leave for the broker. history-deals lags a fresh fill by seconds; without
 // this, several near-simultaneous decisions each read the same pre-burst broker
 // count and every one clears the cap. Keyed by accountId; rolls over on UTC day.
-const placedToday = new Map<string, { day: string; count: number }>();
+const placedToday = new Map<string, number[]>();
 
-export function placedTodayInProcess(accountId: string | null | undefined): number {
+export function placedTodayInProcess(accountId: string | null | undefined, timeZone = 'UTC'): number {
   if (!accountId) return 0;
-  const rec = placedToday.get(accountId);
-  return rec && rec.day === utcDay() ? rec.count : 0;
+  const since = tradingDayStart(Date.now(), timeZone);
+  return (placedToday.get(accountId) ?? []).filter(t => t >= since).length;
 }
 
 function notePlacedToday(accountId: string): void {
-  const day = utcDay();
-  const rec = placedToday.get(accountId);
-  if (rec && rec.day === day) rec.count += 1;
-  else placedToday.set(accountId, { day, count: 1 });
+  // Tijdstippen, geen dagteller: welke dag het was hangt af van de tijdzone van
+  // wie het vraagt. Twee dagen terug is genoeg voor elke zone.
+  const now = Date.now();
+  const keep = (placedToday.get(accountId) ?? []).filter(t => now - t < 48 * 60 * 60_000);
+  keep.push(now);
+  placedToday.set(accountId, keep);
 }
 
 /** Test seam — the in-process tally is module state. */
@@ -211,16 +215,18 @@ const OPENINGS_TTL_MS = 15_000;
  * there is no real account or its history can't be read this cycle. Null is the
  * signal the day-limit fails closed on — see dayLimitState.
  */
-export async function brokerOpeningsTodayFor(account?: MetaApiConfig): Promise<number | null> {
+export async function brokerOpeningsTodayFor(account?: MetaApiConfig, timeZone = 'UTC'): Promise<number | null> {
   const meta = account ?? await getMetaApiConfig();
   if (!(meta?.enabled && meta.token && meta.accountId)) return null;
-  const day = utcDay();
-  const hit = openingsCache.get(meta.accountId);
-  if (hit && hit.day === day && Date.now() - hit.at < OPENINGS_TTL_MS) return hit.count;
-  const res = await metaApiGetHistoryDealsFor(meta, `${day}T00:00:00.000Z`, new Date().toISOString());
+  const now = Date.now();
+  const day = tradingDayKey(now, timeZone);
+  const cacheKey = `${meta.accountId}|${timeZone}`;
+  const hit = openingsCache.get(cacheKey);
+  if (hit && hit.day === day && now - hit.at < OPENINGS_TTL_MS) return hit.count;
+  const res = await metaApiGetHistoryDealsFor(meta, new Date(tradingDayStart(now, timeZone)).toISOString(), new Date(now).toISOString());
   if (!res.ok) return null;
-  const count = countBrokerOpeningsToday(res.deals, day);
-  openingsCache.set(meta.accountId, { at: Date.now(), day, count });
+  const count = countBrokerOpeningsToday(res.deals, day, timeZone);
+  openingsCache.set(cacheKey, { at: now, day, count });
   return count;
 }
 
@@ -367,6 +373,12 @@ export async function brokerPlaceOrder(input: {
    * dit symbool, deze kant en dit account gaat er niets naar de broker.
    */
   clearance: PreTradeClearance;
+  /**
+   * Lots, als de aanroeper ze op risico heeft uitgerekend (positionSizing).
+   * Dan gaat qtyToLots — een symbool-regex met een plafond van één lot — er
+   * niet meer overheen. `qty` blijft voor het papieren spiegelboek.
+   */
+  lots?: number;
 }): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number; venue?: string }> {
   const meta = input.account ?? await getMetaApiConfig();
   const live = Boolean(meta?.enabled && meta.token && meta.accountId);
@@ -380,7 +392,7 @@ export async function brokerPlaceOrder(input: {
   await markPositions({ [input.symbol.toUpperCase()]: snap.last });
 
   if (meta && live) {
-    const lots = qtyToLots(input.symbol, input.qty, snap.last);
+    const lots = input.lots != null && input.lots > 0 ? input.lots : qtyToLots(input.symbol, input.qty, snap.last);
     const placed = await metaApiMarketOrder({
       account: meta,
       symbol: input.symbol,
@@ -462,6 +474,8 @@ export async function brokerPlacePendingOrder(input: {
   /** Zie brokerPlaceOrder: een wachtende order opent later een positie, dus
    *  hij gaat door dezelfde poort. De kant volgt uit het ordertype. */
   clearance: PreTradeClearance;
+  /** Volume in lots, zoals de handmatige order het invoert. */
+  lots?: number;
 }): Promise<{ ok: boolean; orderId?: string; error?: string; venue?: string }> {
   const meta = await getMetaApiConfig();
   if (!(meta?.enabled && meta.token && meta.accountId)) {
@@ -475,7 +489,7 @@ export async function brokerPlacePendingOrder(input: {
   });
   if (!cleared.ok) return { ok: false, error: cleared.error, venue: 'gate' };
   const snap = await fetchMarketSnapshot(input.symbol);
-  const lots = qtyToLots(input.symbol, input.qty, input.openPrice || snap.last);
+  const lots = input.lots != null && input.lots > 0 ? input.lots : qtyToLots(input.symbol, input.qty, input.openPrice || snap.last);
   const placed = await metaApiPendingOrder({
     symbol: input.symbol,
     type: input.type,

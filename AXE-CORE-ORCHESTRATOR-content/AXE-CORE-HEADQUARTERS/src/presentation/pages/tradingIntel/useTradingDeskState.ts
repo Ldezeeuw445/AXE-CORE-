@@ -39,6 +39,7 @@ import {
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { getRiskProfile, setRiskMode, saveRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
+import { applyRiskEdit } from '@/domain/tradingIntel/riskPresets';
 import { getLearningStats, listThinkingTraces } from '@/infrastructure/persistence/tradingLearningService';
 import { getBrokerConnection, connectBrokerKind, getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import {
@@ -675,8 +676,7 @@ export function useTradingDeskState() {
     const clampPct = (v: number | undefined, fb: number, max = 1) =>
       typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : fb;
     const next: RiskProfile = {
-      ...current,
-      ...patch,
+      ...applyRiskEdit(current, patch),
       riskPerTradePct: clampPct(patch.riskPerTradePct, current.riskPerTradePct, 0.5),
       maxOpenRiskPct: clampPct(patch.maxOpenRiskPct, current.maxOpenRiskPct, 1),
       maxDailyLossPct: clampPct(patch.maxDailyLossPct, current.maxDailyLossPct, 1),
