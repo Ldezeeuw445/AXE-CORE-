@@ -31,14 +31,14 @@ here.
 | — | Runtime check in a browser + lab currency fix + DEV preview route | ✅ done | see `git log` |
 | 8 | Multi-chart (2 → 1/2/4) + strategy × pair × timeframe matrix | ✅ done | see `git log` |
 | 9 | Formal typed framework adapter (vbt/nt/kr/ta) in the interactive lab | ✅ done | see `git log` |
-| 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ⏳ not started | |
+| 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ✅ done | see `git log` |
 | 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ⏳ not started (trace data already richer, see below) | |
 | 12 | Remote read-only cockpit backend (`/trading/*`) | ⏳ not started | |
 | 24/7 | Server-side scheduler (Tauri not required), lock, watchdog | ⏳ not started | |
 | Event impact | Connect `gebeurtenisImpact.ts` into decision context | ⏳ not started | |
 
 Verification at the last checkpoint: `npx tsc --noEmit` clean · `npx vitest run`
-**1565/1565** · `npm run build` ✓ · backend `pytest` 144/144 (Phase 0A) ·
+**1578/1578** · `npm run build` ✓ · backend `pytest` 144/144 (Phase 0A) ·
 no new ESLint findings in any touched file (compared file-by-file against
 `3125fe0d`; the only pre-existing findings in touched files are unchanged).
 
@@ -249,6 +249,25 @@ absent from the production bundle — checked with grep on `dist/`):
 - Runtime (real VPS, XAUUSD h1, Nautilus): ema-bracket PF 3.91 on 21 trades →
   "not eligible: sample too small"; atr-breakout 30 trades PF 0.97; donchian 43.
 
+### Phase 10 — Robustness lab
+- `src/domain/tradingIntel/strategyLab/robustness.ts` — on `simulateAccount`:
+  parameter sweep (stop × ATR, target R), selection by average R with ≥ 30
+  trades (never by return), train/validation/test by date with the train→test
+  R drop, walk-forward (re-optimise per train window, score only the next test
+  window, parameter stability), seeded bootstrap of the trade sequence
+  (return/drawdown percentiles, P(loss), P(DD > 10%)), regimes at entry (trend
+  in ATR units, volatility vs median ATR so far), live-vs-backtest divergence
+  from the ledger (judged from 5 live trades).
+- `strategyLab.ts` — `prepareLab` extracted (shared by lab and robustness),
+  `runRobustness`; UI `lab/RobustnessPanel.tsx` (train→test drop first).
+- Tests: `robustness.test.ts` (7) — a train-only edge is flagged as gone on
+  test; test results independent of training bars; low-sample cells never
+  chosen; walk-forward windows never overlap; bootstrap reproducible.
+- Runtime (real EURUSD h1, ifvg): train R 0.27 → test 0.12 (flagged, drop
+  0.15), validation 19 trades (flagged), walk-forward 90 OOS trades R 0.15,
+  4/4 folds positive; bootstrap p5 −1.5 %, P(loss) 5.9 %; regimes: the edge is
+  in trending/high-vol conditions (flat/low: 46 trades, R −0.04).
+
 ## Behaviour changes that need your approval before production / live
 
 1. **Position sizes change.** Risk % now means money at the stop via the broker's
@@ -269,11 +288,6 @@ absent from the production bundle — checked with grep on `dist/`):
 
 ## Not done yet — concrete next steps
 
-- **Phase 10** — robustness on top of `simulateAccount`: parameter sweeps
-  (atrMultiple, rewardRisk), train/validation/test split by date, walk-forward,
-  bootstrap of trade sequence, regime split (ATR/trend), sample-size warnings
-  (`simulate` already warns < 30 trades), live-vs-backtest divergence from the
-  ledger.
 - **Phase 11** — trace already carries: Strategy selection, Evidence, Account
   rules (PASS/BLOCK lines), sizing with money at stop. Still to do: render as
   structured PASS/BLOCK/WAIT cards (`AgentOverviewPanel.tsx`, `BrainTab.tsx`),

@@ -19,9 +19,16 @@ import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/a
 import { buildSeriesFromCandles, loadBacktestSeries } from '@/application/tradingIntel/backtestEngine';
 import { getHistory } from '@/application/tradingIntel/historyService';
 import { barMs } from '@/domain/tradingIntel/candleCache';
+import { canonicalTimeframe } from '@/domain/tradingIntel/timeframes';
+import { getLedger, type LedgerStats } from '@/infrastructure/persistence/tradingLedgerService';
+import {
+  bootstrapTrades, liveVsBacktest, regimeBreakdown, trainValidationTest, walkForward,
+  type BootstrapReport, type Divergence, type RegimeRow, type RobustInput, type TrainValTestReport, type WalkForwardReport,
+} from '@/domain/tradingIntel/strategyLab/robustness';
 import {
   simulateAccount,
   type LabBar,
+  type LabConfig,
   type LabCosts,
   type LabRun,
   type LabSizing,
@@ -138,7 +145,19 @@ async function loadLabSeries(input: StrategyLabInput & { limit: number }): Promi
   return { ok: true, candles: loaded.candles, series: loaded.series, source: loaded.source, depth: null };
 }
 
-export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: true; result: StrategyLabResult } | { ok: false; error: string }> {
+/** Alles wat een lab-run voorbereidt: candles, venster, signaal, instrument, simulatie-instellingen. */
+interface PreparedLab {
+  symbol: string;
+  loaded: Extract<Awaited<ReturnType<typeof loadLabSeries>>, { ok: true }>;
+  bars: LabBar[];
+  warmupBars: number;
+  signalAt: (i: number) => LabSignal;
+  cfg: LabConfig;
+  fromMs: number;
+  highImpactDays: Set<string> | null;
+}
+
+async function prepareLab(input: StrategyLabInput): Promise<{ ok: true; lab: PreparedLab } | { ok: false; error: string }> {
   const symbol = input.symbol.trim().toUpperCase();
   const limit = Math.min(Math.max(input.limit, 100), 20_000);
   const loaded = await loadLabSeries({ ...input, symbol, limit });
@@ -187,7 +206,7 @@ export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: tru
 
   const highImpactDays = input.profile?.newsRestriction === 'high_impact_day' ? await highImpactDaysFor(symbol) : null;
 
-  const run = simulateAccount(bars, signalAt, {
+  const cfg: LabConfig = {
     startingBalance: input.startingBalance,
     sizing: input.sizing,
     instrument,
@@ -202,7 +221,16 @@ export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: tru
     warmupBars,
     profile: input.profile ?? null,
     highImpactDays,
-  });
+  };
+  return { ok: true, lab: { symbol, loaded, bars, warmupBars, signalAt, cfg, fromMs, highImpactDays } };
+}
+
+export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: true; result: StrategyLabResult } | { ok: false; error: string }> {
+  const prepared = await prepareLab(input);
+  if (!prepared.ok) return prepared;
+  const { symbol, loaded, bars, warmupBars, signalAt, cfg, fromMs, highImpactDays } = prepared.lab;
+  const instrument = cfg.instrument;
+  const run = simulateAccount(bars, signalAt, cfg);
 
   const warnings = [...run.warnings];
   if (loaded.source === 'twelvedata') warnings.push('Candles from TwelveData, not the broker feed the live agent trades against');
@@ -369,4 +397,65 @@ export async function runStrategyMatrix(input: {
   }
   input.onProgress?.(done, total, '');
   return cells;
+}
+
+// ── Robuustheid ──────────────────────────────────────────────────────────────
+
+export interface RobustnessResult {
+  symbol: string;
+  timeframe: string;
+  strategyLabel: string;
+  bars: number;
+  grid: { atrMultiple: number[]; rewardRisk: Array<number | null> };
+  trainValTest: TrainValTestReport;
+  walkForward: WalkForwardReport;
+  /** Op de trades van één volledige run met de lab-instellingen. */
+  bootstrap: BootstrapReport;
+  regimes: RegimeRow[];
+  fullRunTrades: number;
+  divergence: Divergence | null;
+  warnings: string[];
+}
+
+export const DEFAULT_GRID = { atrMultiple: [1, 1.5, 2, 2.5], rewardRisk: [1, 1.5, 2, 3] as Array<number | null> };
+
+export async function runRobustness(
+  input: StrategyLabInput,
+  opts: { grid?: { atrMultiple: number[]; rewardRisk: Array<number | null> }; folds?: number } = {},
+): Promise<{ ok: true; result: RobustnessResult } | { ok: false; error: string }> {
+  const prepared = await prepareLab(input);
+  if (!prepared.ok) return prepared;
+  const { bars, signalAt, cfg, symbol } = prepared.lab;
+  const grid = opts.grid ?? DEFAULT_GRID;
+  const rInput: RobustInput = { bars, signalAt, cfg };
+  const trainValTest = trainValidationTest(rInput, grid);
+  const wf = walkForward(rInput, grid, opts.folds ?? 4);
+  const full = simulateAccount(bars, signalAt, cfg);
+  const bootstrap = bootstrapTrades(full.trades.map(t => t.pnl), cfg.startingBalance, { drawdownThreshold: 0.1 });
+  const regimes = regimeBreakdown(bars, full.trades);
+
+  let divergence: Divergence | null = null;
+  if (input.strategy.kind === 'single') {
+    const tf = canonicalTimeframe(input.timeframe) ?? 'h1';
+    const strategyId = input.strategy.strategy;
+    const ledger: LedgerStats[] = await getLedger(symbol).catch(() => []);
+    const row = ledger.find(e => e.strategy === strategyId && e.timeframe === tf);
+    if (row?.backtest) {
+      divergence = liveVsBacktest({
+        liveTrades: row.trades, liveNetReturnPct: row.netReturnPct,
+        backtestTrades: row.backtest.trades, backtestNetReturnPct: row.backtest.netReturnPct,
+      });
+    }
+  }
+
+  const warnings = [...trainValTest.warnings, ...wf.warnings];
+  if (full.trades.length < 30) warnings.push(`Only ${full.trades.length} trades in the full run — every statistic here is fragile`);
+  warnings.push('Bootstrap assumes trades are independent; clustered losses make real drawdowns worse');
+  return {
+    ok: true,
+    result: {
+      symbol, timeframe: input.timeframe, strategyLabel: strategyLabel(input.strategy), bars: bars.length,
+      grid, trainValTest, walkForward: wf, bootstrap, regimes, fullRunTrades: full.trades.length, divergence, warnings,
+    },
+  };
 }

@@ -20,6 +20,7 @@ import { LabEquityChart } from './LabEquityChart';
 import { LabTradeTable } from './LabTradeTable';
 import { LabReplay } from './LabReplay';
 import { StrategyMatrix } from './StrategyMatrix';
+import { RobustnessPanel } from './RobustnessPanel';
 import { FrameworkEnginesPanel } from './FrameworkEnginesPanel';
 
 const INPUT = 'rounded px-2 py-1.5 text-[12px] w-full';
@@ -279,6 +280,7 @@ export function StrategyLabPanel({ symbol, timeframe, limit, strategy }: {
         </div>
       )}
 
+      <RobustnessPanel input={() => (strategy ? { ...baseConfig(), symbol, timeframe, strategy } : null)} />
       <StrategyMatrix base={baseConfig} />
       <FrameworkEnginesPanel symbol={symbol} timeframe={timeframe} labResult={result && 'run' in result ? result : null} />
 
