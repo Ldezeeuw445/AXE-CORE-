@@ -131,6 +131,7 @@ export async function speakWithFishAudio(
     // one-time source and analyser.
     try {
       fishAudioContext ??= new AudioContext();
+      void fishAudioContext.resume().catch(() => {});
       if (!fishSource) {
         fishSource = fishAudioContext.createMediaElementSource(audio);
         fishAnalyser = fishAudioContext.createAnalyser();
