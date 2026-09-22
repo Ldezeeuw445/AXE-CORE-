@@ -223,13 +223,13 @@ async function uploadPrivateCapture(file, mime, prefix = 'screen') {
 }
 
 async function screenObserve(args = {}) {
-  const file = join(tmpdir(), `axe-screen-${process.pid}-${Date.now()}.png`);
+  const file = join(tmpdir(), `axe-screen-${process.pid}-${Date.now()}.jpg`);
   try {
     const meta = await nativeComputerUse('screen.capture', {
       display_index: Number(args.display_index ?? 0),
       path: file,
     });
-    const stored = await uploadPrivateCapture(file, 'image/png', 'screen');
+    const stored = await uploadPrivateCapture(file, 'image/jpeg', 'screen');
     return JSON.stringify({
       ...stored,
       display_index: meta.display_index,
