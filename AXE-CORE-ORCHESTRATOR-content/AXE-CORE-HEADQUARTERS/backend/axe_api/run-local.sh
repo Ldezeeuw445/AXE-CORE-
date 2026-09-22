@@ -109,6 +109,11 @@ if [ ! -x "$VENV/bin/python" ]; then
   uv pip install --python "$VENV/bin/python" -r "$VENV/requirements-local.txt"
 fi
 
+if [[ "${SETUP_ONLY:-0}" == "1" ]]; then
+  echo "axe_api local runtime prepared: $PWD/$VENV"
+  exit 0
+fi
+
 echo
 echo "axe_api on http://$HOST:$PORT"
 # Dezelfde terugval als agent_runner._repos() gebruikt. Alleen de
