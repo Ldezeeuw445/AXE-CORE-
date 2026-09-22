@@ -33,7 +33,7 @@ here.
 | 9 | Formal typed framework adapter (vbt/nt/kr/ta) in the interactive lab | ✅ done | see `git log` |
 | 10 | Robustness lab (sweeps, OOS, walk-forward, Monte Carlo, regimes) | ✅ done | see `git log` |
 | 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ✅ done | see `git log` |
-| 12 | Remote read-only cockpit backend (`/trading/*`) | ⏳ not started | |
+| 12 | Remote read-only cockpit backend (`/trading/*`) | ✅ built, **not deployed** (VPS deploy) | see `git log` |
 | 24/7 | Cross-device lease + idempotent slots; headless VPS runner of the same cycle; watchdog | ✅ built, **not deployed** (needs migration + VPS secret) | see `git log` |
 | Event impact | `gebeurtenisImpact` measured by the desk heartbeat → desk facts → AXE Algo context + trace | ✅ done | see `git log` |
 
@@ -358,6 +358,26 @@ absent from the production bundle — checked with grep on `dist/`):
   JWT, role `anon`. Production Supabase answers PGRST202/PGRST205 for the
   missing function/table → detected as "not migrated".
 
+### Phase 12 — Read-only cockpit API `/trading/*`
+- `backend/axe_api/trading_cockpit.py`, mounted in `main.py` under `/trading`
+  behind the existing bearer `AUTH` (guarded import like perplexity_agent).
+  `GET /trading/overview` and `GET /trading/{accounts|risk|autopilot|positions|
+  decisions|crew|pnl|evidence|lab|learning}`; 15 s cache; GET only.
+- Data: `user_settings` (accounts, risk profiles, breakers, autopilot, decision
+  traces with verdicts, intel reports, lab runs, learning), `core_trading_trades`
+  (positions, realised P&L per account, evidence per environment), and
+  `core_autopilot_lease` (tolerates the table not existing yet).
+- **No secrets:** accounts go through a field whitelist (MetaAPI account id
+  masked to 8 chars, `connected` flag instead of the token), then every response
+  through a recursive `scrub` of token/secret/password/api-key keys.
+- Tests `test_trading_cockpit.py` (9): no token/full account id in any
+  response, recursive scrub, legacy traces marked not invented, P&L/evidence/
+  positions maths, crew latest-per-symbol, lab, the loader never calls a write
+  method and survives a missing lease table, 401 without auth, 404 unknown
+  section, 405 on POST. Backend suite 153/153.
+- Not run against production: `main.py` needs the VPS environment; deploy is
+  an approval item (same as the Phase 0A crew fix).
+
 ## Behaviour changes that need your approval before production / live
 
 1. **Position sizes change.** Risk % now means money at the stop via the broker's
@@ -371,7 +391,8 @@ absent from the production bundle — checked with grep on `dist/`):
    switching it on is a per-account decision.
 5. **Account environment** — set funded challenges on demo servers to
    "live or funded" in the Accounts tab, or they count as demo evidence.
-6. **Backend deploy** of the Phase 0A crew fix to the VPS (not done).
+6. **Backend deploy** of the Phase 0A crew fix and the Phase 12 `/trading/*`
+   cockpit to the VPS (not done).
 7. **Desktop build/install** (`npm run tauri:build`) — not run yet in this work.
 8. **Apply migration `20260922120000_trading_autopilot_lease.sql`** (new table +
    RPC). Until then the desk runs as before, with a status warning.
@@ -383,9 +404,6 @@ absent from the production bundle — checked with grep on `dist/`):
 
 ## Not done yet — concrete next steps
 
-- **Phase 12** — authenticated read-only `/trading/*` routes in
-  `backend/axe_api/main.py` (accounts, risk, positions, decisions, crew, P&L,
-  evidence). Never return MetaAPI tokens.
 
 ---
 

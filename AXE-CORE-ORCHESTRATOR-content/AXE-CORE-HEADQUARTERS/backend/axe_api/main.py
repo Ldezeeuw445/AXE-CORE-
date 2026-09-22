@@ -2044,6 +2044,15 @@ try:
 except Exception as _e:  # noqa: BLE001
     log.warning("perplexity_agent niet ingeladen (%s) -- /research/perplexity bestaat niet", _e)
 
+# Trading-cockpit: alleen-lezen zicht op het bureau (accounts, risico, posities,
+# beslissingen, crew, P&L, bewijs, lab, autopilot-lease) voor een telefoon of
+# tweede scherm. Geen schrijfpad, geen MetaAPI-tokens -- zie trading_cockpit.py.
+try:
+    from trading_cockpit import build_router as _trading_router  # noqa: E402
+    app.include_router(_trading_router(sb), prefix="/trading", dependencies=[AUTH], tags=["trading"])
+except Exception as _e:  # noqa: BLE001
+    log.warning("trading_cockpit niet ingeladen (%s) -- /trading/* bestaat niet", _e)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
