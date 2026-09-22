@@ -5,7 +5,7 @@ import { BorderBeam } from 'border-beam';
 import { VoiceBeam, useMicrophone } from 'voice-glow';
 import { getAxeTtsLevel } from '@/infrastructure/gateways/openAiTtsService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
+import { dispatchComputerTask, onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
 import { closeCurrentAuxWindow, restoreMainWindow } from '@/infrastructure/gateways/windowManagerService';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
@@ -33,10 +33,10 @@ async function beginWindowResize() {
 }
 
 const QUICK = [
-  { label: 'Downloads', prompt: 'Use [COMPUTER:] personal.files.list for Downloads on my selected Mac and show me the real current contents.', icon: Folder },
-  { label: 'Documents', prompt: 'Use [COMPUTER:] personal.files.list for Documents on my selected Mac and show me the real current contents.', icon: Folder },
-  { label: 'Screenshots', prompt: 'Use [COMPUTER:] personal.files.list for Desktop on my selected Mac and identify recent screenshot files from the real listing.', icon: Image },
-  { label: 'Desktop', prompt: 'Use [COMPUTER:] personal.files.list for Desktop on my selected Mac and show me the real current contents.', icon: Folder },
+  { label: 'Downloads', path: 'Downloads', screenshotsOnly: false, icon: Folder },
+  { label: 'Documents', path: 'Documents', screenshotsOnly: false, icon: Folder },
+  { label: 'Screenshots', path: 'Desktop', screenshotsOnly: true, icon: Image },
+  { label: 'Desktop', path: 'Desktop', screenshotsOnly: false, icon: Folder },
 ] as const;
 
 export default function ComputerUseOverlay() {
@@ -45,6 +45,8 @@ export default function ComputerUseOverlay() {
   const [text, setText] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [preferred, setPreferred] = useState<string | null>(null);
+  const [toolBusy, setToolBusy] = useState(false);
+  const [toolReply, setToolReply] = useState<string | null>(null);
 
   useEffect(() => {
     void voice.loadConversation();
@@ -60,13 +62,46 @@ export default function ComputerUseOverlay() {
 
   const machine = useMemo(() => devices.find(d => d.id === preferred) ?? devices[0] ?? null, [devices, preferred]);
   const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
-  const busy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'listening';
+  const busy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'listening' || toolBusy;
   const speaking = voice.voiceStatus === 'listening' || voice.voiceStatus === 'speaking';
 
   useEffect(() => {
     if (voice.voiceStatus === 'listening') { void mic.start(); }
     else if (mic.state === 'live') { mic.stop(); }
   }, [voice.voiceStatus]); // visual stream only; transcription stays in voiceStore
+
+  async function runQuick(path: 'Desktop' | 'Documents' | 'Downloads', screenshotsOnly: boolean) {
+    if (!machine || toolBusy) {
+      if (!machine) setToolReply('No Mac worker is online, so AXE cannot read that folder.');
+      return;
+    }
+    setToolBusy(true);
+    setToolReply(null);
+    try {
+      const result = await dispatchComputerTask({
+        tool: 'personal.files.list',
+        tier: 'observe',
+        workspace: 'AXE Core',
+        device: machine.id,
+        args: { path },
+      });
+      if (!result.ok) {
+        setToolReply(result.text);
+        return;
+      }
+      if (!screenshotsOnly) {
+        setToolReply(result.text);
+        return;
+      }
+      const shots = result.text
+        .split('\n')
+        .filter(line => /screen ?shot|schermafbeelding|\.png$|\.jpe?g$|\.webp$/i.test(line))
+        .slice(0, 80);
+      setToolReply(shots.length ? shots.join('\n') : 'No screenshot-like image files found on the Desktop.');
+    } finally {
+      setToolBusy(false);
+    }
+  }
 
   async function submit(value = text) {
     const task = value.trim();
@@ -125,13 +160,13 @@ export default function ComputerUseOverlay() {
           <span>{busy ? 'AXE is working…' : 'Personal Computer Use'}</span>
         </div>
 
-        {last?.text && <div className="computer-use-overlay__reply">{last.text}</div>}
+        {(toolReply ?? last?.text) && <div className="computer-use-overlay__reply">{toolReply ?? last?.text}</div>}
 
         <div className="computer-use-overlay__quick">
           {QUICK.map(item => {
             const Icon = item.icon;
             return (
-              <button key={item.label} type="button" onClick={() => void submit(item.prompt)} disabled={busy}>
+              <button key={item.label} type="button" onClick={() => void runQuick(item.path, item.screenshotsOnly)} disabled={busy}>
                 <Icon size={22} />
                 <span>{item.label}</span>
               </button>
