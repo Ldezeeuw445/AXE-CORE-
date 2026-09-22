@@ -24,6 +24,7 @@ import {
   tierFor,
   needsApproval,
   UnknownToolError,
+  isDeviceScopedTool,
   type RiskTier,
 } from '@/domain/tools/riskTiers';
 import {
@@ -35,6 +36,8 @@ import {
   type ComputerCall,
 } from '@/infrastructure/gateways/computerRelay';
 import { kiesUit, voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { callVision, configuredVisionSlots } from '@/infrastructure/gateways/visionGateway';
 
 export interface ComputerToolRuntime extends ToolCatalogEntry {
   available: () => boolean;
@@ -82,13 +85,13 @@ function parse(raw: string): ParsedCall | string {
 }
 
 /** The human-readable body of the approval card. */
-function describe(call: ParsedCall, workspace: { name: string }, device: { label: string }): string {
+function describe(call: ParsedCall, scopeName: string, device: { label: string }): string {
   const spec = RISK_TIERS[call.tier];
   const lines = [
     `Tool       ${call.tool}`,
     `Tier       ${spec.label} — ${spec.blurb}`,
     `Machine    ${device.label}`,
-    `Workspace  ${workspace.name}`,
+    `${isDeviceScopedTool(call.tool) ? 'Scope' : 'Workspace'}  ${scopeName}`,
   ];
   if (typeof call.args.path === 'string') lines.push(`File       ${call.args.path}`);
   if (typeof call.args.command === 'string') lines.push(`Command    ${call.args.command}`);
@@ -99,6 +102,81 @@ function describe(call: ParsedCall, workspace: { name: string }, device: { label
     lines.push('', 'This one leaves the machine or is hard to undo.');
   }
   return lines.join('\n');
+}
+
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read screen capture.'));
+    reader.onload = () => {
+      const value = String(reader.result ?? '');
+      resolve(value.includes(',') ? value.slice(value.indexOf(',') + 1) : value);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function inspectPrivateImage(
+  meta: { bucket: string; path: string; mime?: string; width?: number; height?: number },
+  prompt: unknown,
+  systemPrompt: string,
+  defaultQuestion: string,
+  label: string,
+  deleteAfter: boolean,
+): Promise<string> {
+  const sb = getSupabase();
+  if (!sb) return `${label} capture succeeded, but AXE is not signed in so the private image cannot be inspected.`;
+  try {
+    const { data, error } = await sb.storage.from(meta.bucket).download(meta.path);
+    if (error || !data) return `${label} capture could not be downloaded for vision: ${error?.message ?? 'missing image'}`;
+    const imageBase64 = await blobToBase64(data);
+    const slots = configuredVisionSlots();
+    const question = typeof prompt === 'string' && prompt.trim() ? prompt.trim() : defaultQuestion;
+    const vision = await callVision(slots, {
+      prompt: question,
+      imageBase64,
+      mimeType: meta.mime ?? 'image/jpeg',
+      systemPrompt,
+    });
+    const size = meta.width && meta.height ? ` (${meta.width}×${meta.height})` : '';
+    return `${label}${size}:\n${vision.text}`;
+  } finally {
+    if (deleteAfter) {
+      // Screen captures are sensitive and transient. Best-effort delete as soon
+      // as vision has consumed them; never leave a public URL or task-row blob.
+      await sb.storage.from(meta.bucket).remove([meta.path]).catch(() => {});
+    }
+  }
+}
+
+async function groundScreenObservation(raw: string, prompt: unknown): Promise<string> {
+  let meta: { bucket?: string; path?: string; mime?: string; width?: number; height?: number; display_index?: number };
+  try { meta = JSON.parse(raw); } catch { return `SCREEN capture returned invalid metadata: ${raw.slice(0, 300)}`; }
+  if (!meta.bucket || !meta.path) return 'SCREEN capture returned no private storage location.';
+  const observed = await inspectPrivateImage(
+    { bucket: meta.bucket, path: meta.path, mime: meta.mime ?? 'image/jpeg', width: meta.width, height: meta.height },
+    prompt,
+    'You are AXE observing Luka\'s CURRENT Mac screen from a newly captured image. Ground every claim in visible pixels. If something is not visible, say that plainly. When a GUI action needs coordinates, report coordinates in the screenshot IMAGE PIXEL coordinate system: x from the left edge, y from the top edge. Never silently convert them to logical/Retina coordinates.',
+    'Describe the current screen precisely. Read visible text and name the frontmost app/window if clear. Do not infer anything not visible.',
+    'CURRENT SCREEN',
+    true,
+  );
+  return `${observed}\n\nFor a follow-up pointer action use display_index=${meta.display_index ?? 0} with image_x/image_y measured in this ${meta.width ?? '?'}×${meta.height ?? '?'} screenshot. The native helper converts those pixels to the correct Retina/multi-monitor global coordinates.`;
+}
+
+async function groundCameraSnapshot(raw: string, prompt: unknown): Promise<string> {
+  const bucket = /^bucket\s+(.+)$/mi.exec(raw)?.[1]?.trim();
+  const path = /^pad\s+(.+)$/mi.exec(raw)?.[1]?.trim();
+  if (!bucket || !path) return raw;
+  return inspectPrivateImage(
+    { bucket, path, mime: 'image/jpeg' },
+    prompt,
+    'You are AXE looking through Luka\'s selected Mac camera at a newly captured image. Ground every claim in the actual image and do not infer off-camera details.',
+    'Describe what the current Mac camera snapshot actually shows.',
+    'CURRENT CAMERA',
+    false,
+  );
 }
 
 async function execute(
@@ -117,10 +195,12 @@ async function execute(
          + 'Use [COMPUTER_RUN:] — it will ask Luka first.';
   }
 
-  const workspace = resolveWorkspace(parsed.args.workspace);
-  if (!workspace) {
+  const deviceScoped = isDeviceScopedTool(parsed.tool);
+  const workspace = deviceScoped ? null : resolveWorkspace(parsed.args.workspace);
+  if (!deviceScoped && !workspace) {
     return `COMPUTER refused: '${String(parsed.args.workspace ?? '')}' is not one of Luka's workspaces.`;
   }
+  const scopeName = deviceScoped ? 'Personal Computer' : workspace!.name;
 
   // Which machine. With a Mac Mini and an iMac both able to answer, this
   // cannot be left to whoever polls first: the same workspace name is a
@@ -149,11 +229,12 @@ async function execute(
   }
 
   const asked = String(parsed.args.device ?? '').trim().toLowerCase();
-  const able = devices.filter(d => d.workspaces.includes(workspace.name));
+  const able = deviceScoped ? devices : devices.filter(d => d.workspaces.includes(workspace!.name));
 
   if (!able.length) {
-    return `COMPUTER failed: no machine that is currently online has a checkout of `
-         + `'${workspace.name}'. Online now: ${devices.map(d => d.label).join(', ')}.`;
+    return deviceScoped
+      ? 'COMPUTER failed: no selected/online Mac is available for Personal Computer Use.'
+      : `COMPUTER failed: no machine that is currently online has a checkout of '${workspace!.name}'. Online now: ${devices.map(d => d.label).join(', ')}.`;
   }
 
   let device = able[0];
@@ -168,8 +249,9 @@ async function execute(
   if (asked) {
     const match = able.find(d => d.id.toLowerCase() === asked || d.label.toLowerCase() === asked);
     if (!match) {
-      return `COMPUTER failed: '${asked}' is not online with '${workspace.name}'. `
-           + `Available: ${able.map(d => d.label).join(', ')}.`;
+      return deviceScoped
+        ? `COMPUTER failed: '${asked}' is not an online Mac. Available: ${able.map(d => d.label).join(', ')}.`
+        : `COMPUTER failed: '${asked}' is not online with '${workspace!.name}'. Available: ${able.map(d => d.label).join(', ')}.`;
     }
     device = match;
   } else if (!voorkeur && able.length > 1) {
@@ -181,13 +263,14 @@ async function execute(
   }
 
   if (!readOnly) {
-    const remembered = await isTierRemembered(parsed.tier, workspace.name);
+    const trustScope = deviceScoped ? `@device:${device.id}` : workspace!.name;
+    const remembered = await isTierRemembered(parsed.tier, trustScope);
     if (needsApproval(parsed.tool, remembered)) {
       const spec = RISK_TIERS[parsed.tier];
       const approved = await ctx.requestApproval(
         parsed.tier === 'consequential' ? 'local_write' : 'local_run',
         `AXE wants to ${spec.label.toLowerCase()} on ${device.label}`,
-        describe(parsed, workspace, device),
+        describe(parsed, scopeName, device),
       );
       if (!approved) {
         return `COMPUTER refused: Luka denied '${parsed.tool}'. Nothing ran. `
@@ -199,13 +282,20 @@ async function execute(
   const call: ComputerCall = {
     tool: parsed.tool,
     tier: parsed.tier,
-    workspace: workspace.name,
+    workspace: deviceScoped ? '@device' : workspace!.name,
     device: device.id,
     args: parsed.args,
   };
 
   const r = await dispatchComputerTask(call);
-  return r.ok ? r.text : `COMPUTER: ${r.text}`;
+  if (!r.ok) return `COMPUTER: ${r.text}`;
+  if (parsed.tool === 'screen.observe') {
+    return groundScreenObservation(r.text, parsed.args.prompt);
+  }
+  if (parsed.tool === 'camera.snapshot') {
+    return groundCameraSnapshot(r.text, parsed.args.prompt);
+  }
+  return r.text;
 }
 
 export const COMPUTER_TOOL_RUNTIMES: ComputerToolRuntime[] = [

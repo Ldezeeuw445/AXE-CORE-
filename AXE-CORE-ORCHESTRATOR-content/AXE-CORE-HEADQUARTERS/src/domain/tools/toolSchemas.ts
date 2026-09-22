@@ -50,6 +50,8 @@ export interface ToolDef {
 }
 
 const str = (desc: string) => ({ type: 'string', description: desc });
+const num = (desc: string) => ({ type: 'number', description: desc });
+const strArr = (desc: string) => ({ type: 'array', items: { type: 'string' }, description: desc });
 
 /** Argument shape per tool id. Anything not listed falls back to a single string. */
 const ARGS: Record<string, { properties: Record<string, unknown>; required: string[] }> = {
@@ -64,17 +66,44 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
   // risk level -- tierFor() resolves it from the tool id after parsing, so a
   // web page that talks AXE into claiming `git.push` is read-only still gets a
   // push approval card. See computerCatalog for the full reasoning.
-  computer_read:   { properties: { tool: str('Read-only tool id, e.g. git.status, files.read, files.list, files.search.'),
-                                   path: str('Path, for files.* tools. Optional.'),
-                                   workspace: str('Which workspace, for git.*. Defaults to the selected one. Optional.'),
-                                   query: str('Search text, for files.search. Optional.') },
+  computer_read:   { properties: {
+                                   tool: str('Read-only tool id, e.g. screen.observe, screen.displays, pointer.position, app.list, window.list, git.status, files.read.'),
+                                   path: str('Path, for files.* / personal.files.list. Optional.'),
+                                   workspace: str('Workspace for repo-scoped tools. Optional.'),
+                                   device: str('Target Mac id or label. Optional; preferred Mac is used when unambiguous.'),
+                                   query: str('Search text, for files.search. Optional.'),
+                                   prompt: str('Question for screen.observe vision analysis. Optional.'),
+                                   display_index: num('Display index for screen.observe. Optional, defaults to 0.')
+                                 },
                      required: ['tool'] },
-  computer_run:    { properties: { tool: str('Tool id that changes something, e.g. git.commit, files.write, terminal.run.'),
+  computer_run:    { properties: {
+                                   tool: str('Mutating device/repo tool id, e.g. pointer.click, keyboard.type, app.open, git.commit.'),
                                    path: str('Path, for files.* tools. Optional.'),
                                    content: str('New file contents, for files.write. Optional.'),
                                    command: str('Command, for terminal.*. Optional.'),
                                    message: str('Commit message, for git.commit. Optional.'),
-                                   workspace: str('Which workspace. Optional.') },
+                                   workspace: str('Workspace for repo-scoped tools. Optional.'),
+                                   device: str('Target Mac id or label. Optional; preferred Mac is used when unambiguous.'),
+                                   x: num('Global Quartz X coordinate in logical points. Optional.'),
+                                   y: num('Global Quartz Y coordinate in logical points. Optional.'),
+                                   image_x: num('X pixel in the last screen.observe image. Prefer this with display_index for Retina-safe clicks. Optional.'),
+                                   image_y: num('Y pixel in the last screen.observe image. Prefer this with display_index for Retina-safe clicks. Optional.'),
+                                   from_x: num('Drag start global X. Optional.'),
+                                   from_y: num('Drag start global Y. Optional.'),
+                                   to_x: num('Drag end global X. Optional.'),
+                                   to_y: num('Drag end global Y. Optional.'),
+                                   from_image_x: num('Drag start X pixel in observed image. Optional.'),
+                                   from_image_y: num('Drag start Y pixel in observed image. Optional.'),
+                                   to_image_x: num('Drag end X pixel in observed image. Optional.'),
+                                   to_image_y: num('Drag end Y pixel in observed image. Optional.'),
+                                   display_index: num('Display index used by image coordinates. Optional, defaults to 0.'),
+                                   dx: num('Horizontal scroll delta. Optional.'),
+                                   dy: num('Vertical scroll delta. Optional.'),
+                                   text: str('Text for keyboard.type. Optional.'),
+                                   key: str('Key name for keyboard.key. Optional.'),
+                                   modifiers: strArr('Modifier names for keyboard.key: command, shift, option, control, fn. Optional.'),
+                                   app: str('Application name or bundle id for app.open/app.focus. Optional.')
+                                 },
                      required: ['tool'] },
   local_write:     { properties: { path: str('Absolute path to write.'),
                                    content: str('Full new file contents.') }, required: ['path', 'content'] },
@@ -122,6 +151,12 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
  * and quoting. What survives is the first prose line: what the tool is for.
  */
 function describe(id: string, promptDoc: string): string {
+  if (id === 'computer_read') {
+    return 'Observe the selected Mac. Use screen.observe for a fresh grounded screenshot; use it before and after meaningful GUI actions. Never answer what is on screen from memory.';
+  }
+  if (id === 'computer_run') {
+    return 'Perform one bounded action on the selected Mac. For GUI work, observe first, perform the smallest action, then observe again before continuing. Actions stay approval-gated by AXE risk policy.';
+  }
   const first = promptDoc.split('\n').find(l => l.trim()) ?? id;
   return first
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')   // leading emoji

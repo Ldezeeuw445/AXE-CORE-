@@ -28,6 +28,7 @@ VENV=".venv-local"
 ENV_FILE="${ENV_FILE:-.env.local}"
 PORT="${PORT:-8001}"          # same port nginx proxies to on the VPS
 HOST="${HOST:-127.0.0.1}"     # loopback only: this speaks for your machine
+SETUP_ONLY="${SETUP_ONLY:-0}"
 
 # ── env ───────────────────────────────────────────────────────────────────────
 # A relative ENV_FILE is relative to this script's directory (we cd'd there);
@@ -107,6 +108,11 @@ if [ ! -x "$VENV/bin/python" ]; then
   uv venv --python 3.12 "$VENV"
   grep -v browser-use requirements.txt > "$VENV/requirements-local.txt"
   uv pip install --python "$VENV/bin/python" -r "$VENV/requirements-local.txt"
+fi
+
+if [[ "$SETUP_ONLY" == "1" ]]; then
+  echo "axe_api local runtime prepared: $PWD/$VENV"
+  exit 0
 fi
 
 echo

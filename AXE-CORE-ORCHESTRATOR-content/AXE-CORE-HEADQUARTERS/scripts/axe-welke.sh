@@ -92,3 +92,40 @@ if [[ "$GEVONDEN" == "0" ]]; then
 fi
 
 printf '\n  De app zet dezelfde regel zelf boven in beeld op Home.\n'
+
+
+# ── En welke achtergrondworkers draaien echt ─────────────────────────────────
+#
+# De Tauri-app en de computer/browser workers zijn drie aparte processen.
+# Een actuele .app bewijst dus NIET dat Personal Computer Use actueel is.
+kop "AXE achtergrondworkers"
+
+toon_agent() {
+  local label="$1"
+  local expected_path="${2:-}"
+  local domein="gui/$(id -u)/$label"
+  local stand
+  if ! stand="$(launchctl print "$domein" 2>/dev/null)"; then
+    printf '  %-28s %s\n' "$label" 'niet geladen op deze Mac'
+    return
+  fi
+
+  local staat='geladen'
+  [[ "$stand" == *"state = running"* ]] && staat='running'
+  printf '  %-28s %s\n' "$label" "$staat"
+
+  if [[ -n "$expected_path" ]]; then
+    if [[ "$stand" == *"$expected_path"* ]]; then
+      printf '    bron: deze checkout · %s\n' "$expected_path"
+    else
+      let_op "$label wijst NIET naar de worker in deze checkout."
+      printf '    verwacht: %s\n' "$expected_path"
+      printf '    Dit verklaart een app die nieuwe UI toont maar oude Computer Use-capabilities gebruikt.\n'
+    fi
+  fi
+}
+
+toon_agent "com.axe.computer-worker" "$HIER/infra/computer-worker/worker.mjs"
+toon_agent "com.axe.browser-agent"
+
+printf '\n  Na een update moeten app én workers actueel zijn. npm run bijwerken doet beide.\n'

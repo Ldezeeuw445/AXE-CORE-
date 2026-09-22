@@ -73,9 +73,7 @@ VOOR="$(git rev-parse HEAD)"
 # veranderd" ontstaat, dus het script zegt het hardop.
 VERWACHT="orchestrator"
 if [[ "$TAK" != "$VERWACHT" ]]; then
-  printf '\n\033[33m! Je staat op tak "%s" en niet op "%s".\033[0m\n' "$TAK" "$VERWACHT"
-  printf '  Het werk staat op %s. Overstappen met:\n' "$VERWACHT"
-  printf '    git checkout %s && npm run bijwerken\n\n' "$VERWACHT"
+  stop "Canonical AXE CORE wordt ALLEEN uit '$VERWACHT' gebouwd. Je staat op '$TAK'. Gebruik voor featurewerk npm run tauri:dev of npm run tauri:check; gebruik npm run bijwerken pas nadat het werk in orchestrator zit."
 fi
 
 zeg "Binnenhalen op '$TAK'"
@@ -148,10 +146,17 @@ fi
 if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
   printf '\033[36m▸ Ondertekenen met "%s"\033[0m\n' "$APPLE_SIGNING_IDENTITY"
 else
-  printf '\033[33m! Geen AXE-certificaat: adhoc ondertekend, macOS vraagt de SSD opnieuw. Zie docs/MAC-ONDERTEKENEN.md\033[0m\n'
+  stop "Geen vast AXE signing-certificaat. Canonical update stopt hier bewust: een adhoc build zou een tweede macOS-identiteit/TCC-set maken. Zie docs/MAC-ONDERTEKENEN.md."
 fi
 
-npm run tauri:build
+zeg "Native helpers bouwen"
+bash infra/computer-worker/native/build.sh
+bash infra/computer-worker/camera/build.sh
+
+zeg "Lokale AXE runtime voorbereiden"
+SETUP_ONLY=1 bash backend/axe_api/run-local.sh
+
+AXE_CANONICAL_BUILD=1 npm run tauri:build
 
 [[ -d "$APP" ]] || stop "De bouw gaf geen $APP. Lees de uitvoer hierboven."
 
@@ -205,6 +210,17 @@ for poort in 4022 8001; do
   done
 done
 
+# ── 4c. canonical launchd-workers ───────────────────────────────────────────
+#
+# Beide achtergrondworkers worden opnieuw geregistreerd vanuit DEZE canonical
+# orchestrator-checkout. Dat maakt hun bronpad onderdeel van dezelfde update als
+# de .app en voorkomt dat launchd stil naar een oude worktree blijft wijzen.
+zeg "Canonical computer-worker registreren"
+bash scripts/install-computer-worker-launchd.sh
+
+zeg "Canonical browser-agent registreren"
+bash scripts/install-browser-agent-launchd.sh
+
 # ── 5. Starten ───────────────────────────────────────────────────────────────
 # Een zelfgebouwde app is niet ondertekend; zonder dit weigert Gatekeeper hem
 # zwijgend en gebeurt er bij dubbelklikken niets.
@@ -219,19 +235,22 @@ xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 # certificaat ondertekend is (zie hierboven), blijft de toestemming staan en
 # kan de kopie gewoon vervangen worden. Zonder certificaat blijft hij staan,
 # want dan zou vervangen juist wel om toestemming vragen.
-if [[ -d "/Applications/AXE CORE.app" ]]; then
-  if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
-    zeg "/Applications/AXE CORE.app bijwerken"
-    rm -rf "/Applications/AXE CORE.app"
-    ditto "$APP" "/Applications/AXE CORE.app"
-    xattr -dr com.apple.quarantine "/Applications/AXE CORE.app" 2>/dev/null || true
-    APP="/Applications/AXE CORE.app"
-  else
-    printf '\n\033[33m! Er staat ook een AXE CORE in /Applications. Zonder certificaat wordt die niet bijgewerkt\n'
-    printf '  en verschijnt hij in Spotlight naast deze. Weghalen met:\n'
-    printf '    rm -rf "/Applications/AXE CORE.app"\033[0m\n'
-  fi
-fi
+CANONICAL_APP="/Applications/AXE CORE.app"
+zeg "Één canonical app installeren: $CANONICAL_APP"
+rm -rf "$CANONICAL_APP"
+ditto "$APP" "$CANONICAL_APP"
+xattr -dr com.apple.quarantine "$CANONICAL_APP" 2>/dev/null || true
+codesign --verify --deep --strict "$CANONICAL_APP" || stop "Canonical AXE CORE signature-verificatie faalde."
+
+VERWACHT_SHA="$(git rev-parse --short HEAD)"
+APP_SHA="$(grep -rhoE 'commit:"[0-9a-f]{7,12}"' "$CANONICAL_APP" 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')"
+[[ -n "$APP_SHA" ]] || stop "Canonical app bevat geen build-stempel."
+[[ "$APP_SHA" == "$VERWACHT_SHA"* || "$VERWACHT_SHA" == "$APP_SHA"* ]] || stop "Canonical app is uit $APP_SHA gebouwd maar repo staat op $VERWACHT_SHA."
+
+# De release-bundle was vroeger óók Spotlight-startbaar. Na verificatie is
+# /Applications de enige gebruikersapp; de build-output blijft geen tweede AXE.
+rm -rf "$APP"
+APP="$CANONICAL_APP"
 
 zeg "Starten — $(date '+%H:%M') · gebouwd uit $(git rev-parse --short HEAD)"
 open "$APP"
@@ -240,9 +259,7 @@ open "$APP"
 # staat, dan kijk je naar een andere app -- `npm run welke` zegt welke.
 printf '\n  In de app staat boven op Home: build %s\n' "$(git rev-parse --short HEAD)"
 printf '  Staat er iets anders? Dan draait er een andere kopie: npm run welke\n\n'
-printf '  \033[36mMoet blijven draaien in een EIGEN venster:\033[0m\n'
-printf '    npm run terminal   — de shell-server, anders verbindt de Terminals-tab niet\n'
-printf '    backend/axe_api/run-local.sh   — de lokale API, anders geeft de Code Agent 404\n'
+printf '  \033[32mCanonical runtime: /Applications/AXE CORE.app + launchd-workers + lokale diensten.\033[0m\n'
 
 echo
 echo "Opent hij niet, start hem dan direct om de fout te zien:"

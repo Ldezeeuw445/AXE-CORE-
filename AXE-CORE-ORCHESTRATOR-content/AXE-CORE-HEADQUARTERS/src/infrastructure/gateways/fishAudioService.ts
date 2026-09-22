@@ -17,7 +17,6 @@ const USE_VPS_PROXY = import.meta.env.PROD && isTauriRuntime();
 const FISH_AUDIO_BASE_URL = 'https://api.fish.audio/v1/tts';
 const FISH_PROXY_URL = USE_VPS_PROXY ? `${VPS_API_ORIGIN}/proxy/fish-tts` : '/api/tts-fish';
 const FISH_VOICE_KEY = 'axe_fish_voice_id';
-const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
 /** Default AXE voice on Fish Audio (user-selected identity). */
 export const LEWIS_VOICE_ID = 'c9c8850dc8384eb183d0e5e8b9161400';
@@ -40,9 +39,6 @@ function resolveFishKey(): string {
 
 const USE_DIRECT = !USE_VPS_PROXY && !!resolveFishKey() && import.meta.env.DEV;
 
-function sanitizeVoiceId(raw: string): string {
-  return raw.trim().replace(/^["']+|["']+$/g, '');
-}
 
 /** A Fish Audio "reference_id" — defaults to the configured AXE voice. */
 export function getFishVoiceId(): string {
@@ -63,6 +59,10 @@ export function isFishAudioConfigured(): boolean {
 }
 
 let currentAudio: HTMLAudioElement | null = null;
+let fishAudioContext: AudioContext | null = null;
+let fishAnalyser: AnalyserNode | null = null;
+let fishLevelData: Uint8Array<ArrayBuffer> | null = null;
+let fishSource: MediaElementAudioSourceNode | null = null;
 
 function ttsFetch(text: string, voiceId: string): Promise<Response> {
   const key = resolveFishKey();
@@ -125,6 +125,26 @@ export async function speakWithFishAudio(
     audio.src = url;
     currentAudio = audio;
 
+    // The shared Fish fallback is still AXE's voice path, so expose its real
+    // playback energy to the same presence visual as OpenAI Cedar. The shared
+    // element may only be connected to one MediaElementSourceNode, hence the
+    // one-time source and analyser.
+    try {
+      fishAudioContext ??= new AudioContext();
+      void fishAudioContext.resume().catch(() => {});
+      if (!fishSource) {
+        fishSource = fishAudioContext.createMediaElementSource(audio);
+        fishAnalyser = fishAudioContext.createAnalyser();
+        fishAnalyser.fftSize = 512;
+        fishLevelData = new Uint8Array(fishAnalyser.fftSize);
+        fishSource.connect(fishAnalyser);
+        fishAnalyser.connect(fishAudioContext.destination);
+      }
+    } catch {
+      fishAnalyser = null;
+      fishLevelData = null;
+    }
+
     audio.onended = () => {
       URL.revokeObjectURL(url);
       if (currentAudio === audio) currentAudio = null;
@@ -149,4 +169,17 @@ export function stopFishAudio(): void {
     } catch { /* ignore */ }
     currentAudio = null;
   }
+}
+
+
+/** Live 0..1 RMS of the fixed Fish fallback playback. */
+export function getFishTtsLevel(): number {
+  if (!fishAnalyser || !fishLevelData || !currentAudio || currentAudio.paused) return 0;
+  fishAnalyser.getByteTimeDomainData(fishLevelData);
+  let sum = 0;
+  for (const v of fishLevelData) {
+    const x = (v - 128) / 128;
+    sum += x * x;
+  }
+  return Math.min(1, Math.sqrt(sum / fishLevelData.length) * 3.2);
 }

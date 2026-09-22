@@ -96,8 +96,17 @@ function agentIdForTool(toolId: string): string | undefined {
  * Flip it in Settings, or from the console:
  *   localStorage.setItem('axe_native_tools','1')
  */
+const NATIVE_TOOLS_ONCE_KEY = 'axe_native_tools_once';
+
 export function nativeToolsEnabled(): boolean {
-  try { return localStorage.getItem('axe_native_tools') === '1'; } catch { return false; }
+  try {
+    return localStorage.getItem('axe_native_tools') === '1'
+      || localStorage.getItem(NATIVE_TOOLS_ONCE_KEY) === '1';
+  } catch { return false; }
+}
+
+function nativeToolsForcedOnce(): boolean {
+  try { return localStorage.getItem(NATIVE_TOOLS_ONCE_KEY) === '1'; } catch { return false; }
 }
 
 /**
@@ -120,10 +129,14 @@ async function tryNativeTools(
     content: m.content,
   }));
 
+  // Personal Computer Use opts into the structured tool path for exactly its
+  // current task, even when the global Settings switch is off. GUI work needs
+  // a few more bounded observe/action rounds than ordinary chat tools.
+  const forcedForComputerUse = nativeToolsForcedOnce();
   const r = await runNativeToolLoop(slot, msgs, {
     requestApproval: requestActionApproval,
     record: e => recordEvent({ ...e, agentId: agentIdForTool(String(e.details.tool ?? '')) }),
-  });
+  }, forcedForComputerUse ? 8 : 4);
 
   console.info(
     `%c[AXE] native tools%c ${slot.provider} · ${r.rounds} round(s) · ran: ${r.ranTools.join(', ') || 'none'}`,

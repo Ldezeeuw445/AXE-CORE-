@@ -6140,6 +6140,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .computer-use-overlay__meta { display:flex; justify-content:space-between; gap:12px; padding:10px 8px 4px; font-size:10px; letter-spacing:.04em; color:var(--text-muted); }
 .computer-use-overlay__meta .is-online { color:var(--success); }
 .computer-use-overlay__meta .is-offline { color:var(--warning); }
+.computer-use-overlay__permissions { display:flex; gap:6px; padding:4px 8px 0; }
+.computer-use-overlay__permissions button { border:1px solid rgba(255,255,255,.09); border-radius:999px; background:rgba(255,255,255,.035); color:var(--text-muted); padding:4px 8px; font-size:9px; letter-spacing:.03em; }
+.computer-use-overlay__permissions button[data-ready="yes"] { border-color:color-mix(in srgb,var(--success) 35%,transparent); color:var(--success); }
+.computer-use-overlay__permissions button[data-ready="no"] { border-color:color-mix(in srgb,var(--warning) 35%,transparent); color:var(--warning); cursor:pointer; }
 .computer-use-overlay__reply { margin:5px 6px 0; max-height:64px; overflow:auto; font-size:12px; line-height:1.45; color:var(--text-secondary); }
 .computer-use-overlay__quick { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:10px 4px 4px; }
 .computer-use-overlay__quick button { min-width:0; height:70px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; border:1px solid rgba(255,255,255,.08); border-radius:16px; background:rgba(255,255,255,.035); color:var(--text-secondary); font-size:11px; }

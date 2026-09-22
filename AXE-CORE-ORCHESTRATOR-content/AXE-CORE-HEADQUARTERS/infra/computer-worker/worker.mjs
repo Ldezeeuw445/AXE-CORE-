@@ -162,8 +162,8 @@ const COMMANDS = {
 const READ_ONLY = new Set([
   'system.info', 'files.list', 'files.read', 'files.search', 'personal.files.list',
   'git.status', 'git.branch', 'git.diff', 'git.log',
-  // Raakt de repo niet: de foto gaat naar de privé-bucket, dus ook toegestaan op orchestrator.
-  'camera.snapshot',
+  'camera.snapshot', 'computer.permissions', 'screen.displays', 'screen.observe',
+  'pointer.position', 'app.list', 'app.frontmost', 'window.list',
 ]);
 
 /**
@@ -179,6 +179,77 @@ const READ_ONLY = new Set([
 // macOS zonder te vragen (node mist het camera-recht). Zie camera/Info.plist.
 const CAMERA_APP = env.AXE_CAMERA_APP ?? join(HERE, 'camera', 'AXE Camera.app');
 const CAMERA_BUCKET = 'axe-camera';
+
+// One stable app-bundle identity owns Screen Recording + Accessibility TCC.
+// Rebuilding the helper in-place with the same bundle id/signing identity keeps
+// permissions attached to AXE Computer Use instead of anonymous node/swift bins.
+const COMPUTER_USE_APP = env.AXE_COMPUTER_USE_APP ?? join(HERE, 'native', 'AXE Computer Use.app');
+
+async function nativeComputerUse(command, args = {}) {
+  if (!existsSync(COMPUTER_USE_APP)) {
+    throw new Error(`native computer-use helper ontbreekt: bouw ${join(HERE, 'native', 'build.sh')}`);
+  }
+  const stamp = `${process.pid}-${Date.now()}`;
+  const out = join(tmpdir(), `axe-computer-use-${stamp}.json`);
+  try {
+    await new Promise((res, rej) => {
+      execFile(
+        '/usr/bin/open',
+        // Pass the exact bundle path as the target. Using -a is for resolving an
+        // application name and can select a different installed copy with the
+        // same display name — precisely the ambiguity this native runtime work
+        // is eliminating.
+        ['-W', '-n', '-g', COMPUTER_USE_APP, '--args', command, out, JSON.stringify(args)],
+        { timeout: 150_000 },
+        (err) => err ? rej(err) : res(),
+      );
+    });
+    const raw = await readFile(out, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed?.ok) throw new Error(parsed?.error ?? `${command} failed`);
+    return parsed.result;
+  } finally {
+    await unlink(out).catch(() => {});
+  }
+}
+
+async function uploadPrivateCapture(file, mime, prefix = 'screen') {
+  const data = await readFile(file);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const object = `${DEVICE_ID}/${prefix}-${stamp}.${mime === 'image/png' ? 'png' : 'jpg'}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${CAMERA_BUCKET}/${object}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': mime },
+    body: data,
+  });
+  if (!res.ok) throw new Error(`capture upload mislukt: ${res.status} ${(await res.text().catch(() => '')).slice(0, 160)}`);
+  return { bucket: CAMERA_BUCKET, path: object, mime, bytes: data.length };
+}
+
+async function screenObserve(args = {}) {
+  const file = join(tmpdir(), `axe-screen-${process.pid}-${Date.now()}.jpg`);
+  try {
+    const meta = await nativeComputerUse('screen.capture', {
+      display_index: Number(args.display_index ?? 0),
+      path: file,
+    });
+    const stored = await uploadPrivateCapture(file, 'image/jpeg', 'screen');
+    return JSON.stringify({
+      ...stored,
+      display_index: meta.display_index,
+      width: meta.width,
+      height: meta.height,
+      logical_x: meta.logical_x,
+      logical_y: meta.logical_y,
+      logical_width: meta.logical_width,
+      logical_height: meta.logical_height,
+      pixel_width: meta.pixel_width,
+      pixel_height: meta.pixel_height,
+    });
+  } finally {
+    await unlink(file).catch(() => {});
+  }
+}
 
 function cameraShot(file) {
   const foutBestand = `${file}.fout`;
@@ -392,6 +463,63 @@ const git = (root, ...a) => run('git', a, root);
 async function execute(payload) {
   const { tool, workspace, args = {} } = payload;
 
+  // A packaged AXE CORE and its local launchd worker are one runtime. Refuse a
+  // mixed-generation local pair instead of letting an old UI talk confidently
+  // to a newer worker (or vice versa). Remote phone/web clients are allowed to
+  // differ because they intentionally control this Mac across deployments.
+  if (payload.client_runtime === 'tauri' && tool !== 'system.info') {
+    const appBuild = String(payload.client_build ?? '').trim();
+    const workerBuild = (await git(REPO, 'rev-parse', '--short', 'HEAD')).trim();
+    if (appBuild && appBuild !== 'unknown' && workerBuild && appBuild !== workerBuild) {
+      throw new Error(
+        `AXE native runtime mismatch: app=${appBuild}, computer-worker=${workerBuild}. Run 'npm run bijwerken' from orchestrator; no computer action was executed.`,
+      );
+    }
+  }
+
+  // Device-scoped Personal Computer Use never inherits git/worktree branch
+  // semantics. Those protections remain mandatory for repo tools below.
+  if (tool === 'computer.permissions') return JSON.stringify(await nativeComputerUse('permissions.status', args));
+  if (tool === 'computer.permissions.request_screen') return JSON.stringify(await nativeComputerUse('permissions.request_screen', args));
+  if (tool === 'computer.permissions.request_accessibility') return JSON.stringify(await nativeComputerUse('permissions.request_accessibility', args));
+  if (tool === 'screen.displays') return JSON.stringify(await nativeComputerUse('screen.displays', args));
+  if (tool === 'screen.observe') return screenObserve(args);
+  if (tool === 'pointer.position') return JSON.stringify(await nativeComputerUse('pointer.position', args));
+  if (tool === 'pointer.move') return JSON.stringify(await nativeComputerUse('pointer.move', args));
+  if (tool === 'pointer.click') return JSON.stringify(await nativeComputerUse('pointer.click', args));
+  if (tool === 'pointer.double_click') return JSON.stringify(await nativeComputerUse('pointer.double_click', args));
+  if (tool === 'pointer.right_click') return JSON.stringify(await nativeComputerUse('pointer.right_click', args));
+  if (tool === 'pointer.drag') return JSON.stringify(await nativeComputerUse('pointer.drag', args));
+  if (tool === 'pointer.scroll') return JSON.stringify(await nativeComputerUse('pointer.scroll', args));
+  if (tool === 'keyboard.type') return JSON.stringify(await nativeComputerUse('keyboard.type', args));
+  if (tool === 'keyboard.key') return JSON.stringify(await nativeComputerUse('keyboard.key', args));
+  if (tool === 'app.list') return JSON.stringify(await nativeComputerUse('app.list', args));
+  if (tool === 'app.frontmost') return JSON.stringify(await nativeComputerUse('app.frontmost', args));
+  if (tool === 'app.open') return JSON.stringify(await nativeComputerUse('app.open', args));
+  if (tool === 'app.focus') return JSON.stringify(await nativeComputerUse('app.focus', args));
+  if (tool === 'window.list') return JSON.stringify(await nativeComputerUse('window.list', args));
+  if (tool === 'camera.snapshot') return cameraSnapshot();
+
+  // Machine-scoped reads must not depend on a git checkout. Personal Computer
+  // Use is allowed to inspect these three explicit home folders even if this
+  // Mac happens not to have the requested repo/workspace mounted.
+  if (tool === 'personal.files.list') {
+    const requested = String(args.path ?? '').trim();
+    const allowed = new Map([
+      ['Desktop', join(homedir(), 'Desktop')],
+      ['Documents', join(homedir(), 'Documents')],
+      ['Downloads', join(homedir(), 'Downloads')],
+    ]);
+    const dir = allowed.get(requested);
+    if (!dir) throw new Error(`personal.files.list only allows Desktop, Documents, or Downloads; got '${requested}'`);
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries
+      .filter(e => !e.name.startsWith('.') && !DENY_NAMES.test(e.name))
+      .slice(0, 200)
+      .map(e => (e.isDirectory() ? `${e.name}/` : e.name))
+      .join('\n') || '(empty)';
+  }
+
   const ws = WORKSPACES[workspace];
   if (!ws) throw new Error(`unknown workspace '${workspace}'`);
   const root = resolve(ws.root);
@@ -406,32 +534,16 @@ async function execute(payload) {
   }
 
   switch (tool) {
-    case 'system.info':
-      return `host ${hostname()}\nworkspace ${workspace}\nroot ${root}\nbranch ${branch}\nnode ${process.version}`;
+    case 'system.info': {
+      const sourceCommit = (await git(REPO, 'rev-parse', '--short', 'HEAD')).trim();
+      return `host ${hostname()}\nworkspace ${workspace}\nroot ${root}\nbranch ${branch}\nworker_source ${sourceCommit}\nnode ${process.version}`;
+    }
 
-    case 'camera.snapshot': return cameraSnapshot();
 
     case 'git.branch':  return branch || '(detached)';
     case 'git.status':  return git(root, 'status', '--porcelain', '-b');
     case 'git.diff':    return git(root, 'diff', '--stat');
     case 'git.log':     return git(root, 'log', '-5', '--oneline');
-
-    case 'personal.files.list': {
-      const requested = String(args.path ?? '').trim();
-      const allowed = new Map([
-        ['Desktop', join(homedir(), 'Desktop')],
-        ['Documents', join(homedir(), 'Documents')],
-        ['Downloads', join(homedir(), 'Downloads')],
-      ]);
-      const dir = allowed.get(requested);
-      if (!dir) throw new Error(`personal.files.list only allows Desktop, Documents, or Downloads; got '${requested}'`);
-      const entries = await readdir(dir, { withFileTypes: true });
-      return entries
-        .filter(e => !e.name.startsWith('.') && !DENY_NAMES.test(e.name))
-        .slice(0, 200)
-        .map(e => (e.isDirectory() ? `${e.name}/` : e.name))
-        .join('\n') || '(empty)';
-    }
 
     case 'files.list': {
       const dir = safePath(root, args.path ?? '.');
