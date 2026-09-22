@@ -903,7 +903,8 @@ function VoiceSection() {
         <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
           AXE speaks with one fixed voice — OpenAI <strong>cedar</strong>. This is
           separate from which model answers you. It needs your OpenAI key (set it
-          under Keys); without it AXE falls back to the browser voice.
+          under Keys). If Cedar is unavailable AXE keeps the text reply visible
+          and reports the voice error; it never silently changes identity.
         </p>
         {error && (
           <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>

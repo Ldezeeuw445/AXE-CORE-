@@ -2,7 +2,7 @@
  * installStableChat.ts
  *
  * Boot patch for AXE identity:
- * 1. Force Fish Audio as default TTS provider.
+ * 1. Keep one canonical AXE speech identity through globalTts (Cedar).
  * 2. Simple chat → short Gemini cascade (no LangGraph race).
  * 3. Action asks → agentic tool loop.
  * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.
@@ -54,7 +54,11 @@ function speakAxe(text: string, onDone?: () => void): void {
     if (localStorage.getItem('axe_response_mode') === 'type') { onDone?.(); return; }
   } catch { /* ignore */ }
   stopGlobalTts();
-  speakGlobal(text, onDone);
+  speakGlobal(
+    text,
+    onDone,
+    (reason) => useVoiceStore.setState({ error: reason }),
+  );
 }
 
 function recordChatTurn(q: string, a: string, provider: string, capability: string): void {

@@ -19,6 +19,7 @@ import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopi
 import { maybeTriggerCompanionCorrelation } from '@/infrastructure/gateways/companionToolsService';
 import { warmLocalOllama } from '@/infrastructure/gateways/localOllama';
 import { startPlannerKoppeling } from '@/application/planner/plannerKoppeling';
+import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -44,8 +45,9 @@ export async function maybeDailyGreeting(): Promise<void> {
     return;
   }
 
-  // Same provider choice as chat (Settings → Voice) — Fish Audio by default
-  // (no paid ElevenLabs account), straight to browser speech otherwise.
+  // Same canonical identity as every chat reply: OpenAI Cedar through
+  // globalTts. A startup greeting must never resurrect a legacy Fish/browser
+  // voice simply because an old localStorage preference survived an update.
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
@@ -53,31 +55,19 @@ export async function maybeDailyGreeting(): Promise<void> {
   const line = briefing ? `${part}, Luka. ${briefing}` : `${part}, Luka. AXE is online.`;
 
   try {
-    // Don't force speak mode if user prefers type-only
+    // Respect type-only mode, but never choose a second speech identity.
     try {
       if (localStorage.getItem('axe_response_mode') === 'type') return;
     } catch { /* continue */ }
 
-    let ttsProvider: 'fish' | 'elevenlabs' | 'browser' = 'fish';
-    try { ttsProvider = (localStorage.getItem('axe_tts_provider') as typeof ttsProvider) || 'fish'; } catch { /* continue */ }
-
-    const { speakWithBrowser } = await import('@/infrastructure/gateways/elevenLabsService');
-
     await new Promise<void>((resolve) => {
-      if (ttsProvider === 'fish') {
-        void import('@/infrastructure/gateways/fishAudioService').then(({ speakWithFishAudio, isFishAudioConfigured }) => {
-          if (isFishAudioConfigured()) { void speakWithFishAudio(line, resolve, () => speakWithBrowser(line, resolve)); return; }
-          speakWithBrowser(line, resolve);
-        });
-        return;
-      }
-      if (ttsProvider === 'elevenlabs') {
-        void import('@/infrastructure/gateways/elevenLabsService').then(({ speakWithElevenLabs }) => {
-          speakWithElevenLabs(line, resolve, () => speakWithBrowser(line, resolve));
-        });
-        return;
-      }
-      speakWithBrowser(line, resolve);
+      speakGlobal(
+        line,
+        resolve,
+        (reason) => {
+          console.warn('[axeBootstrap] Cedar daily greeting unavailable:', reason);
+        },
+      );
     });
   } catch {
     /* non-fatal */

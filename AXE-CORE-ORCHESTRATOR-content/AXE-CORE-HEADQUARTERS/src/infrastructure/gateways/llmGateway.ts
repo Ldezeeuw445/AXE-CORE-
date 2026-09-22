@@ -219,26 +219,25 @@ function onthoudKoeling(motor:string,tot:number):void{
     }
   }
 
-  if(isOllama && /^https?:\/\//i.test(rawBase) && !rawBase.includes('localhost') && !rawBase.includes('127.0.0.1')){
+  if(!import.meta.env.PROD && isOllama && /^https?:\/\//i.test(rawBase) && !rawBase.includes('localhost') && !rawBase.includes('127.0.0.1')){
     try{
-      // The Settings page can already reach /api/tags on this exact URL
-      // directly. Use the same route for real chat instead of bouncing an
-      // Ollama model through the generic OpenAI-provider proxy. This is
-      // especially important for hermes3:8b cold starts.
+      // Dev can talk to the configured remote endpoint directly. Packaged
+      // Tauri/web production must use the authenticated server-side proxy
+      // below: WebView CORS/network cancellation made healthy remote Ollama
+      // models (notably hermes3:8b) surface as "Fetch is aborted".
       return await callNativeOllama(rawBase);
     }catch(e){
       ollamaDirectError=e instanceof Error?e.message:String(e);
-      // Hermes has no second transport: it *is* an Ollama model. Returning a
-      // truthful Ollama error is better than falling into a fictitious Hermes
-      // provider route.
-      if(slot.provider==='hermes') throw new Error(ollamaDirectError);
+      // Fall through to the same CORS-safe production transport rather than
+      // inventing a separate Hermes daemon. proxyProviderNaam maps Hermes to
+      // Ollama and the backend already has the longer cold-load budget.
     }
   }
 
   // ── Production: CORS-safe proxy (Vercel Edge Fn on the web, the VPS
   // backend directly inside a packaged Tauri app — see aiProxyUrl()) ──────
   if(import.meta.env.PROD){
-    const viaProxy=(m:string)=>fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json',...vpsAuthHeaders(aiProxyUrl())},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model:m,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    const viaProxy=(m:string)=>fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json',...vpsAuthHeaders(aiProxyUrl())},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model:m,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?120_000:25_000)});
     let pr=await viaProxy(model);
     // Bestaat het model niet, dan één keer het standaardmodel: een oud of
     // verkeerd getypt model is geen kapotte sleutel. Zie domain/modelHerstel.ts.
