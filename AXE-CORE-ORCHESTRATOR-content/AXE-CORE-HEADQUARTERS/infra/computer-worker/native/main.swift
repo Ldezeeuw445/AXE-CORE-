@@ -25,7 +25,15 @@ func activeDisplays() -> [CGDirectDisplayID] {
     CGGetActiveDisplayList(0, nil, &count)
     var ids = Array(repeating: CGDirectDisplayID(), count: Int(count))
     CGGetActiveDisplayList(count, &ids, &count)
-    return Array(ids.prefix(Int(count)))
+    return Array(ids.prefix(Int(count))).sorted { a, b in
+        let aMain = CGDisplayIsMain(a) != 0
+        let bMain = CGDisplayIsMain(b) != 0
+        if aMain != bMain { return aMain }
+        let af = CGDisplayBounds(a)
+        let bf = CGDisplayBounds(b)
+        if af.origin.x != bf.origin.x { return af.origin.x < bf.origin.x }
+        return af.origin.y < bf.origin.y
+    }
 }
 
 func displaysPayload() -> [[String: Any]] {
