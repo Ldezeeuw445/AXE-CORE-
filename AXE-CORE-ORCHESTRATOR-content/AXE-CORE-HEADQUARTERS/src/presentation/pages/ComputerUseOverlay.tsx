@@ -45,6 +45,7 @@ export default function ComputerUseOverlay() {
   const [preferred, setPreferred] = useState<string | null>(null);
   const [toolBusy, setToolBusy] = useState(false);
   const [toolReply, setToolReply] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<{ screen_recording: boolean; accessibility: boolean } | null>(null);
 
   useEffect(() => {
     void voice.loadConversation();
@@ -61,6 +62,59 @@ export default function ComputerUseOverlay() {
   const machine = useMemo(() => devices.find(d => d.id === preferred) ?? devices[0] ?? null, [devices, preferred]);
   const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
   const busy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'listening' || toolBusy;
+
+  useEffect(() => {
+    if (!machine) {
+      setPermissions(null);
+      return;
+    }
+    let cancelled = false;
+    void dispatchComputerTask({
+      tool: 'computer.permissions',
+      tier: 'observe',
+      workspace: '@device',
+      device: machine.id,
+      args: {},
+    }).then(result => {
+      if (cancelled || !result.ok) return;
+      try {
+        const parsed = JSON.parse(result.text) as { screen_recording?: boolean; accessibility?: boolean };
+        setPermissions({ screen_recording: parsed.screen_recording === true, accessibility: parsed.accessibility === true });
+      } catch { /* older worker: readiness remains unknown */ }
+    });
+    return () => { cancelled = true; };
+  }, [machine?.id]);
+
+  async function requestPermission(tool: 'computer.permissions.request_screen' | 'computer.permissions.request_accessibility') {
+    if (!machine || toolBusy) return;
+    setToolBusy(true);
+    setToolReply(null);
+    try {
+      const result = await dispatchComputerTask({
+        tool,
+        tier: 'safe_execute',
+        workspace: '@device',
+        device: machine.id,
+        args: {},
+      });
+      setToolReply(result.text);
+      const status = await dispatchComputerTask({
+        tool: 'computer.permissions',
+        tier: 'observe',
+        workspace: '@device',
+        device: machine.id,
+        args: {},
+      });
+      if (status.ok) {
+        const parsed = JSON.parse(status.text) as { screen_recording?: boolean; accessibility?: boolean };
+        setPermissions({ screen_recording: parsed.screen_recording === true, accessibility: parsed.accessibility === true });
+      }
+    } catch (e) {
+      setToolReply(e instanceof Error ? e.message : String(e));
+    } finally {
+      setToolBusy(false);
+    }
+  }
   async function runQuick(path: 'Desktop' | 'Documents' | 'Downloads', screenshotsOnly: boolean) {
     if (!machine || toolBusy) {
       if (!machine) setToolReply('No Mac worker is online, so AXE cannot read that folder.');
@@ -152,6 +206,27 @@ export default function ComputerUseOverlay() {
           </span>
           <span>{busy ? 'AXE is working…' : 'Personal Computer Use'}</span>
         </div>
+
+        {machine && (
+          <div className="computer-use-overlay__permissions">
+            <button
+              type="button"
+              data-ready={permissions?.screen_recording === true ? 'yes' : 'no'}
+              onClick={() => permissions?.screen_recording ? undefined : void requestPermission('computer.permissions.request_screen')}
+              title={permissions?.screen_recording ? 'Screen Recording granted' : 'Grant Screen Recording on this Mac'}
+            >
+              Screen {permissions?.screen_recording ? '✓' : 'needs permission'}
+            </button>
+            <button
+              type="button"
+              data-ready={permissions?.accessibility === true ? 'yes' : 'no'}
+              onClick={() => permissions?.accessibility ? undefined : void requestPermission('computer.permissions.request_accessibility')}
+              title={permissions?.accessibility ? 'Accessibility granted' : 'Grant Accessibility on this Mac'}
+            >
+              Control {permissions?.accessibility ? '✓' : 'needs permission'}
+            </button>
+          </div>
+        )}
 
         {(toolReply ?? last?.text) && <div className="computer-use-overlay__reply">{toolReply ?? last?.text}</div>}
 
