@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { ArrowRight, ExternalLink, Home, Plus, RefreshCw, Smartphone, Trash2, Wrench } from 'lucide-react';
-import { sbGetRows, sbDeleteRow, vercelListDeployments, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { Activity, ArrowRight, ExternalLink, Home, Plus, Power, RefreshCw, Smartphone, Trash2, Wrench } from 'lucide-react';
+import {
+  sbGetRows, sbDeleteRow, vercelListDeployments, isAxeApiConfigured,
+  vpsStatus, buildStatus, vpsServiceRestart, type VpsStatus, type BuildStatus,
+} from '@/infrastructure/gateways/axeCoreApiService';
 import {
   androidShellAvailable, isAppInstalled, openAndroidApp, openPhoneHomeScreen,
 } from '@/infrastructure/gateways/androidAppsBridge';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 import AppLogo from '@/presentation/components/apps/AppLogo';
 import AddAppDialog from '@/presentation/components/apps/AddAppDialog';
 import {
@@ -41,6 +45,25 @@ const STATE_STYLE: Record<LiveState, { bg: string; fg: string; label: string }> 
   unknown: { bg: 'rgba(255,255,255,0.04)', fg: 'rgba(255,255,255,0.4)', label: 'Unknown' },
 };
 
+// Which registered_apps row maps to which real VPS systemd unit (main.py's
+// _VPS_SERVICES) — keyed on the unique `name` column seeded in
+// 20260723_registered_apps.sql. Trading OS has no entry here on purpose: it
+// is an internal tab (internal_path '/trading'), not a separate deploy
+// target, so there is nothing on the VPS to health-check for it — fabricating
+// one would be exactly the "guessed status" this feature replaces.
+const VPS_SERVICE_BY_APP_NAME: Record<string, string> = {
+  'AXE CORE HQ': 'axe-core-api',
+  'AXE Companion': 'axe-companion',
+};
+
+interface AppHealthCheck {
+  checking: boolean;
+  vps?: VpsStatus;
+  build?: BuildStatus;
+  error?: string;
+  checkedAt?: number;
+}
+
 export default function AppsPage() {
   const navigate = useNavigate();
   const sendMessage = useVoiceStore(s => s.sendMessage);
@@ -48,7 +71,64 @@ export default function AppsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveState>>({});
   const [adding, setAdding] = useState(false);
+  const [health, setHealth] = useState<Record<string, AppHealthCheck>>({});
+  const [restarting, setRestarting] = useState<Record<string, boolean>>({});
   const onPhone = androidShellAvailable();
+
+  // Real health check for the rows that map to a VPS systemd unit — replaces
+  // the no-cors-fetch guess above for those two rows specifically. Backed by
+  // main.py's /vps/status + /build/status (see axeCoreApiService.ts).
+  //
+  // Loop wiring (LOOP_AGENTS 'apps'): a health check has a real, observed
+  // outcome (a live systemd state, not a guess), so it earns an episode —
+  // opened before the call and closed with the actual result, same shape as
+  // Tasks.tsx's 'task' wiring.
+  const checkHealth = async (app: RegisteredApp) => {
+    const serviceKey = VPS_SERVICE_BY_APP_NAME[app.name];
+    setHealth(prev => ({ ...prev, [app.id]: { checking: true } }));
+    const episodeId = await openEpisode({ agent: 'apps', subject: `${app.name} health check` });
+    try {
+      const [vps, build] = await Promise.all([vpsStatus(), buildStatus()]);
+      const svc = serviceKey ? vps.services[serviceKey] : undefined;
+      const healthy = serviceKey ? svc?.active === true : vps.ok;
+      setHealth(prev => ({ ...prev, [app.id]: { checking: false, vps, build, checkedAt: Date.now() } }));
+      void closeEpisode(
+        episodeId,
+        healthy ? 'good' : 'poor',
+        serviceKey ? `${serviceKey}: ${svc?.state ?? (svc?.active === null ? 'unknown' : 'inactive')}` : 'vps status fetched',
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setHealth(prev => ({ ...prev, [app.id]: { checking: false, error: message, checkedAt: Date.now() } }));
+      void closeEpisode(episodeId, 'poor', message);
+    }
+  };
+
+  // Destructive: restarts a live systemd unit on the VPS. Gated behind an
+  // explicit confirm (same window.confirm pattern this page already uses for
+  // Remove, above) — this is the only caller of vpsServiceRestart() in the
+  // app, and it is never invoked without that confirmation.
+  const restartService = async (app: RegisteredApp, service: string) => {
+    if (!window.confirm(
+      `Restart ${service} on the VPS? This briefly interrupts the live ${app.name} API.`,
+    )) return;
+    setRestarting(prev => ({ ...prev, [app.id]: true }));
+    const episodeId = await openEpisode({ agent: 'apps', subject: `${app.name} restart (${service})` });
+    try {
+      const res = await vpsServiceRestart(service);
+      void closeEpisode(episodeId, res.ok ? 'good' : 'poor', res.note);
+      // The server dispatches the restart fire-and-forget, so the unit may
+      // still be bouncing the moment this resolves — give it a few seconds
+      // before re-checking rather than reading "still restarting" as failed.
+      setTimeout(() => void checkHealth(app), 4_000);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setLoadError(message);
+      void closeEpisode(episodeId, 'poor', message);
+    } finally {
+      setRestarting(prev => ({ ...prev, [app.id]: false }));
+    }
+  };
 
   const load = async () => {
     try {
@@ -206,6 +286,8 @@ export default function AppsPage() {
             {apps.map((app, i) => {
               const state = live[app.id] ?? 'unknown';
               const st = STATE_STYLE[state];
+              const vpsServiceKey = VPS_SERVICE_BY_APP_NAME[app.name];
+              const h = health[app.id];
               return (
                 <motion.div
                   key={app.id}
@@ -241,6 +323,36 @@ export default function AppsPage() {
                     <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                       {app.description || app.notes || 'No description'}
                     </p>
+                    {/* Real VPS health, only for the rows that map to an
+                        actual systemd unit — genuine pass/fail from
+                        /vps/status + /build/status, not the opaque
+                        reachable-or-not guess the card badge above shows. */}
+                    {vpsServiceKey && (h?.checking || h?.error || h?.vps) && (
+                      <div className="text-[10px] leading-relaxed -mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                        {h?.checking ? (
+                          'Checking VPS…'
+                        ) : h?.error ? (
+                          <span style={{ color: 'var(--error)' }}>Health check failed: {h.error}</span>
+                        ) : h?.vps ? (
+                          <>
+                            <span style={{
+                              color: h.vps.services[vpsServiceKey]?.active ? 'var(--success)' : 'var(--error)',
+                            }}
+                            >
+                              {vpsServiceKey}: {h.vps.services[vpsServiceKey]?.state
+                                ?? (h.vps.services[vpsServiceKey]?.active === null ? 'unknown' : 'inactive')}
+                            </span>
+                            {h.build?.applicable && (
+                              <>
+                                {' · '}{h.build.branch ?? '?'} @ {h.build.commit?.short_sha ?? '?'}
+                                {h.build.uncommitted_files ? ` (${h.build.uncommitted_files} uncommitted)` : ''}
+                                {h.build.stale_vs_latest_commit ? ' · stale build' : ''}
+                              </>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                    )}
                     <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
                       {/* First, because on the phone it is the whole point of
                           the row — and it opens the real app, not a page about
@@ -271,6 +383,31 @@ export default function AppsPage() {
                           onClick={() => window.open(app.prod_url, '_blank', 'noopener,noreferrer')}
                         >
                           <ExternalLink size={11} /> Live
+                        </AxeButton>
+                      )}
+                      {/* Real VPS health check — only for rows mapped to an
+                          actual systemd unit (see VPS_SERVICE_BY_APP_NAME). */}
+                      {vpsServiceKey && (
+                        <AxeButton
+                          size="sm"
+                          variant="ghost"
+                          disabled={h?.checking}
+                          onClick={() => void checkHealth(app)}
+                        >
+                          <Activity size={11} /> {h?.checking ? 'Checking…' : 'Check health'}
+                        </AxeButton>
+                      )}
+                      {/* Destructive, confirm-gated, and only for AXE CORE
+                          HQ's own service — restarting axe-companion from
+                          here isn't part of this pass. */}
+                      {vpsServiceKey === 'axe-core-api' && (
+                        <AxeButton
+                          size="sm"
+                          variant="ghost"
+                          disabled={restarting[app.id]}
+                          onClick={() => void restartService(app, 'axe-core-api')}
+                        >
+                          <Power size={11} /> {restarting[app.id] ? 'Restarting…' : 'Restart API'}
                         </AxeButton>
                       )}
                       {/* "Improve" means AXE editing its own source, which is

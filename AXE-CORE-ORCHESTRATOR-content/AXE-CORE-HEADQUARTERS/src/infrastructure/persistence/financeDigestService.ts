@@ -83,7 +83,7 @@ export interface FinanceDigestPeriod {
 }
 
 /** Today, local calendar day. See file header for why this beats a rolling 24h window. */
-export function todayPeriod(now: Date = new Date()): FinanceDigestPeriod {
+function todayPeriod(now: Date = new Date()): FinanceDigestPeriod {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);

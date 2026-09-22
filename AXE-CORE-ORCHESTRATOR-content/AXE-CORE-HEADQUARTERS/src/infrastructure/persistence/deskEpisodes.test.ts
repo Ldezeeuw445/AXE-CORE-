@@ -45,12 +45,16 @@ const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
 beforeEach(() => {
   db.updates = [];
+  // 22-23 sep 2026: 'intel'/'companion' hernoemd naar 'trading-desk-intel'/
+  // 'trading-desk-companion' zodat Trading's eigen desk-lane-simulatie niet
+  // langer dezelfde loop-agent-identiteit deelt met de echte AXE Intel/AXE
+  // Companion product-agents (zie agentLoop.ts).
   db.rows = [
-    { id: 'i-old', agent: 'intel', subject: 'XAUUSD|long', verdict: 'unknown', opened_at: ago(300), user_id: 'u1' },
-    { id: 'i-new', agent: 'intel', subject: 'XAUUSD|short', verdict: 'unknown', opened_at: ago(130), user_id: 'u1' },
-    { id: 'i-after', agent: 'intel', subject: 'XAUUSD|long', verdict: 'unknown', opened_at: ago(10), user_id: 'u1' },
-    { id: 'c-1', agent: 'companion', subject: 'XAUUSD|long', verdict: 'unknown', opened_at: ago(125), user_id: 'u1' },
-    { id: 'other', agent: 'intel', subject: 'EURUSD|long', verdict: 'unknown', opened_at: ago(200), user_id: 'u1' },
+    { id: 'i-old', agent: 'trading-desk-intel', subject: 'XAUUSD|long', verdict: 'unknown', opened_at: ago(300), user_id: 'u1' },
+    { id: 'i-new', agent: 'trading-desk-intel', subject: 'XAUUSD|short', verdict: 'unknown', opened_at: ago(130), user_id: 'u1' },
+    { id: 'i-after', agent: 'trading-desk-intel', subject: 'XAUUSD|long', verdict: 'unknown', opened_at: ago(10), user_id: 'u1' },
+    { id: 'c-1', agent: 'trading-desk-companion', subject: 'XAUUSD|long', verdict: 'unknown', opened_at: ago(125), user_id: 'u1' },
+    { id: 'other', agent: 'trading-desk-intel', subject: 'EURUSD|long', verdict: 'unknown', opened_at: ago(200), user_id: 'u1' },
   ];
 });
 

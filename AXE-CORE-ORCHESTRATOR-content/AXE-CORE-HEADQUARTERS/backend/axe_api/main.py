@@ -4519,3 +4519,246 @@ async def northsea_action(action: str, req: NorthseaActionRequest):
         status = {"unknown_action": 404, "missing_params": 422, "not_configured": 503,
                   "upstream_unreachable": 502, "tool_error": 502, "bad_response": 502}.get(e.code, 502)
         raise HTTPException(status, f"{e.code}: {e.message}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# APP MANAGER — real VPS status, build freshness, and service restart.
+#
+# The App Manager tab (AppsPage.tsx) has always shown a guessed, opaque
+# up/down state (a no-cors fetch against a public URL). The honest data —
+# which of the six systemd units are actually running, whether the checkout
+# this process runs from matches the latest commit, and the ability to
+# restart a unit — already existed as MCP tools (`axe_vps_status`,
+# `axe_build`, `axe_vps_service`), but those only run inside a Claude Code/
+# Desktop session, never from AXE CORE's own deployed runtime (no .mcp.json
+# ships with this repo). These three endpoints are the equivalent surface
+# through the same proxy pattern every other privileged call already uses
+# (see /frameworks/status above) — new logic, since nothing in this file
+# previously shelled out to systemctl or read host load/disk/memory.
+# ══════════════════════════════════════════════════════════════════════════════
+
+import platform as _platform
+import subprocess as _subprocess
+
+# The six units this host may actually be running. /vps/status reports all
+# six unconditionally (a host that isn't the VPS just reports them all
+# "unknown" — systemctl absent); /vps/service/restart uses this same tuple
+# as an allowlist so the service name can never come from free-form request
+# text.
+_VPS_SERVICES = (
+    "axe-browser-agent", "axe-companion", "axe-core-api",
+    "axe-task-worker", "axe-terminal", "axe-tunnel-relay",
+)
+
+
+async def _systemctl_is_active(systemctl_bin: str, name: str) -> dict:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            systemctl_bin, "is-active", name,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=5)
+        state = (out or b"").decode().strip() or (err or b"").decode().strip()
+        # systemctl is-active exits non-zero for "inactive"/"failed"/"unknown"
+        # too — the STATE STRING is the signal, not the exit code.
+        return {"active": state == "active", "state": state or None}
+    except asyncio.TimeoutError:
+        return {"active": None, "error": "systemctl did not answer within 5s"}
+    except Exception as e:  # noqa: BLE001
+        return {"active": None, "error": str(e)[:150]}
+
+
+def _disk_usage_summary(path: str = "/") -> dict:
+    try:
+        total, used, free = _shutil.disk_usage(path)
+        return {
+            "total_gb": round(total / 1e9, 1),
+            "used_gb": round(used / 1e9, 1),
+            "free_gb": round(free / 1e9, 1),
+            "used_pct": round(used / total * 100, 1) if total else None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:150]}
+
+
+def _memory_usage_summary() -> dict:
+    """/proc/meminfo, not psutil — psutil is not a dependency of this service
+    (checked requirements.txt) and this file already prefers stdlib-only
+    system calls (see _disk_usage_summary above). Linux-only by nature (the
+    VPS); the Mac-mini copy of this same API reports honestly that it can't
+    answer rather than guessing."""
+    if _platform.system() != "Linux":
+        return {"available": False, "reason": f"not implemented on {_platform.system()}"}
+    try:
+        info = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                parts = rest.strip().split()
+                if parts:
+                    info[key] = int(parts[0])  # kB
+        total_kb = info.get("MemTotal", 0)
+        avail_kb = info.get("MemAvailable", total_kb)
+        used_kb = max(total_kb - avail_kb, 0)
+        return {
+            "available": True,
+            "total_mb": round(total_kb / 1024, 1),
+            "used_mb": round(used_kb / 1024, 1),
+            "used_pct": round(used_kb / total_kb * 100, 1) if total_kb else None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"available": False, "error": str(e)[:150]}
+
+
+@app.get("/vps/status", dependencies=[AUTH])
+async def vps_status():
+    """Same shape of information the `axe_vps_status` MCP tool reports — the
+    six systemd units' up/down state plus load/disk/memory — but reachable
+    from AXE CORE's own runtime, not only a Claude Code/Desktop session."""
+    systemctl_bin = _shutil.which("systemctl")
+    services = {}
+    for name in _VPS_SERVICES:
+        if not systemctl_bin:
+            services[name] = {"active": None, "error": "systemctl not available on this host"}
+        else:
+            services[name] = await _systemctl_is_active(systemctl_bin, name)
+    return {
+        "ok": True,
+        "host": _platform.node(),
+        "services": services,
+        "load": list(os.getloadavg()) if hasattr(os, "getloadavg") else None,
+        "disk": _disk_usage_summary("/"),
+        "memory": _memory_usage_summary(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/build/status", dependencies=[AUTH])
+async def build_status():
+    """Mirrors what the `axe_build` MCP tool reports — git branch, last
+    commit, uncommitted file count, and whether the code actually running
+    predates the checkout's latest commit — for whichever host runs this
+    process (VPS or the Mac-mini copy of this same API; see the comment atop
+    this file on why it runs on both).
+
+    Reports `applicable: false` honestly when this process isn't running out
+    of a git checkout at all, rather than fabricating a comparison — the VPS
+    deploy path (deploy.sh) copies files into place with `cp`, so a from-
+    scratch install may have no .git directory at every level this file
+    could be running from. This project has already been burned once by
+    silently trusting the wrong one of several identically-named files
+    (three main.py, only one running) — `running_file` below is reported for
+    exactly that reason, so App Manager can show which file answered."""
+    this_file = os.path.abspath(__file__)
+    start_dir = os.path.dirname(this_file)
+    git_bin = _shutil.which("git")
+    if not git_bin:
+        return {"ok": True, "applicable": False, "reason": "git is not installed on this host", "running_file": this_file}
+
+    loop = asyncio.get_event_loop()
+
+    def _git(*args):
+        return _subprocess.run([git_bin, *args], cwd=start_dir, capture_output=True, text=True, timeout=6)
+
+    try:
+        toplevel = await loop.run_in_executor(None, lambda: _git("rev-parse", "--show-toplevel"))
+    except Exception as e:  # noqa: BLE001
+        return {"ok": True, "applicable": False, "reason": f"git check failed: {e}", "running_file": this_file}
+
+    if toplevel.returncode != 0:
+        return {
+            "ok": True, "applicable": False,
+            "reason": "no git checkout found for this running process — this host may run a copied "
+                      "(non-git) deployment rather than a live checkout",
+            "running_file": this_file,
+        }
+    repo_root = toplevel.stdout.strip()
+
+    def _git_at_root(*args):
+        return _subprocess.run([git_bin, *args], cwd=repo_root, capture_output=True, text=True, timeout=6)
+
+    branch_p, last_p, status_p = await asyncio.gather(
+        loop.run_in_executor(None, lambda: _git_at_root("rev-parse", "--abbrev-ref", "HEAD")),
+        loop.run_in_executor(None, lambda: _git_at_root("log", "-1", "--format=%H%x1f%h%x1f%s%x1f%cI")),
+        loop.run_in_executor(None, lambda: _git_at_root("status", "--porcelain")),
+    )
+
+    branch_name = branch_p.stdout.strip() if branch_p.returncode == 0 else None
+    commit_parts = (last_p.stdout or "").strip().split("\x1f") if last_p.returncode == 0 else []
+    uncommitted = (
+        len([ln for ln in (status_p.stdout or "").splitlines() if ln.strip()])
+        if status_p.returncode == 0 else None
+    )
+
+    commit_info = None
+    if len(commit_parts) == 4:
+        commit_info = {
+            "sha": commit_parts[0], "short_sha": commit_parts[1],
+            "message": commit_parts[2], "date": commit_parts[3],
+        }
+
+    # Build freshness: does the file actually answering this request predate
+    # the checkout's latest commit? If so, the checkout moved since this
+    # process last started — the "commits to the repo did nothing" trap this
+    # codebase hit once already, made visible here instead of silent.
+    stale = None
+    try:
+        running_mtime = datetime.fromtimestamp(os.path.getmtime(this_file), tz=timezone.utc)
+        if commit_info and commit_info["date"]:
+            stale = running_mtime < datetime.fromisoformat(commit_info["date"])
+    except Exception:  # noqa: BLE001
+        stale = None
+
+    return {
+        "ok": True,
+        "applicable": True,
+        "repo_root": repo_root,
+        "running_file": this_file,
+        "branch": branch_name,
+        "commit": commit_info,
+        "uncommitted_files": uncommitted,
+        "stale_vs_latest_commit": stale,
+    }
+
+
+class VpsServiceRequest(BaseModel):
+    service: str
+
+
+@app.post("/vps/service/restart", dependencies=[AUTH])
+async def vps_service_restart(req: VpsServiceRequest, request: Request):
+    """Equivalent of `axe_vps_service(service, "restart")`, reachable from
+    AXE CORE's own runtime. Destructive: restarts a live systemd unit, so
+    `service` is checked against the exact six-name allowlist /vps/status
+    reports on (_VPS_SERVICES) — never taken as free-form text.
+
+    Deliberately NOT invoked anywhere in this codebase yet; AppsPage.tsx's
+    confirm dialog is meant to be the only caller. Also deliberately
+    fire-and-forget: if `service` is axe-core-api, the process handling this
+    very request is the one about to be killed, so awaiting systemctl's exit
+    would race the restart it just triggered — the response confirms
+    dispatch, not completion. Callers should re-check /vps/status shortly
+    after to confirm the unit came back up."""
+    service = (req.service or "").strip()
+    if service not in _VPS_SERVICES:
+        raise HTTPException(400, f"Unknown service '{service}'. Allowed: {', '.join(_VPS_SERVICES)}")
+    systemctl_bin = _shutil.which("systemctl")
+    if not systemctl_bin:
+        raise HTTPException(503, "systemctl is not available on this host")
+
+    client_ip = request.client.host if request.client else ""
+    log.warning("VPS SERVICE RESTART requested: %s (from %s)", service, client_ip or "unknown")
+    await audit("vps_service_restart", "app_manager", {"service": service}, client_ip)
+
+    try:
+        await asyncio.create_subprocess_exec(
+            systemctl_bin, "restart", service,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to invoke systemctl restart: {e}")
+
+    return {
+        "ok": True, "service": service, "action": "restart",
+        "note": "restart dispatched; check /vps/status shortly to confirm it came back up",
+    }

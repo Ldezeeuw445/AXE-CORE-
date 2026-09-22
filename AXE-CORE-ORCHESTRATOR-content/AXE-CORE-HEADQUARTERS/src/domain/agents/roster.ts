@@ -36,7 +36,7 @@ export type AxeAgentId =
   // tier 1 — managers (subscription-only dropdown)
   | 'wingman' | 'northsea' | 'trading' | 'developer' | 'thinktank'
   // tier 2 — workers (auto-route, optional pin)
-  | 'browser' | 'memory' | 'task' | 'cron' | 'finance'
+  | 'browser' | 'memory' | 'task' | 'cron' | 'finance' | 'apps'
   // tier 3 — cross-app assistants (paid-API-only dropdown)
   | 'intel' | 'companion';
 
@@ -211,6 +211,24 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
     route: 'finance',
     accent: '#FBBF24',
   },
+  {
+    // Added the same day as 'finance' above, for the same reason: it went
+    // from a stub with no real action to one — health-checking and
+    // restarting the VPS services behind AXE CORE/AXE Companion via
+    // axeCoreApiService.ts's vpsStatus()/buildStatus()/vpsServiceRestart().
+    // See LOOP_AGENTS's 'apps' entry (domain/memory/agentLoop.ts) for the
+    // longer version of this note.
+    id: 'apps',
+    name: 'App Manager',
+    role: 'App registry + VPS ops',
+    handles: 'Health-checks and can restart the VPS services behind AXE CORE and AXE Companion.',
+    tier: 'tier2',
+    canDecide: false,
+    dropdownScope: 'auto-route',
+    runtime: 'auto-routed engine',
+    route: 'apps',
+    accent: '#A3E635',
+  },
 
   // ── Tier 3 — cross-app assistants (paid-API-only dropdown) ──────────────
   {
@@ -270,6 +288,13 @@ const DOMAIN_SIGNALS: { id: Exclude<AxeAgentId, 'axe'>; re: RegExp }[] = [
   { id: 'cron', re: /\b(cron\b|cron manager|crontab|scheduled job|schedule a (job|task)|recurring job)\b/i },
   { id: 'intel', re: /\b(axe intel|market intel|signal detection|intel table)\b/i },
   { id: 'companion', re: /\b(axe companion|companion app)\b/i },
+  // Conservative on purpose: 'developer' already owns bare "deploy"/"build"
+  // (code/deploy-shaped work). "redeploy" and "restart (the )?api" don't
+  // collide with that regex's \bdeploy\b / \bbuild\b — a word boundary
+  // requires a non-word character immediately before "deploy", which
+  // "redeploy" never has. "vps status" / "app health" / "is axe core up"
+  // are phrases 'developer' has no token for at all.
+  { id: 'apps', re: /\b(app health|is (axe companion|trading os|axe core) (up|down|healthy)|vps status|restart (the )?api|redeploy)\b/i },
 ];
 
 export interface Delegation {

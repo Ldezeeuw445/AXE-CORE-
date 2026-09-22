@@ -221,7 +221,7 @@ export default function Finance() {
               {(digest.algoLiveTradeCount > 0 || digest.algoLivePnlTotal !== 0) && (
                 <div
                   className="p-2 rounded-lg"
-                  style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid var(--warning)' }}
+                  style={{ background: 'var(--bg-base)', border: '2px solid var(--warning)' }}
                 >
                   <p className="text-[9px] mb-1 font-semibold" style={{ color: 'var(--warning)' }}>LIVE P&amp;L — REAL MONEY</p>
                   <p

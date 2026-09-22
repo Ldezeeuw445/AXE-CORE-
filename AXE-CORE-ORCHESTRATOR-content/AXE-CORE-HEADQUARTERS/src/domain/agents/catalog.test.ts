@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { AGENT_CATALOG, namespaceFor, agentsByKind } from './catalog';
 
 describe('agent catalog (the one force)', () => {
-  it('has the thirteen core agents (AXE + twelve tiered) and the eight crew specialists', () => {
+  it('has the fourteen core agents (AXE + thirteen tiered) and the eight crew specialists', () => {
+    // 'apps' joined 22-23 sep 2026 once App Manager got a real action (VPS
+    // health-check/restart) to hang a learning-loop episode on.
     expect(agentsByKind('core').map((a) => a.id).sort()).toEqual([
-      'axe',
+      'apps', 'axe',
       'browser', 'companion', 'cron', 'developer', 'finance',
       'intel', 'memory', 'northsea', 'task', 'thinktank', 'trading', 'wingman',
     ]);

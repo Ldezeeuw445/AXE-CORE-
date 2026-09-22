@@ -249,15 +249,19 @@ export const DEFAULT_AGENTS: CoreAgent[] = [
     name: 'app-manager',
     display_name: 'App Manager',
     role: 'developer',
-    description: 'App registry, integrations, and cross-app surfaces.',
+    // Was a stub (registry only, no real action) until App Manager got a
+    // genuine VPS health-check/restart via axeCoreApiService.ts's
+    // vpsStatus()/buildStatus()/vpsServiceRestart() — same day as the
+    // roster.ts 'apps' domain agent and its LOOP_AGENTS episode wiring.
+    description: 'App registry, VPS health checks, and service restarts for AXE CORE and AXE Companion.',
     system_prompt: 'You are the AXE App Manager.',
     memory_namespace: 'apps',
-    toolset: ['apps', 'integrations'],
+    toolset: ['apps', 'integrations', 'vps-status', 'vps-restart'],
     model_provider: 'google',
     model_name: 'gemini-3.5-flash',
     status: 'active',
     version: '1.0',
-    capabilities: ['registry', 'integrations'],
+    capabilities: ['registry', 'integrations', 'health-check', 'restart'],
     supabase_tables: [],
     app_url: null,
     tags: ['apps', 'tab:apps'],

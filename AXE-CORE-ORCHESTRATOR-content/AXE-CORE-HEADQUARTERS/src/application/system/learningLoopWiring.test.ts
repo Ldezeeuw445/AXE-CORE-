@@ -70,12 +70,18 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(roepers, 'Wingman opent een episode maar sluit hem nooit').toContain('presentation/pages/CrewAI.tsx');
   });
 
-  it('AXE Intel en AXE Companion openen scorebare episodes vanuit de desk-lanes', () => {
+  it('Trading eigen desk-lanes openen scorebare episodes onder hun eigen identiteit', () => {
+    // 22-23 sep 2026: leende tot dan toe de identiteit 'intel'/'companion' --
+    // dezelfde als de echte AXE Intel/AXE Companion product-agents in de
+    // andere apps, dus loop-health van Trading's interne simulatie kwam op
+    // de kaart van het echte product-agent terecht. Eigen loop-agent-ids
+    // ('trading-desk-intel'/'trading-desk-companion') lossen dat op zonder
+    // de echte 'intel'/'companion' agents aan te raken.
     const roepers = aanroepersVan('openLaneEpisode', 'deskAgents.ts');
     const lanes = BESTANDEN.find(({ pad }) => pad.endsWith('application/tradingIntel/deskAgents.ts'))!;
     expect(roepers).toHaveLength(0); // intern in deskAgents, en daar twee keer aangeroepen:
-    expect((lanes.tekst.match(/await openLaneEpisode\('(intel|companion)'/g) ?? []).sort())
-      .toEqual(["await openLaneEpisode('companion'", "await openLaneEpisode('intel'"]);
+    expect((lanes.tekst.match(/await openLaneEpisode\('(trading-desk-intel|trading-desk-companion)'/g) ?? []).sort())
+      .toEqual(["await openLaneEpisode('trading-desk-companion'", "await openLaneEpisode('trading-desk-intel'"]);
   });
 
   it('een gesloten trade sluit ook de lane-episodes, via de ene uitkomstplek', () => {

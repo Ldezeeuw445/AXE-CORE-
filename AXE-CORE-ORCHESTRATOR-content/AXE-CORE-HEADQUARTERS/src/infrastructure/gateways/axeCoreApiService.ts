@@ -1529,6 +1529,70 @@ export async function frameworksStatus(): Promise<FrameworksStatus> {
   return call('GET', '/frameworks/status');
 }
 
+// ── App Manager — real VPS status, build freshness, service restart ────────
+// The App Manager tab used to guess a service's health from a no-cors fetch
+// against its public URL (opaque: reachable-or-not, nothing about the
+// process behind it). These three mirror the `axe_vps_status`/`axe_build`/
+// `axe_vps_service` MCP tools' equivalent HTTP surface — see main.py's
+// /vps/status, /build/status, /vps/service/restart — following exactly the
+// same call() proxy pattern as frameworksStatus() above.
+
+export interface VpsServiceState {
+  active: boolean | null;
+  state?: string | null;
+  error?: string;
+}
+
+export interface VpsStatus {
+  ok: boolean;
+  host: string;
+  services: Record<string, VpsServiceState>;
+  load: number[] | null;
+  disk: { total_gb?: number; used_gb?: number; free_gb?: number; used_pct?: number | null; error?: string };
+  memory: { available: boolean; total_mb?: number; used_mb?: number; used_pct?: number | null; reason?: string; error?: string };
+  timestamp: string;
+}
+
+/** Which of the six known VPS systemd services are up, plus load/disk/
+ *  memory — the App Manager tab's real "Check health" data. */
+export async function vpsStatus(): Promise<VpsStatus> {
+  return call('GET', '/vps/status');
+}
+
+export interface BuildStatusCommit {
+  sha: string;
+  short_sha: string;
+  message: string;
+  date: string;
+}
+
+export interface BuildStatus {
+  ok: boolean;
+  applicable: boolean;
+  reason?: string;
+  running_file: string;
+  repo_root?: string;
+  branch?: string | null;
+  commit?: BuildStatusCommit | null;
+  uncommitted_files?: number | null;
+  stale_vs_latest_commit?: boolean | null;
+}
+
+/** Git branch/commit/uncommitted-count for the checkout the VPS API is
+ *  actually running from — `applicable: false` (not fabricated) when this
+ *  host isn't running out of a git checkout at all. */
+export async function buildStatus(): Promise<BuildStatus> {
+  return call('GET', '/build/status');
+}
+
+/** Restart one of the six known VPS systemd services. Destructive — the
+ *  server rejects anything outside that allowlist with a 400. Callers must
+ *  confirm with the user first (see AppsPage.tsx); this function itself does
+ *  not ask. */
+export async function vpsServiceRestart(service: string): Promise<{ ok: boolean; service: string; action: string; note: string }> {
+  return call('POST', '/vps/service/restart', { service });
+}
+
 /** Real historical OHLC (TwelveData, server-side key) — fallback/supplement
  *  to MetaAPI's own broker history for backtesting and cold-start decisions
  *  when no MT5 account is connected yet or the broker doesn't carry the

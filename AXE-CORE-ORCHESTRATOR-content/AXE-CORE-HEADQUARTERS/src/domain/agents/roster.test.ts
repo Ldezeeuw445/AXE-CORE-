@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { AXE_AGENTS, agentById, agentsByTier, delegateFor, type AxeAgentId } from './roster';
 
 describe('AXE agent roster', () => {
-  it('has AXE plus the twelve tiered agents, AXE first', () => {
-    expect(AXE_AGENTS).toHaveLength(13);
+  it('has AXE plus the tiered agents, AXE first', () => {
+    // Was 13 (AXE + twelve) until 'apps' (App Manager) got a real action —
+    // health-check/restart via axeCoreApiService.ts — the same day 'finance'
+    // did. See roster.ts's 'apps' entry and LOOP_AGENTS in agentLoop.ts.
+    expect(AXE_AGENTS).toHaveLength(14);
     expect(AXE_AGENTS[0].id).toBe('axe');
     const ids = AXE_AGENTS.map((a) => a.id).sort();
     expect(ids).toEqual([
-      'axe',
+      'apps', 'axe',
       'browser', 'companion', 'cron', 'developer', 'finance',
       'intel', 'memory', 'northsea', 'task', 'thinktank', 'trading', 'wingman',
     ]);
@@ -17,7 +20,7 @@ describe('AXE agent roster', () => {
     expect(agentsByTier('tier1').map((a) => a.id).sort())
       .toEqual(['developer', 'northsea', 'thinktank', 'trading', 'wingman']);
     expect(agentsByTier('tier2').map((a) => a.id).sort())
-      .toEqual(['browser', 'cron', 'finance', 'memory', 'task']);
+      .toEqual(['apps', 'browser', 'cron', 'finance', 'memory', 'task']);
     expect(agentsByTier('tier3').map((a) => a.id).sort())
       .toEqual(['companion', 'intel']);
   });
@@ -51,6 +54,8 @@ describe('AXE agent roster', () => {
       expect(delegateFor('fast', 'score this thinktank idea for me').agent).toBe('thinktank');
       expect(delegateFor('fast', 'open the url and scrape the pricing page').agent).toBe('browser');
       expect(delegateFor('fast', 'the cron manager should run this hourly').agent).toBe('cron');
+      expect(delegateFor('fast', 'is axe core up right now?').agent).toBe('apps');
+      expect(delegateFor('fast', 'restart the api on the vps').agent).toBe('apps');
     });
 
     it('holds ambiguous multi-domain work with AXE rather than mis-routing', () => {
