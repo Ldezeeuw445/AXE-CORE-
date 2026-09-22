@@ -21,6 +21,7 @@ import {
   metaApiAccountInfoFor,
   metaApiPositionsFor,
   metaApiGetHistoryDealsFor,
+  metaApiClosePositionFor,
   qtyToLots,
   toMt5Symbol,
   type PendingOrderType,
@@ -452,6 +453,63 @@ export async function brokerPlaceOrder(input: {
     ok: false,
     error: 'No live broker connected — connect MT5 via MetaAPI to place orders.',
     price: snap.last,
+  };
+}
+
+/**
+ * Sluit de longs van `symbol` op dit account, per positie-id.
+ *
+ * De motor "sloot" een long met een markt-SELL. Op een MT5-hedgingaccount — de
+ * gewone soort bij retail en propfirms — opent dat een tweede, tegengestelde
+ * positie in plaats van de long te sluiten: een short, ook met shorts uit, en
+ * de long bleef gewoon staan. positionManager en de kill switch sloten al per
+ * id; dit pad nu ook. Een sluiting verkleint risico en gaat daarom niet door
+ * de pre-trade poort.
+ */
+export async function brokerCloseLongs(input: {
+  symbol: string;
+  account?: MetaApiConfig;
+  reason: string;
+}): Promise<{ ok: boolean; closed: number; error?: string; price?: number }> {
+  const meta = input.account ?? await getMetaApiConfig();
+  if (!(meta?.enabled && meta.token && meta.accountId)) {
+    return { ok: false, closed: 0, error: 'No live broker connected' };
+  }
+  const res = await metaApiPositionsFor(meta);
+  if (!res.ok) return { ok: false, closed: 0, error: res.error };
+  const target = toMt5Symbol(input.symbol);
+  const longs = (res.positions as Record<string, unknown>[]).filter(p =>
+    String(p.symbol ?? '').toUpperCase().startsWith(target)
+    && !String(p.type ?? '').toUpperCase().includes('SELL'));
+  if (!longs.length) return { ok: false, closed: 0, error: `no open long in ${input.symbol}` };
+
+  let closed = 0;
+  const errors: string[] = [];
+  for (const p of longs) {
+    const id = String(p.id ?? p.positionId ?? '');
+    if (!id) continue;
+    const r = await metaApiClosePositionFor(meta, id);
+    if (r.ok) closed += 1; else errors.push(`${id}: ${r.error}`);
+  }
+  const snap = await fetchMarketSnapshot(input.symbol).catch(() => null);
+  if (closed > 0 && snap) {
+    // Het papieren spiegelboek bijwerken voor het journaal; leren doet de
+    // reconciler uit de echte dealhistorie (venue 'metaapi' leert niet).
+    const book = await getDemoAccount().catch(() => null);
+    const held = book?.positions.find(pos => pos.symbol === input.symbol.toUpperCase());
+    if (held && held.qty > 0) {
+      await executeDemoTrade({
+        symbol: input.symbol, side: 'sell', qty: held.qty, price: snap.last,
+        reason: `[MetaAPI close] ${input.reason}`.slice(0, 500), confidence: 1,
+        accountId: meta.accountId, venue: 'metaapi',
+      }).catch(() => undefined);
+    }
+  }
+  return {
+    ok: closed > 0 && errors.length === 0,
+    closed,
+    error: errors.length ? errors.join('; ') : undefined,
+    price: snap?.last,
   };
 }
 

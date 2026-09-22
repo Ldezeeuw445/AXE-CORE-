@@ -53,6 +53,7 @@ import { trailingBreakerThreshold } from '@/domain/tradingIntel/accountRules';
 import { evidencePolicyFor, type EvidencePolicy } from '@/domain/tradingIntel/evidence';
 import { accountEnvironment } from '@/infrastructure/persistence/tradingAccountsService';
 import {
+  brokerCloseLongs,
   brokerPlaceOrder,
   getEffectiveAccountState,
   brokerOpeningsTodayFor,
@@ -862,7 +863,12 @@ export async function runTradingAgent(input: {
   let error: string | undefined;
 
   if (shouldExec) {
-    const placed = await brokerPlaceOrder({
+    // Een long sluiten is een sluiting per positie-id, geen nieuwe SELL-order:
+    // op een hedgingaccount zou die een short openen naast de long.
+    const placed = closesLong
+      ? await brokerCloseLongs({ account: input.account, symbol, reason: rationale.slice(0, 400) })
+        .then(r => ({ ok: r.ok, error: r.error, price: r.price, tradeId: undefined as string | undefined }))
+      : await brokerPlaceOrder({
       account: input.account,
       symbol,
       side: action === 'buy' ? 'buy' : 'sell',

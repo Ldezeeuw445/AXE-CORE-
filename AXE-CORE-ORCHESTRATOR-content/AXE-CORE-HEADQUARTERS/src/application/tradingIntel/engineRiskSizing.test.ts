@@ -45,6 +45,7 @@ vi.mock('@/infrastructure/gateways/metaApiService', () => ({
     ok: true,
     spec: { symbol, brokerSymbol: symbol, tickSize: 0.01, lossTickValue: 1, contractSize: 100, minVolume: 0.01, maxVolume: 50, volumeStep: 0.01 },
   })),
+  metaApiClosePositionFor: vi.fn(async () => ({ ok: true })),
   qtyToLots: vi.fn(() => { throw new Error('qtyToLots must not size an agent order any more'); }),
   toMt5Symbol: vi.fn((s: string) => s.toUpperCase()),
 }));
@@ -198,5 +199,16 @@ describe('runTradingAgent — sizing op de stop', () => {
       .toMatch(/account environment live \(configured\) · using live\/funded evidence only · learned floor 58% from 0 outcome/);
     expect(live.blockedByRisk).toBeUndefined();
     expect(meta.metaApiMarketOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('een SELL tegen een open long sluit die long per id — geen markt-SELL die op hedging een short opent', async () => {
+    h.positions = [{ id: 'pos-7', symbol: 'XAUUSD', type: 'POSITION_TYPE_BUY', volume: 0.5, openPrice: 2390, stopLoss: 2380 }];
+    const res = await runTradingAgent({
+      symbol: 'XAUUSD', autoExecute: true, account: ACCOUNT, run: 'run-1',
+      strategySignalOverride: 'sell', strategyName: 'vbt:macd', timeframe: 'h1',
+    });
+    expect(res.decision.action).toBe('sell');
+    expect(meta.metaApiClosePositionFor).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acct-A' }), 'pos-7');
+    expect(meta.metaApiMarketOrder).not.toHaveBeenCalled();
   });
 });
