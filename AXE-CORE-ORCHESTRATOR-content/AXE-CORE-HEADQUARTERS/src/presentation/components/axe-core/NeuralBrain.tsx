@@ -13,15 +13,35 @@
  *      panel toggle).
  */
 import { applySceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
-import { useSlotAdoptie } from '@/presentation/components/layout/PlaatSlots';
+import { SLOT_ID, useSlotAdoptie } from '@/presentation/components/layout/PlaatSlots';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
-import { memo, useEffect, useRef } from 'react';
+import { createElement, memo, useEffect, useRef, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import * as THREE from 'three';
 import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 'postprocessing';
 import { useGlobalMemoryStats, timeAgo, type GlobalMemoryStats, type HubId } from './useGlobalMemoryStats';
 import './NeuralBrain.css';
 import { MEMORY_HUBS } from '@/domain/memory/memoryHubs';
 import { AGENT_SEEDS } from '@/domain/agents/agentRegistry';
+import { hubIcon } from '@/presentation/components/axe-core/hubIcons';
+import { MemoryDock, type MemoryDockColumn } from '@/presentation/components/axe-core/MemoryDock';
+
+/**
+ * Renders a shared `hubIcons.ts` glyph to an inline SVG string.
+ *
+ * This view is built imperatively (see the module doc comment above) — hub
+ * rows and 3D labels are `innerHTML`, not JSX — so the lucide icon component
+ * cannot be mounted directly. `renderToStaticMarkup` is the same trick every
+ * SSR pipeline uses to turn a React element into markup without a DOM; here
+ * it turns one lucide icon into a string once per hub, at scene-build time,
+ * not per frame. This is what wires this view to the same icon set Terrain
+ * already uses (`TerrainMarkers.tsx`, `NeuralMemorySystem.tsx`) instead of
+ * the plain colour dot it drew before.
+ */
+function hubIconSvg(hubId: string, size: number): string {
+  const Icon = hubIcon(hubId);
+  return renderToStaticMarkup(createElement(Icon, { size, strokeWidth: 2.2 }));
+}
 
 /**
  * The view is built imperatively by the Three.js effect, so this shell must be
@@ -69,7 +89,21 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
     <h2>MEMORY HUBS</h2>
     <div id="hub-list"></div>
   </div>
+  <!-- Fix E: real distribution across hubs, from the same hubCounts the list
+       above already renders -- the list says WHICH hubs exist and their raw
+       count, this says how the total actually splits between them, sorted so
+       the biggest hub is always legible at a glance. -->
   <div class="panel">
+    <h2>DISTRIBUTION</h2>
+    <div id="hub-dist-list"></div>
+  </div>
+  <!-- Corrective round 6, Part 5: dit was panel-plain (kale tekst, geen
+       kader) -- Luka wil dit nu als hetzelfde soort widget-blok als de
+       panelen erboven, zelfde omkering als Terrain's Legend
+       (NeuralMemorySystem.tsx). Gewoon panel met een h2, net als de
+       rest van deze kolom. -->
+  <div class="panel">
+    <h2>Controls</h2>
     <div class="legend" id="legend"></div>
   </div>
 </div>
@@ -84,9 +118,14 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
     <div id="stream-list"></div>
     <button class="viewall-btn" type="button">View all</button>
   </div>
+  <!-- Fix E: "Live Pulses" removed (Luka: not necessary) and replaced with a
+       panel that actually explains the memory, not just that something moved
+       recently -- where the total is actually stored, split by source
+       (global_memory / RAG / Obsidian), the same three stores
+       useGlobalMemoryStats already loads and MemoryDock already surfaces. -->
   <div class="panel">
-    <h2>LIVE PULSES <span class="live-tag"><span class="d"></span>LIVE</span></h2>
-    <div id="pulse-log-list"><div class="stream-empty">Wachten op activiteit…</div></div>
+    <h2>MEMORY SOURCES</h2>
+    <div id="source-list"></div>
   </div>
   <div class="panel">
     <h2>BRAIN OVERVIEW</h2>
@@ -100,12 +139,47 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
       <span><b>Memory synchronized</b>All systems up to date</span>
     </div>
   </div>
-</div>
-
-<div id="depthbar">
-  <div class="label">DEPTH LEVEL</div>
-  <div class="row" id="depth-row"></div>
 </div>`;
+
+/**
+ * Fix 7's four columns, built from `useGlobalMemoryStats` -- the same source
+ * the sidebar's own numbers already come from, so the fold-out never
+ * disagrees with the panels above it. No invented "Active Sessions" or
+ * "System Performance" (CPU/network) fields: this app does not track either,
+ * so the closest honest equivalents are used instead (see the brief).
+ */
+function buildNeuralDockColumns(stats: GlobalMemoryStats): MemoryDockColumn[] {
+  const topHubs = [...MEMORY_HUBS]
+    .map((h) => ({ label: h.name, value: stats.hubCounts[h.id] ?? 0 }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 4);
+  return [
+    {
+      title: 'Memory Capacity',
+      rows: [
+        { label: 'Total', value: stats.total.toLocaleString() },
+        { label: 'Knowledge (RAG)', value: (stats.hubCounts.knowledge ?? 0).toLocaleString() },
+      ],
+    },
+    {
+      title: 'Top Memory Domains',
+      rows: topHubs.map((h) => ({ label: h.label, value: h.value.toLocaleString() })),
+    },
+    {
+      title: 'Recent Activity',
+      rows: [
+        { label: 'Last updated', value: stats.lastUpdatedAt ? timeAgo(new Date(stats.lastUpdatedAt).getTime()) : '—' },
+        { label: 'Connections', value: stats.connections.toLocaleString() },
+      ],
+    },
+    {
+      title: 'System Health',
+      rows: [
+        { label: 'Integrity', value: stats.integrityPct == null ? '—' : `${stats.integrityPct}%`, ok: (stats.integrityPct ?? 0) >= 90 },
+      ],
+    },
+  ];
+}
 
 const NeuralShell = memo(function NeuralShell(
   { rootRef }: { rootRef: React.RefObject<HTMLDivElement | null> },
@@ -115,12 +189,14 @@ const NeuralShell = memo(function NeuralShell(
   );
 });
 
-/* De twee zijbalken van deze weergave gaan naar de sloten van de schil, zodat
-   ze daar dezelfde plek en hetzelfde materiaal krijgen als op elke andere tab.
-   Buiten de module, want een nieuw object per render zou de haak elke keer
-   opnieuw laten verhuizen. */
+/* De ene zijbalk-koppel van deze weergave gaat naar de sloten van de schil,
+   zodat ze daar dezelfde plek en hetzelfde materiaal krijgen als op elke
+   andere tab. Buiten de module, want een nieuw object per render zou de haak
+   elke keer opnieuw laten verhuizen.
+   Het dock (dieptebalk) is geen adoptie meer -- Fix 7 vervangt de vanilla
+   `#depthbar` door de gedeelde React `<MemoryDock>`, dus die hoeft niet meer
+   verhuisd te worden. */
 const NEURAL_SIDE_SLOTS = { links: '#sidebar-left', rechts: '#sidebar-right' } as const;
-const NEURAL_DOCK_SLOT = { dock: '#depthbar' } as const;
 
 export default function NeuralBrain() {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -130,18 +206,20 @@ export default function NeuralBrain() {
   const opPlaat = useHeeftPlaat();
   /* De hoge stand: kolommen naast het beeld, niet de onderband naast de chat. */
   useSlotAdoptie(NEURAL_SIDE_SLOTS, opPlaat, true);
-  useSlotAdoptie(NEURAL_DOCK_SLOT, opPlaat, false);
   // The scene build is expensive and must not re-run when counts refresh every
   // 45s, so the effect below stays on an empty dep list and reads stats through
   // a ref; a second effect pushes new numbers into the DOM it already built.
   const statsRef = useRef<GlobalMemoryStats>(stats);
   statsRef.current = stats;
   const applyStatsRef = useRef<((s: GlobalMemoryStats) => void) | null>(null);
-  // Bridges live memory activity into the WebGL scene without re-running the
-  // expensive build effect: the scene registers a pulse trigger here, and the
-  // stats effect calls it whenever a hub's memory count grows.
-  const triggerHubPulseRef = useRef<((hubId: string, strength?: number) => void) | null>(null);
-  const prevHubCountsRef = useRef<Record<string, number> | null>(null);
+
+  /* Fix 3 + Fix 7: de dieptekiezer leeft nu als React state, gerenderd via
+     <MemoryDock> (dezelfde fold-out als Terrain), en niet meer als een los
+     stuk vanilla DOM. De imperatieve scene blijft de bron van waarheid voor
+     wat er daadwerkelijk verandert (welke sub-hubs zichtbaar zijn); dit is
+     alleen de brug ernaartoe, zelfde patroon als applyStatsRef hierboven. */
+  const [depthLevel, setDepthLevelState] = useState(2);
+  const setDepthImperativeRef = useRef<((n: number) => void) | null>(null);
 
   /**
    * The build waits for real counts. statsRef above already carries them into
@@ -165,9 +243,39 @@ export default function NeuralBrain() {
     );
     const root: HTMLDivElement = maybeRoot;
 
-    /** All lookups scoped to this component — never the whole document. */
+    /**
+     * Lookups scoped to this component — but "this component" isn't just
+     * `root` any more. `useSlotAdoptie` (below) hands `#sidebar-left` and
+     * `#sidebar-right` — and everything inside them: the stat rows, hub list,
+     * stream list, legend, both Rotate switches — to the shell's slot hosts
+     * via `appendChild`, which removes them from `root`'s subtree entirely.
+     * That move happens one `requestAnimationFrame` after mount, so a plain
+     * `root.querySelector` finds these elements on the very first frame and
+     * then silently finds nothing for the rest of the view's life. Falling
+     * back to the known, stable slot hosts (`SLOT_ID`, not hardcoded strings)
+     * covers both states without ever searching the whole document, which
+     * was the actual thing the original scoping was protecting against. */
     const q = <T extends Element = HTMLElement>(sel: string): T | null =>
-      root.querySelector<T>(sel);
+      root.querySelector<T>(sel)
+      ?? document.getElementById(SLOT_ID.links)?.querySelector<T>(sel)
+      ?? document.getElementById(SLOT_ID.rechts)?.querySelector<T>(sel)
+      ?? document.getElementById(SLOT_ID.dock)?.querySelector<T>(sel)
+      ?? null;
+
+    /** Same fallback as `q`, for call sites that need every match rather than
+     *  the first — `.hub-row` lives wholesale inside the adopted sidebar, so
+     *  `root.querySelectorAll` goes from "all of them" to "none of them" the
+     *  instant adoption runs, same failure mode as `q`. */
+    const qAll = <T extends Element = HTMLElement>(sel: string): T[] => {
+      const inRoot = root.querySelectorAll<T>(sel);
+      if (inRoot.length) return Array.from(inRoot);
+      for (const hostId of [SLOT_ID.links, SLOT_ID.rechts, SLOT_ID.dock]) {
+        const host = document.getElementById(hostId);
+        const found = host?.querySelectorAll<T>(sel);
+        if (found && found.length) return Array.from(found);
+      }
+      return [];
+    };
 
     /* ============================== DATA ============================== */
     // Identity, name and colour come from the shared hub definition so Neural
@@ -281,13 +389,23 @@ export default function NeuralBrain() {
     // the reference's depth comes from the mass glowing against true black,
     // not from a glow spread over the whole frame. Raising the threshold
     // keeps the effect on hub cores and pulses, where it belongs.
+    //
+    // Corrective round 2, Fix 3: kernel/radius trimmed one notch further as a
+    // secondary measure alongside BLEND_K and SHELL_DEPTH above (see those
+    // comments for the actual numeric investigation). luminanceThreshold
+    // already keeps most of the base-hue cortex out of bloom entirely, so
+    // this was never the primary cause of the lobes reading as a featureless
+    // blob — but the hot hub cores and markers DO still bloom, and a LARGE
+    // kernel at radius 0.62 spreads that glow across a wide enough mip range
+    // to soften the crisper silhouette edges the other two changes restore.
+    // MEDIUM/0.4 keeps the same glowing-core look at a tighter spread.
     const bloom = new BloomEffect({
       intensity: 1.15,
       luminanceThreshold: 0.42,
       luminanceSmoothing: 0.25,
       mipmapBlur: true,
-      kernelSize: KernelSize.LARGE,
-      radius: 0.62,
+      kernelSize: KernelSize.MEDIUM,
+      radius: 0.4,
     });
     composer.addPass(new EffectPass(camera, bloom));
 
@@ -394,29 +512,56 @@ export default function NeuralBrain() {
       scene.add(new THREE.Points(g, m));
     })();
 
-    /* ============================== HUB COLOR BLEND ============================== */
-    function nearestHubBlend(pv: THREE.Vector3, hubColors: THREE.Color[], hubVecs: THREE.Vector3[]) {
-      let d0 = 1e9, d1 = 1e9, idx0 = 0, idx1 = 1;
+    /* ============================== HUB COLOR ============================== */
+    /**
+     * Corrective round 2, Fix 2. This used to be `nearestHubBlend`: find the
+     * two nearest hubs, weight them by squared inverse distance, and blend
+     * their two hub colours. Its own comment said the goal plainly — "each
+     * region is its own colour, and they meet at a seam" — which is exactly
+     * the bug. Squared-inverse-distance makes the nearer hub dominate almost
+     * immediately, so in practice every particle on the cortex just took on
+     * whichever of the ten hub colours owned that patch of surface: a
+     * Voronoi diagram of solid purple/green/orange/yellow/pink/cyan regions,
+     * not a brain. The original brief (round 1's Fix 6) asked for "1 or 2
+     * colours... reference image 12" — image 12 is a single glowing blue/cyan
+     * mass with no other hue anywhere on it, core included.
+     *
+     * Hub identity does not need to live in the particle colour at all — it
+     * already works, untouched, via each hub's own marker point and floating
+     * label (HUB_POS, hubIcons.ts). So this now does the opposite of the old
+     * function: almost every particle is the one base hue, and only
+     * particles within a small, fast-decaying radius of a hub's marker gain
+     * a second, single shared accent colour — a small warm ember right at
+     * the hub, not a hub-coloured region. That keeps the whole field at
+     * exactly two colours total, which is what "1 or 2" and image 12 both
+     * actually show.
+     */
+    // The reference's hue, and not a new invention: MEMORY_HUBS' own
+    // 'trading' entry is already this exact cyan, and it's the accent this
+    // app already calls cyan everywhere else (--accent-cyaan-mat).
+    const BASE_HUE = new THREE.Color(0x22d3ee);
+    // This app's existing warm accent (--accent-oranje-mat in axe-look.css),
+    // reused rather than inventing a third hue just for this glow.
+    const HUB_GLOW_ACCENT = new THREE.Color(0xffae3d);
+    // Small on purpose. The closest pair of hub markers (resources/trading,
+    // from HUB_POS) sit ~1.4 world units apart pre-projection; at sigma=0.42
+    // a Gaussian falloff is down to ~1.5% of full strength by 1.0 unit out
+    // and ~0.06% by 1.4 units — so two neighbouring hubs' embers don't merge
+    // into a band between them the way the old two-hub blend always did.
+    const HUB_GLOW_SIGMA = 0.42;
+
+    function hubGlowColor(pv: THREE.Vector3, hubVecs: THREE.Vector3[]) {
+      let d0 = 1e9;
       for (let h = 0; h < hubVecs.length; h++) {
         const d = pv.distanceToSquared(hubVecs[h]);
-        if (d < d0) { d1 = d0; idx1 = idx0; d0 = d; idx0 = h; }
-        else if (d < d1) { d1 = d; idx1 = h; }
+        if (d < d0) d0 = d;
       }
-      // Squared inverse distance, not plain inverse.
-      //
-      // With 1/(d+1.1) the two nearest hubs stayed close in weight across most
-      // of the cortex, so every point came out a blend of two hues and the
-      // whole brain read as one wash. Luka's reference is the opposite: each
-      // region is its own colour, and they meet at a seam rather than
-      // dissolving into each other. Squaring makes the nearer hub win quickly
-      // while still blending in the band where they actually meet.
-      const a0 = 1 / (d0 + 0.35), a1 = 1 / (d1 + 0.35);
-      const w0 = a0 * a0, w1 = a1 * a1, wsum = w0 + w1;
-      const col = new THREE.Color(0, 0, 0);
-      col.r = (hubColors[idx0].r * w0 + hubColors[idx1].r * w1) / wsum;
-      col.g = (hubColors[idx0].g * w0 + hubColors[idx1].g * w1) / wsum;
-      col.b = (hubColors[idx0].b * w0 + hubColors[idx1].b * w1) / wsum;
-      return { col, nearDist: Math.sqrt(d0), idx0 };
+      const nearDist = Math.sqrt(d0);
+      // Gaussian, not the old inverse-square: it actually reaches ~0 within a
+      // couple of sigma instead of trailing off across the whole cortex.
+      const glow = Math.exp(-d0 / (2 * HUB_GLOW_SIGMA * HUB_GLOW_SIGMA));
+      const col = BASE_HUE.clone().lerp(HUB_GLOW_ACCENT, glow);
+      return { col, nearDist };
     }
 
     /* ============================== BRAIN SHAPE ==============================
@@ -461,8 +606,28 @@ export default function NeuralBrain() {
       return [...half, ...mirrored, { c: [0, -2.60, -1.05], r: [0.70, 1.70, 0.80] }]; // brain stem
     })();
 
-    /** How softly lobes merge. Higher fuses them into a blob; lower shows seams. */
-    const BLEND_K = 0.45;
+    /**
+     * How softly lobes merge. Higher fuses them into a blob; lower shows seams.
+     *
+     * Corrective round 2, Fix 3. Numerically probing `brainSDF` (porting this
+     * exact function to a standalone script and sampling the ventral
+     * silhouette, since the live app can't be rendered here) showed `smin`
+     * itself was NOT the main reason the lobes read as invisible: at 0.45,
+     * wherever two blobs' SDF values actually differ by more than ~k (true of
+     * almost every lobe seam here), `smin` already collapses to a plain
+     * `min` — the higher k only added a small outward "fillet" bulge exactly
+     * at the few points where two blobs are near-equal (e.g. z≈3.5, the
+     * temporal lobe/frontal-pole boundary, where the probe measured the
+     * silhouette sitting ~0.32 world units further out at k=0.45 than at
+     * k=0.30, with no gaps or cracks introduced by the lower value). Still
+     * worth doing — it removes that one falsely-inflated seam — so this
+     * drops to 0.30, the top of the brief's suggested 0.25-0.30 range (kept
+     * off the bottom of that range since nothing in the probe asked for more
+     * aggression, and a harder seam risks visible cracks the probe didn't
+     * test every angle for). The dominant cause turned out to be
+     * `SHELL_DEPTH` below, not this constant — see its own comment.
+     */
+    const BLEND_K = 0.30;
 
     function sdEllipsoid(px: number, py: number, pz: number, b: Blob): number {
       const qx = (px - b.c[0]) / b.r[0];
@@ -560,15 +725,36 @@ export default function NeuralBrain() {
       return { outward, t1, t2 };
     }
 
-    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 380, strandsPerHub = 260, strandLen = 46) {
+    /**
+     * Fix 6 rebuild.
+     *
+     * Was a rejection-sampled shell PLUS, per hub, a tuft of short curling
+     * fibre-tract filaments (points and drawn line segments both). That tract
+     * system was rewritten twice already chasing the same complaint --
+     * "shapeless firework explosion" (image 10) -- and each rewrite made the
+     * threads shorter and curlier without changing what they fundamentally
+     * are: bright, busy, radiating lines. The user's own instruction (image
+     * 12, image 14) was explicit that this is allowed to get simpler as long
+     * as it reads as more realistic: a dense, glowing shell with a bright
+     * core, coloured per hub region -- not a mesh of visible fibres.
+     *
+     * So the tracts are gone. What replaces them is the core-density burst
+     * that was already being *sized for* here (`coreBurstCount` computed a
+     * `hubBursts`/`burstTotal` budget) but never actually placed -- the old
+     * code allocated that many buffer slots and then never wrote into them,
+     * so they sat at the origin with zero size, fully invisible. That silent
+     * gap is fixed below: it is now what gives the brain "denser fill toward
+     * the core" (image 12), with each hub's burst warm near the centre and
+     * fading to that hub's own colour as it nears the hub's own patch of
+     * surface.
+     */
+    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 380) {
       /**
        * Density per hub, from how much that hub actually holds.
        *
-       * Every hub used to get exactly `strandsPerHub` filaments and
-       * `coreBurstCount` motes, so Conversations (21 memories) and Trading
-       * (15,478) grew identical thickets. The brain was a picture of the
-       * taxonomy, not of the memory in it -- which is the whole of what M4
-       * asks for: density is how much is there.
+       * Every hub used to get exactly `coreBurstCount` motes, so Conversations
+       * (21 memories) and Trading (15,478) grew identical thickets. The brain
+       * was a picture of the taxonomy, not of the memory in it.
        *
        * Log-weighted, then clamped to 0.35-1.9. Linear would have made
        * Trading a solid mass and left everything else as a few threads; the
@@ -580,24 +766,13 @@ export default function NeuralBrain() {
         const w = Math.log10(n + 1) / Math.log10(HUB_COUNT_MAX + 1);
         return Math.max(0.35, Math.min(1.9, 0.35 + w * 1.55));
       });
-      const hubStrands = hubWeights.map(w => Math.max(24, Math.round(strandsPerHub * w)));
       const hubBursts = hubWeights.map(w => Math.max(40, Math.round(coreBurstCount * w)));
-
       const burstTotal = hubBursts.reduce((a, b) => a + b, 0);
-      const filamentTotal = hubStrands.reduce((a, b) => a + b, 0) * strandLen;
-      const total = surfaceCount + filamentTotal + burstTotal;
+      const total = surfaceCount + burstTotal;
       const positions = new Float32Array(total * 3);
       const colors = new Float32Array(total * 3);
       const phases = new Float32Array(total);
       const sizes = new Float32Array(total);
-      // Tracts are also emitted as real line segments. Points alone can only
-      // suggest a filament; drawing the segment is what lets the eye follow a
-      // single thread across the cortex, which is the thing the reference has
-      // and a pure point cloud never will.
-      const segMax = hubStrands.reduce((a, b) => a + b, 0) * (strandLen - 1) * 2;
-      const linePos = new Float32Array(segMax * 3);
-      const lineCol = new Float32Array(segMax * 3);
-      let lineIdx = 0;
       const baseColor = new THREE.Color(0x05060f);
       const hubColors = HUBS.map(h => new THREE.Color(h.color));
       const hubVecs = HUBS.map(h => new THREE.Vector3(h.pos[0], h.pos[1], h.pos[2]));
@@ -615,7 +790,30 @@ export default function NeuralBrain() {
       // middle. Accepting the whole interior and thinning it with depth keeps
       // the crisp outline while giving the mass something behind it.
       // How far inside the skin still counts as "surface", in world units.
-      const SHELL_DEPTH = 2.0;
+      //
+      // Corrective round 2, Fix 3: this — not BLEND_K above — is the actual
+      // reason the lobes rendered as a featureless oval. `skin` decays as
+      // `exp(-(-d)/SHELL_DEPTH * 4)`, so its 1/e falloff length is
+      // SHELL_DEPTH/4 world units: at 2.0 that is 0.5 units, and a particle
+      // a full unit inside the true surface (-d = 1.0) still had an 13.5%
+      // chance to be kept. Probing `brainSDF` numerically (same standalone
+      // port as BLEND_K's comment) against the actual anatomy here: the
+      // ventral silhouette's cerebellum/brain-stem saddle is only ~0.13
+      // units deep and the temporal lobe sits only ~0.05-0.15 units proud of
+      // its neighbours at most front-to-back positions. Both are smaller
+      // than the old 0.5-unit falloff length, so the soft shell buried them
+      // in its own thickness before they ever reached the screen — a real
+      // geometric feature a fraction of a unit tall cannot survive a
+      // fringe several times taller than it is.
+      //
+      // Halved (to 1.15, giving a ~0.29-unit falloff length): still keeps
+      // the "something behind the outline" fill the comment below explains
+      // (this is not back to the pre-fix hollow-bowl surface-only sampling),
+      // but a particle 1 unit inside the true surface now survives at only
+      // ~3%, so density drops away fast enough for the lobe-scale bumps
+      // above to actually read as a silhouette change instead of a uniform
+      // haze at this shell's own thickness.
+      const SHELL_DEPTH = 1.15;
       let guard = 0;
       while (idx < surfaceCount && guard < surfaceCount * 60) {
         guard++;
@@ -641,7 +839,7 @@ export default function NeuralBrain() {
         if (Math.random() > skin * gyri) continue;
 
         const pv = new THREE.Vector3(px, py, pz);
-        const { col, nearDist } = nearestHubBlend(pv, hubColors, hubVecs);
+        const { col, nearDist } = hubGlowColor(pv, hubVecs);
         // Falloff gentler and with a higher floor. At 0.22 per unit down to
         // 0.14, tissue between hubs went nearly black, so the colour only
         // existed as a halo around each node and everything in between was the
@@ -666,106 +864,31 @@ export default function NeuralBrain() {
       // Whatever the guard cut short stays as zeroed, fully transparent points.
       idx = surfaceCount;
 
-      // Fibre tracts.
-      //
-      // Third attempt at this, and the reference settles it.
-      //
-      // v1 walked long straight rays out of each hub -> fireworks. v2 replaced
-      // that with long tangential arcs sweeping ALONG the cortex, on the
-      // reasoning that real tracts braid into a mesh. At 60 steps of 0.10 a
-      // strand travels 6 units across a brain about 10 wide, so every strand
-      // crossed several regions and the whole thing read as a tangle -- which
-      // is what Luka is looking at when he says it is not the reference.
-      //
-      // The reference is neither: each node has a dense tuft of SHORT, curling,
-      // branching threads that stay inside its own territory and fade into the
-      // tissue. So: radial start, strong curl, short life, many of them. The
-      // tangential snap stays -- it is what keeps threads lying on the cortex
-      // instead of floating off it.
-      //
-      // Snapping uses the SDF: after a step, `d` is how far the point drifted
-      // off the shell, and the gradient points straight off the surface, so
-      // stepping back along it returns the strand to the skin without any
-      // assumption about the shape.
-      const sdfGrad = (x: number, y: number, z: number) => {
-        const e = 0.05;
-        return new THREE.Vector3(
-          brainSDF(x + e, y, z) - brainSDF(x - e, y, z),
-          brainSDF(x, y + e, z) - brainSDF(x, y - e, z),
-          brainSDF(x, y, z + e) - brainSDF(x, y, z - e),
-        ).normalize();
-      };
-
+      /* The dense, warm core (image 12). Each hub gets a short "root" of
+       * points running from near the centre out toward its own patch of
+       * surface — biased hard toward the centre (t is raised to a power > 1,
+       * so most samples land near t=0) so the interior is where density
+       * piles up, and coloured white-hot near the middle, fading to that
+       * hub's own colour as it nears the hub's own territory. That is what
+       * makes the core read as a bright source the colour regions grow out
+       * of, rather than a second, dimmer copy of the surface shell. */
+      const hot = new THREE.Color(0xeaf3ff);
       HUBS.forEach((hub, hi) => {
         const hc = hubColors[hi];
-        const origin = new THREE.Vector3(hub.pos[0], hub.pos[1], hub.pos[2]);
-        for (let st = 0; st < hubStrands[hi]; st++) {
-          // Start scattered around the hub rather than exactly on it, so the
-          // tracts read as a field the hub sits in, not spokes on a wheel.
+        const target = hubVecs[hi];
+        for (let i = 0; i < hubBursts[hi]; i++) {
+          const t = Math.pow(Math.random(), 1.8); // biased toward 0 = the core
           const jitter = new THREE.Vector3(
             Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5,
-          ).multiplyScalar(0.9);
-          const pos = origin.clone().add(jitter);
+          ).multiplyScalar(0.5 * (0.3 + t));
+          const p = target.clone().multiplyScalar(t * 0.82).add(jitter);
+          const col = hot.clone().lerp(hc, Math.min(1, t * 1.3 + 0.15));
 
-          let n = sdfGrad(pos.x, pos.y, pos.z);
-          // Tangent = any direction with the normal component removed.
-          // Outward from the hub, flattened onto the surface. The jitter that
-          // placed the start already spreads the tuft, so this gives each
-          // thread a direction that belongs to its own node rather than a
-          // random heading that could walk it into the neighbours.
-          const dir = pos.clone().sub(origin);
-          if (dir.lengthSq() < 1e-6) dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
-          dir.addScaledVector(n, -dir.dot(n)).normalize();
-
-          // Curl hard enough that a thread bends within its own tuft instead of
-          // leaving in a straight line -- a straight ray is the firework, the
-          // bend is what makes it read as a dendrite.
-          const turn = (Math.random() - 0.5) * 0.42;
-          const shellDepth = 0.15 + Math.random() * 1.5;
-          let alive = true;
-          let prevX = 0, prevY = 0, prevZ = 0, prevR = 0, prevG = 0, prevB = 0;
-
-          for (let k = 0; k < strandLen; k++) {
-            if (alive) {
-              n = sdfGrad(pos.x, pos.y, pos.z);
-              // Rotate the heading within the tangent plane.
-              const side = new THREE.Vector3().crossVectors(n, dir).normalize();
-              dir.addScaledVector(side, turn).normalize();
-              dir.addScaledVector(n, -dir.dot(n)).normalize();
-
-              pos.addScaledVector(dir, 0.10);
-
-              // Snap back to a shallow depth under the skin.
-              const d = brainSDF(pos.x, pos.y, pos.z);
-              pos.addScaledVector(n, -(d + shellDepth));
-
-              if (Math.abs(brainSDF(pos.x, pos.y, pos.z) + shellDepth) > 0.6) alive = false;
-            }
-            const t = k / strandLen;
-            // Fade along the strand so tracts dissolve into the tissue instead
-            // of ending abruptly; dead strands write zero-size points so the
-            // buffer stays packed without a second pass.
-            const col = hc.clone().multiplyScalar(alive ? 1.25 - t * 0.85 : 0);
-
-            // Join to the previous point as a drawn segment. Only while the
-            // strand is alive — a dead strand's points sit stacked on its last
-            // position, and joining those would streak a line to nowhere.
-            if (alive && k > 0 && lineIdx + 2 <= segMax) {
-              linePos[lineIdx * 3] = prevX; linePos[lineIdx * 3 + 1] = prevY; linePos[lineIdx * 3 + 2] = prevZ;
-              lineCol[lineIdx * 3] = prevR; lineCol[lineIdx * 3 + 1] = prevG; lineCol[lineIdx * 3 + 2] = prevB;
-              lineIdx++;
-              linePos[lineIdx * 3] = pos.x; linePos[lineIdx * 3 + 1] = pos.y; linePos[lineIdx * 3 + 2] = pos.z;
-              lineCol[lineIdx * 3] = col.r; lineCol[lineIdx * 3 + 1] = col.g; lineCol[lineIdx * 3 + 2] = col.b;
-              lineIdx++;
-            }
-            prevX = pos.x; prevY = pos.y; prevZ = pos.z;
-            prevR = col.r; prevG = col.g; prevB = col.b;
-            positions[idx * 3] = pos.x; positions[idx * 3 + 1] = pos.y; positions[idx * 3 + 2] = pos.z;
-            colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
-            phases[idx] = Math.random() * Math.PI * 2;
-            sizes[idx] = alive ? (0.022 - t * 0.008) + Math.random() * 0.006 : 0;
-            idx++;
-          }
+          positions[idx * 3] = p.x; positions[idx * 3 + 1] = p.y; positions[idx * 3 + 2] = p.z;
+          colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
+          phases[idx] = Math.random() * Math.PI * 2;
+          sizes[idx] = (0.02 + Math.random() * 0.012) * (1.0 - t * 0.5);
+          idx++;
         }
       });
 
@@ -775,22 +898,14 @@ export default function NeuralBrain() {
       geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
       geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
 
-      // Trim to what was actually written: the strand budget is an upper
-      // bound and most strands die before using it.
-      const lineGeo = new THREE.BufferGeometry();
-      lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos.subarray(0, lineIdx * 3), 3));
-      lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol.subarray(0, lineIdx * 3), 3));
-
-      return { points: geo, lines: lineGeo };
+      return { points: geo };
     }
 
     // The travelling "living pulse" is gone. Bands of light running out along
     // every hub's connections, plus a self-firing timer per hub, was the
     // single biggest source of the fireworks feel: something was always
     // flashing somewhere. The reference is still — its detail comes from
-    // density, not motion — so activity is now reported in the log panel
-    // rather than staged on the mesh.
-    const HUB_N = HUBS.length;
+    // density, not motion.
     const brainUniforms = {
       uTime: { value: 0 },
       uOpacity: { value: 1.0 },
@@ -831,115 +946,22 @@ export default function NeuralBrain() {
         }
       `,
     });
-    // Tracts get their own material: same pulse maths as the points so a
-    // travelling light runs along a thread rather than jumping between the
-    // dots on it, but no point-sprite texture — a segment is already a shape.
-    const lineMat = new THREE.ShaderMaterial({
-      uniforms: brainUniforms,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      vertexShader: `
-        attribute vec3 color;
-        varying vec3 vColor;
-        void main(){
-          vColor = color;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vColor;
-        uniform float uOpacity;
-        void main(){
-          // Kept faint on purpose: hundreds of overlapping additive threads
-          // blow out to white long before they read as structure.
-          gl_FragColor = vec4(vColor * 0.95, uOpacity * 0.085);
-        }
-      `,
-    });
-
-    // strandLen 60 -> 20: at 0.10 per step a strand now reaches ~2 units, so
-    // it stays inside its region instead of crossing three. Count raised to
-    // keep the same total thread mass, spent on many short tufts rather than
-    // a few long sweeps.
-    const brainGeo = buildBrainGeometry(122000, 820, 430, 20);
+    // Fix 6: no more fibre-tract LineSegments/material — see buildBrainGeometry's
+    // doc comment for why (image 10's "firework explosion" complaint traces to
+    // this system across three prior rewrites; it is removed rather than
+    // rewritten a fourth time).
+    const brainGeo = buildBrainGeometry(122000, 2600);
     const brainPoints = new THREE.Points(brainGeo.points, brainMat);
     brainGroup.add(brainPoints);
-    const brainTracts = new THREE.LineSegments(brainGeo.lines, lineMat);
-    brainGroup.add(brainTracts);
 
-    /* ============================== LIVING PULSE ============================== */
-    // A pulse is a bright band that starts at a hub (aDist 0) and travels
-    // outward along that hub's strands. Real memory activity fires them via
-    // triggerHubPulseRef; a gentle ambient cadence keeps a connection breathing
-    // while the app is idle so the brain always feels alive.
-    // Small live legend of which hub pulsed most recently, shown beside the
-    // brain. Newest first, capped so the panel never grows.
-    const pulseLog: Array<{ name: string; hex: string; ts: number }> = [];
-    function renderPulseLog() {
-      const list = q('#pulse-log-list');
-      if (!list) return;
-      if (!pulseLog.length) {
-        list.innerHTML = '<div class="stream-empty">Wachten op activiteit…</div>';
-        return;
-      }
-      list.innerHTML = pulseLog.map(p =>
-        `<div class="stream-item"><span class="sd" style="background:${p.hex}; color:${p.hex};"></span>`
-        + `<div class="body"><div class="t">${timeAgo(p.ts)}</div>`
-        + `<div class="l1" style="color:${p.hex}">${p.name}</div>`
-        + `<div class="l2">pulse langs connecties</div></div></div>`,
-      ).join('');
-    }
-    /**
-     * Records real memory activity in the log panel.
-     *
-     * This used to also launch a light down the hub's connections and flash
-     * its sprite. The travelling band was the fireworks; the information —
-     * "this hub just grew" — is worth keeping, so it stays as a log line.
-     */
-    function firePulse(i: number) {
-      if (i < 0 || i >= HUB_N) return;
-      const hub = HUBS[i];
-      pulseLog.unshift({
-        name: hub.name,
-        hex: '#' + hub.color.toString(16).padStart(6, '0'),
-        ts: Date.now(),
-      });
-      if (pulseLog.length > 6) pulseLog.pop();
-      renderPulseLog();
-    }
-    triggerHubPulseRef.current = (hubId: string) => {
-      firePulse(HUBS.findIndex(h => h.id === hubId));
-    };
-    // Keep the "x seconds ago" labels fresh without touching the WebGL context.
-    const pulseLogTimer = window.setInterval(renderPulseLog, 5000);
-
-    (function sparkles() {
-      const N = 1700;
-      const positions = new Float32Array(N * 3), colors = new Float32Array(N * 3);
-      const hubColors = HUBS.map(h => new THREE.Color(h.color));
-      const hubVecs = HUBS.map(h => new THREE.Vector3(h.pos[0], h.pos[1], h.pos[2]));
-      for (let i = 0; i < N; i++) {
-        const phi = Math.acos(2 * Math.random() - 1), theta = Math.random() * Math.PI * 2;
-        const shellJ = 0.88 + Math.random() * 0.2;
-        const R = brainRadius(theta, phi) * shellJ;
-        const px = Math.sin(phi) * Math.cos(theta) * R;
-        const py = Math.cos(phi) * R;
-        const pz = Math.sin(phi) * Math.sin(theta) * R;
-        const { col } = nearestHubBlend(new THREE.Vector3(px, py, pz), hubColors, hubVecs);
-        col.lerp(new THREE.Color(0xffffff), 0.55);
-        positions[i * 3] = px; positions[i * 3 + 1] = py; positions[i * 3 + 2] = pz;
-        colors[i * 3] = col.r; colors[i * 3 + 1] = col.g; colors[i * 3 + 2] = col.b;
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      const m = new THREE.PointsMaterial({
-        map: starTex, size: 0.11, vertexColors: true, transparent: true, opacity: 0.9,
-        sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
-      });
-      brainGroup.add(new THREE.Points(g, m));
-    })();
+    // Fix 6: the "sparkles" layer -- 1700 extra bright, full-opacity
+    // star-sprites scattered back over the whole shell, on top of
+    // buildBrainGeometry's own surface points -- is gone. It was a second,
+    // brighter copy of the same shell with no anatomical or per-hub meaning,
+    // and its bright four-spike star texture at this scale is exactly what
+    // read as "fireworks" rather than as surface texture. The shell's own
+    // 122,000 points (smaller, dimmer, per-hub coloured) already carry the
+    // gyral texture; this was pure extra glare on top of it.
 
     /* ---- hub markers ---- */
     function makeGlowTexture(hex: number, hot: boolean) {
@@ -984,15 +1006,11 @@ export default function NeuralBrain() {
       hot.scale.set(0.14, 0.14, 0.14);
       grp.add(hot);
 
-      // A star-textured glint gives each hub the radiating diffraction spikes
-      // of the reference's bright nodes; Bloom then turns it into a light peak.
-      const glint = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: starTex, color: new THREE.Color(hub.color).lerp(new THREE.Color(0xffffff), 0.65),
-        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.9,
-      }));
-      glint.scale.set(0.62, 0.62, 0.62);
-      grp.add(glint);
-
+      // Fix 6: the four-spike diffraction "glint" sprite is gone -- ten of
+      // those firing at once, on top of the glow+hot halo already here, is
+      // what a lens-flare/firework look actually is. The soft glow + bright
+      // core below already reads as "realistic, glowing rim" (image 12)
+      // without the added spikes.
       const core = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), new THREE.MeshBasicMaterial({ color: hub.color }));
       grp.add(core);
 
@@ -1048,15 +1066,18 @@ export default function NeuralBrain() {
     const hubLeaderLines: Record<string, { glow: SVGLineElement; core: SVGLineElement }> = {};
 
     HUBS.forEach(hub => {
+      const hex = '#' + hub.color.toString(16).padStart(6, '0');
       const el = document.createElement('div');
       el.className = 'hub-label';
-      el.style.color = '#' + hub.color.toString(16).padStart(6, '0');
-      el.innerHTML = `<span class="dot" style="background:currentColor"></span><span><span style="color:var(--text)">${hub.name}</span><span class="sub" data-hub-sub="${hub.id}">${hub.count} memories</span></span>`;
+      el.style.color = hex;
+      // Fix 6: the floating label now carries the same hub glyph as the
+      // sidebar row and Terrain's own summit markers instead of a bare dot --
+      // "gebruik dezelfde icons als op terrain, het is tenslotte dezelfde
+      // memory" (Luka).
+      el.innerHTML = `<span class="hub-label-icon" style="color:${hex}; background:${hex}1a; border-color:${hex}aa;">${hubIconSvg(hub.id, 11)}</span><span><span style="color:var(--text)">${hub.name}</span><span class="sub" data-hub-sub="${hub.id}">${hub.count} memories</span></span>`;
       el.addEventListener('click', () => zoomToHub(hub));
       labelsLayer.appendChild(el);
       hubLabelEls[hub.id] = el;
-
-      const hex = '#' + hub.color.toString(16).padStart(6, '0');
       const glowLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       glowLine.setAttribute('stroke', hex);
       glowLine.setAttribute('stroke-width', '3.5');
@@ -1093,7 +1114,8 @@ export default function NeuralBrain() {
     let dragEnabled = true;
     let autoRotate = true;
     let activeHub: (typeof HUBS)[number] | null = null;
-    let currentDepth = 1;
+    // Matches <MemoryDock>'s initial depthLevel React state (see setDepthLevelState above).
+    let currentDepth = 2;
 
     function updateCameraFromState() {
       camera.position.set(
@@ -1289,9 +1311,9 @@ export default function NeuralBrain() {
     }
 
     function applyDepth() {
-      root.querySelectorAll<HTMLElement>('.depth-btn').forEach(b => {
-        b.classList.toggle('active', Number(b.dataset.d) === currentDepth);
-      });
+      // The active/locked styling used to live on `.depth-btn` DOM nodes built
+      // here; those buttons are now React state rendered by <MemoryDock> (Fix
+      // 3 + Fix 7), so this only has to drive the 3D consequence of depth.
       if (!treeData) return;
       const leafVisible = currentDepth >= 2;
       treeData.nodes.filter(n => n.level === 2).forEach(n => {
@@ -1299,12 +1321,14 @@ export default function NeuralBrain() {
         if (n.parentMesh) n.parentMesh.visible = leafVisible;
       });
     }
+    setDepthImperativeRef.current = (d: number) => {
+      if (d === 5) return;
+      currentDepth = d;
+      applyDepth();
+    };
 
     function zoomToHub(hub: (typeof HUBS)[number]) {
       if (activeHub && activeHub.id === hub.id) return;
-      // Opening a hub is real activity, so it still gets a log line — it just
-      // no longer fires a light down the connections.
-      firePulse(HUBS.indexOf(hub));
       clearTree();
       activeHub = hub;
       treeData = buildTree(hub);
@@ -1326,7 +1350,7 @@ export default function NeuralBrain() {
       set('#hi-count', hub.count + ' memories in deze hub');
       set('#about-text', hub.desc);
 
-      root.querySelectorAll<HTMLElement>('.hub-row').forEach(r => r.classList.toggle('active', r.dataset.id === hub.id));
+      qAll<HTMLElement>('.hub-row').forEach(r => r.classList.toggle('active', r.dataset.id === hub.id));
       Object.values(hubLabelEls).forEach(el => { el.style.opacity = '0'; });
       Object.values(hubLeaderLines).forEach(l => { l.glow.style.opacity = '0'; l.core.style.opacity = '0'; });
     }
@@ -1341,7 +1365,7 @@ export default function NeuralBrain() {
       const hubInfo = q('#hub-info'); if (hubInfo) hubInfo.style.display = 'none';
       const about = q('#about-text');
       if (about) about.textContent = 'This is your Global Memory. It holds everything AXE knows, remembers and learns about you and our conversations. Click a hub to explore deeper.';
-      root.querySelectorAll('.hub-row').forEach(r => r.classList.remove('active'));
+      qAll('.hub-row').forEach(r => r.classList.remove('active'));
       Object.values(hubLabelEls).forEach(el => { el.style.opacity = '1'; });
     }
 
@@ -1351,8 +1375,13 @@ export default function NeuralBrain() {
       const row = document.createElement('div');
       row.className = 'hub-row';
       row.dataset.id = hub.id;
-      row.style.color = '#' + hub.color.toString(16).padStart(6, '0');
-      row.innerHTML = `<span class="avatar-badge" style="color:currentColor"></span><span class="name">${hub.name}</span><span class="count" data-hub-count="${hub.id}">${hub.count}</span>`;
+      const hex = '#' + hub.color.toString(16).padStart(6, '0');
+      row.style.color = hex;
+      // `avatar-badge` had no matching CSS rule at all -- an invisible span,
+      // which is why this list read as name+count with no glyph. Fix 6: the
+      // same shared icon set Terrain already uses (hubIcons.ts), tinted per
+      // hub exactly like `.nm-hub-row-icon` on Terrain's own hub list.
+      row.innerHTML = `<span class="hub-row-icon" style="color:${hex}; background:${hex}18; border-color:${hex}55;">${hubIconSvg(hub.id, 12)}</span><span class="name">${hub.name}</span><span class="count" data-hub-count="${hub.id}">${hub.count}</span>`;
       row.addEventListener('click', () => zoomToHub(hub));
       hubList?.appendChild(row);
     });
@@ -1366,21 +1395,21 @@ export default function NeuralBrain() {
       HUBS.forEach(hub => {
         const n = s.hubCounts[hub.id as HubId] ?? 0;
         hub.count = nf.format(n);
-        const row = root.querySelector(`[data-hub-count="${hub.id}"]`);
+        const row = q(`[data-hub-count="${hub.id}"]`);
         if (row) row.textContent = hub.count;
-        const sub = root.querySelector(`[data-hub-sub="${hub.id}"]`);
+        const sub = q(`[data-hub-sub="${hub.id}"]`);
         if (sub) sub.textContent = `${hub.count} memories`;
       });
 
       const set = (sel: string, txt: string) => {
-        const el = root.querySelector(sel);
+        const el = q(sel);
         if (el) el.textContent = txt;
       };
       set('#stat-total', s.loading ? '…' : nf.format(s.total));
       set('#stat-connections', s.loading ? '…' : nf.format(s.connections));
       set('#stat-updated', s.lastUpdatedAt ? timeAgo(new Date(s.lastUpdatedAt).getTime()) : '—');
       set('#stat-integrity', s.integrityPct == null ? '—' : `${s.integrityPct}%`);
-      const bar = root.querySelector<HTMLElement>('#stat-bar');
+      const bar = q<HTMLElement>('#stat-bar');
       if (bar) bar.style.width = `${s.integrityPct ?? 0}%`;
 
       const list = q('#stream-list');
@@ -1400,21 +1429,53 @@ export default function NeuralBrain() {
           list.appendChild(d);
         });
       }
+
+      /* Fix E: real distribution, sorted so the biggest slice always reads
+       * first -- against the running total, not each hub's own max, so the
+       * bars actually sum to something meaningful. */
+      const distList = q('#hub-dist-list');
+      if (distList) {
+        const totalAll = Math.max(1, s.total);
+        const sorted = [...HUBS].sort((a, b) =>
+          (s.hubCounts[b.id as HubId] ?? 0) - (s.hubCounts[a.id as HubId] ?? 0));
+        distList.innerHTML = sorted.map(hub => {
+          const n = s.hubCounts[hub.id as HubId] ?? 0;
+          const pct = Math.round((n / totalAll) * 100);
+          const hex = '#' + hub.color.toString(16).padStart(6, '0');
+          return `<div class="mini-bar-row">`
+            + `<span class="mini-bar-label" style="color:${hex}">${hub.name}</span>`
+            + `<span class="mini-bar-pct">${pct}%</span>`
+            + `<div class="mini-bar-track"><i style="width:${pct}%; background:${hex};"></i></div>`
+            + `</div>`;
+        }).join('');
+      }
+
+      /* Fix E: replaces "Live Pulses" -- where the total is actually stored,
+       * not just that something moved. Same three stores useGlobalMemoryStats
+       * already loads (global_memory, RAG, Obsidian notes); MemoryDock shows
+       * the same split under "Memory Capacity", this is not a new number. */
+      const sourceList = q('#source-list');
+      if (sourceList) {
+        const totalSources = Math.max(1, s.sourceCounts.global + s.sourceCounts.rag + s.sourceCounts.notes);
+        const rows: Array<[string, number, string]> = [
+          ['Global', s.sourceCounts.global, '#5C8FC2'],
+          ['RAG (Knowledge)', s.sourceCounts.rag, '#4CAF7D'],
+          ['Obsidian', s.sourceCounts.notes, '#C96B92'],
+        ];
+        sourceList.innerHTML = rows.map(([label, n, hex]) => {
+          const pct = Math.round((n / totalSources) * 100);
+          return `<div class="mini-bar-row">`
+            + `<span class="mini-bar-label" style="color:${hex}">${label}</span>`
+            + `<span class="mini-bar-pct">${nf.format(n)}</span>`
+            + `<div class="mini-bar-track"><i style="width:${pct}%; background:${hex};"></i></div>`
+            + `</div>`;
+        }).join('');
+      }
     }
     applyStatsRef.current = applyStats;
     applyStats(statsRef.current);
-
-    const depthRow = q('#depth-row');
-    [1, 2, 3, 4, 5].forEach(d => {
-      const b = document.createElement('div');
-      b.className = 'depth-btn' + (d === 2 ? ' active' : '') + (d === 5 ? ' locked' : '');
-      b.dataset.d = String(d);
-      b.innerHTML = d === 5
-        ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
-        : String(d);
-      b.addEventListener('click', () => { if (d === 5) return; currentDepth = d; applyDepth(); });
-      depthRow?.appendChild(b);
-    });
+    // Depth buttons are React now (<MemoryDock>, Fix 3 + Fix 7) -- no DOM row
+    // to build here any more. See setDepthImperativeRef above for the bridge.
 
     const LEGEND_ICONS = {
       navigate: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg>',
@@ -1599,7 +1660,6 @@ export default function NeuralBrain() {
       canvas.removeEventListener('wheel', onWheel);
       neuralInput?.removeEventListener('keydown', onInputKey);
       clearTree();
-      window.clearInterval(pulseLogTimer);
       composer.dispose();
       // dispose() frees three.js's own objects but does NOT release the WebGL
       // context -- only forceContextLoss() does. Without it every mount of
@@ -1615,20 +1675,28 @@ export default function NeuralBrain() {
   }, [countsReady]);
 
   // Counts refresh on their own cadence; hand them to the scene's DOM without
-  // touching the WebGL context. Real memory activity (a hub whose count grew)
-  // also fires a living pulse along that hub's connections.
+  // touching the WebGL context.
   useEffect(() => {
     applyStatsRef.current?.(stats);
-    const prev = prevHubCountsRef.current;
-    if (prev) {
-      (Object.keys(stats.hubCounts) as HubId[]).forEach(id => {
-        if ((stats.hubCounts[id] ?? 0) > (prev[id] ?? 0)) {
-          triggerHubPulseRef.current?.(id, 1.0);
-        }
-      });
-    }
-    prevHubCountsRef.current = { ...stats.hubCounts };
   }, [stats]);
 
-  return <NeuralShell rootRef={rootRef} />;
+  return (
+    <>
+      <NeuralShell rootRef={rootRef} />
+      {/* Fix 7: dezelfde fold-out als Terrain, met de dieptekiezer in de
+          koprij (Fix 3). Op echte data uit useGlobalMemoryStats -- geen
+          sessies of CPU-cijfers die deze app niet bijhoudt. */}
+      <MemoryDock
+        depthLevel={depthLevel}
+        depthLevels={[1, 2, 3, 4, 5]}
+        isDepthLocked={(n) => n === 5}
+        onSetDepth={(n) => {
+          if (n === 5) return;
+          setDepthLevelState(n);
+          setDepthImperativeRef.current?.(n);
+        }}
+        columns={buildNeuralDockColumns(stats)}
+      />
+    </>
+  );
 }

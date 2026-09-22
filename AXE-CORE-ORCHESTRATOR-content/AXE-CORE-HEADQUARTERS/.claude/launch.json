@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "axe-core-shell",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:shell"],
+      "port": 5011
     }
   ]
 }
