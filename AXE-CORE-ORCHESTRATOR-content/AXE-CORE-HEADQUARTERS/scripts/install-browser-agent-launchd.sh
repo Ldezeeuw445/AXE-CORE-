@@ -13,6 +13,11 @@ PY="$ROOT/backend/axe_api/.venv-local/bin/python"
 }
 [[ -f "$ROOT/backend/axe_api/browser_agent_app.py" ]] || { echo "browser_agent_app.py missing" >&2; exit 1; }
 
+# The Python package alone is not a usable browser worker: Playwright's actual
+# Chromium binary is a separate install. This command is idempotent and only
+# downloads the matching browser when it is missing.
+"$PY" -m playwright install chromium
+
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 
 cat > "$PLIST" <<PLIST
