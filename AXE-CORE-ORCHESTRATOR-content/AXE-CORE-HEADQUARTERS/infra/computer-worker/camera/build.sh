@@ -18,7 +18,7 @@ swiftc "$HERE/main.swift" \
   -o "$MACOS/AXE Camera"
 
 if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
-  codesign --force --deep --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$APP"
+  codesign --force --deep --sign "$APPLE_SIGNING_IDENTITY" "$APP"
 else
   codesign --force --deep --sign - "$APP"
 fi
