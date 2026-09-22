@@ -161,6 +161,23 @@ AXE_CANONICAL_BUILD=1 npm run tauri:build
 
 [[ -d "$APP" ]] || stop "De bouw gaf geen $APP. Lees de uitvoer hierboven."
 
+# Deterministic build identity inside the .app.
+#
+# Grepping minified JS is not a stable verification contract: bundlers are
+# allowed to rename/reshape object literals and macOS grep can also classify
+# bundled assets as binary. The source build stamp still exists for the UI,
+# but the updater verifies a plain text resource that it owns itself.
+VERWACHT_SHA="$(git rev-parse --short HEAD)"
+STAMP_FILE="$APP/Contents/Resources/axe-build-stamp.txt"
+mkdir -p "$(dirname "$STAMP_FILE")"
+printf '%s\n' "$VERWACHT_SHA" > "$STAMP_FILE"
+
+# Tauri signed the bundle before this updater-owned resource existed. Re-sign
+# with the same stable identity so adding the deterministic stamp does not
+# invalidate the native bundle signature or its TCC identity.
+codesign --force --deep --sign "$APPLE_SIGNING_IDENTITY" "$APP"
+codesign --verify --deep --strict "$APP" || stop "Gebouwde AXE CORE signature-verificatie faalde na build-stamp."
+
 # ── 4. De oude afsluiten ─────────────────────────────────────────────────────
 # Tauri laat geen tweede instantie toe: draait de oude nog, dan lijkt de nieuwe
 # gewoon niet te openen en zie je nergens waarom.
@@ -250,10 +267,9 @@ ditto "$APP" "$CANONICAL_APP"
 xattr -dr com.apple.quarantine "$CANONICAL_APP" 2>/dev/null || true
 codesign --verify --deep --strict "$CANONICAL_APP" || stop "Canonical AXE CORE signature-verificatie faalde."
 
-VERWACHT_SHA="$(git rev-parse --short HEAD)"
-APP_SHA="$(grep -rhoE 'commit:"[0-9a-f]{7,12}"' "$CANONICAL_APP" 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')"
-[[ -n "$APP_SHA" ]] || stop "Canonical app bevat geen build-stempel."
-[[ "$APP_SHA" == "$VERWACHT_SHA"* || "$VERWACHT_SHA" == "$APP_SHA"* ]] || stop "Canonical app is uit $APP_SHA gebouwd maar repo staat op $VERWACHT_SHA."
+APP_SHA="$(cat "$CANONICAL_APP/Contents/Resources/axe-build-stamp.txt" 2>/dev/null || true)"
+[[ -n "$APP_SHA" ]] || stop "Canonical app bevat geen deterministische build-stempel."
+[[ "$APP_SHA" == "$VERWACHT_SHA" ]] || stop "Canonical app is uit $APP_SHA gebouwd maar repo staat op $VERWACHT_SHA."
 
 # De release-bundle was vroeger óók Spotlight-startbaar. Na verificatie is
 # /Applications de enige gebruikersapp; de build-output blijft geen tweede AXE.
