@@ -84,6 +84,13 @@ ACTIONS: dict[str, ActionSpec] = {
     # Consolidated Desk visibility (running/waiting/approval/failed/next-scheduled).
     # No parameters, no side effects -- re-groups rows the other actions already expose.
     "get_live_operations": ActionSpec("northsea_get_live_operations", ()),
+    # Plain reporting reads, used by AXE CORE's App Manager tab (AppsPage.tsx) to show
+    # NorthSea Commodity as a monitored business alongside the VPS services -- deal
+    # pipeline counts/funnel, scheduler+database+CrewAI health, and communication
+    # volume. Same no-parameters/no-side-effects shape as get_live_operations above.
+    "get_pipeline_summary": ActionSpec("northsea_get_pipeline_summary", ()),
+    "get_system_health": ActionSpec("northsea_get_system_health", ()),
+    "get_communications_metrics": ActionSpec("northsea_get_communications_metrics", (), ("weeks",)),
 }
 
 

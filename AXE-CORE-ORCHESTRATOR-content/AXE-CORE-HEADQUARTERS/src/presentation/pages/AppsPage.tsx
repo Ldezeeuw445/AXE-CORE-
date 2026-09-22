@@ -5,6 +5,8 @@ import { Activity, ArrowRight, ExternalLink, Home, Plus, Power, RefreshCw, Smart
 import {
   sbGetRows, sbDeleteRow, vercelListDeployments, isAxeApiConfigured,
   vpsStatus, buildStatus, vpsServiceRestart, type VpsStatus, type BuildStatus,
+  northseaPipelineSummary, northseaSystemHealth, northseaCommunicationsMetrics, northseaTab,
+  type NorthseaPipelineSummary, type NorthseaSystemHealth, type NorthseaCommunicationsMetrics,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   androidShellAvailable, isAppInstalled, openAndroidApp, openPhoneHomeScreen,
@@ -64,6 +66,30 @@ interface AppHealthCheck {
   checkedAt?: number;
 }
 
+// NorthSea Commodity is a real business Luka runs, not a deploy target — it
+// has no registered_apps row and no VPS systemd unit of its own here, so it
+// gets its own card below the registry grid rather than a slot inside it
+// (same reasoning as Trading OS having no VPS_SERVICE_BY_APP_NAME entry
+// above). Revenue is carried explicitly as `commissie_bedragen`/`waarde_ingevuld`
+// counts (from the existing /northsea/tab/rapporten) rather than a dollar
+// figure: as of writing, zero opportunities have a commission amount filled
+// in, so a dollar total would be fabricated — the count is the honest number.
+interface NorthseaRevenueCounts {
+  deals: number;
+  gewonnen: number;
+  commissie_bedragen: number;
+  waarde_ingevuld: number;
+}
+
+interface NorthseaSummaryState {
+  loading: boolean;
+  pipeline?: NorthseaPipelineSummary;
+  health?: NorthseaSystemHealth;
+  comms?: NorthseaCommunicationsMetrics;
+  revenue?: NorthseaRevenueCounts;
+  error?: string;
+}
+
 export default function AppsPage() {
   const navigate = useNavigate();
   const sendMessage = useVoiceStore(s => s.sendMessage);
@@ -73,7 +99,37 @@ export default function AppsPage() {
   const [adding, setAdding] = useState(false);
   const [health, setHealth] = useState<Record<string, AppHealthCheck>>({});
   const [restarting, setRestarting] = useState<Record<string, boolean>>({});
+  const [northsea, setNorthsea] = useState<NorthseaSummaryState>({ loading: false });
   const onPhone = androidShellAvailable();
+
+  // NorthSea Commodity summary — read-only, no confirm needed. Four calls:
+  // three governed NorthSea MCP tools (pipeline/health/comms — main.py's
+  // /northsea/pipeline-summary, /northsea/system-health,
+  // /northsea/communications-metrics) plus the existing /northsea/tab/rapporten
+  // for the honest commission count. This is a dashboard, not an agent acting
+  // on the world, so unlike checkHealth() above it does not open a loop episode.
+  const loadNorthsea = async () => {
+    setNorthsea(prev => ({ ...prev, loading: true, error: undefined }));
+    try {
+      const [pipeline, healthData, comms, rapporten] = await Promise.all([
+        northseaPipelineSummary(),
+        northseaSystemHealth(),
+        northseaCommunicationsMetrics(),
+        northseaTab('rapporten'),
+      ]);
+      setNorthsea({
+        loading: false, pipeline, health: healthData, comms,
+        revenue: {
+          deals: rapporten.totaal.deals,
+          gewonnen: rapporten.totaal.gewonnen,
+          commissie_bedragen: rapporten.totaal.commissie_bedragen,
+          waarde_ingevuld: rapporten.totaal.waarde_ingevuld,
+        },
+      });
+    } catch (e) {
+      setNorthsea({ loading: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  };
 
   // Real health check for the rows that map to a VPS systemd unit — replaces
   // the no-cors-fetch guess above for those two rows specifically. Backed by
@@ -214,6 +270,13 @@ export default function AppsPage() {
     // for as long as this page has existed. A microtask makes the async
     // boundary explicit without duplicating the fetch into the effect.
     const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
+
+  }, []);
+
+  useEffect(() => {
+    if (!isAxeApiConfigured) return;
+    const t = setTimeout(() => void loadNorthsea(), 0);
     return () => clearTimeout(t);
 
   }, []);
@@ -451,6 +514,93 @@ export default function AppsPage() {
               );
             })}
           </CardGrid>
+        </>
+      )}
+
+      {/* NorthSea Commodity — a real business, not a deploy target (see the
+          NorthseaSummaryState comment above). Own section below the registry
+          grid, read-only, no confirm dialogs: three governed NorthSea MCP
+          reads plus the existing Reports-tab totals. */}
+      {isAxeApiConfigured && (
+        <>
+          <SectionLabel>NorthSea Commodity</SectionLabel>
+          <AxeCard className="mb-4">
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div>
+                <div className="text-[13px] font-semibold" style={{ color: '#F5F0E6' }}>
+                  NorthSea Commodity
+                </div>
+                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Live deal pipeline — read-only, via the NorthSea MCP.
+                </div>
+              </div>
+              <AxeButton size="sm" variant="ghost" disabled={northsea.loading} onClick={() => void loadNorthsea()}>
+                <RefreshCw size={11} /> {northsea.loading ? 'Loading…' : 'Refresh'}
+              </AxeButton>
+            </div>
+
+            {northsea.error && (
+              <div className="text-[11px] mb-2" style={{ color: 'var(--error)' }}>
+                Could not reach NorthSea: {northsea.error}
+              </div>
+            )}
+
+            {northsea.pipeline && (() => {
+              const metric = (name: string) => northsea.pipeline?.metrics.find(m => m.name === name)?.value ?? '—';
+              const stageEntries = Object.entries(northsea.pipeline.by_stage);
+              const gateEntries = Object.entries(northsea.pipeline.by_gate_passed).filter(([, v]) => v > 0);
+              return (
+                <>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <StatPill label="Open" value={metric('pipeline_open')} tone="cyan" />
+                    <StatPill label="Active" value={metric('active')} tone="success" />
+                    <StatPill label="Blocked" value={metric('blocked_open')} tone="warn" />
+                    <StatPill label="Awaiting approval" value={metric('awaiting_approval')} tone="warn" />
+                    <StatPill label="Won" value={metric('won')} tone="neutral" />
+                  </div>
+                  <div className="text-[10px] mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                    Stage: {stageEntries.length
+                      ? stageEntries.map(([k, v]) => `${k} ${v}`).join(' · ')
+                      : '—'}
+                  </div>
+                  <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+                    Gates passed: {gateEntries.length ? gateEntries.map(([k, v]) => `${k} ${v}`).join(' · ') : 'none yet'}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Revenue is never omitted, even though it is zero — see the
+                NorthseaRevenueCounts comment above for why this is a count,
+                not a fabricated dollar figure. */}
+            <div
+              className="text-[11px] mb-2"
+              style={{ color: northsea.revenue && northsea.revenue.commissie_bedragen > 0 ? 'var(--success)' : 'var(--text-muted)' }}
+            >
+              {northsea.revenue == null
+                ? (northsea.loading ? 'Revenue: loading…' : 'Revenue: unknown — /northsea/tab/rapporten did not load.')
+                : northsea.revenue.commissie_bedragen === 0
+                  ? `Revenue: $0 — no commission recorded yet on any of ${northsea.revenue.deals} deal(s) (${northsea.revenue.gewonnen} won).`
+                  : `Commission recorded on ${northsea.revenue.commissie_bedragen} of ${northsea.revenue.deals} deal(s) — dollar total not aggregated here.`}
+            </div>
+
+            {northsea.comms && (
+              <div className="text-[10px] mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                Comms (last {northsea.comms.window_weeks}w): {northsea.comms.inbound_total} inbound
+                {' · '}{Object.values(northsea.comms.by_channel).reduce((sum, v) => sum + v, 0) - northsea.comms.inbound_total} other
+                {' · '}{northsea.comms.bounced_total} bounced
+              </div>
+            )}
+
+            {northsea.health && (
+              <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                Health: database {northsea.health.database.reachable ? 'reachable' : 'unreachable'}
+                {northsea.health.scheduler.last_status ? ` · scheduler last run ${northsea.health.scheduler.last_status}` : ''}
+                {typeof northsea.health.crewai.available === 'boolean'
+                  ? ` · CrewAI ${northsea.health.crewai.available ? 'available' : 'unavailable'}` : ''}
+              </div>
+            )}
+          </AxeCard>
         </>
       )}
 

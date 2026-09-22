@@ -4521,6 +4521,57 @@ async def northsea_action(action: str, req: NorthseaActionRequest):
         raise HTTPException(status, f"{e.code}: {e.message}")
 
 
+# Three read-only NorthSea MCP tools, each as its own GET endpoint rather than
+# going through /northsea/action/{action} — App Manager (AppsPage.tsx) wants
+# these on load, the same way it already calls /vps/status and /build/status,
+# not behind a POST-with-body action call. Each is a thin wrapper over the
+# same governed call_action() used above: no new transport, auth or error
+# taxonomy, just this route's own error-status mapping (no "unknown_action"
+# here since the action name is fixed, not caller-supplied).
+_NORTHSEA_READ_ERROR_STATUS = {
+    "missing_params": 422, "not_configured": 503,
+    "upstream_unreachable": 502, "tool_error": 502, "bad_response": 502,
+}
+
+
+@app.get("/northsea/pipeline-summary", dependencies=[AUTH])
+async def northsea_pipeline_summary():
+    """Real deal-pipeline counts (open/active/blocked/awaiting-approval/won) plus the
+    stage and gate funnel, straight from the NorthSea MCP's own
+    northsea_get_pipeline_summary tool (backend/northsea_mcp/northsea_mcp/readtools.py
+    ::pipeline_summary). The response is that tool's own structured result, unchanged —
+    nothing here computes, filters or invents a field."""
+    try:
+        result = await _gateway.call_action("get_pipeline_summary", {})
+    except _gateway.NorthSeaGatewayError as e:
+        raise HTTPException(_NORTHSEA_READ_ERROR_STATUS.get(e.code, 502), f"{e.code}: {e.message}")
+    return result["result"]
+
+
+@app.get("/northsea/system-health", dependencies=[AUTH])
+async def northsea_system_health():
+    """Scheduler/database/CrewAI-availability status straight from the NorthSea MCP's
+    own northsea_get_system_health tool (readtools.py::system_health). See
+    northsea_pipeline_summary() above for the same governed-proxy reasoning."""
+    try:
+        result = await _gateway.call_action("get_system_health", {})
+    except _gateway.NorthSeaGatewayError as e:
+        raise HTTPException(_NORTHSEA_READ_ERROR_STATUS.get(e.code, 502), f"{e.code}: {e.message}")
+    return result["result"]
+
+
+@app.get("/northsea/communications-metrics", dependencies=[AUTH])
+async def northsea_communications_metrics(weeks: int = 12):
+    """Weekly inbound/outbound communication volume straight from the NorthSea MCP's
+    own northsea_get_communications_metrics tool (readtools.py::communications_metrics).
+    See northsea_pipeline_summary() above for the same governed-proxy reasoning."""
+    try:
+        result = await _gateway.call_action("get_communications_metrics", {"weeks": weeks})
+    except _gateway.NorthSeaGatewayError as e:
+        raise HTTPException(_NORTHSEA_READ_ERROR_STATUS.get(e.code, 502), f"{e.code}: {e.message}")
+    return result["result"]
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # APP MANAGER — real VPS status, build freshness, and service restart.
 #

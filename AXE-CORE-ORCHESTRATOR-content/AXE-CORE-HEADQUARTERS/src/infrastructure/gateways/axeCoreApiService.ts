@@ -1181,6 +1181,86 @@ export async function northseaLiveOperations(): Promise<NorthseaLiveOperations> 
   return result as unknown as NorthseaLiveOperations;
 }
 
+// ── NorthSea Commodity — App Manager summary (pipeline / health / comms) ───
+// Three more read-only NorthSea MCP tools, each behind its own GET endpoint
+// (backend/axe_api/main.py's /northsea/pipeline-summary, /northsea/system-health,
+// /northsea/communications-metrics) rather than northseaActie() above — App
+// Manager (AppsPage.tsx) wants these on load, same as vpsStatus()/buildStatus().
+// Field names mirror the tools' real return shape (backend/northsea_mcp/
+// northsea_mcp/readtools.py::pipeline_summary/system_health/communications_metrics)
+// exactly; nothing here invents a field the tool doesn't return.
+
+export interface NorthseaPipelineMetric {
+  name: string;
+  value: number;
+  definition: string;
+  source: string[];
+  ids?: string[];
+}
+
+export interface NorthseaPipelineSummary {
+  generated_at: string;
+  metrics: NorthseaPipelineMetric[];
+  by_stage: Record<string, number>;
+  by_execution_state_excluding_lost: Record<string, number>;
+  by_qualification_status: Record<string, number>;
+  readiness_buckets: Record<string, number>;
+  map_state_counts: Record<string, number>;
+  notes: string[];
+  by_gate_passed: Record<string, number>;
+  source: string[];
+}
+
+/** Deal-pipeline counts (open/active/blocked/awaiting-approval/won) plus the
+ *  stage and gate funnel — northsea_get_pipeline_summary, unchanged. */
+export async function northseaPipelineSummary(): Promise<NorthseaPipelineSummary> {
+  return call('GET', '/northsea/pipeline-summary');
+}
+
+export interface NorthseaSystemHealth {
+  generated_at: string;
+  mcp_version: string;
+  database: {
+    reachable: boolean; tables_loaded: number; load_ms?: number;
+    table_errors: Record<string, string>; truncated_tables: string[];
+  };
+  scheduler: {
+    next_run_at?: string | null; last_run_at?: string | null; last_status?: string | null;
+    enabled?: boolean; consecutive_failures?: number; source?: string; note?: string;
+  };
+  crewai: { available: boolean | null; note: string; routes?: unknown; fallback?: unknown; studio_optional?: unknown };
+  research: Record<string, unknown>;
+  not_covered: string[];
+  source: string[];
+}
+
+/** Scheduler/database/CrewAI-availability status — northsea_get_system_health,
+ *  unchanged. `not_covered` lists what this check deliberately does not see
+ *  (the AXE CORE desktop runtime, Resend delivery, edge function health). */
+export async function northseaSystemHealth(): Promise<NorthseaSystemHealth> {
+  return call('GET', '/northsea/system-health');
+}
+
+export interface NorthseaCommunicationsMetrics {
+  generated_at: string;
+  window_weeks: number;
+  by_week: Record<string, Record<string, number>>;
+  by_channel: Record<string, number>;
+  outbound_email_delivery: Record<string, number>;
+  bounced_total: number;
+  inbound_with_analysis: number;
+  inbound_total: number;
+  drafts_by_status: Record<string, number>;
+  definition: string;
+  source: string[];
+}
+
+/** Weekly inbound/outbound communication volume — northsea_get_communications_metrics,
+ *  unchanged. `weeks` defaults to 12, matching the tool's own default. */
+export async function northseaCommunicationsMetrics(weeks = 12): Promise<NorthseaCommunicationsMetrics> {
+  return call('GET', `/northsea/communications-metrics?weeks=${weeks}`);
+}
+
 export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }
 export function mcpHubLijst(): Promise<{ servers: McpHubServer[]; sjablonen: McpHubSjabloon[] }> { return call('GET', '/mcp/hub'); }
 export function mcpHubVoegToe(sjabloon: string, label: string, velden: Record<string, string>): Promise<McpHubServer> {
