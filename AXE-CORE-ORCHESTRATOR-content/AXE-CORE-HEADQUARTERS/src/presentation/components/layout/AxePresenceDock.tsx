@@ -15,6 +15,7 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { ACTIVITEIT_GEBEURTENIS, type AxeActiviteit } from '@/shared/axeActiviteit';
 import { kiesDoel, type Rechthoek } from '@/domain/bolVlucht';
 import { BolVlucht, type Vlucht } from '@/presentation/components/layout/zweef/BolVlucht';
+import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
 function vindDoel(doel: string): Rechthoek | null {
   for (const el of document.querySelectorAll<HTMLElement>(`[data-axe-doel="${CSS.escape(doel)}"]`)) {
@@ -37,6 +38,74 @@ function vindZichtbareRechterRail(): Rechthoek | null {
   return null;
 }
 
+/** Corrective round 2, Fix 4: Neural's and Terrain's right column (PlaatSlot
+ *  `hoog`) is NOT a `[data-rail='right']` -- it is a shell slot that a view
+ *  fills and that stays on screen permanently, never hidden/off-screen the
+ *  way the hover rail is. This card's ceiling math above only ever checked
+ *  the hover rail, so on Neural/Terrain it happily rendered its `vol` (210px)
+ *  card straight on top of that always-visible column -- "ABOUT THIS VIEW"
+ *  and "MEMORY STREAM LIVE" sitting right where the reader read them getting
+ *  a second, unrelated "AXE: ..." exchange painted over them.
+ *
+ *  This went unnoticed until round 1 fixed the hoog slot's own geometry
+ *  (previously it collapsed to zero height and rendered nothing, per the
+ *  history in axe-look.css's `.axe-slot--hoog` comment) -- the collision was
+ *  always possible, it just had nothing on screen to collide with before.
+ *
+ *  `.axe-slot:empty { display:none }` already means a hoog slot with no
+ *  content reports a zero-size rect here, so this is safe on every other
+ *  tab: `getBoundingClientRect()` naturally returns nothing to avoid. */
+function vindZichtbareHogeSlotRechts(): Rechthoek | null {
+  const el = document.querySelector<HTMLElement>('.axe-slot--rechts.axe-slot--hoog');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width > 0 && r.right <= window.innerWidth + 1) return { x: r.left, y: r.top, b: r.width, h: r.height };
+  return null;
+}
+
+/** Corrective round 6, Part 4: the right radial dock (`RadiaalDok`,
+ *  `kant='rechts'`) reserves this same bottom-right corner once its ring
+ *  actually fans out to its full 268px-square footprint -- closed, it is a
+ *  single 60px button and `RADIAAL_RESERVE` below already covers that rest
+ *  position, but open it reaches much further left and would sit right under
+ *  a `vol` card without this. Its own box is a FIXED 268px square in the DOM
+ *  regardless of open/closed (the ring's `width`/`height` are set inline,
+ *  unconditionally; only the tabs inside it transform), so the rect alone
+ *  cannot distinguish the two states -- `data-open` can, and that is exactly
+ *  what this checks before treating it as an obstacle at all. */
+function vindOpenRadiaalRechts(): Rechthoek | null {
+  const el = document.querySelector<HTMLElement>('[data-axe-doel="radiaal-rechts"]');
+  if (!el || el.getAttribute('data-open') !== 'ja') return null;
+  const r = el.getBoundingClientRect();
+  if (r.width > 0) return { x: r.left, y: r.top, b: r.width, h: r.height };
+  return null;
+}
+
+/**
+ * Every horizontal obstacle the card's ceiling must stay clear of right now.
+ * Each finder returns `null` when it simply isn't in the way this instant
+ * (closed, off-screen, absent on this tab) -- `metingActievePositie()` below
+ * just takes the tightest (smallest `x`) of whichever ones are actually
+ * present.
+ *
+ * Corrective round 6, Part 4: this used to be three separate named checks
+ * bolted directly into `metingActievePositie()`'s own `Math.min()` call, each
+ * one added in its own earlier corrective round because nothing generalized
+ * "what else is on screen right now" -- the hover rail (round unknown), the
+ * always-visible hoog slot (round 2), MemoryDock's height (round 4, a
+ * different axis but the same pattern). Luka's ask ("de chat... past zich
+ * altijd aan de ruimte die er is aan") is exactly "find every obstacle,
+ * don't enumerate them by name" -- this array is that: the next obstacle is
+ * one more function pushed here, not a new named variable threaded through
+ * `metingActievePositie()`'s body. Kept as a short array and not a bigger
+ * registry/plugin system -- that would be solving a problem this file
+ * doesn't have yet. */
+const HORIZONTALE_OBSTAKELS: Array<() => Rechthoek | null> = [
+  vindZichtbareRechterRail,
+  vindZichtbareHogeSlotRechts,
+  vindOpenRadiaalRechts,
+];
+
 /** Gap kept after the composer's right edge, matching the original design's
  *  own number (the composer used to end exactly 15px before the presence). */
 const NA_COMPOSER_GAP = 15;
@@ -48,13 +117,19 @@ const RADIAAL_RESERVE = 190;
 const BREEDTE_VOL = 210;
 const BREEDTE_COMPACT = 132;
 const BREEDTE_MINI = 40;
+/** Kept clear above whatever is currently the top of the dock strip -- same
+ *  role as NA_COMPOSER_GAP, just on the vertical axis. */
+const BOVEN_DOK_GAP = 10;
 
 interface ActievePositie { links: number; modus: 'vol' | 'compact' | 'mini'; breedte: number }
 
 function metingActievePositie(): ActievePositie {
   const composer = vindDoel('axe-composer');
-  const rail = vindZichtbareRechterRail();
-  const plafond = Math.min(window.innerWidth - RADIAAL_RESERVE, rail ? rail.x : Infinity);
+  const obstakel = HORIZONTALE_OBSTAKELS.reduce((dichtstbij, vind) => {
+    const r = vind();
+    return r ? Math.min(dichtstbij, r.x) : dichtstbij;
+  }, Infinity);
+  const plafond = Math.min(window.innerWidth - RADIAAL_RESERVE, obstakel);
   const start = (composer ? composer.x + composer.b : window.innerWidth * 0.75) + NA_COMPOSER_GAP;
   const beschikbaar = plafond - start;
   const modus = beschikbaar >= BREEDTE_VOL ? 'vol' : beschikbaar >= BREEDTE_COMPACT ? 'compact' : 'mini';
@@ -64,6 +139,75 @@ function metingActievePositie(): ActievePositie {
   // NA_COMPOSER_GAP would otherwise put it.
   const links = Math.min(start, plafond - breedte);
   return { links, modus, breedte };
+}
+
+/**
+ * Corrective round 7, Fix 1: this used to search for `[data-axe-doel="memory-
+ * dock"]` specifically -- the one identity `MemoryDock.tsx` (Neural/Terrain)
+ * happens to tag its root with. That only ever matched MemoryDock. NorthSea
+ * Desk's `DealsTabel.tsx` sits in the exact same `#axe-slot-dock` host (same
+ * `PlaatSlot slot="dock"`, same variable height: closed is one header row,
+ * open is more), tagged `data-axe-doel="northsea-deals"` -- a different
+ * string this lookup never matched, so the round 4 clamp below silently never
+ * applied there and the very "falls underneath the tab bar" overlap round 4
+ * fixed for Neural/Terrain was still live, unnoticed, on NorthSea Desk.
+ *
+ * The actual invariant was never "MemoryDock specifically" -- it is "whatever
+ * is currently occupying the dock slot", and that slot's own id
+ * (`SLOT_ID.dock`, from PlaatSlots.tsx) is stable and content-agnostic
+ * regardless of which page's component got adopted/portaled into it. Measure
+ * the HOST directly instead of a named child, so MemoryDock, DealsTabel and
+ * anything dropped into this slot in the future are all covered without ever
+ * enumerating them by name again -- the same move round 6 already made for
+ * `HORIZONTALE_OBSTAKELS`.
+ *
+ * An empty slot already reports a zero rect here: `.axe-slot:empty {
+ * display:none }` (axe-look.css) means `getBoundingClientRect()` naturally
+ * returns nothing to avoid, so this stays safe on every tab with no dock
+ * content at all.
+ */
+function vindSlotDok(): Rechthoek | null {
+  const el = document.getElementById(SLOT_ID.dock);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width > 0 && r.height > 0) return { x: r.left, y: r.top, b: r.width, h: r.height };
+  return null;
+}
+
+/**
+ * Corrective round 4, Fix C: the card's own CSS (`bottom: --axe-composer-onder`,
+ * `height: --axe-composer-hoog`) pins its box to exactly `.axe-composer`'s own
+ * rect -- fine on every tab with nothing in the dock slot. On Neural/Terrain
+ * (MemoryDock) and now also NorthSea Desk (DealsTabel), that slot sits
+ * directly above this same composer, and its own height is not fixed: closed
+ * it is one header row, open it is that row plus more. Nothing here ever
+ * measured it, which is exactly the round 2 bug repeating on the other axis --
+ * that fix taught this card about the always-visible hoge-slot column so its
+ * WIDTH would stop short of it; this teaches it about the dock slot so its
+ * HEIGHT does the same.
+ *
+ * `.axe-slot--dock` and this card are NOT in a stacking conflict -- the slot
+ * inherits `.axe-slot`'s z-index:30, the card is z-index:104, comfortably on
+ * top. A higher z-index only wins where the two boxes actually overlap,
+ * though, and painting the card's own top edge over the dock's stats reads
+ * exactly like the "cut-off sliver" Luka saw: the corner of the card sitting
+ * on top of the dock, not fully clear of it. So this does not touch z-index
+ * -- it stops the boxes from overlapping in the first place by capping the
+ * card's rendered height whenever the dock's real, measured bottom edge would
+ * otherwise land inside it.
+ *
+ * Returns `null` when there is no dock content on this tab, or it is not tall
+ * enough to reach the card -- the overwhelmingly common case, where the card
+ * keeps its full CSS-driven height untouched.
+ */
+function metingMaxHoogte(): number | null {
+  const composer = vindDoel('axe-composer');
+  const dok = vindSlotDok();
+  if (!composer || !dok) return null;
+  const dokOnder = dok.y + dok.h;
+  const overschrijding = dokOnder + BOVEN_DOK_GAP - composer.y;
+  if (overschrijding <= 0) return null;
+  return Math.max(0, composer.h - overschrijding);
 }
 
 export function AxePresenceDock() {
@@ -151,6 +295,9 @@ export function AxePresenceDock() {
      flips, since that's exactly when the right answer changes. */
   const [anker, setAnker] = useState<{ x: number; y: number } | null>(null);
   const [actievePositie, setActievePositie] = useState<ActievePositie>(() => metingActievePositie());
+  /* Fix C: null on every tab without MemoryDock (or where it isn't tall
+     enough to reach) -- the card then keeps its plain CSS height. */
+  const [maxHoogte, setMaxHoogte] = useState<number | null>(() => metingMaxHoogte());
   useEffect(() => {
     const meet = () => {
       // Both axes, not just X (round 5 live review): a fixed `bottom: 22px`
@@ -164,10 +311,57 @@ export function AxePresenceDock() {
         const next = metingActievePositie();
         return next.links === prev.links && next.modus === prev.modus ? prev : next;
       });
+      setMaxHoogte(metingMaxHoogte());
     };
     meet();
     window.addEventListener('resize', meet);
-    return () => window.removeEventListener('resize', meet);
+    /* Whatever is adopted into the dock slot changes height on a click
+       (open/closed) -- MemoryDock on Neural/Terrain, DealsTabel on NorthSea
+       Desk -- which fires no resize event -- without watching the SLOT HOST
+       directly the card would only reflow the next time the window itself
+       resized. Round 7, Fix 1: watches `#axe-slot-dock` itself (see
+       `vindSlotDok()` above) instead of one named child, so this covers
+       whichever page's content is currently inside it. */
+    let dokObs: ResizeObserver | null = null;
+    const dokEl = document.getElementById(SLOT_ID.dock);
+    if (dokEl && 'ResizeObserver' in window) {
+      dokObs = new ResizeObserver(meet);
+      dokObs.observe(dokEl);
+    }
+    /* Corrective round 6, Part 4: same shape of problem as MemoryDock above,
+       different element -- the right radial dock toggles `data-open` on a
+       click (RadiaalDok.tsx), which fires no resize event anywhere (its own
+       box is a fixed 268px square regardless of open/closed, see
+       `vindOpenRadiaalRechts`'s comment). Without watching that attribute
+       directly, the card would only pick up the ring having opened the next
+       time something else happened to re-measure -- not "never overlap it",
+       just "eventually stop overlapping it". */
+    let radiaalObs: MutationObserver | null = null;
+    const radiaalEl = document.querySelector<HTMLElement>('[data-axe-doel="radiaal-rechts"]');
+    if (radiaalEl && 'MutationObserver' in window) {
+      radiaalObs = new MutationObserver(meet);
+      radiaalObs.observe(radiaalEl, { attributes: true, attributeFilter: ['data-open'] });
+    }
+    /* Corrective round 7, Fix 3: `vindZichtbareRechterRail()` already reads
+       this obstacle, but nothing ever re-measured when it actually changes.
+       The hover rail's open/closed state is `data-rail-r` on `<html>`
+       (AxeShellChrome.tsx sets it on mousemove, not on click, so there is no
+       existing click handler to piggyback on), and this component watched
+       neither it nor any event the mousemove handler emits -- so sliding the
+       rail open reported stale geometry until some UNRELATED re-measure
+       (resize, the dock, the radial ring) happened to also fire. Same fix
+       shape as the radial-ring observer above, different attribute. */
+    let railObs: MutationObserver | null = null;
+    if ('MutationObserver' in window) {
+      railObs = new MutationObserver(meet);
+      railObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-rail-r'] });
+    }
+    return () => {
+      window.removeEventListener('resize', meet);
+      dokObs?.disconnect();
+      radiaalObs?.disconnect();
+      railObs?.disconnect();
+    };
   }, [actief]);
 
   const modus: ActievePositie['modus'] = actievePositie.modus === 'vol' ? 'vol'
@@ -189,7 +383,14 @@ export function AxePresenceDock() {
         // the same reason) -- this widget needs to be visible by default, not opt-in-visible.
         <div
           className="axe-presence-dock" data-modus={modus} role="complementary" aria-label="AXE presence" data-axe-doel="axe-presence"
-          style={{ left: actievePositie.links, width: breedte }}
+          style={{
+            left: actievePositie.links,
+            width: breedte,
+            // Fix C: overrides the CSS `height: var(--axe-composer-hoog)`
+            // only when MemoryDock's real, measured bottom edge would
+            // otherwise land inside this card -- see metingMaxHoogte().
+            ...(maxHoogte != null ? { height: maxHoogte, maxHeight: maxHoogte } : null),
+          }}
         >
           <div ref={orbRef} className="axe-presence-dock__orb">
             {/* Only 20 (inline-text) or 64 (chat-avatar) exist -- thinking-orbs ships exactly
@@ -212,9 +413,23 @@ export function AxePresenceDock() {
                     <X size={13} />
                   </button>
                 </div>
-              ) : modus === 'vol' && (
+              ) : (
+                // Corrective round 7, Fix 3: this was gated on `modus ===
+                // 'vol'`, so `compact` rendered NOTHING here beyond the "AXE"
+                // head above -- not truncated text, no text at all. That is
+                // the actual "unreadable" Luka saw on the Code Editor: the
+                // card wasn't too narrow to read, it had nothing to read,
+                // regardless of the radial ring's state, because neither
+                // affects `modus` once it has already dropped below 'vol'.
+                // `compact`'s box is the SAME HEIGHT as `vol` (only the width
+                // shrinks -- see `.axe-presence-dock` in axe-look.css), and
+                // each line already clamps to 2 lines, so showing text here
+                // does not risk overflow. `compact` shows AXE's own line
+                // only -- what AXE said is the thing worth reading in a
+                // tight space; the user's own line (which they just typed)
+                // is the one dropped, not the other way round.
                 <div className="axe-presence-dock__exchange" aria-live="polite">
-                  {(liveTranscript || laatste.user) && (
+                  {modus === 'vol' && (liveTranscript || laatste.user) && (
                     <p data-van="mij">{liveTranscript || laatste.user?.text}</p>
                   )}
                   {laatste.axe && <p data-van="axe">{laatste.axe.text}</p>}

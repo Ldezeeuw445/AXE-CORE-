@@ -4,7 +4,8 @@
  * real hub icons + counts, zoom into peak with sub-hub mountains around it.
  */
 import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
-import { PlaatSlot, PlaatDock } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { MemoryDock, type MemoryDockColumn } from '@/presentation/components/axe-core/MemoryDock';
 import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
@@ -15,7 +16,7 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
   Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
-  RotateCw, Sparkles, Database, Link2, Clock, ShieldCheck, Lock, X,
+  RotateCw, Sparkles, Database, Link2, Clock, ShieldCheck, X,
   MessageSquare, Settings2, Zap, Lightbulb, Users, Activity, Layers,
 } from 'lucide-react';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
@@ -1391,6 +1392,28 @@ function LeftSidebar({
         })}
         {hubs.length <= 1 && <div className="nm-about">No memories yet — chat with AXE to grow the terrain.</div>}
       </div>
+
+      {/* Corrective round 4, Fix E: same DISTRIBUTION panel Neural's own left
+          column got -- real hub counts, sorted by share of the total, not a
+          new number but a different read of the hub list above. */}
+      <div className="nm-panel">
+        <h2>Distribution</h2>
+        {[...hubs].filter((h) => h.layer !== 'core').sort((a, b) => b.memoryCount - a.memoryCount).map((hub) => {
+          const pct = counts.total > 0 ? Math.round((hub.memoryCount / counts.total) * 100) : 0;
+          return (
+            <div className="nm-mini-bar-row" key={hub.id}>
+              <span className="label" style={{ color: hub.color }}>{hub.label}</span>
+              <span className="pct">{pct}%</span>
+              <div className="nm-mini-bar-track"><i style={{ width: `${pct}%`, background: hub.color }} /></div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Het bediening-lijstje: onderaan dezelfde kolom, nu als hetzelfde
+          soort widget-blok als de panelen erboven (zie Legend hieronder,
+          corrective round 6, Part 5). */}
+      <Legend />
       </div>
     </PlaatSlot>
   );
@@ -1451,8 +1474,6 @@ function RightSidebar({
         </div>
       </div>
 
-      <Legend />
-
       <div className="nm-panel">
         <div className="nm-sync">
           {integrityPct >= 90 ? <ShieldCheck size={16} className="ok" /> : <ShieldCheck size={16} className="warn" />}
@@ -1475,25 +1496,32 @@ function RightSidebar({
 
 function Legend() {
   const rows: Array<{ icon: ReactNode; label: string; key: string }> = [
-    { icon: <Move size={13} />, label: 'Navigate', key: 'drag' },
-    { icon: <Mouse size={13} />, label: 'Scroll', key: '⇅' },
-    { icon: <MousePointerClick size={13} />, label: 'Click hub', key: '•' },
-    { icon: <ZoomIn size={13} />, label: 'Zoom peak', key: '+/−' },
-    { icon: <Crosshair size={13} />, label: 'Focus', key: 'F' },
-    { icon: <CornerUpLeft size={13} />, label: 'Back', key: 'Esc' },
+    { icon: <Move size={12} />, label: 'Navigate', key: 'drag' },
+    { icon: <Mouse size={12} />, label: 'Scroll', key: '⇅' },
+    { icon: <MousePointerClick size={12} />, label: 'Click hub', key: '•' },
+    { icon: <ZoomIn size={12} />, label: 'Zoom peak', key: '+/−' },
+    { icon: <Crosshair size={12} />, label: 'Focus', key: 'F' },
+    { icon: <CornerUpLeft size={12} />, label: 'Back', key: 'Esc' },
   ];
-  // Positioning lives in .nm-legend in the CSS now: an inline style beats a
-  // stylesheet rule, so the container query that shifts this left when the
-  // right sidebar is hidden could never have applied.
+  // Corrective round 6, Part 5: ronde 1 koos hier bewust voor kale tekst
+  // ("Fix 2": geen `.nm-panel`, alleen een haarlijn erboven) om referentie-
+  // beeld 14 te volgen. Luka wil dat nu expliciet omgedraaid: dit hoort een
+  // echt widget-blok te zijn, net als Memory Overview/Memory Hubs/
+  // Distribution erboven. `.nm-panel` geeft precies dat (dezelfde haarlijn +
+  // padding, plus de uppercase `<h2>`-kop die de andere secties ook hebben)
+  // -- geen nieuw materiaal nodig, alleen dezelfde behandeling toepassen.
   return (
-    <div className="nm-panel nm-legend">
-      {rows.map((r) => (
-        <div className="row" key={r.label}>
-          <span className="ic-wrap">{r.icon}</span>
-          <span style={{ flex: 1 }}>{r.label}</span>
-          <kbd>{r.key}</kbd>
-        </div>
-      ))}
+    <div className="nm-panel">
+      <h2>Controls</h2>
+      <div className="nm-legend">
+        {rows.map((r) => (
+          <div className="row" key={r.label}>
+            <span className="ic">{r.icon}</span>
+            <span style={{ flex: 1 }}>{r.label}</span>
+            <kbd>{r.key}</kbd>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1533,34 +1561,54 @@ function Composer({ onSend, lastReply }: { onSend: (text: string) => void; lastR
   );
 }
 
-function DepthBar({ depthLevel, unlockedFive, onSet }: { depthLevel: number; unlockedFive: boolean; onSet: (n: number) => void }) {
-  /* In het dock, boven de chatplaat. Hij stond onderaan de weergave en
-     botste daar met de navigatie; het dock is de plek waar de schil de
-     knoppen zet die bij WAT JE ZIET horen, op elke tab op dezelfde hoogte. */
-  return (
-    <PlaatDock>
-      <div className="nm-depthbar">
-      <div className="label">EXPLORE DEPTH LEVEL</div>
-      <div className="row">
-        {[1, 2, 3, 4, 5, 6, 7].map((n) => {
-          const locked = n >= 5 && !unlockedFive;
-          return (
-            <button
-              key={n}
-              type="button"
-              className={`nm-depth-btn${depthLevel === n ? ' active' : ''}${locked ? ' locked' : ''}`}
-              disabled={locked}
-              onClick={() => onSet(n)}
-              title={locked ? 'Focus a hub first to unlock deeper levels' : `Depth ${n}`}
-            >
-              {locked ? <Lock size={11} /> : n}
-            </button>
-          );
-        })}
-      </div>
-      </div>
-    </PlaatDock>
-  );
+/**
+ * De data voor het fold-out dock -- Fix 7: dezelfde NorthSea-Desk-stijl
+ * fold-out als DealsTabel, met de diepteregelaar in de koprij (Fix 3's
+ * "centered pill"-doel gaat hierin op, zie MemoryDock's eigen doc-comment).
+ *
+ * Vier kolommen op echte data uit deze weergave -- geen sessies of CPU-getallen
+ * die deze app niet bijhoudt (zie useGlobalMemoryStats.ts / de brief).
+ */
+function buildDockColumns(args: {
+  counts: { global: number; rag: number; notes: number; total: number };
+  hubs: BrainHub[];
+  connections: number;
+  lastUpdated: string | null;
+  integrityPct: number;
+}): MemoryDockColumn[] {
+  const { counts, hubs, connections, lastUpdated, integrityPct } = args;
+  const topHubs = [...hubs]
+    .filter((h) => h.layer !== 'core')
+    .sort((a, b) => b.memoryCount - a.memoryCount)
+    .slice(0, 4);
+  return [
+    {
+      title: 'Memory Capacity',
+      rows: [
+        { label: 'Total', value: counts.total.toLocaleString() },
+        { label: 'Global', value: counts.global.toLocaleString() },
+        { label: 'RAG', value: counts.rag.toLocaleString() },
+        { label: 'Obsidian', value: counts.notes.toLocaleString() },
+      ],
+    },
+    {
+      title: 'Top Memory Domains',
+      rows: topHubs.map((h) => ({ label: h.label, value: h.memoryCount.toLocaleString() })),
+    },
+    {
+      title: 'Recent Activity',
+      rows: [
+        { label: 'Last updated', value: fmtWhen(lastUpdated) },
+        { label: 'Connections', value: connections.toLocaleString() },
+      ],
+    },
+    {
+      title: 'System Health',
+      rows: [
+        { label: 'Integrity', value: `${integrityPct}%`, ok: integrityPct >= 90 },
+      ],
+    },
+  ];
 }
 
 /* ── main ───────────────────────────────────────────────────────────────── */
@@ -1669,7 +1717,13 @@ export function NeuralMemorySystem() {
         counts={counts}
       />
 
-      <DepthBar depthLevel={depthLevel} unlockedFive={everFocused} onSet={setDepthLevel} />
+      <MemoryDock
+        depthLevel={depthLevel}
+        depthLevels={[1, 2, 3, 4, 5, 6, 7]}
+        isDepthLocked={(n) => n >= 5 && !everFocused}
+        onSetDepth={setDepthLevel}
+        columns={buildDockColumns({ counts, hubs, connections, lastUpdated, integrityPct })}
+      />
 
       {counts.total === 0 && !loading && (
         <div className="nm-empty">

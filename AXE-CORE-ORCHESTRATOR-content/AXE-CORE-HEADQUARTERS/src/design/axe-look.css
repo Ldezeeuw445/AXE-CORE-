@@ -632,8 +632,16 @@ html:root[data-look],
   /* Tot de BOVENKANT van de chatplaat, niet tot de voet.
      Ze liepen door tot achter de onderste band, dus een uitgeschoven rail lag
      over de tab-panelen en de chat heen. Nu houdt hij op waar de band begint --
-     dan staan ze naast elkaar in plaats van over elkaar. */
-  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px);
+     dan staan ze naast elkaar in plaats van over elkaar.
+
+     Corrective round 4, Fix D: dit hield al geen rekening met MemoryDock --
+     dat dok hangt ZELF ook boven --axe-chat-top (zie .axe-slot--dock
+     hieronder), dus deze formule liet de rail doorlopen tot een lijn die,
+     zodra het dok open- of dichtklapt, binnen zijn eigen hoogte valt. Het dok
+     bestond niet toen dit geschreven werd. --axe-dock-hoog is 0 op elke tab
+     zonder dok (het slot is dan leeg en `:empty { display:none }` geeft een
+     rect van nul), dus dit is op elke andere pagina exact de oude regel. */
+  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px + var(--axe-dock-hoog, 0px));
   /* Een kwart breder dan de 302px waar ze op stonden. Smaller kapte namen af,
      en een schuifbalk waarin je horizontaal moet scrollen om een woord te
      lezen is geen schuifbalk maar een kier. Verticaal scrollen is prima. */
@@ -1863,6 +1871,15 @@ html:root[data-look],
 }
 :root[data-look] .axe-chatplaat { z-index: 1; }
 
+/* Fix 5 was hier (ronde 1): `.axe-chatplaat[data-dicht='ja'] .axe-vak-kop`
+   kreeg z-index 3 omdat de ingeklapte chatplaat's kopregel een BROER van de
+   composer was en er door de composer overheen getekend kon worden.
+   Verwijderd in ronde 5: `.axe-vak-kop` is nu een kind van `.axe-vak` zelf
+   (zie AxeComposerVak) en bestaat niet meer als los element binnen
+   `.axe-chatplaat` -- deze selector matcht dus niets meer. Er is geen aparte
+   doos meer om achter iets te verdwijnen, dus geen z-index-lap meer nodig.
+   Structureel opgelost in plaats van nog een laag erbovenop. */
+
 /* ── Geen cyaan doosjes in de kop ────────────────────────────────────────
    Cyaan is in dit ontwerp een ACCENT: een ruitje, een driehoekje, een lijn
    tekst. Zodra het een gevuld blokje wordt, gaat het schreeuwen -- en in een
@@ -2226,6 +2243,41 @@ html:root[data-look],
   right: 14px;
   width: calc(var(--axe-chat-rechts, 268px) - 26px);
   align-items: flex-end;
+}
+
+/* ── Corrective round 2, Fix 1: de hoge kolommen krijgen de geometrie van de
+ * rail zelf, niet hun eigen getallen ──────────────────────────────────────
+ *
+ * De hoge kolommen (Neural, Terrain) bleven ALTIJD staan -- dat is gewenst,
+ * Luka wil geen PlaatRail en geen verbergen. Het echte probleem was dat ze
+ * een andere doos waren dan de rail die eroverheen schuift: andere breedte
+ * (242px vs 380px), andere randafstand (14px vs 20px) en vooral een andere
+ * `bottom`-formule (--axe-chat-onder vs 100dvh - --axe-chat-top), die niet
+ * garandeert dat "net boven de chatplaat" op dezelfde regel uitkomt. Daardoor
+ * liep de kolom door tot naast de composer in plaats van te stoppen waar de
+ * rail ook stopt.
+ *
+ * Dit kopieert daarom letterlijk de vier uitdrukkingen van `.axe-shell aside`
+ * (open stand, hierboven) in plaats van nieuwe getallen te verzinnen: zo is de
+ * doos van de kolom exact de doos van de rail, en schuift de rail er precies
+ * overheen en weer weg. Alleen de hoog+links/rechts combinatie: de onderband-
+ * stand van dezelfde klassen (hierboven, zonder --hoog) blijft ongemoeid.
+ *
+ * Corrective round 4, Fix D: nog steeds letterlijk gekopieerd van
+ * `.axe-shell aside`, inclusief de `--axe-dock-hoog`-term die daar nu bij
+ * staat -- anders was dit precies de asymmetrie die Fix D moest oplossen: de
+ * rail zou het dok wel ontwijken en de kolom ernaast niet. */
+:root[data-look] .axe-slot--hoog.axe-slot--links,
+:root[data-look] .axe-slot--hoog.axe-slot--rechts {
+  top: calc(66px + env(safe-area-inset-top) + 10px);
+  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px + var(--axe-dock-hoog, 0px));
+  width: var(--axe-rail-breedte);
+}
+:root[data-look] .axe-slot--hoog.axe-slot--links {
+  left: 20px;
+}
+:root[data-look] .axe-slot--hoog.axe-slot--rechts {
+  right: 20px;
 }
 
 /* Onder de 1100px is er geen ruimte naast de plaat; dan vallen ze weg in plaats
@@ -3163,14 +3215,24 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   gap: 10px;
 }
 
-/* De kopregel: model · persona links, gereedschap rechts. Geen vlak, geen
-   lijn -- in het voorbeeld zweeft die tekst boven het vak. */
+/* De kopregel: model · persona links, gereedschap rechts.
+ *
+ * Corrective round 5: dit stond hier als een los strookje BOVEN het vak
+ * ("geen vlak, geen lijn -- de tekst zweeft erboven"), met zijn eigen 6px
+ * zijpadding om optisch tegen de plaat's padding aan te sluiten. Dat is
+ * precies waarom dit stukje bleef terugkomen met z-index-lapmiddelen (ronde 1
+ * Fix 5): een los vlak zonder eigen achtergrond kan altijd door iets erachter
+ * geraakt worden.
+ *
+ * Nu is dit de EERSTE rij BINNEN `.axe-vak` (zie AxeComposerVak) -- geen
+ * eigen zijpadding meer, want die komt al van `.axe-vak` zelf. Zonder dat zou
+ * deze rij een tandje verder naar binnen staan dan de tekst en de knoppen
+ * eronder, en dat leest als scheef in wat nu ÉÉN doorlopende kaart is. */
 :root[data-look] .axe-vak-kop {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 6px;
   min-height: 22px;
   font-size: clamp(11px, 0.85vw, 13px);
   color: var(--text-secondary);
@@ -3451,15 +3513,39 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 
 /* Het paneel achter de klok: gesprekken en status, op één rij die mag wrappen.
-   Hier staan de dingen die eerst de kopregel vulden. */
+   Hier staan de dingen die eerst de kopregel vulden.
+
+   Corrective round 5, de uitzondering op "alles zit nu in het vak": de
+   klok-knop die dit paneel opent, zit sinds deze ronde IN `.axe-vak`
+   (`.axe-vak-kop`). Zou dit paneel als gewone flow-rij meeverhuizen, dan
+   klapt hij BINNEN het vak open -- tussen de kop en het invoerveld -- en
+   duwt hij de plek waar je typt bij elke klik omlaag. Dat is niet "boven de
+   composer uitklappen", dat is een tweede doos IN de doos.
+
+   Dus: losgemaakt uit de flow. `.axe-composer` (de ouder waarin dit element
+   nu hangt, zie AxeComposerVak) heeft `position: relative`, dus `bottom:
+   100%` zet de onderkant van dit paneel precies op de BOVENkant van
+   `.axe-composer` -- en omdat het vak het eerste kind is, is dat exact de
+   bovenkant van `.axe-vak`. Eigen achtergrond/rand/schaduw erbij, want een
+   overlay op willekeurige inhoud erachter (de sterrenlucht, een projectie)
+   heeft een eigen vlak nodig om leesbaar te blijven -- dat kreeg hij eerder
+   gratis van de chatplaat waar hij toen IN stond. */
 :root[data-look] .axe-kop-paneel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  z-index: 5;
+  margin-bottom: 8px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: clamp(6px, 0.5vw, 12px);
-  padding: 8px 6px 10px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 14px;
+  border-radius: var(--axe-vak-hoek);
+  border: 1px solid var(--axe-vak-lijn);
+  background: var(--axe-vak-vlak);
+  box-shadow: var(--axe-vak-zweef);
   font-size: 10px;
 }
 :root[data-look] .axe-kop-paneel .axe-cstat {
@@ -5861,6 +5947,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     position: fixed;
     bottom: var(--axe-composer-onder, 104px);
     height: var(--axe-composer-hoog, 90px);
+    /* Fix C: on Neural/Terrain, AxePresenceDock.tsx caps `height` inline
+       (`maxHoogte`) whenever MemoryDock's measured rect would otherwise
+       reach into this box. Without clipping here, the exchange text --
+       already 2-line-clamped, but the box itself is now shorter than that
+       clamp assumes -- could still paint past the shortened box. */
+    overflow: hidden;
     z-index: 104;
     display: flex;
     align-items: center;
@@ -5887,6 +5979,20 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     width: 32px;
     min-width: 32px;
     height: 32px;
+  }
+  /* Corrective round 7, Fix 3: `compact` used to keep the full 68px orb, which
+     at BREEDTE_COMPACT (132px) left the text column (`__body`) only ~50px
+     wide -- unreadable even now that `__exchange` actually renders text in
+     compact (see the JSX above). Shrinking the orb here, part-way to mini's
+     32px, hands that space to the thing Luka actually wants legible: what
+     AXE said. Not a full solution to "is there ever truly enough geometric
+     room" (that depends on the composer/radial obstacle math, verified
+     separately), but it stops the orb itself from being the reason a
+     technically-adequate compact width still reads as empty. */
+  :root[data-look] .axe-presence-dock[data-modus='compact'] .axe-presence-dock__orb {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
   }
 
   :root[data-look] .axe-presence-dock__body {
@@ -5961,12 +6067,17 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     box-shadow: var(--axe-tegel-in);
   }
 
-  /* Opening the right radial ring temporarily owns this exact piece of space. */
-  :root[data-look] .axe-shell:has(.axe-dok[data-kant='rechts'][data-open='ja']) .axe-presence-dock {
-    opacity: 0;
-    transform: translateX(-8px) scale(0.96);
-    pointer-events: none;
-  }
+  /* Corrective round 6, Part 4: this used to hide the card outright the
+     instant the right radial ring opened -- a blunt fix from before
+     AxePresenceDock measured the ring as a real obstacle. Luka's ask was
+     the opposite of "make it vanish": the card should shrink around
+     whatever is actually on screen (see `HORIZONTALE_OBSTAKELS` in
+     AxePresenceDock.tsx, which now measures the open ring via
+     `[data-axe-doel="radiaal-rechts"]` and narrows the card's ceiling
+     instead). Keeping this rule too would just paper back over that fix --
+     the card would compute a correct, adapted width and then still be
+     switched off by CSS regardless. Removed rather than kept "just in
+     case". */
 }
 
 /* Luka, 21 sep 2026 (round 4): the active card now has a compact/mini variant
