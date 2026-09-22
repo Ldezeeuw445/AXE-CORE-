@@ -14,6 +14,8 @@ import {
   Trash2,
   ClipboardList,
   RefreshCw,
+  Bot,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   addIncomeEntry,
@@ -24,6 +26,11 @@ import {
   type IncomeEntry,
   type IncomeSource,
 } from '@/infrastructure/persistence/incomeLedgerService';
+import {
+  getLastFinanceDigest,
+  runFinanceDigest,
+  type FinanceDigest,
+} from '@/infrastructure/persistence/financeDigestService';
 
 function fmt(n: number, currency = 'EUR') {
   try {
@@ -44,6 +51,19 @@ export default function Finance() {
   const [currency, setCurrency] = useState('EUR');
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<IncomeSource | 'all'>('all');
+  const [digest, setDigest] = useState<FinanceDigest | null>(() => getLastFinanceDigest());
+  const [digestRunning, setDigestRunning] = useState(false);
+
+  const runDigestNow = useCallback(async () => {
+    setDigestRunning(true);
+    try {
+      setDigest(await runFinanceDigest());
+    } catch (err) {
+      console.warn('[Finance] digest run failed:', err);
+    } finally {
+      setDigestRunning(false);
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -158,6 +178,90 @@ export default function Finance() {
           </div>
         </WidgetCard>
       </div>
+
+      {/* AXE Algo reconciliation — deliberately its own card, never folded
+          into the real-income numbers above. Demo pnl is simulated money;
+          it must never look like it adds to what Luka actually earned. */}
+      <WidgetCard
+        title={`AXE ALGO — ${digest ? digest.period : 'LAST DIGEST'}`}
+        headerAction={
+          <button
+            onClick={() => void runDigestNow()}
+            disabled={digestRunning}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
+            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)', opacity: digestRunning ? 0.5 : 1 }}
+          >
+            <Bot size={11} className={digestRunning ? 'animate-pulse' : ''} /> {digestRunning ? 'Running…' : 'Run digest'}
+          </button>
+        }
+      >
+        {!digest ? (
+          <div className="py-4 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            No digest yet — click "Run digest" to reconcile the income ledger against AXE Algo's trade journal.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))]">
+              <div
+                className="p-2 rounded-lg"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}
+              >
+                <p className="text-[9px] mb-1" style={{ color: 'var(--text-muted)' }}>DEMO P&amp;L (simulated)</p>
+                <p
+                  className="text-sm font-semibold font-mono"
+                  style={{ color: digest.algoDemoPnlTotal > 0 ? 'var(--success)' : digest.algoDemoPnlTotal < 0 ? 'var(--error)' : 'var(--text-primary)' }}
+                >
+                  {fmt(digest.algoDemoPnlTotal)}
+                </p>
+                <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  {digest.algoDemoTradeCount} trades · {(digest.algoDemoWinRate * 100).toFixed(0)}% win
+                </p>
+              </div>
+
+              {(digest.algoLiveTradeCount > 0 || digest.algoLivePnlTotal !== 0) && (
+                <div
+                  className="p-2 rounded-lg"
+                  style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid var(--warning)' }}
+                >
+                  <p className="text-[9px] mb-1 font-semibold" style={{ color: 'var(--warning)' }}>LIVE P&amp;L — REAL MONEY</p>
+                  <p
+                    className="text-sm font-bold font-mono"
+                    style={{ color: digest.algoLivePnlTotal > 0 ? 'var(--success)' : digest.algoLivePnlTotal < 0 ? 'var(--error)' : 'var(--text-primary)' }}
+                  >
+                    {fmt(digest.algoLivePnlTotal)}
+                  </p>
+                  <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {digest.algoLiveTradeCount} trades · {(digest.algoLiveWinRate * 100).toFixed(0)}% win
+                  </p>
+                </div>
+              )}
+
+              {digest.unclassifiedTradeCount > 0 && (
+                <div
+                  className="p-2 rounded-lg"
+                  style={{ background: 'var(--bg-base)', border: '1px dashed var(--border-active)' }}
+                >
+                  <p className="text-[9px] mb-1 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                    <AlertTriangle size={10} /> UNCLASSIFIED
+                  </p>
+                  <p className="text-sm font-semibold font-mono" style={{ color: 'var(--text-secondary)' }}>
+                    {fmt(digest.unclassifiedPnlTotal)}
+                  </p>
+                  <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {digest.unclassifiedTradeCount} trades — environment could not be resolved
+                  </p>
+                </div>
+              )}
+            </div>
+            <p
+              className="text-[9px] mt-2"
+              style={{ color: digest.verdict === 'poor' ? 'var(--error)' : 'var(--text-muted)' }}
+            >
+              {digest.verdict === 'poor' ? '⚠ ' : ''}{digest.note}
+            </p>
+          </>
+        )}
+      </WidgetCard>
 
       {/* Add entry */}
       <WidgetCard title="LOG INCOME">

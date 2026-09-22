@@ -7,6 +7,7 @@ import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
+import { maybeRunFinanceDigest } from '@/infrastructure/persistence/financeDigestService';
 import { backfillRagEmbeddings } from '@/infrastructure/persistence/ragMemoryService';
 import { applyAgentReinforcement } from '@/infrastructure/persistence/agentFeedbackService';
 import { applyReinforcement } from '@/infrastructure/persistence/memoryFeedbackService';
@@ -391,6 +392,11 @@ export function runAxeBootstrap(): void {
   void warmPrimaryAtBoot();
   // Memory Manager: extract durable facts, consolidate library, write report
   maybeRunMemoryManager();
+  // Finance digest: reconcile the manual income ledger against AXE Algo's
+  // own trade journal, once per calendar day. Same idempotent-per-day
+  // pattern as Memory Manager above — no VPS/core_schedules wiring needed,
+  // since this reads the app's own local Supabase client.
+  maybeRunFinanceDigest();
   // Top up the vector index. 8,296 memories existed with no embedding, because
   // rag_memories had no column for one until 1-9-2026; semantic search
   // therefore scanned 200 rows in the browser and never saw the other 97%.

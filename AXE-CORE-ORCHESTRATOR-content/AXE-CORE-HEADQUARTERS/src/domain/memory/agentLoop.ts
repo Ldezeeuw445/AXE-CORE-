@@ -47,15 +47,20 @@ export const LOOP_AGENTS = [
   // memory/thinktank hadden allemaal al een echte, niet-verzonnen afloop
   // (task: done/blocked in Tasks.tsx; cron: ok/fail/timeout/skipped per
   // run op de VPS; memory: ok/warning/error uit checkMemoryHealth(); think-
-  // tank: een echte GitHub branch/PR/merge-uitslag) maar geen lus. 'finance'
-  // en 'apps' staan hier expliciet nog NIET in -- daar bestaat nog geen
-  // echte actie om een afloop aan op te hangen, en een lus zonder een echte
-  // afloop is precies het verzonnen-koppeling-probleem dat dit bestand
-  // bovenaan beschrijft.
+  // tank: een echte GitHub branch/PR/merge-uitslag) maar geen lus.
   'task',
   'cron',
   'memory',
   'thinktank',
+  // 'finance' en 'apps' volgden een dag later, zodra ze een echte actie
+  // hadden: finance = de dagelijkse afstemming tussen de inkomsten-ledger
+  // en AXE Algo's eigen trade-journaal (financeDigestService.ts); apps =
+  // een echte health/deploy-actie op de VPS (axeCoreApiService.ts). Beide
+  // pas toegevoegd toen dat er echt was -- zie de git-log van deze regel
+  // voor de eerdere, kortere lijst en waarom ze er toen expliciet niet
+  // in stonden.
+  'finance',
+  'apps',
   // Trading's eigen desk-lane "tweede mening" (deskAgents.ts) leende tot
   // 22-23 sep 2026 de identiteit 'intel'/'companion' -- dezelfde als de
   // echte AXE Intel/AXE Companion product-agents in de andere apps. Die

@@ -174,15 +174,18 @@ export const DEFAULT_AGENTS: CoreAgent[] = [
     name: 'finance-agent',
     display_name: 'Finance Agent',
     role: 'analyst',
-    description: 'P&L, books, and finance tab intelligence.',
+    // Narrowed to what actually exists: financeDigestService.ts reconciles
+    // the manual income ledger against AXE Algo's trade journal once a day.
+    // No books/ledger tooling beyond that has been built.
+    description: 'Reconciles the manual income ledger against AXE Algo\'s trade journal (demo/live/unclassified).',
     system_prompt: 'You are the AXE Finance Agent. Track P&L, books, and financial context.',
     memory_namespace: 'finance',
-    toolset: ['ledger', 'reports'],
+    toolset: ['income_summary', 'algo_reconciliation'],
     model_provider: 'google',
     model_name: 'gemini-3.5-flash',
     status: 'active',
     version: '1.0',
-    capabilities: ['pnl', 'books', 'reports'],
+    capabilities: ['income_summary', 'algo_reconciliation'],
     supabase_tables: [],
     app_url: null,
     tags: ['finance', 'tab:finance'],
