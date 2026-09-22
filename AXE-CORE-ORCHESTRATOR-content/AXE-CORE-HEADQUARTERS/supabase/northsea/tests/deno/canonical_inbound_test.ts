@@ -9,6 +9,12 @@ Deno.test("outbound provenance is canonical and mandatory", () => {
   assertThrows(() => outboundProvenance({ providerMessageId: "id", actor: "", actorType: "service", approvalBasis: "system_acknowledgement" }));
   assertThrows(() => outboundProvenance({ providerMessageId: "id", actor: "x", actorType: "automation", approvalBasis: "policy_allowed" }));
 });
+Deno.test("provider reconciliation is factual provenance and needs no draft id", () => {
+  const p = outboundProvenance({ providerMessageId: "re_history", actor: "resend-reconcile", actorType: "service", approvalBasis: "provider_reconciled" });
+  assertEquals([p.from_address, p.reply_to_address, p.approval_basis, p.reply_draft_id],
+    ["NorthSea Commodity Partners <trade@northseacommodity.com>", "trade@northseacommodity.com", "provider_reconciled", null]);
+});
+
 Deno.test("Resend payload always uses the canonical sender", () => {
   const b = resendPayload("a@b.test", "s", "t", "<p>t</p>") as Record<string, unknown>;
   assertEquals([b.from, b.reply_to], ["NorthSea Commodity Partners <trade@northseacommodity.com>", "trade@northseacommodity.com"]);
