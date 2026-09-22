@@ -1052,7 +1052,6 @@ function FishAudioSection() {
 }
 
 function OllamaModelsSection() {
-  const voice = useVoiceStore();
   const [registry, setRegistry] = useState(getStoredLlmModelRegistry());
   const [health, setHealth] = useState<Record<string, OllamaModelHealth>>(loadOllamaModelHealth());
   const [syncing, setSyncing] = useState(false);
