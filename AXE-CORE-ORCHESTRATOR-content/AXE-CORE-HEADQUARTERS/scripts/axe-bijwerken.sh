@@ -204,8 +204,15 @@ for poort in 4022 8001; do
         zeg "Achtergebleven dienst op poort $poort afsluiten (pid $pid)"
         kill "$pid" 2>/dev/null || true
         ;;
+      */AXE-CORE-HEADQUARTERS|*/AXE-CORE-HEADQUARTERS/*)
+        # Canonical AXE owns 4022/8001. An older AXE worktree on the same
+        # canonical port is not an unrelated service; leaving it alive makes
+        # the newly installed app silently talk to the old runtime.
+        zeg "Oude AXE-dienst uit andere worktree op poort $poort afsluiten (pid $pid · $werkmap)"
+        kill "$pid" 2>/dev/null || true
+        ;;
       *)
-        [[ -n "$werkmap" ]] && printf '  \033[33m! poort %s is bezet door iets buiten deze checkout (%s) -- blijft staan\033[0m\n' "$poort" "$werkmap"
+        [[ -n "$werkmap" ]] && printf '  \033[33m! poort %s is bezet door iets buiten AXE (%s) -- blijft staan\033[0m\n' "$poort" "$werkmap"
         ;;
     esac
   done
