@@ -153,6 +153,9 @@ zeg "Native helpers bouwen"
 bash infra/computer-worker/native/build.sh
 bash infra/computer-worker/camera/build.sh
 
+zeg "Lokale AXE runtime voorbereiden"
+SETUP_ONLY=1 bash backend/axe_api/run-local.sh
+
 npm run tauri:build
 
 [[ -d "$APP" ]] || stop "De bouw gaf geen $APP. Lees de uitvoer hierboven."
@@ -209,50 +212,14 @@ done
 
 # ── 4c. canonical launchd-workers ───────────────────────────────────────────
 #
-# De computer-worker krijgt bij IEDERE canonical update opnieuw zijn launchd
-# plist uit deze checkout. Daardoor kan launchd niet maanden later nog naar een
-# oud worktree-pad wijzen terwijl /Applications al nieuw is.
+# Beide achtergrondworkers worden opnieuw geregistreerd vanuit DEZE canonical
+# orchestrator-checkout. Dat maakt hun bronpad onderdeel van dezelfde update als
+# de .app en voorkomt dat launchd stil naar een oude worktree blijft wijzen.
 zeg "Canonical computer-worker registreren"
 bash scripts/install-computer-worker-launchd.sh
 
-#
-# De computer-worker en browser-agent leven LOS van AXE CORE. Een app-rebuild
-# vervangt hun proces dus niet. Dat was precies de reden dat een nieuw venster
-# tegelijk nieuwe UI en oude capabilities kon tonen: de app was bijgewerkt,
-# maar com.axe.computer-worker draaide nog de oude worker.mjs in geheugen.
-#
-# Alleen reeds-geregistreerde AXE-agents worden aangeraakt. Bestaat een label
-# niet op deze Mac, dan is dat normaal (bijv. worker draait op de andere Mac).
-restart_launchd_agent() {
-  local label="$1"
-  local expected_path="${2:-}"
-  local domein="gui/$(id -u)/$label"
-  local stand
-
-  if ! stand="$(launchctl print "$domein" 2>/dev/null)"; then
-    printf '  \033[33m! %s is op deze Mac niet geladen — overslaan.\033[0m\n' "$label"
-    return 0
-  fi
-
-  if [[ -n "$expected_path" && "$stand" != *"$expected_path"* ]]; then
-    printf '  \033[33m! %s gebruikt niet deze checkout.\033[0m\n' "$label"
-    printf '    verwacht in launchd: %s\n' "$expected_path"
-    printf '    Hij wordt WEL herstart, maar controleer daarna met: npm run welke\n'
-  fi
-
-  zeg "$label herstarten"
-  if ! launchctl kickstart -k "$domein"; then
-    stop "$label kon niet via launchd worden herstart. De app wordt niet geopend met een mogelijk oude worker."
-  fi
-
-  sleep 1
-  stand="$(launchctl print "$domein" 2>/dev/null || true)"
-  if [[ "$stand" != *"state = running"* ]]; then
-    stop "$label is na kickstart niet running. Los dit eerst op zodat AXE niet tegen een oude/stille worker praat."
-  fi
-}
-
-restart_launchd_agent "com.axe.browser-agent"
+zeg "Canonical browser-agent registreren"
+bash scripts/install-browser-agent-launchd.sh
 
 # ── 5. Starten ───────────────────────────────────────────────────────────────
 # Een zelfgebouwde app is niet ondertekend; zonder dit weigert Gatekeeper hem
