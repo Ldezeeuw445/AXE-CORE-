@@ -104,3 +104,24 @@ pub fn kickstart(id: &str) -> Result<String, String> {
         ))
     }
 }
+
+
+/// Ensure one managed launchd agent is running without disrupting a healthy
+/// in-flight worker. Returns Ok(false) when this Mac has no such registered
+/// label (normal when a worker intentionally lives on the other Mac).
+pub fn ensure_running(id: &str) -> Result<bool, String> {
+    let label = label_voor(id)?;
+    let (detail, loaded) = run_voor_label(label, "print")?;
+    if !loaded {
+        return Ok(false);
+    }
+    if detail.contains("state = running") {
+        return Ok(true);
+    }
+    let (_kick, ok) = run_voor_label(label, "kickstart")?;
+    if !ok {
+        return Err(format!("kon {label} niet starten via launchd"));
+    }
+    let (after, after_ok) = run_voor_label(label, "print")?;
+    Ok(after_ok && after.contains("state = running"))
+}
