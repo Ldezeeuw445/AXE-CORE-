@@ -892,7 +892,7 @@ async function runDeskLanes(symbol: string, thesis: string | null): Promise<Desk
   // first opinions and lose the disagreement that makes the pair worth having.
   // Wat het bureau zelf al gemeten heeft. Faalt dit, dan zegt deskFeitenBlok
   // dat er niets gemeten is — en dat is een ander bericht dan stilte.
-  const feiten = deskFeitenBlok(await leesDeskFeiten().catch(() => []));
+  const feiten = deskFeitenBlok(await leesDeskFeiten().catch(() => []), Date.now(), symbol);
 
   const up: UpstreamContext = { research: thesis, deskFeiten: feiten };
   const intel = await bounded('intel read', runDeskIntel(symbol, callFor('intel'), up));

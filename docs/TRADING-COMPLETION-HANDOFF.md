@@ -35,7 +35,7 @@ here.
 | 11 | Live Trading Desk visibility (structured PASS/BLOCK/WAIT per decision) | ⏳ not started (trace data already richer, see below) | |
 | 12 | Remote read-only cockpit backend (`/trading/*`) | ⏳ not started | |
 | 24/7 | Server-side scheduler (Tauri not required), lock, watchdog | ⏳ not started | |
-| Event impact | Connect `gebeurtenisImpact.ts` into decision context | ⏳ not started | |
+| Event impact | `gebeurtenisImpact` measured by the desk heartbeat → desk facts → AXE Algo context + trace | ✅ done | see `git log` |
 
 Verification at the last checkpoint: `npx tsc --noEmit` clean · `npx vitest run`
 **1578/1578** · `npm run build` ✓ · backend `pytest` 144/144 (Phase 0A) ·
@@ -268,6 +268,35 @@ absent from the production bundle — checked with grep on `dist/`):
   4/4 folds positive; bootstrap p5 −1.5 %, P(loss) 5.9 %; regimes: the edge is
   in trending/high-vol conditions (flat/low: 46 trades, R −0.04).
 
+### Event impact — wired into the decision context
+- `deskHartslag.ts` — `draaiImpactMeting()`: every heartbeat tick (2 h), after
+  the correlation, measures up to 4 (release × pair) combinations for
+  high-impact US releases **due within 7 days**, on USD pairs, from the
+  **MetaAPI M15 history cache** (`historyService`, background priority) — not
+  the LSE quota. Last 6 publications, 60-min window. Each combo is skipped for
+  20 h after a successful write (rotation). Written as desk fact
+  `gebeurtenis_impact`, key `Release|SYMBOL|60`, text starting with
+  `GEBEURTENISIMPACT — volgende publicatie YYYY-MM-DD`.
+- `gebeurtenisImpact.ts` — `kiesImpactCombos` (pure selection, nearest first).
+- `deskFeitenService.ts` — freshness per kind (correlation 6 h, impact 7 d);
+  `deskFeitenBlok(feiten, nu, symbool)` gives each run only its own pair's
+  impact. `agentAutopilot.ts` passes the symbol; the block already flows into
+  Intel/Companion (`upstream.deskFeiten`) and the engine trace step
+  "Bureau: gemeten feiten + lanes".
+- **Bug fixed on the way:** `metaApiMarketData.normalizeTf` sent canonical
+  `m5/m15/m30` to MetaAPI, which only accepts `5m/15m/30m` (HTTP 400). Every
+  minute timeframe through `historyService` (Lab, history panel) failed.
+- Runtime (real FRED calendar + MetaAPI M15, clock set to 2026-09-26 because
+  nothing high-impact is due within 7 days of 2026-09-22): 4 GDP combos
+  measured, M15 backfilled ~175 days per pair (~75 s cold, then from cache).
+  GDP → XAUUSD median 0.37 % / excursion 0.57 %, 5 of 6 up; → EURUSD 0.08 % /
+  0.16 %. The Supabase write was refused by RLS in the unauthenticated DEV
+  preview (no credentials entered); in the signed-in app it uses the same
+  insert as the correlation fact.
+- Tests: `deskHartslag.test.ts` (+4: only upcoming releases on USD pairs, no LSE
+  call, rotation/20 h, no calendar → nothing written, no history → skipped),
+  `deskFeitenBlok.test.ts` (+1 per-pair filter).
+
 ## Behaviour changes that need your approval before production / live
 
 1. **Position sizes change.** Risk % now means money at the stop via the broker's
@@ -299,8 +328,6 @@ absent from the production bundle — checked with grep on `dist/`):
   `maybeRunTradingAutopilot()` (`agentAutopilot.ts`). Needs a VPS-side runner of
   the SAME cycle (not a second engine), a distributed lock, watchdog, idempotency,
   status (last/next cycle, failure reason).
-- **Event impact** — `src/domain/tradingIntel/gebeurtenisImpact.ts` is tested and
-  UI-visible but not fed into research/funnel/engine context.
 
 ---
 
