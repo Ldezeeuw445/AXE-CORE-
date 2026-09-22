@@ -3259,6 +3259,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   display: flex;
   flex-direction: column;
   gap: clamp(8px, 0.7vw, 14px);
+  transition: box-shadow 90ms linear;
+}
+
+/* Real voice energy fallback/confirmation layer. VoiceBeam remains the primary
+   animated visualization, but the composer itself now also exposes the same
+   measured RMS signal as a visible inner bloom. This prevents a valid audio
+   analyser from becoming invisible because a third-party beam wrapper changes
+   stacking/overflow. Zero energy = zero extra glow. */
+:root[data-look] .axe-vakcomposer[data-voice-energy='on'] .axe-vak {
+  box-shadow:
+    var(--axe-vak-zweef),
+    0 0 var(--axe-voice-spread, 24px) rgba(34,211,238,var(--axe-voice-alpha,0)),
+    0 0 calc(var(--axe-voice-spread, 24px) * 1.45) rgba(168,85,247,calc(var(--axe-voice-alpha,0) * .5));
 }
 
 :root[data-look] .axe-vak-boven {
