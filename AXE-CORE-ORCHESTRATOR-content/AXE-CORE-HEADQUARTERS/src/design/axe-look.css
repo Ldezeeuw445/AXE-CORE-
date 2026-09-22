@@ -6174,9 +6174,54 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   background: transparent;
   color: var(--text-primary);
 }
-.computer-use-overlay__card {
+/* The PCU shell pulse belongs BEHIND the complete card. It deliberately does
+   not use BorderBeam: that component owns its own wrapper geometry and changed
+   the silhouette Luka had already approved. This wrapper has exactly the old
+   card footprint and only paints a monochrome breathing perimeter outside it. */
+.computer-use-overlay__pulse-shell {
   position: relative;
   width: min(744px, 100%);
+  max-height: calc(100dvh - 36px);
+  border-radius: 30px;
+  isolation: isolate;
+}
+.computer-use-overlay__pulse-shell::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 36px;
+  border: 1px solid rgba(255,255,255,.68);
+  box-shadow:
+    0 0 12px rgba(255,255,255,.18),
+    0 0 30px rgba(255,255,255,.10);
+  opacity: .48;
+  transform: scale(.997);
+  animation: axe-pcu-mono-pulse 2.8s ease-in-out infinite;
+}
+@keyframes axe-pcu-mono-pulse {
+  0%, 100% {
+    opacity: .34;
+    transform: scale(.996);
+    box-shadow:
+      0 0 10px rgba(255,255,255,.14),
+      0 0 24px rgba(255,255,255,.07);
+  }
+  50% {
+    opacity: .86;
+    transform: scale(1.004);
+    box-shadow:
+      0 0 16px rgba(255,255,255,.28),
+      0 0 40px rgba(255,255,255,.13);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .computer-use-overlay__pulse-shell::before { animation: none; opacity: .56; }
+}
+.computer-use-overlay__card {
+  position: relative;
+  width: 100%;
   max-height: calc(100dvh - 36px);
   overflow: hidden;
   border-radius: 30px;
@@ -6262,6 +6307,8 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .standalone-axe-particle { position:absolute; top:56px; right:14px; z-index:60; width:64px; height:64px; display:grid; place-items:center; border-radius:50%; background:rgba(5,10,12,.42); border:1px solid rgba(255,255,255,.08); backdrop-filter:blur(16px); pointer-events:auto; }
 @media (max-width: 680px) {
   .computer-use-overlay { padding:10px; }
+  .computer-use-overlay__pulse-shell { border-radius:24px; }
+  .computer-use-overlay__pulse-shell::before { border-radius:30px; }
   .computer-use-overlay__card { border-radius:24px; }
   .computer-use-overlay__quick { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
