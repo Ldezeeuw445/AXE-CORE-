@@ -151,17 +151,18 @@ async function inspectPrivateImage(
 }
 
 async function groundScreenObservation(raw: string, prompt: unknown): Promise<string> {
-  let meta: { bucket?: string; path?: string; mime?: string; width?: number; height?: number };
+  let meta: { bucket?: string; path?: string; mime?: string; width?: number; height?: number; display_index?: number };
   try { meta = JSON.parse(raw); } catch { return `SCREEN capture returned invalid metadata: ${raw.slice(0, 300)}`; }
   if (!meta.bucket || !meta.path) return 'SCREEN capture returned no private storage location.';
-  return inspectPrivateImage(
+  const observed = await inspectPrivateImage(
     { bucket: meta.bucket, path: meta.path, mime: meta.mime ?? 'image/png', width: meta.width, height: meta.height },
     prompt,
-    'You are AXE observing Luka\'s CURRENT Mac screen from a newly captured image. Ground every claim in visible pixels. If something is not visible, say that plainly. Give actionable coordinates only when they are visually unambiguous.',
+    'You are AXE observing Luka\'s CURRENT Mac screen from a newly captured image. Ground every claim in visible pixels. If something is not visible, say that plainly. When a GUI action needs coordinates, report coordinates in the screenshot IMAGE PIXEL coordinate system: x from the left edge, y from the top edge. Never silently convert them to logical/Retina coordinates.',
     'Describe the current screen precisely. Read visible text and name the frontmost app/window if clear. Do not infer anything not visible.',
     'CURRENT SCREEN',
     true,
   );
+  return `${observed}\n\nFor a follow-up pointer action use display_index=${meta.display_index ?? 0} with image_x/image_y measured in this ${meta.width ?? '?'}×${meta.height ?? '?'} screenshot. The native helper converts those pixels to the correct Retina/multi-monitor global coordinates.`;
 }
 
 async function groundCameraSnapshot(raw: string, prompt: unknown): Promise<string> {
