@@ -17,3 +17,6 @@ dist
 .axe-logs/
 # Lokale NorthSea-snapshots (inbox-JSON + backlog). Niet naar GitHub.
 .local/
+
+# headless VPS-runner (npm run build:runner)
+dist-runner

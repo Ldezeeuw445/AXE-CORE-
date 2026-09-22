@@ -37,6 +37,10 @@ const TableEditor = lazy(() => import('@/presentation/pages/TableEditor'));
 const CronManager = lazy(() => import('@/presentation/pages/CronManager'));
 const ControlPlane = lazy(() => import('@/presentation/pages/ControlPlane'));
 const Maps3D = lazy(() => import('@/presentation/pages/Maps3D'));
+// Alleen in dev: de Strategy Lab buiten de login-muur, voor visuele controle.
+const StrategyLabDevPreview = import.meta.env.DEV
+  ? lazy(() => import('@/presentation/pages/tradingIntel/lab/StrategyLabDevPreview'))
+  : null;
 const NorthseaDesk = lazy(() => import('@/presentation/pages/northsea/NorthseaDesk'));
 const Grootboek = lazy(() => import('@/presentation/pages/Grootboek'));
 const CrewAI = lazy(() => import('@/presentation/pages/CrewAI'));
@@ -174,6 +178,7 @@ export default function App() {
               already redirected here stayed here. */}
           <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
+          {StrategyLabDevPreview && <Route path="/dev-strategy-lab-preview" element={<StrategyLabDevPreview />} />}
           <Route path="/dev-browser-preview" element={<div className="h-[100dvh] w-full overflow-hidden"><BrowserPage /></div>} />
           {/* Standalone desktop browser — no AppShell chrome */}
           <Route path="/dev-browser-standalone" element={<StandaloneBrowserPage />} />

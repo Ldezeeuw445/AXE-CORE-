@@ -12,7 +12,12 @@
  * (which itself writes memory/journal/learning — see tradingAgentEngine.ts).
  * Off by default; the user arms it from the Agent tab.
  */
+import { ALL_EVIDENCE, evidencePolicyFor, type EvidencePolicy } from '@/domain/tradingIntel/evidence';
 import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService';
+import { LEASE_TTL_S, cycleSlot } from '@/domain/tradingIntel/autopilotLease';
+import {
+  myHolderId, readAutopilotLease, releaseAutopilotLease, tryAcquireAutopilotLease, type LeaseRow,
+} from '@/infrastructure/persistence/autopilotLeaseStore';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
 import { tradablePairsForAccount } from '@/infrastructure/gateways/metaApiSymbolResolver';
@@ -31,11 +36,14 @@ import { manageOpenPositions } from '@/application/tradingIntel/positionManager'
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
 import { reconcileLiveTrades } from '@/application/tradingIntel/liveTradeReconciler';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
-import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, backtestTradingAgents, tradingAgentsSignal, backtestKronos, kronosSignal } from '@/infrastructure/gateways/axeCoreApiService';
+import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, backtestTradingAgents, tradingAgentsSignal, backtestKronos, kronosSignal, frameworksStatus } from '@/infrastructure/gateways/axeCoreApiService';
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
 import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
-import { tradeableAccounts, accountLabel, accountRun, getAccounts } from '@/infrastructure/persistence/tradingAccountsService';
+import { tradeableAccounts, accountLabel, accountRun, getAccounts, accountEnvironment, accountFrameworkSettings } from '@/infrastructure/persistence/tradingAccountsService';
+import { STRATEGY_CAPABILITIES, selectLiveStrategy, type AssetKind } from '@/domain/tradingIntel/frameworkEligibility';
+import { pairSpec } from '@/domain/tradingIntel/pairRegistry';
+import type { FrameworkId } from '@/domain/tradingIntel/strategyColors';
 import { runDecisionFunnel, loadLastFunnelRun, type FunnelVote } from '@/application/tradingIntel/runDecisionFunnel';
 import { listIntelReports } from '@/infrastructure/persistence/tradingIntelService';
 import { moetResearchDraaien } from '@/domain/tradingIntel/researchVers';
@@ -255,12 +263,22 @@ export interface AutopilotStatus {
   lastRunAt: string | null;
   lastResult: string | null;
   running: boolean;
+  /** Wanneer de volgende cyclus due is (laatste start + interval), of null als hij nooit liep. */
+  nextDueAt: string | null;
+  /** Deze instantie, zoals ze in de lease heet ('desktop:…', 'vps:…'). */
+  instance: string;
+  /** Wie de cyclus het laatst claimde, en tot wanneer; null = geen lease-tabel of nog nooit. */
+  lease: LeaseRow | null;
+  /** Waarom deze instantie de laatste tik niet draaide, als dat zo was. */
+  lastSkip: string | null;
 }
 
 // Re-entrancy guard: a cycle across N watchlist symbols can outlast the
 // 1-minute check interval, and starting a second one on top would double
 // up broker calls and CrewAI runs for the same tick.
 let cycleInFlight = false;
+/** Waarom de laatste tik van déze instantie niets draaide (lease bezet, fout). */
+let lastSkip: string | null = null;
 
 export async function isAutopilotEnabled(): Promise<boolean> {
   return loadSetting(KEY_ENABLED, false);
@@ -290,7 +308,12 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
     loadSetting<string | null>(KEY_LAST_RUN, null),
     loadSetting<string | null>(KEY_LAST_RESULT, null),
   ]);
-  return { enabled, intervalMin, lastRunAt, lastResult, running: cycleInFlight };
+  const lease = await readAutopilotLease().catch(() => null);
+  const nextDueAt = lastRunAt ? new Date(Date.parse(lastRunAt) + intervalMin * 60_000).toISOString() : null;
+  return {
+    enabled, intervalMin, lastRunAt, lastResult, running: cycleInFlight,
+    nextDueAt, instance: myHolderId(), lease, lastSkip,
+  };
 }
 
 /**
@@ -551,27 +574,53 @@ function refreshFunnelInBackground(): void {
  * before any data exists it falls back to the user's globally-selected
  * strategy, so a fresh install still behaves predictably.
  */
-/** vectorbt framework strategies — candidates in the ledger alongside AXE's
- *  own, auto-selected and traded via their off-box live signal. */
-const VBT_STRATEGIES = ['vbt:ma-cross', 'vbt:rsi-meanrev', 'vbt:bbands', 'vbt:macd'];
+/**
+ * Of een VPS-engine er is, volgens /frameworks/status. Tien minuten bewaard:
+ * de status verandert bij een deploy, niet per cyclus. Onbereikbaar = null,
+ * "niet te zeggen" — en dan dingen alleen de engines mee die dat altijd deden.
+ */
+let engineHealthCache: { at: number; map: Record<string, boolean> } | null = null;
+async function engineHealth(): Promise<Record<string, boolean> | null> {
+  if (engineHealthCache && Date.now() - engineHealthCache.at < 10 * 60_000) return engineHealthCache.map;
+  try {
+    const st = await frameworksStatus();
+    if (!st?.ok) return null;
+    const map = Object.fromEntries(Object.entries(st.frameworks ?? {}).map(([k, v]) => [k, Boolean((v as { installed?: boolean })?.installed)]));
+    engineHealthCache = { at: Date.now(), map };
+    return map;
+  } catch {
+    return null;
+  }
+}
 
-/** Per-pair strategy — may be one of AXE Algo's own OR a framework strategy
- *  (vbt:*), whichever the ledger ranks best. Returns a plain string since a
- *  framework name isn't a StrategyId. */
+/** Per-pair strategy — any implemented, live-capable strategy of any framework
+ *  that frameworkEligibility admits for THIS account, ranked by the ledger
+ *  under this account's evidence policy. Returns a plain string since a
+ *  framework name isn't a StrategyId, plus a note for the decision trace. */
 async function strategyForSymbol(
   symbol: string,
   run = 'run-1',
-): Promise<{ strategy: string; timeframe: string }> {
+  /** Welk live-bewijs dit account mag gebruiken (evidence.ts). Een funded/live
+   *  account rangschikt alleen op live/funded uitkomsten en backtest-priors,
+   *  nooit op wat een strategie op papier of demo deed. */
+  evidence: EvidencePolicy = ALL_EVIDENCE,
+  /** Welke frameworks dit account live toestaat; weggelaten = AXE + vectorbt. */
+  accountFrameworks: { liveFrameworks?: FrameworkId[]; allowPartialCoverage?: boolean } = {},
+): Promise<{ strategy: string; timeframe: string; selection: string }> {
   try {
-    const candidates = [...DISTINCT_STRATEGIES, ...VBT_STRATEGIES];
-    const ranked = await rankStrategiesForPair(symbol, candidates, [...ALGO_TIMEFRAMES], run);
-    const top = ranked[0];
-    if (top?.tested) return { strategy: top.strategy, timeframe: top.timeframe };
-    // Nothing tested on this pair yet. rankStrategiesForPair still ordered the
-    // candidates, giving every untested one the same small explore score, so
-    // taking the head is a deliberate exploration pick rather than a default —
-    // and the trade it produces becomes the first real evidence for this pair.
-    if (top) return { strategy: top.strategy, timeframe: top.timeframe };
+    // Alle geïmplementeerde strategieën met een live signaal — ook nt:, kr: en
+    // ta:. Wie daarvan echt mag meedingen, beslist frameworkEligibility per
+    // (strategie, timeframe, instrument, account); de ranking alleen niet meer.
+    const candidates = STRATEGY_CAPABILITIES.filter(c => c.implemented && c.liveSignal).map(c => c.id);
+    const ranked = await rankStrategiesForPair(symbol, candidates, [...ALGO_TIMEFRAMES], run, evidence);
+    const picked = selectLiveStrategy({
+      ranked,
+      asset: (pairSpec(symbol)?.kind ?? null) as AssetKind | null,
+      health: await engineHealth(),
+      account: accountFrameworks,
+      evidenceLabel: evidence.label,
+    });
+    if (picked) return { strategy: picked.strategy, timeframe: picked.timeframe, selection: picked.selection };
   } catch (e) {
     console.warn(`[autopilot] per-pair strategy pick failed for ${symbol}:`, e);
   }
@@ -586,7 +635,10 @@ async function strategyForSymbol(
   //
   // The cards are now his backtesting bench and nothing more. What the algo
   // trades is decided by the ledger, per pair.
-  return { strategy: ALGO_FALLBACK_STRATEGY, timeframe: ALGO_FALLBACK_TIMEFRAME };
+  return {
+    strategy: ALGO_FALLBACK_STRATEGY, timeframe: ALGO_FALLBACK_TIMEFRAME,
+    selection: `${ALGO_FALLBACK_STRATEGY}@${ALGO_FALLBACK_TIMEFRAME} — fallback: ranking unavailable`,
+  };
 }
 
 /**
@@ -859,7 +911,7 @@ async function runDeskLanes(symbol: string, thesis: string | null): Promise<Desk
   // first opinions and lose the disagreement that makes the pair worth having.
   // Wat het bureau zelf al gemeten heeft. Faalt dit, dan zegt deskFeitenBlok
   // dat er niets gemeten is — en dat is een ander bericht dan stilte.
-  const feiten = deskFeitenBlok(await leesDeskFeiten().catch(() => []));
+  const feiten = deskFeitenBlok(await leesDeskFeiten().catch(() => []), Date.now(), symbol);
 
   const up: UpstreamContext = { research: thesis, deskFeiten: feiten };
   const intel = await bounded('intel read', runDeskIntel(symbol, callFor('intel'), up));
@@ -1069,13 +1121,15 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
     // three.
     const chosen: string[] = [];
     const fanned = await runOnEveryAccount(symbol, async ({ account, run }) => {
-      const { strategy, timeframe } = await strategyForSymbol(symbol, run);
+      const envInfo = account ? await accountEnvironment(account.accountId).catch(() => null) : null;
+      const fwSettings = account ? await accountFrameworkSettings(account.accountId).catch(() => ({})) : {};
+      const { strategy, timeframe, selection } = await strategyForSymbol(symbol, run, evidencePolicyFor(envInfo?.env), fwSettings);
       chosen.push(`${run}:${strategy}@${timeframe}`);
 
       if (strategy.includes(':')) {
         const sig = await frameworkSignalFor(symbol, strategy, timeframe);
         return runTradingAgent({
-          account, symbol, autoExecute: true, run,
+          account, symbol, autoExecute: true, run, selection,
       // THE ARROW HAS TO CARRY SOMETHING.
       //
       // runTradingAgent has taken `upstream` since the desk lanes were added,
@@ -1091,7 +1145,7 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
         });
       }
       return runTradingAgent({
-        account, symbol, autoExecute: true, run,
+        account, symbol, autoExecute: true, run, selection,
         upstream: { intel: deskRead?.intel ?? null, companion: deskRead?.companion ?? null, deskFeiten: deskRead?.feiten ?? null },
         strategy: strategy as StrategyId, timeframe,
       });
@@ -1164,38 +1218,29 @@ export async function selfTestPairs(pairs: string[]): Promise<number> {
       // Every timeframe, not just h1. A strategy can be an edge on h4 and noise
       // on m15, and testing one timeframe made that difference invisible —
       // the ledger then ranked strategies as if the timeframe were settled.
-      // TradingAgents, once, at d1 only.
-    //
-    // Not a cost dodge: the firm reasons about fundamentals, news and sentiment
-    // with a multi-day horizon, and its own recommendation carries a
-    // time_horizon_days. Asking it what to do on a 15-minute candle would be
-    // asking a question it does not answer, and the ledger would then rank the
-    // nonsense against real m15 rows. One engine call per pair, at the only
-    // timeframe where its output means anything.
-    try {
-      const ta = await backtestTradingAgents(pair, toEngineInterval('d1'));
-      if (ta?.ok && ta.strategies) {
-        for (const [strategy, st] of Object.entries(ta.strategies)) {
-          if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+      for (const timeframe of ALGO_TIMEFRAMES) {
+        try {
+          const res = await runBacktest({ symbol: pair, strategy, timeframe, limit: SELFTEST_BARS });
+          if (!res.ok) continue;
+          const r = res.result;
           geschreven += 1;
           await recordLedgerBacktest({
             pair, strategy,
             backtest: {
-              netReturnPct: st.netReturnPct,
-              winRate: st.winRate,
-              profitFactor: Number.isFinite(st.profitFactor) ? st.profitFactor : 99,
-              trades: st.trades,
-              timeframe: 'd1',
-              bars: ta.bars,
+              netReturnPct: r.netReturnPct,
+              winRate: r.winRate,
+              profitFactor: Number.isFinite(r.profitFactor) ? r.profitFactor : 99,
+              trades: r.totalTrades,
+              timeframe,
+              bars: r.candleCount,
               at: new Date().toISOString(),
             },
           });
+        } catch (e) {
+          console.warn(`[autopilot] self-test failed for ${pair}/${strategy}/${timeframe}:`, e);
         }
       }
-    } catch (e) {
-      console.warn(`[autopilot] tradingagents self-test failed for ${pair}:`, e);
     }
-
     // Kronos, once, at h1 — the timeframe its twelve-bar horizon is tuned for.
     //
     // Once and not four times for a plain cost reason, the same one that keeps
@@ -1228,29 +1273,6 @@ export async function selfTestPairs(pairs: string[]): Promise<number> {
       console.warn(`[autopilot] kronos self-test failed for ${pair}:`, e);
     }
 
-    for (const timeframe of ALGO_TIMEFRAMES) {
-        try {
-          const res = await runBacktest({ symbol: pair, strategy, timeframe, limit: SELFTEST_BARS });
-          if (!res.ok) continue;
-          const r = res.result;
-          geschreven += 1;
-          await recordLedgerBacktest({
-            pair, strategy,
-            backtest: {
-              netReturnPct: r.netReturnPct,
-              winRate: r.winRate,
-              profitFactor: Number.isFinite(r.profitFactor) ? r.profitFactor : 99,
-              trades: r.totalTrades,
-              timeframe,
-              bars: r.candleCount,
-              at: new Date().toISOString(),
-            },
-          });
-        } catch (e) {
-          console.warn(`[autopilot] self-test failed for ${pair}/${strategy}/${timeframe}:`, e);
-        }
-      }
-    }
     // ── Framework strategies (VPS engines) ──
     //
     // Every timeframe, exactly like AXE's own strategies above. This used to
@@ -1307,8 +1329,7 @@ export async function selfTestPairs(pairs: string[]): Promise<number> {
             for (const [strategy, st] of Object.entries(res.strategies)) {
               if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
               geschreven += 1;
-              geschreven += 1;
-          await recordLedgerBacktest({
+              await recordLedgerBacktest({
                 pair, strategy,
                 backtest: {
                   netReturnPct: st.netReturnPct,
@@ -1583,12 +1604,41 @@ export async function maybeRunTradingAutopilot(): Promise<void> {
   const dueAt = last ? Date.parse(last) + intervalMin * 60_000 : 0;
   if (Date.now() < dueAt) return;
 
+  // ÉÉN CYCLUS OVER ALLE APPARATEN. Desktop, Android en de VPS-runner lezen
+  // dezelfde laatste start en zien dezelfde "due"; zonder lease draaiden ze de
+  // cyclus alle drie. De slot is de due-minuut, dus dezelfde cyclus wordt ook
+  // na een crash of herstart nooit twee keer uitgegeven.
+  const slot = cycleSlot(last, intervalMin, Date.now());
+  const claim = await tryAcquireAutopilotLease(slot, LEASE_TTL_S)
+    .catch((e: unknown) => ({ kind: 'error' as const, reason: e instanceof Error ? e.message : String(e) }));
+  if (claim.kind === 'held') {
+    lastSkip = `slot ${slot} held by ${claim.lease.holder} until ${claim.lease.expiresAt}`;
+    return;
+  }
+  if (claim.kind === 'error') {
+    // Niet weten wie de cyclus heeft is geen vrijbrief om hem zelf te draaien.
+    lastSkip = `lease check failed: ${claim.reason}`;
+    console.warn('[autopilot] lease check failed — not running this tick:', claim.reason);
+    return;
+  }
+  lastSkip = claim.kind === 'unavailable' ? claim.reason : null;
+
   cycleInFlight = true;
   cycleStartedAt = Date.now();
+  let failure: string | null = null;
   try {
     await runAutopilotCycle();
+  } catch (e) {
+    failure = e instanceof Error ? e.message : String(e);
+    throw e;
   } finally {
     cycleInFlight = false;
+    if (claim.kind === 'acquired') {
+      await releaseAutopilotLease({
+        slot, startedAt: new Date(cycleStartedAt).toISOString(), finishedAt: new Date().toISOString(),
+        failure, nextDueAt: new Date(Date.now() + intervalMin * 60_000).toISOString(),
+      }).catch(() => { /* de lease verloopt vanzelf */ });
+    }
   }
 }
 
@@ -1631,6 +1681,11 @@ export async function runCycleForAccount(accountId: string): Promise<string> {
   // still a cycle.
   if (cycleInFlight && Date.now() - cycleStartedAt < CYCLE_WATCHDOG_MS) {
     throw new Error('A cycle is already running — wait for it to finish.');
+  }
+  // Een andere instantie (VPS, telefoon) die nu een cyclus draait, telt ook.
+  const held = await readAutopilotLease().catch(() => null);
+  if (held && held.holder !== myHolderId() && Date.parse(held.expiresAt) > Date.now()) {
+    throw new Error(`A cycle is running on ${held.holder} until ${held.expiresAt} — wait for it to finish.`);
   }
   cycleInFlight = true;
   cycleStartedAt = Date.now();

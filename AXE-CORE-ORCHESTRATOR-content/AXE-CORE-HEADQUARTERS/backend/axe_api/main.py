@@ -33,7 +33,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
-from crew_runner import run_crew
+from crew_runner import CrewRunRequest, run_crew
 from zuinig import Bezet, lagere_prioriteit, slot as zuinig_slot
 import contextlib as _contextlib
 
@@ -252,11 +252,6 @@ class PrMergeRequest(BaseModel):
     merge_method: str = "merge"     # merge | squash | rebase
 
 # ── CrewAI (Branch A: VPS Ollama → 9 specialist agents) ───────────────────
-class CrewRunRequest(BaseModel):
-    task: str
-    context: Optional[str] = None
-    conversation: Optional[list] = None
-
 class ClaudeRunRequest(BaseModel):
     repo: str
     prompt: str
@@ -2049,6 +2044,15 @@ try:
 except Exception as _e:  # noqa: BLE001
     log.warning("perplexity_agent niet ingeladen (%s) -- /research/perplexity bestaat niet", _e)
 
+# Trading-cockpit: alleen-lezen zicht op het bureau (accounts, risico, posities,
+# beslissingen, crew, P&L, bewijs, lab, autopilot-lease) voor een telefoon of
+# tweede scherm. Geen schrijfpad, geen MetaAPI-tokens -- zie trading_cockpit.py.
+try:
+    from trading_cockpit import build_router as _trading_router  # noqa: E402
+    app.include_router(_trading_router(sb), prefix="/trading", dependencies=[AUTH], tags=["trading"])
+except Exception as _e:  # noqa: BLE001
+    log.warning("trading_cockpit niet ingeladen (%s) -- /trading/* bestaat niet", _e)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
@@ -2813,18 +2817,20 @@ async def crew_run(req: CrewRunRequest, request: Request):
     """
     Run the AXE CORE CrewAI crew (9 specialist agents) on the VPS against Ollama.
 
-    Body: { "task": "...", "context": "...", "conversation": [...] }
+    Body: { "task": "...", "context": "...", "conversation": [...],
+            "specialists": ["axe_core", "dollar_bill", "intel"] }
     The crew runs in an isolated venv (see crew_runner.py) so it never touches
     this FastAPI/Supabase venv. Heavy work is offloaded to a thread so the
     event loop stays free.
     """
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
-        None, lambda: run_crew(req.task, req.context, req.conversation)
+        None, lambda: run_crew(req.task, req.context, req.conversation, req.specialists)
     )
     await audit(
         "crew_run", "crewai",
-        {"task": (req.task or "")[:200], "status": result.get("status")},
+        {"task": (req.task or "")[:200], "status": result.get("status"),
+         "specialists": result.get("specialists") or req.specialists or []},
         request.client.host if request.client else "",
     )
 
@@ -3397,7 +3403,7 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                 return {"status": "fail", "output": f"{action_type}: no task/prompt in payload"}
             loop = asyncio.get_event_loop()
             res = await loop.run_in_executor(
-                None, lambda: run_crew(task, payload.get("context"), None)
+                None, lambda: run_crew(task, payload.get("context"), None, payload.get("specialists"))
             )
             status = res.get("status", "ok") if isinstance(res, dict) else "ok"
             output = str(res.get("result") if isinstance(res, dict) else res)[:4000]
