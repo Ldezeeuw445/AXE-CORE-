@@ -28,11 +28,13 @@ VENV=".venv-local"
 ENV_FILE="${ENV_FILE:-.env.local}"
 PORT="${PORT:-8001}"          # same port nginx proxies to on the VPS
 HOST="${HOST:-127.0.0.1}"     # loopback only: this speaks for your machine
+SETUP_ONLY="${SETUP_ONLY:-0}"
 
 # ── env ───────────────────────────────────────────────────────────────────────
 # A relative ENV_FILE is relative to this script's directory (we cd'd there);
 # an absolute one is used as given. Sourcing "./$ENV_FILE" broke the second
 # case, which is the one an override actually uses.
+if [[ "$SETUP_ONLY" != "1" ]]; then
 case "$ENV_FILE" in /*) ;; *) ENV_FILE="$PWD/$ENV_FILE" ;; esac
 if [ ! -f "$ENV_FILE" ]; then
   echo "No $ENV_FILE. Copy .env.local.example to it and fill in the values." >&2
@@ -109,7 +111,7 @@ if [ ! -x "$VENV/bin/python" ]; then
   uv pip install --python "$VENV/bin/python" -r "$VENV/requirements-local.txt"
 fi
 
-if [[ "${SETUP_ONLY:-0}" == "1" ]]; then
+if [[ "$SETUP_ONLY" == "1" ]]; then
   echo "axe_api local runtime prepared: $PWD/$VENV"
   exit 0
 fi
