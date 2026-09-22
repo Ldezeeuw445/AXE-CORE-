@@ -155,7 +155,7 @@ async function groundScreenObservation(raw: string, prompt: unknown): Promise<st
   try { meta = JSON.parse(raw); } catch { return `SCREEN capture returned invalid metadata: ${raw.slice(0, 300)}`; }
   if (!meta.bucket || !meta.path) return 'SCREEN capture returned no private storage location.';
   const observed = await inspectPrivateImage(
-    { bucket: meta.bucket, path: meta.path, mime: meta.mime ?? 'image/png', width: meta.width, height: meta.height },
+    { bucket: meta.bucket, path: meta.path, mime: meta.mime ?? 'image/jpeg', width: meta.width, height: meta.height },
     prompt,
     'You are AXE observing Luka\'s CURRENT Mac screen from a newly captured image. Ground every claim in visible pixels. If something is not visible, say that plainly. When a GUI action needs coordinates, report coordinates in the screenshot IMAGE PIXEL coordinate system: x from the left edge, y from the top edge. Never silently convert them to logical/Retina coordinates.',
     'Describe the current screen precisely. Read visible text and name the frontmost app/window if clear. Do not infer anything not visible.',
