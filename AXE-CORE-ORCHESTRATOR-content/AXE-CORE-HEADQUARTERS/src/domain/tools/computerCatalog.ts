@@ -79,6 +79,17 @@ on the Mac is stopped. Do not fall back to guessing what the file said.`,
 \`[COMPUTER_RUN: {"tool":"terminal.test","workspace":"AXE Core"}]\`
 \`[COMPUTER_RUN: {"tool":"claude_code.run","workspace":"AXE Core","prompt":"..."}]\`
 
+For real desktop control, observe before and after meaningful actions:
+`screen.observe` → one bounded action → `screen.observe` again.
+Never execute a long coordinate script from one screenshot.
+
+Examples:
+`[COMPUTER_RUN: {"tool":"pointer.move","x":840,"y":420}]`
+`[COMPUTER_RUN: {"tool":"pointer.click","x":840,"y":420}]`
+`[COMPUTER_RUN: {"tool":"keyboard.type","text":"AXE computer use test"}]`
+`[COMPUTER_RUN: {"tool":"keyboard.key","key":"return","modifiers":[]}]`
+`[COMPUTER_RUN: {"tool":"app.open","app":"TextEdit"}]`
+
 Tools by risk tier — the tier decides how the card looks, and you do not get
 to pick it:
 
