@@ -128,6 +128,7 @@ export function AxeComposerVak({
 
   const presenceStyle = {
     '--axe-voice-alpha': Math.min(0.78, presence.mix * 0.78).toFixed(3),
+    '--axe-voice-alpha-soft': Math.min(0.39, presence.mix * 0.39).toFixed(3),
     '--axe-voice-spread': `${Math.round(12 + presence.mix * 34)}px`,
   } as CSSProperties;
 
