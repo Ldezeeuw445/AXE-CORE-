@@ -4,7 +4,7 @@
 #
 # ## Waarom dit bestaat
 #
-# De reeks was: git pull && npm install && npm run tauri:build, dan zelf de oude
+# De reeks was: git pull && npm install && AXE_CANONICAL_BUILD=1 npm run tauri:build, dan zelf de oude
 # afsluiten en in Finder de nieuwe zoeken. Vier stappen waarvan je er drie kunt
 # vergeten, en de vierde -- welke .app is nu de nieuwe -- was een raadsel omdat
 # er drie in dezelfde map staan.
