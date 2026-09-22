@@ -25,6 +25,29 @@
  * --axe-composer-onder en --axe-composer-hoog te zetten, en de panelen naast
  * de chat hangen daaraan. Een nieuwe klassenaam zou de meting stil op nul
  * zetten en dan staan Terrain en Neural weer verkeerd.
+ *
+ * ## Waarom `kop` NU een kind is van `.axe-vak`, en niet ervoor
+ *
+ * Corrective round 5: `kop` stond hiervoor tussen `.axe-composer` en de
+ * `BorderBeam`/`.axe-vak` in -- een BROER van het vak, zonder eigen
+ * achtergrond of rand. Precies die constructie was waarom deze plek steeds
+ * terugkwam met z-index-lapmiddelen (ronde 1 Fix 5): een los zwevend
+ * strookje kan altijd door iets erachter geraakt worden of ervoor gaan staan.
+ *
+ * Nu is `kop` de EERSTE rij BINNEN `.axe-vak`, boven `.axe-vak-boven`. Er is
+ * geen apart vlak meer om achter te verdwijnen -- het is dezelfde kaart, met
+ * dezelfde achtergrond, rand en hoeken, gewoon een regel hoger. `.axe-vak`
+ * groeit vanzelf mee: hij is een flex-kolom met een gap tussen zijn kinderen,
+ * dus deze rij krijgt ruimte zonder dat er iets aan zijn eigen opmaak hoeft
+ * te veranderen.
+ *
+ * `paneel` is de uitzondering: het gesprekken/status-paneel achter de
+ * klok-knop in `kop` moet BOVEN het vak kunnen verschijnen als uitklap, niet
+ * ERIN -- anders duwt hij bij het openen het invoerveld omlaag. Die blijft
+ * daarom een aparte, absoluut gepositioneerde laag naast (niet in) `.axe-vak`,
+ * verankerd op de BOVENkant van het vak (zie `.axe-kop-paneel` in
+ * axe-look.css). Zijn eigen inhoud is ongewijzigd; alleen waar hij hangt is
+ * nieuw.
  */
 import { useEffect, useRef, type ReactNode, type KeyboardEvent } from 'react';
 import { BorderBeam } from 'border-beam';
@@ -50,8 +73,13 @@ interface Props {
   snelacties?: boolean;
   /** Een eigen rij, bijvoorbeeld die van de Code Editor. Leeg = de rij van Home. */
   snelactieLijst?: readonly Snelactie[];
-  /** Bovenaan buiten het vak: model, persona, en wat er rechts bij hoort. */
+  /** De koprij BINNEN het vak: model, persona, en wat er rechts bij hoort --
+   *  zie de uitleg hierboven waarom dit sinds ronde 5 in `.axe-vak` zit. */
   kop?: ReactNode;
+  /** Het gesprekken/status-paneel achter de klok-knop in `kop`. Rendert als
+   *  overlay BOVEN het vak (zie axe-look.css), niet als extra rij erin --
+   *  anders schuift het invoerveld omlaag zodra je hem openklapt. */
+  paneel?: ReactNode;
 }
 
 /* De lichtrand loopt alleen als AXE iets doet.
@@ -71,6 +99,7 @@ export function AxeComposerVak({
   snelacties = false,
   snelactieLijst,
   kop,
+  paneel,
 }: Props) {
   const veld = useRef<HTMLTextAreaElement>(null);
   const status = useVoiceStore(s => s.voiceStatus);
@@ -86,8 +115,7 @@ export function AxeComposerVak({
   useEffect(() => {
     if (status === 'listening') { void mic.start(); }
     else if (mic.state === 'live') { mic.stop(); }
-  }, [status]); // voice-glow owns stream cleanup on unmount
-
+  }, [status]);
 
   const opToets = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Shift+enter is de enige manier om een tweede regel te maken zolang enter
@@ -100,8 +128,6 @@ export function AxeComposerVak({
 
   return (
     <div className="axe-composer axe-vakcomposer flex-shrink-0" data-axe-doel="axe-composer">
-      {kop && <div className="axe-vak-kop">{kop}</div>}
-
       {/* Locked presence contract:
           idle/silent mic = existing colorful outside pulse;
           actual microphone/TTS energy = smoothly yield to VoiceBeam;
@@ -124,6 +150,10 @@ export function AxeComposerVak({
         theme="dark"
       >
       <div className="axe-vak">
+        {/* De koprij zit NU in het vak zelf (ronde 5) -- zie de uitleg
+            bovenin dit bestand. Dezelfde kaart, gewoon een regel hoger. */}
+        {kop && <div className="axe-vak-kop">{kop}</div>}
+
         <div className="axe-vak-boven">
           <textarea
             ref={veld}
@@ -145,6 +175,13 @@ export function AxeComposerVak({
       </div>
       </VoiceBeam>
       </BorderBeam>
+
+      {/* Uitzondering op "alles in het vak": dit paneel klapt UIT boven het
+          vak, dus hij mag geen extra flex-rij zijn -- position:absolute in
+          axe-look.css (bottom:100% op `.axe-composer`) tilt hem los van de
+          flow en zet hem precies op de bovenkant van `.axe-vak` (zie de
+          uitleg bovenin dit bestand). */}
+      {paneel}
 
       {snelacties && (
         <ComposerSnelacties

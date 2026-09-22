@@ -138,6 +138,12 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
      rechts op +STRAAL. Dezelfde straal als de tabs: even ver van het midden,
      alleen in het stuk waar de boog ontbreekt. */
   const hoekX = kant === 'links' ? -STRAAL : STRAAL;
+  /* Corrective round 6, Part 4: de rechter ring had helemaal geen
+     data-axe-doel -- alleen de linker kreeg er een (voor de driehoek/
+     focus-composer), dus AxePresenceDock's `vindDoel()` kon deze ring nooit
+     vinden en dus nooit als obstakel meetellen. Zelfde naamgeving als links,
+     gespiegeld. */
+  const axeDoel = kant === 'links' ? 'radiaal-links' : 'radiaal-rechts';
 
   return (
     <div
@@ -145,7 +151,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
       className="axe-dok"
       data-open={open ? 'ja' : 'nee'}
       data-kant={kant}
-      data-axe-doel={kant === 'links' ? 'radiaal-links' : undefined}
+      data-axe-doel={axeDoel}
       style={{ width: vak, height: vak }}
     >
       {/* De ring zelf: een schijf met een dikke rand, puur decor. Als eigen
