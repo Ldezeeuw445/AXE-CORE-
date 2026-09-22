@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Folder, GripHorizontal, Image, Mic, Paperclip, Plus, SquareArrowOutUpRight, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { BorderBeam } from 'border-beam';
-import { VoiceBeam, useMicrophone } from 'voice-glow';
-import { getAxeTtsLevel } from '@/infrastructure/gateways/openAiTtsService';
+import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { dispatchComputerTask, onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
@@ -41,7 +40,6 @@ const QUICK = [
 
 export default function ComputerUseOverlay() {
   const voice = useVoiceStore();
-  const mic = useMicrophone({ autoStart: false });
   const [text, setText] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [preferred, setPreferred] = useState<string | null>(null);
@@ -63,13 +61,6 @@ export default function ComputerUseOverlay() {
   const machine = useMemo(() => devices.find(d => d.id === preferred) ?? devices[0] ?? null, [devices, preferred]);
   const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
   const busy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'listening' || toolBusy;
-  const speaking = voice.voiceStatus === 'listening' || voice.voiceStatus === 'speaking';
-
-  useEffect(() => {
-    if (voice.voiceStatus === 'listening') { void mic.start(); }
-    else if (mic.state === 'live') { mic.stop(); }
-  }, [voice.voiceStatus]); // visual stream only; transcription stays in voiceStore
-
   async function runQuick(path: 'Desktop' | 'Documents' | 'Downloads', screenshotsOnly: boolean) {
     if (!machine || toolBusy) {
       if (!machine) setToolReply('No Mac worker is online, so AXE cannot read that folder.');
@@ -110,11 +101,6 @@ export default function ComputerUseOverlay() {
     await voice.sendMessage(`Use Personal Computer Use on my selected Mac for this task: ${task}`);
   }
 
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    void submit();
-  }
-
   return (
     <main className="computer-use-overlay">
       <BorderBeam size="pulse-outside" colorVariant="mono" active strength={0.9}>
@@ -126,32 +112,39 @@ export default function ComputerUseOverlay() {
         >
           <GripHorizontal size={14} />
         </div>
-        <VoiceBeam
-          stream={voice.voiceStatus === 'listening' ? mic.stream : null}
-          level={voice.voiceStatus === 'speaking' ? getAxeTtsLevel : 0}
-          idle={0}
-          active={speaking}
-          attack={0.12}
-          release={0.72}
-          colorVariant="colorful"
-          theme="dark"
-        >
-        <form className="computer-use-overlay__composer" onSubmit={onSubmit}>
-          <div className="computer-use-overlay__particle">
-            <AxeStatusOrb size={64} toonLabel={false} status={busy ? 'processing' : undefined} />
-          </div>
-          <input
-            autoFocus
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Start a task on your Mac…"
-            aria-label="Personal Computer Use task"
-          />
-          <button type="button" className="computer-use-overlay__icon" title="Attach"><Paperclip size={17} /></button>
-          <button type="button" className="computer-use-overlay__icon" title={voice.voiceStatus !== 'idle' ? 'Stop talking to AXE' : 'Talk to AXE'} onClick={() => void (voice.voiceStatus !== 'idle' ? voice.stopListening() : voice.startListening())}><Mic size={17} /></button>
-          <button type="submit" className="computer-use-overlay__plus" title="Run task" disabled={!text.trim() || busy}><Plus size={20} /></button>
-        </form>
-        </VoiceBeam>
+        <AxeComposerVak
+          waarde={text}
+          opWaarde={setText}
+          opVerstuur={() => void submit()}
+          plaatshouder="Start a task on your Mac…"
+          links={
+            <div className="computer-use-overlay__particle">
+              <AxeStatusOrb size={34} toonLabel={false} status={busy ? 'processing' : undefined} />
+            </div>
+          }
+          rechts={
+            <>
+              <button type="button" className="computer-use-overlay__icon" title="Attach"><Paperclip size={17} /></button>
+              <button
+                type="button"
+                className="computer-use-overlay__icon"
+                title={voice.voiceStatus !== 'idle' ? 'Stop talking to AXE' : 'Talk to AXE'}
+                onClick={() => void (voice.voiceStatus !== 'idle' ? voice.stopListening() : voice.startListening())}
+              >
+                <Mic size={17} />
+              </button>
+              <button
+                type="button"
+                className="computer-use-overlay__plus"
+                title="Run task"
+                disabled={!text.trim() || busy}
+                onClick={() => void submit()}
+              >
+                <Plus size={20} />
+              </button>
+            </>
+          }
+        />
 
         <div className="computer-use-overlay__meta">
           <span className={machine ? 'is-online' : 'is-offline'}>
