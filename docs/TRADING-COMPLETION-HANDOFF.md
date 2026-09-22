@@ -37,8 +37,9 @@ here.
 | 24/7 | Cross-device lease + idempotent slots; headless VPS runner of the same cycle; watchdog | ✅ built, **not deployed** (needs migration + VPS secret) | see `git log` |
 | Event impact | `gebeurtenisImpact` measured by the desk heartbeat → desk facts → AXE Algo context + trace | ✅ done | see `git log` |
 
-Verification at the last checkpoint: `npx tsc --noEmit` clean · `npx vitest run`
-**1578/1578** · `npm run build` ✓ · backend `pytest` 144/144 (Phase 0A) ·
+Verification at the final checkpoint (after fetching orchestrator — still `3125fe0d`, branch is a fast-forward): `npx tsc --noEmit` clean · `npx vitest run`
+**1599/1599** · `npm run build:runner` ✓ · backend `pytest` 153/153 ·
+(earlier checkpoint: 1578/1578) · `npm run build` ✓ · backend `pytest` 144/144 (Phase 0A) ·
 no new ESLint findings in any touched file (compared file-by-file against
 `3125fe0d`; the only pre-existing findings in touched files are unchanged).
 
@@ -416,3 +417,12 @@ absent from the production bundle — checked with grep on `dist/`):
   passes `check-desktop-env.mjs`.
 - HawkScan hook: no `HAWK_API_KEY` and no running app → not applicable.
 - Disk: ~8 GB free on `/`; avoid a second full `node_modules`.
+
+---
+
+## PR
+
+Not opened automatically: `gh` is not installed here and the GitKraken tool
+needs `gk auth login`. Open it as a **draft** (do not merge before the approval
+items above):
+https://github.com/Ldezeeuw445/AXE-CORE-/compare/orchestrator...claude/trading-completion?expand=1
