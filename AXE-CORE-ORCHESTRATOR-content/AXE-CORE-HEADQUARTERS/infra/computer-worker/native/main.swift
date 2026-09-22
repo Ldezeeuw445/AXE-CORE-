@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import ScreenCaptureKit
 
 struct ToolError: Error {
     let message: String
@@ -87,9 +88,10 @@ func imagePointToGlobal(displayIndex: Int, imageX: Double, imageY: Double) throw
     guard pixelW > 0, pixelH > 0 else {
         throw ToolError(message: "Display pixel geometry is unavailable.")
     }
-    // CGDisplayCreateImage produces physical pixels while CGEvent consumes the
-    // global Quartz coordinate space in logical points. Keep this conversion in
-    // exactly one place so Retina and multi-monitor origins cannot drift.
+    // ScreenCaptureKit produces the configured physical pixel dimensions while
+    // CGEvent consumes the global Quartz coordinate space in logical points.
+    // Keep this conversion in exactly one place so Retina and multi-monitor
+    // origins cannot drift.
     return CGPoint(
         x: bounds.origin.x + CGFloat(imageX / pixelW) * bounds.width,
         y: bounds.origin.y + CGFloat(imageY / pixelH) * bounds.height
@@ -180,7 +182,7 @@ func postKey(code: CGKeyCode, modifiers: CGEventFlags) throws {
 func typeText(_ text: String) throws {
     try requireAccessibility()
     guard !text.isEmpty else { return }
-    var utf16 = Array(text.utf16)
+    let utf16 = Array(text.utf16)
     let chunk = 40
     var offset = 0
     while offset < utf16.count {
@@ -225,8 +227,12 @@ func windowsPayload() -> [[String: Any]] {
         let name = row[kCGWindowName as String] as? String ?? ""
         let number = row[kCGWindowNumber as String] as? NSNumber
         var bounds = CGRect.zero
-        if let bd = row[kCGWindowBounds as String] as? CFDictionary {
-            _ = CGRectMakeWithDictionaryRepresentation(bd, &bounds)
+        if let bd = row[kCGWindowBounds as String] as? [String: Any],
+           let x = (bd["X"] as? NSNumber)?.doubleValue,
+           let y = (bd["Y"] as? NSNumber)?.doubleValue,
+           let w = (bd["Width"] as? NSNumber)?.doubleValue,
+           let h = (bd["Height"] as? NSNumber)?.doubleValue {
+            bounds = CGRect(x: x, y: y, width: w, height: h)
         }
         return [
             "window_id": number?.intValue ?? 0,
@@ -240,23 +246,43 @@ func windowsPayload() -> [[String: Any]] {
     }
 }
 
-func captureDisplay(index: Int, path: String) throws -> [String: Any] {
+@available(macOS 14.0, *)
+func captureDisplay(index: Int, path: String) async throws -> [String: Any] {
     guard CGPreflightScreenCaptureAccess() else {
         throw ToolError(message: "Screen Recording permission is not granted for AXE Computer Use.")
     }
+
     let ids = activeDisplays()
     guard ids.indices.contains(index) else {
         throw ToolError(message: "No display at index \(index).")
     }
     let id = ids[index]
-    guard let image = CGDisplayCreateImage(id) else {
-        throw ToolError(message: "macOS did not return a display image.")
+
+    // CGDisplayCreateImage is unavailable in the current macOS SDK. Modern
+    // capture goes through ScreenCaptureKit, keyed by the same CGDirectDisplayID
+    // used by the rest of AXE's display/coordinate model.
+    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+    guard let display = content.displays.first(where: { $0.displayID == id }) else {
+        throw ToolError(message: "Selected display is not available to ScreenCaptureKit.")
     }
+
+    let filter = SCContentFilter(display: display, excludingWindows: [])
+    let config = SCStreamConfiguration()
+    config.width = Int(CGDisplayPixelsWide(id))
+    config.height = Int(CGDisplayPixelsHigh(id))
+    config.showsCursor = true
+
+    let image = try await SCScreenshotManager.captureImage(
+        contentFilter: filter,
+        configuration: config
+    )
+
     let rep = NSBitmapImageRep(cgImage: image)
     guard let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.78]) else {
         throw ToolError(message: "Could not encode the display image.")
     }
     try data.write(to: URL(fileURLWithPath: path), options: .atomic)
+
     let bounds = CGDisplayBounds(id)
     return [
         "path": path,
@@ -274,7 +300,7 @@ func captureDisplay(index: Int, path: String) throws -> [String: Any] {
     ]
 }
 
-func execute(_ command: String, _ args: [String: Any]) throws -> Any {
+func execute(_ command: String, _ args: [String: Any]) async throws -> Any {
     switch command {
     case "permissions.status":
         return [
@@ -292,7 +318,10 @@ func execute(_ command: String, _ args: [String: Any]) throws -> Any {
         guard let path = args["path"] as? String, !path.isEmpty else {
             throw ToolError(message: "path is required.")
         }
-        return try captureDisplay(index: index, path: path)
+        guard #available(macOS 14.0, *) else {
+            throw ToolError(message: "AXE Computer Use screen capture requires macOS 14 or newer.")
+        }
+        return try await captureDisplay(index: index, path: path)
     case "pointer.position":
         let p = CGEvent(source: nil)?.location ?? .zero
         return ["x": Double(p.x), "y": Double(p.y)]
@@ -379,22 +408,28 @@ func execute(_ command: String, _ args: [String: Any]) throws -> Any {
     }
 }
 
-let args = CommandLine.arguments
-guard args.count >= 3 else {
-    exit(64)
-}
-let command = args[1]
-let output = args[2]
-let payload = argJSON(args.count >= 4 ? args[3] : nil)
+@main
+struct AXEComputerUseMain {
+    static func main() async {
+        let args = CommandLine.arguments
+        guard args.count >= 3 else {
+            exit(64)
+        }
 
-do {
-    let result = try execute(command, payload)
-    try writeJSON(["ok": true, "command": command, "result": result], to: output)
-    exit(0)
-} catch let e as ToolError {
-    try? writeJSON(["ok": false, "command": command, "error": e.message], to: output)
-    exit(2)
-} catch {
-    try? writeJSON(["ok": false, "command": command, "error": error.localizedDescription], to: output)
-    exit(1)
+        let command = args[1]
+        let output = args[2]
+        let payload = argJSON(args.count >= 4 ? args[3] : nil)
+
+        do {
+            let result = try await execute(command, payload)
+            try writeJSON(["ok": true, "command": command, "result": result], to: output)
+            exit(0)
+        } catch let e as ToolError {
+            try? writeJSON(["ok": false, "command": command, "error": e.message], to: output)
+            exit(2)
+        } catch {
+            try? writeJSON(["ok": false, "command": command, "error": error.localizedDescription], to: output)
+            exit(1)
+        }
+    }
 }

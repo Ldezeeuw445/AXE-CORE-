@@ -11,10 +11,12 @@ mkdir -p "$MACOS"
 cp "$HERE/Info.plist" "$APP/Contents/Info.plist"
 
 swiftc "$HERE/main.swift" \
+  -parse-as-library \
   -O \
   -framework AppKit \
   -framework ApplicationServices \
   -framework CoreGraphics \
+  -framework ScreenCaptureKit \
   -o "$MACOS/AXE Computer Use"
 
 if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then

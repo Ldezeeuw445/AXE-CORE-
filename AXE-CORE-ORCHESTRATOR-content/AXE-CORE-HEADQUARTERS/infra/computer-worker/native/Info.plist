@@ -24,5 +24,7 @@
   <string>10.15</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>AXE uses Screen Recording only when you ask Personal Computer Use to observe the current Mac screen.</string>
 </dict>
 </plist>
