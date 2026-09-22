@@ -32,6 +32,7 @@ BUNDEL="src-tauri/target/release/bundle/macos"
 APP="$BUNDEL/AXE CORE.app"
 zeg() { printf '\n\033[36m▸ %s\033[0m\n' "$*"; }
 stop() { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
+trap 'rc=$?; printf "\n\033[31m✖ AXE update stopte bij regel %s: %s (exit %s)\033[0m\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2' ERR
 
 # ── 1. Niets kwijtraken ──────────────────────────────────────────────────────
 zeg "Controleren of er onopgeslagen werk staat"
