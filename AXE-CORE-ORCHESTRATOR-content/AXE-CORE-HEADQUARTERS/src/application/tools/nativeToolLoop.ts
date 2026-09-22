@@ -67,6 +67,11 @@ export interface NativeLoopResult {
  * Everything else gets JSON, which is what the JSON-shaped ones already parse.
  */
 function toRawArg(name: string, input: Record<string, unknown>): string {
+  // These executors parse a JSON object even when the model only supplies the
+  // mandatory "tool" field. Collapsing {tool:"computer.permissions"} to the
+  // bare string "computer.permissions" makes the parser reject a perfectly
+  // valid native call before it ever reaches the Mac.
+  if (name === 'computer_read' || name === 'computer_run') return JSON.stringify(input);
   const keys = Object.keys(input);
   if (keys.length === 1) {
     const v = input[keys[0]];
