@@ -392,6 +392,26 @@ const git = (root, ...a) => run('git', a, root);
 async function execute(payload) {
   const { tool, workspace, args = {} } = payload;
 
+  // Machine-scoped reads must not depend on a git checkout. Personal Computer
+  // Use is allowed to inspect these three explicit home folders even if this
+  // Mac happens not to have the requested repo/workspace mounted.
+  if (tool === 'personal.files.list') {
+    const requested = String(args.path ?? '').trim();
+    const allowed = new Map([
+      ['Desktop', join(homedir(), 'Desktop')],
+      ['Documents', join(homedir(), 'Documents')],
+      ['Downloads', join(homedir(), 'Downloads')],
+    ]);
+    const dir = allowed.get(requested);
+    if (!dir) throw new Error(`personal.files.list only allows Desktop, Documents, or Downloads; got '${requested}'`);
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries
+      .filter(e => !e.name.startsWith('.') && !DENY_NAMES.test(e.name))
+      .slice(0, 200)
+      .map(e => (e.isDirectory() ? `${e.name}/` : e.name))
+      .join('\n') || '(empty)';
+  }
+
   const ws = WORKSPACES[workspace];
   if (!ws) throw new Error(`unknown workspace '${workspace}'`);
   const root = resolve(ws.root);
@@ -406,8 +426,10 @@ async function execute(payload) {
   }
 
   switch (tool) {
-    case 'system.info':
-      return `host ${hostname()}\nworkspace ${workspace}\nroot ${root}\nbranch ${branch}\nnode ${process.version}`;
+    case 'system.info': {
+      const sourceCommit = (await git(REPO, 'rev-parse', '--short', 'HEAD')).trim();
+      return `host ${hostname()}\nworkspace ${workspace}\nroot ${root}\nbranch ${branch}\nworker_source ${sourceCommit}\nnode ${process.version}`;
+    }
 
     case 'camera.snapshot': return cameraSnapshot();
 
@@ -415,23 +437,6 @@ async function execute(payload) {
     case 'git.status':  return git(root, 'status', '--porcelain', '-b');
     case 'git.diff':    return git(root, 'diff', '--stat');
     case 'git.log':     return git(root, 'log', '-5', '--oneline');
-
-    case 'personal.files.list': {
-      const requested = String(args.path ?? '').trim();
-      const allowed = new Map([
-        ['Desktop', join(homedir(), 'Desktop')],
-        ['Documents', join(homedir(), 'Documents')],
-        ['Downloads', join(homedir(), 'Downloads')],
-      ]);
-      const dir = allowed.get(requested);
-      if (!dir) throw new Error(`personal.files.list only allows Desktop, Documents, or Downloads; got '${requested}'`);
-      const entries = await readdir(dir, { withFileTypes: true });
-      return entries
-        .filter(e => !e.name.startsWith('.') && !DENY_NAMES.test(e.name))
-        .slice(0, 200)
-        .map(e => (e.isDirectory() ? `${e.name}/` : e.name))
-        .join('\n') || '(empty)';
-    }
 
     case 'files.list': {
       const dir = safePath(root, args.path ?? '.');
