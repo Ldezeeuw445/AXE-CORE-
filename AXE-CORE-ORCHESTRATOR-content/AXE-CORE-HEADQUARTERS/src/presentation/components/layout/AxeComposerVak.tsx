@@ -49,7 +49,7 @@
  * axe-look.css). Zijn eigen inhoud is ongewijzigd; alleen waar hij hangt is
  * nieuw.
  */
-import { useEffect, useRef, type ReactNode, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode, type KeyboardEvent } from 'react';
 import { BorderBeam } from 'border-beam';
 import { VoiceBeam, useMicrophone } from 'voice-glow';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -126,8 +126,18 @@ export function AxeComposerVak({
     }
   };
 
+  const presenceStyle = {
+    '--axe-voice-alpha': Math.min(0.78, presence.mix * 0.78).toFixed(3),
+    '--axe-voice-spread': `${Math.round(12 + presence.mix * 34)}px`,
+  } as CSSProperties;
+
   return (
-    <div className="axe-composer axe-vakcomposer flex-shrink-0" data-axe-doel="axe-composer">
+    <div
+      className="axe-composer axe-vakcomposer flex-shrink-0"
+      data-axe-doel="axe-composer"
+      data-voice-energy={presence.mix > 0.015 ? 'on' : 'off'}
+      style={presenceStyle}
+    >
       {/* Locked presence contract:
           idle/silent mic = existing colorful outside pulse;
           actual microphone/TTS energy = smoothly yield to VoiceBeam;
