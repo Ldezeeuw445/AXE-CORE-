@@ -173,7 +173,7 @@ export default function ComputerUseOverlay() {
           plaatshouder="Start a task on your Mac…"
           links={
             <div className="computer-use-overlay__particle">
-              <AxeStatusOrb size={34} toonLabel={false} status={busy ? 'processing' : undefined} />
+              <AxeStatusOrb size={20} toonLabel={false} status={busy ? 'processing' : undefined} />
             </div>
           }
           rechts={
