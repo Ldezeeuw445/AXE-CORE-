@@ -321,6 +321,16 @@ fn main() {
             // je anders zelf open moet houden -- en die je per ongeluk sluit.
             diensten::start_bij_opstarten();
 
+            // AXE CORE Native is one runtime contract: opening the canonical app
+            // also makes sure its registered background workers are actually
+            // alive. Healthy workers are left untouched so in-flight work is
+            // never interrupted; labels that live on the other Mac are ignored.
+            for worker in ["computer-worker", "browser-agent"] {
+                if let Err(err) = launchd::ensure_running(worker) {
+                    eprintln!("AXE worker startup warning ({worker}): {err}");
+                }
+            }
+
             let _ = handle;
             Ok(())
         })
