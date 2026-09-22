@@ -1,4 +1,4 @@
-// resend-inbound v11 (P0.3, P0.4, P0.5, P0.6, P0.7, P0.8).
+// resend-inbound v12 (P0.3–P0.8 + reply-thread role continuity).
 //
 // Ontvangen e-mail -> opslaan -> classificeren -> deterministisch koppelen -> beslissen.
 // - Automatisch versturen ALLEEN als deal_automation_policy dat toestaat (auto_send_qualification
