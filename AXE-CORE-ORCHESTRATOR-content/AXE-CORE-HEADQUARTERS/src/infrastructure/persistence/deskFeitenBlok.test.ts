@@ -53,4 +53,18 @@ describe('deskFeitenBlok', () => {
     expect(t).toContain('EEN');
     expect(t).toContain('TWEE');
   });
+
+  it('geeft een agent alleen de gebeurtenisimpact van zijn eigen paar', () => {
+    const f = (sleutel: string, soort: 'correlatie' | 'gebeurtenis_impact') =>
+      ({ soort, sleutel, agentTekst: `tekst ${sleutel}`, gemetenOp: new Date(NU - 60_000).toISOString() });
+    const t = deskFeitenBlok([
+      f('H1', 'correlatie'),
+      f('Consumer Price Index|XAUUSD|60', 'gebeurtenis_impact'),
+      f('Consumer Price Index|EURUSD|60', 'gebeurtenis_impact'),
+    ], NU, 'xauusd');
+    expect(t).toContain('tekst H1');
+    expect(t).toContain('XAUUSD|60');
+    expect(t).not.toContain('EURUSD|60');
+  });
 });
+

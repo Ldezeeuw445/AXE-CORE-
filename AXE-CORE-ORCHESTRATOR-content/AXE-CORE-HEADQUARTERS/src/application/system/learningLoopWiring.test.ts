@@ -70,6 +70,19 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(roepers, 'Wingman opent een episode maar sluit hem nooit').toContain('presentation/pages/CrewAI.tsx');
   });
 
+  it('AXE Intel en AXE Companion openen scorebare episodes vanuit de desk-lanes', () => {
+    const roepers = aanroepersVan('openLaneEpisode', 'deskAgents.ts');
+    const lanes = BESTANDEN.find(({ pad }) => pad.endsWith('application/tradingIntel/deskAgents.ts'))!;
+    expect(roepers).toHaveLength(0); // intern in deskAgents, en daar twee keer aangeroepen:
+    expect((lanes.tekst.match(/await openLaneEpisode\('(intel|companion)'/g) ?? []).sort())
+      .toEqual(["await openLaneEpisode('companion'", "await openLaneEpisode('intel'"]);
+  });
+
+  it('een gesloten trade sluit ook de lane-episodes, via de ene uitkomstplek', () => {
+    const roepers = aanroepersVan('closeDeskEpisodesForTrade', 'agentFeedbackService');
+    expect(roepers).toContain('infrastructure/persistence/tradingLearningService.ts');
+  });
+
   it('iets voert de versterking daadwerkelijk uit', () => {
     const roepers = aanroepersVan('applyAgentReinforcement', 'agentFeedbackService');
     expect(roepers, 'importance in rag_memories beweegt nooit -- het geheugen groeit maar leert niet').not.toHaveLength(0);

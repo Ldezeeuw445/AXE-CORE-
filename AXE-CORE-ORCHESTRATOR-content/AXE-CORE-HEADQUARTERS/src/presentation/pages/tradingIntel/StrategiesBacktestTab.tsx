@@ -9,13 +9,17 @@ import { StrategyDot, FrameworkDot } from '@/presentation/components/trading/Str
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { COMMON_PAIRS, STRATEGIES } from './useTradingDeskState';
 import type { TradingDeskState } from './useTradingDeskState';
+import { StrategyLabPanel } from './lab/StrategyLabPanel';
+import { SignalBacktestDetails } from './lab/SignalBacktestDetails';
+import { HistoryPanel } from './lab/HistoryPanel';
+import type { StrategyId } from '@/application/tradingIntel/strategySignals';
 
 export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
   const {
     activeStrategy, setActiveStrategy, chartSymbol, backtestRunning, backtestResult, runBacktestNow,
     backtestTimeframe, setBacktestTimeframe, backtestLimit, setBacktestLimit,
     allPairsRunning, allPairsResults, runBacktestAllPairsNow,
-    savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
+    savedStrategies, saveCurrentBacktest, deleteSavedStrategy, openSavedStrategy,
     comboStrategies, toggleComboStrategy, comboMinAgree, setComboMinAgree, comboRunning, comboResult, runComboBacktestNow,
     setups, saveSetup, loadSetup, deleteSetup,
   } = desk;
@@ -100,6 +104,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
             </label>
             <span className="text-[10px] pb-1.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
               Applies to every backtest below. Longer periods page MetaAPI history in batches — slower, but a real edge should survive a longer window.
+              Without MetaAPI the TwelveData fallback returns at most 5,000 bars whatever is selected; the Strategy Lab reads the history cache below.
             </span>
           </div>
         </WidgetCard>
@@ -145,6 +150,9 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
               {backtestResult.note && (
                 <p className="col-span-4 text-[10px] leading-snug mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{backtestResult.note}</p>
               )}
+              <div className="col-span-full">
+                <SignalBacktestDetails result={backtestResult} />
+              </div>
               <div className="col-span-4 flex items-center gap-2 mt-1">
                 <input
                   value={saveNote}
@@ -168,6 +176,17 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
             <p className="text-[11px] mt-3" style={{ color: 'rgba(255,255,255,0.35)' }}>No backtest run yet for this strategy/symbol.</p>
           )}
         </WidgetCard>
+
+        <StrategyLabPanel
+          symbol={chartSymbol}
+          timeframe={backtestTimeframe}
+          limit={backtestLimit}
+          strategy={STRATEGIES.find(s => s.id === activeStrategy)?.backtestable
+            ? { kind: 'single', strategy: activeStrategy as StrategyId }
+            : null}
+        />
+
+        <HistoryPanel symbol={chartSymbol} timeframe={backtestTimeframe} />
 
         {allPairsResults && (
           <WidgetCard title={`All pairs — ${STRATEGIES.find(s => s.id === activeStrategy)?.label ?? activeStrategy}`}>
@@ -353,9 +372,18 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
                       {s.note ? <span style={{ color: 'rgba(255,255,255,0.4)' }}> — {s.note}</span> : null}
                     </div>
                     <div className="text-[10px] font-mono-data mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                      {(s.netReturnPct * 100).toFixed(1)}% return · {(s.winRate * 100).toFixed(0)}% win · {s.totalTrades} trades · PF {Number.isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞'} · {s.savedAt.slice(0, 10)}
+                      {(s.netReturnPct * 100).toFixed(1)}% return · {(s.winRate * 100).toFixed(0)}% win · {s.totalTrades} trades · PF {Number.isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞'}{s.timeframe ? ` · ${s.timeframe}` : ''} · {s.savedAt.slice(0, 10)}
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => openSavedStrategy(s)}
+                    className="text-[10px] shrink-0"
+                    style={{ color: '#c4b5fd' }}
+                    title={s.trades ? 'Reopen with trades and equity curve' : 'Saved before trades were kept — summary only'}
+                  >
+                    Open
+                  </button>
                   <button
                     type="button"
                     onClick={() => void deleteSavedStrategy(s.id)}

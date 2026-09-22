@@ -12,6 +12,10 @@ import logging
 import subprocess
 import tempfile
 
+from typing import Optional
+
+from pydantic import BaseModel
+
 from zuinig import Bezet, lagere_prioriteit, slot
 
 log = logging.getLogger("axe_core_api.crew_runner")
@@ -21,6 +25,45 @@ RUNNER = os.path.join(os.path.dirname(__file__), "run_crew.py")
 # tien minuten doorliep hield alleen een slot bezet (zie zuinig.py).
 CREW_TIMEOUT = int(os.environ.get("CREW_TIMEOUT", "300"))
 CREW_MAX = int(os.environ.get("CREW_MAX", "2"))
+# Negen specialisten bestaan er (run_crew_kickoff kent ze); meer ids dan dat
+# is altijd een fout van de aanroeper, geen grotere crew.
+MAX_SPECIALISTS = 9
+
+
+class CrewRunRequest(BaseModel):
+    """Body van POST /crew/run.
+
+    `specialists` ontbrak hier. Pydantic gooit onbekende velden stil weg, dus
+    de Research Crew vroeg om axe_core + dollar_bill + intel en kreeg altijd
+    alleen de master-orchestrator: run_crew() zag nooit een lijst. Staat nu in
+    dit bestand en niet in main.py, zodat een test het kan importeren zonder
+    Supabase en een hele omgeving.
+    """
+    task: str
+    context: Optional[str] = None
+    conversation: Optional[list] = None
+    specialists: Optional[list[str]] = None
+
+
+def normalize_specialists(raw) -> list[str]:
+    """Maak van wat een aanroeper stuurt een schone lijst ids.
+
+    Alleen tekst, kleine letters, geen dubbelen, volgorde behouden. Welke ids
+    bestaan beslist run_crew_kickoff; die valt terug op axe_core als er geen
+    enkele herkend wordt, en meldt in het resultaat welke lijst hij kreeg.
+    """
+    if not isinstance(raw, (list, tuple)):
+        return []
+    uit: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        sleutel = item.strip().lower()
+        if sleutel and sleutel not in uit:
+            uit.append(sleutel)
+        if len(uit) >= MAX_SPECIALISTS:
+            break
+    return uit
 
 
 def run_crew(task: str, context: str | None = None, conversation: list | None = None, specialists: list | None = None) -> dict:
@@ -36,7 +79,7 @@ def run_crew(task: str, context: str | None = None, conversation: list | None = 
         "task": str(task),
         "context": context,
         "conversation": conversation or [],
-        "specialists": specialists or [],
+        "specialists": normalize_specialists(specialists),
     })
 
     payload_file = result_file = None

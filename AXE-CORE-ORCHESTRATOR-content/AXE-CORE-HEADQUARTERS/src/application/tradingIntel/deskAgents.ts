@@ -21,6 +21,13 @@
  * input, and the agent is told to say so.
  */
 import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
+import { openEpisode } from '@/infrastructure/persistence/agentFeedbackService';
+import {
+  deskEpisodeSubject,
+  parseLaneStance,
+  STANCE_INSTRUCTION,
+  type LaneStance,
+} from '@/domain/tradingIntel/laneStance';
 import {
   remember, rememberForTeam, type MemoryNamespace,
 } from '@/infrastructure/persistence/agentMemoryService';
@@ -114,6 +121,10 @@ export interface DeskAgentResult {
   /** Age of the freshest row the agent actually saw. */
   sourceAge: string;
   rowsSeen: number;
+  /** De richting die de lane uitsprak (STANCE-regel), of null als hij er geen gaf. */
+  stance?: LaneStance | null;
+  /** Of er een episode geopend is die tegen de uitkomst gescoord wordt. */
+  scored?: boolean;
 }
 
 type CallLlm = (system: string, user: string) => Promise<string>;
@@ -290,6 +301,7 @@ export async function runDeskIntel(
     'Two short paragraphs maximum. No preamble. Never invent a number that is not in the data.',
     'If research ran before you, say explicitly whether your data supports or contradicts it — that agreement is the point of the chain.',
     'End with one line: HANDOFF: <what the next agent should take from this>',
+    STANCE_INSTRUCTION,
   ].join(' ');
 
   const text = await callLlm(
@@ -301,15 +313,19 @@ export async function runDeskIntel(
   // The full read is Intel's own — another agent repeating it would be
   // echoing, not corroborating. Only the handoff goes to the team, because a
   // handoff is by definition addressed to the others.
-  await remember({
+  const stance = parseLaneStance(text);
+  const readKey = `desk-read:intel:${symbol}:${Date.now()}`;
+  const stored = await remember({
     agent: 'axe_intel',
     kind: 'fact',
     symbol,
+    key: readKey,
     content: text.slice(0, 4000),
     category: 'intel-read',
     confidence: 0.6,
     source: `${DESK_AGENT_IDENTITY.intel.sourceTag}:${sourceAge}`,
   });
+  const scored = await openLaneEpisode('intel', symbol, stance, stored ? readKey : null);
   if (handoffLine) {
     await rememberForTeam({
       by: 'axe_intel',
@@ -322,7 +338,7 @@ export async function runDeskIntel(
   }
 
   return {
-    ok: true, rowsSeen, sourceAge,
+    ok: true, rowsSeen, sourceAge, stance, scored,
     headline: handoffLine?.replace(/^\s*HANDOFF:\s*/i, '').slice(0, 120) ?? `Intel read · ${sourceAge}`,
     detail: text,
   };
@@ -403,6 +419,7 @@ export async function runDeskCompanion(
     'Weigh what research and intel concluded before you and say where you differ. Agreeing with both without adding a level or a caveat means you added nothing.',
     'When the data supports it, name the levels the trading agent should watch — Fibonacci retracements, volumetric order blocks, prior highs and lows — because those are what it sizes and stops against.',
     'End with one line: HANDOFF: <the levels and the stance the trading agent should act on>',
+    STANCE_INSTRUCTION,
   ].join(' ');
 
   const text = await callLlm(
@@ -411,15 +428,19 @@ export async function runDeskCompanion(
   );
   const handoffLine = text.split('\n').find(l => l.trim().toUpperCase().startsWith('HANDOFF:'));
 
-  await remember({
+  const stance = parseLaneStance(text);
+  const readKey = `desk-read:companion:${symbol}:${Date.now()}`;
+  const stored = await remember({
     agent: 'axe_companion',
     kind: 'fact',
     symbol,
+    key: readKey,
     content: text.slice(0, 4000),
     category: 'companion-read',
     confidence: 0.6,
     source: `${DESK_AGENT_IDENTITY.companion.sourceTag}:${sourceAge}`,
   });
+  const scored = await openLaneEpisode('companion', symbol, stance, stored ? readKey : null);
   if (handoffLine) {
     await rememberForTeam({
       by: 'axe_companion',
@@ -432,10 +453,32 @@ export async function runDeskCompanion(
   }
 
   return {
-    ok: true, rowsSeen, sourceAge,
+    ok: true, rowsSeen, sourceAge, stance, scored,
     headline: handoffLine?.replace(/^\s*HANDOFF:\s*/i, '').slice(0, 120) ?? `Companion read · ${sourceAge}`,
     detail: text,
   };
+}
+
+/**
+ * Open een episode voor een lane-lezing met een richting, zodat de volgende
+ * gesloten trade op dit symbool hem kan scoren (closeDeskEpisodesForTrade).
+ * Neutraal of geen STANCE: niets te scoren, dus geen episode. De episode
+ * verwijst naar precies de geheugenrij van deze lezing, zodat versterking die
+ * lezing raakt en geen andere.
+ */
+async function openLaneEpisode(
+  lane: 'intel' | 'companion',
+  symbol: string,
+  stance: LaneStance | null,
+  readKey: string | null,
+): Promise<boolean> {
+  if (!stance || stance === 'neutral' || !readKey) return false;
+  const id = await openEpisode({
+    agent: lane,
+    subject: deskEpisodeSubject(symbol, stance),
+    memoryKeys: [`memory-key:${readKey}`],
+  }).catch(() => null);
+  return id != null;
 }
 
 /** Which namespace each desk agent writes. Exported so the Brain tab and the

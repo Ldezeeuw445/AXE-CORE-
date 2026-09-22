@@ -23,7 +23,8 @@
     "dev:shell": "STAGE_ENTRY=shell PORT=5011 vite --config vite.stage.config.ts --host 0.0.0.0",
     "bijwerken": "bash scripts/axe-bijwerken.sh",
     "terminal": "bash scripts/axe-terminal.sh",
-    "welke": "bash scripts/axe-welke.sh"
+    "welke": "bash scripts/axe-welke.sh",
+    "build:runner": "vite build -c vite.runner.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

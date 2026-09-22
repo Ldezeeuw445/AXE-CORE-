@@ -29,7 +29,13 @@
 import { saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
 import { memList } from '@/infrastructure/gateways/axeCoreApiService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import type { FrameworkId } from '@/domain/tradingIntel/strategyColors';
 import {
+  environmentFromBrokerTradeMode,
+  type AccountEnvironment,
+} from '@/domain/tradingIntel/evidence';
+import {
+  metaApiAccountInfoFor,
   getMetaApiConfig,
   saveMetaApiConfig,
   type MetaApiConfig,
@@ -59,6 +65,22 @@ export interface TradingAccount {
    * without being touched.
    */
   run?: string;
+  /**
+   * Wat dit account is voor het leren: 'demo' of 'live' (echt geld of funded).
+   * Weggelaten = wat de broker zegt (account-information `type`). Een funded
+   * challenge draait bij veel propfirms op een demoserver — zet hem dan zelf
+   * op 'live', anders telt hij als demo.
+   */
+  environment?: AccountEnvironment;
+  /**
+   * Welke frameworks live mogen meedingen op dit account. Weggelaten = AXE en
+   * vectorbt, precies wat altijd al kon. Nautilus, Kronos of TradingAgents
+   * komen er alleen bij als je ze hier aanzet — en dan nog alleen als
+   * frameworkEligibility ze geschikt vindt.
+   */
+  liveFrameworks?: FrameworkId[];
+  /** Mag een framework meedingen op een instrument dat het maar gedeeltelijk dekt (TradingAgents buiten aandelen)? */
+  allowPartialCoverage?: boolean;
   addedAt: string;
 }
 
@@ -372,4 +394,67 @@ export async function accountRun(accountId: string): Promise<string> {
 export async function accountLabel(accountId: string): Promise<string> {
   const state = await getAccounts().catch(() => null);
   return state?.accounts.find(a => a.accountId === accountId)?.label ?? accountId.slice(0, 8);
+}
+
+export async function setAccountEnvironment(id: string, environment: AccountEnvironment | null): Promise<AccountsState> {
+  const state = await getAccounts();
+  return persist({
+    ...state,
+    accounts: state.accounts.map(a => {
+      if (a.id !== id) return a;
+      const next = { ...a };
+      if (environment) next.environment = environment; else delete next.environment;
+      return next;
+    }),
+  });
+}
+
+const brokerEnvCache = new Map<string, { at: number; env: AccountEnvironment | null }>();
+const BROKER_ENV_TTL_MS = 60 * 60_000;
+
+/**
+ * Welke omgeving een account is, en wie dat zegt.
+ *
+ * Ingesteld wint; anders de broker; anders onbekend. Onbekend wordt nooit
+ * 'live' — een live/funded account moet dat aantoonbaar zijn, anders zou het
+ * op bewijs van elders strategieën kiezen.
+ */
+export async function accountEnvironment(accountId: string): Promise<{
+  env: AccountEnvironment | null;
+  source: 'configured' | 'broker' | 'unknown';
+}> {
+  const state = await getAccounts().catch(() => null);
+  const row = state?.accounts.find(a => a.accountId === accountId);
+  if (row?.environment) return { env: row.environment, source: 'configured' };
+  const hit = brokerEnvCache.get(accountId);
+  if (hit && Date.now() - hit.at < BROKER_ENV_TTL_MS) {
+    return { env: hit.env, source: hit.env ? 'broker' : 'unknown' };
+  }
+  if (!row) return { env: null, source: 'unknown' };
+  const info = await metaApiAccountInfoFor({
+    token: row.token, accountId: row.accountId, region: row.region, enabled: true, updatedAt: row.addedAt,
+  }).catch(() => null);
+  const env = info?.ok ? environmentFromBrokerTradeMode(info.info.tradeMode) : null;
+  if (info?.ok) brokerEnvCache.set(accountId, { at: Date.now(), env });
+  return { env, source: env ? 'broker' : 'unknown' };
+}
+
+export async function setAccountLiveFrameworks(
+  id: string,
+  patch: { liveFrameworks?: FrameworkId[]; allowPartialCoverage?: boolean },
+): Promise<AccountsState> {
+  const state = await getAccounts();
+  return persist({
+    ...state,
+    accounts: state.accounts.map(a => a.id === id ? { ...a, ...patch } : a),
+  });
+}
+
+/** De live-framework-instellingen van een account, of de standaard als het onbekend is. */
+export async function accountFrameworkSettings(accountId: string): Promise<{
+  liveFrameworks?: FrameworkId[]; allowPartialCoverage?: boolean;
+}> {
+  const state = await getAccounts().catch(() => null);
+  const row = state?.accounts.find(a => a.accountId === accountId);
+  return { liveFrameworks: row?.liveFrameworks, allowPartialCoverage: row?.allowPartialCoverage };
 }

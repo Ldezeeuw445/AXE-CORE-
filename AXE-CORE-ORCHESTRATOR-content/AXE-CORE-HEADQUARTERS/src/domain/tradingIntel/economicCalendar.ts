@@ -136,3 +136,25 @@ export function eventWithin48h(input: {
   }
   return false;
 }
+
+/**
+ * Valt er VANDAAG een high-impact release voor dit paar?
+ *
+ * Voor de nieuwsregel van een account (RiskProfile.newsRestriction). FRED geeft
+ * een Amerikaanse datum zonder tijd, dus "vandaag" is de datum in New York en de
+ * hele dag telt als bezet. Zelfde eerlijkheid als eventWithin48h: null als de
+ * vraag niet te beantwoorden is (geen data, of geen gedekte valuta).
+ */
+export function highImpactReleaseToday(input: {
+  pairId: string;
+  events: CalendarEvent[] | null | undefined;
+  now?: number;
+}): boolean | null {
+  const { pairId, events } = input;
+  if (!events || events.length === 0) return null;
+  if (!currenciesOf(pairId).some(c => COVERED_CURRENCIES.has(c))) return null;
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(input.now ?? Date.now());
+  return events.some(ev => isHighImpact(ev.name) && ev.date === today);
+}

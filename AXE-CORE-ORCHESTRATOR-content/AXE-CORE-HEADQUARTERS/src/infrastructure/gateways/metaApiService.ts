@@ -548,6 +548,8 @@ export interface MetaApiAccountBalance {
   margin: number | null;
   freeMargin: number | null;
   currency: string | null;
+  /** MT5-handelsmodus volgens de broker: ACCOUNT_TRADE_MODE_DEMO / _CONTEST / _REAL. */
+  tradeMode?: string | null;
 }
 
 /** Live balance/equity/margin for the connected MT5 account (not the paper/demo book). */
@@ -563,7 +565,7 @@ export async function metaApiAccountInfoFor(cfg: MetaApiConfig): Promise<
       return { ok: false, error: `account-information ${res.status}: ${t.slice(0, 200)}` };
     }
     const data = (await res.json()) as {
-      balance?: number; equity?: number; margin?: number; freeMargin?: number; currency?: string;
+      balance?: number; equity?: number; margin?: number; freeMargin?: number; currency?: string; type?: string;
     };
     return {
       ok: true,
@@ -573,6 +575,7 @@ export async function metaApiAccountInfoFor(cfg: MetaApiConfig): Promise<
         margin: typeof data.margin === 'number' ? data.margin : null,
         freeMargin: typeof data.freeMargin === 'number' ? data.freeMargin : null,
         currency: data.currency ?? null,
+        tradeMode: data.type ?? null,
       },
     };
   } catch (e) {
@@ -666,6 +669,84 @@ export async function metaApiGetSymbolPrice(symbol: string): Promise<
  * back to the bare name only when the account's symbol list can't be
  * fetched at all (e.g. not connected yet).
  */
+// ── Instrumentspecificatie voor sizing ─────────────────────────────────────
+//
+// De specificatie werd al opgehaald, maar alleen voor tradeMode. Voor sizing is
+// nodig wat één tick per lot in de accountvaluta waard is: dat staat niet in de
+// specificatie maar in de actuele prijs (lossTickValue — MetaAPI rekent daar de
+// koers van winst- naar accountvaluta al in). Contractgrootte en volumestappen
+// komen uit de specificatie. Beide worden bewaard; de tickwaarde kort, omdat hij
+// met de wisselkoers meebeweegt.
+
+const SPEC_TTL_MS = 6 * 60 * 60_000;
+const TICK_VALUE_TTL_MS = 60_000;
+const specCache = new Map<string, { at: number; spec: Record<string, unknown> }>();
+const tickValueCache = new Map<string, { at: number; lossTickValue: number; profitTickValue: number | null }>();
+
+export interface BrokerInstrumentSpec {
+  symbol: string;
+  brokerSymbol: string;
+  tickSize: number;
+  lossTickValue: number;
+  contractSize: number;
+  minVolume: number;
+  maxVolume: number;
+  volumeStep: number;
+}
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * De specificatie van `symbol` op DIT account, of een fout. Geen gok als de
+ * broker niet antwoordt: zonder tickwaarde kan niemand zeggen wat een stop kost,
+ * en dan hoort er niet gesized te worden.
+ */
+export async function metaApiInstrumentSpecFor(
+  cfg: MetaApiConfig,
+  symbol: string,
+): Promise<{ ok: true; spec: BrokerInstrumentSpec } | { ok: false; error: string }> {
+  try {
+    const brokerSymbol = await resolveTradableSymbol(cfg, symbol);
+    const key = `${cfg.accountId}:${brokerSymbol}`;
+    let spec = specCache.get(key);
+    if (!spec || Date.now() - spec.at > SPEC_TTL_MS) {
+      const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/symbols/${encodeURIComponent(brokerSymbol)}/specification`, { method: 'GET' });
+      if (!res.ok) return { ok: false, error: `specification ${res.status} for ${brokerSymbol}` };
+      spec = { at: Date.now(), spec: (await res.json()) as Record<string, unknown> };
+      specCache.set(key, spec);
+    }
+    let tick = tickValueCache.get(key);
+    if (!tick || Date.now() - tick.at > TICK_VALUE_TTL_MS) {
+      const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/symbols/${encodeURIComponent(brokerSymbol)}/current-price`, { method: 'GET' });
+      if (!res.ok) return { ok: false, error: `current-price ${res.status} for ${brokerSymbol}` };
+      const price = (await res.json()) as Record<string, unknown>;
+      const loss = num(price.lossTickValue) ?? num(price.profitTickValue);
+      if (loss == null || loss <= 0) return { ok: false, error: `${brokerSymbol}: broker gave no tick value` };
+      tick = { at: Date.now(), lossTickValue: loss, profitTickValue: num(price.profitTickValue) };
+      tickValueCache.set(key, tick);
+    }
+    const sp = spec.spec;
+    const tickSize = num(sp.tickSize) ?? num(sp.point) ?? (num(sp.digits) != null ? Math.pow(10, -(sp.digits as number)) : null);
+    const contractSize = num(sp.contractSize);
+    if (tickSize == null || tickSize <= 0) return { ok: false, error: `${brokerSymbol}: specification has no tick size` };
+    return {
+      ok: true,
+      spec: {
+        symbol: symbol.toUpperCase(),
+        brokerSymbol,
+        tickSize,
+        lossTickValue: tick.lossTickValue,
+        contractSize: contractSize && contractSize > 0 ? contractSize : 1,
+        minVolume: num(sp.minVolume) ?? 0.01,
+        maxVolume: num(sp.maxVolume) ?? 100,
+        volumeStep: num(sp.volumeStep) ?? 0.01,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 async function resolveTradableSymbol(cfg: MetaApiConfig, wanted: string): Promise<string> {
   const bare = toMt5Symbol(wanted);
   const resolved = await resolveBrokerSymbol(bare, { token: cfg.token, accountId: cfg.accountId, region: cfg.region });

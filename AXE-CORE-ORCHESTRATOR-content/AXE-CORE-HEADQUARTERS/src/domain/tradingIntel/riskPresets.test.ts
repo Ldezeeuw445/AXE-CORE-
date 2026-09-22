@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   validatePreset, upsertPreset, removePreset, allPresets, applyPreset,
-  BUILT_IN_PRESETS, MAX_RISK_PER_TRADE, type RiskPreset,
+  BUILT_IN_PRESETS, MAX_RISK_PER_TRADE, applyRiskEdit, type RiskPreset,
 } from './riskPresets';
 
 const custom = (id: string, name = id): RiskPreset => ({
@@ -97,5 +97,16 @@ describe('applyPreset', () => {
 
   it('stamps when it was applied', () => {
     expect(applyPreset(custom('p1')).updatedAt).toBeTruthy();
+  });
+});
+
+describe('applyRiskEdit — een aangepast profiel heet custom', () => {
+  const funded = { mode: 'funded_challenge' as const, riskPerTradePct: 0.005, maxOpenRiskPct: 0.015, maxDailyLossPct: 0.03, maxTradesPerDay: 8, minConfidence: 0.65, allowShort: false, maxDrawdownPct: 0.08, updatedAt: '' };
+  it('een regelwijziging maakt het custom en onthoudt de basis', () => {
+    expect(applyRiskEdit(funded, { maxDrawdownPct: 0.06 })).toMatchObject({ mode: 'custom', basedOn: 'funded_challenge', maxDrawdownPct: 0.06 });
+  });
+  it('dezelfde waarde opnieuw bewaren of alleen de modus kiezen verandert het label niet', () => {
+    expect(applyRiskEdit(funded, { maxDrawdownPct: 0.08 }).mode).toBe('funded_challenge');
+    expect(applyRiskEdit(funded, { mode: 'personal_demo' }).mode).toBe('personal_demo');
   });
 });
