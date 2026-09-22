@@ -144,6 +144,12 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
  * and quoting. What survives is the first prose line: what the tool is for.
  */
 function describe(id: string, promptDoc: string): string {
+  if (id === 'computer_read') {
+    return 'Observe the selected Mac. Use screen.observe for a fresh grounded screenshot; use it before and after meaningful GUI actions. Never answer what is on screen from memory.';
+  }
+  if (id === 'computer_run') {
+    return 'Perform one bounded action on the selected Mac. For GUI work, observe first, perform the smallest action, then observe again before continuing. Actions stay approval-gated by AXE risk policy.';
+  }
   const first = promptDoc.split('\n').find(l => l.trim()) ?? id;
   return first
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')   // leading emoji
