@@ -10,7 +10,7 @@ The only user-facing desktop bundle is:
 
 Do not rename the product/bundle identifier just to distinguish a new build. Keeping the stable `com.axe.core` identity preserves macOS permissions and signing/TCC continuity.
 
-Feature branches may use `npm run tauri:build` for development, but they are NOT installed as the canonical app.
+Feature branches use `npm run tauri:dev` for interactive testing or `npm run tauri:check` for a native compile check. `npm run tauri:build` is guarded and refuses to create an installable bundle unless the canonical updater invokes it on `orchestrator`.
 
 The canonical update path is:
 
