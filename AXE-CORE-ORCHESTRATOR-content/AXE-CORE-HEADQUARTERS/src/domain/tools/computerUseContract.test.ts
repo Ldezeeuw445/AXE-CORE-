@@ -31,7 +31,7 @@ describe('Personal Computer Use end-to-end contract', () => {
     expect(rp).toHaveProperty('display_index');
 
     const wp = run!.parameters.properties;
-    for (const key of ['device', 'x', 'y', 'from_x', 'from_y', 'to_x', 'to_y', 'text', 'key', 'modifiers', 'app']) {
+    for (const key of ['device', 'x', 'y', 'image_x', 'image_y', 'from_x', 'from_y', 'to_x', 'to_y', 'from_image_x', 'from_image_y', 'to_image_x', 'to_image_y', 'display_index', 'text', 'key', 'modifiers', 'app']) {
       expect(wp).toHaveProperty(key);
     }
   });
