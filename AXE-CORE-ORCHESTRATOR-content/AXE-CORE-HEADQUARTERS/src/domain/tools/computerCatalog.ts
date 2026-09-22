@@ -84,8 +84,8 @@ For real desktop control, observe before and after meaningful actions:
 Never execute a long coordinate script from one screenshot.
 
 Examples:
-`[COMPUTER_RUN: {"tool":"pointer.move","x":840,"y":420}]`
-`[COMPUTER_RUN: {"tool":"pointer.click","x":840,"y":420}]`
+`[COMPUTER_RUN: {"tool":"pointer.move","display_index":0,"image_x":840,"image_y":420}]`
+`[COMPUTER_RUN: {"tool":"pointer.click","display_index":0,"image_x":840,"image_y":420}]`
 `[COMPUTER_RUN: {"tool":"keyboard.type","text":"AXE computer use test"}]`
 `[COMPUTER_RUN: {"tool":"keyboard.key","key":"return","modifiers":[]}]`
 `[COMPUTER_RUN: {"tool":"app.open","app":"TextEdit"}]`
