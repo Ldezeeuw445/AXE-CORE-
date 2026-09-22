@@ -88,9 +88,10 @@ func imagePointToGlobal(displayIndex: Int, imageX: Double, imageY: Double) throw
     guard pixelW > 0, pixelH > 0 else {
         throw ToolError(message: "Display pixel geometry is unavailable.")
     }
-    // CGDisplayCreateImage produces physical pixels while CGEvent consumes the
-    // global Quartz coordinate space in logical points. Keep this conversion in
-    // exactly one place so Retina and multi-monitor origins cannot drift.
+    // ScreenCaptureKit produces the configured physical pixel dimensions while
+    // CGEvent consumes the global Quartz coordinate space in logical points.
+    // Keep this conversion in exactly one place so Retina and multi-monitor
+    // origins cannot drift.
     return CGPoint(
         x: bounds.origin.x + CGFloat(imageX / pixelW) * bounds.width,
         y: bounds.origin.y + CGFloat(imageY / pixelH) * bounds.height
