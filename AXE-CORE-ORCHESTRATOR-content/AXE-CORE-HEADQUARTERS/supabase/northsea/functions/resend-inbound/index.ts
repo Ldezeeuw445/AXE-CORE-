@@ -17,7 +17,7 @@ import { renderNorthSeaMail } from "../_shared/mail.ts";
 import { type CompanyOpportunity, mapCommunication, normalizeMessageId, threadMessageIds, type ThreadMatch } from "../_shared/mapping.ts";
 import { blocksHumanSend, decideAutoQualificationReply } from "../_shared/policy.ts";
 
-const VERSION = "resend-inbound-v11";
+const VERSION = "resend-inbound-v12";
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json" } });
 
 async function rget(path: string, key: string) {
@@ -65,6 +65,7 @@ Deno.serve(async (req) => {
 
     // Tegenpartij: bestaand contact; anders bedrijfsdomein (nooit een gratis maildomein).
     let companyId: string | null = null, contactId: string | null = null, companySynthetic = false;
+    let companyRole: "buyer" | "supplier" | null = null;
     if (sender) {
       const { data: c } = await sb.from("contacts").select("id,company_id").ilike("email", sender).limit(1).maybeSingle();
       if (c) { contactId = c.id; companyId = c.company_id; }
@@ -85,8 +86,9 @@ Deno.serve(async (req) => {
       }
     }
     if (companyId) {
-      const { data: co } = await sb.from("companies").select("is_synthetic").eq("id", companyId).maybeSingle();
+      const { data: co } = await sb.from("companies").select("is_synthetic,company_type").eq("id", companyId).maybeSingle();
       companySynthetic = !!co?.is_synthetic;
+      companyRole = co?.company_type === "buyer" || co?.company_type === "supplier" ? co.company_type : null;
     }
 
     // Deterministische koppeling.
@@ -112,23 +114,29 @@ Deno.serve(async (req) => {
 
     const { data: comm, error: ce } = await sb.from("communications").insert({
       company_id: companyId, contact_id: contactId, opportunity_id: opportunityId, direction: "inbound", channel: "email", subject, body,
-      external_message_id: eid, occurred_at: when, rfc_message_id: rfcId, mapping_status: mapping.status, mapping_basis: mapping.basis,
+      external_message_id: eid, occurred_at: when, rfc_message_id: rfcId, from_address: sender, transport: "resend",
+      mapping_status: mapping.status, mapping_basis: mapping.basis,
       mapping_candidates: mapping.candidates.length ? mapping.candidates : null, is_synthetic: mapping.status === "synthetic",
       synthetic_reason: mapping.status === "synthetic" ? `inbound mapped to synthetic record (${mapping.basis})` : null,
     }).select("id").single();
     if (ce) throw ce;
 
-    const i = intel(subject, body, sd);
+    const isReplyOrThread = /^\s*re:/i.test(subject ?? "") || threadMatches.length > 0;
+    const i = intel(subject, body, sd, isReplyOrThread ? companyRole : null);
     const blockReason = await outboundBlockReason(sb, { companyId, contactId, email: sender, opportunityId });
     const policyRead = await readPolicy(sb);
     const decision = decideAutoQualificationReply({ policyRead, classification: i.classification, sensitive: i.sensitive, mappingStatus: mapping.status,
       blockReason, synthetic: mapping.status === "synthetic" || companySynthetic, recipient: sender });
 
+    const d = draftText(i, sender, subject);
+    const needsHuman = i.sensitive || mapping.status === "ambiguous"
+      || Boolean(d && !decision.allowed && !blocksHumanSend(blockReason));
+
     await sb.from("email_intelligence").upsert({ communication_id: comm.id, company_id: companyId, contact_id: contactId, opportunity_id: opportunityId,
       classification: i.classification, commercial_intent: i.classification === "supplier" ? "offer_supply" : i.classification === "buyer" ? "source_product" : "general_inquiry",
       urgency: "normal", risk_level: i.sensitive ? "high" : "low", qualification_score: i.score, summary: (body ?? subject ?? "Inbound email").slice(0, 1000),
       extracted_terms: i.terms, missing_information: i.missing, red_flags: i.sensitive ? ["potential approval-gated content detected"] : [],
-      recommended_action: i.action, requires_human_approval: !decision.allowed, status: "analyzed", analyzed_at: new Date().toISOString(),
+      recommended_action: i.action, requires_human_approval: needsHuman, status: "analyzed", analyzed_at: new Date().toISOString(),
       updated_at: new Date().toISOString() }, { onConflict: "communication_id" });
 
     if (mapping.status === "ambiguous") {
@@ -136,7 +144,6 @@ Deno.serve(async (req) => {
         contact_id: contactId, details: { basis: mapping.basis, candidates: mapping.candidates, note: "No opportunity was changed; manual review required." } });
     }
 
-    const d = draftText(i, sender, subject);
     let autoSent = false, sentId: string | null = null, draftId: string | null = null, draftOutcome = "none";
     if (d && blocksHumanSend(blockReason)) {
       draftOutcome = "suppressed_contact_policy";
