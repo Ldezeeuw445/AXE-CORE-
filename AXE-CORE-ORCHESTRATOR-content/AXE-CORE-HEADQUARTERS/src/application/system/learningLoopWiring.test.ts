@@ -131,6 +131,17 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(voice!.tekst).toMatch(/noteOwnerOutcome\(/);
     expect(voice!.tekst).not.toMatch(/noteTurnOutcome\(latestOpenTurnId\(/);
   });
+
+  it('simple chat (installStableChat) opent en sluit de lus als chat', () => {
+    // Ordinary chat wordt onderschept door installStableChat en komt nooit
+    // bij voiceStore. Zonder deze aanroepen bleef #172 alleen op de fallback
+    // werken — en first-token mag de lus niet overslaan.
+    const stable = BESTANDEN.find(({ pad }) => pad.endsWith('installStableChat.ts'));
+    expect(stable, 'installStableChat.ts niet gevonden').toBeDefined();
+    expect(stable!.tekst).toMatch(/noteRetrieval\(/);
+    expect(stable!.tekst).toMatch(/noteOwnerOutcome\(/);
+    expect(stable!.tekst).toMatch(/'chat'/);
+  });
 });
 
 /**

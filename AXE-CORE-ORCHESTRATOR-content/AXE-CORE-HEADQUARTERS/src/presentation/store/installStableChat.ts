@@ -3,7 +3,7 @@
  *
  * Boot patch for AXE identity:
  * 1. Keep one canonical AXE speech identity through globalTts (George).
- * 2. Simple chat → short Gemini cascade (no LangGraph race).
+ * 2. Simple chat → short cascade, streamed; RAG/TTS blokkeren first-token niet.
  * 3. Action asks → agentic tool loop.
  * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.
  * 5. Inject Architecture-assigned skills into system prompt.
@@ -19,7 +19,10 @@ import {
   type KeySlot,
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
-import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { streamProvider } from '@/infrastructure/gateways/llmStream';
+import { voorwerkVoorFirstToken } from '@/domain/chatLatency';
+import { volgendeAxeBericht } from '@/application/chat/chatStreamBeurt';
+import { noteRetrieval, noteOwnerOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
@@ -457,25 +460,13 @@ async function stableSimpleSend(text: string): Promise<boolean> {
       content: m.text,
     }));
 
-  let skillsBlock = '';
-  try {
-    skillsBlock = await getSkillsPromptForAgent('axe core');
-  } catch { /* ignore */ }
-
-  // The "one memory" AXE is supposed to reason from — buildRagContext()
-  // already existed (globalBrainService, RAG search over rag_memories)
-  // but had no caller anywhere in the codebase: this path only ever wrote
-  // memory (extractMemoryFromMessage below), never read it back, so every
-  // fast reply answered from the last 10 turns of this session and nothing
-  // else. A silent 1.5s budget — a slow/failed memory read degrades to "no
-  // extra context" rather than delaying or breaking the reply.
-  let memoryBlock = '';
-  try {
-    memoryBlock = await Promise.race([
-      buildRagContext(text, 600),
-      new Promise<string>(resolve => setTimeout(() => resolve(''), 1500)),
-    ]);
-  } catch { /* ignore */ }
+  // Leerlus #172: open de beurt nu, synchroon, zonder embeddings. RAG
+  // en skills lopen mee maar houden first-token niet meer tegen (budget 0).
+  noteRetrieval(text, [], [], 'chat');
+  const { memoryBlock, skillsBlock } = await voorwerkVoorFirstToken({
+    rag: buildRagContext(text, 600).catch(() => ''),
+    skills: getSkillsPromptForAgent('axe core').catch(() => ''),
+  });
 
   const system =
     AXE_SYSTEM_PROMPT +
@@ -501,21 +492,59 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     via: 'fallback',
   };
 
+  const toonStream = (partial: string, slot: KeySlot, axeTs: number) => {
+    useVoiceStore.setState(s => ({
+      conversation: volgendeAxeBericht(s.conversation, partial, slot, axeTs) as ConversationMessage[],
+      response: partial,
+      voiceStatus: 'processing' as const,
+      activeProvider: slot.provider,
+      error: null,
+    }));
+  };
+
+  const wisStream = (axeTs: number) => {
+    if (!axeTs) return;
+    useVoiceStore.setState(s => ({
+      conversation: s.conversation.filter(m => !(m.role === 'axe' && m.timestamp === axeTs)),
+    }));
+  };
+
   let lastError = '';
   for (const slot of cascade) {
+    let axeTs = 0;
     try {
-      const raw = await callProvider(slot, messages);
+      const raw = await streamProvider(slot, messages, (_delta, full) => {
+        if (!full.trim()) return;
+        if (!axeTs) axeTs = Date.now();
+        toonStream(full, slot, axeTs);
+      });
       const trimmed = raw.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {
+        wisStream(axeTs);
+        continue;
+      }
+      if (!axeTs) axeTs = Date.now();
 
       routeEvt.winner = slot.provider;
       routeEvt.winnerModel = slot.model;
       routeEvt.attempts.push({ provider: slot.provider, model: slot.model, outcome: 'ok' });
       pushRoute(routeEvt);
-      publishAxeReply(trimmed, slot, true, null, text);
+      toonStream(trimmed, slot, axeTs);
+      {
+        const phase = useSphereProjectionStore.getState().phase;
+        if (phase === 'idle' || phase === 'closing') {
+          void presentAssistantReplyOnSphere(trimmed, text).catch(() => {});
+        }
+      }
+      useVoiceStore.setState({ voiceStatus: 'speaking' });
+      speakAxe(trimmed, () => {
+        useVoiceStore.setState({ voiceStatus: 'idle' });
+      });
+      noteOwnerOutcome('chat', 'good');
       recordChatTurn(text, trimmed, slot.provider, cap);
       return true;
     } catch (e: unknown) {
+      wisStream(axeTs);
       lastError = e instanceof Error ? e.message : String(e);
       routeEvt.attempts.push({
         provider: slot.provider,
@@ -549,6 +578,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
         `${local}\n\n_(answered on this phone — offline, no live data)_`,
         localSlot, true, null, text,
       );
+      noteOwnerOutcome('chat', 'good');
       recordChatTurn(text, local, 'ollama', cap);
       return true;
     } catch (e) {
@@ -558,6 +588,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
 
   routeEvt.via = 'none';
   pushRoute(routeEvt);
+  noteOwnerOutcome('chat', 'poor');
   return false;
 }
 

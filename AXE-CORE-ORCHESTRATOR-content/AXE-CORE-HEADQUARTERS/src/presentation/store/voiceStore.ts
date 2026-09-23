@@ -940,7 +940,10 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       // block the reply. Slow recall must never delay AXE — the turn is still
       // written to memory afterwards (writeConversationMemory), so nothing is lost;
       // it just isn't recalled in-line this one time. Simple chat: tight budget.
-      const memBudgetMs = isSimpleChatCapability(cap) ? 500 : 2500;
+      // Simple chat hoort first-token niet te laten wachten op embeddings.
+      // installStableChat onderschept die beurten; dit budget is de fallback
+      // als die patch niet greep. 0 = RAG loopt door, de LLM start nu.
+      const memBudgetMs = isSimpleChatCapability(cap) ? 0 : 2500;
       const raceTimeout = <T>(p: Promise<T>, ms: number, fb: T): Promise<T> =>
         Promise.race([p, new Promise<T>(r => setTimeout(() => r(fb), ms))]);
       const [ragCtx,tavilyResults]=await Promise.all([

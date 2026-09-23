@@ -1,25 +1,20 @@
 import { useSyncExternalStore } from 'react';
 import { getSpeechProgress, subscribeSpeechProgress } from '@/infrastructure/gateways/speechProgress';
-import { revealCut } from '@/domain/speechChunks';
+import { zichtbareChatTekst } from '@/domain/chatLatency';
 
 /**
- * "AXE typt terwijl hij praat": geeft het deel van `text` terug dat de stem
- * al heeft uitgesproken, woord voor woord. Is `text` niet wat er nu wordt
- * uitgesproken (of praat AXE niet), dan komt de hele tekst terug.
+ * Tekst van een AXE-reply voor de chat-UI.
  *
- * De snapshot is een GETAL per bericht (hoeveel tekens zichtbaar, of -1),
- * geen object: de voortgang tikt tot ~60x per seconde, en dan zou elk
- * chatbericht op het scherm z'n Markdown opnieuw opbouwen. Nu ververst alleen
- * het bericht dat wordt uitgesproken, en alleen als er een woord bijkomt.
+ * Vroeger sneed dit op speech-fraction ("typt terwijl hij praat"). Bij
+ * fraction 0 — de eerste Kokoro-chunk is vaak 2–12s weg — bleef de bubble
+ * leeg terwijl het antwoord al klaar was. De stem mag meelopen; de letters
+ * niet wachten. De subscription blijft zodat de stem-laag een aanroeper
+ * houdt; de snapshot is de hele tekst, dus de bubble flikkert niet mee.
  */
 export function useSpokenReveal(text: string): string {
-  const snede = useSyncExternalStore(
+  return useSyncExternalStore(
     subscribeSpeechProgress,
-    () => {
-      const p = getSpeechProgress();
-      return p.text !== null && p.text === text ? revealCut(text, p.fraction) : -1;
-    },
-    () => -1,
+    () => zichtbareChatTekst(text, getSpeechProgress()),
+    () => text,
   );
-  return snede < 0 ? text : text.slice(0, snede);
 }

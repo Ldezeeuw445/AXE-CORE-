@@ -72,6 +72,15 @@ describe('verpakte Tauri-app: elke proxy-aanroeper stuurt de Bearer mee', () => 
     expect(naarVps()[0].headers.Authorization).toBe(`Bearer ${SLEUTEL}`);
   });
 
+  it('llmStream.streamProvider → /proxy/ai met Bearer', async () => {
+    const { streamProvider } = await import('@/infrastructure/gateways/llmStream');
+    await streamProvider({ provider: 'openai', key: '', model: 'gpt-4o-mini' } as never, [
+      { role: 'user', content: 'hoi' },
+    ]);
+    expect(naarVps().map(a => a.url)).toEqual([`${VPS}/proxy/ai`]);
+    expect(naarVps()[0].headers.Authorization).toBe(`Bearer ${SLEUTEL}`);
+  });
+
   it('visionGateway.callVision → /proxy/ai', async () => {
     const { callVision } = await import('@/infrastructure/gateways/visionGateway');
     await callVision([{ provider: 'openai', key: '', model: 'gpt-4o' } as never], {
