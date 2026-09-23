@@ -28,7 +28,7 @@ export const STEM_UI = {
   speelt: 'Playing…',
 } as const;
 
-export function verkeerdeStemRegel(voice: string): string {
+function verkeerdeStemRegel(voice: string): string {
   return `George service answered as "${voice}", not ${AXE_STEM_ID}. AXE will not silently switch voices.`;
 }
 
