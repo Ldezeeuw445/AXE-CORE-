@@ -63,6 +63,41 @@ function vindZichtbareHogeSlotRechts(): Rechthoek | null {
   return null;
 }
 
+/** Corrective round 8: the ONDERBAND right slot -- `#axe-slot-rechts` in its
+ *  plain (non-`--hoog`) form -- is the literal "this tab has side content
+ *  next to the composer" case Luka described. `CalendarPage.tsx`,
+ *  `Grootboek.tsx`, `CodeEditorPage.tsx` and `NorthseaDesk.tsx` all portal
+ *  into it via `<PlaatSlot slot="rechts">` (no `hoog` prop), and axe-look.css
+ *  positions that box at `right:14px`, running from the chat plate's own top
+ *  down to the composer's bottom (`--axe-chat-top` .. `--axe-composer-onder`)
+ *  -- the SAME vertical band this card lives in (`bottom:
+ *  --axe-composer-onder`, `height: --axe-composer-hoog`).
+ *
+ *  `vindZichtbareHogeSlotRechts()` above only matches the OTHER shape of this
+ *  same host -- `.axe-slot--rechts.axe-slot--hoog`, Neural/Terrain/
+ *  Architecture's full-height column next to the whole scene -- via its
+ *  combined class selector. A tab using the plain onderband slot never
+ *  satisfied that selector, so it was invisible to every check in
+ *  `HORIZONTALE_OBSTAKELS`: the card's 'vol' width (up to `RADIAAL_RESERVE`
+ *  from the window edge) painted straight over whatever that tab put there,
+ *  exactly the overlap Luka reported.
+ *
+ *  Measuring the host itself, not a named child -- same move as `vindSlotDok`
+ *  below -- so this covers whatever any tab portals in there, present or
+ *  future, without ever enumerating pages by name. `.axe-slot:empty {
+ *  display:none }` (axe-look.css) already makes an empty host report a zero
+ *  rect, so this stays safe on every tab with nothing in that slot. Excludes
+ *  the `--hoog` variant explicitly: that one is a different vertical band
+ *  (above the chat plate, not beside the composer) and is already its own
+ *  obstacle via `vindZichtbareHogeSlotRechts`. */
+function vindOnderbandSlotRechts(): Rechthoek | null {
+  const el = document.getElementById(SLOT_ID.rechts);
+  if (!el || el.classList.contains('axe-slot--hoog')) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width > 0 && r.height > 0 && r.right <= window.innerWidth + 1) return { x: r.left, y: r.top, b: r.width, h: r.height };
+  return null;
+}
+
 /** Corrective round 6, Part 4: the right radial dock (`RadiaalDok`,
  *  `kant='rechts'`) reserves this same bottom-right corner once its ring
  *  actually fans out to its full 268px-square footprint -- closed, it is a
@@ -103,6 +138,7 @@ function vindOpenRadiaalRechts(): Rechthoek | null {
 const HORIZONTALE_OBSTAKELS: Array<() => Rechthoek | null> = [
   vindZichtbareRechterRail,
   vindZichtbareHogeSlotRechts,
+  vindOnderbandSlotRechts,
   vindOpenRadiaalRechts,
 ];
 
@@ -328,6 +364,23 @@ export function AxePresenceDock() {
       dokObs = new ResizeObserver(meet);
       dokObs.observe(dokEl);
     }
+    /* Corrective round 8: same shape of problem as the dock above, different
+       host -- a tab's onderband right content (`#axe-slot-rechts`, see
+       `vindOnderbandSlotRechts()` above) appears and disappears purely by
+       mounting/unmounting on a TAB SWITCH (`.axe-slot:empty { display:none }`
+       means an empty host is a zero rect, a filled one is not), which is
+       exactly the kind of size change a ResizeObserver on the host itself
+       catches regardless of whether the window ever resizes. Observing
+       unconditionally (the element exists from PlaatSlotHosts even when
+       empty) means this also picks up the rarer case of the SAME host
+       switching between its onderband and `--hoog` shape, since that swap
+       changes its measured width too. */
+    let rechtsObs: ResizeObserver | null = null;
+    const rechtsEl = document.getElementById(SLOT_ID.rechts);
+    if (rechtsEl && 'ResizeObserver' in window) {
+      rechtsObs = new ResizeObserver(meet);
+      rechtsObs.observe(rechtsEl);
+    }
     /* Corrective round 6, Part 4: same shape of problem as MemoryDock above,
        different element -- the right radial dock toggles `data-open` on a
        click (RadiaalDok.tsx), which fires no resize event anywhere (its own
@@ -359,6 +412,7 @@ export function AxePresenceDock() {
     return () => {
       window.removeEventListener('resize', meet);
       dokObs?.disconnect();
+      rechtsObs?.disconnect();
       radiaalObs?.disconnect();
       railObs?.disconnect();
     };
