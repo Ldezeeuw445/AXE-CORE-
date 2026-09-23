@@ -188,7 +188,7 @@ const VOOR_OBSTAKEL_GAP = 12;
 /** Below this there is no room to read a conversation -- the cloud stays
  *  away rather than squeezing text into a sliver (the old 40px "mini" card
  *  that clipped the orb to a dotted arc: "verstoppertje", Luka 23 sep). */
-const MIN_WOLK = 180;
+const MIN_WOLK = 240; // the 64px orb sits in the cloud now, plus room to read
 /** Kept clear above whatever is currently the top of the dock strip -- same
  *  role as NA_COMPOSER_GAP, just on the vertical axis. */
 const BOVEN_DOK_GAP = 10;
@@ -336,10 +336,11 @@ export function AxePresenceDock() {
 
   /* Luka, 23 sep 2026: "met adaptive bedoel ik de onzichtbare panel waar de
      chat tussen mij en axe in staat". Two things changed:
-     1. The orb keeps ONE place -- centred over the AXE label in the bottom
-        nav -- and never moves into a card. It used to slide into a card beside
-        the composer that shrank to a 40px "mini" whenever room was tight,
-        clipping the 64px orb to a dotted arc ("verstoppertje").
+     1. The orb is never squeezed. It used to slide into a card beside the
+        composer that shrank to a 40px "mini" whenever room was tight,
+        clipping the 64px orb to a dotted arc ("verstoppertje"). Now it is
+        either whole in the cloud next to the conversation, or whole over the
+        AXE label in the bottom nav -- see the JSX below.
      2. The conversation lives in an invisible cloud: all the free room right of
         the composer up to the right radial, stopping short of a tab's side
         content, an open radial ring or a pinned rail -- no card, no 2-line
@@ -425,18 +426,25 @@ export function AxePresenceDock() {
     return () => o.disconnect();
   }, [toonWolk]);
 
+  /* The orb belongs WITH the conversation (Luka, 23 sep: "de orb die hoorde er
+     wel bij") -- AXE's face at the start of the cloud, full 64px, never
+     clipped. The activity flights start from wherever it is. With nothing to
+     show (or no room, or Home's plate open) it rests over the AXE label in the
+     bottom nav: idle is a glance, busy is a conversation. */
+  const orb = <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />;
   return (
     <>
-      <div
-        ref={orbRef}
-        className="axe-presence-idle"
-        data-axe-doel="axe-presence"
-        style={anker ? { left: anker.x, top: anker.y } : undefined}
-        aria-hidden="true"
-      >
-        {/* Only 20 or 64 exist -- thinking-orbs ships two tuned presets. */}
-        <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
-      </div>
+      {!toonWolk && (
+        <div
+          ref={orbRef}
+          className="axe-presence-idle"
+          data-axe-doel="axe-presence"
+          style={anker ? { left: anker.x, top: anker.y } : undefined}
+          aria-hidden="true"
+        >
+          {orb}
+        </div>
+      )}
       {toonWolk && (
         <div
           role="log"
@@ -449,15 +457,27 @@ export function AxePresenceDock() {
             bottom: 'var(--axe-composer-onder, 104px)',
             height: maxHoogte ?? 'var(--axe-composer-hoog, 90px)',
             zIndex: 104,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
           }}
         >
+          <div
+            ref={orbRef}
+            data-axe-doel="axe-presence"
+            aria-hidden="true"
+            className="grid shrink-0 place-items-center"
+            style={{ width: 64, height: 64 }}
+          >
+            {orb}
+          </div>
           <div
             ref={lijstRef}
             onScroll={(e) => {
               const l = e.currentTarget;
               plakOnder.current = l.scrollHeight - l.scrollTop - l.clientHeight < 40;
             }}
-            className="h-full overflow-y-auto"
+            className="h-full min-w-0 flex-1 overflow-y-auto"
             style={{
               scrollbarWidth: 'none',
               // Older lines fade out upward instead of being cut by a hard edge.

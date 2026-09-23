@@ -19,8 +19,14 @@ export interface Vlucht {
   id: number;
 }
 
-const HEEN = 700, BLIJF = 1700, TERUG = 650;
-const AANTAL = 140;
+/* Luka, 23 sep 2026: "die particles mogen wel wat subtieler en rustiger".
+   Was 140 deeltjes tot 2,6px met gloed 8, heen in 0,7 s, bogen tot 160px en
+   een trilling van 180ms. Nu: de helft, kleiner en doorzichtiger, trager heen
+   en terug in zachtere bogen, en een kalme drift langs de rand. */
+const HEEN = 1050, BLIJF = 2000, TERUG = 950;
+const AANTAL = 70;
+const BOCHT = 90;
+const MAX_ALFA = 0.5;
 
 export function BolVlucht({ vlucht, klaar }: { vlucht: Vlucht | null; klaar: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -43,9 +49,9 @@ export function BolVlucht({ vlucht, klaar }: { vlucht: Vlucht | null; klaar: () 
       return {
         start: { x: vlucht.van.x + Math.cos(hoek) * r, y: vlucht.van.y + Math.sin(hoek) * r },
         t: i / AANTAL,
-        bocht: (Math.random() - 0.5) * 160,
-        vertraging: Math.random() * 180,
-        grootte: 0.8 + Math.random() * 1.8,
+        bocht: (Math.random() - 0.5) * BOCHT,
+        vertraging: Math.random() * 260,
+        grootte: 0.6 + Math.random() * 1.0,
       };
     });
 
@@ -57,10 +63,10 @@ export function BolVlucht({ vlucht, klaar }: { vlucht: Vlucht | null; klaar: () 
     const lus = (nu: number) => {
       const tijd = nu - begin;
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-      const draai = tijd / 9000;
+      const draai = tijd / 14000;
       ctx.fillStyle = vlucht.kleur;
       ctx.shadowColor = vlucht.kleur;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 4;
 
       for (const d of deeltjes) {
         const doel = randPunt(vlucht.rect, d.t + draai);
@@ -70,14 +76,14 @@ export function BolVlucht({ vlucht, klaar }: { vlucht: Vlucht | null; klaar: () 
         } else if (tijd < HEEN + d.vertraging) {
           p = boog(d.start, doel, Math.max(0, tijd - d.vertraging) / HEEN, d.bocht);
         } else if (tijd < HEEN + BLIJF) {
-          const tril = Math.sin((tijd + d.vertraging * 20) / 180) * 1.5;
+          const tril = Math.sin((tijd + d.vertraging * 20) / 520) * 0.6;
           p = { x: doel.x + tril, y: doel.y - tril };
         } else {
           const u = (tijd - HEEN - BLIJF) / TERUG;
           p = boog(doel, d.start, u, -d.bocht);
           alfa = 1 - Math.max(0, u - 0.7) / 0.3;
         }
-        ctx.globalAlpha = Math.max(0, Math.min(1, alfa)) * 0.9;
+        ctx.globalAlpha = Math.max(0, Math.min(1, alfa)) * MAX_ALFA;
         ctx.beginPath();
         ctx.arc(p.x, p.y, d.grootte, 0, Math.PI * 2);
         ctx.fill();
