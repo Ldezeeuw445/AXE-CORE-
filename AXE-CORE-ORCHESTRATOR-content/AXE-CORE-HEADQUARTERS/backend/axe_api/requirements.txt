@@ -1,11 +1,29 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 httpx>=0.27,<1
-mcp==2.2.0  # NorthSea MCP client (northsea_gateway.py); pinned to match backend/northsea_mcp's own pin
+# mcp (NorthSea MCP CLIENT — northsea_gateway.py: Client, streamable_http_client
+# only) was pinned to ==2.2.0 "to match backend/northsea_mcp's own pin" — but
+# that's the NorthSea MCP SERVER, which runs in its OWN separate venv
+# (/opt/northsea-mcp/venv per its own requirements.txt); this file never
+# actually needed to match it, and that pin made EVERY browser-use release
+# un-installable (0.11-0.13.9 want mcp==1.26.0/1.28.1, 0.13.10 wants 2.1.1 —
+# none want 2.2.0), so pip had no possible solution. Both symbols this file
+# uses have existed since well before mcp 1.26. Pinned exactly (not a range)
+# because letting pip search this pair's own dependency tree freely was slow
+# enough to look hung; verified installable together with browser-use==0.13.10
+# via a real dry-run against this exact venv.
+mcp==2.1.1
 supabase>=2.7,<3
 python-dotenv>=1.0,<2
 pydantic>=2.11,<3
-websockets>=12,<15
+websockets>=12,<16  # browser-use's browser-harness sub-dep needs exactly 15.0.1; this file's
+                     # own use (main.py: websockets.connect()) is the stable core API,
+                     # unaffected by the 12->15 major bumps
 croniter>=2.0,<4
 playwright>=1.45,<2
-browser-use>=0.11,<1; python_version >= "3.11"
+# Pinned exactly for the same reason as mcp above: the >=0.11,<1 range forced
+# pip to search dozens of pre-release versions (each with a different mcp
+# pin) before finding one, which is what actually made this un-installable in
+# the first place, not just the mcp version itself. 0.13.10 is confirmed
+# installable together with the mcp/websockets pins above.
+browser-use==0.13.10; python_version >= "3.11"
