@@ -103,8 +103,15 @@ export function AxeComposerVak({
 }: Props) {
   const veld = useRef<HTMLTextAreaElement>(null);
   const status = useVoiceStore(s => s.voiceStatus);
+  // The live interim/final transcript SpeechRecognition already produces
+  // while Luka talks (see startListening in voiceStore.ts) -- it was sitting
+  // in the store unused by any UI. Showing it here is the "see my own words
+  // as I talk" ask: no new STT work, just wiring what already exists.
+  const transcript = useVoiceStore(s => s.transcript);
   const mic = useMicrophone({ autoStart: false });
-  const voiceChannelOpen = status === 'listening' || status === 'speaking';
+  const isListening = status === 'listening';
+  const isProcessing = status === 'processing';
+  const voiceChannelOpen = status === 'listening' || status === 'speaking' || status === 'processing';
   const presence = useAudioActivity(
     status === 'listening' ? mic.stream : null,
     status === 'speaking' ? getGlobalTtsLevel : undefined,
@@ -154,6 +161,12 @@ export function AxeComposerVak({
       <VoiceBeam
         stream={status === 'listening' ? mic.stream : null}
         level={status === 'speaking' ? getGlobalTtsLevel : 0}
+        /* Distinct third state: AXE has stopped listening and is generating
+           a reply, before any TTS audio exists to drive `level`. Without
+           this the beam went dark for the entire "thinking" gap between
+           mic-off and audio-on -- the exact moment a "is it doing
+           something?" cue matters most. */
+        processing={isProcessing}
         idle={0}
         active={voiceChannelOpen || presence.mix > 0.01}
         attack={0.12}
@@ -169,13 +182,22 @@ export function AxeComposerVak({
         <div className="axe-vak-boven">
           <textarea
             ref={veld}
-            value={waarde}
+            /* While listening, show the live SpeechRecognition transcript
+               instead of `waarde` -- startListening() in voiceStore.ts sends
+               the final transcript straight to sendMessage() and never
+               touches `chatText`, so without this branch Luka's own words
+               never appeared here while he was still talking. Read-only in
+               this state: the visible text is being replaced every partial
+               result, so typing into it would fight the transcription. */
+            value={isListening ? transcript : waarde}
             onChange={e => opWaarde(e.target.value)}
             onKeyDown={opToets}
-            placeholder={plaatshouder}
+            readOnly={isListening}
+            placeholder={isListening ? 'Listening…' : plaatshouder}
             rows={2}
             spellCheck={false}
             className="axe-vak-invoer"
+            data-axe-luistert={isListening ? 'ja' : 'nee'}
           />
           {staf && <div className="axe-vak-staf">{staf}</div>}
         </div>
