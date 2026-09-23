@@ -1,6 +1,6 @@
 # AXE CORE — bouwlijst
 
-Bijgewerkt 9 september 2026. Alles hieronder is **gemeten**, niet aangenomen.
+Bijgewerkt 23 september 2026. Alles hieronder is **gemeten**, niet aangenomen.
 Staat er een aanname, dan staat erbij dat het er een is.
 
 Lees eerst `AGENTS.md` in de hoofdmap. Werk je hieraan met Cursor of Cowork:
@@ -35,50 +35,50 @@ De browser-tab is de meetlat. Elke andere tab moet daaraan voldoen.
 
 ## 2 — Agents
 
-### ⚠ Eerst dit: er zijn twee leerlussen, en maar één telt mee
+### Twee vormen, één lus
 
-Gemeten 9 september op `agent_learning_episodes`:
-
-| | waar het staat | voedt de versterking |
-|---|---|---|
-| **trading** | Supabase, 1099 episodes | **ja** |
-| chat, browser, code-editor, lokale code | `localStorage`, per apparaat | **nee** |
-
-De andere agents leggen hun beurten wél vast — ze zijn niet stuk. Maar dat
-gebeurt in `axe_memory_feedback_v1` in de browseropslag, en
-`applyAgentReinforcement` leest alleen uit Supabase. Die beurten worden dus
-opgeschreven en er gebeurt nooit iets mee. Op een tweede computer beginnen ze
-bovendien weer bij nul.
-
-**AXE Core leert dus alleen van trading.** Van elk gesprek, elke browsertaak en
-elke code-bewerking wordt netjes bijgehouden wat eruit kwam, en dat verdampt.
-
-**De reparatie is een koppeling, geen herbouw.** De twee vormen passen op
-elkaar:
+De koppeling staat er. Beurten blijven in localStorage (kort, per apparaat);
+episodes gaan naar Supabase (duurzaam, voor de versterking). `noteRetrieval`
+opent beide; `noteTurnOutcome` / `noteOwnerOutcome` sluiten beide.
 
 ```
 noteRetrieval(query,  memoryIds, memoryKeys, owner)  → turnId  (localStorage)
 openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
 ```
 
-- [ ] **2.0** `noteRetrieval` opent óók een episode; `noteTurnOutcome` sluit
-      hem. Dan is er één lus en werkt de versterking voor iedereen.
+- [x] **2.0** `noteRetrieval` opent óók een episode; het oordeel sluit hem.
+      `'local-code'` valt onder `'code-editor'`. Offline (`openEpisode` →
+      null of een throw) laat de beurt in localStorage gewoon werken.
 
-  Drie dingen om op te letten:
-  1. `noteRetrieval` is synchroon en geeft een string terug; `openEpisode` is
-     async. Het episodeId moet dus op de beurt bewaard worden zodra het er is,
-     zonder de aanroeper te laten wachten.
-  2. `LoopAgent` kent `'chat' | 'trading' | 'code-editor' | 'browser' |
-     'research'`. De eigenaar `'local-code'` die ik zette staat daar niet in —
-     kies of die erbij hoort of onder `code-editor` valt.
-  3. Zonder Supabase-sessie geeft `openEpisode` netjes null. De beurt in
-     localStorage moet dan gewoon blijven werken; offline mag geen fout geven.
+  De brug bestond al (commit `72f8e6ea`) maar de lus kwam niet rond.
+  Gemeten 23 september op AXE Companion:
 
-  **Meet je resultaat zo:** voer een chatbericht in, en daarna:
+  | agent | geopend | gesloten |
+  |---|---|---|
+  | trading | 5024 | 72 |
+  | chat | **2** | **0** |
+  | browser, code-editor, research | 0 | 0 |
+
+  Beide chat-rijen hadden herinneringen, `verdict = unknown`, `closed_at`
+  null. Oorzaak: `openEpisode` is async en voiceStore geeft geheugen 500ms;
+  het oordeel kwam eerder dan het episode-id (of eerder dan de beurt zelf)
+  en verdween. Zonder sluiten leest `applyAgentReinforcement` ze nooit.
+
+  Tests die falen op de oude code: oordeel vóór episode-id, oordeel vóór
+  ophalen, `openEpisode` null/throw, lege RAG opent wél een `chat`-rij,
+  voiceStore roept `noteOwnerOutcome` aan (`beurtNaarEpisode.test.ts`,
+  `learningLoopWiring.test.ts`).
+
+  **Live nabouwen, in de draaiende app:**
   ```sql
-  select agent, count(*) from agent_learning_episodes group by agent;
+  select agent, count(*) filter (where closed_at is not null) as closed,
+         count(*) as opened
+  from agent_learning_episodes
+  group by agent;
   ```
-  Er hoort een rij `chat` bij te komen. Nu staat daar alleen `trading`.
+  Na één chatbericht hoort `chat.opened` omhoog te gaan, en na het antwoord
+  `chat.closed` ook. Hier geen composer-sessie, dus dat laatste is niet
+  live gemeten.
 
 
 - [ ] **2.1** **De agents-tab toont dubbelen.** 18 agents in `core_agents`,

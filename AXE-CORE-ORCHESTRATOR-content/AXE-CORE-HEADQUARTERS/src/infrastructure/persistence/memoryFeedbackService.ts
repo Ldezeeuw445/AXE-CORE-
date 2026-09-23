@@ -148,6 +148,31 @@ export function loopAgentVoor(owner: string | undefined): LoopAgent | null {
   return isLoopAgent(catalog.id) ? catalog.id : null;
 }
 
+/**
+ * Oordeel dat binnenkwam voordat de beurt bestond.
+ *
+ * voiceStore geeft geheugen 500ms; het antwoord is er vaak eerder. Dan roept
+ * hij latestOpenTurnId aan en krijgt null -- het oordeel verdween, en de
+ * episode die daarna wél openging bleef voor altijd op unknown staan.
+ * Gemeten 23 september: twee chat-episodes, beide geopend, geen gesloten.
+ */
+const PENDING_TTL_MS = 45_000;
+const pendingByOwner = new Map<string, { verdict: TurnVerdict; at: number }>();
+
+function takePending(owner: string | undefined): TurnVerdict | null {
+  if (!owner) return null;
+  const p = pendingByOwner.get(owner);
+  if (!p) return null;
+  pendingByOwner.delete(owner);
+  if (Date.now() - p.at > PENDING_TTL_MS) return null;
+  return p.verdict;
+}
+
+/** Alleen voor tests: een uitgesteld oordeel mag niet in de volgende case lekken. */
+export function wisUitgesteldOordeel(): void {
+  pendingByOwner.clear();
+}
+
 export function noteRetrieval(
   query: string,
   memoryIds: Array<string | undefined>,
@@ -177,10 +202,11 @@ export function noteRetrieval(
   const agent = loopAgentVoor(owner);
   const ids = memoryIds.filter((x): x is string => !!x);
   const keys = memoryKeys.filter((x): x is string => !!x);
-  // Geen herinneringen betekent niets om te versterken. Zo'n episode zou een
-  // rij zijn die nooit iets kan opleveren, en hij zou de tellingen per agent
-  // vertekenen -- dan lijkt er geleerd te worden waar niets viel te leren.
-  if (agent && (ids.length || keys.length)) {
+  // Ook zonder herinneringen. Anders blijft chat onzichtbaar in
+  // agent_learning_episodes wanneer RAG niets teruggeeft -- het meetcriterium
+  // van bouwlijst 2.0. Versterking slaat lege episodes over
+  // (pendingForReinforcement); openen bewijst alleen dat de lus liep.
+  if (agent) {
     void openEpisode({
       agent,
       subject: query.slice(0, 200),
@@ -190,6 +216,10 @@ export function noteRetrieval(
       .then(episodeId => { if (episodeId) koppelEpisode(id, episodeId); })
       .catch(() => { /* de beurt zelf staat er al; dit is de duurzame kopie */ });
   }
+
+  // Het antwoord was er eerder dan het ophalen. Koppel het oordeel nu.
+  const pending = takePending(owner);
+  if (pending) noteTurnOutcome(id, pending);
 
   return id;
 }
@@ -201,6 +231,12 @@ function koppelEpisode(turnId: string, episodeId: string): void {
   if (!t) return;   // beurt al verlopen of weggerold — dan is er niets te koppelen
   t.episodeId = episodeId;
   save(turns);
+  // De uitslag was er eerder dan Supabase. Zonder dit blijft de episode
+  // openstaan en versterkt hij nooit iets -- de twee chat-rijen van
+  // 22-23 september: geopend, never closed.
+  if (t.verdict !== 'unknown') {
+    void closeEpisode(episodeId, t.verdict).catch(() => { /* niet fataal */ });
+  }
 }
 
 /** The most recent turn that has not been judged yet, if it is still fresh. */
@@ -236,6 +272,24 @@ export function noteTurnOutcome(turnId: string | null, verdict: TurnVerdict): vo
   if (t.episodeId) {
     void closeEpisode(t.episodeId, verdict).catch(() => { /* niet fataal */ });
   }
+}
+
+/**
+ * Sluit de openstaande beurt van deze eigenaar, of onthoudt het oordeel
+ * tot noteRetrieval hem opent.
+ *
+ * De chat kent het turn-id niet: ophalen zit achter een raceTimeout van
+ * 500ms. latestOpenTurnId(owner) is dan vaak null, en het oordeel verdween.
+ */
+export function noteOwnerOutcome(owner: string | undefined, verdict: TurnVerdict): void {
+  if (verdict === 'unknown') return;
+  const id = latestOpenTurnId(owner);
+  if (id) {
+    noteTurnOutcome(id, verdict);
+    return;
+  }
+  if (!owner) return;
+  pendingByOwner.set(owner, { verdict, at: Date.now() });
 }
 
 /**
