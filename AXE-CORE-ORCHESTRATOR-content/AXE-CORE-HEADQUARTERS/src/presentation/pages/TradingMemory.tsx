@@ -11,12 +11,18 @@
  *
  *     intel -> cycle -> decision -> trade -> win / loss / mistake -> lesson
  *
- * Built on Page/Grid/Block so the blocks are equal by construction and long
- * lists scroll inside their own block instead of stretching the page.
+ * Built on Page/Block so the blocks are equal by construction and long lists
+ * scroll inside their own block instead of stretching the page.
+ *
+ * Layout (TradingMemory.css): one grid of eight equal tracks over the full
+ * .axe-tabruimte width. The eight funnel tiles take one track each, the four
+ * columns two -- so every column has exactly two tiles above it, on the same
+ * column lines. The columns take the rest of the height and scroll inside.
  */
 import { useCallback, useEffect, useState } from 'react';
+import './TradingMemory.css';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
-import { Page, Grid, Block, Stat } from '@/presentation/components/surface/Page';
+import { Page, Block, Stat } from '@/presentation/components/surface/Page';
 import {
   loadTradingMemory, winRate,
   type TradingMemoryOverview, type MemoryNote, type SymbolRow,
@@ -24,16 +30,17 @@ import {
 
 /** The funnel, in the order the agent runs it. Labels are the agent's own. */
 const FUNNEL: { kind: string; label: string; what: string }[] = [
-  { kind: 'intel',    label: 'Intel',      what: 'wat het zag' },
-  { kind: 'cycle',    label: 'Cyclus',     what: 'wanneer het keek' },
-  { kind: 'decision', label: 'Beslissing', what: 'wat het koos' },
-  { kind: 'trade',    label: 'Trade',      what: 'wat het deed' },
-  { kind: 'win',      label: 'Winst',      what: 'wat uitkwam' },
-  { kind: 'loss',     label: 'Verlies',    what: 'wat misging' },
-  { kind: 'mistake',  label: 'Fout',       what: 'wat het zichzelf aanrekent' },
-  { kind: 'lesson',   label: 'Les',        what: 'wat het onthield' },
-  // 'what' above is only used when the noise count is unavailable; when it is
-  // known the label says "echt · N scoreregels apart" instead.
+  { kind: 'intel',    label: 'Intel',    what: 'what it saw' },
+  { kind: 'cycle',    label: 'Cycle',    what: 'when it looked' },
+  { kind: 'decision', label: 'Decision', what: 'what it chose' },
+  { kind: 'trade',    label: 'Trade',    what: 'what it did' },
+  { kind: 'win',      label: 'Win',      what: 'what paid off' },
+  { kind: 'loss',     label: 'Loss',     what: 'what went wrong' },
+  { kind: 'mistake',  label: 'Mistake',  what: 'what it blames itself for' },
+  { kind: 'lesson',   label: 'Lesson',   what: 'what it kept' },
+  // 'what' above is only used for the lesson tile when the noise count is
+  // unavailable; when it is known the label says "real · N score lines apart"
+  // instead.
 ];
 
 const TONE: Record<string, 'default' | 'ok' | 'warn' | 'err' | 'accent'> = {
@@ -90,7 +97,7 @@ function NoteLine({ n }: { n: MemoryNote }) {
         {n.symbol || '—'}
       </span>
       <p className="min-w-0 flex-1 break-words text-[12px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
-        {n.text || <span style={{ color: 'var(--text-muted)' }}>(leeg)</span>}
+        {n.text || <span style={{ color: 'var(--text-muted)' }}>(empty)</span>}
       </p>
       <span className="w-[42px] flex-none text-right font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
         {shortDate(n.at)}
@@ -121,7 +128,7 @@ export default function TradingMemory() {
 
   return (
     <Page
-      className="axe-tabruimte axe-trading-memory"
+      className="axe-tabruimte axe-tm"
       title="Trading Memory"
       subtitle={
         data?.error
@@ -142,7 +149,7 @@ export default function TradingMemory() {
           }}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : undefined} />
-          {loading ? 'lezen…' : 'Verversen'}
+          {loading ? 'Reading…' : 'Refresh'}
         </button>
       }
     >
@@ -159,8 +166,10 @@ export default function TradingMemory() {
         </div>
       )}
 
-      {/* De trechter, in de volgorde waarin de agent werkt. */}
-      <Grid rowHeight={116} min={150} className="axe-trading-memory-funnel mb-3">
+      {/* Eén raster: de trechter (acht tegels, één spoor elk) en daaronder de
+          vier kolommen (twee sporen elk). Zo staan er per kolom precies twee
+          tegels boven, op dezelfde kolomlijnen. */}
+      <div className="axe-tm-raster">
         {FUNNEL.map(f => {
           // The lesson block is the one place a raw row count lies. The agent
           // writes 3,537 rows it calls lessons; 3,059 of them are the string
@@ -172,33 +181,33 @@ export default function TradingMemory() {
           const raw = byKind[f.kind]?.count ?? 0;
           const value = isLesson ? (data?.lessonsRealTotal ?? 0) : raw;
           return (
-            <Block key={f.kind} title={f.label}>
+            <Block key={f.kind} title={f.label} className="axe-tm-tegel">
               <Stat
                 value={loading ? '·' : value.toLocaleString('en-US')}
                 tone={TONE[f.kind] ?? 'default'}
                 label={
                   isLesson && data && data.lessonNoise > 0
-                    ? `echt · ${data.lessonNoise.toLocaleString('en-US')} scoreregels apart`
+                    ? `real · ${data.lessonNoise.toLocaleString('en-US')} score lines apart`
                     : f.what
                 }
               />
             </Block>
           );
         })}
-      </Grid>
 
-      <Grid rowHeight={392} min={340} className="axe-trading-memory-grid">
         <Block
-          title="Per symbool"
+          span={2}
+          className="axe-tm-kolom"
+          title="Per symbol"
           action={
             <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              activiteit · W/V · zekerheid
+              activity · W/L · confidence
             </span>
           }
         >
           {symbols.length === 0 ? (
             <p className="pt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              {loading ? 'Lezen…' : 'Niets gevonden.'}
+              {loading ? 'Reading…' : 'Nothing found.'}
             </p>
           ) : (
             <div className="flex flex-col gap-0.5">
@@ -208,13 +217,15 @@ export default function TradingMemory() {
         </Block>
 
         <Block
-          title="Lessen"
+          span={2}
+          className="axe-tm-kolom"
+          title="Lessons"
           action={
             // Het aantal dat weggefilterd is staat er expliciet bij. Ruis
             // verbergen is prima; verbergen dát er ruis is niet.
             <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
               {data
-                ? `${data.lessonsRealTotal.toLocaleString('en-US')} echt · ${data.lessonNoise.toLocaleString('en-US')} scoreregels`
+                ? `${data.lessonsRealTotal.toLocaleString('en-US')} real · ${data.lessonNoise.toLocaleString('en-US')} score lines`
                 : ''}
             </span>
           }
@@ -231,10 +242,12 @@ export default function TradingMemory() {
         </Block>
 
         <Block
-          title="Fouten"
+          span={2}
+          className="axe-tm-kolom"
+          title="Mistakes"
           action={
             <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {(byKind.mistake?.count ?? 0).toLocaleString('en-US')} totaal
+              {(byKind.mistake?.count ?? 0).toLocaleString('en-US')} total
             </span>
           }
         >
@@ -244,18 +257,18 @@ export default function TradingMemory() {
             </div>
           ) : (
             <p className="pt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              {loading ? 'Lezen…' : 'Geen fouten vastgelegd.'}
+              {loading ? 'Reading…' : 'No mistakes recorded.'}
             </p>
           )}
         </Block>
 
-        <Block title="Where this lives">
+        <Block span={2} className="axe-tm-kolom" title="Where this lives">
           <div className="space-y-3 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
             <p>
               Everything above lives in <code className="font-mono text-[11px]">global_memory</code>,
               under the category <code className="font-mono text-[11px]">system_event</code>, with
               keys shaped like{' '}
-              <code className="font-mono text-[11px]">ta:axe_trading_agent:&lt;soort&gt;:&lt;id&gt;</code>.
+              <code className="font-mono text-[11px]">ta:axe_trading_agent:&lt;kind&gt;:&lt;id&gt;</code>.
             </p>
             <p>
               That is <b>95%</b> of that table — the entire brain of the trading agent, written
@@ -278,7 +291,7 @@ export default function TradingMemory() {
                 (<code className="font-mono text-[11px]">HOLD score=0.081</code>), every cycle
                 again. Those are not among the lessons above — the{' '}
                 <b>{data.lessonsRealTotal.toLocaleString('en-US')}</b> real lessons had
-                disappeared into them. Beside this are the {data.lessons.length} newest of those.
+                disappeared into them. The Lessons column shows the {data.lessons.length} newest of those.
               </p>
             )}
             <p style={{ color: 'var(--text-muted)' }}>
@@ -286,7 +299,7 @@ export default function TradingMemory() {
             </p>
           </div>
         </Block>
-      </Grid>
+      </div>
     </Page>
   );
 }

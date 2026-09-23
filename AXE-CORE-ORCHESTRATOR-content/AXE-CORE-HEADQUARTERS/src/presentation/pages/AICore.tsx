@@ -1,119 +1,64 @@
-import { useEffect, useRef, useState } from 'react';
+/**
+ * AI Core — de cognitive stream links, de widgets rechts, elk de helft.
+ *
+ * De stroom nam alles wat er over was (flex-1) en de widgets hingen in een
+ * kolom van 340px tegen de rechterrand, met tekst van 8-9px die afgekapt werd.
+ * De stroom was bovendien bijna altijd leeg: hij toonde alleen wat er gebeurde
+ * terwijl de pagina open stond. Nu:
+ *
+ *   - de pagina staat in .axe-tabruimte (UI-MAATSTAF regel 2), met lucht
+ *     boven en onder;
+ *   - vanaf xl twee gelijke helften: stroom | widgets;
+ *   - de widgets in een raster van twee kolommen, rijen 1fr / auto / 1fr,
+ *     zodat ze dezelfde lijnen delen en lange inhoud IN de kaart schuift;
+ *   - de stroom wordt opgebouwd uit het bewaarde gesprek en de routeringslog
+ *     (aiCoreStroom.ts), dus bij openen staat de geschiedenis er al.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, Bot, Brain, Check, ChevronRight, Circle, Cpu, Database, MemoryStick, MessageSquare, Network, Terminal, X, Zap } from 'lucide-react';
+import { Bot, Brain, Check, ChevronRight, Cpu, Database, MemoryStick, Network, Terminal, X, Zap } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { SystemRegistryPanel } from '@/presentation/components/shared/SystemRegistryPanel';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/presentation/store/voiceStore';
-import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import type { RoutingEvent } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
-import { loadLogs, type CoreLogEntry } from '@/infrastructure/persistence/coreDB';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { bouwStroom, stroomTijd, type StroomRegel } from '@/presentation/pages/aiCoreStroom';
 
 function ts() {
   const d = new Date();
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
 }
-
-interface LogEntry { id: string; t: string; type: 'in' | 'out' | 'sys' | 'route'; text: string; }
 
 export default function AICore() {
   const voice = useVoiceStore();
-  const [routeLogs, setRouteLogs] = useState<CoreLogEntry[]>([]);
   const [linkedState, setLinkedState] = useState({ supa: false, mcp: 0, tasks: 0, kb: 0 });
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '0', t: ts(), type: 'sys', text: 'AXE CORE v2.0 — cognitive engine initialised' },
-    { id: '1', t: ts(), type: 'sys', text: 'System prompt loaded · routing rules active' },
-    { id: '2', t: ts(), type: 'sys', text: 'Waiting for LLM connection...' },
-  ]);
+  // Wat nergens bewaard wordt -- het "denkt na"-moment, "Conversation cleared"
+  // -- komt hier binnen. De rest van de stroom is afgeleid (aiCoreStroom.ts).
+  const [los, setLos] = useState<StroomRegel[]>([]);
+  const [sinds, setSinds] = useState(0);
   const streamRef = useRef<HTMLDivElement>(null);
 
-  // Mirror conversation to logs with rich routing info
-  useEffect(() => {
-    if (voice.conversation.length === 0) return;
-    const last = voice.conversation[voice.conversation.length - 1];
-    // AXE's reply is shown as AXE — never tagged with the model that produced it.
-    // Which model AXE runs on is not a thing the user should watch; AXE is AXE.
-    const entry: LogEntry = {
-      id: `${last.timestamp}-${last.role}`,
-      t: new Date(last.timestamp).toISOString().slice(11, 23),
-      type: last.role === 'user' ? 'in' : 'out',
-      text: last.text,
-    };
-    setLogs(prev => {
-      if (prev.some(l => l.id === entry.id)) return prev;
-      // Show the ONE model AXE actually spoke through this turn — truthful and
-      // verifiable, not a race. AXE is still AXE; this is just which engine it
-      // used, so you can confirm it's the fast brain (e.g. gemini) and not Ollama.
-      const extra: LogEntry[] = [];
-      if (last.role !== 'user' && last.provider) {
-        extra.push({
-          id: `${entry.id}-model`,
-          t: entry.t,
-          type: 'route',
-          text: `model · ${last.provider}${last.model ? `/${last.model.split('/').pop()?.split(':')[0]}` : ''}`,
-        });
-      }
-      return [...prev, ...extra, entry].slice(-200);
-    });
-  }, [voice.conversation]);
+  const stroom = useMemo(
+    () => bouwStroom(voice.conversation, voice.routingLog, los, { sinds }),
+    [voice.conversation, voice.routingLog, los, sinds],
+  );
 
-  // Mirror voiceStatus to logs
-  useEffect(() => {
-    if (voice.voiceStatus === 'processing') {
-      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ AXE thinking…' }].slice(-200));
+  // Het "denkt na"-moment, op de overgang naar processing. Via subscribe en
+  // niet via een effect op voiceStatus: dit is een gebeurtenis in de store,
+  // geen afgeleide staat.
+  useEffect(() => useVoiceStore.subscribe((s, prev) => {
+    if (s.voiceStatus === 'processing' && prev.voiceStatus !== 'processing') {
+      const at = Date.now();
+      setLos(p => [...p, { id: `proc-${at}`, at, type: 'sys' as const, text: '⟳ AXE thinking…' }].slice(-50));
     }
-  }, [voice.voiceStatus]);
-
-  // Emit real routing lines into the cognitive stream whenever a new event lands
-  const prevRouteLen = useRef(0);
-  useEffect(() => {
-    const log = voice.routingLog;
-    if (log.length === 0 || log.length === prevRouteLen.current) return;
-    prevRouteLen.current = log.length;
-    const evt = log[0]; // newest is first
-    const t = new Date(evt.ts).toISOString().slice(11, 23);
-    const baseId = `rte-${evt.id}`;
-    const agent = (evt.delegate ?? 'axe') as AxeAgentId;
-    const newEntries: LogEntry[] = [];
-    // AXE is at the top of the chain. The stream never shows a race for "which
-    // model IS AXE" — for a turn AXE handles itself, you just saw "AXE thinking…"
-    // and then the answer. We only surface what AXE DECIDED: when it hands work
-    // to a specialist, the hand-off and the engine that specialist used (that
-    // engine is downstream of AXE, so it's fine to see).
-    if (agent !== 'axe') {
-      newEntries.push({ id: `${baseId}-dele`, t, type: 'route', text: `AXE → ${agentById(agent).name}${evt.via === 'langgraph' ? '  · via LangGraph' : ''}` });
-      if (evt.winner) {
-        newEntries.push({ id: `${baseId}-eng`, t, type: 'route', text: `${agentById(agent).name} · ${evt.winner}${evt.winnerModel ? `/${evt.winnerModel.split('/').pop()?.split(':')[0]}` : ''}` });
-      }
-    }
-    if (newEntries.length === 0) return;
-    setLogs(prev => {
-      const ids = new Set(prev.map(l => l.id));
-      return [...prev, ...newEntries.filter(e => !ids.has(e.id))].slice(-200);
-    });
-  }, [voice.routingLog]);
+  }), []);
 
   useEffect(() => {
     if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
-  }, [logs]);
-
-  useEffect(() => {
-    let alive = true;
-    const refresh = async () => {
-      const entries = await loadLogs(80).catch(() => []);
-      if (!alive) return;
-      setRouteLogs(entries);
-    };
-    refresh();
-    const timer = setInterval(refresh, 4000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, []);
+  }, [stroom]);
 
   useEffect(() => {
     let alive = true;
@@ -153,13 +98,19 @@ export default function AICore() {
   // Memory is linked when the Supabase client is initialised (env vars present)
   const supaLinked = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) || linkedState.supa;
 
-  const LOG_COLOR: Record<LogEntry['type'], string> = {
+  const LOG_COLOR: Record<StroomRegel['type'], string> = {
     in:    'var(--accent-cyan)',
-    out:   '#a5f3fc',
-    sys:   'rgba(255,255,255,0.35)',
+    out:   'var(--accent-cyan)',
+    sys:   'var(--text-muted)',
     route: 'var(--warning)',
   };
-  const LOG_PREFIX: Record<LogEntry['type'], string> = {
+  const LOG_TEXT: Record<StroomRegel['type'], string> = {
+    in:    'var(--text-secondary)',
+    out:   'var(--text-primary)',
+    sys:   'var(--text-muted)',
+    route: 'var(--text-muted)',
+  };
+  const LOG_PREFIX: Record<StroomRegel['type'], string> = {
     in:    '→ IN  ',
     out:   '◈ AXE ',
     sys:   '⬡ SYS ',
@@ -168,10 +119,13 @@ export default function AICore() {
 
   const mem = (performance as unknown as Record<string, unknown>).memory as Record<string, number> | undefined;
   const heapMB = mem ? Math.round(mem.usedJSHeapSize / 1048576) : null;
-  const coreMB = mem ? Math.round(mem.totalJSHeapSize / 1048576) : null;
 
   return (
-    <motion.div className="flex flex-col xl:flex-row gap-3 p-3 h-full overflow-y-auto xl:overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div
+      className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-y-auto pb-3 pt-5 xl:overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
 
       {/* ── LEFT: System status ─────────────────────────────────────── */}
       {/* De kolom van 230px is een schuifbalk geworden: dezelfde inhoud,
@@ -200,7 +154,7 @@ export default function AICore() {
               ))}
             </div>
           </WidgetCard>
-  
+
           <WidgetCard title="LLM SLOTS">
             {connectedSlots.length === 0 ? (
               <div className="text-[10px] py-1 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -229,7 +183,7 @@ export default function AICore() {
               </div>
             )}
           </WidgetCard>
-  
+
           <WidgetCard title="ROUTING">
             <div className="space-y-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
               <div className="flex items-start gap-1.5">
@@ -245,19 +199,19 @@ export default function AICore() {
         </div>
       </TabRail>
 
-      {/* ── CENTER: Thought stream terminal ─────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-[55vh] xl:min-h-0 rounded-2xl overflow-hidden" style={{ background: '#030a0a', border: '1px solid var(--tint-line)' }}>
-        {/* Terminal header */}
-        <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--tint-line)' }}>
-          <div className="flex gap-1.5">
-            <span className="rounded-full" style={{ width: 10, height: 10, background: 'rgba(255,59,48,0.7)', display: 'inline-block' }} />
-            <span className="rounded-full" style={{ width: 10, height: 10, background: 'rgba(255,196,0,0.7)', display: 'inline-block' }} />
-            <span className="rounded-full" style={{ width: 10, height: 10, background: 'rgba(50,215,75,0.7)', display: 'inline-block' }} />
-          </div>
-          <div className="flex items-center gap-2 ml-2">
-            <Terminal size={11} style={{ color: 'var(--accent-cyan)' }} />
-            <span className="text-[10px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>AXE CORE — COGNITIVE STREAM</span>
-          </div>
+      {/* Twee gelijke helften vanaf xl: de stroom | de widgets. Daaronder
+          onder elkaar, en dan scrollt de pagina in plaats van de kaarten. */}
+      <div className="grid flex-1 grid-cols-1 gap-3 xl:min-h-0 xl:grid-cols-2 xl:[grid-template-rows:minmax(0,1fr)]">
+
+      {/* ── LEFT HALF: Cognitive stream ─────────────────────────────── */}
+      <section
+        className="flex min-h-[55vh] min-w-0 flex-col overflow-hidden xl:min-h-0"
+        style={{ borderRadius: 'var(--radius)', background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)' }}
+      >
+        {/* Stream header */}
+        <div className="flex flex-shrink-0 items-center gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <Terminal size={11} style={{ color: 'var(--accent-cyan)' }} />
+          <span className="text-[10px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>AXE CORE — COGNITIVE STREAM</span>
           <div className="flex-1" />
           <LiveIndicator size={5} />
           <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>
@@ -267,8 +221,16 @@ export default function AICore() {
 
         {/* Stream */}
         <div ref={streamRef} className="flex-1 overflow-y-auto p-4 font-mono-data text-[11px] space-y-0.5" style={{ lineHeight: '1.7' }}>
+          {stroom.length === 0 && voice.voiceStatus !== 'processing' && (
+            // Eerlijk leeg: er is in dit gesprek nog niets gebeurd. Geen
+            // opstartregels die klinken alsof er iets draait.
+            <p className="pb-2 font-sans text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              No turns in this conversation yet. Every message, the model AXE answered through and
+              each hand-off to a specialist lands here, earlier turns included.
+            </p>
+          )}
           <AnimatePresence initial={false}>
-            {logs.map(log => (
+            {stroom.map(log => (
               <motion.div
                 key={log.id}
                 initial={{ opacity: 0 }}
@@ -276,9 +238,9 @@ export default function AICore() {
                 transition={{ duration: 0.15 }}
                 className="flex gap-2"
               >
-                <span style={{ color: 'rgba(255,255,255,0.15)', flexShrink: 0 }}>{log.t}</span>
-                <span style={{ color: LOG_COLOR[log.type], flexShrink: 0 }}>{LOG_PREFIX[log.type]}</span>
-                <span style={{ color: log.type === 'out' ? 'rgba(255,255,255,0.85)' : log.type === 'in' ? 'rgba(165,243,252,0.8)' : 'rgba(255,255,255,0.3)' }}>
+                <span style={{ color: 'var(--text-muted)', opacity: 0.6, flexShrink: 0 }}>{stroomTijd(log.at)}</span>
+                <span style={{ color: LOG_COLOR[log.type], flexShrink: 0, whiteSpace: 'pre' }}>{LOG_PREFIX[log.type]}</span>
+                <span className="min-w-0 break-words" style={{ color: LOG_TEXT[log.type] }}>
                   {log.text}
                 </span>
               </motion.div>
@@ -288,91 +250,53 @@ export default function AICore() {
           {/* Processing indicator */}
           {voice.voiceStatus === 'processing' && (
             <div className="flex gap-2">
-              <span style={{ color: 'rgba(255,255,255,0.15)' }}>{ts()}</span>
-              <span style={{ color: '#a5f3fc' }}>◈ AXE</span>
-              <span style={{ color: 'rgba(255,255,255,0.5)' }}>
+              <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>{ts()}</span>
+              <span style={{ color: 'var(--accent-cyan)' }}>◈ AXE</span>
+              <span style={{ color: 'var(--text-muted)' }}>
                 {[0,1,2].map(i => <span key={i} className="animate-pulse" style={{ animationDelay: `${i*0.2}s` }}>▪</span>)}
               </span>
             </div>
           )}
           {/* Cursor */}
           <div className="flex gap-2">
-            <span style={{ color: 'rgba(255,255,255,0.15)' }}>{ts()}</span>
+            <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>{ts()}</span>
             <span style={{ color: 'var(--accent-cyan)' }}>▌</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── RIGHT: System prompt + stats ────────────────────────────── */}
-      <div className="flex flex-col gap-2.5 w-full xl:w-[340px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
-        <WidgetCard title="SYSTEM PROMPT" headerAction={<span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>v2 · read-only</span>}>
-          <pre className="text-[9px] font-mono-data leading-relaxed max-h-52 overflow-y-auto" style={{ color: 'rgba(165,243,252,0.45)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {AXE_SYSTEM_PROMPT}
-          </pre>
-        </WidgetCard>
-
-        <SystemRegistryPanel />
-
-        <WidgetCard title="CONVERSATION STATS">
-          <div className="space-y-1.5">
-            {[
-              { label: 'Total messages', val: voice.conversation.length },
-              { label: 'User messages',  val: voice.conversation.filter(m => m.role === 'user').length },
-              { label: 'AXE responses',  val: voice.conversation.filter(m => m.role === 'axe').length },
-              { label: 'Log entries',    val: logs.length },
-            ].map(({ label, val }) => (
-              <div key={label} className="flex justify-between">
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
-                <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-primary)' }}>{val}</span>
-              </div>
-            ))}
-          </div>
-          {voice.conversation.length > 0 && (
-            <button onClick={() => { voice.clearConversation(); setLogs([{ id: Date.now().toString(), t: ts(), type: 'sys', text: 'Conversation cleared' }]); }}
-              className="mt-2 text-[9px] w-full text-left" style={{ color: 'var(--text-muted)' }}>
-              Clear conversation →
-            </button>
-          )}
-        </WidgetCard>
-
-        <WidgetCard title="ACTIVE ERROR">
-          {voice.error ? (
-            <p className="text-[10px]" style={{ color: 'var(--error)', lineHeight: 1.6 }}>{voice.error}</p>
-          ) : (
-            <div className="flex items-center gap-1.5 py-1">
-              <span className="rounded-full" style={{ width: 5, height: 5, background: 'var(--success)', display: 'inline-block' }} />
-              <span className="text-[10px]" style={{ color: 'var(--success)' }}>No errors</span>
-            </div>
-          )}
-        </WidgetCard>
-
-        <WidgetCard title="ROUTER TRACE">
+      {/* ── RIGHT HALF: widgets ─────────────────────────────────────── */}
+      {/* Twee kolommen, rijen 1fr / auto / 1fr: de twee lijsten bovenaan,
+          de twee korte kaarten in het midden, de architectuurkaart over de
+          volle breedte eronder. Elke kaart schuift zijn eigen inhoud. */}
+      <div className="grid min-h-0 min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:[grid-template-rows:minmax(0,1fr)_auto_minmax(0,1fr)]">
+        <WidgetCard title="ROUTER TRACE" className="max-h-[420px] xl:max-h-none">
           {voice.routingLog.length === 0 ? (
-            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Send a message to see live routing…</p>
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>No routing decisions yet. Send a message to see how AXE routes it.</p>
           ) : (
-            <div className="space-y-2 max-h-52 overflow-y-auto">
+            <div className="space-y-2">
               {(voice.routingLog as RoutingEvent[]).slice(0, 12).map(evt => (
-                <div key={evt.id} className="rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div key={evt.id} className="rounded-lg px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)' }}>
                   {/* Header: time + capability + via + coalesce count */}
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-[8px] font-mono uppercase" style={{ color: 'var(--warning)' }}>{evt.capability}</span>
-                    <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)' }}>{evt.via}</span>
+                  <div className="mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                    <span className="text-[10px] font-mono uppercase" style={{ color: 'var(--warning)' }}>{evt.capability}</span>
+                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>· {evt.via}</span>
                     {(evt.count ?? 1) > 1 && (
-                      <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)' }}>×{evt.count}</span>
+                      <span className="text-[10px] font-mono" style={{ color: 'var(--warning)' }}>×{evt.count}</span>
                     )}
-                    <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(evt.ts).toISOString().slice(11, 19)}</span>
+                    <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{stroomTijd(evt.ts)}</span>
                   </div>
-                  {/* Query preview */}
-                  <p className="text-[9px] truncate mb-1" style={{ color: 'rgba(165,243,252,0.5)' }}>"{evt.query}"</p>
+                  {/* Query preview -- twee regels in plaats van één afgekapte. */}
+                  <p className="mb-1 line-clamp-2 break-words text-[11px]" style={{ color: 'var(--text-secondary)' }}>&ldquo;{evt.query}&rdquo;</p>
                   {/* Per-slot attempts */}
                   <div className="space-y-0.5">
                     {evt.attempts.map((a, i) => (
-                      <div key={i} className="flex items-center gap-1 text-[9px] font-mono">
-                        <span style={{ color: a.outcome === 'ok' ? '#4ade80' : 'var(--error)', flexShrink: 0 }}>{a.outcome === 'ok' ? <Check size={10} /> : <X size={10} />}</span>
-                        <span style={{ color: a.outcome === 'ok' ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.4)' }}>
+                      <div key={i} className="flex flex-wrap items-center gap-x-1 text-[10px] font-mono">
+                        <span style={{ color: a.outcome === 'ok' ? 'var(--success)' : 'var(--error)', flexShrink: 0 }}>{a.outcome === 'ok' ? <Check size={10} /> : <X size={10} />}</span>
+                        <span className="min-w-0 break-all" style={{ color: a.outcome === 'ok' ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                           {a.provider}{a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}
                         </span>
-                        {a.err && <span style={{ color: 'var(--error)', marginLeft: 'auto', flexShrink: 0 }}>{a.err}</span>}
+                        {a.err && <span className="ml-auto" style={{ color: 'var(--error)' }}>{a.err}</span>}
                       </div>
                     ))}
                   </div>
@@ -381,8 +305,65 @@ export default function AICore() {
             </div>
           )}
         </WidgetCard>
+
+        <WidgetCard
+          title="SYSTEM PROMPT"
+          className="max-h-[420px] xl:max-h-none"
+          headerAction={<span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>v2 · read-only</span>}
+        >
+          <pre className="text-[10px] font-mono-data leading-relaxed" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {AXE_SYSTEM_PROMPT}
+          </pre>
+        </WidgetCard>
+
+        <WidgetCard title="CONVERSATION STATS">
+          <div className="space-y-1.5">
+            {[
+              { label: 'Total messages', val: voice.conversation.length },
+              { label: 'User messages',  val: voice.conversation.filter(m => m.role === 'user').length },
+              { label: 'AXE responses',  val: voice.conversation.filter(m => m.role === 'axe').length },
+              { label: 'Stream lines',   val: stroom.length },
+            ].map(({ label, val }) => (
+              <div key={label} className="flex justify-between gap-2">
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+                <span className="text-[11px] font-mono-data" style={{ color: 'var(--text-primary)' }}>{val}</span>
+              </div>
+            ))}
+          </div>
+          {voice.conversation.length > 0 && (
+            <button
+              onClick={() => {
+                const at = Date.now();
+                voice.clearConversation();
+                setSinds(at);
+                setLos([{ id: `clear-${at}`, at, type: 'sys', text: 'Conversation cleared' }]);
+              }}
+              className="mt-2 w-full text-left text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              Clear conversation →
+            </button>
+          )}
+        </WidgetCard>
+
+        <WidgetCard title="ACTIVE ERROR">
+          {voice.error ? (
+            <p className="break-words text-[11px]" style={{ color: 'var(--error)', lineHeight: 1.6 }}>{voice.error}</p>
+          ) : (
+            <div className="flex items-center gap-1.5 py-1">
+              <span className="rounded-full" style={{ width: 5, height: 5, background: 'var(--success)', display: 'inline-block' }} />
+              <span className="text-[11px]" style={{ color: 'var(--success)' }}>No errors</span>
+            </div>
+          )}
+        </WidgetCard>
+
+        {/* De architectuurkaart heeft de langste namen, dus de volle breedte.
+            Het omhulsel is een raster zodat de kaart zijn cel vult en zelf
+            schuift, in plaats van de rij op te rekken. */}
+        <div className="grid h-[420px] min-h-0 min-w-0 [grid-template-rows:minmax(0,1fr)] sm:col-span-2 xl:h-auto">
+          <SystemRegistryPanel />
+        </div>
       </div>
 
+      </div>
     </motion.div>
   );
 }

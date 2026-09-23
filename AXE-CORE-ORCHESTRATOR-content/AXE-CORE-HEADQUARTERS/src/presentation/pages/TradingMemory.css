@@ -1,0 +1,77 @@
+/* ── Trading Memory ──────────────────────────────────────────────────────
+ *
+ * Luka, 23 sep 2026: "maak die 4 kolommen zo breed als het browservak als je
+ * een url opent, zodat er boven, onder, links en rechts wat ruimte is -- en
+ * per kolom mogen de kleine blokjes erboven netjes 2 per 1 grote kolom."
+ *
+ * Wat er stond: de tegels in een eigen raster (auto-fill, min 150px) en de
+ * kolommen in een tweede (auto-fill, min 340px). Twee rasters met elk hun
+ * eigen maat delen geen kolomlijnen, en bij 1280 breed pasten er drie kolommen
+ * van 340 -- de vierde viel eronder.
+ *
+ * Nu is het ÉÉN raster van acht gelijke sporen. Een tegel neemt er één, een
+ * kolom twee (Block span={2}). Daarmee staan er per kolom precies twee tegels
+ * boven, en is een tegelpaar per constructie even breed als zijn kolom.
+ *
+ * De breedte komt van .axe-tabruimte (UI-MAATSTAF regel 2): dezelfde marges
+ * als het browservak. Wat hier bij komt is lucht boven (onder de kopbalk) en
+ * onder (boven de chat), bovenop de marge-onder die .axe-tabruimte al geeft.
+ *
+ * De oude regels .axe-trading-memory en .axe-trading-memory-grid in
+ * axe-look.css hebben geen gebruiker meer: deze pagina draagt die klassen niet
+ * meer, zodat er maar één plek is die over deze indeling beslist. */
+
+.axe-tm {
+  padding-top: clamp(6px, 1.4vh, 18px);
+  padding-bottom: clamp(6px, 1.2vh, 16px);
+  /* De kolomtelling hangt af van de breedte van DEZE pagina, niet van het
+     venster: in de Memory-tab kan er nog iets naast staan. */
+  container-type: inline-size;
+}
+
+/* Het schuifvak van Page wordt een kolom, zodat het raster de hoogte kan
+   vullen. Scrollen blijft mogelijk: alleen als het venster zo laag is dat de
+   kolommen onder hun minimum komen. */
+.axe-tm > div:last-child {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Geen eigen zijmarge bovenop die van .axe-tabruimte: dan valt het raster
+   precies op de randen van het browservak, en de kop lijnt erop uit. */
+.axe-tm > header,
+.axe-tm > div:last-child {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.axe-tm-raster {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  /* Tegels op een vaste rij -- hoog genoeg voor een getal en drie regels
+     label -- en de kolommen op de rest van de hoogte. */
+  grid-template-rows: 128px minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: 460px;
+}
+
+/* Onder 1000px wordt een tegel smaller dan ~114px en past zijn label niet
+   meer in drie regels: twee kolommen, tegels vier per rij. Een tegelpaar
+   staat nog steeds boven zijn kolom; de pagina scrollt. */
+@container (max-width: 1000px) {
+  .axe-tm-raster {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    flex: none;
+    min-height: 0;
+  }
+  .axe-tm-tegel { height: 128px; }
+  .axe-tm-kolom { height: 360px; }
+}
+
+/* Eén kolom: tegels twee per rij, elke kolom over de volle breedte. */
+@container (max-width: 520px) {
+  .axe-tm-raster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
