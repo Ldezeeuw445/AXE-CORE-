@@ -22,7 +22,13 @@ const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 // (see ECOSYSTEM.md) -- the real agent is DEFAULT_AGENTS' 'trading-agent'.
 // 'axe_ollama'/"Ollama (Local)" is a model provider (providers.ts), not a
 // reasoning agent -- no agent runs "as" Ollama, agents merely may use it.
-const NON_AGENT_ROW_NAMES = new Set(['axe_trader', 'axe_ollama']);
+// 'crewai_manager'/"CrewAI Manager" and 'eve'/"EVE" are both explicitly
+// documented in roster.ts:28-31 as deliberately excluded from the real
+// roster -- CrewAI Manager as "redundant, Wingman already runs the crews
+// it needs", EVE as "a persona framework", not an agent of its own. Found
+// live in this exact table on 23 sep 2026 (they'd survived the first pass
+// of this filter, which only checked Trading OS/Ollama).
+const NON_AGENT_ROW_NAMES = new Set(['axe_trader', 'axe_ollama', 'crewai_manager', 'eve']);
 
 const ROLE_ACCENT: Record<string, string> = {
   orchestrator: '#c084fc',
