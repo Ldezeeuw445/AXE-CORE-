@@ -33,12 +33,12 @@ let loopGeneration = 0;
  *
  * Found 21 sep while building barge-in: this file called stopTTS() (Eleven
  * Labs) + stopFishAudio() everywhere, but the voice AXE actually speaks with
- * is OpenAI cedar via globalTts.speakGlobal() (voiceStore.ts's speakSafely).
+ * is George via globalTts.speakGlobal() (voiceStore.ts's speakSafely).
  * Ending a conversation, or a barge-in cutting AXE off, therefore never
  * silenced the audio that was actually playing -- it silenced two providers
- * that were never the one running. stopGlobalTts() covers all three; keep
- * calling the other two too so a request built against an older store shape
- * (or a future non-global caller) is still covered.
+ * that were never the one running. stopGlobalTts() covers George, Cedar,
+ * Fish and ElevenLabs; keep calling the other two too so a request built
+ * against an older store shape is still covered.
  */
 export function stopAllAudio(): void {
   stopGlobalTts();

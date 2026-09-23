@@ -32,9 +32,9 @@ import { installMemoryFlushHooks } from '@/infrastructure/persistence/memoryReco
 installLiveChat();
 // Voice conversation: Whisper STT + listen→reply→listen loop (until mic stop)
 installWhisperVoice();
-// Fish Audio: default identity voice id + TTS provider
+// Wis de dode TTS-picker (Fish/ElevenLabs) zodat geen statusrij hem terugleest
 installFishVoice();
-// Stable identity: short Gemini cascade for simple chat + Fish TTS on replies
+// Stable identity: korte cascade voor simpele chat; stem blijft George
 installStableChat();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();

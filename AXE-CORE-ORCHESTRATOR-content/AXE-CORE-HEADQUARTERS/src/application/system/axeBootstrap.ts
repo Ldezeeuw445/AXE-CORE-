@@ -46,9 +46,9 @@ export async function maybeDailyGreeting(): Promise<void> {
     return;
   }
 
-  // Same canonical identity as every chat reply: OpenAI Cedar through
-  // globalTts. A startup greeting must never resurrect a legacy Fish/browser
-  // voice simply because an old localStorage preference survived an update.
+  // Same canonical identity as every chat reply: George through globalTts
+  // (Cedar only if George cannot make a sound). A startup greeting must never
+  // resurrect a legacy Fish/browser voice from an old localStorage preference.
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
@@ -66,7 +66,7 @@ export async function maybeDailyGreeting(): Promise<void> {
         line,
         resolve,
         (reason) => {
-          console.warn('[axeBootstrap] Cedar daily greeting unavailable:', reason);
+          console.warn('[axeBootstrap] daily greeting unavailable:', reason);
         },
       );
     });
