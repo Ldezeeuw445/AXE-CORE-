@@ -30,7 +30,8 @@ import { leesDeskFeiten, deskFeitenBlok } from '@/infrastructure/persistence/des
 import { DESK_AGENT_MODELS, slotsPreferring } from '@/application/tradingIntel/deskAgentModels';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
-import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { fetchTradeableSnapshot, probeerBrokerPrijs } from '@/infrastructure/gateways/marketDataService';
+import { magDureCyclus } from '@/domain/tradingIntel/brokerPricedCycle';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
 import { manageOpenPositions } from '@/application/tradingIntel/positionManager';
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
@@ -42,7 +43,7 @@ import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
 import { tradeableAccounts, accountLabel, accountRun, getAccounts, accountEnvironment, accountFrameworkSettings } from '@/infrastructure/persistence/tradingAccountsService';
 import { STRATEGY_CAPABILITIES, selectLiveStrategy, type AssetKind } from '@/domain/tradingIntel/frameworkEligibility';
-import { pairSpec } from '@/domain/tradingIntel/pairRegistry';
+import { canonicalPairId, pairSpec } from '@/domain/tradingIntel/pairRegistry';
 import type { FrameworkId } from '@/domain/tradingIntel/strategyColors';
 import { runDecisionFunnel, loadLastFunnelRun, type FunnelVote } from '@/application/tradingIntel/runDecisionFunnel';
 import { listIntelReports } from '@/infrastructure/persistence/tradingIntelService';
@@ -428,7 +429,10 @@ async function autopilotSymbols(): Promise<string[]> {
   let base: string[];
   try {
     const watch = await listWatchlist();
-    const tickers = Array.from(new Set(watch.map(w => w.ticker.trim().toUpperCase()).filter(Boolean)));
+    const tickers = Array.from(new Set(watch.map(w => {
+      const raw = w.ticker.trim().toUpperCase();
+      return raw ? (canonicalPairId(raw) ?? raw) : '';
+    }).filter(Boolean)));
     base = tickers.length ? tickers : [DEFAULT_SYMBOL];
   } catch (e) {
     console.warn('[autopilot] watchlist unreadable, falling back to the default symbol:', e);
@@ -934,7 +938,10 @@ async function runDeskLanes(symbol: string, thesis: string | null): Promise<Desk
   };
 }
 
-async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<string> {
+async function runOneSymbol(gevraagd: string, only?: MetaApiConfig): Promise<string> {
+  // DJ30 is US30 in het register. Zonder deze stap draait de watchlist twee
+  // cycli voor dezelfde markt, en mist OANDA's US30-prijs.
+  const symbol = canonicalPairId(gevraagd.trim().toUpperCase()) || gevraagd.trim().toUpperCase();
   // What research concluded, carried forward to the lanes that read it.
   let thesis: string | null = null;
 
@@ -992,6 +999,27 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
           'Cycle stopped before research — an order could never have filled.');
         return `${symbol}: ${waarom}`;
       }
+    }
+  }
+
+  /* ── Geen research zonder brokerprijs ────────────────────────────────────
+   *
+   * De catalogus-check hierboven zegt "iemand noemt dit paar". Dat is niet
+   * hetzelfde als "iemand kan het prijzen". Gemeten 23 september: US30,
+   * DJ30, NAS100, BTCUSD en XAUUSD kwamen door (catalogus of lege lookup
+   * telt als ja), research liep tot 45s, en élke account-vraag faalde op
+   * `got "lse"` / `got "binance:…"`. assertTradeable weigerde terecht —
+   * te laat.
+   *
+   * Eén MetaAPI-kandelaanvraag is goedkoper dan een LLM-cascade. Lukt die
+   * niet, dan stopt de ronde hier. LSE blijft voor de grafiek. */
+  {
+    const koers = await probeerBrokerPrijs(symbol, 'h1', { priority: 'trade' });
+    if (!magDureCyclus(koers)) {
+      const waarom = `no broker price for ${symbol}`;
+      await note('funnel', 'empty', waarom,
+        'Cycle stopped before research — no connected account could broker-price this symbol.');
+      return `${symbol}: ${waarom}`;
     }
   }
 

@@ -54,7 +54,8 @@ vi.mock('@/infrastructure/gateways/metaApiService', () => ({
 }));
 
 vi.mock('@/infrastructure/gateways/marketDataService', () => ({
-  fetchMarketSnapshot: vi.fn(async () => ({ last: 2400, bars: [] })),
+  fetchMarketSnapshot: vi.fn(async () => ({ last: 2400, bars: [], source: 'metaapi' })),
+  fetchTradeableSnapshot: vi.fn(async () => ({ last: 2400, bars: [], source: 'metaapi' })),
 }));
 
 vi.mock('@/infrastructure/persistence/demoTradingService', () => ({
@@ -247,6 +248,23 @@ describe('handmatige order door de poort', () => {
 });
 
 describe('de broker-grens zelf', () => {
+  it('brokerPlaceOrder verstuurt niets zonder brokerprijs', async () => {
+    const md = await import('@/infrastructure/gateways/marketDataService');
+    vi.mocked(md.fetchTradeableSnapshot).mockRejectedValueOnce(
+      new Error('No broker price for US30 (got none). A trade is priced by the account that fills it — refusing to decide on a substitute feed.'),
+    );
+    const { evaluatePreTradeGate } = await import('@/domain/tradingIntel/preTradeGate');
+    const clearance = evaluatePreTradeGate({
+      origin: 'manual', symbol: 'US30', side: 'buy', accountId: 'acct-A', mode: 'x',
+      account: { known: true, available: true }, breaker: { tripped: false },
+      dayLimit: { tradesToday: 0, unverified: false, max: 8 }, allowShort: false, longPositionQty: 0,
+    }).clearance!;
+    const res = await brokerPlaceOrder({ symbol: 'US30', side: 'buy', qty: 1, reason: 'x', confidence: 1, clearance });
+    expect(res).toMatchObject({ ok: false, venue: 'price' });
+    expect(res.error).toMatch(/broker price/i);
+    noOrderReachedTheBroker();
+  });
+
   it('brokerPlaceOrder verstuurt niets zonder toelating, ook niet via een omzeild type', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await brokerPlaceOrder({ symbol: 'XAUUSD', side: 'buy', qty: 1, reason: 'x', confidence: 1, clearance: undefined as any });

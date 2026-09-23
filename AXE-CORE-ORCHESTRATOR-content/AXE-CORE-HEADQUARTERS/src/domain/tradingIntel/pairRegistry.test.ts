@@ -32,6 +32,20 @@ describe('resolvePairTicker', () => {
     expect(resolvePairTicker('US500', ['SPXCORP'])).toBeNull();
   });
 
+  it('finds US30 when asked for the proven alias DJ30', () => {
+    // Watchlist zegt DJ30, OANDA noemt US30. Zonder deze stap lijkt de
+    // rekening het paar niet te voeren en valt de cyclus door naar LSE.
+    expect(resolvePairTicker('DJ30', ['US30', 'EURUSD'])).toBe('US30');
+    expect(canonicalPairId('DJ30')).toBe('US30');
+  });
+
+  it('does not invent GER40 → DE30 — that rename is not proven', () => {
+    // BOUWLIJST 3.3b: LSE noemt DE30/EUR, het register niet. Een gok geeft
+    // de grafiek van het verkeerde instrument.
+    expect(canonicalPairId('GER40')).toBe('GER40');
+    expect(resolvePairTicker('GER40', ['DE30', 'DE30/EUR'])).toBeNull();
+  });
+
   it('returns null when the broker genuinely does not carry it', () => {
     // Measured: MetaQuotes-Demo has no crypto, OANDA has no gold.
     expect(resolvePairTicker('BTCUSD', ['XAUUSD', 'US30', 'EURUSD'])).toBeNull();

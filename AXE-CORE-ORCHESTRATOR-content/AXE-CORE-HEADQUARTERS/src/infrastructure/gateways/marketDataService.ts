@@ -10,6 +10,8 @@ import { accountSupportsSymbol, getMetaApiConfig, toMt5Symbol } from '@/infrastr
 import { metaApiGetHistoricalCandles, type KandelRekening } from '@/infrastructure/gateways/metaApiMarketData';
 import { tradeableAccounts } from '@/infrastructure/persistence/tradingAccountsService';
 import { lseBalken } from '@/infrastructure/gateways/lseMarketData';
+import { canonicalPairId } from '@/domain/tradingIntel/pairRegistry';
+import { isSubstituteFeed } from '@/domain/tradingIntel/brokerPricedCycle';
 
 /**
  * Tries the connected real MT5 account first. This didn't exist before —
@@ -69,19 +71,22 @@ export function __resetPrijsRekeningCache(): void {
 }
 
 async function prijsRekeningVoor(sym: string): Promise<KandelRekening | null> {
-  const onthouden = rekeningVoorSymbool.get(sym);
+  // DJ30 is US30 in het register — bewezen alias, geen verzinsel.
+  // Zonder deze stap zoekt de catalogus naar de string DJ30 en mist OANDA's US30.
+  const vraag = canonicalPairId(sym) ?? sym;
+  const onthouden = rekeningVoorSymbool.get(vraag);
   if (onthouden && Date.now() - onthouden.at < REKENING_TTL_MS) return onthouden.rekening;
 
   const kies = async (): Promise<KandelRekening | null> => {
     const standaard = await getMetaApiConfig();
     if (!standaard?.enabled) return null;
-    if (await accountSupportsSymbol(standaard, sym).catch(() => true)) {
+    if (await accountSupportsSymbol(standaard, vraag).catch(() => true)) {
       return { token: standaard.token, accountId: standaard.accountId, region: standaard.region };
     }
     const rest = await tradeableAccounts().catch(() => []);
     for (const a of rest) {
       if (a.accountId === standaard.accountId) continue;
-      if (await accountSupportsSymbol(a, sym).catch(() => false)) {
+      if (await accountSupportsSymbol(a, vraag).catch(() => false)) {
         return { token: a.token, accountId: a.accountId, region: a.region };
       }
     }
@@ -89,7 +94,7 @@ async function prijsRekeningVoor(sym: string): Promise<KandelRekening | null> {
   };
 
   const rekening = await kies();
-  rekeningVoorSymbool.set(sym, { rekening, at: Date.now() });
+  rekeningVoorSymbool.set(vraag, { rekening, at: Date.now() });
   return rekening;
 }
 
@@ -131,7 +136,7 @@ async function tryMetaApiSnapshot(
    * journaal, in plaats van stilletjes de rest meeslepen. */
   try {
     const res = await metaApiGetHistoricalCandles({
-      priority, symbol: toMt5Symbol(sym), timeframe, limit: 120, account: rekening,
+      priority, symbol: toMt5Symbol(canonicalPairId(sym) ?? sym), timeframe, limit: 120, account: rekening,
     });
     if (!res.ok || res.candles.length < 5) return null;
     const bars: OhlcBar[] = res.candles
@@ -330,28 +335,39 @@ export async function fetchMarketSnapshot(
 }
 
 /**
- * The same snapshot, but it refuses to invent a price.
+ * Alleen de brokerprijs, of niets.
  *
- * `fetchMarketSnapshot` ends in a deterministic synthetic series seeded at 100
- * (65000 for BTC, 3200 for ETH) so the chart still draws when every feed is
- * down. That is right for a chart and catastrophic for a trade: on 2026-08-20
- * at 23:21 the agent scored XAUUSD at **105.25** and DJ30 at **106.17** and
- * wrote real BUY/SELL decisions against them, because MetaAPI, Binance and
- * Stooq had all failed and the seed is 100 for anything that is not BTC or ETH.
- * Gold does not trade at $105. The decision was arithmetic on a fiction.
+ * `fetchMarketSnapshot` loopt door naar LSE / Binance / synthetic zodat de
+ * grafiek blijft tekenen. Dat pad is precies de storing van 23 september:
+ * MetaAPI gaf geen kandels, LSE wel, `assertTradeable` weigerde — maar pas
+ * nadat research en de account-uitwaaiering al betaald waren.
  *
- * A missing price is a knowable state; an invented one is not. Every caller
- * that risks money — the decision engine, the kill switch, the position
- * manager, the autopilot screen — takes this function and handles the throw,
- * so "we could not see the market" can never again be silently spent as
- * "the market said trade".
+ * Hier wordt LSE nooit aangeroepen. Geen snapshot van een plaatsvervanger
+ * kan deze functie verlaten, dus execution kan er geen fill op vragen.
  */
+export async function probeerBrokerPrijs(
+  symbol: string,
+  timeframe = 'h1',
+  opts: { priority?: 'trade' | 'background' } = {},
+): Promise<MarketSnapshot | null> {
+  const sym = symbol.trim().toUpperCase();
+  const tf = timeframe.trim().toLowerCase() || 'h1';
+  return tryMetaApiSnapshot(sym, tf, opts.priority ?? 'trade');
+}
+
 export async function fetchTradeableSnapshot(
   symbol: string,
   timeframe = 'h1',
   opts: { priority?: 'trade' | 'background' } = {},
 ): Promise<MarketSnapshot> {
-  return assertTradeable(await fetchMarketSnapshot(symbol, timeframe, opts), symbol);
+  const snap = await probeerBrokerPrijs(symbol, timeframe, opts);
+  if (!snap) {
+    throw new Error(
+      `No broker price for ${symbol} (got none). ` +
+      `A trade is priced by the account that fills it — refusing to decide on a substitute feed.`,
+    );
+  }
+  return assertTradeable(snap, symbol);
 }
 
 /**
@@ -380,7 +396,7 @@ export function assertTradeable(snap: MarketSnapshot, symbol = snap.symbol): Mar
   // Binance, Stooq and the synthetic series stay available to the CHART, where
   // drawing something through an outage is the point. The decision path takes
   // the broker's own quote or it does not decide.
-  if (snap.source !== 'metaapi') {
+  if (isSubstituteFeed(snap.source) || snap.source !== 'metaapi') {
     throw new Error(
       `No broker price for ${symbol} (got "${snap.source}"). ` +
       `A trade is priced by the account that fills it — refusing to decide on a substitute feed.`,

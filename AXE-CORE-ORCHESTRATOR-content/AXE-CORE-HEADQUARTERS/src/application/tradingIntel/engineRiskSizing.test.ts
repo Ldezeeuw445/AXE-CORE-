@@ -95,6 +95,7 @@ import { runTradingAgent } from './tradingAgentEngine';
 import { saveRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import { __resetPlacedToday } from '@/infrastructure/gateways/brokerConnector';
 import * as meta from '@/infrastructure/gateways/metaApiService';
+import * as marketData from '@/infrastructure/gateways/marketDataService';
 import type { RiskProfile } from '@/domain/tradingIntel/botTypes';
 
 const PROFILE: RiskProfile = {
@@ -114,6 +115,22 @@ beforeEach(async () => {
   h.env = 'demo'; h.outcomes = [];
   __resetPlacedToday();
   await saveRiskProfile(PROFILE, 'acct-A');
+});
+
+describe('runTradingAgent — geen fill op een plaatsvervanger', () => {
+  it('vraagt de broker niet als er geen MetaAPI-prijs is', async () => {
+    vi.mocked(marketData.fetchTradeableSnapshot).mockRejectedValueOnce(
+      new Error(
+        'No broker price for US30 (got none). ' +
+        'A trade is priced by the account that fills it — refusing to decide on a substitute feed.',
+      ),
+    );
+    await expect(runTradingAgent({
+      symbol: 'US30', autoExecute: true, account: ACCOUNT, run: 'run-1',
+      strategySignalOverride: 'buy', strategyName: 'vbt:macd', timeframe: 'h1',
+    })).rejects.toThrow(/broker price/);
+    expect(meta.metaApiMarketOrder).not.toHaveBeenCalled();
+  });
 });
 
 describe('runTradingAgent — sizing op de stop', () => {

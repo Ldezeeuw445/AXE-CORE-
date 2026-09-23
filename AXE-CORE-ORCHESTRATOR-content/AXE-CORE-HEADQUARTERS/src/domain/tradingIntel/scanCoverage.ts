@@ -33,14 +33,32 @@
  * zonder één netwerkaanroep.
  */
 
+import { pairSpec } from '@/domain/tradingIntel/pairRegistry';
+
 /** Per account de symbolen die zijn broker voert, zoals de catalogus ze noemt. */
 export type Catalogi = ReadonlyMap<string, ReadonlySet<string>>;
+
+/**
+ * Alle namen van dit instrument: canonieke id plus bewezen aliassen.
+ * DJ30 en US30 zijn hetzelfde paar in het register — een catalogus die
+ * alleen US30 noemt dekt een watchlist-DJ30 wél.
+ */
+function namenVan(symbool: string): string[] {
+  const s = symbool.trim().toUpperCase();
+  const spec = pairSpec(s);
+  if (!spec) return [s];
+  return [spec.id, ...spec.aliases.map(a => a.toUpperCase())];
+}
+
+function catalogusVoert(paren: ReadonlySet<string>, symbool: string): boolean {
+  return namenVan(symbool).some(n => paren.has(n));
+}
 
 /** De accounts die dit symbool voeren, in de volgorde van de catalogi. */
 export function accountsVoor(symbool: string, catalogi: Catalogi): string[] {
   const uit: string[] = [];
   for (const [accountId, paren] of catalogi) {
-    if (paren.has(symbool)) uit.push(accountId);
+    if (catalogusVoert(paren, symbool)) uit.push(accountId);
   }
   return uit;
 }

@@ -167,7 +167,10 @@ function matches(candidate: string, ticker: string): boolean {
  */
 export function resolvePairTicker(pairId: string, brokerSymbols: Iterable<string>): string | null {
   const spec = pairSpec(pairId);
-  const canonical = pairId.toUpperCase();
+  // Asked-for name may be an alias (DJ30). The instrument is spec.id (US30).
+  // Without this, a broker that lists US30 and not DJ30 looks like it carries
+  // nothing — and the cycle then prices the Dow off LSE.
+  const canonical = (spec?.id ?? pairId).toUpperCase();
   const list = Array.from(brokerSymbols);
 
   // 1. Exact canonical.

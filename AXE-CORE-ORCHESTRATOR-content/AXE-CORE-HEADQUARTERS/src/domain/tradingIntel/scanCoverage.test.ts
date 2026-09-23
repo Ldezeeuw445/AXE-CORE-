@@ -19,9 +19,11 @@ describe('wie kan dit symbool verhandelen', () => {
     expect(dekking('XAUUSD', ECHT)).toBe(5);
   });
 
-  it('telt de indices bij één', () => {
-    // Dit is precies waarom een cyclus op US30 vier keer niets oplevert.
-    expect(dekking('US30', ECHT)).toBe(1);
+  it('telt DJ30 en US30 als hetzelfde instrument', () => {
+    // Het register zegt: DJ30 is US30. Vier MT5-catalogi noemen DJ30, OANDA
+    // noemt US30 — dat is vijf rekeningen, niet één plus vier gescheiden.
+    expect(dekking('US30', ECHT)).toBe(5);
+    expect(dekking('DJ30', ECHT)).toBe(5);
     expect(dekking('NAS100', ECHT)).toBe(1);
   });
 
@@ -33,10 +35,9 @@ describe('wie kan dit symbool verhandelen', () => {
 describe('de scanlijst op dekking', () => {
   it('zet breed gedragen paren vóór de indices', () => {
     const uit = opDekkingGesorteerd(['US30', 'NAS100', 'XAUUSD', 'DJ30', 'EURUSD'], ECHT);
-    // XAUUSD en EURUSD staan bij 5, DJ30 bij 4, de twee indices bij 1.
-    expect(uit.slice(0, 2).sort()).toEqual(['EURUSD', 'XAUUSD']);
-    expect(uit[2]).toBe('DJ30');
-    expect(uit.slice(3).sort()).toEqual(['NAS100', 'US30']);
+    // XAUUSD, EURUSD, US30 en DJ30 staan bij 5 (DJ30=US30), NAS100 bij 1.
+    expect(uit.slice(0, 4).sort()).toEqual(['DJ30', 'EURUSD', 'US30', 'XAUUSD']);
+    expect(uit[4]).toBe('NAS100');
   });
 
   it('laat symbolen vallen die geen enkel account voert', () => {
