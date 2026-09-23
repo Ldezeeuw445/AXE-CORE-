@@ -3,7 +3,7 @@
  */
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { BrokerConnection, BrokerKind } from '@/domain/tradingIntel/botTypes';
-import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { fetchMarketSnapshot, fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
 import {
   executeDemoTrade,
   getDemoAccount,
@@ -389,7 +389,16 @@ export async function brokerPlaceOrder(input: {
   });
   if (!cleared.ok) return { ok: false, error: cleared.error, venue: 'gate' };
 
-  const snap = await fetchMarketSnapshot(input.symbol);
+  let snap;
+  try {
+    snap = await fetchTradeableSnapshot(input.symbol);
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      venue: 'price',
+    };
+  }
   await markPositions({ [input.symbol.toUpperCase()]: snap.last });
 
   if (meta && live) {
@@ -546,7 +555,12 @@ export async function brokerPlacePendingOrder(input: {
     symbol: input.symbol, side: pendingSide(input.type), accountId: meta.accountId,
   });
   if (!cleared.ok) return { ok: false, error: cleared.error, venue: 'gate' };
-  const snap = await fetchMarketSnapshot(input.symbol);
+  let snap;
+  try {
+    snap = await fetchTradeableSnapshot(input.symbol);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e), venue: 'price' };
+  }
   const lots = input.lots != null && input.lots > 0 ? input.lots : qtyToLots(input.symbol, input.qty, input.openPrice || snap.last);
   const placed = await metaApiPendingOrder({
     symbol: input.symbol,

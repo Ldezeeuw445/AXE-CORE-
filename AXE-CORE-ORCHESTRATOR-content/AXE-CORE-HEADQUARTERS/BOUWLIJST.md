@@ -245,6 +245,13 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       **Niet om op te handelen**: `assertTradeable` blijft de prijs van de
       rekening eisen die de order vult. LSE is voor de grafiek, backtests en
       context — `source: 'lse'`, zodat de bewaker hem herkent en weigert.
+- [x] **3.3c — execution vraagt geen fill op LSE/Binance** Gemeten in tests
+      (niet live): `fetchTradeableSnapshot` loopt niet meer door de
+      grafiek-cascade. Als MetaAPI zwijgt wordt LSE niet aangeroepen, de
+      cyclus stopt vóór research (`magDureCyclus` / `probeerBrokerPrijs`),
+      en `brokerPlaceOrder` weigert met `venue: 'price'`. DJ30 telt als
+      US30 (register-alias, bewezen); GER40→DE30 niet. **3.1e blijft open**
+      — een live cyclus met een order is nog niet gemeten.
 - [ ] **3.3b — hernoemde symbolen** `GER40` heet bij LSE `DE30/EUR`. De
       vertaling zoekt in de catalogus en raadt geen hernoemingen, dus die geeft
       niets terug. Een tabel kan dat oplossen, maar alleen op bewijs per stuk —

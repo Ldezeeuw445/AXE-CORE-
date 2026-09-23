@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const candles = vi.fn();
 const supports = vi.fn();
 const accounts = vi.fn();
+const lse = vi.fn();
 
 const STANDAARD = { token: 'tok-mt5', accountId: 'mt5-100k', region: 'london', enabled: true };
 const OANDA = { token: 'tok-oanda', accountId: 'oanda-50k', region: 'london', enabled: true };
@@ -37,7 +38,11 @@ vi.mock('@/infrastructure/gateways/metaApiMarketData', () => ({
   metaApiGetHistoricalCandles: (...a: unknown[]) => candles(...a),
 }));
 
-const { fetchMarketSnapshot, __resetPrijsRekeningCache } =
+vi.mock('@/infrastructure/gateways/lseMarketData', () => ({
+  lseBalken: (...a: unknown[]) => lse(...a),
+}));
+
+const { fetchMarketSnapshot, fetchTradeableSnapshot, probeerBrokerPrijs, __resetPrijsRekeningCache } =
   await import('@/infrastructure/gateways/marketDataService');
 
 const echteKandels = {
@@ -52,7 +57,9 @@ beforeEach(() => {
   candles.mockReset();
   supports.mockReset();
   accounts.mockReset();
+  lse.mockReset();
   accounts.mockResolvedValue([STANDAARD, OANDA]);
+  lse.mockResolvedValue(null);
   __resetPrijsRekeningCache();
   // De terugvallen (Binance, Stooq) mogen het net niet op; ze eindigen dan in
   // de synthetische reeks, en dat is precies het pad dat we willen zien.
@@ -118,5 +125,63 @@ describe('bij welk account een prijs wordt opgehaald', () => {
 
     expect(supports.mock.calls.length).toBe(naEerste);
     expect(candles).toHaveBeenCalledTimes(2);
+  });
+});
+
+const lseBalken = Array.from({ length: 10 }, (_, i) => ({
+  t: Date.UTC(2026, 8, 23, i), o: 52000, h: 52100, l: 51900, c: 52050, v: 1,
+}));
+
+describe('fetchTradeableSnapshot loopt nooit naar een plaatsvervanger', () => {
+  it('gooit zonder LSE aan te roepen als geen rekening het voert', async () => {
+    // Oude pad: MetaAPI zwijgt → lseBalken tekent US30 → assertTradeable
+    // weigert. De cyclus had dan al research betaald. Nieuw pad: LSE wordt
+    // niet eens gevraagd.
+    supports.mockResolvedValue(false);
+    lse.mockResolvedValue(lseBalken);
+
+    await expect(fetchTradeableSnapshot('US30')).rejects.toThrow(/broker price/i);
+    expect(lse).not.toHaveBeenCalled();
+    expect(candles).not.toHaveBeenCalled();
+  });
+
+  it('gooit zonder LSE als MetaAPI kandels weigert', async () => {
+    supports.mockResolvedValue(true);
+    candles.mockResolvedValue({ ok: false, error: 'quota' });
+    lse.mockResolvedValue(lseBalken);
+
+    await expect(fetchTradeableSnapshot('XAUUSD')).rejects.toThrow(/broker price/i);
+    expect(lse).not.toHaveBeenCalled();
+  });
+
+  it('geeft een brokerprijs door als MetaAPI antwoordt', async () => {
+    supports.mockImplementation((id: string) => Promise.resolve(id === 'mt5-100k'));
+    candles.mockResolvedValue(echteKandels);
+
+    const snap = await fetchTradeableSnapshot('XAUUSD');
+    expect(snap.source).toBe('metaapi');
+    expect(lse).not.toHaveBeenCalled();
+  });
+
+  it('probeerBrokerPrijs is null voor een plaatsvervanger-paar, metaapi voor een vullend paar', async () => {
+    supports.mockImplementation((id: string, sym: string) =>
+      Promise.resolve(id === 'mt5-100k' && sym === 'XAUUSD'));
+    candles.mockResolvedValue(echteKandels);
+    lse.mockResolvedValue(lseBalken);
+
+    expect(await probeerBrokerPrijs('BTCUSD')).toBeNull();
+    expect(lse).not.toHaveBeenCalled();
+
+    const goud = await probeerBrokerPrijs('XAUUSD');
+    expect(goud?.source).toBe('metaapi');
+  });
+
+  it('laat fetchMarketSnapshot wél LSE gebruiken — dat is de grafiek', async () => {
+    supports.mockResolvedValue(false);
+    lse.mockResolvedValue(lseBalken);
+
+    const snap = await fetchMarketSnapshot('US30');
+    expect(snap.source).toBe('lse');
+    expect(lse).toHaveBeenCalled();
   });
 });
