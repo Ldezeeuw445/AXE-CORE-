@@ -5,7 +5,8 @@
  * voice conversation:
  *  1. Mic on → record until silence (or user stops)
  *  2. Whisper (Groq free / OpenAI) → transcript
- *  3. sendMessage → the single AXE voice (OpenAI cedar, via globalTts) speaks
+ *  3. sendMessage → the single AXE voice (George via globalTts; Cedar only
+ *     if George cannot make a sound) speaks, while the reply types along
  *  4. When idle again → auto listen (until user stops)
  *  5. If the user starts talking WHILE AXE is speaking, that counts as the
  *     next turn immediately — see listenForBargeIn() below.
@@ -189,9 +190,82 @@ export async function speakAndAwaitOrInterrupt(): Promise<{ interruptedBy: strin
   return { interruptedBy: null };
 }
 
+/**
+ * Live words while Luka talks. Whisper only transcribes AFTER he stops, so
+ * the screen stayed empty for the whole sentence. This runs the platform's
+ * own recognizer alongside the recording purely for DISPLAY: it writes the
+ * interim words into `transcript` (which the composer and the presence dock
+ * already show), and Whisper's final text replaces it once it arrives.
+ *
+ * Display only -- it never sends anything. If the recognizer is missing or
+ * refused (no NSSpeechRecognitionUsageDescription, permission denied), the
+ * words simply appear at the end like before; the conversation still works.
+ */
+function startLiveCaption(gen: number): { stop: () => void } {
+  const SpeechRecCtor =
+    typeof window !== 'undefined'
+      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      : null;
+  if (!SpeechRecCtor) return { stop: () => {} };
+
+  let gestopt = false;
+  let rec: SpeechRecognition | null = null;
+  let final = '';
+  // A recognizer that keeps failing (network, audio-capture) would otherwise
+  // restart itself in a hot loop for the whole utterance.
+  let herstarts = 0;
+  const start = () => {
+    if (gestopt || herstarts++ > 12) return;
+    try {
+      rec = new SpeechRecCtor();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'nl-NL';
+      rec.onresult = (event: SpeechRecognitionEvent) => {
+        if (gestopt || gen !== loopGeneration) return;
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        const zichtbaar = `${final} ${interim}`.replace(/\s+/g, ' ').trim();
+        if (zichtbaar && useVoiceStore.getState().voiceStatus === 'listening') {
+          useVoiceStore.setState({ transcript: zichtbaar });
+        }
+      };
+      // Refused or unsupported: stop quietly, Whisper still does the real work.
+      rec.onerror = (event: SpeechRecognitionErrorEvent) => {
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') gestopt = true;
+      };
+      // WebKit ends a recognizer after a pause; keep captions going for the
+      // whole utterance until Whisper's recording is done.
+      rec.onend = () => { if (!gestopt) start(); };
+      rec.start();
+    } catch {
+      gestopt = true;
+    }
+  };
+  start();
+  return {
+    stop: () => {
+      gestopt = true;
+      try { rec?.abort(); } catch { /* ignore */ }
+    },
+  };
+}
+
 async function whisperTurn(gen: number): Promise<'ok' | 'empty' | 'stop' | 'fail'> {
   try {
-    const text = await listenAndTranscribe();
+    const caption = startLiveCaption(gen);
+    let text: string;
+    try {
+      text = await listenAndTranscribe();
+    } finally {
+      // Stop BEFORE Whisper's text is used, so a late interim result can
+      // never overwrite the accurate final transcript.
+      caption.stop();
+    }
     if (!conversationActive || gen !== loopGeneration) return 'stop';
     if (!text) return 'empty';
     return await runTurn(text, gen);

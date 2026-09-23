@@ -434,7 +434,10 @@ describe('geen nieuwe geëxporteerde functie zonder aanroeper', () => {
       'Nieuwe export zonder aanroeper gevonden. Sluit hem aan op de plek waar hij ' +
         'nuttig is, of zet hem bewust op de uitzonderingslijst in dit bestand met een reden.',
     ).toEqual([]);
-  });
+    // Een scan over alle bronbestanden: los ~3 s, in de volle suite op de
+    // 8 GB Mac mini ~6 s -- boven vitest's standaard 5 s, en dan faalde hij op
+    // tijd in plaats van op een vondst (23 sep). De controle zelf is ongewijzigd.
+  }, 30_000);
 
   it('de uitzonderingslijst zelf bevat geen dubbele vermeldingen', () => {
     const sleutels = UITZONDERINGEN.map(([f, n]) => `${f}::${n}`);

@@ -1,11 +1,17 @@
 /**
  * globalTts.ts — single entry for spoken output anywhere in the app.
  *
- * Canonical AXE speech has one identity: OpenAI Cedar. Every surface that
- * speaks as AXE calls this module so a provider failure can never silently
- * swap the assistant to a different voice, accent or playback engine.
+ * AXE's voice is George (Kokoro `bm_george`), running free on the Mac mini
+ * (kokoroTtsService.ts, backend/axe_tts). Luka chose it by ear on 23 Sep 2026
+ * and asked that AXE "always has a good voice, so a good fallback too" --
+ * so if George cannot make a sound at all, OpenAI Cedar speaks instead.
+ * That is the ONLY fallback, and it only happens before anything was heard:
+ * AXE never switches voices in the middle of an answer. Every surface that
+ * speaks as AXE calls this module, so no caller can pick a third voice.
  */
 import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { speakWithKokoro, stopKokoro, getKokoroTtsLevel } from '@/infrastructure/gateways/kokoroTtsService';
+import { beginSpeechProgress, setSpeechFraction, endSpeechProgress } from '@/infrastructure/gateways/speechProgress';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import {
   speakWithOpenAi,
@@ -16,23 +22,20 @@ import {
 } from '@/infrastructure/gateways/openAiTtsService';
 import { normalizeForSpeech } from '@/domain/speechText';
 
-export type TtsProvider = 'fish' | 'elevenlabs' | 'openai' | 'browser';
+export type TtsProvider = 'kokoro' | 'fish' | 'elevenlabs' | 'openai' | 'browser';
 
-/**
- * AXE has ONE voice: OpenAI cedar (AXE_OPENAI_VOICE). There is no picker,
- * provider guessing or voice fallback. If Cedar is unavailable AXE keeps the
- * text reply visible and reports the TTS error instead of impersonating a
- * second identity.
- */
+/** AXE's voice is George (Kokoro). Cedar is only the fallback, never a pick. */
 export function getActiveTtsProvider(): TtsProvider {
-  return 'openai';
+  return 'kokoro';
 }
 
 /** Stop any in-flight TTS from any provider. */
 export function stopGlobalTts(): void {
+  stopKokoro();
   stopTTS();
   stopFishAudio();
   stopOpenAiTts();
+  endSpeechProgress();
 }
 
 /**
@@ -73,26 +76,37 @@ export function speakGlobal(
   }
 
   stopGlobalTts();
+  // The chat reveals `text` (the original, with its formatting) as far as the
+  // voice has got -- "AXE types while it speaks".
+  beginSpeechProgress(text);
+  const klaar = () => { endSpeechProgress(); onDone?.(); };
 
-  if (!isOpenAiTtsConfigured()) {
-    onError?.('AXE voice unavailable: OpenAI TTS is not configured.');
-    onDone?.();
-    return;
-  }
-
-  void speakWithOpenAi(
-    line,
-    onDone,
-    (reason) => {
-      onError?.(`AXE Cedar TTS failed: ${reason}`);
+  const viaCedar = (waaromNietGeorge: string) => {
+    // Cedar reports no progress, so show the whole reply while it speaks
+    // rather than leaving half a sentence frozen on screen.
+    endSpeechProgress();
+    if (!isOpenAiTtsConfigured()) {
+      onError?.(`AXE voice unavailable: George (${waaromNietGeorge}) and no OpenAI key for Cedar.`);
       onDone?.();
-    },
-    AXE_OPENAI_VOICE,
-  );
+      return;
+    }
+    void speakWithOpenAi(
+      line,
+      onDone,
+      (reason) => {
+        onError?.(`AXE voice failed: George (${waaromNietGeorge}), Cedar (${reason}).`);
+        onDone?.();
+      },
+      AXE_OPENAI_VOICE,
+    );
+  };
+
+  speakWithKokoro(line, { opVoortgang: setSpeechFraction, opKlaar: klaar, opFout: viaCedar });
 }
 
 
-/** Real 0..1 playback energy from the one canonical Cedar playback path. */
+/** Real 0..1 playback energy of whichever AXE voice is playing right now
+ *  (George normally, Cedar only as fallback -- never both at once). */
 export function getGlobalTtsLevel(): number {
-  return getAxeTtsLevel();
+  return Math.max(getKokoroTtsLevel(), getAxeTtsLevel());
 }

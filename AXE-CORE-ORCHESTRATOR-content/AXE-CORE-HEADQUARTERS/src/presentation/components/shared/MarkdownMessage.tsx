@@ -14,8 +14,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
 import { leesCodeblok } from './markdownCode';
+import { useSpokenReveal } from '@/presentation/hooks/useSpokenReveal';
 
-export function MarkdownMessage({ text }: { text: string }) {
+export function MarkdownMessage({ text: volledig }: { text: string }) {
+  // While AXE speaks this reply, show it as far as the voice has got.
+  const text = useSpokenReveal(volledig);
   return (
     <div className="markdown-message">
       <ReactMarkdown

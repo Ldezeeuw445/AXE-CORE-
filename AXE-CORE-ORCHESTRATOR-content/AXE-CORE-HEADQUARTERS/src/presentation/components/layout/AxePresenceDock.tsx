@@ -16,6 +16,12 @@ import { ACTIVITEIT_GEBEURTENIS, type AxeActiviteit } from '@/shared/axeActivite
 import { kiesDoel, type Rechthoek } from '@/domain/bolVlucht';
 import { BolVlucht, type Vlucht } from '@/presentation/components/layout/zweef/BolVlucht';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
+import { useSpokenReveal } from '@/presentation/hooks/useSpokenReveal';
+
+/** AXE's line, shown as far as the voice has got while AXE speaks it. */
+function GesprokenRegel({ text }: { text: string }) {
+  return <>{useSpokenReveal(text)}</>;
+}
 
 function vindDoel(doel: string): Rechthoek | null {
   for (const el of document.querySelectorAll<HTMLElement>(`[data-axe-doel="${CSS.escape(doel)}"]`)) {
@@ -525,7 +531,7 @@ export function AxePresenceDock() {
                   {modus === 'vol' && (liveTranscript || laatste.user) && (
                     <p data-van="mij">{liveTranscript || laatste.user?.text}</p>
                   )}
-                  {laatste.axe && <p data-van="axe">{laatste.axe.text}</p>}
+                  {laatste.axe && <p data-van="axe"><GesprokenRegel text={laatste.axe.text} /></p>}
                   {!liveTranscript && !laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
                 </div>
               )}
