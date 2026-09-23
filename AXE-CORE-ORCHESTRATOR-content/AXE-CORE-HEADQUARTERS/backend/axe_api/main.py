@@ -4740,3 +4740,153 @@ async def vps_service_restart(req: VpsServiceRequest, request: Request):
         "ok": True, "service": service, "action": "restart",
         "note": "restart dispatched; check /vps/status shortly to confirm it came back up",
     }
+
+# ── Keystore & cron control plane ─────────────────────────────────────────────
+# Twee dingen woonden op te veel plekken tegelijk. Sleutels stonden in de
+# .env.local van de Companion-VPS, in /opt/axe-core-api/.env op dezelfde box,
+# in de Edge-secrets van Supabase, en een stuk of tien stonden er na de
+# verhuizing van Vercel leeg in — met als gevolg dat MT5 zichzelf stil uitzette
+# en niemand kon zien waarom. Schema's stonden in pg_cron, dat alleen vastlegt
+# dát de SQL liep en nooit wat de app antwoordde: de broadcast-feed gaf twee
+# maanden lang 200 terug met "KRATER_API_KEY is not configured" erin.
+#
+# Beide hebben nu één huis in Supabase (axe_ops.app_secret, axe_ops.cron_job +
+# cron_run). Deze endpoints zijn de brug: de app in de browser mag de
+# service_role-sleutel nooit zien, dus alles loopt hier langs.
+
+class KeystoreValue(BaseModel):
+    value: str
+    description: str | None = None
+
+
+@app.get("/keystore/{app_name}", dependencies=[AUTH])
+async def keystore_list(app_name: str):
+    """Namen en of ze gevuld zijn — nooit waarden.
+
+    Dit is wat een beheerscherm nodig heeft: welke sleutels een app kent,
+    wanneer ze voor het laatst veranderden, en of er echt iets in staat. De
+    waarde zelf verlaat de database alleen richting de app die hem draait.
+    """
+    try:
+        res = sb().rpc("axe_list_app_secrets", {"p_app": app_name}).execute()
+        return {"app": app_name, "keys": res.data or []}
+    except Exception as exc:
+        raise HTTPException(503, f"Keystore niet leesbaar: {exc}") from exc
+
+
+@app.put("/keystore/{app_name}/{key}", dependencies=[AUTH])
+async def keystore_set(app_name: str, key: str, body: KeystoreValue, request: Request):
+    """Zet of roteer één sleutel.
+
+    De waarde gaat versleuteld naar de Vault; deze tabel houdt alleen de
+    verwijzing. Het audit-log krijgt de naam, nooit de waarde.
+    """
+    if not body.value.strip():
+        raise HTTPException(400, "Lege waarde: gebruik DELETE om een sleutel te verwijderen")
+    try:
+        sb().rpc("axe_set_app_secret", {
+            "p_app": app_name,
+            "p_key": key,
+            "p_value": body.value,
+            "p_description": body.description,
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon sleutel niet opslaan: {exc}") from exc
+
+    await audit("keystore_set", f"{app_name}:{key}", {"app": app_name, "key": key},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "key": key}
+
+
+@app.delete("/keystore/{app_name}/{key}", dependencies=[AUTH])
+async def keystore_delete(app_name: str, key: str, request: Request):
+    """Haal de sleutel uit het register én uit de Vault."""
+    try:
+        sb().rpc("axe_delete_app_secret", {"p_app": app_name, "p_key": key}).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon sleutel niet verwijderen: {exc}") from exc
+
+    await audit("keystore_delete", f"{app_name}:{key}", {"app": app_name, "key": key},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "key": key}
+
+
+@app.get("/cron/jobs", dependencies=[AUTH])
+async def cron_jobs(app_name: str = "companion"):
+    """Elk schema met zijn laatste uitkomst.
+
+    `last_ok` kijkt naar het antwoord van de app, niet alleen naar de
+    statuscode: een 200 met "status":"failed" of "not configured" in de body
+    telt als mislukt. Precies die controle miste, en daarom stond alles op
+    groen terwijl de feed stilstond.
+    """
+    try:
+        res = sb().rpc("axe_cron_status", {"p_app": app_name}).execute()
+        return {"app": app_name, "jobs": res.data or []}
+    except Exception as exc:
+        raise HTTPException(503, f"Cron-status niet leesbaar: {exc}") from exc
+
+
+@app.get("/cron/runs", dependencies=[AUTH])
+async def cron_runs(app_name: str = "companion", name: str | None = None, limit: int = 50):
+    """De geschiedenis, om te zien sinds wanneer iets misgaat."""
+    try:
+        res = sb().rpc("axe_cron_runs", {
+            "p_app": app_name, "p_name": name, "p_limit": limit,
+        }).execute()
+        return {"app": app_name, "runs": res.data or []}
+    except Exception as exc:
+        raise HTTPException(503, f"Cron-historie niet leesbaar: {exc}") from exc
+
+
+@app.post("/cron/jobs/{app_name}/{name}/run", dependencies=[AUTH], status_code=202)
+async def cron_run_now(app_name: str, name: str, request: Request):
+    """Draai één job nu.
+
+    De HTTP-aanroep gaat via Supabase, niet vanaf deze machine: daar ligt het
+    gedeelde geheim in de Vault en daar wordt de run ook vastgelegd, zodat een
+    handmatige run dezelfde geschiedenis binnenloopt als een geplande.
+
+    202, geen 200: pg_net vuurt asynchroon. Het antwoord van de app staat
+    binnen een minuut in /cron/runs.
+    """
+    try:
+        jobs = sb().rpc("axe_cron_status", {"p_app": app_name}).execute().data or []
+    except Exception as exc:
+        raise HTTPException(503, f"Cron-status niet leesbaar: {exc}") from exc
+
+    job = next((j for j in jobs if j.get("name") == name), None)
+    if job is None:
+        raise HTTPException(404, f"Onbekende job '{name}' voor app '{app_name}'")
+
+    try:
+        res = sb().rpc("axe_dispatch_cron", {
+            "p_job": f"handmatig-{name}", "p_path": job["path"],
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon job niet starten: {exc}") from exc
+
+    await audit("cron_run_now", f"{app_name}:{name}", {"path": job["path"]},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "job": name, "request_id": res.data,
+            "note": "asynchroon gestart; de uitkomst staat binnen een minuut in /cron/runs"}
+
+
+@app.post("/cron/jobs/{app_name}/{name}/toggle", dependencies=[AUTH])
+async def cron_toggle(app_name: str, name: str, enabled: bool, request: Request):
+    """Zet een job aan of uit in het register.
+
+    Let op: pg_cron vuurt vandaag nog onafhankelijk van dit vlaggetje. Het
+    telt zodra de worker hier eigenaar van is (`owner = 'axe_core'`); tot die
+    tijd is dit de bedoeling, niet de rem.
+    """
+    try:
+        sb().rpc("axe_cron_set_job", {
+            "p_app": app_name, "p_name": name, "p_enabled": enabled, "p_owner": None,
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon job niet bijwerken: {exc}") from exc
+
+    await audit("cron_toggle", f"{app_name}:{name}", {"enabled": enabled},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "job": name, "enabled": enabled}
