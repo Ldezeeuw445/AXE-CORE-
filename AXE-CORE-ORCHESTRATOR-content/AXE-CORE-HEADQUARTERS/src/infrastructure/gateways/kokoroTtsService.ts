@@ -2,7 +2,7 @@
  * AXE's stem: George (Kokoro-82M, `bm_george`), lokaal en gratis.
  *
  * De dienst draait op de Mac mini als launchd-agent `com.axe.tts` op
- * 127.0.0.1:8011 (backend/axe_tts/app.py). Luka koos George op 23 sep 2026
+ * 127.0.0.1:8766 (backend/axe_tts/app.py). Luka koos George op 23 sep 2026
  * op gehoor uit vijf samples.
  *
  * Zin voor zin: stuk n wordt afgespeeld terwijl stuk n+1 al gemaakt wordt,
@@ -15,7 +15,7 @@
 import { splitIntoSpeechChunks } from '@/domain/speechChunks';
 
 export const AXE_KOKORO_VOICE = 'bm_george';
-const ORIGIN = (import.meta.env.VITE_AXE_TTS_ORIGIN as string | undefined) ?? 'http://127.0.0.1:8011';
+const ORIGIN = (import.meta.env.VITE_AXE_TTS_ORIGIN as string | undefined) ?? 'http://127.0.0.1:8766';
 
 let generatie = 0;
 let huidige: HTMLAudioElement | null = null;

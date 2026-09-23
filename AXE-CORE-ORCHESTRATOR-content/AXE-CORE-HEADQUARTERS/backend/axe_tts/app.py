@@ -31,7 +31,10 @@ from kokoro_onnx import Kokoro
 HOME = Path(os.environ.get("AXE_TTS_HOME", Path.home() / ".axe" / "tts"))
 MODEL = HOME / os.environ.get("AXE_TTS_MODEL", "kokoro-v1.0.int8.onnx")
 VOICES = HOME / "voices-v1.0.bin"
-PORT = int(os.environ.get("AXE_TTS_PORT", "8011"))
+# Niet 8011: dat is de poort van de lokale northsea-api/axe_api-devserver
+# (launch.json "northsea-api", VITE_LOKALE_AGENT_ORIGIN). Op 8011 zou de
+# stem die blokkeren, of erger, API-verkeer van northsea-web binnenkrijgen.
+PORT = int(os.environ.get("AXE_TTS_PORT", "8766"))
 
 # Luka koos 23 sep 2026 op gehoor uit vijf samples: George (Brits).
 DEFAULT_VOICE = "bm_george"

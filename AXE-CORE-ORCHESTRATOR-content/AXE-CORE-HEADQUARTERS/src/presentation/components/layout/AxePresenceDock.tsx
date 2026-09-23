@@ -2,9 +2,10 @@
  * AXE Presence — the compact, persistent AXE that follows every workspace.
  *
  * Home keeps its full Core Sphere. This is not a replacement for that scene.
- * The presence owns the 64px idle orb (centred over the "AXE" label in the
- * bottom nav, so the word sits inside the orb) and the 64px active card (beside the composer)
- * with the latest exchange and activity flight. It lives in shell chrome, so
+ * The presence owns the 64px orb (always centred over the "AXE" label in the
+ * bottom nav, so the word sits inside the orb), the activity flight, and the
+ * invisible chat cloud right of the composer where the conversation between
+ * Luka and AXE shows (see the comment above `metingWolk`). It lives in shell chrome, so
  * workspaces (NorthSea map, browser, charts, editors) never have to host an
  * AXE overlay of their own.
  */
@@ -16,12 +17,7 @@ import { ACTIVITEIT_GEBEURTENIS, type AxeActiviteit } from '@/shared/axeActivite
 import { kiesDoel, type Rechthoek } from '@/domain/bolVlucht';
 import { BolVlucht, type Vlucht } from '@/presentation/components/layout/zweef/BolVlucht';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
-import { useSpokenReveal } from '@/presentation/hooks/useSpokenReveal';
-
-/** AXE's line, shown as far as the voice has got while AXE speaks it. */
-function GesprokenRegel({ text }: { text: string }) {
-  return <>{useSpokenReveal(text)}</>;
-}
+import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 
 function vindDoel(doel: string): Rechthoek | null {
   for (const el of document.querySelectorAll<HTMLElement>(`[data-axe-doel="${CSS.escape(doel)}"]`)) {
@@ -64,7 +60,11 @@ function vindZichtbareRechterRail(): Rechthoek | null {
       // Geen composer gemeten (bijv. eerste render) -- veilig aannemen dat
       // hij wél telt, net als voorheen, in plaats van per ongeluk niets te
       // ontwijken.
-      if (composer && r.bottom < composer.y) continue;
+      // `<=` plus 1px: a pinned rail that ENDS where the composer row begins
+      // (measured 23 sep at 2560px: rail bottom 1145 == composer top 1145)
+      // only touches it. With a strict `<` that touch counted as an overlap
+      // and squeezed the chat to a third of its room.
+      if (composer && r.bottom <= composer.y + 1) continue;
     }
     return { x: r.left, y: r.top, b: r.width, h: r.height };
   }
@@ -183,31 +183,34 @@ const NA_COMPOSER_GAP = 15;
  *  own CSS (.axe-dok-knop: 60px, .axe-dok[data-kant='rechts']: right:16px,
  *  vak = (92+42)*2 = 268px), not guessed. A little extra clearance past it. */
 const RADIAAL_RESERVE = 190;
-const BREEDTE_VOL = 210;
-const BREEDTE_COMPACT = 132;
-const BREEDTE_MINI = 40;
+/** Gap kept before whatever stops the chat on the right (radial, side tabs). */
+const VOOR_OBSTAKEL_GAP = 12;
+/** Below this there is no room to read a conversation -- the cloud stays
+ *  away rather than squeezing text into a sliver (the old 40px "mini" card
+ *  that clipped the orb to a dotted arc: "verstoppertje", Luka 23 sep). */
+const MIN_WOLK = 180;
 /** Kept clear above whatever is currently the top of the dock strip -- same
  *  role as NA_COMPOSER_GAP, just on the vertical axis. */
 const BOVEN_DOK_GAP = 10;
 
-interface ActievePositie { links: number; modus: 'vol' | 'compact' | 'mini'; breedte: number }
+interface WolkRuimte { links: number; breedte: number }
 
-function metingActievePositie(): ActievePositie {
+/**
+ * The invisible chat cloud (Luka, 23 sep 2026): the conversation between him
+ * and AXE takes ALL the free room right of the composer, up to the right
+ * radial -- and never over a tab's own side content, an open radial ring or
+ * a pinned rail. Same obstacles as before; the difference is the width is no
+ * longer capped at a 210px card, it is whatever is actually free.
+ */
+function metingWolk(): WolkRuimte {
   const composer = vindDoel('axe-composer');
   const obstakel = HORIZONTALE_OBSTAKELS.reduce((dichtstbij, vind) => {
     const r = vind();
     return r ? Math.min(dichtstbij, r.x) : dichtstbij;
   }, Infinity);
-  const plafond = Math.min(window.innerWidth - RADIAAL_RESERVE, obstakel);
-  const start = (composer ? composer.x + composer.b : window.innerWidth * 0.75) + NA_COMPOSER_GAP;
-  const beschikbaar = plafond - start;
-  const modus = beschikbaar >= BREEDTE_VOL ? 'vol' : beschikbaar >= BREEDTE_COMPACT ? 'compact' : 'mini';
-  const breedte = modus === 'vol' ? BREEDTE_VOL : modus === 'compact' ? BREEDTE_COMPACT : BREEDTE_MINI;
-  // Extreme edge case (a very narrow window): hug the ceiling rather than
-  // render past it, even if that means sitting closer to the composer than
-  // NA_COMPOSER_GAP would otherwise put it.
-  const links = Math.min(start, plafond - breedte);
-  return { links, modus, breedte };
+  const plafond = Math.min(window.innerWidth - RADIAAL_RESERVE, obstakel - VOOR_OBSTAKEL_GAP);
+  const links = (composer ? composer.x + composer.b : window.innerWidth * 0.6) + NA_COMPOSER_GAP;
+  return { links, breedte: Math.max(0, plafond - links) };
 }
 
 /**
@@ -287,13 +290,6 @@ export function AxePresenceDock() {
   const teller = useRef(0);
   const timer = useRef<number | null>(null);
 
-  const laatste = useMemo(() => {
-    const berichten = voice.conversation.slice(-8);
-    const user = [...berichten].reverse().find(m => m.role === 'user');
-    const axe = [...berichten].reverse().find(m => m.role === 'axe');
-    return { user, axe };
-  }, [voice.conversation]);
-
   useEffect(() => {
     const opActiviteit = (e: Event) => {
       const a = (e as CustomEvent<AxeActiviteit>).detail;
@@ -337,174 +333,156 @@ export function AxePresenceDock() {
     schrijft: /write|schrijf|draft|compose|reply|antwoord/.test(activiteitTekst),
   };
   const presenceStatus = activiteit && voice.voiceStatus === 'idle' ? 'processing' as const : undefined;
-  /* Luka, 21 sep 2026 (round 5 live review): the "Thinking"/"Working" word
-     used to sit in a caption under the particle here too, styled too heavy
-     and cramped against the orb. Removed rather than restyled -- the orb's
-     own colour/pulse (presenceStatus/werk above) is the state now, and the
-     word lives in exactly one place, TopNav's badge, reading the same
-     VOICE_STATUS_LABEL so it can never drift from what the particle shows. */
-  /* Luka, 21 sep 2026 (live review): resting spot is the middle of the bottom
-     nav -- the full 64px orb centred over the AXE word, no card. The moment AXE is actually doing
-     something (talking, thinking, waiting on approval), it moves up beside the
-     composer and shows what it's saying. Idle is a glance; busy is a read. */
-  const liveTranscript = voice.transcript.trim();
-  const heeftGesprek = Boolean(laatste.user || laatste.axe || liveTranscript);
-  // The exchange is now the shell's persistent conversation glance. Do not
-  // make it vanish the millisecond TTS finishes; that recreates the old
-  // "where did my message go?" problem above the composer.
-  const actief = Boolean(pending) || Boolean(activiteit) || voice.voiceStatus !== 'idle' || heeftGesprek;
-  // An approval must stay reachable no matter how little room there is --
-  // never drop to the text-less mini variant while one is pending.
-  const minModus: ActievePositie['modus'] = pending ? 'compact' : 'mini';
 
-  /* Luka, 21 sep 2026 (round 4): both the idle particle's X and the active
-     card's X are MEASURED against real DOM anchors (the bottom nav's AXE
-     label slot; the composer; any visible right rail) -- never a hardcoded
-     per-page offset. Re-measured on mount, on resize, and whenever `actief`
-     flips, since that's exactly when the right answer changes. */
+  /* Luka, 23 sep 2026: "met adaptive bedoel ik de onzichtbare panel waar de
+     chat tussen mij en axe in staat". Two things changed:
+     1. The orb keeps ONE place -- centred over the AXE label in the bottom
+        nav -- and never moves into a card. It used to slide into a card beside
+        the composer that shrank to a 40px "mini" whenever room was tight,
+        clipping the 64px orb to a dotted arc ("verstoppertje").
+     2. The conversation lives in an invisible cloud: all the free room right of
+        the composer up to the right radial, stopping short of a tab's side
+        content, an open radial ring or a pinned rail -- no card, no 2-line
+        clamp. On Home the full chat plate is open (`data-chat='open'`, set by
+        PlaatChat), so the cloud stays away there instead of showing it twice. */
+  const liveTranscript = voice.voiceStatus === 'listening' ? voice.transcript.trim() : '';
+  const berichten = useMemo(
+    () => voice.conversation.filter(m => m.text?.trim()).slice(-24),
+    [voice.conversation],
+  );
+  const heeftIets = berichten.length > 0 || Boolean(liveTranscript) || Boolean(pending);
+
   const [anker, setAnker] = useState<{ x: number; y: number } | null>(null);
-  const [actievePositie, setActievePositie] = useState<ActievePositie>(() => metingActievePositie());
-  /* Fix C: null on every tab without MemoryDock (or where it isn't tall
-     enough to reach) -- the card then keeps its plain CSS height. */
+  const [ruimte, setRuimte] = useState<WolkRuimte>(() => metingWolk());
   const [maxHoogte, setMaxHoogte] = useState<number | null>(() => metingMaxHoogte());
+  const [chatPlaatOpen, setChatPlaatOpen] = useState(() => document.documentElement.dataset.chat === 'open');
   useEffect(() => {
     const meet = () => {
-      // Both axes, not just X (round 5 live review): a fixed `bottom: 22px`
-      // guessed where the anchor slot's own vertical centre would land and
-      // put the idle particle right on the bottom nav's top edge instead --
-      // exactly the kind of drift measuring was supposed to prevent. Same
-      // fix as the composer/rail measurements above: read the real slot.
       const r = vindDoel('axe-voice-orb-anchor');
       setAnker(r ? { x: r.x + r.b / 2, y: r.y + r.h / 2 } : null);
-      setActievePositie(prev => {
-        const next = metingActievePositie();
-        return next.links === prev.links && next.modus === prev.modus ? prev : next;
+      setRuimte(prev => {
+        const next = metingWolk();
+        return next.links === prev.links && next.breedte === prev.breedte ? prev : next;
       });
       setMaxHoogte(metingMaxHoogte());
+      setChatPlaatOpen(document.documentElement.dataset.chat === 'open');
     };
     meet();
     window.addEventListener('resize', meet);
-    /* Whatever is adopted into the dock slot changes height on a click
-       (open/closed) -- MemoryDock on Neural/Terrain, DealsTabel on NorthSea
-       Desk -- which fires no resize event -- without watching the SLOT HOST
-       directly the card would only reflow the next time the window itself
-       resized. Round 7, Fix 1: watches `#axe-slot-dock` itself (see
-       `vindSlotDok()` above) instead of one named child, so this covers
-       whichever page's content is currently inside it. */
-    let dokObs: ResizeObserver | null = null;
-    const dokEl = document.getElementById(SLOT_ID.dock);
-    if (dokEl && 'ResizeObserver' in window) {
-      dokObs = new ResizeObserver(meet);
-      dokObs.observe(dokEl);
+    const obs: Array<ResizeObserver | MutationObserver> = [];
+    const kanRO = 'ResizeObserver' in window;
+    const kanMO = 'MutationObserver' in window;
+    /* Everything that can move the cloud's edges without a window resize:
+       - the dock slot above (MemoryDock / DealsTabel open and close),
+       - a tab's own side content right of the composer (mounts on tab switch),
+       - the composer itself (its width follows the layout),
+       - the right radial opening (`data-open`),
+       - the hover rail (`data-rail-r`) and the chat plate (`data-chat`) on <html>,
+       - the pinned right rail (`data-rail-vast`). */
+    for (const el of [
+      document.getElementById(SLOT_ID.dock),
+      document.getElementById(SLOT_ID.rechts),
+      document.querySelector<HTMLElement>('[data-axe-doel="axe-composer"]'),
+    ]) {
+      if (el && kanRO) { const o = new ResizeObserver(meet); o.observe(el); obs.push(o); }
     }
-    /* Corrective round 8: same shape of problem as the dock above, different
-       host -- a tab's onderband right content (`#axe-slot-rechts`, see
-       `vindOnderbandSlotRechts()` above) appears and disappears purely by
-       mounting/unmounting on a TAB SWITCH (`.axe-slot:empty { display:none }`
-       means an empty host is a zero rect, a filled one is not), which is
-       exactly the kind of size change a ResizeObserver on the host itself
-       catches regardless of whether the window ever resizes. Observing
-       unconditionally (the element exists from PlaatSlotHosts even when
-       empty) means this also picks up the rarer case of the SAME host
-       switching between its onderband and `--hoog` shape, since that swap
-       changes its measured width too. */
-    let rechtsObs: ResizeObserver | null = null;
-    const rechtsEl = document.getElementById(SLOT_ID.rechts);
-    if (rechtsEl && 'ResizeObserver' in window) {
-      rechtsObs = new ResizeObserver(meet);
-      rechtsObs.observe(rechtsEl);
-    }
-    /* Corrective round 6, Part 4: same shape of problem as MemoryDock above,
-       different element -- the right radial dock toggles `data-open` on a
-       click (RadiaalDok.tsx), which fires no resize event anywhere (its own
-       box is a fixed 268px square regardless of open/closed, see
-       `vindOpenRadiaalRechts`'s comment). Without watching that attribute
-       directly, the card would only pick up the ring having opened the next
-       time something else happened to re-measure -- not "never overlap it",
-       just "eventually stop overlapping it". */
-    let radiaalObs: MutationObserver | null = null;
-    const radiaalEl = document.querySelector<HTMLElement>('[data-axe-doel="radiaal-rechts"]');
-    if (radiaalEl && 'MutationObserver' in window) {
-      radiaalObs = new MutationObserver(meet);
-      radiaalObs.observe(radiaalEl, { attributes: true, attributeFilter: ['data-open'] });
-    }
-    /* Corrective round 7, Fix 3: `vindZichtbareRechterRail()` already reads
-       this obstacle, but nothing ever re-measured when it actually changes.
-       The hover rail's open/closed state is `data-rail-r` on `<html>`
-       (AxeShellChrome.tsx sets it on mousemove, not on click, so there is no
-       existing click handler to piggyback on), and this component watched
-       neither it nor any event the mousemove handler emits -- so sliding the
-       rail open reported stale geometry until some UNRELATED re-measure
-       (resize, the dock, the radial ring) happened to also fire. Same fix
-       shape as the radial-ring observer above, different attribute. */
-    let railObs: MutationObserver | null = null;
-    if ('MutationObserver' in window) {
-      railObs = new MutationObserver(meet);
-      railObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-rail-r'] });
-    }
-    /* Same shape again: `RightPanel.tsx` toggles `data-rail-vast` on its own
-       aside from React state (the collapse chevron), which -- like the
-       radial ring's `data-open` -- fires no resize event. Without this, the
-       vertical-overlap check above would use whatever the rail's rect
-       happened to be at the last unrelated re-measure. */
-    let railVastObs: MutationObserver | null = null;
-    const railEl = document.querySelector<HTMLElement>('[data-rail="right"]');
-    if (railEl && 'MutationObserver' in window) {
-      railVastObs = new MutationObserver(meet);
-      railVastObs.observe(railEl, { attributes: true, attributeFilter: ['data-rail-vast'] });
+    if (kanMO) {
+      const radiaal = document.querySelector<HTMLElement>('[data-axe-doel="radiaal-rechts"]');
+      if (radiaal) { const o = new MutationObserver(meet); o.observe(radiaal, { attributes: true, attributeFilter: ['data-open'] }); obs.push(o); }
+      const html = new MutationObserver(meet);
+      html.observe(document.documentElement, { attributes: true, attributeFilter: ['data-rail-r', 'data-chat'] });
+      obs.push(html);
+      const rail = document.querySelector<HTMLElement>('[data-rail="right"]');
+      if (rail) { const o = new MutationObserver(meet); o.observe(rail, { attributes: true, attributeFilter: ['data-rail-vast'] }); obs.push(o); }
     }
     return () => {
       window.removeEventListener('resize', meet);
-      dokObs?.disconnect();
-      rechtsObs?.disconnect();
-      radiaalObs?.disconnect();
-      railObs?.disconnect();
-      railVastObs?.disconnect();
+      for (const o of obs) o.disconnect();
     };
-  }, [actief]);
+  }, [heeftIets]);
 
-  const modus: ActievePositie['modus'] = actievePositie.modus === 'vol' ? 'vol'
-    : actievePositie.modus === 'compact' ? 'compact'
-    : minModus;
-  const breedte = modus === actievePositie.modus ? actievePositie.breedte
-    : modus === 'compact' ? BREEDTE_COMPACT : BREEDTE_MINI;
+  // An approval must stay reachable even when room is tight: it gets the
+  // minimum width rather than disappearing. Plain conversation just waits for room.
+  const genoegRuimte = ruimte.breedte >= MIN_WOLK;
+  const toonWolk = heeftIets && !chatPlaatOpen && (genoegRuimte || Boolean(pending));
+  const breedte = genoegRuimte ? ruimte.breedte : MIN_WOLK;
+
+  /* Newest at the bottom, like any chat. Stick to the bottom while the reply
+     grows (AXE types while it speaks), unless Luka scrolled up to reread. */
+  const lijstRef = useRef<HTMLDivElement | null>(null);
+  const inhoudRef = useRef<HTMLDivElement | null>(null);
+  const plakOnder = useRef(true);
+  useEffect(() => { plakOnder.current = true; }, [berichten.length, liveTranscript]);
+  useEffect(() => {
+    const lijst = lijstRef.current;
+    const inhoud = inhoudRef.current;
+    if (!lijst || !inhoud) return;
+    const naarOnder = () => { if (plakOnder.current) lijst.scrollTop = lijst.scrollHeight; };
+    naarOnder();
+    if (!('ResizeObserver' in window)) return;
+    const o = new ResizeObserver(naarOnder);
+    o.observe(inhoud);
+    return () => o.disconnect();
+  }, [toonWolk]);
 
   return (
     <>
-      {!actief && (
-        <div className="axe-presence-idle" style={anker ? { left: anker.x, top: anker.y } : undefined} aria-hidden="true">
-          <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
-        </div>
-      )}
-      {actief && (
-        // A <div>, not <aside>: axe-look.css turns every .axe-shell aside into a hidden,
-        // off-screen drawer by default (the same rule CodeEditorPage's file tree avoids for
-        // the same reason) -- this widget needs to be visible by default, not opt-in-visible.
+      <div
+        ref={orbRef}
+        className="axe-presence-idle"
+        data-axe-doel="axe-presence"
+        style={anker ? { left: anker.x, top: anker.y } : undefined}
+        aria-hidden="true"
+      >
+        {/* Only 20 or 64 exist -- thinking-orbs ships two tuned presets. */}
+        <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
+      </div>
+      {toonWolk && (
         <div
-          className="axe-presence-dock" data-modus={modus} role="complementary" aria-label="AXE presence" data-axe-doel="axe-presence"
+          role="log"
+          aria-live="polite"
+          aria-label="Conversation with AXE"
           style={{
-            left: actievePositie.links,
+            position: 'fixed',
+            left: ruimte.links,
             width: breedte,
-            // Fix C: overrides the CSS `height: var(--axe-composer-hoog)`
-            // only when MemoryDock's real, measured bottom edge would
-            // otherwise land inside this card -- see metingMaxHoogte().
-            ...(maxHoogte != null ? { height: maxHoogte, maxHeight: maxHoogte } : null),
+            bottom: 'var(--axe-composer-onder, 104px)',
+            height: maxHoogte ?? 'var(--axe-composer-hoog, 90px)',
+            zIndex: 104,
           }}
         >
-          <div ref={orbRef} className="axe-presence-dock__orb">
-            {/* Only 20 (inline-text) or 64 (chat-avatar) exist -- thinking-orbs ships exactly
-                two tuned presets, not a scale factor (see AxeStatusOrb's own doc comment). */}
-            <AxeStatusOrb size={64} toonLabel={false} werk={werk} status={presenceStatus} />
-          </div>
-          {modus !== 'mini' && (
-            <div className="axe-presence-dock__body">
-              <div className="axe-presence-dock__head">
-                <span>AXE</span>
-              </div>
-
-              {pending ? (
-                <div className="axe-presence-dock__approval">
-                  <span title={pending.detail}>{pending.title}</span>
+          <div
+            ref={lijstRef}
+            onScroll={(e) => {
+              const l = e.currentTarget;
+              plakOnder.current = l.scrollHeight - l.scrollTop - l.clientHeight < 40;
+            }}
+            className="h-full overflow-y-auto"
+            style={{
+              scrollbarWidth: 'none',
+              // Older lines fade out upward instead of being cut by a hard edge.
+              maskImage: 'linear-gradient(to bottom, transparent 0, #000 26px)',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, #000 26px)',
+            }}
+          >
+            <div ref={inhoudRef} className="flex min-h-full flex-col justify-end gap-1.5 px-1 pb-1 pt-6 text-[12.5px] leading-snug">
+              {berichten.map((m, i) => (m.role === 'user' ? (
+                <p key={`${m.timestamp}-${i}`} className="max-w-[85%] self-end text-right" style={{ color: 'var(--text-muted)' }}>
+                  {m.text}
+                </p>
+              ) : (
+                <div key={`${m.timestamp}-${i}`} className="max-w-[92%] self-start" style={{ color: 'var(--text-primary)' }}>
+                  <MarkdownMessage text={m.text} />
+                </div>
+              )))}
+              {liveTranscript && (
+                <p className="max-w-[85%] self-end text-right italic" style={{ color: 'var(--text-muted)' }}>
+                  {liveTranscript}
+                </p>
+              )}
+              {pending && (
+                <div className="flex max-w-full items-center gap-2 self-start rounded-lg px-2 py-1" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
+                  <span className="truncate" title={pending.detail}>{pending.title}</span>
                   <button type="button" title="Approve" onClick={() => voice.resolvePendingExec(pending.id, true)}>
                     <Check size={13} />
                   </button>
@@ -512,31 +490,9 @@ export function AxePresenceDock() {
                     <X size={13} />
                   </button>
                 </div>
-              ) : (
-                // Corrective round 7, Fix 3: this was gated on `modus ===
-                // 'vol'`, so `compact` rendered NOTHING here beyond the "AXE"
-                // head above -- not truncated text, no text at all. That is
-                // the actual "unreadable" Luka saw on the Code Editor: the
-                // card wasn't too narrow to read, it had nothing to read,
-                // regardless of the radial ring's state, because neither
-                // affects `modus` once it has already dropped below 'vol'.
-                // `compact`'s box is the SAME HEIGHT as `vol` (only the width
-                // shrinks -- see `.axe-presence-dock` in axe-look.css), and
-                // each line already clamps to 2 lines, so showing text here
-                // does not risk overflow. `compact` shows AXE's own line
-                // only -- what AXE said is the thing worth reading in a
-                // tight space; the user's own line (which they just typed)
-                // is the one dropped, not the other way round.
-                <div className="axe-presence-dock__exchange" aria-live="polite">
-                  {modus === 'vol' && (liveTranscript || laatste.user) && (
-                    <p data-van="mij">{liveTranscript || laatste.user?.text}</p>
-                  )}
-                  {laatste.axe && <p data-van="axe"><GesprokenRegel text={laatste.axe.text} /></p>}
-                  {!liveTranscript && !laatste.user && !laatste.axe && <p data-van="axe">I am here with this workspace.</p>}
-                </div>
               )}
             </div>
-          )}
+          </div>
         </div>
       )}
       <BolVlucht vlucht={vlucht} klaar={() => setVlucht(null)} />

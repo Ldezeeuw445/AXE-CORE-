@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- AXE's stem (Kokoro, bm_george) op 127.0.0.1:8011.
+<!-- AXE's stem (Kokoro, bm_george) op 127.0.0.1:8766.
      Draait vanuit ~/.axe/tts (venv + model + een kopie van app.py), niet uit
      een git-checkout: een checkout, rebase of opruimactie mag AXE's stem niet
      breken. Installeren/bijwerken: backend/axe_tts/install.sh -->

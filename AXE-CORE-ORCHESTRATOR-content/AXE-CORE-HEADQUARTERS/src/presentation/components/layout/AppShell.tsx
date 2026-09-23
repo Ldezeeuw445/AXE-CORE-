@@ -6,7 +6,6 @@ import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome'
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
-import { AdaptiveChatCloud } from '@/presentation/components/layout/AdaptiveChatCloud';
 import { TaskCompletionToasts } from '@/presentation/components/layout/TaskCompletionToasts';
 import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
 import { Outlet, useLocation, useNavigate } from 'react-router';
@@ -230,11 +229,8 @@ export function AppShell() {
           je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
           elke pagina Home met de dingen van die tab erbij. */}
       {!mobileCommandSurface && opPlaat && <PlaatChat />}
-      {/* De adaptieve chatwolk naast de composer -- zie AdaptiveChatCloud.tsx
-          voor waarom dit hier hoort (naast PlaatChat, niet erin) en waarom
-          hij zichzelf per route uitschakelt op de vier tabs die de `rechts`-
-          sleuf al met eigen inhoud vullen. */}
-      {!mobileCommandSurface && opPlaat && <AdaptiveChatCloud />}
+      {/* The chat between Luka and AXE lives in AxePresenceDock's invisible
+          cloud right of the composer (23 sep 2026) -- not in a per-tab card. */}
       {/* Luka, 21 sep 2026: on every page including Home now -- the idle particle
           anchors to the bottom nav's own AXE label (see AxePresenceDock.tsx), which
           Home already has, and Home's own big Core Sphere is a separate element
