@@ -2032,7 +2032,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
                 <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Clap twice (or three times) to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
+                  Clap three times, sharply, to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
                 </p>
               </div>
               <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
