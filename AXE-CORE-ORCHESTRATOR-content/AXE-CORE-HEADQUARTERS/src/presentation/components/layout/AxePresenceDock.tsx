@@ -9,7 +9,7 @@
  * workspaces (NorthSea map, browser, charts, editors) never have to host an
  * AXE overlay of their own.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -202,11 +202,38 @@ interface WolkRuimte { links: number; breedte: number }
  * a pinned rail. Same obstacles as before; the difference is the width is no
  * longer capped at a 210px card, it is whatever is actually free.
  */
+/** Below this window width the band keeps its centred full width and the
+ *  conversation lives in the chat plate. MUST match the @media in
+ *  axe-look.css that makes room for the cloud (`data-chatwolk='aan'`). */
+const WOLK_MIN_VENSTER = 1360;
+
+/**
+ * Should the shell make room for the cloud right now? Not on Home with the
+ * chat plate open (the conversation is right there), not on a tab that puts
+ * its own content next to the composer (Calendar, Ledger, Code Editor,
+ * NorthSea use the onderband right slot), and not on narrow windows.
+ * Everywhere else the room is reserved ALWAYS -- also with no conversation
+ * yet -- so the layout never jumps at the first message and the orb has a
+ * fixed home.
+ */
+function wilWolk(): boolean {
+  if (window.innerWidth < WOLK_MIN_VENSTER) return false;
+  if (document.documentElement.dataset.chat === 'open') return false;
+  const rechts = document.getElementById(SLOT_ID.rechts);
+  if (rechts && !rechts.classList.contains('axe-slot--hoog') && rechts.childElementCount > 0) return false;
+  return true;
+}
+
 function metingWolk(): WolkRuimte {
   const composer = vindDoel('axe-composer');
   const obstakel = HORIZONTALE_OBSTAKELS.reduce((dichtstbij, vind) => {
     const r = vind();
-    return r ? Math.min(dichtstbij, r.x) : dichtstbij;
+    if (!r) return dichtstbij;
+    // Only what shares the composer's ROW can block the cloud. The tall side
+    // columns on Neural/Terrain end above the chat plate; counting them hid
+    // the cloud on those tabs for no reason.
+    if (composer && (r.y + r.h <= composer.y + 1 || r.y >= composer.y + composer.h - 1)) return dichtstbij;
+    return Math.min(dichtstbij, r.x);
   }, Infinity);
   const plafond = Math.min(window.innerWidth - RADIAAL_RESERVE, obstakel - VOOR_OBSTAKEL_GAP);
   const links = (composer ? composer.x + composer.b : window.innerWidth * 0.6) + NA_COMPOSER_GAP;
@@ -282,6 +309,31 @@ function metingMaxHoogte(): number | null {
   return Math.max(0, composer.h - overschrijding);
 }
 
+/* One line of the conversation: a small matte dot says who is talking --
+   cyan for AXE, orange for Luka (23 sep: "als axe wat zegt een cyan dot klein
+   voor wat hij zegt en bij mij een oranje klein, allebei mat"). Matte = flat,
+   no glow; everything left-aligned so the dots form one clean column. */
+const DOT_KLEUR = { axe: '#4AAFBF', luka: '#C9853E' } as const;
+
+function ChatRegel({ van, children }: { van: keyof typeof DOT_KLEUR; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span
+        aria-hidden="true"
+        className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ background: DOT_KLEUR[van] }}
+      />
+      <span className="sr-only">{van === 'axe' ? 'AXE:' : 'You:'}</span>
+      <div
+        className="min-w-0 flex-1"
+        style={{ color: van === 'axe' ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function AxePresenceDock() {
   const voice = useVoiceStore();
   const orbRef = useRef<HTMLDivElement | null>(null);
@@ -351,12 +403,11 @@ export function AxePresenceDock() {
     () => voice.conversation.filter(m => m.text?.trim()).slice(-24),
     [voice.conversation],
   );
-  const heeftIets = berichten.length > 0 || Boolean(liveTranscript) || Boolean(pending);
 
   const [anker, setAnker] = useState<{ x: number; y: number } | null>(null);
   const [ruimte, setRuimte] = useState<WolkRuimte>(() => metingWolk());
   const [maxHoogte, setMaxHoogte] = useState<number | null>(() => metingMaxHoogte());
-  const [chatPlaatOpen, setChatPlaatOpen] = useState(() => document.documentElement.dataset.chat === 'open');
+  const [wolkGewenst, setWolkGewenst] = useState(() => wilWolk());
   useEffect(() => {
     const meet = () => {
       const r = vindDoel('axe-voice-orb-anchor');
@@ -366,7 +417,7 @@ export function AxePresenceDock() {
         return next.links === prev.links && next.breedte === prev.breedte ? prev : next;
       });
       setMaxHoogte(metingMaxHoogte());
-      setChatPlaatOpen(document.documentElement.dataset.chat === 'open');
+      setWolkGewenst(wilWolk());
     };
     meet();
     window.addEventListener('resize', meet);
@@ -395,17 +446,31 @@ export function AxePresenceDock() {
       obs.push(html);
       const rail = document.querySelector<HTMLElement>('[data-rail="right"]');
       if (rail) { const o = new MutationObserver(meet); o.observe(rail, { attributes: true, attributeFilter: ['data-rail-vast'] }); obs.push(o); }
+      // A tab mounting its own side content decides whether the cloud may
+      // claim the room at all -- watch the host's children, not just its size.
+      const rechtsEl = document.getElementById(SLOT_ID.rechts);
+      if (rechtsEl) { const o = new MutationObserver(meet); o.observe(rechtsEl, { childList: true, attributes: true, attributeFilter: ['class'] }); obs.push(o); }
     }
     return () => {
       window.removeEventListener('resize', meet);
       for (const o of obs) o.disconnect();
     };
-  }, [heeftIets]);
+  }, []);
+
+  /* The shell reserves the room (axe-look.css, `data-chatwolk='aan'`): the
+     composer and chat plate start on the band's left line and leave a column
+     free on the right. The measurement above then finds that room. */
+  useEffect(() => {
+    const html = document.documentElement;
+    if (wolkGewenst) html.dataset.chatwolk = 'aan';
+    else delete html.dataset.chatwolk;
+    return () => { delete html.dataset.chatwolk; };
+  }, [wolkGewenst]);
 
   // An approval must stay reachable even when room is tight: it gets the
   // minimum width rather than disappearing. Plain conversation just waits for room.
   const genoegRuimte = ruimte.breedte >= MIN_WOLK;
-  const toonWolk = heeftIets && !chatPlaatOpen && (genoegRuimte || Boolean(pending));
+  const toonWolk = wolkGewenst && (genoegRuimte || Boolean(pending));
   const breedte = genoegRuimte ? ruimte.breedte : MIN_WOLK;
 
   /* Newest at the bottom, like any chat. Stick to the bottom while the reply
@@ -458,7 +523,9 @@ export function AxePresenceDock() {
             height: maxHoogte ?? 'var(--axe-composer-hoog, 90px)',
             zIndex: 104,
             display: 'flex',
-            alignItems: 'center',
+            // Orb top-left (Luka, 23 sep: "de orb van 64px moet links boven van
+            // de chat cloud in de state van axe").
+            alignItems: 'flex-start',
             gap: 10,
           }}
         >
@@ -486,22 +553,16 @@ export function AxePresenceDock() {
             }}
           >
             <div ref={inhoudRef} className="flex min-h-full flex-col justify-end gap-1.5 px-1 pb-1 pt-6 text-[12.5px] leading-snug">
-              {berichten.map((m, i) => (m.role === 'user' ? (
-                <p key={`${m.timestamp}-${i}`} className="max-w-[85%] self-end text-right" style={{ color: 'var(--text-muted)' }}>
-                  {m.text}
-                </p>
-              ) : (
-                <div key={`${m.timestamp}-${i}`} className="max-w-[92%] self-start" style={{ color: 'var(--text-primary)' }}>
-                  <MarkdownMessage text={m.text} />
-                </div>
-              )))}
+              {berichten.map((m, i) => (
+                <ChatRegel key={`${m.timestamp}-${i}`} van={m.role === 'user' ? 'luka' : 'axe'}>
+                  {m.role === 'user' ? m.text : <MarkdownMessage text={m.text} />}
+                </ChatRegel>
+              ))}
               {liveTranscript && (
-                <p className="max-w-[85%] self-end text-right italic" style={{ color: 'var(--text-muted)' }}>
-                  {liveTranscript}
-                </p>
+                <ChatRegel van="luka"><span className="italic">{liveTranscript}</span></ChatRegel>
               )}
               {pending && (
-                <div className="flex max-w-full items-center gap-2 self-start rounded-lg px-2 py-1" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
+                <div className="ml-3.5 flex max-w-full items-center gap-2 self-start rounded-lg px-2 py-1" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
                   <span className="truncate" title={pending.detail}>{pending.title}</span>
                   <button type="button" title="Approve" onClick={() => voice.resolvePendingExec(pending.id, true)}>
                     <Check size={13} />

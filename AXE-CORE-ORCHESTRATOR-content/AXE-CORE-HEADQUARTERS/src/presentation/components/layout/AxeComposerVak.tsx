@@ -109,7 +109,6 @@ export function AxeComposerVak({
   const transcript = useVoiceStore(s => s.transcript);
   const mic = useMicrophone({ autoStart: false });
   const isListening = status === 'listening';
-  const isProcessing = status === 'processing';
   const presence = useAudioActivity(
     status === 'listening' ? mic.stream : null,
     status === 'speaking' ? getGlobalTtsLevel : undefined,
@@ -151,7 +150,9 @@ export function AxeComposerVak({
           that ran regardless of what was happening. This glow breathes slowly
           at rest (idle 0.7, 5 s) and answers real sound only: Luka's mic while
           he talks (`stream`), AXE's actual TTS playback while AXE talks
-          (`level`), and the thinking gap in between (`processing`).
+          (`level`). No `processing` sweep any more (23 sep, second ask: "geen
+          processing meer doorheen"): while AXE thinks it simply breathes, and
+          it only moves for real sound.
 
           The look is his libraries.dev playground export taken literally:
           sensitivity 4, threshold 0.055, attack 0.5, breatheDuration 5, bands
@@ -162,7 +163,6 @@ export function AxeComposerVak({
       <VoiceBeam
         stream={status === 'listening' ? mic.stream : null}
         level={status === 'speaking' ? getGlobalTtsLevel : 0}
-        processing={isProcessing}
         sensitivity={4}
         threshold={0.055}
         attack={0.5}
