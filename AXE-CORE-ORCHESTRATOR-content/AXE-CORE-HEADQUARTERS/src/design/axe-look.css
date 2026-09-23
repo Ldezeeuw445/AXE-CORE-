@@ -861,10 +861,13 @@ html:root[data-look],
   --axe-vak-vlak: #0E0E12;
   --axe-vak-lijn: rgba(255, 255, 255, 0.075);
   --axe-vak-hoek: 24px;
+  /* 23 sep: Luka wil de composer "wat meer laten zweven". Beide schaduwen
+     vallen verder en waaieren breder uit (was 16/30/-14 en 44/66/-38); dat is
+     wat het oog als hoogte leest. */
   --axe-vak-zweef:
-    0 1px 0 rgba(255, 255, 255, 0.045) inset,
-    0 16px 30px -14px rgba(0, 0, 0, 0.85),
-    0 44px 66px -38px rgba(0, 0, 0, 0.9);
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 24px 44px -16px rgba(0, 0, 0, 0.88),
+    0 68px 104px -46px rgba(0, 0, 0, 0.95);
 
   /* ── Het materiaal van een KAART ──────────────────────────────────────
    *
@@ -3310,6 +3313,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   /* Tegen de chatplaat aan. Ze stonden 16px van elkaar met elk hun eigen rand
      en hoeken, en dat is precies het gestapelde dat eruit moest. */
   margin-top: 0 !important;
+  /* Meer lucht tot de onderbalk (was de 14px van .axe-composer): samen met de
+     diepere --axe-vak-zweef laat dat het vak zweven i.p.v. op de nav te rusten.
+     Alles eromheen meet de composer, dus wolk, orb en panelen schuiven mee. */
+  margin-bottom: 24px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -6007,7 +6014,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-bolvlucht__wie { opacity: 0.6; margin-right: 4px; }
 
 
-/* Composer-gloed (border-beam, pulse-outside + ocean, glowSize 3; 23 sep). De bloom-laag heeft z-index -1;
+/* Sinds 23 sep zit er GEEN border-beam meer in de composer (alleen VoiceBeam),
+   dus deze regel is inert; laten staan voor als hij terugkomt.
+   Composer-gloed (border-beam, pulse-outside). De bloom-laag heeft z-index -1;
    zonder eigen stapelcontext zakt hij achter de glasplaat en zie je alleen een
    dun randje. isolation houdt hem achter het invoervak maar vóór de plaat. */
 .axe-vakcomposer [data-beam] { isolation: isolate; }

@@ -50,7 +50,6 @@
  * nieuw.
  */
 import { useEffect, useRef, type CSSProperties, type ReactNode, type KeyboardEvent } from 'react';
-import { BorderBeam } from 'border-beam';
 import { VoiceBeam, useMicrophone } from 'voice-glow';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
@@ -111,7 +110,6 @@ export function AxeComposerVak({
   const mic = useMicrophone({ autoStart: false });
   const isListening = status === 'listening';
   const isProcessing = status === 'processing';
-  const voiceChannelOpen = status === 'listening' || status === 'speaking' || status === 'processing';
   const presence = useAudioActivity(
     status === 'listening' ? mic.stream : null,
     status === 'speaking' ? getGlobalTtsLevel : undefined,
@@ -147,67 +145,32 @@ export function AxeComposerVak({
       data-voice-energy={presence.mix > 0.015 ? 'on' : 'off'}
       style={presenceStyle}
     >
-      {/* Locked presence contract:
-          idle/silent mic = ocean pulse glowing out around the vak;
-          actual microphone/TTS energy = smoothly yield to VoiceBeam;
-          silence = release back to the pulse.
-          The crossfade is driven by measured RMS, never by a listening boolean.
+      {/* One light around the composer, and it is the voice (Luka, 23 sep
+          2026: "alleen deze erin, dat is rustiger en reageert op echt axe of
+          ik, dat is realistischer"). The border beam is gone -- a decoration
+          that ran regardless of what was happening. This glow breathes slowly
+          at rest (idle 0.7, 5 s) and answers real sound only: Luka's mic while
+          he talks (`stream`), AXE's actual TTS playback while AXE talks
+          (`level`), and the thinking gap in between (`processing`).
 
-          23 sep 2026 (second pass): Luka's next libraries.dev reference, taken
-          literally -- "die dekt iets meer als nu". Back to `pulse-outside`,
-          but with glowSize 3: the halo now reaches well past the vak's edge,
-          which is exactly what the earlier pulse-outside lacked (it only
-          showed in the few px it spilled, and read as cut off). Ocean colours,
-          hue shifted -20deg over a 14deg range, radius 20 to match the vak.
-          Only `strength` is ours: it is the voice crossfade above, at the
-          library's default of 1 when nobody is speaking. */}
-      <BorderBeam
-        size="pulse-outside"
-        colorVariant="ocean"
-        duration={2}
-        glowSize={3}
-        brightness={2.2}
-        saturation={2.2}
-        hueRange={14}
-        borderRadius={20}
-        style={{
-          '--beam-hue-base': '-20deg',
-          '--beam-stroke-opacity': '2',
-          '--beam-inner-opacity': '0.1',
-          '--beam-bloom-opacity': '0.25',
-          '--pulse-glow-boost': '1.75',
-        } as CSSProperties}
-        strength={1 - presence.mix}
-        active
-      >
+          The look is his libraries.dev playground export taken literally:
+          sensitivity 4, threshold 0.055, attack 0.5, breatheDuration 5, bands
+          off, idle 0.7, reach 2.25, brightness 1.1 (all checked in voice-glow
+          0.2.1's dist/index.d.ts). Everything he did not set is back on the
+          library default. `active` is left at its default (on): with the beam
+          gone, this is the only light, so it must not switch off at rest. */}
       <VoiceBeam
         stream={status === 'listening' ? mic.stream : null}
         level={status === 'speaking' ? getGlobalTtsLevel : 0}
-        /* Distinct third state: AXE has stopped listening and is generating
-           a reply, before any TTS audio exists to drive `level`. Without
-           this the beam went dark for the entire "thinking" gap between
-           mic-off and audio-on -- the exact moment a "is it doing
-           something?" cue matters most.
-
-           23 sep 2026: the look is Luka's libraries.dev playground tuning,
-           taken literally -- the playground exports only what differs from
-           voice-glow's defaults (all ten checked in dist/index.d.ts, 0.2.1),
-           so anything he didn't set (sweep travel/curve, corner follow,
-           release, colour) is back on the library default instead of our
-           older hand-tuning. Only the wiring is ours: `stream` = his mic,
-           `level` = AXE's TTS, `processing` = AXE thinking, and `active`
-           keeps the glow to voice moments so the border beam owns rest. */
         processing={isProcessing}
-        processingEase={0.1}
-        processingDuration={2}
-        processingLevel={0.35}
-        idle={0.25}
-        breatheDuration={3.5}
-        attack={0.32}
-        scale={2.05}
-        spread={1.5}
-        flow={0}
-        active={voiceChannelOpen || presence.mix > 0.01}
+        sensitivity={4}
+        threshold={0.055}
+        attack={0.5}
+        breatheDuration={5}
+        bands={false}
+        idle={0.7}
+        reach={2.25}
+        brightness={1.1}
         theme="dark"
       >
       <div className="axe-vak">
@@ -244,7 +207,6 @@ export function AxeComposerVak({
         </div>
       </div>
       </VoiceBeam>
-      </BorderBeam>
 
       {/* Uitzondering op "alles in het vak": dit paneel klapt UIT boven het
           vak, dus hij mag geen extra flex-rij zijn -- position:absolute in
