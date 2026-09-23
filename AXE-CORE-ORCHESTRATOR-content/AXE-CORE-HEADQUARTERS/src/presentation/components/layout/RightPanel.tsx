@@ -347,8 +347,51 @@ function ActiveTasksWidget() {
   );
 }
 
+/**
+ * De drie kamers van dit paneel.
+ *
+ * Was één lange scroll: Mindset-knoppen, taalkeuze, achttien providers, de
+ * missietijdlijn, actieve taken, snelacties, en dan -- op dezelfde scroll --
+ * een heel apart AXE Algo-blok met een live handelslijst en een eigen
+ * chatveld. Luka's klacht ("half zichtbaar, valt over of boven dingen") kwam
+ * niet alleen van het uitschuif-euvel hierboven (zie de `<aside>`-stijl) --
+ * een paneel zo dicht IS zelf al precies wat die indruk geeft, ongeacht of de
+ * uitschuif-bug er ook nog bovenop zat.
+ *
+ * Drie kamers, geen nieuw navigatiepatroon: dezelfde platte knoppenrij als
+ * `ReplyLanguageWidget` hieronder, gehergebruikt in plaats van uitgevonden.
+ */
+type RailKamer = 'status' | 'activiteit' | 'algo';
+const RAIL_KAMERS: Array<{ id: RailKamer; label: string }> = [
+  { id: 'status', label: 'Status' },
+  { id: 'activiteit', label: 'Activiteit' },
+  { id: 'algo', label: 'AXE Algo' },
+];
+
+function RailKamerKiezer({ kamer, opKamer }: { kamer: RailKamer; opKamer: (k: RailKamer) => void }) {
+  return (
+    <div className="flex gap-1.5">
+      {RAIL_KAMERS.map(k => (
+        <button
+          key={k.id}
+          onClick={() => opKamer(k.id)}
+          className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-medium"
+          style={{
+            background: kamer === k.id ? 'var(--tint)' : 'var(--bg-base)',
+            border: `1px solid ${kamer === k.id ? 'var(--tint-line)' : 'var(--border-subtle)'}`,
+            color: kamer === k.id ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+          }}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function RightPanel() {
   const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen, setRightPanelOpen, setCommandPaletteOpen } = useUIStore();
+  const [kamer, setKamer] = useState<RailKamer>('status');
   const isTablet = useIsTablet();
   const isMobile = useIsMobile();
   const isCompact = isMobile || isTablet;
@@ -388,7 +431,16 @@ export function RightPanel() {
   ];
 
   const content = (
-    <div className="h-full flex flex-col overflow-hidden">
+    // min-w-0 on both layers below: a flex child's `truncate` only works if
+    // something in its ancestor chain actually allows the box to shrink
+    // below its content's natural (min-content) width. `ActiveTasksWidget`'s
+    // task titles and `MissionTimelineWidget`'s event titles already had
+    // `truncate` on the right span, but neither of THESE two wrappers had
+    // `min-w-0` -- so a long task title could still push this whole column
+    // wider than its own fixed `--axe-rail-breedte`, which is exactly the
+    // 52px-past-the-window overflow the evaluator measured on the Activiteit
+    // tab.
+    <div className="h-full flex flex-col overflow-hidden min-w-0">
       <div className="flex justify-end px-3 pt-2 pb-0">
         <button
           onClick={() => (isCompact ? setRightDrawerOpen(false) : setRightPanelOpen(false))}
@@ -398,49 +450,83 @@ export function RightPanel() {
           {isCompact ? <X size={16} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
-        <CyanQuoteButtons />
-        <ReplyLanguageWidget />
+      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
+        <RailKamerKiezer kamer={kamer} opKamer={setKamer} />
 
-        <WidgetCard title="MODELS & TESTS">
-          <ModelStatusWidget />
-        </WidgetCard>
+        {kamer === 'status' && (
+          <>
+            <CyanQuoteButtons />
+            <ReplyLanguageWidget />
+            <WidgetCard title="MODELS & TESTS">
+              <ModelStatusWidget />
+            </WidgetCard>
+          </>
+        )}
 
-        <MissionTimelineWidget />
+        {kamer === 'activiteit' && (
+          <>
+            <MissionTimelineWidget />
+            <ActiveTasksWidget />
 
-        <ActiveTasksWidget />
+            <div>
+              <span className="text-xs-custom uppercase tracking-widest block mb-2" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+                QUICK ACTIONS
+              </span>
+              <div className={LIST_GRID}>
+                {quickActions.map(action => {
+                  const Icon = quickActionIcons[action.icon] || Plus;
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => void runQuickAction(action.id)}
+                      className="flex flex-col items-center gap-1.5 p-3 rounded-lg"
+                      style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.04)' }}
+                    >
+                      <Icon size={20} style={{ color: 'var(--text-secondary)' }} />
+                      <span className="text-xs-custom text-center" style={{ color: 'var(--text-secondary)' }}>{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
 
-        <div>
-          <span className="text-xs-custom uppercase tracking-widest block mb-2" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
-            QUICK ACTIONS
-          </span>
-          <div className={LIST_GRID}>
-            {quickActions.map(action => {
-              const Icon = quickActionIcons[action.icon] || Plus;
-              return (
-                <button
-                  key={action.id}
-                  onClick={() => void runQuickAction(action.id)}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg"
-                  style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.04)' }}
-                >
-                  <Icon size={20} style={{ color: 'var(--text-secondary)' }} />
-                  <span className="text-xs-custom text-center" style={{ color: 'var(--text-secondary)' }}>{action.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <AxeAlgoWidget />
+        {kamer === 'algo' && <AxeAlgoWidget />}
       </div>
     </div>
   );
 
   if (isCompact) {
+    /* Corrective (evaluator round 1): this Sheet is what everyone from 768 to
+     * 1600px wide actually sees -- `useIsTablet()` covers that whole range,
+     * so the `<aside>` branch below only ever runs above 1600px, a width
+     * almost nobody runs at. Two things were wrong here, both invisible if
+     * you only test above 1600:
+     *
+     * 1. `backgroundColor: 'var(--bg-base)'` -- under `data-look='glass'`,
+     *    `--bg-base` itself resolves to `transparent` (see axe-look.css's
+     *    glass-mode tokens), so this "opaque" override was transparent too.
+     *    Whatever sat behind it (the Code Editor's "Start the dev server"
+     *    placeholder) showed straight through. Same opaque gradient the
+     *    hover-rail `<aside>` already uses (axe-look.css, `.axe-shell aside`)
+     *    instead of a CSS variable that isn't guaranteed opaque.
+     * 2. `inset-y-0` (from `SheetContent`'s own class) starts the sheet at
+     *    the very top of the viewport, UNDER the fixed TopNav (`z-fixed` =
+     *    100, this sheet is `z-[110]`) -- so it painted OVER the search/bell/
+     *    avatar icons instead of beside them. `top` below starts it under the
+     *    topbar's own measured height instead. */
     return (
       <Sheet open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
-        <SheetContent side="right" className="bg-black text-white border-l border-white/5 w-[280px] max-w-[85vw] p-0" style={{ backgroundColor: 'var(--bg-base)' }}>
+        <SheetContent
+          side="right"
+          className="text-white border-l border-white/5 w-[300px] max-w-[85vw] p-0"
+          style={{
+            background: 'linear-gradient(180deg, rgba(20,20,24,0.98) 0%, rgba(12,12,15,0.99) 100%)',
+            top: 'calc(66px + env(safe-area-inset-top))',
+            height: 'calc(100dvh - 66px - env(safe-area-inset-top))',
+          }}
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>Status Panel</SheetTitle>
             <SheetDescription>Health, timeline, tasks</SheetDescription>
@@ -472,7 +558,32 @@ export function RightPanel() {
   }
 
   return (
-    <aside data-rail="right" className="flex-shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+    <aside
+      data-rail="right"
+      className="flex-shrink-0 flex flex-col overflow-hidden"
+      /* Corrective (evaluator round 1, issues 6 & 8): this used to force
+       * visibility with an inline `style` override (position/transform/
+       * opacity) that silently fought `:root[data-look] .axe-shell aside`'s
+       * hover-to-peek rule -- it worked, but nothing else in the shell knew
+       * this rail was now permanently pinned instead of hover-triggered.
+       * `AxePresenceDock.tsx`'s `vindZichtbareRechterRail()` reads the SAME
+       * "is a right rail visible" signal to keep its own card clear of it,
+       * and a rail that is ALWAYS visible now ALWAYS counts as an obstacle
+       * to it -- which is exactly how the presence orb ended up on top of
+       * the composer's mic/camera buttons at 1920px: a regression this pin
+       * caused, not something the pin was meant to fix.
+       *
+       * `data-rail-r-vast` below is the explicit state the evaluator asked
+       * for: a flag both this component and AxePresenceDock read on purpose,
+       * instead of one silently overriding the other's assumptions. The
+       * visual effect on THIS element is unchanged (still opts out of the
+       * hover transform/opacity while open); what changes is that
+       * AxePresenceDock can now tell "pinned rail" apart from "hover rail"
+       * and only treat it as a real obstacle where it actually, vertically,
+       * overlaps the composer band (see that file for the other half). */
+      style={{ width: panelWidth }}
+      data-rail-vast={rightPanelOpen ? 'ja' : undefined}
+    >
       {/* Een tab kan hier zijn eigen inhoud in renderen (zie useTabRail).
           Doet hij dat, dan verbergt de CSS de standaardinhoud hieronder --
           met :has() op een leeg vakje, dus zonder staat die uit de pas kan lopen. */}

@@ -111,7 +111,13 @@ export function TopNav() {
           />
           <span className="truncate">Command Center</span>
         </button>
-        <div className="axe-tl axe-tl-ok hidden sm:flex items-center gap-2">
+        {/* Corrective: was `hidden sm:flex` (640px+) -- op tablet-breedte
+            (768px, `isCompact`) telde dit blok mee in de rij die de
+            rechter-lade-knop van het scherm duwde (gemeten: de balk werd
+            1098px breed in een 768px venster, met de lade-knop op x=1066,
+            ver voorbij de rand). `lg:` houdt dit weg tot er echt ruimte is,
+            zodat de lade-knop op tablet-breedte weer binnen beeld valt. */}
+        <div className="axe-tl axe-tl-ok hidden lg:flex items-center gap-2">
           <LiveIndicator size={7} color="var(--success)" />
           <span>Optimal</span>
         </div>
@@ -153,7 +159,7 @@ export function TopNav() {
             dan is dit nul breed. */}
         <div id="axe-slot-topbalk-rechts" className="axe-slot-topbalk flex items-center gap-1 min-w-0 mr-1" />
 
-        <div className="axe-tr-klok hidden md:flex items-center gap-2.5 mr-2.5 whitespace-nowrap">
+        <div className="axe-tr-klok hidden lg:flex items-center gap-2.5 mr-2.5 whitespace-nowrap">
           <b style={{ color: 'var(--text-primary)' }}>{timeStr}</b>
           <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>
         </div>
@@ -172,9 +178,12 @@ export function TopNav() {
             );
         })()}
 
+        {/* Corrective: `sm:` naar `lg:`, zelfde reden als "Optimal" hierboven --
+            samen met de andere vier gemarkeerde items maakt dit genoeg ruimte
+            vrij om de lade-knop op 768px weer op het scherm te laten vallen. */}
         <IconButton
           title={voice.apiKey ? 'API key OK — open AI settings' : 'No API key — open settings'}
-          className="hidden sm:inline-flex"
+          className="hidden lg:inline-flex"
           onClick={() => navigate('/settings')}
         >
           <Key size={14} style={{ color: voice.apiKey ? 'var(--success)' : 'var(--text-muted)' }} />
@@ -189,7 +198,7 @@ export function TopNav() {
         </IconButton>
 
         <IconButton
-          className="relative hidden sm:inline-flex"
+          className="relative hidden lg:inline-flex"
           aria-label="Split workspace"
           title={splitViewOpen ? 'Exit 4-pane split' : 'Split: Home · Trading · Browser · Code'}
           onClick={() => toggleSplitView()}
@@ -209,7 +218,7 @@ export function TopNav() {
         <NotificationBell />
 
         <div
-          className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold"
+          className="hidden lg:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold"
           style={{
             width: 32,
             height: 32,

@@ -32,6 +32,7 @@ import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { openPageOnMonitor, openStandaloneBrowser, openStandaloneNorthsea } from '@/infrastructure/gateways/windowManagerService';
 import { openRegisteredProductShell } from '@/infrastructure/gateways/productWindowService';
+import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
 /** Afstand van het midden tot een tab. */
 const STRAAL = 92;
@@ -104,6 +105,35 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
       window.removeEventListener('mousedown', opKlik);
     };
   }, [open, sluit]);
+
+  /* Corrective (evaluator round 1, issue 2): op de rechterkant deelt deze
+   * dok zijn hoek van het scherm met de onderband-`rechts`-sleuf (`PlaatSlot
+   * slot="rechts"`, zie PlaatSlots.tsx) -- de Code Editor hangt daar zijn
+   * eigen motor/weergave-iconenzuil in (`IcoonZuil`, met o.a. de `{}`-tekens
+   * van codex en de cursor-cursor van Cursor).
+   *
+   * Eerdere poging schoof de hele dok (`right:`) naar links tot voorbij die
+   * sleuf. Gemeten in de app, 1440×900 op de Code Editor: dat zette de
+   * geopende ring er middenin over de composer heen -- op de camera-, mic- en
+   * verstuurknop, en over de onderste navigatie -- en liet de knop zelf
+   * ~275px van de plek springen waar net op geklikt was. Een knop die
+   * wegspringt zodra je hem indrukt is een eigen, nieuwe fout, los van of de
+   * botsing zelf is opgelost.
+   *
+   * Dus: de dok blijft ALTIJD op zijn vaste `right: 16px`-hoek, ook open --
+   * de knop staat waar je hem indrukte. In plaats daarvan krijgt de sleuf
+   * zelf een klasse zolang de ring open is, die zijn inhoud laat wegvallen
+   * (dezelfde beweging als een `WidgetCard` die plaatsmaakt) -- geen
+   * verplaatsing, geen herberekende posities, alleen "twee dingen kunnen niet
+   * tegelijk om aandacht vragen op dezelfde plek, dus wint de ring zolang hij
+   * open is". Sluit je de ring, dan komt de zuil vanzelf terug. */
+  useEffect(() => {
+    if (kant !== 'rechts') return;
+    const el = document.getElementById(SLOT_ID.rechts);
+    if (!el) return;
+    if (open) el.classList.add('axe-slot--wijkt-voor-dok');
+    return () => el.classList.remove('axe-slot--wijkt-voor-dok');
+  }, [kant, open]);
 
   const linkerTabs: DokTab[] = [
     { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },

@@ -29,11 +29,38 @@ function vindDoel(doel: string): Rechthoek | null {
  *  off-screen-by-default state axe-look.css gives every [data-rail='right']
  *  element) -- its own getBoundingClientRect already reflects the CSS
  *  translateX, so an off-screen rail naturally reports an off-screen rect and
- *  never constrains anything here. */
+ *  never constrains anything here.
+ *
+ *  Corrective (evaluator round 1, issue 6): `RightPanel.tsx` can now PIN this
+ *  rail open (`data-rail-vast='ja'`, see that file and axe-look.css) instead
+ *  of only showing it on hover. A pinned rail is on screen ALL the time,
+ *  which means it would count as an obstacle on every tab, at every scroll
+ *  position -- including the many cases where the rail's own box (it runs
+ *  from under the topbar down to roughly the chat plate, see `.axe-shell
+ *  aside`'s own top/bottom) never actually reaches down into the composer's
+ *  row at all. Measured live at 1920px: exactly that mismatch pushed this
+ *  card's ceiling into the composer and put the presence orb on top of the
+ *  mic/camera buttons, even though the rail itself stops well above them.
+ *
+ *  The hover-triggered rail never had this problem: it is only ever visible
+ *  for the moment the mouse is at the edge, which is rare and brief enough
+ *  that "always treat it as an obstacle while visible" was an acceptable
+ *  simplification. A PINNED rail is visible constantly, so the same
+ *  simplification needs the one check it was missing -- does this rail's own
+ *  box actually reach down far enough to matter -- and only for the pinned
+ *  case, since the hover case still wants its previous, safe behaviour. */
 function vindZichtbareRechterRail(): Rechthoek | null {
   for (const el of document.querySelectorAll<HTMLElement>('[data-rail="right"]')) {
     const r = el.getBoundingClientRect();
-    if (r.width > 0 && r.right <= window.innerWidth + 1) return { x: r.left, y: r.top, b: r.width, h: r.height };
+    if (r.width <= 0 || r.right > window.innerWidth + 1) continue;
+    if (el.getAttribute('data-rail-vast') === 'ja') {
+      const composer = vindDoel('axe-composer');
+      // Geen composer gemeten (bijv. eerste render) -- veilig aannemen dat
+      // hij wél telt, net als voorheen, in plaats van per ongeluk niets te
+      // ontwijken.
+      if (composer && r.bottom < composer.y) continue;
+    }
+    return { x: r.left, y: r.top, b: r.width, h: r.height };
   }
   return null;
 }
@@ -409,12 +436,24 @@ export function AxePresenceDock() {
       railObs = new MutationObserver(meet);
       railObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-rail-r'] });
     }
+    /* Same shape again: `RightPanel.tsx` toggles `data-rail-vast` on its own
+       aside from React state (the collapse chevron), which -- like the
+       radial ring's `data-open` -- fires no resize event. Without this, the
+       vertical-overlap check above would use whatever the rail's rect
+       happened to be at the last unrelated re-measure. */
+    let railVastObs: MutationObserver | null = null;
+    const railEl = document.querySelector<HTMLElement>('[data-rail="right"]');
+    if (railEl && 'MutationObserver' in window) {
+      railVastObs = new MutationObserver(meet);
+      railVastObs.observe(railEl, { attributes: true, attributeFilter: ['data-rail-vast'] });
+    }
     return () => {
       window.removeEventListener('resize', meet);
       dokObs?.disconnect();
       rechtsObs?.disconnect();
       radiaalObs?.disconnect();
       railObs?.disconnect();
+      railVastObs?.disconnect();
     };
   }, [actief]);
 

@@ -6,6 +6,8 @@ import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome'
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
+import { AdaptiveChatCloud } from '@/presentation/components/layout/AdaptiveChatCloud';
+import { TaskCompletionToasts } from '@/presentation/components/layout/TaskCompletionToasts';
 import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
@@ -155,6 +157,12 @@ export function AppShell() {
       {/* De rails aan de rand en de hoogtes die de rest eraan ophangt.
           Doet niets zonder data-look. */}
       <AxeShellChrome />
+      {/* Zichtbare terugkoppeling in de app zelf zodra een achtergrondtaak
+          klaar is -- zie TaskCompletionToasts.tsx voor waarom dit ernaast
+          bestaat en niet in plaats van de al bestaande Mission
+          Timeline/Active Tasks. Op elke tab, ook mobiel: dit is precies het
+          moment dat je niet wil missen omdat het paneel toevallig dicht was. */}
+      <TaskCompletionToasts />
       {/* De wereldschakelaar, midden boven op de plaat. Staat op ELKE tab:
           het is de snelste weg tussen Core, Neural, Terrain en Architecture,
           en hij ligt op de plaat in plaats van in een balk, dus hij zit
@@ -222,6 +230,11 @@ export function AppShell() {
           je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
           elke pagina Home met de dingen van die tab erbij. */}
       {!mobileCommandSurface && opPlaat && <PlaatChat />}
+      {/* De adaptieve chatwolk naast de composer -- zie AdaptiveChatCloud.tsx
+          voor waarom dit hier hoort (naast PlaatChat, niet erin) en waarom
+          hij zichzelf per route uitschakelt op de vier tabs die de `rechts`-
+          sleuf al met eigen inhoud vullen. */}
+      {!mobileCommandSurface && opPlaat && <AdaptiveChatCloud />}
       {/* Luka, 21 sep 2026: on every page including Home now -- the idle particle
           anchors to the bottom nav's own AXE label (see AxePresenceDock.tsx), which
           Home already has, and Home's own big Core Sphere is a separate element

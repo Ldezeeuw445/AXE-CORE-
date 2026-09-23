@@ -22,7 +22,8 @@
  * stuur je de sleutel van de een naar de ander -- die faalt, en de melding wijst
  * naar het model in plaats van naar de sleutel.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
@@ -45,6 +46,55 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
   const setPrimair = useVoiceStore(s => s.setPrimarySlot);
   const [open, setOpen] = useState(false);
   const [merk, setMerk] = useState<Merk | null>(null);
+  const wortel = useRef<HTMLSpanElement | null>(null);
+  /* Corrective (evaluator round 1, issue 1): meten of er boven de knop ruimte
+   * is, was nooit het echte probleem -- de knop zit BINNEN `AxeComposerVak`'s
+   * `BorderBeam`/`VoiceBeam`-omhulsels, en beide zetten `overflow: hidden` op
+   * hun eigen wrapper (`voice-glow`'s `index.es.js` doet dit altijd;
+   * `border-beam` doet het voor `pulse-inner`, wat de composer nu gebruikt --
+   * zie AxeComposerVak.tsx). Een `position: absolute` paneel, hoe goed
+   * gemeten ook, wordt geknipt zodra het over de rand van díe wrapper heen
+   * wil, ongeacht `boven`/`maxHoogte`: gemeten in de app, 1440×900, bleef er
+   * van een paneel dat op y 419–610 hoorde te staan maar 13px zichtbaar.
+   *
+   * Dus: de metingen hieronder blijven (ze bepalen nog steeds boven/onder en
+   * de maximale hoogte), maar het PANEEL ZELF rendert via een portal naar
+   * `document.body`, `position: fixed`, met zijn eigen `left`/`top`-of-
+   * `bottom` uit dezelfde meting -- buiten beide omhulsels, dus niets van hen
+   * kan het nog knippen. */
+  const [plek, setPlek] = useState<{ boven: boolean; maxHoogte: number; left: number; verticaal: number }>(
+    { boven: true, maxHoogte: 256, left: 0, verticaal: 0 },
+  );
+  useLayoutEffect(() => {
+    if (!open || !wortel.current) return;
+    const meet = () => {
+      const r = wortel.current!.getBoundingClientRect();
+      const RAND = 12; // lucht tot de vensterrand, zelfde soort marge als elders in de schil
+      const ruimteBoven = r.top - RAND;
+      const ruimteOnder = window.innerHeight - r.bottom - RAND;
+      // Boven blijft de voorkeur (past bij de compositie: het paneel hoort bij
+      // de knop erboven, niet er middenin) -- alleen omlaaien als boven het
+      // écht niet past én onder aantoonbaar meer ruimte heeft.
+      const boven = ruimteBoven >= 160 || ruimteBoven >= ruimteOnder;
+      const PANEEL_BREEDTE = 300;
+      // Links uitgelijnd op de knop, maar nooit voorbij de rechterrand van
+      // het venster -- de knop zit vaak dicht bij de rand van de composer.
+      const left = Math.min(r.left, window.innerWidth - PANEEL_BREEDTE - RAND);
+      // `fixed`-coördinaat vanaf de bovenkant (open onder) of vanaf de
+      // onderkant (open boven, zelfde `bottom: 100% + gap` gevoel als de
+      // oude `absolute`-versie, nu alleen tegen het venster in plaats van
+      // tegen de (geknipte) ouder).
+      const verticaal = boven ? window.innerHeight - r.top + 4 : r.bottom + 4;
+      setPlek({ boven, maxHoogte: Math.max(120, Math.min(360, boven ? ruimteBoven : ruimteOnder)), left, verticaal });
+    };
+    meet();
+    window.addEventListener('resize', meet);
+    window.addEventListener('scroll', meet, true);
+    return () => {
+      window.removeEventListener('resize', meet);
+      window.removeEventListener('scroll', meet, true);
+    };
+  }, [open]);
 
   // Bij het openen opnieuw lezen: heb je net in Settings een sleutel ingevuld,
   // dan hoort die provider hier meteen te staan.
@@ -81,7 +131,7 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
     : MERK_LABEL.native;
 
   return (
-    <span className="relative">
+    <span className="relative" ref={wortel}>
       {variant === 'stip' ? (
         <button
           onClick={() => { setOpen(v => !v); setMerk(null); }}
@@ -109,15 +159,23 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
       </button>
       )}
 
-      {open && (
+      {open && createPortal(
         <>
           {/* Klik ernaast sluit hem. Zonder dit blijft hij open zodra je iets
               anders doet, en dan dekt hij het gesprek af. */}
           <span className="fixed inset-0 z-40" onClick={() => { setOpen(false); setMerk(null); }} />
+          {/* `position: fixed` uit de eigen meting hierboven, geportaald tot
+              buiten `AxeComposerVak`'s BorderBeam/VoiceBeam-omhulsels -- zie
+              de uitleg bij `plek` hierboven. `left-0`/`bottom-full` van de
+              oude `absolute`-versie zijn hier vervangen door de gemeten
+              `left`/`top`-of-`bottom` in pixels. */}
           <div
-            className="absolute bottom-full mb-1 left-0 z-50 rounded-card overflow-hidden"
+            className="fixed z-50 rounded-card overflow-hidden flex flex-col"
             style={{
-              minWidth: 300,
+              left: plek.left,
+              [plek.boven ? 'bottom' : 'top']: plek.verticaal,
+              width: 300,
+              maxHeight: plek.maxHoogte,
               background: 'var(--bg-panel, rgba(12,16,24,0.98))',
               border: '1px solid var(--border-default)',
               boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
@@ -153,7 +211,11 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
                 model vooraan dat er het best bij past.
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto">
+              // flex-1/min-h-0 in plaats van een vaste max-h-64: de OUTER laag
+              // hierboven kent al de echte gemeten ruimte (`plek.maxHoogte`);
+              // een tweede, vaste cap hier zou op een laag venster nog steeds
+              // voorbij die gemeten grens kunnen lopen.
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 {keuzesVanMerk(keuzes, getoondMerk).map(k => {
                   const aan = isActief(k, primair);
                   return (
@@ -180,7 +242,8 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
               </div>
             )}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </span>
   );
