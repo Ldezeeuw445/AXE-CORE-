@@ -128,9 +128,6 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
                                    limit: { type: 'number', description: 'Row cap. Optional.' } }, required: ['table'] },
   db_sql:          { properties: { sql: str('SQL to run against Supabase.') }, required: ['sql'] },
 
-  vercel_status:   { properties: { project: str('Project name. Optional.') }, required: [] },
-  vercel_promote:  { properties: { project: str('Project to promote.'), deployment: str('Deployment id. Optional.') }, required: ['project'] },
-
   osint:           { properties: { query: str('What to look up on the map.') }, required: ['query'] },
   agent:           { properties: { agent: str('Which VPS agent: openhands, openjarvis, openclaw, kilocode.'),
                                    task: str('What it should do.') }, required: ['agent', 'task'] },

@@ -88,7 +88,6 @@ export async function checkAxeApi(): Promise<{
   supabase: boolean;
   n8n: boolean;
   github: boolean;
-  vercel: boolean;
 }> {
   return call('GET', '/health');
 }
@@ -603,32 +602,6 @@ export async function ghGetPr(repo: string, number: number): Promise<PrStatus> {
 
 export async function ghMergePr(repo: string, number: number, mergeMethod: 'merge' | 'squash' | 'rebase' = 'merge'): Promise<{ merged: boolean; sha: string | null; message: string | null }> {
   return call('POST', `/github/pr/${number}/merge`, { repo, merge_method: mergeMethod });
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// VERCEL
-// ══════════════════════════════════════════════════════════════════════════════
-
-export interface VercelDeployment {
-  id: string;
-  url: string;
-  state: string;
-  target: string | null;
-  createdAt: number;
-  commitMessage?: string;
-  commitSha?: string;
-}
-
-export async function vercelListDeployments(limit = 10, projectId?: string): Promise<VercelDeployment[]> {
-  return call('GET', `/vercel/deployments?limit=${limit}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`);
-}
-
-export async function vercelGetDeployment(id: string): Promise<VercelDeployment & { ready?: number; aliasError?: unknown }> {
-  return call('GET', `/vercel/deployment/${id}`);
-}
-
-export async function vercelPromote(deploymentId: string): Promise<{ promoted: boolean; deployment_id: string }> {
-  return call('POST', `/vercel/promote/${deploymentId}`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

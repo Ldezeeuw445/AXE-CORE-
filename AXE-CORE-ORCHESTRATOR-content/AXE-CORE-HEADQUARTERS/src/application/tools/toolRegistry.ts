@@ -25,7 +25,7 @@ import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/brows
 import {
   isAxeApiConfigured, execCommand, ghGetFile, ghUpdateFile,
   ghCreateBranch, ghCreatePr, ghGetPr, ghMergePr,
-  sbGetRows, sbRunSql, vercelListDeployments, vercelPromote,
+  sbGetRows, sbRunSql,
   osintAll, osintLayer, crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode,
 } from '@/infrastructure/gateways/axeCoreApiService';
@@ -72,7 +72,6 @@ interface GitBranchArgs { repo: string; branch: string; from?: string; [key: str
 interface GitPrArgs { repo: string; title: string; head: string; body?: string; base?: string; [key: string]: unknown }
 interface DbReadArgs { table: string; limit?: number; [key: string]: unknown }
 interface DbSqlArgs { query: string; [key: string]: unknown }
-interface VercelPromoteArgs { deploymentId: string; [key: string]: unknown }
 
 function parseJsonArgs<T extends Record<string, unknown>>(raw: string, required: (keyof T)[]): T | null {
   try {
@@ -391,28 +390,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       return `DB_SQL:\n${JSON.stringify(rows).slice(0, 4000)}`;
     },
     onError: (msg) => `Supabase call failed: ${msg}`,
-  },
-  {
-    ...catalogEntry('vercel_status'),
-    available: () => isAxeApiConfigured,
-    run: async () => {
-      const deployments = await vercelListDeployments(10);
-      return `VERCEL_STATUS:\n${deployments.map(d => `- ${d.state} ${d.url}`).join('\n')}`;
-    },
-    onError: (msg) => `Vercel call failed: ${msg}`,
-  },
-  {
-    ...catalogEntry('vercel_promote'),
-    available: () => isAxeApiConfigured,
-    run: async (raw, ctx) => {
-      const args = parseJsonArgs<VercelPromoteArgs>(raw, ['deploymentId']);
-      if (!args) return 'VERCEL_PROMOTE failed.';
-      const approved = await ctx.requestApproval('vercel_promote', 'Promote deployment', args.deploymentId);
-      if (!approved) return NOT_APPROVED('VERCEL_PROMOTE', 'promote');
-      const r = await vercelPromote(args.deploymentId);
-      return `VERCEL_PROMOTE ${r.promoted ? 'ok' : 'failed'}`;
-    },
-    onError: (msg) => `Vercel call failed: ${msg}`,
   },
   {
     ...catalogEntry('open_window'),

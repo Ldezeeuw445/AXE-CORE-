@@ -1872,7 +1872,6 @@ const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
   { id: 'git_write', label: 'Commit files to GitHub' },
   { id: 'git_pr_merge', label: 'Pull requests mergen' },
   { id: 'db_sql', label: 'SQL draaien op Supabase' },
-  { id: 'vercel_promote', label: 'Vercel-deployment promoten' },
   { id: 'agent', label: 'Hand tasks to an external agent' },
   { id: 'smart_home', label: 'Smart home (SmartThings)' },
   // These two reach the worktree the running app is served from, so they

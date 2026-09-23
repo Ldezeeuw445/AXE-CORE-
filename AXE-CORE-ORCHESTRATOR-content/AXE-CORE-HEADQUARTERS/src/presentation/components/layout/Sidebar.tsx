@@ -157,7 +157,6 @@ function VpsHealthWidget() {
         if (health.supabase) bits.push('supabase');
         if (health.n8n) bits.push('n8n');
         if (health.github) bits.push('github');
-        if (health.vercel) bits.push('vercel');
 
         if (health.status === 'ok' || health.status === 'healthy' || bits.length > 0) {
           setStrato({ status: 'online', latencyMs: ms, detail: bits.length ? bits.join(' · ') : 'API healthy' });

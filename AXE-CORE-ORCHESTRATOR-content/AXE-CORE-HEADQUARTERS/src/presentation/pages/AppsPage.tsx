@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { Activity, ArrowRight, ExternalLink, Home, Plus, Power, RefreshCw, Smartphone, Trash2, Wrench } from 'lucide-react';
 import {
-  sbGetRows, sbDeleteRow, vercelListDeployments, isAxeApiConfigured,
+  sbGetRows, sbDeleteRow, isAxeApiConfigured,
   vpsStatus, buildStatus, vpsServiceRestart, type VpsStatus, type BuildStatus,
   northseaPipelineSummary, northseaSystemHealth, northseaCommunicationsMetrics, northseaTab,
   type NorthseaPipelineSummary, type NorthseaSystemHealth, type NorthseaCommunicationsMetrics,
@@ -56,6 +56,36 @@ const STATE_STYLE: Record<LiveState, { bg: string; fg: string; label: string }> 
 const VPS_SERVICE_BY_APP_NAME: Record<string, string> = {
   'AXE CORE HQ': 'axe-core-api',
   'AXE Companion': 'axe-companion',
+};
+
+// Apps whose registered_apps row would otherwise imply a status this
+// dashboard cannot honestly claim — confirmed by a dedicated investigation
+// (see the App Manager Vercel-removal pass), not guessed from a URL fetch or
+// Vercel's API (which this page no longer calls, full stop — see the load()
+// comment below). Each entry overrides both the card's status badge and adds
+// an explicit detail line, regardless of what prod_url/vercel_project_id
+// happen to hold on the row:
+//  - AXE Companion runs on the VPS today, but DNS still points at the
+//    disabled Vercel deployment, so nothing public actually resolves to it.
+//  - Trading OS has never been a separate deployment — it is an internal
+//    tab, hence no VPS_SERVICE_BY_APP_NAME entry for it either.
+//  - Axon Memory has its own domain and its own Supabase project, neither of
+//    which this app can independently verify — so instead of trusting a
+//    no-cors fetch as a stand-in for "launched", it says plainly that this
+//    dashboard doesn't know.
+const NOT_LAUNCHED_STATUS: Record<string, { badge: string; detail: string }> = {
+  'AXE Companion': {
+    badge: 'Not launched',
+    detail: 'Not launched — runs on the VPS (axe-companion service), DNS not yet cut over from the disabled Vercel deployment.',
+  },
+  'Trading OS': {
+    badge: 'No deployment',
+    detail: 'Not a separate deployment — runs as a tab inside AXE CORE.',
+  },
+  'Axon Memory': {
+    badge: 'Status unknown',
+    detail: 'Status unknown from AXE CORE — check directly.',
+  },
 };
 
 interface AppHealthCheck {
@@ -203,55 +233,58 @@ export default function AppsPage() {
         const next: Record<string, LiveState> = {};
         await Promise.all(
           list.map(async (app) => {
-            // NO VERCEL PROJECT IS NOT THE SAME AS NOT RUNNING.
-            //
-            // This returned 'unknown' for anything without a Vercel id, so
-            // Axon Memory — live on Cloudflare at app.axon-memory.com and
-            // answering 200 — was labelled Unknown on a dashboard whose whole
-            // job is saying what is up. A status has to come from an
-            // observation, and the URL is the observation available here.
-            // A native app is not a deployment. Ledger is either installed on
-            // the phone or it is not, and asking Vercel or fetching a URL
-            // would answer a question nobody asked — so the tile reports what
-            // it can actually observe: whether the package is present.
-            if (app.android_package && !app.vercel_project_id) {
+            // This dashboard never asks Vercel's API for status — see
+            // NOT_LAUNCHED_STATUS and VPS_SERVICE_BY_APP_NAME above for why.
+            // Order matters: a hardcoded honest label wins over any network
+            // check, a real VPS systemd check wins over a guess, and only
+            // apps with neither fall back to an actual observation (native
+            // install, or reachability) — never a fabricated "Online".
+            if (NOT_LAUNCHED_STATUS[app.name]) {
+              next[app.id] = 'unknown';
+              return;
+            }
+
+            // Real systemd state from main.py's /vps/status — the same
+            // source checkHealth()/the "Check health" button use — instead
+            // of ever asking Vercel. AXE CORE HQ's row still carries a
+            // vercel_project_id (historical; the column stays because other
+            // code depends on it existing), but that value is never read
+            // here or sent anywhere.
+            const vpsServiceKey = VPS_SERVICE_BY_APP_NAME[app.name];
+            if (vpsServiceKey) {
+              next[app.id] = 'checking';
+              try {
+                const vps = await vpsStatus();
+                const svc = vps.services[vpsServiceKey];
+                next[app.id] = svc?.active === true ? 'online' : svc?.active === false ? 'error' : 'unknown';
+              } catch {
+                next[app.id] = 'unknown';
+              }
+              return;
+            }
+
+            // A native app is not a deployment: whether the package is
+            // present on this phone is the only honest thing to check.
+            if (app.android_package && !app.prod_url) {
               next[app.id] = onPhone
                 ? (isAppInstalled(app.android_package) ? 'online' : 'error')
                 : 'unknown';
               return;
             }
-            if (!app.vercel_project_id) {
-              if (!app.prod_url) {
-                next[app.id] = 'unknown';
-                return;
-              }
-              next[app.id] = 'checking';
-              try {
-                // no-cors: this is a cross-origin GET to a site we do not
-                // control, so the response is opaque. Reaching it at all is
-                // the signal; a body we cannot read would tell us no more.
-                await fetch(app.prod_url, { mode: 'no-cors', signal: AbortSignal.timeout(8_000) });
-                next[app.id] = 'online';
-              } catch {
-                next[app.id] = 'error';
-              }
+
+            if (!app.prod_url) {
+              next[app.id] = 'unknown';
               return;
             }
             next[app.id] = 'checking';
             try {
-              const deps = await vercelListDeployments(1, app.vercel_project_id);
-              const latest = Array.isArray(deps) ? deps[0] : null;
-              const st = String(
-                (latest as { readyState?: string; state?: string })?.readyState
-                ?? (latest as { state?: string })?.state
-                ?? '',
-              ).toUpperCase();
-              if (st.includes('READY') || st === 'SUCCESS') next[app.id] = 'online';
-              else if (st.includes('ERROR') || st.includes('FAIL')) next[app.id] = 'error';
-              else if (st) next[app.id] = 'deploying';
-              else next[app.id] = 'unknown';
+              // no-cors: this is a cross-origin GET to a site we do not
+              // control, so the response is opaque. Reaching it at all is
+              // the signal; a body we cannot read would tell us no more.
+              await fetch(app.prod_url, { mode: 'no-cors', signal: AbortSignal.timeout(8_000) });
+              next[app.id] = 'online';
             } catch {
-              next[app.id] = 'unknown';
+              next[app.id] = 'error';
             }
           }),
         );
@@ -350,6 +383,7 @@ export default function AppsPage() {
               const state = live[app.id] ?? 'unknown';
               const st = STATE_STYLE[state];
               const vpsServiceKey = VPS_SERVICE_BY_APP_NAME[app.name];
+              const notLaunched = NOT_LAUNCHED_STATUS[app.name];
               const h = health[app.id];
               return (
                 <motion.div
@@ -377,15 +411,27 @@ export default function AppsPage() {
                       >
                         {/* "Failed" is the wrong word for an app that simply is
                             not on the phone, and "Online" is the wrong word for
-                            one that is. Same states, honest labels. */}
-                        {app.android_package && !app.vercel_project_id
-                          ? (state === 'online' ? 'Installed' : state === 'error' ? 'Not installed' : st.label)
-                          : st.label}
+                            one that is. Same states, honest labels. A
+                            NOT_LAUNCHED_STATUS entry outranks both — see the
+                            comment on that map for why. */}
+                        {notLaunched
+                          ? notLaunched.badge
+                          : app.android_package && !app.prod_url
+                            ? (state === 'online' ? 'Installed' : state === 'error' ? 'Not installed' : st.label)
+                            : st.label}
                       </span>
                     </div>
                     <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                       {app.description || app.notes || 'No description'}
                     </p>
+                    {/* Honest, hardcoded status for apps this dashboard knows
+                        are not actually launched/reachable the way their row
+                        might imply — see NOT_LAUNCHED_STATUS above. */}
+                    {notLaunched && (
+                      <div className="text-[10px] leading-relaxed -mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                        {notLaunched.detail}
+                      </div>
+                    )}
                     {/* Real VPS health, only for the rows that map to an
                         actual systemd unit — genuine pass/fail from
                         /vps/status + /build/status, not the opaque

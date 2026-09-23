@@ -134,7 +134,6 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/axeCoreApiService.ts', 'n8nUpdateWorkflow'],
   ['src/infrastructure/gateways/axeCoreApiService.ts', 'requestDurableTaskApproval'],
   ['src/infrastructure/gateways/axeCoreApiService.ts', 'transitionDurableTask'],
-  ['src/infrastructure/gateways/axeCoreApiService.ts', 'vercelGetDeployment'],
   ['src/infrastructure/gateways/brokerConnector.ts', 'brokerAccountSummary'],
   ['src/infrastructure/gateways/brokerConnector.ts', 'setBrokerConnection'],
   ['src/infrastructure/gateways/companionToolsService.ts', 'triggerCompanionCorrelation'],

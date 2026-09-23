@@ -17,7 +17,7 @@
 export type ToolGate = 'auto' | 'approval';
 
 /** Kinds shown on the approval card. One per gated tool. */
-export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote' | 'agent' | 'smart_home' | 'local_write' | 'local_run' | 'phone';
+export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'agent' | 'smart_home' | 'local_write' | 'local_run' | 'phone';
 
 /** The local agent bridges Axe can hand a task to (must match the axe_api
  *  /internal/{tool}/execute routes and the {TOOL}_URL env vars). Hermes is
@@ -276,39 +276,6 @@ Companion or Trading OS), say so plainly in the message shown alongside the
 approval, since Luka owns that call, not you. Denied means denied, exactly
 like [EXEC:]: tell him plainly, never silently retry.
 Example: "Ik check dit zodra je akkoord geeft. [DB_SQL: {"query":"select count(*) from core_memory"}]"`,
-  },
-  {
-    id: 'vercel_status',
-    marker: 'VERCEL_STATUS',
-    shortForm: '[VERCEL_STATUS]',
-    gate: 'auto',
-    pattern: /\[VERCEL_STATUS:?\s*\]/,
-    stripPattern: /\[VERCEL_STATUS:?\s*\]/g,
-    promptDoc: `🚀 **Vercel — Deployment status**, no approval needed (reading isn't destructive):
-\`[VERCEL_STATUS]\`
-Returns the 10 most recent deployments for the AXE CORE project: state,
-target (production/preview), commit, URL. Use this instead of guessing
-whether a merge actually went live — Vercel does NOT reliably auto-promote
-every merge to production for this project, which has bitten Luka
-repeatedly. Never assume a deploy succeeded; check.
-Example: "Even kijken of dat al live staat. [VERCEL_STATUS]"`,
-  },
-  {
-    id: 'vercel_promote',
-    marker: 'VERCEL_PROMOTE',
-    shortForm: '[VERCEL_PROMOTE:]',
-    gate: 'approval',
-    approvalKind: 'vercel_promote',
-    pattern: /\[VERCEL_PROMOTE:\s*(\{[^\]]{1,300}\})\s*\]/,
-    stripPattern: /\[VERCEL_PROMOTE:\s*\{[^\]]*\}\s*\]/g,
-    promptDoc: `🚀 **Vercel — Promote to production**, same mandatory-approval contract as [EXEC:]:
-\`[VERCEL_PROMOTE: {"deploymentId":"..."}]\`
-Re-points production traffic at an existing, already-built deployment (get
-the id from [VERCEL_STATUS] first) — does NOT trigger a new build. This is
-real production traffic Luka's users hit, so it's gated exactly like EXEC,
-no exception for "it's just a promote, not a delete." Denied means denied:
-tell him plainly, never silently retry.
-Example: "Ik promoot 'm zodra je akkoord geeft. [VERCEL_PROMOTE: {"deploymentId":"dpl_abc123"}]"`,
   },
   {
     id: 'osint',
