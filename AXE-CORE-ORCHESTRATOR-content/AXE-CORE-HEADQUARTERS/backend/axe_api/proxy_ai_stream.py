@@ -14,9 +14,6 @@ from __future__ import annotations
 import json
 from typing import Any, AsyncIterator, Callable
 
-import httpx
-from fastapi.responses import StreamingResponse
-
 # Zelfde budgets als de gebufferde tak in main.py.
 PROXY_TIMEOUT_OLLAMA = 90
 PROXY_TIMEOUT_CLOUD = 25
@@ -195,7 +192,10 @@ def bouw_stream_request(body: dict) -> tuple[str, dict[str, str], dict[str, Any]
     )
 
 
-async def proxy_ai_stream_response(body: dict) -> StreamingResponse:
+async def proxy_ai_stream_response(body: dict):
+    import httpx
+    from fastapi.responses import StreamingResponse
+
     provider = body.get("provider")
     timeout = PROXY_TIMEOUT_OLLAMA if provider == "ollama" else PROXY_TIMEOUT_CLOUD
     url, headers, payload, iterator = bouw_stream_request(body)

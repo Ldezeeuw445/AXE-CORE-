@@ -9,7 +9,7 @@ describe('SSE-parser voor first-token', () => {
   });
 
   it('leest Gemini-delen en negeert kapotte JSON', () => {
-    expect(deltaUitJson('{"candidates":[{"content":{"parts":[{"text":"Hi"}]}]}')).toBe('Hi');
+    expect(deltaUitJson('{"candidates":[{"content":{"parts":[{"text":"Hi"}]}}]}')).toBe('Hi');
     expect(deltaUitJson('niet-json')).toBe('');
   });
 

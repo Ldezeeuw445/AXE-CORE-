@@ -8,21 +8,21 @@ export interface AxeStreamSlot {
   model?: string;
 }
 
-export interface AxeStreamBericht {
-  role: 'axe';
-  text: string;
+interface ChatBeurtRegel {
+  role: string;
+  text?: string;
   timestamp: number;
   provider?: string;
   model?: string;
 }
 
-export function volgendeAxeBericht<T extends { role: string; timestamp: number }>(
-  conversation: T[],
+export function volgendeAxeBericht(
+  conversation: ChatBeurtRegel[],
   partial: string,
   slot: AxeStreamSlot,
   axeTs: number,
-): Array<T | AxeStreamBericht> {
-  const msg: AxeStreamBericht = {
+): ChatBeurtRegel[] {
+  const msg: ChatBeurtRegel = {
     role: 'axe',
     text: partial,
     timestamp: axeTs,
@@ -32,7 +32,7 @@ export function volgendeAxeBericht<T extends { role: string; timestamp: number }
   const i = conversation.findIndex(m => m.role === 'axe' && m.timestamp === axeTs);
   if (i >= 0) {
     const next = conversation.slice();
-    next[i] = msg as T;
+    next[i] = msg;
     return next;
   }
   return [...conversation, msg];
