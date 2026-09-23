@@ -16,10 +16,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { CANONICAL_FROM, CANONICAL_REPLY_TO, outboundProvenance } from "../_shared/canonical.ts";
+import { outboundProvenance } from "../_shared/canonical.ts";
 import { audit } from "../_shared/db.ts";
-import { email, strip } from "../_shared/inbound.ts";
+import { strip } from "../_shared/inbound.ts";
 import { normalizeMessageId } from "../_shared/mapping.ts";
+import { asList, exactDraftLinkage, isCanonicalSender, pageLimit, wantsCommit } from "../_shared/reconcile.ts";
 
 const VERSION = "resend-reconcile-outbound-v1";
 const json = (b: unknown, s = 200) =>
@@ -44,15 +45,6 @@ async function resendGet(path: string, key: string): Promise<Record<string, unkn
   return body as Record<string, unknown>;
 }
 
-function canonicalSender(v: unknown): boolean {
-  return email(v) === CANONICAL_REPLY_TO;
-}
-
-function asList(v: unknown): string[] {
-  if (Array.isArray(v)) return v.map(String).filter(Boolean);
-  return v ? [String(v)] : [];
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
@@ -64,8 +56,8 @@ Deno.serve(async (req) => {
   if (!resendKey) return json({ ok: false, error: "resend_not_configured" }, 503);
 
   const input = await req.json().catch(() => ({})) as Record<string, unknown>;
-  const commit = input.commit === true;
-  const maxPages = Math.max(1, Math.min(5, Number(input.max_pages ?? 2) || 2));
+  const commit = wantsCommit(input);
+  const maxPages = pageLimit(input);
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, serviceRole, { auth: { persistSession: false } });
 
   try {
@@ -76,7 +68,7 @@ Deno.serve(async (req) => {
       if (after) qs.set("after", after);
       const payload = await resendGet(`/emails?${qs.toString()}`, resendKey);
       const rows = Array.isArray(payload.data) ? payload.data as SentListItem[] : [];
-      const ours = rows.filter((x) => x.id && canonicalSender(x.from));
+      const ours = rows.filter((x) => x.id && isCanonicalSender(x.from));
       sent.push(...ours);
       if (payload.has_more !== true || rows.length === 0) break;
       after = String(rows[rows.length - 1]?.id ?? "");
@@ -128,12 +120,13 @@ Deno.serve(async (req) => {
         if (already) continue;
 
         const detail = await resendGet(`/emails/${encodeURIComponent(id)}`, resendKey) as SentListItem & Record<string, unknown>;
-        if (!canonicalSender(detail.from ?? item.from)) {
+        if (!isCanonicalSender(detail.from ?? item.from)) {
           failed.push({ resend_email_id: id, error: "sender_not_canonical" });
           continue;
         }
 
         const draft = drafts.get(id);
+        const link = exactDraftLinkage(draft);
         const text = typeof detail.text === "string" && detail.text.trim()
           ? detail.text
           : strip(typeof detail.html === "string" ? detail.html : null);
@@ -141,9 +134,9 @@ Deno.serve(async (req) => {
         const messageId = normalizeMessageId(detail.message_id ?? item.message_id);
 
         const { data: inserted, error: ie } = await sb.from("communications").insert({
-          company_id: draft?.company_id ?? null,
-          contact_id: draft?.contact_id ?? null,
-          opportunity_id: draft?.opportunity_id ?? null,
+          company_id: link.company_id,
+          contact_id: link.contact_id,
+          opportunity_id: link.opportunity_id,
           direction: "outbound",
           channel: "email",
           subject: String(detail.subject ?? item.subject ?? "") || null,
@@ -151,8 +144,8 @@ Deno.serve(async (req) => {
           occurred_at: detail.created_at ?? item.created_at ?? new Date().toISOString(),
           rfc_message_id: messageId,
           delivery_status: detail.last_event ?? item.last_event ?? null,
-          mapping_status: draft?.opportunity_id ? "mapped" : "unmapped",
-          mapping_basis: draft?.opportunity_id ? "reply_draft_resend_email_id" : "provider_reconciliation",
+          mapping_status: link.mapping_status,
+          mapping_basis: link.mapping_basis,
           provider_metadata: {
             reconciled: true,
             reconciled_by: VERSION,

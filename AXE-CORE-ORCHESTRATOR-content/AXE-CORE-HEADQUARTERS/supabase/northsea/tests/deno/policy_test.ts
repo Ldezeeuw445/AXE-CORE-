@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { blocksHumanSend, decideAutoQualificationReply, parsePolicy, type PolicyRead } from "../../functions/_shared/policy.ts";
+import { blocksHumanSend, decideAutoQualificationReply, needsHumanApproval, parsePolicy, type PolicyRead } from "../../functions/_shared/policy.ts";
 
 const row = (over: Record<string, unknown> = {}) => ({ auto_send_qualification: true, auto_send_followups: false, auto_reply_nonbinding: true,
   auto_disclose_counterparty_identity: false, auto_accept_pricing: false, auto_sign_documents: false, auto_change_banking: false,
@@ -47,4 +47,13 @@ Deno.test("each blocker blocks independently", () => {
 });
 Deno.test("human send: review_required allowed, dnc/synthetic never", () => {
   assertEquals([blocksHumanSend(null), blocksHumanSend("review_required"), blocksHumanSend("do_not_contact"), blocksHumanSend("synthetic"), blocksHumanSend("bounced_channel")], [false, false, true, true, true]);
+});
+Deno.test("human-approval flag is quiet unless sensitive, ambiguous, or a blocked safe draft", () => {
+  const quiet = { sensitive: false, mappingStatus: "unmapped" as const, hasSafeDraft: false, policyAllowed: false, blockReason: null };
+  assertEquals(needsHumanApproval(quiet), false);
+  assertEquals(needsHumanApproval({ ...quiet, sensitive: true }), true);
+  assertEquals(needsHumanApproval({ ...quiet, mappingStatus: "ambiguous" }), true);
+  assertEquals(needsHumanApproval({ ...quiet, hasSafeDraft: true }), true);
+  assertEquals(needsHumanApproval({ ...quiet, hasSafeDraft: true, policyAllowed: true }), false);
+  assertEquals(needsHumanApproval({ ...quiet, hasSafeDraft: true, blockReason: "do_not_contact" }), false);
 });

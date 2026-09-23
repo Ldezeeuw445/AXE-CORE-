@@ -1,8 +1,10 @@
 # NorthSea Execution Completion — production handoff
 
-Prepared: 2026-09-22
+Prepared: 2026-09-22. Rebased onto current `orchestrator` (includes #172/#173/#174/#175) on 2026-09-23.
 
 This document is a factual handoff for closing the NorthSea Desk execution loop. It is not a redesign.
+
+**This prep does not enable sending.** `auto_send_qualification`, `auto_reply_nonbinding` and `auto_send_followups` stay false. The governed follow-up executor is not in this change. The backlog is not auto-executed.
 
 ## Live production snapshot
 
@@ -144,3 +146,25 @@ Human approval remains required for:
 - any material legal/commercial obligation
 
 Non-binding qualification, missing-information requests and ordinary bounded follow-ups are the candidates for policy-governed automation after tests pass.
+
+## Deploy after merge (do not skip dry-run)
+
+Live flags stay false. Do not deploy from this document as an enablement step.
+
+1. Apply the migration (one file, after existing P1 migrations):
+   `supabase/northsea/migrations/20260922090000_p2_outbound_reconciliation.sql`
+2. Deploy functions with JWT required on the reconciler:
+   ```bash
+   python3 supabase/northsea/tools/deploy_functions.py resend-inbound resend-reconcile-outbound
+   ```
+   `VERIFY_JWT` is already true for `resend-reconcile-outbound` and `send-approved-reply`.
+3. Dry-run reconcile first (default; no `commit`):
+   ```bash
+   curl -sS -X POST "$SUPABASE_URL/functions/v1/resend-reconcile-outbound" \
+     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{}'
+   ```
+   Expect `commit: false` and `reconciled: 0`. Review `rows` for unexpected sender or guessed linkage.
+4. Only after that review, an explicit `{ "commit": true }` writes journal rows. It still never sends mail.
+5. Later, and not in this prep: build the governed follow-up executor. Keep the three auto-send flags false until that path is tested.

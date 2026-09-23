@@ -15,7 +15,7 @@ import { audit, outboundBlockReason, readPolicy } from "../_shared/db.ts";
 import { automatedHtml, domain, draftText, email, FREE_MAIL_DOMAINS, intel, isStratoNotification, strip } from "../_shared/inbound.ts";
 import { renderNorthSeaMail } from "../_shared/mail.ts";
 import { type CompanyOpportunity, mapCommunication, normalizeMessageId, threadMessageIds, type ThreadMatch } from "../_shared/mapping.ts";
-import { blocksHumanSend, decideAutoQualificationReply } from "../_shared/policy.ts";
+import { blocksHumanSend, decideAutoQualificationReply, needsHumanApproval } from "../_shared/policy.ts";
 
 const VERSION = "resend-inbound-v12";
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json" } });
@@ -129,8 +129,13 @@ Deno.serve(async (req) => {
       blockReason, synthetic: mapping.status === "synthetic" || companySynthetic, recipient: sender });
 
     const d = draftText(i, sender, subject);
-    const needsHuman = i.sensitive || mapping.status === "ambiguous"
-      || Boolean(d && !decision.allowed && !blocksHumanSend(blockReason));
+    const needsHuman = needsHumanApproval({
+      sensitive: i.sensitive,
+      mappingStatus: mapping.status,
+      hasSafeDraft: Boolean(d),
+      policyAllowed: decision.allowed,
+      blockReason,
+    });
 
     await sb.from("email_intelligence").upsert({ communication_id: comm.id, company_id: companyId, contact_id: contactId, opportunity_id: opportunityId,
       classification: i.classification, commercial_intent: i.classification === "supplier" ? "offer_supply" : i.classification === "buyer" ? "source_product" : "general_inquiry",
