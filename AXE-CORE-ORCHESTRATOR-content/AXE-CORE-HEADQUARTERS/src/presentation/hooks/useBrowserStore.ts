@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Tab, AIMessage, QuickLink, Bookmark, HistoryEntry, DownloadItem, AIMode, SidebarPanel } from '@/domain/types/browser';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 
 const IS_BROWSER_DEMO = import.meta.env.VITE_BROWSER_DEMO === 'true';
 
@@ -70,6 +71,8 @@ function loadHistory(): HistoryEntry[] {
   ];
 }
 
+const GESCHIEDENIS_MAX = 500;
+
 export function useBrowserStore() {
   const [tabs, setTabs] = useState<Tab[]>([
     {
@@ -110,11 +113,16 @@ export function useBrowserStore() {
 
   // Persist bookmarks and history
   useEffect(() => {
-    localStorage.setItem('axe_browser_bookmarks', JSON.stringify(bookmarks));
+    zetJson('axe_browser_bookmarks', bookmarks);
   }, [bookmarks]);
 
+  /* De geschiedenis had GEEN plafond: elke bezochte pagina kwam erbij en er ging
+     nooit iets af. Op een localStorage van een paar megabyte is dat de post die
+     hem vult, en een volle opslag liet Settings en EVE crashen -- niet de
+     browser zelf, want daar was de schrijfactie toevallig de laatste.
+     500 is ruim voor terugzoeken en scheelt een orde van grootte. */
   useEffect(() => {
-    localStorage.setItem('axe_browser_history', JSON.stringify(history));
+    zetJson('axe_browser_history', history.slice(-GESCHIEDENIS_MAX));
   }, [history]);
 
   const addTab = useCallback((url?: string, title?: string) => {

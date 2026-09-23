@@ -29,17 +29,16 @@
  * Run:  node infra/axe-computer-worker/worker.mjs
  */
 import { execFile } from 'node:child_process';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { resolve, sep, join, dirname } from 'node:path';
-import { homedir, hostname } from 'node:os';
+import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
 
-function loadEnv() {
-  const p = join(REPO, '.env');
+function loadEnvFile(p) {
   if (!existsSync(p)) return {};
   const out = {};
   for (const line of readFileSync(p, 'utf8').split('\n')) {
@@ -48,10 +47,20 @@ function loadEnv() {
   }
   return out;
 }
-const env = { ...loadEnv(), ...process.env };
+// De frontend-.env én de backend-.env.local van deze Mac. De tweede heeft de
+// service-sleutel: core_tasks is niet meer open voor anon, omdat de anon-sleutel
+// in elke app-build zit en wie hem uitleest anders taken op deze Mac kon zetten.
+const env = {
+  ...loadEnvFile(join(REPO, '.env')),
+  ...loadEnvFile(join(REPO, 'backend/axe_api/.env.local')),
+  ...process.env,
+};
 
-const SUPABASE_URL = env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = env.SUPABASE_URL ?? env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = env.SUPABASE_SERVICE_ROLE ?? env.VITE_SUPABASE_ANON_KEY;
+if (!env.SUPABASE_SERVICE_ROLE) {
+  console.warn('axe-computer-worker: geen SUPABASE_SERVICE_ROLE in backend/axe_api/.env.local — valt terug op de anon-sleutel, en die mag core_tasks niet meer lezen.');
+}
 const CAPABILITY = 'computer_use';
 const POLL_MS = Number(env.AXE_COMPUTER_POLL_MS ?? 1500);
 const LEASE_MS = 90_000;
@@ -87,8 +96,12 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const WORKSPACE_DEFS = {
   'AXE Core': {
     envKey: 'AXE_WS_AXE_CORE',
-    fallback: '/Volumes/EagetSSD/AXE-CORE-/.kilo/worktrees/unequaled-louse'
-            + '/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS',
+    // Was the kilo worktree on the SSD. That one was drained on 2026-09-02 and
+    // still sits on trading-desk-aug-25-26; the live checkout has been
+    // ~/AXE-CORE- on orchestrator since 2026-09-03. Measured 2026-09-13: a
+    // system.info from the app answered with the kilo root and the old branch,
+    // so every computer-use call on the Mac Mini read a tree nobody edits.
+    fallback: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS',
     protected: ['orchestrator', 'main'],
   },
   'AXE Companion': {
@@ -147,9 +160,143 @@ const COMMANDS = {
 };
 
 const READ_ONLY = new Set([
-  'system.info', 'files.list', 'files.read', 'files.search',
+  'system.info', 'files.list', 'files.read', 'files.search', 'personal.files.list',
   'git.status', 'git.branch', 'git.diff', 'git.log',
+  'camera.snapshot', 'computer.permissions', 'screen.displays', 'screen.observe',
+  'pointer.position', 'app.list', 'app.frontmost', 'window.list',
 ]);
+
+/**
+ * camera.snapshot — één foto met de ingebouwde camera, naar de privé-bucket `axe-camera`.
+ *
+ * Alleen zinvol op een Mac met camera (de iMac). De foto staat nooit publiek: de
+ * bucket heeft geen publieke URL en alleen Luka's ingelogde account mag hem lezen.
+ * Het resultaat is het pad in de bucket, niet de foto zelf, zodat core_tasks geen
+ * beelden bevat.
+ */
+// Een app-bundel, gestart via `open`: dan is de app zelf het verantwoordelijke proces en
+// vraagt macOS toestemming op naam van "AXE Camera". Rechtstreeks vanuit node weigert
+// macOS zonder te vragen (node mist het camera-recht). Zie camera/Info.plist.
+const CAMERA_APP = env.AXE_CAMERA_APP ?? join(HERE, 'camera', 'AXE Camera.app');
+const CAMERA_BUCKET = 'axe-camera';
+
+// One stable app-bundle identity owns Screen Recording + Accessibility TCC.
+// Rebuilding the helper in-place with the same bundle id/signing identity keeps
+// permissions attached to AXE Computer Use instead of anonymous node/swift bins.
+const COMPUTER_USE_APP = env.AXE_COMPUTER_USE_APP ?? join(HERE, 'native', 'AXE Computer Use.app');
+
+async function nativeComputerUse(command, args = {}) {
+  if (!existsSync(COMPUTER_USE_APP)) {
+    throw new Error(`native computer-use helper ontbreekt: bouw ${join(HERE, 'native', 'build.sh')}`);
+  }
+  const stamp = `${process.pid}-${Date.now()}`;
+  const out = join(tmpdir(), `axe-computer-use-${stamp}.json`);
+  try {
+    await new Promise((res, rej) => {
+      execFile(
+        '/usr/bin/open',
+        // Pass the exact bundle path as the target. Using -a is for resolving an
+        // application name and can select a different installed copy with the
+        // same display name — precisely the ambiguity this native runtime work
+        // is eliminating.
+        ['-W', '-n', '-g', COMPUTER_USE_APP, '--args', command, out, JSON.stringify(args)],
+        { timeout: 150_000 },
+        (err) => err ? rej(err) : res(),
+      );
+    });
+    const raw = await readFile(out, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed?.ok) throw new Error(parsed?.error ?? `${command} failed`);
+    return parsed.result;
+  } finally {
+    await unlink(out).catch(() => {});
+  }
+}
+
+async function uploadPrivateCapture(file, mime, prefix = 'screen') {
+  const data = await readFile(file);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const object = `${DEVICE_ID}/${prefix}-${stamp}.${mime === 'image/png' ? 'png' : 'jpg'}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${CAMERA_BUCKET}/${object}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': mime },
+    body: data,
+  });
+  if (!res.ok) throw new Error(`capture upload mislukt: ${res.status} ${(await res.text().catch(() => '')).slice(0, 160)}`);
+  return { bucket: CAMERA_BUCKET, path: object, mime, bytes: data.length };
+}
+
+async function screenObserve(args = {}) {
+  const file = join(tmpdir(), `axe-screen-${process.pid}-${Date.now()}.jpg`);
+  try {
+    const meta = await nativeComputerUse('screen.capture', {
+      display_index: Number(args.display_index ?? 0),
+      path: file,
+    });
+    const stored = await uploadPrivateCapture(file, 'image/jpeg', 'screen');
+    return JSON.stringify({
+      ...stored,
+      display_index: meta.display_index,
+      width: meta.width,
+      height: meta.height,
+      logical_x: meta.logical_x,
+      logical_y: meta.logical_y,
+      logical_width: meta.logical_width,
+      logical_height: meta.logical_height,
+      pixel_width: meta.pixel_width,
+      pixel_height: meta.pixel_height,
+    });
+  } finally {
+    await unlink(file).catch(() => {});
+  }
+}
+
+function cameraShot(file) {
+  const foutBestand = `${file}.fout`;
+  return new Promise((res, rej) => {
+    if (!existsSync(CAMERA_APP)) {
+      return rej(new Error(`camera-app ontbreekt: bouw "AXE Camera.app" volgens ${join(HERE, 'camera', 'main.swift')}`));
+    }
+    // -W wacht tot de app stopt, -n altijd een nieuwe instantie, -g niet naar voren.
+    // 150 s: de eerste keer wacht de app tot iemand op "Sta toe" klikt.
+    execFile('/usr/bin/open', ['-W', '-n', '-g', '-a', CAMERA_APP, '--args', file], { timeout: 150_000 }, (err) => {
+      if (err?.killed) return rej(new Error('camera: geen antwoord binnen 150 s (wacht de toestemmingsvraag nog op deze Mac?)'));
+      if (existsSync(file)) return res();
+      let code = 0; let msg = err?.message ?? 'geen foto gemaakt';
+      try {
+        const regel = readFileSync(foutBestand, 'utf8').trim();
+        code = Number(regel.split(' ')[0]); msg = regel.slice(String(code).length).trim() || msg;
+      } catch { /* geen foutbestand: de app startte niet */ }
+      unlink(foutBestand).catch(() => {});
+      const uitleg = {
+        2: 'geen cameratoestemming — klik "Sta toe" op deze Mac, of zet AXE Camera aan in Systeeminstellingen → Privacy en beveiliging → Camera',
+        3: 'deze Mac heeft geen camera',
+      }[code];
+      rej(new Error(uitleg ?? `camera mislukt: ${String(msg).slice(0, 200)}`));
+    });
+  });
+}
+
+async function cameraSnapshot() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = join(tmpdir(), `axe-camera-${process.pid}-${stamp}.jpg`);
+  try {
+    await cameraShot(file);
+    const data = await readFile(file);
+    const object = `${DEVICE_ID}/${stamp}.jpg`;
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${CAMERA_BUCKET}/${object}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'image/jpeg' },
+      body: data,
+    });
+    if (!res.ok) {
+      throw new Error(`upload mislukt: ${res.status} ${(await res.text().catch(() => '')).slice(0, 160)}`);
+    }
+    return `bucket ${CAMERA_BUCKET}\npad ${object}\nbytes ${data.length}`;
+  } finally {
+    await unlink(file).catch(() => {});
+  }
+}
 
 /* ── supabase ───────────────────────────────────────────────────────────── */
 function sb(path, init = {}) {
@@ -316,6 +463,63 @@ const git = (root, ...a) => run('git', a, root);
 async function execute(payload) {
   const { tool, workspace, args = {} } = payload;
 
+  // A packaged AXE CORE and its local launchd worker are one runtime. Refuse a
+  // mixed-generation local pair instead of letting an old UI talk confidently
+  // to a newer worker (or vice versa). Remote phone/web clients are allowed to
+  // differ because they intentionally control this Mac across deployments.
+  if (payload.client_runtime === 'tauri' && tool !== 'system.info') {
+    const appBuild = String(payload.client_build ?? '').trim();
+    const workerBuild = (await git(REPO, 'rev-parse', '--short', 'HEAD')).trim();
+    if (appBuild && appBuild !== 'unknown' && workerBuild && appBuild !== workerBuild) {
+      throw new Error(
+        `AXE native runtime mismatch: app=${appBuild}, computer-worker=${workerBuild}. Run 'npm run bijwerken' from orchestrator; no computer action was executed.`,
+      );
+    }
+  }
+
+  // Device-scoped Personal Computer Use never inherits git/worktree branch
+  // semantics. Those protections remain mandatory for repo tools below.
+  if (tool === 'computer.permissions') return JSON.stringify(await nativeComputerUse('permissions.status', args));
+  if (tool === 'computer.permissions.request_screen') return JSON.stringify(await nativeComputerUse('permissions.request_screen', args));
+  if (tool === 'computer.permissions.request_accessibility') return JSON.stringify(await nativeComputerUse('permissions.request_accessibility', args));
+  if (tool === 'screen.displays') return JSON.stringify(await nativeComputerUse('screen.displays', args));
+  if (tool === 'screen.observe') return screenObserve(args);
+  if (tool === 'pointer.position') return JSON.stringify(await nativeComputerUse('pointer.position', args));
+  if (tool === 'pointer.move') return JSON.stringify(await nativeComputerUse('pointer.move', args));
+  if (tool === 'pointer.click') return JSON.stringify(await nativeComputerUse('pointer.click', args));
+  if (tool === 'pointer.double_click') return JSON.stringify(await nativeComputerUse('pointer.double_click', args));
+  if (tool === 'pointer.right_click') return JSON.stringify(await nativeComputerUse('pointer.right_click', args));
+  if (tool === 'pointer.drag') return JSON.stringify(await nativeComputerUse('pointer.drag', args));
+  if (tool === 'pointer.scroll') return JSON.stringify(await nativeComputerUse('pointer.scroll', args));
+  if (tool === 'keyboard.type') return JSON.stringify(await nativeComputerUse('keyboard.type', args));
+  if (tool === 'keyboard.key') return JSON.stringify(await nativeComputerUse('keyboard.key', args));
+  if (tool === 'app.list') return JSON.stringify(await nativeComputerUse('app.list', args));
+  if (tool === 'app.frontmost') return JSON.stringify(await nativeComputerUse('app.frontmost', args));
+  if (tool === 'app.open') return JSON.stringify(await nativeComputerUse('app.open', args));
+  if (tool === 'app.focus') return JSON.stringify(await nativeComputerUse('app.focus', args));
+  if (tool === 'window.list') return JSON.stringify(await nativeComputerUse('window.list', args));
+  if (tool === 'camera.snapshot') return cameraSnapshot();
+
+  // Machine-scoped reads must not depend on a git checkout. Personal Computer
+  // Use is allowed to inspect these three explicit home folders even if this
+  // Mac happens not to have the requested repo/workspace mounted.
+  if (tool === 'personal.files.list') {
+    const requested = String(args.path ?? '').trim();
+    const allowed = new Map([
+      ['Desktop', join(homedir(), 'Desktop')],
+      ['Documents', join(homedir(), 'Documents')],
+      ['Downloads', join(homedir(), 'Downloads')],
+    ]);
+    const dir = allowed.get(requested);
+    if (!dir) throw new Error(`personal.files.list only allows Desktop, Documents, or Downloads; got '${requested}'`);
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries
+      .filter(e => !e.name.startsWith('.') && !DENY_NAMES.test(e.name))
+      .slice(0, 200)
+      .map(e => (e.isDirectory() ? `${e.name}/` : e.name))
+      .join('\n') || '(empty)';
+  }
+
   const ws = WORKSPACES[workspace];
   if (!ws) throw new Error(`unknown workspace '${workspace}'`);
   const root = resolve(ws.root);
@@ -330,8 +534,11 @@ async function execute(payload) {
   }
 
   switch (tool) {
-    case 'system.info':
-      return `host ${hostname()}\nworkspace ${workspace}\nroot ${root}\nbranch ${branch}\nnode ${process.version}`;
+    case 'system.info': {
+      const sourceCommit = (await git(REPO, 'rev-parse', '--short', 'HEAD')).trim();
+      return `host ${hostname()}\nworkspace ${workspace}\nroot ${root}\nbranch ${branch}\nworker_source ${sourceCommit}\nnode ${process.version}`;
+    }
+
 
     case 'git.branch':  return branch || '(detached)';
     case 'git.status':  return git(root, 'status', '--porcelain', '-b');

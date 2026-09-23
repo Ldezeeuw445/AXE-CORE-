@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Home · sphere on the plate, phone floating</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* De bol staat rechtstreeks op de plaat: geen kaart eromheen. Dit is de
+   "scene"-regel -- 3D en 2D tekenen op het glas, alleen HUD-chips in ruit. */
+.scene { position: absolute; inset: 0; }
+.scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* HUD boven de scene: ruit, klein, telemetrie in mono. */
+.hud { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 8px; }
+.hud .ruit { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: var(--r-pil); font: 500 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.hud .ruit b { color: var(--ink); font-weight: 500; }
+
+/* Wat AXE nu doet, als lijst rechts op de plaat -- ruit, want het beweegt
+   over de scene en gaat weg zodra je iets anders opent. */
+.bezig { position: absolute; right: 22px; top: 18px; width: 264px; padding: 12px 14px; display: grid; gap: 8px; }
+.bezig .taak { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; font-size: 11.5px; }
+.bezig .taak .t-mono { font-size: 10px; }
+
+/* Het gesprek in de chatplaat. */
+.gesprek { display: grid; gap: 6px; padding: 8px 4px 0; align-content: end; }
+.bericht { display: grid; grid-template-columns: 54px 1fr; gap: 10px; font-size: 12px; line-height: 1.45; color: var(--ink); }
+.bericht .wie { font: 600 10px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.bericht--axe .wie { color: var(--accent); }
+.bericht .tools { display: flex; gap: 6px; margin-top: 4px; }
+
+/* De telefoon: een zwever linksonder, in ruit. Schaal .52 van een echte
+   iPhone 15 Pro (393x852), dus 204x443 op het scherm. */
+.telefoon { left: 28px; bottom: 26px; width: 204px; height: 486px; }
+.telefoon .kop { position: absolute; top: 0; left: 0; width: 236px; white-space: nowrap; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-radius: var(--r-pil); font: 500 9.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); cursor: grab; }
+.telefoon .kop .knop--rond { width: 22px; height: 22px; background: none; box-shadow: none; color: var(--ink-3); }
+.telefoon .kop .knop--rond svg.ic { width: 12px; height: 12px; }
+.telefoon .kop .knop--rond.aan { color: var(--accent); }
+.telefoon .toestel { position: absolute; left: 0; top: 43px; --schaal: 0.52; }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="scene">
+      <canvas data-bol data-schaal="0.34" data-roty="0.4"></canvas>
+      <div class="hud">
+        <span class="ruit"><i class="stip c-ok"></i> <b>19 038</b> memories</span>
+        <span class="ruit"><i class="stip c-accent"></i> <b>3</b> agents working</span>
+        <span class="ruit"><i class="stip c-warn"></i> <b>2</b> tasks due today</span>
+        <span class="ruit"><i class="stip c-ok"></i> VPS <b>212.227.91.79</b> · 41% mem</span>
+      </div>
+      <div class="ruit bezig">
+        <div class="t-label">now running</div>
+        <div class="taak"><span class="c-accent">▸</span><span>Trading OS · XAUUSD scan</span><span class="t-mono c-ok">live</span></div>
+        <div class="taak"><span class="c-accent">▸</span><span>Cron · memory consolidation</span><span class="t-mono c-3">in 12m</span></div>
+        <div class="taak"><span class="c-accent">▸</span><span>Browser agent · Camofox</span><span class="t-mono c-warn">idle</span></div>
+        <div class="haarlijn"></div>
+        <div class="taak"><span class="c-3">·</span><span class="c-3">Last learning turn scored</span><span class="t-mono c-ok">+0.8</span></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="show me how the mobile home looks on iPhone"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<div class="zweeflaag">
+  <div class="zwever telefoon" data-zweef="telefoon">
+    <div class="kop ruit" data-greep>
+      <span data-ic="telefoon"></span> iPhone 15 Pro · <span class="c-ok">live</span>
+      <span class="groei"></span>
+      <button class="knop knop--rond" title="Rotate" data-ic="herlaad"></button>
+      <button class="knop knop--rond aan" title="Pin" data-ic="speld"></button>
+      <button class="knop knop--rond" title="Hide" data-ic="kruis"></button>
+    </div>
+    <div class="toestel">
+      <div class="iphone">
+        <span class="iphone__knop iphone__knop--stil"></span><span class="iphone__knop iphone__knop--vol1"></span><span class="iphone__knop iphone__knop--vol2"></span><span class="iphone__knop iphone__knop--aan"></span>
+        <div class="iphone__scherm">
+          <div class="iphone__eiland"></div>
+          <div data-chroom="mobiel"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="toekomst.js"></script>
+<script>
+AXE.start({
+  dok: 'Home',
+  // Eén klik naar het bureau van NorthSea: een knop in de bovenbalk van Home,
+  // koper in de letters -- het merk -- en verder hetzelfde materiaal als de rest.
+  topbalk: { links: `<a class="chip chip--klein" href="desk.html" style="text-decoration:none;color:#C49B78;box-shadow:0 0 0 1px rgba(196,155,120,.35) inset">${AXE.ic('beurs')} NorthSea Desk</a>` },
+  chat: {
+    open: true,
+    werkt: true,
+    inhoud: `
+      <div class="gesprek">
+        <div class="bericht"><span class="wie">Luka</span><span>show me how the mobile home looks on iPhone</span></div>
+        <div class="bericht bericht--axe"><span class="wie">AXE</span><span>Floating it bottom-left, live against <span class="t-mono">#/mobile</span>. The sphere is 58vh there, chat sits lower, and the dock has five tabs. Drag it anywhere; pin keeps it on Home only.
+          <span class="tools"><span class="chip chip--aan">${AXE.ic('telefoon')} device · iphone-15-pro</span><span class="chip">${AXE.ic('herlaad')} hot reload</span><span class="chip">${AXE.ic('code')} open in Code</span></span></span></div>
+      </div>`
+  }
+});
+</script>
+</body>
+</html>

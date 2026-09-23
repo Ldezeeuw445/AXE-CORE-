@@ -9,9 +9,9 @@ Gives AXE CORE frontend privileged access to:
 
 All write operations are audit-logged to core_audit_log.
 Protected by Bearer token auth (AXE_API_KEY env var).
-CORS restricted to axe-core-rust.vercel.app.
+CORS restricted to axeheadquarters.com. Never Vercel — not now, not ever.
 
-Future: Cloudflare, Vercel, Railway, MetaAPI
+Future: Cloudflare, Railway, MetaAPI
 """
 
 from __future__ import annotations
@@ -33,8 +33,68 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
-from crew_runner import run_crew
+from crew_runner import CrewRunRequest, run_crew
+from zuinig import Bezet, lagere_prioriteit, slot as zuinig_slot
+import contextlib as _contextlib
+
+# ── agent_runner: beschermd ingeladen ────────────────────────────────────────
+#
+# Dit bestand draait op TWEE machines: de VPS en de lokale API op de Mac mini.
+# Op de Mac staat agent_runner.py naast dit bestand; op de VPS niet -- daar staat
+# hij in een checkout ín /opt/axe-core-api, en die map moet eerst in sys.path.
+#
+# De git-versie importeerde hier kaal (`from agent_runner import ...`). Op de VPS
+# had dat de hele API bij het opstarten laten crashen: trading, chat, alles. De
+# serverversie deed het wel goed -- sys.path aanvullen, en de import in een try,
+# zodat een ontbrekende module alleen /claude/* laat weigeren. Die aanpak is hier
+# overgenomen en naar BOVEN gehaald, omdat de planner-code verderop `run_agent`
+# al bij het laden nodig heeft.
+import sys as _sys
+import logging as _logging
+
+_CLAUDE_RUNNER_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "AXE-CORE-ORCHESTRATOR-content", "AXE-CORE-HEADQUARTERS", "backend", "axe_api",
+)
+if os.path.isdir(_CLAUDE_RUNNER_DIR) and _CLAUDE_RUNNER_DIR not in _sys.path:
+    _sys.path.append(_CLAUDE_RUNNER_DIR)
+
+try:
+    from agent_runner import (  # noqa: E402
+        run_agent,
+        engine_status as agent_engine_status,
+        agent_usage_status,
+        repo_status as claude_repo_status,
+        cli_available as claude_cli_available,
+        ALLOWED_PERMISSION_MODES,
+        werkboom_status,
+        commit_en_push,
+    )
+    _CLAUDE_IMPORT_ERROR = None
+except Exception as _e:  # noqa: BLE001
+    _CLAUDE_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
+    ALLOWED_PERMISSION_MODES = ()
+    _logging.getLogger("axe_api").warning(
+        "agent_runner niet ingeladen (%s) -- /claude/* weigert", _CLAUDE_IMPORT_ERROR)
+
+    def _geen_agent_runner(*_a, **_k):
+        raise RuntimeError(f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}")
+
+    run_agent = werkboom_status = commit_en_push = _geen_agent_runner  # type: ignore[assignment]
+
+    def agent_engine_status(*_a, **_k) -> dict:  # type: ignore[misc]
+        return {}
+
+    def agent_usage_status(*_a, **_k) -> dict:  # type: ignore[misc]
+        return {}
+
+    def claude_repo_status(*_a, **_k) -> dict:  # type: ignore[misc]
+        return {}
+
+    def claude_cli_available(*_a, **_k) -> bool:  # type: ignore[misc]
+        return False
 from task_runtime import TaskRepository
+from browser_ai_agents import router as browser_ai_router
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -52,9 +112,6 @@ N8N_API_KEY      = os.environ.get("N8N_API_KEY", "")
 # across all three (CRON_KEY still read as a fallback for older .env files).
 CRON_SECRET      = os.environ.get("CRON_SECRET") or os.environ.get("CRON_KEY", "")
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
-VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
-VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
-VERCEL_TEAM_ID   = os.environ.get("VERCEL_TEAM_ID", "")
 SMARTTHINGS_TOKEN = os.environ.get("SMARTTHINGS_TOKEN", "")
 
 # Local agent services running on this VPS. Each is OFF until its URL is set:
@@ -77,7 +134,7 @@ AGENT_SERVICES = {
 _OPENHANDS_SEMAPHORE = asyncio.Semaphore(1)
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
-    "https://axe-core-rust.vercel.app,https://www.axeheadquarters.com,https://axeheadquarters.com,"
+    "https://www.axeheadquarters.com,https://axeheadquarters.com,"
     "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost"
 ).split(",")
 
@@ -93,7 +150,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-AXE-Repo"],
     max_age=86400,
 )
 
@@ -108,6 +165,11 @@ def require_auth(
     return credentials.credentials
 
 AUTH = Depends(require_auth)
+
+# Browser AI providers share the AXE API auth wall.  The router existed for
+# DeepSeek, Browser Use and Camofox but was never mounted, so the three Browser
+# composers could render while every VPS request ended at a 404.
+app.include_router(browser_ai_router, dependencies=[AUTH])
 
 # ── Supabase (service_role) ───────────────────────────────────────────────────
 #
@@ -187,10 +249,17 @@ class PrMergeRequest(BaseModel):
     merge_method: str = "merge"     # merge | squash | rebase
 
 # ── CrewAI (Branch A: VPS Ollama → 9 specialist agents) ───────────────────
-class CrewRunRequest(BaseModel):
-    task: str
-    context: Optional[str] = None
-    conversation: Optional[list] = None
+class ClaudeRunRequest(BaseModel):
+    repo: str
+    prompt: str
+    permission_mode: Optional[str] = None
+    timeout: Optional[int] = None
+    # 'claude' of 'codex'. Beide gaan door dezelfde bewakingen in agent_runner;
+    # alleen het commando verschilt. Weggelaten is 'claude'.
+    engine: Optional[str] = None
+    # Het model dat deze motor moet draaien. Leeg = de CLI houdt zijn eigen
+    # standaard, die met een update meebeweegt (zie domain/motorModellen.ts).
+    model: Optional[str] = None
 
 class ExecRequest(BaseModel):
     command: str
@@ -268,7 +337,6 @@ async def health():
         "supabase": bool(SUPABASE_URL),
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
-        "vercel": bool(VERCEL_TOKEN and VERCEL_PROJECT_ID),
         "cron": bool(CRON_SECRET),
     }
 
@@ -386,17 +454,24 @@ async def decide_task_approval(
     return {"approval": approval}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# OPEN PROXIES — LLM providers + Exa search
+# PROXIES — LLM providers, Exa search, Fish TTS
 # ══════════════════════════════════════════════════════════════════════════════
-# Mirrors api/proxy/ai.ts and api/exa.ts (the Vercel versions) exactly, incl.
-# their security model: no AXE_API_KEY / AUTH here, on purpose. The caller's
-# own provider key travels in the request body (same as it already does
-# against Vercel) — these routes only exist to dodge the browser-CORS wall
-# each provider puts up, not to guard a secret of ours. That's what lets the
-# packaged Tauri app reach a real LLM without embedding the master AXE_API_KEY
-# (Supabase service_role + GitHub write + /internal/exec) into a distributed
-# app bundle just to get chat working. Not gated behind Vercel either, so
-# this keeps working even while the Vercel deployment is billing-disabled.
+# Deze routes stonden open, met als redenering: de client stuurt zijn eigen
+# providersleutel mee, de proxy omzeilt alleen CORS en bewaakt geen geheim van
+# ons. Dat klopte tot 2 sep 2026. Toen kreeg de proxy _SERVER_KEYS als
+# terugval (zie hieronder), en EXA_API_KEY / FISH_AUDIO_API_KEY stonden er al.
+# Vanaf dat moment kon iedereen die dit adres kende op Luka's kosten OpenAI,
+# Anthropic, Exa en Fish aanroepen met een lege sleutel.
+#
+# Gemeten 14 sep 2026: POST /proxy/ai met '{}' gaf 400, een validatiefout, dus
+# voorbij elke authcontrole. Daarom nu achter AUTH, net als de rest.
+#
+# Wie ze aanroept en zijn Bearer meestuurt:
+#   - de verpakte Tauri-app en de Android-schil: apiUrl.ts -> vpsAuthHeaders()
+#   - de planner in dit proces: planner.py -> _proxy_headers()
+#   - functions/api/_forward.ts (Cloudflare Pages) stuurt BEWUST geen sleutel
+#     mee. Die route controleert niet wie er belt, dus een sleutel erbij maakt
+#     van de Pages-URL dezelfde open kraan. Eerst een gebruikerscontrole daar.
 
 def _openai_chat_url(base_url: str) -> str:
     """Het chat-adres voor een OpenAI-vormige basis, in welke vorm hij ook komt.
@@ -453,6 +528,7 @@ _SERVER_KEYS: dict[str, tuple[str, ...]] = {
     "grok":        ("XAI_API_KEY", "GROK_API_KEY"),
     "cerebras":    ("CEREBRAS_API_KEY",),
     "deepseek":    ("DEEPSEEK_API_KEY",),
+    "elevenlabs":  ("ELEVENLABS_API_KEY",),
     # ollama heeft geen sleutel nodig en staat hier bewust niet in.
 }
 
@@ -466,7 +542,7 @@ def _server_key_for(provider: str) -> str:
     return ""
 
 
-@app.get("/proxy/ai/providers")
+@app.get("/proxy/ai/providers", dependencies=[AUTH])
 async def proxy_ai_providers():
     """Welke providers deze server zelf kan bedienen.
 
@@ -477,8 +553,8 @@ async def proxy_ai_providers():
     dat er niets is, is precies het soort stille misleiding dat deze codebase
     elders opruimt.
 
-    Geeft namen terug, nooit waarden. Open zoals /proxy/ai zelf: welke merken
-    er geconfigureerd zijn is geen geheim, de sleutels wel.
+    Geeft namen terug, nooit waarden. Achter AUTH net als /proxy/ai: de lijst
+    zegt precies welke betaalde sleutels hier te gebruiken zijn.
     """
     return {
         "providers": sorted({
@@ -490,7 +566,112 @@ async def proxy_ai_providers():
     }
 
 
-@app.post("/proxy/ai")
+def _rate_limit_headers(headers) -> dict:
+    """Sanitized provider quota telemetry; never return auth/cookie headers."""
+    out = {}
+    for k, v in headers.items():
+        lk = str(k).lower()
+        if "ratelimit" in lk or lk == "retry-after":
+            out[lk] = str(v)[:120]
+    return out
+
+
+@app.post("/proxy/ai/usage", dependencies=[AUTH])
+async def proxy_ai_usage(body: dict = Body(...)):
+    """Exact balance/credit information where the provider exposes it.
+
+    Important distinction: a provider's purchased balance is NOT the same as
+    its per-minute/day rate limit. Providers without a balance endpoint return
+    supported=false; the frontend then shows last-known rate-limit telemetry
+    from real model calls instead of inventing a percentage.
+    """
+    provider = str(body.get("provider") or "").strip().lower()
+    key = str(body.get("key") or "").strip() or _server_key_for(provider)
+    if not provider:
+        raise HTTPException(400, "provider is required")
+    if not key:
+        return {"provider": provider, "configured": False, "supported": False, "reason": "no_key"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            if provider in {"openrouter", "openrouter2"}:
+                r = await client.get(
+                    "https://openrouter.ai/api/v1/key",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                if r.is_error:
+                    return {"provider": provider, "configured": True, "supported": True,
+                            "error": f"OpenRouter HTTP {r.status_code}"}
+                data = (r.json() or {}).get("data") or {}
+                return {
+                    "provider": provider, "configured": True, "supported": True,
+                    "kind": "balance", "unit": "credits",
+                    "usage": data.get("usage"),
+                    "usage_daily": data.get("usage_daily"),
+                    "usage_weekly": data.get("usage_weekly"),
+                    "usage_monthly": data.get("usage_monthly"),
+                    "limit": data.get("limit"),
+                    "limit_remaining": data.get("limit_remaining"),
+                    "limit_reset": data.get("limit_reset"),
+                    "is_free_tier": data.get("is_free_tier"),
+                    "rate_limit": data.get("rate_limit"),
+                }
+
+            if provider == "deepseek":
+                r = await client.get(
+                    "https://api.deepseek.com/user/balance",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                if r.is_error:
+                    return {"provider": provider, "configured": True, "supported": True,
+                            "error": f"DeepSeek HTTP {r.status_code}"}
+                data = r.json() or {}
+                return {
+                    "provider": provider, "configured": True, "supported": True,
+                    "kind": "balance", "unit": "currency",
+                    "is_available": data.get("is_available"),
+                    "balances": data.get("balance_infos") or [],
+                }
+
+            if provider == "elevenlabs":
+                r = await client.get(
+                    "https://api.elevenlabs.io/v1/user/subscription",
+                    headers={"xi-api-key": key},
+                )
+                if r.is_error:
+                    return {"provider": provider, "configured": True, "supported": True,
+                            "error": f"ElevenLabs HTTP {r.status_code}"}
+                data = r.json() or {}
+                used = data.get("character_count")
+                limit = data.get("character_limit")
+                remaining = (max(0, limit - used)
+                             if isinstance(limit, int) and isinstance(used, int) else None)
+                return {
+                    "provider": provider, "configured": True, "supported": True,
+                    "kind": "balance", "unit": "credits",
+                    "tier": data.get("tier"),
+                    "status": data.get("status"),
+                    "used": used,
+                    "limit": limit,
+                    "remaining": remaining,
+                    "reset_unix": data.get("next_character_count_reset_unix"),
+                    "billing_period": data.get("billing_period"),
+                    "current_overage": data.get("current_overage"),
+                }
+
+        return {
+            "provider": provider,
+            "configured": True,
+            "supported": False,
+            "kind": "rate_limit",
+            "reason": "provider_does_not_expose_balance_via_standard_key",
+        }
+    except httpx.HTTPError as e:
+        return {"provider": provider, "configured": True, "supported": False,
+                "error": str(e)[:200]}
+
+
+@app.post("/proxy/ai", dependencies=[AUTH])
 async def proxy_ai(body: dict = Body(...)):
     provider = body.get("provider")
     key = body.get("key", "")
@@ -510,6 +691,8 @@ async def proxy_ai(body: dict = Body(...)):
 
     raw_content = None
     stop_reason = None
+    usage = None
+    quota = None
     try:
         # Ollama cold-loads a model on first use after it's been evicted
         # (expected often now — OLLAMA_MAX_LOADED_MODELS=1 on the Hetzner
@@ -564,6 +747,8 @@ async def proxy_ai(body: dict = Body(...)):
                 text = next((b.get("text", "") for b in _blocks if b.get("type") == "text"), "")
                 raw_content = _blocks
                 stop_reason = _d.get("stop_reason")
+                usage = _d.get("usage")
+                quota = _rate_limit_headers(r.headers)
 
             elif fmt == "google":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
@@ -582,8 +767,11 @@ async def proxy_ai(body: dict = Body(...)):
                 if r.is_error:
                     err = r.json().get("error", {}).get("message", f"Google HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"Google HTTP {r.status_code}"
                     raise HTTPException(502, err)
-                cands = r.json().get("candidates") or [{}]
+                _g = r.json()
+                cands = _g.get("candidates") or [{}]
                 text = ((cands[0].get("content") or {}).get("parts") or [{}])[0].get("text", "")
+                usage = _g.get("usageMetadata")
+                quota = _rate_limit_headers(r.headers)
 
             else:  # openai-compatible: OpenAI, OpenRouter, Groq, xAI, Krater, Ollama
                 chat_url = _openai_chat_url(base_url)
@@ -599,6 +787,8 @@ async def proxy_ai(body: dict = Body(...)):
                 text = _msg.get("content", "") or ""
                 raw_content = _msg.get("tool_calls") or []
                 stop_reason = ((_j.get("choices") or [{}])[0]).get("finish_reason")
+                usage = _j.get("usage")
+                quota = _rate_limit_headers(r.headers)
 
         # "text" blijft ongewijzigd het eerste veld, dus elke bestaande
         # aanroeper werkt precies hetzelfde. De rest leest alleen de tool-lus.
@@ -607,12 +797,16 @@ async def proxy_ai(body: dict = Body(...)):
             out["content"] = raw_content
         if stop_reason:
             out["stopReason"] = stop_reason
+        if usage:
+            out["usage"] = usage
+        if quota:
+            out["quota"] = quota
         return out
     except httpx.HTTPError as e:
         raise HTTPException(502, str(e)[:300])
 
 
-@app.post("/proxy/exa")
+@app.post("/proxy/exa", dependencies=[AUTH])
 async def proxy_exa(body: dict = Body(...)):
     key = os.environ.get("EXA_API_KEY") or body.get("key", "")
     query = (body.get("query") or "").strip()
@@ -637,7 +831,7 @@ async def proxy_exa(body: dict = Body(...)):
         raise HTTPException(502, str(e)[:300])
 
 
-@app.post("/proxy/fish-tts")
+@app.post("/proxy/fish-tts", dependencies=[AUTH])
 async def proxy_fish_tts(body: dict = Body(...)):
     # Fish Audio's API doesn't answer CORS preflight (OPTIONS) requests
     # properly — it 401s them instead of returning Access-Control-Allow-*
@@ -677,7 +871,7 @@ async def proxy_fish_tts(body: dict = Body(...)):
 # every VITE_-prefixed env var straight into its shipped JS bundle, so a paid
 # key would be trivially extractable from the packaged Tauri app if it lived
 # client-side — trading-os.json in the vault has the same note carved in for
-# exactly this reason. Gated behind AUTH (unlike /proxy/exa): this gets hit
+# exactly this reason. Gated behind AUTH (like /proxy/exa): this gets hit
 # every autopilot cycle x every symbol, and an open unauthenticated proxy
 # would let anyone who finds the URL burn through a paid quota.
 
@@ -834,15 +1028,32 @@ async def _run_engine(py: str, script: str, label: str, args: list[str], timeout
     takes its own subprocess with it and not this API."""
     if not os.path.exists(py) or not os.path.exists(script):
         raise HTTPException(status_code=503, detail=f"{label} engine not installed on this host")
+    # Hoeveel engines tegelijk: zie zuinig.py. Een TradingAgents-debat of
+    # -backtest duurt minuten en vraagt ~360 MB, dus één tegelijk; de rest
+    # (vbt, nautilus, kronos) twee. Het signaal leest alleen een cache.
+    if label.endswith("signal"):
+        beperking = _contextlib.nullcontext()
+    elif label.startswith("tradingagents"):
+        beperking = zuinig_slot("ta", 1, 0, sleutel=f"{label} {args}")
+    else:
+        beperking = zuinig_slot("engine", 2, 0, sleutel=f"{label} {args}")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            py, script, *args,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
-        )
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail=f"{label} timed out")
+        with beperking:
+            proc = await asyncio.create_subprocess_exec(
+                py, script, *args,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+                preexec_fn=lagere_prioriteit,
+            )
+            try:
+                out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                # Afmaken, niet laten doorlopen: een verlopen run hield zijn
+                # geheugen vast tot hij uit zichzelf klaar was.
+                proc.kill()
+                raise HTTPException(status_code=504, detail=f"{label} timed out")
+    except Bezet as e:
+        raise HTTPException(status_code=429, detail=f"{label}: {e}")
     try:
         return json.loads(out.decode() or "{}")
     except Exception:
@@ -978,6 +1189,7 @@ async def frameworks_status():
             "vbt": {"installed": os.path.exists("/opt/axe-trading/venv/bin/python")
                     and os.path.exists("/opt/axe-trading/vbt_backtest.py")},
             "nt": {"installed": os.path.exists(NAUTILUS_PY) and os.path.exists(NAUTILUS_SCRIPT)},
+            "kr": {"installed": os.path.exists(KRONOS_PY) and os.path.exists(KRONOS_SCRIPT)},
             "ta": {"installed": os.path.exists(TA_PY) and os.path.exists(TA_SCRIPT)},
         },
     }
@@ -1061,13 +1273,24 @@ _FRED_HIGH_IMPACT_RELEASES = {
 }
 
 
-async def _fetch_fred_calendar(days: int = 7) -> dict:
-    """De eerstvolgende hoog-impact releases, per release opgevraagd.
+async def _fetch_fred_calendar(days: int = 7, back: int = 0) -> dict:
+    """De hoog-impact releases rond vandaag, per release opgevraagd.
 
     /fred/releases/dates over een bereik kan deze vraag niet beantwoorden: met
     include_release_dates_with_no_data=true is het een raster waarin elke
     release elke dag staat, en met false komen alleen de releases van vandaag
     terug. Per release werkt wel, en levert de echte maandelijkse data.
+
+    `back` opent hetzelfde venster naar áchteren. Zonder dat kon dit endpoint
+    alleen zeggen wát er aankomt, en niet wat het de vorige keren deed — en dat
+    tweede is waar een positiegrootte uit volgt. De poort in
+    domain/tradingIntel/economicCalendar.ts vraagt vooruit; de impactgeschiedenis
+    in gebeurtenisImpact.ts vraagt terug. Eén tool, twee richtingen, in plaats
+    van een tweede endpoint dat hetzelfde nog eens op zijn eigen manier doet.
+
+    Bij `back=0` gaat de aanvraag er woordelijk hetzelfde uit als voorheen:
+    dezelfde params, dezelfde limit. De beslisfunnel draait hier al maanden op
+    en die mag hier niets van merken.
     """
     key = os.environ.get("FRED_API_KEY", "")
     if not key:
@@ -1077,8 +1300,20 @@ async def _fetch_fred_calendar(days: int = 7) -> dict:
     except (TypeError, ValueError):
         days = 7
 
-    start = datetime.now(timezone.utc).date()
-    end = start + timedelta(days=days)
+    try:
+        back = max(0, min(int(back), 800))
+    except (TypeError, ValueError):
+        back = 0
+
+    vandaag = datetime.now(timezone.utc).date()
+    start = vandaag - timedelta(days=back)
+    end = vandaag + timedelta(days=days)
+
+    # Zes volstaat voor een blik vooruit; over een jaar terug zijn het er per
+    # release een stuk of dertien. Te laag zetten geeft geen fout maar een
+    # stilzwijgend afgekapte geschiedenis, en dat is precies het soort gat dat
+    # er als een rustige periode uitziet.
+    limiet = 6 if back == 0 else max(6, min(((back + days) // 25) + 4, 100))
     out = []
     async with httpx.AsyncClient(timeout=25) as client:
         for rid, name in _FRED_HIGH_IMPACT_RELEASES.items():
@@ -1091,7 +1326,11 @@ async def _fetch_fred_calendar(days: int = 7) -> dict:
                         "file_type": "json",
                         "include_release_dates_with_no_data": "true",
                         "sort_order": "asc",
-                        "limit": 6,
+                        "limit": limiet,
+                        # realtime_end alleen meesturen wanneer er terug wordt
+                        # gekeken: bij back=0 blijft de aanvraag identiek aan
+                        # hoe hij maanden heeft gedraaid.
+                        **({"realtime_end": end.isoformat()} if back else {}),
                         "realtime_start": start.isoformat(),
                     },
                 )
@@ -1202,7 +1441,7 @@ async def marketdata_call(req: MarketToolCallRequest):
         elif req.tool == "fred_macro":
             data = await _fetch_fred_series(req.args.get("name", "fed_funds"))
         elif req.tool == "fred_calendar":
-            data = await _fetch_fred_calendar(req.args.get("days", 7))
+            data = await _fetch_fred_calendar(req.args.get("days", 7), req.args.get("back", 0))
         elif req.tool == "polymarket_bias":
             data = await _fetch_polymarket_bias()
         else:
@@ -1714,80 +1953,32 @@ async def merge_pr(number: int, req: PrMergeRequest, request: Request):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# VERCEL — Deployment status + production promotion
-# ══════════════════════════════════════════════════════════════════════════════
-
-async def _vercel(method: str, path: str, data: dict | None = None) -> Any:
-    if not VERCEL_TOKEN:
-        raise HTTPException(503, "Vercel token not configured (VERCEL_TOKEN)")
-    params = {"teamId": VERCEL_TEAM_ID} if VERCEL_TEAM_ID else {}
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.request(
-            method,
-            f"https://api.vercel.com{path}",
-            json=data,
-            params=params,
-            headers={"Authorization": f"Bearer {VERCEL_TOKEN}"},
-        )
-        if not r.is_success:
-            raise HTTPException(r.status_code, f"Vercel error: {r.text[:200]}")
-        return r.json() if r.content else {}
-
-@app.get("/vercel/deployments", dependencies=[AUTH])
-async def vercel_list_deployments(limit: int = 10, project_id: Optional[str] = None):
-    """Recent deployments. Defaults to the configured project; pass
-    project_id to ask about any other Vercel project on the same team
-    (the Apps page uses this for per-app live status)."""
-    project = project_id or VERCEL_PROJECT_ID
-    if not project:
-        raise HTTPException(503, "Vercel project not configured (VERCEL_PROJECT_ID)")
-    data = await _vercel("GET", f"/v6/deployments?projectId={project}&limit={limit}")
-    return [
-        {
-            "id": d.get("uid"),
-            "url": d.get("url"),
-            "state": d.get("state"),
-            "target": d.get("target"),
-            "createdAt": d.get("createdAt"),
-            "commitMessage": (d.get("meta") or {}).get("githubCommitMessage", "")[:120],
-            "commitSha": (d.get("meta") or {}).get("githubCommitSha", "")[:7],
-        }
-        for d in data.get("deployments", [])
-    ]
-
-@app.get("/vercel/deployment/{deployment_id}", dependencies=[AUTH])
-async def vercel_get_deployment(deployment_id: str):
-    """Full status for one deployment."""
-    data = await _vercel("GET", f"/v13/deployments/{deployment_id}")
-    return {
-        "id": data.get("id"),
-        "url": data.get("url"),
-        "state": data.get("readyState"),
-        "target": data.get("target"),
-        "createdAt": data.get("createdAt"),
-        "ready": data.get("ready"),
-        "aliasError": data.get("aliasError"),
-    }
-
-@app.post("/vercel/promote/{deployment_id}", dependencies=[AUTH])
-async def vercel_promote(deployment_id: str, request: Request):
-    """Promote an existing (already-built) deployment to production —
-    the exact 'production branch didn't auto-promote' problem this exists
-    to fix. Does NOT trigger a new build; only re-points production at a
-    deployment that's already READY."""
-    if not VERCEL_PROJECT_ID:
-        raise HTTPException(503, "Vercel project not configured (VERCEL_PROJECT_ID)")
-    result = await _vercel("POST", f"/v10/projects/{VERCEL_PROJECT_ID}/promote/{deployment_id}")
-    await audit("vercel_promote", VERCEL_PROJECT_ID, {"deployment_id": deployment_id}, request.client.host if request.client else "")
-    return {"promoted": True, "deployment_id": deployment_id, "result": result}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # OSINT — real map data (adapters ported from the Intelligence Terminal)
 # ══════════════════════════════════════════════════════════════════════════════
 
 from osint.router import router as osint_router  # noqa: E402 — after app setup by design
 app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
+
+# Perplexity Agent API: onderzoek met actuele bronnen. Achter AUTH omdat elke
+# vraag geld kost, anders dan /proxy/exa. Zie perplexity_agent.py voor waarom
+# de Agent API en niet de Router, en waarom het dagbudget op de server staat.
+# Beschermd: een onderzoeksfunctie mag nooit de hele API laten omvallen omdat
+# een deploy dit bestand vergat. Dan bestaat /research/perplexity gewoon niet
+# (404), en de app leest dat als "nog niet ingesteld op de server".
+try:
+    from perplexity_agent import router as perplexity_router  # noqa: E402
+    app.include_router(perplexity_router, prefix="/research", dependencies=[AUTH], tags=["research"])
+except Exception as _e:  # noqa: BLE001
+    log.warning("perplexity_agent niet ingeladen (%s) -- /research/perplexity bestaat niet", _e)
+
+# Trading-cockpit: alleen-lezen zicht op het bureau (accounts, risico, posities,
+# beslissingen, crew, P&L, bewijs, lab, autopilot-lease) voor een telefoon of
+# tweede scherm. Geen schrijfpad, geen MetaAPI-tokens -- zie trading_cockpit.py.
+try:
+    from trading_cockpit import build_router as _trading_router  # noqa: E402
+    app.include_router(_trading_router(sb), prefix="/trading", dependencies=[AUTH], tags=["trading"])
+except Exception as _e:  # noqa: BLE001
+    log.warning("trading_cockpit niet ingeladen (%s) -- /trading/* bestaat niet", _e)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1803,13 +1994,38 @@ WORKSPACE_DIR = os.path.realpath(os.environ.get("WORKSPACE_DIR", "/opt/axe-works
 os.makedirs(WORKSPACE_DIR, exist_ok=True)
 _SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"}
 
-def _safe_path(rel: str) -> str:
-    """Resolve a workspace-relative path and confine it to WORKSPACE_DIR."""
+def _safe_path(rel: str, root: str | None = None) -> str:
+    """Resolve a path relative to `root` (default WORKSPACE_DIR) and confine it there."""
+    root = root or WORKSPACE_DIR
     rel = (rel or "").lstrip("/")
-    full = os.path.realpath(os.path.join(WORKSPACE_DIR, rel))
-    if full != WORKSPACE_DIR and not full.startswith(WORKSPACE_DIR + os.sep):
+    full = os.path.realpath(os.path.join(root, rel))
+    if full != root and not full.startswith(root + os.sep):
         raise HTTPException(400, "Path escapes the workspace")
     return full
+
+
+def _werkmap(request: Request) -> str:
+    """De map waarin de Code Editor werkt: WORKSPACE_DIR, of een repo uit AGENT_REPOS.
+
+    De editor stuurt `X-AXE-Repo: <naam>` mee. Alleen een naam uit dezelfde
+    whitelist als de code-agents (agent_runner._repos) mag -- een pad uit het
+    verzoek zelf nooit. Zo bewerk je in de editor precies de repo's waar de
+    agent ook in mag, en toont de boom dezelfde checkout als waar de agent in
+    schrijft. Een onbekende naam is een 400 en geen stille terugval: anders kijk
+    je naar de ene repo terwijl je denkt in de andere te zitten.
+    """
+    naam = (request.headers.get("x-axe-repo") or "").strip()
+    if not naam:
+        return WORKSPACE_DIR
+    from agent_runner import whitelisted_repos
+    repos = whitelisted_repos()
+    pad = repos.get(naam)
+    if not pad:
+        raise HTTPException(400, f"Repo '{naam}' staat niet in AGENT_REPOS op deze host")
+    pad = os.path.realpath(pad)
+    if not os.path.isdir(pad):
+        raise HTTPException(404, f"Repo '{naam}' wijst naar {pad}, dat hier niet bestaat")
+    return pad
 
 class FileWrite(BaseModel):
     path: str
@@ -1875,9 +2091,10 @@ async def st_device_command(device_id: str, body: StCommandBody, request: Reques
     return r.json()
 
 @app.get("/files/tree", dependencies=[AUTH])
-async def files_tree(path: str = ""):
+async def files_tree(request: Request, path: str = ""):
     """List one directory level (folders first, then files)."""
-    full = _safe_path(path)
+    root = _werkmap(request)
+    full = _safe_path(path, root)
     if not os.path.isdir(full):
         raise HTTPException(404, "Not a directory")
     nodes = []
@@ -1885,14 +2102,14 @@ async def files_tree(path: str = ""):
         if name in _SKIP_DIRS:
             continue
         p = os.path.join(full, name)
-        rel = os.path.relpath(p, WORKSPACE_DIR)
+        rel = os.path.relpath(p, root)
         nodes.append({"path": rel, "name": name, "type": "folder" if os.path.isdir(p) else "file"})
     nodes.sort(key=lambda n: (n["type"] != "folder", n["name"].lower()))
     return {"nodes": nodes}
 
 @app.get("/files/read", dependencies=[AUTH])
-async def files_read(path: str):
-    full = _safe_path(path)
+async def files_read(request: Request, path: str):
+    full = _safe_path(path, _werkmap(request))
     if not os.path.isfile(full):
         raise HTTPException(404, "Not a file")
     if os.path.getsize(full) > 2_000_000:
@@ -1905,7 +2122,7 @@ async def files_read(path: str):
 
 @app.put("/files/write", dependencies=[AUTH])
 async def files_write(req: FileWrite, request: Request):
-    full = _safe_path(req.path)
+    full = _safe_path(req.path, _werkmap(request))
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w", encoding="utf-8") as f:
         f.write(req.content)
@@ -1914,7 +2131,7 @@ async def files_write(req: FileWrite, request: Request):
 
 @app.post("/files/create", dependencies=[AUTH])
 async def files_create(req: FileCreate, request: Request):
-    full = _safe_path(req.path)
+    full = _safe_path(req.path, _werkmap(request))
     if os.path.exists(full):
         raise HTTPException(409, "Already exists")
     if req.type == "folder":
@@ -1927,8 +2144,9 @@ async def files_create(req: FileCreate, request: Request):
 
 @app.delete("/files/delete", dependencies=[AUTH])
 async def files_delete(path: str, request: Request):
-    full = _safe_path(path)
-    if full == WORKSPACE_DIR:
+    root = _werkmap(request)
+    full = _safe_path(path, root)
+    if full == root:
         raise HTTPException(400, "Refusing to delete the workspace root")
     if os.path.isdir(full):
         _shutil.rmtree(full)
@@ -1945,9 +2163,10 @@ class FileMove(BaseModel):
 
 @app.post("/files/move", dependencies=[AUTH])
 async def files_move(req: FileMove, request: Request):
-    src = _safe_path(req.from_path)
-    dst = _safe_path(req.to_path)
-    if src == WORKSPACE_DIR or dst == WORKSPACE_DIR:
+    root = _werkmap(request)
+    src = _safe_path(req.from_path, root)
+    dst = _safe_path(req.to_path, root)
+    if src == root or dst == root:
         raise HTTPException(400, "Refusing to move the workspace root")
     if not os.path.exists(src):
         raise HTTPException(404, "Source not found")
@@ -1962,8 +2181,9 @@ async def files_move(req: FileMove, request: Request):
     return {"moved": True, "from": req.from_path, "to": req.to_path}
 
 @app.post("/files/search", dependencies=[AUTH])
-async def files_search(req: FileSearch):
+async def files_search(req: FileSearch, request: Request):
     """Grep the workspace (ripgrep if present, else Python walk)."""
+    root = _werkmap(request)
     results: list[dict] = []
     rg = _shutil.which("rg")
     if rg:
@@ -1972,7 +2192,7 @@ async def files_search(req: FileSearch):
             cmd.append("-i")
         if req.glob:
             cmd += ["--glob", req.glob]
-        cmd += ["--", req.query, WORKSPACE_DIR]
+        cmd += ["--", req.query, root]
         try:
             proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
@@ -1980,25 +2200,25 @@ async def files_search(req: FileSearch):
                 parts = line.split(":", 3)
                 if len(parts) == 4:
                     fpath, ln, col, text = parts
-                    results.append({"file": os.path.relpath(fpath, WORKSPACE_DIR), "line": int(ln), "col": int(col), "text": text[:300]})
+                    results.append({"file": os.path.relpath(fpath, root), "line": int(ln), "col": int(col), "text": text[:300]})
                     if len(results) >= req.maxResults:
                         break
         except Exception:
             pass
     else:
         needle = req.query if req.caseSensitive else req.query.lower()
-        for root, dirs, filenames in os.walk(WORKSPACE_DIR):
+        for map_, dirs, filenames in os.walk(root):
             dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
             for fn in filenames:
                 if len(results) >= req.maxResults:
                     break
-                fp = os.path.join(root, fn)
+                fp = os.path.join(map_, fn)
                 try:
                     with open(fp, "r", encoding="utf-8", errors="ignore") as f:
                         for i, line in enumerate(f, 1):
                             hay = line if req.caseSensitive else line.lower()
                             if needle in hay:
-                                results.append({"file": os.path.relpath(fp, WORKSPACE_DIR), "line": i, "col": hay.index(needle) + 1, "text": line.strip()[:300]})
+                                results.append({"file": os.path.relpath(fp, root), "line": i, "col": hay.index(needle) + 1, "text": line.strip()[:300]})
                                 if len(results) >= req.maxResults:
                                     break
                 except Exception:
@@ -2026,6 +2246,53 @@ MAX_PREVIEW_LOG = 200
 class PreviewStartBody(BaseModel):
     command: Optional[str] = None  # defaults to a Vite/CRA-style dev server on PREVIEW_PORT
 
+_preview_map: str = ""
+
+
+def _projectmap(root: str) -> Optional[str]:
+    """De map met het package.json dat een dev-script heeft, zo dicht mogelijk bij root.
+
+    Gemeten 14 september: de preview startte `npm run dev` in WORKSPACE_DIR
+    (/opt/axe-workspace), los van de repo die in de editor gekozen was, en gaf
+    "ENOENT ... package.json". En in de repo axe-core staat package.json niet in
+    de git-root maar in AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS.
+    Dus: in de gekozen repo, breedte eerst, hooguit drie niveaus diep, zonder
+    node_modules en verborgen mappen.
+    """
+    rij = [(root, 0)]
+    while rij:
+        map_, diepte = rij.pop(0)
+        pj = os.path.join(map_, "package.json")
+        if os.path.isfile(pj):
+            try:
+                with open(pj, "r", encoding="utf-8") as f:
+                    if "dev" in (json.load(f).get("scripts") or {}):
+                        return map_
+            except Exception:  # noqa: BLE001
+                pass
+        if diepte >= 3:
+            continue
+        try:
+            kinderen = sorted(os.listdir(map_))
+        except OSError:
+            continue
+        for k in kinderen:
+            if k.startswith(".") or k in ("node_modules", "dist", "build", "target"):
+                continue
+            pad = os.path.join(map_, k)
+            if os.path.isdir(pad) and not os.path.islink(pad):
+                rij.append((pad, diepte + 1))
+    return None
+
+
+def _preview_url(request: Request) -> Optional[str]:
+    """Waar de app de preview kan openen. Op de VPS via nginx; lokaal rechtstreeks."""
+    if PREVIEW_PUBLIC_URL:
+        return PREVIEW_PUBLIC_URL
+    if (request.url.hostname or "") in ("127.0.0.1", "localhost"):
+        return f"http://127.0.0.1:{PREVIEW_PORT}/"
+    return None
+
 async def _drain_preview_output(stream: asyncio.StreamReader) -> None:
     while True:
         line = await stream.readline()
@@ -2035,22 +2302,32 @@ async def _drain_preview_output(stream: asyncio.StreamReader) -> None:
         _preview_log[:] = _preview_log[-MAX_PREVIEW_LOG:]
 
 @app.post("/preview/start", dependencies=[AUTH])
-async def preview_start(body: PreviewStartBody):
-    global _preview_proc, _preview_command
+async def preview_start(body: PreviewStartBody, request: Request):
+    global _preview_proc, _preview_command, _preview_map
     if _preview_proc is not None and _preview_proc.returncode is None:
         raise HTTPException(409, "Preview server already running — stop it first")
-    command = body.command or f"npm run dev -- --host 0.0.0.0 --port {PREVIEW_PORT}"
+    werk = _werkmap(request)
+    projectmap = _projectmap(werk)
+    if not projectmap:
+        raise HTTPException(400, f"Geen package.json met een dev-script gevonden in {werk} (tot drie mappen diep).")
+    # 127.0.0.1 en niet 0.0.0.0: op de Mac zou 0.0.0.0 de dev-server op het
+    # hele wifi zetten, en op de VPS proxyt nginx toch naar localhost.
+    command = body.command or f"npm run dev -- --host 127.0.0.1 --port {PREVIEW_PORT}"
     _preview_log.clear()
     _preview_command = command
+    _preview_map = projectmap
     try:
         _preview_proc = await asyncio.create_subprocess_shell(
-            command, cwd=WORKSPACE_DIR,
+            command, cwd=projectmap,
+            # PORT ook als variabele: vite.config.ts in axe-core weigert te
+            # starten zonder ("PORT environment variable is required").
+            env={**os.environ, "PORT": str(PREVIEW_PORT)},
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
         )
     except Exception as e:
         raise HTTPException(500, f"Could not start preview server: {e}")
     asyncio.create_task(_drain_preview_output(_preview_proc.stdout))
-    return {"started": True, "command": command, "port": PREVIEW_PORT, "url": PREVIEW_PUBLIC_URL or None}
+    return {"started": True, "command": command, "port": PREVIEW_PORT, "url": _preview_url(request), "map": projectmap}
 
 @app.post("/preview/stop", dependencies=[AUTH])
 async def preview_stop():
@@ -2067,15 +2344,17 @@ async def preview_stop():
     return {"stopped": True, "was_running": True}
 
 @app.get("/preview/status", dependencies=[AUTH])
-async def preview_status():
+async def preview_status(request: Request):
     running = _preview_proc is not None and _preview_proc.returncode is None
+    url = _preview_url(request)
     return {
         "running": running,
         "command": _preview_command,
         "port": PREVIEW_PORT,
-        "url": PREVIEW_PUBLIC_URL or None,
+        "url": url,
+        "map": _preview_map,
         "log": _preview_log[-40:],
-        "configured": bool(PREVIEW_PUBLIC_URL),
+        "configured": bool(url),
     }
 
 
@@ -2394,6 +2673,21 @@ async def _check_vps_services() -> dict:
     # python actually exists, not a network probe.
     crew_venv = os.environ.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3")
     results["crewai"] = {"configured": True, "reachable": os.path.exists(crew_venv), "note": f"isolated venv at {crew_venv}, not a network service"}
+    # Branch C. Counts only — this endpoint is open (no AXE_API_KEY), so repo
+    # paths and branch names stay behind /claude/repos, which is authed.
+    try:
+        _claude_repos = claude_repo_status()
+        _runnable = [n for n, r in _claude_repos.items() if r.get("runnable")]
+        results["claude_code"] = {
+            "configured": bool(_claude_repos),
+            "reachable": any(m.get("aanwezig") for m in agent_engine_status().values()),
+            "engines": {n: bool(m.get("aanwezig")) for n, m in agent_engine_status().items()},
+            "repos": len(_claude_repos),
+            "runnable_repos": len(_runnable),
+            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
+        }
+    except Exception as e:  # noqa: BLE001
+        results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
     # OpenClaw is a real running service but a messaging gateway, not the
     # browsing/computer-use agent AXE's [AGENT:] tool describes — flagged
     # here so the UI can show "reachable" honestly without implying it's
@@ -2407,6 +2701,23 @@ async def _check_vps_services() -> dict:
             results["ollama"] = {"configured": True, "reachable": r.status_code < 500, "latency_ms": round((asyncio.get_event_loop().time() - t0) * 1000)}
     except Exception as e:
         results["ollama"] = {"configured": True, "reachable": False, "error": str(e)[:150]}
+
+    # Branch C. Alleen aantallen — dit endpoint is open (geen AXE_API_KEY), dus
+    # repo-paden en branchnamen blijven achter /claude/repos, dat wél authed is.
+    try:
+        _cr = claude_repo_status()
+        _motoren = agent_engine_status()
+        results["claude_code"] = {
+            "configured": bool(_cr),
+            "reachable": any(m.get("aanwezig") for m in _motoren.values()),
+            "engines": {n: bool(m.get("aanwezig")) for n, m in _motoren.items()},
+            "repos": len(_cr),
+            "runnable_repos": len([n for n, r in _cr.items() if r.get("runnable")]),
+            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
+        }
+    except Exception as e:  # noqa: BLE001
+        results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
+
     return results
 
 
@@ -2428,23 +2739,36 @@ async def vps_agents_status():
 # crew runs land in the same memory stream as chat instead of a separate one.
 AXE_CORE_DEFAULT_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
 
+# The bare uuid (chatPersistence.ts's AXE_USER_BASE / AXE_USER_UUID) — NOT the
+# "-axe-core" suffixed AXE_CORE_DEFAULT_USER_ID above. agent_learning_episodes.user_id
+# happens to be a text column, so the suffixed id would insert without error, but
+# agentLoopHealth() (agentFeedbackService.ts) filters episodes by currentUserId(sb),
+# which is the signed-in session's bare auth uid — never the app-suffixed one (that
+# suffix exists only for global_memory's cross-app namespacing; see
+# axe-core-user-id-valkuil). Confirmed against the live table: every existing
+# agent_learning_episodes row (trading/wingman/intel/companion/chat) already uses
+# this exact bare uuid.
+AXE_CORE_EPISODE_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069"
+
 @app.post("/crew/run", dependencies=[AUTH])
 async def crew_run(req: CrewRunRequest, request: Request):
     """
     Run the AXE CORE CrewAI crew (9 specialist agents) on the VPS against Ollama.
 
-    Body: { "task": "...", "context": "...", "conversation": [...] }
+    Body: { "task": "...", "context": "...", "conversation": [...],
+            "specialists": ["axe_core", "dollar_bill", "intel"] }
     The crew runs in an isolated venv (see crew_runner.py) so it never touches
     this FastAPI/Supabase venv. Heavy work is offloaded to a thread so the
     event loop stays free.
     """
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
-        None, lambda: run_crew(req.task, req.context, req.conversation)
+        None, lambda: run_crew(req.task, req.context, req.conversation, req.specialists)
     )
     await audit(
         "crew_run", "crewai",
-        {"task": (req.task or "")[:200], "status": result.get("status")},
+        {"task": (req.task or "")[:200], "status": result.get("status"),
+         "specialists": result.get("specialists") or req.specialists or []},
         request.client.host if request.client else "",
     )
 
@@ -2483,6 +2807,166 @@ async def crew_run(req: CrewRunRequest, request: Request):
     except Exception as e:  # noqa: BLE001 — a memory-write failure must not fail the crew response
         log.warning(f"crew_run memory write failed: {e}")
 
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CLAUDE CODE — Branch C: a real Claude Code session inside a whitelisted repo
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/claude/run", dependencies=[AUTH])
+async def claude_run(req: ClaudeRunRequest, request: Request):
+    """
+    Run one Claude Code session against a whitelisted repository on this host.
+
+    Body: { "repo": "axe-core", "prompt": "...", "permission_mode": "acceptEdits" }
+
+    Unlike /crew/run this one writes to a working tree, so claude_runner refuses
+    the call before starting anything when: the repo is not in CLAUDE_CODE_REPOS,
+    the checkout is on main/master, or permission_mode is not one of
+    ALLOWED_PERMISSION_MODES. It also strips ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN
+    from the subprocess environment, so the CLI uses the host's `claude auth login`
+    subscription rather than silently billing a metered API key.
+
+    Auth on this host is deliberately NOT configured through an env var here —
+    it is `claude auth login`, run once by the operator. See CLAUDE_CODE_SETUP.md.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude", req.model or ""),
+    )
+    await audit(
+        "claude_run", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "prompt": (req.prompt or "")[:200],
+            "branch": result.get("branch"),
+            "permission_mode": result.get("permission_mode"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
+
+    # Same memory/RAG landing as /crew/run, tagged tab:code — a code session
+    # that only reaches core_audit_log is invisible to Memory Hub and recall.
+    try:
+        ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+        result_text = str(result.get("result") or result.get("error") or "")[:2000]
+        sb().table("global_memory").upsert(
+            [{
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "system_event",
+                "key": f"claude:{ts}",
+                "value": json.dumps({
+                    "repo": (req.repo or "")[:100],
+                    "branch": result.get("branch"),
+                    "prompt": (req.prompt or "")[:500],
+                    "status": result.get("status"),
+                    "result": result_text,
+                }),
+                "confidence": 0.8,
+                "metadata": {"kind": "agent_run", "tab": "code", "repo": req.repo, "branch": result.get("branch")},
+            }],
+            on_conflict="user_id,key",
+        ).execute()
+        if result.get("status") == "ok" and result_text:
+            sb().table("rag_memories").insert({
+                "app_source": "axe-core",
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "agent",
+                "content": f"[claude:{req.repo}@{result.get('branch')}] {(req.prompt or '')[:200]} → {result_text[:400]}",
+                "importance": 6,
+                "metadata": {"source": "claude_run", "repo": req.repo, "branch": result.get("branch"), "tab": "code"},
+            }).execute()
+    except Exception as e:  # noqa: BLE001 — a memory-write failure must not fail the response
+        log.warning(f"claude_run memory write failed: {e}")
+
+    return result
+
+
+@app.get("/claude/repos", dependencies=[AUTH])
+async def claude_repos():
+    """Which repos this host will let Claude Code touch, and whether each one is
+    currently runnable (exists, and not sitting on a protected branch).
+
+    In een thread met time-out. Gemeten 14 september: na elke rebuild van AXE CORE
+    (ad-hoc ondertekend, dus voor macOS een nieuwe app) blijft open() op de
+    externe SSD hangen tot iemand "toegang tot verwijderbaar volume" toestaat.
+    Synchroon in deze async route hield dat de HELE API stil, ook /health.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"repos": {}, "permission_modes": [], "error": _CLAUDE_IMPORT_ERROR}
+    try:
+        repos = await asyncio.wait_for(asyncio.to_thread(claude_repo_status), timeout=6)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, "De repo's op de externe schijf antwoorden niet. Staat er een macOS-venster "
+                                 "'AXE CORE wil toegang tot bestanden op een verwijderbaar volume'? Klik Sta toe.")
+    return {
+        "repos": repos,
+        "permission_modes": list(ALLOWED_PERMISSION_MODES),
+        # Welke CLI's op deze machine staan. Alleen aanwezigheid — of je
+        # ingelogd bent kost een echte aanroep, en een statuspaneel hoort geen
+        # sessie van je abonnement op te maken.
+        "engines": agent_engine_status(),
+        "usage": agent_usage_status(),
+    }
+
+
+class AgentCommitRequest(BaseModel):
+    repo: str
+    # 'bericht' en niet 'message': de rest van deze API is Nederlands en een
+    # half-Engelse body is precies hoe je later twee velden krijgt die hetzelfde
+    # betekenen.
+    bericht: str
+    push: bool = True
+
+
+@app.get("/claude/changes", dependencies=[AUTH])
+async def claude_changes(repo: str):
+    """Wat er in deze checkout gewijzigd is, vóór er iets vastgelegd wordt.
+
+    Bestaat omdat de volgende stap onomkeerbaar is: zodra er gepusht is, staat
+    het op GitHub. Een knop die commit zonder dat er iets te lezen viel, is een
+    knop die je op een dag indrukt terwijl er iets in staat dat je niet bedoelde.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: werkboom_status(repo))
+
+
+@app.post("/claude/commit", dependencies=[AUTH])
+async def claude_commit(req: AgentCommitRequest, request: Request):
+    """Leg vast wat de agent veranderde, en zet het op de werkbranch.
+
+    Dezelfde bewakingen als een agent-run, via dezelfde functies: repo op de
+    whitelist, checkout is git, en nooit op main of master. Geen force, geen
+    rebase, geen amend — dit duwt vooruit of het faalt.
+
+    Altijd geaudit, ook als het misgaat. Een push is naar buiten gaan, en dat
+    hoort een spoor te hebben dat niet afhangt van of het lukte.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: commit_en_push(req.repo, req.bericht, req.push)
+    )
+    await audit(
+        "agent_commit", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "bericht": (req.bericht or "")[:200],
+            "branch": result.get("branch"),
+            "sha": result.get("sha"),
+            "gepusht": result.get("gepusht"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
     return result
 
 
@@ -2701,7 +3185,9 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None  # type: ignore
 
-CRON_ACTIONS = ("prompt", "exec", "webhook", "crew")
+import planning as _planning  # noqa: E402 — één planner + grootboek, zie planning.py
+
+CRON_ACTIONS = _planning.ALLE_SOORTEN
 
 
 class ScheduleBody(BaseModel):
@@ -2712,6 +3198,11 @@ class ScheduleBody(BaseModel):
     action_payload: dict[str, Any] = {}
     enabled: bool = True
     metadata: dict[str, Any] = {}
+    app: Optional[str] = None
+    executor: str = "vps"
+    job_key: Optional[str] = None
+    description: Optional[str] = None
+    max_runtime_s: int = 300
 
 
 class ScheduleUpdate(BaseModel):
@@ -2722,6 +3213,23 @@ class ScheduleUpdate(BaseModel):
     action_payload: Optional[dict[str, Any]] = None
     enabled: Optional[bool] = None
     metadata: Optional[dict[str, Any]] = None
+    app: Optional[str] = None
+    executor: Optional[str] = None
+    description: Optional[str] = None
+    max_runtime_s: Optional[int] = None
+
+
+def _check_schedule_fields(action_type: Optional[str], executor: Optional[str], app: Optional[str], max_runtime_s: Optional[int]) -> None:
+    if action_type is not None and action_type not in CRON_ACTIONS:
+        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    if executor is not None and executor not in _planning.EXECUTORS:
+        raise HTTPException(400, f"executor must be one of {_planning.EXECUTORS}")
+    if app is not None and app not in _planning.APPS:
+        raise HTTPException(400, f"app must be one of {_planning.APPS}")
+    if max_runtime_s is not None and not 5 <= max_runtime_s <= 3600:
+        raise HTTPException(400, "max_runtime_s must be 5-3600")
+    if action_type and executor and action_type != "observed" and action_type not in _planning.UITVOERBAAR.get(executor, ()):
+        raise HTTPException(400, f"action_type '{action_type}' cannot run on executor '{executor}'")
 
 
 def _compute_next_run(cron_expr: str, tz_name: str = "UTC") -> str:
@@ -2785,13 +3293,55 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
             ok = r.status_code < 400
             return {"status": "ok" if ok else "fail", "output": f"{r.status_code} {r.text[:1000]}"}
 
+        if action_type == "northsea":
+            # De NorthSea Communication Engine en de Discovery-sweep draaien in de NorthSea-MCP op dezelfde
+            # box. De sleutels staan in de omgeving van deze API (nooit in core_schedules). Geen van beide
+            # verstuurt ooit; discovery maakt alleen interne opportunities uit bestaande rijen (zie discovery.py).
+            job = (payload.get("job") or "engine_tick").strip()
+            if job == "engine_tick":
+                token = os.environ.get("NORTHSEA_ENGINE_TOKEN", "").strip()
+                if not token:
+                    return {"status": "fail", "output": "northsea: NORTHSEA_ENGINE_TOKEN not set on this host"}
+                url = os.environ.get("NORTHSEA_ENGINE_URL", "http://127.0.0.1:8040/internal/engine/tick")
+                params = {"dry_run": "1"} if payload.get("dry_run") else {}
+                async with httpx.AsyncClient(timeout=260) as client:
+                    r = await client.post(url, params=params, headers={"Authorization": f"Bearer {token}"})
+                try:
+                    data = r.json()
+                except ValueError:
+                    data = {"raw": r.text[:500]}
+                if r.status_code == 409:
+                    return {"status": "skipped", "output": "northsea engine: previous tick still running"}
+                ok = r.status_code == 200 and not data.get("errors")
+                samenvatting = {"summary": data.get("summary"), "errors": (data.get("errors") or [])[:10], "sent": data.get("sent"), "http": r.status_code}
+                return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
+            if job == "discovery_sweep":
+                token = os.environ.get("NORTHSEA_DISCOVERY_TOKEN", "").strip()
+                if not token:
+                    return {"status": "fail", "output": "northsea: NORTHSEA_DISCOVERY_TOKEN not set on this host"}
+                url = os.environ.get("NORTHSEA_DISCOVERY_URL", "http://127.0.0.1:8040/internal/discovery/sweep")
+                params = {"dry_run": "1"} if payload.get("dry_run") else {}
+                async with httpx.AsyncClient(timeout=130) as client:
+                    r = await client.post(url, params=params, headers={"Authorization": f"Bearer {token}"})
+                try:
+                    data = r.json()
+                except ValueError:
+                    data = {"raw": r.text[:500]}
+                if r.status_code == 409:
+                    return {"status": "skipped", "output": "northsea discovery: previous sweep still running"}
+                ok = r.status_code == 200 and not data.get("errors")
+                samenvatting = {"created": data.get("created"), "considered_pairs": data.get("considered_pairs"),
+                               "errors": (data.get("errors") or [])[:10], "http": r.status_code}
+                return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
+            return {"status": "fail", "output": f"northsea: unknown job {job!r}"}
+
         if action_type in ("crew", "prompt"):
             task = (payload.get("task") or payload.get("prompt") or "").strip()
             if not task:
                 return {"status": "fail", "output": f"{action_type}: no task/prompt in payload"}
             loop = asyncio.get_event_loop()
             res = await loop.run_in_executor(
-                None, lambda: run_crew(task, payload.get("context"), None)
+                None, lambda: run_crew(task, payload.get("context"), None, payload.get("specialists"))
             )
             status = res.get("status", "ok") if isinstance(res, dict) else "ok"
             output = str(res.get("result") if isinstance(res, dict) else res)[:4000]
@@ -2833,8 +3383,8 @@ async def cron_list_schedules():
 
 @app.post("/cron/schedules", dependencies=[AUTH])
 async def cron_create_schedule(body: ScheduleBody, request: Request):
-    if body.action_type not in CRON_ACTIONS:
-        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    app_id = body.app or (body.metadata or {}).get("app") or "axe_core"
+    _check_schedule_fields(body.action_type, body.executor, app_id, body.max_runtime_s)
     try:
         next_run = _compute_next_run(body.cron_expr, body.timezone) if body.enabled else None
     except ValueError as e:
@@ -2847,7 +3397,12 @@ async def cron_create_schedule(body: ScheduleBody, request: Request):
         "action_payload": body.action_payload,
         "enabled": body.enabled,
         "next_run_at": next_run,
-        "metadata": body.metadata,
+        "metadata": {**(body.metadata or {}), "app": app_id},
+        "app": app_id,
+        "executor": body.executor,
+        "job_key": body.job_key,
+        "description": body.description,
+        "max_runtime_s": body.max_runtime_s,
     }
     res = sb().table("core_schedules").insert(row).execute()
     await audit("schedule_create", "cron", {"name": body.name, "cron": body.cron_expr}, request.client.host if request.client else "")
@@ -2857,14 +3412,23 @@ async def cron_create_schedule(body: ScheduleBody, request: Request):
 @app.put("/cron/schedules/{schedule_id}", dependencies=[AUTH])
 async def cron_update_schedule(schedule_id: str, body: ScheduleUpdate):
     patch: dict[str, Any] = {}
-    for field in ("name", "cron_expr", "timezone", "action_type", "action_payload", "enabled", "metadata"):
+    for field in ("name", "cron_expr", "timezone", "action_type", "action_payload", "enabled", "metadata",
+                  "app", "executor", "description", "max_runtime_s"):
         val = getattr(body, field)
         if val is not None:
             patch[field] = val
     if not patch:
         raise HTTPException(400, "nothing to update")
-    if patch.get("action_type") and patch["action_type"] not in CRON_ACTIONS:
-        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    if "metadata" in patch and "app" not in patch and isinstance(patch["metadata"], dict) and patch["metadata"].get("app") in _planning.APPS:
+        patch["app"] = patch["metadata"]["app"]
+    if any(k in patch for k in ("action_type", "executor")):
+        huidig = sb().table("core_schedules").select("action_type, executor").eq("id", schedule_id).single().execute().data or {}
+        _check_schedule_fields(patch.get("action_type", huidig.get("action_type")), patch.get("executor", huidig.get("executor")),
+                               patch.get("app"), patch.get("max_runtime_s"))
+    else:
+        _check_schedule_fields(None, None, patch.get("app"), patch.get("max_runtime_s"))
+    if "enabled" in patch and patch["enabled"]:
+        patch["consecutive_failures"] = 0
     # Recompute next_run_at when the schedule or its enabled state changes.
     if "cron_expr" in patch or "timezone" in patch or "enabled" in patch:
         cur = sb().table("core_schedules").select("cron_expr, timezone, enabled").eq("id", schedule_id).single().execute()
@@ -2897,15 +3461,119 @@ async def cron_run_now(schedule_id: str):
     if not cur.data:
         raise HTTPException(404, "schedule not found")
     s = cur.data
-    payload = s.get("action_payload") or {}
-    result = await _run_schedule_action(s["action_type"], payload)
-    sb().table("core_schedules").update({
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
-        "last_status": result["status"],
-        "last_result": result["output"][:4000],
-    }).eq("id", schedule_id).execute()
-    _notify_if_requested(s["name"], payload, result)
-    return {"result": result}
+    if s.get("action_type") == "observed":
+        raise HTTPException(400, "observed jobs run elsewhere and cannot be fired from here")
+    executor = s.get("executor") or "vps"
+    if executor != _deze_uitvoerder():
+        raise HTTPException(409, f"this job runs on '{executor}', not on this host ('{_deze_uitvoerder()}')")
+    uit = await _uitvoerder(executor).voer_uit(s, trigger="manual")
+    rij = sb().table("core_schedules").select("last_status, last_result").eq("id", schedule_id).single().execute().data or {}
+    return {"result": {"status": rij.get("last_status") or uit.get("status"), "output": rij.get("last_result") or ""}, "run": uit}
+
+
+def _deze_uitvoerder() -> str:
+    """'mac' op de agent-host (AXE_MAC_EXECUTOR=1), anders 'vps'."""
+    return "mac" if os.environ.get("AXE_MAC_EXECUTOR", "").strip() == "1" else "vps"
+
+
+def _meld_run(naam: str, payload: dict, resultaat: dict) -> None:
+    _notify_if_requested(naam, payload, {"status": resultaat["status"], "output": resultaat.get("output") or ""})
+    if resultaat.get("uitgezet"):
+        try:
+            sb().table("core_notifications").insert({
+                "type": "error",
+                "message": f"{naam}: uitgezet na {_planning.MAX_FAILS} mislukte runs op rij. Laatste fout: {(resultaat.get('output') or '')[:1500]}",
+            }).execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"disable notify failed: {e}")
+
+
+async def _mac_actie(soort: str, payload: dict) -> dict:
+    if soort == "planner":
+        if _planner is None:
+            return {"status": "fail", "output": "planner niet ingeladen op deze host"}
+        uit = await asyncio.to_thread(_planner.ronde)
+        return {"status": "ok", "output": json.dumps(uit, default=str)[:4000]}
+    return await _run_schedule_action(soort, payload)
+
+
+def _uitvoerder(executor: str) -> "_planning.Uitvoerder":
+    import socket as _socket
+    actie = _mac_actie if executor == "mac" else _run_schedule_action
+    return _planning.Uitvoerder(sb, executor, f"{executor}:{_socket.gethostname()}:{os.getpid()}", actie, meld=_meld_run)
+
+
+# ── Grootboek en agenda: alle jobs en taken van alle apps op één plek ────────
+
+@app.get("/ledger", dependencies=[AUTH])
+async def ledger(app_id: Optional[str] = None, source: Optional[str] = None, hours: int = 168, limit: int = 500):
+    if app_id is not None and app_id not in _planning.APPS:
+        raise HTTPException(400, f"app_id must be one of {_planning.APPS}")
+    if source is not None and source not in ("schedule", "planner", "launchd", "northsea", "manual", "pg_cron", "task"):
+        raise HTTPException(400, "invalid source")
+    since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 90)))
+    rows = sb().rpc("core_ledger", {"p_since": since.isoformat(), "p_app": app_id, "p_source": source,
+                                    "p_limit": max(1, min(limit, 2000))}).execute().data or []
+    return {"entries": rows, "since": since.isoformat(), "apps": list(_planning.APPS)}
+
+
+@app.get("/calendar/jobs", dependencies=[AUTH])
+async def calendar_jobs(van: Optional[str] = None, tot: Optional[str] = None, app_id: Optional[str] = None, tz: str = "Europe/Amsterdam"):
+    try:
+        start = datetime.fromisoformat(van.replace("Z", "+00:00")) if van else datetime.now(timezone.utc) - timedelta(days=1)
+        einde = datetime.fromisoformat(tot.replace("Z", "+00:00")) if tot else start + timedelta(days=8)
+    except ValueError:
+        raise HTTPException(400, "van/tot must be ISO timestamps")
+    if einde - start > timedelta(days=45):
+        raise HTTPException(400, "window max 45 days")
+    schedules = sb().table("core_schedules").select("*").limit(500).execute().data or []
+    pg = sb().rpc("core_pg_cron_jobs", {}).execute().data or []
+    items = _planning.agenda(schedules, pg, start, einde, tz)
+    if app_id:
+        items = [i for i in items if i["app"] == app_id]
+    jobs = [{"job_key": s.get("job_key") or f"schedule:{s['id']}", "id": s["id"], "bron": "schedule", "naam": s.get("name"),
+             "app": _planning.app_of(s.get("app")), "executor": s.get("executor"), "soort": s.get("action_type"), "cron": s.get("cron_expr"),
+             "timezone": s.get("timezone"), "enabled": s.get("enabled"), "next_run_at": s.get("next_run_at"), "last_run_at": s.get("last_run_at"),
+             "last_status": s.get("last_status"), "consecutive_failures": s.get("consecutive_failures"), "description": s.get("description")}
+            for s in schedules]
+    jobs += [{"job_key": f"pg_cron:{j['jobname']}", "id": None, "bron": "pg_cron", "naam": j["jobname"], "app": j["app"], "executor": "supabase",
+              "soort": "pg_cron", "cron": j["schedule"], "timezone": "UTC", "enabled": j["active"],
+              "next_run_at": _planning.volgende(j["schedule"]).isoformat() if j["active"] and _planning.geldig(j["schedule"]) else None,
+              "last_run_at": None, "last_status": None, "consecutive_failures": None, "description": None} for j in pg]
+    if app_id:
+        jobs = [j for j in jobs if j["app"] == app_id]
+    return {"items": items, "jobs": jobs, "van": start.isoformat(), "tot": einde.isoformat()}
+
+
+@app.post("/ledger/report", dependencies=[AUTH])
+async def ledger_report(body: dict = Body(...)):
+    """Een run die elders draaide (launchd op de Mac, de planner-lus) in het grootboek zetten."""
+    try:
+        rij = _planning.rapport_rij(body, datetime.now(timezone.utc))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    s = (sb().table("core_schedules").select("*").eq("job_key", rij["job_key"]).limit(1).execute().data or [None])[0]
+    if s:
+        rij["schedule_id"] = s["id"]
+        rij["app"] = _planning.app_of(s.get("app"))
+    try:
+        ins = sb().table("core_job_runs").insert(rij).execute()
+    except Exception as e:  # noqa: BLE001
+        if "23505" in str(e) or "duplicate key" in str(e):
+            return {"recorded": False, "duplicate": True}
+        raise
+    if s and rij["status"] != "running":
+        teller, uit = _planning.na_run(rij["status"], int(s.get("consecutive_failures") or 0))
+        patch = {"last_run_at": rij["finished_at"] or rij["started_at"], "last_status": rij["status"],
+                 "last_result": (rij.get("output") or rij.get("error") or "")[:4000], "consecutive_failures": teller}
+        try:
+            patch["next_run_at"] = _planning.volgende(s["cron_expr"], s.get("timezone") or "UTC").isoformat()
+        except ValueError:
+            pass
+        sb().table("core_schedules").update(patch).eq("id", s["id"]).execute()
+        if uit:
+            _meld_run(s.get("name") or rij["job_name"], {}, {"status": rij["status"], "output": rij.get("error") or "", "uitgezet": False})
+    return {"recorded": True, "run": (ins.data or [None])[0]}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3315,56 +3983,55 @@ async def cron_tick(
     # fast and loud on the first error is safer than limping through the
     # remaining schedules on a backend that has already shown it is down.
     try:
-        due = (
-            sb().table("core_schedules")
-            .select("*")
-            .eq("enabled", True)
-            .lte("next_run_at", now.isoformat())
-            .limit(50)
-            .execute()
-        )
-        ran = []
-        for s in due.data or []:
-            payload = s.get("action_payload") or {}
-            result = await _run_schedule_action(s["action_type"], payload)
-            update = {
-                "last_run_at": now.isoformat(),
-                "last_status": result["status"],
-                "last_result": result["output"][:4000],
-            }
-            try:
-                update["next_run_at"] = _compute_next_run(s["cron_expr"], s.get("timezone") or "UTC")
-            except ValueError:
-                # A schedule with a corrupt cron expr is disabled rather than retried
-                # every minute forever.
-                update["enabled"] = False
-                update["next_run_at"] = None
-            sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
-            _notify_if_requested(s["name"], payload, result)
-            ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
-            # cron_manager was registered as an agent with no write site of its
-            # own: this tick already ran real, unattended actions every minute,
-            # but nothing tagged that activity, so its hub stayed empty
-            # regardless of how much real work it did. Recorded per fired
-            # schedule, at the real outcome, not the UI edit that created it.
-            # Wrapped separately so a memory-write hiccup can never cost the
-            # schedule's own update/notify, which already completed above.
+        # Claim met lease (planning.py): een job die langer dan een minuut duurt start
+        # niet nog eens, en elke run staat in core_job_runs.
+        ran = await _uitvoerder("vps").tick()
+        for r in ran:
+            if r.get("status") == "skipped":
+                continue
             try:
                 sb().table("global_memory").upsert({
                     "user_id": AXE_CORE_DEFAULT_USER_ID,
                     "category": "system_event",
-                    "key": f"agent_run:cron:{s['id']}:{int(now.timestamp())}",
+                    "key": f"agent_run:cron:{r['id']}:{int(now.timestamp())}",
                     "value": json.dumps({
-                        "summary": f"Cron fired: {s['name']} ({s['action_type']}) -> {result['status']}",
-                        "schedule_id": s["id"], "name": s["name"], "action_type": s["action_type"],
-                        "status": result["status"], "at": now.isoformat(),
+                        "summary": f"Cron fired: {r['name']} -> {r['status']}",
+                        "schedule_id": r["id"], "name": r["name"], "status": r["status"], "run_id": r.get("run_id"),
+                        "at": now.isoformat(),
                     }),
                     "confidence": 1,
                     "metadata": {"kind": "agent_run", "agentId": "cron_manager",
-                                 "summary": f"Cron fired: {s['name']} -> {result['status']}"},
+                                 "summary": f"Cron fired: {r['name']} -> {r['status']}"},
                 }, on_conflict="user_id,key").execute()
             except Exception as mem_err:
-                print(f"[cron_tick] memory write failed for {s['id']}: {mem_err}", flush=True)
+                print(f"[cron_tick] memory write failed for {r['id']}: {mem_err}", flush=True)
+            try:
+                # Gives cron a real learning-loop episode, same table and shape
+                # as openEpisode()/closeEpisode() in agentFeedbackService.ts
+                # (agent_learning_episodes). Open+close happen back-to-back
+                # here because the whole tick — and so the run's outcome — has
+                # already completed by the time we get here; CrewAI.tsx's
+                # wingman wiring does the same open-then-immediately-close for
+                # a synchronous result. No memoryIds/memoryKeys: this loop
+                # never retrieves memory before firing a schedule, so there is
+                # nothing to reinforce — same reasoning as wingman's episodes.
+                verdict = "good" if r["status"] == "ok" else ("poor" if r["status"] in ("fail", "timeout") else "unknown")
+                ins = sb().table("agent_learning_episodes").insert({
+                    "user_id": AXE_CORE_EPISODE_USER_ID,
+                    "agent": "cron",
+                    "subject": str(r.get("name") or r["id"])[:500],
+                    "memory_ids": [],
+                    "memory_keys": [],
+                }).execute()
+                ep_id = (ins.data or [{}])[0].get("id")
+                if ep_id:
+                    sb().table("agent_learning_episodes").update({
+                        "verdict": verdict,
+                        "outcome_note": f"{r['name']} -> {r['status']}"[:500],
+                        "closed_at": now.isoformat(),
+                    }).eq("id", ep_id).execute()
+            except Exception as ep_err:
+                print(f"[cron_tick] episode write failed for {r['id']}: {ep_err}", flush=True)
         await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
         await run_always_awake_jobs()
         return {"ran": len(ran), "at": now.isoformat(), "details": ran}
@@ -3459,3 +4126,767 @@ _MARKET_TOOLS = [
 ]
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PLANNER — de drie hoofdagents plannen zelf (zie planner.py)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Endpoints bestaan overal, zodat de app eerlijk kan zeggen "staat uit"; de lus
+# draait alleen met AXE_PLANNER=1 (de Mac mini, waar de abonnementen staan).
+# Beschermd, om dezelfde reden als agent_runner bovenaan: planner.py stond niet
+# op de VPS, en een kale import had de hele API bij het opstarten laten vallen.
+# Zonder planner antwoorden deze routes 503 in plaats van dat niets meer werkt.
+try:
+    import planner as _planner_mod
+    from agent_runner import whitelisted_repos as _planner_repos
+    _planner = _planner_mod.Planner(sb, run_agent, _planner_repos)
+    _PLANNER_IMPORT_ERROR = None
+except Exception as _e:  # noqa: BLE001
+    _planner_mod = None  # type: ignore[assignment]
+    _planner = None  # type: ignore[assignment]
+    _PLANNER_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
+    log.warning("planner niet ingeladen (%s) -- /planner/* weigert", _PLANNER_IMPORT_ERROR)
+
+
+def _planner_of_503():
+    if _planner_mod is None:
+        raise HTTPException(503, f"Planner niet beschikbaar op deze host: {_PLANNER_IMPORT_ERROR}")
+
+
+class PlannerMotoren(BaseModel):
+    motoren: dict[str, str]
+
+
+class PlannerAan(BaseModel):
+    aan: bool
+
+
+class PlannerBesluit(BaseModel):
+    goedkeuren: bool
+
+
+@app.on_event("startup")
+async def _planner_start():
+    if _deze_uitvoerder() == "mac":
+        # Eén planner: op de agent-host draait de planner als job in core_schedules
+        # (executor 'mac', action 'planner'), zichtbaar in agenda en grootboek. De oude
+        # eigen lus draait dan NIET, anders loopt hij dubbel.
+        if _planner_mod is not None and _planner_mod.planner_aan():
+            try:
+                bestaand = sb().table("core_schedules").select("id").eq("job_key", "axe_core:planner").limit(1).execute().data
+                if not bestaand:
+                    sb().table("core_schedules").insert({
+                        "name": "Planner: agents plannen hun werk", "job_key": "axe_core:planner", "app": "axe_core", "executor": "mac",
+                        "action_type": "planner", "action_payload": {}, "cron_expr": "10 */3 * * *", "timezone": "Europe/Amsterdam",
+                        "enabled": True, "max_runtime_s": 1800, "metadata": {"app": "axe_core"},
+                        "next_run_at": _planning.volgende("10 */3 * * *", "Europe/Amsterdam").isoformat(),
+                        "description": "AXE Core, Code Agent, AXE Algo en de Northsea Desk bedenken elk ≤3 taken (planner.py).",
+                    }).execute()
+            except Exception as e:  # noqa: BLE001
+                log.warning("[planner] schema registreren faalde: %s", e)
+        asyncio.create_task(_mac_lus())
+        log.info("[planner] Mac-uitvoerder aan: jobs met executor 'mac' uit core_schedules, elke minuut")
+    elif _planner_mod is not None and _planner_mod.planner_aan():
+        asyncio.create_task(_planner_mod.lus(_planner))
+        log.info("[planner] aan: eerste ronde over 10 minuten, daarna elke %ss", _planner_mod.INTERVAL_S)
+
+
+async def _mac_lus() -> None:
+    await asyncio.sleep(30)
+    while True:
+        try:
+            await _uitvoerder("mac").tick()
+        except Exception as e:  # noqa: BLE001 — de lus mag nooit stoppen
+            log.warning("[mac-uitvoerder] tick faalde: %s", str(e)[:300])
+        await asyncio.sleep(60)
+
+
+@app.get("/planner/status", dependencies=[AUTH])
+async def planner_status():
+    _planner_of_503()
+    staat = _planner_mod.lees_staat()
+    vandaag = datetime.now().strftime("%Y-%m-%d")
+    return {
+        "host_kan": _planner_mod.planner_aan(),
+        "aan": bool(staat.get("aan", True)) and _planner_mod.planner_aan(),
+        "bezig": _planner.bezig,
+        "interval_s": _planner_mod.INTERVAL_S,
+        "dagbudget": _planner_mod.DAGBUDGET,
+        "gebruik_vandaag": staat.get("gebruik", {}).get(vandaag, {}),
+        "koeling": staat.get("koeling", {}),
+        "motoren": staat.get("motoren") or _planner_mod.STANDAARD_MOTOREN,
+        "laatste_ronde": staat.get("laatste_ronde"),
+    }
+
+
+@app.put("/planner/motoren", dependencies=[AUTH])
+async def planner_motoren(body: PlannerMotoren):
+    _planner_of_503()
+    """De verdeling uit Instellingen → Motoren per agent. Die leeft in de app
+    (localStorage); de planner draait hier en moet hem dus aangereikt krijgen."""
+    geldig = {a: m for a, m in body.motoren.items()
+              if a in _planner_mod.AGENTS and m in (*_planner_mod.ABONNEMENTEN, "sleutels")}
+    staat = _planner_mod.lees_staat()
+    staat["motoren"] = {**_planner_mod.STANDAARD_MOTOREN, **geldig}
+    _planner_mod.schrijf_staat(staat)
+    return {"motoren": staat["motoren"]}
+
+
+@app.put("/planner/aan", dependencies=[AUTH])
+async def planner_zet_aan(body: PlannerAan):
+    _planner_of_503()
+    staat = _planner_mod.lees_staat()
+    staat["aan"] = body.aan
+    _planner_mod.schrijf_staat(staat)
+    return {"aan": body.aan, "host_kan": _planner_mod.planner_aan()}
+
+
+@app.post("/planner/ronde", dependencies=[AUTH], status_code=202)
+async def planner_ronde_nu():
+    _planner_of_503()
+    if not _planner_mod.planner_aan():
+        raise HTTPException(409, "De planner draait niet op deze host (AXE_PLANNER staat niet op 1).")
+    if _planner.bezig:
+        return {"gestart": False, "reden": "er loopt al een ronde"}
+    asyncio.create_task(asyncio.to_thread(_planner.ronde))
+    return {"gestart": True}
+
+
+@app.get("/planner/taken", dependencies=[AUTH])
+async def planner_taken(limit: int = 40):
+    _planner_of_503()
+    rijen = (sb().table("core_tasks")
+             .select("id,title,goal,description,status,priority,assignee,metadata,result,error,created_at,completed_at")
+             .eq("capability", "planner").order("created_at", desc=True)
+             .limit(max(1, min(limit, 100))).execute().data) or []
+    return {"taken": rijen}
+
+
+@app.post("/planner/taken/{taak_id}/besluit", dependencies=[AUTH])
+async def planner_besluit(taak_id: str, body: PlannerBesluit):
+    _planner_of_503()
+    rij = (sb().table("core_tasks").select("id,status,metadata").eq("id", taak_id)
+           .eq("capability", "planner").limit(1).execute().data)
+    if not rij:
+        raise HTTPException(404, "Geen planner-taak met dit id")
+    meta = dict(rij[0].get("metadata") or {})
+    if meta.get("goedkeuring") != "nodig" or rij[0].get("status") != "pending":
+        raise HTTPException(409, "Deze taak wacht niet op goedkeuring")
+    meta["goedkeuring"] = "ja" if body.goedkeuren else "afgewezen"
+    meta["uiStatus"] = "todo" if body.goedkeuren else "blocked"
+    velden = {"metadata": meta, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if not body.goedkeuren:
+        velden["status"] = "cancelled"
+        velden["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+    sb().table("core_tasks").update(velden).eq("id", taak_id).execute()
+    return {"id": taak_id, "goedkeuring": meta["goedkeuring"]}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MCP HUB — echte MCP-verbindingen op de agent-host. Zie mcp_hub.py.
+#
+# Naast /mcp/servers (de oude route, die nooit MCP sprak) en niet in plaats
+# ervan: de VPS draait die oude nog, en niets weggooien wat een andere client
+# misschien leest. De app gebruikt deze.
+# ══════════════════════════════════════════════════════════════════════════════
+
+import mcp_hub as _mcp_hub
+
+
+class McpRoep(BaseModel):
+    tool: str
+    arguments: dict = {}
+
+
+class McpSleutel(BaseModel):
+    waarde: str
+
+
+class McpVerbinding(BaseModel):
+    sjabloon: str
+    label: str
+    velden: dict = {}
+
+
+@app.get("/mcp/hub", dependencies=[AUTH])
+async def mcp_hub_lijst():
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_mcp_hub.overzicht), timeout=8)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, _mcp_hub.SSD_MELDING)
+
+
+@app.post("/mcp/hub/verbinding", dependencies=[AUTH])
+async def mcp_hub_verbinding(body: McpVerbinding):
+    """Nog een project of account van een sjabloon dat er meerdere mag hebben."""
+    try:
+        return await asyncio.to_thread(_mcp_hub.voeg_toe, body.sjabloon, body.label, body.velden)
+    except KeyError:
+        raise HTTPException(404, f"Onbekend sjabloon: {body.sjabloon}")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.delete("/mcp/hub/verbinding/{verbinding_id}", dependencies=[AUTH])
+async def mcp_hub_verbinding_weg(verbinding_id: str):
+    try:
+        await asyncio.to_thread(_mcp_hub.verwijder, verbinding_id)
+    except KeyError:
+        raise HTTPException(404, "Alleen een toegevoegde verbinding kan weg.")
+    return {"verwijderd": verbinding_id}
+
+
+@app.post("/mcp/hub/{server_id}/test", dependencies=[AUTH])
+async def mcp_hub_test(server_id: str):
+    try:
+        return await _mcp_hub.test(server_id)
+    except KeyError:
+        raise HTTPException(404, f"Onbekende MCP-verbinding: {server_id}")
+
+
+@app.post("/mcp/hub/{server_id}/call", dependencies=[AUTH])
+async def mcp_hub_roep(server_id: str, body: McpRoep):
+    try:
+        return await _mcp_hub.roep(server_id, body.tool, body.arguments)
+    except KeyError:
+        raise HTTPException(404, f"Onbekende MCP-verbinding: {server_id}")
+
+
+@app.put("/mcp/hub/{server_id}/sleutel", dependencies=[AUTH])
+async def mcp_hub_sleutel(server_id: str, body: McpSleutel):
+    """Een zelf ingevulde sleutel bewaren op deze machine (600). Geeft nooit de waarde terug."""
+    if server_id not in _mcp_hub.verbindingen():
+        raise HTTPException(404, f"Onbekende MCP-verbinding: {server_id}")
+    if len(body.waarde.strip()) < 8:
+        raise HTTPException(422, "Dat lijkt geen sleutel.")
+    try:
+        naam = await asyncio.to_thread(_mcp_hub.bewaar_sleutel, server_id, body.waarde)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"opgeslagen": naam, **(await _mcp_hub.test(server_id))}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NORTHSEA — de commodity desk leest AXE Commodities, alleen-lezen. Zie northsea.py.
+# ══════════════════════════════════════════════════════════════════════════════
+
+import northsea as _northsea
+import northsea_gateway as _gateway
+import northsea_verstuur as _verstuur
+
+
+@app.get("/northsea/overzicht", dependencies=[AUTH])
+async def northsea_overzicht(vers: bool = False):
+    try:
+        return await _northsea.overzicht(vers=vers)
+    except _northsea.NorthseaFout as e:
+        raise HTTPException(502, str(e))
+
+
+class NorthseaVerstuurRequest(BaseModel):
+    """Wie het vraagt. Het concept moet al goedgekeurd zijn MET menselijke
+    herkomst; dat controleert de edge function, niet deze route."""
+    requested_by: str = "axe-core-desk"
+
+
+@app.get("/northsea/verstuur/status", dependencies=[AUTH])
+async def northsea_verstuur_status():
+    """Kan deze Mac versturen? De desk vraagt dit voordat hij een knop toont."""
+    kan, reden = _verstuur.gereed()
+    return {"kan_versturen": kan, "reden": reden}
+
+
+@app.post("/northsea/concept/{draft_id}/verstuur", dependencies=[AUTH])
+async def northsea_verstuur_concept(draft_id: str, req: NorthseaVerstuurRequest):
+    """Eén goedgekeurd concept versturen.
+
+    Het antwoord van de edge function gaat ONVERANDERD terug, ook bij een
+    weigering: `human_approval_provenance_missing`, `contact_policy_blocked` en
+    `draft_not_approved` vragen elk om iets anders, en dat verschil mag niet
+    verdwijnen in een nette foutzin.
+    """
+    try:
+        status, body = await _verstuur.verstuur(draft_id, req.requested_by)
+    except _verstuur.VerstuurNietKlaar as e:
+        raise HTTPException(503, f"versturen niet ingesteld op deze Mac ({e})")
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"northsea_onbereikbaar: {str(e)[:200]}")
+    if status >= 400:
+        raise HTTPException(status, body.get("error", "verstuur_geweigerd") if isinstance(body, dict) else "verstuur_geweigerd")
+    return body
+
+
+@app.get("/northsea/tab/{naam}", dependencies=[AUTH])
+async def northsea_tab(naam: str, vers: bool = False):
+    """De data van één tabblad naast Live Map. De naam kiest een vaste query; zie northsea.TAB_SQL."""
+    try:
+        return await _northsea.tab(naam, vers=vers)
+    except _northsea.OnbekendTabblad as e:
+        raise HTTPException(404, str(e))
+    except _northsea.NorthseaFout as e:
+        raise HTTPException(502, str(e))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NORTHSEA GOVERNED ACTIONS -- AXE CORE als MCP-client van de NorthSea MCP.
+# Geen tweede CrewGateway: dit zet één toegestane business-actie door naar
+# dezelfde governed grens die ChatGPT/Claude al gebruiken. Zie northsea_gateway.py.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class NorthseaActionRequest(BaseModel):
+    params: dict = {}
+
+
+@app.post("/northsea/action/{action}", dependencies=[AUTH])
+async def northsea_action(action: str, req: NorthseaActionRequest):
+    try:
+        return await _gateway.call_action(action, req.params)
+    except _gateway.NorthSeaGatewayError as e:
+        status = {"unknown_action": 404, "missing_params": 422, "not_configured": 503,
+                  "upstream_unreachable": 502, "tool_error": 502, "bad_response": 502}.get(e.code, 502)
+        raise HTTPException(status, f"{e.code}: {e.message}")
+
+
+# Three read-only NorthSea MCP tools, each as its own GET endpoint rather than
+# going through /northsea/action/{action} — App Manager (AppsPage.tsx) wants
+# these on load, the same way it already calls /vps/status and /build/status,
+# not behind a POST-with-body action call. Each is a thin wrapper over the
+# same governed call_action() used above: no new transport, auth or error
+# taxonomy, just this route's own error-status mapping (no "unknown_action"
+# here since the action name is fixed, not caller-supplied).
+_NORTHSEA_READ_ERROR_STATUS = {
+    "missing_params": 422, "not_configured": 503,
+    "upstream_unreachable": 502, "tool_error": 502, "bad_response": 502,
+}
+
+
+@app.get("/northsea/pipeline-summary", dependencies=[AUTH])
+async def northsea_pipeline_summary():
+    """Real deal-pipeline counts (open/active/blocked/awaiting-approval/won) plus the
+    stage and gate funnel, straight from the NorthSea MCP's own
+    northsea_get_pipeline_summary tool (backend/northsea_mcp/northsea_mcp/readtools.py
+    ::pipeline_summary). The response is that tool's own structured result, unchanged —
+    nothing here computes, filters or invents a field."""
+    try:
+        result = await _gateway.call_action("get_pipeline_summary", {})
+    except _gateway.NorthSeaGatewayError as e:
+        raise HTTPException(_NORTHSEA_READ_ERROR_STATUS.get(e.code, 502), f"{e.code}: {e.message}")
+    return result["result"]
+
+
+@app.get("/northsea/system-health", dependencies=[AUTH])
+async def northsea_system_health():
+    """Scheduler/database/CrewAI-availability status straight from the NorthSea MCP's
+    own northsea_get_system_health tool (readtools.py::system_health). See
+    northsea_pipeline_summary() above for the same governed-proxy reasoning."""
+    try:
+        result = await _gateway.call_action("get_system_health", {})
+    except _gateway.NorthSeaGatewayError as e:
+        raise HTTPException(_NORTHSEA_READ_ERROR_STATUS.get(e.code, 502), f"{e.code}: {e.message}")
+    return result["result"]
+
+
+@app.get("/northsea/communications-metrics", dependencies=[AUTH])
+async def northsea_communications_metrics(weeks: int = 12):
+    """Weekly inbound/outbound communication volume straight from the NorthSea MCP's
+    own northsea_get_communications_metrics tool (readtools.py::communications_metrics).
+    See northsea_pipeline_summary() above for the same governed-proxy reasoning."""
+    try:
+        result = await _gateway.call_action("get_communications_metrics", {"weeks": weeks})
+    except _gateway.NorthSeaGatewayError as e:
+        raise HTTPException(_NORTHSEA_READ_ERROR_STATUS.get(e.code, 502), f"{e.code}: {e.message}")
+    return result["result"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# APP MANAGER — real VPS status, build freshness, and service restart.
+#
+# The App Manager tab (AppsPage.tsx) has always shown a guessed, opaque
+# up/down state (a no-cors fetch against a public URL). The honest data —
+# which of the six systemd units are actually running, whether the checkout
+# this process runs from matches the latest commit, and the ability to
+# restart a unit — already existed as MCP tools (`axe_vps_status`,
+# `axe_build`, `axe_vps_service`), but those only run inside a Claude Code/
+# Desktop session, never from AXE CORE's own deployed runtime (no .mcp.json
+# ships with this repo). These three endpoints are the equivalent surface
+# through the same proxy pattern every other privileged call already uses
+# (see /frameworks/status above) — new logic, since nothing in this file
+# previously shelled out to systemctl or read host load/disk/memory.
+# ══════════════════════════════════════════════════════════════════════════════
+
+import platform as _platform
+import subprocess as _subprocess
+
+# The six units this host may actually be running. /vps/status reports all
+# six unconditionally (a host that isn't the VPS just reports them all
+# "unknown" — systemctl absent); /vps/service/restart uses this same tuple
+# as an allowlist so the service name can never come from free-form request
+# text.
+_VPS_SERVICES = (
+    "axe-browser-agent", "axe-companion", "axe-core-api",
+    "axe-task-worker", "axe-terminal", "axe-tunnel-relay",
+)
+
+
+async def _systemctl_is_active(systemctl_bin: str, name: str) -> dict:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            systemctl_bin, "is-active", name,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=5)
+        state = (out or b"").decode().strip() or (err or b"").decode().strip()
+        # systemctl is-active exits non-zero for "inactive"/"failed"/"unknown"
+        # too — the STATE STRING is the signal, not the exit code.
+        return {"active": state == "active", "state": state or None}
+    except asyncio.TimeoutError:
+        return {"active": None, "error": "systemctl did not answer within 5s"}
+    except Exception as e:  # noqa: BLE001
+        return {"active": None, "error": str(e)[:150]}
+
+
+def _disk_usage_summary(path: str = "/") -> dict:
+    try:
+        total, used, free = _shutil.disk_usage(path)
+        return {
+            "total_gb": round(total / 1e9, 1),
+            "used_gb": round(used / 1e9, 1),
+            "free_gb": round(free / 1e9, 1),
+            "used_pct": round(used / total * 100, 1) if total else None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:150]}
+
+
+def _memory_usage_summary() -> dict:
+    """/proc/meminfo, not psutil — psutil is not a dependency of this service
+    (checked requirements.txt) and this file already prefers stdlib-only
+    system calls (see _disk_usage_summary above). Linux-only by nature (the
+    VPS); the Mac-mini copy of this same API reports honestly that it can't
+    answer rather than guessing."""
+    if _platform.system() != "Linux":
+        return {"available": False, "reason": f"not implemented on {_platform.system()}"}
+    try:
+        info = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                parts = rest.strip().split()
+                if parts:
+                    info[key] = int(parts[0])  # kB
+        total_kb = info.get("MemTotal", 0)
+        avail_kb = info.get("MemAvailable", total_kb)
+        used_kb = max(total_kb - avail_kb, 0)
+        return {
+            "available": True,
+            "total_mb": round(total_kb / 1024, 1),
+            "used_mb": round(used_kb / 1024, 1),
+            "used_pct": round(used_kb / total_kb * 100, 1) if total_kb else None,
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"available": False, "error": str(e)[:150]}
+
+
+@app.get("/vps/status", dependencies=[AUTH])
+async def vps_status():
+    """Same shape of information the `axe_vps_status` MCP tool reports — the
+    six systemd units' up/down state plus load/disk/memory — but reachable
+    from AXE CORE's own runtime, not only a Claude Code/Desktop session."""
+    systemctl_bin = _shutil.which("systemctl")
+    services = {}
+    for name in _VPS_SERVICES:
+        if not systemctl_bin:
+            services[name] = {"active": None, "error": "systemctl not available on this host"}
+        else:
+            services[name] = await _systemctl_is_active(systemctl_bin, name)
+    return {
+        "ok": True,
+        "host": _platform.node(),
+        "services": services,
+        "load": list(os.getloadavg()) if hasattr(os, "getloadavg") else None,
+        "disk": _disk_usage_summary("/"),
+        "memory": _memory_usage_summary(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/build/status", dependencies=[AUTH])
+async def build_status():
+    """Mirrors what the `axe_build` MCP tool reports — git branch, last
+    commit, uncommitted file count, and whether the code actually running
+    predates the checkout's latest commit — for whichever host runs this
+    process (VPS or the Mac-mini copy of this same API; see the comment atop
+    this file on why it runs on both).
+
+    Reports `applicable: false` honestly when this process isn't running out
+    of a git checkout at all, rather than fabricating a comparison — the VPS
+    deploy path (deploy.sh) copies files into place with `cp`, so a from-
+    scratch install may have no .git directory at every level this file
+    could be running from. This project has already been burned once by
+    silently trusting the wrong one of several identically-named files
+    (three main.py, only one running) — `running_file` below is reported for
+    exactly that reason, so App Manager can show which file answered."""
+    this_file = os.path.abspath(__file__)
+    start_dir = os.path.dirname(this_file)
+    git_bin = _shutil.which("git")
+    if not git_bin:
+        return {"ok": True, "applicable": False, "reason": "git is not installed on this host", "running_file": this_file}
+
+    loop = asyncio.get_event_loop()
+
+    def _git(*args):
+        return _subprocess.run([git_bin, *args], cwd=start_dir, capture_output=True, text=True, timeout=6)
+
+    try:
+        toplevel = await loop.run_in_executor(None, lambda: _git("rev-parse", "--show-toplevel"))
+    except Exception as e:  # noqa: BLE001
+        return {"ok": True, "applicable": False, "reason": f"git check failed: {e}", "running_file": this_file}
+
+    if toplevel.returncode != 0:
+        return {
+            "ok": True, "applicable": False,
+            "reason": "no git checkout found for this running process — this host may run a copied "
+                      "(non-git) deployment rather than a live checkout",
+            "running_file": this_file,
+        }
+    repo_root = toplevel.stdout.strip()
+
+    def _git_at_root(*args):
+        return _subprocess.run([git_bin, *args], cwd=repo_root, capture_output=True, text=True, timeout=6)
+
+    branch_p, last_p, status_p = await asyncio.gather(
+        loop.run_in_executor(None, lambda: _git_at_root("rev-parse", "--abbrev-ref", "HEAD")),
+        loop.run_in_executor(None, lambda: _git_at_root("log", "-1", "--format=%H%x1f%h%x1f%s%x1f%cI")),
+        loop.run_in_executor(None, lambda: _git_at_root("status", "--porcelain")),
+    )
+
+    branch_name = branch_p.stdout.strip() if branch_p.returncode == 0 else None
+    commit_parts = (last_p.stdout or "").strip().split("\x1f") if last_p.returncode == 0 else []
+    uncommitted = (
+        len([ln for ln in (status_p.stdout or "").splitlines() if ln.strip()])
+        if status_p.returncode == 0 else None
+    )
+
+    commit_info = None
+    if len(commit_parts) == 4:
+        commit_info = {
+            "sha": commit_parts[0], "short_sha": commit_parts[1],
+            "message": commit_parts[2], "date": commit_parts[3],
+        }
+
+    # Build freshness: does the file actually answering this request predate
+    # the checkout's latest commit? If so, the checkout moved since this
+    # process last started — the "commits to the repo did nothing" trap this
+    # codebase hit once already, made visible here instead of silent.
+    stale = None
+    try:
+        running_mtime = datetime.fromtimestamp(os.path.getmtime(this_file), tz=timezone.utc)
+        if commit_info and commit_info["date"]:
+            stale = running_mtime < datetime.fromisoformat(commit_info["date"])
+    except Exception:  # noqa: BLE001
+        stale = None
+
+    return {
+        "ok": True,
+        "applicable": True,
+        "repo_root": repo_root,
+        "running_file": this_file,
+        "branch": branch_name,
+        "commit": commit_info,
+        "uncommitted_files": uncommitted,
+        "stale_vs_latest_commit": stale,
+    }
+
+
+class VpsServiceRequest(BaseModel):
+    service: str
+
+
+@app.post("/vps/service/restart", dependencies=[AUTH])
+async def vps_service_restart(req: VpsServiceRequest, request: Request):
+    """Equivalent of `axe_vps_service(service, "restart")`, reachable from
+    AXE CORE's own runtime. Destructive: restarts a live systemd unit, so
+    `service` is checked against the exact six-name allowlist /vps/status
+    reports on (_VPS_SERVICES) — never taken as free-form text.
+
+    Deliberately NOT invoked anywhere in this codebase yet; AppsPage.tsx's
+    confirm dialog is meant to be the only caller. Also deliberately
+    fire-and-forget: if `service` is axe-core-api, the process handling this
+    very request is the one about to be killed, so awaiting systemctl's exit
+    would race the restart it just triggered — the response confirms
+    dispatch, not completion. Callers should re-check /vps/status shortly
+    after to confirm the unit came back up."""
+    service = (req.service or "").strip()
+    if service not in _VPS_SERVICES:
+        raise HTTPException(400, f"Unknown service '{service}'. Allowed: {', '.join(_VPS_SERVICES)}")
+    systemctl_bin = _shutil.which("systemctl")
+    if not systemctl_bin:
+        raise HTTPException(503, "systemctl is not available on this host")
+
+    client_ip = request.client.host if request.client else ""
+    log.warning("VPS SERVICE RESTART requested: %s (from %s)", service, client_ip or "unknown")
+    await audit("vps_service_restart", "app_manager", {"service": service}, client_ip)
+
+    try:
+        await asyncio.create_subprocess_exec(
+            systemctl_bin, "restart", service,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to invoke systemctl restart: {e}")
+
+    return {
+        "ok": True, "service": service, "action": "restart",
+        "note": "restart dispatched; check /vps/status shortly to confirm it came back up",
+    }
+
+# ── Keystore & cron control plane ─────────────────────────────────────────────
+# Twee dingen woonden op te veel plekken tegelijk. Sleutels stonden in de
+# .env.local van de Companion-VPS, in /opt/axe-core-api/.env op dezelfde box,
+# in de Edge-secrets van Supabase, en een stuk of tien stonden er na de
+# verhuizing van Vercel leeg in — met als gevolg dat MT5 zichzelf stil uitzette
+# en niemand kon zien waarom. Schema's stonden in pg_cron, dat alleen vastlegt
+# dát de SQL liep en nooit wat de app antwoordde: de broadcast-feed gaf twee
+# maanden lang 200 terug met "KRATER_API_KEY is not configured" erin.
+#
+# Beide hebben nu één huis in Supabase (axe_ops.app_secret, axe_ops.cron_job +
+# cron_run). Deze endpoints zijn de brug: de app in de browser mag de
+# service_role-sleutel nooit zien, dus alles loopt hier langs.
+
+class KeystoreValue(BaseModel):
+    value: str
+    description: str | None = None
+
+
+@app.get("/keystore/{app_name}", dependencies=[AUTH])
+async def keystore_list(app_name: str):
+    """Namen en of ze gevuld zijn — nooit waarden.
+
+    Dit is wat een beheerscherm nodig heeft: welke sleutels een app kent,
+    wanneer ze voor het laatst veranderden, en of er echt iets in staat. De
+    waarde zelf verlaat de database alleen richting de app die hem draait.
+    """
+    try:
+        res = sb().rpc("axe_list_app_secrets", {"p_app": app_name}).execute()
+        return {"app": app_name, "keys": res.data or []}
+    except Exception as exc:
+        raise HTTPException(503, f"Keystore niet leesbaar: {exc}") from exc
+
+
+@app.put("/keystore/{app_name}/{key}", dependencies=[AUTH])
+async def keystore_set(app_name: str, key: str, body: KeystoreValue, request: Request):
+    """Zet of roteer één sleutel.
+
+    De waarde gaat versleuteld naar de Vault; deze tabel houdt alleen de
+    verwijzing. Het audit-log krijgt de naam, nooit de waarde.
+    """
+    if not body.value.strip():
+        raise HTTPException(400, "Lege waarde: gebruik DELETE om een sleutel te verwijderen")
+    try:
+        sb().rpc("axe_set_app_secret", {
+            "p_app": app_name,
+            "p_key": key,
+            "p_value": body.value,
+            "p_description": body.description,
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon sleutel niet opslaan: {exc}") from exc
+
+    await audit("keystore_set", f"{app_name}:{key}", {"app": app_name, "key": key},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "key": key}
+
+
+@app.delete("/keystore/{app_name}/{key}", dependencies=[AUTH])
+async def keystore_delete(app_name: str, key: str, request: Request):
+    """Haal de sleutel uit het register én uit de Vault."""
+    try:
+        sb().rpc("axe_delete_app_secret", {"p_app": app_name, "p_key": key}).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon sleutel niet verwijderen: {exc}") from exc
+
+    await audit("keystore_delete", f"{app_name}:{key}", {"app": app_name, "key": key},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "key": key}
+
+
+@app.get("/cron/jobs", dependencies=[AUTH])
+async def cron_jobs(app_name: str = "companion"):
+    """Elk schema met zijn laatste uitkomst.
+
+    `last_ok` kijkt naar het antwoord van de app, niet alleen naar de
+    statuscode: een 200 met "status":"failed" of "not configured" in de body
+    telt als mislukt. Precies die controle miste, en daarom stond alles op
+    groen terwijl de feed stilstond.
+    """
+    try:
+        res = sb().rpc("axe_cron_status", {"p_app": app_name}).execute()
+        return {"app": app_name, "jobs": res.data or []}
+    except Exception as exc:
+        raise HTTPException(503, f"Cron-status niet leesbaar: {exc}") from exc
+
+
+@app.get("/cron/runs", dependencies=[AUTH])
+async def cron_runs(app_name: str = "companion", name: str | None = None, limit: int = 50):
+    """De geschiedenis, om te zien sinds wanneer iets misgaat."""
+    try:
+        res = sb().rpc("axe_cron_runs", {
+            "p_app": app_name, "p_name": name, "p_limit": limit,
+        }).execute()
+        return {"app": app_name, "runs": res.data or []}
+    except Exception as exc:
+        raise HTTPException(503, f"Cron-historie niet leesbaar: {exc}") from exc
+
+
+@app.post("/cron/jobs/{app_name}/{name}/run", dependencies=[AUTH], status_code=202)
+async def cron_run_now(app_name: str, name: str, request: Request):
+    """Draai één job nu.
+
+    De HTTP-aanroep gaat via Supabase, niet vanaf deze machine: daar ligt het
+    gedeelde geheim in de Vault en daar wordt de run ook vastgelegd, zodat een
+    handmatige run dezelfde geschiedenis binnenloopt als een geplande.
+
+    202, geen 200: pg_net vuurt asynchroon. Het antwoord van de app staat
+    binnen een minuut in /cron/runs.
+    """
+    try:
+        jobs = sb().rpc("axe_cron_status", {"p_app": app_name}).execute().data or []
+    except Exception as exc:
+        raise HTTPException(503, f"Cron-status niet leesbaar: {exc}") from exc
+
+    job = next((j for j in jobs if j.get("name") == name), None)
+    if job is None:
+        raise HTTPException(404, f"Onbekende job '{name}' voor app '{app_name}'")
+
+    try:
+        res = sb().rpc("axe_dispatch_cron", {
+            "p_job": f"handmatig-{name}", "p_path": job["path"],
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon job niet starten: {exc}") from exc
+
+    await audit("cron_run_now", f"{app_name}:{name}", {"path": job["path"]},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "job": name, "request_id": res.data,
+            "note": "asynchroon gestart; de uitkomst staat binnen een minuut in /cron/runs"}
+
+
+@app.post("/cron/jobs/{app_name}/{name}/toggle", dependencies=[AUTH])
+async def cron_toggle(app_name: str, name: str, enabled: bool, request: Request):
+    """Zet een job aan of uit in het register.
+
+    Let op: pg_cron vuurt vandaag nog onafhankelijk van dit vlaggetje. Het
+    telt zodra de worker hier eigenaar van is (`owner = 'axe_core'`); tot die
+    tijd is dit de bedoeling, niet de rem.
+    """
+    try:
+        sb().rpc("axe_cron_set_job", {
+            "p_app": app_name, "p_name": name, "p_enabled": enabled, "p_owner": None,
+        }).execute()
+    except Exception as exc:
+        raise HTTPException(503, f"Kon job niet bijwerken: {exc}") from exc
+
+    await audit("cron_toggle", f"{app_name}:{name}", {"enabled": enabled},
+                request.client.host if request.client else "")
+    return {"ok": True, "app": app_name, "job": name, "enabled": enabled}

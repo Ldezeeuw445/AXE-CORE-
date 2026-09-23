@@ -48,6 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/agents', label: 'Agents', keywords: ['agents', 'agent'], recordType: 'agent' },
   { path: '/crewai', label: 'CrewAI', keywords: ['crewai', 'crew ai', 'crew'] },
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },
+  { path: '/ledger', label: 'Ledger', keywords: ['ledger', 'grootboek', 'runs', 'job runs', 'logboek', 'alle taken', 'wat draaide er'] },
   { path: '/tasks', label: 'Tasks', keywords: ['tasks', 'todo', 'to-do', 'task'], recordType: 'task' },
   { path: '/finance', label: 'Finance', keywords: ['finance', 'financien', 'budget', 'money'] },
   { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets', 'trading os', 'trading desk'] },
@@ -66,14 +67,18 @@ export const NAV_ITEMS: NavItem[] = [
       'trading agent',
     ],
   },
-  { path: '/maps-3d', label: '3D Maps', keywords: ['3d maps', 'maps', 'map'] },
+  /* Het pad blijft /maps-3d: dat staat in opgeslagen links, in de agenten en
+     in de systeemlijst. Alleen het etiket verandert -- de tab IS de desk. */
+  { path: '/maps-3d', label: 'Northsea Desk', keywords: ['northsea', 'northsea desk', 'northsea deals', 'deals', 'deal desk', 'commodity', 'commodity desk', '3d maps', 'maps', 'map'] },
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
-  { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'navigate', 'surf'] },
+  { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'browser use', 'navigate', 'surf'] },
+  { path: '/computer-use', label: 'Computer Use', keywords: ['computer use', 'personal computer use', 'my computer', 'mijn computer', 'mac control', 'control my mac'] },
   { path: '/device', label: 'Device Manager', keywords: ['device manager', 'device', 'phone', 'samsung', 'a17', 'toestel', 'telefoon', 'adb', 'mobile device'] },
   { path: '/lock', label: 'Lock Screen', keywords: ['lock screen', 'lockscreen', 'vergrendelscherm', 'glance', 'lock', 'slot', 'startscherm'] },
   { path: '/organization', label: 'Organization', keywords: ['organization', 'org', 'team', 'org chart'] },
   { path: '/terminal', label: 'Terminal', keywords: ['terminal', 'console', 'shell', 'command line'] },
+  { path: '/terminals', label: 'Terminals', keywords: ['terminals', 'machines', 'mac mini', 'imac', 'vps', 'ssh', 'hosts', 'worker starten'] },
   { path: '/developer', label: 'Command Center', keywords: ['command center', 'developer', 'dev tools', 'developer tools'] },
   { path: '/settings', label: 'Settings', keywords: ['settings', 'preferences', 'configuration'] },
 ];

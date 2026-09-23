@@ -96,7 +96,11 @@ export default defineConfig(async ({ command }) => ({
   plugins: [
     react(),
     VitePWA({
-      disable: isAndroidShell || isTauriBuild,
+      // Desktop-Tauri houdt de zelf-opruimende worker (selfDestroying); een
+      // APK-bouw (AXE_TAURI_BUILD=1) zet PWA volledig uit — geen sw.js, geen
+      // injectie, geen foutbanner. Web blijft gewoon een PWA.
+      disable: isAndroidShell || process.env.AXE_TAURI_BUILD === '1',
+      selfDestroying: isTauriBuild,
       registerType: 'autoUpdate',
       injectRegister: (isAndroidShell || isTauriBuild) ? false : 'script',
       manifest: false, // We use our own public/manifest.json

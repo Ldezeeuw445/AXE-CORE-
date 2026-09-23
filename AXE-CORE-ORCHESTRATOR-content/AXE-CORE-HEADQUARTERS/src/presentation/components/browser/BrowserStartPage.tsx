@@ -1,12 +1,17 @@
+import { useEffect, useState } from 'react';
 import { Clock, CloudSun, Sparkles } from 'lucide-react';
 import {
   BROWSER_AI_PROVIDER_LIST,
   type BrowserAIProviderId,
 } from '@/domain/browser/browserAIProviders';
-import { BrowserAIComposer } from '@/presentation/components/browser/BrowserAIComposer';
+import {
+  BrowserAIComposer,
+  type BrowserComposerFeedback,
+} from '@/presentation/components/browser/BrowserAIComposer';
 import QuickLinksGrid from '@/presentation/components/browser/QuickLinksGrid';
 import { Label, Panel } from '@/presentation/components/surface/Surface';
 import type { QuickLink } from '@/domain/types/browser';
+import { getBrowserAIHealth } from '@/application/browser/browserAIService';
 
 interface BrowserStartPageProps {
   quickLinks: QuickLink[];
@@ -14,6 +19,7 @@ interface BrowserStartPageProps {
   onAddFavorite: () => void;
   onAIProviderSubmit: (provider: BrowserAIProviderId, message: string, mode?: string) => void;
   loadingProvider?: BrowserAIProviderId | null;
+  providerFeedback?: Partial<Record<BrowserAIProviderId, BrowserComposerFeedback>>;
 }
 
 function CompactClock() {
@@ -56,7 +62,31 @@ export function BrowserStartPage({
   onAddFavorite,
   onAIProviderSubmit,
   loadingProvider,
+  providerFeedback,
 }: BrowserStartPageProps) {
+  const [health, setHealth] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      void getBrowserAIHealth()
+        .then(h => { if (alive) setHealth(h); })
+        .catch(() => { if (alive) setHealth({}); });
+    };
+    load();
+    const timer = window.setInterval(load, 30_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, []);
+
+  const providerHealth = (id: BrowserAIProviderId) => {
+    const key = id === 'browser-use' ? 'browser_use' : id;
+    const ok = Boolean(health?.[key]);
+    const note = typeof health?.[`${key}_note`] === 'string'
+      ? String(health?.[`${key}_note`])
+      : ok ? 'ready' : health === null ? 'checking…' : 'not ready';
+    return { ok, note };
+  };
+
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
       {/* Home ligt vrij op de plaat, zonder vak eromheen -- net als elke
@@ -79,17 +109,31 @@ export function BrowserStartPage({
 
         {/* Three composers side by side — no tabs */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {BROWSER_AI_PROVIDER_LIST.map((p) => (
-            <BrowserAIComposer
-              key={p.id}
-              provider={p}
-              compact
-              isActive
-              isLoading={loadingProvider === p.id}
-              onFocus={() => {}}
-              onSubmit={(msg, mode) => onAIProviderSubmit(p.id, msg, mode)}
-            />
-          ))}
+          {BROWSER_AI_PROVIDER_LIST.map((p) => {
+            const h = providerHealth(p.id);
+            return (
+              <div key={p.id} className="min-w-0">
+                <div className="flex items-center gap-1.5 px-1 pb-1.5">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: h.ok ? 'var(--success)' : health === null ? 'var(--warning)' : 'var(--error)' }}
+                  />
+                  <span className="text-[9px] truncate" style={{ color: h.ok ? 'var(--text-secondary)' : 'var(--text-muted)' }} title={h.note}>
+                    {h.ok ? 'backend ready' : h.note}
+                  </span>
+                </div>
+                <BrowserAIComposer
+                  provider={p}
+                  compact
+                  isActive
+                  isLoading={loadingProvider === p.id}
+                  feedback={providerFeedback?.[p.id]}
+                  onFocus={() => {}}
+                  onSubmit={(msg, mode) => onAIProviderSubmit(p.id, msg, mode)}
+                />
+              </div>
+            );
+          })}
         </div>
 
         <div>

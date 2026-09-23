@@ -4,11 +4,35 @@
  * Run: node terminal-server.cjs
  * WebSocket shell on ws://localhost:4022 (local) or behind nginx on /terminal
  * Each browser connection gets its own persistent zsh session.
+ *
+ * ## Wie hier binnen mag
+ *
+ * Dit is een login shell op de machine waar het draait. Wie hem opent leest
+ * /opt/axe-core-api/.env en daarmee elke sleutel die de VPS heeft. Daar hoort
+ * dus een slot op, en het slot is het Supabase-token dat de app al meestuurt.
+ *
+ * Gemeten 2026-09-10 tegen de live server, vóór dit bestand een token las:
+ *
+ *   curl wss://api.axecompanion.com/terminal   (geen Origin, geen token)
+ *   -> HTTP/1.1 101 Switching Protocols
+ *
+ * De Origin-lijst hieronder was het enige slot, en die begon met "geen Origin
+ * is goed". Origin is een header die alleen brówsers verplicht meesturen; curl
+ * laat hem weg en loopt er zo omheen. Met een verzonnen origin kwam er keurig
+ * 401 terug — het slot werkte, het zat op een deur waar je naast kon lopen.
+ *
+ * Daarom nu: het token beslist, de Origin is de tweede muur. Zonder geldig
+ * token geen shell, ook niet zonder Origin, ook niet vanaf localhost achter een
+ * proxy. En zonder SUPABASE_URL en een projectsleutel start hij niet op — dezelfde
+ * keuze als infra/axe-mac-tunnel/relay.cjs, dat weigert te starten zonder
+ * AXE_TUNNEL_TOKEN. Een beveiliging die je per ongeluk uit kunt laten staan is
+ * er geen.
  */
 
 const { WebSocketServer, WebSocket } = require('ws');
 
 const { spawn } = require('child_process');
+const { ptyCommando, maatCommando } = require('./terminalShell.cjs');
 const { createServer } = require('http');
 const os = require('os');
 
@@ -41,6 +65,9 @@ const APP_ORIGINS = new Set([
 ]);
 
 function isAllowedOrigin(origin) {
+  // Geen Origin is geen vrijbrief meer — dat was precies het gat. Een client
+  // zonder Origin (curl, een script, de Tauri-shell in sommige versies) komt
+  // hier langs op zijn token, niet op de afwezigheid van een header.
   if (!origin) return true;
   if (ALLOWED_ORIGINS.includes('*')) return true;
   if (APP_ORIGINS.has(origin)) return true;
@@ -60,6 +87,121 @@ function isAllowedOrigin(origin) {
   }
 }
 
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
+
+/**
+ * De project-sleutel voor de `apikey`-header van /auth/v1/user.
+ *
+ * Bij voorkeur de anon key, maar die staat niet op elke machine — de VPS had
+ * alleen SUPABASE_SERVICE_ROLE (gemeten 10 september). De service role mag hier
+ * ook, want deze sleutel bepaalt niets over identiteit: hij zegt alleen tegen
+ * Supabase welk project je bedoelt. Wíe je bent staat in het token dat de
+ * gebruiker meestuurt, en dat gaat als Bearer mee.
+ *
+ * Zo hoeft er geen sleutel gekopieerd te worden naar een tweede bestand: de
+ * unit hangt gewoon aan de .env die er al is.
+ */
+const SUPABASE_API_KEY =
+  process.env.SUPABASE_ANON_KEY
+  || process.env.VITE_SUPABASE_ANON_KEY
+  || process.env.SUPABASE_SERVICE_ROLE
+  || process.env.SUPABASE_SERVICE_ROLE_KEY
+  || '';
+
+/**
+ * Welke accounts een shell mogen. Leeg = elk geldig account van dit Supabase
+ * project, en dat is voor AXE Core te ruim: één project bedient ook Companion
+ * en Trading OS, dus elke betalende abonnee heeft daar een geldig token. Zet
+ * hem, en zet er alleen jezelf in.
+ */
+const ALLOWED_USER_IDS = (process.env.AXE_TERMINAL_ALLOWED_USER_IDS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+if (!SUPABASE_URL || !SUPABASE_API_KEY) {
+  console.error(
+    'refusing to start: SUPABASE_URL and a project key are required\n' +
+    '(SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE as fallback).\n' +
+    'Without them this process is an unauthenticated shell on a public port.',
+  );
+  process.exit(1);
+}
+
+if (typeof fetch !== 'function') {
+  console.error('refusing to start: this Node has no global fetch (needs Node 18+)');
+  process.exit(1);
+}
+
+if (!ALLOWED_USER_IDS.length) {
+  console.warn(
+    '[terminal] AXE_TERMINAL_ALLOWED_USER_IDS is empty — every account on this ' +
+    'Supabase project can open a shell here. Set it to your own user id.',
+  );
+}
+
+/**
+ * Vraagt Supabase wie dit token is. Niet zelf de JWT ontleden: dan controleer
+ * je een handtekening met code die je zelf schreef, en een ingetrokken sessie
+ * blijft geldig tot hij verloopt. Supabase weet het echte antwoord.
+ *
+ * Eén netwerkaanroep per verbinding — een terminal open je een paar keer per
+ * dag, dus dat is geen pad om te optimaliseren.
+ */
+/**
+ * @returns {{ user: object } | { reden: string }}
+ *
+ * Een reden en niet alleen een nee. Gemeten 10 september: de log zei vier
+ * avonden lang "geen geldig token" terwijl de oorzaak was dat de app inlogt met
+ * een ánder account dan er in de allowlist stond. Dat kostte een half uur
+ * zoeken in een log die het antwoord had kunnen geven.
+ *
+ * De reden noemt nooit het token zelf — wel welk account het was, want dat is
+ * precies wat je in de allowlist moet zetten en het is geen geheim.
+ */
+async function verifieerToken(token) {
+  if (!token) return { reden: 'geen token meegestuurd' };
+  if (token === 'dev') {
+    return { reden: 'dev-plaatshouder: de app had geen Supabase-sessie' };
+  }
+  // De projectsleutel is geen inlog. Werd hij als service role meegegeven, dan
+  // zou hem hier als Bearer terugsturen precies het slot openen dat we net
+  // hebben gemonteerd.
+  if (token === SUPABASE_API_KEY) return { reden: 'projectsleutel als token' };
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_API_KEY },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return { reden: `Supabase wees het af (HTTP ${res.status})` };
+
+    const user = await res.json();
+    if (!user?.id) return { reden: 'Supabase gaf geen gebruiker terug' };
+
+    if (ALLOWED_USER_IDS.length && !ALLOWED_USER_IDS.includes(user.id)) {
+      return {
+        reden: `${user.email || user.id} staat niet in AXE_TERMINAL_ALLOWED_USER_IDS `
+          + `(id ${user.id})`,
+      };
+    }
+    return { user };
+  } catch (e) {
+    // Supabase onbereikbaar betekent geen shell. Bij twijfel dicht: een
+    // terminal die opengaat als de controle uitvalt is geen controle. Maar
+    // zeg het wel, want dit is een storing en geen weigering.
+    return { reden: `Supabase onbereikbaar: ${e?.message || e}` };
+  }
+}
+
+function tokenUit(req) {
+  try {
+    return new URL(req.url, 'http://localhost').searchParams.get('token');
+  } catch {
+    return null;
+  }
+}
+
 const httpServer = createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -72,21 +214,48 @@ const httpServer = createServer((req, res) => {
 
 const wss = new WebSocketServer({
   server: httpServer,
-  // Allow connections from localhost and the live AXE domains.
-  verifyClient: ({ origin }) => {
-    return isAllowedOrigin(origin);
+  // Twee muren, in deze volgorde: komt de aanvraag uit een browser, dan moet
+  // die browser van een bekend adres komen; en altijd moet het token van een
+  // toegelaten account zijn. De callback-vorm omdat de tokencontrole een
+  // netwerkaanroep is.
+  verifyClient: ({ origin, req }, cb) => {
+    if (!isAllowedOrigin(origin)) {
+      console.warn(`[terminal] geweigerd: origin ${origin}`);
+      return cb(false, 401, 'Unauthorized');
+    }
+    verifieerToken(tokenUit(req)).then((uitslag) => {
+      if (!uitslag.user) {
+        console.warn(`[terminal] geweigerd: ${uitslag.reden} (origin ${origin || 'geen'})`);
+        return cb(false, 401, 'Unauthorized');
+      }
+      req.axeUser = uitslag.user;
+      cb(true);
+    });
   },
 });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   const id = Math.random().toString(36).slice(2, 7);
-  console.log(`[${id}] client connected`);
+  // Mét account erbij: een shell-sessie zonder naam is achteraf niet na te gaan.
+  console.log(`[${id}] client connected (${req?.axeUser?.email || req?.axeUser?.id || 'onbekend'})`);
 
   // Spawn a new login shell. Default to bash (always present on Ubuntu);
   // override with AXE_TERMINAL_SHELL (e.g. zsh) if you've installed one.
   // `-l` is a login shell for both bash and zsh.
   const SHELL_BIN = process.env.AXE_TERMINAL_SHELL || process.env.SHELL || 'bash';
-  const shell = spawn(SHELL_BIN, ['-l'], {
+
+  // In een ECHTE terminal, niet op drie pijpen. Zie terminalShell.cjs voor wat
+  // dat verschil precies is -- kort: zonder pty geen prompt, geen kleur, geen
+  // Ctrl+C, en uitvoer die per 4 KB blok aankomt in plaats van meteen.
+  //
+  // `AXE_TERMINAL_PTY=0` zet het uit. Niet omdat iemand dat zou willen, maar
+  // omdat een nieuwe manier van starten een manier moet hebben om terug te
+  // vallen als hij op één machine toch niet blijkt te werken.
+  const ptyGewenst = process.env.AXE_TERMINAL_PTY !== '0';
+  const viaPty = ptyGewenst ? ptyCommando(process.platform, SHELL_BIN) : null;
+
+  const start = viaPty || { cmd: SHELL_BIN, args: ['-l'] };
+  const shell = spawn(start.cmd, start.args, {
     env: {
       ...process.env,
       TERM: 'xterm-256color',
@@ -101,6 +270,13 @@ wss.on('connection', (ws) => {
       ws.send(JSON.stringify({ type, data }));
     }
   };
+
+  // Of dit een echte terminal is bepaalt wat de BROWSER moet doen: bij een pty
+  // echoot de terminal zelf, dus een tweede echo in de browser zou elke letter
+  // dubbel tonen. Daarom staat het in het eerste bericht en niet in een
+  // aanname aan de andere kant.
+  let maatGezet = false;
+  send('ready', { pty: Boolean(viaPty), shell: SHELL_BIN, platform: process.platform });
 
   shell.stdout.on('data', (buf) => send('output', buf.toString()));
   shell.stderr.on('data', (buf) => send('output', buf.toString()));
@@ -120,6 +296,12 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(raw.toString());
       if (msg.type === 'input' && shell.stdin.writable) {
         shell.stdin.write(msg.data);
+      } else if (msg.type === 'resize' && viaPty && !maatGezet && shell.stdin.writable) {
+        // Eén keer, bij het openen: script maakt zijn pty op 80x24 en heeft
+        // zelf geen terminal om de echte maat van over te nemen. Zie
+        // maatCommando voor waarom dit niet bij élke resize opnieuw gaat.
+        maatGezet = true;
+        shell.stdin.write(maatCommando(msg.cols, msg.rows));
       }
     } catch { /* ignore malformed */ }
   });

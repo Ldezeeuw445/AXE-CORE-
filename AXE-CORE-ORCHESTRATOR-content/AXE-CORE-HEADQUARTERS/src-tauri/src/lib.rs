@@ -1,3 +1,11 @@
+// De twee achtergronddienst-modules zijn desktop-only: `diensten` start npm en
+// uvicorn op deze Mac, `launchd` praat met macOS launchd. In een APK bestaat
+// geen van beide, dus daar hoort de code niet eens gecompileerd te worden.
+#[cfg(desktop)]
+mod diensten;
+#[cfg(desktop)]
+mod launchd;
+
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -182,18 +190,73 @@ fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String>
     Ok(())
 }
 
+
+/// De stand van de twee achtergronddiensten. Zie diensten.rs.
+#[cfg(desktop)]
+#[tauri::command]
+fn diensten_stand() -> Vec<diensten::DienstStand> {
+    diensten::stand()
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn dienst_start(id: String) -> Result<String, String> {
+    diensten::start_dienst(&id)
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn dienst_stop(id: String) -> Result<String, String> {
+    diensten::stop_dienst(&id)
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn worker_dienst_stand(id: String) -> Result<launchd::LaunchdStand, String> {
+    launchd::status(&id)
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+fn worker_dienst_herstart(id: String) -> Result<String, String> {
+    launchd::kickstart(&id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            zet_plaat_materiaal,
-            write_vault_file,
-            read_vault_file,
-            vault_path_exists,
-            ensure_vault_dir,
-            list_vault_files,
-            show_main_window,
-        ])
+    let builder = tauri::Builder::default();
+
+    // Eén generate_handler! kan niet half uit staan, en een tweede
+    // .invoke_handler overschrijft de eerste in plaats van hem aan te vullen.
+    // Dus twee lijsten achter een cfg: desktop kent de diensten en launchd,
+    // een APK niet.
+    #[cfg(desktop)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        zet_plaat_materiaal,
+        write_vault_file,
+        read_vault_file,
+        vault_path_exists,
+        ensure_vault_dir,
+        list_vault_files,
+        show_main_window,
+        diensten_stand,
+        dienst_start,
+        dienst_stop,
+        worker_dienst_stand,
+        worker_dienst_herstart,
+    ]);
+    #[cfg(not(desktop))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        zet_plaat_materiaal,
+        write_vault_file,
+        read_vault_file,
+        vault_path_exists,
+        ensure_vault_dir,
+        list_vault_files,
+        show_main_window,
+    ]);
+
+    builder
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -291,9 +354,38 @@ pub fn run() {
                 .build(app)?;
             }
 
+            // De shell-server en de lokale API meteen aanzetten, tenzij er al
+            // iets op hun poort luistert. Dat scheelt twee terminalvensters die
+            // je anders zelf open moet houden -- en die je per ongeluk sluit.
+            #[cfg(desktop)]
+            diensten::start_bij_opstarten();
+
+            // AXE CORE Native is one runtime contract: opening the canonical app
+            // also makes sure its registered background workers are actually
+            // alive. Healthy workers are left untouched so in-flight work is
+            // never interrupted; labels that live on the other Mac are ignored.
+            #[cfg(desktop)]
+            for worker in ["computer-worker", "browser-agent"] {
+                if let Err(err) = launchd::ensure_running(worker) {
+                    eprintln!("AXE worker startup warning ({worker}): {err}");
+                }
+            }
+
             let _ = handle;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Alles wat wij startten weer neerhalen. Zonder dit blijven npm en
+            // uvicorn draaien nadat je de app hebt afgesloten, en dan is de
+            // volgende bouw "address already in use" van een proces waarvan je
+            // niet meer weet dat het bestaat.
+            #[cfg(desktop)]
+            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+                diensten::stop_alles();
+            }
+            #[cfg(not(desktop))]
+            let _ = event;
+        });
 }

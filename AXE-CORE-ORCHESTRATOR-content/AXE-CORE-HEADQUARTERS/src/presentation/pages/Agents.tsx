@@ -9,9 +9,26 @@ import { AgentCard } from '@/presentation/components/widgets/AgentCard';
 import { DEFAULT_AGENTS } from '@/domain/catalogs/defaultAgents';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { agentLoopHealth } from '@/infrastructure/persistence/agentFeedbackService';
+import { loopAgentVoor } from '@/infrastructure/persistence/memoryFeedbackService';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
+import { WarRoom } from '@/presentation/components/axe-core/WarRoom';
+import { agentsByKind } from '@/domain/agents/catalog';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
+
+// core_agents rows that are not agents at all and must never render as a
+// card here. 'axe_trader'/"Trading OS" names AXE CORE's own in-process
+// trading agent after a completely separate standalone application
+// (see ECOSYSTEM.md) -- the real agent is DEFAULT_AGENTS' 'trading-agent'.
+// 'axe_ollama'/"Ollama (Local)" is a model provider (providers.ts), not a
+// reasoning agent -- no agent runs "as" Ollama, agents merely may use it.
+// 'crewai_manager'/"CrewAI Manager" and 'eve'/"EVE" are both explicitly
+// documented in roster.ts:28-31 as deliberately excluded from the real
+// roster -- CrewAI Manager as "redundant, Wingman already runs the crews
+// it needs", EVE as "a persona framework", not an agent of its own. Found
+// live in this exact table on 23 sep 2026 (they'd survived the first pass
+// of this filter, which only checked Trading OS/Ollama).
+const NON_AGENT_ROW_NAMES = new Set(['axe_trader', 'axe_ollama', 'crewai_manager', 'eve']);
 
 const ROLE_ACCENT: Record<string, string> = {
   orchestrator: '#c084fc',
@@ -22,19 +39,14 @@ const ROLE_ACCENT: Record<string, string> = {
   privacy: '#fb923c',
 };
 
-// Welke rij in core_agents hoort bij welke naam in de leerlus
-// (agent_learning_episodes, via LOOP_AGENTS in domain/memory/agentLoop.ts)?
-// Alleen namen die met bewijs uit de code te herleiden zijn -- zie de
-// bestandsverwijzingen in agentRegistry.ts (codeEditorAgent.ts,
-// browserAgentLoop.ts, tradingAgentEngine.ts) en AXE Core als de agent die
-// de chat draait. Geen gok voor de rest: een agent die hier niet in staat
-// heeft gewoon nog geen eigen leerlus, en dat is wat de tab dan ook toont.
-const LOOP_AGENT_BY_NAME: Record<string, LoopHealth['agent']> = {
-  axe_core: 'chat',
-  code_agent: 'code-editor',
-  browser_agent: 'browser',
-  axe_algo: 'trading',
-};
+// Loop identity comes from the same canonical namespace/name resolver used by
+// retrieval itself. The page must not maintain a second agent list: that is how
+// real agents were previously shown as "not wired" while their code was live.
+function loopAgentForRow(agent: CoreAgent): LoopHealth['agent'] | null {
+  return loopAgentVoor(agent.memory_namespace || undefined)
+    ?? loopAgentVoor(agent.name)
+    ?? null;
+}
 
 function loadOverrides(): Record<string, Partial<CoreAgent>> {
   try {
@@ -167,7 +179,7 @@ export default function Agents() {
           agentLoopHealth().catch(() => [] as LoopHealth[]),
         ]);
         if (error) throw new Error(error.message);
-        const remote = (data as CoreAgent[]) || [];
+        const remote = ((data as CoreAgent[]) || []).filter(a => !NON_AGENT_ROW_NAMES.has(a.name));
         setLoopHealthByAgent(Object.fromEntries(health.map(h => [h.agent, h])));
         setUsingFallback(remote.length === 0);
         setAgents(mergeAgents(remote));
@@ -277,8 +289,8 @@ export default function Agents() {
     >
       <PageHeader
         eyebrow="Workforce"
-        title="Agent Center"
-        description={loading ? 'Loading agents…' : 'Full roster — status, skills, tools, models, and target tabs. Edit any card; add your own.'}
+        title="War Room"
+        description={loading ? 'Loading agents…' : 'The six agents AXE runs — see who is doing what. The full roster and settings are below.'}
       />
       <div className="flex flex-wrap gap-2 mt-3 mb-5">
         <StatPill label="Active" value={String(active)} tone="success" />
@@ -294,6 +306,12 @@ export default function Agents() {
         </button>
       </div>
 
+      <WarRoom />
+
+      <h2 className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
+        FULL ROSTER &amp; SETTINGS
+      </h2>
+
       <div className={LIST_GRID}>
         {agents.map(agent => {
           const editing = editingId === agent.id;
@@ -301,7 +319,7 @@ export default function Agents() {
           const note = statusNote(agent.status);
           const skills = Array.isArray(agent.capabilities) ? agent.capabilities : [];
           const tools = Array.isArray(agent.toolset) ? agent.toolset : [];
-          const loopName = LOOP_AGENT_BY_NAME[agent.name];
+          const loopName = loopAgentForRow(agent);
           const health = loopName ? loopHealthByAgent[loopName] : undefined;
           return (
             <div
@@ -367,7 +385,7 @@ export default function Agents() {
                     ? 'Learning loop (agent_learning_episodes): not wired yet.'
                     : !health || health.opened === 0
                       ? 'Learning loop (agent_learning_episodes): 0 episodes.'
-                      : `Learning loop (agent_learning_episodes): ${health.opened} episodes · ${Math.round(health.closeRate * 100)}% closed`}
+                      : `Learning loop: ${health.opened} episodes · ${Math.round(health.closeRate * 100)}% outcomes · ${health.applied}/${health.reinforceable} learned`}
                 </div>
 
                 {!editing ? (
@@ -415,6 +433,28 @@ export default function Agents() {
             </div>
           );
         })}
+      </div>
+
+      {/* The Wingman's CrewAI specialists — the free-model crews AXE delegates
+          to. Shown here so every agent in the force is visible in one place,
+          each with the memory namespace it learns in. */}
+      <h2 className="text-small font-semibold tracking-wide mt-6 mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
+        CREW — THE WINGMAN&apos;S SPECIALISTS
+      </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+        {agentsByKind('crew').map((a) => (
+          <div key={a.id} className="rounded-xl p-3" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: '#38BDF8' }} />
+              <span className="text-small font-medium truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</span>
+            </div>
+            <p className="text-xs-custom" style={{ color: 'var(--text-muted)', lineHeight: 1.35 }}>{a.description}</p>
+            <div className="mt-2 pt-2 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <span className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>memory · {a.namespace}</span>
+              <span className="text-xs-custom flex-shrink-0" style={{ color: 'var(--text-muted)' }}>via Wingman</span>
+            </div>
+          </div>
+        ))}
       </div>
     </motion.div>
   );

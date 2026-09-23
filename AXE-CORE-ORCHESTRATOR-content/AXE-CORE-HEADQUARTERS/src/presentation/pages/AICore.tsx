@@ -6,6 +6,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { SystemRegistryPanel } from '@/presentation/components/shared/SystemRegistryPanel';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/presentation/store/voiceStore';
+import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import type { RoutingEvent } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/infrastructure/persistence/coreDB';
@@ -33,23 +34,36 @@ export default function AICore() {
   useEffect(() => {
     if (voice.conversation.length === 0) return;
     const last = voice.conversation[voice.conversation.length - 1];
-    const provider = last.provider ? `[${last.provider}${last.model ? `/${last.model}` : ''}] ` : '';
+    // AXE's reply is shown as AXE — never tagged with the model that produced it.
+    // Which model AXE runs on is not a thing the user should watch; AXE is AXE.
     const entry: LogEntry = {
       id: `${last.timestamp}-${last.role}`,
       t: new Date(last.timestamp).toISOString().slice(11, 23),
       type: last.role === 'user' ? 'in' : 'out',
-      text: provider + last.text,
+      text: last.text,
     };
     setLogs(prev => {
       if (prev.some(l => l.id === entry.id)) return prev;
-      return [...prev, entry].slice(-200);
+      // Show the ONE model AXE actually spoke through this turn — truthful and
+      // verifiable, not a race. AXE is still AXE; this is just which engine it
+      // used, so you can confirm it's the fast brain (e.g. gemini) and not Ollama.
+      const extra: LogEntry[] = [];
+      if (last.role !== 'user' && last.provider) {
+        extra.push({
+          id: `${entry.id}-model`,
+          t: entry.t,
+          type: 'route',
+          text: `model · ${last.provider}${last.model ? `/${last.model.split('/').pop()?.split(':')[0]}` : ''}`,
+        });
+      }
+      return [...prev, ...extra, entry].slice(-200);
     });
   }, [voice.conversation]);
 
   // Mirror voiceStatus to logs
   useEffect(() => {
     if (voice.voiceStatus === 'processing') {
-      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ LangGraph Orchestrator analyzing...' }].slice(-200));
+      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ AXE thinking…' }].slice(-200));
     }
   }, [voice.voiceStatus]);
 
@@ -60,18 +74,22 @@ export default function AICore() {
     if (log.length === 0 || log.length === prevRouteLen.current) return;
     prevRouteLen.current = log.length;
     const evt = log[0]; // newest is first
-    const newEntries: LogEntry[] = [];
+    const t = new Date(evt.ts).toISOString().slice(11, 23);
     const baseId = `rte-${evt.id}`;
-    newEntries.push({ id: `${baseId}-cap`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `① cap:${evt.capability}  via:${evt.via}  slots:[${evt.slotOrder.join(',')}]` });
-    evt.attempts.forEach((a, i) => {
-      /* Een logregel is tekst, geen JSX -- hier hoort een woord, geen icoon. */
-      const merk = a.outcome === 'ok' ? 'ok' : 'fail';
-      const detail = a.outcome === 'fail' ? ` — ${a.err}` : '';
-      newEntries.push({ id: `${baseId}-att-${i}`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `${merk} ${a.provider}${a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}${detail}` });
-    });
-    if (evt.winner) {
-      newEntries.push({ id: `${baseId}-win`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `winner: ${evt.winner}${evt.winnerModel ? ` · ${evt.winnerModel.split('/').pop()?.split(':')[0]}` : ''}` });
+    const agent = (evt.delegate ?? 'axe') as AxeAgentId;
+    const newEntries: LogEntry[] = [];
+    // AXE is at the top of the chain. The stream never shows a race for "which
+    // model IS AXE" — for a turn AXE handles itself, you just saw "AXE thinking…"
+    // and then the answer. We only surface what AXE DECIDED: when it hands work
+    // to a specialist, the hand-off and the engine that specialist used (that
+    // engine is downstream of AXE, so it's fine to see).
+    if (agent !== 'axe') {
+      newEntries.push({ id: `${baseId}-dele`, t, type: 'route', text: `AXE → ${agentById(agent).name}${evt.via === 'langgraph' ? '  · via LangGraph' : ''}` });
+      if (evt.winner) {
+        newEntries.push({ id: `${baseId}-eng`, t, type: 'route', text: `${agentById(agent).name} · ${evt.winner}${evt.winnerModel ? `/${evt.winnerModel.split('/').pop()?.split(':')[0]}` : ''}` });
+      }
     }
+    if (newEntries.length === 0) return;
     setLogs(prev => {
       const ids = new Set(prev.map(l => l.id));
       return [...prev, ...newEntries.filter(e => !ids.has(e.id))].slice(-200);

@@ -18,12 +18,17 @@ import { currentHostKind } from '@/infrastructure/config/apiUrl';
  */
 
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 export const LOCAL_OLLAMA_URL = 'http://localhost:11434';
 
-/** Keep the local model resident so the first query of a session is fast
- *  (Ollama's own default unloads after 5 min idle). */
-export const LOCAL_KEEP_ALIVE = '60m';
+/** Hoe lang het lokale model na een beurt in het geheugen blijft.
+ *
+ * Was 60 minuten, plus opwarmen bij het opstarten. Gemeten 13 september op de
+ * Mac mini (8 GB): llama-server hield 8,2 GB vast, 18,6 GB swap, schijf vol --
+ * de hele Mac hing. Vijf minuten is Ollama's eigen standaard: een gesprek blijft
+ * snel, een app die open staat terwijl je iets anders doet houdt niets vast. */
+export const LOCAL_KEEP_ALIVE = '5m';
 
 /** How long a probe result is trusted before we re-check. Long enough that a
  *  chat turn never pays for a probe twice, short enough that plugging back
@@ -121,7 +126,7 @@ export async function resolveReachableOllama(): Promise<{ baseUrl: string; local
   const remote = remoteOllamaBaseUrl();
   if (!remote) return null;
   try {
-    const r = await fetch(`${remote}/api/tags`, { signal: AbortSignal.timeout(3_000) });
+    const r = await fetch(`${remote}/api/tags`, { headers: ollamaHeaders(remote), signal: AbortSignal.timeout(3_000) });
     if (r.ok) return { baseUrl: remote, local: false };
   } catch { /* unreachable */ }
   return null;

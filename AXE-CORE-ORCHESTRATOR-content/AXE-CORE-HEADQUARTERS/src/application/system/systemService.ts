@@ -15,6 +15,7 @@ import { VPS_API_ORIGIN, axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrast
 // ── Types ─────────────────────────────────────────────────────────────────
 
 import { statusVan, NIET_INGESTELD, type ServiceStatus } from '@/domain/serviceStatus';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 export type { ServiceStatus };
 
 export interface ServiceState {
@@ -65,6 +66,7 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   axe_companion: 'AXE Companion',
   axe_intel: 'AXE Intel',
   axe_core_api: 'AXE Core API (VPS)',
+  claude_code: 'Claude Code (Branch C)',
 };
 
 // The VPS agent bridges (openhands/openjarvis/openclaw/kilocode/hermes) live
@@ -219,7 +221,7 @@ const SERVICES: Array<{
       const url = OLLAMA_URL;
       const t = Date.now();
       try {
-        const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
+        const res = await fetch(`${url}/api/tags`, { headers: ollamaHeaders(url), signal: AbortSignal.timeout(5000) });
         const data = res.ok ? await res.json() : null;
         return {
           ok: res.ok,
@@ -317,6 +319,10 @@ const SERVICES: Array<{
   {
     key: 'crewai',
     check: async () => vpsAgentStatus('crewai'),
+  },
+  {
+    key: 'claude_code',
+    check: async () => vpsAgentStatus('claude_code'),
   },
   {
     key: 'hermes',

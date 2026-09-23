@@ -1,0 +1,43 @@
+name: North Sea Master Orchestration
+studio_id: d3617f1c-aa50-4de9-a32f-ea68a51170e3
+studio_url: https://app.crewai.com/studio/v2/projects/d3617f1c-aa50-4de9-a32f-ea68a51170e3/editor
+type: flow_dsl
+triggers: []
+role: >
+  Deterministic AXE CORE event router. Does not replace AXE CORE. Selects the
+  minimum specialist crew. Never invokes all crews by default.
+path: >
+  Trigger (unconfigured) → Intake/Validate → Normalize → Validation Gate →
+  Policy/Budget Gate → Normalize Policy → Policy Gate Check →
+  optional Semantic Enrichment → Deterministic Router →
+  Discovery | Deal | Operations | Intelligence | Unroutable →
+  optional Discovery→Deal handoff → Result validation → Persist via NorthSea
+  services → Assemble audited CrewRunResult back to AXE CORE.
+routes:
+  - route_discovery
+  - route_deal
+  - route_intelligence
+  - route_operations
+  - route_unroutable
+nested_crews:
+  discovery:
+    agents: 6
+    specialists: [Buyer Discovery, Supplier Discovery, Counterparty Research, Opportunity Qualification, Evidence & Source, Match Analyst]
+    tools: [exa_search]
+  deal:
+    agents: 3
+    specialists: [Deal Qualification, Evidence, Communications]
+    tools: [exa_search]
+  operations:
+    agents: 2
+    specialists: [Operations, Deal Qualification]
+  intelligence:
+    agents: 2
+    specialists: [Market Intelligence, Research]
+    tools: [exa_search]
+constraints:
+  - No claims VERIFIED without a source
+  - No synthetic/test data in live execution
+  - Draft communications never sent autonomously
+  - Persistence uses typed NorthSea repositories with run_id and idempotency keys
+  - No commercial terms committed by the flow

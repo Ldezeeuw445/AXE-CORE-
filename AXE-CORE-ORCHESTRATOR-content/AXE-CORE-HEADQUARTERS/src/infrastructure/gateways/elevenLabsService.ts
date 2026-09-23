@@ -7,6 +7,8 @@ import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { getReplyLanguage } from '@/domain/replyLanguage';
+import { STEMMEN } from '@/domain/stemKeuzes';
+import { normalizeForSpeech } from '@/domain/speechText';
 
 const ENV_ELEVENLABS_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
@@ -43,55 +45,25 @@ const TTS_VOICE_SETTINGS = {
   use_speaker_boost: true,
 };
 
-export interface ElevenLabsVoice {
-  id: string;
-  name: string;
-  accent: string;
-  gender: string;
-  description: string;
-}
+/**
+ * De stem waarmee we praten als er nog niets gekozen is.
+ *
+ * Hier stond een lijst van negen stemmen plus een ophaler voor de HELE
+ * ElevenLabs-bibliotheek. Dat leverde tientallen namen op die voor dit doel
+ * nauwelijks verschillen, en de instellingen zijn daarom teruggebracht tot vier
+ * keuzes (domain/stemKeuzes). Die lijst is nu de enige plek waar stem-id's
+ * staan; twee lijsten zouden gegarandeerd uit elkaar lopen.
+ */
+const STANDAARD_EL_STEM =
+  STEMMEN.find(s => s.motor === 'elevenlabs')?.stemId ?? 'pNInz6obpgDQGcFmaJgB';
 
-export const ELEVENLABS_VOICES: ElevenLabsVoice[] = [
-  { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', accent: 'American', gender: 'Male', description: 'Deep, confident, authoritative — closest to Bobby Axelrod (AXE default)' },
-  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', accent: 'British', gender: 'Male', description: 'Warm, smart, JARVIS-style' },
-  { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', accent: 'American', gender: 'Male', description: 'Warm, friendly, natural' },
-  { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', accent: 'British', gender: 'Male', description: 'Warm, friendly, well-rounded' },
-  { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli', accent: 'American', gender: 'Female', description: 'Warm, friendly, conversational' },
-  { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', accent: 'British', gender: 'Female', description: 'Soft, elegant, refined' },
-  { id: 'IKne3meq5aSn9XLyUdCD', name: 'Charlie', accent: 'Australian', gender: 'Male', description: 'Casual, approachable, natural' },
-  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', accent: 'American', gender: 'Female', description: 'Clear, professional, warm' },
-  { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy', accent: 'American', gender: 'Male', description: 'Young, energetic, upbeat' },
-];
 
-export async function fetchAvailableVoices(): Promise<ElevenLabsVoice[]> {
-  const key = resolveElevenLabsKey();
-  const direct = useDirectElevenLabs();
-  const res = direct
-    ? await fetch(`${ELEVENLABS_BASE_URL}/voices`, { headers: { 'xi-api-key': key } })
-    : await fetch(TTS_PROXY_URL, { method: 'GET' });
-  if (!res.ok) {
-    if (res.status === 503) throw new Error('ElevenLabs not configured on the server (set ELEVENLABS_API_KEY in Vercel and redeploy).');
-    throw new Error(`ElevenLabs ${res.status}: ${res.statusText}`);
-  }
-  const data = await res.json();
-  const voices = Array.isArray(data?.voices) ? data.voices : [];
-  return voices.map((v: Record<string, unknown>) => {
-    const labels = (v.labels as Record<string, string> | undefined) ?? {};
-    return {
-      id: String(v.voice_id ?? ''),
-      name: String(v.name ?? 'Unknown'),
-      accent: labels.accent ?? '—',
-      gender: labels.gender ?? '—',
-      description: String(v.description ?? labels.description ?? labels.use_case ?? ''),
-    };
-  }).filter((v: ElevenLabsVoice) => v.id);
-}
 
 const TTS_VOICE_KEY = 'axe_tts_voice';
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
-export function getSelectedVoiceId(): string {
-  return localStorage.getItem(TTS_VOICE_KEY) ?? ELEVENLABS_VOICES[0].id;
+function getSelectedVoiceId(): string {
+  return localStorage.getItem(TTS_VOICE_KEY) ?? STANDAARD_EL_STEM;
 }
 
 export function setSelectedVoiceId(voiceId: string): void {
@@ -159,27 +131,19 @@ export async function speakWithElevenLabs(
   onError?: () => void,
   onFallback?: (reason: string) => void,
 ): Promise<void> {
+  const spoken = normalizeForSpeech(text);
+  if (!spoken) { onDone?.(); return; }
+
   if (isElevenLabsConfigured()) {
     try {
       const currentVoice = getSelectedVoiceId();
-      let response = await ttsFetch(text, currentVoice);
+      const response = await ttsFetch(spoken, currentVoice);
 
-      if (!response.ok && response.status === 400) {
-        const body = await response.clone().text().catch(() => '');
-        if (/invalid_uid|voice/i.test(body)) {
-          const fetched = await fetchAvailableVoices().catch(() => [] as ElevenLabsVoice[]);
-          const seen = new Set<string>([currentVoice]);
-          let tried = 0;
-          for (const v of [...fetched, ...ELEVENLABS_VOICES]) {
-            if (seen.has(v.id) || tried >= 8) continue;
-            seen.add(v.id);
-            tried++;
-            const retry = await ttsFetch(text, v.id);
-            if (retry.ok) { setSelectedVoiceId(v.id); response = retry; break; }
-          }
-        }
-      }
-
+      /* One fixed voice: if the selected voice-id is invalid on this key we do
+       * NOT quietly switch to a different ElevenLabs voice and remember it —
+       * that is how "you asked for Man and got someone else for a month"
+       * happened. We surface the error and let the caller fall back to the
+       * browser voice, leaving the user's chosen voice-id untouched. */
       if (!response.ok) {
         const body = await response.text().catch(() => '');
         throw new Error(`ElevenLabs ${response.status}: ${response.statusText}${body ? ` — ${body.slice(0, 200)}` : ''}`);
@@ -224,9 +188,12 @@ export function speakWithBrowser(text: string, onDone?: () => void): void {
       return;
     }
 
+    const spoken = normalizeForSpeech(text);
+    if (!spoken) { onDone?.(); return; }
+
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(spoken);
     utterance.rate = 1.02;
     utterance.pitch = 0.88;
     utterance.volume = 1.0;

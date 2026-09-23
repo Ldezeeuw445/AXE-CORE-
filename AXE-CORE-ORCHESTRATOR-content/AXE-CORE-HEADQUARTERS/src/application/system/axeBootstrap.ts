@@ -7,15 +7,20 @@ import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
+import { maybeRunFinanceDigest } from '@/infrastructure/persistence/financeDigestService';
 import { backfillRagEmbeddings } from '@/infrastructure/persistence/ragMemoryService';
 import { applyAgentReinforcement } from '@/infrastructure/persistence/agentFeedbackService';
 import { applyReinforcement } from '@/infrastructure/persistence/memoryFeedbackService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { loadTodaysBriefing } from '@/application/system/dailyBriefing';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
+import { ABONNEMENT_PROVIDER } from '@/domain/abonnementChat';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
 import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopilot';
 import { maybeTriggerCompanionCorrelation } from '@/infrastructure/gateways/companionToolsService';
 import { warmLocalOllama } from '@/infrastructure/gateways/localOllama';
+import { startPlannerKoppeling } from '@/application/planner/plannerKoppeling';
+import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -30,32 +35,6 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Fetches today's Daily Briefing content (written by the VPS cron job,
- *  core_schedules "Daily Briefing" + notify:true) if one landed today —
- *  real data, not fabricated. Returns null if none exists yet (e.g. app
- *  opened before the 08:00 run, or the job hasn't fired today). */
-export async function loadTodaysBriefing(): Promise<string | null> {
-  try {
-    const sb = getSupabase();
-    if (!sb) return null;
-    const since = new Date(); since.setHours(0, 0, 0, 0);
-    const { data } = await sb
-      .from('core_notifications')
-      .select('message, created_at')
-      .gte('created_at', since.toISOString())
-      .ilike('message', 'Daily Briefing:%')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!data?.message) return null;
-    // Strip the "Daily Briefing: " prefix _run_schedule_action's generic
-    // notify wrapper adds — the greeting already implies what this is.
-    return data.message.replace(/^Daily Briefing:\s*/i, '').trim() || null;
-  } catch {
-    return null;
-  }
-}
-
 /** Once per calendar day, on Tauri main window: spoken greeting — the real
  *  Daily Briefing content when one landed today, a generic line otherwise. */
 export async function maybeDailyGreeting(): Promise<void> {
@@ -67,8 +46,9 @@ export async function maybeDailyGreeting(): Promise<void> {
     return;
   }
 
-  // Same provider choice as chat (Settings → Voice) — Fish Audio by default
-  // (no paid ElevenLabs account), straight to browser speech otherwise.
+  // Same canonical identity as every chat reply: OpenAI Cedar through
+  // globalTts. A startup greeting must never resurrect a legacy Fish/browser
+  // voice simply because an old localStorage preference survived an update.
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
@@ -76,31 +56,19 @@ export async function maybeDailyGreeting(): Promise<void> {
   const line = briefing ? `${part}, Luka. ${briefing}` : `${part}, Luka. AXE is online.`;
 
   try {
-    // Don't force speak mode if user prefers type-only
+    // Respect type-only mode, but never choose a second speech identity.
     try {
       if (localStorage.getItem('axe_response_mode') === 'type') return;
     } catch { /* continue */ }
 
-    let ttsProvider: 'fish' | 'elevenlabs' | 'browser' = 'fish';
-    try { ttsProvider = (localStorage.getItem('axe_tts_provider') as typeof ttsProvider) || 'fish'; } catch { /* continue */ }
-
-    const { speakWithBrowser } = await import('@/infrastructure/gateways/elevenLabsService');
-
     await new Promise<void>((resolve) => {
-      if (ttsProvider === 'fish') {
-        void import('@/infrastructure/gateways/fishAudioService').then(({ speakWithFishAudio, isFishAudioConfigured }) => {
-          if (isFishAudioConfigured()) { void speakWithFishAudio(line, resolve, () => speakWithBrowser(line, resolve)); return; }
-          speakWithBrowser(line, resolve);
-        });
-        return;
-      }
-      if (ttsProvider === 'elevenlabs') {
-        void import('@/infrastructure/gateways/elevenLabsService').then(({ speakWithElevenLabs }) => {
-          speakWithElevenLabs(line, resolve, () => speakWithBrowser(line, resolve));
-        });
-        return;
-      }
-      speakWithBrowser(line, resolve);
+      speakGlobal(
+        line,
+        resolve,
+        (reason) => {
+          console.warn('[axeBootstrap] Cedar daily greeting unavailable:', reason);
+        },
+      );
     });
   } catch {
     /* non-fatal */
@@ -216,6 +184,11 @@ export async function warmPrimaryAtBoot(): Promise<void> {
   // cascadeAround keeps Ollama last as the one provider that cannot be revoked.
 
   if (!primary?.provider) return;
+  // Een abonnement-CLI heeft niets om op te warmen: geen TLS, geen model in
+  // een geheugen. De ping was een volle `codex exec`- of `claude -p`-sessie bij
+  // ELKE opstart ("You are AXE. OK" -- 6x op 13 september in de audit-log), en
+  // dat is limiet die voor echt werk bedoeld is.
+  if (primary.provider === ABONNEMENT_PROVIDER) return;
 
   try {
     const { useVoiceStore } = await import('@/presentation/store/voiceStore');
@@ -241,7 +214,7 @@ export async function warmPrimaryAtBoot(): Promise<void> {
     } catch { /* */ }
     conns[primary.provider] = { ...(conns[primary.provider] ?? {}), lastTest: ok ? 'ok' : 'fail' };
 
-    if (fb1?.provider && fb1.provider !== primary.provider) {
+    if (fb1?.provider && fb1.provider !== primary.provider && fb1.provider !== ABONNEMENT_PROVIDER) {
       const ok2 = await quietTest(fb1);
       conns[fb1.provider] = { ...(conns[fb1.provider] ?? {}), lastTest: ok2 ? 'ok' : 'fail' };
     }
@@ -407,15 +380,23 @@ export async function warmLocalOllamaAtBoot(): Promise<void> {
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
-  // Warm the local model so the first local/fast turn is instant when home.
-  void warmLocalOllamaAtBoot();
+  // Niet meer opwarmen bij het opstarten: dat laadde 2,4 GB in op een Mac met
+  // 8 GB, ook als je niets lokaal vroeg. De eerste lokale beurt laadt hem zelf.
   void maybeNightlyReview();
+  // De planner op de agent-host: motorverdeling doorgeven, en wat hij doet aan
+  // de zwevende bol melden. Zie application/planner/plannerKoppeling.ts.
+  startPlannerKoppeling();
   void maybeSelfHealCheck();
   void maybeSyncObsidianVault();
   // Warm ★ Primair (+ fallback1) so first chat is not a cold start
   void warmPrimaryAtBoot();
   // Memory Manager: extract durable facts, consolidate library, write report
   maybeRunMemoryManager();
+  // Finance digest: reconcile the manual income ledger against AXE Algo's
+  // own trade journal, once per calendar day. Same idempotent-per-day
+  // pattern as Memory Manager above — no VPS/core_schedules wiring needed,
+  // since this reads the app's own local Supabase client.
+  maybeRunFinanceDigest();
   // Top up the vector index. 8,296 memories existed with no embedding, because
   // rag_memories had no column for one until 1-9-2026; semantic search
   // therefore scanned 200 rows in the browser and never saw the other 97%.
@@ -456,6 +437,14 @@ export function runAxeBootstrap(): void {
   // own Tauri app happens to be open too (silent no-op otherwise).
   void maybeTriggerCompanionCorrelation();
   setInterval(() => { void maybeTriggerCompanionCorrelation(); }, 60_000);
+
+  // De bureauhartslag: correlatie meten en wegschrijven, zodat de handelende
+  // agents hem kunnen lézen in plaats van hem per run zelf op te halen. Acht
+  // LSE-aanroepen per meting bij tien per uur — vandaar tweeuurlijks, en
+  // vandaar dat dit niet in de agentlus zelf zit. Zie deskHartslag.ts.
+  void import('@/application/tradingIntel/deskHartslag')
+    .then(m => m.startDeskHartslag())
+    .catch(e => console.warn('[bootstrap] deskHartslag niet gestart:', e));
   // De versterkingsstap van de leerlus.
   //
   // applyAgentReinforcement bestond, was getest en werd door niemand

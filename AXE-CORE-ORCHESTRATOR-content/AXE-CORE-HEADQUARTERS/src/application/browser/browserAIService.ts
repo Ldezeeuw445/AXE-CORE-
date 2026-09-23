@@ -1,9 +1,31 @@
 /**
  * Routes browser start-page composer submissions to the right AI backend.
  * DeepSeek → chat API. Browser Use / Camofox → VPS browser automation agents.
+ *
+ * ## Why this doesn't use apiUrl() like the rest of this file's siblings did
+ *
+ * `/browser/ai/*` (deepseek, browser-use, camofox, health, task polling) is a
+ * router mounted directly on axe-core-api's own FastAPI app (main.py:172,
+ * `browser_ai_agents.py`'s `APIRouter(prefix="/browser/ai")`) — the same
+ * backend as everything in axeCoreApiService.ts, behind the same AUTH
+ * dependency. It was never a Vercel `/api/*` serverless function.
+ *
+ * This file used to call `apiUrl('/api/browser/ai/health')`, which — for the
+ * one place this can be checked, a packaged Tauri app — resolves to
+ * `https://www.axeheadquarters.com/api/browser/ai/health`: the wrong host,
+ * the wrong path (an extra `/api` prefix the real route doesn't have), and
+ * with no Authorization header, which this AUTH-gated router requires
+ * regardless. Confirmed live: the real path 404s even hit directly against
+ * the VPS backend with the `/api` prefix still on it. That is why every
+ * provider card here showed "not ready" — the health check itself could
+ * never reach a real answer, key or no key.
+ *
+ * The fix is to resolve through the exact same BASE_URL + auth headers as
+ * axeCoreApiService.ts's own `call()` — same backend, same proxy, same
+ * trust boundary — rather than apiUrl()'s Vercel-function assumption.
  */
 import type { BrowserAIProviderId } from '@/domain/browser/browserAIProviders';
-import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { axeCoreApiUrl, axeCoreApiExtraHeaders, axeApiAuthHeaders } from '@/infrastructure/config/apiUrl';
 
 export interface BrowserAIResponse {
   message: string;
@@ -13,10 +35,17 @@ export interface BrowserAIResponse {
   status: 'ok' | 'error' | 'agent_started' | 'running';
 }
 
+const BASE_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
+
+function authHeaders(url: string): Record<string, string> {
+  return { ...axeCoreApiExtraHeaders(), ...axeApiAuthHeaders(url) };
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(apiUrl(path), {
+  const url = `${BASE_URL}${path}`;
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(url) },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(120_000),
   });
@@ -28,7 +57,8 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(apiUrl(path), { signal: AbortSignal.timeout(30_000) });
+  const url = `${BASE_URL}${path}`;
+  const res = await fetch(url, { headers: authHeaders(url), signal: AbortSignal.timeout(30_000) });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error((err as { detail?: string }).detail ?? `Request failed (${res.status})`);
@@ -51,7 +81,7 @@ export async function pollBrowserAITask(
       status: string;
       message: string;
       sessionId?: string;
-    }>(`/api/browser/ai/task/${encodeURIComponent(taskId)}`);
+    }>(`/browser/ai/task/${encodeURIComponent(taskId)}`);
 
     opts.onProgress?.(task.message);
 
@@ -89,7 +119,7 @@ export async function sendBrowserAIMessage(
   }
 
   if (provider === 'deepseek') {
-    return postJson<BrowserAIResponse>('/api/browser/ai/deepseek', {
+    return postJson<BrowserAIResponse>('/browser/ai/deepseek', {
       message,
       mode: opts.mode ?? 'chat',
       api_key: opts.apiKey,
@@ -97,7 +127,7 @@ export async function sendBrowserAIMessage(
   }
 
   const endpoint = provider === 'browser-use' ? 'browser-use' : 'camofox';
-  const initial = await postJson<BrowserAIResponse>(`/api/browser/ai/${endpoint}`, {
+  const initial = await postJson<BrowserAIResponse>(`/browser/ai/${endpoint}`, {
     task: message,
     mode: opts.mode ?? (provider === 'browser-use' ? 'automate' : 'stealth'),
   });
@@ -111,5 +141,5 @@ export async function sendBrowserAIMessage(
 
 /** Check health of all browser AI backends. */
 export async function getBrowserAIHealth(): Promise<Record<string, unknown>> {
-  return getJson('/api/browser/ai/health');
+  return getJson('/browser/ai/health');
 }

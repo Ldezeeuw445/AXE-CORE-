@@ -30,7 +30,7 @@ import { AccountsBar } from './AccountsBar';
 import { Loader2, Plus, RefreshCw, Trash2, Check } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import {
-  getAccounts, addAccount, removeAccount, activateAccount, setAccountEnabled, setAccountRun,
+  getAccounts, addAccount, removeAccount, activateAccount, setAccountEnabled, setAccountRun, setAccountEnvironment, setAccountLiveFrameworks,
   maskToken, type TradingAccount, type AccountsState,
 } from '@/infrastructure/persistence/tradingAccountsService';
 import {
@@ -51,6 +51,12 @@ function money(v: number | null, ccy: string | null): string {
   if (v === null || !Number.isFinite(v)) return '—';
   return `${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}${ccy ? ` ${ccy}` : ''}`;
 }
+
+
+/** Engines die per account live aangezet kunnen worden. AXE zelf staat altijd aan. */
+const LIVE_FRAMEWORK_OPTIONS: Array<['axe' | 'vbt' | 'nt' | 'kr' | 'ta', string]> = [
+  ['axe', 'AXE'], ['vbt', 'vectorbt'], ['nt', 'Nautilus'], ['kr', 'Kronos'], ['ta', 'TradingAgents'],
+];
 
 export function AccountsTab() {
   const [state, setState] = useState<AccountsState>({ accounts: [], activeId: null });
@@ -281,6 +287,60 @@ export function AccountsTab() {
                   ? 'the control — keeps everything learned so far'
                   : 'ranks on its own record only, starting empty'}
               </span>
+            </div>
+
+            {/* Welk bewijs dit account mag gebruiken. Een live/funded account
+                kiest en sized alleen op live/funded uitkomsten; demo en papier
+                tellen daar niet als bewijs. Leeg = wat de broker zegt. */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Evidence</span>
+              <select
+                value={a.environment ?? ''}
+                disabled={busy}
+                onChange={e => void act(() => setAccountEnvironment(a.id, (e.target.value || null) as 'demo' | 'live' | null))}
+                className="text-[10px] rounded px-1.5 py-0.5"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                title="Which outcomes count as evidence for this account"
+              >
+                <option value="">as the broker reports</option>
+                <option value="demo">demo / practice</option>
+                <option value="live">live or funded</option>
+              </select>
+              <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                {a.environment === 'live'
+                  ? 'selects strategies on live/funded results only'
+                  : 'a funded challenge on a demo server: set it to live or funded'}
+              </span>
+            </div>
+
+            {/* Welke frameworks live mogen meedingen. AXE en vectorbt deden dat
+                altijd; de rest alleen als je hem hier aanzet, en dan nog alleen
+                als hij geschikt is (engine gezond, genoeg steekproef, juiste
+                timeframe en instrument) — zie frameworkEligibility. */}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Live frameworks</span>
+              {LIVE_FRAMEWORK_OPTIONS.map(([fw, label]) => {
+                const current = a.liveFrameworks ?? ['axe', 'vbt'];
+                const on = current.includes(fw);
+                return (
+                  <label key={fw} className="flex items-center gap-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                    <input
+                      type="checkbox" checked={on} disabled={busy || fw === 'axe'}
+                      onChange={e => {
+                        const next = e.target.checked ? [...new Set([...current, fw])] : current.filter(x => x !== fw);
+                        void act(() => setAccountLiveFrameworks(a.id, { liveFrameworks: next }));
+                      }}
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+              <label className="flex items-center gap-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}
+                title="TradingAgents reasons about equities; on FX, metals, crypto and indices its coverage is partial">
+                <input type="checkbox" checked={Boolean(a.allowPartialCoverage)} disabled={busy}
+                  onChange={e => void act(() => setAccountLiveFrameworks(a.id, { allowPartialCoverage: e.target.checked }))} />
+                allow partial coverage
+              </label>
             </div>
           </WidgetCard>
         );

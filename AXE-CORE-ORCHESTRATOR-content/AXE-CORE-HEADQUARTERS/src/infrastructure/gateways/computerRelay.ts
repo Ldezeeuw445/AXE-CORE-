@@ -17,6 +17,9 @@
  * answer is worse than a slow right one.
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { beschikbaar as tauriBeschikbaar, workerDienstStand, workerDienstHerstart } from '@/infrastructure/gateways/launchdWorkers';
+import { buildStamp } from '@/domain/buildStamp';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
 /**
  * The repo hands out its client through getSupabase(), which returns null when
@@ -125,6 +128,85 @@ export async function onlineDevices(): Promise<Device[]> {
   }));
 }
 
+/** How long to wait for a heartbeat after asking launchd to kickstart the worker. */
+const RECOVERY_POLL_MS = 4_000;
+const RECOVERY_ATTEMPTS = 5;
+
+export interface RecoveryOutcome {
+  recovered: boolean;
+  detail: string;
+}
+
+/**
+ * One bounded attempt to bring the local computer-worker back, via the
+ * launchd agent that already manages it — never a second, ad-hoc spawn.
+ *
+ * Called only from the one place that already knows nobody answered
+ * (`onlineDevices()` came back empty). Exactly one kickstart, exactly one
+ * poll window: a worker that is fundamentally broken must fail loudly here
+ * rather than have this retry forever and hide the problem behind a chat
+ * turn that "eventually" answers.
+ */
+export async function attemptLocalWorkerRecovery(): Promise<RecoveryOutcome> {
+  if (!tauriBeschikbaar()) {
+    return { recovered: false, detail: 'this build has no local service control (not the desktop app) — cannot self-heal from here.' };
+  }
+
+  const before = await workerDienstStand('computer-worker');
+  if (before === null) {
+    return {
+      recovered: false,
+      detail: 'could not read the computer-worker launchd status on this machine — either it is not registered here (the worker may live on a different machine), or this is an older build.',
+    };
+  }
+
+  try {
+    await workerDienstHerstart('computer-worker');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { recovered: false, detail: `launchd kickstart failed: ${msg} — this needs a human look, not another automatic retry.` };
+  }
+
+  for (let attempt = 0; attempt < RECOVERY_ATTEMPTS; attempt++) {
+    await new Promise(r => setTimeout(r, RECOVERY_POLL_MS));
+    const devices = await onlineDevices();
+    if (devices.length > 0) {
+      return { recovered: true, detail: `launchd restarted com.axe.computer-worker and its heartbeat is back (after ~${(attempt + 1) * RECOVERY_POLL_MS / 1000}s).` };
+    }
+  }
+
+  return {
+    recovered: false,
+    detail: `launchd kickstart ran (was ${before.running ? 'already reporting running' : 'not running'}) but no heartbeat appeared within ${RECOVERY_ATTEMPTS * RECOVERY_POLL_MS / 1000}s. This is a real failure, not a timing fluke — say so plainly and stop, do not kickstart again.`,
+  };
+}
+
+/**
+ * Cancel a task that has not been claimed yet.
+ *
+ * The update is conditional on `status=eq.pending`, the same guard
+ * worker.mjs's own claim() uses — so this can never race a worker that just
+ * picked the row up: either this write lands first and the worker's claim
+ * then matches zero rows, or the claim already landed and this matches zero
+ * rows instead. Cancelling a task already being executed is out of scope
+ * here; that needs the worker itself to poll `cancelled_at`, which it does
+ * not do today. Say so via the return value rather than pretending it
+ * happened.
+ */
+export async function cancelTask(id: string): Promise<{ cancelled: boolean; detail: string }> {
+  const { data, error } = await sb()
+    .from('core_tasks')
+    .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle();
+
+  if (error) return { cancelled: false, detail: `cancel failed: ${error.message}` };
+  if (!data) return { cancelled: false, detail: 'task was no longer pending (already claimed, done, or already cancelled) — nothing changed.' };
+  return { cancelled: true, detail: 'task cancelled before any worker claimed it.' };
+}
+
 /** Can this device run this workspace right now? */
 export async function deviceCanRun(device: string, workspace: string): Promise<boolean> {
   const devices = await onlineDevices();
@@ -182,6 +264,11 @@ export async function dispatchComputerTask(call: ComputerCall): Promise<Computer
         tier: call.tier,
         workspace: call.workspace,
         args: call.args,
+        // A local packaged AXE app and its local launchd worker are one native
+        // runtime contract. The worker fail-closes when these commits differ.
+        // Remote web/phone clients deliberately do not require equality.
+        client_runtime: isTauriRuntime() ? 'tauri' : 'remote',
+        client_build: buildStamp()?.commit ?? null,
       },
     })
     .select('id')

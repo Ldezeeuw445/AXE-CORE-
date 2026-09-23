@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — one plate, three layers</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Alleen wat deze pagina eigen is: de indeling van het materiaalblad. */
+.blad { display: grid; grid-template-columns: 1.15fr 1fr 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 12px; height: 100%; padding: 12px 0 10px; min-height: 0; }
+/* Op 1080 hoog past de inktkaart net niet (541 in 459): dan schuift hij, in plaats van af te knippen. */
+.blad > .kaart { padding: 14px 16px; display: grid; gap: 10px; align-content: start; min-height: 0; overflow: hidden auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
+.intro { grid-column: 1; }
+.intro p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; max-width: 52ch; }
+.intro .paginas { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 4px; }
+.intro .paginas a { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: var(--r-knop); background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset; color: var(--ink); text-decoration: none; font-weight: 500; font-size: 11.5px; transition: box-shadow var(--basis) var(--ease); }
+.intro .paginas a:hover { box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset, var(--onderglow); }
+.intro .paginas a span { color: var(--ink-3); font-weight: 400; margin-left: auto; font-size: 10px; }
+
+.materialen { grid-column: 2 / 4; grid-row: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.materiaal { position: relative; height: 178px; border-radius: var(--r-kaart); overflow: hidden; display: grid; align-content: end; padding: 12px; }
+.materiaal .t-label { position: absolute; top: 12px; left: 12px; }
+.materiaal--plaat { box-shadow: 0 0 0 1px rgba(255,255,255,.10) inset; }
+.materiaal--kaart { background: var(--kaart); box-shadow: var(--kaart-rand), var(--kaart-schaduw); }
+.materiaal--ruit { }
+.materiaal--ruit canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.materiaal--ruit .ruit { position: absolute; left: 22px; right: 22px; top: 46px; height: 84px; padding: 12px 14px; display: grid; align-content: center; gap: 4px; }
+.materiaal .uitleg { font-size: 11px; color: var(--ink-2); line-height: 1.4; position: relative; }
+/* Op de plaat staat geen losse tekst: het bijschrift zit in een ruit-chip. */
+.materiaal--plaat .bijschrift, .materiaal--ruit .recept { position: relative; padding: 8px 10px; border-radius: 12px; }
+.materiaal--plaat .bijschrift { display: grid; gap: 4px; }
+.materiaal .recept { font: 400 9.5px/1.5 var(--mono); color: var(--ink-3); position: relative; }
+.materiaal--plaat .t-label, .materiaal--ruit .t-label { padding: 4px 8px; border-radius: 8px; left: 8px; top: 8px; }
+
+.inkt { grid-column: 1; grid-row: 2; }
+.staal { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 10px; font-size: 11.5px; height: 24px; }
+.staal i { display: block; width: 26px; height: 14px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset; }
+.staal code { font: 400 10px/1 var(--mono); color: var(--ink-3); }
+.typo { display: grid; gap: 6px; padding-top: 6px; }
+.typo > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 8px; }
+.typo code { font: 400 9.5px/1 var(--mono); color: var(--ink-4); }
+
+.gloed { grid-column: 2; grid-row: 2; }
+.staten { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; padding: 6px 2px 4px; }
+.staat { height: 74px; padding: 10px 12px; display: grid; align-content: space-between; }
+.staat .t-label { color: var(--ink-4); }
+.regels { display: grid; gap: 6px; }
+.regels li { list-style: none; display: grid; grid-template-columns: 14px 1fr; gap: 8px; font-size: 11px; color: var(--ink-2); line-height: 1.4; }
+.regels li b { color: var(--ink); font-weight: 500; }
+.regels li .c-ok, .regels li .c-err { font-weight: 600; }
+.regels ul { margin: 0; padding: 0; display: grid; gap: 6px; }
+
+.kleurregel { grid-column: 3; grid-row: 2; }
+.voorbeeld { display: grid; gap: 8px; padding: 10px 12px; }
+.voorbeeld .rij { justify-content: space-between; }
+.fout { text-decoration: line-through; opacity: .55; }
+.pil-fout { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: rgba(46,242,194,.14); color: var(--ok); border: 1px solid rgba(46,242,194,.4); font: 500 10px/1 var(--ui); }
+.tabelrij { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; height: 24px; font-size: 11.5px; border-bottom: 1px solid rgba(255,255,255,.05); }
+.tabelrij .t-mono { text-align: right; color: var(--ink); }
+.tabelrij:last-child { border-bottom: 0; }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="tabruimte" style="height:100%">
+      <div class="blad">
+
+        <section class="kaart intro">
+          <div class="t-label">Design gallery · proposal</div>
+          <div class="t-groot">One plate, three layers.</div>
+          <p>The glass plate is a canvas. Everything AXE shows is an object placed on it — a card, a 3D scene, a phone, a chart. One light model for all of them: light from above, depth from below, color only in ink. Only the plate flips between glass and black; what lies on it stays the same.</p>
+          <div class="paginas">
+            <a href="home.html">▸ Home <span>sphere · floating phone</span></a>
+            <a href="browser.html">▸ Browser <span>floating sphere</span></a>
+            <a href="code.html">▸ Code <span>Code · Canvas · Preview</span></a>
+            <a href="code/preview.html">▸ Code mocks <span>phone · tablet · desktop</span></a>
+            <a href="settings.html">▸ Settings <span>dense operate tab</span></a>
+            <a href="desk.html" style="grid-column:1 / -1">▸ NorthSea Deal Desk <span>Luka's company desk, one click from Home</span></a>
+          </div>
+          <div class="t-meta">Switch the plate top-right. Drag anything with a grip. Source of truth: <code class="t-mono">tokens.css</code>.</div>
+        </section>
+
+        <section class="materialen">
+          <div class="materiaal materiaal--plaat">
+            <span class="t-label ruit">01 · Plaat</span>
+            <div class="bijschrift ruit">
+              <div class="uitleg">The shell. Native macOS glass, black or light. Nothing paints over it — a page brings no background of its own.</div>
+              <div class="recept">black: rgba(0,0,0,.56→.68) · saturate(.12)<br>glass: native Sidebar material · transparent</div>
+            </div>
+          </div>
+          <div class="materiaal materiaal--kaart">
+            <span class="t-label">02 · Kaart</span>
+            <div class="uitleg">Matte and opaque, Linear-style. Everything with content: panels, widgets, the chat plate, the composer, the dock, editor plates.</div>
+            <div class="recept">#17171C → #0F0F12 · hairline .09 · r 18/22<br>shadow 0 20 44 -18 · glow only when active</div>
+          </div>
+          <div class="materiaal materiaal--ruit">
+            <canvas data-bol data-schaal="0.44" data-roty="0.8"></canvas>
+            <span class="t-label ruit">03 · Ruit</span>
+            <div class="ruit ruit--actief">
+              <div class="t-titel c-accent">Smoked glass</div>
+              <div class="uitleg">Only what floats or moves over content: the loose sphere, the phone, palettes, hovercards, HUD chips over a scene.</div>
+            </div>
+            <div class="recept ruit">rgba(12,12,14,.58) · blur 24 · sat 120% · r 28</div>
+          </div>
+        </section>
+
+        <section class="kaart inkt">
+          <div class="t-titel">Ink & accent — same in both plates</div>
+          <div class="staal"><i style="background:#E8ECF5"></i><span>Ink · primary text</span><code>--ink #E8ECF5</code></div>
+          <div class="staal"><i style="background:#9AA3B5"></i><span>Ink 2 · secondary</span><code>--ink-2 #9AA3B5</code></div>
+          <div class="staal"><i style="background:#6F7A90"></i><span>Ink 3 · labels, meta</span><code>--ink-3 #6F7A90</code></div>
+          <div class="staal"><i style="background:#4A5366"></i><span>Ink 4 · placeholders</span><code>--ink-4 #4A5366</code></div>
+          <div class="haarlijn"></div>
+          <div class="staal"><i style="background:#22D3EE"></i><span class="c-accent">Accent · one hue, in letters and lines</span><code>--accent #22D3EE</code></div>
+          <div class="staal"><i style="background:#2EF2C2"></i><span class="c-ok">OK · connected, healthy</span><code>--ok #2EF2C2</code></div>
+          <div class="staal"><i style="background:#FFCC66"></i><span class="c-warn">Warn · stale, testing</span><code>--warn #FFCC66</code></div>
+          <div class="staal"><i style="background:#FF4D6D"></i><span class="c-err">Error · failed, why, what to do</span><code>--err #FF4D6D</code></div>
+          <div class="staal"><i style="background:#A78BFA"></i><span class="c-violet">Voice · only the voice orb</span><code>--violet #A78BFA</code></div>
+          <div class="haarlijn"></div>
+          <div class="t-titel">Type — Inter + JetBrains Mono, tabular</div>
+          <div class="typo">
+            <div><span class="t-groot">Command Center</span><code>26/600 −.02em</code></div>
+            <div><span class="t-kop">Provider keys</span><code>15/600</code></div>
+            <div><span style="font-size:12px">Body text reads at twelve, one thirty-five line height.</span><code>12/400</code></div>
+            <div><span class="t-titel">Panel title</span><code>11/600 caps .06</code></div>
+            <div><span class="t-label">telemetry label</span><code>mono 10 caps .08</code></div>
+            <div><span class="t-mono">4 346.46 · 19 038 · 23:08:38</span><code>mono 11 tnum</code></div>
+          </div>
+        </section>
+
+        <section class="kaart gloed">
+          <div class="t-titel">Underglow — light from below, only when it means something</div>
+          <div class="staten">
+            <div class="kaart kaart--in staat"><span class="t-label">rest</span><span class="t-meta">A card at rest has a hairline and a shadow. No glow.</span></div>
+            <div class="kaart kaart--in staat" style="box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 0 0 1px rgba(255,255,255,.04), var(--onderglow)"><span class="t-label">hover</span><span class="t-meta">Glow at .22 while the pointer is on it.</span></div>
+            <div class="kaart kaart--in kaart--actief staat"><span class="t-label c-accent">active</span><span class="t-meta">Ring + glow at .34. One object at a time.</span></div>
+            <div class="kaart kaart--in kaart--werkt staat"><span class="t-label c-accent">working</span><span class="t-meta">Breathes at 3.2s while AXE is busy.</span></div>
+          </div>
+          <div class="haarlijn"></div>
+          <div class="t-titel">Motion</div>
+          <ul class="regels">
+            <li><span class="c-accent">▸</span><span><b>140 / 200 / 320 ms</b>, ease <code class="t-mono">cubic-bezier(.16,1,.3,1)</code>. Hover is a colour and shadow shift, never a scale of the whole panel.</span></li>
+            <li><span class="c-accent">▸</span><span>A floater <b>settles</b> when dropped: shadow shrinks back over 320 ms. Reduced motion: no breathing, no auto-rotate.</span></li>
+          </ul>
+        </section>
+
+        <section class="kaart kleurregel">
+          <div class="t-titel">Colour lives in letters, not in fills</div>
+          <div class="voorbeeld kaart kaart--in">
+            <div class="rij"><span>OpenAI</span><span class="c-ok"><i class="stip"></i> Connected</span></div>
+            <div class="rij"><span>Anthropic</span><span class="c-err"><i class="stip"></i> Failed · key invalid</span></div>
+            <div class="rij"><span>Gemma 3 · local</span><span class="c-warn"><i class="stip"></i> Testing</span></div>
+            <div class="rij"><span>Hermes 3 · VPS</span><span class="c-3"><i class="stip"></i> Not configured</span></div>
+          </div>
+          <ul class="regels">
+            <li><span class="c-ok">✓</span><span>Status is a coloured <b>dot + word</b>. The colour is the message; the word says why.</span></li>
+            <li><span class="c-err">✕</span><span>Not a filled pill: <span class="pil-fout">Connected</span> — that is a button from another app.</span></li>
+            <li><span class="c-ok">✓</span><span>Active mode buttons colour their <b>text</b>. Same rule in the dock, the segments, the chips.</span></li>
+            <li><span class="c-ok">✓</span><span>Meaning colours are never overridden by a "make everything white" rule.</span></li>
+          </ul>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="show chart · show me New York"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="toekomst.js"></script>
+<script>AXE.start({ dok: 'Home', chat: {} });</script>
+</body>
+</html>

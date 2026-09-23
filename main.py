@@ -34,6 +34,8 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
+from zuinig import Bezet, lagere_prioriteit, slot as zuinig_slot
+import contextlib as _contextlib
 from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -834,15 +836,32 @@ async def _run_engine(py: str, script: str, label: str, args: list[str], timeout
     takes its own subprocess with it and not this API."""
     if not os.path.exists(py) or not os.path.exists(script):
         raise HTTPException(status_code=503, detail=f"{label} engine not installed on this host")
+    # Hoeveel engines tegelijk: zie zuinig.py. Een TradingAgents-debat of
+    # -backtest duurt minuten en vraagt ~360 MB, dus één tegelijk; de rest
+    # (vbt, nautilus, kronos) twee. Het signaal leest alleen een cache.
+    if label.endswith("signal"):
+        beperking = _contextlib.nullcontext()
+    elif label.startswith("tradingagents"):
+        beperking = zuinig_slot("ta", 1, 0, sleutel=f"{label} {args}")
+    else:
+        beperking = zuinig_slot("engine", 2, 0, sleutel=f"{label} {args}")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            py, script, *args,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
-        )
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail=f"{label} timed out")
+        with beperking:
+            proc = await asyncio.create_subprocess_exec(
+                py, script, *args,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+                preexec_fn=lagere_prioriteit,
+            )
+            try:
+                out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                # Afmaken, niet laten doorlopen: een verlopen run hield zijn
+                # geheugen vast tot hij uit zichzelf klaar was.
+                proc.kill()
+                raise HTTPException(status_code=504, detail=f"{label} timed out")
+    except Bezet as e:
+        raise HTTPException(status_code=429, detail=f"{label}: {e}")
     try:
         return json.loads(out.decode() or "{}")
     except Exception:
@@ -1061,13 +1080,24 @@ _FRED_HIGH_IMPACT_RELEASES = {
 }
 
 
-async def _fetch_fred_calendar(days: int = 7) -> dict:
-    """De eerstvolgende hoog-impact releases, per release opgevraagd.
+async def _fetch_fred_calendar(days: int = 7, back: int = 0) -> dict:
+    """De hoog-impact releases rond vandaag, per release opgevraagd.
 
     /fred/releases/dates over een bereik kan deze vraag niet beantwoorden: met
     include_release_dates_with_no_data=true is het een raster waarin elke
     release elke dag staat, en met false komen alleen de releases van vandaag
     terug. Per release werkt wel, en levert de echte maandelijkse data.
+
+    `back` opent hetzelfde venster naar áchteren. Zonder dat kon dit endpoint
+    alleen zeggen wát er aankomt, en niet wat het de vorige keren deed — en dat
+    tweede is waar een positiegrootte uit volgt. De poort in
+    domain/tradingIntel/economicCalendar.ts vraagt vooruit; de impactgeschiedenis
+    in gebeurtenisImpact.ts vraagt terug. Eén tool, twee richtingen, in plaats
+    van een tweede endpoint dat hetzelfde nog eens op zijn eigen manier doet.
+
+    Bij `back=0` gaat de aanvraag er woordelijk hetzelfde uit als voorheen:
+    dezelfde params, dezelfde limit. De beslisfunnel draait hier al maanden op
+    en die mag hier niets van merken.
     """
     key = os.environ.get("FRED_API_KEY", "")
     if not key:
@@ -1077,8 +1107,20 @@ async def _fetch_fred_calendar(days: int = 7) -> dict:
     except (TypeError, ValueError):
         days = 7
 
-    start = datetime.now(timezone.utc).date()
-    end = start + timedelta(days=days)
+    try:
+        back = max(0, min(int(back), 800))
+    except (TypeError, ValueError):
+        back = 0
+
+    vandaag = datetime.now(timezone.utc).date()
+    start = vandaag - timedelta(days=back)
+    end = vandaag + timedelta(days=days)
+
+    # Zes volstaat voor een blik vooruit; over een jaar terug zijn het er per
+    # release een stuk of dertien. Te laag zetten geeft geen fout maar een
+    # stilzwijgend afgekapte geschiedenis, en dat is precies het soort gat dat
+    # er als een rustige periode uitziet.
+    limiet = 6 if back == 0 else max(6, min(((back + days) // 25) + 4, 100))
     out = []
     async with httpx.AsyncClient(timeout=25) as client:
         for rid, name in _FRED_HIGH_IMPACT_RELEASES.items():
@@ -1091,7 +1133,11 @@ async def _fetch_fred_calendar(days: int = 7) -> dict:
                         "file_type": "json",
                         "include_release_dates_with_no_data": "true",
                         "sort_order": "asc",
-                        "limit": 6,
+                        "limit": limiet,
+                        # realtime_end alleen meesturen wanneer er terug wordt
+                        # gekeken: bij back=0 blijft de aanvraag identiek aan
+                        # hoe hij maanden heeft gedraaid.
+                        **({"realtime_end": end.isoformat()} if back else {}),
                         "realtime_start": start.isoformat(),
                     },
                 )
@@ -1202,7 +1248,7 @@ async def marketdata_call(req: MarketToolCallRequest):
         elif req.tool == "fred_macro":
             data = await _fetch_fred_series(req.args.get("name", "fed_funds"))
         elif req.tool == "fred_calendar":
-            data = await _fetch_fred_calendar(req.args.get("days", 7))
+            data = await _fetch_fred_calendar(req.args.get("days", 7), req.args.get("back", 0))
         elif req.tool == "polymarket_bias":
             data = await _fetch_polymarket_bias()
         else:
@@ -2407,6 +2453,23 @@ async def _check_vps_services() -> dict:
             results["ollama"] = {"configured": True, "reachable": r.status_code < 500, "latency_ms": round((asyncio.get_event_loop().time() - t0) * 1000)}
     except Exception as e:
         results["ollama"] = {"configured": True, "reachable": False, "error": str(e)[:150]}
+
+    # Branch C. Alleen aantallen — dit endpoint is open (geen AXE_API_KEY), dus
+    # repo-paden en branchnamen blijven achter /claude/repos, dat wél authed is.
+    try:
+        _cr = claude_repo_status()
+        _motoren = agent_engine_status()
+        results["claude_code"] = {
+            "configured": bool(_cr),
+            "reachable": any(m.get("aanwezig") for m in _motoren.values()),
+            "engines": {n: bool(m.get("aanwezig")) for n, m in _motoren.items()},
+            "repos": len(_cr),
+            "runnable_repos": len([n for n, r in _cr.items() if r.get("runnable")]),
+            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
+        }
+    except Exception as e:  # noqa: BLE001
+        results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
+
     return results
 
 
@@ -3459,3 +3522,213 @@ _MARKET_TOOLS = [
 ]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# CLAUDE CODE — Branch C: een echte Claude Code-sessie in een whitelisted repo
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# ## Waarom dit hier staat en niet in backend/axe_api/main.py
+#
+# Daar is het geschreven, en daar draait het niet. Gemeten 10 september op de
+# VPS:
+#
+#     WorkingDirectory=/opt/axe-core-api
+#     ExecStart=…/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 12
+#
+# `main:app` laadt dít bestand. `backend/axe_api/main.py` wordt door uvicorn
+# nooit ingeladen, dus /claude/repos antwoordde 404 hoeveel je ook pullde — en
+# een 404 op een endpoint dat je net hebt geschreven leest als "de code is stuk"
+# in plaats van "de code draait niet". Dezelfde val als het LSE-endpoint een dag
+# eerder.
+#
+# ## Eén kopie van claude_runner, niet twee
+#
+# Het bestand blijft staan waar het hoort; alleen het pad gaat mee in sys.path.
+# Een tweede kopie in de hoofdmap zou binnen een week uit elkaar lopen met de
+# eerste, en dan is niet te zien welke van de twee de weigeringen doet.
+#
+# De import staat in een try: valt hij om — bestand weg, andere checkout — dan
+# weigeren deze twee endpoints netjes, in plaats van dat de hele API niet meer
+# opstart. Een kapotte Code Studio is vervelend; een kapotte API is je hele desk.
+
+import sys as _sys
+
+_CLAUDE_RUNNER_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "AXE-CORE-ORCHESTRATOR-content", "AXE-CORE-HEADQUARTERS", "backend", "axe_api",
+)
+if _CLAUDE_RUNNER_DIR not in _sys.path:
+    _sys.path.append(_CLAUDE_RUNNER_DIR)
+
+try:
+    from agent_runner import (  # noqa: E402
+        run_agent,
+        repo_status as claude_repo_status,
+        engine_status as agent_engine_status,
+        cli_available as claude_cli_available,
+        ALLOWED_PERMISSION_MODES,
+        ENGINES as AGENT_ENGINES,
+        werkboom_status,
+        commit_en_push,
+    )
+    _CLAUDE_IMPORT_ERROR = None
+except Exception as _e:  # noqa: BLE001
+    _CLAUDE_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
+    ALLOWED_PERMISSION_MODES = ()
+    AGENT_ENGINES = {}
+    log.warning(f"agent_runner niet ingeladen ({_CLAUDE_IMPORT_ERROR}) — /claude/* weigert")
+
+    def claude_repo_status() -> dict:  # type: ignore[misc]
+        return {}
+
+    def agent_engine_status() -> dict:  # type: ignore[misc]
+        return {}
+
+    def claude_cli_available(engine: str = "claude") -> bool:  # type: ignore[misc]
+        return False
+
+
+class ClaudeRunRequest(BaseModel):
+    repo: str
+    prompt: str
+    permission_mode: Optional[str] = None
+    timeout: Optional[int] = None
+    # 'claude' (Claude Code, Anthropic-abonnement) of 'codex' (ChatGPT-abonnement).
+    # Beide draaien via dezelfde bewakingen in agent_runner; alleen het commando
+    # en de vlaggen verschillen. Weggelaten is 'claude', zodat bestaande
+    # aanroepers niets merken.
+    engine: Optional[str] = None
+
+
+@app.post("/claude/run", dependencies=[AUTH])
+async def claude_run(req: ClaudeRunRequest, request: Request):
+    """
+    Draai één Claude Code-sessie tegen een whitelisted repo op deze host.
+
+    Body: { "repo": "axe-core", "prompt": "...", "permission_mode": "acceptEdits" }
+
+    Anders dan /crew/run schrijft deze in een working tree, dus claude_runner
+    weigert vóór er iets start: repo niet in CLAUDE_CODE_REPOS, checkout op
+    main/master, of een permission_mode die er niet bij hoort. Hij strípt ook
+    ANTHROPIC_API_KEY en ANTHROPIC_AUTH_TOKEN uit de omgeving van het subproces,
+    zodat de CLI het `claude auth login`-abonnement van de host gebruikt in
+    plaats van stilletijk een betaalde API-sleutel af te schrijven.
+
+    Zie CLAUDE_CODE_SETUP.md; inloggen gebeurt eenmalig door de operator, niet
+    via een omgevingsvariabele hier.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"claude_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude"),
+    )
+    await audit(
+        "claude_run", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "prompt": (req.prompt or "")[:200],
+            "engine": result.get("engine"),
+            "branch": result.get("branch"),
+            "permission_mode": result.get("permission_mode"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
+
+    # Een mislukte geheugenschrijving mag het antwoord niet laten mislukken: de
+    # run is dan al gebeurd, en doen alsof van niet is erger dan een gat in de
+    # index.
+    try:
+        result_text = (result.get("result") or "")
+        if result.get("status") == "ok" and result_text:
+            sb().table("rag_memories").insert({
+                "app_source": "axe-core",
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "agent",
+                "content": f"[{result.get('engine') or 'claude'}:{req.repo}@{result.get('branch')}] "
+                           f"{(req.prompt or '')[:200]} → {result_text[:400]}",
+                "importance": 6,
+                "metadata": {
+                    "source": "agent_run", "engine": result.get("engine"),
+                    "repo": req.repo, "branch": result.get("branch"), "tab": "code",
+                },
+            }).execute()
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"claude_run memory write failed: {e}")
+
+    return result
+
+
+@app.get("/claude/repos", dependencies=[AUTH])
+async def claude_repos():
+    """Welke repo's deze host door Claude Code laat aanraken, en of elk er nu
+    klaar voor is — bestaat het pad, en staat de checkout niet op een beschermde
+    branch."""
+    if _CLAUDE_IMPORT_ERROR:
+        return {"repos": {}, "permission_modes": [], "error": _CLAUDE_IMPORT_ERROR}
+    return {
+        "repos": claude_repo_status(),
+        "permission_modes": list(ALLOWED_PERMISSION_MODES),
+        # Welke CLI's op deze host staan. Alleen aanwezigheid — of je ingelogd
+        # bent kost een echte aanroep, en een statuspaneel hoort geen sessie van
+        # je abonnement op te maken.
+        "engines": agent_engine_status(),
+    }
+
+
+class AgentCommitRequest(BaseModel):
+    repo: str
+    # 'bericht' en niet 'message': de rest van deze API is Nederlands en een
+    # half-Engelse body is precies hoe je later twee velden krijgt die hetzelfde
+    # betekenen.
+    bericht: str
+    push: bool = True
+
+
+@app.get("/claude/changes", dependencies=[AUTH])
+async def claude_changes(repo: str):
+    """Wat er in deze checkout gewijzigd is, vóór er iets vastgelegd wordt.
+
+    Bestaat omdat de volgende stap onomkeerbaar is: zodra er gepusht is, staat
+    het op GitHub. Een knop die commit zonder dat er iets te lezen viel, is een
+    knop die je op een dag indrukt terwijl er iets in staat dat je niet bedoelde.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: werkboom_status(repo))
+
+
+@app.post("/claude/commit", dependencies=[AUTH])
+async def claude_commit(req: AgentCommitRequest, request: Request):
+    """Leg vast wat de agent veranderde, en zet het op de werkbranch.
+
+    Dezelfde bewakingen als een agent-run, via dezelfde functies: repo op de
+    whitelist, checkout is git, en nooit op main of master. Geen force, geen
+    rebase, geen amend — dit duwt vooruit of het faalt.
+
+    Altijd geaudit, ook als het misgaat. Een push is naar buiten gaan, en dat
+    hoort een spoor te hebben dat niet afhangt van of het lukte.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: commit_en_push(req.repo, req.bericht, req.push)
+    )
+    await audit(
+        "agent_commit", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "bericht": (req.bericht or "")[:200],
+            "branch": result.get("branch"),
+            "sha": result.get("sha"),
+            "gepusht": result.get("gepusht"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
+    return result

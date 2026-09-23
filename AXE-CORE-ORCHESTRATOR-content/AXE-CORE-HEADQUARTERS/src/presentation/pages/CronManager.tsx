@@ -3,7 +3,10 @@ import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
-import { AlertCircle, Bot, Calendar, CheckCircle, Clock, Globe, MessageSquare, Play, Plus, Power, RefreshCw, Terminal, Trash2, Workflow, X, XCircle } from 'lucide-react';
+import { NAAST_CORE, appVan, appMeta as appInfo, type AppId } from '@/domain/apps';
+import { CronTabel, type TabelActies, type KolomTekst } from './cron/CronTabel';
+import { toast } from '@/presentation/components/shared/toast';
+import { AlertCircle, Bot, Globe, MessageSquare, Plus, RefreshCw, Terminal, Workflow, X } from 'lucide-react';
 import {
   cronListSchedules, cronCreateSchedule, cronUpdateSchedule, cronDeleteSchedule,
   cronRunNow, type CronSchedule, type CronActionType,
@@ -38,6 +41,9 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
   flow:    { label: 'CrewAI Flow', icon: Workflow,     color: '#c4b5fd' },
   exec:    { label: 'VPS Command', icon: Terminal,     color: 'var(--warning)' },
   webhook: { label: 'Webhook',    icon: Globe,         color: 'var(--success)' },
+  observed: { label: 'Draait elders', icon: Workflow,  color: 'var(--text-muted)' },
+  planner: { label: 'Planner (Mac)', icon: Bot,        color: '#F472B6' },
+  northsea: { label: 'NorthSea-desk', icon: Globe,     color: '#F472B6' },
 };
 
 /* ── App tabs ─────────────────────────────────────────────────────────────
@@ -45,16 +51,17 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
  * Companion and Trading OS stay cleanly separated. AXE Core runs its jobs
  * locally (prompt/crew/exec); the two external apps are driven via a webhook
  * carrying your CRON_KEY — the self-hosted pattern you already use. */
-type AppId = 'axe_core' | 'axe_companion' | 'trading_os';
-const APP_TABS: Array<{ id: AppId; label: string; color: string; blurb: string }> = [
-  { id: 'axe_core',      label: 'AXE Core',      color: 'var(--accent-cyan)', blurb: 'Prompts, CrewAI-runs en VPS-commando’s op je eigen server.' },
-  { id: 'axe_companion', label: 'AXE Companion', color: '#a78bfa', blurb: 'Webhook jobs to AXE Companion, with your CRON_KEY.' },
-  { id: 'trading_os',    label: 'Trading OS',    color: 'var(--success)', blurb: 'Webhook jobs to Trading OS, with your CRON_KEY.' },
-];
+/**
+ * De apps staan in domain/apps.ts -- gedeeld met de taken-tab.
+ *
+ * Ze stonden hier, voor deze pagina alleen. Toen de taken-tab dezelfde
+ * groepering nodig had zouden de id's uit elkaar gaan lopen, en dat is geen
+ * zichtbare fout: een rij valt gewoon in de verkeerde kolom.
+ */
+const NAAST_ELKAAR = NAAST_CORE;
 
 function scheduleApp(s: CronSchedule): AppId {
-  const a = (s.metadata?.app as string) ?? 'axe_core';
-  return (['axe_core', 'axe_companion', 'trading_os'].includes(a) ? a : 'axe_core') as AppId;
+  return appVan(s.metadata);
 }
 
 /** A fresh draft seeded for the given app: external apps default to a
@@ -104,6 +111,7 @@ function draftToPayload(d: Draft): Record<string, unknown> {
     }
     case 'flow':
       return { flow: d.flowName, inputs: { asset: d.flowAsset, topic: d.flowTopic, depth: d.flowDepth } };
+    default: return {};
   }
 }
 
@@ -115,7 +123,6 @@ export default function CronManager() {
   const [adding, setAdding] = useState(false);
   const [activeApp, setActiveApp] = useState<AppId>('axe_core');
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [runResult, setRunResult] = useState<Record<string, string>>({});
 
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get('open');
@@ -156,7 +163,16 @@ export default function CronManager() {
 
   const runNow = (s: CronSchedule) => withBusy(s.id, async () => {
     const { result } = await cronRunNow(s.id);
-    setRunResult(r => ({ ...r, [s.id]: `${result.status.toUpperCase()} · ${result.output.slice(0, 300)}` }));
+    /* De uitkomst als melding en niet in de rij.
+     *
+     * Bij de kaarten stond hij onderin de kaart. In een tabel kan dat niet
+     * zonder de rij te laten groeien, en een rij die van hoogte verandert
+     * schuift alles eronder weg terwijl je kijkt. Weggooien mag ook niet: dan
+     * druk je op Nu en gebeurt er zichtbaar niets. Dus een melding, met de
+     * naam erbij zodat je bij vijf tabellen weet welke job het was. */
+    const kort = result.output.slice(0, 300);
+    if (result.status === 'ok') toast.success(`${s.name} — gelukt`, { description: kort });
+    else toast.error(`${s.name} — mislukt`, { description: kort });
     await load();
   });
 
@@ -188,11 +204,29 @@ export default function CronManager() {
     }
   };
 
-  const visible = schedules.filter(s => scheduleApp(s) === activeApp);
-  const activeCount = visible.filter(s => s.enabled).length;
-  const countFor = (app: AppId) => schedules.filter(s => scheduleApp(s) === app).length;
+  const voorApp = (app: AppId) => schedules.filter(s => scheduleApp(s) === app);
+  const activeCount = schedules.filter(s => s.enabled).length;
+
   const openNew = () => { setDraft(draftForApp(activeApp)); setAdding(true); };
-  const switchApp = (app: AppId) => { setActiveApp(app); if (adding) setDraft(draftForApp(app)); };
+  /* De + op een tabelkop opent het formulier VOOR die app. Zonder dit moest je
+     eerst een tab kiezen en dan pas Nieuw -- en die tabs zijn er niet meer. */
+  const openNewVoor = (app: AppId) => { setActiveApp(app); setDraft(draftForApp(app)); setAdding(true); };
+
+  /* Eén set handelingen voor alle vijf de tabellen. Het waren kaarten die elk
+     hun eigen drie knoppen meebrachten; vijf tabellen die elk hun eigen versie
+     krijgen zouden vijf plekken zijn waar het uit elkaar kan lopen. */
+  const tabelActies: TabelActies = {
+    runNow: s => { void runNow(s); },
+    toggle: s => { void toggle(s); },
+    remove: s => { void remove(s); },
+    bezig: id => busy.has(id),
+  };
+  const kolomTekst: KolomTekst = {
+    soort: s => `${(ACTION_META[s.action_type] ?? ACTION_META.exec).label}${s.executor === 'mac' ? ' · Mac' : ''}`,
+    soortKleur: s => (ACTION_META[s.action_type] ?? ACTION_META.exec).color,
+    menselijk: cronToHuman,
+    tijd: fmt,
+  };
 
   return (
     /* Flexkolom: kop en app-tabs vast, de schema's krijgen de rest van de
@@ -208,7 +242,7 @@ export default function CronManager() {
           topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
       <TopbalkSlot>
         <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-          {loading ? 'Laden…' : `${activeCount} actief · ${visible.length} zichtbaar`}
+          {loading ? 'Laden…' : `${activeCount} actief · ${schedules.length} schema’s`}
         </span>
       </TopbalkSlot>
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
@@ -226,32 +260,6 @@ export default function CronManager() {
           </button>
         </div>
       </div>
-
-      {/* App tabs — separate cron jobs per app */}
-      <div className="flex flex-none items-center gap-1.5 mb-4 overflow-x-auto scrollbar-none pb-0.5">
-        {APP_TABS.map(t => {
-          const sel = t.id === activeApp;
-          return (
-            /* Kleur in de letters, niet in het vlak (regel 5). Dit was een
-               gevulde pil met een gekleurde rand -- een knop uit een andere
-               app. De actieve tab is nu te zien aan zijn tekst en zijn stip. */
-            <button key={t.id} onClick={() => switchApp(t.id)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium shrink-0 transition-all"
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--border-subtle)',
-                color: sel ? t.color : 'var(--text-muted)',
-              }}>
-              <span className="rounded-full" style={{ width: 7, height: 7, background: t.color, display: 'inline-block', opacity: sel ? 1 : 0.4 }} />
-              {t.label}
-              <span className="text-[10px] font-mono-data" style={{ color: sel ? t.color : 'var(--text-muted)' }}>{countFor(t.id)}</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="flex-none text-[11px] mb-4 -mt-1" style={{ color: 'var(--text-muted)' }}>
-        {APP_TABS.find(t => t.id === activeApp)?.blurb}
-      </p>
 
       {/* De enige schuif: foutmelding, het nieuwe-schema-formulier en de lijst
           samen. De app-tabs erboven blijven staan. */}
@@ -300,7 +308,7 @@ export default function CronManager() {
 
               {/* Action type */}
               <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(ACTION_META) as CronActionType[]).map(t => {
+                {(Object.keys(ACTION_META) as CronActionType[]).filter(t => !['observed', 'planner', 'northsea'].includes(t)).map(t => {
                   const M = ACTION_META[t]; const Icon = M.icon; const sel = draft.action_type === t;
                   return (
                     <button key={t} onClick={() => setDraft(d => ({ ...d, action_type: t }))}
@@ -406,75 +414,36 @@ export default function CronManager() {
         <div className={LIST_GRID}>
           {[...Array(3)].map((_, i) => <div key={i} className="h-36 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />)}
         </div>
-      ) : visible.length === 0 ? (
-        <div className="flex h-full flex-col items-center justify-center gap-3" style={{ color: 'var(--text-muted)' }}>
-          <Calendar size={28} />
-          <span className="text-sm">No schedules yet for {APP_TABS.find(t => t.id === activeApp)?.label} — create one with "New"</span>
-        </div>
       ) : (
-        <div className={LIST_GRID}>
-          {visible.map((s, i) => {
-            const M = ACTION_META[s.action_type]; const Icon = M.icon;
-            const isBusy = busy.has(s.id);
-            return (
-              <motion.div key={s.id} ref={el => { cardRefs.current[s.id] = el; }}
-                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                className="rounded-xl p-4 flex flex-col gap-2.5"
-                /* --surface-bg: hetzelfde materiaal als elke andere kaart
-                   (regel 4). En geen opacity op wat uitstaat -- een half
-                   doorzichtige kaart laat de plaat erdoorheen schijnen; dat
-                   het schema uit staat zegt de knop onderin al. */
-                style={{ background: 'var(--surface-bg)', border: `1px solid ${s.enabled ? `${M.color}30` : 'var(--border-subtle)'}` }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Icon size={14} style={{ color: M.color, flexShrink: 0 }} />
-                    <span className="text-small font-medium truncate" style={{ color: 'var(--text-primary)' }}>{s.name}</span>
-                  </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded shrink-0" style={{ background: `${M.color}1a`, color: M.color, border: `1px solid ${M.color}30` }}>{M.label}</span>
-                </div>
+        /* AXE Core over de VOLLE breedte, de vier anderen eronder naast
+           elkaar. Zie de uitleg bij APP_TABS: dat is geen smaak maar het
+           verschil tussen lokaal draaien en een webhook. */
+        <div className="axe-cronvel">
+          <CronTabel
+            titel={appInfo('axe_core').label}
+            onderschrift={appInfo('axe_core').blurb}
+            kleur={appInfo('axe_core').kleur}
+            schemas={voorApp('axe_core')}
+            acties={tabelActies}
+            tekst={kolomTekst}
+            opNieuw={() => openNewVoor('axe_core')}
+          />
 
-                <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                  <Clock size={11} style={{ color: 'var(--text-muted)' }} />
-                  <span className="font-mono">{s.cron_expr}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>· {cronToHuman(s.cron_expr)}</span>
-                </div>
-
-                <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  <span>Volgende: {s.enabled ? fmt(s.next_run_at) : 'uit'}</span>
-                  {s.last_status && (
-                    <span className="flex items-center gap-1" style={{ color: s.last_status === 'ok' ? 'var(--success)' : 'var(--error)' }}>
-                      {s.last_status === 'ok' ? <CheckCircle size={10} /> : <XCircle size={10} />}
-                      {fmt(s.last_run_at)}
-                    </span>
-                  )}
-                </div>
-
-                {(runResult[s.id] || s.last_result) && (
-                  <div className="text-[10px] font-mono px-2 py-1.5 rounded max-h-20 overflow-y-auto whitespace-pre-wrap"
-                    style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                    {runResult[s.id] ?? s.last_result}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-1.5 pt-1 mt-auto">
-                  <button onClick={() => { void toggle(s); }} disabled={isBusy}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
-                    style={{ background: s.enabled ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)', color: s.enabled ? 'var(--success)' : 'var(--text-muted)', border: `1px solid ${s.enabled ? 'rgba(52,211,153,0.25)' : 'rgba(255,255,255,0.08)'}` }}>
-                    <Power size={10} /> {s.enabled ? 'Aan' : 'Uit'}
-                  </button>
-                  <button onClick={() => { void runNow(s); }} disabled={isBusy}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
-                    style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
-                    {isBusy ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />} Nu uitvoeren
-                  </button>
-                  <button onClick={() => { void remove(s); }} disabled={isBusy}
-                    className="ml-auto p-1 rounded" style={{ color: 'var(--text-muted)' }} title="Delete">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
+          <div className="axe-cronvier">
+            {NAAST_ELKAAR.map(id => (
+              <CronTabel
+                key={id}
+                titel={appInfo(id).label}
+                onderschrift={appInfo(id).blurb}
+                kleur={appInfo(id).kleur}
+                schemas={voorApp(id)}
+                acties={tabelActies}
+                tekst={kolomTekst}
+                compact
+                opNieuw={() => openNewVoor(id)}
+              />
+            ))}
+          </div>
         </div>
       )}
       </div>

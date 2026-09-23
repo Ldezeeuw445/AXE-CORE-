@@ -5,6 +5,8 @@ import { useNotifications } from '@/presentation/contexts/NotificationContext';
 import { meaningVar, meaningVarDim } from '@/domain/meaning';
 import { meaningOfNotification, notificationTarget } from '@/domain/notification';
 import { cn } from '@/shared/utils';
+import { AppGrowthBadge } from '@/presentation/components/axe-core/AppGrowthBadge';
+import { MemoryGrowthBadge } from '@/presentation/components/axe-core/MemoryGrowthBadge';
 
 export function NotificationBell() {
   const { notifications, unreadCount, loadError, markAsRead, markAllAsRead, removeNotification, clearAll } = useNotifications();
@@ -86,6 +88,15 @@ export function NotificationBell() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* De tellers die in de bovenbalk stonden.
+              Ze zijn INFORMATIE en geen navigatie, en ze stonden tussen de
+              knoppen waarmee je van weergave wisselt -- dus keek je er de hele
+              dag naar zonder ze te lezen. Hier kijk je juist wél naar cijfers. */}
+          <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <AppGrowthBadge />
+            <MemoryGrowthBadge />
           </div>
 
           <div className="flex-1 overflow-y-auto">

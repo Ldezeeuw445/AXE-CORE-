@@ -21,9 +21,11 @@ import { TradingMemoryPanel } from '@/presentation/pages/tradingIntel/TradingMem
 import { StrategiesBacktestTab } from './tradingIntel/StrategiesBacktestTab';
 import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
+import { CorrelatieTab } from '@/presentation/pages/tradingIntel/CorrelatieTab';
+import { KalenderTab } from '@/presentation/pages/tradingIntel/KalenderTab';
 import { AccountsTab } from './tradingIntel/AccountsTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie' | 'kalender';
 
 /**
  * The tabs are the pipeline, in the order the work actually happens.
@@ -49,6 +51,10 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'memory', label: 'Memory' },
   { id: 'frameworks', label: 'Frameworks' },
   { id: 'strategies', label: 'Strategies & Backtest' },
+  // Naast Strategies, want het is dezelfde vraag van de andere kant: die tab
+  // zoekt wat werkt per paar, deze laat zien welke paren hetzelfde doen.
+  { id: 'correlatie', label: 'Correlatie' },
+  { id: 'kalender', label: 'Kalender' },
   { id: 'funnel', label: 'Funnel' },
   { id: 'scorecard', label: 'Scorecard' },
   { id: 'accounts', label: 'Accounts' },
@@ -100,8 +106,9 @@ export default function TradingIntel() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full flex flex-col overflow-hidden"
-      style={{ background: '#050505' }}
+      className="h-full flex flex-col overflow-hidden bg-transparent"
+      /* Trading is a workspace ON the AXE shell. A page-wide #050505 layer
+         turned every room into a black sheet and hid the shell material. */
     >
       {/* De eigen kopbalk en de statusstrook zijn weg. Ze stonden bovenop de
           pagina en zeiden wat er in de topbalk hoort: waar je bent, of de
@@ -121,6 +128,10 @@ export default function TradingIntel() {
           actief={tab}
           kies={(id) => setTab(id as TabId)}
           instellingen={<SettingsDrawer desk={desk} onClose={() => setSettingsOpen(false)} inline />}
+          /* De kill switch zit in het gat van de rechter ring. De desk-hook
+             heeft hem al; hier wordt hij alleen doorgegeven. */
+          opKillSwitch={() => { void desk.triggerKillSwitch(); }}
+          killBezig={desk.killSwitchBusy}
         />
       )}
 
@@ -133,6 +144,8 @@ export default function TradingIntel() {
         {tab === 'memory' && <TradingMemoryPanel />}
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
+        {tab === 'correlatie' && <CorrelatieTab />}
+        {tab === 'kalender' && <KalenderTab />}
         {tab === 'accounts' && <AccountsTab />}
         {/* orchestrator's DemoBookTab takes the desk state; the branch this file
             came from had a leaner version that did not. Passing it rather than

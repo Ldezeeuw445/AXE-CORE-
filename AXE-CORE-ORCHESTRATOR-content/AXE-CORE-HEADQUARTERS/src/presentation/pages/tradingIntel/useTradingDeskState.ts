@@ -10,9 +10,12 @@ import { toast } from 'sonner';
 import { type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal, type TradingIntelWatchlistItem } from '@/domain/tradingIntel/types';
 import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
-import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
+import { runTradingResearch, buildCallLlmFromSlots, buildBeslissingCallLlm } from '@/application/tradingIntel/runTradingResearch';
+import { abonnementVan } from '@/domain/agentMotoren';
+import { leesToewijzing } from '@/infrastructure/persistence/agentMotorenOpslag';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { PROVIDERS, defaultOllamaSlot, buildStableChatCascade, type KeySlot as ProviderKeySlot } from '@/domain/providers';
+import { zonderAbonnement } from '@/domain/abonnementChat';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getTradingModelPref, saveTradingModelPref, type TradingModelPref } from '@/infrastructure/persistence/tradingModelService';
 import { getTradingSetups, saveTradingSetup, deleteTradingSetup, type TradingSetup } from '@/application/tradingIntel/tradingSetupService';
@@ -36,6 +39,7 @@ import {
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { getRiskProfile, setRiskMode, saveRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
+import { applyRiskEdit } from '@/domain/tradingIntel/riskPresets';
 import { getLearningStats, listThinkingTraces } from '@/infrastructure/persistence/tradingLearningService';
 import { getBrokerConnection, connectBrokerKind, getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import {
@@ -154,6 +158,8 @@ export function useTradingDeskState() {
   const [learning, setLearning] = useState<AgentLearningStats | null>(null);
   const [broker, setBroker] = useState<BrokerConnection | null>(null);
   const [lastTrace, setLastTrace] = useState<ThinkingTrace | null>(null);
+  // De laatste beslissingen als kaarten (DecisionLog); lastTrace blijft de eerste.
+  const [recentTraces, setRecentTraces] = useState<ThinkingTrace[]>([]);
   const [metaToken, setMetaToken] = useState('');
   const [metaAccountId, setMetaAccountId] = useState('');
   const [metaRegion, setMetaRegion] = useState<MetaApiRegion>('london');
@@ -248,7 +254,7 @@ export function useTradingDeskState() {
         // whole time (saveThinkingTrace in tradingAgentEngine), the tab
         // just never loaded them back. This is why it showed "No cycle run
         // yet" even while autopilot had clearly been running.
-        listThinkingTraces(1),
+        listThinkingTraces(20),
         // Same fix, different symptom: the strategy picker was pure local
         // state, so autopilot (which runs outside this component entirely)
         // never knew what you'd selected.
@@ -272,6 +278,7 @@ export function useTradingDeskState() {
       setAutopilot(pilot);
       setCircuitBreaker(breaker);
       if (traces[0]) setLastTrace(traces[0]);
+      setRecentTraces(traces);
       if (meta) {
         setMetaToken(meta.token || '');
         setMetaAccountId(meta.accountId || '');
@@ -387,12 +394,13 @@ export function useTradingDeskState() {
       const [status, breaker, traces] = await Promise.all([
         getAutopilotStatus(),
         getCircuitBreakerState(meta?.accountId),
-        listThinkingTraces(1),
+        listThinkingTraces(20),
       ]);
       if (cancelled) return;
       setAutopilot(status);
       setCircuitBreaker(breaker);
       if (traces[0]) setLastTrace(traces[0]);
+      setRecentTraces(traces);
     };
     const t = setInterval(poll, 10_000);
     return () => {
@@ -408,7 +416,8 @@ export function useTradingDeskState() {
   /** Build the trading LLM from the user's chosen "trading model" (Settings).
    *  Returns undefined for auto (let runTradingResearch use CrewAI/default).
    *  The chosen model becomes both the CrewAI fallback and the synthesis LLM. */
-  const buildTradingCallLlm = useCallback(async (): Promise<((system: string, user: string) => Promise<string>) | undefined> => {
+  type TradingLlm = (system: string, user: string) => Promise<string>;
+  const buildTradingCallLlm = useCallback(async (): Promise<{ callLlm?: TradingLlm; callLlmBeslissing?: TradingLlm }> => {
     const pref = await getTradingModelPref();
 
     // Every configured provider, so a chosen-but-quota-exhausted model still
@@ -440,20 +449,25 @@ export function useTradingDeskState() {
     }
 
     const st = useVoiceStore.getState();
-    const cascade = buildStableChatCascade(allSlots, {
+    const cascade = zonderAbonnement(buildStableChatCascade(allSlots, {
       primary: chosen ?? st.primarySlot,
       fallback1: st.fallback1Slot,
       fallback2: st.fallback2Slot,
-    });
-    if (!cascade.length) return undefined;
-    return buildCallLlmFromSlots(cascade, (s, msgs) => callProvider(s as ProviderKeySlot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
+    }));
+    const roep = (s: ProviderKeySlot, msgs: Array<{ role: string; content: string }>) =>
+      callProvider(s, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>);
+    // Elf rollen op sleutels; de eindbeslissing op het abonnement van de Trading Agent.
+    return {
+      callLlm: buildCallLlmFromSlots(cascade, roep),
+      callLlmBeslissing: buildBeslissingCallLlm(cascade, abonnementVan(leesToewijzing(), 'trading'), roep),
+    };
   }, []);
 
   const runResearch = useCallback(async () => {
     setRunning(true);
     try {
-      const callLlm = await buildTradingCallLlm();
-      const r = await runTradingResearch({ ticker: symbol, callLlm });
+      const { callLlm, callLlmBeslissing } = await buildTradingCallLlm();
+      const r = await runTradingResearch({ ticker: symbol, callLlm, callLlmBeslissing });
       toast.success(`Research done · ${r.signal}`);
       await reload();
     } catch (e) {
@@ -519,7 +533,11 @@ export function useTradingDeskState() {
             }
           : undefined,
       } as Parameters<typeof runTradingAgent>[0]);
-      if (result.trace) setLastTrace(result.trace);
+      if (result.trace) {
+        const t = result.trace;
+        setLastTrace(t);
+        setRecentTraces(prev => [t, ...prev.filter(p => p.decisionId !== t.decisionId)].slice(0, 20));
+      }
       toast.success(
         result.error
           ?? (result.decision ? `${result.decision.action.toUpperCase()} · ${result.decision.rationale}` : 'Agent cycle complete'),
@@ -625,6 +643,18 @@ export function useTradingDeskState() {
     toast.success(`Saved ${toSave.strategy} on ${toSave.symbol}`);
   }, [backtestResult]);
 
+  /** Een bewaarde run weer openen, met zijn trades en curve als die bewaard zijn. */
+  const openSavedStrategy = useCallback((run: SavedStrategyRun) => {
+    setBacktestResult({
+      symbol: run.symbol, strategy: run.strategy, timeframe: run.timeframe,
+      candleCount: run.candleCount ?? 0, trades: run.trades ?? [], totalTrades: run.totalTrades,
+      wins: Math.round(run.winRate * run.totalTrades), losses: run.totalTrades - Math.round(run.winRate * run.totalTrades),
+      winRate: run.winRate, avgWinPct: 0, avgLossPct: 0, profitFactor: run.profitFactor,
+      netReturnPct: run.netReturnPct, maxDrawdownPct: run.maxDrawdownPct, equityCurve: run.equityCurve ?? [],
+      note: `Saved ${run.savedAt.slice(0, 10)}${run.note ? ` — ${run.note}` : ''}${run.trades ? '' : ' · saved before trades were kept'}`,
+    });
+  }, []);
+
   const deleteSavedStrategy = useCallback(async (id: string) => {
     const next = await deleteSavedStrategyRun(id);
     setSavedStrategies(next);
@@ -666,8 +696,7 @@ export function useTradingDeskState() {
     const clampPct = (v: number | undefined, fb: number, max = 1) =>
       typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : fb;
     const next: RiskProfile = {
-      ...current,
-      ...patch,
+      ...applyRiskEdit(current, patch),
       riskPerTradePct: clampPct(patch.riskPerTradePct, current.riskPerTradePct, 0.5),
       maxOpenRiskPct: clampPct(patch.maxOpenRiskPct, current.maxOpenRiskPct, 1),
       maxDailyLossPct: clampPct(patch.maxDailyLossPct, current.maxDailyLossPct, 1),
@@ -771,12 +800,12 @@ export function useTradingDeskState() {
     backtestRunning, backtestResult,
     backtestTimeframe, setBacktestTimeframe, backtestLimit, setBacktestLimit,
     allPairsRunning, allPairsResults, runBacktestAllPairsNow,
-    savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
+    savedStrategies, saveCurrentBacktest, deleteSavedStrategy, openSavedStrategy,
     comboStrategies, toggleComboStrategy, comboMinAgree, setComboMinAgree,
     comboRunning, comboResult, runComboBacktestNow,
     setups, saveSetup, loadSetup, deleteSetup,
     account, snapshot, eq, upnl,
-    memory, risk, learning, broker, lastTrace,
+    memory, risk, learning, broker, lastTrace, recentTraces,
     metaToken, setMetaToken, metaAccountId, setMetaAccountId, metaRegion, setMetaRegion,
     metaAccounts, metaAccountsLoading, refreshMetaAccounts,
     showNewMetaAccount, setShowNewMetaAccount,

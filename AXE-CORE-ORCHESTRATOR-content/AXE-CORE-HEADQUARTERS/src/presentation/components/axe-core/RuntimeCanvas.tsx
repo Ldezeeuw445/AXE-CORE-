@@ -3,7 +3,7 @@
  * Skilltree-style: click hub with children to zoom in; labels ABOVE nodes.
  */
 import { useState, useRef, useCallback, useEffect, useMemo, type ComponentType, type CSSProperties } from 'react';
-import { PlaatPanel, PlaatDock } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatDock, PlaatRail } from '@/presentation/components/layout/PlaatSlots';
 import { AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import {
@@ -45,7 +45,14 @@ const CREAM = '#F5F0E6';
  * parse colour strings themselves and do not resolve CSS variables —
  * they ignore var(--x) silently, with no error, so a token here breaks
  * the render in a way nothing catches. Tokens are for CSS only. */
-const BG = '#000000';
+/* Geen eigen achtergrond meer.
+ *
+ * Dit stond op '#000000' en legde een ondoorzichtig zwart vlak over de shell,
+ * waardoor deze view een losse app leek in plaats van een laag ván AXE -- en
+ * het glas van de plaat eronder verdween. Dezelfde wijziging staat in
+ * NeuralBrain.css en NeuralMemorySystem.css; alle drie de views deden het, en
+ * alle drie om dezelfde reden: ze zijn ooit los gebouwd en daarna ingebouwd. */
+const BG = 'transparent';
 const CYAN = 'var(--accent-cyan)';
 
 function statusColor(status: OrganizationNode['status']) {
@@ -520,17 +527,20 @@ export function RuntimeWorkspace() {
         </button>
       </PlaatDock>
 
-      {/* De legenda stond linksonder op `bottom-14` -- daar zit nu de chatplaat,
-          dus hij lag erachter. Hij hoort in het linkerslot: dan bepaalt de
-          schil waar hij staat en botst hij nooit meer met het chroom. */}
-      <PlaatPanel hoog side="left" title="Legenda">
-        {[{ c: 'var(--success)', l: 'Online' }, { c: CYAN, l: 'Configured' }, { c: 'var(--warning)', l: 'Degraded' }, { c: 'var(--error)', l: 'Offline' }].map(s => (
-          <div key={s.l} className="flex items-center gap-2">
-            <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: s.c, boxShadow: `0 0 5px ${s.c}` }} />
-            <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{s.l}</span>
-          </div>
-        ))}
-      </PlaatPanel>
+      {/* De legenda stond in het altijd-zichtbare linkerslot (`PlaatPanel hoog`),
+          dus las hij als een los, permanent zwevend doosje naast de composer.
+          De rail is het juiste materiaal: dezelfde muis-naar-de-rand-strook als
+          de rest van de schil, dicht totdat je hem nodig hebt. */}
+      <PlaatRail title="Status legend">
+        <div className="flex flex-col gap-2">
+          {[{ c: 'var(--success)', l: 'Online' }, { c: CYAN, l: 'Configured' }, { c: 'var(--warning)', l: 'Degraded' }, { c: 'var(--error)', l: 'Offline' }].map(s => (
+            <div key={s.l} className="flex items-center gap-2">
+              <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: s.c, boxShadow: `0 0 5px ${s.c}` }} />
+              <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{s.l}</span>
+            </div>
+          ))}
+        </div>
+      </PlaatRail>
 
       {tooltip && (
         <div className="absolute pointer-events-none z-30 px-3 py-2 rounded-lg" style={{ left: Math.min(tooltip.x + 14, (WRef.current || 800) - 240), top: Math.max(8, tooltip.y - 8), transform: 'translateY(-100%)', background: 'rgba(0,0,0,0.94)', border: `1px solid ${GOLD}30`, maxWidth: 260 }}>

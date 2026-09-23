@@ -51,6 +51,10 @@ __pycache__/
 *pyc*
 venv/
 .venv/
+# run-local.sh builds its own venv and workspace root next to axe_api, so the
+# project's half-filled .venv and the VPS's /opt paths are both left alone.
+.venv-local/
+.workspace-local/
 
 # Development tools
 chainlit.md

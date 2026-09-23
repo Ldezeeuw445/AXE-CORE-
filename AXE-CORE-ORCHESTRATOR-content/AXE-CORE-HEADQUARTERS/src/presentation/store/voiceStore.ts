@@ -16,10 +16,14 @@ import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gatew
 import { create } from 'zustand';
 import {
   PROVIDERS, isKeyOptional, classifyQuery, selectByCapability, prioritizeOllamaSlots,
-  capabilityToSpecialists, migrateModel,
+  capabilityToSpecialists, migrateModel, isSimpleChatCapability,
   type ProviderId, type ProviderCfg, type KeySlot, type QueryCapability,
 } from '@/domain/providers';
+import { delegateFor, type AxeAgentId } from '@/domain/agents/roster';
+import { namespaceFor } from '@/domain/agents/catalog';
+import { latestOpenTurnId, noteTurnOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
+import { korteFaalReden } from '@/domain/faalReden';
 import { toProxied, callProvider } from '@/infrastructure/gateways/llmGateway';
 
 // Re-exported for backwards compatibility: consumers historically imported
@@ -45,11 +49,12 @@ import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
 import { promisesUnkeptAction, actionNudge, UNKEPT_ACTION_NOTE } from '@/domain/tools/actionIntent';
-import { speakWithElevenLabs, stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
-import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
+import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { routeFast } from '@/application/fastPath/fastPathRouter';
-import { loadTodaysBriefing } from '@/application/system/axeBootstrap';
+import { loadTodaysBriefing } from '@/application/system/dailyBriefing';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 import { getSpecialist, DEFAULT_SPECIALIST_ID } from '@/domain/catalogs/specialists';
 import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
@@ -91,8 +96,17 @@ function agentIdForTool(toolId: string): string | undefined {
  * Flip it in Settings, or from the console:
  *   localStorage.setItem('axe_native_tools','1')
  */
+const NATIVE_TOOLS_ONCE_KEY = 'axe_native_tools_once';
+
 export function nativeToolsEnabled(): boolean {
-  try { return localStorage.getItem('axe_native_tools') === '1'; } catch { return false; }
+  try {
+    return localStorage.getItem('axe_native_tools') === '1'
+      || localStorage.getItem(NATIVE_TOOLS_ONCE_KEY) === '1';
+  } catch { return false; }
+}
+
+function nativeToolsForcedOnce(): boolean {
+  try { return localStorage.getItem(NATIVE_TOOLS_ONCE_KEY) === '1'; } catch { return false; }
 }
 
 /**
@@ -115,10 +129,14 @@ async function tryNativeTools(
     content: m.content,
   }));
 
+  // Personal Computer Use opts into the structured tool path for exactly its
+  // current task, even when the global Settings switch is off. GUI work needs
+  // a few more bounded observe/action rounds than ordinary chat tools.
+  const forcedForComputerUse = nativeToolsForcedOnce();
   const r = await runNativeToolLoop(slot, msgs, {
     requestApproval: requestActionApproval,
     record: e => recordEvent({ ...e, agentId: agentIdForTool(String(e.details.tool ?? '')) }),
-  });
+  }, forcedForComputerUse ? 8 : 4);
 
   console.info(
     `%c[AXE] native tools%c ${slot.provider} · ${r.rounds} round(s) · ran: ${r.ranTools.join(', ') || 'none'}`,
@@ -278,7 +296,15 @@ const ENV_KEYS: Partial<Record<string,string>> = {
 };
 
 
-function getProviderKeySlot(providerId:string):KeySlot|null {
+/** Providers the VPS AI proxy serves with its OWN key (cached from Settings'
+ *  /api/proxy/ai/providers fetch). AXE can route these through the proxy even
+ *  with no local key — the VPS fills the key. Empty until Settings is opened. */
+function serverServedProviders(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem('axe_server_providers') ?? '[]') as string[]); }
+  catch { return new Set(); }
+}
+
+export function getProviderKeySlot(providerId:string):KeySlot|null {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections')??'{}') as Record<string,{key?:string;model?:string;baseUrl?:string}|undefined>;
     const conn = conns[providerId];
@@ -286,7 +312,10 @@ function getProviderKeySlot(providerId:string):KeySlot|null {
     const key = conn?.key || (providerId!=='ollama' ? (ENV_KEYS[providerId]??'') : '');
     const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl);
     if (isKeyOptional(providerId) && providerId!=='ollama' && !baseUrl) return null;
-    if (!isKeyOptional(providerId) && !key) return null;
+    // A provider with no local key is still usable when the VPS proxy serves it
+    // with its own key (e.g. Gemini): build a keyless slot and let callProvider's
+    // proxy path fill the key. Only truly-unavailable providers return null.
+    if (!isKeyOptional(providerId) && !key && !serverServedProviders().has(providerId)) return null;
     // migrateModel() maps stale/deprecated model names (saved in localStorage,
     // possibly months ago) to the current canonical one for this provider —
     // see providers.ts's _MODEL_MIGRATIONS. Applying it here, at the one spot
@@ -331,43 +360,16 @@ function getRec():SpeechRecognition|null{
   return recInstance;
 }
 
-// ElevenLabs' fallback chain (VPS Piper, then browser) — only reached when
-// 'elevenlabs' is explicitly chosen in Settings (e.g. a paid account later).
-// Not the default path: without a paid ElevenLabs account this just wastes
-// a failed round-trip before the browser voice speaks anyway.
-function speakElevenLabsChain(text:string,onDone?:()=>void){
-  speakWithElevenLabs(text,onDone,()=>{
-    if(isAxeApiConfigured){
-      void tts(text).then(blob=>{const url=URL.createObjectURL(blob);const audio=new Audio(url);audio.onended=()=>{URL.revokeObjectURL(url);onDone?.();};audio.onerror=()=>{URL.revokeObjectURL(url);onDone?.();};audio.play().catch(()=>onDone?.());}).catch(()=>{speakWithBrowser(text,onDone);});
-      return;
-    }
-    speakWithBrowser(text,onDone);
-  });
-}
-
+// One AXE identity voice. Every generated reply uses the shared global TTS
+// path, pinned to OpenAI cedar. Browser speech is emergency fallback only.
 function speakSafely(text:string,onDone?:()=>void){
-  // Respect the user's response-mode preference without creating a circular
-  // dependency back to the store (localStorage is the source of truth here).
   try{if(localStorage.getItem('axe_response_mode')==='type'){onDone?.();return;}}catch{}
-  // Fish Audio is the default — no paid ElevenLabs account, so that path
-  // stays available but opt-in only (Settings → Voice). Falls straight to
-  // the (already Axelrod-tuned) browser voice if Fish Audio isn't set up
-  // yet, skipping the known-unusable ElevenLabs attempt instead of eating
-  // its failure latency on every single reply.
-  let ttsProvider:'fish'|'elevenlabs'|'browser'='fish';
-  try{ttsProvider=(localStorage.getItem('axe_tts_provider')as'fish'|'elevenlabs'|'browser')||'fish';}catch{}
-  if(ttsProvider==='fish'&&isFishAudioConfigured()){
-    void speakWithFishAudio(text,onDone,()=>speakWithBrowser(text,onDone));
-    return;
-  }
-  if(ttsProvider==='elevenlabs'){
-    speakElevenLabsChain(text,onDone);
-    return;
-  }
-  speakWithBrowser(text,onDone);
+  speakGlobal(text,onDone);
 }
 
-export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;}
+export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;
+  /** Which of the tiered agents handled this turn (see domain/agents/roster.ts). 'axe' = AXE answered directly. */
+  delegate?:AxeAgentId;}
 
 /** One routing decision — created per `sendMessage` call, populated as slots are tried. */
 export interface RoutingEvent{
@@ -377,18 +379,14 @@ export interface RoutingEvent{
   slotOrder:string[];
   attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
   winner?:string;winnerModel?:string;
+  /** Which of the tiered agents AXE used for this turn (see domain/agents/roster.ts). */
+  delegate?:AxeAgentId;
   via:'langgraph'|'fallback'|'crew'|'none';
   /** How many consecutive messages were coalesced into this entry (≥1). */
   count?:number;
 }
 
 /** Shorten a raw error message to a concise label: "401", "429", "timeout", "network", etc. */
-function shortErr(msg:string):string{
-  if(/timeout|timed out|abort/i.test(msg)) return 'timeout';
-  if(/network|failed to fetch|cors|load failed/i.test(msg)) return 'network';
-  const m=msg.match(/\b(4\d{2}|5\d{2})\b/);if(m) return m[1];
-  return msg.slice(0,24).replace(/\s+/g,' ').trim();
-}
 
 export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'open_url';url:string};
 
@@ -656,45 +654,41 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
     startListening:async()=>{
       try{
-        // ── Gemini Live (if Google slot is configured) ──────────────────
-        const gState=get();
-        const googleSlot=[gState.primarySlot,gState.fallback1Slot,gState.fallback2Slot,gState.fallback3Slot].find(s=>s?.provider==='google');
-        if(googleSlot?.key){
-          try{
-            const{setGeminiLiveApiKey,getGeminiLiveService,startGeminiLive}=await import('@/infrastructure/gateways/geminiLiveService');
-            setGeminiLiveApiKey(googleSlot.key);
-            const svc=getGeminiLiveService();
-            svc.setCallbacks({
-              onStart:()=>set({voiceStatus:'listening',transcript:'',error:null,isGeminiLive:true}),
-              onListening:()=>set({voiceStatus:'listening'}),
-              onSpeaking:()=>set({voiceStatus:'speaking'}),
-              onIdle:()=>set({voiceStatus:'idle'}),
-              onStop:()=>set({voiceStatus:'idle',isGeminiLive:false}),
-              // Gemini Live streams audio directly via WebSocket — do NOT call speakSafely
-              // here or TTS will double-play. Just store the transcript.
-              onText:(text)=>{
-                const trimmed=text.trim();if(!trimmed)return;
-                set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'google',model:'gemini-live'}],response:trimmed,voiceStatus:'idle',error:null}));
-              },
-              onError:(err)=>set({voiceStatus:'idle',isGeminiLive:false,error:`Gemini Live: ${err}`}),
-            });
-            await startGeminiLive();
-            set({isGeminiLive:true});
-            return;
-          }catch(liveErr){console.warn('[GeminiLive] startup failed, falling back to browser STT:',liveErr);set({isGeminiLive:false});}
-        }
-        // ── Browser SpeechRecognition fallback ──────────────────────────
+        // One AXE voice means one audio-output path. Gemini Live used to take
+        // over here whenever a Google slot existed, which made AXE literally
+        // sound like a different assistant depending on routing configuration.
+        // Speech input stays provider-neutral; every reply goes through
+        // speakGlobal() and therefore the single AXE voice profile.
+        stopGlobalTts();
+
         const rec=getRec();if(!rec){set({error:'Speech recognition not supported.'});return;}
         try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});stream.getTracks().forEach(t=>t.stop());set({micPermission:'granted'});}catch{set({error:'Microphone permission denied.'});return;}
-        stopTTS();stopFishAudio();set({transcript:'',response:'',voiceStatus:'listening',error:null});
-        rec.onresult=(event:SpeechRecognitionEvent)=>{let final='';for(let i=0;i<event.results.length;i++)if(event.results[i].isFinal)final+=event.results[i][0].transcript;set({transcript:final||get().transcript});if(final){set({voiceStatus:'processing'});get().sendMessage(final).catch(()=>set({voiceStatus:'idle'}));}};
+
+        set({transcript:'',response:'',voiceStatus:'listening',error:null,isGeminiLive:false});
+        rec.onresult=(event:SpeechRecognitionEvent)=>{
+          let final='',interim='';
+          for(let i=0;i<event.results.length;i++){
+            const piece=event.results[i][0]?.transcript??'';
+            if(event.results[i].isFinal)final+=piece;
+            else interim+=piece;
+          }
+          // Show what Luka is saying WHILE he is saying it. The final text is
+          // still the only thing sent to AXE, so an interim hypothesis can
+          // never accidentally become a command.
+          const visible=(final||interim).trim();
+          if(visible)set({transcript:visible});
+          if(final.trim()){
+            set({voiceStatus:'processing',transcript:final.trim()});
+            get().sendMessage(final.trim()).catch(()=>set({voiceStatus:'idle'}));
+          }
+        };
         rec.onerror=(event:SpeechRecognitionErrorEvent)=>{if(event.error==='not-allowed')set({voiceStatus:'idle',micPermission:'denied',error:'Microphone blocked.'});else if(event.error!=='no-speech')set({voiceStatus:'idle',error:`Speech error: ${event.error}`});else set({voiceStatus:'idle'});};
         rec.onend=()=>{if(get().voiceStatus==='listening')set({voiceStatus:'idle'});};
         rec.start();
       }catch(e:unknown){const m=e instanceof Error?e.message:String(e);set({voiceStatus:'idle',error:`Voice error: ${m}`});}
     },
 
-    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();stopFishAudio();set({voiceStatus:'idle',isGeminiLive:false});},
+    stopListening:()=>{try{recInstance?.stop();}catch{}stopGlobalTts();set({voiceStatus:'idle',isGeminiLive:false});},
 
     sendMessage:async(text:string)=>{
       if(!text?.trim())return;
@@ -820,7 +814,21 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       let orderedSlots:KeySlot[],activeAgentPrompt:string|null=null;
       await logRoute('capability classified',{capability:cap,mode:matchedCap?'matched':'fallback'});
 
-      if(matchedCap?.preferred_provider){
+      // AXE's voice is one real chat model. For normal conversation it never
+      // routes to a local runner (ollama) or a coding CLI (abonnement/openhands/
+      // hermes) — those are the Code agent's engines and cause the "ollama fails
+      // → codex answers" fight you can watch in the stream. Only fall back to the
+      // full set if there is no real chat provider at all.
+      const CHAT_EXCLUDE=new Set(['ollama','abonnement','openhands','hermes']);
+      const chatBase=isSimpleChatCapability(cap)&&allSlots.some(s=>!CHAT_EXCLUDE.has(s.provider))
+        ? allSlots.filter(s=>!CHAT_EXCLUDE.has(s.provider))
+        : allSlots;
+
+      // For normal conversation the Supabase capability config (which can point
+      // "fast" at Ollama) must NOT decide the engine — that override is what made
+      // AXE answer on a dead local model and then fall through to a coding CLI.
+      // Only real specialist work honours a configured preferred_provider.
+      if(matchedCap?.preferred_provider && !isSimpleChatCapability(cap)){
         const preferred = matchedCap.preferred_provider;
         const fallback = matchedCap.fallback_provider;
         orderedSlots=[...allSlots.filter(s=>s.provider===preferred),...allSlots.filter(s=>s.provider===fallback&&s.provider!==preferred),...allSlots.filter(s=>s.provider!==preferred&&s.provider!==fallback)];
@@ -834,7 +842,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           orderedSlots=orderedSlots.map(s=>s.provider===preferred?{...s,model:matchedCap.preferred_model!}:s);
         }
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
-      }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
+      }else{orderedSlots=selectByCapability(cap as QueryCapability,chatBase);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
       // Luka's explicit "★ Primair" choice in Settings (voiceStore.primarySlot)
       // used to only ever be read when zero providers were configured at all
@@ -844,11 +852,36 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       // own configured preferred_provider — that's a deliberate per-task
       // override, e.g. always use a coder model for "code", and should still
       // win over the general chat default).
-      if(!matchedCap?.preferred_provider){
+      // For normal conversation (fast/creative) the engine YOU picked must
+      // answer, even if a capability config maps chat elsewhere — otherwise AXE
+      // replies on a local model while you're on a subscription (the silent swap
+      // that feels like "it's not AXE"). Real specialist WORK still routes.
+      if(!matchedCap?.preferred_provider || isSimpleChatCapability(cap)){
         const primary=get().primarySlot;
         if(primary){
           const idx=orderedSlots.findIndex(s=>s.provider===primary.provider);
-          if(idx>0){const[p]=orderedSlots.splice(idx,1);orderedSlots.unshift(p);}
+          if(idx>=0){
+            // Het MODEL meenemen, niet alleen de provider.
+            //
+            // Hier stond `findIndex` + `unshift` van het gevonden slot, en dat
+            // slot draagt het model dat in Settings voor die provider staat.
+            // Koos je in de chatbalk een ander model van dezelfde provider, dan
+            // schoof de juiste provider naar voren met het VERKEERDE model, en
+            // zei het scherm het ene terwijl het andere antwoordde.
+            //
+            // Precies dezelfde fout als bij preferred_model twintig regels
+            // hierboven ("used to be stored but never actually applied"), en
+            // dezelfde oplossing: overschrijf hem op het slot dat vooraan komt.
+            const[p]=orderedSlots.splice(idx,1);
+            orderedSlots.unshift(primary.model?{...p,model:primary.model}:p);
+          }else{
+            // De provider stond niet in de lijst. Dat is geen fout: allSlots
+            // wordt gebouwd uit providers MET een sleutel, en de
+            // abonnementsweg (Claude Code / Codex via je eigen sessie) heeft er
+            // geen. Zonder deze tak koos je hem in de balk en gebeurde er
+            // niets -- de stilste faalwijze die er is.
+            orderedSlots.unshift(primary);
+          }
         }
       }
 
@@ -864,7 +897,14 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }
 
       // ── Build a routing event that will be populated as slots are tried ──
-      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,specialist:specialistId,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none'};
+      // Which of the tiered agents is handling this turn — the visible hand-off.
+      const delegation=delegateFor(cap,text);
+      // The learning loop, keyed to the handling agent's catalog namespace: the
+      // turn opens in this namespace (memory recall below) and is closed with an
+      // outcome once AXE replies. Before this, chat opened turns and never closed
+      // them, so the loop never completed — now every agent learns in its own space.
+      const memOwner=namespaceFor(delegation.agent);
+      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,specialist:specialistId,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none',delegate:delegation.agent};
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
@@ -896,8 +936,15 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const SEARCH_RE=/\b(zoek op|search for|zoek|search|nieuws|news|vandaag('s)?\s+(nieuws|koers|weer)|today's|recent|latest|actueel|wat betekent|verklaar|explain|define|tell me about|prijs van|price of|koers van|stock price|crypto|bitcoin|weather|weer (in|vandaag)|score van|stand van)\b/i;
       const shouldSearch=tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code';
 
+      // AXE answers fast and remembers around it: cap how long memory recall may
+      // block the reply. Slow recall must never delay AXE — the turn is still
+      // written to memory afterwards (writeConversationMemory), so nothing is lost;
+      // it just isn't recalled in-line this one time. Simple chat: tight budget.
+      const memBudgetMs = isSimpleChatCapability(cap) ? 500 : 2500;
+      const raceTimeout = <T>(p: Promise<T>, ms: number, fb: T): Promise<T> =>
+        Promise.race([p, new Promise<T>(r => setTimeout(() => r(fb), ms))]);
       const [ragCtx,tavilyResults]=await Promise.all([
-        buildGlobalMemoryContext(AXE_USER_ID,text,900).catch(()=>''),
+        raceTimeout(buildGlobalMemoryContext(AXE_USER_ID,text,900,memOwner).catch(()=>''), memBudgetMs, ''),
         shouldSearch?tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'}).catch(()=>[]):Promise.resolve([]),
       ]);
       if(ragCtx) systemContent+=`\n\n${ragCtx}`;
@@ -955,8 +1002,8 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           const trimmed=resolved.trim();
           routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
           pushRouteEvt(routeEvt);
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
-          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,result.slot.provider,cap).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model,delegate:delegation.agent}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,result.slot.provider,cap).catch(()=>{});noteTurnOutcome(latestOpenTurnId(memOwner),'good');await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
@@ -968,14 +1015,15 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           const skipped=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
           routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
           pushRouteEvt(routeEvt);
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
-          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,slot.provider,cap).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,delegate:delegation.agent,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,slot.provider,cap).catch(()=>{});noteTurnOutcome(latestOpenTurnId(memOwner),'good');await logRoute('provider success',{provider:slot.provider});return;
         }
-        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=shortErr(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
+        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=korteFaalReden(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,600)});}
       }
 
-      await logRoute('all providers failed',{error:lastError.slice(0,200)});
+      await logRoute('all providers failed',{error:lastError.slice(0,600)});
       const slotSummary=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
+      noteTurnOutcome(latestOpenTurnId(memOwner),'poor');
       routeEvt.via='none';pushRouteEvt(routeEvt);
 
       // LAST resort, and this one really is last: LangGraph has failed, every

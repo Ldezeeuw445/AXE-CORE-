@@ -24,6 +24,7 @@ import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
 import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import { useLocation } from 'react-router';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
@@ -156,7 +157,6 @@ function VpsHealthWidget() {
         if (health.supabase) bits.push('supabase');
         if (health.n8n) bits.push('n8n');
         if (health.github) bits.push('github');
-        if (health.vercel) bits.push('vercel');
 
         if (health.status === 'ok' || health.status === 'healthy' || bits.length > 0) {
           setStrato({ status: 'online', latencyMs: ms, detail: bits.length ? bits.join(' · ') : 'API healthy' });
@@ -172,7 +172,7 @@ function VpsHealthWidget() {
     const tickHetzner = async () => {
       const t0 = performance.now();
       try {
-        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { signal: AbortSignal.timeout(6000) });
+        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { headers: ollamaHeaders(OLLAMA_HEALTH_URL), signal: AbortSignal.timeout(6000) });
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
         if (!res.ok) {

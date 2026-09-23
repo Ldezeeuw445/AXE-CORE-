@@ -39,7 +39,11 @@ export function SidebarChat() {
 
   const handleMic = async () => {
     try {
-      if (isListening) stopListening();
+      // Not just isListening: during 'processing'/'speaking' the loop is
+      // still running (see installWhisperVoice.ts), and calling
+      // startListening() then is a no-op that leaves you unable to hang up
+      // until AXE finishes talking. Same fix as PlaatChat.tsx.
+      if (voiceStatus !== 'idle') stopListening();
       else await startListening();
     } catch { /* ignore */ }
   };

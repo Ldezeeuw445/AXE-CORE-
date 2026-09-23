@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Palette, Sliders, Zap, Crosshair, Star } from "lucide-react";
 import { toast } from "sonner";
-import { ChartCanvas, type ChartCanvasHandle } from "./ChartCanvas";
+import { ChartCanvas, type ChartCanvasHandle, type ChartTradeMarker } from "./ChartCanvas";
 import { ChartIndicatorLayer } from "./ChartIndicatorLayer";
 import { IndicatorPane } from "./IndicatorPane";
 import { ChartToolsDrawer, DEFAULT_CHART_TOOLS_STATE, type ChartToolsState } from "./ChartToolsDrawer";
@@ -33,9 +33,8 @@ import { FibAnnotationLayer } from "./annotations/FibAnnotationLayer";
 import type { AnnotationPoint, ChartAnnotation } from "./annotations/types";
 import { appendAnnotation, loadAnnotations, removeAnnotation, saveAnnotations } from "./annotations/store";
 import { metaApiGetHistoricalCandles } from "@/infrastructure/gateways/metaApiMarketData";
-import { metaApiMarketOrder, toMt5Symbol, type PendingOrderType } from "@/infrastructure/gateways/metaApiService";
-import { brokerPlaceOrder, brokerPlacePendingOrder } from "@/infrastructure/gateways/brokerConnector";
-import { executeDemoTrade } from "@/infrastructure/persistence/demoTradingService";
+import { toMt5Symbol, type PendingOrderType } from "@/infrastructure/gateways/metaApiService";
+import { placeManualMarketOrder, placeManualPendingOrder } from "@/application/tradingIntel/manualOrders";
 import { detectAllSmc, type Bar } from "@/presentation/components/trading/smcDetect";
 import { sma, rsi } from "@/infrastructure/gateways/marketDataService";
 import type { IndicatorSnapshot } from "@/presentation/components/trading/CompanionStyleChart";
@@ -48,6 +47,12 @@ type Props = {
   onIndicators?: (snap: IndicatorSnapshot) => void;
   /** Star button — opens the strategies/most-profitable-setups picker. */
   onOpenStrategies?: () => void;
+  /**
+   * Replay: de grafiek toont precies deze candles (bars 0..cursor, zie
+   * domain/tradingIntel/replay) met deze posities en pijlen. Laden, live pollen
+   * en orders plaatsen staan dan uit — een replay is alleen-lezen.
+   */
+  replay?: { candles: MetaApiCandle[]; overlays: ChartOverlayRow[]; markers: ChartTradeMarker[] };
 };
 
 const TFS = ["m5", "m15", "h1", "h4", "d1"] as const;
@@ -59,7 +64,7 @@ const PAIRS = [
  *  matching MT5 (and Companion) rather than forcing one to always be visible. */
 type ExecutionMode = "market" | "limit" | null;
 
-export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies }: Props) {
+export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies, replay }: Props) {
   // Renaming the prop rather than threading a second variable through: every
   // existing `symbol` read -- broker symbol, digits, ticket, annotations, all
   // 38 of them -- then follows the picker. A chart showing one pair while the
@@ -102,8 +107,11 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
   const [tick, setTick] = useState<{ mid: number | null; bid: number | null; ask: number | null }>({ mid: null, bid: null, ask: null });
   const lastPrice = tick.mid ?? lastCandle?.close ?? null;
 
-  // Initial (and symbol/tf-change) candle load.
+  // Initial (and symbol/tf-change) candle load. Niet in replay: dan komen de
+  // candles van de replay en zou een eigen lading ze overschrijven.
+  const replayMode = replay != null;
   useEffect(() => {
+    if (replayMode) return;
     let cancelled = false;
     setLoadStatus("Loading candles…");
     void (async () => {
@@ -126,10 +134,28 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
     return () => {
       cancelled = true;
     };
-  }, [symbol, tf]);
+  }, [symbol, tf, replayMode]);
+
+  // Replay: de getoonde candles zijn precies die van de replay (bars 0..cursor).
+  // Eén bar vooruit = de nieuwe bar toevoegen (zoom blijft staan); elke andere
+  // sprong (terug, scrubben) = de data vervangen. Geen eigen state: de replay is
+  // de bron, en alles wat indicatoren tekent leest shownCandles.
+  const replayCandles = replay?.candles;
+  const shownCandles = replayCandles ?? candles;
+  const replayPrevRef = useRef<{ len: number; last: string | null }>({ len: 0, last: null });
+  useEffect(() => {
+    if (!replayCandles) return;
+    const prev = replayPrevRef.current;
+    const lastC = replayCandles[replayCandles.length - 1] ?? null;
+    const oneForward = prev.len > 0 && replayCandles.length === prev.len + 1
+      && replayCandles[prev.len - 1]?.time === prev.last;
+    replayPrevRef.current = { len: replayCandles.length, last: lastC?.time ?? null };
+    if (oneForward && lastC) canvasRef.current?.updateLastCandle(lastC);
+    else canvasRef.current?.replaceData(replayCandles);
+  }, [replayCandles]);
 
   const { status: liveStatus, reason: liveReason } = useLiveChartPolling({
-    enabled: true,
+    enabled: !replayMode,
     displaySymbol: symbol,
     brokerSymbol,
     timeframeKey: tf,
@@ -152,15 +178,15 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
 
   const bars: Bar[] = useMemo(
     () =>
-      candles
+      shownCandles
         .map((c) => ({ time: Math.floor(Date.parse(c.time) / 1000), open: c.open, high: c.high, low: c.low, close: c.close }))
         .filter((b) => Number.isFinite(b.time) && b.time > 0)
         .sort((a, b) => a.time - b.time),
-    [candles],
+    [shownCandles],
   );
   const smc = useMemo(() => detectAllSmc(bars), [bars]);
   useEffect(() => {
-    if (!onIndicators || !bars.length) return;
+    if (replayMode || !onIndicators || !bars.length) return;
     const ohlc = bars.map((b) => ({ t: b.time * 1000, o: b.open, h: b.high, l: b.low, c: b.close }));
     const closes = bars.map((b) => b.close);
     const last = closes[closes.length - 1] ?? 0;
@@ -187,7 +213,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
       bars: bars.length,
       lastVolume: candles[candles.length - 1]?.tickVolume ?? candles[candles.length - 1]?.volume ?? null,
     });
-  }, [bars, smc, symbol, tf, onIndicators]);
+  }, [bars, smc, symbol, tf, onIndicators, replayMode]);
 
   useEffect(() => {
     setAnnotations(loadAnnotations(symbol, tf));
@@ -311,7 +337,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
           setConfirmStatus({ kind: "error", message: "Missing entry price for pending order." });
           return;
         }
-        const pending = await brokerPlacePendingOrder({
+        const pending = await placeManualPendingOrder({
           symbol,
           type: confirmInput.orderType as PendingOrderType,
           qty: confirmInput.volume,
@@ -319,60 +345,38 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
           stopLoss: confirmInput.stopLoss,
           takeProfit: confirmInput.takeProfit,
           slippagePoints: confirmInput.slippagePoints,
-          reason: "Manual desk pending order",
-          confidence: 1,
         });
         if (pending.ok) {
           setConfirmStatus({ kind: "ok", message: `Pending ${confirmInput.orderType} placed @ ${confirmInput.openPrice}` });
           toast.success(`${confirmInput.orderType.toUpperCase()} ${confirmInput.volume} ${symbol} @ ${confirmInput.openPrice}`);
           setTimeout(() => setConfirmInput(null), 900);
         } else {
-          setConfirmStatus({ kind: "error", message: pending.error || "Pending order rejected" });
+          setConfirmStatus({ kind: "error", message: pending.stage === "gate" ? `Risk gate: ${pending.error}` : pending.error });
         }
         return;
       }
-      const broker = await brokerPlaceOrder({
+      // Eén route: poort, dan broker. Geen MetaAPI- of papieren terugval meer
+      // na een weigering — die omzeilde precies de controles die weigerden.
+      const res = await placeManualMarketOrder({
         symbol,
         side: confirmInput.side,
         qty: confirmInput.volume,
-        reason: "Manual desk execution",
-        confidence: 1,
+        stopLoss: confirmInput.stopLoss,
+        takeProfit: confirmInput.takeProfit,
       });
-      if (broker.ok) {
-        setConfirmStatus({ kind: "ok", message: `Sent via ${broker.venue || "broker"} @ ${broker.price ?? "mkt"}` });
+      if (res.ok) {
+        setConfirmStatus({ kind: "ok", message: `Sent via ${res.venue} @ ${res.price ?? "mkt"}` });
         toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol}`);
         setTimeout(() => setConfirmInput(null), 900);
-        return;
-      }
-      const meta = await metaApiMarketOrder({ symbol, side: confirmInput.side, volume: confirmInput.volume });
-      if (meta.ok) {
-        setConfirmStatus({ kind: "ok", message: "Sent to MetaAPI" });
-        toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol} via MetaAPI`);
-        setTimeout(() => setConfirmInput(null), 900);
-        return;
-      }
-      const price = lastPrice ?? 0;
-      const paper = await executeDemoTrade({
-        symbol,
-        side: confirmInput.side,
-        qty: confirmInput.volume,
-        price,
-        reason: "Manual desk (paper)",
-        confidence: 1,
-      });
-      if ("error" in paper) {
-        setConfirmStatus({ kind: "error", message: paper.error });
       } else {
-        setConfirmStatus({ kind: "ok", message: `Paper fill @ ${price}` });
-        toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol} (paper)`);
-        setTimeout(() => setConfirmInput(null), 900);
+        setConfirmStatus({ kind: "error", message: res.stage === "gate" ? `Risk gate: ${res.error}` : res.error });
       }
     } catch (e) {
       setConfirmStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusy(false);
     }
-  }, [confirmInput, symbol, lastPrice]);
+  }, [confirmInput, symbol]);
 
   return (
     <div className={className} style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
@@ -578,16 +582,17 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
       <div className="relative flex-1 min-h-[200px] lg:min-h-[420px]">
         <ChartCanvas
           ref={canvasRef}
-          candles={candles}
+          candles={shownCandles}
           reloadKey={reloadKey}
-          overlays={overlays}
-          pendingOrders={pendingOrders}
+          overlays={replay ? replay.overlays : overlays}
+          pendingOrders={replay ? [] : pendingOrders}
+          markers={replay?.markers}
           symbol={symbol}
           themeKey={themeKey}
           drawingMode={toolsState.drawingMode}
           onPointClick={handlePointClick}
         />
-        <ChartIndicatorLayer candles={candles} canvasRef={canvasRef} active={toolsState.active} isDark={isDark} />
+        <ChartIndicatorLayer candles={shownCandles} canvasRef={canvasRef} active={toolsState.active} isDark={isDark} />
         <div className="pointer-events-none absolute inset-0 z-[25]">
           <FibAnnotationLayer
             annotations={annotations}
@@ -800,21 +805,21 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
 
       {toolsState.panes.includes("vol") ? (
         <ResizablePane id="vol">
-          <IndicatorPane mode="volume" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+          <IndicatorPane mode="volume" candles={shownCandles} canvasRef={canvasRef} isDark={isDark} />
         </ResizablePane>
       ) : null}
       {toolsState.panes.includes("rsi") ? (
         <ResizablePane id="rsi">
-          <IndicatorPane mode="rsi" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+          <IndicatorPane mode="rsi" candles={shownCandles} canvasRef={canvasRef} isDark={isDark} />
         </ResizablePane>
       ) : null}
       {toolsState.panes.includes("macd") ? (
         <ResizablePane id="macd">
-          <IndicatorPane mode="macd" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+          <IndicatorPane mode="macd" candles={shownCandles} canvasRef={canvasRef} isDark={isDark} />
         </ResizablePane>
       ) : null}
 
-      {executionMode === null ? null : executionMode === "market" ? (
+      {replayMode || executionMode === null ? null : executionMode === "market" ? (
         <ChartExecutionBar
           symbol={symbol}
           bid={tick.bid ?? lastPrice}

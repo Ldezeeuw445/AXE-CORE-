@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — NorthSea Deal Desk on the plate</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   De Deal Desk van NorthSea Commodity Partners, op de AXE-plaat.
+
+   Zelfde indeling en dezelfde panelen als northseacommodity.com/desk:
+   commandobalk, KPI-strook, samenvatting, het raster
+     actions | deals  | deals
+     mail    | matches| health
+     money   | money  | blockers
+   en de activiteitenbalk onderin. Alleen het materiaal is anders: kaarten op
+   de plaat, inkt en lijnen in koper -- het merk -- in plaats van gevulde
+   vlakken. De koperen accentkleur is die van de site zelf (#C49B78).
+
+   De cijfers hier zijn illustratief; het echte bureau leest ze uit de
+   NorthSea-backend achter de ChatGPT-login.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root { --koper: #C49B78; --koper-rgb: 196, 155, 120; --koper-licht: #E8CDB4; }
+.c-koper { color: var(--koper); }
+
+.desk { display: grid; grid-template-rows: 46px auto 30px minmax(0, 1fr) 30px; gap: 8px; height: 100%; padding: 6px var(--onder) 0; min-height: 0; font-size: 12px; }
+
+/* Commandobalk */
+.dd-command { display: flex; align-items: center; gap: 14px; padding: 0 12px 0 10px; }
+.dd-brand { display: flex; align-items: center; gap: 10px; }
+.dd-mark { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--koper-licht); box-shadow: 0 0 0 1px rgba(var(--koper-rgb), .45) inset; background: var(--kaart-2); }
+.dd-mark svg { width: 16px; height: 18px; stroke: currentColor; stroke-width: 1.6; fill: none; }
+.dd-brand strong { display: block; font: 600 12px/1.1 var(--ui); letter-spacing: .16em; }
+.dd-brand small { display: block; font: 400 9.5px/1.2 var(--ui); letter-spacing: .1em; color: var(--ink-3); }
+.dd-brand .streep { width: 1px; height: 22px; background: rgba(255,255,255,.1); margin: 0 4px; }
+.dd-brand h1 { margin: 0; font: 600 11px/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); }
+.dd-command .rechts { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.dd-command .knop--rond { width: 26px; height: 26px; }
+
+/* KPI-strook: één kaart, haarlijnen ertussen; de verwachte commissie met
+   een koperen lijn links -- een lijn, geen vlak. */
+.dd-kpis { display: grid; grid-template-columns: 1.7fr repeat(5, 1fr); padding: 0; overflow: hidden; }
+.dd-kpi { display: grid; align-content: center; gap: 3px; padding: 10px 14px; min-width: 0; box-shadow: -1px 0 0 rgba(255,255,255,.06); }
+.dd-kpi:first-child { box-shadow: 3px 0 0 var(--koper) inset; padding-left: 18px; }
+.dd-kpi > span { font: 500 9.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.dd-kpi > strong { font: 500 22px/1.15 var(--ui); letter-spacing: -.01em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.dd-kpi:first-child > span { color: var(--koper); }
+.dd-kpi:first-child > strong { font-size: 30px; letter-spacing: -.02em; color: var(--koper-licht); }
+.dd-kpi > small { font-size: 10.5px; color: var(--ink-3); }
+.dd-kpi > small b { color: var(--ok); font-weight: 500; }
+
+/* Samenvatting */
+/* Ook de samenvatting ligt in een kaart: losse tekst op de plaat valt op
+   licht glas weg. */
+.dd-summary { display: flex; align-items: center; gap: 18px; height: 30px; padding: 0 12px; color: var(--ink-3); font-size: 11px; border-radius: 12px; }
+.dd-summary b { color: var(--ink); font-weight: 500; }
+.dd-summary em { font-style: normal; font-size: 9.5px; color: var(--ink-4); }
+.dd-sync { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font: 500 9.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+/* Het raster -- exact de gebieden van de site. */
+.dd-grid { display: grid; gap: 8px; min-height: 0;
+  grid-template: "actions deals deals" minmax(0, 1.14fr) "mail matches health" minmax(0, 1fr) "money money blockers" minmax(0, .8fr) / minmax(250px, .9fr) minmax(400px, 1.5fr) minmax(270px, 1fr); }
+.dd-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; }
+.dd-head { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 12px; box-shadow: 0 -1px 0 rgba(255,255,255,.05) inset; }
+.dd-head h2 { margin: 0; font: 600 10px/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); display: flex; align-items: center; gap: 7px; }
+.dd-head h2 .tel { font: 500 9.5px/1 var(--mono); color: var(--ink-3); padding: 2px 5px; border-radius: 4px; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset; }
+.dd-head .rechts { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.dd-head .knop--rond { width: 20px; height: 20px; background: none; box-shadow: none; color: var(--ink-3); }
+.dd-head .knop--rond svg.ic { width: 11px; height: 11px; }
+.dd-body { overflow: hidden; min-height: 0; }
+.dd-actions { grid-area: actions; } .dd-deals { grid-area: deals; } .dd-mail { grid-area: mail; } .dd-matches { grid-area: matches; } .dd-health { grid-area: health; } .dd-money { grid-area: money; } .dd-blockers { grid-area: blockers; }
+/* De actiekaart is het enige paneel met koperen kop -- zo op de site ook. */
+.dd-actions .dd-head h2 { color: var(--koper); }
+.dd-actions.kaart { box-shadow: var(--kaart-rand), var(--kaart-schaduw), 0 28px 56px -28px rgba(var(--koper-rgb), .28); }
+
+/* Acties */
+.dd-action { display: block; padding: 9px 12px; box-shadow: 0 -1px 0 rgba(255,255,255,.05) inset; }
+.dd-action.urgent { box-shadow: 0 -1px 0 rgba(255,255,255,.05) inset, 2px 0 0 var(--koper) inset; }
+.dd-action .rij { justify-content: space-between; }
+.dd-caption { font: 500 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--koper); }
+.dd-action small { font-size: 10px; color: var(--ink-3); }
+.dd-action strong { display: block; margin-top: 4px; font: 500 12px/1.3 var(--ui); color: var(--ink); }
+.dd-action p { margin: 3px 0 6px; font-size: 11px; line-height: 1.45; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dd-action footer { display: flex; align-items: center; justify-content: space-between; }
+.dd-action footer .open { color: var(--koper); font-size: 10.5px; }
+
+/* Tabel */
+.dd-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.dd-table th { text-align: left; height: 26px; padding: 0 10px; font: 500 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; box-shadow: 0 -1px 0 rgba(255,255,255,.05) inset; }
+.dd-table td { padding: 7px 10px; vertical-align: middle; color: var(--ink); box-shadow: 0 -1px 0 rgba(255,255,255,.04) inset; line-height: 1.35; }
+.dd-table td small { display: block; margin-top: 2px; font-size: 10px; color: var(--ink-3); }
+.dd-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.dd-route { display: flex; align-items: center; gap: 9px; min-width: 200px; }
+.dd-score { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; font: 500 14px/1 var(--ui); font-variant-numeric: tabular-nums; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.07) inset; color: var(--ink-2); flex: none; }
+.dd-score.strong { color: var(--koper-licht); box-shadow: 0 0 0 1px rgba(var(--koper-rgb), .5) inset; }
+.dd-score.weak { color: var(--ink-3); }
+.dd-next { font-size: 10.5px; color: var(--ink-2); max-width: 220px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Mail */
+.dd-mail-tools { display: flex; align-items: center; gap: 6px; padding: 6px 8px; box-shadow: 0 -1px 0 rgba(255,255,255,.05) inset; }
+.dd-mail-tools .filter { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; }
+.dd-mail-tools .filter button { height: 18px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: var(--ink-3); font: 500 10px/1 var(--ui); cursor: pointer; }
+.dd-mail-tools .filter button.aan { color: var(--ink); background: var(--barknop); box-shadow: var(--barknop-rand); }
+.dd-mail-tools .zoek { flex: 1; display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 10.5px; color: var(--ink-4); }
+.dd-mail-tools .zoek svg.ic { width: 11px; height: 11px; }
+.dd-mail-row { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; padding: 8px 10px; box-shadow: 0 -1px 0 rgba(255,255,255,.04) inset; align-items: start; }
+.dd-mail-row b { display: block; font: 500 11.5px/1.3 var(--ui); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-mail-row .knip { display: block; font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 2px 0; }
+.dd-mail-row small { display: block; font-size: 10px; color: var(--ink-3); }
+.dd-mail-row time { font: 400 10px/1 var(--mono); color: var(--ink-3); padding-top: 2px; }
+.dd-direction { width: 26px; height: 20px; display: grid; place-items: center; border-radius: 5px; font: 600 8.5px/1 var(--mono); letter-spacing: .06em; color: var(--ok); box-shadow: 0 0 0 1px rgba(46,242,194,.3) inset; }
+.dd-direction.out { color: var(--accent); box-shadow: 0 0 0 1px rgba(var(--accent-rgb), .3) inset; }
+
+/* Matches */
+.dd-match { padding: 9px 12px; box-shadow: 0 -1px 0 rgba(255,255,255,.04) inset; }
+.dd-match strong { font: 500 11.5px/1.3 var(--ui); color: var(--ink); }
+.dd-match strong span { color: var(--koper); padding: 0 4px; }
+.dd-match p { margin: 2px 0 5px; font-size: 10.5px; color: var(--ink-2); }
+.dd-facts { display: flex; flex-wrap: wrap; gap: 3px 10px; font: 400 9.5px/1.3 var(--mono); color: var(--ink-3); }
+.dd-match footer { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.dd-match footer small { font-size: 10px; color: var(--koper); }
+
+/* Health */
+.dd-health-counts { display: grid; grid-template-columns: 1fr 1fr; box-shadow: 0 -1px 0 rgba(255,255,255,.05) inset; }
+.dd-health-counts > div { padding: 8px 12px; }
+.dd-health-counts > div + div { box-shadow: -1px 0 0 rgba(255,255,255,.06); }
+.dd-health-counts span { font: 500 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.dd-health-counts strong { margin-left: 8px; font: 500 20px/1 var(--ui); color: var(--ink); }
+.dd-health-counts small { display: block; font-size: 10px; color: var(--ink-3); margin-top: 3px; }
+.dd-company { display: flex; justify-content: space-between; gap: 10px; padding: 7px 12px; box-shadow: 0 -1px 0 rgba(255,255,255,.04) inset; }
+.dd-company b { font: 500 11.5px/1.3 var(--ui); color: var(--ink); }
+.dd-company small { display: block; font-size: 10px; color: var(--ink-3); margin-top: 2px; }
+.dd-company .chip { height: 18px; font-size: 9.5px; flex: none; }
+
+/* Money & blockers */
+.dd-money-note { display: flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 10.5px; color: var(--koper); }
+.dd-blocker { padding: 8px 12px; box-shadow: 0 -1px 0 rgba(255,255,255,.04) inset; }
+.dd-blocker strong { font: 500 11.5px/1.3 var(--ui); color: var(--ink); }
+.dd-blocker p { margin: 3px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--koper); }
+
+/* Activiteit */
+.dd-activity { display: flex; align-items: center; gap: 16px; padding: 0 12px; overflow: hidden; white-space: nowrap; }
+.dd-activity > b { font: 500 9.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.dd-activity > div { display: flex; gap: 18px; overflow: hidden; }
+.dd-activity button { border: 0; background: none; color: var(--ink-2); font-size: 10.5px; padding: 0; }
+.dd-activity button > span { color: var(--koper); margin-right: 5px; font: 500 10px/1 var(--mono); }
+.dd-activity small { margin-left: 5px; font-size: 9.5px; color: var(--ink-4); }
+
+.chip--koper { color: var(--koper); box-shadow: 0 0 0 1px rgba(var(--koper-rgb), .35) inset; }
+.chip--klein { height: 18px; font-size: 9.5px; padding: 0 7px; }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="desk">
+
+      <div class="dd-command kaart">
+        <a class="knop knop--stil" href="home.html" style="color:var(--ink-3)"><span data-ic="pijl" style="display:inline-flex;transform:scaleX(-1)"></span> Home</a>
+        <div class="dd-brand">
+          <span class="dd-mark"><svg viewBox="0 0 48 54"><path d="M5 46V8l38 38V8M14 8v38M34 8v38"/></svg></span>
+          <div><strong>NORTHSEA</strong><small>Commodity Partners</small></div>
+          <span class="streep"></span>
+          <h1>Deal Desk</h1>
+        </div>
+        <span class="chip chip--klein c-3">Private workspace · Luka</span>
+        <div class="rechts">
+          <span class="chip chip--klein c-ok"><i class="stip"></i> Mail synced</span>
+          <span class="chip chip--klein c-ok"><i class="stip"></i> Supabase</span>
+          <span class="chip chip--klein c-warn"><i class="stip"></i> 3 blockers</span>
+          <span class="t-mono c-3">KvK 74239422</span>
+          <button class="knop knop--rond" data-ic="zoek"></button>
+          <button class="knop knop--rond" data-ic="herlaad"></button>
+          <button class="knop knop--rond" data-ic="tandwiel"></button>
+          <a class="knop" href="#"><span data-ic="pijl"></span> northseacommodity.com</a>
+        </div>
+      </div>
+
+      <div class="dd-kpis kaart">
+        <div class="dd-kpi"><span>Expected commission · Q3</span><strong>€ 412 500</strong><small>weighted by score · <b>+€ 38 000</b> vs last week</small></div>
+        <div class="dd-kpi"><span>Open deals</span><strong>7</strong><small>2 at LOI, 1 in sampling</small></div>
+        <div class="dd-kpi"><span>Active buyers</span><strong>12</strong><small>8 with live demand</small></div>
+        <div class="dd-kpi"><span>Active suppliers</span><strong>9</strong><small>6 verified · 3 in KYC</small></div>
+        <div class="dd-kpi"><span>Unread mail</span><strong>14</strong><small>5 inbound today</small></div>
+        <div class="dd-kpi"><span>Next deadline</span><strong>Sep 15</strong><small>SGS slot · Hamburg</small></div>
+      </div>
+
+      <div class="dd-summary kaart">
+        <span><b>Cu cathode</b> 3 routes <em>· 1 700 MT/mo</em></span>
+        <span><b>Cu scrap</b> 2 routes <em>· 450 MT</em></span>
+        <span><b>Al ingot A7</b> 1 route <em>· 1 000 MT</em></span>
+        <span><b>Zn SHG</b> 1 route <em>· 300 MT</em></span>
+        <span><b>LME Cu</b> <span class="t-mono c-ok">$ 9 842 · +0.6%</span></span>
+        <span class="dd-sync c-3"><i class="stip c-ok"></i> synced 23:06 · mail 23:04 · LME 23:07</span>
+      </div>
+
+      <div class="dd-grid">
+        <section class="dd-panel kaart dd-actions">
+          <div class="dd-head"><h2><span data-ic="vonk"></span> Next actions <span class="tel">4</span></h2><span class="rechts"><button class="knop knop--rond" data-ic="herlaad"></button></span></div>
+          <div class="dd-body">
+            <div class="dd-action urgent">
+              <div class="rij"><span class="dd-caption">Counter-offer · today</span><small>due 17:00</small></div>
+              <strong>Send counter-offer to Meridian Metals</strong>
+              <p>They accept CIF Rotterdam but want LME −2.1%. Our floor is −1.6%; Andes will move to −1.8% on 12-month volume.</p>
+              <footer><span class="chip chip--klein chip--koper">Cu cathode · 500 MT/mo</span><span class="open">Open →</span></footer>
+            </div>
+            <div class="dd-action">
+              <div class="rij"><span class="dd-caption">Inspection</span><small>slot closes Sep 13</small></div>
+              <strong>Book SGS inspection · Hamburg warehouse</strong>
+              <p>Berry/Candy scrap, 200 MT. Supplier confirmed access; buyer pays inspection on positive result.</p>
+              <footer><span class="chip chip--klein">Cu scrap · 200 MT</span><span class="open">Open →</span></footer>
+            </div>
+            <div class="dd-action">
+              <div class="rij"><span class="dd-caption">Compliance</span><small>waiting 6 days</small></div>
+              <strong>Chase KYC pack · Al Rashid Trading</strong>
+              <p>Missing: UBO declaration and bank reference. Deal cannot move to LOI without both.</p>
+              <footer><span class="chip chip--klein">Al ingot · 1 000 MT</span><span class="open">Open →</span></footer>
+            </div>
+            <div class="dd-action">
+              <div class="rij"><span class="dd-caption">Paperwork</span><small>draft ready</small></div>
+              <strong>Draft NCNDA · Kazzinc route</strong>
+              <p>Template v3 with Dutch law clause. Send to both sides for signature before pricing is disclosed.</p>
+              <footer><span class="chip chip--klein">Zn SHG · 300 MT</span><span class="open">Open →</span></footer>
+            </div>
+          </div>
+        </section>
+
+        <section class="dd-panel kaart dd-deals">
+          <div class="dd-head"><h2><span data-ic="grafiek"></span> Deals <span class="tel">7</span></h2><span class="rechts"><span class="chip chip--klein chip--aan">by score</span><span class="chip chip--klein">by value</span><button class="knop knop--rond" data-ic="plus"></button></span></div>
+          <div class="dd-body">
+            <table class="dd-table">
+              <thead><tr><th>Route</th><th>Score</th><th>Stage</th><th class="num">Value / mo</th><th class="num">Commission</th><th>Next step</th></tr></thead>
+              <tbody>
+                <tr><td><div class="dd-route"><span class="dd-score strong">82</span><span><b>Andes Copper SpA → Meridian Metals</b><small>Cu cathode 99.99% Grade A · 500 MT/mo · CIF Rotterdam</small></span></div></td><td class="t-mono c-3">strong</td><td><span class="c-ok"><i class="stip"></i> LOI signed</span></td><td class="num">$ 4.62 M</td><td class="num c-koper">0.75%</td><td><span class="dd-next">Buyer's bank comfort letter, then SPA draft.</span></td></tr>
+                <tr><td><div class="dd-route"><span class="dd-score">71</span><span><b>Rheinmetall Recycling → Baltic Cast</b><small>Cu scrap Berry/Candy · 200 MT · FOB Hamburg</small></span></div></td><td class="t-mono c-3">good</td><td><span class="c-warn"><i class="stip"></i> Sampling</span></td><td class="num">$ 1.51 M</td><td class="num c-koper">1.0%</td><td><span class="dd-next">SGS inspection slot; buyer pays on positive result.</span></td></tr>
+                <tr><td><div class="dd-route"><span class="dd-score">64</span><span><b>Al Rashid Trading → Vlissingen Alloys</b><small>Al ingot A7 · 1 000 MT · CIF Vlissingen</small></span></div></td><td class="t-mono c-3">good</td><td><span class="c-warn"><i class="stip"></i> KYC</span></td><td class="num">$ 2.40 M</td><td class="num c-koper">0.5%</td><td><span class="dd-next">Supplier proof of product; UBO declaration outstanding.</span></td></tr>
+                <tr><td><div class="dd-route"><span class="dd-score">58</span><span><b>Kazzinc → Nordic Galvanising</b><small>Zn SHG 99.995% · 300 MT · CIF Rotterdam</small></span></div></td><td class="t-mono c-3">fair</td><td><span class="c-2"><i class="stip"></i> NCNDA</span></td><td class="num">$ 0.86 M</td><td class="num c-koper">1.0%</td><td><span class="dd-next">NCNDA signatures, then indicative pricing.</span></td></tr>
+                <tr><td><div class="dd-route"><span class="dd-score weak">47</span><span><b>Minera Sur → Atlantic Copper</b><small>Cu concentrate 25% · 5 000 MT · CIF Huelva</small></span></div></td><td class="t-mono c-3">weak</td><td><span class="c-2"><i class="stip"></i> Sourcing</span></td><td class="num">$ 3.10 M</td><td class="num c-koper">0.4%</td><td><span class="dd-next">Assay certificate missing; smelter wants 26%+.</span></td></tr>
+                <tr><td><div class="dd-route"><span class="dd-score">66</span><span><b>Zambia Metals → Meridian Metals</b><small>Cu cathode 99.99% · 700 MT/mo · CIF Antwerp</small></span></div></td><td class="t-mono c-3">good</td><td><span class="c-2"><i class="stip"></i> Indication</span></td><td class="num">$ 6.47 M</td><td class="num c-koper">0.5%</td><td><span class="dd-next">Buyer wants Rotterdam; check freight delta.</span></td></tr>
+                <tr><td><div class="dd-route"><span class="dd-score weak">39</span><span><b>Anatolia Scrap → Baltic Cast</b><small>Cu scrap Birch/Cliff · 250 MT · FOB Izmir</small></span></div></td><td class="t-mono c-3">weak</td><td><span class="c-err"><i class="stip"></i> On hold</span></td><td class="num">$ 1.72 M</td><td class="num c-koper">1.0%</td><td><span class="dd-next">Supplier unresponsive 9 days; park until Sep 20.</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="dd-panel kaart dd-mail">
+          <div class="dd-head"><h2><span data-ic="bel"></span> Correspondence <span class="tel">14</span></h2><span class="rechts"><button class="knop knop--rond" data-ic="plus"></button></span></div>
+          <div class="dd-body">
+            <div class="dd-mail-tools"><span class="filter kaart--in"><button class="aan">All</button><button>Inbound</button><button>Outbound</button></span><span class="zoek kaart--in"><span data-ic="zoek"></span> Search mail…</span></div>
+            <div class="dd-mail-row"><span class="dd-direction">IN</span><span><b>RE: Cu cathode 500 MT — pricing</b><span class="knip">We can accept CIF Rotterdam. On the discount, LME −2.1% is our…</span><small>j.vermeer@meridianmetals.eu · Meridian Metals</small></span><time>22:41</time></div>
+            <div class="dd-mail-row"><span class="dd-direction out">OUT</span><span><b>SGS inspection request — Hamburg, 200 MT</b><span class="knip">Please confirm slot on 13 September. Access arranged by supplier…</span><small>to inspections.de@sgs.com</small></span><time>19:12</time></div>
+            <div class="dd-mail-row"><span class="dd-direction">IN</span><span><b>KYC documents — Al Rashid Trading LLC</b><span class="knip">Attached: trade licence, passport copies. UBO declaration to follow…</span><small>compliance@alrashidtrading.ae</small></span><time>16:55</time></div>
+            <div class="dd-mail-row"><span class="dd-direction">IN</span><span><b>Indication: 700 MT/mo cathode, Antwerp</b><span class="knip">Kindly find our soft offer for Q4 delivery. Origin Zambia, Grade A…</span><small>trade@zambiametals.com</small></span><time>14:03</time></div>
+            <div class="dd-mail-row"><span class="dd-direction out">OUT</span><span><b>NCNDA draft v3 — Zn SHG route</b><span class="knip">Attached the NCNDA under Dutch law for review by both parties…</span><small>to legal@kazzinc.kz, procurement@nordicgalv.se</small></span><time>11:20</time></div>
+          </div>
+        </section>
+
+        <section class="dd-panel kaart dd-matches">
+          <div class="dd-head"><h2><span data-ic="schakel"></span> Matches <span class="tel">3</span></h2><span class="rechts"><span class="chip chip--klein c-3">AXE · auto-matched</span></span></div>
+          <div class="dd-body">
+            <div class="dd-match"><strong>Meridian Metals <span>×</span> Zambia Metals</strong><p>Buyer's open demand for 700 MT/mo cathode matches the new Zambia indication; only the port differs.</p><div class="dd-facts"><span>Cu cathode</span><span>700 MT/mo</span><span>Antwerp → Rotterdam?</span><span>LME −1.9%</span></div><footer><span class="chip chip--klein chip--koper">score 66</span><small>freight delta ≈ $ 4/MT</small></footer></div>
+            <div class="dd-match"><strong>Baltic Cast <span>×</span> Anatolia Scrap</strong><p>Grade fits (Birch/Cliff) but supplier silent since Sep 2. Keep as backup for the Hamburg lot.</p><div class="dd-facts"><span>Cu scrap</span><span>250 MT</span><span>FOB Izmir</span></div><footer><span class="chip chip--klein">score 39</span><small>supplier unresponsive</small></footer></div>
+            <div class="dd-match"><strong>Nordic Galvanising <span>×</span> Kazzinc</strong><p>Exact spec match on SHG 99.995%; volume is small but repeat business likely (monthly).</p><div class="dd-facts"><span>Zn SHG</span><span>300 MT</span><span>CIF Rotterdam</span></div><footer><span class="chip chip--klein">score 58</span><small>NCNDA pending</small></footer></div>
+          </div>
+        </section>
+
+        <section class="dd-panel kaart dd-health">
+          <div class="dd-head"><h2><span data-ic="hart"></span> Counterparty health</h2><span class="rechts"><button class="knop knop--rond" data-ic="herlaad"></button></span></div>
+          <div class="dd-body">
+            <div class="dd-health-counts"><div><span>Buyers</span><strong>12</strong><small>8 active · 2 idle · 2 new</small></div><div><span>Suppliers</span><strong>9</strong><small>6 verified · 3 in KYC</small></div></div>
+            <div class="dd-company"><span><b>Meridian Metals</b><small>Buyer · Rotterdam · 2 deals</small></span><span class="chip chip--klein c-ok"><i class="stip"></i> Verified</span></div>
+            <div class="dd-company"><span><b>Andes Copper SpA</b><small>Supplier · Santiago · POP on file</small></span><span class="chip chip--klein c-ok"><i class="stip"></i> Verified</span></div>
+            <div class="dd-company"><span><b>Al Rashid Trading</b><small>Supplier · Dubai · KYC 60%</small></span><span class="chip chip--klein c-warn"><i class="stip"></i> KYC</span></div>
+            <div class="dd-company"><span><b>Anatolia Scrap</b><small>Supplier · Izmir · silent 9 d</small></span><span class="chip chip--klein c-err"><i class="stip"></i> Stale</span></div>
+            <div class="dd-company"><span><b>Nordic Galvanising</b><small>Buyer · Gothenburg · new</small></span><span class="chip chip--klein c-2"><i class="stip"></i> New</span></div>
+          </div>
+        </section>
+
+        <section class="dd-panel kaart dd-money">
+          <div class="dd-head"><h2><span data-ic="beurs"></span> Commissions</h2><span class="rechts"><span class="chip chip--klein c-3">invoiced via AXE Headquarters · NL002314900B21</span></span></div>
+          <div class="dd-body">
+            <table class="dd-table">
+              <thead><tr><th>Deal</th><th class="num">Basis</th><th class="num">Rate</th><th class="num">Expected</th><th>Status</th><th>Due</th></tr></thead>
+              <tbody>
+                <tr><td>Andes → Meridian · Cu cathode</td><td class="num">$ 4.62 M / mo</td><td class="num">0.75%</td><td class="num c-koper">€ 31 800 / mo</td><td><span class="c-ok"><i class="stip"></i> Agreement</span></td><td class="t-mono">on B/L</td></tr>
+                <tr><td>Rheinmetall → Baltic · Cu scrap</td><td class="num">$ 1.51 M</td><td class="num">1.0%</td><td class="num c-koper">€ 13 900</td><td><span class="c-warn"><i class="stip"></i> Pending SGS</span></td><td class="t-mono">Sep 20</td></tr>
+                <tr><td>Al Rashid → Vlissingen · Al ingot</td><td class="num">$ 2.40 M</td><td class="num">0.5%</td><td class="num c-koper">€ 11 000</td><td><span class="c-2"><i class="stip"></i> Indicative</span></td><td class="t-mono">Oct</td></tr>
+              </tbody>
+            </table>
+            <div class="dd-money-note"><span data-ic="schild"></span> Intermediary only — NorthSea takes no title unless a transaction-specific agreement says so.</div>
+          </div>
+        </section>
+
+        <section class="dd-panel kaart dd-blockers">
+          <div class="dd-head"><h2><span data-ic="stop"></span> Blockers <span class="tel">3</span></h2></div>
+          <div class="dd-body">
+            <div class="dd-blocker"><strong>UBO declaration · Al Rashid Trading</strong><p>Deal can't move to LOI. Chased twice; escalate to the managing partner.</p></div>
+            <div class="dd-blocker"><strong>Assay certificate · Minera Sur</strong><p>Smelter needs ≥ 26% Cu. Ask for the latest lab report or drop the route.</p></div>
+            <div class="dd-blocker"><strong>Port mismatch · Zambia → Meridian</strong><p>Buyer insists on Rotterdam; supplier quotes Antwerp. Freight delta must be priced in.</p></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="dd-activity kaart">
+        <b>Activity</b>
+        <div>
+          <button><span>22:41</span>Meridian replied on cathode pricing<small>mail</small></button>
+          <button><span>21:10</span>AXE re-scored Zambia route 61 → 66<small>match</small></button>
+          <button><span>19:12</span>SGS inspection requested<small>mail</small></button>
+          <button><span>16:55</span>KYC pack received (partial)<small>compliance</small></button>
+          <button><span>14:03</span>New supplier indication · Zambia Metals<small>deal</small></button>
+          <button><span>11:20</span>NCNDA v3 sent · Zn route<small>paperwork</small></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="draft the counter-offer to Meridian at LME −1.8%, 12-month volume"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="toekomst.js"></script>
+<script>
+AXE.start({
+  dok: 'Home',
+  chat: { dicht: true },   // het bureau heeft de hoogte nodig; de chat klapt dicht, zoals chatDicht in de app
+  topbalk: { links: `<a class="chip chip--klein" href="home.html" style="text-decoration:none;color:var(--ink-2)">${AXE.ic('home')} Back to Home</a>` }
+});
+</script>
+</body>
+</html>

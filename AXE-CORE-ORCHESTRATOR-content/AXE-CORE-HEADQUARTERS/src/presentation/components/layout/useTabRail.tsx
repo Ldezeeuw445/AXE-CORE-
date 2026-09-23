@@ -19,10 +19,30 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useUIStore } from '@/presentation/store/uiStore';
 
 const HOST_ID = { links: 'axe-rail-links', rechts: 'axe-rail-rechts' } as const;
+const VAST_SLEUTEL = { links: 'railVastL', rechts: 'railVastR' } as const;
 
-export function TabRail({ kant, children }: { kant: 'links' | 'rechts'; children: ReactNode }) {
+/**
+ * `vast` houdt de lade open.
+ *
+ * De lade gaat normaal open als je muis binnen 34px van de rand komt
+ * (AxeShellChrome). Dat werkt voor een lade die je zoekt, maar niet voor een
+ * paneel dat ANTWOORDT op een klik: je klikt een tegenpartij aan, het detail
+ * verschijnt in de lade, en de lade is dicht. De rij licht op en verder
+ * gebeurt er niets zichtbaars -- gemeten in de QA van 16 september.
+ *
+ * Staat er een gekozen record in, dan zet het tabblad `vast` en blijft de lade
+ * open tot je hem sluit. Zonder keuze blijft het gewoon de rand-lade.
+ *
+ * `vast` doet TWEE dingen, en het tweede is waar de eerste versie op stukliep:
+ * de rand-lade van de plaat opentrekken (data-rail-r) EN het rechterpaneel
+ * zelf. Staat dat ingeklapt, dan is de gastheer `hidden` en portaleert het
+ * tabblad zijn detail in een onzichtbare doos -- precies wat je zag: de rij
+ * lichtte op en verder gebeurde er niets.
+ */
+export function TabRail({ kant, children, vast }: { kant: 'links' | 'rechts'; children: ReactNode; vast?: boolean }) {
   const [gastheer, setGastheer] = useState<HTMLElement | null>(
     () => (typeof document === 'undefined' ? null : document.getElementById(HOST_ID[kant])),
   );
@@ -48,6 +68,24 @@ export function TabRail({ kant, children }: { kant: 'links' | 'rechts'; children
     obs.observe(document.body, { childList: true, subtree: true });
     return () => obs.disconnect();
   }, [kant]);
+
+  const setRightPanelOpen = useUIStore(st => st.setRightPanelOpen);
+  const setLeftPanelOpen = useUIStore(st => st.setLeftPanelOpen);
+
+  useEffect(() => {
+    const wortel = document.documentElement;
+    const sleutel = VAST_SLEUTEL[kant];
+    /* Alleen op de overgang naar `vast`, niet elke render: daarna mag je het
+       paneel gewoon dichtklappen zonder dat het meteen terugkomt. */
+    if (vast) (kant === 'rechts' ? setRightPanelOpen : setLeftPanelOpen)(true);
+    if (vast) {
+      wortel.dataset[sleutel] = 'aan';
+      wortel.dataset[kant === 'rechts' ? 'railR' : 'railL'] = 'open';
+    } else {
+      delete wortel.dataset[sleutel];
+    }
+    return () => { delete wortel.dataset[sleutel]; };
+  }, [kant, vast, setRightPanelOpen, setLeftPanelOpen]);
 
   return gastheer ? createPortal(children, gastheer) : null;
 }

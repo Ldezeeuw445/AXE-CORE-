@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Browser · the yardstick, with the sphere floating</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Het browserchroom: één kaartband over de volle tabruimte. */
+.chroom { width: var(--tabruimte); margin: 8px auto 0; height: 40px; display: grid; grid-template-columns: 1fr minmax(320px, 520px) 1fr; align-items: center; gap: 12px; padding: 0 10px; border-radius: var(--r-kaart); }
+.chroom .links, .chroom .rechts { display: flex; align-items: center; gap: 4px; }
+.chroom .rechts { justify-content: flex-end; }
+.chroom .knop--rond { width: 26px; height: 26px; background: none; box-shadow: none; color: var(--ink-3); }
+.chroom .tabblad { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; margin-left: 6px; border-radius: var(--r-knop); background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; font-size: 11.5px; color: var(--ink); }
+.chroom .tabblad .knop--rond { width: 16px; height: 16px; }
+.chroom .adres { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: var(--r-pil); background: var(--bar); box-shadow: var(--bar-schaduw); color: var(--ink-3); font-size: 11.5px; }
+.chroom .adres .groei { color: var(--ink-4); }
+
+/* De startpagina: vrij op de plaat, uitgelijnd op de band (regel 7). */
+.start { width: var(--band); margin: 26px auto 0; display: grid; gap: 12px; }
+.start .titel { display: flex; align-items: center; gap: 8px; font: 600 12px/1 var(--ui); }
+.start .titel .c-accent { font-size: 10px; }
+.rij3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.veld { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; font-size: 11.5px; color: var(--ink-3); }
+.veld .klok { font: 500 12px/1 var(--mono); color: var(--ink); }
+.veld svg.ic { width: 13px; height: 13px; }
+.ai { padding: 12px 14px; display: grid; gap: 8px; }
+.ai .kop { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; }
+.ai .kop b { font-weight: 600; font-size: 12px; display: block; }
+.ai .kop small { font-size: 10.5px; color: var(--ink-3); }
+.ai .logo { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
+.ai .logo svg.ic { width: 12px; height: 12px; }
+.ai .invoer { height: 30px; padding: 0 10px; display: flex; align-items: center; font-size: 11px; color: var(--ink-4); }
+.ai .voet { display: flex; align-items: center; gap: 6px; }
+.ai .voet .stuur { width: 22px; height: 22px; margin-left: auto; border-radius: 50%; }
+.snel { display: grid; gap: 8px; }
+.snel .t-label { padding-left: 2px; }
+.raster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.snelkoppeling { height: 46px; display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 10px; padding: 0 12px; font-size: 11.5px; color: var(--ink); cursor: pointer; }
+.snelkoppeling .logo { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; color: var(--ink-2); }
+.snelkoppeling .logo svg.ic { width: 13px; height: 13px; }
+.snelkoppeling small { display: block; font-size: 10px; color: var(--ink-4); }
+
+/* De bol als zwever: ruit, rechtsboven, met een HUD-regel eronder. */
+.bolwidget { right: 34px; top: 96px; width: 232px; height: 258px; border-radius: var(--r-ruit); }
+.bolwidget .greep { top: 8px; }
+.bolwidget canvas { position: absolute; left: 0; right: 0; top: 14px; height: 196px; width: 100%; }
+.bolwidget .voet { position: absolute; left: 12px; right: 12px; bottom: 10px; display: flex; align-items: center; gap: 8px; font: 500 9.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.bolwidget .voet .knop--rond { width: 20px; height: 20px; background: none; box-shadow: none; color: var(--ink-3); margin-left: auto; }
+.bolwidget .voet .knop--rond svg.ic { width: 11px; height: 11px; }
+.bolwidget .voet .knop--rond + .knop--rond { margin-left: 0; }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="chroom kaart">
+      <div class="links">
+        <button class="knop knop--rond" data-ic="pijl" style="transform:scaleX(-1)"></button>
+        <button class="knop knop--rond" data-ic="pijl"></button>
+        <button class="knop knop--rond" data-ic="herlaad"></button>
+        <button class="knop knop--rond" data-ic="home"></button>
+        <span class="tabblad">New Tab <button class="knop knop--rond" data-ic="kruis"></button></span>
+        <button class="knop knop--rond" data-ic="plus"></button>
+      </div>
+      <div class="adres"><span data-ic="zoek"></span><span class="groei">Search or enter address</span><span class="c-accent" data-ic="vonk"></span><span class="c-3" data-ic="mic"></span></div>
+      <div class="rechts">
+        <span class="chip c-ok"><i class="stip"></i> Camofox</span>
+        <button class="knop knop--rond" data-ic="schild"></button>
+        <button class="knop knop--rond" data-ic="ster"></button>
+        <button class="knop knop--rond" data-ic="layers"></button>
+        <button class="knop knop--rond" data-ic="tandwiel"></button>
+      </div>
+    </div>
+
+    <section class="start">
+      <div class="titel"><span class="c-accent">▲</span> AXE Browser</div>
+      <div class="rij3">
+        <div class="veld kaart"><span class="klok">11:57 PM</span><span class="c-4">· Friday</span></div>
+        <div class="veld kaart"><span class="c-accent" data-ic="vonk"></span> Try AXE Assistant</div>
+        <div class="veld kaart"><span data-ic="zoek"></span> Search or configure settings</div>
+      </div>
+      <div class="rij3">
+        <div class="ai kaart kaart--klik">
+          <div class="kop"><span class="logo c-violet" data-ic="brein"></span><span><b>DeepSeek</b><small>Reasoning model · fast, cheap, in your browser</small></span></div>
+          <div class="invoer kaart--in">Message DeepSeek…</div>
+          <div class="voet"><span class="chip chip--aan">deepseek-r1</span><span class="chip">search</span><span class="knop knop--rond stuur c-violet" data-ic="pijl"></span></div>
+        </div>
+        <div class="ai kaart kaart--klik kaart--actief">
+          <div class="kop"><span class="logo c-ok" data-ic="bot"></span><span><b>Browser Use</b><small>Give the agent a task; it navigates, reads and acts</small></span></div>
+          <div class="invoer kaart--in">Describe a task for the browser agent…</div>
+          <div class="voet"><span class="chip chip--aan"><i class="stip c-ok"></i> autonomous</span><span class="chip">scrape</span><span class="knop knop--rond stuur c-ok" data-ic="pijl"></span></div>
+        </div>
+        <div class="ai kaart kaart--klik">
+          <div class="kop"><span class="logo c-err" data-ic="schild"></span><span><b>Camofox</b><small>Stealth browsing · fingerprint-rotating, undetected</small></span></div>
+          <div class="invoer kaart--in">Give Camofox a stealth browsing task…</div>
+          <div class="voet"><span class="chip">stealth</span><span class="chip">research</span><span class="knop knop--rond stuur c-err" data-ic="pijl"></span></div>
+        </div>
+      </div>
+      <div class="snel">
+        <div class="t-label">shortcuts</div>
+        <div class="raster">
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="zoek"></span><span>Google<small>google.com</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="tak"></span><span>GitHub<small>github.com/luka</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="driehoek"></span><span>Vercel<small>3 deployments</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo c-ok" data-ic="server"></span><span>Supabase<small>axe-core · healthy</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="globe"></span><span>Cloudflare<small>axecompanion.com</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="beurs"></span><span>Railway<small>2 services</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="boek"></span><span>Notion<small>workspace</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="vonk"></span><span>ChatGPT<small>chatgpt.com</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="kompas"></span><span>Perplexity<small>research</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo c-amber" data-ic="ster"></span><span>Claude<small>claude.ai</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="cpu"></span><span>Google AI<small>aistudio</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="maan"></span><span>Kimi<small>kimi.ai</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="stekker"></span><span>OpenAI<small>platform</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo" data-ic="schild"></span><span>Brave<small>search</small></span></div>
+          <div class="snelkoppeling kaart kaart--klik"><span class="logo c-accent" data-ic="driehoek"></span><span class="c-accent">AXE<small>api.axecompanion.com</small></span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="open the Supabase dashboard and check core_agents"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<div class="zweeflaag">
+  <div class="zwever ruit ruit--actief bolwidget" data-zweef="bol">
+    <span class="greep" data-greep></span>
+    <canvas data-bol data-schaal="0.40" data-roty="1.2" data-t0="3"></canvas>
+    <div class="voet">
+      <i class="stip c-ok"></i> AXE Core · <span class="c-ok">live</span> · 19 038
+      <button class="knop knop--rond" title="Back to Home" data-ic="home"></button>
+      <button class="knop knop--rond" title="Hide" data-ic="kruis"></button>
+    </div>
+  </div>
+</div>
+
+<script src="toekomst.js"></script>
+<script>AXE.start({ dok: 'Browser', chat: {} });</script>
+</body>
+</html>

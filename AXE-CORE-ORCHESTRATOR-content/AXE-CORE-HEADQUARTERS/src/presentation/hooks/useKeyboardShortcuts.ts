@@ -26,6 +26,9 @@ const TAB_SHORTCUTS: Record<string, string> = {
   r: '/trading',
   e: '/code-editor',
   v: '/eve',
+  b: '/browser',
+  n: '/maps-3d',
+  u: '/computer-use',
 };
 
 export function useKeyboardShortcuts({

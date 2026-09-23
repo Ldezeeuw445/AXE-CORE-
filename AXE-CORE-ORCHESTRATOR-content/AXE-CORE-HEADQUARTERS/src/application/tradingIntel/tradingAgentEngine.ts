@@ -35,10 +35,27 @@ import { fetchTradeableSnapshot, rsi, sma, atr } from '@/infrastructure/gateways
 import { getRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import {
   getLearningStats,
+  learnedKnobsFor,
   saveThinkingTrace,
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
+import { buildDecisionVerdict } from '@/domain/tradingIntel/decisionVerdict';
+import { evaluatePreTradeGate } from '@/domain/tradingIntel/preTradeGate';
 import {
+  loadInstrumentSpec,
+  resolveOrderAccount,
+  rulesFromSnapshot,
+  sizingBaseAmount,
+  tripOnHardBreach,
+} from '@/application/tradingIntel/preTradeGateService';
+import { readAccountRiskSnapshot } from '@/infrastructure/gateways/accountRiskSnapshot';
+import { sizeLotsForRisk } from '@/domain/tradingIntel/positionSizing';
+import { LIVE_REWARD_RISK, LIVE_SL_ATR_MULTIPLE, protectiveLevels } from '@/domain/tradingIntel/strategyLab/tradePlan';
+import { trailingBreakerThreshold } from '@/domain/tradingIntel/accountRules';
+import { evidencePolicyFor, type EvidencePolicy } from '@/domain/tradingIntel/evidence';
+import { accountEnvironment } from '@/infrastructure/persistence/tradingAccountsService';
+import {
+  brokerCloseLongs,
   brokerPlaceOrder,
   getEffectiveAccountState,
   brokerOpeningsTodayFor,
@@ -73,8 +90,9 @@ function signalToBias(signal: string): number {
 // ATR-based sizing (1.5x recent volatility for the stop, 1.5R for the
 // target) instead of a fixed %, so the stop distance actually reflects how
 // much this specific symbol has been moving.
-const SL_ATR_MULTIPLE = 1.5;
-const REWARD_RISK_RATIO = 1.5;
+// Eén definitie, gedeeld met de Strategy Lab (strategyLab/tradePlan).
+const SL_ATR_MULTIPLE = LIVE_SL_ATR_MULTIPLE;
+const REWARD_RISK_RATIO = LIVE_REWARD_RISK;
 
 /**
  * Builds the same StrategySeries shape backtestEngine uses, from live bars —
@@ -113,13 +131,16 @@ import { loadLastFunnelRun } from '@/application/tradingIntel/runDecisionFunnel'
  */
 async function edgeMultiplierFor(
   symbol: string, strategy: string | undefined, run: string | undefined,
+  /** Alleen bewijs dat dit account mag gebruiken (evidence.ts): een funded
+   *  account wordt niet groter gesized op demo- of papieren uitkomsten. */
+  evidence: EvidencePolicy,
 ): Promise<SizingDecision> {
   const r = run ?? DEFAULT_RUN;
   if (!strategy || r === DEFAULT_RUN) return { multiplier: 1, reason: 'control round — flat size' };
   try {
-    const own = await getLedgerEntry(symbol, strategy, r);
+    const own = await getLedgerEntry(symbol, strategy, r, evidence);
     if (own && own.liveTrusted && own.trades >= MIN_TRADES) return sizeMultiplier(own);
-    const control = await getLedgerEntry(symbol, strategy, DEFAULT_RUN);
+    const control = await getLedgerEntry(symbol, strategy, DEFAULT_RUN, evidence);
     if (!control?.liveTrusted) return { multiplier: 1, reason: 'no trusted record yet — flat size' };
     const d = sizeMultiplier(control);
     return { multiplier: d.multiplier, reason: `${d.reason} (from ${DEFAULT_RUN})` };
@@ -206,7 +227,17 @@ export async function runTradingAgent(input: {
    * is the difference between a pipeline and four boxes with arrows drawn
    * between them: the arrow has to carry something you can point at.
    */
-  upstream?: { intel?: string | null; companion?: string | null };
+  upstream?: {
+    intel?: string | null;
+    companion?: string | null;
+    /**
+     * Wat het bureau gemeten heeft: correlatie en gebeurtenisimpact, uit
+     * core_desk_feiten. Een lane-conclusie is een mening; dit is een cijfer.
+     * Ze horen als aparte stappen in het spoor, anders leest een meting
+     * achteraf als iets wat een agent vond.
+     */
+    deskFeiten?: string | null;
+  };
   /**
    * Decide and execute for THIS account.
    *
@@ -220,6 +251,9 @@ export async function runTradingAgent(input: {
   /** Which experiment round this account trades in. Decides whether edge
    *  sizing applies at all — see edgeMultiplierFor. */
   run?: string;
+  /** Why this strategy/timeframe was chosen, and which framework candidates
+   *  were not eligible — from agentAutopilot.strategyForSymbol. */
+  selection?: string;
   indicatorHint?: {
     sma20?: number | null;
     sma50?: number | null;
@@ -380,6 +414,15 @@ export async function runTradingAgent(input: {
       confidence: 0,
       blockedByRisk: reason,
       createdAt: new Date().toISOString(),
+      strategy: input.strategyName ?? input.strategy,
+      timeframe: input.timeframe,
+      verdict: buildDecisionVerdict({
+        symbol, action: 'hold', confidence: 0,
+        strategy: input.strategyName ?? input.strategy, timeframe: input.timeframe,
+        intelText: input.upstream?.intel, companionText: input.upstream?.companion,
+        account: { id: input.account?.accountId ?? null, environment: null, live: false },
+        blockReason: reason, autoExecute: Boolean(input.autoExecute),
+      }),
     };
     await saveThinkingTrace(blockedTrace);
     return {
@@ -412,7 +455,7 @@ export async function runTradingAgent(input: {
   // account it named sat flat at its starting balance.
   const breaker = await checkAndUpdateCircuitBreaker(
     eqForBreaker,
-    risk.maxDrawdownPct ?? 0.12,
+    trailingBreakerThreshold(risk),
     effective.isReal ? 'live' : 'paper',
     input.account?.accountId ?? null,
   );
@@ -456,6 +499,7 @@ export async function runTradingAgent(input: {
     intel ? intel.confidence : 0.3,
   ));
 
+  if (input.selection) steps.push(step('score', 'Strategy selection', input.selection.slice(0, 900), 1));
   steps.push(step('memory', 'Agent memory', memCtx.slice(0, 320), 0.5));
 
   // The desk lanes, as this cycle's own input rather than as archaeology.
@@ -466,10 +510,23 @@ export async function runTradingAgent(input: {
     input.upstream?.intel ? `INTEL: ${input.upstream.intel.trim().slice(0, 400)}` : null,
     input.upstream?.companion ? `COMPANION: ${input.upstream.companion.trim().slice(0, 400)}` : null,
   ].filter(Boolean).join('\n');
+
+  // Gemeten feiten bóven de lane-meningen, in dezelfde stap.
+  //
+  // Geen eigen fase: `phase` in botTypes.ts is een vaste lijst die de UI ook
+  // gebruikt om stappen te labelen, en daar een waarde bij verzinnen levert een
+  // lege plek op in een scherm dat ik niet meemeet.
+  //
+  // Wel met een eigen kop, want het verschil telt: twee posities die op 0,9
+  // lopen zijn één positie met dubbele inzet, en dat staat in geen enkele lijst
+  // met open trades. Een meting is geen mening van een lane.
+  const feitenBlok = input.upstream?.deskFeiten?.trim().slice(0, 1200)
+    || 'GEMETEN: niets vers meegegeven — spreiding en volatiliteit zijn onbekend, niet gunstig.';
+
   steps.push(step(
     'desk',
-    'Desk lanes (Intel + Companion)',
-    deskRead || 'Neither lane produced a read for this symbol this cycle.',
+    'Bureau: gemeten feiten + lanes',
+    [feitenBlok, deskRead || 'Neither lane produced a read for this symbol this cycle.'].join('\n\n'),
     deskRead ? 0.55 : 0.3,
   ));
 
@@ -556,11 +613,24 @@ export async function runTradingAgent(input: {
     steps.push(step('risk', 'No short', 'Sell signal but no long position and shorts disabled.', 0));
   }
 
-  const eq = eqForBreaker;
+  // HET BEWIJS DAT DIT ACCOUNT MAG GEBRUIKEN. Een funded/live account leert
+  // zijn vertrouwensvloer en zijn sizing alleen van live/funded uitkomsten; een
+  // reeks winsten op papier of demo maakt hem niet brutaler (evidence.ts).
+  const envInfo = input.account
+    ? await accountEnvironment(input.account.accountId).catch(() => ({ env: null, source: 'unknown' as const }))
+    : { env: null, source: 'unknown' as const };
+  const evidence = evidencePolicyFor(envInfo.env);
+  const knobs = learnedKnobsFor(learning, evidence);
   const minConf = Math.max(
     input.minConfidence ?? risk.minConfidence,
-    learning.learnedMinConfidence,
+    knobs.learnedMinConfidence,
   );
+  steps.push(step(
+    'learn',
+    'Evidence',
+    `account environment ${envInfo.env ?? 'unknown'} (${envInfo.source}) · using ${evidence.label} · learned floor ${(knobs.learnedMinConfidence * 100).toFixed(0)}% from ${knobs.sample} outcome(s)`,
+    envInfo.env ? 1 : 0.5,
+  ));
   const riskPct = input.riskPct ?? risk.riskPerTradePct;
   const today = new Date().toISOString().slice(0, 10);
 
@@ -572,30 +642,44 @@ export async function runTradingAgent(input: {
   // real opens today (null if unreadable → hold, never trade blind), and the
   // in-process tally covers a fill that hasn't surfaced in history yet, so a
   // burst inside one run cannot slip past its own orders. See dayLimitState.
+  const tz = risk.resetTimezone || 'UTC';
   const brokerOpensToday = effective.isReal
-    ? await brokerOpeningsTodayFor(input.account)
+    ? await brokerOpeningsTodayFor(input.account, tz)
     : null;
   const { tradesToday, unverified: dayCountUnverified } = dayLimitState({
     isReal: effective.isReal,
     brokerCount: brokerOpensToday,
-    inProcessCount: placedTodayInProcess(input.account?.accountId ?? null),
+    inProcessCount: placedTodayInProcess(input.account?.accountId ?? null, tz),
     paperCount: account.trades.filter(t => t.createdAt.startsWith(today)).length,
   });
 
-  let blockedByRisk: string | undefined;
-  if (breaker.tripped) {
-    blockedByRisk = breaker.trippedReason ?? 'Circuit breaker tripped — reset manually to resume';
-  } else if (dayCountUnverified) {
-    // A real account whose broker trade count could not be read this cycle has
-    // no working day-limit. Holding is the safe answer — this only ever stops an
-    // OPEN, never an exit — and it clears itself the next cycle the broker reads.
-    blockedByRisk = `Day-limit unreadable at broker — holding rather than trading blind [${risk.mode}]`;
-  } else if (tradesToday >= risk.maxTradesPerDay) {
-    blockedByRisk = `Max trades/day (${risk.maxTradesPerDay}) [${risk.mode}]`;
-  }
-  if (!blockedByRisk && confidence < minConf && (action === 'buy' || action === 'sell')) {
-    blockedByRisk = `Confidence ${(confidence * 100).toFixed(0)}% < floor ${(minConf * 100).toFixed(0)}%`;
-  }
+  // DE ENE POORT. Dezelfde evaluatePreTradeGate die de handmatige knoppen op de
+  // grafiek gebruiken (preTradeGateService); de controles stonden hier eerst
+  // inline, en daardoor kon de grafiek ze overslaan. Volgorde en teksten zijn
+  // ongewijzigd: breaker, onleesbare dag, volle dag, vertrouwen. Daarna, voor
+  // een opening, de accountregels — zie verderop.
+  //
+  // Een onleesbare broker-telling houdt alleen een OPENING tegen, nooit een
+  // exit, en herstelt zichzelf de volgende cyclus dat de broker antwoordt.
+  const orderAccount = effective.isReal ? await resolveOrderAccount(input.account) : null;
+  const gateBase = {
+    origin: 'agent' as const,
+    symbol,
+    // Bij HOLD wordt er niets verstuurd; de poort draait toch, zodat breaker en
+    // dagmaximum in het spoor staan zoals voorheen.
+    side: (action === 'sell' ? 'sell' : 'buy') as 'buy' | 'sell',
+    accountId: orderAccount?.accountId ?? null,
+    mode: risk.mode,
+    // Een onbeschikbaar account is hierboven al teruggekeerd.
+    account: { known: true, available: true },
+    breaker: { tripped: breaker.tripped, reason: breaker.trippedReason },
+    dayLimit: { tradesToday, unverified: dayCountUnverified, max: risk.maxTradesPerDay },
+    allowShort: risk.allowShort,
+    longPositionQty: posQty,
+    confidence: action === 'buy' || action === 'sell' ? { value: confidence, floor: minConf } : undefined,
+  };
+  let gate = evaluatePreTradeGate(gateBase);
+  let blockedByRisk: string | undefined = gate.allowed ? undefined : gate.reason;
 
   steps.push(step(
     'risk',
@@ -620,37 +704,6 @@ export async function runTradingAgent(input: {
     symbol,
     ranking: await loadLastFunnelRun().catch(() => null),
   });
-
-  const edge = await edgeMultiplierFor(symbol, input.strategyName ?? input.strategy, input.run);
-  const riskBudget = eq * riskPct * edge.multiplier;
-  let qty = 0;
-  if (action === 'buy' && !blockedByRisk && mandate.mayOpen) {
-    qty = Math.floor((riskBudget / last) * 1000) / 1000;
-    if (qty * last < 10) qty = 0;
-  } else if (action === 'sell' && posQty > 0 && !blockedByRisk) {
-    // Closing is never gated by the funnel — a pair that stopped being a
-    // finalist is exactly the one most likely to need an exit.
-    qty = Math.min(posQty, Math.floor((riskBudget / last) * 1000) / 1000 || posQty);
-  } else if (action === 'sell' && posQty <= 0 && risk.allowShort && !blockedByRisk && mandate.mayOpen) {
-    // OPENING A SHORT — the case that silently did not exist.
-    //
-    // allowShort gated the ACTION a hundred lines up, and sizing never learned
-    // about it: the only two branches were "open a long" and "close a long",
-    // so a short survived the risk gate, matched neither, and kept qty = 0.
-    // Measured 2026-08-21 with allowShort already switched on in Settings:
-    //   LTCUSD  Score -0.400 -> SELL conf 61%.  Size qty=0
-    //   XAUUSD  SELL conf 68%                   never reached the broker
-    // The desk showed a decision, the ledger recorded a decision, and no order
-    // existed — the worst of the three possible outcomes, because it looks
-    // exactly like working.
-    //
-    // Sized identically to a long: the risk budget buys the same notional
-    // whichever way it points. The protective levels below already mirror for
-    // a sell, so this needed no second rule there.
-    qty = Math.floor((riskBudget / last) * 1000) / 1000;
-    if (qty * last < 10) qty = 0;
-  }
-
   if (mandate.binding) {
     steps.push(step(
       'risk',
@@ -660,22 +713,102 @@ export async function runTradingAgent(input: {
     ));
   }
 
-  steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} (${effective.isReal ? 'live MT5' : 'paper'}) budget=$${riskBudget.toFixed(0)} qty=${qty} · sizing: ${edge.reason}`, qty));
+  // STOP EERST, DAN DE GROOTTE.
+  //
+  // De stop werd pas uitgerekend nadat qty al vaststond uit equity × risk% /
+  // koers — een notionele blootstelling. Risk/trade betekent nu wat het zegt:
+  // het geld dat verloren gaat als deze stop raakt, met de tickwaarde die de
+  // broker voor dit account opgeeft (positionSizing). ATR-stop zoals voorheen,
+  // met 1% van de koers als terugval bij te weinig historie.
+  const plannedLong = protectiveLevels({ side: 'buy', entry: last, atr: atr14 });
+  const slDistance = plannedLong.stopDistance;
+  const opensLong = action === 'buy';
+  // OPENING A SHORT — the case that once silently did not exist: allowShort
+  // gated the action and sizing had no branch for it, so a SELL with shorts on
+  // reached the ledger with qty = 0 and never the broker (2026-08-21, LTCUSD /
+  // XAUUSD). It is sized exactly like a long below.
+  const opensShort = action === 'sell' && posQty <= 0 && risk.allowShort;
+  const closesLong = action === 'sell' && posQty > 0;
+  const edge = await edgeMultiplierFor(symbol, input.strategyName ?? input.strategy, input.run, evidence);
 
-  // ATR-based protective stop + target — falls back to a flat 1% of price
-  // when there isn't enough bar history for a real ATR yet (new symbol,
-  // thin data), rather than shipping the order with no stop at all.
-  const slDistance = (atr14 ?? last * 0.01) * SL_ATR_MULTIPLE;
-  const tpDistance = slDistance * REWARD_RISK_RATIO;
-  const stopLoss = qty > 0 ? (action === 'buy' ? last - slDistance : last + slDistance) : null;
-  const takeProfit = qty > 0 ? (action === 'buy' ? last + tpDistance : last - tpDistance) : null;
-  if (qty > 0) {
+  let lots = 0;
+  let unitsPerLot = 1;
+  let riskBudget = 0;
+  let riskAtStop = 0;
+  let sizingNote = edge.reason;
+  let stopLoss: number | null = null;
+  let takeProfit: number | null = null;
+
+  if ((opensLong || opensShort) && !blockedByRisk && mandate.mayOpen && orderAccount) {
+    const plan = protectiveLevels({ side: opensLong ? 'buy' : 'sell', entry: last, atr: atr14 });
+    stopLoss = plan.stopLoss;
+    takeProfit = plan.takeProfit;
+    const [spec, snap] = await Promise.all([
+      loadInstrumentSpec(orderAccount, symbol),
+      readAccountRiskSnapshot(orderAccount, risk),
+    ]);
+    if (!spec.ok) {
+      blockedByRisk = `Instrument spec unreadable (${spec.error}) — cannot size by risk`;
+    } else if (!snap.ok) {
+      blockedByRisk = `Account rules unreadable (${snap.error}) — refusing to open blind`;
+    } else {
+      unitsPerLot = spec.spec.contractSize;
+      riskBudget = sizingBaseAmount(risk, snap.snapshot) * riskPct * edge.multiplier;
+      const sized = sizeLotsForRisk({ riskBudget, entry: last, stop: stopLoss, spec: spec.spec });
+      if (sized.refused) {
+        blockedByRisk = `Sizing: ${sized.refused}`;
+      } else {
+        lots = sized.lots;
+        riskAtStop = sized.riskAtStop;
+        sizingNote = `${edge.reason} · ${spec.spec.source} spec tick=${spec.spec.tickSize} tickValue=${spec.spec.lossTickValue.toFixed(4)} ${snap.snapshot.currency ?? ''}`.trim();
+        // De accountregels, met het risico van DEZE order tot zijn stop.
+        gate = evaluatePreTradeGate({
+          ...gateBase,
+          rules: await rulesFromSnapshot(risk, snap.snapshot, symbol, sized.riskAtStop),
+        });
+        await tripOnHardBreach(gate, orderAccount, snap.snapshot.equity);
+        if (!gate.allowed) {
+          blockedByRisk = gate.reason;
+          lots = 0;
+        }
+        const ruleChecks = gate.checks.filter(c => !['account', 'breaker', 'dayLimit', 'allowShort', 'confidence'].includes(c.id));
+        if (ruleChecks.length) {
+          steps.push(step(
+            'risk',
+            gate.allowed ? 'Account rules OK' : 'Account rules blocked',
+            ruleChecks.map(c => `${c.status} ${c.id}: ${c.detail}`).join(' · '),
+            gate.allowed ? 1 : 0,
+          ));
+        }
+      }
+    }
+    if (lots <= 0) { stopLoss = null; takeProfit = null; }
+  } else if (closesLong && !blockedByRisk) {
+    // Closing is never gated by the funnel or the account rules — a pair that
+    // stopped being a finalist is exactly the one most likely to need an exit.
+    // posQty is the broker's own volume in lots, so the whole long is closed.
+    lots = posQty;
+  }
+
+  steps.push(step(
+    'size',
+    'Position sizing',
+    lots > 0 && !closesLong
+      ? `risk budget ${riskBudget.toFixed(2)} (${(riskPct * 100).toFixed(2)}% of ${risk.sizingBase ?? 'equity'}) → ${lots} lots · ${riskAtStop.toFixed(2)} lost at stop (${slDistance.toFixed(5)} away) · sizing: ${sizingNote}`
+      : closesLong && lots > 0
+        ? `close ${lots} lots (existing long)`
+        : `no size — ${blockedByRisk ?? (action === 'hold' ? 'HOLD' : 'not opening')}`,
+    lots,
+  ));
+  if (lots > 0 && stopLoss != null) {
     steps.push(step(
       'size',
       'Protective levels',
-      `ATR14=${atr14?.toFixed(4) ?? 'n/a (flat 1% fallback)'} · SL=${stopLoss?.toFixed(4)} (${SL_ATR_MULTIPLE}x) · TP=${takeProfit?.toFixed(4)} (${REWARD_RISK_RATIO}R)`,
+      `ATR14=${atr14?.toFixed(4) ?? 'n/a (flat 1% fallback)'} · SL=${stopLoss.toFixed(5)} (${SL_ATR_MULTIPLE}x) · TP=${takeProfit?.toFixed(5)} (${REWARD_RISK_RATIO}R)`,
     ));
   }
+  // Het papieren spiegelboek rekent in eenheden, de broker in lots.
+  const qty = lots > 0 ? lots * unitsPerLot : 0;
 
   const rationale = [
     `Agent ${symbol} @ ${last.toFixed(4)} (${snap.source}).`,
@@ -683,8 +816,8 @@ export async function runTradingAgent(input: {
       ? `Intel ${intel.signal} ${(intel.confidence * 100).toFixed(0)}%: ${intel.thesis.slice(0, 160)}`
       : 'Tape-only (no completed intel).',
     `Score ${score.toFixed(3)} → ${action.toUpperCase()} conf ${(confidence * 100).toFixed(0)}%.`,
-    blockedByRisk ? `RISK: ${blockedByRisk}` : `Size qty=${qty}.`,
-    `Learn: winRate ${(learning.winRate * 100).toFixed(0)}% minConf ${learning.learnedMinConfidence.toFixed(2)}.`,
+    blockedByRisk ? `RISK: ${blockedByRisk}` : `Size ${lots} lots${riskAtStop > 0 ? ` (${riskAtStop.toFixed(2)} at stop)` : ''}.`,
+    `Learn: winRate ${(learning.winRate * 100).toFixed(0)}% minConf ${knobs.learnedMinConfidence.toFixed(2)} (${evidence.label}).`,
   ].join(' ');
 
   const decision: TradingAgentDecision = {
@@ -745,13 +878,20 @@ export async function runTradingAgent(input: {
 
   let tradeId: string | undefined;
   let error: string | undefined;
+  let placedResult: { ok: boolean; error?: string; tradeId?: string | null; price?: number | null; closed?: boolean } | null = null;
 
   if (shouldExec) {
-    const placed = await brokerPlaceOrder({
+    // Een long sluiten is een sluiting per positie-id, geen nieuwe SELL-order:
+    // op een hedgingaccount zou die een short openen naast de long.
+    const placed = closesLong
+      ? await brokerCloseLongs({ account: input.account, symbol, reason: rationale.slice(0, 400) })
+        .then(r => ({ ok: r.ok, error: r.error, price: r.price, tradeId: undefined as string | undefined }))
+      : await brokerPlaceOrder({
       account: input.account,
       symbol,
       side: action === 'buy' ? 'buy' : 'sell',
       qty,
+      lots,
       reason: rationale.slice(0, 400),
       confidence,
       intelReportId: intel?.id,
@@ -759,7 +899,10 @@ export async function runTradingAgent(input: {
       takeProfit,
       strategy: input.strategyName ?? input.strategy,
       timeframe: input.timeframe,
+      // shouldExec vereist !blockedByRisk, dus de poort heeft toegelaten.
+      clearance: gate.clearance!,
     });
+    placedResult = { ok: placed.ok, error: placed.error, tradeId: placed.tradeId ?? null, price: placed.price ?? null, closed: closesLong };
     if (!placed.ok) {
       error = placed.error;
       steps.push(step('execute', 'Order rejected', placed.error || 'unknown', 0));
@@ -776,9 +919,9 @@ export async function runTradingAgent(input: {
     } else {
       tradeId = placed.tradeId;
       decision.executedTradeId = tradeId;
-      steps.push(step('execute', 'Demo fill', `${action.toUpperCase()} ${qty} @ ${placed.price}`, 1));
+      steps.push(step('execute', 'Demo fill', `${action.toUpperCase()} ${lots} lots @ ${placed.price}`, 1));
       await rememberTradeDecision(decision);
-      await rememberLesson(symbol, `Filled ${action} ${qty} @ ${placed.price}`, confidence);
+      await rememberLesson(symbol, `Filled ${action} ${lots} lots @ ${placed.price}`, confidence);
     }
   } else {
     steps.push(step(
@@ -798,6 +941,14 @@ export async function runTradingAgent(input: {
     learning.winRate,
   ));
 
+  // Wat een opening tegenhield zonder blockedByRisk te zetten: de funnel, of
+  // geen orderaccount om tegen te sizen. Zonder deze regel las een geweigerde
+  // koop als "BLOCK: No size" en moest je het spoor lezen om te weten waarom.
+  const wantsOpen = opensLong || opensShort;
+  const verdictBlock = blockedByRisk
+    ?? (wantsOpen && mandate.binding && !mandate.mayOpen ? `Funnel: ${mandate.reason}` : undefined)
+    ?? (wantsOpen && !orderAccount ? 'No live order account — nothing sized or sent' : undefined);
+
   const trace: ThinkingTrace = {
     decisionId: decision.id,
     symbol,
@@ -810,6 +961,27 @@ export async function runTradingAgent(input: {
     // trace and the decision can no longer disagree about who decided.
     strategy: input.strategyName ?? input.strategy,
     timeframe: input.timeframe,
+    verdict: buildDecisionVerdict({
+      symbol,
+      action,
+      strategy: input.strategyName ?? input.strategy,
+      timeframe: input.timeframe,
+      confidence,
+      confidenceFloor: minConf,
+      research: intel ? { signal: intel.signal, confidence: intel.confidence, thesis: intel.thesis.slice(0, 280) } : null,
+      intelText: input.upstream?.intel,
+      companionText: input.upstream?.companion,
+      gates: gate.checks,
+      sizing: action === 'hold' ? null : {
+        lots, riskPct, riskAtStop,
+        stopDistance: closesLong ? null : slDistance,
+        stopLoss, takeProfit, note: closesLong ? 'closing the existing long' : sizingNote,
+      },
+      account: { id: orderAccount?.accountId ?? input.account?.accountId ?? null, environment: envInfo.env, live: effective.isReal },
+      blockReason: verdictBlock,
+      autoExecute: Boolean(input.autoExecute),
+      placed: placedResult,
+    }),
   };
   await saveThinkingTrace(trace);
 

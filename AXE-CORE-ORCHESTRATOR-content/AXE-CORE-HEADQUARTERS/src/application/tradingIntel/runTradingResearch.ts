@@ -34,6 +34,8 @@ import {
 // to callProvider — two types with one name, which is the same fault this
 // codebase keeps finding in its tables.
 import type { KeySlot } from '@/domain/providers';
+import { zonderAbonnement, type AgentEngine } from '@/domain/abonnementChat';
+import { cascadeVoorAgent } from '@/domain/agentMotoren';
 import { remember } from '@/infrastructure/persistence/agentMemoryService';
 
 export interface RunResearchInput {
@@ -44,6 +46,12 @@ export interface RunResearchInput {
   /** Default true — CrewAI is preferred for this tab */
   useCrew?: boolean;
   callLlm?: (system: string, user: string) => Promise<string>;
+  /**
+   * Alleen voor de eindbeslissing (portfolio_manager). Hier mag het abonnement
+   * dat AXE Algo in Instellingen kreeg -- één aanroep per cyclus. De elf rollen
+   * ervoor blijven op callLlm, dus op API-sleutels. Weggelaten: callLlm.
+   */
+  callLlmBeslissing?: (system: string, user: string) => Promise<string>;
   onProgress?: (phase: string, detail?: string) => void;
 }
 
@@ -509,7 +517,8 @@ export async function runTradingResearch(
   const agents: AgentBrief[] = [];
   for (const role of PIPELINE) {
     input.onProgress?.(role, meta(role).label);
-    if (input.callLlm) agents.push(await llmAgent(role, ticker, input.notes, input.callLlm));
+    const llm = role === 'portfolio_manager' ? (input.callLlmBeslissing ?? input.callLlm) : input.callLlm;
+    if (llm) agents.push(await llmAgent(role, ticker, input.notes, llm));
     else {
       await new Promise(r => setTimeout(r, 40));
       agents.push(heuristicAgent(role, ticker, input.notes));
@@ -536,6 +545,9 @@ export function buildCallLlmFromSlots(
   slots: KeySlot[],
   callProvider: (slot: KeySlot, messages: Array<{ role: string; content: string }>) => Promise<string>,
 ): ((system: string, user: string) => Promise<string>) | undefined {
+  // Nooit op een abonnement: elke rol is een eigen CLI-sessie, elke cyclus
+  // opnieuw. Zie zonderAbonnement voor wat dat op 13 september kostte.
+  slots = zonderAbonnement(slots);
   if (!slots.length) return undefined;
   return async (system, user) => {
     let lastErr: unknown;
@@ -544,6 +556,37 @@ export function buildCallLlmFromSlots(
     // throws that away and fails the research run while a working provider is
     // still sitting in the list.
     for (const slot of slots) {
+      try {
+        return await callProvider(slot, [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ]);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('All LLM slots failed');
+  };
+}
+
+/**
+ * De aanroep voor de eindbeslissing van AXE Algo.
+ *
+ * Het abonnement van AXE Algo vooraan, daarna de sleutels. Bewust NIET via
+ * buildCallLlmFromSlots, want die haalt elk abonnement weg -- terecht voor de
+ * elf rollen, niet voor deze ene beurt. Zonder abonnement is dit gewoon de
+ * sleutel-cascade.
+ */
+export function buildBeslissingCallLlm(
+  slots: KeySlot[],
+  abonnement: AgentEngine | null,
+  callProvider: (slot: KeySlot, messages: Array<{ role: string; content: string }>) => Promise<string>,
+): ((system: string, user: string) => Promise<string>) | undefined {
+  const cascade = cascadeVoorAgent(slots, abonnement);
+  if (!cascade.length) return undefined;
+  return async (system, user) => {
+    let lastErr: unknown;
+    for (const slot of cascade) {
       try {
         return await callProvider(slot, [
           { role: 'system', content: system },

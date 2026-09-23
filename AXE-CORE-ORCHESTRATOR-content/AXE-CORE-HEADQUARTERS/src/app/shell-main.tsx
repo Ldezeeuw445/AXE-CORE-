@@ -35,6 +35,7 @@ const StatusPage = lazy(() => import('@/presentation/pages/StatusPage'));
 const TableEditor = lazy(() => import('@/presentation/pages/TableEditor'));
 const Tasks = lazy(() => import('@/presentation/pages/Tasks'));
 const TerminalPage = lazy(() => import('@/presentation/pages/TerminalPage'));
+const TerminalsPage = lazy(() => import('@/presentation/pages/TerminalsPage'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const Trading = lazy(() => import('@/presentation/pages/Trading'));
 const TradingIntel = lazy(() => import('@/presentation/pages/TradingIntel'));
@@ -66,6 +67,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="mcp" element={<MCPCenter />} />
               <Route path="infrastructure" element={<Infrastructure />} />
               <Route path="terminal" element={<TerminalPage />} />
+            <Route path="terminals" element={<TerminalsPage />} />
               <Route path="settings" element={<SettingsPageWithAxeQuotes />} />
               <Route path="table-editor" element={<TableEditor />} />
               <Route path="cron-manager" element={<CronManager />} />

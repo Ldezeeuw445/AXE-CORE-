@@ -1,0 +1,35 @@
+{
+  "_doel": "Gedeelde gevallen: tests/test_canon.py (Python) en src/domain/northsea/canonPariteit.test.ts (TypeScript) moeten dezelfde uitkomst geven.",
+  "deals": [
+    {"id": "d1", "stage": "identified", "execution_state": "qualifying", "primary_blocker": "Seller authority unverified",
+     "loading_port": null, "origin": "Zambia", "supplier_city": null, "supplier_country": "Zambia",
+     "destination": "Qinzhou Port, China", "buyer_city": null, "buyer_country": "China",
+     "expect": {"active": true, "state": "blocked", "route": ["Zambia", "origin", "Qinzhou", "destination", false]}},
+    {"id": "d2", "stage": "identified", "execution_state": "matched", "primary_blocker": "",
+     "loading_port": null, "origin": "Central African copper belt", "supplier_city": "Ulm", "supplier_country": "Germany",
+     "destination": "Hamburg, Germany", "buyer_city": null, "buyer_country": null,
+     "expect": {"active": false, "state": "matched", "route": ["Ulm", "establishment", "Hamburg", "destination", true]}},
+    {"id": "d3", "stage": "verifying", "execution_state": "", "primary_blocker": null,
+     "loading_port": "Mersin / Jebel Ali", "origin": null, "supplier_city": null, "supplier_country": null,
+     "destination": "Rotterdam", "buyer_city": null, "buyer_country": null,
+     "expect": {"active": true, "state": "active", "route": null, "not_placed_side": "supplier", "not_placed_reason": "multiple"}},
+    {"id": "d4", "stage": "won", "execution_state": "settled", "primary_blocker": "",
+     "loading_port": "Durban", "origin": null, "supplier_city": null, "supplier_country": null,
+     "destination": "USA", "buyer_city": null, "buyer_country": null,
+     "expect": {"active": false, "state": "completed", "route": ["Durban", "loading_port", "United States of America", "destination", false]}},
+    {"id": "d5", "stage": "identified", "execution_state": "discovered", "primary_blocker": "",
+     "loading_port": null, "origin": null, "supplier_city": null, "supplier_country": null,
+     "destination": "Europe", "buyer_city": null, "buyer_country": null,
+     "expect": {"active": false, "state": "other", "route": null, "not_placed_side": "both", "not_placed_reason": "region"}}
+  ],
+  "places": [
+    ["Hamburg, Germany", "Hamburg", null],
+    ["Jebel Ali, Dubai, UAE", "Jebel Ali", null],
+    ["Austria or Italy", null, "multiple"],
+    ["Thailand (exact port unconfirmed)", "Thailand", null],
+    ["", null, "empty"],
+    ["Zambia / DRC", null, "multiple"],
+    ["Worldwide", null, "region"],
+    ["Atlantis", null, "unknown"]
+  ]
+}

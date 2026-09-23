@@ -7,6 +7,8 @@
  */
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import { execCommand } from '@/infrastructure/gateways/axeCoreApiService';
+import { agentBasis } from '@/infrastructure/config/agentHost';
+import { editorRepoHeaders, huidigeEditorRepo } from '@/infrastructure/config/editorRepo';
 
 export interface WorkspaceTreeNode {
   path: string;
@@ -23,14 +25,42 @@ export interface WorkspaceTreeNode {
 // .map() over the (nonexistent) node list.
 const BASE = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 
+/**
+ * Dezelfde machine als de code-agent.
+ *
+ * De bestanden stonden vast op de VPS (`/opt/axe-workspace`) terwijl de agent
+ * via agentBasis op deze Mac in de echte checkout bewerkte: je keek naar de ene
+ * boom en de agent veranderde de andere. Nu volgen ze allebei dezelfde keuze
+ * (auto / deze Mac / VPS in de Code Editor). Zie config/agentHost.ts.
+ */
+export async function editorBasis(): Promise<string> {
+  return agentBasis(BASE).catch(() => BASE);
+}
+
+/**
+ * In welke repo de editor werkt. Leeg = de werkmap van de host.
+ *
+ * Een NAAM uit AGENT_REPOS, geen pad: de host zoekt het pad op in dezelfde
+ * whitelist als de code-agents (zie _werkmap in backend/axe_api/main.py). Zo
+ * kijk je in de boom altijd naar de checkout waar de agent ook in schrijft.
+ */
+export { zetEditorRepo } from '@/infrastructure/config/editorRepo';
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE}/files${path}`, {
+  const res = await fetch(`${await editorBasis()}/files${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
+    headers: {
+      'Content-Type': 'application/json',
+      ...axeCoreApiExtraHeaders(),
+      ...editorRepoHeaders(),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: string }).error ?? `Request failed (${res.status})`);
+  if (!res.ok) {
+    const j = json as { error?: string; detail?: string };
+    throw new Error(j.error ?? j.detail ?? `Request failed (${res.status})`);
+  }
   return json as T;
 }
 
@@ -67,10 +97,15 @@ export async function moveWorkspaceEntry(from: string, to: string): Promise<void
     throw new Error('Cannot move a folder into itself');
   }
   try {
-    await call('POST', '/move', { from, to });
+    // from_path/to_path is wat de API leest (FileMove). Dit stuurde {from, to},
+    // dus /move faalde altijd en elke verplaatsing liep via `mv` op de VPS --
+    // ook als je op deze Mac werkte.
+    await call('POST', '/move', { from_path: from, to_path: to });
     return;
-  } catch {
-    // API may not expose /move yet — use shell on the VPS workspace
+  } catch (e) {
+    // In een gekozen repo nooit terugvallen op een shell elders: die kent die
+    // repo niet, en dan verplaats je iets in een andere boom.
+    if (huidigeEditorRepo()) throw e;
   }
   const q = (p: string) => `'${p.replace(/'/g, `'"'"'`)}'`;
   const result = await execCommand(`mv -- ${q(from)} ${q(to)}`, 15);

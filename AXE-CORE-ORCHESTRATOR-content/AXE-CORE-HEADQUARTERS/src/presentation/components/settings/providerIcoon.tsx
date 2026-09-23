@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Bot, Brain, Globe, Hand, Key, Rocket, Router, Search, Server, Sparkles, Terminal, Users, Zap } from 'lucide-react';
+import { Bot, Brain, Compass, Globe, Hand, Key, Rocket, Router, Search, Server, Sparkles, Terminal, Users, Zap } from 'lucide-react';
 
 /**
  * Zet de icoonnaam uit de catalogus om in een component.
@@ -14,7 +14,7 @@ import { Bot, Brain, Globe, Hand, Key, Rocket, Router, Search, Server, Sparkles,
  * de provider te maken heeft.
  */
 const ICONEN: Record<string, LucideIcon> = {
-  Bot, Brain, Globe, Hand, Key, Rocket, Router, Search, Server, Sparkles, Terminal, Users, Zap,
+  Bot, Brain, Compass, Globe, Hand, Key, Rocket, Router, Search, Server, Sparkles, Terminal, Users, Zap,
 };
 
 export function providerIcoon(naam: string): LucideIcon {

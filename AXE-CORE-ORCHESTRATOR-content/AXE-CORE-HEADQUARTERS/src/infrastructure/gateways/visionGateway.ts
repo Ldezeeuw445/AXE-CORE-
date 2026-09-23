@@ -5,11 +5,70 @@
  * when configured. Uses the same KeySlot model as chat routing.
  */
 import type { KeySlot } from '@/domain/providers';
-import { PROVIDERS } from '@/domain/providers';
+import { PROVIDERS, isKeyOptional, migrateModel } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
-import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
+import { aiProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { proxyErrorMessage } from '@/domain/proxyError';
+import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
+
+
+const VISION_ENV_KEYS: Partial<Record<string, string>> = {
+  google: import.meta.env.VITE_GEMINI_API_KEY ?? '',
+  openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
+  anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
+  openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
+};
+
+/**
+ * Resolve the currently configured vision-capable provider slots without
+ * importing voiceStore. Keeping this gateway-level prevents a circular
+ * voiceStore -> nativeToolLoop -> computer registry -> voiceStore dependency.
+ */
+export function configuredVisionSlots(): KeySlot[] {
+  const out: KeySlot[] = [];
+  const seen = new Set<string>();
+
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
+      string,
+      { key?: string; model?: string; baseUrl?: string } | undefined
+    >;
+    for (const id of ['google', 'openai', 'anthropic', 'openrouter'] as const) {
+      if (seen.has(id)) continue;
+      const cfg = PROVIDERS.find((p) => p.id === id);
+      if (!cfg) continue;
+      const conn = conns[id];
+      const key = conn?.key || VISION_ENV_KEYS[id] || '';
+      if (!key && !isKeyOptional(id)) continue;
+      seen.add(id);
+      out.push({
+        provider: id,
+        key,
+        model: migrateModel(id, conn?.model) || cfg.defaultModel,
+        baseUrl: normalizeProviderBaseUrl(id, conn?.baseUrl || cfg.baseUrl),
+      });
+    }
+  } catch {
+    /* malformed local settings: return any env-backed slots below */
+  }
+
+  for (const id of ['google', 'openai', 'anthropic', 'openrouter'] as const) {
+    if (seen.has(id)) continue;
+    const cfg = PROVIDERS.find((p) => p.id === id);
+    if (!cfg) continue;
+    const key = VISION_ENV_KEYS[id] || '';
+    if (!key && !isKeyOptional(id)) continue;
+    seen.add(id);
+    out.push({
+      provider: id,
+      key,
+      model: cfg.defaultModel,
+      baseUrl: normalizeProviderBaseUrl(id, cfg.baseUrl),
+    });
+  }
+  return out;
+}
 
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
  *  /v1 produces /v1/v1/messages and a 404 — seen live 2026-08-20, and it reads
@@ -82,7 +141,7 @@ async function callVisionProvider(
   if (import.meta.env.PROD && slot.provider !== 'google') {
     const pr = await fetch(aiProxyUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...vpsAuthHeaders(aiProxyUrl()) },
       body: JSON.stringify({
         provider: slot.provider,
         key: slot.key,

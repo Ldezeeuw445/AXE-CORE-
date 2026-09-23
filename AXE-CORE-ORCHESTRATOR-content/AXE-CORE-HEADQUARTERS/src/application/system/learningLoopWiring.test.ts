@@ -43,12 +43,50 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(roepers, 'niemand opent een episode -- agent_learning_episodes blijft leeg').not.toHaveLength(0);
   });
 
+  it('Wingman opent een episode per specialist bij een crew-run', () => {
+    // CrewAI.tsx is "the only place the crew is invoked" (eigen commentaar
+    // daar) -- runCrewWithTools.ts was oorspronkelijk een niet-aangeroepen
+    // wrapper; die is nu de echte crew-gateway van deze pagina (zie de test
+    // hieronder).
+    const roepers = aanroepersVan('openEpisode', 'agentFeedbackService');
+    expect(roepers, 'niemand opent een episode voor Wingman\'s crew-run').toContain('presentation/pages/CrewAI.tsx');
+  });
+
+  it('Wingman loopt via de crew-gateway, niet via een kale crewRun()', () => {
+    // Zonder deze gateway kreeg de crew geen EXA/Firecrawl/BrightData/E2B/
+    // Qdrant-credentials mee (buildCrewToolEnv) -- een specialist die een tool
+    // nodig had, kon hem stilletjes niet gebruiken. Dat was de echte reden om
+    // runCrewWithTools hier aan te sluiten, niet alleen de episodes.
+    const roepers = aanroepersVan('runCrewWithTools', 'application/crew/runCrewWithTools');
+    expect(roepers, 'runCrewWithTools heeft geen aanroeper -- terug bij dode code').toContain('presentation/pages/CrewAI.tsx');
+  });
+
   it('iets sluit episodes af', () => {
     const roepers = [
       ...aanroepersVan('closeEpisode', 'agentFeedbackService'),
       ...aanroepersVan('closeTradingEpisodeForTrade', 'agentFeedbackService'),
     ];
     expect(roepers, 'episodes worden geopend maar nooit gesloten').not.toHaveLength(0);
+    expect(roepers, 'Wingman opent een episode maar sluit hem nooit').toContain('presentation/pages/CrewAI.tsx');
+  });
+
+  it('Trading eigen desk-lanes openen scorebare episodes onder hun eigen identiteit', () => {
+    // 22-23 sep 2026: leende tot dan toe de identiteit 'intel'/'companion' --
+    // dezelfde als de echte AXE Intel/AXE Companion product-agents in de
+    // andere apps, dus loop-health van Trading's interne simulatie kwam op
+    // de kaart van het echte product-agent terecht. Eigen loop-agent-ids
+    // ('trading-desk-intel'/'trading-desk-companion') lossen dat op zonder
+    // de echte 'intel'/'companion' agents aan te raken.
+    const roepers = aanroepersVan('openLaneEpisode', 'deskAgents.ts');
+    const lanes = BESTANDEN.find(({ pad }) => pad.endsWith('application/tradingIntel/deskAgents.ts'))!;
+    expect(roepers).toHaveLength(0); // intern in deskAgents, en daar twee keer aangeroepen:
+    expect((lanes.tekst.match(/await openLaneEpisode\('(trading-desk-intel|trading-desk-companion)'/g) ?? []).sort())
+      .toEqual(["await openLaneEpisode('trading-desk-companion'", "await openLaneEpisode('trading-desk-intel'"]);
+  });
+
+  it('een gesloten trade sluit ook de lane-episodes, via de ene uitkomstplek', () => {
+    const roepers = aanroepersVan('closeDeskEpisodesForTrade', 'agentFeedbackService');
+    expect(roepers).toContain('infrastructure/persistence/tradingLearningService.ts');
   });
 
   it('iets voert de versterking daadwerkelijk uit', () => {

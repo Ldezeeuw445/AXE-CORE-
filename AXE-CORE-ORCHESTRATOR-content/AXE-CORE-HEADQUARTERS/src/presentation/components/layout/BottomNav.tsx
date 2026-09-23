@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
-  Bot, Megaphone, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, Smartphone, Lock, type LucideIcon,
+  Bot, Megaphone, BookOpenCheck, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
+  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, Smartphone, Lock,
+  TerminalSquare, Monitor, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -40,11 +41,24 @@ const rightItems: NavItem[] = [
   { icon: Bot, label: navLabel('/agents'), path: '/agents' },
   { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
   { icon: CalendarDays, label: navLabel('/calendar'), path: '/calendar' },
+  { icon: BookOpenCheck, label: navLabel('/ledger'), path: '/ledger' },
   { icon: ListTodo, label: navLabel('/tasks'), path: '/tasks' },
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
   { icon: LineChart, label: navLabel('/trading-intel'), path: '/trading-intel' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
   { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
+  // In navRegistry sinds integration/axe-desktop-final maar zonder deur hier --
+  // precies wat de comment hierboven waarschuwt. /computer-use-overlay en
+  // /northsea-desktop horen hier NIET bij: die zijn losse vensters (App.tsx
+  // buiten de AppShell-routes) en staan in navBereikbaar.test.ts's
+  // BEWUST_VERBORGEN, niet hier.
+  { icon: Monitor, label: navLabel('/computer-use'), path: '/computer-use' },
+  // Naast de code-editor, want dat is waar je hem nodig hebt: een bouw draaien,
+  // de lokale API herstarten, een poort vrijmaken. Deze lijst is met de hand
+  // gemaakt en staat los van navRegistry -- een route toevoegen zonder deze
+  // regel levert een tab op die bestaat maar nergens te vinden is. Precies wat
+  // er met /terminals gebeurde.
+  { icon: TerminalSquare, label: navLabel('/terminals'), path: '/terminals' },
   { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
@@ -188,12 +202,14 @@ function AxeVoiceOrb() {
 
      De canvas blijft bestaan voor de stand zonder plaat; welke je ziet is één
      voorwaarde, geen tweede component. */
+  /* Op de plaat: het gedeelde statusteken (AxeStatusOrb), 64px -- de maat die
+     thinking-orbs voert voor "groot". Elke stand heeft nu zijn eigen orb, dus
+     je ziet aan het midden van de balk wát AXE doet en niet alleen dát hij
+     bezig is. Spreken blijft de equalizer, met zeven staafjes. */
   if (opPlaat) {
     return (
-      <div className="axe-voice-orb" title={STATUS_LABEL[status]}>
-        <span className="axe-eq" style={{ ['--eq-ink' as string]: STATUS_COLOR[status] }}>
-          <i /><i /><i /><i /><i />
-        </span>
+      <div className="axe-voice-orb" title="AXE presence is beside the composer">
+        <span className="text-[9px] font-mono tracking-[0.18em] uppercase" style={{ color: 'var(--text-muted)' }}>AXE</span>
       </div>
     );
   }
@@ -226,19 +242,28 @@ function NavTile({
   const iconPx = isMobile ? 22 : 26;
   const Icon = item.icon;
 
-  // Same near-black as a card, so the nav does not end up being the brightest
-  // surface on a matte screen — it was #0d0d0d, two steps lighter than
-  // everything it sits under.
-  const tileBg = 'var(--bg-elevated)';
-  const tileBorder = isActive
-    ? '1px solid rgba(34,211,238,0.35)'
-    : '1px solid rgba(255,255,255,0.05)';
-  // The active halo carried a second, purple light source alongside the cyan.
-  // Nothing else in the app is purple, so it read as a stray glow rather than
-  // as "this tab is selected".
+  /* Zacht reliëf, zoals de soft-UI-knop uit het voorbeeld: de tegel heeft
+     dezelfde kleur als de band eronder, en de vorm komt alleen uit licht van
+     linksboven plus de schaduw rechtsonder. Zie --axe-tegel-op in
+     design/axe-look.css voor het waarom van de waarden.
+
+     De vulling was --bg-elevated: een tint LICHTER dan de band. Dat is hoe je
+     een kaart op een pagina zet, en precies wat een soft-UI-knop niet is --
+     zodra de vulling afwijkt van de ondergrond is het weer een blokje erop in
+     plaats van een uitstulping eruit. Nu hetzelfde vlak, en het verschil zit
+     in de schaduw.
+
+     Een lijn zit er niet meer om. Een uitstulping heeft geen rand; die had hij
+     wel, en dat maakte er een kadertje van. De actieve tab had er een cyane --
+     nu is hij INGEDRUKT, en dat zegt hetzelfde zonder lijn.
+
+     De tokens staan in de look-css met een terugval hier, want deze inline
+     stijl staat er ook voor het eerste frame, vóórdat data-look op <html>
+     staat. */
+  const tileBg = 'var(--axe-barbtn, var(--bg-base))';
   const tileShadow = isActive
-    ? '0 0 18px rgba(34,211,238,0.28), inset 0 1px 0 rgba(255,255,255,0.04)'
-    : '0 2px 6px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03)';
+    ? 'var(--axe-tegel-in, inset 4px 4px 9px rgba(0,0,0,0.8), inset -3px -3px 8px rgba(255,255,255,0.055))'
+    : 'var(--axe-tegel-op, -4px -4px 9px rgba(255,255,255,0.055), 5px 6px 14px rgba(0,0,0,0.8))';
 
   // Inactive was the LIGHTER cyan (#67e8f9 against #22d3ee), so every tab you
   // were not on glowed harder than the one you were. Selected keeps the accent;
@@ -252,26 +277,26 @@ function NavTile({
       title={item.label}
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
+      // Een doel voor de zwevende bol: meldt iets op deze tab terwijl je er
+      // niet bent, dan vliegt hij naar dit icoon (shared/axeActiviteit).
+      data-axe-doel={item.path}
       className="flex items-center justify-center rounded-[16px] transition-all flex-shrink-0 active:scale-95"
       style={{
         width: size,
         height: size,
-        background: tileBg,
-        border: tileBorder,
+        border: 0,
         boxShadow: tileShadow,
+        background: tileBg,
       }}
     >
       {Icon ? (
-        <Icon
-          size={iconPx}
-          strokeWidth={2.1}
-          color={strokeColor}
-          style={{
-            filter: isActive
-              ? 'drop-shadow(0 0 6px rgba(34,211,238,0.5))'
-              : 'drop-shadow(0 0 2px rgba(0,0,0,0.4))',
-          }}
-        />
+        /* Plat, zonder gloed. In het voorbeeld is het icoon gewoon grijs: de
+           diepte zit in de KNOP, niet in het teken erop. De actieve had een
+           cyane drop-shadow en de rest een zwarte, en samen met het reliëf
+           eronder werd dat twee soorten licht op één vorm -- dan leest geen van
+           beide meer als hoogte. Welke tab aan staat zie je nu aan de
+           ingedrukte tegel plus de accentkleur van het icoon. */
+        <Icon size={iconPx} strokeWidth={2.1} color={strokeColor} />
       ) : null}
     </button>
   );
@@ -286,6 +311,7 @@ export function BottomNav() {
   return (
     <div
       className="axe-bottomnav flex-shrink-0 w-full overflow-hidden"
+      data-axe-doel="axe-bottom-nav"
       style={{
         // Explicitly stacked, because in normal flow this sat at level 0 and
         // any in-page overlay covered it. ChartToolsDrawer's invisible
@@ -336,6 +362,7 @@ export function BottomNav() {
 
         <div
           className="hidden sm:flex flex-shrink-0 w-28 h-full items-center justify-center"
+          data-axe-doel="axe-voice-orb-anchor"
           style={{
             borderLeft: '1px solid rgba(255,255,255,0.05)',
             borderRight: '1px solid rgba(255,255,255,0.05)',

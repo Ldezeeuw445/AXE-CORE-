@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "dev:browser-demo": "vite --config vite.browser-demo.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts",
+    "build": "node scripts/check-desktop-env.mjs && vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -14,18 +14,18 @@
     "lint": "eslint src",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "bash scripts/tauri-build-guard.sh",
+    "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml",
     "bridge": "node --env-file=.env infra/axe-local-bridge/server.mjs",
     "check:secrets": "node scripts/check-no-secrets.mjs",
     "build:web": "vite build --config vite.config.ts && node scripts/check-no-secrets.mjs dist/public",
     "dev:stage": "vite --config vite.stage.config.ts --host 0.0.0.0",
     "build:stage": "vite build --config vite.stage.config.ts",
-    "tauri:stage": "tauri dev --config src-tauri/tauri.stage.conf.json",
-    "tauri:plaat": "tauri dev --config src-tauri/tauri.plaat.conf.json",
-    "tauri:plaat:build": "tauri build --config src-tauri/tauri.plaat.conf.json",
     "dev:shell": "STAGE_ENTRY=shell PORT=5011 vite --config vite.stage.config.ts --host 0.0.0.0",
-    "plaat:dev": "tauri dev --config src-tauri/tauri.coreplaat.dev.conf.json",
-    "plaat:build": "tauri build --config src-tauri/tauri.coreplaat.conf.json"
+    "bijwerken": "bash scripts/axe-bijwerken.sh",
+    "terminal": "bash scripts/axe-terminal.sh",
+    "welke": "bash scripts/axe-welke.sh",
+    "build:runner": "vite build -c vite.runner.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -75,6 +75,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.185.3",
+    "@types/topojson-client": "^3.1.5",
     "@vercel/node": "^5.8.26",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.23",
@@ -116,6 +117,7 @@
     "vite": "^7.2.4",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^3.2.7",
+    "ws": "^8.21.3",
     "zod": "^4.3.5",
     "zustand": "^5.0.14"
   },
@@ -124,13 +126,19 @@
     "@vis.gl/react-google-maps": "^1.9.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
-    "border-beam": "^1.3.0",
+    "border-beam": "^1.4.1",
     "lightweight-charts": "^5.2.0",
+    "liquid-gooey": "^0.2.1",
     "maplibre-gl": "^5.24.0",
     "pdfjs-dist": "^4.10.38",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "three": "^0.185.1"
+    "thinking-orbs": "^0.3.1",
+    "three": "^0.185.1",
+    "topojson-client": "^3.1.0",
+    "voice-glow": "^0.2.1",
+    "world-atlas": "^2.0.2"
   }
 }

@@ -254,13 +254,14 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
           onClick={onClick}
           onKeyDown={onKeyDown}
           onWheel={onWheel}
-          // Desktop renders at pane size, so the picture fills it exactly.
-          // Mobile keeps a real phone viewport and is fitted, because a 390px
-          // page stretched over a tablet-width pane is not what the site looks
-          // like on a phone.
+          // Preserve aspect ratio on BOTH desktop and mobile. Desktop still
+          // asks Chromium for the pane's measured viewport, so it normally
+          // fills exactly; during resize/debounce or an older screenshot we
+          // letterbox briefly instead of visibly stretching the website.
+          // Mobile keeps a real phone viewport and is fitted.
           className={mobile
             ? 'max-w-full max-h-full object-contain cursor-pointer outline-none'
-            : 'w-full h-full object-fill cursor-pointer outline-none'}
+            : 'w-full h-full object-contain cursor-pointer outline-none'}
           draggable={false}
         />
       ) : (

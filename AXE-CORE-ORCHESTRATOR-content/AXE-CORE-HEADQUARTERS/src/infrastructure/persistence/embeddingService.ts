@@ -12,6 +12,7 @@
  */
 import { loadConnectionOverrides } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /**
  * Where Ollama actually is, according to Luka.
@@ -180,30 +181,44 @@ export function cosineSimilarity(a: EmbeddingVector, b: EmbeddingVector): number
 }
 let warnedDimMismatch = false;
 
-function cacheGet(key: string): EmbeddingVector | null {
-  try {
-    const raw = localStorage.getItem(LS_EMBED_CACHE);
-    if (!raw) return null;
-    const map = JSON.parse(raw) as Record<string, EmbeddingVector>;
-    return map[key] ?? null;
-  } catch {
-    return null;
-  }
-}
+/* De cache leeft in het geheugen en gaat af en toe naar localStorage.
+ *
+ * Gemeten 13 september: 400 vectoren van 1024 getallen met zestien decimalen
+ * waren 1,8 miljoen tekens, en zowel cacheGet als cacheSet las en schreef dat
+ * hele blok bij ELKE opzoeking, synchroon op de hoofdthread. Samen met de
+ * trading-rapporten zat de app boven WebKit's 5 MB. Nu: één keer inlezen, vier
+ * decimalen (cosinus merkt dat niet), hoogstens 80 bewaard, en wegschrijven
+ * gebundeld na een paar seconden rust. */
+const EMBED_CACHE_MAX = 80;
+let embedCache: Map<string, EmbeddingVector> | null = null;
+let embedSchrijf: ReturnType<typeof setTimeout> | null = null;
 
-function cacheSet(key: string, vec: EmbeddingVector): void {
+function laadEmbedCache(): Map<string, EmbeddingVector> {
+  if (embedCache) return embedCache;
+  embedCache = new Map();
   try {
     const raw = localStorage.getItem(LS_EMBED_CACHE);
     const map = (raw ? JSON.parse(raw) : {}) as Record<string, EmbeddingVector>;
-    map[key] = vec;
-    const keys = Object.keys(map);
-    if (keys.length > 400) {
-      for (const k of keys.slice(0, keys.length - 300)) delete map[k];
-    }
-    localStorage.setItem(LS_EMBED_CACHE, JSON.stringify(map));
-  } catch {
-    /* quota */
-  }
+    for (const [k, v] of Object.entries(map).slice(-EMBED_CACHE_MAX)) embedCache.set(k, v);
+  } catch { /* kapotte cache: leeg beginnen */ }
+  return embedCache;
+}
+
+function cacheGet(key: string): EmbeddingVector | null {
+  return laadEmbedCache().get(key) ?? null;
+}
+
+function cacheSet(key: string, vec: EmbeddingVector): void {
+  const cache = laadEmbedCache();
+  cache.delete(key);
+  cache.set(key, vec.map(x => Math.round(x * 1e4) / 1e4));
+  while (cache.size > EMBED_CACHE_MAX) cache.delete(cache.keys().next().value as string);
+  if (embedSchrijf) clearTimeout(embedSchrijf);
+  embedSchrijf = setTimeout(() => {
+    embedSchrijf = null;
+    try { localStorage.setItem(LS_EMBED_CACHE, JSON.stringify(Object.fromEntries(cache))); }
+    catch { /* quota: dan alleen in het geheugen */ }
+  }, 4000);
 }
 
 async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500): Promise<EmbeddingVector | null> {
@@ -212,7 +227,7 @@ async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500)
     const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
     const res = await fetch(`${baseUrl}/api/embeddings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...ollamaHeaders(baseUrl) },
       body: JSON.stringify({ model: EMBED_MODEL, prompt: text.slice(0, 8000) }),
       signal: ctrl.signal,
     });

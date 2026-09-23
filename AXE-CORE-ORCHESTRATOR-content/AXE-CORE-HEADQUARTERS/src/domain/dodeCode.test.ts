@@ -75,8 +75,25 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/domain/chatRouting.ts', 'limitSimpleChatSlots'],
   ['src/domain/memory/hubClassifier.ts', 'hubForAgentRow'],
   ['src/domain/navRegistry.ts', 'loadDynamicNavItems'],
+  // 18 sep 2026 (AXE × NorthSea integratie): koppeling.ts is wél gekoppeld --
+  // DealsTab/CommunicatieTab gebruiken beoordeelKoppeling, koppelLabel enz. --
+  // maar deze twee helpers hebben nog géén aanroeper: `normalizeMessageId`
+  // (Message-ID-normalisatie voor threading) en `berichtTermen` (qty/incoterm/
+  // dest-extractie voor match-scoring) zijn met unit-tests bewezen maar nog
+  // niet aangesloten op beoordeelKoppeling. Bewust NIET geforceerd aangeroepen
+  // (dat zou de matching-uitkomst stilletjes veranderen); staat als open
+  // NorthSea-koppeling in het integratierapport. Niet weggooien.
+  ['src/domain/northsea/koppeling.ts', 'berichtTermen'],
+  ['src/domain/northsea/koppeling.ts', 'normalizeMessageId'],
   ['src/domain/providers.ts', 'applyPrimarySlot'],
   ['src/domain/providers.ts', 'limitChatIdentityCascade'],
+  // 17 sep 2026: dit was AXE's eigen "no primary pinned" chat-cascade
+  // stilzwijgend Ollama-first maken -- precies wat de "AXE nooit Ollama"-regel
+  // (chatModelKeuzes.ts, Settings' AXE Core-rij) doorbrak. Weggehaald uit
+  // installStableChat.ts, bewust hier gelaten: Luka wil "local models first"
+  // behouden maar dan voor de tier-2 workers/CrewAI, die nog geen eigen
+  // cascade-uitvoering hebben om op aan te sluiten. Niet weggooien.
+  ['src/domain/providers.ts', 'preferLocalOllamaFirst'],
   ['src/domain/providers.ts', 'resolveOllamaModel'],
   ['src/domain/proxyProvider.ts', 'wordtHernoemd'],
   ['src/domain/replyLanguage.ts', 'ttsPreviewLine'],
@@ -117,7 +134,6 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/axeCoreApiService.ts', 'n8nUpdateWorkflow'],
   ['src/infrastructure/gateways/axeCoreApiService.ts', 'requestDurableTaskApproval'],
   ['src/infrastructure/gateways/axeCoreApiService.ts', 'transitionDurableTask'],
-  ['src/infrastructure/gateways/axeCoreApiService.ts', 'vercelGetDeployment'],
   ['src/infrastructure/gateways/brokerConnector.ts', 'brokerAccountSummary'],
   ['src/infrastructure/gateways/brokerConnector.ts', 'setBrokerConnection'],
   ['src/infrastructure/gateways/companionToolsService.ts', 'triggerCompanionCorrelation'],
@@ -125,9 +141,13 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/e2bService.ts', 'e2bRunPython'],
   ['src/infrastructure/gateways/exaSearchService.ts', 'saveExaApiKey'],
   ['src/infrastructure/gateways/firecrawlService.ts', 'firecrawlSearch'],
-  ['src/infrastructure/gateways/geminiLiveService.ts', 'isGeminiLiveAvailable'],
-  ['src/infrastructure/gateways/geminiLiveService.ts', 'stopGeminiLive'],
+  // 23 sep 2026: gebouwd voor de globale spreekmeter (cbc36d9a), bewust losgekoppeld toen Cedar AXE's enige stem werd (c285b431); Fish hoort niet in getGlobalTtsLevel. Niet weggooien.
+  ['src/infrastructure/gateways/fishAudioService.ts', 'getFishTtsLevel'],
   ['src/infrastructure/gateways/globalTts.ts', 'getActiveTtsProvider'],
+  // Only called internally by speakGlobal() today; exported alongside it (like
+  // getActiveTtsProvider/stopGlobalTts above) so the markdown/chrome-stripping
+  // step is independently unit-testable without exercising real TTS playback.
+  ['src/infrastructure/gateways/globalTts.ts', 'sanitizeForSpeech'],
   ['src/infrastructure/gateways/globalTts.ts', 'stopGlobalTts'],
   ['src/infrastructure/gateways/kimiClawService.ts', 'browserCloseSession'],
   ['src/infrastructure/gateways/kimiClawService.ts', 'browserHealth'],
@@ -145,6 +165,8 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/localBridgeService.ts', 'localList'],
   ['src/infrastructure/gateways/localOllama.ts', 'invalidateLocalOllamaProbe'],
   ['src/infrastructure/gateways/localOllama.ts', 'listLocalOllamaModels'],
+  // Same removal as preferLocalOllamaFirst above -- its only caller.
+  ['src/infrastructure/gateways/localOllama.ts', 'resolveReachableOllama'],
   ['src/infrastructure/gateways/lseGateway.ts', 'lseSeries'],
   ['src/infrastructure/gateways/maps3d/ollamaApi.ts', 'isOllamaAvailable'],
   ['src/infrastructure/gateways/maps3d/ollamaApi.ts', 'listOllamaModels'],
@@ -206,6 +228,13 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/persistence/memoryStatsService.ts', 'getMemoryGrowthHistory'],
   ['src/infrastructure/persistence/obsidianMemoryService.ts', 'extractWikilinks'],
   ['src/infrastructure/persistence/obsidianVaultSyncService.ts', 'noteToMarkdown'],
+  // 21 sep 2026 (PR #153 integratie): symmetrische paar-functie van
+  // recordProviderUsage (die wél wordt aangeroepen, vanuit llmGateway.ts).
+  // SettingsPage.tsx leest vandaag de hele store via readAllProviderUsage()
+  // en indexeert zelf per provider; deze single-provider getter blijft
+  // bewust bestaan als publieke, symmetrische API -- niet weggooien, niet
+  // kunstmatig een aanroeper forceren.
+  ['src/infrastructure/persistence/providerUsageService.ts', 'readProviderUsage'],
   ['src/infrastructure/persistence/obsidianVaultSyncService.ts', 'pullNotesFromVault'],
   ['src/infrastructure/persistence/obsidianVaultSyncService.ts', 'syncAllNotesToVault'],
   ['src/infrastructure/persistence/ragMemoryService.ts', 'initializeRagMemory'],
@@ -277,6 +306,16 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/presentation/components/browser/AxeSpherePanel.tsx', 'AxeSpherePanel'],
   ['src/presentation/components/browser/NavigationBar.tsx', 'NavigationBar'],
   ['src/presentation/components/browser/SidebarPanels.tsx', 'SidebarPanels'],
+  // 20 sep 2026 (integration/axe-desktop-final, a6f43cda): the left radial's
+  // corner triangle used to call wisselBol() (AppShell.tsx's opHoek prop) to
+  // toggle the floating sphere; that commit repurposed the corner for Personal
+  // Computer Use instead, per the desktop-integration acceptance spec. The
+  // floating sphere itself (bolZichtbaar/useBolZichtbaar/ZwevendeBol.tsx,
+  // still mounted in BrowserPage.tsx) is unaffected -- only its on/off switch
+  // lost its caller. Not deleted: whether it gets a new home (e.g. Settings)
+  // or is retired for good is a product decision, not this verification pass's
+  // call. Flagged to Luka in the acceptance report.
+  ['src/presentation/components/layout/zweef/bolZichtbaar.ts', 'wisselBol'],
   ['src/presentation/components/shared/GlassPanel.tsx', 'GlassPanel'],
   ['src/presentation/components/surface/Surface.tsx', 'Chip'],
   ['src/presentation/components/surface/Surface.tsx', 'GhostButton'],
@@ -328,6 +367,13 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/presentation/pages/tradingIntel/StatusStrip.tsx', 'StatusStrip'],
   ['src/presentation/store/installWhisperVoice.ts', 'isVoiceConversationActive'],
   ['src/presentation/store/voiceStore.ts', 'markLoadedAsPersisted'],
+
+  // Gevraagd als component om te GEBRUIKEN, nog niet geplaatst: waar hij op
+  // het scherm hoort is een UI-keuze en die is niet aan mij. Het rekenwerk
+  // eronder (radiaal.ts) is wel getest, dus als hij ergens opgehangen wordt
+  // klopt hij meteen. Staat hij er over een week nog steeds op, dan is het
+  // dode code en hoort hij eruit.
+  ['src/presentation/components/shared/RadialMenu.tsx', 'RadialMenu'],
 ];
 
 const EXPORT_RE =
@@ -388,7 +434,10 @@ describe('geen nieuwe geëxporteerde functie zonder aanroeper', () => {
       'Nieuwe export zonder aanroeper gevonden. Sluit hem aan op de plek waar hij ' +
         'nuttig is, of zet hem bewust op de uitzonderingslijst in dit bestand met een reden.',
     ).toEqual([]);
-  });
+    // Een scan over alle bronbestanden: los ~3 s, in de volle suite op de
+    // 8 GB Mac mini ~6 s -- boven vitest's standaard 5 s, en dan faalde hij op
+    // tijd in plaats van op een vondst (23 sep). De controle zelf is ongewijzigd.
+  }, 30_000);
 
   it('de uitzonderingslijst zelf bevat geen dubbele vermeldingen', () => {
     const sleutels = UITZONDERINGEN.map(([f, n]) => `${f}::${n}`);

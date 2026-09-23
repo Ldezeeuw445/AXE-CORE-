@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, Rocket, Send, Sparkles, Target, Users } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { crewRun, apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { runCrewWithTools } from '@/application/crew/runCrewWithTools';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
-import { CARD_GRID_TALL, STAT_ROW } from '@/presentation/components/surface/Page';
+import { STAT_ROW } from '@/presentation/components/surface/Page';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
 /**
  * CrewAI — run the REAL multi-specialist crew as an explicit background job.
@@ -29,6 +31,7 @@ export default function CrewAI() {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [taskMsg, setTaskMsg] = useState<string | null>(null);
+  const [tools, setTools] = useState<Record<string, boolean> | null>(null);
 
   const toggle = (id: string) =>
     setSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -38,15 +41,41 @@ export default function CrewAI() {
     setState('running');
     setResult(null);
     setError(null);
+    setTools(null);
     const startedAt = Date.now();
+    // One episode per named specialist — Wingman is the agent that runs this
+    // crew (roster.ts), so every run's outcome counts toward its loop-health
+    // even when it's kicked off from a different machine than the one that
+    // later reads Agents -> loop health. No memoryIds: this page doesn't
+    // retrieve memory into the crew's context yet, so there is nothing to
+    // reinforce -- these episodes prove the loop is real (opened, closed,
+    // counted), not that it feeds memory back in. When `selected` is empty
+    // the VPS picks its own roster, so there is no honest per-specialist
+    // subject to tag -- one episode for the whole run instead.
+    const episodeSubjects = selected.length > 0
+      ? selected.map(id => `${SPECIALISTS.find(s => s.id === id)?.name ?? id}: ${task.trim().slice(0, 200)}`)
+      : [`crew (auto-selected): ${task.trim().slice(0, 200)}`];
+    const episodeIds = await Promise.all(
+      episodeSubjects.map(subject => openEpisode({ agent: 'wingman', subject })),
+    );
+    const sluitEpisodes = (verdict: 'good' | 'poor') =>
+      episodeIds.forEach(id => { void closeEpisode(id, verdict); });
     try {
-      const res = await crewRun({ task: task.trim(), specialists: selected.length > 0 ? selected : undefined });
+      // Through the crew gateway, not a bare crewRun(): without it the run
+      // gets no EXA/Firecrawl/BrightData/E2B/Qdrant credentials at all, so a
+      // specialist that needs a tool silently can't use it. This was the real
+      // gap the handoff's "runCrewWithTools" pointer was actually about.
+      const res = await runCrewWithTools({ task: task.trim(), specialists: selected.length > 0 ? selected : undefined });
+      setTools(res.tools ?? null);
       if (res.status === 'ok' && res.result) {
         setState('done');
         setResult(res.result);
+        sluitEpisodes('good');
         // The crewai_manager hub was registered but had no write site of its
         // own — this is that site. Only real, completed runs are recorded;
         // an idle page click that never fires runCrew() writes nothing.
+        // Tagged 'wingman', not the retired 'crewai_manager' (CONFIRMED
+        // ARCHITECTURE, 17 sep — Wingman runs this crew, not a fourth agent).
         recordEvent({
           kind: 'agent_run',
           summary: `Crew run: ${task.trim().slice(0, 120)}`,
@@ -56,28 +85,30 @@ export default function CrewAI() {
             result: res.result.slice(0, 2000),
             ms: Date.now() - startedAt,
           },
-          agentId: 'crewai_manager',
+          agentId: 'wingman',
         });
       } else {
         setState('error');
         const errMsg = res.error || `Crew returned status "${res.status}" without a result.`;
         setError(errMsg);
+        sluitEpisodes('poor');
         recordEvent({
           kind: 'error',
           summary: `Crew run failed: ${errMsg.slice(0, 120)}`,
           details: { task: task.trim(), specialists: selected, error: errMsg, ms: Date.now() - startedAt },
-          agentId: 'crewai_manager',
+          agentId: 'wingman',
         });
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setState('error');
       setError(msg);
+      sluitEpisodes('poor');
       recordEvent({
         kind: 'error',
         summary: `Crew run threw: ${msg.slice(0, 120)}`,
         details: { task: task.trim(), specialists: selected, error: msg, ms: Date.now() - startedAt },
-        agentId: 'crewai_manager',
+        agentId: 'wingman',
       });
     }
   };
@@ -132,9 +163,13 @@ export default function CrewAI() {
           const Icon = card.icon;
           return (
             <WidgetCard key={card.label} title="">
+              {/* Icoon naast het getal in plaats van erboven: als derde regel
+                  duwde hij het label onder de 104px-tellerrij uit beeld. */}
               <div className="text-center py-1">
-                <Icon size={15} className="mx-auto mb-1" style={{ color: card.color }} />
-                <div className="text-2xl font-bold font-mono-data" style={{ color: card.color }}>{card.value}</div>
+                <div className="flex items-center justify-center gap-2 text-2xl font-bold font-mono-data" style={{ color: card.color }}>
+                  <Icon size={15} />
+                  <span>{card.value}</span>
+                </div>
                 <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{card.label}</div>
               </div>
             </WidgetCard>
@@ -142,8 +177,11 @@ export default function CrewAI() {
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={CARD_GRID_TALL}>
+      {/* Twee vaste kolommen die de resthoogte vullen. Met auto-fill stonden
+          de roster en de taakkolom in twee van vier sporen en bleef de rechter
+          helft van de tab op 1728 breed leeg (UI-MAATSTAF regel 6); de roster
+          scrolt nu in de eigen kaart in plaats van de hele tab. */}
+      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
         <WidgetCard title="Crew Roster" headerAction={<Users size={13} style={{ color: 'var(--accent-cyan)' }} />}>
           <div className="space-y-2">
             {SPECIALISTS.map(s => {
@@ -181,8 +219,8 @@ export default function CrewAI() {
           </div>
         </WidgetCard>
 
-        <div className="space-y-4">
-          <WidgetCard title="Crew Task" headerAction={<Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} />}>
+        <div className="flex min-h-0 flex-col gap-3">
+          <WidgetCard className="flex-none" title="Crew Task" headerAction={<Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} />}>
             <div className="space-y-2.5">
               <textarea
                 value={task}
@@ -224,7 +262,26 @@ export default function CrewAI() {
             </div>
           </WidgetCard>
 
-          <WidgetCard title={state === 'error' ? 'Crew Error' : 'Crew Result'}>
+          <WidgetCard className="flex-1" title={state === 'error' ? 'Crew Error' : 'Crew Result'}>
+            {/* What the run actually had, not what Settings says is configured —
+                a key can be saved and still be wrong, so this reads the crew
+                gateway's own report of what it attached to this specific run. */}
+            {tools && (state === 'done' || state === 'error') && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {Object.entries(tools).map(([name, on]) => (
+                  <span
+                    key={name}
+                    className="text-[9px] px-1.5 py-0.5 rounded-full font-mono"
+                    style={{
+                      background: on ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.04)',
+                      color: on ? '#4ade80' : 'var(--text-muted)',
+                    }}
+                  >
+                    {on ? '✓' : '·'} {name}
+                  </span>
+                ))}
+              </div>
+            )}
             {state === 'idle' && (
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
                 No run yet. The result shown here is exactly what the VPS crew returns — if the CrewAI runtime
@@ -248,7 +305,6 @@ export default function CrewAI() {
             )}
           </WidgetCard>
         </div>
-      </div>
       </div>
     </motion.div>
   );

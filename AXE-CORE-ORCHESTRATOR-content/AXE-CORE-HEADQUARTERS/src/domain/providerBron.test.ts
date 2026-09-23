@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { PROVIDER_KEY_CATALOGUE } from './providerCatalogue';
+import { PROVIDERS } from './providers';
 
 /**
  * Instellingen en de uitschuifbalk moeten hetzelfde tonen.
@@ -41,7 +42,8 @@ describe('één bron voor providers', () => {
   it('de catalogus bevat wat er draait, en niet wat weg is', () => {
     const ids = PROVIDER_KEY_CATALOGUE.map(p => p.id);
     for (const nodig of ['openai', 'anthropic', 'google', 'groq', 'cerebras',
-                         'hermes', 'ollama', 'openrouter', 'openrouter2']) {
+                         'hermes', 'ollama', 'openrouter', 'openrouter2',
+                         'tavily', 'perplexity']) {
       expect(ids, `${nodig} hoort erin`).toContain(nodig);
     }
     // Luka heeft deze twee expliciet weggehaald. Ze staan hier zodat niemand
@@ -49,6 +51,9 @@ describe('één bron voor providers', () => {
     // keer in kwamen.
     expect(ids, 'smartthings is eruit gehaald').not.toContain('smartthings');
     expect(ids, 'Grok (xAI) is eruit gehaald').not.toContain('xai');
+    // Perplexity is onderzoek, geen chatmodel. In de sleutelcatalogus, niet
+    // in PROVIDERS — anders gaat de cascade hem als LLM inzetten.
+    expect(PROVIDERS.map(p => p.id), 'Perplexity is geen chat-provider').not.toContain('perplexity');
   });
 
   it('elke provider heeft alles wat een kaart nodig heeft', () => {

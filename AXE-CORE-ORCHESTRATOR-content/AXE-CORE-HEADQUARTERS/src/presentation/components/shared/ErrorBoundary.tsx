@@ -4,7 +4,15 @@ import { toast } from '@/presentation/components/shared/toast';
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
+  /**
+   * Vaste inhoud, of een functie die de foutmelding krijgt.
+   *
+   * Die functievorm bestaat omdat de vaste vorm hem weggooide: AppShell gaf een
+   * eigen scherm mee dat "This page crashed" toonde en verder niets, terwijl de
+   * melding hier gewoon in state stond. Een crashscherm zonder oorzaak maakt van
+   * een fout van vijf minuten een zoektocht van een uur.
+   */
+  fallback?: ReactNode | ((fout: string) => ReactNode);
 }
 
 interface State {
@@ -30,7 +38,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[AXE ErrorBoundary]', error, info.componentStack);
-    toast.error('AXE ran into an unexpected problem. You can try again or reload.');
+    // Was "AXE ran into an unexpected problem. You can try again or reload."
+    // -- één zin die bij elke crash hetzelfde zei en dus nooit iets toevoegde.
+    // describeFailure kent het verschil tussen een weggevallen server, een
+    // verwisselde build en een echte fout in de pagina, en dat verschil bepaalt
+    // wat je eraan doet.
+    toast.error(describeFailure(error).message);
   }
 
   private retry = () => {
@@ -39,6 +52,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      if (typeof this.props.fallback === 'function') {
+        return this.props.fallback(this.state.error ?? 'Onbekende fout');
+      }
       return this.props.fallback || (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center" style={{ backgroundColor: 'var(--bg-base)' }}>
           <div className="text-center p-8 max-w-md">

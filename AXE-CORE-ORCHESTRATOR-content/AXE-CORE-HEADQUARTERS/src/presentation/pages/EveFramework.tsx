@@ -23,6 +23,7 @@ import { writeReflection } from '@/infrastructure/persistence/reflectionService'
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface EveSkill {
@@ -357,7 +358,11 @@ export default function EveFramework() {
     const toPersist = providers.map(({ id, name, model, accent, connected, verified, skills, expanded }) => ({
       id, name, model, accent, connected, verified, skills, expanded,
     }));
-    localStorage.setItem(OPSLAG, JSON.stringify(toPersist));
+    // Via zetJson en niet rechtstreeks: dit stond hier onbeschermd, en met een
+    // volle opslag gooide het -- in een effect, dus de ErrorBoundary ving het en
+    // je hele EVE-scherm was weg omdat een uitklapstand niet onthouden kon
+    // worden. Zie infrastructure/persistence/veiligeOpslag.ts.
+    zetJson(OPSLAG, toPersist);
   }, [providers]);
 
   const toggleProvider = useCallback((id: string) => {

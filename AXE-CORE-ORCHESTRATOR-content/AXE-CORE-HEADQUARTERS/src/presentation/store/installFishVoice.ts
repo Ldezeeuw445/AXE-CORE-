@@ -1,27 +1,21 @@
 /**
- * installFishVoice.ts
- * On boot: ensure Fish Audio has the configured AXE identity voice id,
- * and keep axe_tts_provider in localStorage so Settings choices
- * (fish | elevenlabs | browser) are what speakSafely uses.
+ * Legacy boot migration kept under its historical name so older imports do not
+ * create a second startup path.
+ *
+ * AXE now has one speech identity: OpenAI Cedar through globalTts.ts. Old
+ * builds stored a selectable TTS provider (usually "fish"), and that persisted
+ * value was still enough to make the daily greeting sound like the old AXE
+ * after a fresh native rebuild. Clear that obsolete selector at boot.
+ *
+ * Fish Audio itself remains available as a standalone service for explicit
+ * diagnostics/preview code; it is not an AXE identity fallback.
  */
-import { LEWIS_VOICE_ID } from '@/infrastructure/gateways/fishAudioService';
-
-const FISH_VOICE_KEY = 'axe_fish_voice_id';
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
-/** Previous default (Damian Lewis / Bobby Axelrod style) — migrate to new identity. */
-const LEGACY_LEWIS_VOICE_ID = 'e385288efc394446b3155a4fdaf24b75';
 
 export function installFishVoice(): void {
   try {
-    const existing = (localStorage.getItem(FISH_VOICE_KEY) ?? '').trim();
-    if (!existing || existing === LEGACY_LEWIS_VOICE_ID) {
-      localStorage.setItem(FISH_VOICE_KEY, LEWIS_VOICE_ID);
-    }
-    // If user never picked a provider, default to fish.
-    if (!localStorage.getItem(TTS_PROVIDER_KEY)) {
-      localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
-    }
+    localStorage.removeItem(TTS_PROVIDER_KEY);
   } catch {
-    /* ignore */
+    /* storage unavailable */
   }
 }

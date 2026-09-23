@@ -9,8 +9,8 @@ import { useAuth } from '@/presentation/contexts/AuthContext';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
-import { runAxeBootstrap } from '@/application/system/axeBootstrap';
 import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
+import { isIngebed } from '@/presentation/components/layout/zweef/ingebed';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
@@ -31,15 +31,25 @@ const MCPCenter = lazy(() => import('@/presentation/pages/MCPCenter'));
 const Infrastructure = lazy(() => import('@/presentation/pages/Infrastructure'));
 const CommandCenter = lazy(() => import('@/presentation/pages/CommandCenter'));
 const TerminalPage = lazy(() => import('@/presentation/pages/TerminalPage'));
+const TerminalsPage = lazy(() => import('@/presentation/pages/TerminalsPage'));
 const SettingsPageWithAxeQuotes = lazy(() => import('@/presentation/pages/SettingsPageWithAxeQuotes'));
 const TableEditor = lazy(() => import('@/presentation/pages/TableEditor'));
 const CronManager = lazy(() => import('@/presentation/pages/CronManager'));
 const ControlPlane = lazy(() => import('@/presentation/pages/ControlPlane'));
 const Maps3D = lazy(() => import('@/presentation/pages/Maps3D'));
+// Alleen in dev: de Strategy Lab buiten de login-muur, voor visuele controle.
+const StrategyLabDevPreview = import.meta.env.DEV
+  ? lazy(() => import('@/presentation/pages/tradingIntel/lab/StrategyLabDevPreview'))
+  : null;
+const NorthseaDesk = lazy(() => import('@/presentation/pages/northsea/NorthseaDesk'));
+const Grootboek = lazy(() => import('@/presentation/pages/Grootboek'));
 const CrewAI = lazy(() => import('@/presentation/pages/CrewAI'));
 const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'));
 const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
 const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
+const ComputerUse = lazy(() => import('@/presentation/pages/ComputerUse'));
+const ComputerUseOverlay = lazy(() => import('@/presentation/pages/ComputerUseOverlay'));
+const StandaloneNorthseaPage = lazy(() => import('@/presentation/pages/StandaloneNorthseaPage'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
@@ -117,9 +127,31 @@ export default function App() {
     useVoiceStore.getState().loadConversation().catch(() => {});
   }, []);
 
+  /**
+   * De opstartroutine wordt PAS ingeladen als er iemand is ingelogd.
+   *
+   * Hij werd hier al na de login aangeroepen, maar stond boven statisch
+   * geïmporteerd -- en dan zit hij gewoon in de eerste brok. Achter die ene
+   * import hangt de halve applicatielaag: obsidian-sync, de trading-autopilot,
+   * de geheugenbeheerder, elke gateway daaronder. Dat werd allemaal gelezen en
+   * uitgevoerd vóór de eerste pixel, terwijl het pas seconden later nodig is.
+   *
+   * Gemeten voor deze wijziging: index-*.js was 2.267 kB (719 kB gzip).
+   *
+   * Bewust geen `void` op de import zonder vangnet: mislukt hij, dan hoort dat
+   * in de console te staan en niet als stille niet-gestarte achtergrondlus te
+   * eindigen waarbij je je een week afvraagt waarom je geheugen niet bijwerkt.
+   *
+   * Niet in een iframe. De telefoon op Home laadt deze app op #/mobile; die
+   * kopie hoort te tonen, niet te werken: de trading-autopilot, de
+   * geheugenbeheerder en de vault-sync bewaken zichzelf per venster, dus twee
+   * vensters is twee keer draaien. Eén opstartroutine, in het bovenste venster.
+   */
   useEffect(() => {
-    if (!user) return;
-    runAxeBootstrap();
+    if (!user || isIngebed()) return;
+    import('@/application/system/axeBootstrap')
+      .then(({ runAxeBootstrap }) => runAxeBootstrap())
+      .catch((e) => console.error('[AXE] opstartroutine niet geladen', e));
   }, [user]);
 
   useKeyboardShortcuts({});
@@ -148,10 +180,13 @@ export default function App() {
               already redirected here stayed here. */}
           <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
+          {StrategyLabDevPreview && <Route path="/dev-strategy-lab-preview" element={<StrategyLabDevPreview />} />}
           <Route path="/dev-browser-preview" element={<div className="h-[100dvh] w-full overflow-hidden"><BrowserPage /></div>} />
           {/* Standalone desktop browser — no AppShell chrome */}
           <Route path="/dev-browser-standalone" element={<StandaloneBrowserPage />} />
           <Route path="/browser-desktop" element={<RequireAuth><StandaloneBrowserPage /></RequireAuth>} />
+          <Route path="/computer-use-overlay" element={<RequireAuth><ComputerUseOverlay /></RequireAuth>} />
+          <Route path="/northsea-desktop" element={<RequireAuth><StandaloneNorthseaPage /></RequireAuth>} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
             {/* The page that answers "what actually works". */}
@@ -161,6 +196,7 @@ export default function App() {
             <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="calendar" element={<CalendarPage />} />
+            <Route path="ledger" element={<Grootboek />} />
             <Route path="memory" element={<MemoryHub />} />
             <Route path="memory/explore" element={<Memory />} />
             <Route path="memory/trading" element={<TradingMemory />} />
@@ -175,16 +211,20 @@ export default function App() {
                 entry in navRegistry — reachable only by typing the URL, and
                 indistinguishable from /terminal once there. Removed 31-08-2026. */}
             <Route path="terminal" element={<TerminalPage />} />
+            <Route path="terminals" element={<TerminalsPage />} />
             <Route path="settings" element={<SettingsPageWithAxeQuotes />} />
             <Route path="table-editor" element={<TableEditor />} />
             <Route path="cron-manager" element={<CronManager />} />
             <Route path="control-plane" element={<ControlPlane />} />
-            <Route path="maps-3d" element={<Maps3D />} />
+            {/* De Maps-tab is de NorthSea Commodity desk (Luka, 14 september). De
+                oude 3D-kaart staat nog op /dev-map-preview. */}
+            <Route path="maps-3d" element={<NorthseaDesk />} />
             <Route path="crewai" element={<CrewAI />} />
             <Route path="developer" element={<CommandCenter />} />
             <Route path="code-editor" element={<CodeEditorPage />} />
             <Route path="eve" element={<EveFramework />} />
             <Route path="browser" element={<BrowserPage />} />
+            <Route path="computer-use" element={<ComputerUse />} />
             <Route path="organization" element={<Organization />} />
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />

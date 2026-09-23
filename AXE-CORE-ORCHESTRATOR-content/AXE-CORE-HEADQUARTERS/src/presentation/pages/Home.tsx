@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
@@ -13,14 +14,29 @@ import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
+import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp';
+import { BezigVlag } from '@/presentation/components/layout/zweef/BezigVlag';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
 
 
+/* Twaalf uur. Niet als "hier hoort een nieuwe bouw te staan" -- een bouw van
+   vorige week is volkomen normaal als er niets veranderd is. Dit is voor de
+   sessie waarin je WEL aan het bouwen bent en het scherm niet meebeweegt: dan
+   is een bouw van gisteren het antwoord. */
+const BOUW_OUD_NA = 12 * 60 * 60 * 1000;
+
 export default function Home() {
   const isMobile = useIsMobile();
+  /* Eén keer lezen, niet elke render: het is een constante die bij de bouw is
+     ingebakken. De leeftijd wordt dus niet live bijgewerkt -- dat hoeft ook
+     niet, want hij verandert alleen als je herstart, en dan is dit een nieuwe
+     mount met een nieuwe waarde. */
+  const bouw = buildStamp();
+  const bouwRegel = buildStampLine(bouw);
+  const bouwOud = buildLooksStale(bouw, BOUW_OUD_NA);
   const voice = useVoiceStore();
   const spherePhase = useSphereProjectionStore(s => s.phase);
   const spherePayload = useSphereProjectionStore(s => s.payload);
@@ -31,7 +47,6 @@ export default function Home() {
      bijhouden of het paneel open is, lopen gegarandeerd uit elkaar. */
   const showAwareness = useCoreViewStore(s => s.showAwareness);
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
-  const setChatCollapsed = useCoreViewStore(s => s.setChatDicht);
 
   // Any living-display project → force Core view so SphereStage is visible
   useEffect(() => {
@@ -46,12 +61,23 @@ export default function Home() {
     return () => window.removeEventListener('axe-living-display', onLiving);
   }, []);
 
-  // Neural / Terrain are both full memory explorers (sidebars, composer, depth
-  // control) — give them the room they need by collapsing the chat drawer
-  // instead of squeezing under it.
-  useEffect(() => {
-    if (coreView === 'neural' || coreView === 'terrain') setChatCollapsed(true);
-  }, [coreView]);
+  /* De chatplaat blijft staan, ook op Neural en Terrain.
+   *
+   * Hier stond het omgekeerde: die twee klapten de plaat dicht, met als reden
+   * dat ze "full memory explorers (sidebars, composer, depth control)" zijn en
+   * anders geen ruimte hebben. Die reden is vervallen -- hun eigen zijpanelen
+   * staan nu uit, want de shell heeft links en rechts al widgets. Wat overblijft
+   * is de scene met een composer bovenin en een depth-regelaar onderin, en dat
+   * past prima boven een open plaat.
+   *
+   * De depth-regelaar houdt afstand via --axe-chat-onder, de maat die
+   * AxeShellChrome meet. Dus de plaat mag open of dicht staan zonder dat er
+   * iets overheen valt.
+   *
+   * Het effect zelf is weg in plaats van omgedraaid: de plaat dwingend OPEN
+   * zetten zou net zo fout zijn. Of de chat open staat is jouw keuze, niet iets
+   * dat een tab voor je omzet. */
+
 
 
 
@@ -88,6 +114,7 @@ export default function Home() {
        de 3D-scene loopt door tot het glas, en zodra hij inspringt zie je de
        afgeronde rand van .axe-scene als een lijn dwars over de plaat. Die was
        er nooit, en hij hoort er ook niet. */
+    <>
     <motion.div className="flex flex-col h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
       <motion.div variants={iv} className="flex-1 min-h-0">
         <div
@@ -119,8 +146,14 @@ export default function Home() {
               const label = statusLabel[coreStatus] ?? (hasError ? 'ERROR' : hasProvider ? 'CORE ACTIVE' : 'NO AI');
               const color = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--accent-cyan)' : 'var(--warning)');
               const dotColor = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--success)' : 'var(--warning)');
+              /* Het stipje zei alleen DAT er iets was; de orb zegt WAT. Zelfde
+                 teken als het midden van de onderbalk, hier op 20px. */
+              const orbStatus = coreStatus === 'listening' ? 'listening'
+                : coreStatus === 'speaking' ? 'speaking'
+                  : coreStatus === 'thinking' || coreStatus === 'awaiting-approval' ? 'processing'
+                    : 'idle';
               return (<>
-                <LiveIndicator size={6} color={dotColor} />
+                <AxeStatusOrb size={20} status={orbStatus} werk={{ schrijft: coreStatus === 'thinking' }} />
                 <span className="text-xs-custom font-mono-data" style={{ color }}>{label}</span>
               </>);
             })()}
@@ -142,12 +175,28 @@ export default function Home() {
           )}
 
 
-          {/* Purely decorative watermark — on mobile it sits directly behind
-              the tab pills above, so it only adds visual noise to the exact
-              spot that's already tight on room. Desktop has space to spare. */}
+          {/* Welke bouw hier draait.
+       *
+       * Hier stond `v5.0`, met de hand ingetypt, en dat antwoordde niets: het
+       * getal veranderde nooit. De vraag die je hier echt stelt is "is mijn
+       * rebuild binnengekomen" -- en die is vandaag drie keer gesteld zonder
+       * dat de app hem kon beantwoorden.
+       *
+       * domain/buildStamp bestond al, met tests, en werd door geen enkel
+       * scherm gelezen. Het stond zelfs niet op de dode-code-lijst, want die
+       * kijkt of een naam ELDERS voorkomt en dat deed hij: in zijn eigen test.
+       *
+       * Wel leesbaar, niet opdringerig: het watermerk stond op alpha 0.12 en
+       * dat is precies te zwak om een commit uit te lezen. Wordt de bouw oud
+       * terwijl je aan het bouwen bent, dan kleurt de TEKST (wet 10: kleur zit
+       * in de letters, nooit in een vlak). */}
           {!isMobile && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none" style={{ color: 'rgba(255,255,255,0.12)' }}>
-              v5.0
+            <div
+              className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none"
+              title="De commit en het tijdstip waarop deze app gebouwd is"
+              style={{ color: bouwOud ? 'var(--m-budget)' : 'rgba(255,255,255,0.34)' }}
+            >
+              {bouwRegel}
             </div>
           )}
 
@@ -185,6 +234,18 @@ export default function Home() {
                   de vorm in de gloed. Beide blijven bestaan. */}
               {opPlaat ? <AxeCoreSphere /> : <SphereStage status={coreStatus} />}
             </div>
+          {/* De drie weergaven vullen het HELE vak, niet alleen het stuk boven
+              de chatplaat.
+
+              Ze stonden in het bol-vak (`--axe-bol-vak`), dat met opzet stopt
+              waar de chat begint -- die maat bestaat zodat de bol niet meezakt
+              als je de plaat inklapt. Voor een terrein is dat precies verkeerd:
+              dan krijgt de scene een onzichtbaar kader, en bij inzoomen loopt
+              hij tegen een rand aan in plaats van gewoon door.
+
+              Vol dus, en onder de composer door. De panelen erin houden zelf
+              afstand tot de chatplaat via --axe-chat-onder; de SCENE hoeft dat
+              niet, want daar kijk je doorheen. */}
             <AnimatePresence>
               {coreView === 'runtime' && (
                 <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
@@ -202,11 +263,16 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
+
           </div>
         </div>
       </motion.div>
 
 
     </motion.div>
+    {/* Buiten de motion.div: framer zet er een transform op en dat zou de
+        laag aan de scene binden in plaats van aan het venster. */}
+    <BezigVlag />
+    </>
   );
 }

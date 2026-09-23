@@ -29,7 +29,10 @@
 .axe-neural-embed .nm-canvas-wrap {
   position: absolute;
   inset: 0;
-  background: #000000;
+  /* Zie NeuralBrain.css: een zwarte plaat over de shell maakt hier een losse
+     app van. Het terrein wordt op het canvas getekend en heeft geen
+     ondergrond nodig. */
+  background: transparent;
   z-index: 0;
 }
 .axe-neural-embed canvas {
@@ -40,34 +43,71 @@
   cursor: grabbing;
 }
 
-/* ---------- side panels ---------- */
+/* ---------- side panels ----------
+ * Fix 2: image 14's columns read as ONE quiet strip -- search, a title, a
+ * tight stat list, a tight hub list, a plain-text control legend -- not a
+ * stack of separately-boxed cards. The card material (background, border,
+ * radius, shadow) that used to sit on every `.nm-panel` now sits ONCE on
+ * `.nm-sidebar` below; each `.nm-panel` is just a section inside that one
+ * card, separated from its neighbour by a hairline instead of its own box.
+ * Reusability is why they keep the wrapper at all -- the wrapper still gives
+ * each section its own DOM boundary for the `h2` and its rows. */
 .nm-panel {
-  background: var(--nm-card);
-  border: 1px solid var(--nm-border);
-  border-radius: 16px;
-  padding: 13px 14px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 11px 0 0;
   flex-shrink: 0;
 }
+.nm-panel:first-child {
+  padding-top: 0;
+}
+.nm-panel:not(:first-child) {
+  border-top: 1px solid var(--nm-border);
+}
+/* Deze kolom hangt in het LINKERSLOT VAN DE SCHIL (zie PlaatSlot in
+   NeuralMemorySystem.tsx, regel ~1345). Hij ligt dus niet over de shell-widgets
+   heen -- hij IS de shell-widget, met de inhoud van deze weergave.
+
+   Hier stond even `display:none`, op de aanname dat deze panelen dubbelop waren
+   met de Sidebar en RightPanel van de schil. Dat was fout: de plaatsing komt al
+   van de plaat, precies zodat deze kolom op dezelfde plek en in hetzelfde
+   materiaal staat als de panelen van elke andere tab. Verbergen haalde dus de
+   widgets weg die er juist horen te zijn.
+
+   Staat hier ooit weer een reden om ze te verbergen: lees eerst die comment in
+   de tsx. */
 .nm-sidebar {
-  position: absolute;
-  top: 64px;
-  bottom: 14px;
-  width: 218px;
+  /* PlaatSlot is the positioning authority. Once this node is portaled into
+     the shell, viewport offsets here create a second coordinate system and
+     make the widgets drift/clip. Fill the shell slot instead. */
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   z-index: 15;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   overflow-y: auto;
   pointer-events: auto;
+  /* Eén doorlopende kaart voor de hele kolom -- zie de nm-panel comment
+     hierboven. Niet doorzichtig (zie PlaatSlots.tsx): de scene erachter is
+     kleurrijk genoeg om tekst zonder scrim onleesbaar te maken. */
+  background: linear-gradient(180deg, rgba(9, 10, 13, 0.86), rgba(5, 5, 7, 0.92));
+  border: 1px solid var(--nm-border);
+  border-radius: 18px;
+  padding: 14px 14px 12px;
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.7);
 }
 .nm-sidebar::-webkit-scrollbar {
   width: 0;
 }
-.nm-sidebar-left {
-  left: 14px;
-}
+ .nm-sidebar-left,
 .nm-sidebar-right {
-  right: 14px;
+  left: auto;
+  right: auto;
 }
 
 .nm-title {
@@ -117,8 +157,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
-  font-size: 11px;
+  padding: 3px 0;
+  font-size: 10.5px;
 }
 .nm-stat-row .k {
   color: var(--nm-dim);
@@ -143,11 +183,11 @@
 .nm-hub-row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 6px;
-  border-radius: 10px;
+  gap: 8px;
+  padding: 4px 5px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 11.5px;
+  font-size: 11px;
   transition: background 0.15s;
   border: 1px solid transparent;
 }
@@ -193,41 +233,77 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Corrective round 4, Fix E: same DISTRIBUTION panel Neural's left column
+   got (NeuralBrain.css's .mini-bar-*), named to this file's own convention.
+   Real hub counts, sorted by share of the total -- not a new number, a
+   different read of the one the hub list above already shows. */
+.nm-mini-bar-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
+  row-gap: 3px;
+  align-items: center;
+  font-size: 11px;
+  padding: 3px 0;
+}
+.nm-mini-bar-row .label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nm-mini-bar-row .pct {
+  color: var(--nm-dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.nm-mini-bar-track {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.nm-mini-bar-track > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+/* Corrective round 6, Part 5: het bediening-lijstje onderaan de linkerkolom
+ * is nu een `.nm-panel` net als zijn buren (zie Legend() in
+ * NeuralMemorySystem.tsx) -- dat geeft het al zijn haarlijn-scheiding en
+ * kop-opmaak (`.nm-panel h2`), dus hier hoeft alleen de rij-opmaak van de
+ * oude `.nm-legend-plain` nog te bestaan, verhuisd naar `.nm-legend` zodat
+ * de naam niet meer "plain" belooft terwijl het blok er inmiddels wel een is. */
 .nm-legend {
-  font-size: 10.5px;
-  color: var(--nm-text);
+  font-size: 10px;
+  color: var(--nm-dim);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 .nm-legend .row {
   display: flex;
-  gap: 9px;
+  gap: 8px;
   align-items: center;
   font-weight: 500;
 }
-.nm-legend .ic-wrap {
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  background: var(--nm-card-2);
-  border: 1px solid var(--nm-border);
+.nm-legend .ic {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--nm-dim);
+  width: 15px;
   flex-shrink: 0;
+  color: var(--nm-dim);
 }
 .nm-legend kbd {
-  background: var(--nm-card-2);
-  border: 1px solid var(--nm-border);
-  border-radius: 5px;
-  padding: 1px 5px;
   font-size: 9px;
   min-width: 14px;
   text-align: center;
   font-family: inherit;
   color: var(--nm-dim);
+  opacity: 0.8;
 }
 
 .nm-live-tag {
@@ -372,61 +448,16 @@
   font-size: 11px;
 }
 
-/* ---------- depth bar ---------- */
-.nm-depthbar {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-}
-.nm-depthbar .label {
-  font-size: 9px;
-  letter-spacing: 1.3px;
-  color: var(--nm-dim);
-  font-weight: 700;
-}
-.nm-depthbar .row {
-  display: flex;
-  gap: 6px;
-  background: var(--nm-card);
-  border: 1px solid var(--nm-border);
-  padding: 6px;
-  border-radius: 14px;
-}
-.nm-depth-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid var(--nm-border);
-  background: var(--nm-card-2);
-  color: var(--nm-text);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-.nm-depth-btn.active {
-  background: #fff;
-  color: #020203;
-  border-color: #fff;
-}
-.nm-depth-btn.locked {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 /* ---------- composer ---------- */
+/* Corrective round 4, Fix B: this 56px was the same guess as Neural's own
+   #composer (NeuralBrain.css) -- both views had it, which is why screenshot
+   24 showed the identical overlap under the tab row on Terrain too. Now reads
+   the tab row's real measured bottom edge (--axe-viewctl-onder,
+   AxeShellChrome.tsx) instead of a constant that was never actually verified
+   against the row's rendered height. */
 .nm-composer {
   position: absolute;
-  top: 56px;
+  top: var(--axe-viewctl-onder, 64px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
@@ -802,31 +833,11 @@
 --------------------------------------------------------------------------- */
 @media (max-width: 900px) {
   .nm-sidebar-left,
-  .nm-sidebar-right,
-  .nm-legend {
+  .nm-sidebar-right {
     display: none !important;
   }
-
-  /* Depth control stays — it changes what you're looking at — but sits flat
-     against the bottom instead of floating over the peaks. */
-  .nm-depthbar {
-    position: static !important;
-    transform: none !important;
-    width: 100% !important;
-    padding: 6px 8px !important;
-    justify-content: center !important;
-  }
 }
 
-
-/* Was four inline style properties on the element, which no stylesheet rule
-   could override -- including the container query below. */
-.axe-neural-embed .nm-legend {
-  position: absolute;
-  bottom: 14px;
-  left: 246px;
-  z-index: 15;
-}
 
 /* ---------------------------------------------------------------------------
    Narrow container: terrain only.
@@ -853,7 +864,6 @@
    --------------------------------------------------------------------------- */
 @container nm (max-width: 720px) {
   .axe-neural-embed .nm-sidebar,
-  .axe-neural-embed .nm-legend,
   .axe-neural-embed .nm-composer {
     display: none;
   }
@@ -866,7 +876,29 @@
   .axe-neural-embed .nm-sidebar-right {
     display: none;
   }
-  .axe-neural-embed .nm-legend {
-    left: 14px;
-  }
+}
+
+/* Consolidated shell-side readout: the scene itself stays free of loose cards. */
+.nm-side-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+}
+.nm-side-summary > span {
+  min-width: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--nm-border);
+}
+.nm-side-summary small {
+  display: block;
+  font-size: 8px;
+  letter-spacing: .08em;
+  color: var(--nm-dim);
+}
+.nm-side-summary b {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--nm-text);
 }

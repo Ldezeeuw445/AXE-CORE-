@@ -4,6 +4,7 @@
  * Crypto via Binance public API (no key). Equities best-effort via Stooq CSV.
  * Synthetic random-walk only as an offline-safe last resort.
  */
+import { atrOf } from '@/domain/tradingIntel/strategyLab/tradePlan';
 import type { MarketSnapshot, OhlcBar } from '@/domain/tradingIntel/demoTypes';
 import { accountSupportsSymbol, getMetaApiConfig, toMt5Symbol } from '@/infrastructure/gateways/metaApiService';
 import { metaApiGetHistoricalCandles, type KandelRekening } from '@/infrastructure/gateways/metaApiMarketData';
@@ -411,15 +412,7 @@ export function rsi(bars: OhlcBar[], period = 14): number | null {
 
 /** Average true range — used by tradingAgentEngine to size stop-loss/take-
  *  profit distance off actual recent volatility instead of a fixed %. */
+/** De live motor en de Strategy Lab gebruiken dezelfde ATR (strategyLab/tradePlan). */
 export function atr(bars: OhlcBar[], period = 14): number | null {
-  if (bars.length < period + 1) return null;
-  const slice = bars.slice(-period);
-  let sum = 0;
-  for (let i = 0; i < slice.length; i++) {
-    const b = slice[i];
-    const prevClose = i > 0 ? slice[i - 1].c : b.o;
-    const trueRange = Math.max(b.h - b.l, Math.abs(b.h - prevClose), Math.abs(b.l - prevClose));
-    sum += trueRange;
-  }
-  return sum / slice.length;
+  return atrOf(bars, period);
 }

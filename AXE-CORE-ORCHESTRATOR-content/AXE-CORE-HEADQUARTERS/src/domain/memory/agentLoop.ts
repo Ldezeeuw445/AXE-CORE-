@@ -35,6 +35,43 @@ export const LOOP_AGENTS = [
   'code-editor',
   'browser',
   'research',
+  'intel',
+  'companion',
+  // Wingman's crew-runs (CrewAI.tsx): één episode per specialist, gesloten
+  // zodra het (synchrone) /crew/run-resultaat terugkomt. Episodes en niet
+  // beurten, ondanks het directe antwoord: een crew gestart op de Mac Mini
+  // moet ook meetellen in de loop-health op de iMac, en dat is precies
+  // waar localStorage-beurten niet voor gemaakt zijn.
+  'wingman',
+  // Toegevoegd na het War Room-onderzoek van 22-23 sep 2026: task/cron/
+  // memory/thinktank hadden allemaal al een echte, niet-verzonnen afloop
+  // (task: done/blocked in Tasks.tsx; cron: ok/fail/timeout/skipped per
+  // run op de VPS; memory: ok/warning/error uit checkMemoryHealth(); think-
+  // tank: een echte GitHub branch/PR/merge-uitslag) maar geen lus.
+  'task',
+  'cron',
+  'memory',
+  'thinktank',
+  // 'finance' en 'apps' volgden een dag later, zodra ze een echte actie
+  // hadden: finance = de dagelijkse afstemming tussen de inkomsten-ledger
+  // en AXE Algo's eigen trade-journaal (financeDigestService.ts); apps =
+  // een echte health/deploy-actie op de VPS (axeCoreApiService.ts). Beide
+  // pas toegevoegd toen dat er echt was -- zie de git-log van deze regel
+  // voor de eerdere, kortere lijst en waarom ze er toen expliciet niet
+  // in stonden.
+  'finance',
+  'apps',
+  // Trading's eigen desk-lane "tweede mening" (deskAgents.ts) leende tot
+  // 22-23 sep 2026 de identiteit 'intel'/'companion' -- dezelfde als de
+  // echte AXE Intel/AXE Companion product-agents in de andere apps. Die
+  // agents zeggen zelf al "not the AXE Companion application" in hun eigen
+  // system prompt (deskAgents.ts), maar de loop-health werd toch onder
+  // dezelfde emmer geteld, dus de kaart van het echte product-agent toonde
+  // Trading's interne simulatie als was het zijn eigen activiteit. Eigen
+  // identiteit hier lost dat op zonder de echte 'intel'/'companion' agents
+  // aan te raken.
+  'trading-desk-intel',
+  'trading-desk-companion',
 ] as const;
 
 export type LoopAgent = (typeof LOOP_AGENTS)[number];
@@ -117,8 +154,14 @@ export interface LoopHealth {
   closed: number;
   good: number;
   poor: number;
+  /** Good episodes that actually contained memory references to learn from. */
+  reinforceable: number;
+  /** Episodes whose reinforcement was successfully completed. */
+  applied: number;
   /** Aandeel geopende episodes dat ooit een oordeel kreeg. */
   closeRate: number;
+  /** Aandeel reinforceable good episodes dat echt is toegepast. */
+  applyRate: number;
 }
 
 /**
@@ -133,12 +176,18 @@ export interface LoopHealth {
 export function loopHealth(agent: LoopAgent, episodes: Episode[]): LoopHealth {
   const mine = episodes.filter(e => e.agent === agent);
   const closed = mine.filter(e => e.verdict !== 'unknown');
+  const good = closed.filter(e => e.verdict === 'good');
+  const reinforceable = good.filter(e => e.memoryIds.length > 0 || e.memoryKeys.length > 0);
+  const applied = reinforceable.filter(e => e.applied);
   return {
     agent,
     opened: mine.length,
     closed: closed.length,
-    good: closed.filter(e => e.verdict === 'good').length,
+    good: good.length,
     poor: closed.filter(e => e.verdict === 'poor').length,
+    reinforceable: reinforceable.length,
+    applied: applied.length,
     closeRate: mine.length ? closed.length / mine.length : 0,
+    applyRate: reinforceable.length ? applied.length / reinforceable.length : 0,
   };
 }

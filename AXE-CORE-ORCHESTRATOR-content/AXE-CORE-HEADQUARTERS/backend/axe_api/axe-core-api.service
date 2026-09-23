@@ -1,55 +1,32 @@
-# NAME MATTERS: the live unit is axe-core-api.service, with hyphens.
+# NAAM DOET ERTOE: de draaiende unit heet axe-core-api.service, met streepjes.
 #
-# This file was called axe_api.service, so "systemctl restart axe_api" — the
-# obvious command, and the one this repo implied — returned "Unit not found"
-# on 2026-08-19 while the service was running perfectly well under its real
-# name. A deploy that patches the code and then fails to restart anything is
-# worse than no deploy: the file says one thing and the box does another.
+# Dit bestand heette ooit axe_api.service, waardoor "systemctl restart axe_api"
+# — het voor de hand liggende commando, en wat deze repo suggereerde — op
+# 2026-08-19 "Unit not found" gaf terwijl de service prima draaide onder zijn
+# echte naam. Een deploy die de code aanpast en daarna niets herstart is erger
+# dan geen deploy: het bestand zegt iets anders dan de box doet.
 #
+# Geheimen staan alleen op de host, nooit in deze repo. Zie README.md.
+#
+# Bewust aan loopback gebonden: de box doet TLS ervoor, en deze service houdt
+# de Supabase service_role-sleutel vast — hij mag dus nooit rechtstreeks vanaf
+# het internet bereikbaar zijn.
+
 [Unit]
 Description=AXE Core API
 Documentation=https://github.com/Ldezeeuw445/AXE-CORE-
 After=network.target
-
-# Secrets live only on the host, never in this repo. See README.md.
-#
-# Bound to loopback on purpose: the box terminates TLS in front of this, and
-# the service holds the Supabase service_role key, so it must never be
-# reachable directly from the internet.
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/axe-core-api
 EnvironmentFile=/opt/axe-core-api/.env
-# 12 workers.
-#
-# Two earlier numbers, both reasoned from things that have since changed.
-#
-# 12 was set on 2026-08-19 to stop "Strato is offline again": the Supabase
-# client here is the SYNCHRONOUS postgrest one, so a slow query occupies an
-# entire worker until it gives up rather than yielding. 144 read timeouts in
-# two hours across four workers within the same second, on a box at 0.14 load.
-# Twelve fixed that and then appeared to move the bottleneck onto a Nano-tier
-# database, so it was written down as 6.
-#
-# Measured 2026-08-20, after the Supabase compute upgrade:
-#   * read timeouts: ~2200/hour at yesterday's peak, 107 in the hour before the
-#     upgrade, and 0 in the hour after it. The database was the bottleneck, and
-#     it is not one now.
-#   * memory: all 13 processes together hold 644MB, about 70MB per worker --
-#     not the ~1.5GB the 6-worker note assumed at 300MB each. The box has
-#     5.8GB free.
-#
-# So the reason to drop to 6 was a database that no longer struggles, and the
-# cost of 12 is a fifth of what it was thought to be. Keeping 12, which is also
-# what has actually been running throughout.
-#
-# The real fix is still the synchronous client -- worker count only buys
-# tolerance for it. What to watch is max_connections, still 60 on this tier
-# with ~21 in use; if timeouts return, that is the number that matters, not
-# this one.
-ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 12
+# Twee workers, niet twaalf. Op de box gemeten en daar aangepast: 7,7 GB wordt
+# gedeeld met Ollama, de browser-agent en de task-worker, en elke uvicorn-worker
+# is een eigen proces met zijn eigen Supabase-client. Twaalf stond in git maar
+# draaide nergens; dit is wat er echt loopt.
+ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 2
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

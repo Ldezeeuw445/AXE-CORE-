@@ -41,7 +41,13 @@ import { createPortal } from 'react-dom';
 
 export type SlotNaam = 'links' | 'rechts' | 'dock' | 'rail' | 'topbalk';
 
-const SLOT_ID: Record<SlotNaam, string> = {
+/**
+ * Exported so anything that adopts an EXISTING (non-React) element into a slot
+ * -- see `useSlotAdoptie` below -- can still find that element by id after the
+ * move, without hardcoding host ids that could drift from this table. See
+ * `NeuralBrain.tsx`'s `q()` for the concrete case this exists for.
+ */
+export const SLOT_ID: Record<SlotNaam, string> = {
   links: 'axe-slot-links',
   rechts: 'axe-slot-rechts',
   dock: 'axe-slot-dock',
@@ -91,6 +97,61 @@ function useSlotGastheer(naam: SlotNaam): HTMLElement | null {
   }, [naam]);
 
   return gastheer;
+}
+
+/**
+ * Referentietelling voor `axe-slot--hoog`, gedeeld door alle drie de wegen die
+ * de klasse zetten (`PlaatPanel`, `PlaatSlot`, `useSlotAdoptie`).
+ *
+ * ## Waarom een teller en geen boolean
+ *
+ * Neural, Terrain en Architecture wisselen via `AnimatePresence` (Home.tsx /
+ * HomeStage.tsx, `exit={{opacity:0}}` met 250ms). Dat betekent dat de
+ * VERTREKKENDE weergave nog gewoon gemount blijft -- effecten, cleanup en al
+ * -- voor de hele duur van zijn exit-animatie, TERWIJL de binnenkomende
+ * weergave al mount en zijn eigen `axe-slot--hoog` claim probeert te leggen op
+ * hetzelfde gedeelde gastheer-element (`#axe-slot-links`/`#axe-slot-rechts`).
+ * Voor 250ms lang kunnen dus twee (of bij een snelle heen-en-terug-wissel:
+ * drie) instanties tegelijk gemount zijn op dezelfde gastheer.
+ *
+ * Een boolean "heb ik hem zelf gezet" (het oude patroon, hieronder nog te
+ * zien in de git-historie) gaat hier stuk: instantie B mount, ziet de klasse
+ * al staan (want instantie A had hem gezet en is nog niet opgeruimd), en
+ * concludeert dus "iemand anders zorgt hiervoor" -- B registreert zichzelf
+ * NOOIT als eigenaar. Zodra A dan alsnog opruimt (zijn exit-animatie is
+ * voorbij), haalt A de klasse weg ONDER B vandaan, terwijl B nog springlevend
+ * is en hem nog nodig heeft. Van buiten is dat precies Neural's "eerst goed,
+ * dan valt hij terug" -- de klasse verdwijnt niet DIRECT bij het wisselen,
+ * maar pas zodra de vorige instantie zijn (vertraagde) opruiming voltooit,
+ * wat de flap een fractie later laat gebeuren dan de wissel zelf -- en kan,
+ * bij de verkeerde volgorde, de klasse ook blijvend LATEN STAAN op een
+ * gastheer die niemand meer gebruikt (het spook-obstakel dat
+ * AxePresenceDock.tsx op een geheel andere tab zou kunnen zien).
+ *
+ * Een teller lost dit op ONGEACHT de volgorde: elke claim verhoogt, elke
+ * vrijgave verlaagt, en de klasse gaat pas weg als de teller op nul staat.
+ * Wie hem als tweede claimt terwijl hij al aanstaat telt gewoon mee (was
+ * eerst een no-op); wie vrijgeeft terwijl er nog een ander telt laat hem
+ * gewoon staan. Correct bij elke overlap, zonder dat de volgorde van mount/
+ * unmount ertoe doet. */
+const hoogTellers = new Map<Element, number>();
+
+function hoogClaim(gastheer: Element): void {
+  const volgende = (hoogTellers.get(gastheer) ?? 0) + 1;
+  hoogTellers.set(gastheer, volgende);
+  if (volgende === 1) gastheer.classList.add('axe-slot--hoog');
+}
+
+function hoogVrijgeven(gastheer: Element): void {
+  const huidige = hoogTellers.get(gastheer);
+  if (huidige === undefined) return; // al vrijgegeven, of nooit geclaimd -- niets te doen
+  const volgende = huidige - 1;
+  if (volgende <= 0) {
+    hoogTellers.delete(gastheer);
+    gastheer.classList.remove('axe-slot--hoog');
+  } else {
+    hoogTellers.set(gastheer, volgende);
+  }
 }
 
 /** Waar de schil de sloten neerzet. Alleen AppShell gebruikt dit. */
@@ -157,8 +218,12 @@ export function PlaatPanel({
 
   useEffect(() => {
     if (!gastheer || !hoog) return;
-    gastheer.classList.add('axe-slot--hoog');
-    return () => { gastheer.classList.remove('axe-slot--hoog'); };
+    // Referentietelling (zie hoogClaim/hoogVrijgeven hierboven), niet een kale
+    // add/remove: twee panelen die overlappen op dezelfde gastheer (Terrain
+    // wisselt via AnimatePresence, zie useSlotAdoptie's uitleg) mogen elkaars
+    // klasse niet onder elkaar vandaan trekken.
+    hoogClaim(gastheer);
+    return () => hoogVrijgeven(gastheer);
   }, [gastheer, hoog]);
 
   /* De breedte staat op het SLOT, niet op het paneel: twee panelen in dezelfde
@@ -208,13 +273,13 @@ export function PlaatSlot({ slot, hoog, children }: {
    * Neem de volle hoogte van de plaat in plaats van alleen de onderband.
    *
    * De sloten lopen normaal van de chatplaat tot onder de composer -- dat is
-   * de band van de code-editor, met de terminal links en de agent rechts. De
+   * de onderband van tabs die er panelen in hangen. De code-editor doet dat
+   * niet meer (terminal onder de editor, agent in de balk). De
    * geheugenverkenners willen iets anders: kolommen naast het beeld, van onder
    * de kopbalk tot boven de chat, zoals in de oude AXE Core.
    *
-   * Als schakelaar op het slot en niet als attribuut op <html>: dan hoeft geen
-   * enkele andere pagina te weten dat deze stand bestaat, en kan de
-   * code-editor er niet per ongeluk in meegaan.
+   * Alleen wie er zelf om vraagt krijgt dit: PlaatSlot zet de klasse op de
+   * gastheer en haalt hem er bij het verlaten weer af.
    */
   hoog?: boolean;
   children: ReactNode;
@@ -224,10 +289,20 @@ export function PlaatSlot({ slot, hoog, children }: {
   // De klasse hoort op de GASTHEER, want die is gepositioneerd -- niet op wat
   // erin geportaleerd wordt. Opruimen bij het verlaten, anders houdt de
   // volgende tab de hoge stand.
+  //
+  // Referentietelling, net als PlaatPanel en useSlotAdoptie hierboven/onder:
+  // Terrain (deze weg) en Neural (useSlotAdoptie) wisselen via dezelfde
+  // AnimatePresence in Home.tsx/HomeStage.tsx, dus tijdens een wissel kunnen
+  // een vertrekkende en een binnenkomende instantie allebei even gemount zijn
+  // op hetzelfde gastheer-element. Terrain toonde de race niet zo zichtbaar
+  // als Neural, maar dat was timing (een synchrone add/remove komt hier
+  // toevallig vaker "op tijd" uit dan useSlotAdoptie's met-een-frame-
+  // vertraagde rAF-pad), niet een andere, veiligere bookhouding -- de kale
+  // add/remove hieronder was BOVEN referentietelling niet raceveilig.
   useEffect(() => {
     if (!gastheer || !hoog) return;
-    gastheer.classList.add('axe-slot--hoog');
-    return () => { gastheer.classList.remove('axe-slot--hoog'); };
+    hoogClaim(gastheer);
+    return () => hoogVrijgeven(gastheer);
   }, [gastheer, hoog]);
 
   if (!gastheer) return null;
@@ -286,7 +361,7 @@ export function useSlotAdoptie(
     if (!actief) return;
 
     const verhuisd: Array<{ el: HTMLElement; ouder: Node; naast: Node | null }> = [];
-    const hoogGezet: HTMLElement[] = [];
+    const hoogGeclaimd: HTMLElement[] = [];
 
     /* Eén tik uitstel: het element komt uit dangerouslySetInnerHTML en de
        slot-gastheren uit de schil; welke van de twee er eerder staat is niet
@@ -298,12 +373,23 @@ export function useSlotAdoptie(
         if (!gastheer || !el || el.parentNode === gastheer) continue;
         verhuisd.push({ el, ouder: el.parentNode!, naast: el.nextSibling });
         gastheer.appendChild(el);
-        /* De klasse op de gastheer, want die is gepositioneerd. Alleen als hij
-           er nog niet stond, anders haalt het opruimen hem weg bij een slot dat
-           hem van een ander onderdeel had. */
-        if (hoog && !gastheer.classList.contains('axe-slot--hoog')) {
-          gastheer.classList.add('axe-slot--hoog');
-          hoogGezet.push(gastheer);
+        /* De klasse op de gastheer, want die is gepositioneerd.
+         *
+         * ALTIJD claimen, nooit eerst checken of hij al aanstaat -- dat was
+         * precies de race (zie hoogClaim/hoogVrijgeven's uitleg hierboven).
+         * Deze weg heeft het extra probleem dat de claim een heel
+         * animatieframe LATER komt dan de synchrone PlaatSlot/PlaatPanel-weg
+         * (de rAF hierboven): tijdens een snelle Neural<->Terrain-wissel via
+         * AnimatePresence kan de vertrekkende instantie de klasse allang
+         * gezet hebben voordat deze rAF hier vuurt. Een boolean-teller die
+         * dat als "al goed" leest registreert zichzelf dan nooit als
+         * claimant, en verliest de klasse zodra de vertrekkende instantie
+         * (met vertraging, via zijn eigen cleanup) opruimt -- exact de "eerst
+         * goed, dan valt hij terug"-flip. De teller telt gewoon mee, ongeacht
+         * of hij nul of al hoger was. */
+        if (hoog) {
+          hoogClaim(gastheer);
+          hoogGeclaimd.push(gastheer);
         }
       }
     });
@@ -313,7 +399,7 @@ export function useSlotAdoptie(
       for (const { el, ouder, naast } of verhuisd) {
         try { ouder.insertBefore(el, naast); } catch { /* ouder is al weg */ }
       }
-      for (const g of hoogGezet) g.classList.remove('axe-slot--hoog');
+      for (const g of hoogGeclaimd) hoogVrijgeven(g);
     };
   }, [selectors, actief, hoog]);
 }

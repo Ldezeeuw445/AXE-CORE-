@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { ArrowRight, ExternalLink, Home, Plus, RefreshCw, Smartphone, Trash2, Wrench } from 'lucide-react';
-import { sbGetRows, sbDeleteRow, vercelListDeployments, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { Activity, ArrowRight, ExternalLink, Home, Plus, Power, RefreshCw, Smartphone, Trash2, Wrench } from 'lucide-react';
+import {
+  sbGetRows, sbDeleteRow, isAxeApiConfigured,
+  vpsStatus, buildStatus, vpsServiceRestart, type VpsStatus, type BuildStatus,
+  northseaPipelineSummary, northseaSystemHealth, northseaCommunicationsMetrics, northseaTab,
+  type NorthseaPipelineSummary, type NorthseaSystemHealth, type NorthseaCommunicationsMetrics,
+} from '@/infrastructure/gateways/axeCoreApiService';
 import {
   androidShellAvailable, isAppInstalled, openAndroidApp, openPhoneHomeScreen,
 } from '@/infrastructure/gateways/androidAppsBridge';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 import AppLogo from '@/presentation/components/apps/AppLogo';
 import AddAppDialog from '@/presentation/components/apps/AddAppDialog';
 import {
@@ -41,6 +47,79 @@ const STATE_STYLE: Record<LiveState, { bg: string; fg: string; label: string }> 
   unknown: { bg: 'rgba(255,255,255,0.04)', fg: 'rgba(255,255,255,0.4)', label: 'Unknown' },
 };
 
+// Which registered_apps row maps to which real VPS systemd unit (main.py's
+// _VPS_SERVICES) — keyed on the unique `name` column seeded in
+// 20260723_registered_apps.sql. Trading OS has no entry here on purpose: it
+// is an internal tab (internal_path '/trading'), not a separate deploy
+// target, so there is nothing on the VPS to health-check for it — fabricating
+// one would be exactly the "guessed status" this feature replaces.
+const VPS_SERVICE_BY_APP_NAME: Record<string, string> = {
+  'AXE CORE HQ': 'axe-core-api',
+  'AXE Companion': 'axe-companion',
+};
+
+// Apps whose registered_apps row would otherwise imply a status this
+// dashboard cannot honestly claim — confirmed by a dedicated investigation
+// (see the App Manager Vercel-removal pass), not guessed from a URL fetch or
+// Vercel's API (which this page no longer calls, full stop — see the load()
+// comment below). Each entry overrides both the card's status badge and adds
+// an explicit detail line, regardless of what prod_url/vercel_project_id
+// happen to hold on the row:
+//  - AXE Companion runs on the VPS today, but DNS still points at the
+//    disabled Vercel deployment, so nothing public actually resolves to it.
+//  - Trading OS has never been a separate deployment — it is an internal
+//    tab, hence no VPS_SERVICE_BY_APP_NAME entry for it either.
+//  - Axon Memory has its own domain and its own Supabase project, neither of
+//    which this app can independently verify — so instead of trusting a
+//    no-cors fetch as a stand-in for "launched", it says plainly that this
+//    dashboard doesn't know.
+const NOT_LAUNCHED_STATUS: Record<string, { badge: string; detail: string }> = {
+  'AXE Companion': {
+    badge: 'Not launched',
+    detail: 'Not launched — runs on the VPS (axe-companion service), DNS not yet cut over from the disabled Vercel deployment.',
+  },
+  'Trading OS': {
+    badge: 'No deployment',
+    detail: 'Not a separate deployment — runs as a tab inside AXE CORE.',
+  },
+  'Axon Memory': {
+    badge: 'Status unknown',
+    detail: 'Status unknown from AXE CORE — check directly.',
+  },
+};
+
+interface AppHealthCheck {
+  checking: boolean;
+  vps?: VpsStatus;
+  build?: BuildStatus;
+  error?: string;
+  checkedAt?: number;
+}
+
+// NorthSea Commodity is a real business Luka runs, not a deploy target — it
+// has no registered_apps row and no VPS systemd unit of its own here, so it
+// gets its own card below the registry grid rather than a slot inside it
+// (same reasoning as Trading OS having no VPS_SERVICE_BY_APP_NAME entry
+// above). Revenue is carried explicitly as `commissie_bedragen`/`waarde_ingevuld`
+// counts (from the existing /northsea/tab/rapporten) rather than a dollar
+// figure: as of writing, zero opportunities have a commission amount filled
+// in, so a dollar total would be fabricated — the count is the honest number.
+interface NorthseaRevenueCounts {
+  deals: number;
+  gewonnen: number;
+  commissie_bedragen: number;
+  waarde_ingevuld: number;
+}
+
+interface NorthseaSummaryState {
+  loading: boolean;
+  pipeline?: NorthseaPipelineSummary;
+  health?: NorthseaSystemHealth;
+  comms?: NorthseaCommunicationsMetrics;
+  revenue?: NorthseaRevenueCounts;
+  error?: string;
+}
+
 export default function AppsPage() {
   const navigate = useNavigate();
   const sendMessage = useVoiceStore(s => s.sendMessage);
@@ -48,7 +127,94 @@ export default function AppsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveState>>({});
   const [adding, setAdding] = useState(false);
+  const [health, setHealth] = useState<Record<string, AppHealthCheck>>({});
+  const [restarting, setRestarting] = useState<Record<string, boolean>>({});
+  const [northsea, setNorthsea] = useState<NorthseaSummaryState>({ loading: false });
   const onPhone = androidShellAvailable();
+
+  // NorthSea Commodity summary — read-only, no confirm needed. Four calls:
+  // three governed NorthSea MCP tools (pipeline/health/comms — main.py's
+  // /northsea/pipeline-summary, /northsea/system-health,
+  // /northsea/communications-metrics) plus the existing /northsea/tab/rapporten
+  // for the honest commission count. This is a dashboard, not an agent acting
+  // on the world, so unlike checkHealth() above it does not open a loop episode.
+  const loadNorthsea = async () => {
+    setNorthsea(prev => ({ ...prev, loading: true, error: undefined }));
+    try {
+      const [pipeline, healthData, comms, rapporten] = await Promise.all([
+        northseaPipelineSummary(),
+        northseaSystemHealth(),
+        northseaCommunicationsMetrics(),
+        northseaTab('rapporten'),
+      ]);
+      setNorthsea({
+        loading: false, pipeline, health: healthData, comms,
+        revenue: {
+          deals: rapporten.totaal.deals,
+          gewonnen: rapporten.totaal.gewonnen,
+          commissie_bedragen: rapporten.totaal.commissie_bedragen,
+          waarde_ingevuld: rapporten.totaal.waarde_ingevuld,
+        },
+      });
+    } catch (e) {
+      setNorthsea({ loading: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  // Real health check for the rows that map to a VPS systemd unit — replaces
+  // the no-cors-fetch guess above for those two rows specifically. Backed by
+  // main.py's /vps/status + /build/status (see axeCoreApiService.ts).
+  //
+  // Loop wiring (LOOP_AGENTS 'apps'): a health check has a real, observed
+  // outcome (a live systemd state, not a guess), so it earns an episode —
+  // opened before the call and closed with the actual result, same shape as
+  // Tasks.tsx's 'task' wiring.
+  const checkHealth = async (app: RegisteredApp) => {
+    const serviceKey = VPS_SERVICE_BY_APP_NAME[app.name];
+    setHealth(prev => ({ ...prev, [app.id]: { checking: true } }));
+    const episodeId = await openEpisode({ agent: 'apps', subject: `${app.name} health check` });
+    try {
+      const [vps, build] = await Promise.all([vpsStatus(), buildStatus()]);
+      const svc = serviceKey ? vps.services[serviceKey] : undefined;
+      const healthy = serviceKey ? svc?.active === true : vps.ok;
+      setHealth(prev => ({ ...prev, [app.id]: { checking: false, vps, build, checkedAt: Date.now() } }));
+      void closeEpisode(
+        episodeId,
+        healthy ? 'good' : 'poor',
+        serviceKey ? `${serviceKey}: ${svc?.state ?? (svc?.active === null ? 'unknown' : 'inactive')}` : 'vps status fetched',
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setHealth(prev => ({ ...prev, [app.id]: { checking: false, error: message, checkedAt: Date.now() } }));
+      void closeEpisode(episodeId, 'poor', message);
+    }
+  };
+
+  // Destructive: restarts a live systemd unit on the VPS. Gated behind an
+  // explicit confirm (same window.confirm pattern this page already uses for
+  // Remove, above) — this is the only caller of vpsServiceRestart() in the
+  // app, and it is never invoked without that confirmation.
+  const restartService = async (app: RegisteredApp, service: string) => {
+    if (!window.confirm(
+      `Restart ${service} on the VPS? This briefly interrupts the live ${app.name} API.`,
+    )) return;
+    setRestarting(prev => ({ ...prev, [app.id]: true }));
+    const episodeId = await openEpisode({ agent: 'apps', subject: `${app.name} restart (${service})` });
+    try {
+      const res = await vpsServiceRestart(service);
+      void closeEpisode(episodeId, res.ok ? 'good' : 'poor', res.note);
+      // The server dispatches the restart fire-and-forget, so the unit may
+      // still be bouncing the moment this resolves — give it a few seconds
+      // before re-checking rather than reading "still restarting" as failed.
+      setTimeout(() => void checkHealth(app), 4_000);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setLoadError(message);
+      void closeEpisode(episodeId, 'poor', message);
+    } finally {
+      setRestarting(prev => ({ ...prev, [app.id]: false }));
+    }
+  };
 
   const load = async () => {
     try {
@@ -67,55 +233,58 @@ export default function AppsPage() {
         const next: Record<string, LiveState> = {};
         await Promise.all(
           list.map(async (app) => {
-            // NO VERCEL PROJECT IS NOT THE SAME AS NOT RUNNING.
-            //
-            // This returned 'unknown' for anything without a Vercel id, so
-            // Axon Memory — live on Cloudflare at app.axon-memory.com and
-            // answering 200 — was labelled Unknown on a dashboard whose whole
-            // job is saying what is up. A status has to come from an
-            // observation, and the URL is the observation available here.
-            // A native app is not a deployment. Ledger is either installed on
-            // the phone or it is not, and asking Vercel or fetching a URL
-            // would answer a question nobody asked — so the tile reports what
-            // it can actually observe: whether the package is present.
-            if (app.android_package && !app.vercel_project_id) {
+            // This dashboard never asks Vercel's API for status — see
+            // NOT_LAUNCHED_STATUS and VPS_SERVICE_BY_APP_NAME above for why.
+            // Order matters: a hardcoded honest label wins over any network
+            // check, a real VPS systemd check wins over a guess, and only
+            // apps with neither fall back to an actual observation (native
+            // install, or reachability) — never a fabricated "Online".
+            if (NOT_LAUNCHED_STATUS[app.name]) {
+              next[app.id] = 'unknown';
+              return;
+            }
+
+            // Real systemd state from main.py's /vps/status — the same
+            // source checkHealth()/the "Check health" button use — instead
+            // of ever asking Vercel. AXE CORE HQ's row still carries a
+            // vercel_project_id (historical; the column stays because other
+            // code depends on it existing), but that value is never read
+            // here or sent anywhere.
+            const vpsServiceKey = VPS_SERVICE_BY_APP_NAME[app.name];
+            if (vpsServiceKey) {
+              next[app.id] = 'checking';
+              try {
+                const vps = await vpsStatus();
+                const svc = vps.services[vpsServiceKey];
+                next[app.id] = svc?.active === true ? 'online' : svc?.active === false ? 'error' : 'unknown';
+              } catch {
+                next[app.id] = 'unknown';
+              }
+              return;
+            }
+
+            // A native app is not a deployment: whether the package is
+            // present on this phone is the only honest thing to check.
+            if (app.android_package && !app.prod_url) {
               next[app.id] = onPhone
                 ? (isAppInstalled(app.android_package) ? 'online' : 'error')
                 : 'unknown';
               return;
             }
-            if (!app.vercel_project_id) {
-              if (!app.prod_url) {
-                next[app.id] = 'unknown';
-                return;
-              }
-              next[app.id] = 'checking';
-              try {
-                // no-cors: this is a cross-origin GET to a site we do not
-                // control, so the response is opaque. Reaching it at all is
-                // the signal; a body we cannot read would tell us no more.
-                await fetch(app.prod_url, { mode: 'no-cors', signal: AbortSignal.timeout(8_000) });
-                next[app.id] = 'online';
-              } catch {
-                next[app.id] = 'error';
-              }
+
+            if (!app.prod_url) {
+              next[app.id] = 'unknown';
               return;
             }
             next[app.id] = 'checking';
             try {
-              const deps = await vercelListDeployments(1, app.vercel_project_id);
-              const latest = Array.isArray(deps) ? deps[0] : null;
-              const st = String(
-                (latest as { readyState?: string; state?: string })?.readyState
-                ?? (latest as { state?: string })?.state
-                ?? '',
-              ).toUpperCase();
-              if (st.includes('READY') || st === 'SUCCESS') next[app.id] = 'online';
-              else if (st.includes('ERROR') || st.includes('FAIL')) next[app.id] = 'error';
-              else if (st) next[app.id] = 'deploying';
-              else next[app.id] = 'unknown';
+              // no-cors: this is a cross-origin GET to a site we do not
+              // control, so the response is opaque. Reaching it at all is
+              // the signal; a body we cannot read would tell us no more.
+              await fetch(app.prod_url, { mode: 'no-cors', signal: AbortSignal.timeout(8_000) });
+              next[app.id] = 'online';
             } catch {
-              next[app.id] = 'unknown';
+              next[app.id] = 'error';
             }
           }),
         );
@@ -134,6 +303,13 @@ export default function AppsPage() {
     // for as long as this page has existed. A microtask makes the async
     // boundary explicit without duplicating the fetch into the effect.
     const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
+
+  }, []);
+
+  useEffect(() => {
+    if (!isAxeApiConfigured) return;
+    const t = setTimeout(() => void loadNorthsea(), 0);
     return () => clearTimeout(t);
 
   }, []);
@@ -206,6 +382,9 @@ export default function AppsPage() {
             {apps.map((app, i) => {
               const state = live[app.id] ?? 'unknown';
               const st = STATE_STYLE[state];
+              const vpsServiceKey = VPS_SERVICE_BY_APP_NAME[app.name];
+              const notLaunched = NOT_LAUNCHED_STATUS[app.name];
+              const h = health[app.id];
               return (
                 <motion.div
                   key={app.id}
@@ -232,15 +411,57 @@ export default function AppsPage() {
                       >
                         {/* "Failed" is the wrong word for an app that simply is
                             not on the phone, and "Online" is the wrong word for
-                            one that is. Same states, honest labels. */}
-                        {app.android_package && !app.vercel_project_id
-                          ? (state === 'online' ? 'Installed' : state === 'error' ? 'Not installed' : st.label)
-                          : st.label}
+                            one that is. Same states, honest labels. A
+                            NOT_LAUNCHED_STATUS entry outranks both — see the
+                            comment on that map for why. */}
+                        {notLaunched
+                          ? notLaunched.badge
+                          : app.android_package && !app.prod_url
+                            ? (state === 'online' ? 'Installed' : state === 'error' ? 'Not installed' : st.label)
+                            : st.label}
                       </span>
                     </div>
                     <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                       {app.description || app.notes || 'No description'}
                     </p>
+                    {/* Honest, hardcoded status for apps this dashboard knows
+                        are not actually launched/reachable the way their row
+                        might imply — see NOT_LAUNCHED_STATUS above. */}
+                    {notLaunched && (
+                      <div className="text-[10px] leading-relaxed -mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                        {notLaunched.detail}
+                      </div>
+                    )}
+                    {/* Real VPS health, only for the rows that map to an
+                        actual systemd unit — genuine pass/fail from
+                        /vps/status + /build/status, not the opaque
+                        reachable-or-not guess the card badge above shows. */}
+                    {vpsServiceKey && (h?.checking || h?.error || h?.vps) && (
+                      <div className="text-[10px] leading-relaxed -mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                        {h?.checking ? (
+                          'Checking VPS…'
+                        ) : h?.error ? (
+                          <span style={{ color: 'var(--error)' }}>Health check failed: {h.error}</span>
+                        ) : h?.vps ? (
+                          <>
+                            <span style={{
+                              color: h.vps.services[vpsServiceKey]?.active ? 'var(--success)' : 'var(--error)',
+                            }}
+                            >
+                              {vpsServiceKey}: {h.vps.services[vpsServiceKey]?.state
+                                ?? (h.vps.services[vpsServiceKey]?.active === null ? 'unknown' : 'inactive')}
+                            </span>
+                            {h.build?.applicable && (
+                              <>
+                                {' · '}{h.build.branch ?? '?'} @ {h.build.commit?.short_sha ?? '?'}
+                                {h.build.uncommitted_files ? ` (${h.build.uncommitted_files} uncommitted)` : ''}
+                                {h.build.stale_vs_latest_commit ? ' · stale build' : ''}
+                              </>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                    )}
                     <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
                       {/* First, because on the phone it is the whole point of
                           the row — and it opens the real app, not a page about
@@ -271,6 +492,31 @@ export default function AppsPage() {
                           onClick={() => window.open(app.prod_url, '_blank', 'noopener,noreferrer')}
                         >
                           <ExternalLink size={11} /> Live
+                        </AxeButton>
+                      )}
+                      {/* Real VPS health check — only for rows mapped to an
+                          actual systemd unit (see VPS_SERVICE_BY_APP_NAME). */}
+                      {vpsServiceKey && (
+                        <AxeButton
+                          size="sm"
+                          variant="ghost"
+                          disabled={h?.checking}
+                          onClick={() => void checkHealth(app)}
+                        >
+                          <Activity size={11} /> {h?.checking ? 'Checking…' : 'Check health'}
+                        </AxeButton>
+                      )}
+                      {/* Destructive, confirm-gated, and only for AXE CORE
+                          HQ's own service — restarting axe-companion from
+                          here isn't part of this pass. */}
+                      {vpsServiceKey === 'axe-core-api' && (
+                        <AxeButton
+                          size="sm"
+                          variant="ghost"
+                          disabled={restarting[app.id]}
+                          onClick={() => void restartService(app, 'axe-core-api')}
+                        >
+                          <Power size={11} /> {restarting[app.id] ? 'Restarting…' : 'Restart API'}
                         </AxeButton>
                       )}
                       {/* "Improve" means AXE editing its own source, which is
@@ -314,6 +560,93 @@ export default function AppsPage() {
               );
             })}
           </CardGrid>
+        </>
+      )}
+
+      {/* NorthSea Commodity — a real business, not a deploy target (see the
+          NorthseaSummaryState comment above). Own section below the registry
+          grid, read-only, no confirm dialogs: three governed NorthSea MCP
+          reads plus the existing Reports-tab totals. */}
+      {isAxeApiConfigured && (
+        <>
+          <SectionLabel>NorthSea Commodity</SectionLabel>
+          <AxeCard className="mb-4">
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div>
+                <div className="text-[13px] font-semibold" style={{ color: '#F5F0E6' }}>
+                  NorthSea Commodity
+                </div>
+                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Live deal pipeline — read-only, via the NorthSea MCP.
+                </div>
+              </div>
+              <AxeButton size="sm" variant="ghost" disabled={northsea.loading} onClick={() => void loadNorthsea()}>
+                <RefreshCw size={11} /> {northsea.loading ? 'Loading…' : 'Refresh'}
+              </AxeButton>
+            </div>
+
+            {northsea.error && (
+              <div className="text-[11px] mb-2" style={{ color: 'var(--error)' }}>
+                Could not reach NorthSea: {northsea.error}
+              </div>
+            )}
+
+            {northsea.pipeline && (() => {
+              const metric = (name: string) => northsea.pipeline?.metrics.find(m => m.name === name)?.value ?? '—';
+              const stageEntries = Object.entries(northsea.pipeline.by_stage);
+              const gateEntries = Object.entries(northsea.pipeline.by_gate_passed).filter(([, v]) => v > 0);
+              return (
+                <>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <StatPill label="Open" value={metric('pipeline_open')} tone="cyan" />
+                    <StatPill label="Active" value={metric('active')} tone="success" />
+                    <StatPill label="Blocked" value={metric('blocked_open')} tone="warn" />
+                    <StatPill label="Awaiting approval" value={metric('awaiting_approval')} tone="warn" />
+                    <StatPill label="Won" value={metric('won')} tone="neutral" />
+                  </div>
+                  <div className="text-[10px] mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                    Stage: {stageEntries.length
+                      ? stageEntries.map(([k, v]) => `${k} ${v}`).join(' · ')
+                      : '—'}
+                  </div>
+                  <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+                    Gates passed: {gateEntries.length ? gateEntries.map(([k, v]) => `${k} ${v}`).join(' · ') : 'none yet'}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Revenue is never omitted, even though it is zero — see the
+                NorthseaRevenueCounts comment above for why this is a count,
+                not a fabricated dollar figure. */}
+            <div
+              className="text-[11px] mb-2"
+              style={{ color: northsea.revenue && northsea.revenue.commissie_bedragen > 0 ? 'var(--success)' : 'var(--text-muted)' }}
+            >
+              {northsea.revenue == null
+                ? (northsea.loading ? 'Revenue: loading…' : 'Revenue: unknown — /northsea/tab/rapporten did not load.')
+                : northsea.revenue.commissie_bedragen === 0
+                  ? `Revenue: $0 — no commission recorded yet on any of ${northsea.revenue.deals} deal(s) (${northsea.revenue.gewonnen} won).`
+                  : `Commission recorded on ${northsea.revenue.commissie_bedragen} of ${northsea.revenue.deals} deal(s) — dollar total not aggregated here.`}
+            </div>
+
+            {northsea.comms && (
+              <div className="text-[10px] mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                Comms (last {northsea.comms.window_weeks}w): {northsea.comms.inbound_total} inbound
+                {' · '}{Object.values(northsea.comms.by_channel).reduce((sum, v) => sum + v, 0) - northsea.comms.inbound_total} other
+                {' · '}{northsea.comms.bounced_total} bounced
+              </div>
+            )}
+
+            {northsea.health && (
+              <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                Health: database {northsea.health.database.reachable ? 'reachable' : 'unreachable'}
+                {northsea.health.scheduler.last_status ? ` · scheduler last run ${northsea.health.scheduler.last_status}` : ''}
+                {typeof northsea.health.crewai.available === 'boolean'
+                  ? ` · CrewAI ${northsea.health.crewai.available ? 'available' : 'unavailable'}` : ''}
+              </div>
+            )}
+          </AxeCard>
         </>
       )}
 

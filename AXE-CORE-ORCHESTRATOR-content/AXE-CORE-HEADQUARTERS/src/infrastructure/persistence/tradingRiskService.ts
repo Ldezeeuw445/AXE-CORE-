@@ -54,6 +54,14 @@ export async function saveRiskProfile(profile: RiskProfile, accountId?: string |
 }
 
 export async function setRiskMode(mode: RiskMode, accountId?: string | null): Promise<RiskProfile> {
+  // 'custom' heeft geen eigen startwaarden: het is wat er nu staat, als eigen label.
+  if (mode === 'custom') {
+    const current = await getRiskProfile(accountId);
+    return saveRiskProfile({
+      ...current, mode: 'custom',
+      basedOn: current.mode === 'custom' ? current.basedOn : current.mode,
+    }, accountId);
+  }
   const base = mode === 'personal_demo' ? DEFAULT_PERSONAL_RISK : DEFAULT_FUNDED_RISK;
   if (mode === 'funded_live_rules') {
     return saveRiskProfile({

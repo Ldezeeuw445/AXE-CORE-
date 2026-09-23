@@ -91,14 +91,12 @@ export function apiUrl(path: string): string {
 }
 
 // The VPS's own FastAPI backend, reachable directly (no Vercel in the path).
-// Only the packaged Tauri app uses this — the public web app keeps going
-// through Vercel's /api/proxy/ai + /api/exa as before. Two routes exist
-// specifically for this: they're open (no AXE_API_KEY), same security model
-// as the Vercel versions they mirror — the caller's own provider key rides
-// in the request body, this just dodges browser CORS. That means the
-// packaged app works even while the Vercel deployment is billing-disabled,
-// without embedding the master backend key (Supabase service_role, GitHub
-// write, /internal/exec) into a distributed app bundle.
+// Only the packaged apps use this — the web app goes through its own /api/*.
+//
+// /proxy/ai, /proxy/exa en /proxy/fish-tts stonden hier open, omdat de client
+// zijn eigen providersleutel meestuurde. Sinds 2 sep vult de VPS een lege
+// sleutel zelf aan, en daarmee waren het open kranen op Luka's kosten. Sinds
+// 14 sep eisen ze AXE_CORE_API_KEY, net als de rest: zie vpsAuthHeaders().
 export const VPS_API_ORIGIN = (import.meta.env.VITE_VPS_API_ORIGIN as string | undefined) ?? 'https://api.axecompanion.com';
 
 /** Resolves the AI-provider proxy: VPS directly when packaged, else the
@@ -116,8 +114,8 @@ export function exaProxyUrl(): string {
 
 // axe-core-api's *privileged* surface (Supabase service_role, GitHub write,
 // n8n, /internal/exec, and the openhands/openclaw/crewai/... agent bridges)
-// needs AXE_CORE_API_KEY on every call — unlike /proxy/ai and /proxy/exa
-// above, this one can't be left open. On the web app that key never reaches
+// needs AXE_CORE_API_KEY on every call — and since 14 sep so do /proxy/ai,
+// /proxy/exa and /proxy/fish-tts above. On the web app that key never reaches
 // the browser: Vercel's /api/proxy/axecore attaches it server-side from an
 // env var. There's no server behind a packaged Tauri bundle to do that, so
 // this build only embeds VITE_AXE_CORE_API_KEY at `tauri:build` time (set it
@@ -163,4 +161,37 @@ export function axeCoreApiExtraHeaders(): Record<string, string> {
     return { Authorization: `Bearer ${axeCoreApiKey()}` };
   }
   return {};
+}
+
+/**
+ * De Bearer voor een aanroep naar de VPS, maar alleen als `url` daar ook
+ * echt heen gaat.
+ *
+ * Bestaat voor de proxies (/proxy/ai, /proxy/exa, /proxy/fish-tts), die sinds
+ * 14 sep achter AUTH staan. De aanroepers bepalen hun URL elk net anders --
+ * aiProxyUrl() kijkt naar isPackagedShell(), fishAudioService naar
+ * isTauriRuntime() -- en het herhalen van die voorwaarde hier zou vroeg of
+ * laat uiteenlopen. Kijken naar de bestemming kan dat niet: de sleutel gaat
+ * nooit naar Pages, Vercel of een relatief pad, en een VPS-aanroep krijgt hem
+ * altijd.
+ */
+export function vpsAuthHeaders(url: string): Record<string, string> {
+  if (!url.startsWith(`${VPS_API_ORIGIN}/`)) return {};
+  const key = axeCoreApiKey();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
+/**
+ * Bearer voor een directe axe_api-URL (VPS of lokale agent). Relatieve
+ * `/proxy/*`-paden blijven leeg: Vite/Vercel hangen de sleutel server-side.
+ * Geen RLS-omzeiling — dezelfde AXE_CORE_API_KEY als de verpakte app.
+ */
+export function axeApiAuthHeaders(url: string): Record<string, string> {
+  if (!url || url.startsWith('/')) return {};
+  const lokale = (import.meta.env.VITE_LOKALE_AGENT_ORIGIN as string | undefined) ?? 'http://127.0.0.1:8001';
+  const naarLokale = url === lokale || url.startsWith(`${lokale}/`);
+  const naarVps = url.startsWith(`${VPS_API_ORIGIN}/`);
+  if (!naarLokale && !naarVps) return {};
+  const key = axeCoreApiKey();
+  return key ? { Authorization: `Bearer ${key}` } : {};
 }

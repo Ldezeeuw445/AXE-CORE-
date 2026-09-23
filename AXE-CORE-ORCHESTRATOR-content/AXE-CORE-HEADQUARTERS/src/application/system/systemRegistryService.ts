@@ -52,7 +52,7 @@ export type OrganizationNode = {
    * Always present, empty for a leaf.
    *
    * This was optional, and every consumer paid for it: 25 "possibly
-   * undefined" errors across Organization, ArchitectureCanvas and
+   * undefined" errors across Organization and
    * RuntimeInspector, for a field that no producer has ever left out --
    * every node in this file is built by n(), which defaults it to [].
    *
@@ -193,7 +193,7 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
     n('crewai', 'CrewAI', 'tool', 'Multi-agent crews'),
     n('browser', 'Browser', 'tool', 'Web research'),
     n('code-editor', 'Code Editor', 'tool', 'Repo edits'),
-    n('maps-3d', '3D Maps', 'tool', 'Living display maps'),
+    n('maps-3d', 'Northsea Desk', 'tool', 'De handelsdesk: Live Map en negen tabbladen'),
   ]);
 
   const mcp = n('mcp-servers', 'MCP Servers', 'mcp', 'Connected bridges', [

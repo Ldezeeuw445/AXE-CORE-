@@ -1,19 +1,27 @@
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
+import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
 import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
+import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
+import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
+import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
 import { ProviderCard } from '@/presentation/components/settings/ProviderCard';
 import type { KaartStand } from '@/domain/providerCardStand';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
+// Vier onbeschermde schrijfacties stonden hier. Met een volle opslag gooide de
+// eerste daarvan tijdens het laden, en crashte de hele instellingenpagina.
+import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 import { mergeConnections } from '@/domain/providerConnections';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
@@ -23,15 +31,21 @@ import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnec
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
 import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
-  ELEVENLABS_VOICES, getSelectedVoiceId, setSelectedVoiceId,
+  setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
-  fetchAvailableVoices, type ElevenLabsVoice,
 } from '@/infrastructure/gateways/elevenLabsService';
 import { testExaKey } from '@/infrastructure/gateways/exaSearchService';
 import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructure/persistence/trustLevelsService';
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
+import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import {
+  readAllProviderUsage,
+  refreshProviderBalance,
+  type ProviderUsageSnapshot,
+} from '@/infrastructure/persistence/providerUsageService';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -67,6 +81,13 @@ const OPENROUTER_CHIPS = [
  * Tokenra still serves it under its own card, where the slug is correct.
  */
 const MODEL_CHIPS: Record<string, string[]> = {
+  // Voor deze provider zijn dit geen modellen maar MOTOREN: welke CLI het wordt.
+  // Zie domain/abonnementChat.ts voor waarom het modelveld die rol draagt --
+  // kort: voor deze provider ís dat de keuze, en een tweede keuzeveld dat alleen
+  // hier bestaat zou twee dingen op het scherm zetten die hetzelfde lijken.
+  // Geen cursor: die kent geen alleen-lezen stand en de chat draait op plan.
+  // Zie domain/abonnementChat.ts. Hij staat wél in de code-editor.
+  abonnement: [...ABONNEMENT_MOTOREN],
   // Anthropic en OpenAI hadden geen knoppen, dus stond hier wat je ooit had
   // ingetypt. Luka's kaart droeg 'Claude-sonnet-5' met een hoofdletter C, en
   // die bestaat niet -- model-ids zijn hoofdlettergevoelig. De fout die
@@ -107,7 +128,7 @@ const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crew
  * once already; a fifth entry would have had to be added four times, and
  * missing one of them is invisible until a good key reads as broken.
  */
-const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon']);
+const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon', 'perplexity']);
 
 /** The subset that needs nothing but a key — no base URL, no model to pick. */
 
@@ -201,7 +222,7 @@ function loadProviderKeys(): Record<string, ProviderConn> {
       stored.ollama = { ...stored.ollama, models: defaultOllamaModels };
       changed = true;
     }
-    if (changed) localStorage.setItem('axe_llm_connections', JSON.stringify(stored));
+    if (changed) zetJson('axe_llm_connections', stored);
     return stored;
   } catch { return {}; }
 }
@@ -228,7 +249,7 @@ let cloudSnapshot: Record<string, ProviderConn> = {};
  */
 function saveConnections(next: Record<string, ProviderConn>) {
   const merged = mergeConnections(cloudSnapshot, next);
-  localStorage.setItem('axe_llm_connections', JSON.stringify(merged));
+  zetJson('axe_llm_connections', merged);
   void saveSetting('axe_llm_connections', merged);
   return merged;
 }
@@ -247,7 +268,7 @@ function loadOllamaModelHealth(): Record<string, OllamaModelHealth> {
 }
 
 function saveOllamaModelHealth(next: Record<string, OllamaModelHealth>) {
-  localStorage.setItem(OLLAMA_MODEL_HEALTH_KEY, JSON.stringify(next));
+  zetJson(OLLAMA_MODEL_HEALTH_KEY, next);
   void saveSetting(OLLAMA_MODEL_HEALTH_KEY, next);
 }
 
@@ -316,6 +337,8 @@ function ProviderKeysSection() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   const [addProviderError, setAddProviderError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<Record<string, ProviderUsageSnapshot>>(() => readAllProviderUsage());
+  const [usageRefreshing, setUsageRefreshing] = useState(false);
 
   // Welke providers de VPS zelf kan bedienen.
   //
@@ -331,21 +354,89 @@ function ProviderKeysSection() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const served: string[] = [];
       try {
         const res = await fetch(apiUrl('/api/proxy/ai/providers'));
-        if (!res.ok) { if (!cancelled) setServerProviders(new Set()); return; }
-        const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
-        if (cancelled) return;
-        setServerProviders(new Set([...(body.providers ?? []), ...(body.keyless ?? [])]));
+        if (res.ok) {
+          const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
+          served.push(...(body.providers ?? []), ...(body.keyless ?? []));
+          // Cache for the chat runtime: it must know which providers the VPS serves
+          // (with the VPS's own key), so AXE can route e.g. Gemini through the proxy
+          // even though there is no local key on this device. Without this the chat
+          // cascade silently drops every VPS-only provider and falls to Ollama.
+          // Perplexity hoort hier NIET in: dat is onderzoek, geen chat-slot.
+          try { localStorage.setItem('axe_server_providers', JSON.stringify(served)); } catch { /* ignore */ }
+        }
       } catch {
-        // Server onbereikbaar. Een lege set is hier beter dan null blijven:
-        // het scherm valt terug op het oude gedrag, en de automatische meting
-        // hieronder blijft niet eeuwig wachten op een antwoord dat niet komt.
-        if (!cancelled) setServerProviders(new Set());
+        // Server onbereikbaar. De lijst hieronder mag leeg blijven; een
+        // onderzoek-probe mag Gemini/Groq niet van het scherm vegen.
       }
+      const namen = new Set(served);
+      try {
+        const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+        const pplx = await testPerplexityOpServer();
+        if (pplx.ok) namen.add('perplexity');
+        if (!cancelled) {
+          setKeys(prev => {
+            const next = {
+              ...prev,
+              perplexity: {
+                ...prev.perplexity,
+                lastTest: pplx.ok ? 'ok' as const : 'fail' as const,
+                lastTestAt: new Date().toISOString(),
+                lastError: pplx.ok ? undefined : (pplx.error || 'Not configured'),
+              },
+            };
+            saveProviderKeys(next);
+            return next;
+          });
+        }
+      } catch {
+        // Onderzoekszijde apart: een fout hier mag OpenAI/Groq niet op "geen
+        // server-sleutel" zetten.
+      }
+      if (!cancelled) setServerProviders(namen);
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const sync = () => setUsage(readAllProviderUsage());
+    window.addEventListener('axe:provider-usage', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('axe:provider-usage', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  const BALANCE_PROVIDERS = new Set(['openrouter', 'openrouter2', 'elevenlabs', 'deepseek']);
+  const refreshUsage = async (onlyId?: string) => {
+    if (usageRefreshing) return;
+    setUsageRefreshing(true);
+    try {
+      const ids = onlyId
+        ? [onlyId]
+        : PROVIDER_KEY_CATALOGUE.map(p => p.id).filter(id => BALANCE_PROVIDERS.has(id));
+      for (const id of ids) {
+        if (!BALANCE_PROVIDERS.has(id)) continue;
+        const key = keys[id]?.key;
+        if (!key && !(serverProviders?.has(id) ?? false)) continue;
+        try { await refreshProviderBalance(id, key); } catch { /* one provider must not block the rest */ }
+      }
+      setUsage(readAllProviderUsage());
+    } finally {
+      setUsageRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (serverProviders === null) return;
+    void refreshUsage();
+    // Settings-open + manual refresh is deliberate: exact balance endpoints
+    // should not become a background poller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverProviders]);
 
 
   // Known-format defaults — there's exactly one real endpoint for these two
@@ -363,7 +454,16 @@ function ProviderKeysSection() {
       const storedCustom = await loadSetting<CustomProvider[]>(CUSTOM_PROVIDERS_KEY, []);
       if (!alive) return;
       cloudSnapshot = stored;
-      if (Object.keys(stored).length > 0) setKeys(prev => ({ ...prev, ...stored }));
+      if (Object.keys(stored).length > 0) setKeys(prev => {
+        const merged = { ...prev, ...stored };
+        // Persist the Supabase-synced keys to THIS device's localStorage. The
+        // chat runtime (getProviderKeySlot / collectAllSlots) reads localStorage
+        // only, so a key set on another device (or synced from the cloud) shows
+        // "Connected" here but was invisible to AXE's chat — which is why AXE
+        // fell back to Ollama instead of using Gemini. Now they share one source.
+        try { localStorage.setItem('axe_llm_connections', JSON.stringify(merged)); } catch { /* ignore */ }
+        return merged;
+      });
       if (storedCustom.length > 0) setCustomProviders(storedCustom);
     };
     void hydrate();
@@ -423,6 +523,22 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (stOk) delete n[id]; else n[id] = msg; return n; });
+      return;
+    }
+
+    // Perplexity is research on the VPS, not an LLM. Never probe it as chat
+    // (that would spend a paid question) and never send a browser key — the
+    // key lives on the server.
+    if (id === 'perplexity') {
+      const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+      const { ok: pxOk, error: pxErr } = await testPerplexityOpServer();
+      setTesting(t => ({ ...t, [id]: pxOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: pxOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: pxOk ? undefined : pxErr } };
+        saveConnections(next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (pxOk) delete n[id]; else n[id] = pxErr ?? 'Not configured'; return n; });
       return;
     }
 
@@ -551,6 +667,10 @@ function ProviderKeysSection() {
         return next;
       });
     }
+    if (!isAutoTest && BALANCE_PROVIDERS.has(id)) {
+      void refreshUsage(id);
+    }
+
     // Only an explicit, manual "Test" click may promote a provider to
     // primary. The background self-test on Settings load used to do this
     // too — silently swapping AXE's actual chat provider to whichever one
@@ -637,9 +757,10 @@ function ProviderKeysSection() {
 
   return (
     <div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-        <div className="min-w-0">
-          <h2 className="text-body font-semibold flex items-center gap-2 whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+      <AgentMotorenSection />
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> Provider Keys
           </h2>
           <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
@@ -647,6 +768,14 @@ function ProviderKeysSection() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => { void refreshUsage(); }}
+            disabled={usageRefreshing}
+            title="Refresh exact provider balances where supported"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+            style={{ border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)', opacity: usageRefreshing ? 0.6 : 1 }}>
+            <RefreshCw size={12} className={usageRefreshing ? 'animate-spin' : ''} /> Usage
+          </button>
           <button
             onClick={() => { voice.clearRoutingLog(); }}
             title="Wis routing history (ROUTER TRACE)"
@@ -723,16 +852,11 @@ function ProviderKeysSection() {
               modellen={MODEL_CHIPS[cat.id] ?? []}
               isPrimair={isPrimary}
               aangepast={isCustom}
+              gebruik={usage[cat.id] ?? null}
               onSleutel={(waarde) => update(cat.id, 'key', waarde)}
               onModel={(model) => update(cat.id, 'model', model)}
               onTest={() => testProvider(cat.id, isCustom)}
               onToonSleutel={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))}
-              onPrimair={() => voice.setPrimarySlot(isPrimary ? null : {
-                provider: cat.id as ProviderId,
-                key: conn.key ?? '',
-                model: conn.model || standaardModel || '',
-                baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
-              })}
               onVerwijder={isCustom ? () => removeCustomProvider(cat.id) : undefined}
             />
           );
@@ -742,107 +866,81 @@ function ProviderKeysSection() {
   );
 }
 
+/**
+ * De stemkeuze: vier, en niet een bibliotheek.
+ *
+ * Hier stond de HELE ElevenLabs-lijst: tientallen namen met land en
+ * omschrijving, opgehaald bij het openen. Voor dit doel klinken die
+ * nauwelijks verschillend, dus je luisterde twintig voorbeelden en koos
+ * alsnog de eerste -- een keuzelijst die je niet kunt beantwoorden is geen
+ * keuze maar werk.
+ *
+ * Nu vier: AXE (Fish), een man, een vrouw, en de browser als vangnet. De lijst
+ * staat in domain/stemKeuzes met een test die hem kort houdt.
+ *
+ * Kiezen zet MEEBEEN de motor. Dat was hiervoor twee losse instellingen -- een
+ * stem hier en een provider verderop -- en je kon dus een ElevenLabs-stem
+ * kiezen terwijl Fish aan het praten was. Eén keuze, één uitkomst.
+ */
 function VoiceSection() {
-  const [selected, setSelected] = useState(getSelectedVoiceId);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
-  const [voices, setVoices] = useState<ElevenLabsVoice[]>(ELEVENLABS_VOICES);
-  const [voiceListSource, setVoiceListSource] = useState<'loading' | 'live' | 'fallback'>('loading');
-  const [voiceListFallbackReason, setVoiceListFallbackReason] = useState<string | null>(null);
-  const configured = isElevenLabsConfigured();
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!configured) { setVoiceListSource('fallback'); setVoiceListFallbackReason('ElevenLabs not configured'); return; }
-    fetchAvailableVoices()
-      .then(list => {
-        if (list.length) { setVoices(list); setVoiceListSource('live'); }
-        else { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); setVoiceListFallbackReason('ElevenLabs returned zero voices for this API key — check its permission scope in the ElevenLabs dashboard (it may be a text-to-speech-only key without voice-library read access).'); }
-      })
-      .catch(err => { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); setVoiceListFallbackReason(err instanceof Error ? err.message : String(err)); });
-  }, [configured]);
-
-  const select = (id: string) => {
-    setSelectedVoiceId(id);
-    setSelected(id);
-  };
-
-  const preview = (id: string) => {
-    stopTTS();
-    if (playingId === id) { setPlayingId(null); return; }
-    setPlayingId(id);
-    setFallbackNotice(null);
-    // `selected` (component state, not storage) is the restore target — reading
-    // storage here would pick up whatever the *previous* preview left behind
-    // if one preview is started before another's callback has fired.
-    setSelectedVoiceId(id); // speakWithElevenLabs always reads the current selection
-    void speakWithElevenLabs(
-      'Hi Luka, this is a sample of this voice.',
-      () => { setPlayingId(null); setSelectedVoiceId(selected); },
-      () => { setPlayingId(null); setSelectedVoiceId(selected); },
-      (reason) => { setFallbackNotice(`ElevenLabs didn't play this voice — heard the browser's own voice instead. Reason: ${reason}`); },
+  const listen = () => {
+    if (playing) { stopGlobalTts(); setPlaying(false); return; }
+    setError(null);
+    setPlaying(true);
+    speakGlobal(
+      'Hi Luka, this is the AXE voice.',
+      () => setPlaying(false),
+      (reason) => { setPlaying(false); setError(`Could not play the voice: ${reason}`); },
     );
   };
 
   return (
     <WidgetCard title="VOICE" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
-      {!configured ? (
-        <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-          <AlertTriangle size={13} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
-          <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
-            ElevenLabs isn't configured (no <code>VITE_ELEVENLABS_API_KEY</code>) — AXE is speaking through the browser's built-in voice instead, which can't be changed here.
-          </p>
+      <div className="space-y-2">
+        <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+          AXE speaks with one fixed voice — OpenAI <strong>cedar</strong>. This is
+          separate from which model answers you. It needs your OpenAI key (set it
+          under Keys). If Cedar is unavailable AXE keeps the text reply visible
+          and reports the voice error; it never silently changes identity.
+        </p>
+        {error && (
+          <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
+            <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
+            <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{error}</p>
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-2 p-2 rounded-lg"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: 'var(--accent-cyan)' }} />
+            <span className="min-w-0">
+              <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>AXE</span>
+              <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>OpenAI cedar — warm and natural.</p>
+            </span>
+          </span>
+          <button onClick={listen}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
+            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+            <Play size={11} /> {playing ? 'Playing…' : 'Listen'}
+          </button>
         </div>
-      ) : (
-        <div className="space-y-1.5">
-          <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
-            Pick a voice and tap play to preview it before switching — this is the ElevenLabs voice AXE speaks with, separate from which AI model answers you.
-            {voiceListSource === 'loading' && ' Loading your real voice library…'}
-          </p>
-          {voiceListSource === 'fallback' && voiceListFallbackReason && (
-            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
-              <AlertTriangle size={12} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
-              <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
-                Showing a fallback voice list (IDs may not be valid on this account) — real reason: {voiceListFallbackReason}
-              </p>
-            </div>
-          )}
-          {fallbackNotice && (
-            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
-              <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-              <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{fallbackNotice}</p>
-            </div>
-          )}
-          {voices.map(v => {
-            const isSelected = v.id === selected;
-            const isPlaying = v.id === playingId;
-            return (
-              <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
-                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-                <button onClick={() => select(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0">
-                  <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: isSelected ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
-                  <span className="min-w-0">
-                    <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{v.name}</span>
-                    <span className="text-xs-custom ml-1.5" style={{ color: 'var(--text-muted)' }}>{v.accent} · {v.gender}</span>
-                    <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>{v.description}</p>
-                  </span>
-                </button>
-                <button onClick={() => preview(v.id)} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-                  style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
-                  <Play size={11} /> {isPlaying ? 'Playing…' : 'Preview'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
     </WidgetCard>
   );
 }
 
+/** Waar de keuze staat. Eén sleutel, want het is één keuze. */
+const STEM_SLEUTEL = 'axe_stem';
+
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
-function loadTtsProvider(): 'fish' | 'elevenlabs' | 'browser' {
-  try { return (localStorage.getItem(TTS_PROVIDER_KEY) as 'fish' | 'elevenlabs' | 'browser') || 'fish'; } catch { return 'fish'; }
+type TtsKeuze = 'fish' | 'elevenlabs' | 'openai' | 'browser';
+
+function loadTtsProvider(): TtsKeuze {
+  try { return (localStorage.getItem(TTS_PROVIDER_KEY) as TtsKeuze) || 'fish'; } catch { return 'fish'; }
 }
 
 /** Voice provider — Fish Audio is the default (no paid ElevenLabs account),
@@ -854,8 +952,9 @@ function FishAudioSection() {
   const [voiceId, setVoiceIdState] = useState(getFishVoiceId);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openAiStem, setOpenAiStemState] = useState<OpenAiStem>(getOpenAiStem);
 
-  const chooseProvider = (next: 'fish' | 'elevenlabs' | 'browser') => {
+  const chooseProvider = (next: TtsKeuze) => {
     setProvider(next);
     try { localStorage.setItem(TTS_PROVIDER_KEY, next); } catch { /* ignore */ }
   };
@@ -894,11 +993,40 @@ function FishAudioSection() {
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           ElevenLabs
         </button>
+        <button onClick={() => chooseProvider('openai')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'openai' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          OpenAI
+        </button>
         <button onClick={() => chooseProvider('browser')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Browser (built-in)
         </button>
       </div>
+
+      {/* Arbor staat hier niet tussen, en dat is geen omissie: Arbor, Breeze,
+          Juniper, Cove en Ember zijn stemmen van de ChatGPT-APP. De API voert
+          een andere vaste lijst (nagelezen in OpenAI's TTS-gids, 16 sep 2026);
+          een app-stem is niet met een sleutel op te halen. marin en cedar zijn
+          OpenAI's eigen aanbeveling en staan daarom bovenaan. */}
+      {provider === 'openai' && (
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            <select
+              value={openAiStem}
+              onChange={e => { const v = e.target.value as OpenAiStem; setOpenAiStem(v); setOpenAiStemState(v); }}
+              className="flex-1 rounded-lg px-2 py-1.5 text-xs-custom"
+              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              aria-label="OpenAI-stem"
+            >
+              {OPENAI_STEMMEN.map(v => <option key={v} value={v}>{v}{v === 'marin' || v === 'cedar' ? ' — aanbevolen' : ''}</option>)}
+            </select>
+          </div>
+          <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+            Arbor, Breeze, Juniper, Cove en Ember zijn alleen in de ChatGPT-app beschikbaar, niet via de API.
+            Gebruikt gpt-4o-mini-tts met je OpenAI-sleutel uit Connections.
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-1.5">
         <input
@@ -925,7 +1053,6 @@ function FishAudioSection() {
 }
 
 function OllamaModelsSection() {
-  const voice = useVoiceStore();
   const [registry, setRegistry] = useState(getStoredLlmModelRegistry());
   const [health, setHealth] = useState<Record<string, OllamaModelHealth>>(loadOllamaModelHealth());
   const [syncing, setSyncing] = useState(false);
@@ -960,7 +1087,7 @@ function OllamaModelsSection() {
     try {
       const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
       const baseUrl = conns.ollama?.baseUrl ?? OLLAMA_BASE_URL;
-      const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
+      const res = await fetch(`${baseUrl}/api/tags`, { headers: ollamaHeaders(baseUrl), signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
       const data = await res.json();
       const names = (data?.models ?? [])
@@ -982,7 +1109,7 @@ function OllamaModelsSection() {
       // above — without writing it here too, this sync only ever updated
       // what this settings grid displays, never what the app actually uses.
       conns.ollama = { ...conns.ollama, models: names };
-      localStorage.setItem('axe_llm_connections', JSON.stringify(conns));
+      zetJson('axe_llm_connections', conns);
       setSyncState({ ok: true, at: new Date().toISOString() });
     } catch (err) {
       // Do NOT silently keep showing the old registry as if it's current —
@@ -1001,12 +1128,47 @@ function OllamaModelsSection() {
       ...health,
       [modelName]: { ...health[modelName], status: 'testing', lastTestAt: new Date().toISOString(), baseUrl },
     });
-    const ok = await voice.testSlot({ provider: 'ollama', key: '', model: modelName, baseUrl });
-    const err = ok ? undefined : (useVoiceStore.getState().error ?? 'Test mislukt').slice(0, 180);
-    if (!ok) useVoiceStore.setState({ error: null }); // see the Gemini test above — don't leak into the shared live-chat error banner
+
+    let ok = false;
+    let err: string | undefined;
+    try {
+      // Test the model on Ollama itself. The generic provider test went through
+      // AXE's proxy and could abort while an 8B model was still cold-loading,
+      // producing "Fetch is aborted" even though /api/tags proved the box was
+      // reachable. A model-health card should test the model, not the proxy.
+      const root = baseUrl.replace(/\/+$/, '');
+      const res = await fetch(`${root}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...ollamaHeaders(root) },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: 'user', content: 'Reply only with OK' }],
+          stream: false,
+          think: false,
+          keep_alive: '5m',
+          options: { num_predict: 8, temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(180_000),
+      });
+      const raw = await res.text();
+      if (!res.ok) {
+        const detail = raw.replace(/\s+/g, ' ').trim().slice(0, 180);
+        throw new Error(`Ollama HTTP ${res.status}${detail ? `: ${detail}` : ''}`);
+      }
+      const data = JSON.parse(raw) as { message?: { content?: string }; response?: string };
+      if (!(data.message?.content ?? data.response ?? '').trim()) throw new Error('Ollama returned no content');
+      ok = true;
+    } catch (e) {
+      err = e instanceof Error
+        ? (e.name === 'TimeoutError' || /abort/i.test(e.message)
+          ? `Ollama model ${modelName} did not answer within 180s`
+          : e.message)
+        : String(e);
+    }
+
     saveHealth({
       ...health,
-      [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err, baseUrl },
+      [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err?.slice(0, 180), baseUrl },
     });
     setTesting(prev => ({ ...prev, [modelName]: false }));
   };
@@ -1127,7 +1289,6 @@ function OllamaModelsSection() {
                 onModel={() => {}}
                 onTest={() => testModel(model.name)}
                 onToonSleutel={() => {}}
-                onPrimair={() => {}}
               />
             );
           })}
@@ -1162,7 +1323,7 @@ function ServiceHealthSection() {
     }
   };
 
-  const focusOrder = ['supabase', 'github', 'n8n', 'langgraph', 'terminal', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'];
+  const focusOrder = ['supabase', 'github', 'n8n', 'langgraph', 'terminal', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'claude_code', 'hermes'];
   const ordered = focusOrder
     .map(name => services.find(service => service.service === name))
     .filter((service): service is ServiceState => !!service)
@@ -1191,7 +1352,7 @@ function ServiceHealthSection() {
               const online = service.status === 'online';
               const degraded = service.status === 'degraded';
               const label = service.service === 'n8n' ? 'n8n' : service.display || service.service;
-              const isVps = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes', 'ollama'].includes(service.service);
+              const isVps = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'claude_code', 'hermes', 'ollama'].includes(service.service);
               return (
                 <div key={service.service} className="rounded-xl p-3 flex items-center gap-3"
                   style={{ background: 'var(--bg-surface)', border: `1px solid ${online ? 'rgba(16,185,129,0.28)' : degraded ? 'rgba(245,158,11,0.28)' : 'var(--border-subtle)'}` }}>
@@ -1711,7 +1872,6 @@ const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
   { id: 'git_write', label: 'Commit files to GitHub' },
   { id: 'git_pr_merge', label: 'Pull requests mergen' },
   { id: 'db_sql', label: 'SQL draaien op Supabase' },
-  { id: 'vercel_promote', label: 'Vercel-deployment promoten' },
   { id: 'agent', label: 'Hand tasks to an external agent' },
   { id: 'smart_home', label: 'Smart home (SmartThings)' },
   // These two reach the worktree the running app is served from, so they
@@ -1872,7 +2032,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
                 <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Clap twice (or three times) to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
+                  Clap three times, sharply, to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
                 </p>
               </div>
               <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
@@ -1884,11 +2044,8 @@ export default function SettingsPage() {
           </div>
         </WidgetCard>
 
-        {/* ── Voice (ElevenLabs TTS) ───────────────────────────────── */}
+        {/* ── Voice: one fixed AXE voice (OpenAI cedar), no picker ──── */}
         <VoiceSection />
-
-        {/* ── Fish Audio (second, optional voice provider) ──────────── */}
-        <FishAudioSection />
 
         {/* ── AXE Quotes (between voice and trust) ─────────────────── */}
         <MindsetQuotesSection />
@@ -1900,6 +2057,11 @@ export default function SettingsPage() {
             vraag: wat mag AXE zelf doen. */}
         <LookSection />
         <ToolCallingSection />
+
+        {/* ── AXE Branches (A/B/C) ──────────────────────────────── */}
+        <WidgetCard title="AXE BRANCHES">
+          <BranchRouterSection />
+        </WidgetCard>
 
         {/* ── Capability Router ─────────────────────────────────── */}
         <WidgetCard title="CAPABILITY ROUTER">

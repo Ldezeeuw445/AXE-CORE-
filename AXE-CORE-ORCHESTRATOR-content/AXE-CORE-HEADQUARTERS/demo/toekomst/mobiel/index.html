@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Mobile · the Samsung as device manager</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="mobiel.css">
+<style>
+.blad-mobiel { grid-template-columns: 720px auto; justify-content: center; gap: 40px; }
+.blad-mobiel .paginas { grid-template-columns: 1fr 1fr; }
+.blad-mobiel .paginas a:first-child { grid-column: 1 / -1; }
+.blad-mobiel .regels { display: grid; gap: 6px; margin: 0; padding: 0; }
+.blad-mobiel .regels li { list-style: none; display: grid; grid-template-columns: 14px 1fr; gap: 8px; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.blad-mobiel .regels li b { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="tabruimte" style="height:100%">
+      <div class="blad-mobiel">
+
+        <section class="kaart intro">
+          <div class="t-label">Design gallery · mobile · proposal</div>
+          <div class="t-groot">The Samsung, managed by AXE.</div>
+          <p>The phone already runs AXE CORE as its device manager: a Kotlin shell around the same web bundle as the Mac, with a native launcher, lock-screen cards and widgets. These screens bring it into the black look and the three materials — plate, card, smoked glass — and reorder everything the desktop can do into five tabs a thumb can reach.</p>
+          <div class="paginas">
+            <a href="device.html">▸ Device <span>lock screen · the phone, managed · the launcher, kept</span></a>
+            <a href="chat.html">▸ Chat <span>cards · voice · approve</span></a>
+            <a href="werk.html">▸ Core <span>trading · memory · agents</span></a>
+            <a href="verbinding.html">▸ Link <span>VPS · Mac · pairing</span></a>
+            <a href="instellingen.html">▸ Settings <span>providers · voice &amp; alerts · look &amp; security</span></a>
+          </div>
+          <div class="haarlijn"></div>
+          <div class="vergelijk">
+            <div class="kaart--in kaart">
+              <span class="t-titel">On the phone today</span>
+              <span><b>Native shell</b> · <span class="t-mono">com.axecore.core</span>, no git remote, one Mac.</span>
+              <span><b>Six tabs</b> in Kotlin: CORE CHART ALGO WEB CODE APPS — five open the web bundle, APPS is native.</span>
+              <span><b>#/mobile</b> in the bundle: its own black, its own card colour, filled cyan buttons, a four-button nav.</span>
+              <span><b>Kept:</b> lock cards, widgets, launcher with pins, on-device Gemma, offline queue, key after biometric unlock.</span>
+            </div>
+            <div class="kaart--in kaart">
+              <span class="t-titel c-accent">What changes</span>
+              <span><b>One material language</b> with the Mac: plate, card, glass; colour in letters and dots; glow only where it works.</span>
+              <span><b>Five tabs</b>, web and native the same: Device · Chat · Core · Link · Settings.</span>
+              <span><b>Approvals first.</b> The phone's main job is to answer what the Mac and the VPS are waiting on.</span>
+              <span><b>Nothing new runs on the phone.</b> Everything still goes through the VPS; the Mac is reached by relay.</span>
+            </div>
+          </div>
+          <ul class="regels">
+            <li><span class="c-accent">▸</span><span>Frame: Galaxy S24-class, <b>412 × 915</b> CSS px, centred punch-hole, equal bezels. The docs mention an A17 at 384 wide — the layout is one column and survives that.</span></li>
+            <li><span class="c-accent">▸</span><span>Tokens and behaviour come from <code class="t-mono">../tokens.css</code> and <code class="t-mono">../toekomst.js</code>; only <code class="t-mono">mobiel.css</code> / <code class="t-mono">mobiel.js</code> are new. Spec: <code class="t-mono">ONTWERP-MOBIEL.md</code>.</span></li>
+          </ul>
+        </section>
+
+        <div class="podium__plek">
+          <span class="podium__kop ruit">Device · <b>the home of the device manager</b></span>
+          <div class="podium__toestel" data-mob="galaxy" data-actief>
+            <div class="sam">
+              <div class="sam__status" data-mob="status"></div>
+              <div class="sam__body">
+                <div class="sam__kop"><span class="t-groot">Device</span><span class="rechts"><span class="chip c-ok"><i class="stip"></i> shell live</span><span class="chip">Galaxy S24</span></span></div>
+                <div class="sam__bol">
+                  <canvas data-bol data-schaal="0.44" data-roty="0.4"></canvas>
+                  <div class="hud"><span class="ruit"><i class="stip c-ok"></i> <b>19 038</b> memories</span><span class="ruit"><i class="stip c-accent"></i> <b>3</b> agents</span></div>
+                </div>
+                <div class="kaart">
+                  <div class="t-titel">This phone <span class="rechts">One UI 7 · Android 15</span></div>
+                  <div class="meter"><span>Battery</span><span class="spoor"><i style="width:78%"></i></span><span class="t-mono c-ok">78% · charging</span></div>
+                  <div class="meter"><span>Storage</span><span class="spoor"><i style="width:38%"></i></span><span class="t-mono">96 / 256 GB</span></div>
+                  <div class="haarlijn"></div>
+                  <div class="regel"><span>Network</span><span class="t-mono c-ok">5G · KPN · 42 Mbit</span></div>
+                  <div class="regel"><span>Memory · screen on</span><span class="t-mono">4.1 / 8 GB · 2 h 14 m</span></div>
+                </div>
+                <div class="kaart">
+                  <div class="t-titel">AXE on this phone <span class="rechts">com.axecore.core</span></div>
+                  <div class="regel"><span>Web bundle</span><span class="c-ok"><i class="stip"></i> same as desktop</span></div>
+                  <div class="regel"><span>Gemma 3 · 1B <span class="c-3">on-device fallback</span></span><span class="c-ok"><i class="stip"></i> ready · 657 MB</span></div>
+                  <div class="regel"><span>Offline queue</span><span class="t-mono">0 waiting</span></div>
+                  <div class="regel"><span>Lock cards · widgets</span><span class="c-ok"><i class="stip"></i> live</span></div>
+                  <div class="regel"><span>Waiting on you</span><span class="c-warn"><i class="stip"></i> 1 approval</span></div>
+                </div>
+                <div class="kaart">
+                  <div class="t-titel">Your apps <span class="rechts">tap opens · hold pins</span></div>
+                  <div class="tegels">
+                    <a class="tegel tegel--aan"><span class="vak c-accent">AX</span>AXE Mobile</a>
+                    <a class="tegel"><span class="vak c-ok">CH</span>Chart</a>
+                    <a class="tegel"><span class="vak c-violet">AL</span>Algo</a>
+                    <a class="tegel"><span class="vak c-2">WW</span>Browser</a>
+                    <a class="tegel"><span class="vak" style="color:#C49B78">NS</span>NorthSea Desk</a>
+                    <a class="tegel"><span class="vak c-accent">CO</span>Companion</a>
+                    <a class="tegel"><span class="vak">AXN</span>Axon Memory</a>
+                    <a class="tegel"><span class="vak c-warn">&lt;/&gt;</span>Code</a>
+                  </div>
+                </div>
+              </div>
+              <div class="sam__onder" data-mob="onder" data-actief="Device"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="make the Samsung a real AXE device manager, in the black look"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="../toekomst.js"></script>
+<script src="mobiel.js"></script>
+<script>
+MOB.start({
+  dok: 'Home',
+  chat: { dicht: true },
+  topbalk: {
+    segmenten: MOB.DOK.map(([ic, naam]) => [naam, ic]), segment: 'Device',
+    links: `<a class="chip" href="../index.html" style="text-decoration:none">${AXE.ic('monitor')} Desktop gallery</a>`,
+  },
+});
+</script>
+</body>
+</html>

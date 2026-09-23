@@ -1,15 +1,69 @@
-import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  MapPin,
-  AlignLeft,
-  CalendarDays,
-  X,
-} from 'lucide-react';
-import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { useState, useMemo, useEffect } from 'react';
+import { motion } from 'framer-motion';
+
+import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
+import { WeekRooster } from './agenda/WeekRooster';
+import { MaandRooster } from './agenda/MaandRooster';
+import { AgendaLijst } from './agenda/AgendaLijst';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster';
+import { CalendarRange, LayoutGrid } from 'lucide-react';
+import { APPS } from '@/domain/apps';
+import { werkAgenda, type AgendaTaak, type AgendaCron } from '@/domain/werkAgenda';
+import { calendarJobs, listDurableTasks, northseaTab, plannerTaken, type CalendarJobItem } from '@/infrastructure/gateways/axeCoreApiService';
+import { agendaVanJobs, filterAgenda, type AppFilter } from '@/domain/grootboek';
+import { AppZuil } from '@/presentation/components/layout/AppZuil';
+import { northseaAgenda } from '@/domain/northsea/werk';
+import type { NorthseaAgendaItem } from '@/domain/northsea/tabs/typen';
+
+/**
+ * Maand of week. Als twee iconen in de band naast de composer, net als de
+ * sub-tabs van de trading-desk -- dezelfde component (IcoonZuil), want het is
+ * dezelfde handeling: kiezen wat je in het midden ziet.
+ */
+type Weergave = 'maand' | 'week';
+const WEERGAVEN: ZuilItem[] = [
+  { id: 'maand', label: 'Maand', kleur: '#22D3EE', icoon: <LayoutGrid size={17} /> },
+  { id: 'week', label: 'Week', kleur: '#8B7CF6', icoon: <CalendarRange size={17} /> },
+];
+
+/** De legenda: de kleur van elke app, dezelfde als in Taken en Cron. */
+const SOORTEN: ReadonlyArray<{ label: string; kleur: string }> = APPS.map(a => ({ label: a.label, kleur: a.kleur }));
+
+/**
+ * Taken, planner en cronjobs ophalen. Elk apart: valt er één weg (de VPS, of
+ * de agent-host), dan staat de rest er gewoon.
+ */
+async function laadWerk(): Promise<{ taken: AgendaTaak[]; crons: AgendaCron[] }> {
+  /* De cronjobs komen niet meer hier vandaan maar uit /calendar/jobs: dat rekent
+     elke run vooruit, ook van pg_cron, in plaats van alleen de volgende. */
+  const [taken, planner] = await Promise.allSettled([
+    listDurableTasks({ limit: 200 }), plannerTaken(100),
+  ]);
+  const uit: AgendaTaak[] = [];
+  if (planner.status === 'fulfilled') {
+    for (const t of planner.value.taken) uit.push({ ...t, metadata: t.metadata as Record<string, unknown> | null, planner: true });
+  }
+  if (taken.status === 'fulfilled') {
+    for (const t of taken.value.tasks) uit.push({ ...t, completed_at: null, planner: t.capability === 'planner' });
+  }
+  return { taken: uit, crons: [] };
+}
+
+/**
+ * Een agenda-item omzetten naar iets waar het weekrooster mee kan rekenen.
+ *
+ * De duur staat als tekst in het event ("1h 30m", "45m") en daar kun je niet
+ * mee rekenen. Kan hij niet gelezen worden, dan een uur: een blokje van nul
+ * hoog is onzichtbaar, en dan lijkt de afspraak er niet te zijn.
+ */
+function duurInMinuten(tekst: string): number {
+  const u = /(\d+)\s*h/i.exec(tekst);
+  const m = /(\d+)\s*m/i.exec(tekst);
+  const totaal = (u ? Number(u[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
+  return totaal > 0 ? totaal : 60;
+}
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -28,63 +82,37 @@ interface CalendarEvent {
 }
 
 /* ------------------------------------------------------------------ */
-/*  MOCK EVENTS                                                        */
+/*  DE AGENDA-ITEMS                                                    */
 /* ------------------------------------------------------------------ */
 
-const EVENTS: CalendarEvent[] = [
-  { id: '1', title: 'Daily Standup', date: '2025-01-06', time: '09:00', duration: '15m', type: 'meeting', description: 'Team sync on daily progress', location: 'Zoom', color: '#3B82F6' },
-  { id: '2', title: 'Design Review', date: '2025-01-08', time: '14:30', duration: '1h', type: 'meeting', description: 'Review Command Center V1 designs', location: 'Conference Room A', color: '#3B82F6' },
-  { id: '3', title: 'Deep Work Block', date: '2025-01-08', time: '10:00', duration: '2h', type: 'focus', description: 'Voice pipeline implementation', color: '#8B5CF6' },
-  { id: '4', title: 'Submit Tax Documents', date: '2025-01-10', time: '17:00', duration: '30m', type: 'task', description: 'Q4 tax filing preparation', color: 'var(--success)' },
-  { id: '5', title: 'Client Call — Acme Corp', date: '2025-01-13', time: '11:00', duration: '45m', type: 'meeting', description: 'Quarterly review call', location: 'Google Meet', color: '#3B82F6' },
-  { id: '6', title: 'Refactor Auth Module', date: '2025-01-14', time: '09:00', duration: '3h', type: 'task', description: 'Update OAuth flow', color: 'var(--success)' },
-  { id: '7', title: 'Take Supabase Backup', date: '2025-01-15', time: '02:00', duration: '10m', type: 'reminder', description: 'Automated daily backup', color: 'var(--warning)' },
-  { id: '8', title: 'Team Lunch', date: '2025-01-15', time: '12:30', duration: '1h', type: 'meeting', description: 'Monthly team lunch', location: 'Main Cafeteria', color: '#3B82F6' },
-  { id: '9', title: 'Deploy to Production', date: '2025-01-16', time: '16:00', duration: '1h', type: 'task', description: 'Release v2.4.0', color: 'var(--success)' },
-  { id: '10', title: 'Weekly Review', date: '2025-01-17', time: '15:00', duration: '30m', type: 'meeting', description: 'Sprint retrospective', color: '#3B82F6' },
-  { id: '11', title: 'Renew SSL Certificates', date: '2025-01-20', time: '10:00', duration: '20m', type: 'reminder', description: 'Cloudflare edge certificates', color: 'var(--warning)' },
-  { id: '12', title: 'Investor Presentation', date: '2025-01-22', time: '13:00', duration: '1h 30m', type: 'meeting', description: 'Series A pitch deck review', location: 'Board Room', color: '#3B82F6' },
-  { id: '13', title: 'Database Migration', date: '2025-01-23', time: '03:00', duration: '2h', type: 'task', description: 'Migrate users table to new schema', color: 'var(--success)' },
-  { id: '14', title: '1:1 with Engineering Lead', date: '2025-01-24', time: '11:00', duration: '30m', type: 'meeting', description: 'Career growth discussion', color: '#3B82F6' },
-  { id: '15', title: 'End of Month Reports', date: '2025-01-28', time: '09:00', duration: '4h', type: 'task', description: 'Generate all monthly analytics', color: 'var(--success)' },
-];
+/**
+ * LEEG, en met opzet.
+ *
+ * Hier stond een lijst verzonnen afspraken uit januari 2025 -- Daily Standup,
+ * Design Review, Submit Tax Documents. Die zag er echt uit, en dat is het
+ * probleem: een scherm dat data toont die nergens vandaan komt liegt over wat
+ * de app weet. Je gaat erop plannen.
+ *
+ * Er is geen agendakoppeling in deze app. Zolang die er niet is hoort dit leeg
+ * te zijn en horen de weergaven te zeggen dat er niets is. Komt er een bron
+ * (Google Calendar, Supabase, wat dan ook), dan vult die deze lijst en werkt
+ * alles eromheen al.
+ */
+const EVENTS: CalendarEvent[] = [];
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const TYPE_LABELS: Record<string, string> = {
-  meeting: 'Meeting',
-  task: 'Task',
-  reminder: 'Reminder',
-  focus: 'Focus',
-};
 
 /* ------------------------------------------------------------------ */
 /*  UTILITIES                                                          */
 /* ------------------------------------------------------------------ */
 
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
-}
 
-function getFirstDayOfMonth(year: number, month: number): number {
-  /* 0 = Sun, 1 = Mon, ... adjust so Mon = 0 */
-  const day = new Date(year, month, 1).getDay();
-  return day === 0 ? 6 : day - 1;
-}
 
 function formatDateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function isToday(year: number, month: number, day: number): boolean {
-  const now = new Date();
-  return now.getFullYear() === year && now.getMonth() === month && now.getDate() === day;
-}
 
 /* ------------------------------------------------------------------ */
 /*  MAIN COMPONENT                                                     */
@@ -97,67 +125,84 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(
     formatDateKey(now.getFullYear(), now.getMonth(), now.getDate())
   );
-  const isMobile = useIsMobile();
-  // On mobile the day-detail panel is a bottom sheet that opens when a day is
-  // tapped (the desktop right sidebar is hidden there). Without this there was
-  // no way to see or add a day's events on a phone.
-  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [weergave, setWeergave] = useState<Weergave>('maand');
+  /* De week die je bekijkt. Apart van de maand: bladeren door weken hoort de
+     maandweergave niet te verzetten en andersom. */
+  const [weekAnker, setWeekAnker] = useState<Date>(() => new Date());
+  /* Welke app je ziet. Eén agenda per app, en Alle voor het geheel; elke job in
+     de kleur van zijn app, dezelfde als in Taken, Cron en het grootboek. */
+  const [app, setApp] = useState<AppFilter>('alle');
+  const [jobItems, setJobItems] = useState<CalendarJobItem[]>([]);
 
-  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-  const firstDayOffset = getFirstDayOfMonth(currentYear, currentMonth);
-  const totalSlots = Math.ceil((daysInMonth + firstDayOffset) / 7) * 7;
-
-  /* Events by date */
-  const eventsByDate = useMemo(() => {
-    const map: Record<string, CalendarEvent[]> = {};
-    EVENTS.forEach((ev) => {
-      if (!map[ev.date]) map[ev.date] = [];
-      map[ev.date].push(ev);
-    });
-    return map;
+  /* Het werk van de agents: taken met een deadline, wat de planner deed en
+     wanneer de cronjobs draaien. Elke minuut opnieuw, zodat een afgeronde
+     planner-taak vanzelf verschuift. */
+  const [werk, setWerk] = useState<{ taken: AgendaTaak[]; crons: AgendaCron[] }>({ taken: [], crons: [] });
+  /* De geplande acties van de NorthSea-desk: volgende acties op deals en
+     sourcing-campagnes. Zelfde kleur als de rest van die app; het soort staat
+     in de tekst. */
+  const [deskAgenda, setDeskAgenda] = useState<NorthseaAgendaItem[]>([]);
+  useEffect(() => {
+    let weg = false;
+    const haal = () => {
+      void northseaTab('werk')
+        .then(w => { if (!weg) setDeskAgenda(w.agenda); })
+        .catch(() => { if (!weg) setDeskAgenda([]); });
+    };
+    haal();
+    const t = setInterval(haal, 60_000);
+    return () => { weg = true; clearInterval(t); };
+  }, []);
+  /* De geplande runs van alle jobs (VPS, Mac, Supabase-cron) voor het venster dat
+     je bekijkt: de maand, of de week, met een week marge. */
+  const vensterSleutel = weergave === 'week' ? datumSleutel(weekAnker) : `${currentYear}-${currentMonth}`;
+  useEffect(() => {
+    let weg = false;
+    const basis = weergave === 'week' ? new Date(weekAnker) : new Date(currentYear, currentMonth, 1);
+    const van = new Date(basis.getTime() - 7 * 86400_000);
+    const tot = new Date(basis.getTime() + (weergave === 'week' ? 14 : 38) * 86400_000);
+    const haal = () => {
+      void calendarJobs(van, tot)
+        .then(r => { if (!weg) setJobItems(r.items); })
+        .catch(() => { if (!weg) setJobItems([]); });
+    };
+    haal();
+    const t = setInterval(haal, 5 * 60_000);
+    return () => { weg = true; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vensterSleutel, weergave]);
+  useEffect(() => {
+    let weg = false;
+    const haal = () => { void laadWerk().then(w => { if (!weg) setWerk(w); }); };
+    haal();
+    const t = setInterval(haal, 60_000);
+    return () => { weg = true; clearInterval(t); };
   }, []);
 
-  /* Selected date events */
-  const selectedEvents = selectedDate ? (eventsByDate[selectedDate] || []) : [];
+  const roosterItems: RoosterItem[] = useMemo(
+    () => [
+      ...EVENTS
+        .filter(e => minutenVan(e.time) !== null)
+        .map(e => ({
+          id: e.id, titel: e.title, datum: e.date, tijd: e.time,
+          duurMin: duurInMinuten(e.duration), kleur: e.color, soort: e.type,
+        })),
+      ...filterAgenda([
+        ...werkAgenda(werk.taken, werk.crons),
+        ...northseaAgenda(deskAgenda),
+        ...agendaVanJobs(jobItems),
+      ], app),
+    ],
+    [werk, deskAgenda, jobItems, app],
+  );
 
-  /* Upcoming events (sorted) */
-  const upcomingEvents = useMemo(() => {
-    return [...EVENTS]
-      .filter((e) => e.date >= formatDateKey(currentYear, currentMonth, 1))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
-      .slice(0, 6);
-  }, [currentYear, currentMonth]);
 
-  const goToPrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear((y) => y - 1);
-    } else {
-      setCurrentMonth((m) => m - 1);
-    }
-    setSelectedDate(null);
-  };
 
-  const goToNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear((y) => y + 1);
-    } else {
-      setCurrentMonth((m) => m + 1);
-    }
-    setSelectedDate(null);
-  };
 
-  /* Build grid cells */
-  const cells: { day: number | null; dateKey: string | null; isCurrentMonth: boolean }[] = [];
-  for (let i = 0; i < totalSlots; i++) {
-    const dayNum = i - firstDayOffset + 1;
-    if (dayNum > 0 && dayNum <= daysInMonth) {
-      cells.push({ day: dayNum, dateKey: formatDateKey(currentYear, currentMonth, dayNum), isCurrentMonth: true });
-    } else {
-      cells.push({ day: null, dateKey: null, isCurrentMonth: false });
-    }
-  }
+
+
+
+
 
   return (
     <motion.div
@@ -166,265 +211,75 @@ export default function CalendarPage() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
+      {/* De rechter schuifbalk: wat komt eraan.
+          In de week alles vanaf vandaag, in de maand alleen de dag die je hebt
+          aangeklikt -- daar gaat het om die ene dag, want de kalender ernaast
+          laat de rest al zien. */}
+      <TabRail kant="rechts">
+        <AgendaLijst
+          items={roosterItems}
+          titel="Agenda"
+          vanaf={weergave === 'week' ? datumSleutel(new Date()) : undefined}
+          tot={weergave === 'maand' ? (selectedDate ?? undefined) : undefined}
+          opKies={item => { setSelectedDate(item.datum); }}
+          leegTekst={
+            weergave === 'maand'
+              ? 'Niets op deze dag.'
+              : 'Niets gepland: geen taken met een deadline, planner-werk of cronjobs deze week.'
+          }
+        />
+      </TabRail>
+
+      {/* Maand of week, links in de band naast de composer -- net als de
+          sub-tabs van de trading-desk, en met dezelfde component. Het is
+          dezelfde handeling: kiezen wat je in het midden ziet. */}
+      <PlaatSlot slot="rechts">
+        <AppZuil actief={app} kies={setApp} />
+      </PlaatSlot>
+
+      <PlaatSlot slot="links">
+        <IcoonZuil
+          items={WEERGAVEN}
+          actief={weergave}
+          kies={id => setWeergave(id as Weergave)}
+          rijen={2}
+        />
+      </PlaatSlot>
+
       {/* Main Grid Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-6 py-4 flex-shrink-0"
-          style={{ borderBottom: '1px solid var(--border-subtle)' }}
-        >
-          <div className="flex items-center gap-4">
-            <button
-              onClick={goToPrevMonth}
-              className="p-2 rounded-lg transition-colors hover:bg-white/5"
-              style={{ border: '1px solid var(--border-subtle)' }}
-            >
-              <ChevronLeft size={16} color="var(--text-secondary)" />
-            </button>
-            <h1
-              className="text-page-title font-semibold min-w-[200px] text-center"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {MONTH_NAMES[currentMonth]} {currentYear}
-            </h1>
-            <button
-              onClick={goToNextMonth}
-              className="p-2 rounded-lg transition-colors hover:bg-white/5"
-              style={{ border: '1px solid var(--border-subtle)' }}
-            >
-              <ChevronRight size={16} color="var(--text-secondary)" />
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const n = new Date();
-                setCurrentYear(n.getFullYear());
-                setCurrentMonth(n.getMonth());
-                setSelectedDate(formatDateKey(n.getFullYear(), n.getMonth(), n.getDate()));
-              }}
-              className="text-xs-custom px-3 py-1.5 rounded-lg transition-colors hover:bg-white/5"
-              style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
-            >
-              Today
-            </button>
-          </div>
-        </div>
-
-        {/* Day Labels */}
-        <div
-          className="grid flex-shrink-0"
-          style={{
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            borderBottom: '1px solid var(--border-subtle)',
-          }}
-        >
-          {DAY_LABELS.map((label, i) => (
-            <div
-              key={label}
-              className="py-2 text-center text-[10px] uppercase tracking-wider font-medium"
-              style={{
-                color: i >= 5 ? 'var(--text-muted)' : 'var(--text-secondary)',
-                borderRight: i < 6 ? '1px solid var(--border-subtle)' : 'none',
-              }}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
-
-        {/* Month Grid */}
-        <div
-          className="flex-1 grid overflow-hidden"
-          style={{
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gridTemplateRows: `repeat(${cells.length / 7}, 1fr)`,
-          }}
-        >
-          {cells.map((cell, i) => {
-            const cellEvents = cell.dateKey ? (eventsByDate[cell.dateKey] || []) : [];
-            const selected = cell.dateKey === selectedDate;
-            const today = cell.isCurrentMonth && cell.day !== null && isToday(currentYear, currentMonth, cell.day);
-
-            return (
-              <button
-                key={i}
-                onClick={() => { if (cell.dateKey) { setSelectedDate(cell.dateKey); if (isMobile) setMobileSheetOpen(true); } }}
-                className="relative text-left transition-colors flex flex-col"
-                style={{
-                  padding: '6px',
-                  borderRight: (i % 7) < 6 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                  borderBottom: '1px solid rgba(255,255,255,0.03)',
-                  /* Vandaag is geen doorzichtige cel. Op de plaat kijk je door
-                     'transparent' heen naar het bureaublad, en dan is de dag
-                     waar je op staat juist de minst leesbare van de maand.
-                     Geselecteerd blijft cyaan, vandaag krijgt een eigen vlak. */
-                  backgroundColor: selected
-                    ? 'rgba(34,211,238,0.10)'
-                    : today
-                    ? 'var(--bg-elevated)'
-                    : cell.isCurrentMonth
-                    ? 'var(--bg-panel)'
-                    : 'rgba(0,0,0,0.22)',
-                  cursor: cell.isCurrentMonth ? 'pointer' : 'default',
-                }}
-              >
-                {cell.day !== null && (
-                  <>
-                    {/* Day number */}
-                    <span
-                      className="text-xs font-mono inline-flex items-center justify-center rounded-full"
-                      style={{
-                        width: '24px',
-                        height: '24px',
-                        color: today ? '#05070A' : selected ? 'var(--accent-cyan)' : 'var(--text-primary)',
-                        backgroundColor: today ? 'var(--accent-cyan)' : selected ? 'var(--tint)' : 'transparent',
-                        fontWeight: today || selected ? 600 : 400,
-                      }}
-                    >
-                      {cell.day}
-                    </span>
-
-                    {/* Event dots/bars */}
-                    {cellEvents.length > 0 && (
-                      <div className="flex flex-col gap-0.5 mt-1.5 flex-1 min-h-0">
-                        {cellEvents.slice(0, 3).map((ev) => (
-                          <div
-                            key={ev.id}
-                            className="flex items-center gap-1.5 px-1 py-0.5 rounded text-[10px] truncate"
-                            style={{
-                              backgroundColor: `${ev.color}15`,
-                              color: ev.color,
-                              borderLeft: `2px solid ${ev.color}`,
-                            }}
-                          >
-                            <span className="truncate">{ev.title}</span>
-                          </div>
-                        ))}
-                        {cellEvents.length > 3 && (
-                          <span className="text-[9px] px-1" style={{ color: 'var(--text-muted)' }}>
-                            +{cellEvents.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Mobile: dim backdrop behind the bottom sheet so a tap outside closes it */}
-      {isMobile && mobileSheetOpen && (
-        <div
-          className="absolute inset-0 z-20"
-          style={{ background: 'rgba(0,0,0,0.4)' }}
-          onClick={() => setMobileSheetOpen(false)}
-        />
-      )}
-
-      {/* Day-detail panel: desktop right sidebar, mobile bottom sheet. Anchored
-          with `absolute` (not fixed) so it stays inside the calendar area and
-          never overlaps the app's bottom nav/composer. */}
-      <div
-        className={
-          isMobile
-            ? `absolute left-0 right-0 bottom-0 z-30 flex flex-col overflow-y-auto rounded-t-2xl transition-transform duration-200 ${mobileSheetOpen ? 'translate-y-0' : 'translate-y-full'}`
-            : 'hidden md:flex flex-shrink-0 overflow-y-auto'
-        }
-        style={
-          isMobile
-            ? { maxHeight: '55%', borderTop: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-surface)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }
-            : { width: '300px', borderLeft: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }
-        }
-      >
-        {isMobile && (
-          <div className="sticky top-0 flex items-center justify-between px-4 pt-2 pb-1 z-10" style={{ background: 'var(--bg-surface)' }}>
-            <div className="mx-auto w-9 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
-            <button onClick={() => setMobileSheetOpen(false)} className="absolute right-3 top-2 p-1 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Close">
-              <X size={16} />
-            </button>
-          </div>
+        {weergave === 'week' ? (
+          <WeekRooster
+            anker={weekAnker}
+            items={roosterItems}
+            opAnker={setWeekAnker}
+            soorten={SOORTEN}
+            opKies={item => {
+              /* Klik je een blok aan, dan spring je terug naar de maand met die
+                 dag geselecteerd -- daar staat de volle omschrijving. */
+              setSelectedDate(item.datum);
+              setWeergave('maand');
+            }}
+          />
+        ) : (
+          <MaandRooster
+            jaar={currentYear}
+            maand={currentMonth}
+            items={roosterItems}
+            gekozen={selectedDate}
+            opKies={setSelectedDate}
+            opMaand={(j, m) => { setCurrentYear(j); setCurrentMonth(m); }}
+          />
         )}
-        {/* Selected Day Events */}
-        <AnimatePresence mode="wait">
-          {selectedDate ? (
-            <motion.div
-              key={selectedDate}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="p-4"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <CalendarDays size={14} color="var(--accent-cyan)" />
-                <h2 className="text-body font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {selectedDate}
-                </h2>
-                <span className="text-xs-custom ml-auto" style={{ color: 'var(--text-muted)' }}>
-                  {selectedEvents.length} events
-                </span>
-              </div>
-
-              {selectedEvents.length === 0 ? (
-                <div className="py-8 text-center">
-                  <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                    No events scheduled
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {selectedEvents.map((ev) => (
-                    <EventCard key={ev.id} event={ev} />
-                  ))}
-                </div>
-              )}
-
-              {/* Divider then upcoming */}
-              <div
-                className="my-4"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              />
-              <h3
-                className="text-[10px] uppercase tracking-wider font-medium mb-3"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Upcoming
-              </h3>
-              <div className="space-y-2">
-                {upcomingEvents
-                  .filter((e) => e.date !== selectedDate)
-                  .slice(0, 4)
-                  .map((ev) => (
-                    <EventCard key={ev.id} event={ev} compact />
-                  ))}
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="no-selection"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="p-4"
-            >
-              <h3
-                className="text-[10px] uppercase tracking-wider font-medium mb-3"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Upcoming Events
-              </h3>
-              <div className="space-y-2">
-                {upcomingEvents.map((ev) => (
-                  <EventCard key={ev.id} event={ev} compact />
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* Het dagpaneel is helemaal weg -- en daarmee ook het mobiele
+          onderblad en de donkere laag erachter.
+
+          Het stond rechts naast de maandkalender en toonde de gekozen dag:
+          precies wat de agenda-lijst in de rechter schuifbalk nu ook doet.
+          Twee plekken die hetzelfde tonen kunnen uit de pas lopen, en dit
+          kostte bovendien breedte die de kalender beter kan gebruiken. */}
     </motion.div>
   );
 }
@@ -433,71 +288,3 @@ export default function CalendarPage() {
 /*  EVENT CARD                                                         */
 /* ------------------------------------------------------------------ */
 
-function EventCard({ event, compact }: { event: CalendarEvent; compact?: boolean }) {
-  if (compact) {
-    return (
-      <div
-        className="p-2.5 rounded-lg flex items-start gap-2.5"
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.02)',
-          borderLeft: `2px solid ${event.color}`,
-        }}
-      >
-        <div className="flex-1 min-w-0">
-          <p className="text-xs truncate font-medium" style={{ color: 'var(--text-primary)' }}>
-            {event.title}
-          </p>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{event.time}</span>
-            <span className="text-[10px]" style={{ color: event.color }}>{TYPE_LABELS[event.type]}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <motion.div
-      className="p-3 rounded-xl"
-      style={{
-        backgroundColor: 'var(--surface-bg)',
-        border: `1px solid ${event.color}20`,
-      }}
-      layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.15 }}
-    >
-      <div className="flex items-center gap-2 mb-1.5">
-        <span
-          className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium"
-          style={{ backgroundColor: `${event.color}20`, color: event.color }}
-        >
-          {TYPE_LABELS[event.type]}
-        </span>
-        <span className="text-[10px] font-mono ml-auto" style={{ color: 'var(--text-muted)' }}>
-          {event.duration}
-        </span>
-      </div>
-      <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-        {event.title}
-      </p>
-      <div className="flex items-center gap-1.5 mb-1">
-        <Clock size={10} color="var(--text-muted)" />
-        <span className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>{event.time}</span>
-      </div>
-      {event.location && (
-        <div className="flex items-center gap-1.5 mb-1">
-          <MapPin size={10} color="var(--text-muted)" />
-          <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{event.location}</span>
-        </div>
-      )}
-      {event.description && (
-        <div className="flex items-start gap-1.5">
-          <AlignLeft size={10} color="var(--text-muted)" className="mt-0.5 flex-shrink-0" />
-          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{event.description}</span>
-        </div>
-      )}
-    </motion.div>
-  );
-}

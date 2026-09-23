@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AxeStatusOrb } from './AxeStatusOrb';
 import { useNavigate } from 'react-router';
 import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
@@ -9,6 +10,7 @@ import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { NotificationBell } from '@/presentation/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
+import { VOICE_STATUS_LABEL } from '@/presentation/store/voiceStatusLabel';
 
 /**
  * One row per voice state, instead of the same ternary written three times
@@ -17,9 +19,9 @@ import { useIsTablet } from '@/presentation/hooks/use-tablet';
  * because it only shows up in the state you weren't looking at.
  */
 const VOICE_STATE = {
-  listening:  { label: 'LISTENING', ink: 'var(--accent-cyan)' },
-  processing: { label: 'THINKING',  ink: 'var(--warning)' },
-  speaking:   { label: 'SPEAKING',  ink: 'var(--accent-blue)' },
+  listening:  { label: VOICE_STATUS_LABEL.listening.toUpperCase(),  ink: 'var(--accent-cyan)' },
+  processing: { label: VOICE_STATUS_LABEL.processing.toUpperCase(), ink: 'var(--warning)' },
+  speaking:   { label: VOICE_STATUS_LABEL.speaking.toUpperCase(),   ink: 'var(--accent-blue)' },
 } as const;
 
 export function TopNav() {
@@ -65,8 +67,15 @@ export function TopNav() {
         paddingTop: 'env(safe-area-inset-top)',
         paddingLeft: 'calc(12px + env(safe-area-inset-left))',
         paddingRight: 'calc(12px + env(safe-area-inset-right))',
-        backgroundColor: 'var(--bg-base)',
-        borderBottom: '1px solid var(--border-subtle)',
+        /* Geen eigen achtergrond en geen lijn eronder.
+         *
+         * Die stonden hier wel, en axe-look.css haalde ze er met !important
+         * weer af -- de enige reden dat daar !important stond. Twee plekken die
+         * het oneens zijn over hoe deze balk eruitziet, waarbij de ene altijd
+         * wint: dat is geen instelling maar dode verf, en precies zo'n paar
+         * regels maakte de balk in de lichte stand anders dan de rest van de
+         * shell. De kopregel LIGT op de vensterbalk (titleBarStyle "Overlay");
+         * hij is er geen tweede. */
       }}
     >
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
@@ -102,7 +111,13 @@ export function TopNav() {
           />
           <span className="truncate">Command Center</span>
         </button>
-        <div className="axe-tl axe-tl-ok hidden sm:flex items-center gap-2">
+        {/* Corrective: was `hidden sm:flex` (640px+) -- op tablet-breedte
+            (768px, `isCompact`) telde dit blok mee in de rij die de
+            rechter-lade-knop van het scherm duwde (gemeten: de balk werd
+            1098px breed in een 768px venster, met de lade-knop op x=1066,
+            ver voorbij de rand). `lg:` houdt dit weg tot er echt ruimte is,
+            zodat de lade-knop op tablet-breedte weer binnen beeld valt. */}
+        <div className="axe-tl axe-tl-ok hidden lg:flex items-center gap-2">
           <LiveIndicator size={7} color="var(--success)" />
           <span>Optimal</span>
         </div>
@@ -110,7 +125,12 @@ export function TopNav() {
             kopbalk. Het is app-brede status, geen Home-status, dus hij hoort
             hier -- en op de demo-plaat staat hij op dezelfde lijn. Home's kopie
             wordt verborgen zodra data-look aan staat. */}
+        {/* Het statusteken hoort HIER en niet in Home: op de plaat verbergt
+            data-look Home's kopie, dus daar was hij onzichtbaar (gemeten in de
+            app, 16 september). Zelfde orb als het midden van de onderbalk,
+            20px -- de kleine maat die thinking-orbs voert. */}
         <div className="axe-tl axe-tl-core hidden md:flex items-center gap-2">
+          <AxeStatusOrb size={20} />
           <span>{coreLabel}</span>
         </div>
       </div>
@@ -139,7 +159,7 @@ export function TopNav() {
             dan is dit nul breed. */}
         <div id="axe-slot-topbalk-rechts" className="axe-slot-topbalk flex items-center gap-1 min-w-0 mr-1" />
 
-        <div className="axe-tr-klok hidden md:flex items-center gap-2.5 mr-2.5 whitespace-nowrap">
+        <div className="axe-tr-klok hidden lg:flex items-center gap-2.5 mr-2.5 whitespace-nowrap">
           <b style={{ color: 'var(--text-primary)' }}>{timeStr}</b>
           <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>
         </div>
@@ -158,9 +178,12 @@ export function TopNav() {
             );
         })()}
 
+        {/* Corrective: `sm:` naar `lg:`, zelfde reden als "Optimal" hierboven --
+            samen met de andere vier gemarkeerde items maakt dit genoeg ruimte
+            vrij om de lade-knop op 768px weer op het scherm te laten vallen. */}
         <IconButton
           title={voice.apiKey ? 'API key OK — open AI settings' : 'No API key — open settings'}
-          className="hidden sm:inline-flex"
+          className="hidden lg:inline-flex"
           onClick={() => navigate('/settings')}
         >
           <Key size={14} style={{ color: voice.apiKey ? 'var(--success)' : 'var(--text-muted)' }} />
@@ -175,7 +198,7 @@ export function TopNav() {
         </IconButton>
 
         <IconButton
-          className="relative hidden sm:inline-flex"
+          className="relative hidden lg:inline-flex"
           aria-label="Split workspace"
           title={splitViewOpen ? 'Exit 4-pane split' : 'Split: Home · Trading · Browser · Code'}
           onClick={() => toggleSplitView()}
@@ -195,7 +218,7 @@ export function TopNav() {
         <NotificationBell />
 
         <div
-          className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold"
+          className="hidden lg:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold"
           style={{
             width: 32,
             height: 32,

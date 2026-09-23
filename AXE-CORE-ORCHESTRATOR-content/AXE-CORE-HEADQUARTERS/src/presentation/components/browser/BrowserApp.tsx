@@ -9,7 +9,6 @@ import TabBar from '@/presentation/components/browser/TabBar';
 import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
 import { BrowserStartPage } from '@/presentation/components/browser/BrowserStartPage';
-import { AxeFloatingPresence } from '@/presentation/components/browser/AxeFloatingPresence';
 import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
 import { BrowserUnifiedSidebar } from '@/presentation/components/browser/BrowserUnifiedSidebar';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
@@ -17,7 +16,10 @@ import { MobileBrowserChat } from '@/presentation/components/browser/MobileBrows
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
 import { useAIConfig } from '@/presentation/hooks/useAIConfig';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
-import { sendBrowserAIMessage } from '@/application/browser/browserAIService';
+import {
+  sendBrowserAIMessage,
+  type BrowserAIResponse,
+} from '@/application/browser/browserAIService';
 import type { BrowserAIProviderId } from '@/domain/browser/browserAIProviders';
 import { StandaloneBrowserShell, OpenStandaloneBrowserButton } from '@/presentation/components/browser/StandaloneBrowserShell';
 
@@ -65,6 +67,9 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
   const [showBrowserAgent, setShowBrowserAgent] = useState(false);
   const [agentSeed, setAgentSeed] = useState<string | undefined>(undefined);
   const [loadingProvider, setLoadingProvider] = useState<BrowserAIProviderId | null>(null);
+  const [providerFeedback, setProviderFeedback] = useState<
+    Partial<Record<BrowserAIProviderId, { status: BrowserAIResponse['status']; message: string }>>
+  >({});
   const [isLoading, setIsLoading] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
@@ -138,6 +143,10 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
 
   const handleAIProviderSubmit = useCallback(async (provider: BrowserAIProviderId, message: string, mode?: string) => {
     setLoadingProvider(provider);
+    setProviderFeedback(prev => ({
+      ...prev,
+      [provider]: { status: 'running', message: 'Opdracht verstuurd — wachten op de provider…' },
+    }));
     appendAIMessage('user', `[${provider}] ${message}`);
 
     try {
@@ -147,13 +156,24 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
       });
 
       appendAIMessage('assistant', result.message);
+      setProviderFeedback(prev => ({
+        ...prev,
+        [provider]: { status: result.status, message: result.message },
+      }));
 
-      if (result.status === 'agent_started' || result.status === 'running' || provider === 'browser-use' || provider === 'camofox') {
-        setAgentSeed(message);
-        setShowBrowserAgent(true);
-      }
+      /* Do NOT open BrowserAgentPanel with the same prompt here.
+         Browser Use/Camofox already received this task through their own API.
+         Seeding the generic Playwright panel afterwards executed the request a
+         second time in a different browser session, while the actual provider
+         result remained invisible on the card. The manual Browser Agent button
+         still opens that separate tool explicitly. */
     } catch (err) {
-      appendAIMessage('assistant', `Error: ${err instanceof Error ? err.message : String(err)}`);
+      const messageText = err instanceof Error ? err.message : String(err);
+      appendAIMessage('assistant', `Error: ${messageText}`);
+      setProviderFeedback(prev => ({
+        ...prev,
+        [provider]: { status: 'error', message: messageText },
+      }));
     } finally {
       setLoadingProvider(null);
     }
@@ -540,48 +560,28 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
           ref={contentRef}
           className={`flex-1 relative flex flex-col min-h-0 ${isOnHome ? '' : 'axe-browser-vak'}`}
         >
-          <div className="flex-1 relative overflow-hidden min-h-0">
-          {isOnHome ? (
-            <div ref={homeRef} className="h-full w-full">
-              <BrowserStartPage
-                quickLinks={quickLinks}
-                onNavigate={handleNavigate}
-                onAddFavorite={handleAddFavorite}
-                onAIProviderSubmit={handleAIProviderSubmit}
-                loadingProvider={loadingProvider}
-              />
+          <div className="flex-1 relative overflow-hidden min-h-0 flex">
+            <div className="flex-1 min-w-0 relative overflow-hidden">
+            {isOnHome ? (
+              <div ref={homeRef} className="h-full w-full">
+                <BrowserStartPage
+                  quickLinks={quickLinks}
+                  onNavigate={handleNavigate}
+                  onAddFavorite={handleAddFavorite}
+                  onAIProviderSubmit={handleAIProviderSubmit}
+                  loadingProvider={loadingProvider}
+                  providerFeedback={providerFeedback}
+                />
+              </div>
+            ) : (
+              /* AXE presence is shell-owned now; the website gets the full browser workspace. */
+              <div ref={mainRef} className="h-full w-full">
+                <WebView url={activeTab.url} mobile={isMobile} />
+              </div>
+            )}
             </div>
-          ) : (
-            /* De pagina op een plaat, net als de code-editor.
-             *
-             * Hij liep van rand tot rand en botste onderaan strak tegen de
-             * chatplaat -- twee vlakken die elkaar raken zonder scheiding
-             * lezen als een fout. Een marge en ronde hoeken geven hem een
-             * eigen vlak, en de donkere ondergrond vangt de pagina op zolang
-             * die nog laadt.
-             *
-             * De pagina zelf komt donker binnen: de Chromium op de VPS draait
-             * sinds vandaag met color_scheme="dark". */
-            /* Geen tweede plaat meer om de pagina: het vak eromheen IS de
-               plaat. Een doos in een doos gaf een dubbele rand, en de pagina
-               werd twee keer ingeperkt -- daar kwam de rare uitrekking
-               vandaan. */
-            <div ref={mainRef} className="h-full w-full">
-              <WebView url={activeTab.url} mobile={isMobile} />
-            </div>
-          )}
-          </div>
 
-          {!isMobile && (
-            <AxeFloatingPresence
-              visible={showAIPanel}
-              messages={aiMessages}
-              onSendMessage={sendAIMessage}
-              aiConfig={config}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              isLoading={loadingProvider !== null}
-            />
-          )}
+          </div>
 
           {isMobile && (
             <MobileBrowserChat

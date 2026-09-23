@@ -73,6 +73,15 @@ MANIFEST = {
     "/opt/axe-core-api/agent_loop.py": ("backend/axe_api/agent_loop.py", "axe-task-worker"),
     "/opt/axe-core-api/browser_agent.py": ("backend/axe_api/browser_agent.py", "axe-core-api"),
     "/opt/axe-core-api/crew_runner.py": ("backend/axe_api/crew_runner.py", "axe-core-api"),
+    # main.py importeert dit bij het opstarten. Zonder deze regel ship je
+    # main.py zonder zijn module en start de hele API niet meer.
+    "/opt/axe-core-api/perplexity_agent.py": ("backend/axe_api/perplexity_agent.py", "axe-core-api"),
+    # Deze twee importeert main.py ook, en ze stonden niet in het manifest: zuinig
+    # kwam er met de hand op, planner nooit. Een module die main.py nodig heeft en
+    # die deploy niet meestuurt is een API die niet opstart -- of, sinds de
+    # imports beschermd zijn, een functie die stil ontbreekt.
+    "/opt/axe-core-api/zuinig.py": ("backend/axe_api/zuinig.py", "axe-core-api"),
+    "/opt/axe-core-api/planner.py": ("backend/axe_api/planner.py", "axe-core-api"),
     "/opt/axe-core-api/run_crew.py": ("backend/axe_api/run_crew.py", None),
     "/opt/axe-core-api/flow_runner.py": ("infra/axe-core-api/flow_runner.py", "axe-core-api"),
     "/opt/axe-core-api/run_flow.py": ("infra/axe-core-api/run_flow.py", None),

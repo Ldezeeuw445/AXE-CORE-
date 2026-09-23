@@ -25,6 +25,7 @@ import {
 } from '@/infrastructure/persistence/obsidianMemoryService';
 import { writeReflection } from '@/infrastructure/persistence/reflectionService';
 import { vaultSyncAvailable, getVaultPath } from '@/infrastructure/persistence/obsidianVaultSyncService';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
 const LS_LAST_RUN = 'axe_memory_manager_last_run';
 const LS_STATS = 'axe_memory_manager_stats';
@@ -271,6 +272,17 @@ export async function runMemoryManager(opts?: {
     /* continue */
   }
 
+  // Loop wiring (LOOP_AGENTS 'memory'): opened before the consolidation work
+  // below runs, closed right after checkMemoryHealth() below produces a real
+  // verdict. No memoryIds/memoryKeys here -- at this point in the function
+  // nothing has been loaded yet (extractFactsFromMessages and checkMemoryHealth
+  // do their own loadGlobalMemories/loadRagMemories calls internally, out of
+  // this scope), so an honest empty array beats a fabricated id.
+  const episodeId = await openEpisode({
+    agent: 'memory',
+    subject: `daily memory consolidation ${todayKey()}`,
+  });
+
   let factsExtracted = 0;
   let notesWritten = 0;
   let reflections = 0;
@@ -317,6 +329,8 @@ export async function runMemoryManager(opts?: {
   } catch (err) {
     console.warn('[memoryManager] health check failed:', err);
   }
+
+  void closeEpisode(episodeId, health === 'ok' ? 'good' : 'poor');
 
   try {
     await writeReflection({

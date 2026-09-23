@@ -174,6 +174,7 @@ const KEY_KEYS = 'research_sources';
 const KEY_BUDGET = 'research_budget';
 const KEY_HEALTH = 'research_health';
 const KEY_CALENDAR = 'research_calendar';
+const KEY_CALENDAR_PAST = 'research_calendar_past';
 
 /**
  * Four, not five, and now grounded rather than guessed.
@@ -468,6 +469,75 @@ interface NewsCacheRow { date: string; items: NewsItem[] }
  * domain/tradingIntel/economicCalendar.ts, where it is tested against the
  * near-identical regional releases FRED publishes beside the real ones.
  */
+/**
+ * Dezelfde releases, maar dan die al gewéést zijn.
+ *
+ * `fetchEconomicReleases` kijkt vooruit, want de poort in economicCalendar.ts
+ * wil weten wat eraan komt. De impactgeschiedenis wil het omgekeerde: wat deden
+ * de vorige zes prints. Zelfde tool op de API-box, met `back` erbij.
+ *
+ * ## Waarom dit een eigen cache heeft, en een langere
+ *
+ * De vooruitblik verandert elke dag — er schuift een release in en een uit, dus
+ * daar is een cache van één dag precies goed. Datums uit het verleden veranderen
+ * nooit meer. Ze elke dag opnieuw ophalen kost een van de weinige FRED-aanroepen
+ * die dit bureau per dag heeft, voor een antwoord dat gisteren al klopte.
+ *
+ * Daarom op de maand gecached: het enige wat er kan veranderen is dat er een
+ * release bijkomt, en die komt er maandelijks bij.
+ */
+export async function fetchPastReleases(
+  terugDagen = 400,
+): Promise<Array<{ date: string; name: string }>> {
+  const maand = today().slice(0, 7);
+  const cached = await loadDurableConfig<{ maand: string; terug: number; events: Array<{ date: string; name: string }> } | null>(
+    KEY_CALENDAR_PAST, null);
+  if (cached && cached.maand === maand && cached.terug >= terugDagen) return cached.events;
+
+  if (!(await reserveDailyCall('fred', SOURCE_DAILY_CAPS.fred))) {
+    // Geen aanroep meer over vandaag. Wat er ligt is beter dan niets, en het is
+    // niet verouderd — het verleden verandert niet.
+    return cached?.events ?? [];
+  }
+
+  const started = Date.now();
+  try {
+    const res = await marketToolCall<{ release_dates?: Array<{ date?: string; release_name?: string }> }>(
+      'fred_calendar', { days: 0, back: terugDagen });
+
+    if (!res.ok) {
+      const oud = /unknown tool|not found|unsupported/i.test(res.error ?? '');
+      if (oud || !/fred/i.test(res.error ?? '')) await releaseDailyCall('fred');
+      await recordHealth('fred', {
+        at: new Date().toISOString(), ok: false, ms: Date.now() - started,
+        detail: oud
+          ? 'fred_calendar kent `back` nog niet — de API-box draait oudere code'
+          : (res.error ?? 'FRED calendar unavailable'),
+      });
+      return cached?.events ?? [];
+    }
+
+    const vandaag = today();
+    const events = (res.data?.release_dates ?? [])
+      .filter(r => r.date && r.release_name && String(r.date) < vandaag)
+      .map(r => ({ date: String(r.date), name: String(r.release_name) }));
+
+    await saveDurableConfig(KEY_CALENDAR_PAST, { maand, terug: terugDagen, events });
+    await recordHealth('fred', {
+      at: new Date().toISOString(), ok: true, ms: Date.now() - started,
+      detail: `${events.length} publicatie(s) over de afgelopen ${terugDagen} dagen`,
+    });
+    return events;
+  } catch (e) {
+    await releaseDailyCall('fred');
+    await recordHealth('fred', {
+      at: new Date().toISOString(), ok: false, ms: Date.now() - started,
+      detail: e instanceof Error ? e.message : String(e),
+    });
+    return cached?.events ?? [];
+  }
+}
+
 export async function fetchEconomicReleases(): Promise<Array<{ date: string; name: string }>> {
   const cached = await loadDurableConfig<{ date: string; events: Array<{ date: string; name: string }> } | null>(
     KEY_CALENDAR, null);

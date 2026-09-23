@@ -1,4 +1,5 @@
 import { useEffect, Suspense } from 'react';
+import { Triangle } from 'lucide-react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { MobileGlass, LookToggle } from '@/presentation/components/layout/MobileGlass';
@@ -6,6 +7,8 @@ import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome'
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
+import { TaskCompletionToasts } from '@/presentation/components/layout/TaskCompletionToasts';
+import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -13,15 +16,23 @@ import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { isIngebed, schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { MobileFab } from '@/presentation/components/layout/MobileFab';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
+import { describeFailure } from '@/domain/globalFailure';
+import { magHerstelHerladen, meldGoedeLading } from '@/domain/staleBuildRecovery';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
 import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFloatingChat';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
+import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
+import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDock';
+import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
+import { openPageOnMonitor, openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -31,22 +42,62 @@ function PageLoading() {
   return <div className="flex-1" aria-busy="true" />;
 }
 
-function PageError() {
+/**
+ * @param fout de melding die de ErrorBoundary opving.
+ *
+ * Die stond hier eerst niet. Het scherm zei "This page crashed" en verder
+ * niets, terwijl de melding gewoon beschikbaar was — en AXE Core schrijft geen
+ * clientfouten weg en heeft geen devtools in de release-build, dus er was
+ * nergens anders om te kijken. Nu staat hij er, met de pagina erbij en een knop
+ * om hem te kopiëren: dan is een crash iets om op te lossen in plaats van iets
+ * om over te vertellen.
+ */
+function PageError({ fout }: { fout: string }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { kind, message } = describeFailure(fout);
+  const verouderd = kind === 'verouderd';
+  const regel = `${location.pathname} — ${fout}`;
+
+  // Bij een verwisselde build is herladen niet één van de opties maar de
+  // enige; opnieuw proberen levert exact dezelfde fout. Eén poging per sessie,
+  // want een ongeremde versie knippert eindeloos zonder ooit iets te tonen.
+  useEffect(() => {
+    if (verouderd && magHerstelHerladen(globalThis.sessionStorage)) window.location.reload();
+  }, [verouderd]);
+
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center max-w-sm">
+      <div className="text-center max-w-lg">
         <div className="text-3xl mb-3" style={{ color: 'var(--accent-cyan)' }}>◆</div>
-        <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>This page crashed</h2>
-        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-          The rest of AXE keeps working — switch to another tab or go back to Home.
+        <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+          {verouderd ? 'AXE is bijgewerkt' : 'This page crashed'}
+        </h2>
+        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+          {verouderd
+            ? message
+            : 'The rest of AXE keeps working — switch to another tab or go back to Home.'}
         </p>
+        <pre
+          className="text-[11px] text-left mb-3 max-h-40 overflow-auto rounded-lg px-3 py-2 whitespace-pre-wrap"
+          style={{ color: 'rgba(248,113,113,0.9)', border: '1px solid rgba(248,113,113,0.2)', background: 'rgba(255,255,255,0.04)' }}
+        >
+          {regel}
+        </pre>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => { void navigator.clipboard?.writeText(regel); }}
+          className="mb-4 text-[11px] underline"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          kopieer foutmelding
+        </button>
+        <div />
+        <button
+          onClick={() => { if (verouderd) window.location.reload(); else navigate('/'); }}
           className="px-4 py-2 rounded-lg text-sm font-medium"
           style={{ backgroundColor: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}
         >
-          Go to Home
+          {verouderd ? 'Herlaad AXE' : 'Go to Home'}
         </button>
       </div>
     </div>
@@ -82,6 +133,11 @@ export function AppShell() {
     // leidt zijn zichtbare stand hiervan af — zie useChatCollapsed.
     setChatUserSet(false);
   }, [location.pathname, setChatDicht, setChatUserSet]);
+
+  // Een pagina die opkomt bewijst dat de brokken kloppen. De herstelpoging mag
+  // dan weer op scherp: zonder dit is de eerste update van een sessie de enige
+  // die zichzelf oplost, en zit je bij de tweede weer met de hand te herladen.
+  useEffect(() => { meldGoedeLading(globalThis.sessionStorage); }, [location.pathname]);
   const opPlaat = useHeeftPlaat();
   // The Android shell draws its own top bar, tab bar and composer natively, so
   // the web chrome would be a second copy of all three stacked on a 384px-wide
@@ -95,9 +151,19 @@ export function AppShell() {
   // desktop-balk of -composer in het klein, en ziet de telefoon eruit zoals de
   // Android-shell (waar isAndroidShellRuntime dit hoe dan ook aanzet). `/mobile`
   // en `/lock` blijven het ook op een breed scherm, voor preview/dev.
+  // Samsung's eigen voorwaarde blijft leidend: op een telefoon is ELKE route
+  // een command-surface. schilZonderChroom() komt er met OR bij, niet in de
+  // plaats van — die helper kent `isMobile` niet, en alleen hem nemen zou een
+  // echte telefoon weer desktop-chroom geven. Wat hij wél toevoegt is de
+  // ingebedde stand: in het iframe van de zwevende telefoon vreet desktop-
+  // chroom 80% van 393px, en daar had deze tak nog geen antwoord op.
   const mobileCommandSurface =
     isMobile || isAndroidShellRuntime()
-    || location.pathname === '/mobile' || location.pathname === '/lock';
+    || location.pathname === '/mobile' || location.pathname === '/lock'
+    || schilZonderChroom(location.pathname, {
+      android: isAndroidShellRuntime(),
+      ingebed: isIngebed(),
+    });
   // De nav is dan altijd de lade; de horizontale onderbalk is alleen desktop.
   const mobileNav = mobileCommandSurface;
   // De telefoon-home is de échte Tauri-glasplaat: een paneel dat op de
@@ -141,6 +207,12 @@ export function AppShell() {
       {/* De rails aan de rand en de hoogtes die de rest eraan ophangt.
           Doet niets zonder data-look. */}
       <AxeShellChrome />
+      {/* Zichtbare terugkoppeling in de app zelf zodra een achtergrondtaak
+          klaar is -- zie TaskCompletionToasts.tsx voor waarom dit ernaast
+          bestaat en niet in plaats van de al bestaande Mission
+          Timeline/Active Tasks. Op elke tab, ook mobiel: dit is precies het
+          moment dat je niet wil missen omdat het paneel toevallig dicht was. */}
+      <TaskCompletionToasts />
       {/* De wereldschakelaar, midden boven op de plaat. Staat op ELKE tab:
           het is de snelste weg tussen Core, Neural, Terrain en Architecture,
           en hij ligt op de plaat in plaats van in een balk, dus hij zit
@@ -237,7 +309,7 @@ export function AppShell() {
               Een pagina die de volle breedte nodig heeft (een 3D-scene) breekt
               eruit met .axe-vol-breed; dat is de uitzondering en die moet je
               opschrijven, niet per ongeluk krijgen. */}
-          <ErrorBoundary key={location.pathname} fallback={<PageError />}>
+          <ErrorBoundary key={location.pathname} fallback={(fout) => <PageError fout={fout} />}>
             <Suspense fallback={<PageLoading />}>
               {/* Op de telefoon zweeft de hamburger van de lade linksboven. De
                   mobiele home en het lock screen houden daar zelf rekening mee;
@@ -270,6 +342,58 @@ export function AppShell() {
       {/* De volledige composer (met alles erop) hoort óók op de telefoon-home,
           net als in de Tauri-app — niet mijn afgeslankte mobiele composer. */}
       {opPlaat && !volScherm && <PlaatChat />}
+      {/* The chat between Luka and AXE lives in AxePresenceDock's invisible
+          cloud right of the composer (23 sep 2026) -- not in a per-tab card. */}
+      {/* Luka, 21 sep 2026: on every page including Home now -- the idle particle
+          anchors to the bottom nav's own AXE label (see AxePresenceDock.tsx), which
+          Home already has, and Home's own big Core Sphere is a separate element
+          entirely, so the two never compete. */}
+      {!mobileCommandSurface && opPlaat && <AxePresenceDock />}
+
+      {/* Het radiaal menu linksonder. Naast de chat en niet erin: het zijn
+          sprongen naar ergens anders, en die horen niet tussen de knoppen
+          waarmee je iets tégen AXE zegt.
+
+          De driehoek klapt de chat open en zet de cursor in het veld -- de
+          snelste weg naar "ik wil iets vragen" vanaf welke tab dan ook. Dat
+          zit hier en niet in RadiaalDok, zodat hij ergens anders op aan te
+          sluiten is zonder dat bestand te wijzigen. */}
+      {/* Ook rechts, op ELKE tab.
+        *
+        * Hij hing alleen op de trading-desk, in TradingRail. Een dok die op één
+        * tab bestaat is geen dok maar een knop van die pagina -- en je kwam hem
+        * pas tegen als je daar toevallig was. Nu staat hij overal, net als de
+        * linker.
+        *
+        * De tabs en de hoekknop zijn nog de standaard; klopt dat ergens niet
+        * (de code-editor bijvoorbeeld), dan krijgt die tab later zijn eigen
+        * inhoud mee -- de component neemt ze al als prop. */}
+      {!mobileCommandSurface && opPlaat && (
+        <RadiaalDok
+          kant="rechts"
+          hoek={<Triangle size={28} fill="none" strokeWidth={1.7} style={{ color: 'var(--accent-cyan)' }} />}
+          hoekLabel="Trading — open in separate window"
+          opHoek={() => { void openPageOnMonitor('trading', 0); }}
+        />
+      )}
+
+      {/* De telefoon blijft een vrije tool. AXE zelf is geen losse grote
+          zweefbol meer: de compacte presence hierboven is shell-owned. Home
+          behoudt zijn eigen grote Core Sphere in Home.tsx. */}
+      {!mobileCommandSurface && opPlaat && (
+        <ZweefLaag>
+          <ZwevendeTelefoon />
+        </ZweefLaag>
+      )}
+
+      {!mobileCommandSurface && opPlaat && <QuickNoteDock />}
+
+      {!mobileCommandSurface && opPlaat && (
+        <RadiaalDok
+          opHoek={() => { void openPersonalComputerUse(); }}
+          hoekLabel="Personal Computer Use"
+        />
+      )}
 
       {/* De oude onderbalk alleen nog zonder plaat. Met plaat levert PlaatChat
           de composer, en twee invoerbalken onder elkaar is voor niemand te

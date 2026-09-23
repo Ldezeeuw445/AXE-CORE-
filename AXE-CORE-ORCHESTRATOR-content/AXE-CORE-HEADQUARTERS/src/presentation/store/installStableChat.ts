@@ -2,42 +2,32 @@
  * installStableChat.ts
  *
  * Boot patch for AXE identity:
- * 1. Force Fish Audio as default TTS provider.
+ * 1. Keep one canonical AXE speech identity through globalTts (Cedar).
  * 2. Simple chat → short Gemini cascade (no LangGraph race).
  * 3. Action asks → agentic tool loop.
  * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.
  * 5. Inject Architecture-assigned skills into system prompt.
  * 6. Living Display owned by installSpherePresent (no double project).
  */
-import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
+import { useVoiceStore, getProviderKeySlot, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
+  PROVIDERS,
   buildStableChatCascade,
   classifyQuery,
   isSimpleChatCapability,
-  preferLocalOllamaFirst,
   type KeySlot,
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
-import { isLocalOllamaUp, resolveReachableOllama } from '@/infrastructure/gateways/localOllama';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
 import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
 import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
 import { nativeToolsEnabled, requestActionApproval } from '@/presentation/store/voiceStore';
 import { TOOL_RUNTIMES } from '@/application/tools/toolRegistry';
-import {
-  speakWithFishAudio,
-  isFishAudioConfigured,
-  stopFishAudio,
-  LEWIS_VOICE_ID,
-  setFishVoiceId,
-  getFishVoiceId,
-} from '@/infrastructure/gateways/fishAudioService';
-import { speakWithBrowser, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
-import { sanitizeForSpeech } from '@/infrastructure/gateways/globalTts';
+import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import {
   applyPendingCodeEdit,
   loadPendingEdit,
@@ -53,56 +43,22 @@ import {
   getDurableTask,
   type DurableTaskSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { zonderAbonnement } from '@/domain/abonnementChat';
 
 let installed = false;
 const ACTIVE_TASKS_KEY = 'axe_active_durable_tasks';
 const taskMonitors = new Set<string>();
 
-const TTS_PROVIDER_KEY = 'axe_tts_provider';
-const FISH_VOICE_KEY = 'axe_fish_voice_id';
-
-function forceFishTtsDefaults(): void {
+function speakAxe(text: string, onDone?: () => void): void {
   try {
-    const voice = (localStorage.getItem(FISH_VOICE_KEY) ?? '').trim();
-    if (!voice) localStorage.setItem(FISH_VOICE_KEY, LEWIS_VOICE_ID);
-    const prov = localStorage.getItem(TTS_PROVIDER_KEY);
-    if (!prov || prov === 'fish') localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
+    if (localStorage.getItem('axe_response_mode') === 'type') { onDone?.(); return; }
   } catch { /* ignore */ }
-}
-
-function speakFishFirst(text: string, onDone?: () => void): void {
-  try {
-    if (localStorage.getItem('axe_response_mode') === 'type') {
-      onDone?.();
-      return;
-    }
-  } catch { /* ignore */ }
-
-  const clean = sanitizeForSpeech(text);
-  if (!clean) {
-    onDone?.();
-    return;
-  }
-
-  stopTTS();
-  stopFishAudio();
-
-  try {
-    if (isFishAudioConfigured()) localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
-  } catch { /* ignore */ }
-
-  if (isFishAudioConfigured() && getFishVoiceId()) {
-    void speakWithFishAudio(
-      clean,
-      onDone,
-      (err) => {
-        console.warn('[AXE TTS] Fish failed, browser fallback:', err);
-        speakWithBrowser(clean, onDone);
-      },
-    );
-    return;
-  }
-  speakWithBrowser(clean, onDone);
+  stopGlobalTts();
+  speakGlobal(
+    text,
+    onDone,
+    (reason) => useVoiceStore.setState({ error: reason }),
+  );
 }
 
 function recordChatTurn(q: string, a: string, provider: string, capability: string): void {
@@ -155,6 +111,15 @@ function collectAllSlots(): KeySlot[] {
     }
   } catch { /* ignore */ }
 
+  // Also include every known provider whose key comes from the vault/ENV, not
+  // only localStorage — getProviderKeySlot resolves both, exactly like Settings.
+  // Without this, a vault-keyed provider (e.g. Gemini via VITE_GEMINI_API_KEY)
+  // shows "Connected" in Settings but is invisible to AXE's chat cascade, so AXE
+  // fell back to whatever localStorage happened to hold (Ollama/OpenRouter).
+  for (const p of PROVIDERS) {
+    push(getProviderKeySlot(p.id));
+  }
+
   return slots;
 }
 
@@ -185,12 +150,17 @@ function chatCascade(): KeySlot[] {
   const all = collectAllSlots();
   if (all.length === 0) return [];
   const st = useVoiceStore.getState();
-  const cascade = buildStableChatCascade(all, {
+  // AXE's voice is a fast chat model, never a coding subscription (claude/codex/
+  // cursor). Overlaying axe-core's subscription here is what made Codex answer
+  // as AXE. Strip subscriptions from the identity cascade — the same rule the
+  // trading chat already uses — so a real chat model (your picked ★ Primary, or
+  // Gemini/etc.) answers. Subscriptions belong to the Code agent and heavy work.
+  const cascade = zonderAbonnement(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
-  });
-  return cascade.length ? cascade : all.slice(0, 1);
+  }));
+  return cascade.length ? cascade : zonderAbonnement(all).slice(0, 1);
 }
 
 /** First choice only — for callers that need a slot to label a reply with,
@@ -249,7 +219,7 @@ function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: strin
       void presentAssistantReplyOnSphere(answer, lastUserText).catch(() => {});
     }
   }
-  speakFishFirst(answer, () => {
+  speakAxe(answer, () => {
     useVoiceStore.setState({ voiceStatus: 'idle' });
   });
 }
@@ -465,17 +435,19 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   if (all.length === 0) return false;
 
   const st = useVoiceStore.getState();
-  let cascade = buildStableChatCascade(all, {
+  // Same rule as chatCascade: AXE speaks through a real chat model, not a coding
+  // subscription. Strip subscriptions so your chosen brain answers.
+  //
+  // "Local model first" used to also apply here when nothing was pinned
+  // (AXE Native) -- that's exactly the "AXE never gets Ollama" rule (Settings'
+  // AXE Core row, domain/chatModelKeuzes.ts) being quietly overruled the one
+  // time you left AXE on auto. The toggle is for the tier-2 workers/CrewAI,
+  // not for AXE's own brain -- removed here, not repurposed here.
+  const cascade = zonderAbonnement(buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
-  });
-  // "Local model first when home": when the Mac Mini's own Ollama is reachable
-  // and the toggle is on, put the local model at the front for simple chat.
-  // The gateway then serves it locally (fast, private, no key) and falls back
-  // to VPS/cloud — which is exactly what the rest of this cascade provides.
-  const reachableOllama = await resolveReachableOllama();
-    cascade = preferLocalOllamaFirst(cascade, !!reachableOllama, reachableOllama?.baseUrl);
+  }));
   if (cascade.length === 0) return false;
 
   const history = st.conversation
@@ -592,11 +564,6 @@ async function stableSimpleSend(text: string): Promise<boolean> {
 export function installStableChat(): void {
   if (installed) return;
   installed = true;
-
-  forceFishTtsDefaults();
-  try {
-    if (!getFishVoiceId()) setFishVoiceId(LEWIS_VOICE_ID);
-  } catch { /* ignore */ }
 
   const original = useVoiceStore.getState().sendMessage;
   const resumeSlot = pickPrimarySlot();

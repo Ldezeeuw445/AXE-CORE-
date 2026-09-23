@@ -24,17 +24,17 @@
  * buiten de chat.
  */
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Check, ChevronDown, ChevronUp, MapPin, Mic, Plus, RotateCcw, Send, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
-import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
-import { HomeCommandComposer } from '@/presentation/components/axe-core/HomeCommandComposer';
+import { AlertTriangle, Check, Clock, Code2, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
+import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
+import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import { VermogensKnop } from '@/presentation/components/layout/VermogensKnop';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { useCoreViewStore, useChatCollapsed } from '@/presentation/store/coreViewStore';
+import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
@@ -52,6 +52,8 @@ import {
   directFromAssistantMessageAsync,
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
+import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
+import { useCodeAgentKop } from '@/presentation/store/codeAgentKopStore';
 
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
@@ -66,30 +68,24 @@ function looksLikeChartRequest(t: string): boolean {
 
 export function PlaatChat() {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const voice = useVoiceStore();
   const dismiss = useSphereProjectionStore(s => s.dismiss);
   const setCoreView = useCoreViewStore(s => s.setCoreView);
+  const chatCollapsed = useCoreViewStore(s => s.chatDicht);
   const setChatCollapsed = useCoreViewStore(s => s.setChatDicht);
-
-  // Op de telefoon start de home clean, zoals de Tauri-mockup: alleen de sphere
-  // en de slanke composer, met de chat ingeklapt. Hij opent zodra je 'm gebruikt
-  // (typen/versturen) of bij een approval/bestand — zie de effecten hieronder.
-  // Op de telefoon start de home clean (chat dicht), zoals de Tauri-mockup;
-  // pas als de gebruiker — of een approval/bestand — de chat expliciet opent,
-  // telt die stand. Afgeleid i.p.v. via een effect, want de Tauri-webview meldt
-  // zijn 'mobiele' breedte pas ná de eerste render, waardoor een effect de stand
-  // miste. `collapsed` is voortaan de bron voor alle chat-hoogte/kop-logica.
-  const setChatUserSet = useCoreViewStore(s => s.setChatUserSet);
-  const collapsed = useChatCollapsed(isMobile);
-  const openChat = () => { setChatUserSet(true); setChatCollapsed(false); };
-  const toggleChat = () => { setChatUserSet(true); setChatCollapsed(!collapsed); };
 
   const [chatText, setChatText] = useState('');
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
   const [dropActive, setDropActive] = useState(false);
+  /* Het paneel achter de klok. Dicht bij het laden: de kopregel hoort leeg te
+     beginnen, net als in het voorbeeld. */
+  const [paneelOpen, setPaneelOpen] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const lastProjectedMsgRef = useRef<string>('');
+  const lastProjectedUserTsRef = useRef<number>(0);
+  const mountedAtRef = useRef(Date.now());
   const lastUserTextRef = useRef<string>('');
 
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -119,9 +115,46 @@ export function PlaatChat() {
     return () => { cancelled = true; };
   }, [voice.conversation]);
 
+  /* One user-turn director for BOTH typing and speech.
+   *
+   * Previously handleChatSend() projected typed requests before send, while
+   * SpeechRecognition called voice.sendMessage() directly and skipped this
+   * entire path. "Laat New York zien" therefore depended on the input method.
+   * Watch the canonical conversation instead: every input path lands there.
+   *
+   * Old persisted messages are ignored by timestamp so opening AXE does not
+   * suddenly replay yesterday's map. */
+  useEffect(() => {
+    const last = [...voice.conversation].reverse().find(m => m.role === 'user');
+    if (!last?.text || last.timestamp < mountedAtRef.current - 1000) return;
+    if (last.timestamp === lastProjectedUserTsRef.current) return;
+    lastProjectedUserTsRef.current = last.timestamp;
+    lastUserTextRef.current = last.text;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (shouldDismissProjection(last.text)) {
+          if (!cancelled) dismiss();
+          return;
+        }
+        let directed = await directFromChat({ text: last.text, attachments: [] });
+        if (!directed && looksLikeChartRequest(last.text)) directed = await resolveChart(last.text);
+        if (!directed && looksLikeMapRequest(last.text)) directed = await resolveMap(last.text);
+        if (!directed && (/laat(\s+\S+){1,10}\s+zien/i.test(last.text) || /\b(show|toon)\s+/i.test(last.text))) {
+          directed = await resolveMap(last.text);
+        }
+        if (!cancelled && directed) showOnSphere(directed);
+      } catch (err) {
+        console.warn('[AXE] sphere director failed for user turn', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [voice.conversation]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const onScrollToApproval = () => {
-      openChat();
+      setChatCollapsed(false);
       requestAnimationFrame(() => {
         const el = chatScrollRef.current;
         if (el) el.scrollTop = el.scrollHeight;
@@ -129,6 +162,15 @@ export function PlaatChat() {
     };
     window.addEventListener('axe-scroll-to-approval', onScrollToApproval);
     return () => window.removeEventListener('axe-scroll-to-approval', onScrollToApproval);
+  }, []);
+
+  useEffect(() => {
+    const focusComposer = () => {
+      const veld = document.querySelector<HTMLTextAreaElement>('.axe-vak-invoer');
+      veld?.focus();
+    };
+    window.addEventListener('axe-focus-composer', focusComposer);
+    return () => window.removeEventListener('axe-focus-composer', focusComposer);
   }, []);
 
   useEffect(() => {
@@ -184,6 +226,16 @@ export function PlaatChat() {
   }); // geen deps: ingestFiles leest verse attachments
 
   const chatIsListening = voice.voiceStatus === 'listening';
+  /* De mic-knop moet een gesprek op elk moment kunnen ophangen, niet alleen
+     terwijl je zelf aan het woord bent. Vóór deze fix keek de knop alleen naar
+     chatIsListening: klik hem in tijdens 'processing' of 'speaking' en
+     startListening() deed niets (de loop draaide al, zie
+     installWhisperVoice.ts), dus je zat vast tot AXE uitgesproken was.
+     runConversationLoop zet voiceStatus terug naar 'idle' zodra het gesprek
+     echt stopt, dus 'niet idle' is precies "gesprek loopt", ongeacht welke
+     substatus. Zelfde fix nodig (en gedaan) in BottomBar.tsx, RightPanel.tsx
+     en SidebarChat.tsx -- die hadden precies dezelfde aanname. */
+  const chatGesprekActief = voice.voiceStatus !== 'idle';
 
   const showOnSphere = (proj: NonNullable<Awaited<ReturnType<typeof directFromChat>>>) => {
     setCoreView('axe');
@@ -193,59 +245,31 @@ export function PlaatChat() {
   const ingestFiles = async (files: FileList | File[]) => {
     const next = await filesToAttachments(files, attachments);
     setAttachments(next);
-    openChat();
+    setChatCollapsed(false);
     emitAxeEvent('axe:files-attached', { names: next.map(a => a.name), count: next.length });
     const proj = projectionFromAttachments(next, 'drop');
     if (proj) showOnSphere(proj);
   };
 
-  // `override` laat een tip-chip een bewerkte prompt sturen zonder eerst de
-  // invoer-state te moeten bijwerken (die is async). Zonder override telt het
-  // veld, zoals altijd.
-  const handleChatSend = async (override?: string) => {
-    const t = (override ?? chatText).trim();
+  const handleChatSend = async () => {
+    const t = chatText.trim();
     if (!t && attachments.length === 0) return;
 
-    if (shouldDismissProjection(t)) {
-      dismiss();
-      setChatText('');
-      return;
-    }
-
     lastUserTextRef.current = t;
-    // Je stuurt iets, dus je wilt het antwoord zien: op de clean mobiele home
-    // klapt de chat hierbij open (op de desktop-home staat hij al open).
-    openChat();
-
-    try {
-      let directed = await directFromChat({ text: t, attachments });
-      if (!directed && looksLikeChartRequest(t)) {
-        directed = await resolveChart(t);
-      }
-      if (!directed && looksLikeMapRequest(t)) {
-        directed = await resolveMap(t);
-      }
-      // Ultimate fallback: any "laat … zien" / "show …" → map resolve
-      if (!directed && (/laat(\s+\S+){1,10}\s+zien/i.test(t) || /\b(show|toon)\s+/i.test(t))) {
-        directed = await resolveMap(t);
-      }
-      if (directed) {
-        showOnSphere(directed);
-      } else {
-        console.warn('[Home] no sphere projection resolved for:', t);
-      }
-    } catch (err) {
-      console.warn('[Home] sphere director failed', err);
-    }
 
     const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
     setAttachments([]);
+    /* Op de code-tab is de composer de vraag aan de code-agent — geen tweede
+       balk, en AXE zelf hoeft dezelfde opdracht niet nóg eens te draaien. */
+    if (location.pathname.includes('code-editor') && designAgentBridge.send(payload)) {
+      return;
+    }
     await voice.sendMessage(payload);
   };
 
   const handleChatMic = async () => {
-    try { if (chatIsListening) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ }
+    try { if (chatGesprekActief) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ }
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -264,18 +288,73 @@ export function PlaatChat() {
     if (e.dataTransfer.files?.length) await ingestFiles(e.dataTransfer.files);
   };
 
-  const expandedChatHeight = isMobile ? '48%' : 300;
-  /* 72px, en dat is exact wat de panelen ernaast krijgen.
+  /* De plaat GROEIT MEE en staat niet op een vaste hoogte.
    *
-   * De sloten lopen van de bovenkant van deze plaat tot de onderkant van de
-   * composer. Trek daar de tussenruimte en de composer vanaf en je houdt
-   * precies deze hoogte over -- mits de plaat en het slot dezelfde tussenruimte
-   * gebruiken. Dat was het verschil: ingeklapt had de plaat er 14px marge
-   * bovenop, dus werd het paneel 14px hoger dan de balk. Die marge is weg (zie
-   * axe-look.css), dus nu volgt de een uit de ander in plaats van dat twee
-   * getallen toevallig gelijk moeten staan. */
-  const collapsedChatHeight = 72;
-  const chatHeight = collapsed ? collapsedChatHeight : expandedChatHeight;
+   * Hij stond op 300px (48% op mobiel), leeg of vol. Dat is precies de loze
+   * ruimte die je zag: een leeg gesprek nam 300px in beslag, de kopregel stond
+   * bovenaan die leegte, en de composer eronder. In het voorbeeld zit die kop
+   * vlak boven de composer.
+   *
+   * 'auto' laat hem krimpen tot wat erin staat en groeien tot het plafond
+   * hieronder. Zo hoort hij zich te gedragen: leeg is leeg, en pas als er iets
+   * gezegd is neemt hij ruimte.
+   *
+   * Het PLAFOND blijft nodig: zonder dat duwt een lang gesprek de composer van
+   * het scherm. Dat staat als max-height in de css (.axe-chatplaat--kaal). */
+  const expandedChatHeight = 'auto';
+  const opEditor = location.pathname.includes('code-editor');
+  const codeKop = useCodeAgentKop(s => s.kop);
+  /* Op de Code Editor: alleen de kop, net als het ingeklapte gesprek op Home.
+   * De composer gaat daar naar de code-agent (zie handleSend); de kop zegt dat,
+   * met welke motor en in welke repo. Geen gespreksrol eronder -- het gesprek
+   * met de agent staat in de editor zelf. */
+  const [presenceNaastComposer, setPresenceNaastComposer] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 640px)');
+    const sync = () => setPresenceNaastComposer(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  /* Desktop/tablet conversation lives BESIDE the composer in AxePresenceDock,
+   * including Home. On narrow phones the dock is hidden, so the normal chat
+   * history remains the fallback there. Code Editor keeps its own header
+   * because it carries motor/repo context, not conversation. */
+  const gesprekInPresence = presenceNaastComposer && !opEditor;
+  const kopAlleen = gesprekInPresence || opEditor || chatCollapsed;
+  /* Corrective round 6, Part 1: dit paneel (het gesprekken/status-paneel
+   * achter de klok) hergebruikte `kopAlleen` en verdween daardoor op elke
+   * normale-breedte pagina buiten de code editor -- `gesprekInPresence` is op
+   * desktopbreedte vrijwel overal waar (presence staat naast de composer,
+   * behalve op de editor), en `chatCollapsed` staat sinds AppShell op elke tab
+   * behalve Home. Samen betekende dat: het paneel kon in de praktijk bijna
+   * nooit tonen, ONGEACHT ronde 5 -- git log bevestigt dat `gesprekInPresence`
+   * en `kopAlleen` letterlijk ongewijzigd zijn sinds vóór ronde 5; die ronde
+   * verplaatste alleen WAAR het paneel rendert (van een sibling-blok naar
+   * `composerPaneel` als prop van AxeComposerVak), niet de voorwaarde
+   * eronder. Luka merkte nu iets op dat al langer stuk was, zichtbaar
+   * geworden doordat de rest van de kop eindelijk klopt.
+   *
+   * Het paneel is een ANDER concern dan "staat het gesprek naast de composer"
+   * (AxePresenceDock) of "is de chatgeschiedenis handmatig dicht"
+   * (chatCollapsed) -- het is puur "kan de klok-knop iets laten zien", en die
+   * hoort altijd te werken zolang er een klok-knop is. Alleen op de code
+   * editor bestaat die knop niet (zie composerKop hieronder: die tak heeft
+   * geen Clock-knop), dus dat blijft de enige echte uitsluiting. */
+  const paneelBeschikbaar = !opEditor;
+  /* Corrective round 5: hier stond nog `collapsedChatHeight` (72px), zodat de
+   * ingeklapte plaat precies de koprij liet staan -- die koprij WAS toen het
+   * enige wat er nog stond. Sinds de koprij verhuisd is naar binnen de
+   * composer (zie AxeComposerVak, `kop`), is die 72px een lege, dichtgeklapte
+   * doos zonder inhoud geworden: de kop staat er niet meer, en de berichten
+   * staan al achter `!kopAlleen` verstopt. Dus is `kopAlleen` nu gewoon 0 --
+   * er is niets meer om in deze plaat te tonen als de kop hem niet meer
+   * bewoont, ongeacht WELKE van de drie redenen (presence, code editor,
+   * handmatig dicht) `kopAlleen` liet worden. */
+  const chatHeight = kopAlleen ? 0 : expandedChatHeight;
 
   /* De stand van de chat op <html>, zodat de panelen ernaast hem kennen.
    *
@@ -284,9 +363,133 @@ export function PlaatChat() {
    * onderin één rij balken, en dan horen alle drie de namen op dezelfde hoogte
    * te staan. Eén attribuut is genoeg; de rest is opmaak. */
   useEffect(() => {
-    document.documentElement.dataset.chat = collapsed ? 'dicht' : 'open';
+    document.documentElement.dataset.chat = kopAlleen ? 'dicht' : 'open';
     return () => { delete document.documentElement.dataset.chat; };
-  }, [collapsed]);
+  }, [kopAlleen]);
+
+  /* Corrective round 5: de INHOUD van de koprij, niet meer de doos eromheen --
+   * die doos (`.axe-vak-kop`) is verhuisd naar AxeComposerVak, als eerste rij
+   * BINNEN `.axe-vak`. Zie de uitleg daar voor waarom: een losse doos ervoor
+   * kon door de composer geraakt worden (ronde 1 Fix 5), een rij ERIN niet.
+   * Links wie er praat, rechts drie kale icoonknoppen -- ongewijzigd, alleen
+   * de plek waar het terechtkomt is anders. */
+  const composerKop = opEditor ? (
+    <>
+      <span className="axe-kop-links">
+        <span className="axe-kop-persona" style={{ color: 'var(--accent-cyan)', letterSpacing: '0.08em' }}>
+          <Code2 size={13} /> CODE AGENT
+        </span>
+        <span className="axe-kop-streep" aria-hidden="true" />
+        <span className="axe-kop-persona">{codeKop?.motor ?? '…'}</span>
+      </span>
+      <span className="axe-kop-rechts" style={{ gap: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+        {codeKop?.spoor && <span className="truncate" style={{ maxWidth: 320 }} title={codeKop.spoor}>{codeKop.spoor}</span>}
+        {codeKop?.repo && (
+          <span className="t-mono" title="De repo waar de bestanden en de agent in werken">
+            {codeKop.repo}{codeKop.branch ? ` · ${codeKop.branch}` : ''}
+          </span>
+        )}
+      </span>
+    </>
+  ) : (
+    <>
+      {/* AXE CORE staat helemaal links, met het bolletje ernaast: dat
+          is de modelkeuze (klik erop) en tegelijk het teken dat er iets
+          aanstaat. De modelnaam zelf zat hier vóór de titel en duwde die
+          naar het midden; hij staat nu in de tooltip van het bolletje.
+
+          Corrective round 6, Part 2: dit label ZOCHT eerst de titel van het
+          huidige gesprek op (`voice.allConversations.find(...)`) en viel pas
+          terug op 'AXE CORE' als die ontbrak. Gesprekken krijgen automatisch
+          een titel van hun eerste uitwisseling, dus na een paar berichten
+          stond hier bijna altijd die eerste zin in plaats van het merk --
+          Luka wil dat dit ALTIJD 'AXE CORE' zegt. De echte titel is niet weg:
+          hij staat als tooltip op dit label, en (ongewijzigd) als knoptekst
+          in het gesprekken-paneel achter de klok (`axe-convs` hieronder). */}
+      <span className="axe-kop-links">
+        <span
+          className="axe-kop-persona"
+          title={voice.allConversations.find(c => c.id === voice.sessionId)?.title || undefined}
+        >
+          <Sparkles size={13} />
+          AXE CORE
+        </span>
+        <span onClick={e => e.stopPropagation()}>
+          <ChatModelKiezer variant="stip" />
+        </span>
+      </span>
+
+      <span className="axe-kop-rechts">
+        <button onClick={() => setPaneelOpen(v => !v)} title="Gesprekken en status" aria-expanded={paneelOpen}>
+          <Clock size={15} />
+        </button>
+        <button onClick={() => navigate('/settings')} title="Instellingen">
+          <SlidersHorizontal size={15} />
+        </button>
+        {/* Geen inklap-pijltje meer. Het was de laatste knop die de chat
+            kon dichtklappen -- Home deed dat eerder automatisch en dat is
+            er al af -- dus er is niets meer dat hem dicht zet, en een
+            knop die alleen iets kan aanzetten dat je nooit wil is
+            chroom. De stand zelf (chatDicht) blijft bestaan: de
+            driehoek van de radiaal-dok zet hem terug open als iets hem
+            ooit toch dicht zet. */}
+      </span>
+    </>
+  );
+
+  /* Achter de klok: de gesprekken en de status. Eén paneel in plaats van vier
+   * dingen op de kopregel.
+   *
+   * Blijft een uitzondering op "alles zit nu in het vak": dit paneel moet
+   * BOVEN de composer kunnen uitklappen zonder het invoerveld te verschuiven,
+   * dus gaat hij als aparte, absoluut gepositioneerde laag mee (zie `paneel`
+   * op AxeComposerVak en `.axe-kop-paneel` in axe-look.css) in plaats van als
+   * inhoud van `.axe-vak-kop` zelf.
+   *
+   * Corrective round 6, Part 1: de voorwaarde is HIER wel gewijzigd, van
+   * `!kopAlleen` naar `paneelBeschikbaar` (== `!opEditor`) -- zie de uitleg bij
+   * die variabele hierboven. `!kopAlleen` was zelf nooit het probleem van
+   * ronde 5, maar wel de reden dat dit paneel al van vóór ronde 5 af
+   * nauwelijks bereikbaar was op elke gewone tab. De CSS-kant is nagekeken en
+   * niet de oorzaak: `.axe-composer` heeft `position: relative` en geen eigen
+   * `overflow`, dus `.axe-kop-paneel`'s `position: absolute; bottom: 100%`
+   * landt gewoon zichtbaar erboven; de enige `overflow: hidden` in de
+   * voorouderketen zit op `.axe-shell` zelf (de volle-viewport-hoogte
+   * wrapper), ver genoeg weg van een composer onderin het scherm om dit
+   * paneel (~100-150px) niet af te snijden. */
+  const composerPaneel = paneelOpen && paneelBeschikbaar && (
+    <div className="axe-kop-paneel">
+      <span className="axe-cpills"><MissionControlStrip /></span>
+      <span className="axe-cstat">
+        <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
+        <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}><Wifi size={10} />Online</span>
+        {voice.apiKeyValid === true && <span style={{ color: 'var(--success)' }}>API OK</span>}
+        {attachments.length > 0 && (
+          <span style={{ color: 'var(--accent-cyan)' }}>
+            {attachments.length} file{attachments.length > 1 ? 's' : ''}
+          </span>
+        )}
+      </span>
+      <span className="axe-convs">
+        {voice.allConversations.slice(0, 6).map(conv => (
+          <button
+            key={conv.id}
+            onClick={() => voice.switchConversation(conv.id)}
+            className="axe-conv"
+            data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}
+          >
+            {conv.title}
+          </button>
+        ))}
+      </span>
+      <button onClick={() => voice.loadAllConversations()} title="Verversen" className="axe-kop-mini">
+        <RotateCcw size={12} />
+      </button>
+      <button onClick={() => voice.startNewConversation()} title="Nieuw gesprek" className="axe-kop-mini">
+        <Plus size={12} />
+      </button>
+    </div>
+  );
 
   return (
     <>
@@ -301,115 +504,22 @@ export function PlaatChat() {
           </div>
         </div>
       )}
-      {/* Op de telefoon-home is de ingeklapte chatbalk weg: dan zijn de sphere,
-          de cijferregel en de composer de baas (zoals de Tauri-mockup). Zodra je
-          iets stuurt klapt de chat open en verschijnt de plaat met het gesprek.
-          Op de desktop en op andere tabs blijft de ingeklapte kop gewoon staan. */}
-      {!(isMobile && collapsed) && (
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
-          data-dicht={collapsed ? 'ja' : 'nee'}
-          className="axe-chatplaat h-full flex flex-col rounded-xl overflow-hidden relative"
-          style={
-            isMobile
-              // Op de telefoon geen native glas: maak de plaat zelf gerookt glas —
-              // half-transparant + backdrop-blur, zodat de wallpaper er wazig
-              // doorheen komt (frosted), net als het Tauri-glas op de Mac.
-              ? { background: 'rgba(12,14,20,0.48)', backdropFilter: 'blur(28px) saturate(150%)', WebkitBackdropFilter: 'blur(28px) saturate(150%)', border: '1px solid rgba(255,255,255,0.08)' }
-              : { background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }
-          }
+          data-dicht={kopAlleen ? 'ja' : 'nee'}
+          className="axe-chatplaat axe-chatplaat--kaal h-full flex flex-col relative"
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={(e) => { void onDrop(e); }}
         >
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={toggleChat}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleChat(); } }}
-            className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left cursor-pointer"
-            style={{ borderBottom: collapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide" style={{ color: 'var(--accent-cyan)' }}>
-              {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              AXE CHAT
-              {attachments.length > 0 && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
-                  {attachments.length} file{attachments.length > 1 ? 's' : ''}
-                </span>
-              )}
-              {/* De tellers stonden als losse pillen BOVEN de plaat, en dat is
-                  waarom er een rij zwevende doosjes tussen de scene en de chat
-                  hing. In de demo staan ze op dezelfde regel als de naam, ín de
-                  kop, gescheiden door een streepje in plaats van door een
-                  kader: het zijn tellers, geen knoppen. */}
-              {/* Op de telefoon botsten deze tellers met de gesprekstitels in
-                  dezelfde smalle kopregel; daar houden we de kop schoon (alleen
-                  "AXE CHAT"). Op desktop staan ze gewoon op de regel. */}
-              {!isMobile && (
-                <span className="axe-cpills" onClick={e => e.stopPropagation()}>
-                  <MissionControlStrip />
-                </span>
-              )}
-              {/* Waar je bent en of de verbinding staat. Dit stond boven de
-                  composer, waardoor die twee regels hoog was en op elke tab
-                  anders. Hier staat het bij de rest van de status, op één
-                  lijn. */}
-              <span className="axe-cstat hidden lg:flex items-center gap-2.5">
-                <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
-                <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}>
-                  <Wifi size={10} />Online
-                </span>
-                {voice.apiKeyValid === true && (
-                  <span style={{ color: 'var(--success)' }}>API OK</span>
-                )}
-              </span>
-            </span>
-            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-              {/* De gesprekken stonden op een eigen regel ONDER de kop, met een
-                  streep eronder -- twee regels chroom voordat het gesprek zelf
-                  begon. Ze horen op de kopregel: het is dezelfde informatie
-                  ("welk gesprek kijk je"), en de demo heeft daar één lijn. */}
-              {/* Ook op de telefoon zichtbaar zodra de chat open is: de klok-knop
-                  in de composer opent de chat als "geschiedenis", en dan wil je
-                  hier je eerdere gesprekken kunnen kiezen (ze scrollen zijwaarts). */}
-              {!collapsed && voice.allConversations.length > 1 && (
-                <span className="axe-convs flex items-center gap-1 overflow-x-auto max-w-[60vw]">
-                  {voice.allConversations.slice(0, 4).map(conv => (
-                    <button
-                      key={conv.id}
-                      onClick={() => voice.switchConversation(conv.id)}
-                      className="axe-conv flex-shrink-0 truncate max-w-[110px]"
-                      data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}
-                    >
-                      {conv.title}
-                    </button>
-                  ))}
-                </span>
-              )}
-              {!collapsed && voice.allConversations.length > 0 && (
-                <button onClick={() => voice.loadAllConversations()} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
-                  <RotateCcw size={11} />
-                </button>
-              )}
-              {!collapsed && (
-                <button onClick={() => voice.startNewConversation()} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
-                  <Plus size={9} /> New
-                </button>
-              )}
-            </div>
-          </div>
-
-          {!collapsed && (
+          {/* Corrective round 5: de koprij en het klok-paneel woonden hier
+              (`.axe-vak-kop`, `.axe-kop-paneel`, beide siblings van de
+              composer) -- ze zijn verhuisd naar `composerKop`/`composerPaneel`
+              hierboven, die AxeComposerVak als `kop`/`paneel` binnenkrijgt en
+              nu ECHT in het vak zelf tekent. Zie de uitleg daar. */}
+          {!kopAlleen && (
             <>
-              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
-                {voice.conversation.length === 0 && (
-                  <div className="h-full flex items-center justify-center text-center px-4">
-                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      “show chart” · “show me New York” · drop files · “done”
-                    </span>
-                  </div>
-                )}
+              <div ref={chatScrollRef} className="axe-chatrol overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
                 {voice.conversation.map((m, i) => {
                   const isUser = m.role === 'user';
                   const displayText = isUser && (m.text.includes('## Attached files') || m.text.includes('LAUNCH CREWAI'))
@@ -473,67 +583,65 @@ export function PlaatChat() {
           )}
         </div>
       </motion.div>
-      )}
       {/* De composer staat ONDER de chatplaat, niet erin.
           In de demo zijn dat twee losse dingen: de plaat met het gesprek,
           en daaronder de pil waarin je typt. Hier zat hij binnenin, wat twee
           dingen brak -- hij verdween zodra je de chat inklapte (in de demo
           blijft hij staan), en hij kreeg de breedte van de plaat MIN de
           padding, dus hij was altijd smaller dan de plaat erboven. */}
-              {isMobile ? (
-                <HomeCommandComposer
-                  value={chatText}
-                  onChange={setChatText}
-                  onSend={() => void handleChatSend()}
-                  onRunChip={(full) => void handleChatSend(full)}
-                  onHistory={() => { void voice.loadAllConversations(); openChat(); }}
-                  onMic={() => void handleChatMic()}
-                  isListening={chatIsListening}
-                  attachments={attachments}
-                  onAttachments={setAttachments}
-                  responseMode={voice.responseMode}
-                  onToggleResponseMode={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
-                  modelLabel={voice.primarySlot?.model || voice.activeProvider || 'AXE CORE'}
-                  voiceStatus={voice.voiceStatus}
-                />
-              ) : (
-              <HomeChatComposer>
-                    <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-                    {/* Speak/text toggle dropped on mobile: five icon buttons plus
-                        the input squeezed the input down to ~150px on a 375px
-                        screen, clipping even a short placeholder — this is the
-                        least essential of the row, a preference toggle rather
-                        than an action. */}
-                    {!isMobile && (
-                      <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'var(--tint-line)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'var(--tint-line)' : 'rgba(255,255,255,0.06)'}` }}>
-                        {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
-                      </button>
-                    )}
-                    <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
-                      <Mic size={13} />
-                    </button>
-                    <VisionCaptureButton compact className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50" />
-                    {/* Wat AXE buiten dit gesprek kan: deze Mac, een echte
-                        browser, en een paar kant-en-klare opdrachten. Eén knop
-                        die opengaat en niet drie erbij -- deze rij is al vol,
-                        en binnenin is er wél plek voor de stand erbij.
-                        Op de telefoon weg: op de smalle glasplaat drukte deze
-                        vierde knop de invoer dicht tot "Ask a"; het vermogen is
-                        elders te bereiken, de invoer moet leesbaar blijven. */}
-                    {!isMobile && <VermogensKnop onKies={t => setChatText(t)} />}
-                    <input
-                      value={chatText}
-                      onChange={e => setChatText(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                      placeholder={attachments.length ? 'Send · show · chart · done' : (isMobile ? 'Ask AXE…' : 'show chart · show me New York')}
-                      className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
-                      style={{ color: 'var(--text-primary)', border: 'none' }}
-                    />
-                    <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-                      <Send size={13} />
-                    </button>
-              </HomeChatComposer>
-              )}
+      {/* De composer hangt VAST aan de chatplaat: één blok, geen twee dozen
+          boven elkaar. Zie .axe-vakcomposer in design/axe-look.css.
+
+          De rij eronder is die van het voorbeeld, met de functies die deze app
+          echt heeft -- een icoon hoort te doen wat hij tekent. Links het
+          gereedschap, rechts opnemen/spreken/versturen, en de toverstaf
+          rechtsboven is de prompt-kiezer (de "/prompts" uit de placeholder). */}
+      <AxeComposerVak
+        waarde={chatText}
+        opWaarde={setChatText}
+        opVerstuur={() => void handleChatSend()}
+        plaatshouder={attachments.length ? 'Send · show · chart · done' : 'Ask anything, @models, /prompts …'}
+        snelacties={!isMobile && (opEditor || !chatCollapsed)}
+        snelactieLijst={opEditor ? codeKop?.snelacties : undefined}
+        staf={<VermogensKnop onKies={t => setChatText(t)} />}
+        kop={composerKop}
+        paneel={composerPaneel}
+        links={
+          <>
+            <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
+            {/* Spreekt AXE terug of typt hij. Op mobiel weg: die rij is daar al
+                vol, en dit is een voorkeur, geen actie. */}
+            {!isMobile && (
+              <button
+                onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
+                title={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
+              >
+                {voice.responseMode === 'speak' ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              </button>
+            )}
+            {/* Diep onderzoek: zet het voorvoegsel klaar in plaats van meteen
+                iets te starten. Een knop die ongevraagd een onderzoek afvuurt
+                kost tokens zonder dat je erom vroeg. */}
+            <button onClick={() => setChatText(t => (t.startsWith('/research') ? t : `/research ${t}`))} title="Diep onderzoek">
+              <Telescope size={18} />
+            </button>
+            <button onClick={() => navigate('/browser')} title="Zoek op het web">
+              <Globe size={18} />
+            </button>
+          </>
+        }
+        rechts={
+          <>
+            <VisionCaptureButton compact />
+            <button onClick={handleChatMic} title="Spreek" style={chatIsListening ? { color: 'var(--accent-cyan)' } : undefined}>
+              <Mic size={18} />
+            </button>
+            <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} title="Versturen">
+              <Send size={16} />
+            </button>
+          </>
+        }
+      />
     </>
   );
 }

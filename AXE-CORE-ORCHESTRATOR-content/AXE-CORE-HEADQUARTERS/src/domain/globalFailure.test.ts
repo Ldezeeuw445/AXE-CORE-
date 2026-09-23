@@ -77,3 +77,42 @@ describe('describeFailure — vormen die de app werkelijk oplevert', () => {
     expect(describeFailure({ error: { message: 'Failed to fetch' } }).kind).toBe('onbereikbaar');
   });
 });
+
+describe('een verouderde build is geen storing', () => {
+  it('herkent de Chromium-tekst, ondanks "failed to fetch" erin', () => {
+    // Dit is de hele reden dat deze controle voor STILTE staat. Zonder die
+    // volgorde zegt het scherm dat de server weg is, controleer je de VPS,
+    // staat daar niets mis, en zoek je een uur op de verkeerde plek.
+    const f = describeFailure(
+      new Error('Failed to fetch dynamically imported module: http://localhost/assets/EveFramework-a1b2.js'),
+    );
+    expect(f.kind).toBe('verouderd');
+    expect(f.message).toContain('Herlaad');
+  });
+
+  it('herkent de WebKit-tekst', () => {
+    // Tauri op macOS draait op WebKit en zegt het volstrekt anders. Eén van de
+    // twee kennen is hetzelfde als geen van beide kennen.
+    expect(describeFailure(new Error('Importing a module script failed.')).kind).toBe('verouderd');
+  });
+
+  it('herkent een css-brok die niet meer bestaat', () => {
+    expect(describeFailure(new Error('Unable to preload CSS for /assets/Settings-9f.css')).kind).toBe('verouderd');
+  });
+
+  it('noemt het niet "geen internet" als je toevallig offline bent', () => {
+    // Een ontbrekende brok blijft een ontbrekende brok. "Geen internet" laat je
+    // wachten op iets dat vanzelf goed komt, en dat komt het niet.
+    const echt = navigator.onLine;
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    try {
+      expect(describeFailure(new Error('Importing a module script failed.')).kind).toBe('verouderd');
+    } finally {
+      Object.defineProperty(navigator, 'onLine', { value: echt, configurable: true });
+    }
+  });
+
+  it('laat een gewone mislukte fetch met rust', () => {
+    expect(describeFailure(new Error('Failed to fetch')).kind).toBe('onbereikbaar');
+  });
+});

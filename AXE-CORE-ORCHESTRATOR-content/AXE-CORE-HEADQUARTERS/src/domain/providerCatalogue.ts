@@ -10,6 +10,8 @@
  * de enige plek die dat hoort te doen.
  */
 
+import { STANDAARD_MOTOR } from '@/domain/abonnementChat';
+
 export interface ProviderInvoer {
   id: string;
   name: string;
@@ -35,8 +37,21 @@ export const PROVIDER_KEY_CATALOGUE: ProviderInvoer[] = [
   { id: 'openhands',   name: 'OpenHands (VPS)',icon: 'Hand', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
   { id: 'openclaw',    name: 'OpenClaw (VPS)', icon: 'Terminal', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'crewai',      name: 'CrewAI (VPS)',   icon: 'Users', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
+  // Draait op de sessie van `claude auth login` / `codex login` / `cursor-agent
+  // login` -- er IS geen sleutel, en daarom staat er geen plaatshouder die
+  // suggereert dat je er een moet invullen. Wie hier toch iets neerzet, betaalt
+  // vanaf dat moment de gemeterde API terwijl hij denkt zijn abonnement te
+  // gebruiken; dat is precies wat deze provider komt voorkomen.
+  //
+  // defaultModel is de MOTOR, niet een model. Uit de constante, want dit was
+  // de derde plek waar 'codex' letterlijk stond -- en drie plekken die
+  // hetzelfde moeten zeggen, gaan het ooit oneens zijn.
+  { id: 'abonnement',  name: 'Abonnement (CLI)', icon: 'Terminal', accent: '#22D3EE', placeholder: '(geen key — je bent ingelogd)', defaultModel: STANDAARD_MOTOR, docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     icon: 'Search', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
   { id: 'elevenlabs',  name: 'ElevenLabs',     icon: 'Mic', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
   { id: 'tavily',      name: 'Tavily Search',  icon: 'Globe', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
+  // Onderzoek met bronnen, geen chatmodel. De sleutel staat op de VPS
+  // (PERPLEXITY_API_KEY) en mag niet in de browser — zie perplexityResearchService.
+  { id: 'perplexity',  name: 'Perplexity',     icon: 'Compass', accent: '#1FB8A5', placeholder: '(server-managed credential)', defaultModel: 'Research / web intelligence', docsUrl: 'https://docs.perplexity.ai',              free: false, needsKey: false },
   { id: 'axon',        name: 'AXON Memory',    icon: 'Brain', accent: '#14B8A6', placeholder: 'axon_live_...',       defaultModel: '',                           docsUrl: 'https://app.axon-memory.com',             free: true,  needsKey: true },
 ];

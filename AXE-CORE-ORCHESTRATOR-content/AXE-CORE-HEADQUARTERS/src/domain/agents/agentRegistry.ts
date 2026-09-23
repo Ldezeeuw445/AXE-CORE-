@@ -100,9 +100,15 @@ export const AGENT_SEEDS: AgentSeed[] = [
     description: 'Picks up tasks from the Tasks tab, tracks them through the durable task worker on the VPS, and leaves a memory trail.',
   },
   {
+    // Was a statue: nothing behind the name beyond the trading agent itself.
+    // Now real: financeDigestService.ts reconciles the manual income ledger
+    // against AXE Algo's own trade journal (core_trading_trades) once a day,
+    // classifying pnl into demo/live/unclassified via accountEnvironment()
+    // rather than the unreliable trading_mode column, and closes a loop
+    // episode with a real verdict (agentLoop.ts LOOP_AGENTS 'finance').
     id: 'finance_agent', name: 'Finance Agent', groupLabel: 'AXE CORE', icon: '💰', color: '#FBBF24',
-    status: 'statue',
-    description: 'Still to build: no financial analysis logic of its own found (apart from the trading agent).',
+    status: 'active',
+    description: 'Daily digest reconciling the manual income ledger against AXE Algo\'s trade journal. financeDigestService.ts.',
   },
 
   // ── Trading tab only — expliciet voor later ────────────────────────────

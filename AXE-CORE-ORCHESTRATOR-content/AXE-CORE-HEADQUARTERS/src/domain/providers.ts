@@ -12,9 +12,13 @@
  */
 import { sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
 
+import { STANDAARD_MOTOR } from '@/domain/abonnementChat';
+
 export type ProviderId =
   | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'openrouter2' | 'cerebras'
-  | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes';
+  | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes'
+  /** De codeer-CLI's op je eigen abonnement. Zie domain/abonnementChat.ts. */
+  | 'abonnement';
 
 export interface ProviderCfg {
   id: ProviderId; name: string; baseUrl: string; defaultModel: string;
@@ -22,10 +26,30 @@ export interface ProviderCfg {
 }
 
 export const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
-  'ollama','openhands','openjarvis','openclaw','kilocode','crewai','hermes'
+  'ollama','openhands','openjarvis','openclaw','kilocode','crewai','hermes',
+  // Geen sleutel omdat er geen sleutel IS: deze draait op de sessie waarmee je
+  // `claude auth login` of `codex login` deed. Een sleutelveld tonen zou
+  // suggereren dat je er een moet invullen, en wie dat doet betaalt vanaf dat
+  // moment de gemeterde API terwijl hij denkt zijn abonnement te gebruiken.
+  'abonnement',
 ]);
+/**
+ * Providers die NIET over http praten maar via een agent-dienst op de VPS.
+ *
+ * Hermes stond hier en hoorde er niet: de opmerking bij zijn regel in PROVIDERS
+ * hieronder legt uit dat hij géén dienst is maar een Ollama-model (hermes3:8b),
+ * en dat de "Hermes Agent"-provider die naar een niet-bestaande poort wees al
+ * verwijderd is. Die conclusie is alleen nooit in deze set doorgevoerd.
+ *
+ * Gevolg: llmGateway nam de brug-tak (die staat vóór de http-tak), POSTte naar
+ * /internal/hermes/execute, en kreeg van de dode HERMES_URL een
+ * "405 method not allowed" terug. Precies de fout die op Luka's scherm stond.
+ *
+ * Een half doorgevoerde conclusie is erger dan geen: het bestand zegt het
+ * goede, de code doet het oude, en de foutmelding wijst naar geen van beide.
+ */
 export const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
-  'openhands','openjarvis','openclaw','kilocode','crewai','hermes'
+  'openhands','openjarvis','openclaw','kilocode','crewai'
 ]);
 
 /** Cloud providers suitable as AXE identity backups (multi-capable, not local-only). */
@@ -82,6 +106,15 @@ export const PROVIDERS: ProviderCfg[] = [
   // gone. Luka had tried to add Hermes before and it never worked; this is
   // why — the thing was there, the address was not.
   { id:'hermes', name:'Hermes 3 (Ollama)', baseUrl:OLLAMA_BASE_URL, defaultModel:'hermes3:8b', format:'openai', needsKey:false },
+  // Abonnement: geen HTTP-API maar een CLI in een checkout, via /claude/run.
+  // baseUrl en format worden voor deze provider niet gebruikt -- de weg loopt
+  // niet door de fetch hieronder maar door de tak in llmGateway. Ze staan er
+  // omdat ProviderCfg ze verplicht stelt; dat is een vormgebrek van dit type en
+  // niet iets wat je hier moet proberen te repareren.
+  //
+  // defaultModel draagt de MOTORNAAM: claude, codex of cursor. Zie
+  // domain/abonnementChat.ts voor waarom het modelveld die rol krijgt.
+  { id:'abonnement', name:'Abonnement (CLI)', baseUrl:'', defaultModel:STANDAARD_MOTOR, format:'openai', needsKey:false },
 ];
 
 // Removed 2-9-2026: openjarvis, openclaw, kilocode and the crewai PROVIDER.
@@ -300,20 +333,19 @@ export function buildStableChatCascade(
   push(resolve(fb1));
   push(resolve(fb2));
 
-  // 2) If no primary configured: prefer Google Gemini when a key exists
-  if (out.length === 0) {
-    const google = allSlots.find(s => s.provider === 'google');
-    push(google ?? null);
-  }
-
-  // 3) One extra multi-capable cloud if cascade still short
-  if (out.length < 2) {
-    for (const s of allSlots) {
-      if (CLOUD_IDENTITY_PROVIDERS.has(s.provider) && !seen.has(s.provider)) {
-        push(s);
-        if (out.length >= 2) break;
-      }
-    }
+  // 2) Top up the cascade from a priority list of fast, reliable chat models,
+  //    so behind whatever the user pinned there are always real working engines
+  //    to fall through to. This runs even WITH a pinned primary: a pin that is
+  //    out of credits (Gemini's free key) must fall through to a live model, not
+  //    die on empty fallbacks. `push` dedups by provider, so the pinned primary
+  //    stays first (the ★ / one source of truth) and is simply not repeated.
+  //    Order: fast+free first (Groq/Cerebras), then smart (Anthropic/OpenAI),
+  //    then Gemini (great but its free key runs out), then the rest.
+  const AXE_PREF = ['groq', 'cerebras', 'anthropic', 'openai', 'google', 'xai', 'openrouter'];
+  for (const id of AXE_PREF) {
+    if (out.length >= 3) break;
+    const s = allSlots.find(x => x.provider === id);
+    if (s) push(s);
   }
 
   // 4) Ollama only as third/last resort — never ahead of cloud identity
@@ -437,6 +469,12 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     'gemma4:latest':  'qwen3.5:2b',
     'gemma4:e2b-mlx': 'qwen3.5:2b',
     'gemma4:e2b':     'qwen3.5:2b',
+  },
+  cerebras: {
+    // Cerebras no longer serves gemma-4-31b on the shared Inference API.
+    // A stale saved Settings card must not override the verified provider default
+    // and turn an otherwise usable Cerebras key into a permanently failing slot.
+    'gemma-4-31b': 'gpt-oss-120b',
   },
   groq: {
     // Groq shut both of these down on 2026-08-16 (llama-3.3-70b-versatile —

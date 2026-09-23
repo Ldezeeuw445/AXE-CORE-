@@ -6,17 +6,30 @@
  * knows how to talk to the wire.
  */
 import { PROVIDERS, VPS_BRIDGE_PROVIDER_IDS, type KeySlot, type ProviderCfg } from '@/domain/providers';
+import { leesModellen } from '@/infrastructure/persistence/motorModellenOpslag';
+import { modelVoor } from '@/domain/motorModellen';
 import {
   crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw,
   apiExecuteKiloCode, apiExecuteHermes,
+  claudeRun, claudeRepos,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  ABONNEMENT_PROVIDER, ABONNEMENT_MODUS, REPO_SLEUTEL,
+  motorVanSlot, bouwPrompt, kiesRepo,
+} from '@/domain/abonnementChat';
 import { findCustomProvider } from '@/domain/customProviders';
-import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
+import { aiProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
 import { proxyErrorMessage } from '@/domain/proxyError';
+import { quotaFromHeaders, recordProviderUsage } from '@/infrastructure/persistence/providerUsageService';
+import {
+  LIMIET_SLEUTEL, isLimietFout, koelingTot, koeltNog, koelingTekst,
+} from '@/domain/gebruikslimiet';
 import { proxyProviderNaam } from '@/domain/proxyProvider';
+import { herstelModelNaam, isModelBestaatNiet } from '@/domain/modelHerstel';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
@@ -43,9 +56,125 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   const custom=builtin?undefined:findCustomProvider(slot.provider);
   const cfg:ProviderCfg|undefined=builtin??(custom?{id:custom.id as ProviderCfg['id'],name:custom.name,baseUrl:custom.baseUrl,defaultModel:custom.defaultModel,format:custom.format,needsKey:custom.needsKey}:undefined);
   if(!cfg) throw new Error(`Unknown provider: ${slot.provider}`);
-  const base=toProxied(slot.baseUrl||cfg.baseUrl), model=slot.model||cfg.defaultModel;
-  const isOllama=slot.provider==='ollama';
-  const signal=AbortSignal.timeout(isOllama?90_000:15_000);
+  const rawBase=slot.baseUrl||cfg.baseUrl;
+  const base=toProxied(rawBase), model=herstelModelNaam(slot.provider,slot.model)||cfg.defaultModel;
+  // Hermes is not a separate daemon/provider. It is hermes3:8b served by
+  // Ollama, so it must use the exact same native Ollama transport.
+  const isOllama=slot.provider==='ollama'||slot.provider==='hermes';
+  const signal=AbortSignal.timeout(isOllama?180_000:15_000);
+
+  const callNativeOllama=async(target:string):Promise<string>=>{
+    const root=target.replace(/\/+$/,'');
+    const r=await fetch(`${root}/api/chat`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json',...ollamaHeaders(root)},
+      body:JSON.stringify({
+        model,messages,stream:false,think:false,keep_alive:LOCAL_KEEP_ALIVE,
+        options:{num_predict:2048,temperature:0.7},
+      }),
+      signal:AbortSignal.timeout(180_000),
+    });
+    const raw=await r.text();
+    if(!r.ok){
+      const detail=raw.replace(/\s+/g,' ').trim().slice(0,240);
+      throw new Error(`Ollama ${model} HTTP ${r.status}${detail?`: ${detail}`:''}`);
+    }
+    let d:{message?:{content?:string};response?:string};
+    try{d=JSON.parse(raw);}catch{throw new Error(`Ollama ${model} returned invalid JSON.`);}
+    const text=d.message?.content??d.response??'';
+    if(!text.trim())throw new Error(`Ollama ${model} returned no content.`);
+    return sanitizeLlmText(text);
+  };
+
+/**
+ * De koeling per motor, in localStorage.
+ *
+ * Hier en niet in domain/: dat weet wat een limiet betekent, dit weet waar het
+ * blijft staan. En in localStorage en niet in het geheugen, want de limiet
+ * loopt over het herstarten van de app heen -- zou hij bij elke start leeg
+ * zijn, dan is dit precies niets waard op de dag dat je hem nodig hebt.
+ */
+function leesKoeling():Record<string,number>{
+  try{
+    const rauw=localStorage.getItem(LIMIET_SLEUTEL);
+    const g=rauw?JSON.parse(rauw):null;
+    return (g && typeof g==='object')?g as Record<string,number>:{};
+  }catch{ return {}; }  // privémodus, of iets anders onder dezelfde sleutel
+}
+
+function onthoudKoeling(motor:string,tot:number):void{
+  try{ localStorage.setItem(LIMIET_SLEUTEL,JSON.stringify({...leesKoeling(),[motor]:tot})); }
+  catch{ /* privémodus: dan maar elke beurt opnieuw proberen */ }
+}
+
+  // ── Abonnement: een CLI in een checkout, geen HTTP-API ──────────────────
+  //
+  // Vóór alle andere takken, want deze provider heeft geen baseUrl en geen
+  // sleutel; alles hieronder gaat daarvan uit. Zie domain/abonnementChat.ts
+  // voor waarom dit alleen-lezen is en waarom het modelveld de motor draagt.
+  if(slot.provider===ABONNEMENT_PROVIDER){
+    const motor=motorVanSlot(slot.model);
+
+    // De host bepaalt welke repo's bestaan; dit is geen keuze die de app mag
+    // verzinnen. Waar deze chat draait bepaalt welke code hij leest.
+    let repos:Record<string,{runnable:boolean}>={};
+    try{
+      const antwoord=await claudeRepos();
+      repos=antwoord.repos??{};
+    }catch(e){
+      throw new Error(`Abonnement-chat: de host met de CLI's is niet bereikbaar (${e instanceof Error?e.message:String(e)}). Draait run-local.sh?`);
+    }
+
+    let voorkeur:string|null=null;
+    try{ voorkeur=localStorage.getItem(REPO_SLEUTEL); }catch{ /* privémodus */ }
+    const repo=kiesRepo(voorkeur,repos);
+    if(!repo){
+      // Met naam en reden, want "het werkt niet" is hier drie verschillende
+      // problemen: geen whitelist, een pad dat niet bestaat, of elke checkout
+      // op main. Het antwoord van de host weet welke het is.
+      const namen=Object.keys(repos);
+      throw new Error(namen.length
+        ?`Abonnement-chat: geen bruikbare repo. Bekend: ${namen.join(', ')} — elk staat op een beschermde branch of ontbreekt.`
+        :'Abonnement-chat: geen repo op de whitelist. Zet AGENT_REPOS op de host die de CLI draait.');
+    }
+
+    // Een abonnement dat op is, is geen storing -- maar wel een reden om deze
+    // motor niet te starten. Zie domain/gebruikslimiet.ts: de CLI noemt zelf
+    // een tijd, en tot dan kost proberen alleen seconden.
+    const tot=leesKoeling()[motor];
+    if(koeltNog(tot,new Date())) throw new Error(koelingTekst(motor,tot));
+
+    // Het model dat bij deze motor gekozen is (Instellingen -> Agent-motoren).
+    // Leeg laten betekent: de CLI houdt zijn eigen standaard.
+    const model=modelVoor(leesModellen(),motor);
+    const res=await claudeRun({repo,prompt:bouwPrompt(messages),permission_mode:ABONNEMENT_MODUS,engine:motor,...(model?{model}:{})});
+    if(res.status!=='ok'){
+      const reden=res.error||res.result||'onbekende fout';
+      if(isLimietFout(reden)){
+        const nu=new Date();
+        const nieuweTot=koelingTot(reden,nu);
+        onthoudKoeling(motor,nieuweTot);
+        throw new Error(koelingTekst(motor,nieuweTot));
+      }
+      throw new Error(`${motor} gaf geen antwoord: ${reden}`);
+    }
+    const tekst=(res.result||'').trim();
+    // Een CLI die met exitcode 0 afsluit en toch "ERROR: ..." schrijft, zou
+    // hier zijn eigen foutmelding als antwoord de chat in sturen. Bewust
+    // alleen op die vorm en niet op de tekst alleen: een antwoord dat
+    // tóevallig over rate limits gaat is een antwoord, geen storing.
+    if(/^ERROR:/i.test(tekst)&&isLimietFout(tekst)){
+      const nu=new Date();
+      const nieuweTot=koelingTot(tekst,nu);
+      onthoudKoeling(motor,nieuweTot);
+      throw new Error(koelingTekst(motor,nieuweTot));
+    }
+    // Een lege maar geslaagde run is geen antwoord. Hem als leeg bericht
+    // doorgeven zou in de chat lezen als "AXE had niets te zeggen", terwijl er
+    // iets misging tussen de CLI en ons.
+    if(!tekst) throw new Error(`${motor} eindigde zonder tekst (exit ${res.exit_code ?? '?'}).`);
+    return sanitizeLlmText(tekst);
+  }
 
   if(VPS_BRIDGE_PROVIDER_IDS.has(slot.provider)){
     // Actually execute the task on the VPS agent — not just a health check.
@@ -79,25 +208,43 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   //   2) only if up, a real completion with a proper timeout + keep_alive
   // Any failure falls through to the unchanged VPS/cloud path below, so it
   // still "just works" when away from home or with Ollama stopped.
+  let ollamaDirectError='';
   if(isOllama && await isLocalOllamaUp()){
     try{
-      // Ollama's NATIVE /api/chat (not the OpenAI /v1 shim) with think:false.
-      // qwen3.5 is a reasoning model: via the OpenAI endpoint the hidden
-      // "thinking" eats the token budget and message.content comes back empty.
-      // Native chat + think:false returns a clean, fast answer (the point of
-      // a *local fast* model). keep_alive pins it in memory between turns.
-      const r=await fetch(`${LOCAL_OLLAMA_URL}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,messages,stream:false,think:false,keep_alive:LOCAL_KEEP_ALIVE,options:{num_predict:2048,temperature:0.7}}),signal:AbortSignal.timeout(120_000)});
-      if(r.ok){const d=await r.json();const text=d.message?.content;if(text)return sanitizeLlmText(text);}
-    }catch{
-      // Model still cold-loading past the timeout, or a transient local error
-      // — fall through to the VPS path rather than failing the whole turn.
+      // Local native Ollama first. If this Mac does not have the requested
+      // model, continue to the configured remote Ollama box.
+      return await callNativeOllama(LOCAL_OLLAMA_URL);
+    }catch(e){
+      ollamaDirectError=e instanceof Error?e.message:String(e);
+    }
+  }
+
+  if(!import.meta.env.PROD && isOllama && /^https?:\/\//i.test(rawBase) && !rawBase.includes('localhost') && !rawBase.includes('127.0.0.1')){
+    try{
+      // Dev can talk to the configured remote endpoint directly. Packaged
+      // Tauri/web production must use the authenticated server-side proxy
+      // below: WebView CORS/network cancellation made healthy remote Ollama
+      // models (notably hermes3:8b) surface as "Fetch is aborted".
+      return await callNativeOllama(rawBase);
+    }catch(e){
+      ollamaDirectError=e instanceof Error?e.message:String(e);
+      // Fall through to the same CORS-safe production transport rather than
+      // inventing a separate Hermes daemon. proxyProviderNaam maps Hermes to
+      // Ollama and the backend already has the longer cold-load budget.
     }
   }
 
   // ── Production: CORS-safe proxy (Vercel Edge Fn on the web, the VPS
   // backend directly inside a packaged Tauri app — see aiProxyUrl()) ──────
   if(import.meta.env.PROD){
-    const pr=await fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    const viaProxy=(m:string)=>fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json',...vpsAuthHeaders(aiProxyUrl())},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model:m,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?120_000:25_000)});
+    let pr=await viaProxy(model);
+    // Bestaat het model niet, dan één keer het standaardmodel: een oud of
+    // verkeerd getypt model is geen kapotte sleutel. Zie domain/modelHerstel.ts.
+    if(!pr.ok && model!==cfg.defaultModel){
+      const eerste=await pr.clone().json().catch(()=>({}));
+      if(isModelBestaatNiet(proxyErrorMessage(eerste,pr.status))) pr=await viaProxy(cfg.defaultModel);
+    }
     if(!pr.ok){
       // proxyErrorMessage en niet e.error: de VPS antwoordt in FastAPI-vorm,
       // met de reden in `detail`. Dit las alleen `error`, gooide daarmee de
@@ -105,20 +252,29 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
       // aan hebt. Een geweigerde sleutel zag er zo hetzelfde uit als een
       // platte server.
       const body=await pr.json().catch(()=>({}));
+      if(slot.provider==='cerebras'&&pr.status===402){
+        throw new Error('Cerebras HTTP 402 (payment required): the model is valid, but this account/key has no usable inference credit. Check Cerebras Billing / free-trial balance or add funds.');
+      }
       throw new Error(proxyErrorMessage(body,pr.status));
     }
     // Ollama replies as a plain-text stream on Vercel (25s cold-start cap);
     // the VPS proxy always returns a single {text} JSON body since it isn't
     // under that constraint. Try JSON first, fall back to raw text.
     const raw=await pr.text();
-    try{const d=JSON.parse(raw) as{text?:string};return sanitizeLlmText(d.text??raw);}catch{return sanitizeLlmText(raw);}
+    try{
+      const d=JSON.parse(raw) as{text?:string;quota?:Record<string,string>;usage?:Record<string,unknown>};
+      if(d.quota||d.usage)recordProviderUsage(slot.provider,{quota:d.quota,usage:d.usage});
+      return sanitizeLlmText(d.text??raw);
+    }catch{return sanitizeLlmText(raw);}
   }
 
   if(cfg.format==='anthropic'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
     const r=await fetch(`${anthropicBase(base)}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:4096,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return sanitizeLlmText(d.content?.[0]?.text??'');
+    const d=await r.json();
+    recordProviderUsage(slot.provider,{quota:quotaFromHeaders(r.headers),usage:d.usage});
+    return sanitizeLlmText(d.content?.[0]?.text??'');
   }
 
   if(cfg.format==='google'){
@@ -128,13 +284,35 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     // formats, so this isn't conditional on which one the user has.
     const r=await fetch(`${base}/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':slot.key},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:8192}})});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return sanitizeLlmText(d.candidates?.[0]?.content?.parts?.[0]?.text??'');
+    const d=await r.json();
+    recordProviderUsage(slot.provider,{quota:quotaFromHeaders(r.headers),usage:d.usageMetadata});
+    return sanitizeLlmText(d.candidates?.[0]?.content?.parts?.[0]?.text??'');
   }
 
   const chatPath=slot.provider==='groq'?`${base}/chat/completions`:`${base}/v1/chat/completions`;
   const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:4096,temperature:0.7}),signal});
-  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-  const d=await r.json();return sanitizeLlmText(d.choices?.[0]?.message?.content??'');
+  if(!r.ok){
+    const e=await r.json().catch(()=>({}));
+    const vanProvider=e.error?.message as string|undefined;
+    if(slot.provider==='cerebras'&&r.status===402){
+      throw new Error('Cerebras HTTP 402 (payment required): the model is valid, but this account/key has no usable inference credit. Check Cerebras Billing / free-trial balance or add funds.');
+    }
+    // Een 404 op een chat-endpoint betekent bijna altijd: dít model bestaat
+    // daar niet. De kale tekst was "HTTP 404", en dan ga je de URL, de sleutel
+    // en het netwerk controleren terwijl er een modelnaam in het slot staat die
+    // de provider nooit gehad heeft. Gemeten geval: 'gemma-4-31b' op Cerebras,
+    // dat alleen GPT-OSS, Llama en Qwen serveert.
+    //
+    // Alleen hier en niet bij de twee andere !r.ok hierboven: die zijn voor
+    // Anthropic en Google, en daar heeft een 404 een andere betekenis.
+    if(r.status===404&&!vanProvider){
+      throw new Error(`${slot.provider} kent model "${model}" niet (HTTP 404). Kies een ander model op de kaart.`);
+    }
+    throw new Error(vanProvider||`HTTP ${r.status}`);
+  }
+  const d=await r.json();
+  recordProviderUsage(slot.provider,{quota:quotaFromHeaders(r.headers),usage:d.usage});
+  return sanitizeLlmText(d.choices?.[0]?.message?.content??'');
 }
 
 /**
