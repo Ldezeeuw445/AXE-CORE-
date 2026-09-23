@@ -30,6 +30,7 @@ import httpx
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from proxy_ai_stream import proxy_ai_stream_response, wil_stream
 from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
@@ -688,6 +689,10 @@ async def proxy_ai(body: dict = Body(...)):
     tool_choice = body.get("toolChoice")
     if not all([provider, model, fmt, base_url]) or not isinstance(messages, list):
         raise HTTPException(400, "Missing required fields: provider, model, format, baseUrl, messages")
+
+    # Opt-in: de chat vraagt first-token. Zonder stream blijft {text}.
+    if wil_stream(body):
+        return await proxy_ai_stream_response({**body, "key": key})
 
     raw_content = None
     stop_reason = None
