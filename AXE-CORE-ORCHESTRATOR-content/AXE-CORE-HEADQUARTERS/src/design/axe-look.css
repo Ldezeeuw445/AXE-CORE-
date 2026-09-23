@@ -6007,7 +6007,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-bolvlucht__wie { opacity: 0.6; margin-right: 4px; }
 
 
-/* Composer-gloed (border-beam, `md`-rondloper sinds 23 sep). De bloom-laag heeft z-index -1;
+/* Composer-gloed (border-beam, pulse-outside + ocean, glowSize 3; 23 sep). De bloom-laag heeft z-index -1;
    zonder eigen stapelcontext zakt hij achter de glasplaat en zie je alleen een
    dun randje. isolation houdt hem achter het invoervak maar vóór de plaat. */
 .axe-vakcomposer [data-beam] { isolation: isolate; }

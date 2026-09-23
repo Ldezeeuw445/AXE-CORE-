@@ -148,23 +148,35 @@ export function AxeComposerVak({
       style={presenceStyle}
     >
       {/* Locked presence contract:
-          idle/silent mic = colorful rotating border beam;
+          idle/silent mic = ocean pulse glowing out around the vak;
           actual microphone/TTS energy = smoothly yield to VoiceBeam;
-          silence = release back to the beam.
+          silence = release back to the pulse.
           The crossfade is driven by measured RMS, never by a listening boolean.
 
-          23 sep 2026: Luka's own libraries.dev reference, taken literally --
-          the default `md` preset (a beam that TRAVELS the vak's border) with
-          duration 2, brightness 2.2 and `--beam-stroke-opacity: 2`. The pulse
-          presets before it (outside, then inner) glowed around or inside the
-          card; `md` lives on the border stroke itself, so the old "halo gets
-          cut off at the bottom of the viewport" problem doesn't apply. Only
-          `strength` is ours: it is the voice crossfade above, at the
+          23 sep 2026 (second pass): Luka's next libraries.dev reference, taken
+          literally -- "die dekt iets meer als nu". Back to `pulse-outside`,
+          but with glowSize 3: the halo now reaches well past the vak's edge,
+          which is exactly what the earlier pulse-outside lacked (it only
+          showed in the few px it spilled, and read as cut off). Ocean colours,
+          hue shifted -20deg over a 14deg range, radius 20 to match the vak.
+          Only `strength` is ours: it is the voice crossfade above, at the
           library's default of 1 when nobody is speaking. */}
       <BorderBeam
+        size="pulse-outside"
+        colorVariant="ocean"
         duration={2}
+        glowSize={3}
         brightness={2.2}
-        style={{ '--beam-stroke-opacity': '2' } as CSSProperties}
+        saturation={2.2}
+        hueRange={14}
+        borderRadius={20}
+        style={{
+          '--beam-hue-base': '-20deg',
+          '--beam-stroke-opacity': '2',
+          '--beam-inner-opacity': '0.1',
+          '--beam-bloom-opacity': '0.25',
+          '--pulse-glow-boost': '1.75',
+        } as CSSProperties}
         strength={1 - presence.mix}
         active
       >
