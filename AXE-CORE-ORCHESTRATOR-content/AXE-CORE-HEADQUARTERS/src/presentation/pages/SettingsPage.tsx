@@ -7,6 +7,8 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
 import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
+import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
+import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
@@ -867,24 +869,21 @@ function ProviderKeysSection() {
 }
 
 /**
- * De stemkeuze: vier, en niet een bibliotheek.
- *
- * Hier stond de HELE ElevenLabs-lijst: tientallen namen met land en
- * omschrijving, opgehaald bij het openen. Voor dit doel klinken die
- * nauwelijks verschillend, dus je luisterde twintig voorbeelden en koos
- * alsnog de eerste -- een keuzelijst die je niet kunt beantwoorden is geen
- * keuze maar werk.
- *
- * Nu vier: AXE (Fish), een man, een vrouw, en de browser als vangnet. De lijst
- * staat in domain/stemKeuzes met een test die hem kort houdt.
- *
- * Kiezen zet MEEBEEN de motor. Dat was hiervoor twee losse instellingen -- een
- * stem hier en een provider verderop -- en je kon dus een ElevenLabs-stem
- * kiezen terwijl Fish aan het praten was. Eén keuze, één uitkomst.
+ * De stem is geen keuze meer. AXE spreekt George; Cedar alleen als George
+ * niets hoorbaars kan maken. Dit blok toont die identiteit en of de lokale
+ * dienst (com.axe.tts) echt draait — groen of rood, met wat je eraan doet.
+ * Listen gaat door speakGlobal, dezelfde keten als elk chatantwoord.
  */
 function VoiceSection() {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stand, setStand] = useState<StemStand | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void probeGeorgeStem().then((s) => { if (live) setStand(s); });
+    return () => { live = false; };
+  }, []);
 
   const listen = () => {
     if (playing) { stopGlobalTts(); setPlaying(false); return; }
@@ -897,15 +896,22 @@ function VoiceSection() {
     );
   };
 
+  const standKleur = stand == null
+    ? 'var(--text-muted)'
+    : stand.ok ? 'var(--success)' : 'var(--error)';
+
   return (
     <WidgetCard title="VOICE" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
       <div className="space-y-2">
         <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-          AXE speaks with one fixed voice — OpenAI <strong>cedar</strong>. This is
-          separate from which model answers you. It needs your OpenAI key (set it
-          under Keys). If Cedar is unavailable AXE keeps the text reply visible
-          and reports the voice error; it never silently changes identity.
+          {STEM_UI.uitleg}
         </p>
+        <p className="text-xs-custom" style={{ color: standKleur }} data-axe-stem={stand == null ? 'wacht' : stand.ok ? 'live' : 'dood'}>
+          {stand ? stand.regel : 'Checking George…'}
+        </p>
+        {stand?.watNu && (
+          <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{stand.watNu}</p>
+        )}
         {error && (
           <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
             <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
@@ -915,16 +921,15 @@ function VoiceSection() {
         <div className="flex items-center justify-between gap-2 p-2 rounded-lg"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
           <span className="flex items-center gap-2 min-w-0">
-            <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: 'var(--accent-cyan)' }} />
             <span className="min-w-0">
               <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>AXE</span>
-              <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>OpenAI cedar — warm and natural.</p>
+              <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>{STEM_UI.label}</p>
             </span>
           </span>
           <button onClick={listen}
             className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
             style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
-            <Play size={11} /> {playing ? 'Playing…' : 'Listen'}
+            <Play size={11} /> {playing ? STEM_UI.speelt : STEM_UI.luister}
           </button>
         </div>
       </div>
@@ -2044,7 +2049,7 @@ export default function SettingsPage() {
           </div>
         </WidgetCard>
 
-        {/* ── Voice: one fixed AXE voice (OpenAI cedar), no picker ──── */}
+        {/* ── Voice: one fixed AXE voice (George), Cedar only as fallback ──── */}
         <VoiceSection />
 
         {/* ── AXE Quotes (between voice and trust) ─────────────────── */}

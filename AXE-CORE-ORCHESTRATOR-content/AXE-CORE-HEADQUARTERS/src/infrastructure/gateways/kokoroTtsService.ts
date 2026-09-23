@@ -13,9 +13,23 @@
  * echt uit de speakers komt -- dezelfde afspraak als bij de Cedar-stem.
  */
 import { splitIntoSpeechChunks } from '@/domain/speechChunks';
+import { AXE_STEM_ID, stemStandVanHealth, type StemStand } from '@/domain/stemIdentiteit';
 
-export const AXE_KOKORO_VOICE = 'bm_george';
-const ORIGIN = (import.meta.env.VITE_AXE_TTS_ORIGIN as string | undefined) ?? 'http://127.0.0.1:8766';
+export const AXE_KOKORO_VOICE = AXE_STEM_ID;
+export const AXE_TTS_ORIGIN = (import.meta.env.VITE_AXE_TTS_ORIGIN as string | undefined) ?? 'http://127.0.0.1:8766';
+const ORIGIN = AXE_TTS_ORIGIN;
+
+/** Live: draait com.axe.tts, en zegt hij nog steeds George? */
+export async function probeGeorgeStem(): Promise<StemStand> {
+  try {
+    const r = await fetch(`${ORIGIN}/health`, { signal: AbortSignal.timeout(1500) });
+    if (!r.ok) return stemStandVanHealth(null, `axe_tts_${r.status}`);
+    const body = (await r.json()) as { ok?: boolean; voice?: string };
+    return stemStandVanHealth({ ok: Boolean(body.ok), voice: body.voice });
+  } catch (e) {
+    return stemStandVanHealth(null, e instanceof Error ? e.message : String(e));
+  }
+}
 
 let generatie = 0;
 let huidige: HTMLAudioElement | null = null;

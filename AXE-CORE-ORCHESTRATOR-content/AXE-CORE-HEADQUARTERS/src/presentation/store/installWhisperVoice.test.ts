@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * finish, so interrupting AXE mid-sentence was structurally impossible, no
  * matter what a settings toggle claimed. It also called stopTTS() (Eleven
  * Labs) + stopFishAudio() everywhere "stop everything" was meant, while the
- * voice AXE actually speaks with (OpenAI cedar) is stopped by a THIRD
+ * voice AXE actually speaks with (George via globalTts) is stopped by a THIRD
  * function, stopGlobalTts() — so even ending a call the normal way never
  * silenced the audio actually playing.
  *

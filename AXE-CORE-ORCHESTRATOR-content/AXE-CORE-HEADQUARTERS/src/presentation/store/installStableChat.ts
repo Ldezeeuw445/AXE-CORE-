@@ -2,7 +2,7 @@
  * installStableChat.ts
  *
  * Boot patch for AXE identity:
- * 1. Keep one canonical AXE speech identity through globalTts (Cedar).
+ * 1. Keep one canonical AXE speech identity through globalTts (George).
  * 2. Simple chat → short Gemini cascade (no LangGraph race).
  * 3. Action asks → agentic tool loop.
  * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.

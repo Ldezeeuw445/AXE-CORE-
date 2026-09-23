@@ -25,11 +25,14 @@ import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import { useLocation } from 'react-router';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
+import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
   const [supaOk, setSupaOk] = useState<boolean | null>(null);
   const [llmCount, setLlmCount] = useState(0);
+  const [stem, setStem] = useState<StemStand | null>(null);
   const voice = useVoiceStore();
 
   useEffect(() => {
@@ -50,31 +53,27 @@ function AICoreSystemLeft() {
       } catch { setSupaOk(false); }
     };
     void ping();
+    void probeGeorgeStem().then(setStem);
   }, []);
 
-  let tts = 'Fish Audio';
-  try {
-    const p = localStorage.getItem('axe_tts_provider');
-    if (p === 'elevenlabs') tts = 'ElevenLabs';
-    else if (p === 'browser') tts = 'Browser';
-  } catch { /* ignore */ }
-
   const provider = voice.activeProvider || voice.primarySlot?.provider || '—';
+  const stemVal = stem == null ? '…' : stem.ok ? STEM_UI.kortLive : STEM_UI.kortDood;
+  const stemFout = stem?.ok === false;
 
   return (
     <div className="space-y-1.5">
       {[
         { icon: Activity, label: 'Status', val: llmCount > 0 ? 'Online' : 'No AI', ok: llmCount > 0 },
         { icon: Cpu, label: 'Primary', val: String(provider), ok: !!voice.activeProvider || !!voice.primarySlot },
-        { icon: Mic, label: 'Voice', val: tts, ok: true },
+        { icon: Mic, label: 'Voice', val: stemVal, ok: stem?.ok === true, fout: stemFout },
         { icon: Zap, label: 'Memory', val: supaOk ? `OK · ${voice.conversation.length} msgs` : supaOk === null ? '…' : 'offline', ok: supaOk === true },
-      ].map(({ icon: Icon, label, val, ok }) => (
+      ].map(({ icon: Icon, label, val, ok, fout }) => (
         <div key={label} className="flex items-center justify-between gap-1">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+            <Icon size={11} style={{ color: fout ? 'var(--error)' : ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
             <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
           </div>
-          <span className="text-[10px] font-mono truncate max-w-[100px]" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+          <span className="text-[10px] font-mono truncate max-w-[100px]" style={{ color: fout ? 'var(--error)' : ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>
             {val}
           </span>
         </div>
