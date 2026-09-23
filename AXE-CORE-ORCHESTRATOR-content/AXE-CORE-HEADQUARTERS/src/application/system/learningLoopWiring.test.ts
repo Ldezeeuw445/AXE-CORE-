@@ -121,6 +121,16 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(boot, 'axeBootstrap.ts niet gevonden').toBeDefined();
     expect(boot!.tekst).toMatch(/setInterval\(.{0,80}\bapplyReinforcement\b/s);
   });
+
+  it('de chat sluit via de eigenaar, niet via een racegevoelige turn-id', () => {
+    // voiceStore gaf geheugen 500ms. latestOpenTurnId(memOwner) was dan vaak
+    // null, dus het oordeel verdween en de episode bleef open. Gemeten
+    // 23 september: twee chat-rijen, beide unknown.
+    const voice = BESTANDEN.find(({ pad }) => pad.endsWith('voiceStore.ts'));
+    expect(voice, 'voiceStore.ts niet gevonden').toBeDefined();
+    expect(voice!.tekst).toMatch(/noteOwnerOutcome\(/);
+    expect(voice!.tekst).not.toMatch(/noteTurnOutcome\(latestOpenTurnId\(/);
+  });
 });
 
 /**
