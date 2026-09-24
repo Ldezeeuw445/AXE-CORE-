@@ -19,6 +19,7 @@ const KLEUR: Record<string, string> = {
   Speaking: '#F59E0B',
   Listening: '#10B981',
   Ready: '#22D3EE',
+  Error: '#F87171',
 };
 
 export function AxeStatusOrb({ size, werk, toonLabel = false, className, status: opgelegd }: {
@@ -32,8 +33,9 @@ export function AxeStatusOrb({ size, werk, toonLabel = false, className, status:
   status?: VoiceStatus;
 }) {
   const uitStore = useVoiceStore(s => s.voiceStatus);
+  const fout = useVoiceStore(s => Boolean(s.error));
   const status = opgelegd ?? uitStore;
-  const teken = statusTeken(status, werk);
+  const teken = statusTeken(status, { ...werk, fout: werk?.fout || fout });
   const label = tekenLabel(teken);
   const kleur = KLEUR[label] ?? '#a855f7';
 
@@ -43,6 +45,17 @@ export function AxeStatusOrb({ size, werk, toonLabel = false, className, status:
         <span className="axe-eq" style={{ ['--eq-ink' as string]: kleur, height: size === 20 ? 14 : 28 }}>
           <i /><i /><i /><i /><i /><i /><i />
         </span>
+      ) : teken.soort === 'fout' ? (
+        <span
+          aria-hidden
+          className="rounded-full flex-shrink-0"
+          style={{
+            width: size === 20 ? 8 : 16,
+            height: size === 20 ? 8 : 16,
+            border: `1.5px solid ${kleur}`,
+            background: 'transparent',
+          }}
+        />
       ) : (
         <ThinkingOrb state={teken.stand} size={size} />
       )}

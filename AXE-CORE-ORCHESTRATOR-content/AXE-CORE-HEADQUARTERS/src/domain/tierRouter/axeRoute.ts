@@ -26,6 +26,7 @@ export type AxeRouteSkill =
 export type AxeRouteKind =
   | 'greeting'
   | 'status'
+  | 'session'
   | 'priorities'
   | 'tasks'
   | 'calendar'
@@ -61,6 +62,12 @@ const PRIORITY_RE =
 
 const TASKS_RE =
   /\b(mijn taken|my tasks|open tasks|taaklijst|task list|to-?do'?s?|wat staat er open)\b/i;
+
+const SESSION_RE =
+  /^(wat heb je gedaan|what have you (done|been doing)|what did you do|job status|session status|status)\??$/i;
+
+const TASK_WORK_RE =
+  /\b(zet een taak|maak een taak|create a task|add a (task|todo)|task for tomorrow|taak voor morgen|schedule a task)\b/i;
 
 const CALENDAR_RE =
   /\b(agenda|calendar|schedule|rooster|wat staat er (vandaag )?(op|in) (mijn )?agenda|what'?s on my (calendar|schedule)|afspraken)\b/i;
@@ -122,6 +129,18 @@ export function classifyAxeTier(text: string): AxeRoute {
       reason: `skill:${skill}`,
       agent,
       skill,
+      confident: true,
+    };
+  }
+
+  if (SESSION_RE.test(t) && t.length < 80) {
+    return {
+      tier: 1,
+      kind: 'session',
+      via: 'rules',
+      reason: 'session jobs',
+      agent: 'axe',
+      skill: null,
       confident: true,
     };
   }
@@ -190,15 +209,21 @@ export function classifyAxeTier(text: string): AxeRoute {
   // Nooit capability 'code' forceren: delegateFor geeft dan altijd developer,
   // ook als de tekst een trading- of crew-signaal heeft.
   const delegatie = delegateFor('fast', t);
-  const actief = intent === 'act' || WORK_RE.test(t);
+  const taakWerk = TASK_WORK_RE.test(t);
+  const actief = intent === 'act' || WORK_RE.test(t) || taakWerk;
   const domein = delegatie.agent !== 'axe';
 
-  if (actief || (domein && t.length > 20)) {
-    const agent: AxeAgentId = domein
-      ? delegatie.agent
-      : intent === 'act'
-        ? 'developer'
-        : 'axe';
+  // Eén duidelijk domein is genoeg — ook bij een korte zin als
+  // "check NorthSea deals". De lengte-drempel liet die stukken als
+  // tier 2 vallen en de multi-intent-knip wees ze dan naar de verkeerde agent.
+  if (actief || domein) {
+    const agent: AxeAgentId = taakWerk
+      ? 'task'
+      : domein
+        ? delegatie.agent
+        : intent === 'act'
+          ? 'developer'
+          : 'axe';
     return {
       tier: 3,
       kind: 'agent',

@@ -25,9 +25,41 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(tekst).toMatch(/if\s*\(\s*!keuze\.intercept\s*\)/);
     expect(tekst).toMatch(/await original\(text\)/);
     expect(tekst).toMatch(/voerTier1Uit/);
-    expect(tekst).toMatch(/voerTier3Uit/);
-    expect(tekst).toMatch(/createDurableTask\s*\(/);
+    expect(tekst).toMatch(/voerJobsUit/);
+    expect(tekst).toMatch(/createDurableTask/);
     expect(tekst).toMatch(/pushTierRoute/);
+  });
+
+  it('knipte jobs starten op de achtergrond — sendMessage wacht niet', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/splitsAxeBeurten/);
+    expect(tekst).toMatch(/function startAxeJobs/);
+    expect(tekst).toMatch(/void startJobsParallel/);
+    expect(tekst).toMatch(/void monitorTier3/);
+    expect(tekst).not.toMatch(/await startAxeJobs/);
+    expect(tekst).not.toMatch(/await startJobsParallel/);
+    expect(tekst).not.toMatch(/await monitorTier3/);
+    expect(tekst).toMatch(/injecteerJobResultaat/);
+    expect(tekst).toMatch(/speakZonderKap/);
+    expect(tekst).toMatch(/sessieSamenvatting/);
+    expect(tekst).not.toMatch(/auto_send_qualification|auto_reply_nonbinding|auto_send_followups/);
+  });
+
+  it('de agents-balk zit in de composer, niet alleen als los bestand', () => {
+    const vak = bron('presentation/components/layout/AxeComposerVak.tsx');
+    expect(vak).toMatch(/<AxeAgentsBalk\s*\/>/);
+    const balk = bron('presentation/components/layout/AxeAgentsBalk.tsx');
+    expect(balk).toMatch(/balkLabel/);
+    expect(balk).toMatch(/surface-bg/);
+    expect(balk).toMatch(/tint-line/);
+  });
+
+  it('Whisper-lus: Esc stopt, job-spraak wacht tot de gebruiker klaar is', () => {
+    const tekst = bron('presentation/store/installWhisperVoice.ts');
+    expect(tekst).toMatch(/e\.key !== 'Escape'/);
+    expect(tekst).toMatch(/stopListening\(\)/);
+    expect(tekst).toMatch(/flushAxeSpraakRij/);
+    expect(tekst).toMatch(/conversationActive/);
   });
 
   it('tier 1 wacht niet op RAG of het grote model', () => {

@@ -115,10 +115,11 @@ onterecht vinkje is erger dan geen vinkje.
 
 **AXE is de baas, niet een chatbot.** Elke beurt (typen of stem) gaat door
 de tier-router: 1 = regels + opgeslagen data, 2 = klein snel model, 3 =
-bestaande agent op de achtergrond. De classifier schrijft geen antwoord.
-Timeout of fout → het pad dat er al was. De vier fases staan in
-`BOUWLIJST.md` §6 — bouw niet fase 2–4 in een fase-1-PR, en verwar deze
-tiers niet met de roster-tiers in `roster.ts`.
+bestaande agent op de achtergrond. Meerdere taken in één zin worden
+geknipt en lopen parallel; de chat wacht daar niet op. De classifier
+schrijft geen antwoord. Timeout of fout → het pad dat er al was. De vier
+fases staan in `BOUWLIJST.md` §6 — verwar deze tiers niet met de
+roster-tiers in `roster.ts`.
 
 ## Waar de rest staat
 

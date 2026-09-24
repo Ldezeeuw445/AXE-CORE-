@@ -42,7 +42,7 @@ export async function haalTier1Kijk(
   kind: AxeRouteKind,
   deps: HaalTier1Deps = {},
 ): Promise<Tier1Kijk> {
-  if (kind === 'greeting') return LEEG;
+  if (kind === 'greeting' || kind === 'session') return LEEG;
 
   const timeoutMs = deps.timeoutMs ?? 600;
   const awareness = deps.awareness ?? (async () => {

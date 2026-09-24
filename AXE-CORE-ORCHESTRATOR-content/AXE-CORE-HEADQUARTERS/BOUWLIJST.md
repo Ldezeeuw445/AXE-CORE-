@@ -327,11 +327,19 @@ assistant). Dit is de aanvraag-route.
       agent, schrijft het resultaat in de leerlus/RAG.
 - [x] **6.5** Cognitive stream toont `route · tier N · … · Nms`.
       Latency staat op het `RoutingEvent`.
+- [x] **6.5a** Multi-intent: één zin met meerdere taken wordt geknipt
+      (NL + EN), elk stuk een eigen job, parallel, één korte ack.
+      De chat blijft open voor nieuwe T1/T2-beurten.
+- [x] **6.5b** Agents-balk boven de composer (`N agents running`),
+      matzwart met dunne lijn; klik opent naam / agent / stand.
+- [x] **6.5c** Klaar job komt als korte samenvatting in de chat.
+      George TTS wacht als de gebruiker praat (spraakrij + barge-in).
+      `Wat heb je gedaan?` / `status` is T1 uit de job-store.
 
 **Al aanwezig vóór deze PR:** `classifyQuery` / `classifyChatIntent` /
 `isSocialChatTurn` / `routeFast` / `delegateFor`, durable tasks + monitor
 in `installStableChat`, first-token stream, leerlus (`noteRetrieval` →
-`noteOwnerOutcome`), Groq-slot.
+`noteOwnerOutcome`), Groq-slot, Whisper-lus + barge-in (#178).
 
 **Nog niet:** gemeten latency op de Mac (regels zijn in tests <5ms;
 het model-pad is begrensd op 700ms). NorthSea auto-send blijft uit.
@@ -364,10 +372,10 @@ aanroepbaar, gekoppeld aan de router.
       toont.
 
 **Al aanwezig:** Whisper-lus, George (Kokoro), `voiceStatus`, Home-bol
-die meeloopt met die status, `statusOrb.ts` (idle/listening/processing/
-speaking → orb of equalizer), #178 stilte-wacht. **Ontbreekt:** pauze-
-versturen als contract, Esc overal, globale hotkey, error-stand op een
-altijd-zichtbare bol.
+die meeloopt met die status, `statusOrb.ts` (idle/listening/thinking/
+speaking/error), #178 stilte-wacht, Esc stopt de stemlus, barge-in
+kapt TTS af, job-spraak wacht in de rij. **Ontbreekt:** globale
+hotkey om de mic van overal te openen.
 
 ---
 

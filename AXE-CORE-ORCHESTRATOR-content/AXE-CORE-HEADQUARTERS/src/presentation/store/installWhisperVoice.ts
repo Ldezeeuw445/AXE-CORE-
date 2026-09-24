@@ -27,6 +27,7 @@ import {
   releaseMic,
 } from '@/infrastructure/gateways/whisperService';
 import { usableTranscript } from '@/infrastructure/gateways/whisperGuard';
+import { flushAxeSpraakRij } from '@/application/tierRouter/axeSpraakRij';
 
 let conversationActive = false;
 let loopGeneration = 0;
@@ -308,6 +309,8 @@ async function runTurn(text: string, gen: number, depth = 0): Promise<'ok' | 'em
     return runTurn(interruptedBy, gen, depth + 1);
   }
 
+  flushAxeSpraakRij();
+
   // Brief pause so TTS tail / echo doesn't re-trigger the next listen.
   await new Promise((r) => setTimeout(r, 450));
   return conversationActive && gen === loopGeneration ? 'ok' : 'stop';
@@ -465,6 +468,15 @@ export function hangUpListenForTypedInput(): void {
 }
 
 export function installWhisperVoice(): void {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!conversationActive) return;
+      e.preventDefault();
+      useVoiceStore.getState().stopListening();
+    });
+  }
+
   useVoiceStore.setState({
     startListening: async () => {
       if (conversationActive) return; // already in a loop

@@ -153,7 +153,7 @@ export default function Home() {
                   : coreStatus === 'thinking' || coreStatus === 'awaiting-approval' ? 'processing'
                     : 'idle';
               return (<>
-                <AxeStatusOrb size={20} status={orbStatus} werk={{ schrijft: coreStatus === 'thinking' }} />
+                <AxeStatusOrb size={20} status={orbStatus} werk={{ schrijft: coreStatus === 'thinking', fout: hasError }} />
                 <span className="text-xs-custom font-mono-data" style={{ color }}>{label}</span>
               </>);
             })()}

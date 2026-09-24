@@ -36,6 +36,11 @@ const VOORBEELDEN: Array<{ text: string; tier: AxeRouteTier; note?: string }> = 
   { text: "what's on my calendar", tier: 1 },
   { text: 'wat staat er op mijn agenda', tier: 1 },
   { text: 'wat moet ik vandaag doen', tier: 1 },
+  { text: 'wat heb je gedaan', tier: 1 },
+  { text: 'Wat heb je gedaan?', tier: 1 },
+  { text: 'status', tier: 1 },
+  { text: 'what have you done', tier: 1 },
+  { text: 'check NorthSea deals', tier: 3 },
 
   // Tier 2 — NL + EN
   { text: "summarize today's AI news", tier: 2 },
@@ -81,6 +86,12 @@ describe('classifyAxeTier', () => {
     expect(classifyAxeTier('fix the login bug').agent).toBe('developer');
     expect(classifyAxeTier('run the wingman crew').agent).toBe('wingman');
     expect(classifyAxeTier('intel brief').agent).toBe('intel');
+  });
+
+  it('sessie-status is tier 1 uit de job-store, geen groot model', () => {
+    expect(classifyAxeTier('wat heb je gedaan').kind).toBe('session');
+    expect(classifyAxeTier('status').kind).toBe('session');
+    expect(classifyAxeTier('what have you done').kind).toBe('session');
   });
 
   it('houdt begroetingen uit de grote-model-route', () => {

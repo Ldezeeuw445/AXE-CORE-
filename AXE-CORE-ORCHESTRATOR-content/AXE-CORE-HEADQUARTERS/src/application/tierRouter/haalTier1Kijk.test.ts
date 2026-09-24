@@ -2,6 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { haalTier1Kijk } from './haalTier1Kijk';
 
 describe('haalTier1Kijk', () => {
+  it('haalt geen data voor een sessie-vraag', async () => {
+    let geroepen = 0;
+    const kijk = await haalTier1Kijk('session', {
+      awareness: async () => {
+        geroepen += 1;
+        return { openTasks: 9, overdueTasks: 2 };
+      },
+    });
+    expect(kijk.openTasks).toBe(0);
+    expect(geroepen).toBe(0);
+  });
+
   it('haalt geen data voor een groet', async () => {
     let geroepen = 0;
     const kijk = await haalTier1Kijk('greeting', {

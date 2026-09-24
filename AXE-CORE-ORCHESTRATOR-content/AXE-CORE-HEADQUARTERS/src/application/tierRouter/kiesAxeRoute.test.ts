@@ -71,6 +71,17 @@ describe('kiesAxeRoute — fallback', () => {
     expect(r.via).toBe('fallback');
   });
 
+  it('sessie-status is tier 1, zonder model', async () => {
+    const r = await kiesAxeRoute('wat heb je gedaan', {
+      vraagModel: async () => {
+        throw new Error('model mag niet worden aangeroepen');
+      },
+    });
+    expect(r.tier).toBe(1);
+    expect(r.kind).toBe('session');
+    expect(r.intercept).toBe(true);
+  });
+
   it('tier 3-regel onderschept en noemt de agent', async () => {
     const r = await kiesAxeRoute('open a long on XAUUSD');
     expect(r.intercept).toBe(true);

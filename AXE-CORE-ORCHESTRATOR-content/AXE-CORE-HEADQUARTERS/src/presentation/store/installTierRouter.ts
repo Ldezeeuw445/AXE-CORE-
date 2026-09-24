@@ -1,15 +1,12 @@
 /**
  * installTierRouter — de laag vóór AXE.
  *
- * Elke getypte of gesproken beurt gaat eerst door de classifier.
- * Tier 1 antwoordt uit regels + opgeslagen data, zonder groot model.
- * Tier 2 gebruikt een klein snel model met lichte context.
- * Tier 3 zet werk uit bij een bestaande agent en meldt meteen "on it".
- * Timeout of fout → het huidige pad (installStableChat / voiceStore).
- *
- * NorthSea auto-send vlaggen blijven hier buiten. Geen UI-wijziging.
+ * Elke beurt door de classifier. Meerdere taken in één zin worden geknipt
+ * en als parallelle jobs uitgezet. De chat wacht daar niet op.
+ * NorthSea auto-send blijft hier buiten.
  */
 import { useVoiceStore, getProviderKeySlot, writeConversationMemory, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
+import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { AXE_SYSTEM_PROMPT, CONVERSATION_FIRST_RULE } from '@/domain/prompts';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
@@ -18,7 +15,6 @@ import { PROVIDERS, type KeySlot } from '@/domain/providers';
 import {
   TIER2_GROQ_MODEL,
   agendaAntwoord,
-  capabilityVoorAgent,
   groetAntwoord,
   prioriteitenAntwoord,
   statusAntwoord,
@@ -39,6 +35,17 @@ import {
 import { noteRetrieval, noteOwnerOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { extractMemoryFromMessage } from '@/infrastructure/persistence/ragMemoryService';
 import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
+import { splitsAxeBeurten, jobStukkenVan, type AxeBeurtStuk } from '@/domain/tierRouter/splitsAxeBeurten';
+import {
+  bouwMultiAck,
+  jobAgentVan,
+  jobResultaatTekst,
+  sessieSamenvatting,
+  type AxeJob,
+} from '@/domain/tierRouter/axeJobRegels';
+import { jobsVanStukken, startJobsParallel } from '@/application/tierRouter/stuurAxeJobs';
+import { kiesSpraakPad, stemlusVanVoice, zetSpraakSpreker } from '@/application/tierRouter/axeSpraakRij';
+import { chatBlijftLuisteren, injecteerJobResultaat } from '@/application/tierRouter/injecteerJobResultaat';
 
 let installed = false;
 const taskMonitors = new Set<string>();
@@ -49,6 +56,24 @@ function speakAxe(text: string, onDone?: () => void): void {
   } catch { /* ignore */ }
   stopGlobalTts();
   speakGlobal(text, onDone, (reason) => useVoiceStore.setState({ error: reason }));
+}
+
+function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
+  try {
+    if (localStorage.getItem('axe_response_mode') === 'type') return;
+  } catch { /* ignore */ }
+  const stand = stemlusVanVoice(useVoiceStore.getState().voiceStatus, useVoiceStore.getState().error);
+  if (kiesSpraakPad(text, stand, bron) === 'queue') return;
+  if (bron === 'ack') {
+    stopGlobalTts();
+    speakGlobal(text, () => {
+      if (!chatBlijftLuisteren(useVoiceStore.getState().voiceStatus)) {
+        useVoiceStore.setState({ voiceStatus: 'idle' });
+      }
+    }, (reason) => useVoiceStore.setState({ error: reason }));
+    return;
+  }
+  speakGlobal(text, undefined, (reason) => useVoiceStore.setState({ error: reason }));
 }
 
 export function pushTierRoute(keuze: AxeRouteKeuze, extra: Partial<RoutingEvent> = {}): void {
@@ -100,7 +125,7 @@ function haalGebruikerWeg(text: string): void {
   }
 }
 
-function publiceer(text: string, slot: { provider: string; model?: string }, lastUser: string): void {
+function publiceer(text: string, slot: { provider: string; model?: string }, bron: 'ack' | 'job' = 'ack'): void {
   const visible = zichtbareAxeAntwoord(text) || text;
   const axeMsg: ConversationMessage = {
     role: 'axe',
@@ -110,16 +135,21 @@ function publiceer(text: string, slot: { provider: string; model?: string }, las
     model: slot.model,
     delegate: 'axe',
   };
-  useVoiceStore.setState((s) => ({
-    conversation: [...s.conversation, axeMsg],
-    response: visible,
-    voiceStatus: 'speaking' as const,
-    error: null,
-  }));
-  speakAxe(visible, () => {
-    useVoiceStore.setState({ voiceStatus: 'idle' });
-  });
-  void lastUser;
+  const luistert = chatBlijftLuisteren(useVoiceStore.getState().voiceStatus);
+  if (bron === 'job') {
+    useVoiceStore.setState((s) => ({
+      conversation: injecteerJobResultaat(s.conversation, visible) as ConversationMessage[],
+      response: visible,
+    }));
+  } else {
+    useVoiceStore.setState((s) => ({
+      conversation: [...s.conversation, axeMsg],
+      response: visible,
+      voiceStatus: luistert ? s.voiceStatus : 'speaking' as const,
+      error: null,
+    }));
+  }
+  speakZonderKap(visible, bron);
 }
 
 function recordBeurt(q: string, a: string, provider: string, capability: string): void {
@@ -165,7 +195,10 @@ function tier1Tekst(
   vpsOnline: boolean | null,
 ): string {
   if (kind === 'greeting') return groetAntwoord();
+  if (kind === 'session') return sessieSamenvatting(useAxeJobStore.getState().jobs);
   if (kind === 'status') {
+    const jobs = useAxeJobStore.getState().jobs;
+    if (jobs.length) return sessieSamenvatting(jobs);
     return statusAntwoord({
       vpsOnline,
       openTasks: kijk.openTasks,
@@ -181,7 +214,7 @@ function tier1Tekst(
 async function voerTier1Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
   const kijk = await haalTier1Kijk(keuze.kind);
   const antwoord = tier1Tekst(keuze.kind, kijk, useVoiceStore.getState().vpsOnline);
-  publiceer(antwoord, { provider: 'rules', model: `tier1/${keuze.kind}` }, text);
+  publiceer(antwoord, { provider: 'rules', model: `tier1/${keuze.kind}` }, 'ack');
   recordBeurt(text, antwoord, 'rules', `tier1:${keuze.kind}`);
   return true;
 }
@@ -226,7 +259,7 @@ async function voerTier2Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean
     const trimmed = zichtbareAxeAntwoord(raw).trim();
     if (!trimmed) return false;
     if (!axeTs) {
-      publiceer(trimmed, slot, text);
+      publiceer(trimmed, slot, 'ack');
     } else {
       useVoiceStore.setState((s) => ({
         conversation: volgendeAxeBericht(s.conversation, trimmed, slot, axeTs) as ConversationMessage[],
@@ -259,24 +292,35 @@ function taakTekst(snapshot: DurableTaskSnapshot): string {
   return last || 'The task finished.';
 }
 
-async function monitorTier3(taskId: string, slot: KeySlot, original: string, agent: AxeAgentId): Promise<void> {
-  if (taskMonitors.has(taskId)) return;
+function meldJobKlaar(job: AxeJob): void {
+  const tekst = jobResultaatTekst(job);
+  useAxeJobStore.getState().patch(job.id, job);
+  publiceer(tekst, { provider: 'tier3', model: job.agent }, 'job');
+  recordBeurt(job.sourceText, tekst, 'tier3', `tier3:${job.agent}`);
+}
+
+async function monitorTier3(job: AxeJob): Promise<void> {
+  const taskId = job.taskId;
+  if (!taskId || taskMonitors.has(taskId)) return;
   taskMonitors.add(taskId);
   try {
     while (true) {
       const snapshot = await getDurableTask(taskId);
       const { status } = snapshot.task;
       if (status === 'completed' || status === 'done') {
-        const answer = taakTekst(snapshot);
-        publiceer(answer, slot, original);
-        recordBeurt(original, answer, slot.provider, `tier3:${agent}`);
+        meldJobKlaar({
+          ...job,
+          state: 'done',
+          summary: taakTekst(snapshot),
+          finishedAt: Date.now(),
+        });
         return;
       }
       if (['failed', 'cancelled', 'rejected'].includes(status)) {
         const message = typeof snapshot.task.error?.message === 'string'
           ? snapshot.task.error.message
           : `The task stopped with status ${status}.`;
-        publiceer(`That did not work: ${message}`, slot, original);
+        meldJobKlaar({ ...job, state: 'failed', summary: message, finishedAt: Date.now() });
         return;
       }
       await new Promise((r) => setTimeout(r, 4_000));
@@ -288,51 +332,45 @@ async function monitorTier3(taskId: string, slot: KeySlot, original: string, age
   }
 }
 
-async function voerTier3Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
-  const naam = agentById(keuze.agent).name;
-  const ack = tier3Ack(naam, keuze.skill);
-  const label = { provider: 'tier3', model: keuze.agent };
-  publiceer(ack, label, text);
-
-  try {
-    const { task } = await createDurableTask({
-      title: (keuze.skill ? `${keuze.skill}: ` : '') + text.slice(0, 100),
-      goal: text,
-      requested_by: 'luka',
-      capability: capabilityVoorAgent(keuze.agent),
-      assignee: keuze.agent === 'axe' ? undefined : keuze.agent,
-      execution_mode: 'execute',
-      idempotency_key: `tier3-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      payload: {
-        request: text,
-        route_tier: 3,
-        agent: keuze.agent,
-        skill: keuze.skill,
-        reply_language: replyLanguageInstruction(),
-      },
-      metadata: {
-        conversation_source: 'axe_tier_router',
-        route_tier: 3,
-        agent: keuze.agent,
-        skill: keuze.skill,
-      },
-    });
-    const slot = snelSlot('tier2') ?? { provider: 'google' as const, key: '', model: `tier3/${keuze.agent}` };
-    void monitorTier3(task.id, slot, text, keuze.agent);
-    return true;
-  } catch (e) {
+/** Zet jobs uit zonder dat sendMessage daarop wacht. */
+function startAxeJobs(stukken: AxeBeurtStuk[]): void {
+  const ids = stukken.map((_, i) => `job-${Date.now()}-${i}`);
+  let n = 0;
+  const queued = jobsVanStukken(stukken, Date.now(), () => ids[n++]);
+  useAxeJobStore.getState().voeg(queued);
+  n = 0;
+  void startJobsParallel(stukken, {
+    create: createDurableTask,
+    id: () => queued[n++]?.id ?? `job-x-${n}`,
+  }).then((gestart) => {
+    for (const g of gestart) {
+      useAxeJobStore.getState().patch(g.job.id, g.job);
+      if (g.ok && g.job.taskId) void monitorTier3(g.job);
+      if (!g.ok) meldJobKlaar(g.job);
+    }
+  }).catch((e) => {
     console.warn('[AXE] tier 3 dispatch failed, falling through:', e);
-    // Ack staat al in de chat. Het huidige pad zou de gebruikersregel
-    // verdubbelen — daarom blijven we hier en zeggen we het eerlijk.
-    const msg = e instanceof Error ? e.message : String(e);
-    publiceer(`Could not start the desk (${msg.slice(0, 80)}). Say it again and I'll take the long path.`, label, text);
-    return true;
-  }
+  });
+}
+
+function voerJobsUit(text: string, stukken: AxeBeurtStuk[]): boolean {
+  const jobs = stukken.map((s) => ({
+    text: s.text,
+    agent: jobAgentVan(s.route, s.text) as AxeAgentId,
+  }));
+  const ack = jobs.length === 1
+    ? tier3Ack(agentById(jobs[0].agent).name, stukken[0].route.skill)
+    : bouwMultiAck(jobs);
+  publiceer(ack, { provider: 'tier3', model: jobs.map((j) => j.agent).join('+') }, 'ack');
+  recordBeurt(text, ack, 'tier3', 'tier3:batch');
+  startAxeJobs(stukken);
+  return true;
 }
 
 export function installTierRouter(): void {
   if (installed) return;
   installed = true;
+  zetSpraakSpreker((text) => speakZonderKap(text, 'ack'));
 
   const original = useVoiceStore.getState().sendMessage;
 
@@ -340,9 +378,18 @@ export function installTierRouter(): void {
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
 
-      // Mac-relay blijft het deterministische pad in voiceStore.
       if (detectMacRoute(text)) {
         await original(text);
+        return;
+      }
+
+      const stukken = splitsAxeBeurten(text);
+      const jobs = jobStukkenVan(stukken);
+      if (jobs.length >= 2) {
+        const keuze = await kiesAxeRoute(text, { vraagModel: vraagKlassificeerder });
+        pushTierRoute({ ...keuze, tier: 3, kind: 'agent', intercept: true, reason: `multi:${jobs.length}` }, { query: text.slice(0, 60) });
+        zetGebruiker(text);
+        voerJobsUit(text, jobs);
         return;
       }
 
@@ -365,7 +412,7 @@ export function installTierRouter(): void {
           const ok = await voerTier2Uit(text, keuze);
           if (ok) return;
         } else {
-          const ok = await voerTier3Uit(text, keuze);
+          const ok = voerJobsUit(text, stukken.length ? stukken : [{ text, route: keuze }]);
           if (ok) return;
         }
       } catch (e) {
