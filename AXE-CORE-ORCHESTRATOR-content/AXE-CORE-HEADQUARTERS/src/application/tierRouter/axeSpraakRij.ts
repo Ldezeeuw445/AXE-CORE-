@@ -14,7 +14,7 @@ export function stemlusVanVoice(status: string, error?: string | null): StemlusS
   return 'idle';
 }
 
-export function zetInSpraakRij(text: string): void {
+function zetInSpraakRij(text: string): void {
   const t = text.trim();
   if (t) rij.push(t);
 }
