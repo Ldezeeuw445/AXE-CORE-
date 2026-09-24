@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { TabRuimte, Kaart, SectieBlok, KaartRaster } from '@/presentation/components/layout/tabMaatstaf';
 import { NAAST_CORE, appVan, appMeta as appInfo, type AppId } from '@/domain/apps';
 import { CronTabel, type TabelActies, type KolomTekst } from './cron/CronTabel';
 import { toast } from '@/presentation/components/shared/toast';
@@ -232,9 +232,11 @@ export default function CronManager() {
     /* Flexkolom: kop en app-tabs vast, de schema's krijgen de rest van de
        hoogte. Eerst schoof de hele pagina en stond alles bovenin. */
     <motion.div
-      className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-6"
+      className="flex min-h-0 flex-1 flex-col"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
     >
+      <TabRuimte vullen>
+      <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
       <div className="flex flex-none items-center justify-between mb-4 gap-2">
       {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
@@ -278,7 +280,8 @@ export default function CronManager() {
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             className="mb-5 overflow-hidden"
           >
-            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)' }}>
+            <Kaart titel="New schedule">
+              <div className="space-y-3">
               <input
                 value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
                 placeholder="Naam (bijv. 'Ochtend-briefing')"
@@ -404,20 +407,22 @@ export default function CronManager() {
                   {busy.has('__new__') ? 'Working…' : 'Create'}
                 </button>
               </div>
-            </div>
+              </div>
+            </Kaart>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* List */}
       {loading ? (
-        <div className={LIST_GRID}>
+        <KaartRaster>
           {[...Array(3)].map((_, i) => <div key={i} className="h-36 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />)}
-        </div>
+        </KaartRaster>
       ) : (
         /* AXE Core over de VOLLE breedte, de vier anderen eronder naast
            elkaar. Zie de uitleg bij APP_TABS: dat is geen smaak maar het
            verschil tussen lokaal draaien en een webhook. */
+        <SectieBlok titel="CRON JOBS">
         <div className="axe-cronvel">
           <CronTabel
             titel={appInfo('axe_core').label}
@@ -445,8 +450,11 @@ export default function CronManager() {
             ))}
           </div>
         </div>
+        </SectieBlok>
       )}
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

@@ -11,6 +11,12 @@ const css = readFileSync(new URL('../design/axe-look.css', import.meta.url), 'ut
 const settings = readFileSync(new URL('../presentation/pages/SettingsPage.tsx', import.meta.url), 'utf8');
 const mcp = readFileSync(new URL('../presentation/pages/MCPCenter.tsx', import.meta.url), 'utf8');
 const primitieven = readFileSync(new URL('../presentation/components/layout/tabMaatstaf.tsx', import.meta.url), 'utf8');
+const tasks = readFileSync(new URL('../presentation/pages/Tasks.tsx', import.meta.url), 'utf8');
+const cron = readFileSync(new URL('../presentation/pages/CronManager.tsx', import.meta.url), 'utf8');
+const calendar = readFileSync(new URL('../presentation/pages/CalendarPage.tsx', import.meta.url), 'utf8');
+const finance = readFileSync(new URL('../presentation/pages/Finance.tsx', import.meta.url), 'utf8');
+const control = readFileSync(new URL('../presentation/pages/ControlPlane.tsx', import.meta.url), 'utf8');
+const crew = readFileSync(new URL('../presentation/pages/CrewAI.tsx', import.meta.url), 'utf8');
 
 function tokenKeren(naam: string): number {
   const esc = naam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -74,5 +80,42 @@ describe('Settings en MCP gebruiken de primitieven', () => {
     expect(mcp).toMatch(/MCP TOOL TESTER/);
     expect(mcp).not.toMatch(/STAT_ROW/);
     expect(mcp).not.toMatch(/LIST_GRID/);
+  });
+});
+
+describe('Calendar, Cron, Tasks en de volgende tabs', () => {
+  it('Tasks heeft TabRuimte, SchuifBalk en sectieblokken', () => {
+    expect(tasks).toMatch(/<TabRuimte/);
+    expect(tasks).toMatch(/<SchuifBalk/);
+    expect(tasks).toMatch(/<SectieBlok/);
+    expect(tasks).toMatch(/<Kaart/);
+  });
+
+  it('Cron gebruikt Kaart en geen LIST_GRID', () => {
+    expect(cron).toMatch(/<TabRuimte/);
+    expect(cron).toMatch(/<Kaart/);
+    expect(cron).toMatch(/<SectieBlok/);
+    expect(cron).not.toMatch(/LIST_GRID/);
+  });
+
+  it('Calendar vult via TabRuimte', () => {
+    expect(calendar).toMatch(/<TabRuimte/);
+    expect(calendar).toMatch(/vullen/);
+  });
+
+  it('Finance rekt geen stats meer', () => {
+    expect(finance).toMatch(/<TabRuimte/);
+    expect(finance).toMatch(/<StatRij/);
+    expect(finance).toMatch(/<SchuifBalk/);
+    expect(finance).not.toMatch(/STAT_ROW/);
+  });
+
+  it('ControlPlane en CrewAI gebruiken StatRij', () => {
+    expect(control).toMatch(/<TabRuimte/);
+    expect(control).toMatch(/<StatRij/);
+    expect(control).not.toMatch(/STAT_ROW/);
+    expect(crew).toMatch(/<TabRuimte/);
+    expect(crew).toMatch(/<StatRij/);
+    expect(crew).not.toMatch(/STAT_ROW/);
   });
 });

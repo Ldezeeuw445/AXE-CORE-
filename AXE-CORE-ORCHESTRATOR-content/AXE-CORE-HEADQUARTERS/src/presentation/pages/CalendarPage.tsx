@@ -7,6 +7,7 @@ import { WeekRooster } from './agenda/WeekRooster';
 import { MaandRooster } from './agenda/MaandRooster';
 import { AgendaLijst } from './agenda/AgendaLijst';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { TabRuimte } from '@/presentation/components/layout/tabMaatstaf';
 import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster';
 import { CalendarRange, LayoutGrid } from 'lucide-react';
 import { APPS } from '@/domain/apps';
@@ -206,7 +207,7 @@ export default function CalendarPage() {
 
   return (
     <motion.div
-      className="axe-tabruimte axe-tabruimte--vullen flex min-h-0 flex-1 overflow-hidden relative"
+      className="flex min-h-0 flex-1 overflow-hidden relative"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
@@ -247,6 +248,7 @@ export default function CalendarPage() {
       </PlaatSlot>
 
       {/* Main Grid Area */}
+      <TabRuimte vullen>
       <div className="flex-1 flex flex-col overflow-hidden">
         {weergave === 'week' ? (
           <WeekRooster
@@ -272,6 +274,7 @@ export default function CalendarPage() {
           />
         )}
       </div>
+      </TabRuimte>
 
       {/* Het dagpaneel is helemaal weg -- en daarmee ook het mobiele
           onderblad en de donkere laag erachter.

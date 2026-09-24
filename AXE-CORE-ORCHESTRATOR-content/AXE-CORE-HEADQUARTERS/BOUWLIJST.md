@@ -43,12 +43,14 @@ belangrijkste tab), dan MCP (het tegenvoorbeeld), dan de rest.
 - [x] **1.0b** MCP: compacte stat-kaarten (niet meer `STAT_ROW` die drie
       cijfers tot balken rekt), ruimere serverkaarten in `.axe-kaart-raster`,
       tool-tester in een Agents-sectieblok, zelfde schuifbalkvorm.
-- [ ] **1.0c** Calendar, Cron, Tasks: indeling grotendeels goed; kaarten
-      nog niet overal op `--axe-kaart-*` / `Kaart`. Calendar mag vullen
-      (`TabRuimte vullen`). Nog niet gedaan.
-- [ ] **1.0d** Resterende tabs dezelfde primitieven: Agents, Apps, Knowledge,
-      Control Plane, Organization, Terminal, Obsidian, Maps, EVE, CrewAI,
-      Table editor, Command, Developer, Finance, Infrastructure, Memory,
+- [x] **1.0c** Calendar, Cron, Tasks: `TabRuimte` (Calendar/Cron/Tasks
+      vullen), Tasks-schuifbalk Status, Cron-formulier als `Kaart`,
+      TASKS/CRON JOBS als `SectieBlok`. Geen `LIST_GRID` meer op Cron.
+- [ ] **1.0d** Resterende tabs dezelfde primitieven. Gedaan: Finance
+      (`StatRij` + Source-schuifbalk), Control Plane + CrewAI (`StatRij`,
+      geen `STAT_ROW`), Organization (`TabRuimte vullen`). Nog open:
+      Agents, Apps, Knowledge, Terminal, Obsidian, Maps, EVE,
+      Table editor, Command, Developer, Infrastructure, Memory,
       Home (alleen wat geen composer/AICore is).
 - [ ] **1.1** Per tab langs `UI-MAATSTAF.md` — volgt uit 1.0c/1.0d.
 - [ ] **1.2** Vier tabs gebruiken minder dan de helft van de hoogte:

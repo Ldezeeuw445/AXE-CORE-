@@ -6,7 +6,7 @@ import { apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axe
 import { runCrewWithTools } from '@/application/crew/runCrewWithTools';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
-import { STAT_ROW } from '@/presentation/components/surface/Page';
+import { TabRuimte, Kaart, StatRij } from '@/presentation/components/layout/tabMaatstaf';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
 /**
@@ -133,7 +133,9 @@ export default function CrewAI() {
   };
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRuimte vullen>
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
         <div className="min-w-0">
           <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>CrewAI Specialists</h1>
@@ -154,7 +156,7 @@ export default function CrewAI() {
         </div>
       </div>
 
-      <div className={`${STAT_ROW} flex-none`}>
+      <StatRij className="flex-none">
         {[
           { label: 'Specialists', value: SPECIALISTS.length, icon: Bot, color: 'var(--accent-cyan)' },
           { label: 'Selected', value: selected.length, icon: Users, color: '#8b5cf6' },
@@ -162,9 +164,7 @@ export default function CrewAI() {
         ].map(card => {
           const Icon = card.icon;
           return (
-            <WidgetCard key={card.label} title="">
-              {/* Icoon naast het getal in plaats van erboven: als derde regel
-                  duwde hij het label onder de 104px-tellerrij uit beeld. */}
+            <Kaart key={card.label} compact>
               <div className="text-center py-1">
                 <div className="flex items-center justify-center gap-2 text-2xl font-bold font-mono-data" style={{ color: card.color }}>
                   <Icon size={15} />
@@ -172,10 +172,10 @@ export default function CrewAI() {
                 </div>
                 <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{card.label}</div>
               </div>
-            </WidgetCard>
+            </Kaart>
           );
         })}
-      </div>
+      </StatRij>
 
       {/* Twee vaste kolommen die de resthoogte vullen. Met auto-fill stonden
           de roster en de taakkolom in twee van vier sporen en bleef de rechter
@@ -306,6 +306,8 @@ export default function CrewAI() {
           </WidgetCard>
         </div>
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

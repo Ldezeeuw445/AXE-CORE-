@@ -5,7 +5,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { STAT_ROW } from '@/presentation/components/surface/Page';
+import { TabRuimte, Kaart, StatRij } from '@/presentation/components/layout/tabMaatstaf';
 
 function kindLabel(kind: ControlPlaneRoute['kind']) {
   switch (kind) {
@@ -91,7 +91,9 @@ export default function ControlPlane() {
   const highlightRoutes = routes.filter(r => ['google_maps', 'smartthings', 'hermes', 'langgraph'].some(token => `${r.path} ${r.target ?? ''} ${r.display_name}`.toLowerCase().includes(token)));
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRuimte vullen>
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -102,21 +104,21 @@ export default function ControlPlane() {
         </div>
       </div>
 
-      <div className={`${STAT_ROW} flex-none`}>
+      <StatRij className="flex-none">
         {[
           { label: 'Public', value: counts.public, color: 'var(--accent-cyan)' },
           { label: 'Internal', value: counts.internal, color: '#a78bfa' },
           { label: 'Hooks', value: counts.hook, color: 'var(--warning)' },
           { label: 'Integrations', value: counts.integration, color: 'var(--success)' },
         ].map(card => (
-          <WidgetCard key={card.label} title="">
+          <Kaart key={card.label} compact>
             <div className="text-center py-1">
               <div className="text-2xl font-bold font-mono-data" style={{ color: card.color }}>{card.value}</div>
               <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{card.label}</div>
             </div>
-          </WidgetCard>
+          </Kaart>
         ))}
-      </div>
+      </StatRij>
 
       {error && (
         <div className="mb-4 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -260,6 +262,8 @@ export default function ControlPlane() {
           </div>
         </WidgetCard>
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

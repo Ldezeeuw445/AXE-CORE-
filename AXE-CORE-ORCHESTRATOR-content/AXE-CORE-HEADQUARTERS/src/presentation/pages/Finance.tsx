@@ -4,9 +4,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { TabRuimte, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { STAT_ROW } from '@/presentation/components/surface/Page';
 import {
   DollarSign,
   TrendingUp,
@@ -115,11 +115,30 @@ export default function Finance() {
 
   return (
     <motion.div
-      className="p-6 h-full overflow-y-auto"
+      className="flex min-h-0 flex-1 flex-col"
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[{
+            titel: 'Source',
+            items: [
+              { id: 'all', label: `All (${entries.length})`, actief: filter === 'all', onKies: () => setFilter('all') },
+              ...INCOME_SOURCES
+                .filter(s => entries.some(e => e.source === s.id) || filter === s.id)
+                .map(s => ({
+                  id: s.id,
+                  label: `${s.label} (${entries.filter(e => e.source === s.id).length})`,
+                  actief: filter === s.id,
+                  onKies: () => setFilter(s.id),
+                })),
+            ],
+          }]}
+        />
+      </TabRail>
+      <TabRuimte>
       <div className="flex items-center justify-between mb-6">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -133,7 +152,7 @@ export default function Finance() {
       </div>
 
       {/* Metrics */}
-      <div className={STAT_ROW}>
+      <StatRij>
         <WidgetCard title="THIS MONTH">
           <div className="flex items-center gap-2">
             <DollarSign size={16} style={{ color: 'var(--success)' }} />
@@ -177,7 +196,7 @@ export default function Finance() {
             )}
           </div>
         </WidgetCard>
-      </div>
+      </StatRij>
 
       {/* AXE Algo reconciliation — deliberately its own card, never folded
           into the real-income numbers above. Demo pnl is simulated money;
@@ -345,47 +364,6 @@ export default function Finance() {
         </p>
       </WidgetCard>
 
-      {/* Filters + list */}
-      {/* De bronfilters stonden tussen de kaarten en de lijst in.
-          In de schuifbalk kun je er even goed bij, zonder dat het altijd
-          breedte kost. */}
-      <TabRail kant="links">
-        <div className="axe-paneel">
-          <h2 className="axe-paneel-kop">Bron</h2>
-          <div className="axe-paneel-body">
-          <div className="mt-4 flex flex-wrap gap-1.5 mb-3">
-            <button
-              onClick={() => setFilter('all')}
-              className="text-[10px] px-2 py-0.5 rounded font-mono"
-              style={{
-                background: filter === 'all' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)',
-                color: filter === 'all' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              }}
-            >
-              all ({entries.length})
-            </button>
-            {INCOME_SOURCES.map(s => {
-              const n = entries.filter(e => e.source === s.id).length;
-              if (!n && filter !== s.id) return null;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setFilter(s.id)}
-                  className="text-[10px] px-2 py-0.5 rounded font-mono"
-                  style={{
-                    background: filter === s.id ? `${s.color}22` : 'rgba(255,255,255,0.04)',
-                    color: filter === s.id ? s.color : 'var(--text-muted)',
-                  }}
-                >
-                  {s.label} ({n})
-                </button>
-              );
-            })}
-          </div>
-          </div>
-        </div>
-      </TabRail>
-
       <WidgetCard title="LEDGER">
         {loading && !entries.length ? (
           <div className="py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>Loading…</div>
@@ -436,6 +414,7 @@ export default function Finance() {
           </div>
         )}
       </WidgetCard>
+      </TabRuimte>
     </motion.div>
   );
 }
