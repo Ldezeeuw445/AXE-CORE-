@@ -1,11 +1,18 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { buildCartesiaSpeechRequest, isCartesiaConfigured } from './cartesiaTtsService';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const geheugen = new Map<string, string>();
+vi.stubGlobal('localStorage', {
+  getItem: (k: string) => geheugen.get(k) ?? null,
+  setItem: (k: string, v: string) => { geheugen.set(k, v); },
+  removeItem: (k: string) => { geheugen.delete(k); },
+  clear: () => geheugen.clear(),
+});
+
+const { buildCartesiaSpeechRequest, isCartesiaConfigured } = await import('./cartesiaTtsService');
+
+beforeEach(() => geheugen.clear());
 
 describe('cartesiaTtsService', () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
   it('is uit zonder sleutel', () => {
     expect(isCartesiaConfigured()).toBe(false);
   });
@@ -13,8 +20,7 @@ describe('cartesiaTtsService', () => {
   it('leest de sleutel uit connections, niet uit deze file', () => {
     localStorage.setItem('axe_llm_connections', JSON.stringify({ cartesia: { key: 'test-key' } }));
     expect(isCartesiaConfigured()).toBe(true);
-    const src = `${buildCartesiaSpeechRequest('Hi').model_id}`;
-    expect(src).toBe('sonic-3');
+    expect(buildCartesiaSpeechRequest('Hi').model_id).toBe('sonic-3');
   });
 
   it('payload noemt sonic-3 en een publiek stem-id, geen geheim', () => {

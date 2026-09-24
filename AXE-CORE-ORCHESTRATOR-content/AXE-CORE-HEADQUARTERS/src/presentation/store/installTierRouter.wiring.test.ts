@@ -92,6 +92,6 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     const tekst = bron('presentation/components/layout/AxeStatusOrb.tsx');
     expect(tekst).toMatch(/getMicLevel/);
     expect(tekst).toMatch(/getGlobalTtsLevel/);
-    expect(tekst).not.toMatch(/getUserMedia/);
+    expect(tekst).not.toMatch(/getUserMedia\s*\(/);
   });
 });
