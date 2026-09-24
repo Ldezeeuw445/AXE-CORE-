@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideGuard, inspectBlocked } from './guardrails';
+import { decideGuard, inspectApproval, inspectBlocked } from './guardrails';
 
 describe('axe guardrails', () => {
   it('blokkeert e-mail en outbound zonder override', () => {
@@ -56,6 +56,7 @@ describe('axe guardrails', () => {
   });
 
   it('agent run die het systeem raakt vraagt goedkeuring', () => {
+    expect(inspectApproval('git push the feature branch')).toMatch(/system/);
     const d = decideGuard({
       path: 'agent run',
       raw: 'agent run developer git push the feature branch',
