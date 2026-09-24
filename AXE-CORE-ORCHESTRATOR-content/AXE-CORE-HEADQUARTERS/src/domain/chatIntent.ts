@@ -26,3 +26,17 @@ export function classifyChatIntent(text: string): ChatIntent {
 export function intentBadgeLabel(intent: ChatIntent): string {
   return intent === 'act' ? 'Acting' : 'Talk';
 }
+
+/**
+ * Alleen een begroeting: "hey axe", "hoi", "ben je daar".
+ * "hey axe, zoek bitcoin" is geen sociale beurt — dat is een vraag.
+ */
+const SOCIAL_ONLY_RE =
+  /^(hey|hi|hoi|hallo|yo|dag|hoihoi|goedemorgen|goedemiddag|goedenavond|good\s+morning|good\s+evening|what'?s\s+up|whats\s+up|hoe\s+gaat\s+het|ben\s+je\s+daar|you\s+there)(?:\s*axe)?$/i;
+
+export function isSocialChatTurn(text: string): boolean {
+  const t = (text || '').trim().replace(/[.!?]+$/g, '').trim();
+  if (!t) return false;
+  if (ACT_RE.test(t)) return false;
+  return SOCIAL_ONLY_RE.test(t);
+}
