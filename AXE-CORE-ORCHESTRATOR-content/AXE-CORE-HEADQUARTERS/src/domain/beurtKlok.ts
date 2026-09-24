@@ -3,17 +3,17 @@
  * Geen I/O — de wrappers zetten de merken, de stream leest ze.
  */
 export interface BeurtMeting {
-  sttMs: number | null;
-  routeMs: number | null;
-  firstTokenMs: number | null;
-  firstAudioMs: number | null;
+  sttMs: number | undefined;
+  routeMs: number | undefined;
+  firstTokenMs: number | undefined;
+  firstAudioMs: number | undefined;
 }
 
 const LEEG: BeurtMeting = {
-  sttMs: null,
-  routeMs: null,
-  firstTokenMs: null,
-  firstAudioMs: null,
+  sttMs: undefined,
+  routeMs: undefined,
+  firstTokenMs: undefined,
+  firstAudioMs: undefined,
 };
 
 let t0 = 0;
@@ -49,7 +49,7 @@ export function leesBeurt(): BeurtMeting {
 }
 
 export function beurtRegel(m: BeurtMeting = meting): string {
-  const deel = (naam: string, v: number | null) => (v == null ? null : `${naam} ${v}ms`);
+  const deel = (naam: string, v: number | undefined) => (v == null ? null : `${naam} ${v}ms`);
   return ['lat', deel('stt', m.sttMs), deel('route', m.routeMs), deel('token', m.firstTokenMs), deel('audio', m.firstAudioMs)]
     .filter(Boolean)
     .join(' · ');

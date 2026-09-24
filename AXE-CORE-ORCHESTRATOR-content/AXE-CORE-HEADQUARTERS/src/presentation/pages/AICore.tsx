@@ -106,10 +106,10 @@ export default function AICore() {
       }
     }
     const lat = beurtRegel({
-      sttMs: evt.sttMs ?? null,
-      routeMs: evt.routeMs ?? null,
-      firstTokenMs: evt.firstTokenMs ?? null,
-      firstAudioMs: evt.firstAudioMs ?? null,
+      sttMs: evt.sttMs,
+      routeMs: evt.routeMs,
+      firstTokenMs: evt.firstTokenMs,
+      firstAudioMs: evt.firstAudioMs,
     });
     if (lat !== 'lat') {
       newEntries.push({ id: `${baseId}-lat`, t, type: 'route', text: lat });

@@ -90,8 +90,8 @@ export function pushTierRoute(keuze: AxeRouteKeuze, extra: Partial<RoutingEvent>
           ? 'tier3'
           : 'tier2',
     routeTier: keuze.tier,
-    routeMs: Math.round(keuze.latencyMs),
     ...leesBeurt(),
+    routeMs: Math.round(keuze.latencyMs),
     ...extra,
   };
   useVoiceStore.setState((s) => {
