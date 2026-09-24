@@ -1617,6 +1617,9 @@ html:root[data-look],
   0%, 100% { height: 5px; }
   50%      { height: 26px; }
 }
+:root[data-look] .axe-eq[data-live="on"] i {
+  animation: none;
+}
 @media (prefers-reduced-motion: reduce) {
   :root[data-look] .axe-eq i { animation: none; height: 14px; }
 }

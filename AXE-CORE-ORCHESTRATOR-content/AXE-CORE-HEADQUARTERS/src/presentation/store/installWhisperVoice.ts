@@ -22,12 +22,15 @@ import { stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import {
   acquireMic,
   cancelRecording,
+  eindeSpraakTs,
   isWhisperAvailable,
+  laatsteWhisperMs,
   listenAndTranscribe,
   releaseMic,
 } from '@/infrastructure/gateways/whisperService';
 import { usableTranscript } from '@/infrastructure/gateways/whisperGuard';
 import { flushAxeSpraakRij } from '@/application/tierRouter/axeSpraakRij';
+import { startBeurt } from '@/domain/beurtKlok';
 
 let conversationActive = false;
 let loopGeneration = 0;
@@ -293,6 +296,10 @@ async function whisperTurn(gen: number): Promise<'ok' | 'empty' | 'stop' | 'fail
 async function runTurn(text: string, gen: number, depth = 0): Promise<'ok' | 'empty' | 'stop' | 'fail'> {
   const usable = usableTranscript(text);
   if (!usable) return 'empty';
+  startBeurt({
+    sttMs: laatsteWhisperMs(),
+    t0: eindeSpraakTs() || Date.now(),
+  });
   useVoiceStore.setState({ transcript: usable, voiceStatus: 'processing', error: null });
   submittingVoice = true;
   try {

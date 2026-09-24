@@ -1,12 +1,14 @@
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
-import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
+import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, isOpenAiTtsConfigured, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
 import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
-import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
+import { speakGlobal, stopGlobalTts, gekozenStemMotor, zetStemMotor } from '@/infrastructure/gateways/globalTts';
+import { STEM_MOTOREN, type StemMotor } from '@/domain/stemMotor';
+import { isCartesiaConfigured } from '@/infrastructure/gateways/cartesiaTtsService';
 import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
 import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
@@ -544,6 +546,20 @@ function ProviderKeysSection() {
       return;
     }
 
+    // Cartesia is TTS, not an LLM — list voices, don't chat-complete.
+    if (id === 'cartesia') {
+      const { testCartesiaKey } = await import('@/infrastructure/gateways/cartesiaTtsService');
+      const { ok: caOk, error: caErr } = await testCartesiaKey(conn.key ?? '');
+      setTesting(t => ({ ...t, [id]: caOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: caOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: caOk ? undefined : caErr } };
+        saveConnections(next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (caOk) delete n[id]; else n[id] = caErr ?? 'Cartesia test mislukt'; return n; });
+      return;
+    }
+
     // ElevenLabs is a TTS voice provider, not an LLM — a real key check, not
     // a chat-completion probe.
     if (id === 'elevenlabs') {
@@ -874,10 +890,28 @@ function ProviderKeysSection() {
  * dienst (com.axe.tts) echt draait — groen of rood, met wat je eraan doet.
  * Listen gaat door speakGlobal, dezelfde keten als elk chatantwoord.
  */
+function fishSleutelAanwezig(): boolean {
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>;
+    if ((conns.fishaudio?.key ?? conns.fish?.key ?? '').trim()) return true;
+  } catch { /* ignore */ }
+  return Boolean(import.meta.env.VITE_FISH_AUDIO_API_KEY);
+}
+
+function motorAan(id: StemMotor): boolean {
+  if (id === 'george') return true;
+  if (id === 'cedar') return isOpenAiTtsConfigured();
+  if (id === 'elevenlabs-flash' || id === 'elevenlabs-v3') return isElevenLabsConfigured();
+  if (id === 'cartesia') return isCartesiaConfigured();
+  if (id === 'fish') return fishSleutelAanwezig();
+  return false;
+}
+
 function VoiceSection() {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stand, setStand] = useState<StemStand | null>(null);
+  const [motor, setMotor] = useState<StemMotor>(() => gekozenStemMotor());
 
   useEffect(() => {
     let live = true;
@@ -894,6 +928,12 @@ function VoiceSection() {
       () => setPlaying(false),
       (reason) => { setPlaying(false); setError(`Could not play the voice: ${reason}`); },
     );
+  };
+
+  const kies = (id: StemMotor) => {
+    if (!motorAan(id)) return;
+    zetStemMotor(id);
+    setMotor(id);
   };
 
   const standKleur = stand == null
@@ -931,6 +971,38 @@ function VoiceSection() {
             style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
             <Play size={11} /> {playing ? STEM_UI.speelt : STEM_UI.luister}
           </button>
+        </div>
+        <p className="text-xs-custom pt-1" style={{ color: 'var(--text-muted)' }}>
+          Optional motors. George stays the default. Keys live in Settings → Keys — never in this file.
+        </p>
+        <div className="space-y-1" data-axe-stem-motoren>
+          {STEM_MOTOREN.map((m) => {
+            const aan = motorAan(m.id);
+            const actief = motor === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={!aan}
+                onClick={() => kies(m.id)}
+                className="w-full text-left px-2 py-1.5 rounded-lg"
+                style={{
+                  background: 'var(--bg-base)',
+                  border: `1px solid ${actief ? 'var(--border-active)' : 'var(--border-subtle)'}`,
+                  color: aan ? (actief ? 'var(--accent-cyan)' : 'var(--text-primary)') : 'var(--text-muted)',
+                  opacity: aan ? 1 : 0.55,
+                }}
+                data-axe-stem-motor={m.id}
+                data-axe-stem-aan={aan ? '1' : '0'}
+              >
+                <span className="text-xs-custom font-medium">{m.naam}</span>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.regel}</p>
+                {!aan && m.id !== 'george' && (
+                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>needs key · {m.sleutel}</p>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </WidgetCard>

@@ -117,9 +117,11 @@ onterecht vinkje is erger dan geen vinkje.
 de tier-router: 1 = regels + opgeslagen data, 2 = klein snel model, 3 =
 bestaande agent op de achtergrond. Meerdere taken in één zin worden
 geknipt en lopen parallel; de chat wacht daar niet op. De classifier
-schrijft geen antwoord. Timeout of fout → het pad dat er al was. De vier
-fases staan in `BOUWLIJST.md` §6 — verwar deze tiers niet met de
-roster-tiers in `roster.ts`.
+schrijft geen antwoord. Timeout of fout → het pad dat er al was. Stem:
+eerste complete zin speelt terwijl de LLM nog tokens stuurt; barge-in
+stopt TTS; de orb volgt mic en afspeelniveau. De vier fases staan in
+`BOUWLIJST.md` §6 — verwar deze tiers niet met de roster-tiers in
+`roster.ts`.
 
 ## Waar de rest staat
 

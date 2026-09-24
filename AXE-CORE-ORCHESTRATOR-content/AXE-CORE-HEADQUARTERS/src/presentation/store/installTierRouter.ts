@@ -46,17 +46,11 @@ import {
 import { jobsVanStukken, startJobsParallel } from '@/application/tierRouter/stuurAxeJobs';
 import { kiesSpraakPad, stemlusVanVoice, zetSpraakSpreker } from '@/application/tierRouter/axeSpraakRij';
 import { chatBlijftLuisteren, injecteerJobResultaat } from '@/application/tierRouter/injecteerJobResultaat';
+import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
+import { beurtRegel, leesBeurt, markBeurt, startBeurtIndienNodig } from '@/domain/beurtKlok';
 
 let installed = false;
 const taskMonitors = new Set<string>();
-
-function speakAxe(text: string, onDone?: () => void): void {
-  try {
-    if (localStorage.getItem('axe_response_mode') === 'type') { onDone?.(); return; }
-  } catch { /* ignore */ }
-  stopGlobalTts();
-  speakGlobal(text, onDone, (reason) => useVoiceStore.setState({ error: reason }));
-}
 
 function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
   try {
@@ -64,16 +58,17 @@ function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
   } catch { /* ignore */ }
   const stand = stemlusVanVoice(useVoiceStore.getState().voiceStatus, useVoiceStore.getState().error);
   if (kiesSpraakPad(text, stand, bron) === 'queue') return;
+  const hoor = () => pushBeurtLatentie();
   if (bron === 'ack') {
     stopGlobalTts();
     speakGlobal(text, () => {
       if (!chatBlijftLuisteren(useVoiceStore.getState().voiceStatus)) {
         useVoiceStore.setState({ voiceStatus: 'idle' });
       }
-    }, (reason) => useVoiceStore.setState({ error: reason }));
+    }, (reason) => useVoiceStore.setState({ error: reason }), hoor);
     return;
   }
-  speakGlobal(text, undefined, (reason) => useVoiceStore.setState({ error: reason }));
+  speakGlobal(text, undefined, (reason) => useVoiceStore.setState({ error: reason }), hoor);
 }
 
 export function pushTierRoute(keuze: AxeRouteKeuze, extra: Partial<RoutingEvent> = {}): void {
@@ -96,6 +91,7 @@ export function pushTierRoute(keuze: AxeRouteKeuze, extra: Partial<RoutingEvent>
           : 'tier2',
     routeTier: keuze.tier,
     routeMs: Math.round(keuze.latencyMs),
+    ...leesBeurt(),
     ...extra,
   };
   useVoiceStore.setState((s) => {
@@ -108,6 +104,19 @@ export function pushTierRoute(keuze: AxeRouteKeuze, extra: Partial<RoutingEvent>
     'color:#22D3EE;font-weight:600',
     'color:inherit',
   );
+}
+
+/** Zet STT / first-token / first-audio op de jongste route-regel. */
+export function pushBeurtLatentie(): void {
+  const m = leesBeurt();
+  useVoiceStore.setState((s) => {
+    if (!s.routingLog[0]) return {};
+    const head = { ...s.routingLog[0], ...m };
+    const updated = [head, ...s.routingLog.slice(1)];
+    try { localStorage.setItem('axe_routing_log', JSON.stringify(updated)); } catch { /* ignore */ }
+    return { routingLog: updated };
+  });
+  console.info(`%c[AXE] ${beurtRegel(m)}`, 'color:#22D3EE;font-weight:600');
 }
 
 function zetGebruiker(text: string): void {
@@ -242,31 +251,53 @@ async function voerTier2Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean
   noteRetrieval(text, [], [], 'chat');
   useVoiceStore.setState({ voiceStatus: 'processing', activeProvider: slot.provider });
 
+  const stroom = startAxeSpraakStroom({
+    onFirstAudio: () => {
+      markBeurt('firstAudio');
+      pushBeurtLatentie();
+      useVoiceStore.setState({ voiceStatus: 'speaking' });
+    },
+    onDone: () => {
+      if (!chatBlijftLuisteren(useVoiceStore.getState().voiceStatus)) {
+        useVoiceStore.setState({ voiceStatus: 'idle' });
+      }
+    },
+    onError: (reason) => useVoiceStore.setState({ error: reason }),
+  });
+
   let axeTs = 0;
   try {
     const raw = await streamProvider(slot, messages, (_delta, full) => {
       const visible = zichtbareAxeAntwoord(full);
       if (!visible.trim()) return;
-      if (!axeTs) axeTs = Date.now();
+      if (!axeTs) {
+        axeTs = Date.now();
+        markBeurt('firstToken');
+        pushBeurtLatentie();
+      }
+      stroom.voer(visible);
       useVoiceStore.setState((s) => ({
         conversation: volgendeAxeBericht(s.conversation, visible, slot, axeTs) as ConversationMessage[],
         response: visible,
-        voiceStatus: 'processing' as const,
+        voiceStatus: s.voiceStatus === 'speaking' ? s.voiceStatus : 'processing' as const,
         activeProvider: slot.provider,
         error: null,
       }));
     });
     const trimmed = zichtbareAxeAntwoord(raw).trim();
-    if (!trimmed) return false;
+    if (!trimmed) {
+      stroom.stop();
+      return false;
+    }
+    stroom.sluit();
     if (!axeTs) {
+      markBeurt('firstToken');
       publiceer(trimmed, slot, 'ack');
     } else {
       useVoiceStore.setState((s) => ({
         conversation: volgendeAxeBericht(s.conversation, trimmed, slot, axeTs) as ConversationMessage[],
         response: trimmed,
-        voiceStatus: 'speaking' as const,
       }));
-      speakAxe(trimmed, () => useVoiceStore.setState({ voiceStatus: 'idle' }));
     }
     noteOwnerOutcome('chat', 'good');
     void writeConversationMemory(text, trimmed, slot.provider, `tier2:${keuze.kind}`);
@@ -280,6 +311,7 @@ async function voerTier2Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean
         conversation: s.conversation.filter((m) => !(m.role === 'axe' && m.timestamp === axeTs)),
       }));
     }
+    stroom.stop();
     noteOwnerOutcome('chat', 'poor');
     return false;
   }
@@ -377,6 +409,7 @@ export function installTierRouter(): void {
   useVoiceStore.setState({
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
+      startBeurtIndienNodig();
 
       if (detectMacRoute(text)) {
         await original(text);
@@ -396,6 +429,7 @@ export function installTierRouter(): void {
       const keuze = await kiesAxeRoute(text, {
         vraagModel: vraagKlassificeerder,
       });
+      markBeurt('route', Math.round(keuze.latencyMs));
       pushTierRoute(keuze, { query: text.slice(0, 60) });
 
       if (!keuze.intercept) {

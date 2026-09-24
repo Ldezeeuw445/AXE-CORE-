@@ -335,6 +335,14 @@ assistant). Dit is de aanvraag-route.
 - [x] **6.5c** Klaar job komt als korte samenvatting in de chat.
       George TTS wacht als de gebruiker praat (spraakrij + barge-in).
       `Wat heb je gedaan?` / `status` is T1 uit de job-store.
+- [x] **6.5d** Zin-voor-zin TTS tijdens de LLM-stream: eerste complete
+      zin speelt terwijl de rest nog komt. Per-beurt `lat · stt · route
+      · token · audio` in de cognitive stream.
+- [x] **6.5e** Orb volgt mic (listening) en TTS-analyser (speaking).
+      Settings-schakelaar: George (standaard), Cedar, ElevenLabs Flash
+      v2.5, ElevenLabs v3 Conversational, Cartesia Sonic, Fish.
+      Sleutels alleen via Settings → Keys / `VITE_*` — geen waarden
+      in de repo.
 
 **Al aanwezig vóór deze PR:** `classifyQuery` / `classifyChatIntent` /
 `isSocialChatTurn` / `routeFast` / `delegateFor`, durable tasks + monitor
@@ -374,7 +382,8 @@ aanroepbaar, gekoppeld aan de router.
 **Al aanwezig:** Whisper-lus, George (Kokoro), `voiceStatus`, Home-bol
 die meeloopt met die status, `statusOrb.ts` (idle/listening/thinking/
 speaking/error), #178 stilte-wacht, Esc stopt de stemlus, barge-in
-kapt TTS af, job-spraak wacht in de rij. **Ontbreekt:** globale
+kapt TTS af, job-spraak wacht in de rij, zin-voor-zin TTS, orb op
+mic + TTS-niveau, stem-motor in Settings. **Ontbreekt:** globale
 hotkey om de mic van overal te openen.
 
 ---

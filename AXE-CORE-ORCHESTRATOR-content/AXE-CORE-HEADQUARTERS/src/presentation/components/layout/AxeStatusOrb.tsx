@@ -10,10 +10,13 @@
  * Spreken is de equalizer die AXE al had, nu met zeven staafjes zodat hij naast
  * de orbs niet als een ander soort teken leest.
  */
+import { useEffect, useState } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { ThinkingOrb } from 'thinking-orbs';
 import { statusTeken, tekenLabel, type WerkSignalen } from '@/domain/statusOrb';
 import type { VoiceStatus } from '@/presentation/store/voiceStore';
+import { getMicLevel } from '@/infrastructure/gateways/whisperService';
+import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 
 const KLEUR: Record<string, string> = {
   Speaking: '#F59E0B',
@@ -38,12 +41,50 @@ export function AxeStatusOrb({ size, werk, toonLabel = false, className, status:
   const teken = statusTeken(status, { ...werk, fout: werk?.fout || fout });
   const label = tekenLabel(teken);
   const kleur = KLEUR[label] ?? '#a855f7';
+  const [pulse, setPulse] = useState(0);
+
+  // Eén rAF: mic terwijl we luisteren, TTS-analyser terwijl AXE praat.
+  // Geen tweede getUserMedia — getMicLevel leest de Whisper-stream.
+  useEffect(() => {
+    const luistert = status === 'listening';
+    const praat = status === 'speaking' || teken.soort === 'equalizer';
+    if (!luistert && !praat) {
+      setPulse(0);
+      return;
+    }
+    let raf = 0;
+    const tik = () => {
+      setPulse(luistert ? getMicLevel() : getGlobalTtsLevel());
+      raf = requestAnimationFrame(tik);
+    };
+    raf = requestAnimationFrame(tik);
+    return () => cancelAnimationFrame(raf);
+  }, [status, teken.soort]);
+
+  const live = pulse > 0.02;
+  const staaf = [0.45, 0.7, 1, 0.85, 0.6, 0.9, 0.5];
+  const schaal = 1 + pulse * (size === 20 ? 0.18 : 0.28);
 
   return (
-    <div className={`flex flex-col items-center justify-center gap-0.5 ${className ?? ''}`} title={label} data-axe-status={label.toLowerCase()}>
+    <div
+      className={`flex flex-col items-center justify-center gap-0.5 ${className ?? ''}`}
+      title={label}
+      data-axe-status={label.toLowerCase()}
+      data-axe-pulse={live ? 'on' : 'off'}
+      style={{ transform: `scale(${schaal.toFixed(3)})`, transition: 'transform 70ms linear' }}
+    >
       {teken.soort === 'equalizer' ? (
-        <span className="axe-eq" style={{ ['--eq-ink' as string]: kleur, height: size === 20 ? 14 : 28 }}>
-          <i /><i /><i /><i /><i /><i /><i />
+        <span
+          className="axe-eq"
+          data-live={live ? 'on' : 'off'}
+          style={{ ['--eq-ink' as string]: kleur, height: size === 20 ? 14 : 28 }}
+        >
+          {staaf.map((h, i) => (
+            <i
+              key={i}
+              style={live ? { height: Math.max(3, Math.round(4 + pulse * (size === 20 ? 12 : 22) * h)) } : undefined}
+            />
+          ))}
         </span>
       ) : teken.soort === 'fout' ? (
         <span

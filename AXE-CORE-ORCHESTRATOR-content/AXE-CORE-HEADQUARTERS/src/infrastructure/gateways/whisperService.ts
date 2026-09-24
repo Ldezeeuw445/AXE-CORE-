@@ -390,6 +390,19 @@ export function isRecording(): boolean {
   return !!mediaRecorder && mediaRecorder.state !== 'inactive';
 }
 
+let laatsteSttMs = 0;
+let eindeSpraakOp = 0;
+
+/** Transcribe-tijd van de laatste beurt (einde spraak → tekst). */
+export function laatsteWhisperMs(): number {
+  return laatsteSttMs;
+}
+
+/** Date.now() toen de stilte viel — t0 voor first-audio. */
+export function eindeSpraakTs(): number {
+  return eindeSpraakOp;
+}
+
 /** Record one utterance → Whisper text. Empty string if silence / cancel / hallucinatie. */
 export async function listenAndTranscribe(opts?: {
   lang?: string;
@@ -400,7 +413,13 @@ export async function listenAndTranscribe(opts?: {
     onLevel: opts?.onLevel,
     onSpeechStart: opts?.onSpeechStart,
   });
-  if (!blob || !shouldTranscribeUtterance({ blob, hadSpeech })) return '';
+  eindeSpraakOp = Date.now();
+  if (!blob || !shouldTranscribeUtterance({ blob, hadSpeech })) {
+    laatsteSttMs = 0;
+    return '';
+  }
+  const t = Date.now();
   const text = await transcribeAudio(blob, opts?.lang);
+  laatsteSttMs = Date.now() - t;
   return usableTranscript(text);
 }

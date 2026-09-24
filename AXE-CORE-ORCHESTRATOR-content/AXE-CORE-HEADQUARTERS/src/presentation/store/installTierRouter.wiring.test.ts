@@ -74,5 +74,24 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     const tekst = bron('presentation/pages/AICore.tsx');
     expect(tekst).toMatch(/evt\.routeTier/);
     expect(tekst).toMatch(/route · tier/);
+    expect(tekst).toMatch(/beurtRegel/);
+    expect(tekst).toMatch(/firstAudioMs/);
+  });
+
+  it('tier 2 spreekt zin voor zin tijdens de stream', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/startAxeSpraakStroom/);
+    expect(tekst).toMatch(/stroom\.voer\(/);
+    expect(tekst).toMatch(/stroom\.sluit\(/);
+    expect(tekst).toMatch(/stroom\.stop\(/);
+    expect(tekst).toMatch(/pushBeurtLatentie/);
+    expect(tekst).toMatch(/startBeurtIndienNodig/);
+  });
+
+  it('de orb leest mic- en TTS-niveaus, geen tweede getUserMedia', () => {
+    const tekst = bron('presentation/components/layout/AxeStatusOrb.tsx');
+    expect(tekst).toMatch(/getMicLevel/);
+    expect(tekst).toMatch(/getGlobalTtsLevel/);
+    expect(tekst).not.toMatch(/getUserMedia/);
   });
 });

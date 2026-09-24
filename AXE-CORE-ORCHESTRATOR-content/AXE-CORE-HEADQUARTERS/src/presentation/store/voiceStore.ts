@@ -387,6 +387,12 @@ export interface RoutingEvent{
   routeTier?:1|2|3;
   /** Classificatietijd in ms — regels horen ver onder 1000 te blijven. */
   routeMs?:number;
+  /** Whisper-transcribe (einde spraak → tekst). 0 bij typen. */
+  sttMs?:number;
+  /** Einde spraak (of send) → eerste LLM-token. */
+  firstTokenMs?:number;
+  /** Einde spraak (of send) → eerste hoorbare TTS. Doel ~1000ms. */
+  firstAudioMs?:number;
   /** How many consecutive messages were coalesced into this entry (≥1). */
   count?:number;
 }
