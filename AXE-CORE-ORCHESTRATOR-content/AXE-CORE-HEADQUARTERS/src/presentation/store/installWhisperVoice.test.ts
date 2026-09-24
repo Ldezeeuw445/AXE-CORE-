@@ -173,7 +173,7 @@ describe('installWhisperVoiceSendGuard', () => {
     const original = vi.fn();
     Object.assign(voiceState, { sendMessage: original });
     installWhisperVoiceSendGuard();
-    const wrapped = (voiceState as { sendMessage: (t: string) => Promise<void> }).sendMessage;
+    const wrapped = (voiceState as unknown as { sendMessage: (t: string) => Promise<void> }).sendMessage;
     await wrapped('Hey axe');
     expect(original).toHaveBeenCalledWith('Hey axe');
     expect(isVoiceConversationActive()).toBe(false);

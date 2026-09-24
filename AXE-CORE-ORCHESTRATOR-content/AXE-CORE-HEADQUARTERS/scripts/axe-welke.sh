@@ -57,7 +57,13 @@ kop "De apps op deze Mac"
 lees_app() {
   local app="$1"
   local sha
-  sha="$(grep -rhoE 'commit:"[0-9a-f]{7,12}"' "$app" 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')"
+  local stamp="$app/Contents/Resources/axe-build-stamp.txt"
+  if [[ -f "$stamp" ]]; then
+    sha="$(tr -d '[:space:]' < "$stamp" | grep -E '^[0-9a-f]{7,12}$' || true)"
+  else
+    sha=""
+  fi
+  [[ -z "$sha" ]] && sha="$(grep -rhoE 'commit:"[0-9a-f]{7,12}"' "$app" 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')"
   local tijd
   tijd="$(stat -f '%Sm' -t '%d %b %H:%M' "$app" 2>/dev/null || echo '?')"
   if [[ -z "$sha" ]]; then
