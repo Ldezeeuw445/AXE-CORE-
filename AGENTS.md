@@ -125,22 +125,20 @@ onterecht vinkje is erger dan geen vinkje.
 | `ARCHITECTURE.md` | de lagen en waarom |
 | `WERKVERDELING.md` | wie waaraan werkt, en welke bestanden van wie zijn |
 | `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
-| `os3/` | Skill AXE + SETUP. Primaire uitvoerder: `axe node`. OS3 optioneel. |
+| `os3/` | Skill AXE + SETUP. CLI + hek bovenop bestaande workers. OS3 optioneel. |
 
-## Architectuur: AXE is zelf de uitvoeringslaag
+## Architectuur: CLI bovenop wat er al is
 
-AXE is interface, persoonlijkheid, geheugen **én** node-agent. Elke
-machine van Luka (Mac mini, iMac, VPS) draait `axe node run`: outbound
-naar `api.axecompanion.com`, geen inbound poort. De hekken zitten in
-`cli/axe` en `backend/axe_api/cli_laag.py`, niet alleen in docs.
+AXE is interface, persoonlijkheid en geheugen. Uitvoering op Luka's
+machines bestaat al: `infra/computer-worker` (launchd),
+`infra/claude-local-worker`, durable kernel (`core_tasks`), leerlus +
+RAG (`rag_memories`, `agent_learning_episodes`). De `axe`-CLI en het
+hek (`cli_laag.py`) zitten daar bovenop. Geen tweede node-daemon, geen
+tweede geheugenstore. Inventaris: bouwlijst §8.
 
-Rabbit OS3 blijft een optionele extra executor via dezelfde CLI. Er is
-geen publieke OS3-API; OS3 belt AXE, niet andersom.
-
-Volgende stappen: `cli_laag.py` op de box (`vps_sync.py`), machines
-koppelen met `axe node register`, daemon via `scripts/install-axe-node.sh`.
-Job-uitvoering (shell / bestanden / Claude Code) is bouwlijst §8. Niet
-mergen naar `orchestrator` vanuit een node — dat is hard geblokkeerd.
+Rabbit OS3 is een optionele extra executor via dezelfde CLI. Er is geen
+publieke OS3-API; OS3 belt AXE, niet andersom. Niet mergen naar
+`orchestrator` — dat is hard geblokkeerd.
 
 Dit bestand staat in de hoofdmap omdat elke assistent het daar als eerste leest.
 Klopt er iets niet meer, verander het hier — niet in je eigen sessie-geheugen.

@@ -1,7 +1,6 @@
 /**
- * De axe-commandolaag: wat AXE's eigen node-agent (of OS3 als extra
- * executor) mag aanroepen. Eén bron voor help-tekst en de parser.
- * Geen geheimen.
+ * De axe-commandolaag: CLI + hek bovenop wat er al is (taken, RAG,
+ * computer-workers). OS3 is optioneel. Geen geheimen.
  */
 
 export type CommandRisk = 'read' | 'write' | 'blocked';
@@ -46,9 +45,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   { path: 'notify', usage: 'axe notify "<msg>"', summary: 'Post into AXE chat + the notification bell', risk: 'write', flags: [] },
   { path: 'report', usage: 'axe report "<title>" --file <pad>', summary: 'Store a task report in memory and notify', risk: 'write', flags: ['--file'] },
   { path: 'approvals list', usage: 'axe approvals list', summary: 'Pending approvals visible in AXE', risk: 'read', flags: ['--status', '--limit'] },
-  { path: 'node list', usage: 'axe node list', summary: 'Machines paired with AXE (name, OS, online)', risk: 'read', flags: [] },
-  { path: 'node register', usage: 'axe node register --name <n> [--os <os>]', summary: 'Pair this machine; prints a one-time token', risk: 'write', flags: ['--name', '--os', '--capabilities'] },
-  { path: 'node run', usage: 'axe node run [--once|--daemon]', summary: 'Outbound heartbeat + job poll (executor is phase 2)', risk: 'read', flags: ['--once', '--daemon', '--token', '--device'] },
+  { path: 'node list', usage: 'axe node list', summary: 'Existing computer-workers (name, last-seen, online)', risk: 'read', flags: [] },
 ];
 
 export const EXIT = {
@@ -69,7 +66,7 @@ export const WRITE_PATHS = new Set(
 
 export function helpText(): string {
   const regels = [
-    'axe — command layer for AXE Core (own node agent; OS3 optional).',
+    'axe — command layer for AXE Core (existing workers + kernel; OS3 optional).',
     '',
     'Global flags:',
     ...GLOBAL_FLAGS.map((f) => `  ${f}`),

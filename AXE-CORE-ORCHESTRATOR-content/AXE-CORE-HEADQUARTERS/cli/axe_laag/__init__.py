@@ -1,1 +1,1 @@
-"""axe-commandolaag: AXE's eigen node-agent (OS3 is optioneel)."""
+"""axe-commandolaag: CLI + hek bovenop bestaande workers en geheugen."""

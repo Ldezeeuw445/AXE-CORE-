@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -416,92 +415,13 @@ def _run(path: str, parsed: dict[str, Any], client: Client, cfg: dict[str, Any])
                 raise
             return envelope(path, "ok", {
                 "via": "config",
+                "note": "Reads existing core_computer_workers. Install: scripts/install-computer-worker-launchd.sh",
                 "nodes": [
                     {"device_id": cfg["node_mac"], "name": cfg["node_mac"], "os": None, "online": False, "source": "config"},
                     {"device_id": cfg["node_vps"], "name": cfg["node_vps"], "os": None, "online": False, "source": "config"},
                 ],
             })
-    if path == "node register":
-        name = _flag(parsed, "name") or (p[0] if p else "")
-        if not name.strip():
-            raise UsageError("node register needs --name")
-        caps = [c.strip() for c in (_flag(parsed, "capabilities") or "shell,files,claude_code").split(",") if c.strip()]
-        data = client.post("/cli/nodes/register", {
-            "name": name.strip(), "os": _flag(parsed, "os") or "",
-            "capabilities": caps, "actor": actor,
-        })
-        _bewaar_node_paar(data)
-        return envelope(path, "ok", data)
-    if path == "node run":
-        return _node_run(parsed, client, cfg)
     raise UsageError(f"unknown command '{path}'")
-
-
-def _node_bestand() -> Path:
-    return Path.home() / ".config" / "axe" / "node.json"
-
-
-def _lees_node_paar() -> dict[str, Any]:
-    return _read_json(_node_bestand())
-
-
-def _bewaar_node_paar(data: dict[str, Any]) -> None:
-    token = data.get("pairing") or data.get("token")
-    device = data.get("device_id")
-    if not token or not device:
-        return
-    pad = _node_bestand()
-    try:
-        pad.parent.mkdir(parents=True, exist_ok=True)
-        bestaande = _read_json(pad)
-        bestaande.update({"device_id": device, "token": token, "name": data.get("name") or device})
-        pad.write_text(json.dumps(bestaande, indent=2) + "\n")
-        try:
-            os.chmod(pad, 0o600)
-        except OSError:
-            pass
-    except OSError:
-        pass
-
-
-def _node_run(parsed: dict[str, Any], client: Client, cfg: dict[str, Any]) -> dict[str, Any]:
-    paar = _lees_node_paar()
-    device = _flag(parsed, "device") or os.environ.get("AXE_NODE_ID") or paar.get("device_id") or cfg["node_mac"]
-    token = _flag(parsed, "token") or os.environ.get("AXE_NODE_TOKEN") or paar.get("token") or ""
-    caps = [c.strip() for c in (_flag(parsed, "capabilities") or "shell,files,claude_code").split(",") if c.strip()]
-
-    def eenmaal() -> dict[str, Any]:
-        beat = client.post("/cli/nodes/heartbeat", {
-            "device_id": device, "token": token, "name": device,
-            "os": _flag(parsed, "os") or "", "capabilities": caps,
-        })
-        try:
-            jobs = client.get("/cli/nodes/jobs", {"device_id": str(device)})
-        except HttpError as exc:
-            if exc.status != 404:
-                raise
-            jobs = {"jobs": []}
-        return {
-            "heartbeat": beat, "jobs": jobs, "executor": "phase2",
-            "note": "Presence only. Job execution (shell/files/claude) is bouwlijst §8.",
-        }
-
-    daemon = bool(parsed["flags"].get("daemon")) and not parsed["flags"].get("once")
-    if not daemon:
-        return envelope("node run", "ok", eenmaal())
-    last: dict[str, Any] | None = None
-    try:
-        while True:
-            last = eenmaal()
-            n = 0
-            jobs = (last.get("jobs") or {})
-            if isinstance(jobs, dict):
-                n = len(jobs.get("jobs") or [])
-            print(f"axe-node: heartbeat device={device} jobs={n}", file=sys.stderr, flush=True)
-            time.sleep(1.5)
-    except KeyboardInterrupt:
-        pass
-    return envelope("node run", "ok", last or {"stopped": True})
 
 
 def main(argv: list[str]) -> int:

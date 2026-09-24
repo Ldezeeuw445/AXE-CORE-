@@ -30,13 +30,9 @@ class TestLaag(unittest.TestCase):
 
     def test_write_vlag_en_aliassen(self):
         self.assertTrue(parse_argv(["notify", "hi", "--write"])["write"])
-        self.assertTrue(parse_argv(["node", "register", "--name", "vps", "--write"])["write"])
-        self.assertEqual(decide_guard("node register", "node register", False)["kind"], "need_write")
         self.assertEqual(parse_argv(["tasks", "wait", "id"])["path"], "task wait")
         self.assertEqual(parse_argv(["agents", "run", "trading", "scan"])["path"], "agent run")
         self.assertEqual(parse_argv(["node", "list"])["path"], "node list")
-        self.assertEqual(parse_argv(["node", "register", "--name", "mac-mini"])["path"], "node register")
-        self.assertEqual(parse_argv(["node", "run", "--once"])["path"], "node run")
 
     def test_blokkades_niet_te_omzeilen(self):
         gevallen = (

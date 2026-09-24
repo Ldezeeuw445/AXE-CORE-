@@ -50,11 +50,8 @@ describe('axe-laag is aangesloten', () => {
     expect(typeof main).toBe('function');
   });
 
-  it('install-axe-node kent launchd en systemd', () => {
-    const tekst = readFileSync(join(HQ, 'scripts/install-axe-node.sh'), 'utf8');
-    expect(tekst).toMatch(/com\.axe\.node/);
-    expect(tekst).toMatch(/launchctl|LaunchAgents/);
-    expect(tekst).toMatch(/systemd/);
-    expect(tekst).toMatch(/node run --daemon/);
+  it('computer-worker-install bestaat al; geen tweede node-daemon', () => {
+    const tekst = readFileSync(join(HQ, 'scripts/install-computer-worker-launchd.sh'), 'utf8');
+    expect(tekst).toMatch(/com\.axe\.computer-worker/);
   });
 });

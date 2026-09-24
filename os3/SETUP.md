@@ -1,12 +1,10 @@
-# AXE-node op je machines
+# axe CLI op je machines
 
-Kort, in de volgorde die je een keer doet. Daarna is AXE zelf de
-uitvoeringslaag: een daemon op de Mac mini, de iMac en de VPS belt
-**naar buiten** naar `api.axecompanion.com`. Geen inbound poort, dus
-het werkt ook als je remote bent (Device Manager, PR #149).
+Kort, in de volgorde die je een keer doet. De CLI is een hek bovenop
+wat er **al** draait: computer-worker, durable kernel, leerlus/RAG.
+Geen tweede daemon, geen tweede geheugen.
 
-Rabbit OS3 blijft een optionele extra executor via dezelfde `axe`-CLI.
-Die hangt onderaan.
+Rabbit OS3 is optioneel en gebruikt dezelfde `axe`-commando's.
 
 De commandolaag staat in de app-map:
 
@@ -26,9 +24,7 @@ axe help --json
 ```
 
 Op de VPS is het pad vaak `/opt` of de git-checkout die je daar al hebt.
-Zelfde commando: `ln -sf` naar `/usr/local/bin/axe`.
-
-Of, zonder symlink, vanuit de app-map:
+Of, zonder symlink:
 
 ```bash
 python3 cli/axe help --json
@@ -39,7 +35,6 @@ python3 cli/axe help --json
 Nooit in git, nooit in een prompt plakken. Env of een lokaal bestand.
 
 ```bash
-# hetzelfde op Mac en VPS
 export AXE_API_URL=https://api.axecompanion.com
 export AXE_API_KEY='…'          # dezelfde bearer als de app; staat op de VPS in /opt/axe-core-api/.env
 export AXE_ACTOR=axe
@@ -61,108 +56,45 @@ Of `~/.config/axe/config.json`:
 ```
 
 `AXE_API_KEY` woont in de kluis (`SLEUTELS.md`) en op de VPS. De CLI
-drukt hem nooit af. `memoryBackend: axon` is later: zelfde commando's,
-andere backend.
+drukt hem nooit af. `memoryBackend: axon` is een label, geen tweede store
+— AXON is een apart product met een write-bridge, geen AXE-backend.
 
-## 3. Machine koppelen
+## 3. Machines die er al zijn
 
-Op elke machine één keer. De token wordt **één keer** getoond en
-hashed bewaard. Daarna is dat het geheim van die node.
-
-```bash
-axe node register --name mac-mini --os darwin --write --json
-# veld `pairing` is het geheim — één keer, daarna hashed
-# of op de VPS:
-axe node register --name vps --os linux --write --json
-```
-
-De CLI zet `device_id` + pairing in `~/.config/axe/node.json` (mode 600).
-Bewaar die file; zonder geheim weigert de heartbeat.
-
-Lijst in AXE (naam, OS, online / last-seen):
+De Mac-relay is `infra/computer-worker` (launchd
+`com.axe.computer-worker`, `scripts/install-computer-worker-launchd.sh`).
+Die belt outbound naar Supabase, schrijft `core_computer_workers`, pakt
+`core_tasks` met `capability=computer_use`. Claude-local is
+`infra/claude-local-worker` (handmatig, `capability=claude_local`).
 
 ```bash
 axe node list --json
 ```
 
-## 4. Daemon: outbound, geen poort
+leest die bestaande rijen. Geen `register`, geen nieuwe pairing-token,
+geen tweede KeepAlive.
 
-Eén hartslag + job-poll (testbaar):
+Remote (vakantie, Samsung): Device Manager (PR #149) is de telefoon-UI
+die dezelfde Mac-workers werk geeft. Geen extra poort op de Mac.
 
-```bash
-axe node run --once --json
-```
+## 4. Vijf testprompts
 
-Blijvend, voor launchd / systemd:
+1. `Meet of AXE leeft.` → `axe status --json`
+2. `Welke machines hangen eraan?` → `axe node list --json`
+3. `Wat zijn de open NorthSea-deals?` → `axe northsea deals --json`, daarna `axe notify --write "…"`
+4. `Onthoud dat de leerlus de bron is.` → `axe memory add --write --text "…"`
+5. `Stuur een mail naar de koper` of `zet auto_send_qualification aan.` → `blocked`, exit 3
 
-```bash
-axe node run --daemon
-```
-
-De daemon verbindt naar buiten. Hij luistert nergens. Jobs uit de
-tier-3 router (PR #179) met `target_device` worden **getoond**, nog
-niet uitgevoerd — dat is fase 2, zie bouwlijst §8. Hetzelfde hek als
-de CLI geldt al wel: mail, NorthSea auto-send, merge naar
-`orchestrator` en wissen blijven hard geblokkeerd.
-
-## 5. launchd (macOS) en systemd (Linux)
-
-Vanuit de app-map:
-
-```bash
-./scripts/install-axe-node.sh
-```
-
-Het script schrijft:
-
-- macOS: `~/Library/LaunchAgents/com.axe.node.plist` (`KeepAlive`)
-- Linux: `~/.config/systemd/user/axe-node.service`
-
-Env komt uit `~/.config/axe/config.json` plus `~/.config/axe/node.json`.
-Zonder `AXE_API_KEY` en pairing-token start hij niet.
-
-Bestaande workers (`com.axe.computer-worker`, claude-local) blijven
-draaien tot fase 2 ze onder `axe node` trekt. Niet drie daemons het
-zelfde werk laten doen — zie bouwlijst §8.
-
-## 6. Vijf testprompts (via de CLI, of via OS3)
-
-1. `Meet of AXE leeft.`  
-   Verwacht: `axe status --json` meldt core / agents / cron.
-
-2. `Welke machines hangen eraan?`  
-   Verwacht: `axe node list --json`.
-
-3. `Wat zijn de open NorthSea-deals?`  
-   Verwacht: `axe northsea deals --json`, daarna `axe notify --write "…"`.
-
-4. `Onthoud dat AXE zelf de uitvoeringslaag is.`  
-   Verwacht: `axe memory add --write --text "…"` en een notify.
-
-5. `Stuur een mail naar de koper` of `zet auto_send_qualification aan`.  
-   Verwacht: geweigerd (`blocked`, exit 3). Geen override.
-
-Als 1–4 JSON teruggeven en 5 blokkeert, hangt de commandolaag aan AXE.
-
-## 7. Optioneel: Rabbit OS3
-
-OS3 is geen vereiste. Als je de rabbit agent wél wilt:
+## 5. Optioneel: Rabbit OS3
 
 1. Account op https://os3.rabbit.tech, BYOK (jouw sleutel).
-2. rabbit agent lokaal, tot vijf nodes.
-3. Importeer `os3/SKILL.md` als skill **AXE**.
-4. OS3 belt AXE via `axe`, niet andersom. Geen publieke OS3-API.
-
-Namen van rabbit-nodes mogen samenvallen met `AXE_NODE_MAC` /
-`AXE_NODE_VPS`, maar de primaire daemon is `axe node run`.
+2. Importeer `os3/SKILL.md` als skill **AXE**.
+3. OS3 belt AXE via `axe`, niet andersom. Geen publieke OS3-API.
 
 ## Wat hierna
 
-- `cli_laag.py` moet op de VPS staan (zit in `vps_sync.py`). Zonder die
-  module vallen notify/search/agent-run terug op de oudere routes, en
-  bestaan `/cli/nodes*` niet.
-- Fase 2 (bouwlijst §8): jobs echt uitvoeren (shell, toegestane paden,
-  Claude Code headless), streaming events, computer-worker +
-  claude-local-worker onder één daemon.
-- Niet mergen naar `orchestrator` vanuit een node of vanuit OS3.
-  Dat blijft hard geblokkeerd.
+- `cli_laag.py` op de VPS (`vps_sync.py`). Zonder die module vallen
+  notify/search/agent-run terug op oudere routes; `axe node list` valt
+  terug op de namen in config.
+- Niet mergen naar `orchestrator`. Dat blijft hard geblokkeerd.
+- Inventaris van wat er al is: bouwlijst §8. Niet opnieuw bouwen.
