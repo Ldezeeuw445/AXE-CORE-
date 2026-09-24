@@ -96,6 +96,13 @@ MANIFEST = {
     "/etc/systemd/system/axe-browser-agent.service": ("backend/axe_api/axe-browser-agent.service", "axe-browser-agent"),
     "/etc/systemd/system/axe-core-api.service": ("backend/axe_api/axe-core-api.service", "axe-core-api"),
     "/etc/systemd/system/axe-task-worker.service": ("backend/axe_api/axe-task-worker.service", "axe-task-worker"),
+    # main.py importeert planning (de planner-uitvoerder achter /cron/tick). Hij
+    # stond niet in het manifest, dus een fix eraan kon nooit worden uitgerold
+    # of op drift gecontroleerd (23 sep 2026: de hangende-run-fix).
+    "/opt/axe-core-api/planning.py": ("backend/axe_api/planning.py", "axe-core-api"),
+    # AXE's stem als terugval (George/Kokoro, lazy). Venv + model: install_vps.sh.
+    "/opt/axe-tts/app.py": ("backend/axe_tts/app.py", "axe-tts"),
+    "/etc/systemd/system/axe-tts.service": ("backend/axe_tts/axe-tts.service", "axe-tts"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

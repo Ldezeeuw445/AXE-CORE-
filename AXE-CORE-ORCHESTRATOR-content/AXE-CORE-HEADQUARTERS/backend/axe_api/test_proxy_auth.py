@@ -12,7 +12,7 @@ import pathlib
 import planner as p
 
 MAIN = pathlib.Path(__file__).with_name("main.py")
-BEWAAKT = {"/proxy/ai", "/proxy/ai/providers", "/proxy/exa", "/proxy/fish-tts"}
+BEWAAKT = {"/proxy/ai", "/proxy/ai/providers", "/proxy/exa", "/proxy/fish-tts", "/tts", "/tts/health"}
 
 
 def _routes_met_auth() -> dict[str, bool]:
