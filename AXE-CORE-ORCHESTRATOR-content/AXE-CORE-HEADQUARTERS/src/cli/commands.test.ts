@@ -119,4 +119,38 @@ describe('axe commands', () => {
     expect(env.exit).toBe(4);
     expect(env.approval?.id).toBe('a-1');
   });
+
+  it('node list leest /cli/nodes', async () => {
+    const h = http({
+      'GET /cli/nodes': { nodes: [{ device_id: 'mac-mini', online: true, os: 'darwin' }] },
+      'POST /cli/audit': {},
+    });
+    const env = await run(['node', 'list', '--json'], h);
+    expect(env.ok).toBe(true);
+    expect(JSON.stringify(env.result)).toMatch(/mac-mini/);
+  });
+
+  it('node register eist --write en geeft een token-veld terug', async () => {
+    const h = http({
+      'POST /cli/nodes/register': { device_id: 'mac-mini', pairing: 'axe-node_mac-mini_x', expires_at: '2099-01-01T00:00:00Z' },
+      'POST /cli/audit': {},
+    });
+    const blocked = await run(['node', 'register', '--name', 'mac-mini'], h);
+    expect(blocked.status).toBe('usage');
+    const ok = await run(['node', 'register', '--name', 'mac-mini', '--write', '--json'], h);
+    expect(ok.ok).toBe(true);
+    expect((ok.result as { device_id: string; pairing: string }).device_id).toBe('mac-mini');
+    expect((ok.result as { pairing: string }).pairing).toBe('axe-node_mac-mini_x');
+  });
+
+  it('node run hartslag + jobs, voert niet uit', async () => {
+    const h = http({
+      'POST /cli/nodes/heartbeat': { device_id: 'mac-mini', online: true },
+      'GET /cli/nodes/jobs': { jobs: [] },
+      'POST /cli/audit': {},
+    });
+    const env = await run(['node', 'run', '--once', '--json'], h);
+    expect(env.ok).toBe(true);
+    expect((env.result as { executor: string }).executor).toBe('phase2');
+  });
 });

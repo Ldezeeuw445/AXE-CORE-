@@ -17,6 +17,7 @@ EXIT = {
 
 WRITE_PATHS = {
     "tasks create", "tasks update", "agent run", "memory add", "notify", "report",
+    "node register",
 }
 
 COMMANDS = [
@@ -40,6 +41,9 @@ COMMANDS = [
     ("notify", "axe notify \"<msg>\"", "Post into AXE chat + the notification bell"),
     ("report", "axe report \"<title>\" --file <pad>", "Store a task report in memory and notify"),
     ("approvals list", "axe approvals list", "Pending approvals visible in AXE"),
+    ("node list", "axe node list", "Machines paired with AXE (name, OS, online)"),
+    ("node register", "axe node register --name <n>", "Pair this machine; prints a one-time token"),
+    ("node run", "axe node run [--once|--daemon]", "Outbound heartbeat + job poll (executor is phase 2)"),
 ]
 
 TWO_WORD = {
@@ -49,6 +53,7 @@ TWO_WORD = {
     "memory search", "memory add",
     "northsea status", "northsea deals", "northsea journal",
     "trading status", "cron list", "mcp list", "approvals list",
+    "node list", "node register", "node run",
 }
 
 BLOCKED_FLAGS = (
@@ -67,7 +72,7 @@ class UsageError(ValueError):
 
 def help_text() -> str:
     regels = [
-        "axe — command layer for AXE Core (OS3 and any terminal agent).",
+        "axe — command layer for AXE Core (own node agent; OS3 optional).",
         "",
         "Global flags:",
         "  --json  --write  --confirm  --config <pad>  --actor <naam>  --timeout <sec>  --help",

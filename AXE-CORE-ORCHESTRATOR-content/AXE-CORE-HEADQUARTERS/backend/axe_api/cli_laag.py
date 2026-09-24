@@ -1,16 +1,21 @@
 """
 cli_laag.py — serverkant van de axe-commandolaag.
 
-OS3 (of elke terminal) praat met AXE via `axe`. Deze routes zijn de
-gegovernede kant: hetzelfde hek als in de CLI, plus schrijven naar de
-bestaande tabellen (taken, geheugen, chat, approvals, audit).
+AXE's eigen node-agent (en optioneel OS3) praat met AXE via `axe`.
+Deze routes zijn de gegovernede kant: hetzelfde hek als in de CLI,
+plus schrijven naar de bestaande tabellen (taken, geheugen, chat,
+approvals, audit). Pairing-tokens worden gehasht bewaard.
 
 Geen tweede waarheid. Geen mail. Geen auto-send. Geen delete.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import re
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -57,6 +62,58 @@ CAPABILITY = {
     "developer": "code", "trading": "trading",
     "intel": "research", "browser": "research",
 }
+
+NODE_PAIR_TTL_SEC = 15 * 60
+NODE_STALE_SEC = 45
+NODE_JOB_CAPABILITIES = ("node_agent", "computer_use", "claude_local")
+NODE_PAIR_CATEGORY = "node_pair"
+
+
+def slug_device(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower()).strip("-")
+    return s or "node"
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+
+def token_matches(token: str, hashed: str) -> bool:
+    if not token or not hashed:
+        return False
+    return hmac.compare_digest(hash_token(token), hashed)
+
+
+def new_node_token(device_id: str) -> str:
+    return f"axe-node_{slug_device(device_id)}_{secrets.token_urlsafe(24)}"
+
+
+def pair_expired(expires_at: str, now: datetime | None = None) -> bool:
+    if not expires_at:
+        return True
+    stamp = now or datetime.now(timezone.utc)
+    try:
+        raw = expires_at.replace("Z", "+00:00")
+        exp = datetime.fromisoformat(raw)
+    except ValueError:
+        return True
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    return stamp >= exp
+
+
+def heartbeat_online(heartbeat_at: str | None, now: datetime | None = None, stale: int = NODE_STALE_SEC) -> bool:
+    if not heartbeat_at:
+        return False
+    stamp = now or datetime.now(timezone.utc)
+    try:
+        raw = heartbeat_at.replace("Z", "+00:00")
+        beat = datetime.fromisoformat(raw)
+    except ValueError:
+        return False
+    if beat.tzinfo is None:
+        beat = beat.replace(tzinfo=timezone.utc)
+    return (stamp - beat).total_seconds() < stale
 
 
 def inspect_blocked(text: str) -> tuple[str, str] | None:
@@ -139,7 +196,52 @@ def build_router(
         at: str | None = None
         extras: dict[str, Any] = Field(default_factory=dict)
 
+    class NodeRegisterBody(BaseModel):
+        name: str
+        os: str = ""
+        capabilities: list[str] = Field(default_factory=lambda: ["shell", "files", "claude_code"])
+        actor: str = "axe"
+
+    class NodeHeartbeatBody(BaseModel):
+        device_id: str
+        token: str = ""
+        name: str = ""
+        os: str = ""
+        capabilities: list[str] = Field(default_factory=list)
+
     router = APIRouter()
+
+    def _pair_key(device_id: str) -> str:
+        return f"cli/node-pair/{device_id}"
+
+    def _lees_paar(device_id: str) -> dict[str, Any] | None:
+        try:
+            rows = (sb().table("global_memory").select("key,value")
+                    .eq("user_id", AXE_USER_MEMORY).eq("key", _pair_key(device_id))
+                    .limit(1).execute().data) or []
+        except Exception:
+            return None
+        if not rows:
+            return None
+        value = rows[0].get("value")
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                return parsed if isinstance(parsed, dict) else None
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    def _schrijf_paar(device_id: str, record: dict[str, Any]) -> None:
+        sb().table("global_memory").upsert({
+            "user_id": AXE_USER_MEMORY,
+            "key": _pair_key(device_id),
+            "value": json.dumps(record),
+            "category": NODE_PAIR_CATEGORY,
+            "confidence": 1,
+        }, on_conflict="user_id,key").execute()
 
     @router.get("/agents")
     async def cli_agents():
@@ -287,5 +389,146 @@ def build_router(
     async def cli_status():
         """Dunne verzamelroute; de CLI kan dit of de bestaande paden gebruiken."""
         return {"ok": True, "service": "axe-cli", "roster": len(ROSTER)}
+
+    @router.get("/nodes")
+    async def cli_nodes():
+        workers: list[dict[str, Any]] = []
+        try:
+            workers = (sb().table("core_computer_workers")
+                       .select("device_id,worker_id,host,workspaces,heartbeat_at")
+                       .execute().data) or []
+        except Exception:
+            workers = []
+        by_id: dict[str, dict[str, Any]] = {}
+        for w in workers:
+            did = str(w.get("device_id") or "")
+            if not did:
+                continue
+            beat = w.get("heartbeat_at")
+            by_id[did] = {
+                "device_id": did,
+                "name": w.get("host") or did,
+                "os": None,
+                "online": heartbeat_online(beat),
+                "last_seen": beat,
+                "capabilities": w.get("workspaces") or [],
+                "source": "core_computer_workers",
+            }
+        try:
+            pairs = (sb().table("global_memory").select("key,value")
+                     .eq("user_id", AXE_USER_MEMORY).eq("category", NODE_PAIR_CATEGORY)
+                     .execute().data) or []
+        except Exception:
+            pairs = []
+        for row in pairs:
+            value = row.get("value")
+            rec = value if isinstance(value, dict) else None
+            if rec is None and isinstance(value, str):
+                try:
+                    parsed = json.loads(value)
+                    rec = parsed if isinstance(parsed, dict) else None
+                except json.JSONDecodeError:
+                    rec = None
+            if not rec:
+                continue
+            did = str(rec.get("device_id") or "")
+            if not did:
+                continue
+            cur = by_id.get(did, {
+                "device_id": did, "name": rec.get("name") or did, "os": None,
+                "online": False, "last_seen": None, "capabilities": [], "source": "pairing",
+            })
+            cur["os"] = rec.get("os") or cur.get("os")
+            cur["name"] = rec.get("name") or cur.get("name")
+            if rec.get("capabilities"):
+                cur["capabilities"] = rec.get("capabilities")
+            cur["paired"] = bool(rec.get("paired"))
+            by_id[did] = cur
+        nodes = sorted(by_id.values(), key=lambda n: str(n.get("name") or ""))
+        return {"nodes": nodes, "stale_sec": NODE_STALE_SEC}
+
+    @router.post("/nodes/register")
+    async def cli_node_register(body: NodeRegisterBody):
+        weiger_of_door(body.name)
+        device_id = slug_device(body.name)
+        token = new_node_token(device_id)
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(seconds=NODE_PAIR_TTL_SEC)
+        record = {
+            "device_id": device_id,
+            "name": body.name.strip(),
+            "os": (body.os or "").strip(),
+            "capabilities": body.capabilities or ["shell", "files", "claude_code"],
+            "token_hash": hash_token(token),
+            "expires_at": expires.isoformat().replace("+00:00", "Z"),
+            "paired": False,
+            "created_at": now.isoformat().replace("+00:00", "Z"),
+        }
+        _schrijf_paar(device_id, record)
+        await audit("cli_node_register", device_id, {"name": record["name"], "os": record["os"]})
+        return {
+            "device_id": device_id,
+            "name": record["name"],
+            "pairing": token,
+            "expires_at": record["expires_at"],
+            "shown_once": True,
+        }
+
+    @router.post("/nodes/heartbeat")
+    async def cli_node_heartbeat(body: NodeHeartbeatBody):
+        weiger_of_door(body.device_id)
+        device_id = slug_device(body.device_id)
+        pair = _lees_paar(device_id)
+        if not pair:
+            from fastapi import HTTPException
+            raise HTTPException(403, "unknown node; run axe node register first")
+        if not token_matches(body.token, str(pair.get("token_hash") or "")):
+            from fastapi import HTTPException
+            raise HTTPException(403, "invalid node token")
+        if not pair.get("paired") and pair_expired(str(pair.get("expires_at") or "")):
+            from fastapi import HTTPException
+            raise HTTPException(403, "pairing token expired; run axe node register again")
+        pair["paired"] = True
+        if body.os:
+            pair["os"] = body.os
+        if body.capabilities:
+            pair["capabilities"] = body.capabilities
+        if body.name:
+            pair["name"] = body.name
+        _schrijf_paar(device_id, pair)
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        row = {
+            "device_id": device_id,
+            "worker_id": f"axe-node-{device_id}",
+            "host": body.name or (pair or {}).get("name") or device_id,
+            "workspaces": body.capabilities or (pair or {}).get("capabilities") or [],
+            "heartbeat_at": now,
+        }
+        try:
+            sb().table("core_computer_workers").upsert(row, on_conflict="device_id").execute()
+        except Exception:
+            pass
+        return {"device_id": device_id, "online": True, "heartbeat_at": now, "paired": bool(pair)}
+
+    @router.get("/nodes/jobs")
+    async def cli_node_jobs(device_id: str):
+        weiger_of_door(device_id)
+        did = slug_device(device_id)
+        jobs: list[dict[str, Any]] = []
+        try:
+            rows = (sb().table("core_tasks")
+                    .select("id,status,capability,target_device,title,goal,payload,created_at")
+                    .eq("target_device", did).eq("status", "pending")
+                    .in_("capability", list(NODE_JOB_CAPABILITIES))
+                    .order("created_at").limit(20).execute().data) or []
+            jobs = rows
+        except Exception:
+            jobs = []
+        return {
+            "device_id": did,
+            "jobs": jobs,
+            "executor": "phase2",
+            "capabilities": list(NODE_JOB_CAPABILITIES),
+        }
 
     return router

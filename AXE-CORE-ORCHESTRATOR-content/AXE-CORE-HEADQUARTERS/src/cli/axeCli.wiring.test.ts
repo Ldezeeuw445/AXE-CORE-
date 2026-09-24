@@ -23,6 +23,7 @@ describe('axe-laag is aangesloten', () => {
     const data = JSON.parse(r.stdout) as { ok: boolean; result: { help: string } };
     expect(data.ok).toBe(true);
     expect(data.result.help).toMatch(/axe status/);
+    expect(data.result.help).toMatch(/axe node list/);
   });
 
   it('blokkeert verstuur in het echte commando', () => {
@@ -47,5 +48,13 @@ describe('axe-laag is aangesloten', () => {
     expect(axonMemoryBackend(http, 'u').name).toBe('axon');
     expect(typeof runArgv).toBe('function');
     expect(typeof main).toBe('function');
+  });
+
+  it('install-axe-node kent launchd en systemd', () => {
+    const tekst = readFileSync(join(HQ, 'scripts/install-axe-node.sh'), 'utf8');
+    expect(tekst).toMatch(/com\.axe\.node/);
+    expect(tekst).toMatch(/launchctl|LaunchAgents/);
+    expect(tekst).toMatch(/systemd/);
+    expect(tekst).toMatch(/node run --daemon/);
   });
 });

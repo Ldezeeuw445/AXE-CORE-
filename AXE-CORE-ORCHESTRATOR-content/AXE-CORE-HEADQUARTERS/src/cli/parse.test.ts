@@ -25,6 +25,9 @@ describe('axe parse', () => {
       notify: ['notify', 'done'],
       report: ['report', 'Title', '--file', 'r.md'],
       'approvals list': ['approvals', 'list'],
+      'node list': ['node', 'list'],
+      'node register': ['node', 'register', '--name', 'mac-mini', '--write'],
+      'node run': ['node', 'run', '--once'],
     };
     for (const spec of COMMANDS) {
       const argv = voorbeelden[spec.path];

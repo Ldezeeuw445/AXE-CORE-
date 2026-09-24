@@ -399,6 +399,70 @@ async function run(parsed: ParsedCommand, deps: CommandDeps): Promise<CliEnvelop
       return envelope({ command: parsed.path, status: 'ok', result: data });
     }
 
+    case 'node list': {
+      try {
+        const data = await http.get('/cli/nodes');
+        return envelope({ command: parsed.path, status: 'ok', result: data });
+      } catch (e) {
+        if (!(e instanceof AxeHttpError) || e.status !== 404) throw e;
+        return envelope({
+          command: parsed.path,
+          status: 'ok',
+          result: {
+            via: 'config',
+            nodes: [
+              { device_id: config.nodeMac, name: config.nodeMac, os: null, online: false, source: 'config' },
+              { device_id: config.nodeVps, name: config.nodeVps, os: null, online: false, source: 'config' },
+            ],
+          },
+        });
+      }
+    }
+
+    case 'node register': {
+      const name = flagStr(f, 'name') ?? p[0];
+      if (!name?.trim()) throw new UsageError('node register needs --name');
+      const caps = (flagStr(f, 'capabilities') ?? 'shell,files,claude_code')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const data = await http.post('/cli/nodes/register', {
+        name: name.trim(),
+        os: flagStr(f, 'os') ?? '',
+        capabilities: caps,
+        actor: parsed.actor ?? config.actor,
+      });
+      return envelope({ command: parsed.path, status: 'ok', result: data });
+    }
+
+    case 'node run': {
+      const device = flagStr(f, 'device') ?? config.nodeMac;
+      const token = flagStr(f, 'token');
+      const heartbeat = await http.post('/cli/nodes/heartbeat', {
+        device_id: device,
+        token: token ?? '',
+        name: device,
+        os: flagStr(f, 'os') ?? '',
+        capabilities: ['shell', 'files', 'claude_code'],
+      });
+      let jobs: unknown = { jobs: [] };
+      try {
+        jobs = await http.get('/cli/nodes/jobs', { device_id: device });
+      } catch (e) {
+        if (!(e instanceof AxeHttpError) || e.status !== 404) throw e;
+      }
+      return envelope({
+        command: parsed.path,
+        status: 'ok',
+        result: {
+          heartbeat,
+          jobs,
+          executor: 'phase2',
+          note: 'Presence only. Job execution (shell/files/claude) is bouwlijst §8.',
+        },
+      });
+    }
+
     default:
       throw new UsageError(`unknown command '${parsed.path}'`);
   }

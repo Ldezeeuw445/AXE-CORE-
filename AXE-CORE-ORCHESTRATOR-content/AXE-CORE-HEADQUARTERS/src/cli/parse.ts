@@ -42,6 +42,7 @@ const TWO_WORD = new Set([
   'cron list',
   'mcp list',
   'approvals list',
+  'node list', 'node register', 'node run',
 ]);
 
 function resolvePath(words: string[]): { path: string; rest: string[] } {

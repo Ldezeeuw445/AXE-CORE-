@@ -5,7 +5,19 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cli_laag import BLOCKED_FLAGS, capability_for, inspect_approval, inspect_blocked, redact
+from cli_laag import (
+    BLOCKED_FLAGS,
+    capability_for,
+    hash_token,
+    heartbeat_online,
+    inspect_approval,
+    inspect_blocked,
+    new_node_token,
+    pair_expired,
+    redact,
+    slug_device,
+    token_matches,
+)
 
 
 def test_blokkeert_mail_vlaggen_merge_en_wissen():
@@ -39,10 +51,28 @@ def test_capability_volgt_de_roster():
     assert capability_for("wingman") == "agentic"
 
 
+def test_node_pairing_hash_en_slug():
+    assert slug_device("Mac Mini") == "mac-mini"
+    assert slug_device("  ") == "node"
+    token = new_node_token("mac-mini")
+    assert token.startswith("axe-node_mac-mini_")
+    hashed = hash_token(token)
+    assert hashed != token
+    assert token_matches(token, hashed)
+    assert not token_matches("wrong", hashed)
+    assert pair_expired("2000-01-01T00:00:00Z")
+    assert not pair_expired("2099-01-01T00:00:00Z")
+    from datetime import datetime, timezone
+    assert heartbeat_online(datetime.now(timezone.utc).isoformat())
+    assert heartbeat_online("2000-01-01T00:00:00Z") is False
+    assert heartbeat_online(None) is False
+
+
 if __name__ == "__main__":
     test_blokkeert_mail_vlaggen_merge_en_wissen()
     test_geen_override_via_andere_woorden()
     test_system_raken_is_approval_geen_blok()
     test_redact_haalt_sleutels_weg()
     test_capability_volgt_de_roster()
+    test_node_pairing_hash_en_slug()
     print("ok")

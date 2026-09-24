@@ -1,1 +1,1 @@
-"""axe-commandolaag: OS3 praat met AXE, niet andersom."""
+"""axe-commandolaag: AXE's eigen node-agent (OS3 is optioneel)."""

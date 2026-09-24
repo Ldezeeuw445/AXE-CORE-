@@ -21,7 +21,7 @@ export interface AxeConfig {
 const DEFAULTS: Omit<AxeConfig, 'apiKey'> = {
   apiUrl: 'https://api.axecompanion.com',
   userId: 'acff7a12-1111-481d-a7a9-cc07583b8069',
-  actor: 'os3',
+  actor: 'axe',
   memoryBackend: 'rag',
   nodeMac: 'mac-mini',
   nodeVps: 'vps',

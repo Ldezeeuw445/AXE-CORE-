@@ -16,7 +16,7 @@ CLI = Path(__file__).resolve().parent / "axe"
 class TestLaag(unittest.TestCase):
     def test_help_noemt_elk_commando(self):
         tekst = help_text()
-        for stuk in ("status", "tasks list", "agent run", "memory search", "northsea", "notify", "report"):
+        for stuk in ("status", "tasks list", "agent run", "memory search", "northsea", "notify", "report", "node list"):
             self.assertIn(stuk.split()[0], tekst)
 
     def test_json_envelop_heeft_exitcodes(self):
@@ -30,8 +30,13 @@ class TestLaag(unittest.TestCase):
 
     def test_write_vlag_en_aliassen(self):
         self.assertTrue(parse_argv(["notify", "hi", "--write"])["write"])
+        self.assertTrue(parse_argv(["node", "register", "--name", "vps", "--write"])["write"])
+        self.assertEqual(decide_guard("node register", "node register", False)["kind"], "need_write")
         self.assertEqual(parse_argv(["tasks", "wait", "id"])["path"], "task wait")
         self.assertEqual(parse_argv(["agents", "run", "trading", "scan"])["path"], "agent run")
+        self.assertEqual(parse_argv(["node", "list"])["path"], "node list")
+        self.assertEqual(parse_argv(["node", "register", "--name", "mac-mini"])["path"], "node register")
+        self.assertEqual(parse_argv(["node", "run", "--once"])["path"], "node run")
 
     def test_blokkades_niet_te_omzeilen(self):
         gevallen = (
