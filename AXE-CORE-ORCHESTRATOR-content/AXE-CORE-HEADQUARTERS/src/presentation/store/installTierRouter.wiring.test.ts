@@ -71,7 +71,8 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
   });
 
   it('de cognitive stream toont de gekozen tier', () => {
-    const tekst = bron('presentation/pages/AICore.tsx');
+    // De stroom wordt afgeleid in aiCoreStroom.ts; AICore.tsx toont hem alleen.
+    const tekst = bron('presentation/pages/aiCoreStroom.ts');
     expect(tekst).toMatch(/evt\.routeTier/);
     expect(tekst).toMatch(/route · tier/);
     expect(tekst).toMatch(/beurtRegel/);

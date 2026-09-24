@@ -373,6 +373,11 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   // klopt hij meteen. Staat hij er over een week nog steeds op, dan is het
   // dode code en hoort hij eruit.
   ['src/presentation/components/shared/RadialMenu.tsx', 'RadialMenu'],
+  // Samsung/mobiel (integratie 23 sep): gebouwd, nog niet op een scherm aangesloten.
+  ['src/infrastructure/config/apiUrl.ts', 'isTauriMobile'],
+  ['src/presentation/components/axe-core/HomeCommandComposer.tsx', 'HomeCommandComposer'],
+  ['src/presentation/components/layout/AxeShellSphere.tsx', 'AxeShellSphere'],
+  ['src/presentation/pages/LockScreen.tsx', 'LockScreenContent'],
 ];
 
 const EXPORT_RE =

@@ -116,6 +116,7 @@ export function AxeComposerVak({
   const stopListening = useVoiceStore(s => s.stopListening);
   const [micStream, setMicStream] = useState<MediaStream | null>(() => getActiveMicStream());
   const isListening = status === 'listening';
+  const isProcessing = status === 'processing';
   const presence = useAudioActivity(
     status === 'listening' ? micStream : null,
     status === 'speaking' ? getGlobalTtsLevel : undefined,
