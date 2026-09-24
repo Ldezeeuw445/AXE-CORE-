@@ -5,8 +5,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { CARD_GRID_TALL, STAT_ROW } from '@/presentation/components/surface/Page';
-import { cn } from '@/shared/utils';
+import { STAT_ROW } from '@/presentation/components/surface/Page';
 
 function kindLabel(kind: ControlPlaneRoute['kind']) {
   switch (kind) {
@@ -90,6 +89,9 @@ export default function ControlPlane() {
   }), [routes]);
 
   const highlightRoutes = routes.filter(r => ['google_maps', 'smartthings', 'hermes', 'langgraph'].some(token => `${r.path} ${r.target ?? ''} ${r.display_name}`.toLowerCase().includes(token)));
+  /* auto-fill hield lege kolommen open. auto-fit + 420px: twee kolommen die
+     de tabruimte delen, hetzelfde ritme als de statistiekrij erboven. */
+  const planeGrid = 'grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))] [grid-auto-rows:440px]';
 
   return (
     <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -126,7 +128,7 @@ export default function ControlPlane() {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={CARD_GRID_TALL}>
+      <div className={planeGrid}>
         <WidgetCard title="Route Registry">
           <div className="space-y-2">
             {loading ? (
@@ -214,7 +216,7 @@ export default function ControlPlane() {
         </WidgetCard>
       </div>
 
-      <div className={cn(CARD_GRID_TALL, 'mt-4')}>
+      <div className={`mt-4 ${planeGrid}`}>
         <WidgetCard title="Recent Tasks">
           <div className="space-y-2">
             {tasks.length === 0 ? (

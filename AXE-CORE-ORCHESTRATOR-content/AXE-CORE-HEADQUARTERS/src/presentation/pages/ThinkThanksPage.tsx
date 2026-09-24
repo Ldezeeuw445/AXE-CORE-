@@ -218,7 +218,7 @@ export default function ThinkThanksPage() {
   const a = selected?.analysis;
 
   return (
-    <motion.div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--bg-base)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* De kopstrook is weg: titel en omschrijving zeiden waar je bent, en dat
           staat al in de nav. De twee knoppen die er stonden zijn er nog -- in
           de topbalk, waar ze niet elke keer een regel kosten. */}

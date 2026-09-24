@@ -153,7 +153,7 @@ export default function AICore() {
   const coreMB = mem ? Math.round(mem.totalJSHeapSize / 1048576) : null;
 
   return (
-    <motion.div className="flex flex-col xl:flex-row gap-3 p-3 h-full overflow-y-auto xl:overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row gap-3 pt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
       {/* ── LEFT: System status ─────────────────────────────────────── */}
       {/* De kolom van 230px is een schuifbalk geworden: dezelfde inhoud,

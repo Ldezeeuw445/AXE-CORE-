@@ -95,11 +95,12 @@ export default function Finance() {
 
   return (
     <motion.div
-      className="p-6 h-full overflow-y-auto"
+      className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5"
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
+      <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="flex items-center justify-between mb-6">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -332,6 +333,7 @@ export default function Finance() {
           </div>
         )}
       </WidgetCard>
+      </div>
     </motion.div>
   );
 }

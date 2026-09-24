@@ -121,6 +121,7 @@ export default function TradingMemory() {
 
   return (
     <Page
+      className="axe-tabruimte min-h-0 flex-1"
       title="Trading Memory"
       subtitle={
         data?.error

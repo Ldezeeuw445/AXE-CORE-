@@ -42,7 +42,7 @@ export function Page({
   className?: string;
 }) {
   return (
-    <div className={cn('flex h-full min-h-0 flex-col', className)}>
+    <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
       {(title || actions) && (
         <header className="flex flex-none items-start justify-between gap-4 px-4 pb-3 pt-4 md:px-6">
           <div className="min-w-0">

@@ -133,6 +133,7 @@ export default function StatusPage() {
 
   return (
     <Page
+      className="axe-tabruimte min-h-0 flex-1"
       title="Status"
       subtitle={
         checkedAt
