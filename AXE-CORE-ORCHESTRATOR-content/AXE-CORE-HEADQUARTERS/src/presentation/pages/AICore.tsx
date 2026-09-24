@@ -11,10 +11,10 @@ import type { RoutingEvent } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/infrastructure/persistence/coreDB';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { formatLocalClock } from '@/presentation/pages/aicoreKlok';
 
-function ts() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+function ts(at?: number | Date) {
+  return formatLocalClock(at ?? Date.now(), true);
 }
 
 interface LogEntry { id: string; t: string; type: 'in' | 'out' | 'sys' | 'route'; text: string; }
@@ -38,7 +38,7 @@ export default function AICore() {
     // Which model AXE runs on is not a thing the user should watch; AXE is AXE.
     const entry: LogEntry = {
       id: `${last.timestamp}-${last.role}`,
-      t: new Date(last.timestamp).toISOString().slice(11, 23),
+      t: ts(last.timestamp),
       type: last.role === 'user' ? 'in' : 'out',
       text: last.text,
     };
@@ -74,7 +74,7 @@ export default function AICore() {
     if (log.length === 0 || log.length === prevRouteLen.current) return;
     prevRouteLen.current = log.length;
     const evt = log[0]; // newest is first
-    const t = new Date(evt.ts).toISOString().slice(11, 23);
+    const t = ts(evt.ts);
     const baseId = `rte-${evt.id}`;
     const agent = (evt.delegate ?? 'axe') as AxeAgentId;
     const newEntries: LogEntry[] = [];
@@ -150,6 +150,9 @@ export default function AICore() {
   const primaryLabel = primaryCfg
     ? `${primaryCfg.name}${voice.primarySlot?.model ? ' / ' + shortModel(voice.primarySlot.model) : ''}`
     : '—';
+  const llmStatusText = connectedSlots.length === 0
+    ? 'No LLM connected — Settings → AI Config'
+    : `LLM ready · ${primaryLabel}${connectedSlots.length > 1 ? ` + ${connectedSlots.length - 1} fallback` : ''}`;
   // Memory is linked when the Supabase client is initialised (env vars present)
   const supaLinked = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) || linkedState.supa;
 
@@ -279,7 +282,7 @@ export default function AICore() {
                 <span style={{ color: 'rgba(255,255,255,0.15)', flexShrink: 0 }}>{log.t}</span>
                 <span style={{ color: LOG_COLOR[log.type], flexShrink: 0 }}>{LOG_PREFIX[log.type]}</span>
                 <span style={{ color: log.type === 'out' ? 'rgba(255,255,255,0.85)' : log.type === 'in' ? 'rgba(165,243,252,0.8)' : 'rgba(255,255,255,0.3)' }}>
-                  {log.text}
+                  {log.id === '2' ? llmStatusText : log.text}
                 </span>
               </motion.div>
             ))}
@@ -360,7 +363,7 @@ export default function AICore() {
                     {(evt.count ?? 1) > 1 && (
                       <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)' }}>×{evt.count}</span>
                     )}
-                    <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(evt.ts).toISOString().slice(11, 19)}</span>
+                    <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{formatLocalClock(evt.ts, false)}</span>
                   </div>
                   {/* Query preview */}
                   <p className="text-[9px] truncate mb-1" style={{ color: 'rgba(165,243,252,0.5)' }}>"{evt.query}"</p>

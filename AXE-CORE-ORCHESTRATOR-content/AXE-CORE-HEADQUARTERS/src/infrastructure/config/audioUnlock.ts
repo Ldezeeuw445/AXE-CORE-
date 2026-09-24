@@ -17,6 +17,7 @@ const SILENT_WAV =
   'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
 
 let sharedAudio: HTMLAudioElement | null = null;
+let sharedCtx: AudioContext | null = null;
 let unlocked = false;
 
 /** The single shared audio element every TTS path should play through. */
@@ -40,6 +41,12 @@ function unlock(): void {
     if (p && typeof p.then === 'function') {
       p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
     }
+  } catch { /* best effort */ }
+  // WKWebView: een AudioContext die je later maakt blijft suspended als er
+  // tijdens het gebaar nooit één is hervat. Deze deelt dat gebaar.
+  try {
+    if (!sharedCtx) sharedCtx = new AudioContext();
+    void sharedCtx.resume();
   } catch { /* best effort */ }
 }
 

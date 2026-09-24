@@ -33,6 +33,7 @@ export function SidebarChat() {
     // Live chat: never block the composer — a new message interrupts the
     // current turn (stop TTS + supersede in-flight reply in sendMessage).
     if (!t) return;
+    if (voiceStatus !== 'idle') stopListening();
     setText('');
     await sendMessage(t);
   };

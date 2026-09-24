@@ -20,13 +20,18 @@ import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import {
+  acquireMic,
+  cancelRecording,
   isWhisperAvailable,
   listenAndTranscribe,
-  stopRecording,
+  releaseMic,
 } from '@/infrastructure/gateways/whisperService';
+import { usableTranscript } from '@/infrastructure/gateways/whisperGuard';
 
 let conversationActive = false;
 let loopGeneration = 0;
+/** True terwijl een Whisper-beurt zelf sendMessage aanroept — typed send moet dan niet zichzelf ophangen. */
+let submittingVoice = false;
 
 /**
  * Kill every TTS path at once.
@@ -285,8 +290,15 @@ async function whisperTurn(gen: number): Promise<'ok' | 'empty' | 'stop' | 'fail
  * forever without ever reaching `waitUntilIdle`'s own timeout.
  */
 async function runTurn(text: string, gen: number, depth = 0): Promise<'ok' | 'empty' | 'stop' | 'fail'> {
-  useVoiceStore.setState({ transcript: text, voiceStatus: 'processing', error: null });
-  await useVoiceStore.getState().sendMessage(text);
+  const usable = usableTranscript(text);
+  if (!usable) return 'empty';
+  useVoiceStore.setState({ transcript: usable, voiceStatus: 'processing', error: null });
+  submittingVoice = true;
+  try {
+    await useVoiceStore.getState().sendMessage(usable);
+  } finally {
+    submittingVoice = false;
+  }
   if (!conversationActive || gen !== loopGeneration) return 'stop';
 
   const { interruptedBy } = await speakAndAwaitOrInterrupt();
@@ -369,14 +381,16 @@ async function runConversationLoop() {
   stopAllAudio();
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((t) => t.stop());
-    useVoiceStore.setState({ micPermission: 'granted' });
-  } catch {
+    await acquireMic();
+    useVoiceStore.setState({ micPermission: 'granted', error: null });
+  } catch (e) {
     conversationActive = false;
+    const msg = e instanceof Error ? e.message : 'Microphone permission denied.';
     useVoiceStore.setState({
       voiceStatus: 'idle',
-      error: 'Microphone permission denied.',
+      error: msg.includes('denied') || msg.includes('NotAllowed')
+        ? 'Microphone permission denied. System Settings → Privacy → Microphone → AXE Core.'
+        : `Microphone error: ${msg.slice(0, 140)}`,
       micPermission: 'denied',
     });
     return;
@@ -431,24 +445,48 @@ async function runConversationLoop() {
 
   if (gen === loopGeneration) {
     conversationActive = false;
+    releaseMic();
     useVoiceStore.setState({ voiceStatus: 'idle', isGeminiLive: false });
   }
+}
+
+/** Typed send / toetsaanslag: hang de luisterlus op zodat een stille Whisper-beurt niet meer instuurt. */
+export function hangUpListenForTypedInput(): void {
+  if (!conversationActive) return;
+  conversationActive = false;
+  loopGeneration++;
+  try {
+    cancelRecording();
+  } catch {
+    /* ignore */
+  }
+  releaseMic();
+  stopAllAudio();
 }
 
 export function installWhisperVoice(): void {
   useVoiceStore.setState({
     startListening: async () => {
       if (conversationActive) return; // already in a loop
+      // WKWebView: hervat het audiobeleid tijdens de klik, vóór getUserMedia.
+      try {
+        const ctx = new AudioContext();
+        if (ctx.state === 'suspended') await ctx.resume();
+        void ctx.close();
+      } catch {
+        /* ignore */
+      }
       await runConversationLoop();
     },
     stopListening: () => {
       conversationActive = false;
       loopGeneration++;
       try {
-        stopRecording();
+        cancelRecording();
       } catch {
         /* ignore */
       }
+      releaseMic();
       stopAllAudio();
       useVoiceStore.setState({ voiceStatus: 'idle', isGeminiLive: false });
     },
@@ -464,4 +502,21 @@ export function installWhisperVoice(): void {
 
 export function isVoiceConversationActive(): boolean {
   return conversationActive;
+}
+
+/**
+ * Buitenste sendMessage-wrapper: typed send hangt een lopende listen op.
+ * Moet NA de andere installers (stable/sphere) worden gezet, anders mist
+ * hij de simple-chat-paden die original() nooit aanroepen.
+ */
+export function installWhisperVoiceSendGuard(): void {
+  const original = useVoiceStore.getState().sendMessage;
+  useVoiceStore.setState({
+    sendMessage: async (text: string) => {
+      if (conversationActive && !submittingVoice) {
+        hangUpListenForTypedInput();
+      }
+      return original(text);
+    },
+  });
 }

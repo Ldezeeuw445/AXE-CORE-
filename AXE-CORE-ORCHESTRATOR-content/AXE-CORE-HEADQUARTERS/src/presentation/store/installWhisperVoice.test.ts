@@ -41,9 +41,19 @@ vi.mock('@/infrastructure/gateways/whisperService', () => ({
   isWhisperAvailable: () => false,
   listenAndTranscribe: vi.fn(),
   stopRecording: vi.fn(),
+  cancelRecording: vi.fn(),
+  acquireMic: vi.fn(),
+  releaseMic: vi.fn(),
 }));
 
-const { stopAllAudio, listenForBargeIn, speakAndAwaitOrInterrupt } = await import('@/presentation/store/installWhisperVoice');
+const {
+  stopAllAudio,
+  listenForBargeIn,
+  speakAndAwaitOrInterrupt,
+  hangUpListenForTypedInput,
+  installWhisperVoiceSendGuard,
+  isVoiceConversationActive,
+} = await import('@/presentation/store/installWhisperVoice');
 
 /** A controllable fake SpeechRecognition, one instance per call. */
 class FakeRecognition {
@@ -148,5 +158,24 @@ describe('speakAndAwaitOrInterrupt', () => {
     expect(stopGlobalTts).not.toHaveBeenCalled();
     // The barge-in recognizer must not be left running once AXE finished.
     expect(lastRec!.stopped).toBe(true);
+  });
+});
+
+describe('hangUpListenForTypedInput', () => {
+  it('doet niets als er geen gesprek loopt', () => {
+    hangUpListenForTypedInput();
+    expect(isVoiceConversationActive()).toBe(false);
+  });
+});
+
+describe('installWhisperVoiceSendGuard', () => {
+  it('laat een typed send door als er niet geluisterd wordt', async () => {
+    const original = vi.fn();
+    Object.assign(voiceState, { sendMessage: original });
+    installWhisperVoiceSendGuard();
+    const wrapped = (voiceState as { sendMessage: (t: string) => Promise<void> }).sendMessage;
+    await wrapped('Hey axe');
+    expect(original).toHaveBeenCalledWith('Hey axe');
+    expect(isVoiceConversationActive()).toBe(false);
   });
 });
