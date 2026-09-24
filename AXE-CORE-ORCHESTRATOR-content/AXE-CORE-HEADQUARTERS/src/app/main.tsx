@@ -23,6 +23,7 @@ import { installLiveChat } from '@/presentation/store/installLiveChat'
 import { installWhisperVoice, installWhisperVoiceSendGuard } from '@/presentation/store/installWhisperVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
+import { installTierRouter } from '@/presentation/store/installTierRouter'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 import { installContinuousMemory } from '@/infrastructure/persistence/continuousMemoryService'
@@ -36,6 +37,10 @@ installWhisperVoice();
 installFishVoice();
 // Stable identity: korte cascade voor simpele chat; stem blijft George
 installStableChat();
+// Jarvis-route: tier 1/2/3 vóór de grote cascade. Ná stable, vóór de
+// send-guard: typed send hangt Whisper nog steeds op, en fallback valt
+// terug op het pad dat hierboven al staat.
+installTierRouter();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
 // Typed send hangt een lopende Whisper-listen op (na de andere wrappers)

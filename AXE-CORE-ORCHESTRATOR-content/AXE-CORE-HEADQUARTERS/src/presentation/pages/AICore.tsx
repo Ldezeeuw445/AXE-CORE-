@@ -83,6 +83,18 @@ export default function AICore() {
     // and then the answer. We only surface what AXE DECIDED: when it hands work
     // to a specialist, the hand-off and the engine that specialist used (that
     // engine is downstream of AXE, so it's fine to see).
+    //
+    // De Jarvis-route (tier 1/2/3) is een andere as dan de roster-tiers.
+    // Die tonen we altijd: dan is te zien of een groet het grote model oversloeg.
+    if (evt.routeTier) {
+      const ms = typeof evt.routeMs === 'number' ? ` · ${evt.routeMs}ms` : '';
+      newEntries.push({
+        id: `${baseId}-tier`,
+        t,
+        type: 'route',
+        text: `route · tier ${evt.routeTier} · ${evt.via}${ms}${agent !== 'axe' ? ` · ${agentById(agent).name}` : ''}`,
+      });
+    }
     if (agent !== 'axe') {
       newEntries.push({ id: `${baseId}-dele`, t, type: 'route', text: `AXE → ${agentById(agent).name}${evt.via === 'langgraph' ? '  · via LangGraph' : ''}` });
       if (evt.winner) {

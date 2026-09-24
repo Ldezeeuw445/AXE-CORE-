@@ -382,7 +382,11 @@ export interface RoutingEvent{
   winner?:string;winnerModel?:string;
   /** Which of the tiered agents AXE used for this turn (see domain/agents/roster.ts). */
   delegate?:AxeAgentId;
-  via:'langgraph'|'fallback'|'crew'|'none';
+  via:'langgraph'|'fallback'|'crew'|'none'|'rules'|'tier2'|'tier3';
+  /** Jarvis-route: 1=regels+geheugen, 2=klein model, 3=agent. Niet de roster-tiers. */
+  routeTier?:1|2|3;
+  /** Classificatietijd in ms — regels horen ver onder 1000 te blijven. */
+  routeMs?:number;
   /** How many consecutive messages were coalesced into this entry (≥1). */
   count?:number;
 }

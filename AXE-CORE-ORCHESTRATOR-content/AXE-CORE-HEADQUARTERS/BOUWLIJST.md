@@ -1,6 +1,6 @@
 # AXE CORE — bouwlijst
 
-Bijgewerkt 23 september 2026. Alles hieronder is **gemeten**, niet aangenomen.
+Bijgewerkt 24 september 2026. Alles hieronder is **gemeten**, niet aangenomen.
 Staat er een aanname, dan staat erbij dat het er een is.
 
 Lees eerst `AGENTS.md` in de hoofdmap. Werk je hieraan met Cursor of Cowork:
@@ -299,6 +299,74 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
 - [ ] **5.3** `axe-status` bij elke rode regel zeggen wát je eraan doet.
 - [ ] **5.4** Strato: waarom valt de VPS uit? Op 7 sep was het ollama; op 9 sep
       viel hij hard weg (geen ping, poorten dicht) — dat is iets anders.
+
+---
+
+## 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis)
+
+Aangepast van de Jarvis OS 2.0 / Jev-slides naar wat AXE Core al is: de
+baas-chat naast de composer, de bestaande agents (War Room / Wingman,
+NorthSea Desk, Trading / AXE Algo, Developer, …), de leerlus (#172),
+RAG per taak, George (#173), first-token (#175), Whisper (#178) en de
+LLM-cascade. Geen Obsidian-plicht, geen Claude Code-plicht. Twee deuren
+(Home/HUD + dashboard) delen één brein.
+
+Dit is **niet** de roster-tier in `roster.ts` (manager / worker /
+assistant). Dit is de aanvraag-route.
+
+### Fase 1 — tier-router (deze PR)
+
+- [x] **6.1** Elke beurt door een classifier die tier 1/2/3 teruggeeft,
+      plus agent/skill bij tier 3, in ruim onder 1s. Regels eerst;
+      optioneel Groq `llama-3.1-8b-instant` bij twijfel; timeout 700ms
+      → huidig pad.
+- [x] **6.2** Tier 1 antwoordt zonder groot model: groet (`hey axe`),
+      status, taken / prioriteiten / agenda uit opgeslagen data.
+- [x] **6.3** Tier 2 = klein snel model, lichte context, gestreamd.
+- [x] **6.4** Tier 3 erkent meteen, zet een durable task bij de bestaande
+      agent, schrijft het resultaat in de leerlus/RAG.
+- [x] **6.5** Cognitive stream toont `route · tier N · … · Nms`.
+      Latency staat op het `RoutingEvent`.
+
+**Al aanwezig vóór deze PR:** `classifyQuery` / `classifyChatIntent` /
+`isSocialChatTurn` / `routeFast` / `delegateFor`, durable tasks + monitor
+in `installStableChat`, first-token stream, leerlus (`noteRetrieval` →
+`noteOwnerOutcome`), Groq-slot.
+
+**Nog niet:** gemeten latency op de Mac (regels zijn in tests <5ms;
+het model-pad is begrensd op 700ms). NorthSea auto-send blijft uit.
+
+### Fase 2 — gestructureerd geheugen
+
+- [ ] **6.6** Vaste mappen: inbox / projects / content / wiki. Dagelijks
+      briefje met plan, top 3, agenda. Elke taak laat een rapport achter.
+      Harvest: een klaar project wordt een wiki-artikel.
+
+**Al aanwezig:** RAG (`searchRagMemories`), leerlus + episodes, namespaces
+(`axe_trader`, `global`, …), `writeConversationMemory`, Obsidian-tab,
+continuous memory. **Ontbreekt:** de vaste structuur, het dagelijkse
+briefje, rapport-per-taak, harvest.
+
+### Fase 3 — skills als knoppen
+
+- [ ] **6.7** Plan Today, Inbox Brief, Intel Brief, Deep Research, Weekly
+      Review: dezelfde knoppen op Home/HUD en het dashboard, elk een
+      nagekeken skill, ook via stem.
+
+**Al aanwezig:** `skillRegistryService` / Architecture-skills, War Room,
+delegate-signalen. **Ontbreekt:** die vijf knoppen als één bron, stem-
+aanroepbaar, gekoppeld aan de router.
+
+### Fase 4 — stem-UX
+
+- [ ] **6.8** Spreken, pauze = versturen, Esc = stop, globale hotkey,
+      een bol die altijd idle / listening / working / speaking / error
+      toont.
+
+**Al aanwezig:** Whisper-lus, George (Kokoro), `voiceStatus`, Home-bol
+die meeloopt met die status, #178 stilte-wacht. **Ontbreekt:** pauze-
+versturen als contract, Esc overal, globale hotkey, error-stand op een
+altijd-zichtbare bol.
 
 ---
 
