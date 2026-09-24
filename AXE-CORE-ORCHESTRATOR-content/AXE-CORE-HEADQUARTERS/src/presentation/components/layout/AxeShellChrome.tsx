@@ -10,6 +10,7 @@
  * altijd deed.
  */
 import { useEffect, useRef } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
@@ -38,11 +39,16 @@ export function AxeShellChrome() {
     /* ── De rails ──────────────────────────────────────────────────────── */
     const meetMuis = (x: number) => {
       const w = window.innerWidth;
-      wortel.dataset.railL = x <= (wortel.dataset.railL === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
-      wortel.dataset.railR = x >= w - (wortel.dataset.railR === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
+      const linksVast = wortel.dataset.railPinL === 'aan' || wortel.dataset.railVastL === 'aan';
+      const rechtsVast = wortel.dataset.railPinR === 'aan' || wortel.dataset.railVastR === 'aan';
+      if (!linksVast) wortel.dataset.railL = x <= (wortel.dataset.railL === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
+      if (!rechtsVast) wortel.dataset.railR = x >= w - (wortel.dataset.railR === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
     };
     const beweeg = (e: PointerEvent) => { if (e.pointerType !== 'touch') meetMuis(e.clientX); };
-    const verlaat = () => { wortel.dataset.railL = 'dicht'; wortel.dataset.railR = 'dicht'; };
+    const verlaat = () => {
+      if (wortel.dataset.railPinL !== 'aan' && wortel.dataset.railVastL !== 'aan') wortel.dataset.railL = 'dicht';
+      if (wortel.dataset.railPinR !== 'aan' && wortel.dataset.railVastR !== 'aan') wortel.dataset.railR = 'dicht';
+    };
 
     /* Op een aanraakscherm bestaat "muis aan de rand" niet, dus daar reageert
        hij op een veeg vanaf de zijkant. */
@@ -310,8 +316,23 @@ export function AxeShellChrome() {
       wortel.style.removeProperty('--axe-viewctl-onder');
       delete wortel.dataset.railL;
       delete wortel.dataset.railR;
+      delete wortel.dataset.railPinL;
+      delete wortel.dataset.railPinR;
     };
   }, []);
+
+  const toggleRail = (kant: 'L' | 'R') => {
+    const wortel = document.documentElement;
+    const pin = kant === 'L' ? 'railPinL' : 'railPinR';
+    const rail = kant === 'L' ? 'railL' : 'railR';
+    if (wortel.dataset[pin] === 'aan') {
+      delete wortel.dataset[pin];
+      wortel.dataset[rail] = 'dicht';
+    } else {
+      wortel.dataset[pin] = 'aan';
+      wortel.dataset[rail] = 'open';
+    }
+  };
 
   /* Corrective round 5, Fix 1: "Neural was correct voor een moment, toen
      Terrain ook, toen sprongen beide terug" -- de meet-effect hierboven is
@@ -388,6 +409,24 @@ export function AxeShellChrome() {
       <div className="axe-sleepstrip" data-tauri-drag-region aria-hidden="true" />
       <div className="axe-railhint axe-railhint--l" aria-hidden="true" />
       <div className="axe-railhint axe-railhint--r" aria-hidden="true" />
+      <button
+        type="button"
+        className="axe-railtoggle axe-railtoggle--l"
+        aria-label="Linkerlade openen of sluiten"
+        title="Linkerlade"
+        onClick={() => toggleRail('L')}
+      >
+        <ChevronRight size={13} />
+      </button>
+      <button
+        type="button"
+        className="axe-railtoggle axe-railtoggle--r"
+        aria-label="Rechterlade openen of sluiten"
+        title="Rechterlade"
+        onClick={() => toggleRail('R')}
+      >
+        <ChevronLeft size={13} />
+      </button>
     </>
   );
 }

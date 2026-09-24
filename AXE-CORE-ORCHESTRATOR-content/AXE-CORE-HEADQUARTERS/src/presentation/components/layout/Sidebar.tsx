@@ -254,6 +254,16 @@ export function Sidebar() {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   const isCompact = isMobile || isTablet;
+  const opHome = useLocation().pathname === '/';
+
+  const sluitPaneel = () => {
+    if (typeof document !== 'undefined' && document.documentElement.dataset.look) {
+      delete document.documentElement.dataset.railPinL;
+      document.documentElement.dataset.railL = 'dicht';
+      return;
+    }
+    toggleLeftPanel();
+  };
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden">
@@ -272,7 +282,7 @@ export function Sidebar() {
             <X size={16} style={{ color: 'var(--text-muted)' }} />
           </button>
         ) : (
-          <button onClick={toggleLeftPanel} className="p-1 rounded-md hover:bg-white/5" title="Collapse">
+          <button onClick={sluitPaneel} className="p-1 rounded-md hover:bg-white/5" title="Collapse">
             {leftPanelOpen ? <ChevronLeft size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
           </button>
         )}
@@ -337,8 +347,6 @@ export function Sidebar() {
       </Sheet>
     );
   }
-
-  const opHome = useLocation().pathname === '/';
 
   if (!leftPanelOpen) {
     return (

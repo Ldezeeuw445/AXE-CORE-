@@ -1,6 +1,6 @@
 import { TERMINAL_TASK_STATUSES } from '@/domain/tasks/taskStatus';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import {
   Plus, Calendar, Mic, Play, Terminal, FilePlus,
   CheckSquare, ChevronRight, ChevronLeft, X, Flame, Zap, Clock, Check,
@@ -396,6 +396,7 @@ export function RightPanel() {
   const isMobile = useIsMobile();
   const isCompact = isMobile || isTablet;
   const navigate = useNavigate();
+  const opHome = useLocation().pathname === '/';
   const voice = useVoiceStore();
 
   // Een kwart breder dan de 320px waar hij op stond, om dezelfde reden als de
@@ -403,6 +404,18 @@ export function RightPanel() {
   // Eén breedte voor elke uitschuifbalk -- zie --axe-rail-breedte.
   const panelWidth = 'var(--axe-rail-breedte)';
   const closePanel = () => { if (isCompact) setRightDrawerOpen(false); };
+  const sluitPaneel = () => {
+    if (isCompact) {
+      setRightDrawerOpen(false);
+      return;
+    }
+    if (typeof document !== 'undefined' && document.documentElement.dataset.look) {
+      delete document.documentElement.dataset.railPinR;
+      document.documentElement.dataset.railR = 'dicht';
+      return;
+    }
+    setRightPanelOpen(false);
+  };
 
   const runQuickAction = async (id: string) => {
     closePanel();
@@ -443,7 +456,7 @@ export function RightPanel() {
     <div className="h-full flex flex-col overflow-hidden min-w-0">
       <div className="flex justify-end px-3 pt-2 pb-0">
         <button
-          onClick={() => (isCompact ? setRightDrawerOpen(false) : setRightPanelOpen(false))}
+          onClick={sluitPaneel}
           className="p-1 rounded-md hover:bg-white/5"
           title={isCompact ? 'Close' : 'Collapse'}
         >
@@ -582,13 +595,12 @@ export function RightPanel() {
        * and only treat it as a real obstacle where it actually, vertically,
        * overlaps the composer band (see that file for the other half). */
       style={{ width: panelWidth }}
-      data-rail-vast={rightPanelOpen ? 'ja' : undefined}
     >
       {/* Een tab kan hier zijn eigen inhoud in renderen (zie useTabRail).
           Doet hij dat, dan verbergt de CSS de standaardinhoud hieronder --
           met :has() op een leeg vakje, dus zonder staat die uit de pas kan lopen. */}
       <div id="axe-rail-rechts" className="axe-rail-host" />
-      <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">{content}</div>
+      {opHome && <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">{content}</div>}
     </aside>
   );
 }

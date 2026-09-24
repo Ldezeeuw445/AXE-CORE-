@@ -37,6 +37,8 @@ belangrijkste tab), dan MCP (het tegenvoorbeeld), dan de rest.
 - [x] **1.0** Regel vastgelegd in `AGENTS.md`, `UI-MAATSTAF.md` en hier.
       Gedeelde primitieven + tokens (`--axe-kaart-*`, één definitie, test
       `kaartMateriaal.test.ts`) horen in dezelfde PR als 1.0a/1.0b.
+      Aanvulling 24 september: elke tab heeft links én rechts dezelfde
+      hover/click-lade. Rechts mag leeg zijn totdat een tab echte context heeft.
 - [x] **1.0a** Settings: gegroepeerde matzwarte kaarten in sectieblokken,
       Browser-vormige schuifbalk (Providers / Voice / Trust / Routing /
       System / General), inhoud gecentreerd in `TabRuimte`.

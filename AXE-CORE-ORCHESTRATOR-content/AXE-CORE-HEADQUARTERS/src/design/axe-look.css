@@ -727,6 +727,38 @@ html:root[data-look],
 :root[data-rail-l='open'] .axe-railhint--l,
 :root[data-rail-r='open'] .axe-railhint--r { opacity: 0; }
 
+.axe-railtoggle {
+  position: fixed;
+  top: 50%;
+  width: 24px;
+  height: 44px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 31;
+  color: rgba(238, 243, 250, 0.78);
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.88), rgba(10, 10, 12, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 30px -20px rgba(0, 0, 0, 0.9);
+  opacity: 0.36;
+  transform: translateY(-50%);
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+:root[data-look] .axe-railtoggle { display: flex; }
+.axe-railtoggle--l { left: 6px; }
+.axe-railtoggle--r { right: 6px; }
+.axe-railtoggle:hover,
+:root[data-rail-pin-l='aan'] .axe-railtoggle--l,
+:root[data-rail-pin-r='aan'] .axe-railtoggle--r {
+  opacity: 0.88;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+:root[data-rail-l='open'] .axe-railtoggle--l { transform: translateY(-50%) translateX(10px); }
+:root[data-rail-r='open'] .axe-railtoggle--r { transform: translateY(-50%) translateX(-10px); }
+
 /* De widgets liggen OP de plaat, niet erin. */
 :root[data-look] .axe-shell aside .widget-card {
   background: none !important;
@@ -2710,10 +2742,10 @@ html:root[data-look],
  * zichzelf. */
 .axe-rail-host:empty { display: none; }
 
-/* Een balk zonder inhoud klapt weg in plaats van als lege koker te blijven
-   staan. Sinds de standaardinhoud alleen nog op Home hangt, houdt een tab
-   zonder eigen rail anders 300px leegte over aan de zijkant. */
-aside:has(> .axe-rail-host:empty):not(:has(> .axe-rail-standaard)) { display: none; }
+/* Een tab zonder eigen railinhoud houdt toch dezelfde lade over. Leeg is hier
+   een bewuste basisstaat: elke tab heeft links en rechts dezelfde hover/click
+   mechaniek, en de inhoud kan per tab later groeien zonder de shell opnieuw te
+   verbouwen. */
 
 /* ── Wat een tab in de rail zet, IS de rail ──────────────────────────────
  *

@@ -41,4 +41,22 @@ describe('de rail-host is altijd te vinden', () => {
     // En een disconnect binnen de waarnemer doet hetzelfde.
     expect(tekst).not.toMatch(/setGastheer\(el\);\s*obs\.disconnect\(\)/);
   });
+
+  it('de shell heeft klikknoppen naast dezelfde hover-rails', () => {
+    const tekst = lees('presentation/components/layout/AxeShellChrome.tsx');
+    expect(tekst).toContain('axe-railtoggle axe-railtoggle--l');
+    expect(tekst).toContain('axe-railtoggle axe-railtoggle--r');
+    expect(tekst).toContain('railPinL');
+    expect(tekst).toContain('railPinR');
+  });
+
+  it('de rechterrail wordt niet standaard vastgepind', () => {
+    const tekst = lees('presentation/components/layout/RightPanel.tsx');
+    expect(tekst).not.toMatch(/data-rail-vast=\{rightPanelOpen/);
+  });
+
+  it('lege rails blijven bestaan als basis voor elke tab', () => {
+    const css = lees('design/axe-look.css');
+    expect(css).not.toMatch(/aside:has\(> \.axe-rail-host:empty\):not\(:has\(> \.axe-rail-standaard\)\)\s*\{\s*display:\s*none/);
+  });
 });

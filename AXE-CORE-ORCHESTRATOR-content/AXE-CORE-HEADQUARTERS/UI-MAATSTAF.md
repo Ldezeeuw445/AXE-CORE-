@@ -49,11 +49,15 @@ Kop zoals WAR ROOM / WINGMAN'S CREW: klein, breed tracked, cream. Daaronder
 de kaarten. `SectieBlok` / `.axe-sectie`. Geen Word-document van
 volle-breedte-koppen.
 
-**5. Linker schuifbalken: één vorm, eigen inhoud.**
+**5. Schuifbalken links én rechts: één gedrag, eigen inhoud.**
 Zelfde vorm als de Browser-lade: binnenkaart met vaste afstand tot de rand,
-gegroepeerde secties, Settings + Profile onderaan. `SchuifBalk` /
-`.axe-schuifbalk`, via `TabRail kant="links"`. De rail levert de breedte; de
-binnenkaart is het materiaal.
+gegroepeerde secties, Settings + Profile onderaan waar dat logisch is.
+`SchuifBalk` / `.axe-schuifbalk`, via `TabRail kant="links"` of
+`TabRail kant="rechts"`. De rail levert de breedte; de binnenkaart is het
+materiaal. Elke tab heeft dezelfde basis: links en rechts openen met de muis aan
+de rand én met een subtiele randknop. Heeft een tab rechts nog geen eigen
+context, dan blijft die lade bewust leeg in plaats van willekeurige globale
+inhoud te tonen.
 
 ---
 
