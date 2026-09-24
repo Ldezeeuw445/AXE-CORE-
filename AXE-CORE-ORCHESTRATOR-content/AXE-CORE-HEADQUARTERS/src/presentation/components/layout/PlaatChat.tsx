@@ -59,7 +59,6 @@ const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transit
 
 function looksLikeMapRequest(t: string): boolean {
   return /\b(kaart|map|maps|locatie|city|stad)\b/i.test(t)
-    || /laat(\s+\S+){1,8}\s+zien/i.test(t)
     || /\b(new\s*york|nyc|tokyo|london|paris|amsterdam|dubai|singapore|berlin)\b/i.test(t);
 }
 function looksLikeChartRequest(t: string): boolean {
@@ -141,9 +140,6 @@ export function PlaatChat() {
         let directed = await directFromChat({ text: last.text, attachments: [] });
         if (!directed && looksLikeChartRequest(last.text)) directed = await resolveChart(last.text);
         if (!directed && looksLikeMapRequest(last.text)) directed = await resolveMap(last.text);
-        if (!directed && (/laat(\s+\S+){1,10}\s+zien/i.test(last.text) || /\b(show|toon)\s+/i.test(last.text))) {
-          directed = await resolveMap(last.text);
-        }
         if (!cancelled && directed) showOnSphere(directed);
       } catch (err) {
         console.warn('[AXE] sphere director failed for user turn', err);

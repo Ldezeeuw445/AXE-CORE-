@@ -16,6 +16,7 @@ import { MobileBrowserChat } from '@/presentation/components/browser/MobileBrows
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
 import { useAIConfig } from '@/presentation/hooks/useAIConfig';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { metGeheugen, openLeerbeurt, sluitLeerbeurt } from '@/application/agents/abonnementLeerlus';
 import {
   sendBrowserAIMessage,
   type BrowserAIResponse,
@@ -149,10 +150,22 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
     }));
     appendAIMessage('user', `[${provider}] ${message}`);
 
+    const leer = await openLeerbeurt(message, provider);
     try {
-      const result = await sendBrowserAIMessage(provider, message, {
+      // Alleen een sleutel meesturen die echt van DeepSeek is. De algemene
+      // AI-config is meestal OpenAI; die naar DeepSeek sturen geeft een 401
+      // in plaats van de duidelijke melding dat de VPS-sleutel ontbreekt.
+      const deepseekKey = provider === 'deepseek' && /deepseek/i.test(config.apiEndpoint)
+        ? config.apiKey || undefined
+        : undefined;
+      const result = await sendBrowserAIMessage(provider, metGeheugen(message, leer), {
         mode,
-        apiKey: config.apiKey || undefined,
+        apiKey: deepseekKey,
+      });
+      sluitLeerbeurt(leer, result.status === 'ok' || result.status === 'agent_started', {
+        wie: provider,
+        opdracht: message,
+        uitkomst: result.message,
       });
 
       appendAIMessage('assistant', result.message);
@@ -169,6 +182,7 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
          still opens that separate tool explicitly. */
     } catch (err) {
       const messageText = err instanceof Error ? err.message : String(err);
+      sluitLeerbeurt(leer, false, { wie: provider, opdracht: message, uitkomst: messageText });
       appendAIMessage('assistant', `Error: ${messageText}`);
       setProviderFeedback(prev => ({
         ...prev,
