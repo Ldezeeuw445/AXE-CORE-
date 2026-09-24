@@ -22,11 +22,15 @@ import { stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import {
   acquireMic,
   cancelRecording,
+  eindeSpraakTs,
   isWhisperAvailable,
+  laatsteWhisperMs,
   listenAndTranscribe,
   releaseMic,
 } from '@/infrastructure/gateways/whisperService';
 import { usableTranscript } from '@/infrastructure/gateways/whisperGuard';
+import { flushAxeSpraakRij } from '@/application/tierRouter/axeSpraakRij';
+import { startBeurt } from '@/domain/beurtKlok';
 
 let conversationActive = false;
 let loopGeneration = 0;
@@ -292,6 +296,10 @@ async function whisperTurn(gen: number): Promise<'ok' | 'empty' | 'stop' | 'fail
 async function runTurn(text: string, gen: number, depth = 0): Promise<'ok' | 'empty' | 'stop' | 'fail'> {
   const usable = usableTranscript(text);
   if (!usable) return 'empty';
+  startBeurt({
+    sttMs: laatsteWhisperMs(),
+    t0: eindeSpraakTs() || Date.now(),
+  });
   useVoiceStore.setState({ transcript: usable, voiceStatus: 'processing', error: null });
   submittingVoice = true;
   try {
@@ -307,6 +315,8 @@ async function runTurn(text: string, gen: number, depth = 0): Promise<'ok' | 'em
   if (interruptedBy && depth < 4) {
     return runTurn(interruptedBy, gen, depth + 1);
   }
+
+  flushAxeSpraakRij();
 
   // Brief pause so TTS tail / echo doesn't re-trigger the next listen.
   await new Promise((r) => setTimeout(r, 450));
@@ -465,6 +475,15 @@ export function hangUpListenForTypedInput(): void {
 }
 
 export function installWhisperVoice(): void {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!conversationActive) return;
+      e.preventDefault();
+      useVoiceStore.getState().stopListening();
+    });
+  }
+
   useVoiceStore.setState({
     startListening: async () => {
       if (conversationActive) return; // already in a loop

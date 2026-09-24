@@ -41,14 +41,29 @@ describe('het live chat-pad wacht niet op TTS of RAG voor first-token', () => {
     expect(tekst).toMatch(/'chat'/);
   });
 
+  it('de tier-router start tier 2 zonder op RAG te wachten', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/streamProvider\s*\(/);
+    expect(tekst).toMatch(/volgendeAxeBericht\s*\(/);
+    expect(tekst).not.toMatch(/await\s+buildRagContext\s*\(/);
+    const streamIdx = tekst.indexOf('streamProvider');
+    const ragIdx = tekst.indexOf('buildRagContext');
+    expect(ragIdx).toBe(-1);
+    expect(streamIdx).toBeGreaterThan(0);
+  });
+
   it('publishAxeReply start TTS ná zichtbare tekst, niet als poort ernaartoe', () => {
     const tekst = bron('presentation/store/installStableChat.ts');
     expect(tekst).toMatch(/speakAxe\s*\(/);
+    expect(tekst).toMatch(/startAxeSpraakStroom/);
+    expect(tekst).toMatch(/stroom\.voer\(/);
     // De bubble moet al tokens hebben vóór speakAxe: volgendeAxeBericht
-    // tijdens de stream, speakAxe pas als de beurt klaar is.
+    // tijdens de stream, speakAxe blijft voor ack/agentic.
     const streamIdx = tekst.indexOf('volgendeAxeBericht');
+    const stroomIdx = tekst.indexOf('stroom.voer');
     const speakIdx = tekst.lastIndexOf('speakAxe(');
     expect(streamIdx).toBeGreaterThan(0);
-    expect(speakIdx).toBeGreaterThan(streamIdx);
+    expect(stroomIdx).toBeGreaterThan(streamIdx);
+    expect(speakIdx).toBeGreaterThan(0);
   });
 });

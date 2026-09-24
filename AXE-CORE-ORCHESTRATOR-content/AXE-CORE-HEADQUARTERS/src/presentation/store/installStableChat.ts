@@ -32,6 +32,9 @@ import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
 import { nativeToolsEnabled, requestActionApproval } from '@/presentation/store/voiceStore';
 import { TOOL_RUNTIMES } from '@/application/tools/toolRegistry';
 import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
+import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
+import { markBeurt } from '@/domain/beurtKlok';
+import { pushBeurtLatentie } from '@/presentation/store/installTierRouter';
 import {
   applyPendingCodeEdit,
   loadPendingEdit,
@@ -518,19 +521,35 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   let lastError = '';
   for (const slot of cascade) {
     let axeTs = 0;
+    const stroom = startAxeSpraakStroom({
+      onFirstAudio: () => {
+        markBeurt('firstAudio');
+        pushBeurtLatentie();
+        useVoiceStore.setState({ voiceStatus: 'speaking' });
+      },
+      onDone: () => useVoiceStore.setState({ voiceStatus: 'idle' }),
+      onError: (reason) => useVoiceStore.setState({ error: reason }),
+    });
     try {
       const raw = await streamProvider(slot, messages, (_delta, full) => {
         const visible = zichtbareAxeAntwoord(full);
         if (!visible.trim()) return;
-        if (!axeTs) axeTs = Date.now();
+        if (!axeTs) {
+          axeTs = Date.now();
+          markBeurt('firstToken');
+          pushBeurtLatentie();
+        }
+        stroom.voer(visible);
         toonStream(visible, slot, axeTs);
       });
       const trimmed = zichtbareAxeAntwoord(raw).trim();
       if (!trimmed) {
+        stroom.stop();
         wisStream(axeTs);
         continue;
       }
       if (!axeTs) axeTs = Date.now();
+      stroom.sluit();
 
       routeEvt.winner = slot.provider;
       routeEvt.winnerModel = slot.model;
@@ -543,14 +562,11 @@ async function stableSimpleSend(text: string): Promise<boolean> {
           void presentAssistantReplyOnSphere(trimmed, text).catch(() => {});
         }
       }
-      useVoiceStore.setState({ voiceStatus: 'speaking' });
-      speakAxe(trimmed, () => {
-        useVoiceStore.setState({ voiceStatus: 'idle' });
-      });
       noteOwnerOutcome('chat', 'good');
       recordChatTurn(text, trimmed, slot.provider, cap);
       return true;
     } catch (e: unknown) {
+      stroom.stop();
       wisStream(axeTs);
       lastError = e instanceof Error ? e.message : String(e);
       routeEvt.attempts.push({

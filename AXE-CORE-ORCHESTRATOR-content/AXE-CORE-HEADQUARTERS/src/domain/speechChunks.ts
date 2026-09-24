@@ -81,6 +81,30 @@ export function splitIntoSpeechChunks(text: string, maxLen = 280): string[] {
   return stukken;
 }
 
+const ZIN_KLAAR = /[.!?…]["')\]]*$/;
+
+/**
+ * Welke stukken mag de stem NU al maken terwijl de LLM nog tokens stuurt.
+ * De laatste zin zonder eindteken blijft liggen tot `afgerond`.
+ */
+export function klaarSpraakStukken(text: string, afgerond: boolean): string[] {
+  const all = splitIntoSpeechChunks(text);
+  if (afgerond || all.length === 0) return all;
+  const last = all[all.length - 1];
+  if (ZIN_KLAAR.test(last)) return all;
+  return all.slice(0, -1);
+}
+
+/** Nieuwe stukken sinds `alGezegd` klaar-stukken. */
+export function nieuweSpraakStukken(
+  alGezegd: number,
+  text: string,
+  afgerond: boolean,
+): { stukken: string[]; tot: number } {
+  const klaar = klaarSpraakStukken(text, afgerond);
+  return { stukken: klaar.slice(Math.max(0, alGezegd)), tot: klaar.length };
+}
+
 /**
  * Hoeveel van `text` zichtbaar is bij `fraction` (0..1) van de uitgesproken
  * stem. Nooit midden in een woord: we lopen door tot het einde van het woord

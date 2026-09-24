@@ -141,8 +141,7 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/e2bService.ts', 'e2bRunPython'],
   ['src/infrastructure/gateways/exaSearchService.ts', 'saveExaApiKey'],
   ['src/infrastructure/gateways/firecrawlService.ts', 'firecrawlSearch'],
-  // 23 sep 2026: gebouwd voor de globale spreekmeter (cbc36d9a), bewust losgekoppeld toen Cedar AXE's enige stem werd (c285b431); Fish hoort niet in getGlobalTtsLevel. Niet weggooien.
-  ['src/infrastructure/gateways/fishAudioService.ts', 'getFishTtsLevel'],
+  // getFishTtsLevel zit nu in getGlobalTtsLevel (stem-keuze).
   ['src/infrastructure/gateways/globalTts.ts', 'getActiveTtsProvider'],
   // Only called internally by speakGlobal() today; exported alongside it (like
   // getActiveTtsProvider/stopGlobalTts above) so the markdown/chrome-stripping

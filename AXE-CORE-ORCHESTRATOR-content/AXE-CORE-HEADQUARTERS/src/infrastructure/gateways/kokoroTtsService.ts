@@ -75,7 +75,7 @@ async function haalStuk(tekst: string): Promise<Blob> {
   return r.blob();
 }
 
-function speel(blob: Blob, opVoortgang: (binnenStuk: number) => void, mijn: number): Promise<void> {
+function speel(blob: Blob, opVoortgang: (binnenStuk: number) => void, mijn: number, opStart?: () => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
@@ -109,7 +109,10 @@ function speel(blob: Blob, opVoortgang: (binnenStuk: number) => void, mijn: numb
     rondHuidigeAf = rondAf;
     audio.onended = () => { opVoortgang(1); klaar(); };
     audio.onerror = () => klaar(new Error('audio_kon_niet_spelen'));
-    audio.play().then(() => { rafId = requestAnimationFrame(tik); }, (e) => klaar(e instanceof Error ? e : new Error(String(e))));
+    audio.play().then(() => {
+      opStart?.();
+      rafId = requestAnimationFrame(tik);
+    }, (e) => klaar(e instanceof Error ? e : new Error(String(e))));
   });
 }
 
@@ -122,10 +125,11 @@ function speel(blob: Blob, opVoortgang: (binnenStuk: number) => void, mijn: numb
  */
 export function speakWithKokoro(
   tekst: string,
-  { opKlaar, opFout, opVoortgang }: {
+  { opKlaar, opFout, opVoortgang, opEersteAudio }: {
     opKlaar?: () => void;
     opFout?: (reden: string) => void;
     opVoortgang?: (fractie: number) => void;
+    opEersteAudio?: () => void;
   } = {},
 ): void {
   stopKokoro();
@@ -155,7 +159,7 @@ export function speakWithKokoro(
       }
       const lengte = stukken[i].length;
       try {
-        await speel(blob, (binnen) => opVoortgang?.((gedaan + lengte * binnen) / totaal), mijn);
+        await speel(blob, (binnen) => opVoortgang?.((gedaan + lengte * binnen) / totaal), mijn, i === 0 ? opEersteAudio : undefined);
       } catch (e) {
         if (mijn !== generatie) return;
         if (i === 0) { opFout?.(e instanceof Error ? e.message : String(e)); return; }

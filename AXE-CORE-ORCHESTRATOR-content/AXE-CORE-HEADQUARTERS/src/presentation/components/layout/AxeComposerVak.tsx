@@ -52,6 +52,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { VoiceBeam } from 'voice-glow';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { AxeAgentsBalk } from '@/presentation/components/layout/AxeAgentsBalk';
 import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 import { getActiveMicStream, getMicLevel, subscribeMicStream } from '@/infrastructure/gateways/whisperService';
 import { useAudioActivity } from '@/presentation/hooks/useAudioActivity';
@@ -174,6 +175,7 @@ export function AxeComposerVak({
       data-voice-energy={presence.mix > 0.015 ? 'on' : 'off'}
       style={presenceStyle}
     >
+      <AxeAgentsBalk />
       {/* One light around the composer, and it is the voice (Luka, 23 sep
           2026: "alleen deze erin, dat is rustiger en reageert op echt axe of
           ik, dat is realistischer"). The border beam is gone -- a decoration

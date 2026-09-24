@@ -4,7 +4,6 @@
  * Falls back to browser speechSynthesis if ElevenLabs is not configured.
  */
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
-import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { getReplyLanguage } from '@/domain/replyLanguage';
 import { STEMMEN } from '@/domain/stemKeuzes';
@@ -36,7 +35,7 @@ function useDirectElevenLabs(): boolean {
   return import.meta.env.DEV || (import.meta.env.PROD && isTauriRuntime());
 }
 
-const TTS_MODEL_ID = 'eleven_turbo_v2_5';
+const TTS_MODEL_ID = 'eleven_flash_v2_5';
 const TTS_VOICE_SETTINGS = {
   stability: 0.45,
   similarity_boost: 0.85,
@@ -62,14 +61,22 @@ const STANDAARD_EL_STEM =
 const TTS_VOICE_KEY = 'axe_tts_voice';
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
-function getSelectedVoiceId(): string {
-  return localStorage.getItem(TTS_VOICE_KEY) ?? STANDAARD_EL_STEM;
+export function getSelectedVoiceId(): string {
+  try {
+    return localStorage.getItem(TTS_VOICE_KEY)?.trim() || STANDAARD_EL_STEM;
+  } catch {
+    return STANDAARD_EL_STEM;
+  }
 }
 
 export function setSelectedVoiceId(voiceId: string): void {
-  localStorage.setItem(TTS_VOICE_KEY, voiceId);
-  localStorage.setItem(TTS_PROVIDER_KEY, 'elevenlabs');
-  void saveSetting(TTS_VOICE_KEY, voiceId);
+  const schoon = voiceId.trim();
+  try {
+    if (schoon) localStorage.setItem(TTS_VOICE_KEY, schoon);
+    else localStorage.removeItem(TTS_VOICE_KEY);
+    localStorage.setItem(TTS_PROVIDER_KEY, 'elevenlabs');
+  } catch { /* ignore */ }
+  void saveSetting(TTS_VOICE_KEY, schoon);
   void saveSetting(TTS_PROVIDER_KEY, 'elevenlabs');
 }
 
@@ -96,6 +103,21 @@ export async function testElevenLabsKey(key?: string): Promise<{ ok: boolean; er
 }
 
 let currentAudio: HTMLAudioElement | null = null;
+let elAudioContext: AudioContext | null = null;
+let elAnalyser: AnalyserNode | null = null;
+let elLevelData: Uint8Array<ArrayBuffer> | null = null;
+
+/** Live 0..1 RMS van ElevenLabs-afspelen. Eigen Audio — niet getSharedAudio. */
+export function getElevenLabsTtsLevel(): number {
+  if (!elAnalyser || !elLevelData || !currentAudio || currentAudio.paused) return 0;
+  elAnalyser.getByteTimeDomainData(elLevelData);
+  let som = 0;
+  for (const v of elLevelData) {
+    const x = (v - 128) / 128;
+    som += x * x;
+  }
+  return Math.min(1, Math.sqrt(som / elLevelData.length) * 3.2);
+}
 
 function elevenLanguageCode(): string {
   const mode = getReplyLanguage();
@@ -103,10 +125,20 @@ function elevenLanguageCode(): string {
   return 'en';
 }
 
-function ttsFetch(text: string, voiceId: string): Promise<Response> {
+function elevenLabsModelId(model?: string): string {
+  if (
+    model === 'eleven_v3_conversational' ||
+    model === 'eleven_v3' ||
+    model === 'eleven_flash_v2_5' ||
+    model === 'eleven_turbo_v2_5'
+  ) return model;
+  return TTS_MODEL_ID;
+}
+
+function ttsFetch(text: string, voiceId: string, model?: string): Promise<Response> {
   const payload = {
     text: text.slice(0, 4000),
-    model_id: TTS_MODEL_ID,
+    model_id: elevenLabsModelId(model),
     voice_settings: TTS_VOICE_SETTINGS,
     language_code: elevenLanguageCode(),
   };
@@ -130,6 +162,7 @@ export async function speakWithElevenLabs(
   onDone?: () => void,
   onError?: () => void,
   onFallback?: (reason: string) => void,
+  opts?: { model?: string; onStart?: () => void },
 ): Promise<void> {
   const spoken = normalizeForSpeech(text);
   if (!spoken) { onDone?.(); return; }
@@ -137,7 +170,7 @@ export async function speakWithElevenLabs(
   if (isElevenLabsConfigured()) {
     try {
       const currentVoice = getSelectedVoiceId();
-      const response = await ttsFetch(spoken, currentVoice);
+      const response = await ttsFetch(spoken, currentVoice, opts?.model);
 
       /* One fixed voice: if the selected voice-id is invalid on this key we do
        * NOT quietly switch to a different ElevenLabs voice and remember it —
@@ -151,10 +184,20 @@ export async function speakWithElevenLabs(
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      const audio = getSharedAudio();
+      // Eigen element: getSharedAudio mag niet een tweede MediaElementSource
+      // krijgen (Fish hangt daar al aan).
+      const audio = new Audio(url);
       audio.muted = false;
-      audio.src = url;
       currentAudio = audio;
+      elAudioContext ??= new AudioContext();
+      void elAudioContext.resume().catch(() => {});
+      if (!elAnalyser) {
+        elAnalyser = elAudioContext.createAnalyser();
+        elAnalyser.fftSize = 512;
+        elLevelData = new Uint8Array(elAnalyser.fftSize);
+        elAnalyser.connect(elAudioContext.destination);
+      }
+      elAudioContext.createMediaElementSource(audio).connect(elAnalyser);
 
       audio.onended = () => {
         URL.revokeObjectURL(url);
@@ -168,6 +211,7 @@ export async function speakWithElevenLabs(
       };
 
       await audio.play();
+      opts?.onStart?.();
       return;
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);

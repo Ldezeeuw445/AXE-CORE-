@@ -12,6 +12,7 @@ import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/infrastructure/persistence/coreDB';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { formatLocalClock } from '@/presentation/pages/aicoreKlok';
+import { beurtRegel } from '@/domain/beurtKlok';
 
 function ts(at?: number | Date) {
   return formatLocalClock(at ?? Date.now(), true);
@@ -68,12 +69,15 @@ export default function AICore() {
   }, [voice.voiceStatus]);
 
   // Emit real routing lines into the cognitive stream whenever a new event lands
-  const prevRouteLen = useRef(0);
+  // of wanneer first-token / first-audio later op dezelfde beurt arriveren.
+  const prevRouteSig = useRef('');
   useEffect(() => {
     const log = voice.routingLog;
-    if (log.length === 0 || log.length === prevRouteLen.current) return;
-    prevRouteLen.current = log.length;
+    if (log.length === 0) return;
     const evt = log[0]; // newest is first
+    const sig = `${log.length}|${evt.id}|${evt.sttMs ?? ''}|${evt.firstTokenMs ?? ''}|${evt.firstAudioMs ?? ''}`;
+    if (sig === prevRouteSig.current) return;
+    prevRouteSig.current = sig;
     const t = ts(evt.ts);
     const baseId = `rte-${evt.id}`;
     const agent = (evt.delegate ?? 'axe') as AxeAgentId;
@@ -83,16 +87,38 @@ export default function AICore() {
     // and then the answer. We only surface what AXE DECIDED: when it hands work
     // to a specialist, the hand-off and the engine that specialist used (that
     // engine is downstream of AXE, so it's fine to see).
+    //
+    // De Jarvis-route (tier 1/2/3) is een andere as dan de roster-tiers.
+    // Die tonen we altijd: dan is te zien of een groet het grote model oversloeg.
+    if (evt.routeTier) {
+      const ms = typeof evt.routeMs === 'number' ? ` · ${evt.routeMs}ms` : '';
+      newEntries.push({
+        id: `${baseId}-tier`,
+        t,
+        type: 'route',
+        text: `route · tier ${evt.routeTier} · ${evt.via}${ms}${agent !== 'axe' ? ` · ${agentById(agent).name}` : ''}`,
+      });
+    }
     if (agent !== 'axe') {
       newEntries.push({ id: `${baseId}-dele`, t, type: 'route', text: `AXE → ${agentById(agent).name}${evt.via === 'langgraph' ? '  · via LangGraph' : ''}` });
       if (evt.winner) {
         newEntries.push({ id: `${baseId}-eng`, t, type: 'route', text: `${agentById(agent).name} · ${evt.winner}${evt.winnerModel ? `/${evt.winnerModel.split('/').pop()?.split(':')[0]}` : ''}` });
       }
     }
+    const lat = beurtRegel({
+      sttMs: evt.sttMs,
+      routeMs: evt.routeMs,
+      firstTokenMs: evt.firstTokenMs,
+      firstAudioMs: evt.firstAudioMs,
+    });
+    if (lat !== 'lat') {
+      newEntries.push({ id: `${baseId}-lat`, t, type: 'route', text: lat });
+    }
     if (newEntries.length === 0) return;
     setLogs(prev => {
-      const ids = new Set(prev.map(l => l.id));
-      return [...prev, ...newEntries.filter(e => !ids.has(e.id))].slice(-200);
+      const withoutLat = prev.filter(l => l.id !== `${baseId}-lat`);
+      const ids = new Set(withoutLat.map(l => l.id));
+      return [...withoutLat, ...newEntries.filter(e => !ids.has(e.id) || e.id === `${baseId}-lat`)].slice(-200);
     });
   }, [voice.routingLog]);
 

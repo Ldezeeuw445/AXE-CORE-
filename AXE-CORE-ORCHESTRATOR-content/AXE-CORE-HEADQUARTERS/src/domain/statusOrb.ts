@@ -25,8 +25,11 @@ export type OrbStand =
   | 'working' | 'searching' | 'solving' | 'listening'
   | 'connecting' | 'weaving' | 'composing' | 'breathing' | 'shaping';
 
-/** Wat er te tonen is: een orb-stand, of de equalizer voor spreken. */
-export type StatusTeken = { soort: 'orb'; stand: OrbStand } | { soort: 'equalizer' };
+/** Wat er te tonen is: een orb-stand, de equalizer, of een fout. */
+export type StatusTeken =
+  | { soort: 'orb'; stand: OrbStand }
+  | { soort: 'equalizer' }
+  | { soort: 'fout' };
 
 /** Werk dat buiten de stemlus loopt en de stand mag overrulen. */
 export interface WerkSignalen {
@@ -36,6 +39,8 @@ export interface WerkSignalen {
   verbindt?: boolean;
   /** Er wordt tekst geschreven (chat streamt). */
   schrijft?: boolean;
+  /** De stemlus of een job is in de fout. */
+  fout?: boolean;
 }
 
 /**
@@ -43,6 +48,7 @@ export interface WerkSignalen {
  * en praten wint van alles -- als AXE praat, is dát wat je hoort.
  */
 export function statusTeken(status: StemStand, werk: WerkSignalen = {}): StatusTeken {
+  if (werk.fout) return { soort: 'fout' };
   if (status === 'speaking') return { soort: 'equalizer' };
   if (status === 'listening') return { soort: 'orb', stand: 'listening' };
   if (werk.zoekt) return { soort: 'orb', stand: 'searching' };
@@ -53,7 +59,7 @@ export function statusTeken(status: StemStand, werk: WerkSignalen = {}): StatusT
 }
 
 /** Het woord eronder. Hetzelfde woord op elke plek waar het teken staat. */
-export const TEKEN_LABEL: Record<OrbStand | 'equalizer', string> = {
+export const TEKEN_LABEL: Record<OrbStand | 'equalizer' | 'fout', string> = {
   working: 'Working',
   searching: 'Searching',
   solving: 'Solving',
@@ -64,8 +70,11 @@ export const TEKEN_LABEL: Record<OrbStand | 'equalizer', string> = {
   breathing: 'Ready',
   shaping: 'Shaping',
   equalizer: 'Speaking',
+  fout: 'Error',
 };
 
 export function tekenLabel(teken: StatusTeken): string {
-  return teken.soort === 'equalizer' ? TEKEN_LABEL.equalizer : TEKEN_LABEL[teken.stand];
+  if (teken.soort === 'equalizer') return TEKEN_LABEL.equalizer;
+  if (teken.soort === 'fout') return TEKEN_LABEL.fout;
+  return TEKEN_LABEL[teken.stand];
 }

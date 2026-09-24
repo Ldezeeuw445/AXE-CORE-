@@ -52,6 +52,12 @@ describe('aanroepketen: schermen lezen deze identiteit, niet een dode picker', (
     const sectie = src.slice(begin, eind);
     expect(sectie).toContain('STEM_UI');
     expect(sectie).toContain('probeGeorgeStem');
+    expect(sectie).toContain('STEM_MOTOREN');
+    expect(sectie).toContain('zetStemMotor');
+    expect(sectie).toContain('ElevenLabs voice ID');
+    expect(sectie).toContain('Cartesia voice ID');
+    expect(sectie).toContain('setSelectedVoiceId');
+    expect(sectie).toContain('setCartesiaVoiceId');
     expect(sectie).not.toMatch(/OpenAI <strong>cedar<\/strong>/);
     expect(sectie).not.toMatch(/OpenAI cedar — warm and natural/);
   });

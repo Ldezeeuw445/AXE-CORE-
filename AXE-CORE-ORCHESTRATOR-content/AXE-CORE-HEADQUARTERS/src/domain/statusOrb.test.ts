@@ -22,4 +22,9 @@ describe('statusTeken', () => {
     expect(statusTeken('idle')).toEqual({ soort: 'orb', stand: 'breathing' });
     expect(tekenLabel(statusTeken('idle'))).toBe('Ready');
   });
+
+  it('fout wint van de rest', () => {
+    expect(statusTeken('listening', { fout: true })).toEqual({ soort: 'fout' });
+    expect(tekenLabel(statusTeken('idle', { fout: true }))).toBe('Error');
+  });
 });
