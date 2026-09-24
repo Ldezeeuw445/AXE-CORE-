@@ -8,6 +8,12 @@ repository = ""
 edition = "2021"
 rust-version = "1.70"
 
+# Mobiel (Android/iOS) heeft een library-target nodig die de app-logica draagt
+# en een .so voor het toestel maakt; de desktop-binary (main.rs) roept run() aan.
+[lib]
+name = "axe_core_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
 

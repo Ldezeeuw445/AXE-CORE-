@@ -1,5 +1,8 @@
 import { loopbackVerdict } from '@/domain/loopback';
 import { currentHostKind } from '@/infrastructure/config/apiUrl';
+import { demoDevices, demoLook, demoDo } from '@/infrastructure/gateways/phoneDemoDevice';
+
+export { isA17Model } from '@/domain/phone/a17';
 /**
  * phoneBridgeService — the Samsung, as something AXE can look at and touch.
  *
@@ -37,6 +40,40 @@ const BRIDGE_TOKEN = (import.meta.env.VITE_AXE_BRIDGE_TOKEN as string | undefine
 export const isPhoneBridgeConfigured =
   Boolean(BRIDGE_TOKEN) && loopbackVerdict(BRIDGE_URL, currentHostKind(), 'the phone bridge').reachable;
 
+/**
+ * Demo mode — the A17 that isn't there.
+ *
+ * With no phone plugged in there is nothing to build the device manager
+ * against. Demo mode routes every call to `phoneDemoDevice` instead of the
+ * bridge, so the whole manager works offline. It is a per-browser toggle
+ * (localStorage), and `VITE_AXE_PHONE_DEMO=1` forces it on for a build that
+ * ships without a bridge at all.
+ */
+const DEMO_KEY = 'axe_phone_demo';
+
+export function isPhoneDemo(): boolean {
+  if ((import.meta.env.VITE_AXE_PHONE_DEMO as string | undefined) === '1') return true;
+  try {
+    return localStorage.getItem(DEMO_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setPhoneDemo(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(DEMO_KEY, '1');
+    else localStorage.removeItem(DEMO_KEY);
+  } catch {
+    /* private mode: the toggle just won't persist */
+  }
+}
+
+/** Is there anything to drive at all — a real bridge, or the demo device? */
+export function phoneBridgeAvailable(): boolean {
+  return isPhoneDemo() || isPhoneBridgeConfigured;
+}
+
 /** One thing on screen that a finger could reach. */
 export interface PhoneElement {
   label: string;
@@ -47,6 +84,13 @@ export interface PhoneElement {
   /** A text field — `phoneType` needs this focused first. */
   editable?: boolean;
   id?: string;
+  /**
+   * Width/height of the element's box, in device pixels. Only the demo device
+   * fills these — a real `ui_dump` reports centre points, so the manager draws
+   * a nominal box there. Optional so nothing on the real path has to set them.
+   */
+  w?: number;
+  h?: number;
 }
 
 export interface PhoneDevice {
@@ -99,10 +143,12 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
  * diagnosis.
  */
 export async function phoneDevices(): Promise<{ adb: string | null; devices: PhoneDevice[] }> {
+  if (isPhoneDemo()) return demoDevices();
   return call('/adb/devices');
 }
 
 export async function phoneIsReady(): Promise<boolean> {
+  if (isPhoneDemo()) return true;
   if (!BRIDGE_TOKEN) return false;
   try {
     const { devices } = await phoneDevices();
@@ -116,6 +162,7 @@ export async function phoneLook(
   action: PhoneLookAction,
   serial?: string,
 ): Promise<PhoneResult> {
+  if (isPhoneDemo()) return demoLook(action);
   return call('/adb', {
     method: 'POST',
     body: JSON.stringify({ action, serial: serial ?? null }),
@@ -127,6 +174,7 @@ export async function phoneDo(
   params: Record<string, unknown>,
   serial?: string,
 ): Promise<PhoneResult> {
+  if (isPhoneDemo()) return demoDo(action, params);
   return call('/adb', {
     method: 'POST',
     body: JSON.stringify({ action, params, serial: serial ?? null }),

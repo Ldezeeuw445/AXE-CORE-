@@ -119,30 +119,30 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       return { px: cx + X * R * persp, py: cy + Y * R * persp, depth: (Z + 1) / 2 };
     };
 
-    /* De helft van de ring die achter (voor=false) of vóór het midden langs
-       loopt. Goud: één warme lijn tussen al dat koele blauw valt op zonder fel
-       te zijn. In twee helften, want dát is wat een ring van een cirkel
-       onderscheidt. */
+    /* De ring, als DEELTJES i.p.v. een lijn — een ketting gouden puntjes om de
+       bol. Goud: één warme kleur tussen al dat koele blauw valt op zonder fel te
+       zijn. In twee helften (voor=false achterlangs, voor=true voorlangs), want
+       dát is wat een ring van een platte cirkel onderscheidt: de achterste helft
+       ijler, de voorste steviger, zodat hij er echt omhéén loopt. */
+    const RING_N = 150;
     const ringHelft = (cx: number, cy: number, R: number, voor: boolean) => {
       const straal = R * 0.74;
-      x.lineWidth = Math.max(1, 1.15 * d);
-      x.beginPath();
-      let begonnen = false;
-      for (let i = 0; i <= 180; i++) {
-        const a = (i / 180) * 6.2832;
+      for (let i = 0; i < RING_N; i++) {
+        const a = (i / RING_N) * 6.2832;
         const X0 = Math.cos(a), Z0 = Math.sin(a);
         const X = X0 * cyv - Z0 * syv;
         let Z = X0 * syv + Z0 * cyv;
         const Y = -Z * sxv;
         Z = Z * cxv;
-        if ((Z > 0) !== voor) { begonnen = false; continue; }
+        if ((Z > 0) !== voor) continue;
         const persp = 1.9 / (2.4 - Z);
         const px = cx + X * straal * persp, py = cy + Y * straal * persp;
-        if (begonnen) x.lineTo(px, py); else x.moveTo(px, py);
-        begonnen = true;
+        const depth = (Z + 1) / 2;
+        x.fillStyle = voor
+          ? `rgba(228,210,120,${(0.55 + depth * 0.42).toFixed(3)})`
+          : `rgba(210,192,96,${(0.20 + depth * 0.30).toFixed(3)})`;
+        x.beginPath(); x.arc(px, py, (0.75 + depth * 1.25) * d, 0, 6.284); x.fill();
       }
-      x.strokeStyle = voor ? 'rgba(212,196,86,.62)' : 'rgba(212,196,86,.26)';
-      x.stroke();
     };
 
     /* Deeltjes voller en iets groter dan eerst.
@@ -160,8 +160,14 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       x.clearRect(0, 0, w, h);
 
       const b = boostRef.current;
-      const cx = w / 2, cy = h / 2;
-      const R = Math.min(w, h) * 0.31 * zoom;
+      // Boven het midden: op de telefoon-plaat staat de composer eronder, en dan
+      // oogt het gecentreerde midden te laag. 0.40 tilt de bol wat verder op
+      // zonder hem tegen de bovenrand te duwen.
+      const cx = w / 2, cy = h * 0.40;
+      // Iets groter standaard (0.31 -> 0.34): op klein formaat lagen de deeltjes
+      // te dicht op elkaar en versmolten tot één waas. Meer straal = meer lucht
+      // tussen de punten, dus ook zonder inzoomen leest de korrel.
+      const R = Math.min(w, h) * 0.34 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
 
       // Binnenbol op 46% van de straal: je ziet hem door de buitenste heen
@@ -170,38 +176,43 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth > 0.5) continue;
-        x.fillStyle = `rgba(120,205,240,${(0.16 + q.depth * 0.52).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.7 + q.depth * 1.45) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(130,212,246,${(0.26 + q.depth * 0.60).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.95 + q.depth * 1.6) * d, 0, 6.284); x.fill();
       }
 
       ringHelft(cx, cy, R, false);
 
       // Twee gradients: één wijde gloed en één felle punt. Eén gradient geeft
       // óf een vlek óf een stip, nooit allebei.
+      // Minder gloed dan eerst: de wijde waas en de hete kern maakten van de bol
+      // op klein formaat één lichtende bol i.p.v. deeltjes. Gedempt zodat de
+      // korrel wint; bij inzoomen blijft er genoeg kern voor diepte.
       const wijd = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.55 * puls);
-      wijd.addColorStop(0, `rgba(110,200,240,${(0.18 + b * 0.1).toFixed(3)})`);
-      wijd.addColorStop(0.45, 'rgba(60,130,190,.06)');
+      wijd.addColorStop(0, `rgba(110,200,240,${(0.10 + b * 0.08).toFixed(3)})`);
+      wijd.addColorStop(0.45, 'rgba(60,130,190,.03)');
       wijd.addColorStop(1, 'rgba(0,0,0,0)');
       x.fillStyle = wijd;
       x.beginPath(); x.arc(cx, cy, R * 0.55 * puls, 0, 6.284); x.fill();
 
-      const kern = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.12 * puls);
-      kern.addColorStop(0, `rgba(240,252,255,${(0.72 + b * 0.25).toFixed(3)})`);
-      kern.addColorStop(0.42, 'rgba(120,215,245,.30)');
+      const kern = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.11 * puls);
+      kern.addColorStop(0, `rgba(240,252,255,${(0.44 + b * 0.22).toFixed(3)})`);
+      kern.addColorStop(0.42, 'rgba(120,215,245,.16)');
       kern.addColorStop(1, 'rgba(0,0,0,0)');
       x.fillStyle = kern;
       x.beginPath(); x.arc(cx, cy, R * 0.12 * puls, 0, 6.284); x.fill();
 
       for (const q of binnen) {
         if (q.depth <= 0.5) continue;
-        x.fillStyle = `rgba(150,228,255,${(0.20 + q.depth * 0.66).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.7 + q.depth * 1.55) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(160,232,255,${(0.34 + q.depth * 0.66).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.95 + q.depth * 1.7) * d, 0, 6.284); x.fill();
       }
 
       for (const p of bol) {
         const q = proj(p, cx, cy, R);
-        const size = (0.85 + q.depth * 2.2) * d * (0.9 + b * 0.4);
-        x.fillStyle = `rgba(${p.rgb},${(0.34 + q.depth * 0.66).toFixed(3)})`;
+        // Groter en steviger: Luka wil de korrel duidelijker — zowel de buitenschil
+        // als de binnenbol met deeltjes.
+        const size = (1.15 + q.depth * 2.55) * d * (0.9 + b * 0.4);
+        x.fillStyle = `rgba(${p.rgb},${(0.52 + q.depth * 0.48).toFixed(3)})`;
         x.beginPath(); x.arc(q.px, q.py, size, 0, 6.284); x.fill();
       }
 
@@ -257,17 +268,51 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       teken();
     };
 
+    /* Één vinger draait, twee vingers zoomen (knijpen).
+     *
+     * `wheel` vuurt alleen op de desktop, dus op de telefoon was er geen manier
+     * om in/uit te zoomen. Nu houden we de actieve pointers bij: bij twee raak-
+     * punten meet de afstand het zoomen (net als een foto), bij één punt draait
+     * hij zoals eerst. touch-action:none op de canvas houdt de browser-zoom weg. */
+    const pointers = new Map<number, { x: number; y: number }>();
+    let knijpAfstand = 0;
+    const tweeAfstand = () => {
+      const pts = [...pointers.values()];
+      if (pts.length < 2) return 0;
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    };
     const omlaag = (e: PointerEvent) => {
-      slepen = true; lastX = e.clientX; lastY = e.clientY;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       canvas.setPointerCapture(e.pointerId);
+      if (pointers.size === 1) { slepen = true; lastX = e.clientX; lastY = e.clientY; }
+      else if (pointers.size === 2) { slepen = false; knijpAfstand = tweeAfstand(); }
     };
     const beweeg = (e: PointerEvent) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size >= 2) {
+        const d2 = tweeAfstand();
+        if (knijpAfstand > 0 && d2 > 0) {
+          zoom = Math.max(0.55, Math.min(2.6, zoom * (d2 / knijpAfstand)));
+        }
+        knijpAfstand = d2;
+        return;
+      }
       if (!slepen) return;
       rotY += (e.clientX - lastX) * 0.006;
       rotX = Math.max(-1.3, Math.min(1.3, rotX + (e.clientY - lastY) * 0.006));
       lastX = e.clientX; lastY = e.clientY;
     };
-    const los = () => { slepen = false; };
+    const los = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) knijpAfstand = 0;
+      if (pointers.size === 0) { slepen = false; }
+      else if (pointers.size === 1) {
+        // Terug naar draaien met de overgebleven vinger, zonder sprong.
+        const [p] = pointers.values();
+        slepen = true; lastX = p.x; lastY = p.y;
+      }
+    };
     const wiel = (e: WheelEvent) => {
       e.preventDefault();
       zoom = Math.max(0.55, Math.min(2.6, zoom * (e.deltaY < 0 ? 1.08 : 0.926)));

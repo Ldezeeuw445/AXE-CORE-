@@ -37,6 +37,28 @@ export function isAndroidShellRuntime(): boolean {
 }
 
 /**
+ * De Tauri-app draait sinds Tauri 2 óók op Android (`tauri android`), met exact
+ * dit web-frontend. Dat is een telefoon zonder het macOS-glas achter het
+ * venster, dus daar hoort de mobiele indeling + een geschilderde plaat, net als
+ * in een telefoonbrowser. Onderscheiden via de user-agent: de Android-webview
+ * zegt "Android", de macOS-desktop zegt "Macintosh".
+ */
+export function isTauriMobile(): boolean {
+  if (!isTauriRuntime() || typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+/**
+ * Waar is er ECHT native glas achter het venster? Alleen op de macOS-desktop-
+ * Tauri (zie zet_plaat_materiaal in main.rs). Overal anders — telefoonbrowser,
+ * PWA, Android-shell, Tauri-Android — moet de plaat geschilderd worden.
+ */
+export function hasNativeGlass(): boolean {
+  if (typeof navigator === 'undefined') return isTauriRuntime();
+  return isTauriRuntime() && /Macintosh|Mac OS X/i.test(navigator.userAgent) && !isTauriMobile();
+}
+
+/**
  * Which of the three hosts this is, for the purpose of reaching a local
  * service. See domain/loopback.ts for what the answer is used for.
  *

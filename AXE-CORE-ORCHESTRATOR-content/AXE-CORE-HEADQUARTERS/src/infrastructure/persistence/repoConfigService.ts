@@ -117,6 +117,27 @@ export function resolveRepoIdFromHint(hint: string): string | null {
   return null;
 }
 
+/**
+ * Coerce one stored entry into a whole RepoConfig.
+ *
+ * A config that was written by an older UI, or synced half-formed, can be
+ * missing `repo`/`owner` entirely. One such entry used to blank the whole app:
+ * CodeAgentPanel calls `repo.repo.replace(...)` during render, and `undefined`
+ * has no `.replace`. The invariant belongs here, not in every consumer — a
+ * loaded config always has strings, so nothing downstream has to guard.
+ */
+function normalizeRepo(r: Partial<RepoConfig> | null | undefined): RepoConfig {
+  return {
+    id: String(r?.id ?? ''),
+    label: String(r?.label ?? r?.id ?? ''),
+    owner: String(r?.owner ?? ''),
+    repo: String(r?.repo ?? ''),
+    branch: String(r?.branch ?? 'main'),
+    srcPrefix: String(r?.srcPrefix ?? ''),
+    token: String(r?.token ?? ''),
+  };
+}
+
 /** Merge stored configs with DEFAULT_REPOS so new entries (e.g. Axon) appear. */
 export function loadRepoConfigs(): RepoConfig[] {
   let stored: RepoConfig[] = [];
@@ -147,14 +168,18 @@ export function loadRepoConfigs(): RepoConfig[] {
   for (const r of stored) {
     if (!merged.some((m) => m.id === r.id)) merged.push(r);
   }
+  // Every entry gets whole strings, and a config with neither id nor repo is
+  // dropped — it could never clone or edit anything, and it must not crash a
+  // render on the way to being ignored.
+  const clean = merged.map(normalizeRepo).filter((r) => r.id || r.repo);
   // If stored list was older (no AXON), write the merged list back so the next
   // Settings hydrate / save keeps all DEFAULT_REPOS cards visible.
   if (stored.length < DEFAULT_REPOS.length || !byId.has('axon')) {
     try {
-      localStorage.setItem('axe_github_repos', JSON.stringify(merged));
+      localStorage.setItem('axe_github_repos', JSON.stringify(clean));
     } catch { /* ignore */ }
   }
-  return merged;
+  return clean;
 }
 
 export function saveRepoConfigs(repos: RepoConfig[]) {

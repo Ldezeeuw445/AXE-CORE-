@@ -571,6 +571,56 @@ html:root[data-look],
   -webkit-backdrop-filter: none;
 }
 
+/* ── De mobiele glasplaat ────────────────────────────────────────────────
+ *
+ * Op de telefoon-home IS de schil de zwevende glasplaat uit de "AXE Glass
+ * Plate"-mockup: een paneel met een kier eromheen (de inset staat inline in
+ * AppShell), een randje en een subtiele vulling die het van de achtergrond
+ * (MobileGlass) aftekent. De inhoud eronder — sphere, cijfers, chat, composer —
+ * houdt zijn eigen donkere materiaal; dit is alleen de plaat waarop het ligt.
+ *
+ * Waarom een klasse met !important: de shell-achtergrond hierboven staat op
+ * `transparent !important` (glass) en `var(--axe-plaat) !important` (black), en
+ * dat moet de plaatvulling overrulen. Geen backdrop-filter op de plaat: die zou
+ * de eigen matglas-lagen van de chat en de composer platslaan (een element met
+ * backdrop-filter is de backdrop-root voor alles erbinnen). */
+:root[data-look] .axe-shell.axe-plaat-mobiel {
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── Border-beam op de composer ──────────────────────────────────────────
+ * De gloed rond de home-composer komt nu uit de `border-beam`-library
+ * (size="pulse-outside", colorVariant="colorful") in HomeCommandComposer.tsx.
+ * Het eerdere handgemaakte `.axe-beam` (conic-rand / radiale golf in CSS) is
+ * verwijderd — de library doet de pulse-outside halo netjes rond de doos. */
+/* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
+   dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
+   een dichte kaart wordt. */
+/* Lichte stand = FROSTED glas over de kleur-grond (MobileGlass): een echte
+   backdrop-blur vervaagt de kleurige gradient tot matglas, met een lichte sluier
+   erover. Zo tekent de plaat zich af tegen de grond en scheidt hij de sphere van
+   de achtergrond (die vervaagt erachter, de sphere blijft scherp erop).
+   De licht/donker-knop staat buiten de schil (AppShell), dus deze backdrop-filter
+   verschuift hem niet meer. */
+:root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
+  background:
+    radial-gradient(130% 80% at 50% -14%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, rgba(248, 250, 253, 0.24) 0%, rgba(240, 245, 250, 0.15) 100%) !important;
+  /* FROST helemaal vol (à la liquid-glass): een zware blur vervaagt de kleur-
+     grond tot een zacht melkig matglas met kleurzweempjes — dát is het Tauri-
+     light-glas-effect. */
+  backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.38) !important;
+}
+:root[data-look='black'] .axe-shell.axe-plaat-mobiel {
+  background:
+    radial-gradient(130% 80% at 50% -12%, rgba(212, 222, 255, 0.11), rgba(212, 222, 255, 0) 62%),
+    linear-gradient(180deg, rgba(192, 210, 250, 0.15) 0%, rgba(162, 182, 230, 0.062) 50%, rgba(144, 164, 220, 0.028) 100%) !important;
+}
+
 /* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de
    galaxy doorkomt, saturate 0 trekt de kleur naar grijs — donker glas dat
    leeft, geen effen zwart vlak. */
@@ -1452,6 +1502,14 @@ html:root[data-look],
   z-index: 1200;
 }
 
+/* Op de telefoon onder de statusbalk én binnen de glasplaat-rand: top:16 zonder
+   safe-area zette de wereldschakelaar in de statusregel, boven de plaat uit. */
+@media (max-width: 767px) {
+  :root[data-look] .axe-viewctl {
+    top: calc(env(safe-area-inset-top, 0px) + 20px);
+  }
+}
+
 /* Home's eigen CORE ACTIVE staat nu in de kopregel. Twee keer dezelfde status,
    op twee hoogtes, was precies wat de kop twee regels maakte. */
 :root[data-look] .axe-home-status { display: none !important; }
@@ -1507,6 +1565,14 @@ html:root[data-look],
   border: 0 !important;
   box-shadow: none !important;
   gap: clamp(13px, 1vw, 19px) !important;
+}
+
+/* Mobiel: de knoprij van de composer past alleen als één compacte balk (de
+   "vierkante" Tauri-composer) als de ruime desktop-gap kleiner wordt; met
+   clamp(13px,…) × zes gaten klapte de input naar bijna niets. */
+@media (max-width: 640px) {
+  :root[data-look] .axe-composer .axe-gemini-inner,
+  :root[data-look] .axe-composer .axe-gemini-inner-subtle { gap: 5px !important; }
 }
 
 /* Het cyaan ruitje vooraan. In de demo is dat het eerste wat je ziet -- de

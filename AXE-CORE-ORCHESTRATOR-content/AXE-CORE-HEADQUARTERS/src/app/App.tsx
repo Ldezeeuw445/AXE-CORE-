@@ -56,6 +56,8 @@ const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
 const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
+const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
+const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
@@ -226,6 +228,11 @@ export default function App() {
             <Route path="organization" element={<Organization />} />
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />
+            <Route path="device" element={<DeviceManager />} />
+            {/* Lock Screen — binnen de AppShell, maar als command-surface
+                (zie AppShell): alle chrome weg, de plaat blijft eronder, dus
+                exact de app-look met licht/donker. */}
+            <Route path="lock" element={<LockScreen />} />
           </Route>
         </Routes>
       </NotificationProvider>

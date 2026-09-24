@@ -3,6 +3,7 @@ import { HashRouter } from 'react-router'
 import { Toaster } from 'sonner'
 import '@/app/index.css'
 import { applyStoredLookEarly } from '@/presentation/hooks/useLook'
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl'
 
 // Vóór de eerste render: anders ziet frame 1 de standaardstand en klapt het
 // scherm daarna om -- een flits die eruitziet als een fout.
@@ -17,6 +18,20 @@ try {
     document.documentElement.classList.add("axe-tauri")
   }
 } catch { /* geen window */ }
+
+// "ResizeObserver loop completed with undelivered notifications" is een bekende,
+// onschuldige browser-waarschuwing (o.a. van xterm/kaartcomponenten die tijdens
+// een resize opnieuw meten). In de Tauri-debug-webview komt zo'n onafgevangen
+// error als rode banner over de app. Deze ene slikken we, de rest laten we staan.
+try {
+  window.addEventListener('error', (e) => {
+    if (e?.message && /ResizeObserver loop/i.test(e.message)) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  });
+} catch { /* geen window */ }
+
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { installLiveChat } from '@/presentation/store/installLiveChat'
