@@ -97,19 +97,6 @@ export default function AICore() {
   }, [voice.routingLog]);
 
   useEffect(() => {
-    const slots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
-    const cfg = voice.primarySlot ? PROVIDERS.find(p => p.id === voice.primarySlot!.provider) : null;
-    const short = voice.primarySlot?.model
-      ? voice.primarySlot.model.split('/').pop()?.split(':')[0]
-      : null;
-    const label = cfg ? `${cfg.name}${short ? ' / ' + short : ''}` : voice.primarySlot?.provider;
-    const text = slots.length === 0
-      ? 'No LLM connected — Settings → AI Config'
-      : `LLM ready · ${label}${slots.length > 1 ? ` + ${slots.length - 1} fallback` : ''}`;
-    setLogs(prev => prev.map(l => (l.id === '2' ? { ...l, text } : l)));
-  }, [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot]);
-
-  useEffect(() => {
     if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
   }, [logs]);
 
@@ -163,6 +150,9 @@ export default function AICore() {
   const primaryLabel = primaryCfg
     ? `${primaryCfg.name}${voice.primarySlot?.model ? ' / ' + shortModel(voice.primarySlot.model) : ''}`
     : '—';
+  const llmStatusText = connectedSlots.length === 0
+    ? 'No LLM connected — Settings → AI Config'
+    : `LLM ready · ${primaryLabel}${connectedSlots.length > 1 ? ` + ${connectedSlots.length - 1} fallback` : ''}`;
   // Memory is linked when the Supabase client is initialised (env vars present)
   const supaLinked = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) || linkedState.supa;
 
@@ -292,7 +282,7 @@ export default function AICore() {
                 <span style={{ color: 'rgba(255,255,255,0.15)', flexShrink: 0 }}>{log.t}</span>
                 <span style={{ color: LOG_COLOR[log.type], flexShrink: 0 }}>{LOG_PREFIX[log.type]}</span>
                 <span style={{ color: log.type === 'out' ? 'rgba(255,255,255,0.85)' : log.type === 'in' ? 'rgba(165,243,252,0.8)' : 'rgba(255,255,255,0.3)' }}>
-                  {log.text}
+                  {log.id === '2' ? llmStatusText : log.text}
                 </span>
               </motion.div>
             ))}
