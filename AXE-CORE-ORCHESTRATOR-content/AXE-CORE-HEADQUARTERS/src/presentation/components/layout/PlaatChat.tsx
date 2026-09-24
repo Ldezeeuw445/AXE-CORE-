@@ -257,6 +257,7 @@ export function PlaatChat() {
 
     lastUserTextRef.current = t;
 
+    if (voice.voiceStatus !== 'idle') voice.stopListening();
     const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
     setAttachments([]);

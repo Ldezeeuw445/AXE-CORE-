@@ -11,10 +11,10 @@ import type { RoutingEvent } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/infrastructure/persistence/coreDB';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { formatLocalClock } from '@/presentation/pages/aicoreKlok';
 
-function ts() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+function ts(at?: number | Date) {
+  return formatLocalClock(at ?? Date.now(), true);
 }
 
 interface LogEntry { id: string; t: string; type: 'in' | 'out' | 'sys' | 'route'; text: string; }
@@ -38,7 +38,7 @@ export default function AICore() {
     // Which model AXE runs on is not a thing the user should watch; AXE is AXE.
     const entry: LogEntry = {
       id: `${last.timestamp}-${last.role}`,
-      t: new Date(last.timestamp).toISOString().slice(11, 23),
+      t: ts(last.timestamp),
       type: last.role === 'user' ? 'in' : 'out',
       text: last.text,
     };
@@ -74,7 +74,7 @@ export default function AICore() {
     if (log.length === 0 || log.length === prevRouteLen.current) return;
     prevRouteLen.current = log.length;
     const evt = log[0]; // newest is first
-    const t = new Date(evt.ts).toISOString().slice(11, 23);
+    const t = ts(evt.ts);
     const baseId = `rte-${evt.id}`;
     const agent = (evt.delegate ?? 'axe') as AxeAgentId;
     const newEntries: LogEntry[] = [];
@@ -95,6 +95,19 @@ export default function AICore() {
       return [...prev, ...newEntries.filter(e => !ids.has(e.id))].slice(-200);
     });
   }, [voice.routingLog]);
+
+  useEffect(() => {
+    const slots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
+    const cfg = voice.primarySlot ? PROVIDERS.find(p => p.id === voice.primarySlot!.provider) : null;
+    const short = voice.primarySlot?.model
+      ? voice.primarySlot.model.split('/').pop()?.split(':')[0]
+      : null;
+    const label = cfg ? `${cfg.name}${short ? ' / ' + short : ''}` : voice.primarySlot?.provider;
+    const text = slots.length === 0
+      ? 'No LLM connected — Settings → AI Config'
+      : `LLM ready · ${label}${slots.length > 1 ? ` + ${slots.length - 1} fallback` : ''}`;
+    setLogs(prev => prev.map(l => (l.id === '2' ? { ...l, text } : l)));
+  }, [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot]);
 
   useEffect(() => {
     if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
@@ -360,7 +373,7 @@ export default function AICore() {
                     {(evt.count ?? 1) > 1 && (
                       <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)' }}>×{evt.count}</span>
                     )}
-                    <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(evt.ts).toISOString().slice(11, 19)}</span>
+                    <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{formatLocalClock(evt.ts, false)}</span>
                   </div>
                   {/* Query preview */}
                   <p className="text-[9px] truncate mb-1" style={{ color: 'rgba(165,243,252,0.5)' }}>"{evt.query}"</p>

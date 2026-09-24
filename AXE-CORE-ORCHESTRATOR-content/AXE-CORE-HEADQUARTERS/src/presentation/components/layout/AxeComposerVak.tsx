@@ -49,10 +49,11 @@
  * axe-look.css). Zijn eigen inhoud is ongewijzigd; alleen waar hij hangt is
  * nieuw.
  */
-import { useEffect, useRef, type CSSProperties, type ReactNode, type KeyboardEvent } from 'react';
-import { VoiceBeam, useMicrophone } from 'voice-glow';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type KeyboardEvent, type ClipboardEvent } from 'react';
+import { VoiceBeam } from 'voice-glow';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
+import { getActiveMicStream, getMicLevel, subscribeMicStream } from '@/infrastructure/gateways/whisperService';
 import { useAudioActivity } from '@/presentation/hooks/useAudioActivity';
 import { ComposerSnelacties } from './ComposerSnelacties';
 import type { Snelactie } from '@/domain/snelacties';
@@ -107,28 +108,56 @@ export function AxeComposerVak({
   // in the store unused by any UI. Showing it here is the "see my own words
   // as I talk" ask: no new STT work, just wiring what already exists.
   const transcript = useVoiceStore(s => s.transcript);
-  const mic = useMicrophone({ autoStart: false });
+  const rawError = useVoiceStore(s => s.error);
+  const micError = rawError && /microphone|mic |audio-capture|notallowed|permission denied|getusermedia/i.test(rawError)
+    ? rawError
+    : null;
+  const stopListening = useVoiceStore(s => s.stopListening);
+  const [micStream, setMicStream] = useState<MediaStream | null>(() => getActiveMicStream());
   const isListening = status === 'listening';
   const isProcessing = status === 'processing';
   const presence = useAudioActivity(
-    status === 'listening' ? mic.stream : null,
+    status === 'listening' ? micStream : null,
     status === 'speaking' ? getGlobalTtsLevel : undefined,
   );
 
-  // SpeechRecognition owns transcription; VoiceBeam only borrows a raw stream
-  // while Luka is speaking so the visual follows the real microphone dynamics.
-  useEffect(() => {
-    if (status === 'listening') { void mic.start(); }
-    else if (mic.state === 'live') { mic.stop(); }
-  }, [status]);
+  // Eén stream: Whisper opent hem vanuit de klik, VoiceBeam leest hem alleen.
+  // Geen tweede getUserMedia vanuit useEffect — in WKWebView blijft die stil.
+  useEffect(() => subscribeMicStream(setMicStream), []);
+
+  const hangListenOp = () => {
+    if (status !== 'idle') stopListening();
+  };
 
   const opToets = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isListening && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const typt = e.key.length === 1 || e.key === 'Backspace' || e.key === 'Enter';
+      if (typt) {
+        hangListenOp();
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          opVerstuur();
+          return;
+        }
+        if (e.key.length === 1) {
+          opWaarde(waarde + e.key);
+          e.preventDefault();
+        }
+      }
+    }
     // Shift+enter is de enige manier om een tweede regel te maken zolang enter
     // verstuurt. Zonder deze uitzondering is een textarea een dure input.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       opVerstuur();
     }
+  };
+
+  const opPlak = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!isListening) return;
+    e.preventDefault();
+    hangListenOp();
+    opWaarde(waarde + e.clipboardData.getData('text'));
   };
 
   const presenceStyle = {
@@ -160,8 +189,8 @@ export function AxeComposerVak({
           library default. `active` is left at its default (on): with the beam
           gone, this is the only light, so it must not switch off at rest. */}
       <VoiceBeam
-        stream={status === 'listening' ? mic.stream : null}
-        level={status === 'speaking' ? getGlobalTtsLevel : 0}
+        stream={status === 'listening' ? micStream : null}
+        level={status === 'speaking' ? getGlobalTtsLevel : status === 'listening' ? getMicLevel : 0}
         processing={isProcessing}
         sensitivity={4}
         threshold={0.055}
@@ -191,6 +220,7 @@ export function AxeComposerVak({
             value={isListening ? transcript : waarde}
             onChange={e => opWaarde(e.target.value)}
             onKeyDown={opToets}
+            onPaste={opPlak}
             readOnly={isListening}
             placeholder={isListening ? 'Listening…' : plaatshouder}
             rows={2}
@@ -200,6 +230,12 @@ export function AxeComposerVak({
           />
           {staf && <div className="axe-vak-staf">{staf}</div>}
         </div>
+
+        {micError && (
+          <p className="px-1 text-[10px] leading-snug" style={{ color: 'var(--error)' }} role="alert">
+            {micError}
+          </p>
+        )}
 
         <div className="axe-vak-rij">
           <div className="axe-vak-links">{links}</div>

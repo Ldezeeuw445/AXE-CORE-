@@ -20,7 +20,7 @@ try {
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { installLiveChat } from '@/presentation/store/installLiveChat'
-import { installWhisperVoice } from '@/presentation/store/installWhisperVoice'
+import { installWhisperVoice, installWhisperVoiceSendGuard } from '@/presentation/store/installWhisperVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
@@ -38,6 +38,8 @@ installFishVoice();
 installStableChat();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
+// Typed send hangt een lopende Whisper-listen op (na de andere wrappers)
+installWhisperVoiceSendGuard();
 // WebXR / Maps3D entry from sphere map projection
 installSphereXR();
 // Continuous memory: every session + chat turns land in the right stores
