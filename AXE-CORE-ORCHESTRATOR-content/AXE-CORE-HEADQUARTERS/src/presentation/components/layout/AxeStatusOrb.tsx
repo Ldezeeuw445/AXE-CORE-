@@ -45,13 +45,10 @@ export function AxeStatusOrb({ size, werk, toonLabel = false, className, status:
 
   // Eén rAF: mic terwijl we luisteren, TTS-analyser terwijl AXE praat.
   // Geen tweede getUserMedia — getMicLevel leest de Whisper-stream.
+  const luistert = status === 'listening';
+  const praat = status === 'speaking' || teken.soort === 'equalizer';
   useEffect(() => {
-    const luistert = status === 'listening';
-    const praat = status === 'speaking' || teken.soort === 'equalizer';
-    if (!luistert && !praat) {
-      setPulse(0);
-      return;
-    }
+    if (!luistert && !praat) return;
     let raf = 0;
     const tik = () => {
       setPulse(luistert ? getMicLevel() : getGlobalTtsLevel());
@@ -59,11 +56,12 @@ export function AxeStatusOrb({ size, werk, toonLabel = false, className, status:
     };
     raf = requestAnimationFrame(tik);
     return () => cancelAnimationFrame(raf);
-  }, [status, teken.soort]);
+  }, [luistert, praat]);
 
-  const live = pulse > 0.02;
+  const niveau = luistert || praat ? pulse : 0;
+  const live = niveau > 0.02;
   const staaf = [0.45, 0.7, 1, 0.85, 0.6, 0.9, 0.5];
-  const schaal = 1 + pulse * (size === 20 ? 0.18 : 0.28);
+  const schaal = 1 + niveau * (size === 20 ? 0.18 : 0.28);
 
   return (
     <div
@@ -82,7 +80,7 @@ export function AxeStatusOrb({ size, werk, toonLabel = false, className, status:
           {staaf.map((h, i) => (
             <i
               key={i}
-              style={live ? { height: Math.max(3, Math.round(4 + pulse * (size === 20 ? 12 : 22) * h)) } : undefined}
+              style={live ? { height: Math.max(3, Math.round(4 + niveau * (size === 20 ? 12 : 22) * h)) } : undefined}
             />
           ))}
         </span>
