@@ -2750,6 +2750,41 @@ AXE_CORE_DEFAULT_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
 # this exact bare uuid.
 AXE_CORE_EPISODE_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069"
 
+# ── AXE's stem op de VPS (23 sep 2026) ─────────────────────────────────────
+# George (Kokoro bm_george) draait primair op de Mac mini (com.axe.tts). Deze
+# VPS-kopie (systemd axe-tts, 127.0.0.1:8766, lazy geladen en na stilte weer
+# vrijgegeven) is de terugval, zodat AXE altijd dezelfde stem houdt -- Luka:
+# "dan is het gewoon altijd dezelfde stem". De app bereikt hem hier, achter
+# dezelfde AUTH als de rest; de stemdienst zelf luistert alleen lokaal.
+AXE_TTS_URL = os.environ.get("AXE_TTS_URL", "http://127.0.0.1:8766")
+
+
+@app.get("/tts/health", dependencies=[AUTH])
+async def tts_health():
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(f"{AXE_TTS_URL}/health")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=503, detail=f"voice service unreachable ({type(e).__name__})")
+    return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+
+
+@app.post("/tts", dependencies=[AUTH])
+async def tts_proxy(request: Request):
+    body = await request.body()
+    if len(body) > 64_000:
+        raise HTTPException(status_code=413, detail="body too large")
+    try:
+        # 90 s: de eerste aanvraag na stilte laadt het model eerst.
+        async with httpx.AsyncClient(timeout=90) as client:
+            r = await client.post(f"{AXE_TTS_URL}/tts", content=body, headers={"Content-Type": "application/json"})
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=503, detail=f"voice service unreachable ({type(e).__name__})")
+    extra = {k: v for k, v in r.headers.items() if k.lower() in ("x-audio-seconds", "x-synth-seconds")}
+    return Response(content=r.content, status_code=r.status_code,
+                    media_type=r.headers.get("content-type", "application/json"), headers=extra)
+
+
 @app.post("/crew/run", dependencies=[AUTH])
 async def crew_run(req: CrewRunRequest, request: Request):
     """

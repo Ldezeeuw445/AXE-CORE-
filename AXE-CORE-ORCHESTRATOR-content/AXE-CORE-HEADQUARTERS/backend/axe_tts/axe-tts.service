@@ -1,0 +1,24 @@
+# AXE's stem op de VPS: George (Kokoro), de terugval voor de Mac mini.
+# Lazy: laadt pas bij de eerste aanvraag en geeft na 10 min stilte het geheugen
+# weer vrij -- deze box swapt al. Harde grenzen zodat de stem de API nooit kan
+# meenemen (zoals ollama dat eerder deed). Bereikbaar via axe_api /tts (AUTH).
+[Unit]
+Description=AXE voice (George, Kokoro) - fallback for the Mac mini
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/axe-tts
+Environment=AXE_TTS_HOME=/opt/axe-tts
+Environment=AXE_TTS_LAZY=1
+Environment=AXE_TTS_IDLE_S=600
+Environment=AXE_TTS_PORT=8766
+ExecStart=/opt/axe-tts/.venv/bin/python /opt/axe-tts/app.py
+Restart=always
+RestartSec=5
+MemoryMax=1G
+CPUQuota=150%
+
+[Install]
+WantedBy=multi-user.target

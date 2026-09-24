@@ -17,6 +17,7 @@ Luistert alleen op 127.0.0.1. Het model staat buiten git in AXE_TTS_HOME
 """
 from __future__ import annotations
 
+import gc
 import io
 import json
 import os
@@ -25,6 +26,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import numpy as np
 import soundfile as sf
 from kokoro_onnx import Kokoro
 
@@ -50,9 +52,45 @@ ALLOWED_ORIGINS = {
     "http://127.0.0.1:5173",
 }
 
-_kokoro = Kokoro(str(MODEL), str(VOICES))
-_voices = set(_kokoro.get_voices())
+# Lazy (VPS): de VPS is alleen de terugval als de Mac mini geen stem heeft, en
+# die box swapt al. Dan pas laden bij de eerste aanvraag en na AXE_TTS_IDLE_S
+# stilte weer vrijgeven -- in rust kost de stem daar niets. Op de Mac mini
+# eager: daar is hij de hoofdstem en telt de eerste seconde.
+LAZY = os.environ.get("AXE_TTS_LAZY") == "1"
+IDLE_S = int(os.environ.get("AXE_TTS_IDLE_S", "600"))
+
+# De stemnamen komen uit het stemmenbestand zelf (een npz), zodat we ook
+# zonder geladen model kunnen weigeren wat niet bestaat.
+with np.load(str(VOICES)) as _npz:
+    _voices = set(_npz.files)
+
 _lock = threading.Lock()
+_kokoro: Kokoro | None = None if LAZY else Kokoro(str(MODEL), str(VOICES))
+_laatst = time.monotonic()
+
+
+def _model() -> Kokoro:
+    """Het model, geladen als het nog niet in het geheugen staat. Onder _lock."""
+    global _kokoro, _laatst
+    if _kokoro is None:
+        _kokoro = Kokoro(str(MODEL), str(VOICES))
+    _laatst = time.monotonic()
+    return _kokoro
+
+
+def _vrijgever() -> None:
+    global _kokoro
+    while True:
+        time.sleep(30)
+        with _lock:
+            if _kokoro is not None and time.monotonic() - _laatst > IDLE_S:
+                _kokoro = None
+                gc.collect()
+                print(f"axe-tts: model vrijgegeven na {IDLE_S}s stilte", flush=True)
+
+
+if LAZY:
+    threading.Thread(target=_vrijgever, daemon=True).start()
 
 
 def _lang_for(voice: str) -> str:
@@ -87,7 +125,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path.split("?")[0] == "/health":
-            self._json(200, {"ok": True, "voice": DEFAULT_VOICE, "model": MODEL.name})
+            self._json(200, {"ok": True, "voice": DEFAULT_VOICE, "model": MODEL.name,
+                             "lazy": LAZY, "loaded": _kokoro is not None})
         else:
             self._json(404, {"error": "not found"})
 
@@ -129,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
 
         t0 = time.monotonic()
         with _lock:
-            samples, rate = _kokoro.create(text, voice=voice, speed=speed, lang=_lang_for(voice))
+            samples, rate = _model().create(text, voice=voice, speed=speed, lang=_lang_for(voice))
         buf = io.BytesIO()
         sf.write(buf, samples, rate, format="WAV", subtype="PCM_16")
         wav = buf.getvalue()
@@ -152,5 +191,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"axe-tts: {MODEL.name}, voice {DEFAULT_VOICE}, 127.0.0.1:{PORT}", flush=True)
+    print(f"axe-tts: {MODEL.name}, voice {DEFAULT_VOICE}, 127.0.0.1:{PORT}, lazy={LAZY}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
