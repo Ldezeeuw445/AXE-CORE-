@@ -456,30 +456,29 @@ html:root[data-look],
 
 /* Eén materiaal voor alles wat een kaart is — de widgets in de rails, de
    blokken op elke pagina en de commandobalk lezen uit dezelfde tokens, dus
-   ze kunnen niet uit de pas gaan lopen. */
+   ze kunnen niet uit de pas gaan lopen. Matzwart, dunne lichte rand, zachte
+   schaduw. Geen cyaan gloed. */
+:root[data-look] .axe-kaart,
 :root[data-look] .widget-card,
 :root[data-look] .axe-shell .axe-surface,
 :root[data-look] .axe-shell .axe-surface--flat,
 :root[data-look] .axe-shell .axe-surface--inset {
-  background: var(--surface-bg);
-  border-color: transparent;
-  box-shadow: var(--surface-edge);
-  /* Hier stond var(--card-blur). De regel verderop zet hem toch al op none;
-     twee regels die het tegenovergestelde zeggen over hetzelfde element zijn
-     een val voor de volgende lezer. Zie daar voor het waarom. */
+  background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn);
+  border-radius: var(--axe-kaart-hoek);
+  box-shadow: var(--axe-kaart-schaduw);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-/* De hover-regel in index.css staat op !important en moet hier expliciet
-   terug: een rand die alleen bij aanwijzen verschijnt is nog steeds een rand.
-
-   `none` mag hier niet staan — dat wist ook de lichtstreep die de kaart tot
-   ruit maakt, en dan valt de kaart bij aanwijzen uit elkaar. De streep blijft;
-   alleen de cyaan gloed eromheen gaat weg. */
+/* Hover: bovenrand iets helderder, geen neon. */
+:root[data-look] .axe-kaart:hover,
 :root[data-look] .widget-card:hover,
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border']:hover,
 :root[data-look] .axe-shell [class*='rounded-2xl'][class*='border']:hover {
-  border-color: transparent !important;
-  box-shadow: var(--surface-edge) !important;
+  border-color: var(--axe-kaart-lijn) !important;
+  box-shadow: var(--axe-kaart-schaduw) !important;
 }
 
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border-white'],
@@ -913,12 +912,17 @@ html:root[data-look],
   --text-muted: rgba(255, 255, 255, 0.6);
 
   --axe-kaart-vlak: #17181C;
-  --axe-kaart-lijn: rgba(255, 255, 255, 0.08);
-  --axe-kaart-hoek: 18px;
-  --axe-kaart-zweef:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 2px 4px rgba(0, 0, 0, 0.4),
-    0 12px 22px -12px rgba(0, 0, 0, 0.6);
+  --axe-kaart-lijn: rgba(255, 255, 255, 0.10);
+  --axe-kaart-lijn-boven: rgba(255, 255, 255, 0.18);
+  --axe-kaart-hoek: 16px;
+  /* Dunne lichte rand + bovenrand iets helderder + zachte donkere schaduw.
+     Geen cyaan gloed. Eén bron; --axe-kaart-zweef leest hieruit. */
+  --axe-kaart-schaduw:
+    0 1px 0 var(--axe-kaart-lijn-boven) inset,
+    0 4px 14px rgba(0, 0, 0, 0.42);
+  --axe-kaart-zweef: var(--axe-kaart-schaduw);
+  --axe-kaart-kolom: 300px;
+  --axe-kaart-kolom-ruim: 340px;
   /* De scheidingslijn BINNEN een kaart. Niet nog een kleur, alleen een lijn. */
   --axe-kaart-scheiding: 1px solid rgba(255, 255, 255, 0.055);
 
@@ -1750,14 +1754,12 @@ html:root[data-look],
 /* ── De ruimte van een tab ────────────────────────────────────────────────
  *
  * Dezelfde marges als het vak waarin een geladen website valt, maar zonder de
- * plaat eronder. Dat vak bepaalt hoeveel ruimte er op deze schil bruikbaar is:
- * genoeg marge opzij om de schuifbalken vrij te houden, en onder om de
- * chatplaat niet te raken.
+ * plaat eronder. Dat vak is het MAXIMUM, geen doel: inhoud bepaalt de maat.
+ * Alleen een website, kaart, agenda of grote tabel vult het (vullen).
  *
  * Waarom niet de bandbreedte. Die is smaller -- 1026 tegen 1280 bij een venster
- * van 1600 -- en hoort bij de composer en de chatplaat. Een tab die daarop
- * uitlijnt laat aan weerskanten een strook plaat leeg die hij had kunnen
- * gebruiken. De composer mag smal zijn; een pagina niet.
+ * van 1600 -- en hoort bij de composer en de chatplaat. De tabruimte is de
+ * buitenrand die elke tab deelt met het browservak.
  *
  * De uitzondering is de startpagina van de browser: die lijnt WEL op de band
  * uit, omdat hij vlak boven de composer staat en daar samen mee moet ogen. */
@@ -1765,6 +1767,179 @@ html:root[data-look],
   margin-inline: clamp(14px, 10vw, 230px);
   margin-bottom: clamp(10px, 1.4vh, 20px);
   min-width: 0;
+}
+
+:root[data-look] .axe-tabruimte--vullen {
+  min-height: 0;
+}
+
+:root[data-look] .axe-inhoud {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 20px;
+}
+
+:root[data-look] .axe-inhoud > * {
+  max-width: 100%;
+}
+
+:root[data-look] .axe-inhoud--vullen {
+  align-items: stretch;
+  overflow: hidden;
+  padding-top: 0;
+}
+
+:root[data-look] .axe-inhoud--vullen > * {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Kaartkop en lijf — het materiaal staat bij .axe-kaart hierboven. */
+:root[data-look] .axe-kaart--compact {
+  width: 148px;
+  flex: 0 0 148px;
+}
+
+:root[data-look] .axe-kaart-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+
+:root[data-look] .axe-kaart-titel {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+:root[data-look] .axe-kaart-lijf {
+  padding: 12px 14px 14px;
+  min-width: 0;
+}
+
+:root[data-look] .axe-kaart--compact .axe-kaart-lijf {
+  padding: 10px 12px 12px;
+}
+
+/* Sectie — WAR ROOM / WINGMAN'S CREW. */
+:root[data-look] .axe-sectie {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+:root[data-look] .axe-sectie-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+:root[data-look] .axe-sectie-titel {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+:root[data-look] .axe-sectie-lijf {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Gelijke kaarten, geen 1fr-rek. auto-fit + vaste kolom: lege sporen
+   klappen in, restant blijft lucht. */
+:root[data-look] .axe-kaart-raster {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, var(--axe-kaart-kolom));
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+:root[data-look] .axe-kaart-raster--ruim {
+  grid-template-columns: repeat(auto-fit, var(--axe-kaart-kolom-ruim));
+}
+
+:root[data-look] .axe-stat-rij {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+/* Linker schuifbalk — binnenkaart, vaste afstand tot de railrand.
+   Direct kind van .axe-rail-host blijft doorzichtig (die regel wist
+   achtergronden); de kaart is het kleinkind. */
+:root[data-look] .axe-rail-host:has(.axe-schuifbalk) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+:root[data-look] .axe-schuifbalk {
+  height: 100%;
+  min-height: 0;
+  padding: 12px;
+  display: flex;
+  box-sizing: border-box;
+}
+
+:root[data-look] .axe-schuifbalk-kaart {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--axe-kaart-hoek);
+  background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn);
+  box-shadow: var(--axe-kaart-schaduw);
+}
+
+:root[data-look] .axe-schuifbalk-lijf {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+:root[data-look] .axe-schuifbalk-groep,
+:root[data-look] .axe-schuifbalk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+:root[data-look] .axe-schuifbalk-voet {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: var(--axe-kaart-scheiding);
 }
 
 :root[data-look] .axe-browser-vak {
@@ -2705,35 +2880,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
    Zelfde recept als .axe-paneel, met opzet: een kaart in de rail en een kaart
    op een pagina horen hetzelfde materiaal te zijn. */
+:root[data-look] .axe-kaart,
 :root[data-look] .axe-shell .widget-card,
 :root[data-look] .axe-shell .axe-surface,
 :root[data-look] .axe-shell .axe-surface--flat,
 :root[data-look] .axe-shell .axe-surface--inset {
-  /* EXACT de chatplaat. Eén materiaal voor alles wat op de plaat ligt: de
-     chatplaat, de tab-panelen ernaast, de widgets in de rails en de kaarten op
-     elke pagina. Zodra er twee soorten glas zijn ga je ze vergelijken, en dan
-     valt het verschil op in plaats van de inhoud. */
-  background: var(--axe-chat) !important;
-  /* ── Geen backdrop-filter op kaarten ──────────────────────────────────
-   *
-   * Hier stond var(--chat-filter): blur(40px). Achter een kaart ligt de
-   * plaat, en die is bijna effen -- een effen vlak vervagen geeft datzelfde
-   * effen vlak terug. Op AI Core zijn dat zeven schermgrote vervagingen per
-   * frame die niets laten zien. Finance vijf, Control Plane vijf.
-   *
-   * De blur blijft waar er wél iets achter beweegt: de plaat zelf (je
-   * bureaublad, via NSVisualEffect) en de chatplaat en rails op Home (de
-   * sphere). Daar doet hij werk; hier kostte hij alleen. */
+  /* Matzwart als Browser-home. Tokens één keer hierboven; deze regel bestaat
+     alleen omdat eerdere experimenten !important zetten en anders winnen. */
+  background: var(--axe-kaart-vlak) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 0 !important;
-  border-radius: 22px !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.09) inset,
-    1px 0 0 rgba(255, 255, 255, 0.03) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 20px 44px -18px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid var(--axe-kaart-lijn) !important;
+  border-radius: var(--axe-kaart-hoek) !important;
+  box-shadow: var(--axe-kaart-schaduw) !important;
 }
 
 /* ── 3. Kleur zit in de letters, niet in een blokje ──────────────────────
@@ -5292,10 +5451,6 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    om een geladen website. Eén verloop, één haarlijn, één schaduw. */
 :root[data-look='black'] .axe-chatplaat,
 :root[data-look='black'] .axe-paneel,
-:root[data-look='black'] .axe-shell .widget-card,
-:root[data-look='black'] .axe-shell .axe-surface,
-:root[data-look='black'] .axe-shell .axe-surface--flat,
-:root[data-look='black'] .axe-shell .axe-surface--inset,
 :root[data-look='black'] .axe-shell aside,
 :root[data-look='black'] .axe-slot--rail,
 :root[data-look='black'] .axe-browser-vak {
@@ -5307,6 +5462,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   box-shadow: var(--kaart-rand), var(--kaart-schaduw), 0 32px 64px -26px rgba(var(--accent-rgb), var(--gloed, 0)) !important;
   backdrop-filter: var(--kaart-filter);
   -webkit-backdrop-filter: var(--kaart-filter);
+}
+
+/* Pagina-kaarten: matzwart, geen chatplaat-gloed. */
+:root[data-look='black'] .axe-kaart,
+:root[data-look='black'] .axe-shell .widget-card,
+:root[data-look='black'] .axe-shell .axe-surface,
+:root[data-look='black'] .axe-shell .axe-surface--flat,
+:root[data-look='black'] .axe-shell .axe-surface--inset {
+  background: var(--axe-kaart-vlak) !important;
+  border: 1px solid var(--axe-kaart-lijn) !important;
+  box-shadow: var(--axe-kaart-schaduw) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 /* De rails zijn geen kaart die je optilt; de vervaging erachter kost een
    volledige schermvervaging per rail en je ziet er niets van omdat er alleen
@@ -5323,11 +5491,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 /* Kaart 18, plaat 22. De ingeklapte chatbalk houdt zijn 14 (zie
    [data-dicht='ja'] hierboven): een balk hoort eruit te zien als een balk. */
+:root[data-look='black'] .axe-kaart,
 :root[data-look='black'] .axe-shell .widget-card,
 :root[data-look='black'] .axe-shell .axe-surface,
 :root[data-look='black'] .axe-shell .axe-surface--flat,
 :root[data-look='black'] .axe-shell .axe-surface--inset {
-  border-radius: var(--r-kaart) !important;
+  border-radius: var(--axe-kaart-hoek) !important;
 }
 :root[data-look='black'] .axe-chatplaat:not([data-dicht='ja']) {
   border-radius: var(--r-plaat) !important;
@@ -5335,19 +5504,15 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 /* Het lichtmodel: rust is een haarlijn, hover is een iets sterkere haarlijn,
    een iets sterkere accentrand en één pixel lift in 140 ms. Geen gloed -- die
    is voor wat werkt. */
+:root[data-look='black'] .axe-kaart,
 :root[data-look='black'] .axe-shell .widget-card,
 :root[data-look='black'] .axe-shell .axe-surface {
-  transition: box-shadow var(--snel) var(--ease), transform var(--snel) var(--ease);
+  transition: box-shadow var(--snel) var(--ease);
 }
+:root[data-look='black'] .axe-kaart:hover,
 :root[data-look='black'] .axe-shell .widget-card:hover,
 :root[data-look='black'] .axe-shell .axe-surface:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.16) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 0 2px rgba(var(--accent-rgb), 0.07),
-    var(--kaart-schaduw) !important;
-  transform: translateY(-1px);
+  box-shadow: var(--axe-kaart-schaduw) !important;
 }
 /* Actief en werkend: de onderglow, en bij werkend ademt hij. Klassen, zodat
    een component ze kan zetten zonder zelf een schaduw te kennen. */

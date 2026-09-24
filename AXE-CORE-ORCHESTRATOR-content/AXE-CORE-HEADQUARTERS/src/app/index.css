@@ -201,31 +201,22 @@ h1, h2, h3, h4, h5, h6 {
  *
  * These used to be set inline on the component, which meant the resting shadow
  * outranked any :hover rule written here. */
-.widget-card {
-  /* AXE Surface: the same gradient body as the command bar, so a card and the
-   * bar read as the same material. Flat --bg-elevated made every card a
-   * uniform grey slab; the gradient is what makes it look lit from above.
-   * No lift shadow here — see .axe-surface--inset for why. */
-  background: var(--surface-bg);
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--surface-edge);
+.widget-card,
+.axe-kaart {
+  /* Zelfde tokens als Browser-home. axe-look.css herhaalt ze onder data-look;
+     de waarden staan daar één keer. Geen cyaan gloed. */
+  background: var(--axe-kaart-vlak, #17181C);
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.10));
+  box-shadow: var(--axe-kaart-schaduw, 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 4px 14px rgba(0, 0, 0, 0.42));
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-/* Answering the pointer.
- *
- * A very light cyan edge and nothing else — no lift, no scale. The point is to
- * confirm what is under the cursor, not to animate. Anything that moves the
- * card also moves the numbers on it, which is exactly wrong on a screen you
- * read while it updates. */
 .widget-card:hover,
+.axe-kaart:hover,
 [class*='rounded-xl'][class*='border']:hover,
 [class*='rounded-2xl'][class*='border']:hover {
-  border-color: rgba(34, 211, 238, 0.26) !important;
-  box-shadow:
-    var(--surface-edge),
-    0 0 0 1px rgba(34, 211, 238, 0.05),
-    0 0 16px -6px rgba(34, 211, 238, 0.3);
+  border-color: var(--axe-kaart-lijn, rgba(255, 255, 255, 0.10)) !important;
+  box-shadow: var(--axe-kaart-schaduw, 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 4px 14px rgba(0, 0, 0, 0.42)) !important;
 }
 [class*='rounded-xl'][class*='border'],
 [class*='rounded-2xl'][class*='border'] {

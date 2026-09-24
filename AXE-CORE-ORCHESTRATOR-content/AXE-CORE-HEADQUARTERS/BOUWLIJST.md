@@ -25,13 +25,37 @@ zet je naam bij het punt dat je oppakt, zodat we niet twee keer hetzelfde doen.
 
 ## 1 — Tabs kloppend maken
 
-De browser-tab is de meetlat. Elke andere tab moet daaraan voldoen.
+De browser-tab is de meetlat. De vijf layoutregels staan in `AGENTS.md` en
+`UI-MAATSTAF.md`. Primitieven: `TabRuimte`, `Kaart`, `SectieBlok`, `SchuifBalk`
+in `src/presentation/components/layout/tabMaatstaf.tsx`. Alleen stijl en
+indeling — geen data, hooks, stores of API. Composer, chat, voice en AICore
+blijven buiten dit spoor (eigen PR).
 
-- [ ] **1.1** Per tab langs `UI-MAATSTAF.md`. Nog niet gedaan voor: Agents,
-      Apps, Knowledge, Control Plane, Calendar, Cron, Organization, Terminal,
-      Obsidian, Maps, EVE, CrewAI, Table editor, Command, Developer.
+Volgorde, bewust: eerst de regel en de gedeelde vorm, dan Settings (Luka's
+belangrijkste tab), dan MCP (het tegenvoorbeeld), dan de rest.
+
+- [x] **1.0** Regel vastgelegd in `AGENTS.md`, `UI-MAATSTAF.md` en hier.
+      Gedeelde primitieven + tokens (`--axe-kaart-*`, één definitie, test
+      `kaartMateriaal.test.ts`) horen in dezelfde PR als 1.0a/1.0b.
+- [x] **1.0a** Settings: gegroepeerde matzwarte kaarten in sectieblokken,
+      Browser-vormige schuifbalk (Providers / Voice / Trust / Routing /
+      System / General), inhoud gecentreerd in `TabRuimte`.
+- [x] **1.0b** MCP: compacte stat-kaarten (niet meer `STAT_ROW` die drie
+      cijfers tot balken rekt), ruimere serverkaarten in `.axe-kaart-raster`,
+      tool-tester in een Agents-sectieblok, zelfde schuifbalkvorm.
+- [x] **1.0c** Calendar, Cron, Tasks: `TabRuimte` (Calendar/Cron/Tasks
+      vullen), Tasks-schuifbalk Status, Cron-formulier als `Kaart`,
+      TASKS/CRON JOBS als `SectieBlok`. Geen `LIST_GRID` meer op Cron.
+- [ ] **1.0d** Resterende tabs dezelfde primitieven. Gedaan: Finance
+      (`StatRij` + Source-schuifbalk), Control Plane + CrewAI (`StatRij`,
+      geen `STAT_ROW`), Organization (`TabRuimte vullen`). Nog open:
+      Agents, Apps, Knowledge, Terminal, Obsidian, Maps, EVE,
+      Table editor, Command, Developer, Infrastructure, Memory,
+      Home (alleen wat geen composer/AICore is).
+- [ ] **1.1** Per tab langs `UI-MAATSTAF.md` — volgt uit 1.0c/1.0d.
 - [ ] **1.2** Vier tabs gebruiken minder dan de helft van de hoogte:
-      eve 32%, tasks 46%, cron-manager 47%, mcp 50%.
+      eve 32%, tasks 46%, cron-manager 47%, mcp 50%. MCP hoort na 1.0b
+      inhoud-bepaald te zijn (niet opgerekt); hermeten na pull.
 
 ## 2 — Agents
 

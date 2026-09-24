@@ -123,6 +123,43 @@ stopt TTS; de orb volgt mic en afspeelniveau. De vier fases staan in
 `BOUWLIJST.md` §6 — verwar deze tiers niet met de roster-tiers in
 `roster.ts`.
 
+### UI-regel — één inhoudsruimte, inhoud bepaalt de maat
+
+De Browser-tab is de meetlat. Elke andere tab gebruikt dezelfde schil-primitieven
+(`TabRuimte`, `Kaart`, `SectieBlok`, `SchuifBalk` in
+`src/presentation/components/layout/tabMaatstaf.tsx`). Geen eigen raster, geen
+eigen kaartmateriaal, geen eigen ladevorm. Uitwerking en hoe je het meet: het
+hoofdstuk **De vijf layoutregels** in
+`AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/UI-MAATSTAF.md`.
+
+1. **Eén vaste inhoudsruimte.** Dat is het vak dat de Browser-plaat inneemt
+   als er een domein open is (NorthSea-desk gebruikt precies dat vak, zonder
+   plaat). Dezelfde marges tot de schilranden, de composer en het dock, op
+   elke tab. Alleen via `TabRuimte` / `.axe-tabruimte`.
+2. **Die ruimte is een MAXIMUM, geen doel.** Inhoud bepaalt de maat. Kaarten
+   groeien met hun inhoud; kaarten van hetzelfde type zijn even groot op één
+   raster. Nooit een kleine kaart oprekken tot de rij vol is, nooit een zware
+   kaart platdrukken. Wat de ruimte niet vult, blijft gecentreerd met lucht
+   (Browser-home: drie composers boven het snelkoppelingenraster). Alleen wat
+   het écht nodig heeft vult het hele vak: een website, de NorthSea-kaart, de
+   agenda, grote tabellen.
+3. **Kaarten zijn matzwart.** Zelfde materiaal als de kaarten op Browser-home:
+   `Kaart` / `.axe-kaart`, tokens `--axe-kaart-*`. Dunne lichte rand (~1px,
+   wit met lage dekking, bovenrand iets helderder) plus een zachte donkere
+   schaduw — leesbaar tegen donker bureaublad achter de transparante schil,
+   en zwevend in de lichte stand. Subtiel; geen gekleurde neongloed.
+4. **Secties** gebruiken het blok van de Agents-tab (WAR ROOM / WINGMAN'S
+   CREW): `SectieBlok` / `.axe-sectie`.
+5. **Linker schuifbalken** hebben per tab eigen inhoud, maar dezelfde vorm
+   als de Browser-lade: binnenkaart met vaste afstand tot de rand, gegroepeerde
+   secties, Settings + Profile onderaan. `SchuifBalk` / `.axe-schuifbalk`.
+
+Tegenvoorbeeld: drie stat-kaarten oprekken tot volle-breedte-balken, of
+serverkaarten in een krappe 1fr-rij proppen. Dat is de oude MCP-tab.
+
+Composer, chat, voice en AICore horen hier niet bij — die hebben een eigen
+spoor. Alleen stijl en indeling; geen data, hooks, stores of API.
+
 ## Waar de rest staat
 
 | Bestand | Waarvoor |

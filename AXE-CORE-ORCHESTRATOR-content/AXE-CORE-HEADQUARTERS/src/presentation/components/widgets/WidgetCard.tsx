@@ -18,7 +18,7 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
         // min-h-0 + overflow-hidden is what makes "all blocks the same size"
         // hold: without it a card with a long list stretches its grid row and
         // drags every neighbour taller with it.
-        'widget-card flex min-h-0 flex-col gap-3 overflow-hidden',
+        'widget-card axe-kaart flex min-h-0 flex-col gap-3 overflow-hidden',
         className
       )}
       /* Only the box model lives here now.

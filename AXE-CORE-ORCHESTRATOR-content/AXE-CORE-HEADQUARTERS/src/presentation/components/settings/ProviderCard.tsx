@@ -156,19 +156,7 @@ export function ProviderCard({
 
   return (
     <div
-      className="h-full flex flex-col rounded-2xl overflow-hidden"
-      style={{
-        background: 'var(--surface-bg)',
-        boxShadow: 'var(--surface-edge)',
-        // De rand draagt de stand. Op achttien kaarten is een stip van zeven
-        // pixels te klein om te scannen; een rand zie je zonder te lezen.
-        // Elke kaart dezelfde rand. Hij was gekleurd naar de stand (groen bij
-        // werkt, rood bij mislukt), en met achttien kaarten onder elkaar werd
-        // het scherm hard en rommelig -- terwijl Law 10 van de ontwerplaag
-        // precies dit zegt: kleur hoort in de letters, niet in een vlak of een
-        // rand. De stip en de tekst rechtsboven dragen de stand al.
-        border: '1px solid var(--border-default)',
-      }}
+      className="axe-kaart h-full flex flex-col overflow-hidden"
     >
       {/* Wie het is, en hoe het ervoor staat. */}
       <div className="flex items-center gap-3 px-4 py-3">

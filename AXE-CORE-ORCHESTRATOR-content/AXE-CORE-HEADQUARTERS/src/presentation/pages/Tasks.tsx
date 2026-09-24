@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, X, Zap, Clock } from 'lucide-react';
-import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { TabRuimte, Kaart, SchuifBalk, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
 import { AppTaken, AppCijfers, type AppTaak } from './taken/AppTaken';
 import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
@@ -350,7 +350,22 @@ export default function Tasks() {
 
   return (
     /* Flexkolom: knoppen en cijfers vast, de takenlijst krijgt de rest. */
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[{
+            titel: 'Status',
+            items: (['all', 'todo', 'in-progress', 'done', 'blocked'] as const).map(f => ({
+              id: f,
+              label: f === 'all' ? 'All' : STATUS_CFG[f as TaskStatus]?.label ?? f,
+              actief: filterStatus === f,
+              onKies: () => setFilterStatus(f),
+            })),
+          }]}
+        />
+      </TabRail>
+      <TabRuimte vullen>
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -384,7 +399,7 @@ export default function Tasks() {
       <AnimatePresence>
         {adding && (
           <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -8, height: 0 }} className="overflow-hidden mb-4">
-            <WidgetCard title="New Task">
+            <Kaart titel="New Task">
               <div className="space-y-2.5">
                 <input
                   autoFocus
@@ -448,39 +463,10 @@ export default function Tasks() {
                   <button onClick={() => setAdding(false)} className="px-2 py-1.5 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}><X size={13} /></button>
                 </div>
               </div>
-            </WidgetCard>
+            </Kaart>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* De statusfilters kostten een regel boven elke lijst, terwijl je er
-          meestal maar één keer aan draait.
-          In de schuifbalk kun je er even goed bij, zonder dat het altijd
-          breedte kost. */}
-      <TabRail kant="links">
-        <div className="axe-paneel">
-          <h2 className="axe-paneel-kop">Status</h2>
-          <div className="axe-paneel-body">
-          <div className="flex flex-wrap gap-1 mb-3">
-            {(['all', 'todo', 'in-progress', 'done', 'blocked'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilterStatus(f)}
-                className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
-                style={{ background: filterStatus === f ? 'var(--bg-active)' : 'transparent', color: filterStatus === f ? 'var(--accent-cyan)' : 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}
-              >
-                {f === 'all' ? 'All' : STATUS_CFG[f as TaskStatus]?.label ?? f}
-                {f !== 'all' && tasks.filter(t => t.status === f).length > 0 && (
-                  <span className="ml-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                    {tasks.filter(t => t.status === f).length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-          </div>
-        </div>
-      </TabRail>
 
       {/* De lijst is de enige schuif, en hij vult wat er onder de cijfers over
           is. De lege staat gebruikt diezelfde ruimte in plaats van als strookje
@@ -501,6 +487,7 @@ export default function Tasks() {
         * lokaal draaien tegenover een webhook. Bij taken is dat verschil er
         * niet -- een taak is een taak, welke app hij ook raakt. Dan zijn vijf
         * gelijke kolommen eerlijker dan er één uitlichten. */}
+      <SectieBlok titel="TASKS">
       <div className="axe-appvijf">
         {APPS.map(a => (
           /* Twee losse kaarten per kolom: de cijfers erboven, het paneel
@@ -525,8 +512,11 @@ export default function Tasks() {
           </div>
         ))}
       </div>
+      </SectieBlok>
 
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }
