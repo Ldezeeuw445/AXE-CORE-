@@ -125,6 +125,17 @@ onterecht vinkje is erger dan geen vinkje.
 | `ARCHITECTURE.md` | de lagen en waarom |
 | `WERKVERDELING.md` | wie waaraan werkt, en welke bestanden van wie zijn |
 | `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
+| `os3/` | Rabbit OS3: skill AXE + SETUP. Uitvoering via `cli/axe` |
+
+## Architectuur: AXE op Rabbit OS3
+
+AXE is de interface, de persoonlijkheid en het geheugen. Rabbit OS3
+is de uitvoeringslaag. Er is geen publieke OS3-API: OS3 belt AXE via
+de `axe`-commandolaag (`AXE-CORE-HEADQUARTERS/cli/axe`), niet andersom.
+
+Volgende stappen: skill importeren (zie `os3/SETUP.md`), CLI op Mac
+en VPS zetten, `cli_laag.py` laten meelopen met `vps_sync.py`. Niet
+mergen naar `orchestrator` vanuit OS3 — dat is hard geblokkeerd.
 
 Dit bestand staat in de hoofdmap omdat elke assistent het daar als eerste leest.
 Klopt er iets niet meer, verander het hier — niet in je eigen sessie-geheugen.

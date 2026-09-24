@@ -309,3 +309,23 @@ redenering: een test die faalt zonder je wijziging, een meting, een screenshot.
 
 Blijkt een punt niet te kloppen, verbeter dan de tekst hier in plaats van er
 stilletjes iets anders van te maken.
+
+---
+
+## 7 — AXE op Rabbit OS3
+
+AXE (interface, persoonlijkheid, geheugen) staat op Rabbit OS3
+(uitvoeringslaag). OS3 belt AXE via `cli/axe`, niet andersom. De hekken
+zitten in de CLI en in `backend/axe_api/cli_laag.py`, niet alleen in docs.
+
+- [x] **7.1** `axe` CLI (Python 3, geen extra packages) + geteste parser,
+      guardrails en JSON-uitvoer (`src/cli/*.test.ts`, `cli/test_axe_laag.py`).
+- [x] **7.2** Commando's mappen op wat er al is: taken, geheugen/RAG,
+      agents/durable kernel, NorthSea (read-only), trading cockpit, cron, MCP.
+- [x] **7.3** Hek: alleen-lezen tot `--write`; hard geblokkeerd: mail,
+      NorthSea `auto_send_*`, merge naar `orchestrator`, wissen.
+- [x] **7.4** `os3/SKILL.md` + `os3/SETUP.md`.
+- [ ] **7.5** Gemeten op de Mac mini en de VPS: `axe status --json` en de
+      vijf testprompts uit SETUP.md. Hier niet live gemeten.
+- [ ] **7.6** `cli_laag.py` op de box (`vps_sync.py check` na deploy).
+- [ ] **7.7** AXON als geheugenbackend achter dezelfde `axe memory`-poort.

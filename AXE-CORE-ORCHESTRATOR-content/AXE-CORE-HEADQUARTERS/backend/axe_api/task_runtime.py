@@ -267,6 +267,30 @@ class TaskRepository:
         )
         return updated
 
+    def list(self, status: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        q = (
+            self._db().table("core_tasks").select("*")
+            .order("created_at", desc=True).limit(max(1, min(limit, 200)))
+        )
+        if status:
+            q = q.eq("status", status)
+        return q.execute().data or []
+
+    def update(self, task_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        UUID(task_id)
+        allowed = {"title", "goal", "description", "priority", "metadata", "payload"}
+        patch = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if not patch:
+            raise ValueError("nothing to update")
+        rows = self._db().table("core_tasks").update(patch).eq("id", task_id).execute().data
+        if not rows:
+            raise KeyError(task_id)
+        self.append_event(
+            task_id, "task.updated", actor_type="user",
+            data={"fields": list(patch.keys())},
+        )
+        return rows[0]
+
     def list_approvals(self, status: str = "pending", limit: int = 20) -> list[dict[str, Any]]:
         """Every open question, across all tasks, oldest first.
 

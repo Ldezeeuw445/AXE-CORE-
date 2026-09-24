@@ -23,6 +23,7 @@
     "build:stage": "vite build --config vite.stage.config.ts",
     "dev:shell": "STAGE_ENTRY=shell PORT=5011 vite --config vite.stage.config.ts --host 0.0.0.0",
     "bijwerken": "bash scripts/axe-bijwerken.sh",
+    "axe": "python3 cli/axe",
     "terminal": "bash scripts/axe-terminal.sh",
     "welke": "bash scripts/axe-welke.sh",
     "build:runner": "vite build -c vite.runner.config.ts"
