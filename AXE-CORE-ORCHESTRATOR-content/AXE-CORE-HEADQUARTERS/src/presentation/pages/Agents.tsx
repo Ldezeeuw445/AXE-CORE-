@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { Plus, Pencil, Save, X, Cpu } from 'lucide-react';
@@ -13,6 +13,10 @@ import { loopAgentVoor } from '@/infrastructure/persistence/memoryFeedbackServic
 import type { LoopHealth } from '@/domain/memory/agentLoop';
 import { WarRoom } from '@/presentation/components/axe-core/WarRoom';
 import { agentsByKind } from '@/domain/agents/catalog';
+import { agentPulses, type AgentFilter } from '@/domain/agents/activity';
+import { ActivityPlansPanel, LiveIndicator } from '@/presentation/components/agents/ActivityPlansPanel';
+import { AgentMemoryPanel } from '@/presentation/components/agents/AgentMemoryPanel';
+import { useAgentActivity, useNow } from '@/presentation/components/agents/useAgentActivity';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -158,6 +162,17 @@ export default function Agents() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<CoreAgent>>({});
   const agentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Activity & plans + geheugen: echte rijen, elke 15 s (zie useAgentActivity).
+  const activity = useAgentActivity();
+  const now = useNow();
+  const [filter, setFilter] = useState<AgentFilter>('all');
+  const [memoryId, setMemoryId] = useState<string>('axe');
+  const pulses = useMemo(() => agentPulses(activity.items, now), [activity.items, now]);
+  const chooseFilter = (f: AgentFilter) => {
+    setFilter(f);
+    // Wie je op de tijdlijn volgt, wil je ook in het geheugen zien.
+    if (f !== 'all') setMemoryId(f);
+  };
 
   useEffect(() => {
     // Was `.then(({ data }) => ...).catch(...)`, which had two faults. The
@@ -280,9 +295,10 @@ export default function Agents() {
     (a.role === 'orchestrator' ? 'home' : a.role);
 
   return (
+    // axe-tabruimte en geen eigen achtergrond: UI-MAATSTAF regel 1 en 2 --
+    // de pagina ligt op de plaat en deelt de breedte van het browservak.
     <motion.div
-      className="p-5 h-full overflow-y-auto"
-      style={{ background: 'var(--bg-base)' }}
+      className="axe-tabruimte h-full overflow-y-auto pt-4 pb-6 sm:pt-5"
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
@@ -306,7 +322,33 @@ export default function Agents() {
         </button>
       </div>
 
-      <WarRoom />
+      <WarRoom pulses={pulses} now={now} />
+
+      <ActivityPlansPanel
+        snapshot={activity.snapshot}
+        items={activity.items}
+        filter={filter}
+        onFilter={chooseFilter}
+        now={now}
+        loading={activity.loading}
+        live={
+          <LiveIndicator
+            lastOkAt={activity.lastOkAt}
+            errors={activity.snapshot?.errors ?? []}
+            loading={activity.loading}
+            now={now}
+          />
+        }
+      />
+
+      <AgentMemoryPanel
+        selectedId={memoryId}
+        onSelect={setMemoryId}
+        counts={activity.counts}
+        loopHealth={loopHealthByAgent}
+        stamp={activity.stamp}
+        now={now}
+      />
 
       <h2 className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
         FULL ROSTER &amp; SETTINGS
