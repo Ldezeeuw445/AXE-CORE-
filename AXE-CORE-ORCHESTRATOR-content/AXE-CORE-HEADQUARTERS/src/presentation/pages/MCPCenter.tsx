@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { motion } from 'framer-motion';
-import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
 import { ExternalLink, Check, X, RefreshCw, Play, Wrench, Plus, Trash2 } from 'lucide-react';
 import {
   mcpHubLijst, mcpHubRoep, mcpHubSleutel, mcpHubTest, mcpHubVerwijder, mcpHubVoegToe,
   type McpHubServer, type McpHubSjabloon, type McpHubTest,
 } from '@/infrastructure/gateways/axeCoreApiService';
-import { LIST_GRID, STAT_ROW } from '@/presentation/components/surface/Page';
+import {
+  TabRuimte, Kaart, KaartRaster, SectieBlok, SchuifBalk, StatRij,
+} from '@/presentation/components/layout/tabMaatstaf';
 import { gemiddelde, toonGetal } from '@/domain/gemiddelde';
 
 /**
@@ -140,10 +141,27 @@ export default function MCPCenter() {
   const avgLatency = gemiddelde(online.map(s => standen[s.id]?.test?.latency).filter((l): l is number => typeof l === 'number'));
   const gekozenTools = standen[toolServer]?.test?.tools ?? [];
 
+  const categorieen = ['active', 'all', 'ai', 'infra', 'storage', 'comms', 'dev'] as const;
+
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex flex-none items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: 'Category',
+              items: categorieen.map(cat => ({
+                id: cat,
+                label: cat.charAt(0).toUpperCase() + cat.slice(1),
+                actief: filter === cat,
+                onKies: () => setFilter(cat),
+              })),
+            },
+          ]}
+        />
+      </TabRail>
+      <TabRuimte>
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
           <button onClick={() => { void laad(); }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]" style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={10} /> Opnieuw testen
           </button>
@@ -158,13 +176,11 @@ export default function MCPCenter() {
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs-custom" style={{ color: 'var(--accent-cyan)' }}>
             Docs <ExternalLink size={11} />
           </a>
+          {laadFout && <span className="text-[10px]" style={{ color: 'var(--error)' }}>Agent-host niet bereikbaar: {laadFout}</span>}
         </div>
-        {laadFout && <span className="text-[10px]" style={{ color: 'var(--error)' }}>Agent-host niet bereikbaar: {laadFout}</span>}
-      </div>
 
-      {nieuw && (
-        <div className="flex-none mb-3">
-          <WidgetCard title={`NIEUWE ${sjablonen.find(sj => sj.id === nieuw.sjabloon)?.naam.toUpperCase() ?? ''}-VERBINDING`}>
+        {nieuw && (
+          <Kaart titel={`NIEUWE ${sjablonen.find(sj => sj.id === nieuw.sjabloon)?.naam.toUpperCase() ?? ''}-VERBINDING`}>
             <div className="flex flex-wrap items-center gap-1.5">
               <input autoFocus value={nieuw.label} onChange={e => setNieuw({ ...nieuw, label: e.target.value })}
                 placeholder="Naam (bijv. Companion, Axon, account 2)"
@@ -182,70 +198,42 @@ export default function MCPCenter() {
               <button onClick={() => setNieuw(null)} className="px-2 py-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}><X size={11} /></button>
             </div>
             {nieuwFout && <div className="mt-1 text-[10px]" style={{ color: 'var(--error)' }}>{nieuwFout}</div>}
-          </WidgetCard>
-        </div>
-      )}
+          </Kaart>
+        )}
 
-      <div className={`${STAT_ROW} flex-none`}>
-        {[
-          { label: 'Connected', val: online.length },
-          { label: 'Avg Latency', val: toonGetal(avgLatency, 'ms') },
-          { label: 'Total Servers', val: servers.length },
-        ].map(({ label, val }) => (
-          <WidgetCard key={label} title="">
-            <div className="text-center py-1">
-              <div className="text-xl font-bold font-mono-data" style={{ color: 'var(--accent-cyan)' }}>{val}</div>
-              <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{label}</div>
-            </div>
-          </WidgetCard>
-        ))}
-      </div>
+        <StatRij>
+          {[
+            { label: 'Connected', val: online.length },
+            { label: 'Avg Latency', val: toonGetal(avgLatency, 'ms') },
+            { label: 'Total Servers', val: servers.length },
+          ].map(({ label, val }) => (
+            <Kaart key={label} compact>
+              <div className="text-center py-1">
+                <div className="text-xl font-bold font-mono-data" style={{ color: 'var(--accent-cyan)' }}>{val}</div>
+                <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{label}</div>
+              </div>
+            </Kaart>
+          ))}
+        </StatRij>
 
-      <TabRail kant="links">
-        <div className="axe-paneel">
-          <h2 className="axe-paneel-kop">Categorie</h2>
-          <div className="axe-paneel-body">
-            <div className="flex gap-1.5 mb-4 flex-wrap">
-              {(['active', 'all', 'ai', 'infra', 'storage', 'comms', 'dev'] as const).map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setFilter(cat)}
-                  className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
-                  style={{
-                    background: 'transparent',
-                    color: filter === cat
-                      ? (cat === 'all' || cat === 'active' ? 'var(--accent-cyan)' : CATEGORY_COLORS[cat])
-                      : 'var(--text-muted)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </TabRail>
-
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className={LIST_GRID}>
-          {displayed.map((server, i) => {
-            const stand = standen[server.id];
-            const t = stand?.test;
-            const kleur = CATEGORY_COLORS[server.categorie];
-            return (
-              <motion.div key={server.id} className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <WidgetCard title="" className="h-full">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="rounded-lg flex items-center justify-center font-mono-data text-[9px] font-bold"
+        <SectieBlok titel="SERVERS">
+          <KaartRaster ruim>
+            {displayed.map((server, i) => {
+              const stand = standen[server.id];
+              const t = stand?.test;
+              const kleur = CATEGORY_COLORS[server.categorie];
+              return (
+                <motion.div key={server.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                  <Kaart>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="rounded-lg flex items-center justify-center font-mono-data text-[9px] font-bold shrink-0"
                           style={{ width: 32, height: 32, background: `${kleur}15`, color: kleur, border: `1px solid ${kleur}30` }}>
                           {server.naam.slice(0, 2).toUpperCase()}
                         </div>
-                        <div>
-                          <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{server.naam}</span>
-                          <div className="flex items-center gap-1.5">
+                        <div className="min-w-0">
+                          <span className="text-small font-medium block truncate" style={{ color: 'var(--text-primary)' }}>{server.naam}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[9px]" style={{ color: kleur }}>{server.categorie}</span>
                             {server.transport === 'stdio' && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>op deze Mac</span>}
                             {Object.values(server.velden).filter(Boolean).map(w => <span key={w} className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>{w}</span>)}
@@ -254,7 +242,7 @@ export default function MCPCenter() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <StatusBadge variant={statusVan(server.id)} size="sm" />
                         {server.sleutelnaam && (
                           <button onClick={() => { setConfiguring(server.id); setEnvInput(''); }} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>
@@ -273,10 +261,14 @@ export default function MCPCenter() {
                       </div>
                     </div>
 
-                    <div className="mt-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    <p className="mt-3 text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                       {server.uitleg}
-                      {server.sleutelnaam && <> · sleutel: {server.klaar ? server.sleutel : <span style={{ color: 'var(--warning)' }}>ontbreekt ({server.sleutelnaam})</span>}</>}
-                    </div>
+                    </p>
+                    {server.sleutelnaam && (
+                      <p className="mt-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        sleutel: {server.klaar ? server.sleutel : <span style={{ color: 'var(--warning)' }}>ontbreekt ({server.sleutelnaam})</span>}
+                      </p>
+                    )}
                     {t?.fout && <div className="mt-1 text-[10px]" style={{ color: 'var(--error)' }}>{t.fout}</div>}
 
                     {configuring === server.id && server.sleutelnaam && (
@@ -300,15 +292,15 @@ export default function MCPCenter() {
                         </div>
                       </motion.div>
                     )}
-                  </div>
-                </WidgetCard>
-              </motion.div>
-            );
-          })}
-        </div>
+                  </Kaart>
+                </motion.div>
+              );
+            })}
+          </KaartRaster>
+        </SectieBlok>
 
-        <div className="mt-6">
-          <WidgetCard title="MCP TOOL TESTER" headerAction={<Wrench size={12} style={{ color: 'var(--text-muted)' }} />}>
+        <SectieBlok titel="MCP TOOL TESTER" extra={<Wrench size={12} style={{ color: 'var(--text-muted)' }} />}>
+          <Kaart>
             <div className="space-y-2">
               <div className="flex gap-2">
                 <select value={toolServer} onChange={e => { setToolServer(e.target.value); setToolName(''); }} className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
@@ -328,9 +320,9 @@ export default function MCPCenter() {
                 <pre className="text-[10px] p-2 rounded overflow-x-auto" style={{ background: '#030505', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(165,243,252,0.8)' }}>{toolResult}</pre>
               )}
             </div>
-          </WidgetCard>
-        </div>
-      </div>
+          </Kaart>
+        </SectieBlok>
+      </TabRuimte>
     </motion.div>
   );
 }

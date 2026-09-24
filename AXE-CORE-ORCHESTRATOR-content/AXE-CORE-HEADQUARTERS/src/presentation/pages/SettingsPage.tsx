@@ -15,6 +15,10 @@ import { BranchRouterSection } from '@/presentation/components/settings/BranchRo
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import {
+  TabRuimte, Kaart, KaartRaster, SectieBlok, SchuifBalk, gaNaarSectie,
+} from '@/presentation/components/layout/tabMaatstaf';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
@@ -31,7 +35,7 @@ import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegist
 import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
-import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Keyboard, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
   setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
@@ -821,8 +825,8 @@ function ProviderKeysSection() {
         </div>
       )}
 
-      {/* Provider cards grid */}
-      <div className={LIST_GRID}>
+      {/* Provider cards grid — gelijke kolommen, geen 1fr-rek. */}
+      <KaartRaster>
         {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
           const isCustom = customProviders.some(p => p.id === cat.id);
@@ -863,7 +867,7 @@ function ProviderKeysSection() {
             />
           );
         })}
-      </div>
+      </KaartRaster>
     </div>
   );
 }
@@ -1261,7 +1265,7 @@ function OllamaModelsSection() {
               : `● Sync mislukt (${syncState.error}) — onderstaande lijst is gecached, niet bevestigd live op ${new Date(syncState.at).toLocaleTimeString()}`}
           </div>
         )}
-        <div className={LIST_GRID}>
+        <KaartRaster>
           {models.map(model => {
             const state = health[model.name];
             const isOk = state?.status === 'ok';
@@ -1297,7 +1301,7 @@ function OllamaModelsSection() {
               />
             );
           })}
-        </div>
+        </KaartRaster>
       </div>
   );
 }
@@ -1953,6 +1957,11 @@ export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
+  const [sectie, setSectie] = useState('providers');
+  const kiesSectie = (id: string) => {
+    setSectie(id);
+    gaNaarSectie(id);
+  };
 
   useEffect(() => { voice.checkMicPermission(); }, []);
   useEffect(() => { loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled); }, []);
@@ -1983,129 +1992,137 @@ export default function SettingsPage() {
   }, [voice.micPermission]);
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <h1 className="flex-none text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <BuildStampLine />
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: 'Setup',
+              items: [
+                { id: 'providers', label: 'Providers', actief: sectie === 'providers', onKies: () => kiesSectie('providers') },
+                { id: 'voice', label: 'Voice', actief: sectie === 'voice', onKies: () => kiesSectie('voice') },
+                { id: 'trust', label: 'Trust', actief: sectie === 'trust', onKies: () => kiesSectie('trust') },
+              ],
+            },
+            {
+              titel: 'System',
+              items: [
+                { id: 'routing', label: 'Routing', actief: sectie === 'routing', onKies: () => kiesSectie('routing') },
+                { id: 'system', label: 'Services', actief: sectie === 'system', onKies: () => kiesSectie('system') },
+                { id: 'general', label: 'General', actief: sectie === 'general', onKies: () => kiesSectie('general') },
+              ],
+            },
+          ]}
+        />
+      </TabRail>
+      <TabRuimte>
+        <BuildStampLine />
+        {/* Says so when a save only reached this device. Without it, pasting an
+            API key while signed out looks identical to pasting one that worked,
+            and every background agent keeps using the old value. */}
+        <UnsyncedSettingsBanner />
 
-      {/* Says so when a save only reached this device. Without it, pasting an
-          API key while signed out looks identical to pasting one that worked,
-          and every background agent keeps using the old value. */}
-      <UnsyncedSettingsBanner />
+        <SectieBlok id="providers" titel="PROVIDERS">
+          <ProviderKeysSection />
+          <OllamaModelsSection />
+        </SectieBlok>
 
-      <div className="space-y-4">
-
-         {/* ── Provider Keys (unified smart-router keys) ────────────── */}
-         <ProviderKeysSection />
-
-         {/* ── Ollama Models ─────────────────────────────────────────── */}
-        <OllamaModelsSection />
-
-        {/* ── Microphone ───────────────────────────────────────────── */}
-        <WidgetCard title="MICROPHONE" headerAction={<Mic size={14} style={{ color: 'var(--text-muted)' }} />}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-small" style={{ color: 'var(--text-primary)' }}>Browser microphone access</p>
-                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Permission: <span style={{ color: voice.micPermission === 'granted' ? 'var(--success)' : voice.micPermission === 'denied' ? 'var(--error)' : 'var(--warning)' }}>{voice.micPermission}</span>
-                  {' · '}Recognition supported: <span style={{ color: voice.recognitionSupported ? 'var(--success)' : 'var(--error)' }}>{voice.recognitionSupported ? 'yes' : 'no'}</span>
-                </p>
+        <SectieBlok id="voice" titel="VOICE">
+          <Kaart titel="MICROPHONE" actie={<Mic size={14} style={{ color: 'var(--text-muted)' }} />}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-small" style={{ color: 'var(--text-primary)' }}>Browser microphone access</p>
+                  <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                    Permission: <span style={{ color: voice.micPermission === 'granted' ? 'var(--success)' : voice.micPermission === 'denied' ? 'var(--error)' : 'var(--warning)' }}>{voice.micPermission}</span>
+                    {' · '}Recognition supported: <span style={{ color: voice.recognitionSupported ? 'var(--success)' : 'var(--error)' }}>{voice.recognitionSupported ? 'yes' : 'no'}</span>
+                  </p>
+                </div>
+                <button onClick={testMic} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs-custom"
+                  style={{ border: '1px solid var(--border-subtle)', color: micTest === 'ok' ? 'var(--success)' : micTest === 'denied' ? 'var(--error)' : 'var(--accent-cyan)', fontWeight: micTest === 'idle' ? 500 : 600 }}>
+                  {micTest === 'testing' ? <RefreshCw size={12} className="animate-spin" /> : <Mic size={12} />}
+                  {micTest === 'idle' ? 'Test Mic' : micTest === 'testing' ? 'Testing...' : micTest === 'ok' ? 'Mic Works!' : 'Permission Denied'}
+                </button>
               </div>
-              <button onClick={testMic} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs-custom"
-                style={{ border: '1px solid var(--border-subtle)', color: micTest === 'ok' ? 'var(--success)' : micTest === 'denied' ? 'var(--error)' : 'var(--accent-cyan)', fontWeight: micTest === 'idle' ? 500 : 600 }}>
-                {micTest === 'testing' ? <RefreshCw size={12} className="animate-spin" /> : <Mic size={12} />}
-                {micTest === 'idle' ? 'Test Mic' : micTest === 'testing' ? 'Testing...' : micTest === 'ok' ? 'Mic Works!' : 'Permission Denied'}
-              </button>
+              {voice.micPermission === 'denied' && (
+                <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
+                  <AlertTriangle size={13} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
+                  <p className="text-xs-custom" style={{ color: 'var(--error)' }}>
+                    Microphone blocked. Click the lock icon in the address bar → Site Settings → Microphone → Allow → Refresh page.
+                  </p>
+                </div>
+              )}
+              {micTest === 'ok' && (
+                <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
+                  <Check size={13} style={{ color: 'var(--success)', flexShrink: 0, marginTop: 1 }} />
+                  <p className="text-xs-custom" style={{ color: 'var(--success)' }}>Microphone is working correctly. Use the circle button in the bottom bar to talk to AXE.</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border-active)' }}>
+                <div>
+                  <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
+                  <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                    Clap three times, sharply, to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
+                  </p>
+                </div>
+                <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
+                  className="relative flex-shrink-0 rounded-full transition-colors"
+                  style={{ width: 38, height: 22, background: clapEnabled ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}>
+                  <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
+                </button>
+              </div>
             </div>
-            {voice.micPermission === 'denied' && (
-              <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-                <AlertTriangle size={13} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-                <p className="text-xs-custom" style={{ color: 'var(--error)' }}>
-                  Microphone blocked. Click the lock icon in the address bar → Site Settings → Microphone → Allow → Refresh page.
-                </p>
-              </div>
-            )}
-            {micTest === 'ok' && (
-              <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-                <Check size={13} style={{ color: 'var(--success)', flexShrink: 0, marginTop: 1 }} />
-                <p className="text-xs-custom" style={{ color: 'var(--success)' }}>Microphone is working correctly. Use the circle button in the bottom bar to talk to AXE.</p>
-              </div>
-            )}
+          </Kaart>
+          <VoiceSection />
+        </SectieBlok>
 
-            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border-active)' }}>
-              <div>
-                <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
-                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Clap three times, sharply, to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
-                </p>
-              </div>
-              <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
-                className="relative flex-shrink-0 rounded-full transition-colors"
-                style={{ width: 38, height: 22, background: clapEnabled ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}>
-                <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
-              </button>
-            </div>
-          </div>
-        </WidgetCard>
+        <SectieBlok id="trust" titel="TRUST">
+          <MindsetQuotesSection />
+          <TrustLevelsSection />
+          <LookSection />
+          <ToolCallingSection />
+        </SectieBlok>
 
-        {/* ── Voice: one fixed AXE voice (George), Cedar only as fallback ──── */}
-        <VoiceSection />
+        <SectieBlok id="routing" titel="ROUTING">
+          <Kaart titel="AXE BRANCHES">
+            <BranchRouterSection />
+          </Kaart>
+          <Kaart titel="CAPABILITY ROUTER">
+            <CapabilityRouterSection />
+          </Kaart>
+        </SectieBlok>
 
-        {/* ── AXE Quotes (between voice and trust) ─────────────────── */}
-        <MindsetQuotesSection />
+        <SectieBlok id="system" titel="SYSTEM">
+          <RemoteTerminalSection />
+          <ServiceHealthSection />
+          <Kaart titel="DEVELOPER — GITHUB REPOS">
+            <GitHubReposSection />
+          </Kaart>
+        </SectieBlok>
 
-        {/* ── Trust & Autonomie (capability ladder) ─────────────────── */}
-        <TrustLevelsSection />
-
-        {/* Tool calling — direct onder de trust-ladder, want het is dezelfde
-            vraag: wat mag AXE zelf doen. */}
-        <LookSection />
-        <ToolCallingSection />
-
-        {/* ── AXE Branches (A/B/C) ──────────────────────────────── */}
-        <WidgetCard title="AXE BRANCHES">
-          <BranchRouterSection />
-        </WidgetCard>
-
-        {/* ── Capability Router ─────────────────────────────────── */}
-        <WidgetCard title="CAPABILITY ROUTER">
-          <CapabilityRouterSection />
-        </WidgetCard>
-
-        {/* ── Remote Terminal ───────────────────────────────────── */}
-        <RemoteTerminalSection />
-
-        {/* ── Live Services ──────────────────────────────────────── */}
-        <ServiceHealthSection />
-
-        {/* ── Developer: GitHub Repos ───────────────────────────────── */}
-        <WidgetCard title="DEVELOPER — GITHUB REPOS">
-          <GitHubReposSection />
-        </WidgetCard>
-
-        {/* ── General settings grid ─────────────────────────────────────── */}
-        <div className={LIST_GRID}>
-          {[
-            { title: 'Appearance', icon: Palette, items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
-            { title: 'Keyboard',   icon: '⌨️', items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },
-            { title: 'Security',   icon: Lock, items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
-            { title: 'System',     icon: Settings, items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
-          ].map(group => (
-            <WidgetCard key={group.title} title={`${group.icon} ${group.title}`}>
-              <div className="space-y-2">
-                {group.items.map(item => (
-                  <div key={item.k} className="flex items-center justify-between py-0.5">
-                    <span className="text-small" style={{ color: 'var(--text-secondary)' }}>{item.k}</span>
-                    <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-primary)' }}>{item.v}</span>
-                  </div>
-                ))}
-              </div>
-            </WidgetCard>
-          ))}
-        </div>
-      </div>
-      </div>
+        <SectieBlok id="general" titel="GENERAL">
+          <KaartRaster>
+            {[
+              { title: 'Appearance', icon: Palette, items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
+              { title: 'Keyboard',   icon: Keyboard, items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },
+              { title: 'Security',   icon: Lock, items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
+              { title: 'System',     icon: Settings, items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
+            ].map(group => (
+              <Kaart key={group.title} titel={group.title} actie={<group.icon size={14} style={{ color: 'var(--text-muted)' }} />}>
+                <div className="space-y-2">
+                  {group.items.map(item => (
+                    <div key={item.k} className="flex items-center justify-between py-0.5">
+                      <span className="text-small" style={{ color: 'var(--text-secondary)' }}>{item.k}</span>
+                      <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-primary)' }}>{item.v}</span>
+                    </div>
+                  ))}
+                </div>
+              </Kaart>
+            ))}
+          </KaartRaster>
+        </SectieBlok>
+      </TabRuimte>
     </motion.div>
   );
 }

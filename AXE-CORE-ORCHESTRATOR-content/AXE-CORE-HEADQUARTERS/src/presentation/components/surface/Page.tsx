@@ -231,6 +231,7 @@ export function Stat({
  * on the last row stretching to full width is exactly the raggedness this is
  * meant to remove.
  */
+/** @deprecated Rekt kleine cijfers tot volle-breedte-balken. Gebruik StatRij. */
 export const STAT_ROW =
   'grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]';
 
