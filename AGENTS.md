@@ -15,6 +15,24 @@ begint die verder gaat dan één regel verzetten.
 
 ---
 
+## Eén lijn, twee Macs, één app (Luka, 25 sep)
+
+Luka wil geen takken, commits of pull requests zien. Alleen: gedaan, en te zien
+in de app.
+
+- **Werk af = in `orchestrator`.** Tests groen → `git push origin HEAD:orchestrator`.
+  Geen werk achterlaten op een eigen tak, geen PR, geen "wil je dat ik merge?".
+  Een sessietak mag als wachtkamer, maar is leeg als je klaar bent.
+- **Beide Macs bouwen zichzelf.** `com.axe.autosync` (`scripts/axe-autosync.sh`)
+  draait elke 5 minuten op de Mac mini én de iMac: pusht eigen commits, haalt
+  nieuwe binnen en bouwt/installeert `/Applications/AXE CORE.app` als de
+  build-stempel niet de huidige commit is. Handmatig bouwen hoeft niet meer.
+- **Controleren:** Home toont `build <sha>`; op beide Macs hetzelfde. Log:
+  `~/Library/Logs/axe-autosync.log`.
+- Dezelfde app, dezelfde mogelijkheden. De Mac mini blijft het brein (lokale
+  API :8001, planner); de iMac-app praat daar via Tailscale mee. Start op de
+  iMac geen tweede axe_api.
+
 ## Waar je bent
 
 | | |
@@ -184,8 +202,8 @@ hek (`cli_laag.py`) zitten daar bovenop. Geen tweede node-daemon, geen
 tweede geheugenstore. Inventaris: bouwlijst §8.
 
 Rabbit OS3 is een optionele extra executor via dezelfde CLI. Er is geen
-publieke OS3-API; OS3 belt AXE, niet andersom. Niet mergen naar
-`orchestrator` — dat is hard geblokkeerd.
+publieke OS3-API; OS3 belt AXE, niet andersom. Staat sinds 25 sep in
+`orchestrator`; zonder OS3-koppeling doet de laag niets.
 
 Dit bestand staat in de hoofdmap omdat elke assistent het daar als eerste leest.
 Klopt er iets niet meer, verander het hier — niet in je eigen sessie-geheugen.
