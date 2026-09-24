@@ -1738,6 +1738,30 @@ html:root[data-look],
   }
 }
 
+/* ── Ruimte voor de chatwolk naast de composer (23 sep 2026) ──────────────
+ *
+ * De band liet rechts 287px over, en daar staat ook de radiaalnav: er bleef
+ * ~82px over voor het gesprek, dus Luka zag de wolk nooit. Zolang de wolk
+ * gewenst is (AxePresenceDock zet `data-chatwolk='aan'`: niet op Home met de
+ * plaat open, niet op tabs met eigen zij-inhoud, niet onder 1360px) beginnen
+ * de chatplaat en de composer op de LINKERlijn van de band en houden ze rechts
+ * een kolom vrij. De onderbalk blijft gecentreerd en volle band.
+ *
+ * 217px = RADIAAL_RESERVE 190 + VOOR_OBSTAKEL_GAP 12 + NA_COMPOSER_GAP 15
+ * (AxePresenceDock.tsx); 1360 = WOLK_MIN_VENSTER daar. Verandert één van die,
+ * dan dit ook. */
+:root[data-look] {
+  --axe-wolk-b: clamp(300px, 22vw, 440px);
+}
+@media (min-width: 1360px) {
+  :root[data-look][data-chatwolk='aan'] .axe-chatplaat,
+  :root[data-look][data-chatwolk='aan'] .axe-composer {
+    width: calc(100% - 217px - var(--axe-wolk-b) - (100% - var(--axe-barw, 1520px)) / 2);
+    margin-left: calc((100% - var(--axe-barw, 1520px)) / 2) !important;
+    margin-right: auto !important;
+  }
+}
+
 /* ── Dezelfde breedte als de band, voor wat erboven hangt ─────────────────
  *
  * De chatplaat, de composer en de nav delen één uitgerekende breedte. Wat
