@@ -364,7 +364,8 @@ aanroepbaar, gekoppeld aan de router.
       toont.
 
 **Al aanwezig:** Whisper-lus, George (Kokoro), `voiceStatus`, Home-bol
-die meeloopt met die status, #178 stilte-wacht. **Ontbreekt:** pauze-
+die meeloopt met die status, `statusOrb.ts` (idle/listening/processing/
+speaking → orb of equalizer), #178 stilte-wacht. **Ontbreekt:** pauze-
 versturen als contract, Esc overal, globale hotkey, error-stand op een
 altijd-zichtbare bol.
 
