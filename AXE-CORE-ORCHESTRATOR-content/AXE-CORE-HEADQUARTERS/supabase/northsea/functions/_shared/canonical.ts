@@ -6,7 +6,7 @@ export const CANONICAL_REPLY_TO = "trade@northseacommodity.com";
 export const CANONICAL_TRANSPORT = "resend";
 
 export type ActorType = "human" | "service" | "automation";
-export type ApprovalBasis = "human_approved_draft" | "policy_allowed" | "system_acknowledgement";
+export type ApprovalBasis = "human_approved_draft" | "policy_allowed" | "system_acknowledgement" | "provider_reconciled";
 
 export interface OutboundProvenanceInput {
   providerMessageId: string;

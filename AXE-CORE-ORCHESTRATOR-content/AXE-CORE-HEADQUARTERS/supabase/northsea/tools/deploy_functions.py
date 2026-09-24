@@ -9,7 +9,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from supa_mcp import call
 
 ROOT = pathlib.Path(__file__).resolve().parents[1] / "functions"
-VERIFY_JWT = {"send-approved-reply": True}  # alle andere doen hun eigen autorisatie (handtekening/sleutel/eigenaar)
+VERIFY_JWT = {
+    "send-approved-reply": True,
+    "resend-reconcile-outbound": True,
+}  # alle andere doen hun eigen autorisatie (handtekening/sleutel/eigenaar)
 
 
 def bundle(slug: str) -> list[dict]:

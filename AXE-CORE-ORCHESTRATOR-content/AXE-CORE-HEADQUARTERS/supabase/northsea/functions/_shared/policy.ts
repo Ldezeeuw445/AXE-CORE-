@@ -85,6 +85,23 @@ export function blocksHumanSend(reason: BlockReason): boolean {
   return reason === "do_not_contact" || reason === "synthetic" || reason === "bounced_channel";
 }
 
+/**
+ * Wanneer moet inbound een mens markeren? Niet bij elk geweigerd auto-send
+ * (dat zou met alle vlaggen uit bijna alles markeren), alleen bij:
+ * gevoelige inhoud, dubbelzinnige koppeling, of een veilig concept dat
+ * beleid tegenhoudt terwijl een mens het nog wél zou mogen sturen.
+ */
+export function needsHumanApproval(i: {
+  sensitive: boolean;
+  mappingStatus: MappingStatus;
+  hasSafeDraft: boolean;
+  policyAllowed: boolean;
+  blockReason: BlockReason;
+}): boolean {
+  return i.sensitive || i.mappingStatus === "ambiguous"
+    || Boolean(i.hasSafeDraft && !i.policyAllowed && !blocksHumanSend(i.blockReason));
+}
+
 export function blocksAutomation(reason: BlockReason): boolean {
   return reason !== null;
 }

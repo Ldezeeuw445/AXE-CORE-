@@ -9,6 +9,12 @@ Deno.test("outbound provenance is canonical and mandatory", () => {
   assertThrows(() => outboundProvenance({ providerMessageId: "id", actor: "", actorType: "service", approvalBasis: "system_acknowledgement" }));
   assertThrows(() => outboundProvenance({ providerMessageId: "id", actor: "x", actorType: "automation", approvalBasis: "policy_allowed" }));
 });
+Deno.test("provider reconciliation is factual provenance and needs no draft id", () => {
+  const p = outboundProvenance({ providerMessageId: "re_history", actor: "resend-reconcile", actorType: "service", approvalBasis: "provider_reconciled" });
+  assertEquals([p.from_address, p.reply_to_address, p.approval_basis, p.reply_draft_id],
+    ["NorthSea Commodity Partners <trade@northseacommodity.com>", "trade@northseacommodity.com", "provider_reconciled", null]);
+});
+
 Deno.test("Resend payload always uses the canonical sender", () => {
   const b = resendPayload("a@b.test", "s", "t", "<p>t</p>") as Record<string, unknown>;
   assertEquals([b.from, b.reply_to], ["NorthSea Commodity Partners <trade@northseacommodity.com>", "trade@northseacommodity.com"]);
@@ -45,4 +51,17 @@ Deno.test("corporate HTML uses the official identity and does not prefix new lin
 Deno.test("STRATO notifications are recognized", () => {
   assert(isStratoNotification("ai-voicereceptionist.com", "x"));
   assert(isStratoNotification("other.test", "Nieuwe oproep van +31"));
+});
+
+
+Deno.test("reply-thread role hint keeps terse supplier replies actionable without overriding explicit text", () => {
+  const terse = intel("Re: Copper qualification", "Please find the requested documents attached.", "supplier.test", "supplier");
+  assertEquals([terse.classification, terse.safe], ["supplier", true]);
+  assert(draftText(terse, "sales@supplier.test", "Re: Copper qualification"));
+
+  const explicitBuyer = intel("Re: Copper qualification", "We require 100 MT copper cathode CIF Rotterdam, payment LC.", "supplier.test", "supplier");
+  assertEquals(explicitBuyer.classification, "buyer");
+
+  const unrelated = intel("Newsletter", "Here is our monthly update.", "supplier.test");
+  assertEquals(unrelated.classification, "unknown");
 });

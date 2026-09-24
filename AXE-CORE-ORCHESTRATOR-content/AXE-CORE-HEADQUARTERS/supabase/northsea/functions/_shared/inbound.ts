@@ -49,11 +49,22 @@ export interface Intel {
   action: string;
 }
 
-export function intel(s: string | null, b: string | null, d: string | null): Intel {
+export function intel(
+  s: string | null,
+  b: string | null,
+  d: string | null,
+  roleHint: "buyer" | "supplier" | null = null,
+): Intel {
   const raw = `${s ?? ""}\n${b ?? ""}`, t = raw.toLowerCase(), has = (...a: string[]) => a.some((x) => t.includes(x));
   const supplier = has("we can supply", "we supply", "available stock", "monthly capacity", "supplier offer", "offer supply", "seller mandate");
   const buyer = has("we require", "requirement", "looking to buy", "want to buy", "purchase", "need copper", "buyer requirement", "seeking");
-  const c = supplier ? "supplier" : buyer ? "buyer" : has("broker", "intermediary", "mandate") ? "broker" : d === "axeheadquarters.com" ? "internal" : "unknown";
+  // Replies often contain only documents/answers ("attached", "see below", pricing,
+  // certificates) and therefore no longer repeat "we supply"/"we require". When
+  // resend-inbound has already linked the sender to a known buyer/supplier company
+  // and this is a reply/thread, that role is evidence we can safely use for
+  // classification. Explicit message text still wins over the hint.
+  const c = supplier ? "supplier" : buyer ? "buyer" : has("broker", "intermediary", "mandate") ? "broker"
+    : roleHint ?? (d === "axeheadquarters.com" ? "internal" : "unknown");
   const q = raw.match(/(?:quantity|qty|trial|capacity)?\s*[:\-]?\s*(\d{1,6}(?:[.,]\d+)?)\s*(?:mt|metric tons?|tonnes?)/i),
     pu = raw.match(/(99(?:[.,]\d{1,4})?)\s*%/i),
     commodity = /copper cathode/i.test(raw) ? "Copper Cathode" : /copper/i.test(raw) ? "Copper" : null,
