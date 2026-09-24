@@ -439,6 +439,25 @@ async def test_search_only_rerun_targets_one_requirement_and_never_sends():
         await crew.aclose()
 
 
+async def test_search_only_dry_run_returns_slate_and_writes_nothing():
+    repo = FakeRepo()
+    crew = CrewGateway(axe_api_url="http://x", axe_api_key="", crew_venv_py="", local_enabled=True, timeout=5)
+    research = FakeResearch()
+    voor_q = [q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review"]
+    voor_audit = list(repo.t["northsea_audit_events"])
+    try:
+        uit = await disc(repo, crew=crew, research=research).search_only_rerun(REQ, dry_run=True)
+        assert uit["dry_run"] is True and uit["created_review"] is False and uit["search_only"] is True
+        assert uit["would_persist"]["candidates"] and uit["candidate_count"] == len(uit["would_persist"]["candidates"])
+        assert uit["would_persist"]["web_hits"] and uit["search_hits"] == len(uit["would_persist"]["web_hits"])
+        assert uit["outreach"] is False
+        assert [q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review"] == voor_q
+        assert repo.t["northsea_audit_events"] == voor_audit
+        assert repo.sends == []
+    finally:
+        await crew.aclose()
+
+
 async def test_search_only_replaces_existing_review_metadata():
     repo = FakeRepo()
     crew = _StubCrew(_ok_crew_info(structured_output={"candidates": [], "rejected": []}))
@@ -506,6 +525,8 @@ async def test_search_only_endpoint_requires_discovery_service_token(client, sto
     r = await client.post("/internal/discovery/search-only?buyer_requirement_id=" + REQ + "&dry_run=1",
                           headers={"Authorization": f"Bearer {ok}"})
     assert r.status_code == 200 and r.json()["dry_run"] is True and r.json()["search_only"] is True
+    assert r.json()["created_review"] is False
+    assert r.json()["would_persist"]["candidates"]
     assert repo.sends == []
     assert not any(q["action_type"] == "crew_candidate_review" for q in repo.t["action_queue"])
 

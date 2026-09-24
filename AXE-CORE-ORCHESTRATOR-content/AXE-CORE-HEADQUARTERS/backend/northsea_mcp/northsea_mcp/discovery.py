@@ -280,8 +280,9 @@ class DiscoveryService:
             if kandidaat is None:
                 return {"skipped": True, "reason": "no eligible requirement (all already crew-reviewed or none active)"}
 
-        if dry_run:
-            return {"dry_run": True, "search_only": search_only,
+        if dry_run and not search_only:
+            # Sweep-dry-run blijft goedkoop: geen zoekbudget verbranden.
+            return {"dry_run": True, "search_only": False,
                     "would_review": {"buyer_requirement_id": kandidaat["id"],
                                      "product": kandidaat.get("product") or kandidaat.get("commodity")}}
 
@@ -310,6 +311,10 @@ class DiscoveryService:
         info = await self.crew.run("find_suppliers", handoff)
         dedupe_key = f"crew_candidate_review:{kandidaat['id']}"
         if not info.used or info.status != "ok":
+            if dry_run:
+                return {"dry_run": True, "created_review": False, "buyer_requirement_id": kandidaat["id"],
+                        "crew_status": info.status, "reason": info.reason, "search_status": zoek_status,
+                        "search_only": search_only}
             await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
                 "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_skipped",
                 "details": {"buyer_requirement_id": kandidaat["id"], "crew_status": info.status, "reason": info.reason,
@@ -336,6 +341,16 @@ class DiscoveryService:
         }
         if extractie:
             metadata["candidate_extract_warning"] = extractie
+        if dry_run:
+            # Search-only dry-run: zoek + rank, toon de slate, schrijf niets.
+            return {"dry_run": True, "created_review": False, "search_only": True,
+                    "buyer_requirement_id": kandidaat["id"], "search_status": zoek_status,
+                    "search_hits": metadata["search_hits"], "candidate_count": metadata["candidate_count"],
+                    "rejected_count": metadata["rejected_count"],
+                    "would_persist": {"candidates": metadata["candidates"], "rejected": metadata["rejected"],
+                                     "web_hits": metadata["web_hits"], "search_provider": metadata.get("search_provider"),
+                                     "candidate_extract_warning": extractie},
+                    "outreach": False}
         if metadata["candidate_count"] != len(metadata["candidates"]) or metadata["rejected_count"] != len(metadata["rejected"]):
             await self._resilient(lambda: self.repo.engine_insert("northsea_audit_events", {
                 "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_persist_failed",
