@@ -5,6 +5,7 @@
 import type { NormalizedAttachment } from '@/application/attachments/attachmentService';
 import type { ProjectionPayload, ProjectionMode, ProjectionSource } from '@/domain/sphere/projectionTypes';
 import { resolveChart } from '@/application/sphere/projectionResolvers/chartResolver';
+import { resolveShownContent, wantsShownContent } from '@/application/sphere/projectionResolvers/contentResolver';
 import { resolveMap } from '@/application/sphere/projectionResolvers/mapResolver';
 
 function id(): string {
@@ -257,9 +258,10 @@ export async function directFromChat(input: {
     return resolveMap(placeContextFromText(text) || text);
   }
 
-  // Flexible "laat X zien" that is not chart/code → try map geocode
-  if (/laat(\s+\S+){1,6}\s+zien/i.test(text) && !CODE_RE.test(text)) {
-    return resolveMap(placeContextFromText(text) || text);
+  // "laat het nieuws zien", "toon een artikel", "show me the briefing" —
+  // niet geocoden. Een mislukte plaatsnaam viel anders terug op Amsterdam.
+  if (wantsShownContent(text) && !CODE_RE.test(text)) {
+    return resolveShownContent(text);
   }
 
   if (!SHOW_FLEX_RE.test(text) && !CODE_RE.test(text)) return null;
@@ -270,18 +272,6 @@ export async function directFromChat(input: {
       title: 'Code',
       subtitle: 'from chat',
       text,
-      source: 'chat',
-    });
-  }
-
-  if (SHOW_FLEX_RE.test(text)) {
-    return projectionFromResolved({
-      mode: 'document',
-      title: 'Request',
-      subtitle: 'Awaiting resolved content',
-      text:
-        text +
-        '\n\n—\nTip: “toon chart” · “laat New York zien” · drop a file · “klaar”.',
       source: 'chat',
     });
   }
