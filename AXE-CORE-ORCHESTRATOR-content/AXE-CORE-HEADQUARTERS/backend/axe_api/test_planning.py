@@ -30,6 +30,14 @@ class FakeQuery:
         self.filters[k] = v
         return self
 
+    def select(self, _cols="*"):
+        self.op = "select"
+        return self
+
+    def limit(self, n):
+        self.limit_n = n
+        return self
+
     def execute(self):
         rows = self.db.setdefault(self.table, [])
         if self.op == "insert":
@@ -40,6 +48,8 @@ class FakeQuery:
             rows.append(row)
             return FakeResult([row])
         hits = [r for r in rows if all(r.get(k) == v for k, v in self.filters.items())]
+        if self.op == "select":
+            return FakeResult(hits[: getattr(self, "limit_n", len(hits))])
         for r in hits:
             r.update(self.body)
         return FakeResult(hits)
@@ -215,3 +225,56 @@ def test_report_row_validates_and_computes_duration():
                 {"job_key": "x", "status": "ok", "executor": "moon"}):
         with pytest.raises(ValueError):
             p.rapport_rij(bad, NU)
+
+
+# ── Een run die bleef hangen (23 sep 2026) ─────────────────────────────────
+# Stierf het proces midden in een run, dan bleef die rij op 'running' staan en
+# schoof next_run_at nooit door. Elke tik botste daarna op hetzelfde moment
+# (unieke index job_key+scheduled_for), noteerde 'skipped' en schoof weer niet
+# door: de planner stond zo sinds 17 sep stil, de NorthSea-engine sinds 01:03.
+
+def test_abandoned_running_run_is_closed_and_schedule_moves_on():
+    sb = FakeSb([sched(max_runtime_s=300)])
+    sb.db["core_job_runs"].append({"id": "run-0", "job_key": "northsea:job", "scheduled_for": "2026-09-16T12:00:00+00:00",
+                                   "status": "running", "started_at": (NU - timedelta(hours=11)).isoformat()})
+    calls = []
+
+    async def actie(soort, payload):
+        calls.append(soort)
+        return {"status": "ok", "output": ""}
+
+    uit = run(p.Uitvoerder(lambda: sb, "vps", "vps:test", actie, nu=lambda: NU).tick())
+    oud = sb.db["core_job_runs"][0]
+    s = sb.db["core_schedules"][0]
+    assert calls == []                                   # the old moment is not re-run
+    assert oud["status"] == "timeout" and oud.get("finished_at") and "abandoned" in (oud.get("error") or "")
+    assert s["next_run_at"] == "2026-09-16T13:00:00+00:00"  # moves on instead of retrying 12:00 forever
+    assert s["lease_owner"] is None and s["last_status"] == "timeout"
+    assert uit[0]["status"] == "timeout"
+
+
+def test_run_still_within_its_runtime_is_left_alone():
+    sb = FakeSb([sched(max_runtime_s=300)])
+    sb.db["core_job_runs"].append({"id": "run-0", "job_key": "northsea:job", "scheduled_for": "2026-09-16T12:00:00+00:00",
+                                   "status": "running", "started_at": (NU - timedelta(seconds=90)).isoformat()})
+
+    async def actie(soort, payload):
+        return {"status": "ok", "output": ""}
+
+    uit = run(p.Uitvoerder(lambda: sb, "vps", "vps:test", actie, nu=lambda: NU).tick())
+    assert sb.db["core_job_runs"][0]["status"] == "running"          # another tick is genuinely running it
+    assert sb.db["core_schedules"][0]["next_run_at"] == "2026-09-16T12:00:00+00:00"
+    assert uit[0]["status"] == "skipped"
+
+
+def test_finished_run_for_the_moment_just_moves_the_schedule_on():
+    sb = FakeSb([sched()])
+    sb.db["core_job_runs"].append({"id": "run-0", "job_key": "northsea:job", "scheduled_for": "2026-09-16T12:00:00+00:00",
+                                   "status": "ok", "started_at": NU.isoformat()})
+
+    async def actie(soort, payload):
+        return {"status": "ok", "output": ""}
+
+    uit = run(p.Uitvoerder(lambda: sb, "vps", "vps:test", actie, nu=lambda: NU).tick())
+    assert sb.db["core_schedules"][0]["next_run_at"] == "2026-09-16T13:00:00+00:00"
+    assert uit[0]["status"] == "skipped"

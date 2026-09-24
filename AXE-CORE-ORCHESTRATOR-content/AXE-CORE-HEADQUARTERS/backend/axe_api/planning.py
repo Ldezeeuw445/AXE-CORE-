@@ -148,6 +148,11 @@ def agenda(schedules: list[dict], pg_jobs: list[dict], van: datetime, tot: datet
     return sorted(items, key=lambda i: i["at"])
 
 
+# Een run die langer dan zijn eigen looptijd plus deze marge op 'running' staat,
+# draait nergens meer: het proces dat hem startte is weg.
+HANG_MARGE_S = 120
+
+
 def na_run(status: str, fouten_op_rij: int, max_fails: int = MAX_FAILS) -> tuple[int, bool]:
     """(nieuwe teller, uitzetten?) na een run. Alleen een geslaagde run zet de teller terug."""
     if status == "ok":
@@ -182,6 +187,56 @@ class Uitvoerder:
             uit.append(await self.voer_uit(s, trigger="cron"))
         return uit
 
+    def _moment_al_gedaan(self, s: dict, gepland: Optional[str], nu: datetime, trigger: str) -> dict:
+        """Er bestaat al een run voor dit moment (unieke index job_key+scheduled_for).
+
+        Drie gevallen, en alleen de eerste is "echt bezet":
+          1. die run loopt nog binnen zijn looptijd -> een andere tick doet hem; overslaan.
+          2. die run staat nog op 'running' maar is ver over zijn looptijd -> het proces
+             stierf halverwege (herstart, reboot). Afsluiten als timeout.
+          3. die run is klaar -> alleen next_run_at is toen niet doorgeschoven.
+        In 2 en 3 schuift next_run_at door. Zonder dat botste elke tick eeuwig op
+        hetzelfde moment: zo stond de planner stil sinds 17 sep en de NorthSea-engine
+        sinds 23 sep 01:03, terwijl last_status 'ok' bleef zeggen (23 sep 2026).
+        """
+        patch: dict[str, Any] = {"lease_owner": None, "lease_until": None}
+        job_key = s.get("job_key") or f"schedule:{s['id']}"
+        limiet = max(5, min(int(s.get("max_runtime_s") or 300), 3600))
+        bestaand = None
+        try:
+            bestaand = ((self.sb().table("core_job_runs").select("id,status,started_at")
+                         .eq("job_key", job_key).eq("scheduled_for", gepland).limit(1).execute().data) or [None])[0]
+        except Exception:  # noqa: BLE001 — niet kunnen lezen = het oude, veilige gedrag
+            bestaand = None
+
+        status, reden = "skipped", "run voor dit moment bestond al"
+        if bestaand and bestaand.get("status") == "running":
+            try:
+                gestart = datetime.fromisoformat(str(bestaand.get("started_at")))
+            except ValueError:
+                gestart = None
+            leeftijd = (nu - gestart).total_seconds() if gestart else float("inf")
+            if leeftijd < limiet + HANG_MARGE_S:
+                self.sb().table("core_schedules").update(patch).eq("id", s["id"]).execute()
+                return {"id": s["id"], "name": s.get("name"), "status": "skipped", "reden": "run voor dit moment loopt nog"}
+            fout = (f"abandoned: still 'running' after {int(leeftijd)}s (max {limiet}s) -- "
+                    "the process died mid-run; closed so the schedule can continue")
+            self.sb().table("core_job_runs").update({
+                "status": "timeout", "finished_at": nu.isoformat(), "error": fout,
+            }).eq("id", bestaand["id"]).execute()
+            teller, _ = na_run("timeout", int(s.get("consecutive_failures") or 0))
+            patch.update({"last_run_at": nu.isoformat(), "last_status": "timeout", "last_result": fout,
+                          "consecutive_failures": teller})
+            status, reden = "timeout", "hangende run afgesloten"
+
+        if trigger == "cron" and s.get("cron_expr"):
+            try:
+                patch["next_run_at"] = volgende(s["cron_expr"], s.get("timezone") or "UTC", nu).isoformat()
+            except (ValueError, KeyError):
+                pass
+        self.sb().table("core_schedules").update(patch).eq("id", s["id"]).execute()
+        return {"id": s["id"], "name": s.get("name"), "status": status, "reden": reden}
+
     async def voer_uit(self, s: dict, trigger: str = "cron") -> dict:
         start = self.nu()
         gepland = s.get("next_run_at") if trigger == "cron" else None
@@ -196,9 +251,7 @@ class Uitvoerder:
             run_id = (ins.data or [{}])[0].get("id")
         except Exception as e:  # noqa: BLE001
             if _is_dubbel(e):
-                # Deze run bestaat al (een andere tick). Alleen de lease vrijgeven.
-                self.sb().table("core_schedules").update({"lease_owner": None, "lease_until": None}).eq("id", s["id"]).execute()
-                return {"id": s["id"], "name": s.get("name"), "status": "skipped", "reden": "run bestaat al voor dit moment"}
+                return self._moment_al_gedaan(s, gepland, start, trigger)
             raise
 
         soort = s.get("action_type") or ""
