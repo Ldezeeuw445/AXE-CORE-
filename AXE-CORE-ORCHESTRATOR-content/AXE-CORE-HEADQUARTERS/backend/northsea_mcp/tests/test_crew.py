@@ -10,7 +10,7 @@ import json
 import httpx
 import pytest
 
-from northsea_mcp.crew import CREW_FOR_ROUTE, ROUTE_FOR_ACTION, CrewGateway, StudioRoute, parse_dedicated_output
+from northsea_mcp.crew import CREW_FOR_ROUTE, ROUTE_FOR_ACTION, CrewGateway, StudioRoute, parse_dedicated_output, structured_from_output
 
 API = "api.test"
 DEAL = "deal-crew.crewai.test"
@@ -116,6 +116,38 @@ async def test_extra_contract_fields_survive_as_structured_output():
     assert info.structured_output["candidates"] == [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}]
     assert info.structured_output["strategy"]["commodity"] == "Copper"
     assert "analysis" not in info.structured_output and "models" not in info.structured_output  # bekende velden niet dubbel
+
+
+async def test_local_runtime_puts_candidates_on_structured_output():
+    """Productiepad (northsea_local): 9f753dbe testte alleen Studio AMP met extra velden
+    op topniveau. LocalCrewBackend nestte candidates onder typed_result, en discovery
+    las structured_output['candidates'] -- leeg, terwijl de analyse 'N ranked' zei."""
+    g = CrewGateway(axe_api_url="http://x", axe_api_key="", crew_venv_py="", local_enabled=True, timeout=5)
+    try:
+        info = await g.run("find_suppliers", {
+            "payload": {"direction": "find_supplier", "commodity": "Copper", "geography": "Germany",
+                        "web_hits": [{"title": "Mopani Copper Mines", "url": "https://www.mopani.com/products"}],
+                        "web_hits_provider": "zenserp"},
+            "canonical_state": {"source": "northsea_service", "file_read": False},
+        })
+        assert info.status == "ok" and info.backend == "northsea_local"
+        assert info.structured_output["candidates"]
+        assert info.structured_output["candidates"][0]["name"] == "Mopani Copper Mines"
+        assert info.structured_output.get("rejected") == [] or isinstance(info.structured_output.get("rejected"), list)
+    finally:
+        await g.aclose()
+
+
+def test_structured_from_output_flattens_typed_result_nesting():
+    from northsea_mcp.crew import DedicatedCrewOutput
+    raw = DedicatedCrewOutput.model_validate({
+        "analysis": "Sourcing find_supplier for Copper: 1 ranked candidate(s), 0 rejected.",
+        "typed_result": {"candidates": [{"name": "Aurubis", "url": "https://aurubis.example", "fit_score": 80}],
+                         "rejected": [], "strategy": {"commodity": "Copper"}},
+    })
+    extra = structured_from_output(raw)
+    assert extra["candidates"][0]["name"] == "Aurubis"
+    assert extra["strategy"]["commodity"] == "Copper"
 
 
 async def test_health_check_failure_falls_back_visibly():

@@ -80,6 +80,10 @@ class LocalCrewBackend:
         analysis = str(raw.get("analysis") or "").strip()
         if not analysis:
             return _Run("invalid", detail="local crew returned empty analysis")
+        extras = {k: v for k, v in raw.items() if k not in {
+            "analysis", "claims", "blockers", "recommendations", "models", "skills",
+            "tools", "budget_usage", "confidence",
+        }}
         contract = {
             "analysis": analysis,
             "claims": raw.get("claims") or [],
@@ -90,11 +94,13 @@ class LocalCrewBackend:
             "tools": raw.get("tools") or ["canonical_state"],
             "budget_usage": raw.get("budget_usage") or {},
             "confidence": raw.get("confidence"),
-            "typed_result": {k: v for k, v in raw.items() if k not in {
-                "analysis", "claims", "blockers", "recommendations", "models", "skills",
-                "tools", "budget_usage", "confidence",
-            }},
+            "typed_result": extras,
         }
+        # DedicatedCrewOutput extra='allow': candidates/rejected moeten TOP-LEVEL
+        # staan. Zonder dit ziet discovery alleen search_hits (Copper Cathode 84eed8f3).
+        for sleutel in ("candidates", "rejected"):
+            if sleutel in extras:
+                contract[sleutel] = extras[sleutel]
         uitvoer, fout = parse_dedicated_output(json.dumps(contract))
         if not uitvoer:
             return _Run("invalid", detail=fout)

@@ -127,6 +127,7 @@ class FakeRepo:
         self.engine_writes: list[tuple[str, str]] = []
         self.fail_insert_match_assessment = False
         self.fail_delete_opportunity = False
+        self.fail_engine_insert_action_queue = False
 
     def _find(self, table: str, **eq) -> list[dict]:
         if self.fail_reads:
@@ -146,6 +147,8 @@ class FakeRepo:
         assert table in {"email_intelligence", "opportunities", "northsea_followups", "reply_drafts", "action_queue", "contacts", "deal_evidence",
                          "deal_events", "northsea_audit_events"}
         rows = self.t.setdefault(table, [])
+        if self.fail_engine_insert_action_queue and table == "action_queue":
+            raise RepositoryError("database write failed for action_queue (400): simulated persist failure")
         if self.guard_block and table == "reply_drafts":
             raise RepositoryError("database write failed for reply_drafts (400): NS_CONTACT_POLICY: draft blocked (bounced_channel)")
         if on_conflict:
@@ -164,6 +167,9 @@ class FakeRepo:
         return [copy.deepcopy(nieuw)]
 
     async def engine_patch(self, table, filters, body):
+        from northsea_mcp.repository import RepositoryError
+        if self.fail_engine_insert_action_queue and table == "action_queue":
+            raise RepositoryError("database write failed for action_queue (400): simulated persist failure")
         rows = self.t.setdefault(table, [])
         (sleutel, waarde), = filters.items()
         doel = waarde.removeprefix("eq.")

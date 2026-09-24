@@ -48,7 +48,7 @@ from .models import (
 )
 from .oauth import NorthSeaTokenVerifier, OAuthServer, client_ip
 from .policy import SCOPES, TOOLS, PolicyDenied, Risk, require_scopes
-from .repository import InvalidId, RepositoryError, SupabaseRepository
+from .repository import InvalidId, RepositoryError, SupabaseRepository, uid
 from .readlayer import InspectService
 from .readtools import ReadTools
 from .research import ResearchError, ResearchGateway
@@ -645,6 +645,38 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 uit = await asyncio.wait_for(discovery.sweep(dry_run=dry, max_new_override=override), timeout=100)
                 if not skip_crew:
                     uit["crew_review"] = await asyncio.wait_for(discovery.crew_assisted_review(dry_run=dry), timeout=20)
+            except asyncio.TimeoutError:
+                return JSONResponse({"error": "timeout"}, status_code=504)
+            except RepositoryError:
+                return JSONResponse({"error": "upstream_error"}, status_code=502)
+        return JSONResponse(uit, headers={"Cache-Control": "no-store"})
+
+    @route("/internal/discovery/search-only", methods=["POST"])
+    async def discovery_search_only(request: Request) -> Response:
+        """Search + rank for ONE buyer_requirement. Never sends mail or any outside
+        message, never creates a company/offer/opportunity. Updates the existing
+        crew_candidate_review Chase item if one exists (recovery for a lost slate).
+        Service-token + northsea.discovery only. `buyer_requirement_id` is required.
+        `?dry_run=1` reports without writing."""
+        auth = request.headers.get("authorization", "")
+        rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
+        if rec is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        if "northsea.discovery" not in rec.scopes:
+            return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
+        rid = (request.query_params.get("buyer_requirement_id") or "").strip()
+        if not rid:
+            return JSONResponse({"error": "buyer_requirement_id required"}, status_code=400, headers={"Cache-Control": "no-store"})
+        try:
+            uid(rid, "buyer_requirement_id")
+        except InvalidId:
+            return JSONResponse({"error": "buyer_requirement_id must be a UUID"}, status_code=400, headers={"Cache-Control": "no-store"})
+        dry = request.query_params.get("dry_run") in ("1", "true", "yes")
+        if discovery_lock.locked():
+            return JSONResponse({"skipped": True, "reason": "a sweep is already running"}, status_code=409)
+        async with discovery_lock:
+            try:
+                uit = await asyncio.wait_for(discovery.search_only_rerun(rid, dry_run=dry), timeout=90)
             except asyncio.TimeoutError:
                 return JSONResponse({"error": "timeout"}, status_code=504)
             except RepositoryError:

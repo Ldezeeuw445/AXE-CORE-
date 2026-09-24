@@ -120,6 +120,27 @@ class DedicatedCrewOutput(BaseModel):
     confidence: float | None = None
 
 
+def structured_from_output(output: DedicatedCrewOutput | None) -> dict[str, Any]:
+    """Extra contractvelden voor callers (candidates/rejected/strategy/...).
+
+    DedicatedCrewOutput staat extra velden toe (extra='allow'). De lokale
+    productie-runtime (LocalCrewBackend / northsea_local) stopt die extra's in
+    `typed_result`, zodat `model_extra` alleen `{"typed_result": {...}}` is.
+    9f753dbe las `model_extra['candidates']` en schreef daardoor `candidates: []`
+    terwijl de crew wél een slate had -- Copper Cathode CIF Germany (84eed8f3)
+    had `search_hits: 6` en geen enkele herstelbare kandidaat. Deze helper
+    tilt candidates/rejected uit die nesting naar het topniveau."""
+    if output is None:
+        return {}
+    extra = dict(output.model_extra or {})
+    typed = extra.get("typed_result")
+    if isinstance(typed, dict):
+        for sleutel in ("candidates", "rejected", "strategy", "evidence", "warnings", "gaps"):
+            if sleutel not in extra and sleutel in typed:
+                extra[sleutel] = typed[sleutel]
+    return extra
+
+
 def parse_dedicated_output(raw: Any) -> tuple[DedicatedCrewOutput | None, str | None]:
     tekst = raw
     if isinstance(raw, dict) and "output" in raw:
@@ -350,7 +371,7 @@ class CrewGateway:
                                    models=o.models, skills=o.skills, tools=o.tools, budget_usage=o.budget_usage,
                                    timings=timings, validation="valid", actual_specialists=local_res.specialists,
                                    retries=max(0, len(pogingen) - 1), audit_references=[local_res.run_id] if local_res.run_id else [],
-                                   attempts=[p.as_dict() for p in pogingen], structured_output=o.model_extra or {}, **basis)
+                                   attempts=[p.as_dict() for p in pogingen], structured_output=structured_from_output(o), **basis)
             # lokale fout: NorthSea stopt niet; Studio is optioneel, daarna zichtbare fallback
 
         # ── OPTIONEEL: Studio-AMP als die geconfigureerd is ──────────────────
@@ -381,7 +402,7 @@ class CrewGateway:
                                        execution_mode="llm", actual_crew=gevraagd, fallback_used=False, models=o.models, skills=o.skills, tools=o.tools,
                                        budget_usage=o.budget_usage, timings=timings, validation="valid", actual_specialists=res.specialists,
                                        retries=max(0, len(pogingen) - 1), audit_references=[res.run_id] if res.run_id else [],
-                                       attempts=[p.as_dict() for p in pogingen], structured_output=o.model_extra or {}, **basis)
+                                       attempts=[p.as_dict() for p in pogingen], structured_output=structured_from_output(o), **basis)
                 if res.status == "invalid":
                     # Ongeldige uitvoer is geen reden om stil iets anders te draaien: melden.
                     timings["total_s"] = round(time.monotonic() - t0, 2)

@@ -46,12 +46,47 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import canon, matching
-from .repository import RepositoryError
+from .repository import InvalidId, RepositoryError, uid
 from .research import ResearchError
 
 log = logging.getLogger("northsea_mcp.discovery")
 
 ACTOR = "northsea-discovery"
+
+
+def slate_from_structured(structured: dict[str, Any] | None, web_hits: list[dict[str, Any]]) -> tuple[list, list, str | None]:
+    """Ranked + rejected uit crew-output, met vangnet voor de typed_result-nesting.
+
+    9f753dbe schreef `metadata.candidates` uit `structured_output['candidates']`.
+    De lokale runtime (northsea_local) nest die lijst onder `typed_result`, dus
+    een run met `search_hits: 6` kon `candidates: []` of helemaal geen sleutel
+    krijgen -- Copper Cathode CIF Germany, action 90e282a5. Als de crew-slate
+    ontbreekt terwijl er wél hits zijn, blijven de ruwe hits bewaard als
+    unranked candidates: liever een herstelbare slate dan een geopende review
+    zonder namen."""
+    extra = dict(structured or {})
+    typed = extra.get("typed_result") if isinstance(extra.get("typed_result"), dict) else {}
+    kandidaten = extra.get("candidates")
+    if kandidaten is None:
+        kandidaten = typed.get("candidates")
+    afgewezen = extra.get("rejected")
+    if afgewezen is None:
+        afgewezen = typed.get("rejected")
+    if not isinstance(kandidaten, list):
+        kandidaten = []
+    if not isinstance(afgewezen, list):
+        afgewezen = []
+    waarschuwing = None
+    if not kandidaten and not afgewezen and web_hits:
+        waarschuwing = "crew structured_output had no candidates/rejected; persisted raw web_hits unranked"
+        kandidaten = [{
+            "name": h.get("title") or h.get("name") or "UNKNOWN",
+            "url": h.get("url"),
+            "fit_score": None,
+            "ranked": False,
+            "source": "web_hit_unranked",
+        } for h in web_hits]
+    return kandidaten[:10], afgewezen[:10], waarschuwing
 
 
 def _now() -> datetime:
@@ -184,7 +219,20 @@ class DiscoveryService:
                 "selected": len(geselecteerd), "created": len(gemaakt), "created_ids": [o.get("id") for o in gemaakt],
                 "created_today_total": al_vandaag + len(gemaakt), "max_new_per_day": self.max_new_per_day, "errors": fouten}
 
-    async def crew_assisted_review(self, *, dry_run: bool = False) -> dict[str, Any]:
+    async def search_only_rerun(self, buyer_requirement_id: str, *, dry_run: bool = False) -> dict[str, Any]:
+        """Zoek + rank voor ÉÉN requirement. Geen e-mail, geen outreach, geen opportunity.
+
+        Bestaande Chase-review wordt bijgewerkt in plaats van overgeslagen, zodat een
+        verloren slate (Copper Cathode 84eed8f3 / action 90e282a5) hersteld kan worden
+        zonder een tweede item. Schrijft bewust NIET naar sourcing_candidates: crew-
+        output is analyse, geen feit, en de engine mag die tabel niet aanraken."""
+        return await self.crew_assisted_review(
+            dry_run=dry_run, buyer_requirement_id=buyer_requirement_id,
+            replace_existing=True, ignore_daily_cap=True, search_only=True)
+
+    async def crew_assisted_review(self, *, dry_run: bool = False, buyer_requirement_id: str | None = None,
+                                   replace_existing: bool = False, ignore_daily_cap: bool = False,
+                                   search_only: bool = False) -> dict[str, Any]:
         """Governed crew invocation for genuinely NEW candidates -- the higher-risk tier the
         deterministic cross-match above deliberately does not attempt (it only pairs rows that
         already exist). Bounded to `max_crew_calls_per_day` real crew calls, system-wide, because
@@ -195,31 +243,47 @@ class DiscoveryService:
         `crew_candidate_review` Chase item (requires_approval=true) with full provenance (route,
         backend, execution_mode, actual specialists, fallback, audit_references), for a human to
         act on. Deduped per requirement via dedupe_key, so the same requirement is never
-        crew-reviewed twice."""
+        crew-reviewed twice -- unless `replace_existing` (search-only recovery) updates the row.
+
+        Ranked candidates + rejected + raw web_hits worden in metadata gezet VOORDAT de review
+        als geopend geldt. Als die schrijfactie faalt, blijft er geen review open en gaat er
+        een auditregel `crew_candidate_review_persist_failed` in. Nooit e-mail of outreach."""
         if self.crew is None:
             return {"skipped": True, "reason": "no crew gateway configured for this process"}
         nu = self.now()
         vandaag = nu.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         al_vandaag = await self.repo.count_action_queue_since(action_type="crew_candidate_review", since=vandaag)
-        if al_vandaag >= self.max_crew_calls_per_day:
+        if not ignore_daily_cap and al_vandaag >= self.max_crew_calls_per_day:
             return {"skipped": True, "reason": "daily crew-review budget already used", "used_today": al_vandaag,
                     "max_crew_calls_per_day": self.max_crew_calls_per_day}
 
-        ruwe_reqs = await self.repo.list_active_requirements()
-        reqs = [r for r in ruwe_reqs if not canon.testcase_reason(r, r.get("companies"))]
-        reqs.sort(key=lambda r: str(r.get("created_at") or ""))  # de langst genegeerde vraag eerst
-        kandidaat = None
-        for r in reqs:
-            bestaand = await self.repo.get_action_queue_by_dedupe_key(f"crew_candidate_review:{r['id']}")
-            if not bestaand:
-                kandidaat = r
-                break
-        if kandidaat is None:
-            return {"skipped": True, "reason": "no eligible requirement (all already crew-reviewed or none active)"}
+        if buyer_requirement_id is not None:
+            try:
+                rid = uid(buyer_requirement_id, "buyer_requirement_id")
+            except InvalidId as e:
+                return {"skipped": True, "reason": str(e)}
+            kandidaat = await self.repo.get_requirement(rid)
+            if kandidaat is None:
+                return {"skipped": True, "reason": "buyer_requirement not found"}
+            if canon.testcase_reason(kandidaat, kandidaat.get("companies")):
+                return {"skipped": True, "reason": "testcase requirement refused"}
+        else:
+            ruwe_reqs = await self.repo.list_active_requirements()
+            reqs = [r for r in ruwe_reqs if not canon.testcase_reason(r, r.get("companies"))]
+            reqs.sort(key=lambda r: str(r.get("created_at") or ""))  # de langst genegeerde vraag eerst
+            kandidaat = None
+            for r in reqs:
+                bestaand = await self.repo.get_action_queue_by_dedupe_key(f"crew_candidate_review:{r['id']}")
+                if not bestaand:
+                    kandidaat = r
+                    break
+            if kandidaat is None:
+                return {"skipped": True, "reason": "no eligible requirement (all already crew-reviewed or none active)"}
 
         if dry_run:
-            return {"dry_run": True, "would_review": {"buyer_requirement_id": kandidaat["id"],
-                                                       "product": kandidaat.get("product") or kandidaat.get("commodity")}}
+            return {"dry_run": True, "search_only": search_only,
+                    "would_review": {"buyer_requirement_id": kandidaat["id"],
+                                     "product": kandidaat.get("product") or kandidaat.get("commodity")}}
 
         commodity = kandidaat.get("commodity") or kandidaat.get("product") or ""
         geografie = kandidaat.get("origin_preference") or ""
@@ -249,32 +313,76 @@ class DiscoveryService:
             await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
                 "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_skipped",
                 "details": {"buyer_requirement_id": kandidaat["id"], "crew_status": info.status, "reason": info.reason,
-                           "search_status": zoek_status}}))
+                           "search_status": zoek_status, "search_only": search_only}}))
             return {"created_review": False, "buyer_requirement_id": kandidaat["id"], "crew_status": info.status,
-                    "reason": info.reason, "search_status": zoek_status}
+                    "reason": info.reason, "search_status": zoek_status, "search_only": search_only}
 
-        kandidaten_gevonden = (info.structured_output or {}).get("candidates") or []
-        afgewezen = (info.structured_output or {}).get("rejected") or []
-        rij = await self._resilient(lambda info=info: self.repo.engine_insert("action_queue", {
-            "dedupe_key": dedupe_key, "action_type": "crew_candidate_review", "opportunity_id": None, "company_id": None,
-            "priority": 55, "title": f"Crew-assisted candidate review: {kandidaat.get('product') or kandidaat.get('commodity')}"[:200],
-            "description": (info.analysis or "No analysis text returned.")[:2000],
-            "status": "open", "requires_approval": True,
-            "metadata": {"source": ACTOR, "kind": "crew_candidate_review", "buyer_requirement_id": kandidaat["id"],
-                        "crew_route": info.route, "crew_backend": info.backend, "execution_mode": info.execution_mode,
-                        "requested_specialists": info.requested_specialists, "actual_specialists": info.actual_specialists,
-                        "fallback_used": info.fallback_used, "fallback_reason": info.fallback_reason,
-                        "validation": info.validation, "audit_references": info.audit_references,
-                        "timings": info.timings, "budget_usage": info.budget_usage,
-                        "search_status": zoek_status, "search_provider": payload.get("web_hits_provider"),
-                        "search_hits": len(payload.get("web_hits") or []),
-                        # De echte kandidaten zelf -- zonder dit kan niemand deze Chase-item beoordelen,
-                        # alleen het AANTAL ("6 ranked candidate(s)") zonder wie of waarom.
-                        "candidates": kandidaten_gevonden[:10], "rejected": afgewezen[:10]}}, ignore_duplicates=True))
+        web_hits = list(payload.get("web_hits") or [])
+        kandidaten_gevonden, afgewezen, extractie = slate_from_structured(info.structured_output or {}, web_hits)
+        metadata = {
+            "source": ACTOR, "kind": "crew_candidate_review", "buyer_requirement_id": kandidaat["id"],
+            "crew_route": info.route, "crew_backend": info.backend, "execution_mode": info.execution_mode,
+            "requested_specialists": info.requested_specialists, "actual_specialists": info.actual_specialists,
+            "fallback_used": info.fallback_used, "fallback_reason": info.fallback_reason,
+            "validation": info.validation, "audit_references": info.audit_references,
+            "timings": info.timings, "budget_usage": info.budget_usage,
+            "search_status": zoek_status, "search_provider": payload.get("web_hits_provider"),
+            "search_hits": len(web_hits), "web_hits": web_hits[:10],
+            # De echte kandidaten zelf -- zonder dit kan niemand deze Chase-item beoordelen,
+            # alleen het AANTAL ("6 ranked candidate(s)") zonder wie of waarom.
+            "candidates": kandidaten_gevonden, "rejected": afgewezen,
+            "candidate_count": len(kandidaten_gevonden), "rejected_count": len(afgewezen),
+            "search_only": search_only, "outreach": False,
+        }
+        if extractie:
+            metadata["candidate_extract_warning"] = extractie
+        if metadata["candidate_count"] != len(metadata["candidates"]) or metadata["rejected_count"] != len(metadata["rejected"]):
+            await self._resilient(lambda: self.repo.engine_insert("northsea_audit_events", {
+                "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_persist_failed",
+                "details": {"buyer_requirement_id": kandidaat["id"], "reason": "stored count does not match stored slate",
+                           "search_status": zoek_status, "search_only": search_only}}))
+            return {"created_review": False, "buyer_requirement_id": kandidaat["id"],
+                    "reason": "stored count does not match stored slate", "search_status": zoek_status,
+                    "search_only": search_only}
+
+        titel = f"Crew-assisted candidate review: {kandidaat.get('product') or kandidaat.get('commodity')}"[:200]
+        beschrijving = (info.analysis or "No analysis text returned.")[:2000]
+        bestaand = await self.repo.get_action_queue_by_dedupe_key(dedupe_key)
+        vervangen = bool(bestaand and replace_existing)
+        try:
+            if vervangen:
+                rij = await self._resilient(lambda: self.repo.engine_patch(
+                    "action_queue", {"id": f"eq.{bestaand['id']}"},
+                    {"title": titel, "description": beschrijving, "status": "open",
+                     "requires_approval": True, "metadata": metadata}))
+            else:
+                rij = await self._resilient(lambda: self.repo.engine_insert("action_queue", {
+                    "dedupe_key": dedupe_key, "action_type": "crew_candidate_review",
+                    "opportunity_id": None, "company_id": None, "priority": 55, "title": titel,
+                    "description": beschrijving, "status": "open", "requires_approval": True,
+                    "metadata": metadata}, ignore_duplicates=True))
+        except RepositoryError as e:
+            try:
+                await self.repo.engine_insert("northsea_audit_events", {
+                    "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_persist_failed",
+                    "details": {"buyer_requirement_id": kandidaat["id"], "reason": str(e)[:400],
+                               "search_status": zoek_status, "search_only": search_only,
+                               "candidate_count": metadata["candidate_count"]}})
+            except RepositoryError as e2:
+                log.warning("discovery persist-failure audit failed: %s", e2)
+            return {"created_review": False, "buyer_requirement_id": kandidaat["id"],
+                    "reason": f"persist failed: {e}", "search_status": zoek_status, "search_only": search_only}
+
         await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
             "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_requested",
             "details": {"buyer_requirement_id": kandidaat["id"], "crew_route": info.route, "crew_backend": info.backend,
-                       "execution_mode": info.execution_mode, "search_status": zoek_status}}))
+                       "execution_mode": info.execution_mode, "search_status": zoek_status,
+                       "search_hits": metadata["search_hits"], "candidate_count": metadata["candidate_count"],
+                       "rejected_count": metadata["rejected_count"], "search_only": search_only,
+                       "replaced_existing": vervangen}}))
         return {"created_review": bool(rij), "buyer_requirement_id": kandidaat["id"], "crew_route": info.route,
                 "crew_backend": info.backend, "execution_mode": info.execution_mode, "search_status": zoek_status,
-                "used_today": al_vandaag + 1, "max_crew_calls_per_day": self.max_crew_calls_per_day}
+                "search_hits": metadata["search_hits"], "candidate_count": metadata["candidate_count"],
+                "rejected_count": metadata["rejected_count"], "search_only": search_only,
+                "replaced_existing": vervangen, "used_today": al_vandaag + (0 if vervangen else 1),
+                "max_crew_calls_per_day": self.max_crew_calls_per_day}

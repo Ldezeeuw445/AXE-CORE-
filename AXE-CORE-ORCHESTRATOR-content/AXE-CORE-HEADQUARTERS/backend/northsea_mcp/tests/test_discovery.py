@@ -10,8 +10,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import httpx
+import pytest
+
 from fakes import OFFER, OTHER_OFFER, OTHER_SELLER_CO, REQ, FakeCrew, FakeRepo, FakeResearch
-from northsea_mcp.discovery import DiscoveryService
+from northsea_mcp.crew import CrewGateway
+from northsea_mcp.discovery import DiscoveryService, slate_from_structured
 from northsea_mcp.models import CrewRunInfo
 from northsea_mcp.research import ResearchError
 
@@ -314,6 +318,7 @@ async def test_crew_review_feeds_real_search_hits_into_the_crew_handoff():
     assert handoff["payload"]["web_hits"][0]["title"] == "Mopani Copper Mines"
     rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
     assert rij["metadata"]["search_provider"] == "tavily" and rij["metadata"]["search_hits"] > 0
+    assert rij["metadata"]["web_hits"] and rij["metadata"]["candidate_count"] == len(rij["metadata"]["candidates"])
 
 
 async def test_crew_review_reports_a_failed_search_chain_honestly():
@@ -347,6 +352,125 @@ async def test_crew_review_excludes_testcase_requirements():
     assert uit["skipped"] is True and len(crew.calls) == 0
 
 
+def test_slate_from_structured_reads_typed_result_and_falls_back_to_web_hits():
+    ranked, afgewezen, waarschuwing = slate_from_structured(
+        {"typed_result": {"candidates": [{"name": "Aurubis", "fit_score": 80}],
+                          "rejected": [{"name": "Broker Co", "fit_score": 0}]}},
+        [{"title": "ignored", "url": "https://x.example"}])
+    assert ranked == [{"name": "Aurubis", "fit_score": 80}] and afgewezen[0]["name"] == "Broker Co"
+    assert waarschuwing is None
+    fallback, leeg, warn = slate_from_structured({}, [{"title": "Raw Hit", "url": "https://raw.example"}])
+    assert fallback[0]["name"] == "Raw Hit" and fallback[0]["source"] == "web_hit_unranked" and leeg == []
+    assert warn and "unranked" in warn
+    leeg_k, leeg_a, leeg_w = slate_from_structured({"candidates": [], "rejected": []}, [])
+    assert leeg_k == [] and leeg_a == [] and leeg_w is None
+
+
+async def test_crew_review_persists_ranked_candidates_from_the_local_runtime():
+    """Het productiepad: CrewGateway + LocalCrewBackend + echte zoekhits. 9f753dbe
+    dekte dit niet -- die test stubde structured_output op topniveau."""
+    repo = FakeRepo()
+    crew = CrewGateway(axe_api_url="http://x", axe_api_key="", crew_venv_py="", local_enabled=True, timeout=5)
+    research = FakeResearch()
+    try:
+        uit = await disc(repo, crew=crew, research=research).crew_assisted_review()
+        assert uit["created_review"] is True and uit["search_status"] == "ok:tavily"
+        assert uit["candidate_count"] == uit["search_hits"] or uit["candidate_count"] >= 1
+        rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
+        md = rij["metadata"]
+        assert md["candidates"] and md["candidate_count"] == len(md["candidates"])
+        assert md["rejected_count"] == len(md["rejected"])
+        assert md["search_hits"] == len(md["web_hits"])
+        assert any(c.get("name") for c in md["candidates"])
+        assert "Mopani" in " ".join(c.get("name") or "" for c in md["candidates"]) or md["rejected"]
+        assert md["outreach"] is False
+        audit = next(e for e in repo.t["northsea_audit_events"] if e["action"] == "crew_candidate_review_requested")
+        assert audit["details"]["candidate_count"] == md["candidate_count"]
+        assert audit["details"]["search_hits"] == md["search_hits"]
+    finally:
+        await crew.aclose()
+
+
+async def test_crew_review_empty_search_persists_empty_slate_and_opens_review():
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info(structured_output={"candidates": [], "rejected": []}))
+    research = FakeResearch(search_fail=ResearchError("budget_exhausted", "daily search budget used"))
+    uit = await disc(repo, crew=crew, research=research).crew_assisted_review()
+    assert uit["created_review"] is True and uit["search_status"] == "failed:budget_exhausted"
+    rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
+    md = rij["metadata"]
+    assert md["candidates"] == [] and md["rejected"] == []
+    assert md["candidate_count"] == 0 and md["search_hits"] == 0
+    assert "candidates" in md and "rejected" in md
+
+
+async def test_crew_review_persist_failure_does_not_open_review():
+    repo = FakeRepo()
+    repo.fail_engine_insert_action_queue = True
+    crew = _StubCrew(_ok_crew_info(structured_output={
+        "candidates": [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}],
+        "rejected": []}))
+    uit = await disc(repo, crew=crew).crew_assisted_review()
+    assert uit["created_review"] is False and "persist failed" in uit["reason"]
+    assert not any(q["action_type"] == "crew_candidate_review" for q in repo.t["action_queue"])
+    assert any(e["action"] == "crew_candidate_review_persist_failed" for e in repo.t["northsea_audit_events"])
+
+
+async def test_search_only_rerun_targets_one_requirement_and_never_sends():
+    repo = FakeRepo()
+    tweede = _tweede_req(repo)
+    repo.t["buyer_requirements"].append(tweede)
+    crew = CrewGateway(axe_api_url="http://x", axe_api_key="", crew_venv_py="", local_enabled=True, timeout=5)
+    research = FakeResearch()
+    voor_drafts = len(repo.t["reply_drafts"])
+    voor_sends = list(repo.sends)
+    voor_bedrijven = len(repo.t["companies"])
+    try:
+        uit = await disc(repo, crew=crew, research=research).search_only_rerun(tweede["id"])
+        assert uit["created_review"] is True and uit["search_only"] is True
+        assert uit["buyer_requirement_id"] == tweede["id"]
+        reviews = [q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review"]
+        assert len(reviews) == 1 and reviews[0]["metadata"]["buyer_requirement_id"] == tweede["id"]
+        assert reviews[0]["metadata"]["candidates"]
+        assert reviews[0]["metadata"]["outreach"] is False
+        assert repo.sends == voor_sends and len(repo.t["reply_drafts"]) == voor_drafts
+        assert len(repo.t["companies"]) == voor_bedrijven  # geen verzonnen company
+    finally:
+        await crew.aclose()
+
+
+async def test_search_only_replaces_existing_review_metadata():
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info(structured_output={"candidates": [], "rejected": []}))
+    eerste = await disc(repo, crew=crew).crew_assisted_review()
+    assert eerste["created_review"] is True
+    crew2 = _StubCrew(_ok_crew_info(structured_output={
+        "candidates": [{"name": "Aurubis AG", "url": "https://aurubis.example", "fit_score": 80}],
+        "rejected": [{"name": "Some Broker Ltd", "fit_score": 0}]}))
+    research = FakeResearch()
+    tweede = await disc(repo, crew=crew2, research=research).search_only_rerun(REQ)
+    assert tweede["created_review"] is True and tweede["replaced_existing"] is True
+    reviews = [q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review"]
+    assert len(reviews) == 1
+    md = reviews[0]["metadata"]
+    assert md["candidates"][0]["name"] == "Aurubis AG"
+    assert md["candidate_count"] == 1 and md["rejected_count"] == 1
+    assert md["search_hits"] == len(md["web_hits"]) == 4  # FakeResearch levert 4 hits (max_results=6)
+
+
+async def test_stored_count_always_matches_stored_candidates():
+    repo = FakeRepo()
+    crew = _StubCrew(_ok_crew_info(structured_output={
+        "candidates": [{"name": "A", "fit_score": 80}, {"name": "B", "fit_score": 70}],
+        "rejected": [{"name": "C", "fit_score": 0}]}))
+    research = FakeResearch()
+    await disc(repo, crew=crew, research=research).crew_assisted_review()
+    md = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")["metadata"]
+    assert md["candidate_count"] == len(md["candidates"]) == 2
+    assert md["rejected_count"] == len(md["rejected"]) == 1
+    assert md["search_hits"] == len(md["web_hits"])
+
+
 async def test_idempotent_rerun_creates_no_duplicates_even_after_a_rollback():
     """A candidate whose write failed and rolled back must be retryable on the NEXT run without
     becoming a duplicate once it succeeds."""
@@ -360,3 +484,45 @@ async def test_idempotent_rerun_creates_no_duplicates_even_after_a_rollback():
     assert tweede["created"] == 1
     derde = await disc(repo).sweep()
     assert derde["created"] == 0  # nu bestaat de paring: geen tweede exemplaar
+
+
+@pytest.fixture
+def client(app):
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://mcp.northsea.test")
+
+
+async def test_search_only_endpoint_requires_discovery_service_token(client, store, repo):
+    r = await client.post("/internal/discovery/search-only?buyer_requirement_id=" + REQ)
+    assert r.status_code == 401
+    read = store.issue(kind="service", client_id="service:x", subject="service:x",
+                       scopes=["northsea.read", "northsea.admin"],
+                       resource="https://mcp.northsea.test/mcp", ttl_s=600, label="x")
+    r = await client.post("/internal/discovery/search-only?buyer_requirement_id=" + REQ,
+                          headers={"Authorization": f"Bearer {read}"})
+    assert r.status_code == 403
+    ok = store.issue(kind="service", client_id="service:discovery", subject="service:discovery",
+                     scopes=["northsea.discovery"],
+                     resource="https://mcp.northsea.test/mcp", ttl_s=600, label="discovery")
+    r = await client.post("/internal/discovery/search-only?buyer_requirement_id=" + REQ + "&dry_run=1",
+                          headers={"Authorization": f"Bearer {ok}"})
+    assert r.status_code == 200 and r.json()["dry_run"] is True and r.json()["search_only"] is True
+    assert repo.sends == []
+    assert not any(q["action_type"] == "crew_candidate_review" for q in repo.t["action_queue"])
+
+
+async def test_search_only_endpoint_never_sends_and_persists_slate(client, store, repo):
+    ok = store.issue(kind="service", client_id="service:discovery", subject="service:discovery",
+                     scopes=["northsea.discovery"],
+                     resource="https://mcp.northsea.test/mcp", ttl_s=600, label="discovery")
+    voor_sends = list(repo.sends)
+    voor_drafts = len(repo.t["reply_drafts"])
+    r = await client.post("/internal/discovery/search-only?buyer_requirement_id=" + REQ,
+                          headers={"Authorization": f"Bearer {ok}"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["created_review"] is True and body["search_only"] is True
+    assert body["buyer_requirement_id"] == REQ
+    assert repo.sends == voor_sends and len(repo.t["reply_drafts"]) == voor_drafts
+    rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
+    assert rij["metadata"]["candidates"] and rij["metadata"]["candidate_count"] == len(rij["metadata"]["candidates"])
+    assert rij["metadata"]["outreach"] is False
