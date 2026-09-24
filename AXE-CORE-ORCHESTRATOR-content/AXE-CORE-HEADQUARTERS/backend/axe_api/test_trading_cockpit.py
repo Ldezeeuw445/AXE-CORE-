@@ -111,6 +111,9 @@ class _Q:
         r = R()
         if self.table == "user_settings":
             r.data = [{"key": k, "value": v} for k, v in SETTINGS.items()]
+        elif self.table == "global_memory":
+            import json as _json
+            r.data = [{"value": _json.dumps(ACCOUNTS), "updated_at": "2026-09-20T03:00:00Z"}]
         elif self.table == "core_trading_trades":
             r.data = TRADES
         else:
@@ -151,3 +154,21 @@ def test_router_requires_auth():
     assert r.status_code == 200 and TOKEN not in r.text
     assert client.get("/trading/nope").status_code == 404
     assert client.post("/trading/overview").status_code == 405
+
+
+def test_accounts_komen_uit_de_geheugentabel_als_user_settings_ze_niet_heeft():
+    """De app schrijft accounts via memList onder cfg:trading_accounts, niet in user_settings."""
+    class Leeg(_Client):
+        def table(self, name):
+            q = _Q(self.calls, name)
+            if name == "user_settings":
+                orig = q.execute
+                q.execute = lambda: type("R", (), {"data": [
+                    {"key": k, "value": v} for k, v in SETTINGS.items() if k != tc.K_ACCOUNTS]})()
+            return q
+
+    c = Leeg()
+    settings, _, _ = tc.load(c)
+    accounts = tc.shape_accounts(settings[tc.K_ACCOUNTS])
+    assert [a["label"] for a in accounts] == ["FTMO 100k", "Demo"]
+    assert TOKEN not in json.dumps(tc.shape_overview(settings, TRADES, None))

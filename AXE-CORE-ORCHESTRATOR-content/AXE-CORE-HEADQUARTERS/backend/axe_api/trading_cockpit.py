@@ -23,6 +23,7 @@ testen zijn; `load` is de enige die Supabase aanraakt.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -42,6 +43,15 @@ K_LAB_RUNS = "axe_strategy_lab_runs"
 K_LEARNING = "axe_trading_agent_learning"
 P_RISK = "axe_trading_risk_profile"
 P_BREAKER = "axe_trading_circuit_breaker"
+
+# De accounts staan NIET in user_settings maar in de geheugentabel: de app
+# schrijft ze via memList/memSave onder 'cfg:trading_accounts', met het
+# AXE_USER_ID-achtervoegsel. Gemeten 24 sep 2026: /trading/accounts gaf een
+# lege lijst terwijl er vijf accounts waren, puur omdat hier de verkeerde
+# bron stond.
+MEM_TABLE = "global_memory"
+MEM_ACCOUNTS_KEY = "cfg:trading_accounts"
+MEM_USER_SUFFIX = "-axe-core"
 
 EXACT_KEYS = [
     K_ACCOUNTS, K_AUTOPILOT_ENABLED, K_AUTOPILOT_INTERVAL, K_AUTOPILOT_LAST_RUN,
@@ -263,6 +273,26 @@ _cache: dict[str, tuple[float, dict]] = {}
 CACHE_S = 15
 
 
+def _accounts_from_memory(client: Any, user_id: str) -> Any:
+    """De accountlijst uit de geheugentabel; None als hij er niet staat."""
+    try:
+        rows = (client.table(MEM_TABLE).select("value,updated_at")
+                .eq("user_id", f"{user_id}{MEM_USER_SUFFIX}")
+                .eq("key", MEM_ACCOUNTS_KEY)
+                .order("updated_at", desc=True).limit(1).execute().data or [])
+    except Exception:
+        return None
+    if not rows:
+        return None
+    v = rows[0].get("value")
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return None
+    return v
+
+
 def load(client: Any, user_id: str = DESK_USER_ID) -> tuple[dict[str, Any], list[dict], Optional[dict]]:
     """Alleen SELECTs. Service role (RLS omzeild), dus expliciet op user_id gefilterd."""
     rows = (client.table("user_settings").select("key,value").eq("user_id", user_id)
@@ -271,6 +301,9 @@ def load(client: Any, user_id: str = DESK_USER_ID) -> tuple[dict[str, Any], list
         rows += (client.table("user_settings").select("key,value").eq("user_id", user_id)
                  .like("key", f"{prefix}%").execute().data or [])
     settings = {r["key"]: r.get("value") for r in rows}
+
+    if not settings.get(K_ACCOUNTS):
+        settings[K_ACCOUNTS] = _accounts_from_memory(client, user_id)
 
     # user_id is nullable en wordt door tradingTradesService niet gezet: bureau-gebruiker of leeg.
     trades = (client.table("core_trading_trades").select("*").or_(f"user_id.eq.{user_id},user_id.is.null")
