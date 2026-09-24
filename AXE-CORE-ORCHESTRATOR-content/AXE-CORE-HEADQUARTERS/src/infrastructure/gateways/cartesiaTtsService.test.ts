@@ -8,7 +8,7 @@ vi.stubGlobal('localStorage', {
   clear: () => geheugen.clear(),
 });
 
-const { buildCartesiaSpeechRequest, isCartesiaConfigured } = await import('./cartesiaTtsService');
+const { buildCartesiaSpeechRequest, isCartesiaConfigured, setCartesiaVoiceId } = await import('./cartesiaTtsService');
 
 beforeEach(() => geheugen.clear());
 
@@ -29,5 +29,10 @@ describe('cartesiaTtsService', () => {
     expect(body.voice.mode).toBe('id');
     expect(body.voice.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(JSON.stringify(body)).not.toMatch(/sk_|test-key|VITE_/);
+  });
+
+  it('gebruikt een zelfgekozen stem-id uit localStorage', () => {
+    setCartesiaVoiceId('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(buildCartesiaSpeechRequest('Hi').voice.id).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
   });
 });

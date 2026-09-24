@@ -10,7 +10,7 @@ export type StemMotor =
   | 'cartesia'
   | 'fish';
 
-export type ElevenLabsModel = 'eleven_flash_v2_5' | 'eleven_v3';
+export type ElevenLabsModel = 'eleven_flash_v2_5' | 'eleven_v3_conversational';
 
 export const STEM_MOTOR_SLEUTEL = 'axe_stem_motor';
 
@@ -54,8 +54,8 @@ export const STEM_MOTOREN: readonly StemMotorKeuze[] = [
   {
     id: 'elevenlabs-v3',
     naam: 'ElevenLabs v3 Conversational',
-    regel: 'eleven_v3 · conversational · NL+EN',
-    latency: '~0.5–1.0s per sentence if an ElevenLabs key is set',
+    regel: 'eleven_v3_conversational · realtime · ~280ms · NL+EN',
+    latency: '~280ms first byte if an ElevenLabs key is set',
     streaming: true,
     sleutel: 'Settings → Keys → ElevenLabs / VITE_ELEVENLABS_API_KEY',
   },
@@ -90,5 +90,5 @@ export function parseStemMotor(raw: string | null | undefined): StemMotor {
 }
 
 export function elevenLabsModelVan(motor: StemMotor): ElevenLabsModel {
-  return motor === 'elevenlabs-v3' ? 'eleven_v3' : 'eleven_flash_v2_5';
+  return motor === 'elevenlabs-v3' ? 'eleven_v3_conversational' : 'eleven_flash_v2_5';
 }

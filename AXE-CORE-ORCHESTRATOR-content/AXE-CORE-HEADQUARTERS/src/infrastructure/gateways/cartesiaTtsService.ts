@@ -48,12 +48,20 @@ export async function testCartesiaKey(key?: string): Promise<{ ok: boolean; erro
   }
 }
 
-function stemId(): string {
+export function getCartesiaVoiceId(): string {
   try {
     return localStorage.getItem(STEM_SLEUTEL)?.trim() || STANDAARD_STEM;
   } catch {
     return STANDAARD_STEM;
   }
+}
+
+export function setCartesiaVoiceId(id: string): void {
+  const schoon = id.trim();
+  try {
+    if (schoon) localStorage.setItem(STEM_SLEUTEL, schoon);
+    else localStorage.removeItem(STEM_SLEUTEL);
+  } catch { /* ignore */ }
 }
 
 function taal(): string {
@@ -64,7 +72,7 @@ export function buildCartesiaSpeechRequest(transcript: string) {
   return {
     model_id: CARTESIA_MODEL,
     transcript,
-    voice: { mode: 'id' as const, id: stemId() },
+    voice: { mode: 'id' as const, id: getCartesiaVoiceId() },
     language: taal(),
     output_format: {
       container: 'mp3' as const,

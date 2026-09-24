@@ -61,14 +61,22 @@ const STANDAARD_EL_STEM =
 const TTS_VOICE_KEY = 'axe_tts_voice';
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
-function getSelectedVoiceId(): string {
-  return localStorage.getItem(TTS_VOICE_KEY) ?? STANDAARD_EL_STEM;
+export function getSelectedVoiceId(): string {
+  try {
+    return localStorage.getItem(TTS_VOICE_KEY)?.trim() || STANDAARD_EL_STEM;
+  } catch {
+    return STANDAARD_EL_STEM;
+  }
 }
 
 export function setSelectedVoiceId(voiceId: string): void {
-  localStorage.setItem(TTS_VOICE_KEY, voiceId);
-  localStorage.setItem(TTS_PROVIDER_KEY, 'elevenlabs');
-  void saveSetting(TTS_VOICE_KEY, voiceId);
+  const schoon = voiceId.trim();
+  try {
+    if (schoon) localStorage.setItem(TTS_VOICE_KEY, schoon);
+    else localStorage.removeItem(TTS_VOICE_KEY);
+    localStorage.setItem(TTS_PROVIDER_KEY, 'elevenlabs');
+  } catch { /* ignore */ }
+  void saveSetting(TTS_VOICE_KEY, schoon);
   void saveSetting(TTS_PROVIDER_KEY, 'elevenlabs');
 }
 
@@ -118,7 +126,12 @@ function elevenLanguageCode(): string {
 }
 
 function elevenLabsModelId(model?: string): string {
-  if (model === 'eleven_v3' || model === 'eleven_flash_v2_5' || model === 'eleven_turbo_v2_5') return model;
+  if (
+    model === 'eleven_v3_conversational' ||
+    model === 'eleven_v3' ||
+    model === 'eleven_flash_v2_5' ||
+    model === 'eleven_turbo_v2_5'
+  ) return model;
   return TTS_MODEL_ID;
 }
 

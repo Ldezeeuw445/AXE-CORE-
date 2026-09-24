@@ -34,14 +34,15 @@ describe('STEM_MOTOREN', () => {
     ]);
     const tekst = JSON.stringify(STEM_MOTOREN);
     expect(tekst).toMatch(/eleven_flash_v2_5/);
-    expect(tekst).toMatch(/eleven_v3/);
+    expect(tekst).toMatch(/eleven_v3_conversational/);
+    expect(tekst).not.toMatch(/eleven_v3[^_]/);
     expect(tekst).toMatch(/sonic-3/);
     expect(tekst).not.toMatch(/sk_|xi-|cartesia_[a-z0-9]{8,}/i);
   });
 
   it('koppelt de motor aan het ElevenLabs-model', () => {
     expect(elevenLabsModelVan('elevenlabs-flash')).toBe('eleven_flash_v2_5');
-    expect(elevenLabsModelVan('elevenlabs-v3')).toBe('eleven_v3');
+    expect(elevenLabsModelVan('elevenlabs-v3')).toBe('eleven_v3_conversational');
     expect(elevenLabsModelVan('george')).toBe('eleven_flash_v2_5');
   });
 });

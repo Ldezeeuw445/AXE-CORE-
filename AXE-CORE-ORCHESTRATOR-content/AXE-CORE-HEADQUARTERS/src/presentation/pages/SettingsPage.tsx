@@ -8,7 +8,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
 import { speakGlobal, stopGlobalTts, gekozenStemMotor, zetStemMotor } from '@/infrastructure/gateways/globalTts';
 import { STEM_MOTOREN, type StemMotor } from '@/domain/stemMotor';
-import { isCartesiaConfigured } from '@/infrastructure/gateways/cartesiaTtsService';
+import { getCartesiaVoiceId, isCartesiaConfigured, setCartesiaVoiceId } from '@/infrastructure/gateways/cartesiaTtsService';
 import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
 import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
@@ -35,6 +35,7 @@ import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnec
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
 import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
+  getSelectedVoiceId,
   setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
 } from '@/infrastructure/gateways/elevenLabsService';
@@ -912,6 +913,12 @@ function VoiceSection() {
   const [error, setError] = useState<string | null>(null);
   const [stand, setStand] = useState<StemStand | null>(null);
   const [motor, setMotor] = useState<StemMotor>(() => gekozenStemMotor());
+  const [elVoice, setElVoice] = useState(() => {
+    try { return getSelectedVoiceId(); } catch { return ''; }
+  });
+  const [caVoice, setCaVoice] = useState(() => {
+    try { return getCartesiaVoiceId(); } catch { return ''; }
+  });
 
   useEffect(() => {
     let live = true;
@@ -1004,6 +1011,31 @@ function VoiceSection() {
             );
           })}
         </div>
+        <p className="text-xs-custom pt-1" style={{ color: 'var(--text-muted)' }}>
+          Voice IDs — paste from the ElevenLabs Voice Library or Cartesia. Empty keeps the default.
+        </p>
+        <input
+          value={elVoice}
+          onChange={(e) => {
+            setElVoice(e.target.value);
+            setSelectedVoiceId(e.target.value);
+          }}
+          placeholder="ElevenLabs voice ID"
+          aria-label="ElevenLabs voice ID"
+          className="w-full text-small px-3 py-2 rounded-lg outline-none"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+        />
+        <input
+          value={caVoice}
+          onChange={(e) => {
+            setCaVoice(e.target.value);
+            setCartesiaVoiceId(e.target.value);
+          }}
+          placeholder="Cartesia voice ID"
+          aria-label="Cartesia voice ID"
+          className="w-full text-small px-3 py-2 rounded-lg outline-none"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+        />
       </div>
     </WidgetCard>
   );
