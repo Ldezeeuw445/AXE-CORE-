@@ -82,6 +82,7 @@ MANIFEST = {
     # imports beschermd zijn, een functie die stil ontbreekt.
     "/opt/axe-core-api/zuinig.py": ("backend/axe_api/zuinig.py", "axe-core-api"),
     "/opt/axe-core-api/planner.py": ("backend/axe_api/planner.py", "axe-core-api"),
+    "/opt/axe-core-api/cli_laag.py": ("backend/axe_api/cli_laag.py", "axe-core-api"),
     "/opt/axe-core-api/run_crew.py": ("backend/axe_api/run_crew.py", None),
     "/opt/axe-core-api/flow_runner.py": ("infra/axe-core-api/flow_runner.py", "axe-core-api"),
     "/opt/axe-core-api/run_flow.py": ("infra/axe-core-api/run_flow.py", None),

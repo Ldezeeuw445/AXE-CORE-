@@ -172,6 +172,20 @@ spoor. Alleen stijl en indeling; geen data, hooks, stores of API.
 | `ARCHITECTURE.md` | de lagen en waarom |
 | `WERKVERDELING.md` | wie waaraan werkt, en welke bestanden van wie zijn |
 | `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
+| `os3/` | Skill AXE + SETUP. CLI + hek bovenop bestaande workers. OS3 optioneel. |
+
+## Architectuur: CLI bovenop wat er al is
+
+AXE is interface, persoonlijkheid en geheugen. Uitvoering op Luka's
+machines bestaat al: `infra/computer-worker` (launchd),
+`infra/claude-local-worker`, durable kernel (`core_tasks`), leerlus +
+RAG (`rag_memories`, `agent_learning_episodes`). De `axe`-CLI en het
+hek (`cli_laag.py`) zitten daar bovenop. Geen tweede node-daemon, geen
+tweede geheugenstore. Inventaris: bouwlijst §8.
+
+Rabbit OS3 is een optionele extra executor via dezelfde CLI. Er is geen
+publieke OS3-API; OS3 belt AXE, niet andersom. Niet mergen naar
+`orchestrator` — dat is hard geblokkeerd.
 
 Dit bestand staat in de hoofdmap omdat elke assistent het daar als eerste leest.
 Klopt er iets niet meer, verander het hier — niet in je eigen sessie-geheugen.

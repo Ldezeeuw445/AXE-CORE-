@@ -280,6 +280,14 @@ class TaskCreateRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+class TaskUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    goal: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+    payload: Optional[dict[str, Any]] = None
+
 class TaskClaimRequest(BaseModel):
     worker_id: str
     lease_seconds: int = 60
@@ -361,6 +369,31 @@ async def create_task(req: TaskCreateRequest, request: Request):
         "created": created, "priority": task["priority"], "capability": task.get("capability"),
     }, request.client.host if request.client else "")
     return {"task": task, "created": created}
+
+@app.get("/tasks", dependencies=[AUTH])
+async def list_tasks(status: Optional[str] = None, limit: int = 50):
+    """De lijst die de frontend al vroeg (listDurableTasks) maar die hier ontbrak."""
+    try:
+        return {"tasks": task_repo().list(status, limit)}
+    except Exception as exc:
+        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
+
+@app.patch("/tasks/{task_id}", dependencies=[AUTH])
+async def update_task(task_id: str, req: TaskUpdateRequest, request: Request):
+    try:
+        task = task_repo().update(task_id, req.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(404, "Task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await audit("task_update", task_id, {
+        "fields": list(req.model_dump(exclude_none=True)),
+    }, request.client.host if request.client else "")
+    return {"task": task}
+
+@app.delete("/tasks/{task_id}", dependencies=[AUTH])
+async def delete_task_blocked(task_id: str):
+    raise HTTPException(403, "deleting data is hard-blocked")
 
 @app.get("/tasks/{task_id}", dependencies=[AUTH])
 async def get_task(task_id: str, after_sequence: int = 0):
@@ -1984,6 +2017,15 @@ try:
     app.include_router(_trading_router(sb), prefix="/trading", dependencies=[AUTH], tags=["trading"])
 except Exception as _e:  # noqa: BLE001
     log.warning("trading_cockpit niet ingeladen (%s) -- /trading/* bestaat niet", _e)
+
+try:
+    from cli_laag import build_router as _cli_router  # noqa: E402
+    app.include_router(
+        _cli_router(sb, task_repo, audit),
+        prefix="/cli", dependencies=[AUTH], tags=["cli"],
+    )
+except Exception as _e:  # noqa: BLE001
+    log.warning("cli_laag niet ingeladen (%s) -- /cli/* bestaat niet", _e)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

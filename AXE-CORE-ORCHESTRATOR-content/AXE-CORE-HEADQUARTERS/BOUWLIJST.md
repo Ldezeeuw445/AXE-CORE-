@@ -421,3 +421,73 @@ redenering: een test die faalt zonder je wijziging, een meting, een screenshot.
 
 Blijkt een punt niet te kloppen, verbeter dan de tekst hier in plaats van er
 stilletjes iets anders van te maken.
+
+---
+
+## 7 — axe-commandolaag (CLI + hek, geen tweede agent)
+
+De CLI en het hek zitten **bovenop wat er al is**. Geen nieuwe
+node-daemon, geen nieuwe geheugenstore. Rabbit OS3 is een optionele
+extra executor via dezelfde `cli/axe`.
+
+- [x] **7.1** `axe` CLI (Python 3, geen extra packages) + geteste parser,
+      guardrails en JSON-uitvoer (`src/cli/*.test.ts`, `cli/test_axe_laag.py`).
+- [x] **7.2** Commando's mappen op wat er al is: taken, geheugen/RAG,
+      agents/durable kernel, NorthSea (read-only), trading cockpit, cron, MCP,
+      `axe node list` → bestaande `core_computer_workers`.
+- [x] **7.3** Hek: alleen-lezen tot `--write`; hard geblokkeerd: mail,
+      NorthSea `auto_send_*`, merge naar `orchestrator`, wissen.
+- [x] **7.4** `os3/SKILL.md` + `os3/SETUP.md`.
+- [ ] **7.5** Gemeten op de Mac mini en de VPS: `axe status --json` en de
+      vijf testprompts uit SETUP.md. Hier niet live gemeten.
+- [ ] **7.6** `cli_laag.py` op de box (`vps_sync.py check` na deploy).
+- [ ] **7.7** AXON-read in chat — **niet** een vierde store. Write-bridge
+      bestaat (`axonMemoryBridge.ts`); CLI-label `axon` is een stub op RAG.
+      Alleen doen als je de bestaande `axonContextPack` in
+      `buildDurableMemoryContext` hangt.
+
+---
+
+## 8 — Inventaris: bestaat / deels / ontbreekt
+
+Niet bouwen wat hier **bestaat**. Uitbreiden waar het **deels** is.
+Alleen het **ontbrekende** is werk — en dat is niet "een node-agent" of
+"een memory backend".
+
+Status is gemeten aan **aanroepers**, niet aan definities (val 2).
+
+### Uitvoering / machines
+
+| Stuk | Status | Waar (aanroeper) | Tabellen | Niet doen |
+|---|---|---|---|---|
+| Computer-use worker | **bestaat** | `infra/computer-worker/worker.mjs` ← Computer Use-tab, `toolRegistry.computer.ts`, launchd `com.axe.computer-worker` | `core_computer_workers`, `core_tasks` (`computer_use`, `target_device`), `core_task_events`, `core_trust_levels` | Geen tweede daemon, geen `core_nodes` |
+| Claude-local / Mac-relay | **deels** | `infra/claude-local-worker/worker.mjs` ← `macRelayService.ts`, `[MAC:]`, voice; **geen launchd** | `core_tasks` (`claude_local`) | Geen `target_device`; niet vervangen door `axe node run` |
+| Durable task kernel | **bestaat** | `task_runtime.py` / `task_worker.py` ← `/tasks*`, CLI `agent run`, ControlPlane, planner | `core_tasks`, `core_task_steps`, `core_approvals`, `core_task_events` | Geen parallelle job-queue |
+| Device Manager (PR #149) | **deels** | `MobileSystem.tsx`, `device-manager/*`; native Android buiten repo | via `core_tasks` + loopback ADB `:4599` | Geen Samsung-side worker in deze repo |
+| Browser-agent | **bestaat** | `browser_agent_app.py`, `com.axe.browser-agent` | — (in-process) | Niet via `core_tasks` |
+| Terminal / mac-tunnel | **deels** | `terminal-server.cjs` (lokaal), `infra/axe-mac-tunnel` (handmatig) | — | Tunnel is outbound WebSocket, geen node-agent |
+| LiveKit `core_devices` | **deels** | `livekitService.ts` | `core_devices`, `core_voice_*` | **Andere tabel** dan workers; niet hergebruiken voor executie |
+| `axe node list` | **bestaat** (deze PR) | `GET /cli/nodes` leest `core_computer_workers` (45s, zelfde als `onlineDevices()`) | zelfde | Geen register/run/pairing |
+| Nieuwe `axe node` daemon | **ontbreekt — bewust** | — | — | Niet bouwen; computer-worker ís de outbound executor |
+| Pairing-token / `core_node_secrets` | **ontbreekt — bewust** | — | — | Workers auth'en al via service role / API-key |
+
+### Geheugen / leerlus / agents
+
+| Stuk | Status | Waar (aanroeper) | Tabellen | Niet doen |
+|---|---|---|---|---|
+| Leerlus PR #172 | **bestaat** | `noteRetrieval` / `noteOwnerOutcome` ← chat, voice, browser, code-editor; `axeBootstrap` 15 min | `agent_learning_episodes` + localStorage beurten | Geen tweede reinforcement |
+| RAG semantisch | **bestaat** | `searchRagMemories` ← `searchGlobalBrain` ← `buildGlobalMemoryContext` (chat, agents) | `rag_memories`, RPC `match_rag_memories` | Geen tweede vectorstore |
+| `global_memory` | **bestaat** | `memoryRecorder`, `/memory/upsert`, workers | `global_memory` | CLI-audit mag hierin, geen nieuwe event-log |
+| Agent-namespaces | **bestaat** | `agentMemoryService` + `catalog.ts` `namespace` | `memory` | — |
+| RAG per taak / bestanden per taak | **ontbreekt** | worker schrijft `global_memory` key `task_agent:{id}` | geen task-scoped RAG | Alleen bouwen als Luka dat apart vraagt |
+| CLI `axe memory` | **bestaat** (deze PR) | `/cli/memory/search\|add` → RAG + global; ILIKE, niet pgvector | zelfde | Geen AXON-transport tot read-pad bestaat |
+| AXON-product | **bestaat** (extern) | `axonMemoryBridge.ts` write vanuit trading | AXON-Supabase | Geen vierde store in AXE |
+| AXON-read in chat | **ontbreekt** | `axonContextPack` alleen in tests | — | Hang in `buildDurableMemoryContext`, niet een nieuwe backend |
+| Roster + dispatch | **bestaat** | `roster.ts` → voice; CLI → `/cli/agents/{id}/run` → `core_tasks` | `core_agents` (UI), roster (code) | 18 DB-rijen vs 13 roster — niet hier oplossen |
+| Loop-wiring research/northsea/developer | **ontbreekt** | in `LOOP_AGENTS` maar geen `openEpisode`-aanroeper | — | Geen CLI-werk |
+| `agenticEngine.ts` | **dood** | geen importeurs; echte runs via Python `task_worker.py` | — | Niet "aansluiten" zonder meting |
+
+### Wat deze PR wél is
+
+CLI + hek + `axe node list` als leesbril op de bestaande worker-tabel.
+OS3-skill als optionele extra. Verder niets.
