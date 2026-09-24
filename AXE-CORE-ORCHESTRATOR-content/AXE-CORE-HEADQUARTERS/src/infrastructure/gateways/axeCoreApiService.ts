@@ -15,6 +15,7 @@
 
 import type { NorthseaOverzicht } from '@/domain/northsea/chase';
 import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
+import type { KeystoreEntry, OpsCronJob, OpsCronRun } from '@/domain/controlPlane';
 import { axeCoreApiUrl, axeCoreApiExtraHeaders, axeApiAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { agentBasis } from '@/infrastructure/config/agentHost';
 import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
@@ -562,6 +563,44 @@ export async function calendarJobs(van: Date, tot: Date): Promise<{ items: Calen
   return call('GET', `/calendar/jobs?${q.toString()}`);
 }
 
+// ── Ops-register (axe_ops): cronjobs per app en de sleutelkluis ──────────────
+// De VPS-API is de brug: de browser ziet de service_role-sleutel nooit. Zie
+// "Keystore & cron control plane" in backend/axe_api/main.py.
+
+export async function opsCronJobs(app: string): Promise<OpsCronJob[]> {
+  const { jobs } = await call<{ jobs: OpsCronJob[] }>('GET', `/cron/jobs?app_name=${encodeURIComponent(app)}`);
+  return jobs ?? [];
+}
+
+export async function opsCronRuns(app: string, name?: string, limit = 20): Promise<OpsCronRun[]> {
+  const q = new URLSearchParams({ app_name: app, limit: String(limit) });
+  if (name) q.set('name', name);
+  const { runs } = await call<{ runs: OpsCronRun[] }>('GET', `/cron/runs?${q.toString()}`);
+  return runs ?? [];
+}
+
+/** 202: pg_net vuurt asynchroon; de uitkomst staat binnen een minuut in /cron/runs. */
+export async function opsCronRunNow(app: string, name: string): Promise<{ ok: boolean; request_id: number | null; note?: string }> {
+  return call('POST', `/cron/jobs/${encodeURIComponent(app)}/${encodeURIComponent(name)}/run`);
+}
+
+/** Namen en of ze gevuld zijn -- nooit waarden. */
+export async function keystoreList(app: string): Promise<KeystoreEntry[]> {
+  const { keys } = await call<{ keys: KeystoreEntry[] }>('GET', `/keystore/${encodeURIComponent(app)}`);
+  return keys ?? [];
+}
+
+/** Open vragen van de takenkernel (core_approvals is alleen service_role). */
+export async function listPendingApprovals(limit = 50): Promise<DurableTaskApproval[]> {
+  const { approvals } = await call<{ approvals: DurableTaskApproval[] }>('GET', `/approvals?status=pending&limit=${limit}`);
+  return approvals ?? [];
+}
+
+/** De echte routekaart van de draaiende API (FastAPI's eigen /openapi.json). */
+export async function apiOpenApi(): Promise<unknown> {
+  return call('GET', '/openapi.json');
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // GITHUB
 // ══════════════════════════════════════════════════════════════════════════════
@@ -607,20 +646,6 @@ export async function ghMergePr(repo: string, number: number, mergeMethod: 'merg
 // ══════════════════════════════════════════════════════════════════════════════
 // Control Plane
 // ══════════════════════════════════════════════════════════════════════════════
-
-export interface ControlPlaneRoute {
-  id: string;
-  kind: 'public' | 'internal' | 'hook' | 'integration';
-  method: string;
-  path: string;
-  display_name: string;
-  description?: string | null;
-  target?: string | null;
-  execution_mode: 'read' | 'patch' | 'execute';
-  auth_required: boolean;
-  enabled: boolean;
-  metadata?: Record<string, unknown>;
-}
 
 export interface ControlPlaneTaskStep {
   title: string;
@@ -673,11 +698,6 @@ export interface AgentExecutePayload {
   task: string;
   context?: string;
   conversation?: Array<{ role: string; content: string }>;
-}
-
-export async function apiListRoutes(kind?: ControlPlaneRoute['kind']): Promise<ControlPlaneRoute[]> {
-  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
-  return call('GET', `/api/routes${qs}`);
 }
 
 export async function apiListTasks(limit = 50, status?: string): Promise<unknown[]> {
