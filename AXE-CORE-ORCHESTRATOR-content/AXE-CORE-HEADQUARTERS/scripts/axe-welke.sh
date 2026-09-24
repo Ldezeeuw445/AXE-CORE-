@@ -89,7 +89,12 @@ while IFS= read -r app; do
   [[ -z "$app" ]] && continue
   GEVONDEN=1
   lees_app "$app"
-done < <(mdfind -name 'AXE CORE' 2>/dev/null | grep -E '\.app$' | sort -u)
+done < <( {
+  # Spotlight kan net na een canonical update achterlopen. De app die Luka via
+  # Dock/Spotlight hoort te openen, controleren we daarom altijd expliciet.
+  [[ -d "/Applications/AXE CORE.app" ]] && printf '%s\n' "/Applications/AXE CORE.app"
+  mdfind -name 'AXE CORE' 2>/dev/null | grep -E '\.app$' || true
+} | sort -u )
 
 if [[ "$GEVONDEN" == "0" ]]; then
   echo "  Spotlight vond niets. Dan alleen de bouw hier:"
