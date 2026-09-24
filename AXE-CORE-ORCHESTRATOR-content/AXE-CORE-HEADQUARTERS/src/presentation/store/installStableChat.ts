@@ -18,14 +18,15 @@ import {
   isSimpleChatCapability,
   type KeySlot,
 } from '@/domain/providers';
-import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
+import { AXE_SYSTEM_PROMPT, CONVERSATION_FIRST_RULE } from '@/domain/prompts';
 import { streamProvider } from '@/infrastructure/gateways/llmStream';
 import { voorwerkVoorFirstToken } from '@/domain/chatLatency';
 import { volgendeAxeBericht } from '@/application/chat/chatStreamBeurt';
 import { noteRetrieval, noteOwnerOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
-import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
+import { classifyChatIntent, intentBadgeLabel, isSocialChatTurn } from '@/domain/chatIntent';
+import { zichtbareAxeAntwoord } from '@/domain/tools/toolLeak';
 import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
 import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
 import { nativeToolsEnabled, requestActionApproval } from '@/presentation/store/voiceStore';
@@ -202,16 +203,17 @@ async function withCascade<T>(
 }
 
 function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: string | null, lastUserText?: string) {
+  const visible = zichtbareAxeAntwoord(answer) || answer;
   const axeMsg: ConversationMessage = {
     role: 'axe',
-    text: answer,
+    text: visible,
     timestamp: Date.now(),
     provider: slot.provider,
     model: slot.model,
   };
   useVoiceStore.setState(s => ({
     conversation: [...s.conversation, axeMsg],
-    response: answer,
+    response: visible,
     voiceStatus: 'speaking',
     activeProvider: slot.provider,
     error: ok ? null : (err ?? null),
@@ -219,10 +221,10 @@ function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: strin
   {
     const phase = useSphereProjectionStore.getState().phase;
     if (phase === 'idle' || phase === 'closing') {
-      void presentAssistantReplyOnSphere(answer, lastUserText).catch(() => {});
+      void presentAssistantReplyOnSphere(visible, lastUserText).catch(() => {});
     }
   }
-  speakAxe(answer, () => {
+  speakAxe(visible, () => {
     useVoiceStore.setState({ voiceStatus: 'idle' });
   });
 }
@@ -473,6 +475,10 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     (skillsBlock ? `\n\n${skillsBlock}` : '') +
     (memoryBlock ? `\n\n${memoryBlock}` : '') +
     replyLanguageInstruction() +
+    `\n\n${CONVERSATION_FIRST_RULE}` +
+    (isSocialChatTurn(text)
+      ? `\n\nThis message is a greeting. Reply with a short hello. No tools. No markers. No mention of tools.`
+      : '') +
     `\n\n## Spoken style\nNever mention model names, provider names, or routing. Just talk to Luka.\nWhen proposing a code change, always state repo, branch, and file path clearly.\n\n## Huidige datum\n${new Date().toLocaleDateString('nl-NL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Amsterdam.`;
 
   const messages = [
@@ -514,11 +520,12 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     let axeTs = 0;
     try {
       const raw = await streamProvider(slot, messages, (_delta, full) => {
-        if (!full.trim()) return;
+        const visible = zichtbareAxeAntwoord(full);
+        if (!visible.trim()) return;
         if (!axeTs) axeTs = Date.now();
-        toonStream(full, slot, axeTs);
+        toonStream(visible, slot, axeTs);
       });
-      const trimmed = raw.trim();
+      const trimmed = zichtbareAxeAntwoord(raw).trim();
       if (!trimmed) {
         wisStream(axeTs);
         continue;

@@ -48,6 +48,7 @@ import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
 import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
+import { zichtbareAxeAntwoord } from '@/domain/tools/toolLeak';
 import { promisesUnkeptAction, actionNudge, UNKEPT_ACTION_NOTE } from '@/domain/tools/actionIntent';
 import { stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
 import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
@@ -146,7 +147,7 @@ async function tryNativeTools(
     rounds: r.rounds, ran: r.ranTools.join(',') || 'none',
   }).catch(() => {});
 
-  return r.text;
+  return zichtbareAxeAntwoord(r.text);
 }
 
 async function resolveModelToolCalls(
@@ -247,8 +248,8 @@ async function resolveModelToolCalls(
     }
   }
 
-  // Strip any leftover markers from the final response
-  return stripToolMarkers(current).trim();
+  // Strip leftover markers and bekende protocol-lekzinnen from the final reply
+  return zichtbareAxeAntwoord(stripToolMarkers(current).trim());
 }
 
 /** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
