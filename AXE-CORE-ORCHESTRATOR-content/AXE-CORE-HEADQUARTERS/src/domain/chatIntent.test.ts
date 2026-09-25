@@ -18,6 +18,10 @@ describe('isSocialChatTurn', () => {
     'ga naar github.com',
     'hey axe, start Finder',
     'zet Spotify open',
+    'kan je Safari openen',
+    'wil je Finder starten',
+    'could you open Safari',
+    'zou je dat bestand verwijderen',
   ])('stuurt gesproken computeropdracht "%s" naar ACT', (text) => {
     expect(classifyChatIntent(text)).toBe('act');
     expect(isSocialChatTurn(text)).toBe(false);
