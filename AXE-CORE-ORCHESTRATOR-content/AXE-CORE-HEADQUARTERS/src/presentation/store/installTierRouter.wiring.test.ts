@@ -45,6 +45,22 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(tekst).not.toMatch(/auto_send_qualification|auto_reply_nonbinding|auto_send_followups/);
   });
 
+  it('gesproken ja/nee bedient de echte geparkeerde durable task', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/probeerGesprokenGoedkeuring/);
+    expect(tekst).toMatch(/gesprokenGoedkeuringsBesluit/);
+    expect(tekst).toMatch(/magMetStemGoedkeuren/);
+    expect(tekst).toMatch(/decideDurableTaskApproval/);
+    expect(tekst).toMatch(/jobWachtTekst\(wacht, vraag\)/);
+  });
+
+  it('expliciete Mac-opdrachten omzeilen de kernel niet meer', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/explicit mac -> durable kernel/);
+    expect(tekst).toMatch(/list_devices\/run_on_device/);
+    expect(tekst).not.toMatch(/if \(detectMacRoute\(text\)\) \{\s*await original\(text\)/);
+  });
+
   it('de agents-balk zit in de composer, niet alleen als los bestand', () => {
     const vak = bron('presentation/components/layout/AxeComposerVak.tsx');
     expect(vak).toMatch(/<AxeAgentsBalk\s*\/>/);
