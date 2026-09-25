@@ -1,0 +1,32 @@
+name: AXE OS Kernel CI
+
+on:
+  push:
+    branches:
+      - feat/os-kernel-fleet
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/package-lock.json
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Focused voice/router/computer tests
+        run: npx vitest run src/domain/chatIntent.test.ts src/domain/tierRouter/axeJobRegels.test.ts src/presentation/store/installTierRouter.wiring.test.ts src/domain/tools/computerUseContract.test.ts
+      - name: Node syntax check
+        run: node --check infra/computer-worker/worker.mjs
+      - name: Python syntax check
+        run: python3 -m py_compile backend/axe_api/agent_loop.py backend/axe_api/device_actions.py backend/axe_api/task_worker.py
