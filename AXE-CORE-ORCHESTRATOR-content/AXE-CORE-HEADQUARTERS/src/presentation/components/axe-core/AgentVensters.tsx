@@ -34,18 +34,19 @@ import { STAND } from '@/presentation/components/axe-core/managerStand';
 const TIK_MS = 1_000;
 
 /**
- * Zwevende tekst heeft geen vlak om op te staan, en in de glasstand kijk je
- * door de plaat heen op je bureaublad. Met een lichte foto erachter viel
- * "DONE" in mintgroen en "NEEDS YOUR OK" in geel volledig weg — gemeten, niet
- * vermoed: zie de glas-screenshot van 25 sep.
- *
- * Een kader eronder zou dat oplossen, maar dat is precies wat hier niet mag.
- * Dus een schaduw op de letters zelf, zoals ondertiteling: het blijft tekst
- * zonder vlak, en hij houdt zijn contrast op elke grond.
+ * Een lichte schaduw, geen vlak. Luka, 25 sep, met zijn eigen scherm erbij:
+ * "het mag echt floaten op de tauri shell" en "niet een achtergrond zoals die
+ * zwarte vlek". Er stond hier een verloop achter de kolom om de tekst op een
+ * licht bureaublad leesbaar te houden; dat is eruit. Wat blijft is een schaduw
+ * op de letters zelf, zoals ondertiteling — dat is geen grond om op te staan,
+ * maar het scheelt genoeg om de tekst van de schil los te trekken.
  */
-const LEESBAAR =
-  '0 1px 2px rgba(0,0,0,.92), 0 0 5px rgba(0,0,0,.85), 0 0 14px rgba(0,0,0,.65)';
+const LEESBAAR = '0 1px 3px rgba(0,0,0,.7)';
 
+/**
+ * Eén manager: driehoekje, zijn naam eronder, en daar weer onder wat hij nu
+ * doet. Alles onder elkaar en gecentreerd, zoals Luka het tekende.
+ */
 function Rij({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: () => void }) {
   const { agent, job, regel } = rij;
   const stand = job ? STAND[job.state] : null;
@@ -57,31 +58,37 @@ function Rij({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: ()
       onClick={onKies}
       aria-expanded={open}
       aria-label={`Gesprek met ${agent.name}`}
-      className="flex items-start gap-2.5 text-left w-full bg-transparent border-0 p-0"
-      style={{ opacity: stil ? 0.6 : 1, textShadow: LEESBAAR }}
+      className="flex flex-col items-center gap-1 w-full bg-transparent border-0 p-0 text-center"
+      style={{ opacity: stil ? 0.55 : 1, textShadow: LEESBAAR }}
     >
-      <ManagerAvatar agent={agent} size={30} stil={stil} />
-      <span className="min-w-0 flex-1 leading-snug">
-        <span className="text-[11.5px] font-medium" style={{ color: agent.accent }}>
-          {agent.name}
-        </span>
-        {stand && (
-          <span
-            className="text-[9px] tracking-wider uppercase ml-2 whitespace-nowrap"
-            style={{ color: stand.kleur }}
-          >
-            {stand.label}
-          </span>
-        )}
-        {regel && (
-          <span
-            className="block text-[11.5px] mt-0.5 line-clamp-2"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            {regel}
-          </span>
-        )}
+      <ManagerAvatar agent={agent} size={34} stil={stil} />
+
+      {/* De korte naam, niet de volle: "NORTHSEA DESK MANAGER" breekt in een
+          smalle kolom over drie regels en dan staat de rail scheef. */}
+      <span
+        className="text-[9.5px] tracking-[0.13em] uppercase leading-none"
+        style={{ color: agent.accent }}
+      >
+        {agent.kort ?? agent.name}
       </span>
+
+      {stand && (
+        <span
+          className="text-[8.5px] tracking-[0.1em] uppercase leading-none"
+          style={{ color: stand.kleur }}
+        >
+          {stand.label}
+        </span>
+      )}
+
+      {regel && (
+        <span
+          className="w-full text-[11px] leading-snug line-clamp-2 break-words"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          {regel}
+        </span>
+      )}
     </button>
   );
 }
@@ -105,37 +112,20 @@ export function AgentVensters() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20" data-axe-agent-vensters>
-      {/* Links, verticaal gecentreerd. Breedte in vw zodat de kolom op een
-          smaller venster niet tegen de sphere aan loopt. */}
+      {/* Op dezelfde hoogte als de sphere, en die staat NIET op de helft:
+          AxeCoreSphere tekent hem op cy = h * 0.40, omdat een gecentreerd
+          midden in dit vak te laag oogt. Met top:50% hing de kolom er dus
+          onder. Nu volgt hij de sphere. */}
       <div
         className="pointer-events-auto absolute"
         style={{
-          left: 'clamp(16px, 3vw, 44px)',
-          top: '50%',
+          left: 'clamp(36px, 6vw, 96px)',
+          top: '40%',
           transform: 'translateY(-50%)',
-          width: 'clamp(190px, 21vw, 290px)',
+          width: 'clamp(150px, 15vw, 196px)',
         }}
       >
-        {/* Geen kaart en geen rand, maar wél donker materiaal. Dat is de regel
-            van de glasstand: "alles wat erop staat houdt hetzelfde donkere
-            materiaal en dezelfde lichte inkt als op zwart" (axe-look.css).
-            Zonder dit viel de kolom volledig weg zodra er een lichte
-            bureaubladfoto achter de plaat stond — gemeten, niet vermoed.
-
-            Eigen laag en geen padding op de kolom, anders eet de vulling de
-            breedte op en breken de namen af. Hij dooft naar alle kanten uit en
-            loopt links het beeld uit, dus je ziet nergens een rand: het leest
-            als schaduw, niet als vlak. */}
-        <div
-          aria-hidden
-          className="absolute pointer-events-none"
-          style={{
-            left: -96, right: -44, top: -30, bottom: -30,
-            background:
-              'radial-gradient(128% 76% at 18% 50%, rgba(6,7,13,.66), rgba(6,7,13,.3) 52%, transparent 76%)',
-          }}
-        />
-        <div className="relative flex flex-col gap-3.5">
+        <div className="flex flex-col gap-5">
           {rijen.map((rij) => (
             <Rij
               key={rij.agent.id}
@@ -154,8 +144,10 @@ export function AgentVensters() {
             key={open.agent.id}
             className="pointer-events-none absolute"
             style={{
-              left: 'clamp(216px, 25vw, 348px)',
-              top: '50%',
+              // Net rechts van de kolom (links + breedte + lucht), en op
+              // dezelfde hoogte als de kolom en de sphere.
+              left: 'calc(clamp(36px, 6vw, 96px) + clamp(150px, 15vw, 196px) + 18px)',
+              top: '40%',
               transform: 'translateY(-50%)',
             }}
           >

@@ -52,6 +52,12 @@ export type DropdownScope =
 export interface AxeAgent {
   id: AxeAgentId;
   name: string;
+  /**
+   * Korte naam voor waar de volle niet past: de managerkolom naast de sphere
+   * is smal, en "NorthSea Desk Manager" breekt daar over drie regels. Valt
+   * terug op `name` als hij er niet is.
+   */
+  kort?: string;
   role: string;
   /** One line: what work this agent owns. */
   handles: string;
@@ -92,6 +98,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'wingman',
     name: 'Wingman',
+    kort: 'Wingman',
     role: "AXE's right hand · manager",
     handles: 'Runs the free CrewAI crew from the Crew tab on AXE\'s behalf, and helps anywhere.',
     tier: 'tier1',
@@ -104,6 +111,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'northsea',
     name: 'NorthSea Desk Manager',
+    kort: 'NorthSea',
     role: 'Commodity desk manager',
     handles: 'Runs the NorthSea crews and moves deals — decides before you where it safely can.',
     tier: 'tier1',
@@ -116,6 +124,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'trading',
     name: 'Trading Agent',
+    kort: 'Trading',
     role: 'AXE Algo · trading desk',
     handles: 'Market analysis, positions, risk and the final trade decision; owns the trading research crew.',
     tier: 'tier1',
@@ -128,6 +137,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'developer',
     name: 'AXE Developer',
+    kort: 'Developer',
     role: 'Code manager',
     handles: 'Reads, writes, builds, ships and deploys the codebase. May hand simple/local work to the Code agent.',
     tier: 'tier1',
@@ -140,6 +150,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'thinktank',
     name: 'ThinkTank',
+    kort: 'ThinkTank',
     role: 'Ideas manager',
     handles: 'Runs the ThinkTank tab: score/rank ideas → build plan → Build → library → integrate plan → Integrate into the app.',
     tier: 'tier1',
