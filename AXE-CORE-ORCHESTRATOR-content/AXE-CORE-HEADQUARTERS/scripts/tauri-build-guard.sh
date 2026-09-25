@@ -26,4 +26,6 @@ if [[ "$branch" != "orchestrator" ]]; then
   exit 2
 fi
 
-exec npx tauri build
+# Alleen de .app: de dmg-stap stuurt Finder aan via AppleScript en faalt vanuit
+# launchd (autosync). Het script installeert de .app; de dmg werd nooit gebruikt.
+exec npx tauri build --bundles app
