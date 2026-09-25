@@ -4,6 +4,8 @@
  * zet; hun crew zie je in hun eigen venster terug. Geen I/O hier.
  */
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
+import type { AxeAgent, AxeAgentId } from '@/domain/agents/roster';
+import { agentsByTier } from '@/domain/agents/roster';
 
 /** Hoe lang een klaar venster blijft staan voor het wegschuift. */
 export const VENSTER_NAGLOEI_MS = 25_000;
@@ -53,11 +55,68 @@ export function stappenUit(berichten: Array<string | null | undefined>, max = 4)
   return uit.slice(-max);
 }
 
+/** Loopt hij nog, of is hij net klaar en staat hij nog na te gloeien? */
+function levendeJob(job: AxeJob, nu: number): boolean {
+  if (job.state === 'queued' || job.state === 'running' || job.state === 'waiting') return true;
+  return job.finishedAt != null && nu - job.finishedAt < VENSTER_NAGLOEI_MS;
+}
+
 /** Welke jobs een venster krijgen: wat loopt, en wat net klaar is. */
 export function zichtbareVensters(jobs: AxeJob[], nu: number): AxeJob[] {
-  const actief = jobs.filter((j) => {
-    if (j.state === 'queued' || j.state === 'running' || j.state === 'waiting') return true;
-    return j.finishedAt != null && nu - j.finishedAt < VENSTER_NAGLOEI_MS;
+  return jobs.filter((j) => levendeJob(j, nu)).slice(-MAX_VENSTERS);
+}
+
+/* ── De vijf managers links naast de sphere ──────────────────────────────
+ * Luka, 25 sep: "dan allemaal en ook floating zonder achtergrond". Niet
+ * alleen wie er loopt dus — alle vijf blijven staan, op een vaste plek, en
+ * wie niets doet valt terug tot zijn naam. Anders springt de kolom bij elke
+ * job en weet je nooit waar Trading staat.
+ */
+
+export interface ManagerRij {
+  agent: AxeAgent;
+  /** De job die AXE bij hem heeft neergelegd, of null als hij stilstaat. */
+  job: AxeJob | null;
+  /** Wat hij nu zegt, in gewone taal. Leeg als hij stilstaat. */
+  regel: string;
+}
+
+/**
+ * Van welke manager is deze job? Een job van een tier-2-werker (Browser,
+ * Memory, ...) hangt onder de manager die hem heeft uitgezet; die koppeling
+ * bestaat nog niet, dus zulke jobs krijgen hier geen rij. Ze zijn niet weg —
+ * ze staan in de Agents-tab.
+ */
+function isManagerJob(job: AxeJob, managers: readonly AxeAgent[]): boolean {
+  return managers.some((m) => m.id === job.agent);
+}
+
+/**
+ * Eén rij per tier-1 manager, altijd in de volgorde van de roster. Per manager
+ * de job die het laatst begon — twee tegelijk bij dezelfde manager is zeldzaam,
+ * en dan is de nieuwste wat je wil zien.
+ */
+export function managerRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
+  const managers = agentsByTier('tier1');
+  // Bewust NIET via zichtbareVensters: die kapt af op MAX_VENSTERS, en dan valt
+  // er een manager weg zodra alle vijf tegelijk lopen. Hier krijgt iedereen een rij.
+  const zichtbaar = jobs.filter((j) => levendeJob(j, nu) && isManagerJob(j, managers));
+
+  const perManager = new Map<AxeAgentId, AxeJob>();
+  for (const job of zichtbaar) {
+    const staand = perManager.get(job.agent);
+    if (!staand || job.startedAt >= staand.startedAt) perManager.set(job.agent, job);
+  }
+
+  return managers.map((agent) => {
+    const job = perManager.get(agent.id) ?? null;
+    return { agent, job, regel: job ? regelVan(job) : '' };
   });
-  return actief.slice(-MAX_VENSTERS);
+}
+
+/** Wat er achter de naam komt te staan: zijn slotzin, anders zijn laatste stap. */
+export function regelVan(job: AxeJob): string {
+  if (job.summary) return job.summary;
+  const stappen = stappenUit(job.stappen ?? [], 1);
+  return stappen[stappen.length - 1] ?? job.title;
 }
