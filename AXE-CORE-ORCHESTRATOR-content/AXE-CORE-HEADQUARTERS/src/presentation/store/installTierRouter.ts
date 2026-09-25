@@ -650,8 +650,35 @@ export function installTierRouter(): void {
       if (!text?.trim()) return;
       startBeurtIndienNodig();
 
-      if (detectMacRoute(text)) {
-        await original(text);
+      // Als AXE net om toestemming vroeg, moet een kort gesproken ja/nee die
+      // echte geparkeerde taak bedienen -- niet als nieuw chatbericht eindigen.
+      if (await probeerGesprokenGoedkeuring(text)) return;
+
+      // "mac: ..." was een legacy bypass naar claude_local. Dat maakte twee
+      // werkelijkheden: gewone opdrachten gingen via de durable AXE-kernel,
+      // expliciete Mac-opdrachten omzeilden juist die kernel. Vanaf hier is de
+      // Mac gewoon een execution node van dezelfde agentic task.
+      const mac = detectMacRoute(text);
+      if (mac) {
+        const gerouteerd = classifyAxeTier(mac.prompt);
+        const agent: AxeAgentId = gerouteerd.agent === 'axe' ? 'apps' : gerouteerd.agent;
+        const keuze: AxeRouteKeuze = {
+          tier: 3,
+          kind: 'agent',
+          via: 'rules',
+          reason: 'explicit mac -> durable kernel',
+          agent,
+          skill: null,
+          confident: true,
+          intercept: true,
+          latencyMs: 0,
+        };
+        pushTierRoute(keuze, { query: text.slice(0, 60) });
+        zetGebruiker(text);
+        voerJobsUit(text, [{
+          text: `Use Luka's Mac fleet for this request. Pick the correct online Mac with list_devices/run_on_device and actually do it: ${mac.prompt}`,
+          route: keuze,
+        }]);
         return;
       }
 
