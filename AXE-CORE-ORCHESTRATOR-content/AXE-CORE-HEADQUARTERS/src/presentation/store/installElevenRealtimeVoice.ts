@@ -22,6 +22,7 @@ import {
 } from '@/infrastructure/gateways/elevenRealtimeScribe';
 import { usableTranscript } from '@/infrastructure/gateways/whisperGuard';
 import { stopAllAudio } from '@/presentation/store/installWhisperVoice';
+import { flushAxeSpraakRij } from '@/application/tierRouter/axeSpraakRij';
 
 let installed = false;
 let realtimeActive = false;
@@ -134,6 +135,10 @@ export function installElevenRealtimeVoice(): void {
       queueMicrotask(() => {
         if (realtimeActive && useVoiceStore.getState().voiceStatus === 'idle') {
           useVoiceStore.setState({ voiceStatus: 'listening', transcript: '' });
+          // Een job-resultaat dat binnenkwam terwijl Luka sprak, wachtte netjes
+          // zijn beurt af. Nu de beurt voorbij is mag AXE het alsnog hardop
+          // melden; anders blijft de queue in realtime mode voor altijd staan.
+          flushAxeSpraakRij();
         }
       });
     }
