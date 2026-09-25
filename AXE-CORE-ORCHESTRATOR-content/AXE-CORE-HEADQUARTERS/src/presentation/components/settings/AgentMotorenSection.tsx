@@ -8,8 +8,7 @@
  * Zie domain/agentMotoren.ts.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Cpu } from 'lucide-react';
-import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
+import type { ReactNode } from 'react';
 import {
   HOOFD_AGENTS, AGENT_LABEL, MOTOR_LABEL, TOEGESTAAN, kiesbaar,
   type HoofdAgent, type HoofdMotor, type MotorToewijzing,
@@ -20,7 +19,8 @@ import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motor
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import {
   claudeRepos, plannerStatus, plannerZetAan,
-  type PlannerStatus, type AgentSubscriptionUsage,
+  ledgerList,
+  type PlannerStatus, type AgentSubscriptionUsage, type LedgerEntry,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
@@ -28,67 +28,8 @@ import { chatModelKeuzes, workerKeuzes, paidApiKeuzes, isActief, leesVerbindinge
 import { agentsByTier } from '@/domain/agents/roster';
 import { leesOverrides, zetOverride, type OverrideMap } from '@/infrastructure/persistence/agentEngineOverrides';
 
-/** Een klein bolletje: heeft de provider die hier gekozen staat een sleutel,
- *  en werkte hij de laatste keer dat hij getest is? Dezelfde `lastTest` die de
- *  Provider Keys-kaarten verderop op dit scherm ook tonen — geen tweede
- *  waarheid, alleen een kleinere weergave ervan naast de agent die hem
- *  gebruikt. */
-function VerbindingBadge({ provider, verbindingen }: { provider?: ProviderId; verbindingen: Record<string, Verbinding> }) {
-  if (!provider) return null;
-  const v = verbindingen[provider];
-  if (!v?.key) return <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>geen sleutel</span>;
-  const kleur = v.lastTest === 'ok' ? 'var(--success)' : v.lastTest === 'fail' ? 'var(--error)' : 'var(--text-muted)';
-  const tekst = v.lastTest === 'ok' ? 'werkt' : v.lastTest === 'fail' ? 'faalt' : 'nog niet getest';
-  return (
-    <span className="flex items-center gap-1 text-[9px]" style={{ color: kleur }} title={v.lastTestAt ? `Laatst getest ${new Date(v.lastTestAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : undefined}>
-      <span className="rounded-full" style={{ width: 5, height: 5, background: kleur, display: 'inline-block' }} />
-      {tekst}
-    </span>
-  );
-}
 
-/** Een 0-100% balkje voor hoeveel van het dagbudget van deze motor al op is
- *  (planner.gebruik_vandaag / planner.dagbudget) — de enige echte "usage"-
- *  telling die dit apparaat heeft: Claude/Codex/Cursor geven zelf geen
- *  quotum terug, dit is puur hoe vaak de PLANNER dit abonnement vandaag al
- *  inzette. Handmatige runs (chat, code-editor) tellen hier niet in mee. */
-function GebruikBalk({ gebruik, budget }: { gebruik: number; budget: number }) {
-  if (!budget) return null;
-  const pct = Math.min(100, Math.round((gebruik / budget) * 100));
-  const kleur = pct >= 100 ? 'var(--error)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
-  return (
-    <div className="flex items-center gap-1.5 shrink-0" title={`Planner: ${gebruik} van ${budget} vandaag`}>
-      <div className="rounded-full overflow-hidden" style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.08)' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: kleur }} />
-      </div>
-      <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{pct}%</span>
-    </div>
-  );
-}
 
-function AbonnementGebruik({ gebruik }: { gebruik?: AgentSubscriptionUsage }) {
-  if (!gebruik) {
-    return <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>AXE usage: nog geen meting van deze agent-host.</div>;
-  }
-  const tokens = gebruik.input_tokens_7d + gebruik.output_tokens_7d;
-  return (
-    <div className="mt-1 space-y-0.5">
-      <div className="text-[9px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-        AXE OBSERVED · {gebruik.runs_24h} runs / 24h · {gebruik.runs_7d} runs / 7d
-        {tokens > 0 ? ` · ${tokens.toLocaleString()} tokens / 7d` : ''}
-      </div>
-      <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-        Plan-restant: niet machine-readable door deze CLI
-        {gebruik.last_run_at ? ` · laatste run ${new Date(gebruik.last_run_at * 1000).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
-      </div>
-      {gebruik.last_limit_message && (
-        <div className="text-[9px] line-clamp-2" style={{ color: 'var(--warning)' }} title={gebruik.last_limit_message}>
-          LIMIT GEZIEN · {gebruik.last_limit_message}
-        </div>
-      )}
-    </div>
-  );
-}
 
 const WAARVOOR: Record<HoofdAgent, string> = {
   wingman: 'Draait de gratis CrewAI-crew namens AXE, en helpt overal waar dat past.',
@@ -176,256 +117,291 @@ export function AgentMotorenSection() {
 
   const kies = (agent: HoofdAgent, motor: HoofdMotor) => setToewijzing(kiesMotor(agent, motor));
 
+  // Latency = echte meting, anders een streepje. AXE Core: first-token van de
+  // laatste beurten. Agents: gemiddelde duur van hun planner-runs (grootboek).
+  const routingLog = useVoiceStore(s => s.routingLog);
+  const axeLatency = useMemo(() => {
+    const ms = routingLog.map(e => e.firstTokenMs).filter((x): x is number => typeof x === 'number').slice(0, 20);
+    return ms.length ? Math.round(ms.reduce((a, b) => a + b, 0) / ms.length) : null;
+  }, [routingLog]);
+  const [runs, setRuns] = useState<LedgerEntry[]>([]);
+  useEffect(() => {
+    void ledgerList({ source: 'planner', hours: 168, limit: 500 }).then(setRuns).catch(() => setRuns([]));
+  }, []);
+  const agentLatency = (id: string): number | null => {
+    const d = runs.filter(r => r.name.toLowerCase().includes(id) && typeof r.duration_ms === 'number').map(r => r.duration_ms as number);
+    return d.length ? Math.round(d.reduce((a, b) => a + b, 0) / d.length) : null;
+  };
+  const gebruiktDoor = (motor: string) => HOOFD_AGENTS.filter(a => toewijzing[a] === motor).map(a => AGENT_LABEL[a]);
+
+  const motorStatus = (motor: HoofdMotor): Stand => {
+    if (motor === 'sleutels') return { toon: 'info', tekst: 'API keys' };
+    if (aanwezig === null) return { toon: 'muted', tekst: 'Host offline' };
+    if (aanwezig[motor] === false) return { toon: 'bad', tekst: 'CLI missing' };
+    const koelt = planner?.koeling[motor];
+    if (koelt) return { toon: 'warn', tekst: `Cooling · ${new Date(koelt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` };
+    return { toon: 'ok', tekst: 'Online' };
+  };
+  const sleutelStatus = (provider?: ProviderId): Stand => {
+    if (!provider) return { toon: 'muted', tekst: 'Auto' };
+    const v = verbindingen[provider];
+    if (!v?.key) return { toon: 'bad', tekst: 'No key' };
+    if (v.lastTest === 'ok') return { toon: 'ok', tekst: 'Online' };
+    if (v.lastTest === 'fail') return { toon: 'bad', tekst: 'Failing' };
+    return { toon: 'muted', tekst: 'Not tested' };
+  };
+
   return (
-    /* Eén kaart per onderdeel, naast elkaar op een raster -- geen lange doos
-       met tekstregels (Luka, 25 sep: "net een Word-document"). */
-    <div className="axe-motoren-raster mb-4">
-      <Kaart>
-      <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-        <Cpu size={15} style={{ color: 'var(--accent-cyan)' }} /> Motoren per agent
-      </h2>
-      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Elk abonnement hoort bij één tier-1 manager, zodat ze niet om hetzelfde limiet vechten.
-        Subtaken draaien altijd op je API-sleutels hieronder.
-      </p>
-
-      {/* Rij 1 — AXE Core. Los van de rijen eronder: nooit een abonnement, nooit
-          Ollama, alleen snelle/slimme chat-modellen. Zelfde opgeslagen keuze als
-          de ChatModelKiezer boven de composer. */}
-      <div
-        className="flex items-center justify-between gap-3 pb-2 mb-2"
-        style={{ borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        <div className="min-w-0">
-          <div className="text-xs-custom font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE Core</div>
-          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            Het antwoord in de chat. Nooit een abonnement, nooit Ollama.
-          </div>
-        </div>
-        <select
-          value={axeHuidig ? `${axeHuidig.provider}:${axeHuidig.model}` : ''}
-          onChange={e => kiesAxe(e.target.value)}
-          className="rounded-lg px-2 py-1 text-xs-custom"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-          aria-label="Model voor AXE Core"
-        >
-          <option value="">AXE Native (kiest zelf)</option>
-          {axeKeuzes.map(k => (
-            <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>
-              {k.provider} · {k.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2">
+    <div className="axe-motoren">
+      <SectieKop titel="Main agents" uitleg="Each subscription belongs to one manager, so they never fight over the same limit. Subtasks always run on API keys." />
+      <div className="axe-agent-raster">
+        <AgentKaart
+          naam="AXE Core"
+          accent="var(--accent-cyan)"
+          rol="The answer in the chat. Never a subscription, never Ollama."
+          stand={primair ? { toon: 'ok', tekst: 'Online' } : { toon: 'info', tekst: 'Native' }}
+          keuze={
+            <select value={axeHuidig ? `${axeHuidig.provider}:${axeHuidig.model}` : ''} onChange={e => kiesAxe(e.target.value)} aria-label="Model for AXE Core">
+              <option value="">AXE Native (chooses itself)</option>
+              {axeKeuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+            </select>
+          }
+          stats={[
+            { label: 'Latency', waarde: axeLatency != null ? `${axeLatency} ms` : '—' },
+            { label: 'Turns', waarde: String(routingLog.length) },
+            { label: 'Model', waarde: axeHuidig ? axeHuidig.label : 'auto' },
+            { label: 'Last', waarde: routingLog[0] ? geleden(routingLog[0].ts) : '—' },
+          ]}
+        />
         {HOOFD_AGENTS.map(agent => {
-          const huidig = toewijzing[agent];
+          const motor = toewijzing[agent];
           const opties = kiesbaar(toewijzing, agent);
-          const bezetDoorAnder = TOEGESTAAN[agent].filter(m => !opties.includes(m));
-          const cliOntbreekt = huidig !== 'sleutels' && aanwezig !== null && aanwezig[huidig] === false;
+          const g = motor !== 'sleutels' ? abonnementGebruik[motor] : undefined;
+          const lat = agentLatency(agent);
+          const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
+          const vandaag = motor !== 'sleutels' ? planner?.gebruik_vandaag[motor] ?? 0 : 0;
           return (
-            <div key={agent} className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>{AGENT_LABEL[agent]}</div>
-                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  {WAARVOOR[agent]}
-                  {bezetDoorAnder.length > 0 && ` · al verdeeld: ${bezetDoorAnder.map(m => MOTOR_LABEL[m]).join(', ')}`}
-                </div>
-                {cliOntbreekt && (
-                  <div className="text-[10px]" style={{ color: 'var(--error)' }}>
-                    Deze CLI staat niet op de agent-host — installeer en log in via Terminals → Mac · agents.
-                  </div>
-                )}
-              </div>
-              <select
-                value={huidig}
-                onChange={e => kies(agent, e.target.value as HoofdMotor)}
-                className="rounded-lg px-2 py-1 text-xs-custom"
-                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                aria-label={`Motor voor ${AGENT_LABEL[agent]}`}
-              >
-                {opties.map(m => <option key={m} value={m}>{MOTOR_LABEL[m]}</option>)}
-              </select>
-            </div>
+            <AgentKaart
+              key={agent}
+              naam={AGENT_LABEL[agent]}
+              accent={ACCENT[agent]}
+              rol={WAARVOOR[agent]}
+              stand={motorStatus(motor)}
+              keuze={
+                <select value={motor} onChange={e => kies(agent, e.target.value as HoofdMotor)} aria-label={`Engine for ${AGENT_LABEL[agent]}`}>
+                  {opties.map(m => <option key={m} value={m}>{MOTOR_LABEL[m]}</option>)}
+                </select>
+              }
+              stats={[
+                { label: 'Runs 24h', waarde: g ? String(g.runs_24h) : '—' },
+                { label: 'Latency', waarde: lat != null ? duur(lat) : '—' },
+                { label: 'Tokens 7d', waarde: tokens ? kort(tokens) : '—' },
+                { label: 'Last run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : '—' },
+              ]}
+              balken={[
+                ...(planner?.dagbudget && motor !== 'sleutels' ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
+                ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
+              ]}
+              melding={g?.last_limit_message ?? undefined}
+            />
           );
         })}
       </div>
 
-      {/* Tier 2 — Agents-tab workers. Geen abonnement-uitsluiting nodig: dit
-          zijn gewone API-modellen, en twee agents die dezelfde Gemini-sleutel
-          gebruiken botsen niet zoals twee agents op één ingelogde CLI-sessie
-          dat wel doen. Standaard "Auto"; vastzetten is optioneel. Mag, anders
-          dan AXE's eigen rij hierboven, wél Ollama -- routinewerk (cron-tik,
-          task-check) hoeft niet het slimste model te zijn, en dat is precies
-          waar "local models first" voor bedoeld is (workerKeuzes). */}
-      </Kaart>
-      <Kaart>
-      <div>
-        <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Agents-tab workers</div>
-        <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
-          Auto-routeert tussen capabele engines, Ollama inbegrepen. Vastzetten kan, maar hoeft niet.
-        </div>
-        <div className="space-y-2">
-          {agentsByTier('tier2').map(agent => {
-            const ov = overrides[agent.id];
-            return (
-              <div key={agent.id} className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-xs-custom font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                    {agent.name}
-                    <VerbindingBadge provider={ov?.provider} verbindingen={verbindingen} />
-                  </div>
-                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{agent.handles}</div>
-                </div>
-                <select
-                  value={ov ? `${ov.provider}:${ov.model}` : ''}
-                  onChange={e => kiesOverride(agent.id, e.target.value)}
-                  className="rounded-lg px-2 py-1 text-xs-custom"
-                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                  aria-label={`Motor voor ${agent.name}`}
-                >
+      <SectieKop titel="App agents · Planner" uitleg="The same agent as in your other apps, on paid Anthropic/OpenAI only (min. gpt-4o-mini). The planner runs the main agents on their own." />
+      <div className="axe-agent-raster">
+        {agentsByTier('tier3').map(agent => {
+          const ov = overrides[agent.id];
+          const v = ov ? verbindingen[ov.provider] : undefined;
+          return (
+            <AgentKaart
+              key={agent.id}
+              naam={agent.name}
+              accent={agent.accent}
+              rol={agent.handles}
+              stand={ov ? sleutelStatus(ov.provider) : { toon: 'warn', tekst: 'No model' }}
+              keuze={
+                <select value={ov ? `${ov.provider}:${ov.model}` : ''} onChange={e => kiesOverride(agent.id, e.target.value)} aria-label={`Model for ${agent.name}`}>
+                  <option value="">choose a model (min. gpt-4o-mini)</option>
+                  {tier3Keuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+                </select>
+              }
+              stats={[
+                { label: 'Provider', waarde: ov?.provider ?? '—' },
+                { label: 'Model', waarde: ov?.model ?? '—' },
+                { label: 'Last test', waarde: v?.lastTestAt ? geleden(Date.parse(v.lastTestAt)) : '—' },
+                { label: 'Runs in', waarde: agent.runtime },
+              ]}
+            />
+          );
+        })}
+        <AgentKaart
+          naam="Planner"
+          accent="var(--accent-cyan)"
+          rol={!planner ? 'Agent host not reachable.' : !planner.host_kan ? 'Does not run on this host (AXE_PLANNER off).' : `Every ${Math.round(planner.interval_s / 3600)}h · max ${planner.dagbudget} runs per subscription per day`}
+          stand={!planner?.host_kan ? { toon: 'muted', tekst: 'Off host' } : planner.bezig ? { toon: 'info', tekst: 'Running' } : planner.aan ? { toon: 'ok', tekst: 'On' } : { toon: 'muted', tekst: 'Off' }}
+          keuze={
+            <label className="axe-agentkaart-schakel">
+              <input type="checkbox" checked={!!planner?.aan} disabled={!planner?.host_kan} onChange={e => { void zetPlanner(e.target.checked); }} />
+              Planner {planner?.aan ? 'on' : 'off'}
+            </label>
+          }
+          stats={[
+            { label: 'Interval', waarde: planner ? `${Math.round(planner.interval_s / 3600)}h` : '—' },
+            { label: 'Budget', waarde: planner ? `${planner.dagbudget}/day` : '—' },
+            { label: 'Today', waarde: planner ? String(Object.values(planner.gebruik_vandaag).reduce((a, b) => a + b, 0)) : '—' },
+            { label: 'Last round', waarde: planner?.laatste_ronde?.begon ? geleden(Date.parse(planner.laatste_ronde.begon)) : '—' },
+          ]}
+        />
+      </div>
+
+      <SectieKop titel="Agents-tab workers" uitleg="Auto-routes between capable engines, Ollama included. Pinning is optional." />
+      <div className="axe-agent-raster axe-agent-raster--klein">
+        {agentsByTier('tier2').map(agent => {
+          const ov = overrides[agent.id];
+          return (
+            <AgentKaart
+              key={agent.id}
+              klein
+              naam={agent.name}
+              accent={agent.accent}
+              rol={agent.handles}
+              stand={sleutelStatus(ov?.provider)}
+              keuze={
+                <select value={ov ? `${ov.provider}:${ov.model}` : ''} onChange={e => kiesOverride(agent.id, e.target.value)} aria-label={`Engine for ${agent.name}`}>
                   <option value="">Auto (races)</option>
-                  {tier2Keuzes.map(k => (
-                    <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>
-                  ))}
+                  {tier2Keuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
                 </select>
-              </div>
-            );
-          })}
-        </div>
+              }
+            />
+          );
+        })}
       </div>
 
-      {/* Tier 3 — cross-app assistants. Dezelfde agent als in Companion/
-          Trading OS, hier alleen zichtbaar en instelbaar. Alleen betaalde
-          Anthropic/OpenAI (nooit lager dan gpt-4o-mini) — geen abonnement,
-          geen Ollama, geen "auto": Luka's eigen regel voor deze twee. */}
-      </Kaart>
-      <Kaart>
-      <div>
-        <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Cross-app assistants</div>
-        <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
-          Dezelfde agent als in je andere apps. Alleen betaalde Anthropic/OpenAI, minimaal gpt-4o-mini.
-        </div>
-        <div className="space-y-2">
-          {agentsByTier('tier3').map(agent => {
-            const ov = overrides[agent.id];
-            return (
-              <div key={agent.id} className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-xs-custom font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                    {agent.name}
-                    <VerbindingBadge provider={ov?.provider} verbindingen={verbindingen} />
-                  </div>
-                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{agent.handles}</div>
-                </div>
-                <select
-                  value={ov ? `${ov.provider}:${ov.model}` : ''}
-                  onChange={e => kiesOverride(agent.id, e.target.value)}
-                  className="rounded-lg px-2 py-1 text-xs-custom"
-                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                  aria-label={`Model voor ${agent.name}`}
-                >
-                  <option value="">kies een model (min. gpt-4o-mini)</option>
-                  {tier3Keuzes.map(k => (
-                    <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>
-                  ))}
-                </select>
-              </div>
-            );
-          })}
-        </div>
+      <SectieKop titel="Subscriptions" uitleg="What each subscription did, as observed by AXE. Remaining plan quota is not readable from these CLIs." />
+      <div className="axe-agent-raster axe-agent-raster--ruim">
+        {ALLE_MOTOREN.map((motor: AgentEngine) => {
+          const g = abonnementGebruik[motor];
+          const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
+          const vandaag = planner?.gebruik_vandaag[motor] ?? 0;
+          const door = gebruiktDoor(motor);
+          return (
+            <AgentKaart
+              key={motor}
+              naam={MOTOR_LABEL[motor]}
+              accent="var(--text-secondary)"
+              rol={door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}
+              stand={motorStatus(motor)}
+              keuze={
+                <>
+                  <input value={modellen[motor] ?? ''} onChange={e => setModellen(zetModel(motor, e.target.value))} list={`modellen-${motor}`} placeholder={`CLI default · ${MODEL_VLAG[motor]}`} spellCheck={false} aria-label={`Model for ${MOTOR_LABEL[motor]}`} />
+                  <datalist id={`modellen-${motor}`}>{MODEL_SUGGESTIES[motor].map(m => <option key={m} value={m} />)}</datalist>
+                </>
+              }
+              stats={[
+                { label: 'Runs 24h', waarde: g ? String(g.runs_24h) : '—' },
+                { label: 'Runs 7d', waarde: g ? String(g.runs_7d) : '—' },
+                { label: 'Tokens 7d', waarde: tokens ? kort(tokens) : '—' },
+                { label: 'Last run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : '—' },
+              ]}
+              balken={[
+                ...(planner?.dagbudget ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
+                ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
+              ]}
+              melding={g?.last_limit_message ?? undefined}
+            />
+          );
+        })}
       </div>
+    </div>
+  );
+}
 
-      {/* Het model per abonnement.
-          Hoort bij de MOTOR en niet bij de agent: Claude Code draait een
-          Claude-model, Codex een OpenAI-model. Per agent instellen zou je een
-          model laten kiezen dat zijn motor niet kent, en dat merk je pas als de
-          run faalt. Leeg laten = de CLI houdt zijn eigen standaard, die met een
-          update meebeweegt. */}
-      </Kaart>
-      <Kaart>
-      <div>
-        <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Model per abonnement</div>
-        <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
-          Leeg = de CLI kiest zelf. Een naam of alias mag allebei.
-        </div>
-        <div className="space-y-2">
-          {ALLE_MOTOREN.map((motor: AgentEngine) => (
-            <div key={motor} className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs-custom flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  {MOTOR_LABEL[motor]}
-                  {planner?.host_kan && (
-                    <GebruikBalk gebruik={planner.gebruik_vandaag[motor] ?? 0} budget={planner.dagbudget} />
-                  )}
-                </div>
-                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  {MODEL_VLAG[motor]} · suggesties: {MODEL_SUGGESTIES[motor].join(', ')}
-                </div>
-                <AbonnementGebruik gebruik={abonnementGebruik[motor]} />
-              </div>
-              <input
-                value={modellen[motor] ?? ''}
-                onChange={e => setModellen(zetModel(motor, e.target.value))}
-                list={`modellen-${motor}`}
-                placeholder="CLI-standaard"
-                spellCheck={false}
-                className="w-[170px] rounded-lg px-2 py-1 text-xs-custom"
-                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                aria-label={`Model voor ${MOTOR_LABEL[motor]}`}
-              />
-              <datalist id={`modellen-${motor}`}>
-                {MODEL_SUGGESTIES[motor].map(m => <option key={m} value={m} />)}
-              </datalist>
+/* ── De kaart ─────────────────────────────────────────────────────────── */
+
+type Toon = 'ok' | 'bad' | 'warn' | 'info' | 'muted';
+type Stand = { toon: Toon; tekst: string };
+const TOON_KLEUR: Record<Toon, string> = {
+  ok: 'var(--success)', bad: 'var(--error)', warn: 'var(--warning)', info: 'var(--accent-cyan)', muted: 'var(--text-muted)',
+};
+const ACCENT: Record<HoofdAgent, string> = {
+  wingman: '#a78bfa', northsea: '#22d3ee', trading: '#34d399', developer: '#60a5fa', thinktank: '#fbbf24',
+};
+
+function geleden(ms: number): string {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+function duur(ms: number): string {
+  return ms < 1000 ? `${ms} ms` : ms < 60_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 60_000)} min`;
+}
+function kort(n: number): string {
+  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+}
+
+function SectieKop({ titel, uitleg }: { titel: string; uitleg: string }) {
+  return (
+    <div className="axe-agent-sectiekop">
+      <h3>{titel}</h3>
+      <p>{uitleg}</p>
+    </div>
+  );
+}
+
+function AgentKaart({ naam, accent, rol, stand, keuze, stats, balken, melding, klein }: {
+  naam: string;
+  accent: string;
+  rol: string;
+  stand: Stand;
+  keuze: ReactNode;
+  stats?: { label: string; waarde: string }[];
+  balken?: { label: string; waarde: string; pct: number; goed?: boolean }[];
+  melding?: string;
+  klein?: boolean;
+}) {
+  return (
+    <div className={`axe-kaart axe-agentkaart${klein ? ' axe-agentkaart--klein' : ''}`}>
+      <div className="axe-agentkaart-kop">
+        <span className="axe-agentkaart-stip" style={{ background: accent }} />
+        <b>{naam}</b>
+        <span className="axe-agentkaart-stand" style={{ color: TOON_KLEUR[stand.toon] }}>
+          <span style={{ background: TOON_KLEUR[stand.toon] }} />{stand.tekst}
+        </span>
+      </div>
+      <p className="axe-agentkaart-rol" title={rol}>{rol}</p>
+      <div className="axe-agentkaart-keuze">{keuze}</div>
+      {stats && stats.length > 0 && (
+        <div className="axe-agentkaart-stats">
+          {stats.map(st => (
+            <div key={st.label}>
+              <span>{st.label}</span>
+              <b title={st.waarde}>{st.waarde}</b>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* De planner: dezelfde abonnementen, maar dan zonder dat je iets vraagt.
-          Met een dagbudget per abonnement, zodat hij het niet opmaakt. */}
-      </Kaart>
-      <Kaart>
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>Planner</div>
-            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {!planner ? 'Agent-host niet bereikbaar.'
-                : !planner.host_kan ? 'Draait niet op deze host (AXE_PLANNER staat niet aan).'
-                : `Elke ${Math.round(planner.interval_s / 3600)} uur · max ${planner.dagbudget} runs per abonnement per dag`}
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-xs-custom shrink-0" style={{ color: 'var(--text-secondary)' }}>
-            <input type="checkbox" checked={!!planner?.aan} disabled={!planner?.host_kan} onChange={e => { void zetPlanner(e.target.checked); }} />
-            aan
-          </label>
-        </div>
-        {/* Per abonnement hoeveel de planner er vandaag al mee deed — dezelfde
-            balk als hierboven, zodat "hoeveel is er al gebruikt" in dit ene
-            scherm op precies twee plekken hetzelfde antwoord geeft. Alleen
-            motoren die vandaag iets deden of aan het koelen zijn — een rij
-            "0%" voor elk van de acht abonnementen is ruis, geen informatie. */}
-        {planner?.host_kan && (Object.keys(planner.gebruik_vandaag).length > 0 || Object.keys(planner.koeling).length > 0) && (
-          <div className="mt-2 space-y-1">
-            {ALLE_MOTOREN.filter(m => (planner.gebruik_vandaag[m] ?? 0) > 0 || planner.koeling[m]).map(motor => (
-              <div key={motor} className="flex items-center justify-between gap-3">
-                <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{MOTOR_LABEL[motor]}</span>
-                <div className="flex items-center gap-2">
-                  {planner.koeling[motor] && (
-                    <span className="text-[9px]" style={{ color: 'var(--warning)' }}>
-                      koelt tot {new Date(planner.koeling[motor]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
-                  <GebruikBalk gebruik={planner.gebruik_vandaag[motor] ?? 0} budget={planner.dagbudget} />
-                </div>
+      )}
+      {balken && balken.length > 0 && (
+        <div className="axe-agentkaart-balken">
+          {balken.map(b => {
+            const pct = Math.max(0, Math.min(100, Math.round(b.pct)));
+            const kleur = b.goed
+              ? (pct >= 90 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--error)')
+              : (pct >= 100 ? 'var(--error)' : pct >= 70 ? 'var(--warning)' : 'var(--success)');
+            return (
+              <div key={b.label} className="axe-agentkaart-balk">
+                <div><span>{b.label}</span><b>{b.waarde}</b></div>
+                <i><em style={{ width: `${pct}%`, background: kleur }} /></i>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-      </Kaart>
+            );
+          })}
+        </div>
+      )}
+      {melding && <p className="axe-agentkaart-melding" title={melding}>Limit seen · {melding}</p>}
     </div>
   );
 }

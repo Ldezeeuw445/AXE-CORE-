@@ -6898,3 +6898,127 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-motoren-raster .axe-kaart .justify-between:has(> input):last-child { border-bottom: 0; }
 .axe-motoren-raster .axe-kaart .justify-between > select,
 .axe-motoren-raster .axe-kaart .justify-between > input { width: 100% !important; }
+
+/* ── Settings → agentkaarten (25 sep) ─────────────────────────────────────
+   Gelijke kaarten op één raster, zoals de Browser en de dashboardvoorbeelden:
+   naam + stand, één regel wat hij doet, de keuze, vier cijfers, balken. */
+.axe-motoren { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.axe-agent-sectiekop { display: flex; align-items: baseline; gap: 12px; margin-top: 8px; }
+.axe-agent-sectiekop h3 { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); }
+.axe-agent-sectiekop p { font-size: 11px; color: var(--text-muted); }
+.axe-agent-raster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.axe-agent-raster--klein { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.axe-agent-raster--ruim { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.axe-agentkaart { padding: 14px 14px 12px; gap: 10px; min-height: 0; }
+.axe-agentkaart-kop { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.axe-agentkaart-kop b { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-agentkaart-stip { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+.axe-agentkaart-stand { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 500; white-space: nowrap; }
+.axe-agentkaart-stand > span { width: 6px; height: 6px; border-radius: 999px; display: inline-block; }
+.axe-agentkaart-rol {
+  font-size: 11px; line-height: 1.45; color: var(--text-muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 32px;
+}
+.axe-agentkaart-keuze select,
+.axe-agentkaart-keuze input:not([type='checkbox']) {
+  width: 100%; border-radius: 10px; padding: 7px 10px; font-size: 12px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-primary);
+}
+.axe-agentkaart-schakel { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); padding: 7px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); white-space: nowrap; }
+.axe-agentkaart-schakel input { width: 14px; height: 14px; accent-color: var(--accent-cyan); }
+.axe-agentkaart-stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
+  padding-top: 10px; border-top: var(--axe-kaart-scheiding); margin-top: auto;
+}
+.axe-agentkaart-stats > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.axe-agentkaart-stats span { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.axe-agentkaart-stats b { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.axe-agentkaart-balken { display: flex; flex-direction: column; gap: 7px; }
+.axe-agentkaart-balk > div { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+.axe-agentkaart-balk b { color: var(--text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.axe-agentkaart-balk i { display: block; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.axe-agentkaart-balk em { display: block; height: 100%; border-radius: 999px; }
+.axe-agentkaart-melding { font-size: 10px; color: var(--warning); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-agentkaart--klein .axe-agentkaart-rol { -webkit-line-clamp: 2; }
+/* In Settings lijnen alle rasters op dezelfde volle breedte uit, zodat de
+   providerkaarten onder de agentkaarten één geheel vormen. */
+:root[data-look] .axe-settings .axe-kaart-raster {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  justify-content: stretch;
+}
+
+/* ── Kalender zoals Luka's voorbeeld (25 sep) ─────────────────────────────
+   Links mini-maand + vandaag, rechts het weekrooster met hoge uurrijen die
+   scrollen, gevulde blokken in de kleur van hun app, en een nu-lijn. */
+.axe-kalender { display: flex; gap: 12px; flex: 1; min-height: 0; padding: 10px; }
+.axe-kalender .axe-week { margin: 0; }
+.axe-minimaand {
+  width: 250px; flex: none; display: flex; flex-direction: column; gap: 14px; padding: 14px;
+  border-radius: var(--axe-kaart-hoek); background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn); box-shadow: var(--axe-kaart-schaduw); overflow-y: auto;
+}
+.axe-minimaand header { display: flex; align-items: center; justify-content: space-between; }
+.axe-minimaand header b { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.axe-minimaand header button { padding: 4px; border-radius: 6px; color: var(--text-muted); }
+.axe-minimaand header button:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.axe-minimaand-raster { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.axe-minimaand-kop { font-size: 9px; font-weight: 600; letter-spacing: .06em; text-align: center; color: var(--text-muted); padding-bottom: 4px; }
+.axe-minimaand-raster button {
+  position: relative; height: 28px; border-radius: 7px; font-size: 11px; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.axe-minimaand-raster button:hover { background: rgba(255, 255, 255, 0.06); }
+.axe-minimaand-raster button[data-buiten='ja'] { color: var(--text-muted); opacity: .45; }
+.axe-minimaand-raster button[data-week='ja'] { background: rgba(255, 255, 255, 0.05); }
+.axe-minimaand-raster button[data-vandaag='ja'] { background: #f97316; color: #fff; font-weight: 700; }
+.axe-minimaand-raster button i { position: absolute; bottom: 3px; left: 50%; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 99px; background: #f97316; }
+.axe-minimaand-raster button[data-vandaag='ja'] i { background: #fff; }
+.axe-minimaand-vandaag { border-top: var(--axe-kaart-scheiding); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.axe-minimaand-label { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-secondary); }
+.axe-minimaand-label em { font-style: normal; margin-left: 6px; color: var(--text-muted); }
+.axe-minimaand-vandaag p { font-size: 11px; color: var(--text-muted); }
+.axe-minimaand-vandaag ul { display: flex; flex-direction: column; gap: 6px; }
+.axe-minimaand-vandaag li { display: grid; grid-template-columns: 8px 38px minmax(0, 1fr); align-items: center; gap: 6px; font-size: 11px; }
+.axe-minimaand-vandaag li i { width: 7px; height: 7px; border-radius: 3px; }
+.axe-minimaand-vandaag li span { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.axe-minimaand-vandaag li b { font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Rooster: hoge uurrijen, verticaal scrollen. */
+:root[data-look] .axe-week-rol { overflow-y: auto; }
+:root[data-look] .axe-week-raster { height: auto; grid-template-rows: auto repeat(var(--uren), 58px); }
+:root[data-look] .axe-week-dagkop { flex-direction: row; justify-content: center; gap: 6px; padding: 12px 4px; }
+:root[data-look] .axe-week-dagnaam { font-size: 12px; color: var(--text-muted); }
+:root[data-look] .axe-week-dagnr { font-size: 13px; font-weight: 600; color: var(--text-secondary); padding: 1px 6px; border-radius: 6px; }
+:root[data-look] .axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnr { background: #f97316; color: #fff; }
+:root[data-look] .axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnaam { color: var(--text-primary); opacity: 1; }
+:root[data-look] .axe-week-dagtel { display: none; }
+:root[data-look] .axe-week-kolom[data-vandaag='ja'] { background: rgba(255, 255, 255, 0.015); }
+
+/* Blokken zoals het voorbeeld: gevuld in de kleur van de app, tijd bovenaan
+   in een iets sterkere band, dan soort en titel. */
+:root[data-look] .axe-week-blok {
+  left: 4px; right: 4px; min-height: 30px; padding: 0 0 5px; gap: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--blok, #64748b) 34%, #121214);
+  border: 1px solid color-mix(in srgb, var(--blok, #64748b) 55%, transparent);
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.8);
+  color: rgba(255, 255, 255, 0.92);
+}
+:root[data-look] .axe-week-blok:hover { filter: brightness(1.12); }
+:root[data-look] .axe-week-bloktijd {
+  width: 100%; padding: 3px 7px; font-size: 10px; font-weight: 600; text-align: center;
+  background: color-mix(in srgb, var(--blok, #64748b) 60%, #121214); color: #fff;
+}
+:root[data-look] .axe-week-bloksoort { padding: 0 7px; font-size: 10px; font-weight: 700; color: #fff; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root[data-look] .axe-week-bloktitel { padding: 0 7px; font-size: 10.5px; color: rgba(255, 255, 255, 0.78) !important; }
+
+/* De nu-lijn: zacht over de hele week, fel in vandaag. */
+.axe-week-nulijn { position: absolute; left: 0; right: 0; height: 1px; background: rgba(249, 115, 22, 0.35); z-index: 2; pointer-events: none; }
+.axe-week-nulijn[data-vandaag='ja'] { height: 2px; background: #f97316; }
+.axe-week-nulijn[data-vandaag='ja']::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 99px; background: #f97316; }
+:root[data-look] .axe-week-meer { --blok: #475569; align-items: center; }

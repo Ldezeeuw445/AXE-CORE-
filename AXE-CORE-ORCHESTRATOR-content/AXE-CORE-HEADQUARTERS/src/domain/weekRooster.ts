@@ -134,3 +134,37 @@ export const DAG_UREN = 24;
 export function urenBereik(): { van: number; tot: number } {
   return { van: 0, tot: DAG_UREN };
 }
+
+/**
+ * Blokjes die tegelijk vallen naast elkaar in plaats van op elkaar.
+ *
+ * Per groep overlappende blokjes krijgt elk een baan (0, 1, 2 ...) en weet de
+ * groep hoeveel banen er zijn. Een blokje dat niets overlapt krijgt de hele
+ * breedte. Invoer is gesorteerd op vanUur (zoals blokjesVoor teruggeeft).
+ */
+export function banenVoor(blokjes: Blokje[]): { baan: number; banen: number; groep: number }[] {
+  const uit: { baan: number; banen: number; groep: number }[] = blokjes.map(() => ({ baan: 0, banen: 1, groep: 0 }));
+  let groepNr = 0;
+  let groep: number[] = [];
+  let groepEind = -Infinity;
+  const sluit = () => {
+    const eindes: number[] = [];
+    for (const i of groep) {
+      const b = blokjes[i];
+      let baan = eindes.findIndex(e => e <= b.vanUur + 1e-9);
+      if (baan === -1) { baan = eindes.length; eindes.push(0); }
+      eindes[baan] = b.vanUur + b.hoogUur;
+      uit[i].baan = baan;
+    }
+    for (const i of groep) { uit[i].banen = Math.max(1, eindes.length); uit[i].groep = groepNr; }
+    groepNr += 1;
+    groep = [];
+  };
+  blokjes.forEach((b, i) => {
+    if (b.vanUur >= groepEind - 1e-9 && groep.length) { sluit(); groepEind = -Infinity; }
+    groep.push(i);
+    groepEind = Math.max(groepEind, b.vanUur + b.hoogUur);
+  });
+  if (groep.length) sluit();
+  return uit;
+}

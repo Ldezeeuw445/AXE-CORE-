@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
 import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
 import { WeekRooster } from './agenda/WeekRooster';
+import { MiniMaand } from './agenda/MiniMaand';
 import { MaandRooster } from './agenda/MaandRooster';
 import { AgendaLijst } from './agenda/AgendaLijst';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
@@ -126,7 +127,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(
     formatDateKey(now.getFullYear(), now.getMonth(), now.getDate())
   );
-  const [weergave, setWeergave] = useState<Weergave>('maand');
+  const [weergave, setWeergave] = useState<Weergave>('week');
   /* De week die je bekijkt. Apart van de maand: bladeren door weken hoort de
      maandweergave niet te verzetten en andersom. */
   const [weekAnker, setWeekAnker] = useState<Date>(() => new Date());
@@ -264,7 +265,14 @@ export default function CalendarPage() {
 
       {/* Main Grid Area */}
       <TabRuimte vullen>
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Links de mini-maand + vandaag, rechts het rooster (Luka's voorbeeld). */}
+      <div className="axe-kalender">
+      <MiniMaand
+        anker={weekAnker}
+        items={roosterItems}
+        opKies={d => { setWeekAnker(d); setSelectedDate(datumSleutel(d)); setWeergave('week'); }}
+      />
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {weergave === 'week' ? (
           <WeekRooster
             anker={weekAnker}
@@ -288,6 +296,7 @@ export default function CalendarPage() {
             opMaand={(j, m) => { setCurrentYear(j); setCurrentMonth(m); }}
           />
         )}
+      </div>
       </div>
       </TabRuimte>
 
