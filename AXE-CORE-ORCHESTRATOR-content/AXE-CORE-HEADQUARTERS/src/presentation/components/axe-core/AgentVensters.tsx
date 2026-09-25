@@ -64,6 +64,8 @@ const TEGEL: React.CSSProperties = {
   background: 'var(--axe-kaart-vlak)',
   border: '1px solid var(--axe-kaart-lijn)',
   borderTopColor: 'var(--axe-kaart-lijn-boven)',
+  // Het donkere randje onder de tegel uit Luka's beeld: hij staat er net boven.
+  boxShadow: '0 3px 0 rgba(0,0,0,.45), 0 8px 18px rgba(0,0,0,.28)',
 };
 
 const BALK: React.CSSProperties = {
@@ -105,8 +107,8 @@ function Balkje({ rij, onKies }: { rij: ManagerRij; onKies: () => void }) {
   if (!job) {
     return (
       <span
-        className="text-[9.5px] tracking-[0.1em] uppercase"
-        style={{ color: 'var(--text-muted)', textShadow: LEESBAAR }}
+        className="text-[10px] tracking-[0.16em] uppercase"
+        style={{ color: 'var(--text-secondary)', textShadow: LEESBAAR }}
       >
         idle
       </span>
