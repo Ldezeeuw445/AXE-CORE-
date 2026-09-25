@@ -17,19 +17,22 @@ export interface PlanBeurtDeps {
   modellen: PlanModel[];
   /** Laatste beurten, oudste eerst, zodat "die van net" iets betekent. */
   geschiedenis?: Array<{ role: 'user' | 'axe'; text: string }>;
+  /** Wat AXE over Luka weet (geheugenBlok), zodat het antwoord het gebruikt. */
+  geheugen?: string;
   /** Titels van jobs die al lopen, zodat het plan ze niet opnieuw start. */
   lopend?: string[];
   nu?: Date;
   timeoutMs?: number;
 }
 
-export function planInvoer(text: string, geschiedenis: PlanBeurtDeps['geschiedenis'] = []): string {
+export function planInvoer(text: string, geschiedenis: PlanBeurtDeps['geschiedenis'] = [], geheugen = ''): string {
   const recent = geschiedenis.slice(-6)
     .map((m) => `${m.role === 'user' ? 'Luka' : 'AXE'}: ${m.text.slice(0, 300)}`)
     .join('\n');
-  return recent
+  const kern = recent
     ? `Recent conversation:\n${recent}\n\nLuka now says: ${text}`
     : text;
+  return geheugen ? `${geheugen}\n\n${kern}` : kern;
 }
 
 /**
@@ -40,7 +43,7 @@ export function planInvoer(text: string, geschiedenis: PlanBeurtDeps['geschieden
 export async function planBeurt(text: string, deps: PlanBeurtDeps): Promise<BeurtPlan | null> {
   if (!deps.modellen.length) return null;
   const system = planPrompt(deps.nu ?? new Date(), deps.lopend ?? []);
-  const user = planInvoer(text, deps.geschiedenis);
+  const user = planInvoer(text, deps.geschiedenis, deps.geheugen);
   const timeoutMs = deps.timeoutMs ?? PLAN_TIMEOUT_MS;
   return new Promise<BeurtPlan | null>((resolve) => {
     let open = deps.modellen.length;

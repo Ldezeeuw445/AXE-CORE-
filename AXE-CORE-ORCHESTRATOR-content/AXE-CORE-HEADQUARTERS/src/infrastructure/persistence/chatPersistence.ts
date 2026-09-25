@@ -224,7 +224,9 @@ export function loadConversationLocal(conversationId: string): ConversationMessa
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Load a conversation's history (oldest → newest). Returns [] on any failure. */
+/** The newest 500 of a conversation (oldest → newest). Returns [] on any failure.
+ *  user_id is the UUID column: it filtered on the suffixed AXE_USER_ID before,
+ *  which matched nothing, so this fallback always came back empty. */
 async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMessageRecord[]> {
   const sb = getSupabase();
   if (!sb) return [];
@@ -232,11 +234,11 @@ async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMess
     .from(MESSAGES_TABLE)
     .select('*')
     .eq('conversation_id', conversationId)
-    .eq('user_id', AXE_USER_ID)
-    .order('created_at', { ascending: true })
+    .eq('user_id', AXE_USER_UUID)
+    .order('created_at', { ascending: false })
     .limit(500);
   if (error) { console.error('[chatPersistence] loadMessages error:', formatSbError(error)); return []; }
-  return data || [];
+  return (data || []).reverse();
 }
 
 export async function loadMessages(conversationId: string): Promise<ConversationMessage[]> {
@@ -245,13 +247,15 @@ export async function loadMessages(conversationId: string): Promise<Conversation
 
     if (isAxeApiConfigured) {
       try {
-        rows = (await sbGetRows(MESSAGES_TABLE, {
+        // De NIEUWSTE 500, oud → nieuw. Met één doorlopend gesprek over alle
+        // apparaten toonde 'asc + limit' anders voor altijd de oudste 500.
+        rows = ((await sbGetRows(MESSAGES_TABLE, {
           limit: 500,
           orderBy: 'created_at',
-          orderDir: 'asc',
+          orderDir: 'desc',
           filterCol: 'conversation_id',
           filterVal: conversationId,
-        })) as unknown as ChatMessageRecord[];
+        })) as unknown as ChatMessageRecord[]).reverse();
       } catch (apiErr) {
         // The AXE Core VPS bridge may be unreachable — fall back to talking
         // to Supabase directly rather than failing the whole load.
@@ -294,7 +298,7 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
   // console.error'd) — this is why the messages table stopped growing.
   // metadata already mirrors provider/model, which is the only place they
   // can safely live without a real migration.
-  const extraMeta: Record<string, unknown> = { ...(msg.metadata ?? {}) };
+  const extraMeta: Record<string, unknown> = { device: apparaatId(), ...(msg.metadata ?? {}) };
   if (msg.provider) extraMeta.provider = msg.provider;
   if (msg.model)    extraMeta.model    = msg.model;
 
@@ -422,4 +426,58 @@ export function createNewConversationId(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+// ─── Eén gesprek over alle apparaten ──────────────────────────────────────────
+
+const APPARAAT_KEY = 'axe_device_id';
+
+/** Stabiel id van deze installatie, zodat een apparaat zijn eigen berichten herkent. */
+export function apparaatId(): string {
+  try {
+    let id = localStorage.getItem(APPARAAT_KEY);
+    if (!id) {
+      id = `app-${createNewConversationId().slice(0, 8)}`;
+      localStorage.setItem(APPARAAT_KEY, id);
+    }
+    return id;
+  } catch {
+    return 'app-onbekend';
+  }
+}
+
+export interface RecenteRij {
+  conversationId: string;
+  role: 'user' | 'axe';
+  text: string;
+  timestamp: number;
+  device?: string;
+  createdAt: string;
+}
+
+/** Alle AXE-berichten na `sindsIso`, over alle gesprekken, oud → nieuw. */
+export async function berichtenSinds(sindsIso: string, limit = 50): Promise<RecenteRij[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from(MESSAGES_TABLE)
+    .select('conversation_id, role, content, metadata, created_at')
+    .eq('user_id', AXE_USER_UUID)
+    .gt('created_at', sindsIso)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(formatSbError(error));
+  return ((data || []) as ChatMessageRecord[])
+    .filter(isOurApp)
+    .map((r) => {
+      const meta = r.metadata as Record<string, unknown> | null | undefined;
+      return {
+        conversationId: r.conversation_id,
+        role: (r.role === 'user' ? 'user' : 'axe') as 'user' | 'axe',
+        text: r.content ?? '',
+        timestamp: r.created_at ? Date.parse(r.created_at) : Date.now(),
+        device: typeof meta?.device === 'string' ? meta.device : undefined,
+        createdAt: r.created_at ?? new Date().toISOString(),
+      };
+    });
 }

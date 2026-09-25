@@ -55,6 +55,7 @@ import { lopendeJobs } from '@/presentation/store/axeJobStore';
 import { stappenUit } from '@/domain/tierRouter/agentVenster';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { beurtRegel, leesBeurt, markBeurt, startBeurtIndienNodig } from '@/domain/beurtKlok';
+import { geheugenVoorBeurt, onthoudInGesprek, warmGeheugen } from '@/application/memory/gespreksGeheugen';
 
 let installed = false;
 const taskMonitors = new Set<string>();
@@ -244,11 +245,13 @@ async function voerTier2Uit(text: string, keuze: AxeRouteKeuze, extra = ''): Pro
     role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
     content: m.text,
   }));
+  const geheugen = await geheugenVoorBeurt(text, 400);
   const messages = [
     {
       role: 'system' as const,
       content:
         `${AXE_SYSTEM_PROMPT}\n\n${CONVERSATION_FIRST_RULE}\n${replyLanguageInstruction()}\n\n` +
+        (geheugen ? `${geheugen}\n\n` : '') +
         'Answer quickly. No tools. No markers. Light context only.' + (extra ? `\n${extra}` : ''),
     },
     ...history.slice(0, -1),
@@ -419,7 +422,8 @@ async function maakPlan(text: string): Promise<BeurtPlan | null> {
     .slice(-7, -1)
     .map((m) => ({ role: m.role === 'user' ? 'user' as const : 'axe' as const, text: m.text }));
   const lopend = lopendeJobs(useAxeJobStore.getState().jobs).map((j) => j.title);
-  return planBeurt(text, { modellen, geschiedenis, lopend });
+  const geheugen = await geheugenVoorBeurt(text);
+  return planBeurt(text, { modellen, geschiedenis, lopend, geheugen });
 }
 
 /** Het plan uitvoeren: praten, starten, onthouden, herinneren. Niets hiervan
@@ -445,6 +449,7 @@ function voerPlanUit(text: string, plan: BeurtPlan): void {
   }
 
   for (const content of plan.onthoud) {
+    onthoudInGesprek(content);
     void saveRagMemory({
       category: 'user',
       content,
@@ -537,6 +542,7 @@ async function praatTerug(text: string, keuze: AxeRouteKeuze): Promise<boolean> 
 export function installTierRouter(): void {
   if (installed) return;
   installed = true;
+  warmGeheugen();
   zetSpraakSpreker((text) => speakZonderKap(text, 'ack'));
 
   const original = useVoiceStore.getState().sendMessage;

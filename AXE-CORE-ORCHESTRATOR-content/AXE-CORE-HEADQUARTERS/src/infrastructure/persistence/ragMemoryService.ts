@@ -165,6 +165,22 @@ export async function loadRagMemories(
   }
 }
 
+/** Wat Luka onlangs vertelde (nieuwste eerst), voor het gesprek van nu. */
+export async function loadRecenteHerinneringen(limit = 12): Promise<RagMemory[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from('rag_memories')
+    .select('content, category, importance, created_at')
+    .eq('user_id', AXE_USER_ID)
+    .eq('app_source', APP_SOURCE)
+    .eq('category', 'user')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data || []) as RagMemory[];
+}
+
 // ── Semantic search ───────────────────────────────────────────────────────
 
 /**

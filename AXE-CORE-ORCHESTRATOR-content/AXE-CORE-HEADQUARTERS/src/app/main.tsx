@@ -39,6 +39,7 @@ import { installWhisperVoice, installWhisperVoiceSendGuard } from '@/presentatio
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
 import { installTierRouter } from '@/presentation/store/installTierRouter'
+import { installGesprekSync } from '@/presentation/store/installGesprekSync'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 import { installContinuousMemory } from '@/infrastructure/persistence/continuousMemoryService'
@@ -56,6 +57,7 @@ installStableChat();
 // send-guard: typed send hangt Whisper nog steeds op, en fallback valt
 // terug op het pad dat hierboven al staat.
 installTierRouter();
+installGesprekSync();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
 // Typed send hangt een lopende Whisper-listen op (na de andere wrappers)

@@ -448,6 +448,19 @@ hotkey om de mic van overal te openen.
       als een mens, geen help-desk-opvulling; stemmingen/verhalen niet onthouden.
       Gemeten (gpt-4.1-mini): verhaal/stoom afblazen → 0 taken, ~1,1s;
       gemengde beurt → 1 taak + 1 herinnering + 1 idee, 1,9s.
+- [x] **6.18** AXE onthoudt en gebruikt het (25 sep). Alles werd al opgeslagen
+      (rag_memories ~400/dag), maar het snelle gesprekspad las niets terug
+      (RAG-budget 0 ms). Nu `application/memory/gespreksGeheugen.ts`: profiel +
+      recente herinneringen altijd warm (0 ms), zoeken op de beurt met 600 ms
+      grens (400 ms voor snelle antwoorden); blok gaat in plan én tier 2.
+      Plan onthoudt alles wat later telt (ideeën, mensen, feiten), niet opvulling.
+      Gemeten: "wat wilde ik opschonen?" → "de trading desk, toch?", 1,2s.
+- [x] **6.19** Eén gesprek op alle apparaten (OS3). Berichten dragen
+      `metadata.device`; `installGesprekSync` kijkt elke 4s wat andere apparaten
+      opsloegen: erbij in dit gesprek, of meeverhuizen naar het gesprek waar Luka
+      elders mee verderging (alleen als AXE hier stil is). Gesprek laadt de
+      nieuwste 500 i.p.v. de oudste; Supabase-terugval filterde op de verkeerde
+      user_id en gaf altijd niets.
 - [ ] **6.16** Echt getest in de app met stem: een brain dump van een paar
       minuten, onderbreken, resultaten die terugkomen. Nog niet gedaan.
 
