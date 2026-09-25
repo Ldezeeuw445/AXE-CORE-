@@ -30,7 +30,9 @@ import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { detectMacRoute } from '@/infrastructure/gateways/macRelayService';
 import {
   createDurableTask,
+  decideDurableTaskApproval,
   getDurableTask,
+  type DurableTaskApproval,
   type DurableTaskSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { noteRetrieval, noteOwnerOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
@@ -40,8 +42,10 @@ import { splitsAxeBeurten, jobStukkenVan, type AxeBeurtStuk } from '@/domain/tie
 import {
   bouwMultiAck,
   jobAgentVan,
+  gesprokenGoedkeuringsBesluit,
   jobResultaatTekst,
   jobWachtTekst,
+  magMetStemGoedkeuren,
   sessieSamenvatting,
   type AxeJob,
 } from '@/domain/tierRouter/axeJobRegels';
@@ -83,6 +87,15 @@ function announceJobText(text: string, slot: { provider: string; model?: string 
   publiceer(text, slot, 'job');
 }
 
+/**
+ * `announceJobText` above is now the ONLY path a job result can reach a live
+ * OpenAI Realtime call through — it never touches this function while that
+ * call is open (see installOpenAIRealtimeVoice.ts). Every caller left here
+ * (typed chat, and voice turns coming back through the Whisper fallback
+ * loop's sendMessage calls) is therefore never running during a realtime
+ * call either, so this stays the plain non-realtime speaker, no awareness
+ * of which voice layer is active needed.
+ */
 function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
   try {
     if (localStorage.getItem('axe_response_mode') === 'type') return;
@@ -387,7 +400,7 @@ async function monitorTier3(job: AxeJob): Promise<void> {
           gemeldeVraag = sleutel;
           const wacht = { ...job, state: 'waiting' as const };
           useAxeJobStore.getState().patch(job.id, wacht);
-          announceJobText(jobWachtTekst(wacht, vraag?.title), { provider: 'tier3', model: job.agent });
+          announceJobText(jobWachtTekst(wacht, vraag), { provider: 'tier3', model: job.agent });
         }
         await new Promise((r) => setTimeout(r, 4_000));
         continue;
@@ -419,6 +432,104 @@ async function monitorTier3(job: AxeJob): Promise<void> {
   } finally {
     taskMonitors.delete(taskId);
   }
+}
+
+interface GesprokenGoedkeuringKandidaat {
+  job: AxeJob;
+  approval: DurableTaskApproval;
+}
+
+/**
+ * AXE heeft de goedkeuringsvraag zelf net hardop gesteld. Een kort "ja" of
+ * "nee" moet dan ook werkelijk de geparkeerde durable task hervatten/stoppen.
+ *
+ * Alleen session-jobs tellen mee: zo kan een losse "ja" nooit per ongeluk een
+ * oude approval uit een ander venster of van gisteren tekenen. Bij meer dan één
+ * open vraag weigeren we te raden welke Luka bedoelt.
+ */
+async function probeerGesprokenGoedkeuring(text: string): Promise<boolean> {
+  const besluit = gesprokenGoedkeuringsBesluit(text);
+  if (!besluit) return false;
+
+  const wachtend = useAxeJobStore.getState().jobs
+    .filter((j) => j.state === 'waiting' && !!j.taskId);
+
+  if (!wachtend.length) return false;
+
+  const kandidaten: GesprokenGoedkeuringKandidaat[] = [];
+  const snapshots = await Promise.all(
+    wachtend.map(async (job) => {
+      try {
+        const snapshot = await getDurableTask(job.taskId!);
+        return { job, snapshot };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  for (const entry of snapshots) {
+    if (!entry) continue;
+    const approval = entry.snapshot.approvals.find((a) => a.status === 'pending');
+    if (approval) kandidaten.push({ job: entry.job, approval });
+  }
+
+  if (!kandidaten.length) return false;
+
+  // Dit was een echte gebruikersbeurt, ook al wordt hij door de approval-laag
+  // afgehandeld in plaats van door een model.
+  zetGebruiker(text);
+
+  if (kandidaten.length > 1) {
+    publiceer(
+      `I have ${kandidaten.length} approvals waiting. Tell me which task you mean.`,
+      { provider: 'rules', model: 'spoken-approval/ambiguous' },
+      'ack',
+    );
+    return true;
+  }
+
+  const { job, approval } = kandidaten[0];
+
+  if (besluit === 'approve' && !magMetStemGoedkeuren(approval)) {
+    publiceer(
+      'That approval is too consequential to accept by voice. Use the Approvals control.',
+      { provider: 'rules', model: 'spoken-approval/blocked' },
+      'ack',
+    );
+    return true;
+  }
+
+  try {
+    await decideDurableTaskApproval(
+      approval.task_id,
+      approval.id,
+      besluit === 'approve',
+      besluit === 'approve' ? 'Approved by spoken AXE reply.' : 'Rejected by spoken AXE reply.',
+    );
+
+    if (besluit === 'approve') {
+      useAxeJobStore.getState().patch(job.id, { state: 'running' });
+      publiceer(
+        `Okay. ${agentById(job.agent).name} is continuing.`,
+        { provider: 'rules', model: 'spoken-approval/approved' },
+        'ack',
+      );
+    } else {
+      publiceer(
+        'Okay. I rejected that action.',
+        { provider: 'rules', model: 'spoken-approval/rejected' },
+        'ack',
+      );
+    }
+  } catch (e) {
+    publiceer(
+      `I couldn't apply that approval: ${e instanceof Error ? e.message : String(e)}`,
+      { provider: 'rules', model: 'spoken-approval/error' },
+      'ack',
+    );
+  }
+  return true;
 }
 
 /** Modellen voor het beurtplan, snelste eerst. Groq's gratis dagtegoed kan op
@@ -577,8 +688,35 @@ export function installTierRouter(): void {
       if (!text?.trim()) return;
       startBeurtIndienNodig();
 
-      if (detectMacRoute(text)) {
-        await original(text);
+      // Als AXE net om toestemming vroeg, moet een kort gesproken ja/nee die
+      // echte geparkeerde taak bedienen -- niet als nieuw chatbericht eindigen.
+      if (await probeerGesprokenGoedkeuring(text)) return;
+
+      // "mac: ..." was een legacy bypass naar claude_local. Dat maakte twee
+      // werkelijkheden: gewone opdrachten gingen via de durable AXE-kernel,
+      // expliciete Mac-opdrachten omzeilden juist die kernel. Vanaf hier is de
+      // Mac gewoon een execution node van dezelfde agentic task.
+      const mac = detectMacRoute(text);
+      if (mac) {
+        const gerouteerd = classifyAxeTier(mac.prompt);
+        const agent: AxeAgentId = gerouteerd.agent === 'axe' ? 'apps' : gerouteerd.agent;
+        const keuze: AxeRouteKeuze = {
+          tier: 3,
+          kind: 'agent',
+          via: 'rules',
+          reason: 'explicit mac -> durable kernel',
+          agent,
+          skill: null,
+          confident: true,
+          intercept: true,
+          latencyMs: 0,
+        };
+        pushTierRoute(keuze, { query: text.slice(0, 60) });
+        zetGebruiker(text);
+        voerJobsUit(text, [{
+          text: `Use Luka's Mac fleet for this request. Pick the correct online Mac with list_devices/run_on_device and actually do it: ${mac.prompt}`,
+          route: keuze,
+        }]);
         return;
       }
 

@@ -29,7 +29,6 @@ import {
   sessieSamenvatting,
   magMetStemGoedkeuren,
   type AxeJob,
-  type AxeGoedkeuring,
 } from '@/domain/tierRouter/axeJobRegels';
 import type { AxeRoute } from '@/domain/tierRouter/axeRoute';
 import { sneltoetsActie, SNELTOETS_EVENT } from '@/domain/voice/sneltoets';
@@ -246,16 +245,11 @@ async function toolAnswerApproval(args: ToolArgs): Promise<string> {
   const pending = approvals.find((a) => a.status === 'pending');
   if (!pending) return JSON.stringify({ ok: false, message: 'That approval is already resolved.' });
 
-  const goedkeuring: AxeGoedkeuring = {
-    kind: pending.kind,
-    title: pending.title,
-    detail: pending.detail,
-    // DurableTaskApproval's TS type doesn't declare `metadata`, but the
-    // backend row (task_worker.py) carries it — see magMetStemGoedkeuren's
-    // own doc comment. Read it defensively rather than widen the shared type.
-    metadata: (pending as unknown as { metadata?: { command?: string | null; reason?: string | null } }).metadata ?? null,
-  };
-  if (!magMetStemGoedkeuren(goedkeuring)) {
+  // DurableTaskApproval carries the same kind/title/detail/metadata shape
+  // AxeGoedkeuring expects, so magMetStemGoedkeuren reads it directly — the
+  // same gate installTierRouter's probeerGesprokenGoedkeuring uses for a
+  // spoken yes/no during the Whisper-fallback loop.
+  if (!magMetStemGoedkeuren(pending)) {
     return JSON.stringify({
       ok: false,
       message: `${agentById(match.agent).name} needs a click in Approvals for this one — it's not something to approve by voice.`,

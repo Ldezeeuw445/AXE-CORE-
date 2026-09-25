@@ -18,6 +18,30 @@ describe('Personal Computer Use end-to-end contract', () => {
     }
   });
 
+  it('OS execution worker implements the critical write/developer tools it advertises', () => {
+    const worker = readFileSync(
+      path.resolve(new URL('.', import.meta.url).pathname, '../../../infra/computer-worker/worker.mjs'),
+      'utf8',
+    );
+    for (const tool of [
+      'files.write',
+      'files.delete',
+      'git.create_branch',
+      'git.commit',
+      'git.push',
+      'git.merge',
+      'git.pr_open',
+      'terminal.free',
+      'claude_code.run',
+      'codex.run',
+      'cursor.run',
+    ]) {
+      expect(worker).toContain(`case '${tool}'`);
+    }
+    expect(worker).toMatch(/mayLeaveProtected\s*=\s*tool === 'git\.create_branch'/);
+    expect(worker).toMatch(/git\.commit needs explicit paths/);
+  });
+
   it('native computer tool schemas expose device and GUI arguments', () => {
     const defs = toolDefs();
     const read = defs.find(d => d.name === 'computer_read');

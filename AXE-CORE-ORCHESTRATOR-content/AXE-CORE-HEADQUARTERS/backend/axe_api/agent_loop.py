@@ -298,11 +298,14 @@ TOOL_DECLARATIONS = [
         "description": (
             "Run one action on one of Luka's Macs through its computer-worker. Use "
             "this for anything about a Mac: its files, apps, screen, repo checkouts. "
-            "run_shell is the VPS, not a Mac. Tools include system.info, files.list, "
-            "files.read, files.search, files.write, app.list, app.frontmost, app.open, "
-            "screen.observe, pointer.click, keyboard.type, keyboard.key, git.status, "
-            "git.log, terminal.test, terminal.build, claude_code.run. Clicking, typing "
-            "and writing ask Luka once per device and tool."
+            "run_shell is the VPS, not a Mac. The Mac worker can inspect and change "
+            "workspace files; observe/control screen, pointer, keyboard, windows and apps; "
+            "run typecheck/lint/test/build/install or an approved free terminal command; "
+            "create branches, inspect/commit/push/merge/open PRs; and delegate coding work "
+            "to claude_code.run, codex.run or cursor.run. Use the narrowest tool that does "
+            "the job. Clicking, typing and writes are approval-gated; consequential actions "
+            "such as terminal.free, git push/merge/PR and delete always require the exact "
+            "approval and cannot be approved by voice."
         ),
         "parameters": {
             "type": "object",
@@ -385,6 +388,13 @@ Luka has devices, and you pick where each piece of work happens:
 When the proof for finish() lives on a Mac, verify with a VPS command that
 echoes the fact you observed there (e.g. `echo "iMac frontmost: Safari"`),
 having seen it in a run_on_device answer in this task.
+
+For code work on a Mac, do not pretend the VPS checkout is the user's live app.
+Use list_devices, pick the machine that advertises the workspace, inspect it
+there, create a feature/axe-task-* branch if the checkout is protected, then
+use the Mac tools directly or claude_code.run/codex.run/cursor.run. Verify on
+that same device. The installed AXE app is updated only from orchestrator, so
+do not claim a feature is live until the canonical update has actually landed.
 
 You have {MAX_STEPS} steps. Use them."""
 
