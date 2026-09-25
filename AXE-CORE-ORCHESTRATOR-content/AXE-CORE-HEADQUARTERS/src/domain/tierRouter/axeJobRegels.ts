@@ -233,6 +233,30 @@ const APPARAAT_SLEUTEL = /^device:(\S+)\s+(\S+)\s*(.*)$/s;
  * saaie midden — een commando dat op deze machine blijft en niets onomkeerbaars
  * doet.
  */
+export type GesprokenGoedkeuringsBesluit = 'approve' | 'reject' | null;
+
+/**
+ * Een kort antwoord op AXE's expliciete goedkeuringsvraag.
+ *
+ * Alleen complete, ondubbelzinnige frases. Geen substring-match: "ja maar..."
+ * is een gesprek, geen handtekening.
+ */
+export function gesprokenGoedkeuringsBesluit(text: string): GesprokenGoedkeuringsBesluit {
+  const t = (text || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/g, '')
+    .replace(/\s+/g, ' ');
+
+  if (/^(ja|yes|yep|yeah|doe maar|ga door|go ahead|yes go ahead|ja ga door|ja doe maar|akkoord|approve)$/.test(t)) {
+    return 'approve';
+  }
+  if (/^(nee|no|nope|niet doen|laat maar|reject|afwijzen)$/.test(t)) {
+    return 'reject';
+  }
+  return null;
+}
+
 export function magMetStemGoedkeuren(approval?: AxeGoedkeuring | null): boolean {
   if (!approval) return false;
   // Alleen shell-vragen kennen we goed genoeg om op gehoor te beoordelen.
