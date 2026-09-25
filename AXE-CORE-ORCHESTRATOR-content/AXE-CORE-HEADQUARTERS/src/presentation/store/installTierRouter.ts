@@ -30,7 +30,9 @@ import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { detectMacRoute } from '@/infrastructure/gateways/macRelayService';
 import {
   createDurableTask,
+  decideDurableTaskApproval,
   getDurableTask,
+  type DurableTaskApproval,
   type DurableTaskSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { noteRetrieval, noteOwnerOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
@@ -40,8 +42,10 @@ import { splitsAxeBeurten, jobStukkenVan, type AxeBeurtStuk } from '@/domain/tie
 import {
   bouwMultiAck,
   jobAgentVan,
+  gesprokenGoedkeuringsBesluit,
   jobResultaatTekst,
   jobWachtTekst,
+  magMetStemGoedkeuren,
   sessieSamenvatting,
   type AxeJob,
 } from '@/domain/tierRouter/axeJobRegels';
