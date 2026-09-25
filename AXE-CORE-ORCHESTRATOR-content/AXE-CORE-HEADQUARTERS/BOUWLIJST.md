@@ -412,6 +412,30 @@ kapt TTS af, job-spraak wacht in de rij, zin-voor-zin TTS, orb op
 mic + TTS-niveau, stem-motor in Settings. **Ontbreekt:** globale
 hotkey om de mic van overal te openen.
 
+### Fase 5 — OS3-gevoel: praten terwijl het werk doorloopt (25 sep)
+
+- [x] **6.9** Achtergrondtaken uit het gesprek worden echt uitgevoerd.
+      Bewijs: nul tier-3-taken ooit (core_tasks, 25 sep); Gemini gaf 402,
+      'code'/'trading'/'research' hadden geen handler. Nu alles `agentic`,
+      agent-lus op Groq → OpenAI → Gemini → ollama. Smoketest op de VPS:
+      klaar en bewezen in 2 stappen, samenvatting is het antwoord zelf.
+- [x] **6.10** Leestaken zijn echt dicht: `execution_mode=read` blokkeert
+      schrijven en posten; mail/versturen vraagt altijd je ok. Smoketest:
+      schrijfopdracht in een leestaak schreef niets.
+- [x] **6.11** Beurtplan: één snel model leest de hele beurt (brain dump) en
+      scheidt opdrachten, dingen om te onthouden, herinneringen en praten.
+      Getest op echte Nederlandse zinnen met gpt-4.1-mini (Groq's gratis
+      dagtegoed was op). Geen plan binnen 3s = oude regelroute.
+- [x] **6.12** Een taak die op je ok wacht, meldt zich één keer in het gesprek.
+- [x] **6.13** Kern van de sphere spreekt mee met AXE (zelfde signaal als de
+      composer-pulse).
+- [x] **6.14** Agent-vensters rond de core op Home (screenshot shell-preview).
+- [ ] **6.15** Machinekeuze: een taak die over de Mac mini gaat (autosync,
+      bestanden daar) moet naar de computer-worker op de Mac mini, niet naar
+      de VPS-lus. Nu draait alles op de VPS.
+- [ ] **6.16** Echt getest in de app met stem: een brain dump van een paar
+      minuten, onderbreken, resultaten die terugkomen. Nog niet gedaan.
+
 ---
 
 ## Hoe je een punt afvinkt
