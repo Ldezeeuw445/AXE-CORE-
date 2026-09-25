@@ -154,7 +154,7 @@ export default function Grootboek() {
         {fout && <div className="mb-4 text-sm" style={{ color: 'var(--m-broken)' }}>Grootboek niet bereikbaar: {fout}</div>}
 
         {/* Per app de stand, in het ritme van drie kolommen. Klik = die app. */}
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {stand.map(s => {
             const m = appMeta(s.app);
             return (

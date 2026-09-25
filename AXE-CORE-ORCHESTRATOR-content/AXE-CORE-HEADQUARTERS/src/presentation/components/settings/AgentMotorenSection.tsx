@@ -8,7 +8,7 @@
  * Zie domain/agentMotoren.ts.
  */
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { StatusKaart, SectieKop, geleden, duur, kort, type Stand } from '@/presentation/components/settings/StatusKaart';
 import {
   HOOFD_AGENTS, AGENT_LABEL, MOTOR_LABEL, TOEGESTAAN, kiesbaar,
   type HoofdAgent, type HoofdMotor, type MotorToewijzing,
@@ -155,7 +155,7 @@ export function AgentMotorenSection() {
     <div className="axe-motoren">
       <SectieKop titel="Main agents" uitleg="Each subscription belongs to one manager, so they never fight over the same limit. Subtasks always run on API keys." />
       <div className="axe-agent-raster">
-        <AgentKaart
+        <StatusKaart
           naam="AXE Core"
           accent="var(--accent-cyan)"
           rol="The answer in the chat. Never a subscription, never Ollama."
@@ -181,7 +181,7 @@ export function AgentMotorenSection() {
           const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
           const vandaag = motor !== 'sleutels' ? planner?.gebruik_vandaag[motor] ?? 0 : 0;
           return (
-            <AgentKaart
+            <StatusKaart
               key={agent}
               naam={AGENT_LABEL[agent]}
               accent={ACCENT[agent]}
@@ -214,7 +214,7 @@ export function AgentMotorenSection() {
           const ov = overrides[agent.id];
           const v = ov ? verbindingen[ov.provider] : undefined;
           return (
-            <AgentKaart
+            <StatusKaart
               key={agent.id}
               naam={agent.name}
               accent={agent.accent}
@@ -235,7 +235,7 @@ export function AgentMotorenSection() {
             />
           );
         })}
-        <AgentKaart
+        <StatusKaart
           naam="Planner"
           accent="var(--accent-cyan)"
           rol={!planner ? 'Agent host not reachable.' : !planner.host_kan ? 'Does not run on this host (AXE_PLANNER off).' : `Every ${Math.round(planner.interval_s / 3600)}h · max ${planner.dagbudget} runs per subscription per day`}
@@ -260,7 +260,7 @@ export function AgentMotorenSection() {
         {agentsByTier('tier2').map(agent => {
           const ov = overrides[agent.id];
           return (
-            <AgentKaart
+            <StatusKaart
               key={agent.id}
               klein
               naam={agent.name}
@@ -286,7 +286,7 @@ export function AgentMotorenSection() {
           const vandaag = planner?.gebruik_vandaag[motor] ?? 0;
           const door = gebruiktDoor(motor);
           return (
-            <AgentKaart
+            <StatusKaart
               key={motor}
               naam={MOTOR_LABEL[motor]}
               accent="var(--text-secondary)"
@@ -317,91 +317,7 @@ export function AgentMotorenSection() {
   );
 }
 
-/* ── De kaart ─────────────────────────────────────────────────────────── */
 
-type Toon = 'ok' | 'bad' | 'warn' | 'info' | 'muted';
-type Stand = { toon: Toon; tekst: string };
-const TOON_KLEUR: Record<Toon, string> = {
-  ok: 'var(--success)', bad: 'var(--error)', warn: 'var(--warning)', info: 'var(--accent-cyan)', muted: 'var(--text-muted)',
-};
 const ACCENT: Record<HoofdAgent, string> = {
   wingman: '#a78bfa', northsea: '#22d3ee', trading: '#34d399', developer: '#60a5fa', thinktank: '#fbbf24',
 };
-
-function geleden(ms: number): string {
-  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-  if (s < 60) return `${s}s ago`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 48) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
-function duur(ms: number): string {
-  return ms < 1000 ? `${ms} ms` : ms < 60_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 60_000)} min`;
-}
-function kort(n: number): string {
-  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
-}
-
-function SectieKop({ titel, uitleg }: { titel: string; uitleg: string }) {
-  return (
-    <div className="axe-agent-sectiekop">
-      <h3>{titel}</h3>
-      <p>{uitleg}</p>
-    </div>
-  );
-}
-
-function AgentKaart({ naam, accent, rol, stand, keuze, stats, balken, melding, klein }: {
-  naam: string;
-  accent: string;
-  rol: string;
-  stand: Stand;
-  keuze: ReactNode;
-  stats?: { label: string; waarde: string }[];
-  balken?: { label: string; waarde: string; pct: number; goed?: boolean }[];
-  melding?: string;
-  klein?: boolean;
-}) {
-  return (
-    <div className={`axe-kaart axe-agentkaart${klein ? ' axe-agentkaart--klein' : ''}`}>
-      <div className="axe-agentkaart-kop">
-        <span className="axe-agentkaart-stip" style={{ background: accent }} />
-        <b>{naam}</b>
-        <span className="axe-agentkaart-stand" style={{ color: TOON_KLEUR[stand.toon] }}>
-          <span style={{ background: TOON_KLEUR[stand.toon] }} />{stand.tekst}
-        </span>
-      </div>
-      <p className="axe-agentkaart-rol" title={rol}>{rol}</p>
-      <div className="axe-agentkaart-keuze">{keuze}</div>
-      {stats && stats.length > 0 && (
-        <div className="axe-agentkaart-stats">
-          {stats.map(st => (
-            <div key={st.label}>
-              <span>{st.label}</span>
-              <b title={st.waarde}>{st.waarde}</b>
-            </div>
-          ))}
-        </div>
-      )}
-      {balken && balken.length > 0 && (
-        <div className="axe-agentkaart-balken">
-          {balken.map(b => {
-            const pct = Math.max(0, Math.min(100, Math.round(b.pct)));
-            const kleur = b.goed
-              ? (pct >= 90 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--error)')
-              : (pct >= 100 ? 'var(--error)' : pct >= 70 ? 'var(--warning)' : 'var(--success)');
-            return (
-              <div key={b.label} className="axe-agentkaart-balk">
-                <div><span>{b.label}</span><b>{b.waarde}</b></div>
-                <i><em style={{ width: `${pct}%`, background: kleur }} /></i>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {melding && <p className="axe-agentkaart-melding" title={melding}>Limit seen · {melding}</p>}
-    </div>
-  );
-}

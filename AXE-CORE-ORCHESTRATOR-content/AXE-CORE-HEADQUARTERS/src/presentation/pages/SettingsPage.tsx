@@ -25,6 +25,7 @@ import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
 import { ProviderCard } from '@/presentation/components/settings/ProviderCard';
+import { StatusKaart, duur } from '@/presentation/components/settings/StatusKaart';
 import type { KaartStand } from '@/domain/providerCardStand';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
 // Vier onbeschermde schrijfacties stonden hier. Met een volle opslag gooide de
@@ -951,97 +952,72 @@ function VoiceSection() {
     ? 'var(--text-muted)'
     : stand.ok ? 'var(--success)' : 'var(--error)';
 
+  // Gemeten: first-audio van de laatste beurten (routeringslog) — alleen voor
+  // de stem die nu spreekt. De rest toont de opgegeven typische waarde.
+  const routingLog = useVoiceStore(st => st.routingLog);
+  const gemeten = (() => {
+    const ms = routingLog.map(ev => ev.firstAudioMs).filter((x): x is number => typeof x === 'number').slice(0, 20);
+    return ms.length ? Math.round(ms.reduce((x, y) => x + y, 0) / ms.length) : null;
+  })();
+  const actieveNaam = STEM_MOTOREN.find(m => m.id === motor)?.naam ?? 'George';
+
   return (
-    <WidgetCard title="VOICE" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
-      <div className="space-y-2">
-        <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-          {STEM_UI.uitleg}
-        </p>
-        <p className="text-xs-custom" style={{ color: standKleur }} data-axe-stem={stand == null ? 'wacht' : stand.ok ? 'live' : 'dood'}>
-          {stand ? stand.regel : 'Checking George…'}
-        </p>
-        {stand?.watNu && (
-          <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{stand.watNu}</p>
-        )}
-        {error && (
-          <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-            <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-            <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{error}</p>
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-2 p-2 rounded-lg"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-          <span className="flex items-center gap-2 min-w-0">
-            <span className="min-w-0">
-              <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>AXE</span>
-              <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>{STEM_UI.label}</p>
-            </span>
-          </span>
-          <button onClick={listen}
-            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
-            <Play size={11} /> {playing ? STEM_UI.speelt : STEM_UI.luister}
+    <>
+      <StatusKaart
+        naam="Voice test"
+        accent="var(--accent-cyan)"
+        rol={STEM_UI.uitleg}
+        stand={stand == null ? { toon: 'muted', tekst: 'Checking' } : stand.ok ? { toon: 'ok', tekst: 'George running' } : { toon: 'bad', tekst: 'George down' }}
+        keuze={
+          <button type="button" onClick={listen} className="axe-agentkaart-knop">
+            <Play size={12} /> {playing ? STEM_UI.speelt : `${STEM_UI.luister} · ${actieveNaam}`}
           </button>
-        </div>
-        <p className="text-xs-custom pt-1" style={{ color: 'var(--text-muted)' }}>
-          Optional motors. George stays the default. Keys live in Settings → Keys — never in this file.
-        </p>
-        <div className="space-y-1" data-axe-stem-motoren>
-          {STEM_MOTOREN.map((m) => {
-            const aan = motorAan(m.id);
-            const actief = motor === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                disabled={!aan}
-                onClick={() => kies(m.id)}
-                className="w-full text-left px-2 py-1.5 rounded-lg"
-                style={{
-                  background: 'var(--bg-base)',
-                  border: `1px solid ${actief ? 'var(--border-active)' : 'var(--border-subtle)'}`,
-                  color: aan ? (actief ? 'var(--accent-cyan)' : 'var(--text-primary)') : 'var(--text-muted)',
-                  opacity: aan ? 1 : 0.55,
-                }}
-                data-axe-stem-motor={m.id}
-                data-axe-stem-aan={aan ? '1' : '0'}
-              >
-                <span className="text-xs-custom font-medium">{m.naam}</span>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.regel}</p>
-                {!aan && m.id !== 'george' && (
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>needs key · {m.sleutel}</p>
-                )}
+        }
+        stats={[
+          { label: 'In use', waarde: actieveNaam },
+          { label: 'First audio', waarde: gemeten != null ? duur(gemeten) : '—' },
+          { label: 'Turns', waarde: String(routingLog.length) },
+          { label: 'Fallback', waarde: 'Cedar' },
+        ]}
+        melding={error ?? stand?.watNu ?? undefined}
+      />
+      {STEM_MOTOREN.map((m) => {
+        const aan = motorAan(m.id);
+        const actief = motor === m.id;
+        return (
+          <StatusKaart
+            key={m.id}
+            naam={m.naam}
+            accent={actief ? 'var(--accent-cyan)' : 'var(--text-muted)'}
+            rol={m.regel}
+            stand={actief ? { toon: 'ok', tekst: 'In use' } : aan ? { toon: 'info', tekst: 'Available' } : { toon: 'muted', tekst: 'Needs key' }}
+            keuze={
+              <button type="button" disabled={!aan || actief} onClick={() => kies(m.id)} className="axe-agentkaart-knop" data-axe-stem-motor={m.id} data-axe-stem-aan={aan ? '1' : '0'}>
+                {actief ? 'In use' : aan ? 'Use this voice' : `Needs key · ${m.sleutel}`}
               </button>
-            );
-          })}
-        </div>
-        <p className="text-xs-custom pt-1" style={{ color: 'var(--text-muted)' }}>
-          Voice IDs — paste from the ElevenLabs Voice Library or Cartesia. Empty keeps the default.
-        </p>
-        <input
-          value={elVoice}
-          onChange={(e) => {
-            setElVoice(e.target.value);
-            setSelectedVoiceId(e.target.value);
-          }}
-          placeholder="ElevenLabs voice ID"
-          aria-label="ElevenLabs voice ID"
-          className="w-full text-small px-3 py-2 rounded-lg outline-none"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-        />
-        <input
-          value={caVoice}
-          onChange={(e) => {
-            setCaVoice(e.target.value);
-            setCartesiaVoiceId(e.target.value);
-          }}
-          placeholder="Cartesia voice ID"
-          aria-label="Cartesia voice ID"
-          className="w-full text-small px-3 py-2 rounded-lg outline-none"
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-        />
-      </div>
-    </WidgetCard>
+            }
+            stats={[
+              { label: actief && gemeten != null ? 'Measured' : 'Typical', waarde: actief && gemeten != null ? duur(gemeten) : m.latency.split(' ')[0] },
+              { label: 'Streaming', waarde: m.streaming ? 'Yes' : 'No' },
+              { label: 'Key', waarde: m.id === 'george' ? 'None' : aan ? 'Set' : 'Missing' },
+              { label: 'Where', waarde: m.id === 'george' ? 'This Mac' : 'Cloud' },
+            ]}
+          />
+        );
+      })}
+      <StatusKaart
+        naam="Voice IDs"
+        accent="var(--text-secondary)"
+        rol="Paste from the ElevenLabs Voice Library or Cartesia. Empty keeps the default."
+        stand={{ toon: elVoice || caVoice ? 'info' : 'muted', tekst: elVoice || caVoice ? 'Custom' : 'Default' }}
+        keuze={
+          <div className="flex flex-col gap-2">
+            <input value={elVoice} onChange={(e) => { setElVoice(e.target.value); setSelectedVoiceId(e.target.value); }} placeholder="ElevenLabs voice ID" aria-label="ElevenLabs voice ID" />
+            <input value={caVoice} onChange={(e) => { setCaVoice(e.target.value); setCartesiaVoiceId(e.target.value); }} placeholder="Cartesia voice ID" aria-label="Cartesia voice ID" />
+          </div>
+        }
+      />
+    </>
   );
 }
 
@@ -2135,83 +2111,76 @@ export default function SettingsPage() {
 
         {sectie === 'voice' && (
         <SectieBlok id="voice" titel="VOICE">
-          <Kaart titel="MICROPHONE" actie={<Mic size={14} style={{ color: 'var(--text-muted)' }} />}>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-small" style={{ color: 'var(--text-primary)' }}>Browser microphone access</p>
-                  <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                    Permission: <span style={{ color: voice.micPermission === 'granted' ? 'var(--success)' : voice.micPermission === 'denied' ? 'var(--error)' : 'var(--warning)' }}>{voice.micPermission}</span>
-                    {' · '}Recognition supported: <span style={{ color: voice.recognitionSupported ? 'var(--success)' : 'var(--error)' }}>{voice.recognitionSupported ? 'yes' : 'no'}</span>
-                  </p>
-                </div>
-                <button onClick={testMic} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs-custom"
-                  style={{ border: '1px solid var(--border-subtle)', color: micTest === 'ok' ? 'var(--success)' : micTest === 'denied' ? 'var(--error)' : 'var(--accent-cyan)', fontWeight: micTest === 'idle' ? 500 : 600 }}>
-                  {micTest === 'testing' ? <RefreshCw size={12} className="animate-spin" /> : <Mic size={12} />}
-                  {micTest === 'idle' ? 'Test Mic' : micTest === 'testing' ? 'Testing...' : micTest === 'ok' ? 'Mic Works!' : 'Permission Denied'}
-                </button>
-              </div>
-              {voice.micPermission === 'denied' && (
-                <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-                  <AlertTriangle size={13} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-                  <p className="text-xs-custom" style={{ color: 'var(--error)' }}>
-                    Microphone blocked. Click the lock icon in the address bar → Site Settings → Microphone → Allow → Refresh page.
-                  </p>
-                </div>
-              )}
-              {micTest === 'ok' && (
-                <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-                  <Check size={13} style={{ color: 'var(--success)', flexShrink: 0, marginTop: 1 }} />
-                  <p className="text-xs-custom" style={{ color: 'var(--success)' }}>Microphone is working correctly. Use the circle button in the bottom bar to talk to AXE.</p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border-active)' }}>
-                <div>
-                  <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
-                  <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                    Clap three times, sharply, to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
-                  </p>
-                </div>
-                <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
-                  className="relative flex-shrink-0 rounded-full transition-colors"
-                  style={{ width: 38, height: 22, background: clapEnabled ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}>
-                  <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
-                </button>
-              </div>
-            </div>
-          </Kaart>
+          <div className="axe-agent-raster axe-agent-raster--ruim">
+          <StatusKaart
+            naam="Microphone"
+            accent="var(--accent-cyan)"
+            rol="Browser microphone access. Use the circle button in the bottom bar to talk to AXE."
+            stand={voice.micPermission === 'granted' ? { toon: 'ok', tekst: 'Granted' } : voice.micPermission === 'denied' ? { toon: 'bad', tekst: 'Blocked' } : { toon: 'warn', tekst: String(voice.micPermission) }}
+            keuze={
+              <button type="button" onClick={testMic} className="axe-agentkaart-knop">
+                {micTest === 'testing' ? <RefreshCw size={12} className="animate-spin" /> : <Mic size={12} />}
+                {micTest === 'idle' ? 'Test mic' : micTest === 'testing' ? 'Testing…' : micTest === 'ok' ? 'Mic works' : 'Permission denied'}
+              </button>
+            }
+            stats={[
+              { label: 'Permission', waarde: String(voice.micPermission) },
+              { label: 'Recognition', waarde: voice.recognitionSupported ? 'Yes' : 'No' },
+              { label: 'Last test', waarde: micTest === 'idle' ? '—' : micTest },
+              { label: 'Clap', waarde: clapEnabled ? 'On' : 'Off' },
+            ]}
+            melding={voice.micPermission === 'denied' ? 'Microphone blocked: allow it in the site / app settings and reload.' : undefined}
+          />
+          <StatusKaart
+            naam="Clap to activate"
+            accent="var(--text-secondary)"
+            rol="Clap three times, sharply, to open AXE and start listening from anywhere. Keeps the mic on in the background while enabled."
+            stand={clapEnabled ? { toon: 'ok', tekst: 'On' } : { toon: 'muted', tekst: 'Off' }}
+            keuze={
+              <label className="axe-agentkaart-schakel">
+                <input type="checkbox" checked={clapEnabled} onChange={toggleClap} />
+                Clap to activate {clapEnabled ? 'on' : 'off'}
+              </label>
+            }
+          />
           <VoiceSection />
+          </div>
         </SectieBlok>
         )}
 
         {sectie === 'trust' && (
         <SectieBlok id="trust" titel="TRUST">
+          <div className="axe-agent-raster axe-agent-raster--sectie">
           <MindsetQuotesSection />
           <TrustLevelsSection />
           <LookSection />
           <ToolCallingSection />
+          </div>
         </SectieBlok>
         )}
 
         {sectie === 'routing' && (
         <SectieBlok id="routing" titel="ROUTING">
+          <div className="axe-agent-raster axe-agent-raster--sectie">
           <Kaart titel="AXE BRANCHES">
             <BranchRouterSection />
           </Kaart>
           <Kaart titel="CAPABILITY ROUTER">
             <CapabilityRouterSection />
           </Kaart>
+          </div>
         </SectieBlok>
         )}
 
         {sectie === 'system' && (
         <SectieBlok id="system" titel="SYSTEM">
+          <div className="axe-agent-raster axe-agent-raster--sectie">
           <RemoteTerminalSection />
           <ServiceHealthSection />
           <Kaart titel="DEVELOPER — GITHUB REPOS">
             <GitHubReposSection />
           </Kaart>
+          </div>
         </SectieBlok>
         )}
 

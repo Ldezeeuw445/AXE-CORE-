@@ -197,11 +197,11 @@ export function SchuifVoet() {
     { pad: '/settings', label: 'Profile', icoon: <User className="w-3.5 h-3.5" /> },
   ];
   return (
-    <div className="axe-schuifbalk-voet">
+    <div className="axe-schuifbalk-voet axe-schuifbalk-voet--compact">
       {items.map((i) => (
-        <button key={i.label} type="button" className="axe-row !py-1.5" onClick={() => navigeer(i.pad)}>
-          <span className="axe-glyph">{i.icoon}</span>
-          <span className="axe-row__text"><b>{i.label}</b></span>
+        <button key={i.label} type="button" className="axe-voetknop" onClick={() => navigeer(i.pad)} title={i.label}>
+          {i.icoon}
+          <span>{i.label}</span>
         </button>
       ))}
     </div>

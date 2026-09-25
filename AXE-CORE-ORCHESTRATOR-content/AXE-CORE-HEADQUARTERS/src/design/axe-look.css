@@ -7022,3 +7022,32 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-week-nulijn[data-vandaag='ja'] { height: 2px; background: #f97316; }
 .axe-week-nulijn[data-vandaag='ja']::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 99px; background: #f97316; }
 :root[data-look] .axe-week-meer { --blok: #475569; align-items: center; }
+
+/* De ladevoet compact (25 sep): 2 x 2 kleine knoppen in plaats van vier
+   regels -- de lade stopt boven de composer, en vier regels namen een derde
+   van de ruimte waar de inhoud had moeten staan. */
+:root[data-look] .axe-schuifbalk-voet--compact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+:root[data-look] .axe-voetknop {
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  padding: 6px 8px; border-radius: 9px; font-size: 11px; font-weight: 500;
+  color: var(--text-secondary); background: rgba(255, 255, 255, 0.03);
+}
+:root[data-look] .axe-voetknop svg { flex: none; color: var(--text-muted); }
+:root[data-look] .axe-voetknop span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root[data-look] .axe-voetknop:hover { background: rgba(255, 255, 255, 0.07); color: var(--text-primary); }
+.axe-agentkaart-knop {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 10px; border-radius: 10px; font-size: 12px; font-weight: 500;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.09); color: var(--text-primary);
+}
+.axe-agentkaart-knop:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
+.axe-agentkaart-knop:disabled { color: var(--text-muted); cursor: default; }
+.axe-agentkaart-keuze .flex input { width: 100%; }
+/* Settings-secties met grotere onderdelen: gelijke kolommen, uitgelijnd. */
+.axe-agent-raster--sectie { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); }
+.axe-agent-raster--sectie > .widget-card,
+.axe-agent-raster--sectie > .axe-kaart { height: 100%; min-height: 0; }
