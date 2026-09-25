@@ -6,6 +6,7 @@ import {
   jobResultaatTekst,
   jobStatusTekst,
   jobWachtTekst,
+  gesprokenGoedkeuringsBesluit,
   magMetStemGoedkeuren,
   moetSpraakWachtrij,
   northseaJobModus,
@@ -174,6 +175,22 @@ const vraag = (over: Partial<AxeGoedkeuring> & { command?: string; reason?: stri
   ...(over.kind !== undefined ? { kind: over.kind } : {}),
   ...(over.title !== undefined ? { title: over.title } : {}),
   ...(over.detail !== undefined ? { detail: over.detail } : {}),
+});
+
+describe('gesprokenGoedkeuringsBesluit', () => {
+  it('pakt alleen een kort, ondubbelzinnig ja of nee', () => {
+    expect(gesprokenGoedkeuringsBesluit('ja')).toBe('approve');
+    expect(gesprokenGoedkeuringsBesluit('Yes, go ahead.')).toBe('approve');
+    expect(gesprokenGoedkeuringsBesluit('doe maar')).toBe('approve');
+    expect(gesprokenGoedkeuringsBesluit('nee')).toBe('reject');
+    expect(gesprokenGoedkeuringsBesluit('laat maar')).toBe('reject');
+  });
+
+  it('maakt van gewoon gesprek geen goedkeuring', () => {
+    expect(gesprokenGoedkeuringsBesluit('ja maar ik bedoel iets anders')).toBeNull();
+    expect(gesprokenGoedkeuringsBesluit('yes, what was that again?')).toBeNull();
+    expect(gesprokenGoedkeuringsBesluit('ga door met je verhaal')).toBeNull();
+  });
 });
 
 describe('magMetStemGoedkeuren', () => {
