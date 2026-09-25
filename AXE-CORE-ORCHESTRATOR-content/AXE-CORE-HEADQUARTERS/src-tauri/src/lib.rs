@@ -145,6 +145,47 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// ── De globale mic-sneltoets ────────────────────────────────────────────────
+//
+// Deze twee namen staan ook in src/domain/voice/sneltoets.ts. Verandert er hier
+// één, dan moet die daar mee: Rust stuurt het event en de frontend luistert
+// ernaar, en er is niets dat een verschil zou opmerken -- de sneltoets zou
+// gewoon stil niets meer doen.
+#[cfg(desktop)]
+const SNELTOETS_ACCELERATOR: &str = "Alt+Space";
+#[cfg(desktop)]
+const SNELTOETS_EVENT: &str = "axe://sneltoets-mic";
+
+/// Toont het venster na de sneltoets, zonder de focus af te pakken waar dat kan.
+///
+/// `show_main_window` hierboven zet er `set_focus()` bij, en daar is dat goed:
+/// je hebt er zelf in de app om gevraagd. Bij een GLOBALE sneltoets is het
+/// verkeerd. Je drukt hem juist terwijl je in een andere app zit -- vaak een die
+/// in volledig scherm staat -- en op macOS klapt het hele beeld dan om naar een
+/// ander Space. Voor een sneltoets die alleen de mic hoort te openen is dat het
+/// tegenovergestelde van handig: je wilt praten TERWIJL je in die app bezig blijft.
+///
+/// Dus op macOS wel tonen, niet activeren. Op Windows en Linux bestaat die
+/// Space-val niet, en is een venster dat niet vooraan komt juist onvindbaar --
+/// daar dus wel `set_focus()`.
+///
+/// Wat hier bewust NIET gebeurt: `set_visible_on_all_workspaces(true)`. Dat zou
+/// het venster ook over een app in volledig scherm heen laten verschijnen, maar
+/// het is een blijvende verandering aan het venster, niet iets voor deze ene
+/// druk. Staat er een app in volledig scherm voorop, dan blijft het venster dus
+/// onzichtbaar tot je zelf terugwisselt -- de mic gaat wél gewoon open, want het
+/// event hieronder gaat los van het venster.
+#[cfg(desktop)]
+fn toon_sneltoets_venster(app: &tauri::AppHandle) {
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = win.unminimize();
+    let _ = win.show();
+    #[cfg(not(target_os = "macos"))]
+    let _ = win.set_focus();
+}
+
 /// Wisselt het native glas mee met de lichte of donkere stand.
 ///
 /// Houdt het glas gelijk in beide standen.
@@ -352,6 +393,57 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+            }
+
+            // ── Option+Space, overal ────────────────────────────────────
+            //
+            // useKeyboardShortcuts.ts hoort alleen wat er in ONS venster
+            // gebeurt. Staat Mail of Chrome voorop, dan krijgt de webview de
+            // toets nooit te zien; alleen het besturingssysteem kan hem daar
+            // afvangen, en dat is precies wat deze plugin doet.
+            //
+            // Wat hier NIET gebeurt is beslissen of de mic start of stopt. Dat
+            // is een schakelaar, en alleen de frontend weet of er al een gesprek
+            // loopt (sneltoetsActie in src/domain/voice/sneltoets.ts). Rust zet
+            // het venster klaar en stuurt één event; de rest gebeurt daar.
+            #[cfg(desktop)]
+            {
+                use tauri::Emitter;
+                use tauri_plugin_global_shortcut::{
+                    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
+                };
+
+                // Option heet op Windows en Linux Alt, en in Tauri heet hij
+                // overal Alt. Zelfde toets, andere naam op de kap.
+                let mic_sneltoets = Shortcut::new(Some(Modifiers::ALT), Code::Space);
+
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_handler(move |app, shortcut, event| {
+                            // Alleen bij indrukken. Zonder deze regel vuurt
+                            // dezelfde sneltoets twee keer -- ook bij loslaten --
+                            // en zet de schakelaar zichzelf meteen weer terug,
+                            // zodat je van de mic nooit meer dan een tik hoort.
+                            if shortcut != &mic_sneltoets
+                                || event.state() != ShortcutState::Pressed
+                            {
+                                return;
+                            }
+                            toon_sneltoets_venster(app);
+                            let _ = app.emit(SNELTOETS_EVENT, SNELTOETS_ACCELERATOR);
+                        })
+                        .build(),
+                )?;
+
+                // Een bezette sneltoets mag de app niet tegenhouden. Option+Space
+                // is op sommige Macs al van Spotlight of een ander programma; dan
+                // werkt alles behalve deze ene weg naar de mic, en dat is beter
+                // dan een app die niet opstart.
+                if let Err(err) = app.global_shortcut().register(mic_sneltoets) {
+                    eprintln!(
+                        "AXE global shortcut ({SNELTOETS_ACCELERATOR}) not registered: {err}"
+                    );
+                }
             }
 
             // De shell-server en de lokale API meteen aanzetten, tenzij er al

@@ -267,6 +267,84 @@ class TaskRepository:
         )
         return updated
 
+    async def cancel(
+        self, task_id: str, *, by: str = "user", reason: str | None = None,
+    ) -> dict[str, Any]:
+        """De gebruiker trekt de stekker eruit: taak, wachtende kinderen, open vragen.
+
+        Bewust zonder lease. `transition()` eist voor een ACTIVE taak de lease van
+        de worker die hem draait (PermissionError zonder), en die lease ligt op de
+        VPS of op een Mac -- niet in de app. Zou annuleren dezelfde eis stellen,
+        dan kon de gebruiker een lopende taak nooit stoppen. Dit is een overrule:
+        de status gaat er direct in en de lease wordt leeggemaakt, zodat de worker
+        bij zijn volgende heartbeat merkt dat hij hem kwijt is.
+
+        Ook geen revisie-slot (`.eq("revision", ...)`) zoals transition wel doet:
+        een heartbeat die er net tussendoor fietst mag een annulering niet laten
+        afketsen.
+
+        TRANSITIONS hoefde niet uitgebreid te worden: elke niet-terminale status
+        daarin heeft 'cancelled' al als toegestaan doel, dus er bestaat geen
+        legale status van waaruit annuleren verboden zou zijn.
+
+        Werpt LookupError als de taak niet bestaat, ValueError als hij al terminal
+        is (klaar, mislukt, afgewezen of al geannuleerd).
+        """
+        try:
+            UUID(str(task_id))
+        except ValueError:
+            # Een onmogelijke id is nooit een bestaande taak -- geen 500 waard.
+            raise LookupError(task_id) from None
+
+        found = self._db().table("core_tasks").select("*").eq("id", task_id).limit(1).execute().data
+        if not found:
+            raise LookupError(task_id)
+        task = found[0]
+        current = task.get("status") or "pending"
+        if current in TERMINAL:
+            raise ValueError(f"task is already {current}")
+
+        now = datetime.now(timezone.utc).isoformat()
+        rows = self._db().table("core_tasks").update({
+            "status": "cancelled",
+            "cancelled_at": now,
+            "revision": int(task.get("revision") or 0) + 1,
+            "worker_id": None,
+            "lease_token": None,
+            "lease_expires_at": None,
+        }).eq("id", task_id).execute().data
+        if not rows:
+            raise RuntimeError("task changed concurrently")
+
+        # De computer_use-rijen die nog op een Mac liggen te wachten: niemand
+        # pakt die straks nog op, maar zonder dit blijven ze eeuwig 'pending'
+        # staan. Een kind dat al draait laten we met rust -- anders staat de rij
+        # op cancelled terwijl die Mac gewoon doorklikt.
+        children = self._db().table("core_tasks").update({
+            "status": "cancelled",
+            "cancelled_at": now,
+        }).eq("parent_task_id", task_id).in_("status", ["pending", "queued"]).execute().data or []
+
+        # Een openstaande vraag zonder taak valt niet meer te beantwoorden.
+        approvals = self._db().table("core_approvals").update({
+            "status": "cancelled",
+            "decided_by": by,
+            "decided_at": now,
+            "decision_reason": reason,
+        }).eq("task_id", task_id).eq("status", "pending").execute().data or []
+
+        self.append_event(
+            task_id, "task.cancelled", actor_type="user", actor_id=by,
+            message=reason,
+            data={
+                "reason": reason,
+                "from_status": current,
+                "cancelled_children": len(children),
+                "cancelled_approvals": len(approvals),
+            },
+        )
+        return rows[0]
+
     def list(self, status: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         q = (
             self._db().table("core_tasks").select("*")

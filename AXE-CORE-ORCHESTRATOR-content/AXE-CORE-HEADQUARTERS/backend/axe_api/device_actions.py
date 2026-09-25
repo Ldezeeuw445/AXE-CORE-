@@ -147,6 +147,20 @@ def list_devices(db=None, now: Callable[[], float] = time.time) -> list[dict[str
     return sorted(out, key=lambda d: (not d["online"], d["device"]))
 
 
+def is_cancelled(db, task_id: str) -> bool:
+    """Staat deze taak op cancelled?
+
+    Twijfel is geen annulering: gaat de vraag mis (netwerk, time-out), dan
+    blijven we gewoon wachten. Een valse "ja" zou een lopende actie op de Mac
+    afbreken terwijl er niets aan de hand is.
+    """
+    try:
+        rows = db.table("core_tasks").select("status").eq("id", task_id).limit(1).execute().data or []
+    except Exception:
+        return False
+    return bool(rows) and rows[0].get("status") == "cancelled"
+
+
 def run_on_device(
     device: str,
     tool: str,
@@ -198,6 +212,16 @@ def run_on_device(
     deadline = time.monotonic() + TIMEOUT_S
     while time.monotonic() < deadline:
         sleep(POLL_S)
+        # Stopt Luka de taak waar deze actie bij hoort, dan heeft doorwachten
+        # geen zin meer: zonder deze controle blijft een geannuleerde taak nog
+        # tot TIMEOUT_S minuten op een Mac hangen en komt het antwoord terug in
+        # een gesprek dat allang gestopt is.
+        if parent_task_id and is_cancelled(db, parent_task_id):
+            # De rij van de Mac zelf blijft zoals hij is: TaskRepository.cancel
+            # gaat over kindrijen, en een Mac die nog klikt is niet gestopt door
+            # hem hier op cancelled te zetten.
+            return {"device": device, "tool": tool, "ok": False, "cancelled": True,
+                    "error": "cancelled: the task this action belongs to was cancelled."}
         found = db.table("core_tasks").select("status,result,error").eq(
             "id", row["id"]).limit(1).execute().data
         if not found:

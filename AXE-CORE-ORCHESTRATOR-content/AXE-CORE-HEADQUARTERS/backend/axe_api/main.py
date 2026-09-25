@@ -306,6 +306,10 @@ class TaskTransitionRequest(BaseModel):
     result: Optional[dict[str, Any]] = None
     error: Optional[dict[str, Any]] = None
 
+class TaskCancelRequest(BaseModel):
+    by: str = "user"
+    reason: Optional[str] = None
+
 class TaskApprovalRequest(BaseModel):
     kind: str
     title: str
@@ -437,6 +441,35 @@ async def transition_task(task_id: str, req: TaskTransitionRequest, request: Req
         raise HTTPException(409, str(exc)) from exc
     await audit("task_transition", task_id, {
         "status": req.status, "worker_id": req.worker_id,
+    }, request.client.host if request.client else "")
+    return {"task": task}
+
+@app.post("/tasks/{task_id}/cancel", dependencies=[AUTH])
+async def cancel_task(
+    task_id: str, request: Request, req: Optional[TaskCancelRequest] = None,
+):
+    """Stop een lopende taak. Een statuswijziging, geen verwijdering.
+
+    DELETE /tasks blijft hard geblokkeerd en dat hoort zo: een gestopte taak
+    moet achteraf nog te lezen zijn -- wie hem stopzette, wanneer en waarom.
+    Annuleren zet dus de status om en laat de rij, de stappen en de
+    gebeurtenissen staan, en loopt langs dezelfde AUTH- en auditweg als
+    /transition.
+
+    Het lichaam mag weg: een knop die alleen "stop" bedoelt, hoeft niets te
+    sturen. Dan is het Luka die stopt, zonder reden erbij.
+    """
+    req = req or TaskCancelRequest()
+    try:
+        task = await task_repo().cancel(task_id, by=req.by, reason=req.reason)
+    except LookupError as exc:
+        # Onbekende taak: niets om te stoppen.
+        raise HTTPException(404, "Task not found") from exc
+    except ValueError as exc:
+        # Al klaar, mislukt of eerder gestopt -- daar valt niets meer af te breken.
+        raise HTTPException(409, str(exc)) from exc
+    await audit("task_cancel", task_id, {
+        "by": req.by, "reason": req.reason,
     }, request.client.host if request.client else "")
     return {"task": task}
 

@@ -27,6 +27,14 @@ serde_json = "1.0"
 [target."cfg(target_os = \"macos\")".dependencies]
 window-vibrancy = "0.5"
 
+# De globale sneltoets (Option+Space) die de mic opent terwijl een ANDERE app
+# voorop staat. Bewust NIET bij de gewone dependencies: op Android en iOS
+# bestaat er geen systeembrede sneltoets, en de crate bouwt daar niet. Deze
+# cfg is precies het spiegelbeeld van `#[cfg(desktop)]` in lib.rs, zodat de
+# import en het gebruik altijd samen aan of samen uit staan.
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-global-shortcut = "2"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

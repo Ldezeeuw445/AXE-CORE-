@@ -29,12 +29,14 @@ So this module does the two things that were missing:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import os
 import logging
 import subprocess
 import time
-from typing import Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Awaitable, Callable
 
 import device_actions
 
@@ -134,6 +136,30 @@ _READ_ONLY_NEEDS_APPROVAL = (
 # Omleidingen die niets schrijven, zodat `2>/dev/null` een leestaak niet stopt.
 _ONSCHULDIGE_OMLEIDING = ("2>&1", "&>/dev/null", "2>/dev/null", ">/dev/null")
 
+# Geld. Een order plaatsen of wijzigen gaat nooit zonder Luka's ok, welke agent
+# het ook vraagt. Nu de Trading Agent een eigen brief krijgt (AGENT_BRIEFS) en
+# echt trading-werk toegewezen kan krijgen, is een shell op deze box één curl
+# verwijderd van een echte MT5-order.
+#
+# Dit zijn de werkelijke ingangen, opgezocht in de app en niet verzonnen:
+#   brokerPlaceOrder / brokerPlacePendingOrder  (gateways/brokerConnector.ts)
+#   metaApiMarketOrder / metaApiPendingOrder / metaApiTradeAction
+#                                               (gateways/metaApiService.ts)
+#   executeDemoTrade                            (het papieren boek)
+#   ORDER_TYPE_*/POSITION_MODIFY/ORDER_MODIFY/ORDER_CANCEL
+#                                               (MetaAPI's actionType)
+#   mt-client-api-v1.*.agiliumtrade.ai/.../trade (de REST-ingang zelf)
+#   /trading/order                              (de API op deze box)
+# Openen én wijzigen staan er allebei in: een stop-loss verzetten is net zo
+# goed geld als een nieuwe order.
+_ORDER_NEEDS_APPROVAL = (
+    "place_order", "placeorder", "brokerplaceorder", "brokerplacependingorder",
+    "metaapimarketorder", "metaapipendingorder", "metaapitradeaction",
+    "executedemotrade", "/trading/order", "mt-client-api", "agiliumtrade",
+    "order_type_buy", "order_type_sell", "position_modify", "position_close",
+    "order_modify", "order_cancel",
+)
+
 
 def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> str | None:
     """Return why this command needs Luka's approval, or None if it may run free.
@@ -152,6 +178,10 @@ def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> s
     for pattern in _OUTBOUND_NEEDS_APPROVAL:
         if pattern in lowered:
             return f"sends something out ({pattern.strip()})"
+
+    for pattern in _ORDER_NEEDS_APPROVAL:
+        if pattern in lowered:
+            return f"places or changes an order ({pattern.strip()})"
 
     if read_only:
         schoon = lowered
@@ -185,6 +215,17 @@ class ApprovalRequired(Exception):
         super().__init__(f"needs approval ({reason}): {command}")
         self.command = command
         self.reason = reason
+
+
+class TaskCancelled(Exception):
+    """De taak is onderweg geannuleerd; de lus stopt waar hij staat.
+
+    Ook geen mislukking. De lus draait tot een half uur door, dus "stop" moet
+    ergens aankomen tussen twee stappen in: run_agent_loop vraagt het na aan
+    `should_stop`, vóór elke modelaanroep en vóór elke tooluitvoering, en gooit
+    dit als het antwoord True is. De aanroeper (task_runtime.cancel) zet de taak
+    daarna op `cancelled` -- een geannuleerde taak is geen error-taak.
+    """
 
 
 def normalize_command(command: str) -> str:
@@ -348,6 +389,220 @@ having seen it in a run_on_device answer in this task.
 You have {MAX_STEPS} steps. Use them."""
 
 
+# Eén lus, dertien rollen. Tot nu toe was SYSTEM_PROMPT het enige dat het model
+# te horen kreeg, dus "NorthSea Desk Manager" en "Trading Agent" waren etiketten
+# op precies dezelfde agent: dezelfde toon, dezelfde aannames, dezelfde scope.
+# Dit is wat een agent tot díe agent maakt -- zijn rol, wat hij bezit en waar
+# hij van afblijft. Overgenomen uit src/domain/agents/roster.ts (AXE_AGENTS);
+# elke id daar hoort hier een brief te hebben, en test_agent_briefs.py houdt de
+# twee lijsten gelijk.
+#
+# De brief gaat VOOR de system prompt, niet erna: het eerste wat het model
+# leest is wie het is, daarna pas hoe het werkt.
+AGENT_BRIEFS: dict[str, str] = {
+    "axe": (
+        "You are AXE, the orchestrator. You talk to Luka, work out what he "
+        "actually wants, and either answer it yourself or hand it to the "
+        "manager who owns that domain. You hold ambiguous work rather than "
+        "mis-routing it."
+    ),
+    # ── tier 1 — het managerteam ────────────────────────────────────────────
+    "wingman": (
+        "You are the Wingman, AXE's right hand, working for AXE. You run the "
+        "CrewAI crews on the VPS on AXE's behalf and help out anywhere else. "
+        "You prepare and propose; AXE and Luka decide."
+    ),
+    "northsea": (
+        "You are the NorthSea Desk Manager, working for AXE: the commodity "
+        "desk. You research counterparties, cargoes, offers and prices, and "
+        "you report what you found.\n"
+        "HARD LIMIT: this desk is READ-ONLY. You never send an email, a "
+        "message or an offer, never write to the NorthSea database, and never "
+        "switch on any automatic sending. Nothing leaves the desk without "
+        "Luka. If a job needs something sent, say exactly what you would send "
+        "and to whom, and stop there."
+    ),
+    "trading": (
+        "You are the Trading Agent, working for AXE: the AXE Algo trading "
+        "desk. Market analysis, positions, risk and the final trade decision "
+        "are yours, and you own the trading research crew.\n"
+        "HARD LIMIT: money never moves unattended. Placing, modifying, "
+        "closing or cancelling an order — through the broker API, the "
+        "/trading/order endpoint or any script — always needs Luka's "
+        "approval first. Analysing, sizing and proposing a trade is your "
+        "work; executing it is his call."
+    ),
+    "developer": (
+        "You are AXE Developer, working for AXE: the code manager. You read, "
+        "write, build and ship the codebase. Look at the real file before you "
+        "change it, keep the change small, and prove it with a test or a "
+        "build — not with a description of what you did."
+    ),
+    "thinktank": (
+        "You are ThinkTank, working for AXE: the ideas manager. You score and "
+        "rank ideas, turn the survivors into a build plan, and hand that plan "
+        "on. Be concrete: an idea without a next step is not an idea yet."
+    ),
+    # ── tier 2 — de werkers ─────────────────────────────────────────────────
+    "browser": (
+        "You are the Browser agent, working for AXE. You navigate, extract "
+        "and summarise web pages. Report what the page actually said, with "
+        "the URL; never fill in what you did not see."
+    ),
+    "memory": (
+        "You are the Memory manager, working for AXE. You build and maintain "
+        "the durable memory itself: consolidation, decay and the Obsidian "
+        "vault. Only store what was explicitly worth remembering."
+    ),
+    "task": (
+        "You are the Task manager, working for AXE. You pick up tasks from "
+        "the Tasks tab and track them to close. A task is closed when there "
+        "is proof it is done, not when someone said so."
+    ),
+    "cron": (
+        "You are the Cron manager, working for AXE: the self-hosted "
+        "scheduler. You run due schedules with nobody watching, so be "
+        "conservative — a job that should not run twice must not run twice."
+    ),
+    "finance": (
+        "You are the Finance agent, working for AXE: money, credits and every "
+        "subscription. You watch what is left, warn before something runs "
+        "out, and route work to the cheapest engine that can still do it. You "
+        "report numbers; you never buy, top up or cancel anything yourself."
+    ),
+    "apps": (
+        "You are the App manager, working for AXE: the app registry and VPS "
+        "ops. You health-check the services behind AXE CORE and AXE "
+        "Companion, and you can restart them — with approval, and after you "
+        "have said what is actually wrong."
+    ),
+    # ── tier 3 — cross-app assistenten ──────────────────────────────────────
+    "intel": (
+        "You are AXE Intel, working for AXE: market intelligence and signal "
+        "detection inside Trading OS. You surface signals with their source "
+        "and time; you do not trade on them."
+    ),
+    "companion": (
+        "You are AXE Companion, working for AXE: the assistant that lives in "
+        "the other apps and is driven through AXE CORE. Do the work in the "
+        "app you are in, and report back plainly."
+    ),
+}
+
+
+# De brief van de agent die déze beurt draait. Een ContextVar en geen extra
+# parameter op _call_model: die functie wordt in tests vervangen door een dubbel
+# met twee parameters, en een derde argument zou dat stilzwijgend breken. Elke
+# asyncio-taak krijgt zijn eigen kopie van de context, dus twee worker-slots
+# naast elkaar zien elkaars brief nooit.
+_HUIDIGE_BRIEF: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "axe_agent_brief", default=""
+)
+
+
+def systeem_prompt() -> str:
+    """De system prompt zoals het model hem deze beurt krijgt: brief + basis."""
+    brief = _HUIDIGE_BRIEF.get()
+    return f"{brief}\n\n{SYSTEM_PROMPT}" if brief else SYSTEM_PROMPT
+
+
+class ProviderUitgeput(RuntimeError):
+    """Een provider die de rest van de dag toch niets meer gaat doen.
+
+    Twee gevallen, allebei echt gebeurd: Groq's 429 met een dagquotum en
+    Gemini's 402 "prepayment credits are depleted". Erft van RuntimeError, zodat
+    elke bestaande `except Exception`/`except RuntimeError` onveranderd werkt en
+    de foutregel er hetzelfde uitziet als voorheen.
+    """
+
+    def __init__(self, provider: str, status: int, body: str, retry_after: float | None = None):
+        super().__init__(f"{provider} {status}: {body[:300]}")
+        self.status = status
+        self.body = body
+        self.retry_after = retry_after
+
+
+# Afkoeling per provider. Zonder dit probeert de lus elke stap opnieuw Groq
+# (dagquotum op) en Gemini (credits op): tot veertig keer dezelfde 429/402 per
+# taak, veertig keer dezelfde regel in het log, en elke stap twee nutteloze
+# HTTP-rondjes voordat de provider die het wél doet aan de beurt is.
+# Sleutel = de naam uit de attempts-lijst, waarde = monotone tijd waarop hij
+# weer meedoet.
+_AFKOELING: dict[str, float] = {}
+
+# Credits zijn niet aan een dag gebonden: die komen terug als Luka bijvult.
+# Zes uur is lang genoeg om de taak niet te vertragen en kort genoeg dat een
+# bijgevulde provider dezelfde dag weer meedraait.
+_AFKOEL_CREDITS = 6 * 3600
+# Een Retry-After die verder ligt dan een dag geloven we niet blind.
+_AFKOEL_MAX = 24 * 3600
+
+# Een 429 kan een piek van een minuut zijn of een dagquotum. Alleen het tweede
+# verdient afkoeling; een minuutlimiet is over voordat de volgende stap begint.
+# De minuut-markers gaan voor, want Gemini zegt "Quota exceeded ... per minute".
+_MINUUT_MARKERS = ("per minute", "per-minute", "per second", "rpm", "tpm")
+_DAG_MARKERS = ("per day", "per-day", "perday", "daily", "rpd", "tpd", "quota exceeded")
+
+
+def _is_dagquotum(body: str) -> bool:
+    laag = body.lower()
+    if any(m in laag for m in _MINUUT_MARKERS):
+        return False
+    return any(m in laag for m in _DAG_MARKERS)
+
+
+def _seconden_tot_middernacht() -> float:
+    """Tot de reset van het dagquotum (UTC), met een marge van een minuut."""
+    nu = datetime.now(timezone.utc)
+    morgen = (nu + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(60.0, (morgen - nu).total_seconds() + 60)
+
+
+def _afkoelduur(exc: BaseException) -> float | None:
+    """Hoe lang deze provider overgeslagen wordt, of None om het niet te doen."""
+    if not isinstance(exc, ProviderUitgeput):
+        return None
+    if exc.retry_after and exc.retry_after > 0:
+        return min(float(exc.retry_after), _AFKOEL_MAX)
+    if exc.status == 402:
+        return _AFKOEL_CREDITS
+    return _seconden_tot_middernacht()
+
+
+def _provider_fout(provider: str, response: Any) -> RuntimeError:
+    """Vertaal een mislukte HTTP-poging naar de juiste fout.
+
+    ProviderUitgeput als het een dagquotum (429) of opgebruikte credits (402)
+    is, anders een gewone RuntimeError -- een 500 of een timeout is een
+    incident, geen reden om de provider een dag te laten liggen.
+    """
+    body = response.text or ""
+    status = response.status_code
+    if status == 402 or (status == 429 and _is_dagquotum(body)):
+        na = (response.headers or {}).get("retry-after")
+        try:
+            retry_after = float(na) if na is not None else None
+        except (TypeError, ValueError):
+            retry_after = None
+        return ProviderUitgeput(provider, status, body, retry_after)
+    return RuntimeError(f"{provider} {status}: {body[:300]}")
+
+
+# Eén Ollama tegelijk. De VPS heeft 7,7GB en geen swap die dit opvangt: het
+# model is al eens met een OOM door de hele box heen gegaan (AGENTS.md val 4).
+# Zolang de worker één taak tegelijk draaide kwam dat niet samen, maar met K
+# parallelle slots kunnen twee taken nu echt tegelijk op de terugval landen en
+# twee keer hetzelfde model laden. De semafoor laat de tweede wachten in plaats
+# van de box om te duwen.
+_OLLAMA_SLOT = asyncio.Semaphore(1)
+
+
+async def _call_ollama_begrensd(contents: list[dict[str, Any]]) -> dict[str, Any]:
+    """_call_ollama, maar nooit twee tegelijk."""
+    async with _OLLAMA_SLOT:
+        return await _call_ollama(contents)
+
+
 def _shell(command: str, cwd: str | None = None) -> dict[str, Any]:
     refusal = _refuse(command)
     if refusal:
@@ -401,7 +656,7 @@ async def _call_gemini(contents: list[dict[str, Any]], api_key: str) -> dict[str
     payload = {
         "contents": contents,
         "tools": [{"functionDeclarations": TOOL_DECLARATIONS}],
-        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "systemInstruction": {"parts": [{"text": systeem_prompt()}]},
         "generationConfig": {"temperature": 0.2},
     }
     url = _ENDPOINT.format(model=MODEL)
@@ -411,7 +666,7 @@ async def _call_gemini(contents: list[dict[str, Any]], api_key: str) -> dict[str
             headers={"Content-Type": "application/json"},
         )
     if response.status_code != 200:
-        raise RuntimeError(f"gemini {response.status_code}: {response.text[:300]}")
+        raise _provider_fout("gemini", response)
     data = response.json()
     candidates = data.get("candidates") or []
     if not candidates:
@@ -426,7 +681,7 @@ def _to_ollama_messages(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     and the rest of the code reads it. Only the wire format changes per
     provider, so a fallback cannot subtly lose the conversation.
     """
-    out: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    out: list[dict[str, Any]] = [{"role": "system", "content": systeem_prompt()}]
     for entry in contents:
         role = entry.get("role")
         parts = entry.get("parts") or []
@@ -511,7 +766,7 @@ def _to_openai_messages(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     functionCall krijgt een id, en het antwoord erna verwijst ernaar in
     dezelfde volgorde.
     """
-    out: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    out: list[dict[str, Any]] = [{"role": "system", "content": systeem_prompt()}]
     open_ids: list[str] = []
     n = 0
     for entry in contents:
@@ -576,7 +831,7 @@ async def _call_openai_compat(
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         )
     if response.status_code != 200:
-        raise RuntimeError(f"{model} {response.status_code}: {response.text[:300]}")
+        raise _provider_fout(model, response)
 
     message = ((response.json().get("choices") or [{}])[0]).get("message") or {}
     parts: list[dict[str, Any]] = []
@@ -617,14 +872,32 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
         attempts.append((f"gemini/{MODEL}", lambda: _call_gemini(contents, api_key)))
     if openai_key:
         attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
-    attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama(contents)))
+    # De terugval is begrensd: nooit twee Ollama-aanroepen tegelijk op deze box.
+    attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
 
     errors: list[str] = []
     for name, call in attempts:
+        tot = _AFKOELING.get(name)
+        if tot is not None:
+            if tot > time.monotonic():
+                # Stil overslaan. Dat dit gebeurt is één keer gelogd, toen de
+                # provider in de afkoeling ging; het elke stap herhalen is
+                # precies het lawaai dat dit moest oplossen.
+                errors.append(f"{name}: afkoelend")
+                continue
+            _AFKOELING.pop(name, None)
         try:
             return await call()
         except Exception as exc:
-            log.warning("[agent_loop] %s failed: %s", name, str(exc)[:200])
+            seconden = _afkoelduur(exc)
+            if seconden:
+                _AFKOELING[name] = time.monotonic() + seconden
+                log.warning(
+                    "[agent_loop] %s is uitgeput (%s) — overgeslagen voor %d minuten",
+                    name, str(exc)[:160], int(seconden // 60),
+                )
+            else:
+                log.warning("[agent_loop] %s failed: %s", name, str(exc)[:200])
             errors.append(f"{name}: {str(exc)[:150]}")
     raise RuntimeError("every provider failed — " + " | ".join(errors))
 
@@ -635,6 +908,9 @@ async def run_agent_loop(
     on_event,
     approved_commands: tuple[str, ...] = (),
     read_only: bool = False,
+    *,
+    agent: str | None = None,
+    should_stop: Callable[[], Awaitable[bool]] | None = None,
 ) -> dict[str, Any]:
     """Run the request to completion.
 
@@ -644,12 +920,55 @@ async def run_agent_loop(
     `approved_commands` are commands Luka has already approved for THIS task, so
     a resumed attempt runs straight through the thing it previously stopped on
     instead of asking again.
+
+    `agent` is een roster-id uit AGENT_BRIEFS (northsea, trading, ...). Die
+    brief gaat voor de system prompt, zodat de lus als díe agent werkt en niet
+    als een algemene "AXE" met een ander etiket. Onbekend of None = geen brief.
+
+    `should_stop` wordt vóór elke modelaanroep en vóór elke tooluitvoering
+    afgevraagd; geeft hij True, dan stopt de lus met TaskCancelled.
     """
     pre_approved = {normalize_command(c) for c in approved_commands}
     # No longer required. A missing or dead Gemini key now means the loop runs
     # on the local model instead of refusing to start.
     api_key = os.environ.get("GEMINI_API_KEY")
 
+    # De NorthSea-desk is alleen-lezen, wat de aanroeper er ook van vindt. Die
+    # regel staat in zijn brief, maar een brief is een vraag aan het model en
+    # geen garantie -- dit is de garantie.
+    if agent == "northsea":
+        read_only = True
+
+    brief = AGENT_BRIEFS.get(agent or "", "")
+    fiche = _HUIDIGE_BRIEF.set(brief)
+
+    async def stop_gevraagd() -> None:
+        """Werp TaskCancelled als de taak intussen geannuleerd is."""
+        if should_stop is None:
+            return
+        if await should_stop():
+            raise TaskCancelled(f"task {task_id} was cancelled")
+
+    try:
+        return await _lus(
+            request_text, task_id, on_event, pre_approved, read_only,
+            api_key, stop_gevraagd,
+        )
+    finally:
+        _HUIDIGE_BRIEF.reset(fiche)
+
+
+async def _lus(
+    request_text: str,
+    task_id: str,
+    on_event,
+    pre_approved: set[str],
+    read_only: bool,
+    api_key: str | None,
+    stop_gevraagd,
+) -> dict[str, Any]:
+    """De lus zelf. Apart van run_agent_loop zodat de brief-ContextVar in één
+    plek gezet en weer opgeruimd wordt, ook bij ApprovalRequired."""
     contents: list[dict[str, Any]] = [
         {"role": "user", "parts": [{"text": request_text}]}
     ]
@@ -663,6 +982,7 @@ async def run_agent_loop(
                 f"({WALL_CLOCK_SECONDS}s budget). Transcript kept for the next attempt."
             )
 
+        await stop_gevraagd()
         content = await _call_model(contents, api_key)
         parts = content.get("parts") or []
         contents.append({"role": "model", "parts": parts})
@@ -690,6 +1010,10 @@ async def run_agent_loop(
 
         responses = []
         for call in calls:
+            # Vóór elke tooluitvoering, niet alleen per stap: één stap kan
+            # meerdere tools bevatten, en een annulering hoort niet te wachten
+            # tot de rest van de rij is uitgevoerd.
+            await stop_gevraagd()
             name = call.get("name")
             args = call.get("args") or {}
 

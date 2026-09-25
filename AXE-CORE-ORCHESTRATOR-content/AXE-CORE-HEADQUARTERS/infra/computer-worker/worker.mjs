@@ -406,8 +406,17 @@ async function claim(id) {
   return res.ok && (await res.json()).length > 0;
 }
 
+/**
+ * De uitkomst terugschrijven -- maar alleen op een rij die nog draait.
+ *
+ * `status=eq.running` in het filter is het hele punt. Annuleren zet de rij op
+ * `cancelled` terwijl deze machine nog bezig is; zonder dat filter PATCHt deze
+ * afronding hem een moment later stilletjes terug naar `completed`, en meldt
+ * een taak die Luka stopzette zichzelf alsnog als klaar. Nul rijen raken is
+ * hier het goede antwoord: iemand anders heeft deze rij al afgesloten.
+ */
 async function settle(id, ok, body) {
-  await sb(`core_tasks?id=eq.${id}`, {
+  await sb(`core_tasks?id=eq.${id}&status=eq.running`, {
     method: 'PATCH',
     body: JSON.stringify({
       status: ok ? 'completed' : 'failed',

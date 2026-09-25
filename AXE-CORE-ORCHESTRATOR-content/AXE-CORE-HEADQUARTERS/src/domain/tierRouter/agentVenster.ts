@@ -5,7 +5,7 @@
  */
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import type { AxeAgent, AxeAgentId } from '@/domain/agents/roster';
-import { agentsByTier } from '@/domain/agents/roster';
+import { agentById, agentsByTier } from '@/domain/agents/roster';
 
 /** Hoe lang een klaar venster blijft staan voor het wegschuift. */
 export const VENSTER_NAGLOEI_MS = 25_000;
@@ -75,20 +75,63 @@ export function zichtbareVensters(jobs: AxeJob[], nu: number): AxeJob[] {
 
 export interface ManagerRij {
   agent: AxeAgent;
-  /** De job die AXE bij hem heeft neergelegd, of null als hij stilstaat. */
+  /**
+   * De job die onder hem hangt: zijn eigen werk, of het werk van een agent
+   * die hij bezit (zie MANAGER_VAN). Null als er niets loopt.
+   */
   job: AxeJob | null;
-  /** Wat hij nu zegt, in gewone taal. Leeg als hij stilstaat. */
+  /** Wat er nu gebeurt, in gewone taal. Leeg als hij stilstaat. */
   regel: string;
 }
 
 /**
- * Van welke manager is deze job? Een job van een tier-2-werker (Browser,
- * Memory, ...) hangt onder de manager die hem heeft uitgezet; die koppeling
- * bestaat nog niet, dus zulke jobs krijgen hier geen rij. Ze zijn niet weg —
- * ze staan in de Agents-tab.
+ * Onder welke manager hangt het werk van deze agent?
+ *
+ * Tot nu toe kreeg alleen een tier-1-job een rij, en verdween alles van een
+ * tier-2/tier-3-werker (of van AXE zelf) uit beeld — terwijl het wél draaide.
+ * Elke agent hangt daarom nu onder één manager. De keuze komt uit wat
+ * roster.ts over die agenten zegt:
+ *
+ * - **developer** — "Reads, writes, builds, ships and deploys the codebase."
+ *   Hij krijgt de werkers die aan de machinerie van de app zelf zitten:
+ *   `task` (de Tasks-tab), `cron` ("self-hosted scheduler"), `memory`
+ *   ("builds and maintains the durable memory itself"), `apps`
+ *   ("health-checks and can restart the VPS services") en `finance`
+ *   ("routes to the cheapest capable engine" — motorkeuze is stack-werk).
+ * - **wingman** — "AXE's right hand ... and helps anywhere." Hij krijgt wat
+ *   geen eigen desk heeft: `browser` (web-werk zonder domein), de twee
+ *   cross-app assistenten `intel` en `companion` (roster: "driven through
+ *   AXE CORE" — dus vlak naast AXE's rechterhand), en `axe` zelf, voor het
+ *   werk dat AXE niet uitbesteedt.
+ *
+ * northsea, trading en thinktank hebben hun eigen desk en houden hun eigen
+ * werk; ze krijgen niets doorgeschoven. Het type is bewust een volledige
+ * Record: komt er een agent bij in de roster, dan dwingt de compiler hier
+ * een keuze af in plaats van hem stilletjes te laten verdwijnen.
  */
-function isManagerJob(job: AxeJob, managers: readonly AxeAgent[]): boolean {
-  return managers.some((m) => m.id === job.agent);
+const MANAGER_VAN: Record<AxeAgentId, AxeAgentId> = {
+  axe: 'wingman',
+  // tier 1 — een manager houdt zijn eigen werk
+  wingman: 'wingman',
+  northsea: 'northsea',
+  trading: 'trading',
+  developer: 'developer',
+  thinktank: 'thinktank',
+  // tier 2
+  browser: 'wingman',
+  memory: 'developer',
+  task: 'developer',
+  cron: 'developer',
+  finance: 'developer',
+  apps: 'developer',
+  // tier 3
+  intel: 'wingman',
+  companion: 'wingman',
+};
+
+/** Welke manager deze agent bezit. Onbekende id (oude job uit de store) → wingman. */
+export function managerVan(agent: AxeAgentId): AxeAgentId {
+  return MANAGER_VAN[agent] ?? 'wingman';
 }
 
 /**
@@ -100,18 +143,31 @@ export function managerRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
   const managers = agentsByTier('tier1');
   // Bewust NIET via zichtbareVensters: die kapt af op MAX_VENSTERS, en dan valt
   // er een manager weg zodra alle vijf tegelijk lopen. Hier krijgt iedereen een rij.
-  const zichtbaar = jobs.filter((j) => levendeJob(j, nu) && isManagerJob(j, managers));
+  const zichtbaar = jobs.filter((j) => levendeJob(j, nu));
 
   const perManager = new Map<AxeAgentId, AxeJob>();
   for (const job of zichtbaar) {
-    const staand = perManager.get(job.agent);
-    if (!staand || job.startedAt >= staand.startedAt) perManager.set(job.agent, job);
+    const eigenaar = managerVan(job.agent);
+    const staand = perManager.get(eigenaar);
+    if (!staand || job.startedAt >= staand.startedAt) perManager.set(eigenaar, job);
   }
 
   return managers.map((agent) => {
     const job = perManager.get(agent.id) ?? null;
-    return { agent, job, regel: job ? regelVan(job) : '' };
+    return { agent, job, regel: job ? rijRegel(job, agent) : '' };
   });
+}
+
+/**
+ * Wat er in de rij staat. Doet de manager het zelf, dan alleen zijn zin; doet
+ * een van zijn agenten het, dan eerst wie — anders lijkt het alsof de manager
+ * zelf in een browser zit te klikken.
+ */
+function rijRegel(job: AxeJob, manager: AxeAgent): string {
+  const regel = regelVan(job);
+  if (job.agent === manager.id) return regel;
+  const werker = agentById(job.agent);
+  return `${werker.kort ?? werker.name} · ${regel}`;
 }
 
 /** Wat er achter de naam komt te staan: zijn slotzin, anders zijn laatste stap. */

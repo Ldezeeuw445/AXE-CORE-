@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  gewoneTaal, stappenUit, zichtbareVensters, managerRijen, regelVan,
+  gewoneTaal, stappenUit, zichtbareVensters, managerRijen, managerVan, regelVan,
   VENSTER_NAGLOEI_MS, MAX_VENSTERS,
 } from './agentVenster';
 import type { AxeJob } from './axeJobRegels';
+import type { AxeAgentId } from '@/domain/agents/roster';
+import { agentById } from '@/domain/agents/roster';
 
 describe('gewoneTaal', () => {
   it('maakt van de echte agent-lus-regels (25 sep) iets leesbaars', () => {
@@ -78,9 +80,51 @@ describe('managerRijen', () => {
     expect(rijen.filter((r) => r.job != null)).toHaveLength(5);
   });
 
-  it('laat werk van een tier-2-agent buiten de kolom', () => {
-    const rijen = managerRijen([job('x', { agent: 'browser' })], 0);
-    expect(rijen.every((r) => r.job === null)).toBe(true);
+  // OS3, W3c: dit was het gat. Een job van Browser/Intel/Task/... draaide wél,
+  // maar viel uit de kolom en was daarmee nergens rond de core te zien.
+  it('hangt werk van een tier-2-werker onder zijn manager in plaats van het te laten verdwijnen', () => {
+    const rijen = managerRijen([job('x', { agent: 'browser', title: 'Open the docs' })], 0);
+    const wingman = rijen.find((r) => r.agent.id === 'wingman');
+    expect(wingman?.job?.id).toBe('x');
+    // Wie het doet staat erbij: anders lijkt het alsof Wingman zelf browst.
+    expect(wingman?.regel).toBe('Browser · Open the docs');
+  });
+
+  it('elke tier-2/tier-3-agent en AXE zelf krijgt een zichtbare rij', () => {
+    const werkers: AxeAgentId[] = [
+      'browser', 'memory', 'task', 'cron', 'finance', 'apps', 'intel', 'companion', 'axe',
+    ];
+    for (const id of werkers) {
+      const rijen = managerRijen([job('x', { agent: id, title: 'Doing the thing' })], 0);
+      const bezet = rijen.filter((r) => r.job != null);
+      expect(bezet, `geen rij voor ${id}`).toHaveLength(1);
+      expect(bezet[0].agent.tier, `${id} hangt niet onder een tier-1 manager`).toBe('tier1');
+      expect(bezet[0].regel, id).toBe(`${agentById(id).kort ?? agentById(id).name} · Doing the thing`);
+    }
+  });
+
+  it('managerVan volgt de roster: app-machinerie naar Developer, dakloos werk naar Wingman', () => {
+    expect(['memory', 'task', 'cron', 'finance', 'apps'].map((id) => managerVan(id as AxeAgentId)))
+      .toEqual(['developer', 'developer', 'developer', 'developer', 'developer']);
+    expect(['browser', 'intel', 'companion', 'axe'].map((id) => managerVan(id as AxeAgentId)))
+      .toEqual(['wingman', 'wingman', 'wingman', 'wingman']);
+    // Een manager houdt zijn eigen werk.
+    expect(managerVan('trading')).toBe('trading');
+    expect(managerVan('northsea')).toBe('northsea');
+  });
+
+  it('een manager die zelf werkt krijgt geen naam voor zijn zin geplakt', () => {
+    const rijen = managerRijen([job('x', { agent: 'trading', title: 'Check my risk' })], 0);
+    expect(rijen.find((r) => r.agent.id === 'trading')?.regel).toBe('Check my risk');
+  });
+
+  it('eigen werk en doorgeschoven werk delen één rij: de nieuwste wint', () => {
+    const jobs = [
+      job('eigen', { agent: 'wingman', startedAt: 10, title: 'Brief the crew' }),
+      job('door', { agent: 'browser', startedAt: 20, title: 'Open the docs' }),
+    ];
+    const wingman = managerRijen(jobs, 0).find((r) => r.agent.id === 'wingman');
+    expect(wingman?.job?.id).toBe('door');
   });
 
   it('een job die lang klaar is telt niet meer mee', () => {

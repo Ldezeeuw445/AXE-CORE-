@@ -11,15 +11,39 @@ import json
 import logging
 import os
 import socket
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from agent_loop import ApprovalRequired
 from task_runtime import TaskRepository
 
+try:  # agent_loop levert deze klasse volgens het gedeelde contract.
+    from agent_loop import TaskCancelled
+except ImportError:  # pragma: no cover
+    # Vangnet zodat dit bestand importeerbaar blijft zolang agent_loop hem nog
+    # niet heeft. Zodra hij er staat, wint de echte import hierboven vanzelf.
+    class TaskCancelled(Exception):
+        """Een taak is onderweg geannuleerd; de lus is netjes gestopt."""
+
 log = logging.getLogger("axe_task_worker")
 
 TaskHandler = Callable[[dict[str, Any], "TaskContext"], Awaitable[dict[str, Any]]]
+
+# Hetzelfde geval, alleen gezien via de repo: iemand heeft de taak op
+# 'cancelled' gezet terwijl wij hem draaiden, dus require_transition weigert
+# elke volgende overgang. Dat is geen fout van de handler en zeker geen reden
+# om te retryen -- de taak is met opzet gestopt.
+CANCELLED_TRANSITION_PREFIX = "invalid task transition: cancelled ->"
+
+
+def is_cancelled_race(exc: BaseException) -> bool:
+    """True als deze fout betekent: de taak is onder ons vandaan geannuleerd."""
+    return isinstance(exc, ValueError) and str(exc).startswith(CANCELLED_TRANSITION_PREFIX)
+
+
+# Hoe vaak de agent-lus hoogstens echt naar de status van zijn eigen taak vraagt.
+STOP_CHECK_SECONDS = 5.0
 
 
 def normalize_agent_result(value: Any) -> str:
@@ -160,7 +184,18 @@ class TaskWorker:
             # up its lease. Falling through to the generic branch below would
             # overwrite that with retrying/failed and lose the pending question.
             log.info("[task_worker] task %s is waiting for approval", task["id"])
+        except TaskCancelled:
+            # Annuleren is geen mislukking. De taak staat al op 'cancelled' en
+            # heeft geen lease meer; verifying of retrying proberen zou alleen
+            # maar een "invalid task transition" opleveren en de taak daarna
+            # opnieuw in de wachtrij zetten -- precies wat de gebruiker net
+            # afzette.
+            log.info("[task_worker] task %s was cancelled while it ran", task["id"])
         except Exception as exc:
+            if is_cancelled_race(exc):
+                # Dezelfde situatie, alleen zag de repo het eerder dan de lus.
+                log.info("[task_worker] task %s was cancelled while it ran", task["id"])
+                return True
             target = "retrying" if task["attempt"] < task["max_attempts"] else "failed"
             latest_checkpoint = context.task.get("checkpoint") or {}
             retried = await asyncio.to_thread(
@@ -266,10 +301,38 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             f"Resuming with {len(approved)} approved command(s).",
         )
 
+    # Annuleren moet ONDERWEG aankomen. Zonder dit loopt een taak van een half
+    # uur gewoon door nadat hij is afgezet, en pas aan het eind blijkt dat er
+    # niets meer te schrijven valt. Daarom vraagt de lus dit zelf tussen de
+    # stappen door.
+    #
+    # Goedkoop houden is hier het hele punt: één kolom van één rij (niet
+    # repo.get, die haalt ook alle steps, approvals en events op), en hoogstens
+    # eens per STOP_CHECK_SECONDS echt naar de database. De agent-lus mag dit
+    # dus elke stap aanroepen zonder de database te belasten.
+    laatste_check: dict[str, Any] = {"tijd": 0.0, "gestopt": False}
+
+    async def should_stop() -> bool:
+        nu = time.monotonic()
+        if laatste_check["tijd"] and nu - laatste_check["tijd"] < STOP_CHECK_SECONDS:
+            return bool(laatste_check["gestopt"])
+        laatste_check["tijd"] = nu
+        try:
+            rows = await asyncio.to_thread(
+                lambda: context.repo._db().table("core_tasks")
+                .select("status").eq("id", task["id"]).limit(1).execute().data
+            )
+        except Exception as exc:  # noqa: BLE001 — een hapering mag niets afbreken
+            log.debug("[task_worker] stop-check skipped: %s", exc)
+            return bool(laatste_check["gestopt"])
+        laatste_check["gestopt"] = bool(rows) and (rows[0] or {}).get("status") == "cancelled"
+        return bool(laatste_check["gestopt"])
+
     try:
         output = await run_agent_loop(
             request_text, task["id"], on_event, approved,
             read_only=task.get("execution_mode") == "read",
+            should_stop=should_stop,
         )
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})
@@ -301,6 +364,12 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
                 "metadata": {"command": pause.command, "reason": pause.reason},
             },
         )
+        raise
+    except TaskCancelled:
+        # Afgebroken, niet mislukt. Een stap op 'failed' zou bij een volgende
+        # poging ook nog eens door reset_steps_for_retry op pending gezet
+        # worden, alsof er niets aan de hand was.
+        await asyncio.to_thread(context.repo.update_step, plan["id"], "cancelled")
         raise
     except Exception as exc:
         await asyncio.to_thread(
@@ -361,6 +430,157 @@ async def task_manage_handler(task: dict[str, Any], context: TaskContext) -> dic
     return output
 
 
+# --- De lus die de VPS draait -------------------------------------------------
+#
+# Idle backoff.
+#
+# Dit sliep een vlakke 2s zodra er niets te claimen viel, dus één
+# claim_next_core_task per twee seconden, voor altijd. Gemeten 2026-08-19 in
+# Supabase's edge logs: 1565 aanroepen in één uur -- meer dan al het andere
+# verkeer naar de database bij elkaar (de nummer twee stond op 172).
+#
+# claim_next_core_task neemt een row lock. Dat 26x per minuut doen tegen een
+# Nano-tier Postgres is wat de ShareLock-waits en statement timeouts in de
+# postgres-logs opleverde, en als de database stokt, stokt auth mee -- daarom
+# kon Luka steeds niet inloggen terwijl Supabase én de VPS er van buiten gezond
+# uitzagen. Dat waren ze ook: AXE verhongerde zijn eigen database.
+#
+# Terugzakken tijdens stilte kost niets wat ertoe doet -- er is per definitie
+# geen werk -- en zodra er wél iets is, staat de vertraging weer op 2s.
+IDLE_MIN, IDLE_MAX = 2, 30
+
+# Sinds er meer dan één slot draait, geldt die meting dubbel: K slots die
+# allemaal om de 30s pollen zijn K keer zoveel lockverkeer op een stille bak,
+# en dat is precies wat hierboven de database omver duwde. Daarom pollt alleen
+# slot 0 (de verkenner) op het snelle tempo; de andere slots liggen stil op
+# SLEEPING_SECONDS en gaan pas mee in het snelle tempo nadat ze zélf iets
+# geclaimd hebben. Ze hoeven ook niet te pollen om werk op tijd te zien: wie
+# iets claimt port de rest meteen wakker (WorkSignal). Het lange interval is
+# alleen het vangnet voor het geval de verkenner zelf een taak van een half uur
+# draait en dus even niemand kijkt.
+SLEEPING_SECONDS = 120
+
+
+class WorkSignal:
+    """Het portje van het slot dat werk vond naar de slapende slots.
+
+    Eén Event per slot, want met één gedeelde Event weet niemand wie hem mag
+    wissen en blijft er altijd iemand achter.
+    """
+
+    def __init__(self, count: int):
+        self._events = [asyncio.Event() for _ in range(max(1, count))]
+
+    def wake_others(self, index: int) -> None:
+        for i, event in enumerate(self._events):
+            if i != index:
+                event.set()
+
+    async def wait(self, index: int) -> None:
+        event = self._events[index]
+        await event.wait()
+        event.clear()
+
+
+async def _idle(
+    signal: WorkSignal | None,
+    index: int,
+    seconds: float,
+    sleep: Callable[[float], Awaitable[None]],
+) -> None:
+    """Wacht `seconds`, maar kom meteen terug als een ander slot werk vond."""
+    if signal is None:
+        await sleep(seconds)
+        return
+    tick = asyncio.ensure_future(sleep(seconds))
+    poke = asyncio.ensure_future(signal.wait(index))
+    try:
+        await asyncio.wait({tick, poke}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for pending in (tick, poke):
+            if not pending.done():
+                pending.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await pending
+
+
+async def run_slot(
+    worker: TaskWorker,
+    *,
+    scout: bool = True,
+    signal: WorkSignal | None = None,
+    index: int = 0,
+    stop: Callable[[], bool] | None = None,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    """Eén claim-lus. Blijft claimen en draaien tot `stop()` True zegt."""
+    # Gevonden live 2026-08-17: de 15s postgrest-timeout maakt van een
+    # voorbijgaande Supabase-hik tijdens claim() een *verwachte*, gewone
+    # gebeurtenis -- maar niets ving hem op, dus elke keer ging het hele proces
+    # eraan. systemd herstartte in een strakke lus (69 herstarts in enkele
+    # minuten) in plaats van dat de worker het een tik later nog eens probeerde.
+    # Een gecrashte worker betekent bovendien dat geen enkele duurzame taak --
+    # ook het werk dat chat uitbesteedt -- opgepakt wordt tot de volgende start.
+    consecutive_errors = 0
+    ceiling = IDLE_MAX if scout else SLEEPING_SECONDS
+    idle_delay: float = IDLE_MIN if scout else ceiling
+    while stop is None or not stop():
+        try:
+            worked = await worker.run_once()
+        except Exception as exc:
+            consecutive_errors += 1
+            log.error(
+                f"[task_worker] run_once failed on {worker.worker_id} "
+                f"(consecutive={consecutive_errors}): {exc}"
+            )
+            # Verder terugzakken bij aanhoudende fouten (Supabase echt plat)
+            # in plaats van er elke 2s tegenaan te blijven beuken.
+            await sleep(min(2 * consecutive_errors, IDLE_MAX))
+            continue
+        consecutive_errors = 0
+        if worked:
+            idle_delay = IDLE_MIN
+            if signal is not None:
+                # Er was werk, dus er is waarschijnlijk meer. De slapers hoeven
+                # niet tot hun volgende ronde te wachten.
+                signal.wake_others(index)
+            continue
+        await _idle(signal, index, idle_delay, sleep)
+        idle_delay = ceiling if idle_delay >= IDLE_MAX else min(idle_delay * 2, IDLE_MAX)
+
+
+async def run_slots(
+    repo: TaskRepository,
+    handlers: dict[str, TaskHandler],
+    *,
+    concurrency: int | None = None,
+    lease_seconds: int = 90,
+    stop: Callable[[], bool] | None = None,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    """K onafhankelijke claim-lussen in één proces.
+
+    Hiervoor bouwde run_forever één TaskWorker en await'te run_once() in een
+    lus. Drie taken die de app tegelijk uitzette, toonden "3 agents running"
+    terwijl ze op de server keurig achter elkaar stonden te wachten: een taak
+    van dertig minuten hield alles erachter tegen. Elk slot heeft zijn eigen
+    worker_id ("<host>:slot-N"), zodat lease en heartbeat per taak blijven
+    kloppen.
+    """
+    count = concurrency if concurrency is not None else int(os.environ.get("AXE_TASK_CONCURRENCY", "3"))
+    count = max(1, count)
+    host = socket.gethostname()
+    signal = WorkSignal(count)
+    workers = [
+        TaskWorker(repo, handlers, worker_id=f"{host}:slot-{n}", lease_seconds=lease_seconds)
+        for n in range(count)
+    ]
+    await asyncio.gather(*[
+        run_slot(worker, scout=(n == 0), signal=signal, index=n, stop=stop, sleep=sleep)
+        for n, worker in enumerate(workers)
+    ])
+
+
 async def run_forever() -> None:
     from dotenv import load_dotenv
     from supabase import create_client
@@ -374,53 +594,11 @@ async def run_forever() -> None:
         client.options.postgrest_client_timeout = 15
         return client
 
-    worker = TaskWorker(
+    await run_slots(
         TaskRepository(db),
         {"agentic": agentic_handler, "task_manage": task_manage_handler},
         lease_seconds=int(os.environ.get("TASK_LEASE_SECONDS", "90")),
     )
-    # Found live 2026-08-17: db()'s 15s postgrest timeout makes a transient
-    # Supabase hiccup during claim() an *expected*, routine event — but
-    # nothing here caught it, so every single occurrence killed the whole
-    # process. systemd restarted it in a tight loop (69 restarts observed in
-    # minutes) instead of the worker just trying again next tick. A crashed
-    # worker also means no durable task — including chat's own delegated
-    # work — ever gets picked up until the next restart lands.
-    consecutive_errors = 0
-    # Idle backoff.
-    #
-    # This slept a flat 2s whenever there was nothing to claim, which means one
-    # claim_next_core_task every two seconds forever. Measured 2026-08-19 in
-    # Supabase's edge logs: 1565 calls in a single hour -- more than every other
-    # request to the whole database combined (the next biggest was 172).
-    #
-    # claim_next_core_task takes a row lock. Doing that 26x a minute against a
-    # Nano-tier Postgres is what produced the ShareLock waits and statement
-    # timeouts in the postgres logs, and when the database stalls so does auth,
-    # which is why Luka kept being unable to sign in while both Supabase and the
-    # VPS looked healthy from outside. They were: AXE was starving its own
-    # database.
-    #
-    # Backing off while idle costs nothing that matters -- there is by
-    # definition no work waiting -- and the moment a task appears the delay
-    # resets to 2s, so a queued task is still picked up as fast as before.
-    idle_delay = 2
-    IDLE_MIN, IDLE_MAX = 2, 30
-    while True:
-        try:
-            worked = await worker.run_once()
-            consecutive_errors = 0
-            if worked:
-                idle_delay = IDLE_MIN
-            else:
-                await asyncio.sleep(idle_delay)
-                idle_delay = min(idle_delay * 2, IDLE_MAX)
-        except Exception as exc:
-            consecutive_errors += 1
-            log.error(f"[task_worker] run_once failed (consecutive={consecutive_errors}): {exc}")
-            # Back off further on sustained failure (e.g. Supabase actually
-            # down) instead of hammering it every 2s, capped at 30s.
-            await asyncio.sleep(min(2 * consecutive_errors, 30))
 
 
 if __name__ == "__main__":
