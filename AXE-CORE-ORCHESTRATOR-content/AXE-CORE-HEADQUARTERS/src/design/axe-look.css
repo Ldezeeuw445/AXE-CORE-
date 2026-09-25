@@ -1272,8 +1272,21 @@ html:root[data-look],
   background: none !important;
   background-color: transparent !important;
   border-bottom: 0 !important;
-  height: calc(66px + env(safe-area-inset-top)) !important;
-  min-height: calc(66px + env(safe-area-inset-top)) !important;
+  height: calc(var(--axe-kop-h) + env(safe-area-inset-top)) !important;
+  min-height: calc(var(--axe-kop-h) + env(safe-area-inset-top)) !important;
+}
+
+/* De hoogte van de kopregel staat op EEN plek.
+ *
+ * Hij stond op drie: 48px als inline-stijl in TopNav.tsx (dood, want de regel
+ * hierboven overschreef hem met !important), 66px hier, en 16px als losse
+ * `top` onder de view-balk die daar niet mee meerekende. Drie getallen voor
+ * een balk waar alles op dezelfde lijn hoort te liggen -- dat liep uit elkaar
+ * zodra er een van veranderde, en dat is ook gebeurd.
+ *
+ * Nu: dit token is de balk. Wie erop wil liggen rekent zichzelf uit. */
+:root[data-look] {
+  --axe-kop-h: 66px;
 }
 
 /* ── Geen eigen balk: de kopregel LIGT op de vensterbalk ───────────────
@@ -1513,7 +1526,20 @@ html:root[data-look],
    flow van welke pagina er ook open staat. */
 :root[data-look] .axe-viewctl {
   position: fixed;
-  top: 16px;
+  /* Op het HART van de kopregel, niet op een geraden 16px.
+   *
+   * `.axe-topbar > *` zet elk kind op 34px, dus alles in die balk ligt op
+   * hartlijn 33 (bij een balk van 66). De pil is ~45px hoog en stond op
+   * top:16, dus op hartlijn 38: vijf pixels lager dan de statusregel links en
+   * de klok rechts, met 5px lucht onder zich tegen 16px erboven. Zo hangt hij
+   * aan de onderrand en steekt hij de inhoud in -- "de pil valt onder de top
+   * bar", precies zoals gemeld.
+   *
+   * De hoogte wordt gemeten (AxeShellChrome, --axe-viewctl-h) omdat ze
+   * varieert: op mobiel vallen de labels weg en de knoppen clampen mee met de
+   * vensterbreedte. De 44px-terugval is alleen voor het ene frame voor de
+   * eerste meting. */
+  top: calc(env(safe-area-inset-top, 0px) + (var(--axe-kop-h, 66px) - var(--axe-viewctl-h, 44px)) / 2);
   left: 50%;
   right: auto;
   transform: translateX(-50%);
@@ -1534,6 +1560,9 @@ html:root[data-look],
    safe-area zette de wereldschakelaar in de statusregel, boven de plaat uit. */
 @media (max-width: 767px) {
   :root[data-look] .axe-viewctl {
+    /* Op de telefoon is er geen kopregel om op te liggen: daar hangt hij onder
+       de statusbalk, binnen de glasplaat-rand. Vier pixels lager dan de
+       desktop-hartlijn, want daar staat geen balk omheen. */
     top: calc(env(safe-area-inset-top, 0px) + 20px);
   }
 }

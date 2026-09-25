@@ -169,7 +169,36 @@ export function AxeShellChrome() {
     let midden: Element | null = null;
     const meetMidden = () => {
       midden = document.querySelector('.axe-viewctl');
-      const b = midden ? Math.ceil(midden.getBoundingClientRect().width) + 24 : 0;
+      const pil = midden ? midden.getBoundingClientRect() : null;
+
+      /* ── De hoogte van de balk, zodat hij op het hart van de kopregel ligt
+       * ────────────────────────────────────────────────────────────────────
+       * `.axe-topbar > *` zet elk kind op 34px hoog; in een kopbalk van 66px
+       * liggen die dus op hartlijn 33. De view-balk is ~45px hoog en stond
+       * hard op `top: 16px`, dus op hartlijn 38 -- vijf pixels lager dan al
+       * het andere in die balk, met nog maar 5px lucht onder zich. Dat leest
+       * als "de pil zakt uit de balk", en dat is precies wat het was.
+       *
+       * De hoogte is niet te raden: hij hangt af van de labels (Awareness
+       * verdwijnt op mobiel) en van de vensterbreedte (de knoppen clampen).
+       * Meten dus, en de CSS rekent het hart er zelf uit. */
+      wortel.style.setProperty('--axe-viewctl-h', `${pil ? Math.ceil(pil.height) : 0}px`);
+
+      /* ── Het gat in de kopbalk, op de plek waar de pil ECHT ligt ─────────
+       * Dit was `breedte + 24`, als los blokje in de flex-rij. Maar de pil
+       * ligt `fixed` en centreert op het SCHERM, terwijl het blokje landt waar
+       * flexbox het neerzet -- tussen links en rechts. Die twee vallen alleen
+       * samen als de groepen ernaast even breed zijn, en dat zijn ze niet
+       * (311px links, 592px rechts): het gat lag 68px naast de pil.
+       *
+       * Gemeten op 1900px botste er niets, dus het bleef onopgemerkt; onder
+       * ~1750px schuift de klokgroep er wel degelijk onder. Daarom reserveren
+       * we nu tot waar de pil daadwerkelijk EINDIGT, gerekend vanaf de plek
+       * waar dit blokje in de rij begint. Eén getal, altijd kloppend, ook als
+       * het linkerslot vol loopt. */
+      const gat = document.querySelector('.axe-topbar-midden');
+      const begin = gat ? gat.getBoundingClientRect().left : 0;
+      const b = pil ? Math.max(0, Math.ceil(pil.right + 12 - begin)) : 0;
       wortel.style.setProperty('--axe-viewctl-b', `${b}px`);
 
       /* Corrective round 4, Fix B: waar de balk zelf ophoudt, zodat Neural en
@@ -180,7 +209,7 @@ export function AxeShellChrome() {
        * vanaf top:16px, dus rond de 57px). Gemeten in plaats van geraden
        * betekent ook dat dit blijft kloppen als de balk ooit van hoogte
        * verandert (Awareness-label weg op mobiel, een vijfde weergave, etc). */
-      const onder = midden ? Math.ceil(midden.getBoundingClientRect().bottom) + 8 : 64;
+      const onder = pil ? Math.ceil(pil.bottom) + 8 : 64;
       wortel.style.setProperty('--axe-viewctl-onder', `${onder}px`);
     };
     meetMiddenRef.current = meetMidden;
@@ -313,6 +342,7 @@ export function AxeShellChrome() {
       }
       domObs?.disconnect();
       wortel.style.removeProperty('--axe-viewctl-b');
+      wortel.style.removeProperty('--axe-viewctl-h');
       wortel.style.removeProperty('--axe-viewctl-onder');
       delete wortel.dataset.railL;
       delete wortel.dataset.railR;
