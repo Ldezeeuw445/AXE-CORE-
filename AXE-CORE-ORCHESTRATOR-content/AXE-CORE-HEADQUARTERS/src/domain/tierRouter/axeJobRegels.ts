@@ -18,6 +18,8 @@ export interface AxeJob {
   summary?: string;
   taskId?: string;
   sourceText: string;
+  /** Wat de agent nu doet, in gewone taal (uit core_task_events). */
+  stappen?: string[];
 }
 
 export type StemlusStand = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';

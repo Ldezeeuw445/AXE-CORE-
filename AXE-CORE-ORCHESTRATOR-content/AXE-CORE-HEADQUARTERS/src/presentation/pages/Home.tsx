@@ -5,6 +5,7 @@ import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
+import { AgentVensters } from '@/presentation/components/axe-core/AgentVensters';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
@@ -233,6 +234,8 @@ export default function Home() {
                   zwart, maar slaat dicht op een lichte plaat en dan verdwijnt
                   de vorm in de gloed. Beide blijven bestaan. */}
               {opPlaat ? <AxeCoreSphere /> : <SphereStage status={coreStatus} />}
+              {/* Wie AXE nu aan het werk heeft, in gewone taal, rond de core. */}
+              <AgentVensters />
             </div>
           {/* De drie weergaven vullen het HELE vak, niet alleen het stuk boven
               de chatplaat.

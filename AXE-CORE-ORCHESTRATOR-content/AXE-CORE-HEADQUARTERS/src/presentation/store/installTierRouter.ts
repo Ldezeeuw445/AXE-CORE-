@@ -52,6 +52,7 @@ import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
 import { planBeurt, type PlanModel } from '@/application/tierRouter/planBeurt';
 import { PLAN_GROQ_MODEL, moetPlannen, type BeurtPlan } from '@/domain/tierRouter/beurtPlan';
 import { lopendeJobs } from '@/presentation/store/axeJobStore';
+import { stappenUit } from '@/domain/tierRouter/agentVenster';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { beurtRegel, leesBeurt, markBeurt, startBeurtIndienNodig } from '@/domain/beurtKlok';
 
@@ -347,6 +348,12 @@ async function monitorTier3(job: AxeJob): Promise<void> {
     while (true) {
       const snapshot = await getDurableTask(taskId);
       const { status } = snapshot.task;
+      // Voor het venster rond de core: wat doet de agent nu, in gewone taal.
+      const stappen = stappenUit(snapshot.events.map((e) => e.message));
+      const huidig = useAxeJobStore.getState().jobs.find((j) => j.id === job.id);
+      if (stappen.join('\n') !== (huidig?.stappen ?? []).join('\n')) {
+        useAxeJobStore.getState().patch(job.id, { stappen });
+      }
       if (status === 'waiting_approval') {
         const vraag = snapshot.approvals.find((a) => a.status === 'pending');
         const sleutel = vraag?.id ?? 'onbekend';
