@@ -185,10 +185,12 @@ export async function openRealtimeScribe(
   };
 
   socket.onclose = (event) => {
-    void cleanupAudio();
-    if (!closing) {
-      handlers.onClosed?.(event.code, event.reason || 'connection closed');
-    }
+    void (async () => {
+      await cleanupAudio();
+      if (!closing) {
+        handlers.onClosed?.(event.code, event.reason || 'connection closed');
+      }
+    })();
   };
 
   socket.onerror = () => {
