@@ -129,6 +129,16 @@ export function installElevenRealtimeVoice(): void {
   useVoiceStore.subscribe((state, previous) => {
     if (previous.voiceStatus === 'speaking' && state.voiceStatus !== 'speaking') {
       lastSpeechEndedAt = Date.now();
+      // Normaal einde van AXE-spraak in realtime: als Luka niet al aan het
+      // inbreken is (dan staat er transcript), mag een wachtend job-resultaat
+      // nu direct als volgende zin komen.
+      if (
+        realtimeActive &&
+        state.voiceStatus === 'listening' &&
+        !state.transcript.trim()
+      ) {
+        queueMicrotask(flushAxeSpraakRij);
+      }
     }
     if (!realtimeActive) return;
     if (state.voiceStatus === 'idle' && previous.voiceStatus !== 'idle') {
