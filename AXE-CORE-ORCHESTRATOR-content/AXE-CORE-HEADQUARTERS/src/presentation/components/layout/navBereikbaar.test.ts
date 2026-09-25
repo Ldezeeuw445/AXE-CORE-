@@ -22,6 +22,8 @@ const NAV = 'src/presentation/components/layout/BottomNav.tsx';
  * te laten verdwijnen -- en dan bewaakt deze test niets meer.
  */
 const BEWUST_VERBORGEN: Record<string, string> = {
+  '/device': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
+  '/lock': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
   '/': 'Home heeft zijn eigen icoon, staat als eerste in leftItems',
   '/mobile': 'Alleen voor het telefoonoppervlak',
   '/login': 'Voor wie niet ingelogd is; dan is er geen balk',

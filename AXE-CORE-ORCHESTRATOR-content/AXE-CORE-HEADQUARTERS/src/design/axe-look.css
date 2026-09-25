@@ -1736,8 +1736,11 @@ html:root[data-look],
      iconen zonder blok. De balk mag liever horizontaal schuiven (dat kon hij
      al) dan dat de knoppen zichzelf wegdrukken. */
   flex: 1 1 auto !important;
-  min-width: 44px;
-  min-height: 46px;
+  /* 38 en niet 44: 26 tabs in de band van 1326px (venster 1900) kwamen met 44
+     op 1432px uit -- de rij liep er aan beide kanten af (25 sep). Met 38 past
+     hij, en flex rekt ze weer op tot de band vol is. */
+  min-width: 38px;
+  min-height: 41px;
   max-width: 76px;
   aspect-ratio: 48 / 52;
   height: auto !important;

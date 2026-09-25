@@ -7,7 +7,7 @@
  */
 import type { CSSProperties, ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { Settings, User } from 'lucide-react';
+import { Lock, Settings, Smartphone, User } from 'lucide-react';
 import { cn } from '@/shared/utils';
 
 /* ── Inhoudsruimte ──────────────────────────────────────────────────────── */
@@ -145,7 +145,6 @@ export function SchuifBalk({
   groepen: SchuifGroep[];
   className?: string;
 }) {
-  const navigeer = useNavigate();
 
   return (
     <div className={cn('axe-schuifbalk', className)}>
@@ -171,17 +170,34 @@ export function SchuifBalk({
             </div>
           ))}
         </div>
-        <div className="axe-schuifbalk-voet">
-          <button type="button" className="axe-row !py-1.5" onClick={() => navigeer('/settings')}>
-            <span className="axe-glyph"><Settings className="w-3.5 h-3.5" /></span>
-            <span className="axe-row__text"><b>Settings</b></span>
-          </button>
-          <button type="button" className="axe-row !py-1.5" onClick={() => navigeer('/settings')}>
-            <span className="axe-glyph"><User className="w-3.5 h-3.5" /></span>
-            <span className="axe-row__text"><b>Profile</b></span>
-          </button>
-        </div>
+        <SchuifVoet />
       </div>
+    </div>
+  );
+}
+
+/**
+ * De voet van elke lade: wat niet in de onderbalk hoort maar wel altijd
+ * bereikbaar moet zijn. Device Manager en Lock Screen komen van de telefoon-
+ * versie; op de desktop stonden ze in de onderbalk en duwden die over de rand
+ * (25 sep). Hier staan ze bij Settings, in elke lade dezelfde.
+ */
+export function SchuifVoet() {
+  const navigeer = useNavigate();
+  const items = [
+    { pad: '/device', label: 'Device Manager', icoon: <Smartphone className="w-3.5 h-3.5" /> },
+    { pad: '/lock', label: 'Lock Screen', icoon: <Lock className="w-3.5 h-3.5" /> },
+    { pad: '/settings', label: 'Settings', icoon: <Settings className="w-3.5 h-3.5" /> },
+    { pad: '/settings', label: 'Profile', icoon: <User className="w-3.5 h-3.5" /> },
+  ];
+  return (
+    <div className="axe-schuifbalk-voet">
+      {items.map((i) => (
+        <button key={i.label} type="button" className="axe-row !py-1.5" onClick={() => navigeer(i.pad)}>
+          <span className="axe-glyph">{i.icoon}</span>
+          <span className="axe-row__text"><b>{i.label}</b></span>
+        </button>
+      ))}
     </div>
   );
 }

@@ -36,7 +36,7 @@ const wacht = (ms: number) => new Promise(r => setTimeout(r, ms));
 async function wachtOpRun(app: string, name: string, sinds: number): Promise<Uitkomst> {
   for (let i = 0; i < 9; i += 1) {
     await wacht(10_000);
-    const runs = await opsCronRuns(app, name, 3).catch(() => []);
+    const runs = await opsCronRuns(app, name, 3).catch((): Awaited<ReturnType<typeof opsCronRuns>> => []);
     const run = runs.find(r => Date.parse(r.started_at) >= sinds - 5_000);
     if (run) {
       const code = run.status_code != null ? `HTTP ${run.status_code}` : 'no HTTP status';
