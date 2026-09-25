@@ -16,7 +16,7 @@ const ACT_RE =
  * zodat "wat vind je van Safari openen?" gewoon gesprek blijft.
  */
 const DIRECT_ACTION_RE =
-  /^(?:(?:hey|hoi|hi)\s+axe[,\s]+)?(?:open|start|launch|sluit|close|klik|click|tik|tap|scroll|type|typ|focus|navigeer|navigate|ga\s+naar|go\s+to|zet\s+.+\s+(?:open|aan|uit)|turn\s+.+\s+(?:on|off)|zoek\s+op|search\s+for)\b/i;
+  /^(?:(?:hey|hoi|hi)\s+axe[,\s]+)?(?:(?:(?:kan|kun|wil|zou)\s+je|(?:can|could|would)\s+you|please)\s+)?(?:open(?:en)?|start(?:en)?|launch|sluit(?:en)?|close|klik(?:ken)?|click|tik(?:ken)?|tap|scroll(?:en)?|type|typ(?:en)?|focus|navigeer|navigate|ga\s+naar|go\s+to|verwijder(?:en)?|delete|maak|create|zet\s+.+\s+(?:open|aan|uit)|turn\s+.+\s+(?:on|off)|zoek\s+op|search\s+for)\b/i;
 
 const TALK_RE =
   /\b(wat\s+vind|what\s+do\s+you\s+think|leg\s+uit|explain|waarom|why|hoe\s+werkt|how\s+does|samenvat|summarize|vertel|tell\s+me|brainstorm)\b/i;
