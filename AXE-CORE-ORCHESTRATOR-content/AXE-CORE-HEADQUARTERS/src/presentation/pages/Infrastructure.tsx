@@ -158,7 +158,7 @@ export default function Infrastructure() {
   };
 
   return (
-    <motion.div className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+    <motion.div className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die

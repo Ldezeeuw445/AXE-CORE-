@@ -24,6 +24,8 @@ import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface EveSkill {
@@ -262,16 +264,7 @@ function ProviderCard({
   return (
     <motion.div
       layout
-      className="rounded-xl overflow-hidden"
-      style={{
-        /* --surface-bg, niet --bg-surface. Twee tokens die op één letter na
-           gelijk heten en allebei bestaan: het ene is het materiaal van de
-           maatstaf (regel 4), het andere een vlakke kleur. De vaardigheidskaart
-           hierboven stond al op --surface-bg, deze niet, dus lagen er twee
-           materialen in dezelfde kaart. */
-        background: 'var(--surface-bg)',
-        border: `1px solid ${provider.connected ? `${provider.accent}20` : 'rgba(255,255,255,0.06)'}`,
-      }}
+      className="axe-kaart overflow-hidden"
     >
       {/* Header */}
       <div
@@ -457,6 +450,33 @@ export default function EveFramework() {
        alles zich boven in het vak en bleef de onderste helft leeg: gemeten
        47% van 644px. Nu is de pagina een flexkolom -- kop vast, lijst groeit
        mee -- zodat de rasterruimte de hoogte is die er is. */
+    <>
+    <TabRail kant="links">
+      <SchuifBalk
+        groepen={[
+          {
+            titel: 'Providers',
+            items: providers.map((p) => ({
+              id: p.id,
+              label: `${p.name} · ${p.skills.length} skills`,
+              icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.connected ? 'var(--success)' : 'var(--text-muted)' }} />,
+              actief: !!p.expanded,
+              onKies: () => {
+                setProviders(prev => prev.map(x => x.id === p.id ? { ...x, expanded: true } : x));
+                window.setTimeout(() => document.getElementById(`axe-eve-${p.id}`)?.firstElementChild?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+              },
+            })),
+          },
+          {
+            titel: 'Actions',
+            items: [
+              { id: 'open', label: 'Expand all', onKies: () => setProviders(prev => prev.map(x => ({ ...x, expanded: true }))) },
+              { id: 'dicht', label: 'Collapse all', onKies: () => setProviders(prev => prev.map(x => ({ ...x, expanded: false }))) },
+            ],
+          },
+        ]}
+      />
+    </TabRail>
     <motion.div
       className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4"
       initial={{ opacity: 0 }}
@@ -490,8 +510,8 @@ export default function EveFramework() {
             Elke kaart houdt nu zijn eigen hoogte. */}
         <div className={`${LIST_GRID} items-start`}>
           {providers.map(provider => (
+            <div key={provider.id} id={`axe-eve-${provider.id}`} className="contents">
             <ProviderCard
-              key={provider.id}
               provider={provider}
               running={running}
               results={results}
@@ -502,10 +522,12 @@ export default function EveFramework() {
               onToggleSkill={toggleSkill}
               onRunSkill={runSkill}
             />
+            </div>
           ))}
         </div>
       </div>
     </motion.div>
+    </>
   );
 }
 

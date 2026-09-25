@@ -5,6 +5,8 @@ import { onlineDevices, type Device } from '@/infrastructure/gateways/computerRe
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { voorkeurMachine, kiesVoorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
 import { multiMonitorAvailable, openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 
 type ComputerTask = {
   id: string;
@@ -65,7 +67,36 @@ export default function ComputerUse() {
   }
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto p-4 md:p-6">
+    <>
+    <TabRail kant="links">
+      <SchuifBalk
+        groepen={[
+          {
+            titel: `Machine · ${devices.length} online`,
+            items: [
+              { id: 'auto', label: 'Automatic', actief: preferred === null, onKies: () => void choose(null) },
+              ...devices.map((d) => ({
+                id: d.id,
+                label: d.label,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: 'var(--success)' }} />,
+                actief: preferred === d.id,
+                onKies: () => void choose(d.id),
+              })),
+            ],
+          },
+          {
+            titel: 'Actions',
+            items: [
+              { id: 'refresh', label: 'Refresh', icoon: <RefreshCw size={13} />, onKies: () => void refresh() },
+              ...(multiMonitorAvailable()
+                ? [{ id: 'compact', label: 'Compact mode', icoon: <Cpu size={13} />, onKies: () => void openPersonalComputerUse() }]
+                : []),
+            ],
+          },
+        ]}
+      />
+    </TabRail>
+    <div className="axe-tabruimte h-full min-h-0 overflow-y-auto pt-4 pb-6">
       <PageHeader
         title="Personal Computer Use"
         description="Live hands on your Macs — device-bound, audited and approval-gated"
@@ -94,7 +125,7 @@ export default function ComputerUse() {
         <StatPill label="Guard" value="Approval gated" />
       </div>
 
-      <section className="grid gap-3 md:grid-cols-2">
+      <section className="axe-kaart-raster">
         {devices.map(device => {
           const selected = preferred === device.id;
           return (
@@ -102,12 +133,8 @@ export default function ComputerUse() {
               key={device.id}
               type="button"
               onClick={() => void choose(selected ? null : device.id)}
-              className={
-                'group rounded-2xl border p-4 text-left transition ' +
-                (selected
-                  ? 'border-cyan-400/40 bg-cyan-400/[0.07]'
-                  : 'border-white/10 bg-black/30 hover:border-white/20 hover:bg-white/[0.03]')
-              }
+              className="axe-kaart group p-4 text-left transition"
+              style={{ outline: selected ? '1px solid var(--tint-line)' : undefined, outlineOffset: -1 }}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -143,7 +170,7 @@ export default function ComputerUse() {
         )}
       </section>
 
-      <section className="mt-5 rounded-2xl border border-white/10 bg-black/30">
+      <section className="axe-kaart mt-5">
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <div>
             <h2 className="text-sm font-medium text-zinc-100">Activity</h2>
@@ -185,5 +212,6 @@ export default function ComputerUse() {
         {lastRefresh ? `Live refresh · ${lastRefresh.toLocaleTimeString()}` : 'Connecting…'}
       </div>
     </div>
+    </>
   );
 }

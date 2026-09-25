@@ -38,6 +38,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, X, Check, ChevronUp, ChevronDown } from 'lucide-react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import {
   alleHosts, maakHost, geldigWsAdres, metAdres, isKlaar,
@@ -94,6 +96,26 @@ export default function TerminalsPage() {
     <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: `Machines · ${hosts.filter(isKlaar).length}/${hosts.length} ready`,
+              items: hosts.slice(0, VAKKEN).map((h) => ({
+                id: h.id,
+                label: h.naam,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: isKlaar(h) ? 'var(--success)' : 'var(--text-muted)' }} />,
+                onKies: () => document.getElementById(`axe-term-${h.id}`)?.firstElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+              })),
+            },
+            {
+              titel: 'Actions',
+              items: [{ id: 'add', label: 'Add machine', icoon: <Plus size={13} />, onKies: () => setToevoegen(true) }],
+            },
+          ]}
+        />
+      </TabRail>
+
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
         style={{ borderBottom: '1px solid var(--tint-line)' }}>
         <span className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -132,12 +154,13 @@ export default function TerminalsPage() {
           terminals van 200px naast elkaar zijn vier onleesbare terminals. */}
       <div className="axe-termraster flex-1 min-h-0 overflow-auto p-2">
         {hosts.slice(0, VAKKEN).map(host => (
-          <MachinePaneel
-            key={host.id}
-            host={host}
-            opAdres={url => bewaarAdres(host.id, url)}
-            opWeg={host.ingebouwd ? undefined : () => bewaarEigen(eigen.filter(h => h.id !== host.id))}
-          />
+          <div key={host.id} id={`axe-term-${host.id}`} className="contents">
+            <MachinePaneel
+              host={host}
+              opAdres={url => bewaarAdres(host.id, url)}
+              opWeg={host.ingebouwd ? undefined : () => bewaarEigen(eigen.filter(h => h.id !== host.id))}
+            />
+          </div>
         ))}
         {/* De lege plekken blijven staan in plaats van het raster te laten
             inklappen: acht vakken is de indeling, en een leeg vak zegt "hier

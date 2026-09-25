@@ -736,6 +736,27 @@ html:root[data-look],
   opacity: 1;
 }
 
+/* Een lade zonder inhoud gaat niet open (25 sep). Een tab die rechts (of
+   links) niets eigens heeft, liet bij de rand een grote lege zwarte lade
+   zien. Leeg = het vakje van de tab is leeg EN er staat geen standaard-
+   inhoud (die heeft alleen Home). Dan ook geen randknop en geen streepje. */
+:root[data-look] .axe-shell aside:has(> #axe-rail-links:empty):not(:has(.axe-rail-standaard)),
+:root[data-look] .axe-shell aside:has(> #axe-rail-rechts:empty):not(:has(.axe-rail-standaard)),
+:root[data-look] .axe-shell [data-rail='right']:has(#axe-rail-rechts:empty):not(:has(.axe-rail-standaard)) {
+  transform: translateX(calc(-100% - 40px)) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+:root[data-look] .axe-shell [data-rail='right']:has(#axe-rail-rechts:empty):not(:has(.axe-rail-standaard)) {
+  transform: translateX(calc(100% + 40px)) !important;
+}
+:root[data-look]:has(.axe-shell aside #axe-rail-links:empty):not(:has(.axe-shell .axe-rail-standaard)):not(:has(.axe-browser-lade)) .axe-railtoggle--l,
+:root[data-look]:has(.axe-shell aside #axe-rail-links:empty):not(:has(.axe-shell .axe-rail-standaard)):not(:has(.axe-browser-lade)) .axe-railhint--l,
+:root[data-look]:has(.axe-shell #axe-rail-rechts:empty):not(:has(.axe-shell [data-rail='right'] .axe-rail-standaard)) .axe-railtoggle--r,
+:root[data-look]:has(.axe-shell #axe-rail-rechts:empty):not(:has(.axe-shell [data-rail='right'] .axe-rail-standaard)) .axe-railhint--r {
+  display: none !important;
+}
+
 /* `RightPanel.tsx`'s own panel, EXPLICITLY pinned open via its own chevron
  * toggle (`data-rail-vast='ja'`) rather than the mouse-near-the-edge gesture
  * every other `[data-rail]` still uses. Same visible result as the hover
@@ -993,15 +1014,22 @@ html:root[data-look],
   --text-secondary: rgba(255, 255, 255, 0.78);
   --text-muted: rgba(255, 255, 255, 0.6);
 
-  --axe-kaart-vlak: #17181C;
-  --axe-kaart-lijn: rgba(255, 255, 255, 0.10);
-  --axe-kaart-lijn-boven: rgba(255, 255, 255, 0.18);
-  --axe-kaart-hoek: 16px;
-  /* Dunne lichte rand + bovenrand iets helderder + zachte donkere schaduw.
-     Geen cyaan gloed. Eén bron; --axe-kaart-zweef leest hieruit. */
+  /* ── Het ene kaartmateriaal (Luka, 25 sep) ───────────────────────────
+     Exact het matzwart van de Browser-home (.axe-panel--inset): hetzelfde
+     verloop van bijna-zwart naar zwart, 18px hoek. Daarbij de dunne rand die
+     hij vroeg: 1px wit op lage dekking, bovenkant iets lichter (alsof er licht
+     op valt), en een zachte donkere schaduw eronder. De rand houdt de kaart
+     zichtbaar op een donker bureaublad achter het glas; de schaduw laat hem
+     zweven op licht. Geen gekleurde gloed. Eén bron: elke kaart en de
+     Browser-kaarten zelf lezen hieruit. */
+  --axe-kaart-vlak: linear-gradient(180deg, rgba(23, 23, 23, 0.94), rgba(12, 12, 12, 0.96));
+  --axe-kaart-lijn: rgba(255, 255, 255, 0.07);
+  --axe-kaart-lijn-boven: rgba(255, 255, 255, 0.12);
+  --axe-kaart-hoek: 18px;
   --axe-kaart-schaduw:
-    0 1px 0 var(--axe-kaart-lijn-boven) inset,
-    0 4px 14px rgba(0, 0, 0, 0.42);
+    inset 0 1px 0 var(--axe-kaart-lijn-boven),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 10px 28px -14px rgba(0, 0, 0, 0.6);
   --axe-kaart-zweef: var(--axe-kaart-schaduw);
   --axe-kaart-kolom: 300px;
   --axe-kaart-kolom-ruim: 340px;
@@ -2088,6 +2116,29 @@ html:root[data-look],
   display: none;
 }
 
+/* Alles in de lade staat in DE kaart van de lade (Luka, 25 sep: "inside card
+   erin, nette layout"). Een WidgetCard of Kaart daarbinnen wordt een sectie:
+   geen eigen vlak, rand of schaduw, wel zijn kop. */
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .widget-card,
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-kaart {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-radius: 0 !important;
+}
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .widget-card + .widget-card,
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-kaart + .axe-kaart {
+  border-top: var(--axe-kaart-scheiding) !important;
+  padding-top: 10px !important;
+}
+/* Niets steekt buiten de kaart. */
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf { overflow-x: hidden; }
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf * { max-width: 100%; }
+
 :root[data-look] .axe-browser-vak {
   /* De marges horen hier, niet elders.
      Ik haalde ze weg op de aanname dat .axe-tabruimte om elke pagina ze zou
@@ -2900,7 +2951,10 @@ html:root[data-look],
 }
 /* Een kolom die op md: pas zichtbaar wordt hoort in de rail altijd te tonen --
    de rail zelf beslist al of hij er is. */
-.axe-rail-host .hidden { display: flex !important; }
+/* Alleen wat op kleine schermen verborgen is (`hidden md:flex` e.d.). Stond op
+   ELKE .hidden, en toonde zo ook wat echt verborgen hoort: de ruwe
+   bestandsknop van ThinkThanks, lege weergaven (25 sep). */
+.axe-rail-host .hidden:is([class*="sm:"], [class*="md:"], [class*="lg:"], [class*="xl:"]) { display: flex !important; }
 aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 :root[data-look] .axe-dock {
@@ -6800,3 +6854,47 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 /* Right radial uses an explicit Lucide outline triangle from AppShell. */
 .axe-dok[data-kant="rechts"] .axe-dok-hoek{color:var(--accent-cyan)}
 .axe-dok[data-kant="rechts"] .axe-dok-hoek:hover>svg{filter:drop-shadow(0 0 9px rgba(34,211,238,.55));transform:scale(1.06)}
+
+
+/* De Browser-kaarten zijn de maat, en krijgen nu ook de dunne zweefrand. */
+:root[data-look] .axe-panel--inset {
+  box-shadow: 0 0 0 1px var(--axe-kaart-lijn), var(--axe-kaart-schaduw) !important;
+}
+
+/* Settings → Motoren: losse kaarten naast elkaar, elk zijn eigen hoogte. */
+.axe-motoren-raster {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+.axe-motoren-raster > .axe-kaart { flex: 1 1 360px; max-width: 560px; padding: 16px; }
+
+/* Settings als dashboard (25 sep): de kaarten van een sectie staan naast
+   elkaar, elk zijn eigen hoogte. Wat geen kaart is (een eigen raster zoals
+   de providerkaarten of de motoren) neemt de hele breedte. */
+:root[data-look] .axe-settings .axe-sectie-lijf {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  gap: 12px;
+  align-items: flex-start !important;
+}
+.axe-settings .axe-sectie-lijf > .axe-kaart,
+.axe-settings .axe-sectie-lijf > .widget-card { flex: 1 1 440px; max-width: 100%; min-width: 0; }
+.axe-settings .axe-sectie-lijf > :not(.axe-kaart):not(.widget-card) { flex: 1 1 100%; min-width: 0; }
+/* In een motorkaart: naam + uitleg boven, keuze op volle breedte eronder.
+   Naast elkaar werd de tekst een kolommetje van één woord breed. */
+.axe-motoren-raster .axe-kaart .justify-between:has(> select),
+.axe-motoren-raster .axe-kaart .justify-between:has(> input) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-motoren-raster .axe-kaart .justify-between:has(> select):last-child,
+.axe-motoren-raster .axe-kaart .justify-between:has(> input):last-child { border-bottom: 0; }
+.axe-motoren-raster .axe-kaart .justify-between > select,
+.axe-motoren-raster .axe-kaart .justify-between > input { width: 100% !important; }

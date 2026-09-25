@@ -20,7 +20,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useUIStore } from '@/presentation/store/uiStore';
-import { SchuifVoet } from '@/presentation/components/layout/tabMaatstaf';
+import { LadeKaart } from '@/presentation/components/layout/tabMaatstaf';
 
 const HOST_ID = { links: 'axe-rail-links', rechts: 'axe-rail-rechts' } as const;
 const VAST_SLEUTEL = { links: 'railVastL', rechts: 'railVastR' } as const;
@@ -93,13 +93,6 @@ export function TabRail({ kant, children, vast }: { kant: 'links' | 'rechts'; ch
      zelf te doen, en 8 van de 11 deden het niet (25 sep). Een tab die zelf al
      een SchuifBalk meegeeft, wordt door de CSS plat gemaakt -- geen kaart in
      een kaart. */
-  const lade = (
-    <div className="axe-schuifbalk axe-schuifbalk--rail">
-      <div className="axe-schuifbalk-kaart">
-        <div className="axe-schuifbalk-lijf">{children}</div>
-        {kant === 'links' && <SchuifVoet />}
-      </div>
-    </div>
-  );
+  const lade = <LadeKaart kant={kant}>{children}</LadeKaart>;
   return gastheer ? createPortal(lade, gastheer) : null;
 }

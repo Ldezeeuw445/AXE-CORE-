@@ -15,6 +15,8 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 import AppLogo from '@/presentation/components/apps/AppLogo';
 import AddAppDialog from '@/presentation/components/apps/AddAppDialog';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import {
   PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
 } from '@/presentation/components/ui/AxeUI';
@@ -316,7 +318,36 @@ export default function AppsPage() {
 
   const onlineCount = Object.values(live).filter(s => s === 'online').length;
 
+  const naarApp = (id: string) =>
+    document.getElementById(`axe-app-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
   return (
+    <>
+    <TabRail kant="links">
+      <SchuifBalk
+        groepen={[
+          {
+            titel: 'Apps',
+            items: (apps ?? []).map((app) => {
+              const st = STATE_STYLE[live[app.id] ?? 'unknown'];
+              return {
+                id: app.id,
+                label: `${app.name} · ${st.label}`,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: st.fg }} />,
+                onKies: () => naarApp(app.id),
+              };
+            }),
+          },
+          {
+            titel: 'Actions',
+            items: [
+              { id: 'add', label: 'Add app', icoon: <Plus size={13} />, onKies: () => setAdding(true) },
+              { id: 'refresh', label: 'Refresh', icoon: <RefreshCw size={13} />, onKies: () => void load() },
+            ],
+          },
+        ]}
+      />
+    </TabRail>
     <div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden pt-4">
       <div className="flex-none">
       <PageHeader
@@ -388,6 +419,7 @@ export default function AppsPage() {
               return (
                 <motion.div
                   key={app.id}
+                  id={`axe-app-${app.id}`}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04, duration: 0.25 }}
@@ -655,5 +687,6 @@ export default function AppsPage() {
       )}
       </div>
     </div>
+    </>
   );
 }

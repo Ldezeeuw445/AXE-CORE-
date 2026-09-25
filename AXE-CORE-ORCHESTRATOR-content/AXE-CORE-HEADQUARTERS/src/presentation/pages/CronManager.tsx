@@ -2,7 +2,8 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TabRuimte, Kaart, SectieBlok, KaartRaster } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRuimte, Kaart, SectieBlok, KaartRaster, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { NAAST_CORE, appVan, appMeta as appInfo, type AppId } from '@/domain/apps';
 import { CronTabel, type TabelActies, type KolomTekst } from './cron/CronTabel';
 import { toast } from '@/presentation/components/shared/toast';
@@ -235,6 +236,28 @@ export default function CronManager() {
       className="flex min-h-0 flex-1 flex-col"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
     >
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: 'Apps',
+              items: (['axe_core', ...NAAST_ELKAAR] as AppId[]).map((id) => ({
+                id,
+                label: `${appInfo(id).label} · ${voorApp(id).length}`,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: appInfo(id).kleur }} />,
+                onKies: () => document.getElementById(`axe-cron-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+              })),
+            },
+            {
+              titel: 'Actions',
+              items: [
+                { id: 'new', label: 'New schedule', icoon: <Plus size={13} />, onKies: openNew },
+                { id: 'refresh', label: 'Refresh', icoon: <RefreshCw size={13} />, onKies: () => void load() },
+              ],
+            },
+          ]}
+        />
+      </TabRail>
       <TabRuimte vullen>
       <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
@@ -425,6 +448,7 @@ export default function CronManager() {
         <SectieBlok titel="CRON JOBS">
         <div className="axe-cronvel">
           <CronTabel
+            anker="axe-cron-axe_core"
             titel={appInfo('axe_core').label}
             onderschrift={appInfo('axe_core').blurb}
             kleur={appInfo('axe_core').kleur}
@@ -438,6 +462,7 @@ export default function CronManager() {
             {NAAST_ELKAAR.map(id => (
               <CronTabel
                 key={id}
+                anker={`axe-cron-${id}`}
                 titel={appInfo(id).label}
                 onderschrift={appInfo(id).blurb}
                 kleur={appInfo(id).kleur}

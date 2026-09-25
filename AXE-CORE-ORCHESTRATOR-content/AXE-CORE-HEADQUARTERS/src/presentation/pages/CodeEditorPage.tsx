@@ -1294,7 +1294,7 @@ export default function CodeEditorPage() {
   });
 
   return (
-    <motion.div className="h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <AnimatePresence>
         {paletteOpen && (
           <motion.div className="absolute inset-0 z-50 flex items-start justify-center pt-14"

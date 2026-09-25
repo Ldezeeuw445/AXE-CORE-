@@ -89,7 +89,7 @@ export function BrowserUnifiedSidebar({
   const showInlinePanel = !standalone && activePanel !== 'none';
 
   return (
-    <aside className="w-[240px] flex-shrink-0 flex flex-col py-3 pl-3 pr-1 z-10">
+    <aside className="axe-browser-lade w-[240px] flex-shrink-0 flex flex-col py-3 pl-3 pr-1 z-10">
       <Panel className="h-full flex flex-col gap-3 p-3 min-h-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-2 shrink-0">

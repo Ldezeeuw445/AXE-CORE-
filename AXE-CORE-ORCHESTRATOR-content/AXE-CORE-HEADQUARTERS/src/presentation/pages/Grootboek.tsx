@@ -14,7 +14,8 @@ import { Bot, CalendarClock, Database, HardDrive, Layers, ListTodo, RefreshCw } 
 import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
 import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
-import { AppZuil } from '@/presentation/components/layout/AppZuil';
+import { AppZuil, appGroep } from '@/presentation/components/layout/AppZuil';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { appMeta } from '@/domain/apps';
 import {
@@ -92,6 +93,22 @@ export default function Grootboek() {
       <PlaatSlot slot="rechts">
         <AppZuil actief={app} kies={setApp} />
       </PlaatSlot>
+
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            appGroep(app, setApp),
+            {
+              titel: 'Period',
+              items: VENSTERS.map((v) => ({ id: String(v.uren), label: v.label, actief: uren === v.uren, onKies: () => setUren(v.uren) })),
+            },
+            {
+              titel: 'Source',
+              items: BRONNEN.map((b) => ({ id: b.id, label: b.label, actief: bron === b.id, onKies: () => setBron(b.id) })),
+            },
+          ]}
+        />
+      </TabRail>
 
       <TabRail kant="rechts">
         <div className="axe-paneel">

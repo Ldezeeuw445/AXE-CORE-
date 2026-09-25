@@ -5,7 +5,8 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { TabRuimte, Kaart, StatRij } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRuimte, Kaart, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchedulesBlock } from '@/presentation/pages/controlPlane/SchedulesBlock';
 import { TasksBlock } from '@/presentation/pages/controlPlane/TasksBlock';
 import { useSchedules, useTasks } from '@/presentation/pages/controlPlane/useControlPlaneData';
@@ -44,6 +45,7 @@ export default function ControlPlane() {
   const [tasks, setTasks] = useState<TableRow[]>([]);
   const [events, setEvents] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [soort, setSoort] = useState<ControlPlaneRoute['kind'] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -100,6 +102,23 @@ export default function ControlPlane() {
 
   return (
     <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[{
+            titel: 'Route registry',
+            items: [
+              { id: 'all', label: `All · ${routes.length}`, actief: soort === null, onKies: () => setSoort(null) },
+              ...(['public', 'internal', 'hook', 'integration'] as const).map((k) => ({
+                id: k,
+                label: `${kindLabel(k)} · ${routes.filter(r => r.kind === k).length}`,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: kindColor(k) }} />,
+                actief: soort === k,
+                onKies: () => setSoort(k),
+              })),
+            ],
+          }]}
+        />
+      </TabRail>
       <TabRuimte vullen>
       <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
@@ -147,7 +166,7 @@ export default function ControlPlane() {
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>Loading routes…</p>
             ) : routes.length === 0 ? (
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>No route registry entries found.</p>
-            ) : routes.map(route => (
+            ) : routes.filter(r => !soort || r.kind === soort).map(route => (
               <div key={route.id} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${kindColor(route.kind)}22` }}>
                 <div className="flex items-start justify-between gap-3">
                   <div>

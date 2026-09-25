@@ -28,6 +28,7 @@ import {
 } from '@/domain/replyLanguage';
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { LadeKaart } from '@/presentation/components/layout/tabMaatstaf';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const quickActionIcons: Record<string, React.ComponentType<any>> = {
@@ -600,7 +601,7 @@ export function RightPanel() {
           Doet hij dat, dan verbergt de CSS de standaardinhoud hieronder --
           met :has() op een leeg vakje, dus zonder staat die uit de pas kan lopen. */}
       <div id="axe-rail-rechts" className="axe-rail-host" />
-      {opHome && <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">{content}</div>}
+      {opHome && <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden"><LadeKaart kant="rechts">{content}</LadeKaart></div>}
     </aside>
   );
 }

@@ -121,12 +121,12 @@
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  background: #0B0B0D;
-  border-radius: var(--r-kaart, 18px);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 22px 48px -20px rgba(0, 0, 0, 0.75);
+  /* Hetzelfde matzwarte materiaal als elke kaart (UI-MAATSTAF regel 3, 25 sep).
+     Was een eigen, donkerder vlak met 18px hoek. */
+  background: var(--axe-kaart-vlak, #17181C);
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.10));
+  border-radius: var(--axe-kaart-hoek, 16px);
+  box-shadow: var(--axe-kaart-schaduw);
 }
 .axe-studio-kop {
   display: flex;

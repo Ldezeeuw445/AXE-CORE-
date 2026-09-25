@@ -102,23 +102,14 @@ export default function ObsidianMemory() {
           In de schuifbalk kun je er even goed bij, en de grafiek krijgt de
           hele hoogte -- dat is waar die pagina voor bedoeld is. */}
       <TabRail kant="links">
-        {/* Bottom 1/4 (25%): Notes 50% | System/content 50% — handled inside ObsidianMemoryPanel */}
-        <div
-          className="min-h-0 overflow-hidden"
-          style={{
-            flex: '1 1 0%',
-            height: '25%',
-            maxHeight: '25%',
+        <ObsidianMemoryPanel
+          gestapeld
+          externalSelectedPath={selectedPath}
+          onNotesChanged={(list) => {
+            setNotes(list);
           }}
-        >
-          <ObsidianMemoryPanel
-            externalSelectedPath={selectedPath}
-            onNotesChanged={(list) => {
-              setNotes(list);
-            }}
-            onSelectPath={selectPath}
-          />
-        </div>
+          onSelectPath={selectPath}
+        />
       </TabRail>
     </motion.div>
   );

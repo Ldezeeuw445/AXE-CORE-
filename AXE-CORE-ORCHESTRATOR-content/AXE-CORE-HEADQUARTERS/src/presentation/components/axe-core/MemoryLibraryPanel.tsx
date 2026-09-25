@@ -94,13 +94,8 @@ function Shelf({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-xl p-4 flex flex-col gap-3 text-left w-full transition-transform hover:scale-[1.015] active:scale-[0.99]"
-      style={{
-        background: 'var(--bg-surface)',
-        border: `1px solid ${color}33`,
-        boxShadow: count > 0 ? `0 0 24px ${color}12` : 'none',
-        cursor: onClick ? 'pointer' : 'default',
-      }}
+      className="axe-kaart p-4 flex flex-col gap-3 text-left w-full transition-transform hover:scale-[1.015] active:scale-[0.99]"
+      style={{ cursor: onClick ? 'pointer' : 'default' }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -230,17 +225,8 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         <div className="p-4 sm:p-6 lg:p-8 space-y-5 w-full flex flex-col flex-1 min-h-0">
           <div
-            className="rounded-2xl p-5 lg:p-6 relative overflow-hidden flex-shrink-0"
-            style={{
-              background: flash
-                ? 'linear-gradient(135deg, rgba(167,139,250,0.18), rgba(16,185,129,0.12), rgba(34,211,238,0.1))'
-                : 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(34,211,238,0.06), rgba(139,92,246,0.06))',
-              border: flash
-                ? '1px solid rgba(167,139,250,0.45)'
-                : '1px solid rgba(16,185,129,0.25)',
-              boxShadow: flash ? '0 0 40px rgba(167,139,250,0.2)' : 'none',
-              transition: 'background 0.4s, border 0.4s, box-shadow 0.4s',
-            }}
+            className="axe-kaart p-5 lg:p-6 relative overflow-hidden flex-shrink-0"
+            style={{ outline: flash ? '1px solid rgba(167,139,250,0.45)' : undefined, outlineOffset: -1 }}
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-start gap-3">

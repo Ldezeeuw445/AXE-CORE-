@@ -7,14 +7,14 @@ import { WeekRooster } from './agenda/WeekRooster';
 import { MaandRooster } from './agenda/MaandRooster';
 import { AgendaLijst } from './agenda/AgendaLijst';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
-import { TabRuimte } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRuimte, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster';
 import { CalendarRange, LayoutGrid } from 'lucide-react';
 import { APPS } from '@/domain/apps';
 import { werkAgenda, type AgendaTaak, type AgendaCron } from '@/domain/werkAgenda';
 import { calendarJobs, listDurableTasks, northseaTab, plannerTaken, type CalendarJobItem } from '@/infrastructure/gateways/axeCoreApiService';
 import { agendaVanJobs, filterAgenda, type AppFilter } from '@/domain/grootboek';
-import { AppZuil } from '@/presentation/components/layout/AppZuil';
+import { AppZuil, appGroep } from '@/presentation/components/layout/AppZuil';
 import { northseaAgenda } from '@/domain/northsea/werk';
 import type { NorthseaAgendaItem } from '@/domain/northsea/tabs/typen';
 
@@ -234,6 +234,21 @@ export default function CalendarPage() {
       {/* Maand of week, links in de band naast de composer -- net als de
           sub-tabs van de trading-desk, en met dezelfde component. Het is
           dezelfde handeling: kiezen wat je in het midden ziet. */}
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: 'View',
+              items: [
+                { id: 'maand', label: 'Month', actief: weergave === 'maand', onKies: () => setWeergave('maand') },
+                { id: 'week', label: 'Week', actief: weergave === 'week', onKies: () => setWeergave('week') },
+              ],
+            },
+            appGroep(app, setApp),
+          ]}
+        />
+      </TabRail>
+
       <PlaatSlot slot="rechts">
         <AppZuil actief={app} kies={setApp} />
       </PlaatSlot>

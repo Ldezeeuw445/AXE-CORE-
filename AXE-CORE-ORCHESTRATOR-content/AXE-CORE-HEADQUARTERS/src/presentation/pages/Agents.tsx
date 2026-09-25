@@ -17,6 +17,9 @@ import { agentPulses, type AgentFilter } from '@/domain/agents/activity';
 import { ActivityPlansPanel, LiveIndicator } from '@/presentation/components/agents/ActivityPlansPanel';
 import { AgentMemoryPanel } from '@/presentation/components/agents/AgentMemoryPanel';
 import { useAgentActivity, useNow } from '@/presentation/components/agents/useAgentActivity';
+import { AXE_AGENTS } from '@/domain/agents/roster';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -294,9 +297,45 @@ export default function Agents() {
     a.tags?.find(t => t.startsWith('tab:'))?.replace('tab:', '') ||
     (a.role === 'orchestrator' ? 'home' : a.role);
 
+  const naar = (id: string) =>
+    document.getElementById(`axe-agents-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   return (
-    // axe-tabruimte en geen eigen achtergrond: UI-MAATSTAF regel 1 en 2 --
-    // de pagina ligt op de plaat en deelt de breedte van het browservak.
+    <>
+    <TabRail kant="links">
+      <SchuifBalk
+        groepen={[
+          {
+            titel: 'Sections',
+            items: [
+              { id: 'warroom', label: 'War Room', onKies: () => naar('warroom') },
+              { id: 'activity', label: 'Activity & plans', onKies: () => naar('activity') },
+              { id: 'memory', label: 'Memory', onKies: () => naar('memory') },
+              { id: 'roster', label: 'Full roster & settings', onKies: () => naar('roster') },
+            ],
+          },
+          {
+            titel: 'Follow agent',
+            items: [
+              { id: 'all', label: 'All agents', actief: filter === 'all', onKies: () => { chooseFilter('all'); naar('activity'); } },
+              ...AXE_AGENTS.map((a) => ({
+                id: a.id,
+                label: a.name,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: pulses[a.id]?.working ? a.accent : 'var(--text-muted)' }} />,
+                actief: filter === a.id,
+                onKies: () => { chooseFilter(a.id); naar('activity'); },
+              })),
+            ],
+          },
+          {
+            titel: 'Actions',
+            items: [{ id: 'add', label: 'Add agent', icoon: <Plus size={13} />, onKies: addCustomAgent }],
+          },
+        ]}
+      />
+    </TabRail>
+    {/* axe-tabruimte en geen eigen achtergrond: UI-MAATSTAF regel 1 en 2 --
+        de pagina ligt op de plaat en deelt de breedte van het browservak. */}
     <motion.div
       className="axe-tabruimte h-full overflow-y-auto pt-4 pb-6 sm:pt-5"
       initial={{ opacity: 0, scale: 0.98 }}
@@ -322,8 +361,9 @@ export default function Agents() {
         </button>
       </div>
 
-      <WarRoom pulses={pulses} now={now} />
+      <div id="axe-agents-warroom"><WarRoom pulses={pulses} now={now} /></div>
 
+      <div id="axe-agents-activity" />
       <ActivityPlansPanel
         snapshot={activity.snapshot}
         items={activity.items}
@@ -341,6 +381,7 @@ export default function Agents() {
         }
       />
 
+      <div id="axe-agents-memory" />
       <AgentMemoryPanel
         selectedId={memoryId}
         onSelect={setMemoryId}
@@ -350,7 +391,7 @@ export default function Agents() {
         now={now}
       />
 
-      <h2 className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
+      <h2 id="axe-agents-roster" className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
         FULL ROSTER &amp; SETTINGS
       </h2>
 
@@ -367,12 +408,10 @@ export default function Agents() {
             <div
               key={agent.id}
               ref={el => { agentRefs.current[agent.id] = el; }}
-              className="rounded-xl overflow-hidden flex flex-col transition-all"
+              className="axe-kaart overflow-hidden flex flex-col transition-all"
               style={{
-                background: 'var(--bg-surface)',
-                border: highlightedId === agent.id ? '1px solid var(--tint-line)' : '1px solid rgba(255,255,255,0.08)',
-                borderLeft: `3px solid ${accent}`,
-                boxShadow: highlightedId === agent.id ? '0 0 0 2px rgba(34,211,238,0.2)' : undefined,
+                outline: highlightedId === agent.id ? '1px solid var(--tint-line)' : undefined,
+                outlineOffset: -1,
               }}
             >
               <AgentCard agent={agent} highlighted={highlightedId === agent.id} />
@@ -499,5 +538,6 @@ export default function Agents() {
         ))}
       </div>
     </motion.div>
+    </>
   );
 }

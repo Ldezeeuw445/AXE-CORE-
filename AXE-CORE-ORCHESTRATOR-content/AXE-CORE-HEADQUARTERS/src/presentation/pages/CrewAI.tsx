@@ -6,7 +6,8 @@ import { apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axe
 import { runCrewWithTools } from '@/application/crew/runCrewWithTools';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
-import { TabRuimte, Kaart, StatRij } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRuimte, Kaart, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
 /**
@@ -134,6 +135,28 @@ export default function CrewAI() {
 
   return (
     <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: `Crew · ${selected.length} selected`,
+              items: SPECIALISTS.map((sp) => ({
+                id: sp.id,
+                label: `${sp.emoji} ${sp.name}`,
+                actief: selected.includes(sp.id),
+                onKies: () => toggle(sp.id),
+              })),
+            },
+            {
+              titel: 'Selection',
+              items: [
+                { id: 'all', label: 'Select all', onKies: () => setSelected(SPECIALISTS.map((sp) => sp.id)) },
+                { id: 'none', label: 'Clear', onKies: () => setSelected([]) },
+              ],
+            },
+          ]}
+        />
+      </TabRail>
       <TabRuimte vullen>
       <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">

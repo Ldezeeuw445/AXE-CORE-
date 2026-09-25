@@ -108,7 +108,11 @@ export default function ObsidianMemoryPanel({
   externalSelectedPath,
   onNotesChanged,
   onSelectPath,
+  gestapeld = false,
 }: {
+  /** In de lade: lijst op volle breedte, gekozen notitie eronder. De twee
+      kolommen naast elkaar pasten niet in 378px (25 sep). */
+  gestapeld?: boolean;
   externalSelectedPath?: string | null;
   onNotesChanged?: (notes: ObsidianNote[]) => void;
   onSelectPath?: (path: string | null) => void;
@@ -247,8 +251,8 @@ export default function ObsidianMemoryPanel({
   };
 
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="w-1/2 min-w-0 flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+    <div className={gestapeld ? 'flex flex-col' : 'flex h-full overflow-hidden'}>
+      <div className={gestapeld ? 'w-full min-w-0 flex flex-col' : 'w-1/2 min-w-0 flex flex-col'} style={gestapeld ? undefined : { borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div className="flex items-center gap-2">
             <BookOpen size={15} color="var(--accent-cyan)" />
@@ -349,7 +353,7 @@ export default function ObsidianMemoryPanel({
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className={gestapeld ? 'overflow-y-auto p-1 space-y-1 max-h-[300px]' : 'flex-1 overflow-y-auto p-2 space-y-1'}>
           {loading && notes.length === 0 && (
             <div className="flex justify-center py-10"><RefreshCw size={14} className="animate-spin" color="var(--text-muted)" /></div>
           )}
@@ -405,7 +409,7 @@ export default function ObsidianMemoryPanel({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className={gestapeld ? (selected ? 'flex flex-col min-w-0 border-t border-white/5' : 'hidden') : 'flex-1 flex flex-col min-w-0 overflow-hidden'}>
         <AnimatePresence>
           {showAdd && (
             <motion.div
@@ -456,7 +460,7 @@ export default function ObsidianMemoryPanel({
         </AnimatePresence>
 
         {selected ? (
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className={gestapeld ? 'px-1 py-3' : 'flex-1 overflow-y-auto p-6'}>
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>

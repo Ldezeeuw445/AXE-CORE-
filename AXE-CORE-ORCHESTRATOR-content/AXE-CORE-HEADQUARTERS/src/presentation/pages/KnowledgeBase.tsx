@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink, Settings2, Merge } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 
 type AI = 'axe-core' | 'axe-companion' | 'axe-intel';
@@ -439,6 +441,39 @@ export default function KnowledgeBase() {
   };
 
   return (
+    <>
+    <TabRail kant="links">
+      <SchuifBalk
+        groepen={[
+          {
+            titel: 'Systems',
+            items: (Object.entries(AI_CFG) as [AI, typeof AI_CFG[AI]][]).map(([id, cfg]) => ({
+              id,
+              label: `${cfg.label} · ${totals[id]}`,
+              icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: cfg.color }} />,
+              actief: activeAI === id,
+              onKies: () => setActiveAI(id),
+            })),
+          },
+          {
+            titel: 'Categories',
+            items: [
+              { id: '__all', label: 'All', actief: selectedCategory === null, onKies: () => setSelectedCategory(null) },
+              ...categoriesForActiveAI.map((c) => ({
+                id: c, label: c, actief: selectedCategory === c, onKies: () => setSelectedCategory(c),
+              })),
+            ],
+          },
+          {
+            titel: 'Actions',
+            items: [
+              { id: 'add', label: 'Add document', icoon: <Plus size={13} />, onKies: () => setAdding(true) },
+              { id: 'manage', label: 'Manage categories', icoon: <Settings2 size={13} />, onKies: () => setManagingCategories(true) },
+            ],
+          },
+        ]}
+      />
+    </TabRail>
     <motion.div
       className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5"
       initial={{ opacity: 0 }}
@@ -773,5 +808,6 @@ export default function KnowledgeBase() {
       )}
       </div>
     </motion.div>
+    </>
   );
 }

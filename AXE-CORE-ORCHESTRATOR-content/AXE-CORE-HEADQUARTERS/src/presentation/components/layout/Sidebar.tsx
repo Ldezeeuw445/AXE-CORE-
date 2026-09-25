@@ -18,7 +18,7 @@ import {
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { ThinkThanksWidget } from '@/presentation/components/widgets/ThinkThanksWidget';
 import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
-import { SchuifVoet } from '@/presentation/components/layout/tabMaatstaf';
+import { LadeKaart } from '@/presentation/components/layout/tabMaatstaf';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
@@ -399,8 +399,7 @@ export function Sidebar() {
         * lege balk inklapt. */}
       {opHome && (
         <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">{content}</div>
-          <div className="flex-none px-3 pb-3"><SchuifVoet /></div>
+          <LadeKaart kant="links">{content}</LadeKaart>
         </div>
       )}
     </aside>

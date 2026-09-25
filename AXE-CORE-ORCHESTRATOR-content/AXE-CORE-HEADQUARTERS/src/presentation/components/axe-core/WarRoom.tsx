@@ -78,11 +78,12 @@ export function WarRoom({ pulses, now }: {
             <button
               key={agent.id}
               onClick={() => navigate(`/${agent.route}`)}
-              className="text-left rounded-xl p-3 transition-transform"
+              // Zelfde matzwarte kaart als overal (25 sep). Actief = een dunne
+              // lijn in de kleur van de agent, geen gloed.
+              className="axe-kaart text-left p-3 transition-transform"
               style={{
-                background: 'var(--bg-base)',
-                border: `1px solid ${active ? agent.accent : 'var(--border-subtle)'}`,
-                boxShadow: active ? `0 0 0 1px ${agent.accent}, 0 0 18px -6px ${agent.accent}` : 'none',
+                outline: active ? `1px solid ${agent.accent}` : undefined,
+                outlineOffset: -1,
                 opacity: last || pulse || isOrchestrator || active ? 1 : 0.72,
               }}
             >

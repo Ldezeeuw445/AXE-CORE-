@@ -150,25 +150,31 @@ export function SchuifBalk({
     <div className={cn('axe-schuifbalk', className)}>
       <div className="axe-schuifbalk-kaart">
         <div className="axe-schuifbalk-lijf">
-          {groepen.map((groep, i) => (
-            <div key={groep.titel ?? `groep-${i}`} className="axe-schuifbalk-groep">
-              {groep.titel && <div className="axe-tab-group__label">{groep.titel}</div>}
-              <div className="axe-schuifbalk-stack">
-                {groep.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="axe-row !py-1.5"
-                    data-active={item.actief || undefined}
-                    onClick={item.onKies}
-                  >
-                    {item.icoon != null && <span className="axe-glyph">{item.icoon}</span>}
-                    <span className="axe-row__text"><b>{item.label}</b></span>
-                  </button>
-                ))}
+          {groepen.map((groep, i) => {
+            const rijen = groep.items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="axe-row !py-1.5"
+                data-active={item.actief || undefined}
+                onClick={item.onKies}
+              >
+                {item.icoon != null && <span className="axe-glyph">{item.icoon}</span>}
+                <span className="axe-row__text"><b>{item.label}</b></span>
+              </button>
+            ));
+            // Met titel: dezelfde groep als in de Browser-lade -- getinte kop
+            // en een getint blok eronder, samen één geheel. Een kop zonder dat
+            // blok las als een losse, geselecteerde knop (25 sep).
+            return groep.titel ? (
+              <div key={groep.titel} className="axe-tab-group">
+                <div className="axe-tab-group__label">{groep.titel}</div>
+                <div className="axe-tab-group__stack">{rijen}</div>
               </div>
-            </div>
-          ))}
+            ) : (
+              <div key={`groep-${i}`} className="axe-schuifbalk-stack">{rijen}</div>
+            );
+          })}
         </div>
         <SchuifVoet />
       </div>
@@ -202,7 +208,19 @@ export function SchuifVoet() {
   );
 }
 
-/** Scroll naar een sectieblok. Alleen de plek; geen data. */
-export function gaNaarSectie(id: string) {
-  document.getElementById(`axe-sectie-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+/**
+ * Het omhulsel van ELKE lade, links en rechts: de Browser-vorm (UI-MAATSTAF
+ * layoutregel 5). Binnenkaart, scrollend lijf, en links de vaste voet. TabRail,
+ * de Home-lades (Sidebar, RightPanel) gebruiken allemaal deze ene.
+ */
+export function LadeKaart({ kant, children }: { kant: 'links' | 'rechts'; children: ReactNode }) {
+  return (
+    <div className="axe-schuifbalk axe-schuifbalk--rail">
+      <div className="axe-schuifbalk-kaart">
+        <div className="axe-schuifbalk-lijf">{children}</div>
+        {kant === 'links' && <SchuifVoet />}
+      </div>
+    </div>
+  );
 }
+

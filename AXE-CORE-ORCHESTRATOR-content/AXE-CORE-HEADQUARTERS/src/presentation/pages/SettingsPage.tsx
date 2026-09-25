@@ -19,7 +19,7 @@ import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import {
-  TabRuimte, Kaart, KaartRaster, SectieBlok, SchuifBalk, gaNaarSectie,
+  TabRuimte, Kaart, KaartRaster, SectieBlok, SchuifBalk,
 } from '@/presentation/components/layout/tabMaatstaf';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
@@ -37,7 +37,7 @@ import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegist
 import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
-import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Keyboard, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key,  Mic, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
   getSelectedVoiceId,
   setSelectedVoiceId,
@@ -2062,9 +2062,10 @@ export default function SettingsPage() {
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
   const [sectie, setSectie] = useState('providers');
+  // Eén sectie tegelijk, zoals de Browser: de lade kiest, het vak toont die
+  // ene sectie als dashboard in kaarten (25 sep).
   const kiesSectie = (id: string) => {
     setSectie(id);
-    gaNaarSectie(id);
   };
 
   useEffect(() => { voice.checkMicPermission(); }, []);
@@ -2113,24 +2114,26 @@ export default function SettingsPage() {
               items: [
                 { id: 'routing', label: 'Routing', actief: sectie === 'routing', onKies: () => kiesSectie('routing') },
                 { id: 'system', label: 'Services', actief: sectie === 'system', onKies: () => kiesSectie('system') },
-                { id: 'general', label: 'General', actief: sectie === 'general', onKies: () => kiesSectie('general') },
               ],
             },
           ]}
         />
       </TabRail>
-      <TabRuimte>
+      <TabRuimte className="axe-settings">
         <BuildStampLine />
         {/* Says so when a save only reached this device. Without it, pasting an
             API key while signed out looks identical to pasting one that worked,
             and every background agent keeps using the old value. */}
         <UnsyncedSettingsBanner />
 
+        {sectie === 'providers' && (
         <SectieBlok id="providers" titel="PROVIDERS">
           <ProviderKeysSection />
           <OllamaModelsSection />
         </SectieBlok>
+        )}
 
+        {sectie === 'voice' && (
         <SectieBlok id="voice" titel="VOICE">
           <Kaart titel="MICROPHONE" actie={<Mic size={14} style={{ color: 'var(--text-muted)' }} />}>
             <div className="space-y-3">
@@ -2180,14 +2183,18 @@ export default function SettingsPage() {
           </Kaart>
           <VoiceSection />
         </SectieBlok>
+        )}
 
+        {sectie === 'trust' && (
         <SectieBlok id="trust" titel="TRUST">
           <MindsetQuotesSection />
           <TrustLevelsSection />
           <LookSection />
           <ToolCallingSection />
         </SectieBlok>
+        )}
 
+        {sectie === 'routing' && (
         <SectieBlok id="routing" titel="ROUTING">
           <Kaart titel="AXE BRANCHES">
             <BranchRouterSection />
@@ -2196,7 +2203,9 @@ export default function SettingsPage() {
             <CapabilityRouterSection />
           </Kaart>
         </SectieBlok>
+        )}
 
+        {sectie === 'system' && (
         <SectieBlok id="system" titel="SYSTEM">
           <RemoteTerminalSection />
           <ServiceHealthSection />
@@ -2204,28 +2213,9 @@ export default function SettingsPage() {
             <GitHubReposSection />
           </Kaart>
         </SectieBlok>
+        )}
 
-        <SectieBlok id="general" titel="GENERAL">
-          <KaartRaster>
-            {[
-              { title: 'Appearance', icon: Palette, items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
-              { title: 'Keyboard',   icon: Keyboard, items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },
-              { title: 'Security',   icon: Lock, items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
-              { title: 'System',     icon: Settings, items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
-            ].map(group => (
-              <Kaart key={group.title} titel={group.title} actie={<group.icon size={14} style={{ color: 'var(--text-muted)' }} />}>
-                <div className="space-y-2">
-                  {group.items.map(item => (
-                    <div key={item.k} className="flex items-center justify-between py-0.5">
-                      <span className="text-small" style={{ color: 'var(--text-secondary)' }}>{item.k}</span>
-                      <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-primary)' }}>{item.v}</span>
-                    </div>
-                  ))}
-                </div>
-              </Kaart>
-            ))}
-          </KaartRaster>
-        </SectieBlok>
+
       </TabRuimte>
     </motion.div>
   );

@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Cpu } from 'lucide-react';
+import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import {
   HOOFD_AGENTS, AGENT_LABEL, MOTOR_LABEL, TOEGESTAAN, kiesbaar,
   type HoofdAgent, type HoofdMotor, type MotorToewijzing,
@@ -176,7 +177,10 @@ export function AgentMotorenSection() {
   const kies = (agent: HoofdAgent, motor: HoofdMotor) => setToewijzing(kiesMotor(agent, motor));
 
   return (
-    <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+    /* Eén kaart per onderdeel, naast elkaar op een raster -- geen lange doos
+       met tekstregels (Luka, 25 sep: "net een Word-document"). */
+    <div className="axe-motoren-raster mb-4">
+      <Kaart>
       <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
         <Cpu size={15} style={{ color: 'var(--accent-cyan)' }} /> Motoren per agent
       </h2>
@@ -255,7 +259,9 @@ export function AgentMotorenSection() {
           dan AXE's eigen rij hierboven, wél Ollama -- routinewerk (cron-tik,
           task-check) hoeft niet het slimste model te zijn, en dat is precies
           waar "local models first" voor bedoeld is (workerKeuzes). */}
-      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      </Kaart>
+      <Kaart>
+      <div>
         <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Agents-tab workers</div>
         <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
           Auto-routeert tussen capabele engines, Ollama inbegrepen. Vastzetten kan, maar hoeft niet.
@@ -294,7 +300,9 @@ export function AgentMotorenSection() {
           Trading OS, hier alleen zichtbaar en instelbaar. Alleen betaalde
           Anthropic/OpenAI (nooit lager dan gpt-4o-mini) — geen abonnement,
           geen Ollama, geen "auto": Luka's eigen regel voor deze twee. */}
-      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      </Kaart>
+      <Kaart>
+      <div>
         <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Cross-app assistants</div>
         <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
           Dezelfde agent als in je andere apps. Alleen betaalde Anthropic/OpenAI, minimaal gpt-4o-mini.
@@ -335,7 +343,9 @@ export function AgentMotorenSection() {
           model laten kiezen dat zijn motor niet kent, en dat merk je pas als de
           run faalt. Leeg laten = de CLI houdt zijn eigen standaard, die met een
           update meebeweegt. */}
-      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      </Kaart>
+      <Kaart>
+      <div>
         <div className="text-xs-custom font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Model per abonnement</div>
         <div className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
           Leeg = de CLI kiest zelf. Een naam of alias mag allebei.
@@ -375,7 +385,9 @@ export function AgentMotorenSection() {
 
       {/* De planner: dezelfde abonnementen, maar dan zonder dat je iets vraagt.
           Met een dagbudget per abonnement, zodat hij het niet opmaakt. */}
-      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      </Kaart>
+      <Kaart>
+      <div>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>Planner</div>
@@ -413,6 +425,7 @@ export function AgentMotorenSection() {
           </div>
         )}
       </div>
+      </Kaart>
     </div>
   );
 }

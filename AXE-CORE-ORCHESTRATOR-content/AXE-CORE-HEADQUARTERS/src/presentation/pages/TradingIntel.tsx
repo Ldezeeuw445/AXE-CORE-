@@ -106,7 +106,7 @@ export default function TradingIntel() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full flex flex-col overflow-hidden bg-transparent"
+      className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col overflow-hidden bg-transparent"
       /* Trading is a workspace ON the AXE shell. A page-wide #050505 layer
          turned every room into a black sheet and hid the shell material. */
     >

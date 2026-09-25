@@ -59,6 +59,20 @@ de rand én met een subtiele randknop. Heeft een tab rechts nog geen eigen
 context, dan blijft die lade bewust leeg in plaats van willekeurige globale
 inhoud te tonen.
 
+**Uitwerking 25 sep 2026 (Luka).**
+- *Eén kaartmateriaal* = exact de Browser-home-kaart (`.axe-panel--inset`): verloop
+  `rgba(23,23,23,.94)` → `rgba(12,12,12,.96)`, hoek 18px, plus een dunne zweefrand
+  (1px wit ~7%, bovenkant ~12%) en een zachte donkere schaduw. Tokens `--axe-kaart-*`
+  in `axe-look.css`; de Browser-kaarten lezen dezelfde rand. Nergens eigen kaartkleuren
+  inline (`bg-surface`, `bg-black/30`, `border-white/10`): gebruik `axe-kaart` of `Kaart`.
+  Actief/geselecteerd = een dunne `outline` in de accentkleur, geen gloed.
+- *Settings is een dashboard*: de lade kiest één sectie; die sectie staat als kaarten
+  naast elkaar (flex-wrap, elk eigen hoogte), formulierkaarten met label boven en
+  keuze op volle breedte. Geen verzonnen waarden (de oude General-sectie is weg).
+- *Elke lade* = `LadeKaart` (via `TabRail` automatisch): binnenkaart, groepen als
+  `axe-tab-group` (getinte kop + blok), voet met Device Manager, Lock Screen,
+  Settings, Profile. Een lade zonder inhoud gaat niet open.
+
 ---
 
 ## De overige regels (materiaal, kleur, meten)

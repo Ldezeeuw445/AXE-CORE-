@@ -6,6 +6,7 @@ import { Brain, Cpu, Globe2, Layers, LineChart, Smartphone } from 'lucide-react'
 import { APPS, type AppId } from '@/domain/apps';
 import type { AppFilter } from '@/domain/grootboek';
 import { IcoonZuil, type ZuilItem } from './IcoonZuil';
+import type { SchuifGroep } from './tabMaatstaf';
 
 const ICOON: Record<AppId, typeof Cpu> = {
   axe_core: Cpu,
@@ -25,4 +26,21 @@ const APP_ZUIL: ZuilItem[] = [
 
 export function AppZuil({ actief, kies, kant = 'rechts' }: { actief: AppFilter; kies: (app: AppFilter) => void; kant?: 'links' | 'rechts' }) {
   return <IcoonZuil items={APP_ZUIL} actief={actief} kies={id => kies(id as AppFilter)} kant={kant} rijen={2} />;
+}
+
+/** Dezelfde app-keuze als groep in een lade, met namen erbij. */
+export function appGroep(actief: AppFilter, kies: (app: AppFilter) => void): SchuifGroep {
+  return {
+    titel: 'Apps',
+    items: [
+      { id: 'alle', label: 'All apps', actief: actief === 'alle', onKies: () => kies('alle') },
+      ...APPS.map((a) => ({
+        id: a.id,
+        label: a.label,
+        icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: a.kleur }} />,
+        actief: actief === a.id,
+        onKies: () => kies(a.id as AppFilter),
+      })),
+    ],
+  };
 }

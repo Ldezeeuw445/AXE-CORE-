@@ -37,8 +37,10 @@ export interface KolomTekst {
 }
 
 export function CronTabel({
-  titel, onderschrift, kleur, schemas, acties, tekst, compact, opNieuw,
+  titel, onderschrift, kleur, schemas, acties, tekst, compact, opNieuw, anker,
 }: {
+  /** id voor de lade: daar scrolt 'naar deze app' naartoe. */
+  anker?: string;
   titel: string;
   onderschrift: string;
   kleur: string;
@@ -53,7 +55,7 @@ export function CronTabel({
   const stuk = schemas.filter(s => s.last_status === 'fail' || s.last_status === 'timeout').length;
 
   return (
-    <section className="axe-cron">
+    <section className="axe-cron" id={anker}>
       <header className="axe-cron-kop">
         <div className="min-w-0">
           {/* De naam in de KLEUR van de app, niet een gekleurd vlakje ernaast:
