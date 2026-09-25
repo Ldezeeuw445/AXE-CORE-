@@ -151,6 +151,15 @@ export function installElevenRealtimeVoice(): void {
       return;
     }
 
+    // WKWebView locks WebAudio until it has been resumed from a direct user
+    // gesture. Do this BEFORE the token network request so the later realtime
+    // AudioContext is not born suspended after the click activation expired.
+    try {
+      const unlock = new AudioContext();
+      if (unlock.state === 'suspended') await unlock.resume();
+      void unlock.close();
+    } catch { /* input can still fall back to Whisper */ }
+
     realtimeStarting = true;
     const myGeneration = ++generation;
     useVoiceStore.setState({
