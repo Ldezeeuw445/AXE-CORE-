@@ -3,7 +3,7 @@
  * mag de chat niet op slot zetten.
  */
 import { create } from 'zustand';
-import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
+import { jobLoopt, type AxeJob } from '@/domain/tierRouter/axeJobRegels';
 
 interface AxeJobStateShape {
   jobs: AxeJob[];
@@ -23,7 +23,9 @@ export const useAxeJobStore = create<AxeJobStateShape>((set) => ({
   leeg: () => set({ jobs: [] }),
 }));
 
+/** Eén definitie van "loopt nog" (axeJobRegels.jobLoopt) — niet een eigen
+ *  conditie die uit de pas kan lopen met de gesproken samenvatting. */
 export function lopendeJobs(jobs: AxeJob[]): AxeJob[] {
-  return jobs.filter((j) => j.state === 'queued' || j.state === 'running' || j.state === 'waiting');
+  return jobs.filter((j) => jobLoopt(j.state));
 }
 

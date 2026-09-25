@@ -26,6 +26,7 @@ import {
   stopCartesia,
   getCartesiaTtsLevel,
 } from '@/infrastructure/gateways/cartesiaTtsService';
+import { getOpenAiRealtimeLevel } from '@/infrastructure/gateways/openAiRealtimeVoice';
 import { normalizeForSpeech } from '@/domain/speechText';
 import { elevenLabsModelVan, parseStemMotor, STEM_MOTOR_SLEUTEL, type StemMotor } from '@/domain/stemMotor';
 import { markBeurt } from '@/domain/beurtKlok';
@@ -193,5 +194,6 @@ export function getGlobalTtsLevel(): number {
     getFishTtsLevel(),
     getElevenLabsTtsLevel(),
     getCartesiaTtsLevel(),
+    getOpenAiRealtimeLevel(),
   );
 }

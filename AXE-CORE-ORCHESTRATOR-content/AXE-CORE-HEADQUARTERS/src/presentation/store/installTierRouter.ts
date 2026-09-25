@@ -60,6 +60,29 @@ import { geheugenVoorBeurt, onthoudInGesprek, warmGeheugen } from '@/application
 let installed = false;
 const taskMonitors = new Set<string>();
 
+let realtimeAnnouncer: ((text: string) => void) | null = null;
+
+/**
+ * installOpenAIRealtimeVoice registers here while a realtime voice call is
+ * open, so a background job's result is said IN that call — same voice, no
+ * second TTS call fighting it for the speakers — instead of going out
+ * through the old globalTts path below. Unregister (null) closes the loop.
+ */
+export function setRealtimeJobAnnouncer(fn: ((text: string) => void) | null): void {
+  realtimeAnnouncer = fn;
+}
+
+function announceJobText(text: string, slot: { provider: string; model?: string }): void {
+  if (realtimeAnnouncer) {
+    useVoiceStore.setState((s) => ({
+      conversation: injecteerJobResultaat(s.conversation, text) as ConversationMessage[],
+    }));
+    realtimeAnnouncer(text);
+    return;
+  }
+  publiceer(text, slot, 'job');
+}
+
 function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
   try {
     if (localStorage.getItem('axe_response_mode') === 'type') return;
@@ -337,7 +360,7 @@ function taakTekst(snapshot: DurableTaskSnapshot): string {
 function meldJobKlaar(job: AxeJob): void {
   const tekst = jobResultaatTekst(job);
   useAxeJobStore.getState().patch(job.id, job);
-  publiceer(tekst, { provider: 'tier3', model: job.agent }, 'job');
+  announceJobText(tekst, { provider: 'tier3', model: job.agent });
   recordBeurt(job.sourceText, tekst, 'tier3', `tier3:${job.agent}`);
 }
 
@@ -364,7 +387,7 @@ async function monitorTier3(job: AxeJob): Promise<void> {
           gemeldeVraag = sleutel;
           const wacht = { ...job, state: 'waiting' as const };
           useAxeJobStore.getState().patch(job.id, wacht);
-          publiceer(jobWachtTekst(wacht, vraag?.title), { provider: 'tier3', model: job.agent }, 'job');
+          announceJobText(jobWachtTekst(wacht, vraag?.title), { provider: 'tier3', model: job.agent });
         }
         await new Promise((r) => setTimeout(r, 4_000));
         continue;
@@ -492,8 +515,10 @@ async function probeerPlan(text: string, keuze: AxeRouteKeuze): Promise<boolean>
   return true;
 }
 
-/** Zet jobs uit zonder dat sendMessage daarop wacht. */
-function startAxeJobs(stukken: AxeBeurtStuk[]): void {
+/** Zet jobs uit zonder dat sendMessage daarop wacht. Ook de ingang voor de
+ *  realtime-voice-tool `start_background_task` — zelfde dispatch, zelfde
+ *  monitor, geen tweede takenrij. */
+export function startAxeJobs(stukken: AxeBeurtStuk[]): void {
   const ids = stukken.map((_, i) => `job-${Date.now()}-${i}`);
   let n = 0;
   const queued = jobsVanStukken(stukken, Date.now(), () => ids[n++]);

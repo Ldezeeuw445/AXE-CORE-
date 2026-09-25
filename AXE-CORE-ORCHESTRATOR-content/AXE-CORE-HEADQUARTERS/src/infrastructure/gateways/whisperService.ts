@@ -32,7 +32,9 @@ export interface WhisperConfig {
   endpoint: string;
 }
 
-function readConnKey(id: string): string {
+/** Shared with openAiRealtimeVoice.ts — one place reads the provider keys out
+ *  of axe_llm_connections, so "no OpenAI key" always means the same thing. */
+export function readConnKey(id: string): string {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
       string,
@@ -75,14 +77,14 @@ export function isWhisperAvailable(): boolean {
   return !!resolveWhisperConfig();
 }
 
-export async function transcribeAudio(blob: Blob, lang?: string): Promise<string> {
-  const cfg = resolveWhisperConfig();
-  if (!cfg) {
-    throw new Error(
-      'Geen Groq- of OpenAI-key voor Whisper. Zet Groq in Settings → Provider Keys (gratis Whisper).',
-    );
+export class WhisperHttpError extends Error {
+  constructor(public readonly provider: WhisperProvider, public readonly status: number, message: string) {
+    super(message);
+    this.name = 'WhisperHttpError';
   }
+}
 
+async function postTranscription(cfg: WhisperConfig, blob: Blob, lang?: string): Promise<string> {
   const form = new FormData();
   const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
   form.append('file', blob, `axe-voice.${ext}`);
@@ -99,10 +101,55 @@ export async function transcribeAudio(blob: Blob, lang?: string): Promise<string
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Whisper ${cfg.provider} HTTP ${res.status}: ${body.slice(0, 160)}`);
+    throw new WhisperHttpError(cfg.provider, res.status, `Whisper ${cfg.provider} HTTP ${res.status}: ${body.slice(0, 160)}`);
   }
   const data = (await res.json()) as { text?: string };
   return (data.text ?? '').trim();
+}
+
+/** OpenAI whisper-1 config, independent of resolveWhisperConfig()'s "Groq
+ *  first" preference — used as the fallback when Groq itself is the one
+ *  failing, not as a general alternative. */
+function openAiWhisperConfig(): WhisperConfig | null {
+  const openai =
+    readConnKey('openai') ||
+    (typeof import.meta !== 'undefined' ? String(import.meta.env?.VITE_OPENAI_API_KEY ?? '') : '');
+  if (!openai) return null;
+  return {
+    provider: 'openai',
+    key: openai,
+    model: 'whisper-1',
+    endpoint: 'https://api.openai.com/v1/audio/transcriptions',
+  };
+}
+
+export async function transcribeAudio(blob: Blob, lang?: string): Promise<string> {
+  const cfg = resolveWhisperConfig();
+  if (!cfg) {
+    throw new Error(
+      'Geen Groq- of OpenAI-key voor Whisper. Zet Groq in Settings → Provider Keys (gratis Whisper).',
+    );
+  }
+
+  try {
+    return await postTranscription(cfg, blob, lang);
+  } catch (error) {
+    // Groq's free daily quota runs out (429) or the endpoint has a bad day
+    // (5xx): fall through to OpenAI whisper-1 instead of failing the whole
+    // turn, same key whisperService already knows how to read.
+    if (
+      cfg.provider === 'groq' &&
+      error instanceof WhisperHttpError &&
+      (error.status === 429 || error.status >= 500)
+    ) {
+      const fallback = openAiWhisperConfig();
+      if (fallback) {
+        console.warn('[Whisper] Groq failed, falling back to OpenAI whisper-1:', error.message);
+        return await postTranscription(fallback, blob, lang);
+      }
+    }
+    throw error;
+  }
 }
 
 // ── Session state ────────────────────────────────────────────────────────
