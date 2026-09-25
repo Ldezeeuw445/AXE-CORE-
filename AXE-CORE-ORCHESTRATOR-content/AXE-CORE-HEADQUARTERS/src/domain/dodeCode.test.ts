@@ -378,6 +378,14 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/presentation/components/axe-core/HomeCommandComposer.tsx', 'HomeCommandComposer'],
   ['src/presentation/components/layout/AxeShellSphere.tsx', 'AxeShellSphere'],
   ['src/presentation/pages/LockScreen.tsx', 'LockScreenContent'],
+  // Control Plane (sessie 23 sep stopte halverwege): de blokken voor events,
+  // routes en sleutels zijn nooit gebouwd. Schedules en Tasks staan wel op de pagina.
+  ['src/domain/controlPlane.ts', 'filterEvents'],
+  ['src/domain/controlPlane.ts', 'routeAreas'],
+  ['src/presentation/pages/controlPlane/bits.tsx', 'Teller'],
+  ['src/presentation/pages/controlPlane/useControlPlaneData.ts', 'useEvents'],
+  ['src/presentation/pages/controlPlane/useControlPlaneData.ts', 'useRoutes'],
+  ['src/presentation/pages/controlPlane/useControlPlaneData.ts', 'useKeys'],
 ];
 
 const EXPORT_RE =

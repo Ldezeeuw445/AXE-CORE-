@@ -647,6 +647,25 @@ export async function ghMergePr(repo: string, number: number, mergeMethod: 'merg
 // Control Plane
 // ══════════════════════════════════════════════════════════════════════════════
 
+export interface ControlPlaneRoute {
+  id: string;
+  kind: 'public' | 'internal' | 'hook' | 'integration';
+  method: string;
+  path: string;
+  display_name: string;
+  description?: string | null;
+  target?: string | null;
+  execution_mode: 'read' | 'patch' | 'execute';
+  auth_required: boolean;
+  enabled: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export async function apiListRoutes(kind?: ControlPlaneRoute['kind']): Promise<ControlPlaneRoute[]> {
+  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+  return call('GET', `/api/routes${qs}`);
+}
+
 export interface ControlPlaneTaskStep {
   title: string;
   status?: string;
