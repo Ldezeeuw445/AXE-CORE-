@@ -444,6 +444,10 @@ async function probeerGesprokenGoedkeuring(text: string): Promise<boolean> {
 
   if (!kandidaten.length) return false;
 
+  // Dit was een echte gebruikersbeurt, ook al wordt hij door de approval-laag
+  // afgehandeld in plaats van door een model.
+  zetGebruiker(text);
+
   if (kandidaten.length > 1) {
     publiceer(
       `I have ${kandidaten.length} approvals waiting. Tell me which task you mean.`,
