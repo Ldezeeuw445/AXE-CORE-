@@ -31,7 +31,7 @@
  */
 import { execFile } from 'node:child_process';
 import { mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
-import { resolve, sep, join, dirname } from 'node:path';
+import { resolve, sep, join, dirname, relative } from 'node:path';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -618,8 +618,8 @@ async function execute(payload) {
         : [];
       if (!message) throw new Error('git.commit needs a message');
       if (!paths.length) throw new Error('git.commit needs explicit paths; refusing implicit git add -A');
-      paths.forEach(p => safePath(root, p));
-      await git(root, 'add', '--', ...paths);
+      const relPaths = paths.map(p => relative(root, safePath(root, p)) || '.');
+      await git(root, 'add', '--', ...relPaths);
       return git(root, 'commit', '-m', message);
     }
 
