@@ -149,7 +149,7 @@ export interface DurableTaskApproval {
   detail: string;
   /** The backend stores the exact command/reason here. Voice approval must
    * inspect this instead of guessing from the human title. */
-  metadata?: Record<string, unknown> | null;
+  metadata?: ({ command?: string | null; reason?: string | null } & Record<string, unknown>) | null;
   decided_by?: string | null;
   decision_reason?: string | null;
   created_at: string;
