@@ -246,6 +246,7 @@ export function gesprokenGoedkeuringsBesluit(text: string): GesprokenGoedkeuring
     .trim()
     .toLowerCase()
     .replace(/[.!?]+$/g, '')
+    .replace(/[,;:]+/g, ' ')
     .replace(/\s+/g, ' ');
 
   if (/^(ja|yes|yep|yeah|doe maar|ga door|go ahead|yes go ahead|ja ga door|ja doe maar|akkoord|approve)$/.test(t)) {
