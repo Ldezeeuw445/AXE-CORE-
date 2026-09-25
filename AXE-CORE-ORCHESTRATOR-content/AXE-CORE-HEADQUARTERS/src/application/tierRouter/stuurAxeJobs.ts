@@ -45,7 +45,7 @@ export function jobsVanStukken(stukken: AxeBeurtStuk[], nu = Date.now(), id = ()
     const agent = jobAgentVan(s.route, s.text);
     return {
       id: id(),
-      title: jobTitelVan(s.text),
+      title: jobTitelVan(s.titel ?? s.text),
       agent,
       state: 'queued' as AxeJobState,
       startedAt: nu,

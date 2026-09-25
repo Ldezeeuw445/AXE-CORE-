@@ -9,6 +9,8 @@ const SPLIT_RE = /\s*(?:,\s*(?:en|and|plus)\s+|;\s+|\s+en\s+|\s+and\s+|\s+plus\s
 export interface AxeBeurtStuk {
   text: string;
   route: AxeRoute;
+  /** Korte titel voor de balk; zonder titel wordt het de tekst zelf. */
+  titel?: string;
 }
 
 function isJob(route: AxeRoute): boolean {

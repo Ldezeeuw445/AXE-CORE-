@@ -15,6 +15,7 @@ import { PROVIDERS, type KeySlot } from '@/domain/providers';
 import {
   TIER2_GROQ_MODEL,
   agendaAntwoord,
+  classifyAxeTier,
   groetAntwoord,
   prioriteitenAntwoord,
   statusAntwoord,
@@ -48,6 +49,10 @@ import { jobsVanStukken, startJobsParallel } from '@/application/tierRouter/stuu
 import { kiesSpraakPad, stemlusVanVoice, zetSpraakSpreker } from '@/application/tierRouter/axeSpraakRij';
 import { chatBlijftLuisteren, injecteerJobResultaat } from '@/application/tierRouter/injecteerJobResultaat';
 import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
+import { planBeurt, type PlanModel } from '@/application/tierRouter/planBeurt';
+import { PLAN_GROQ_MODEL, moetPlannen, type BeurtPlan } from '@/domain/tierRouter/beurtPlan';
+import { lopendeJobs } from '@/presentation/store/axeJobStore';
+import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { beurtRegel, leesBeurt, markBeurt, startBeurtIndienNodig } from '@/domain/beurtKlok';
 
 let installed = false;
@@ -383,6 +388,98 @@ async function monitorTier3(job: AxeJob): Promise<void> {
   }
 }
 
+/** Modellen voor het beurtplan, snelste eerst. Groq's gratis dagtegoed kan op
+ *  zijn (gemeten 25 sep: 200k tokens/dag), dan neemt OpenAI het over. */
+function planModellen(): PlanModel[] {
+  const uit: PlanModel[] = [];
+  const vraag = (slot: KeySlot): PlanModel => (system, user) => callProvider(slot, [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ]);
+  const groq = getProviderKeySlot('groq');
+  if (groq) uit.push(vraag({ ...groq, model: PLAN_GROQ_MODEL }));
+  const openai = getProviderKeySlot('openai');
+  if (openai) uit.push(vraag({ ...openai, model: 'gpt-4.1-mini' }));
+  const cerebras = getProviderKeySlot('cerebras');
+  if (cerebras) uit.push(vraag(cerebras));
+  return uit;
+}
+
+async function maakPlan(text: string): Promise<BeurtPlan | null> {
+  const modellen = planModellen();
+  if (!modellen.length) return null;
+  const geschiedenis = useVoiceStore.getState().conversation
+    .slice(-7, -1)
+    .map((m) => ({ role: m.role === 'user' ? 'user' as const : 'axe' as const, text: m.text }));
+  const lopend = lopendeJobs(useAxeJobStore.getState().jobs).map((j) => j.title);
+  return planBeurt(text, { modellen, geschiedenis, lopend });
+}
+
+/** Het plan uitvoeren: praten, starten, onthouden, herinneren. Niets hiervan
+ *  laat de chat wachten; alleen het antwoord gaat meteen de lucht in. */
+function voerPlanUit(text: string, plan: BeurtPlan): void {
+  publiceer(plan.reply, { provider: 'plan', model: plan.jobs.map((j) => j.agent).join('+') || 'reply' }, 'ack');
+  recordBeurt(text, plan.reply, 'plan', `plan:${plan.jobs.length}`);
+
+  if (plan.jobs.length) {
+    startAxeJobs(plan.jobs.map((j) => ({
+      text: j.request,
+      titel: j.title,
+      route: {
+        tier: 3 as const,
+        kind: 'agent' as const,
+        via: 'model' as const,
+        reason: 'plan',
+        agent: j.agent,
+        skill: null,
+        confident: true,
+      },
+    })));
+  }
+
+  for (const content of plan.onthoud) {
+    void saveRagMemory({
+      category: 'user',
+      content,
+      importance: 6,
+      metadata: { source: 'axe_plan', said: text.slice(0, 300) },
+    }).catch((e) => console.warn('[AXE] plan memory failed:', e));
+  }
+
+  for (const h of plan.herinneringen) {
+    void createDurableTask({
+      title: h.title,
+      goal: h.title,
+      requested_by: 'luka',
+      capability: 'task_manage',
+      execution_mode: 'read',
+      metadata: {
+        uiStatus: 'todo',
+        progress: 0,
+        routedBy: 'axe-core',
+        source: 'axe_plan',
+        ...(h.dueAt ? { dueAt: h.dueAt } : {}),
+      },
+    }).catch((e) => console.warn('[AXE] plan reminder failed:', e));
+  }
+}
+
+/** Probeert het plan; true als het de beurt heeft afgehandeld. */
+async function probeerPlan(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
+  zetGebruiker(text);
+  const plan = await maakPlan(text);
+  if (!plan) {
+    haalGebruikerWeg(text);
+    return false;
+  }
+  pushTierRoute(
+    { ...keuze, tier: plan.jobs.length ? 3 : 2, kind: plan.jobs.length ? 'agent' : 'quick', intercept: true, reason: `plan:${plan.jobs.length}j/${plan.onthoud.length}m/${plan.herinneringen.length}r` },
+    { query: text.slice(0, 60) },
+  );
+  voerPlanUit(text, plan);
+  return true;
+}
+
 /** Zet jobs uit zonder dat sendMessage daarop wacht. */
 function startAxeJobs(stukken: AxeBeurtStuk[]): void {
   const ids = stukken.map((_, i) => `job-${Date.now()}-${i}`);
@@ -437,6 +534,15 @@ export function installTierRouter(): void {
 
       const stukken = splitsAxeBeurten(text);
       const jobs = jobStukkenVan(stukken);
+
+      // Een brain dump of meerdere dingen tegelijk: eerst begrijpen wat Luka
+      // bedoelt, dan pas knippen. Lukt het plan niet, dan de regels hieronder.
+      if (jobs.length >= 2 || moetPlannen(text, jobs.length, 2)) {
+        // Alleen regels (geen netwerk): het plan zelf is de echte klassificatie.
+        const voorlopig: AxeRouteKeuze = { ...classifyAxeTier(text), intercept: true, latencyMs: 0 };
+        if (await probeerPlan(text, voorlopig)) return;
+      }
+
       if (jobs.length >= 2) {
         const keuze = await kiesAxeRoute(text, { vraagModel: vraagKlassificeerder });
         pushTierRoute({ ...keuze, tier: 3, kind: 'agent', intercept: true, reason: `multi:${jobs.length}` }, { query: text.slice(0, 60) });
@@ -465,6 +571,11 @@ export function installTierRouter(): void {
           const ok = await voerTier2Uit(text, keuze);
           if (ok) return;
         } else {
+          // Echt werk: het plan maakt er een opdracht van die op zichzelf
+          // staat en kiest de agent. Zonder plan de oude route.
+          haalGebruikerWeg(text);
+          if (await probeerPlan(text, keuze)) return;
+          zetGebruiker(text);
           const ok = voerJobsUit(text, stukken.length ? stukken : [{ text, route: keuze }]);
           if (ok) return;
         }
