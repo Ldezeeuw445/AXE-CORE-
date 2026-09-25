@@ -300,15 +300,15 @@ export function parseModelKlassificatie(raw: string): AxeRoute | null {
   }
 }
 
+/**
+ * Alles naar `agentic`: dat is de enige capability waar de VPS-worker een
+ * handler voor heeft. 'code', 'trading' en 'research' faalden meteen met
+ * "No handler" (gemeten 25 sep). Welke agent het is, staat in payload.agent;
+ * NorthSea blijft alleen-lezen via execution_mode.
+ */
 export function capabilityVoorAgent(agent: AxeAgentId): string {
-  switch (agent) {
-    case 'developer': return 'code';
-    case 'trading': return 'trading';
-    case 'intel': return 'research';
-    case 'browser': return 'research';
-    case 'northsea': return 'agentic';
-    default: return 'agentic';
-  }
+  void agent;
+  return 'agentic';
 }
 
 export function groetAntwoord(nu = new Date()): string {

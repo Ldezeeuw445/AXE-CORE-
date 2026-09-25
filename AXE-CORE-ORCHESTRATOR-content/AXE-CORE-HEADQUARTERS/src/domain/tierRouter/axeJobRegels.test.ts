@@ -4,6 +4,7 @@ import {
   bouwMultiAck,
   jobAgentVan,
   jobResultaatTekst,
+  jobWachtTekst,
   moetSpraakWachtrij,
   northseaJobModus,
   sessieSamenvatting,
@@ -92,5 +93,15 @@ describe('jobAgentVan', () => {
     expect(jobAgentVan(classifyAxeTier('check NorthSea deals'), 'check NorthSea deals')).toBe('northsea');
     expect(jobAgentVan(classifyAxeTier('vat het AI-nieuws samen'), 'vat het AI-nieuws samen')).toBe('intel');
     expect(jobAgentVan(classifyAxeTier('zet een taak voor morgen'), 'zet een taak voor morgen')).toBe('task');
+  });
+});
+
+describe('jobWachtTekst', () => {
+  it('zegt welke agent op je ok wacht en wat hij wil draaien', () => {
+    const job = { id: 'j', title: 't', agent: 'northsea' as const, state: 'waiting' as const, startedAt: 0, sourceText: 's' };
+    const tekst = jobWachtTekst(job, 'AXE wants to run: systemctl restart northsea');
+    expect(tekst).toMatch(/needs your OK/);
+    expect(tekst).toMatch(/systemctl restart northsea/);
+    expect(tekst).not.toMatch(/AXE wants to run/);
   });
 });

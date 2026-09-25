@@ -6,7 +6,7 @@ import type { AxeAgentId } from '@/domain/agents/roster';
 import { agentById } from '@/domain/agents/roster';
 import type { AxeRoute } from '@/domain/tierRouter/axeRoute';
 
-export type AxeJobState = 'queued' | 'running' | 'done' | 'failed';
+export type AxeJobState = 'queued' | 'running' | 'waiting' | 'done' | 'failed';
 
 export interface AxeJob {
   id: string;
@@ -117,6 +117,15 @@ export function jobResultaatTekst(job: AxeJob): string {
   const naam = agentById(job.agent).name;
   if (job.state === 'failed') return `${naam}: that did not work. ${job.summary || ''}`.trim();
   return `${naam}: ${job.summary || job.title}`;
+}
+
+/** De taak staat stil op een commando dat Luka moet goedkeuren. */
+export function jobWachtTekst(job: AxeJob, vraag?: string): string {
+  const naam = agentById(job.agent).name;
+  const wat = (vraag || '').replace(/^AXE wants to run:\s*/i, '').trim();
+  return wat
+    ? `${naam} needs your OK before it runs ${wat}. It's waiting in Approvals.`
+    : `${naam} needs your OK to continue. It's waiting in Approvals.`;
 }
 
 export function balkLabel(lopend: number): string {

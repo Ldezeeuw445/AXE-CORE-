@@ -40,6 +40,7 @@ import {
   bouwMultiAck,
   jobAgentVan,
   jobResultaatTekst,
+  jobWachtTekst,
   sessieSamenvatting,
   type AxeJob,
 } from '@/domain/tierRouter/axeJobRegels';
@@ -335,10 +336,28 @@ async function monitorTier3(job: AxeJob): Promise<void> {
   const taskId = job.taskId;
   if (!taskId || taskMonitors.has(taskId)) return;
   taskMonitors.add(taskId);
+  // Eén keer melden per goedkeuringsvraag; na je ok loopt de taak door.
+  let gemeldeVraag: string | null = null;
   try {
     while (true) {
       const snapshot = await getDurableTask(taskId);
       const { status } = snapshot.task;
+      if (status === 'waiting_approval') {
+        const vraag = snapshot.approvals.find((a) => a.status === 'pending');
+        const sleutel = vraag?.id ?? 'onbekend';
+        if (gemeldeVraag !== sleutel) {
+          gemeldeVraag = sleutel;
+          const wacht = { ...job, state: 'waiting' as const };
+          useAxeJobStore.getState().patch(job.id, wacht);
+          publiceer(jobWachtTekst(wacht, vraag?.title), { provider: 'tier3', model: job.agent }, 'job');
+        }
+        await new Promise((r) => setTimeout(r, 4_000));
+        continue;
+      }
+      if (gemeldeVraag && (status === 'running' || status === 'queued')) {
+        gemeldeVraag = null;
+        useAxeJobStore.getState().patch(job.id, { ...job, state: 'running' });
+      }
       if (status === 'completed' || status === 'done') {
         meldJobKlaar({
           ...job,

@@ -138,7 +138,9 @@ describe('tier-antwoorden (geen model)', () => {
     expect(agendaAntwoord([])).toMatch(/Nothing on the calendar/);
     expect(prioriteitenAntwoord(['Ship offer'], 0, ['Stand-up'])).toMatch(/Stand-up/);
     expect(tier3Ack('Trading Agent', null)).toMatch(/Trading Agent/);
-    expect(capabilityVoorAgent('developer')).toBe('code');
-    expect(capabilityVoorAgent('trading')).toBe('trading');
+    // Alleen `agentic` heeft een worker; de rest faalde met "No handler".
+    expect(capabilityVoorAgent('developer')).toBe('agentic');
+    expect(capabilityVoorAgent('trading')).toBe('agentic');
+    expect(capabilityVoorAgent('northsea')).toBe('agentic');
   });
 });

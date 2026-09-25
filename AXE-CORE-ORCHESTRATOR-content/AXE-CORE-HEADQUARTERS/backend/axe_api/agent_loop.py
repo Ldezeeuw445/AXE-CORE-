@@ -70,6 +70,16 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "https://ollama.axecompanion.com").r
 OLLAMA_MODEL = os.environ.get("AXE_AGENT_FALLBACK_MODEL", "llama3.1:8b-32k")
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
+# Groq eerst, OpenAI als reserve (25 sep). Gemini gaf 402 "prepayment credits
+# are depleted" en de llama-terugval op deze box deed over één `df` minuten,
+# met de swap vol. Gemeten vanaf de VPS: gpt-oss-120b op Groq geeft een goede
+# tool-call in 0,23s, gpt-4.1-mini op OpenAI in 1,3s. Zonder key slaat de lus
+# die stap gewoon over.
+GROQ_MODEL = os.environ.get("AXE_AGENT_GROQ_MODEL", "openai/gpt-oss-120b")
+OPENAI_MODEL = os.environ.get("AXE_AGENT_OPENAI_MODEL", "gpt-4.1-mini")
+_GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+
 # Cheap insurance on a box that also serves the API. This is not a security
 # boundary -- the agent legitimately has shell here -- it only catches the
 # catastrophic typo that would take the VPS down with it.
@@ -103,8 +113,27 @@ _NEEDS_APPROVAL = (
     "certbot", "psql", "supabase",
 )
 
+# Mail en berichten gaan nooit zonder Luka's ok de deur uit, welke taak het
+# ook is (25 sep). Taken uit het gesprek komen nu echt hier aan, en een shell
+# op de box waar NorthSea en de mailbox draaien kan anders met één curl mailen.
+_OUTBOUND_NEEDS_APPROVAL = (
+    "sendmail", "smtplib", "resend", "mail -s", "mailx",
+    "northsea_verstuur", "/send", "send_email", "send-email",
+)
 
-def approval_reason(command: str, cwd: str | None) -> str | None:
+# Alleen-lezen taken (NorthSea vanuit het gesprek): niets schrijven, niets
+# posten. Lezen blijft vrij.
+_READ_ONLY_NEEDS_APPROVAL = (
+    "curl -x post", "curl -x put", "curl -x patch", "curl -x delete",
+    "curl -d", "curl --data", "--data-raw", "requests.post", "requests.put",
+    "requests.delete", "httpx.post", "httpx.put", "httpx.delete",
+    "rm ", "mv ", "cp ", "tee ", "truncate", "chmod", "chown", ">",
+)
+# Omleidingen die niets schrijven, zodat `2>/dev/null` een leestaak niet stopt.
+_ONSCHULDIGE_OMLEIDING = ("2>&1", "&>/dev/null", "2>/dev/null", ">/dev/null")
+
+
+def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> str | None:
     """Return why this command needs Luka's approval, or None if it may run free.
 
     Conservative in one direction only: an unrecognised command that stays
@@ -117,6 +146,18 @@ def approval_reason(command: str, cwd: str | None) -> str | None:
     for pattern in _NEEDS_APPROVAL:
         if pattern in lowered:
             return f"touches the system ({pattern.strip()})"
+
+    for pattern in _OUTBOUND_NEEDS_APPROVAL:
+        if pattern in lowered:
+            return f"sends something out ({pattern.strip()})"
+
+    if read_only:
+        schoon = lowered
+        for onschuldig in _ONSCHULDIGE_OMLEIDING:
+            schoon = schoon.replace(onschuldig, "")
+        for pattern in _READ_ONLY_NEEDS_APPROVAL:
+            if pattern in schoon:
+                return f"changes something in a read-only task ({pattern.strip()})"
 
     # Writing outside the workspace. Reading outside stays free -- the agent has
     # to be able to look at its own source in order to work on it.
@@ -213,7 +254,10 @@ TOOL_DECLARATIONS = [
             "properties": {
                 "summary": {
                     "type": "string",
-                    "description": "What you actually did, in plain language.",
+                    "description": (
+                        "The answer itself, spoken to Luka: the concrete findings or "
+                        "what now exists (numbers, names, paths). 1-3 short sentences."
+                    ),
                 },
                 "verify_command": {
                     "type": "string",
@@ -249,6 +293,12 @@ How to work:
     The worker will run that command. If the proof fails you will be sent back
     to keep working, so make the proof something that genuinely demonstrates
     the result.
+
+The summary you give finish() is read out loud to Luka, mid-conversation.
+Make it the ANSWER, not a description of your work: say what you found or
+what now exists, with the concrete facts (numbers, names, paths). "The root
+disk has 161 GB free and the server has been up for 1 day 21 hours" -- not
+"Reported the free disk space". One to three short sentences.
 
 You have {MAX_STEPS} steps. Use them."""
 
@@ -409,6 +459,98 @@ async def _call_ollama(contents: list[dict[str, Any]]) -> dict[str, Any]:
     return {"parts": parts}
 
 
+def _to_openai_messages(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Gemini's `contents` -> strikte OpenAI `messages`.
+
+    Ollama slikt tool-berichten zonder id; Groq en OpenAI niet. Elke
+    functionCall krijgt een id, en het antwoord erna verwijst ernaar in
+    dezelfde volgorde.
+    """
+    out: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    open_ids: list[str] = []
+    n = 0
+    for entry in contents:
+        role = entry.get("role")
+        parts = entry.get("parts") or []
+        calls = [p["functionCall"] for p in parts if "functionCall" in p]
+        responses = [p["functionResponse"] for p in parts if "functionResponse" in p]
+        text = " ".join(p["text"] for p in parts if p.get("text"))
+
+        if calls:
+            ids = []
+            for _ in calls:
+                n += 1
+                ids.append(f"call_{n}")
+            open_ids = list(ids)
+            out.append({
+                "role": "assistant",
+                "content": text or None,
+                "tool_calls": [
+                    {"id": i, "type": "function", "function": {
+                        "name": c.get("name"),
+                        "arguments": json.dumps(c.get("args") or {}),
+                    }}
+                    for i, c in zip(ids, calls)
+                ],
+            })
+        elif responses:
+            for r in responses:
+                call_id = open_ids.pop(0) if open_ids else f"call_{n}"
+                out.append({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": json.dumps(r.get("response") or {})[:20000],
+                })
+        elif text:
+            out.append({"role": "assistant" if role == "model" else "user", "content": text})
+    return out
+
+
+async def _call_openai_compat(
+    contents: list[dict[str, Any]], url: str, api_key: str, model: str,
+) -> dict[str, Any]:
+    """Groq of OpenAI, zelfde vorm. Geeft Gemini-vormige content terug."""
+    import httpx
+
+    payload = {
+        "model": model,
+        "messages": _to_openai_messages(contents),
+        "tools": [
+            {"type": "function", "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["parameters"],
+            }}
+            for t in TOOL_DECLARATIONS
+        ],
+        "temperature": 0.2,
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.post(
+            url, json=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        )
+    if response.status_code != 200:
+        raise RuntimeError(f"{model} {response.status_code}: {response.text[:300]}")
+
+    message = ((response.json().get("choices") or [{}])[0]).get("message") or {}
+    parts: list[dict[str, Any]] = []
+    if message.get("content"):
+        parts.append({"text": message["content"]})
+    for call in message.get("tool_calls") or []:
+        fn = call.get("function") or {}
+        args = fn.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError:
+                args = {}
+        parts.append({"functionCall": {"name": fn.get("name"), "args": args or {}}})
+    if not parts:
+        raise RuntimeError(f"{model} returned neither text nor a tool call")
+    return {"parts": parts}
+
+
 async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> dict[str, Any]:
     """Try each provider in turn until one answers.
 
@@ -422,8 +564,14 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     llama3.1:8b-32k returns a correct tool call in ~13s while warm.
     """
     attempts: list[tuple[str, Any]] = []
+    groq_key = os.environ.get("GROQ_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if groq_key:
+        attempts.append((f"groq/{GROQ_MODEL}", lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_MODEL)))
     if api_key:
         attempts.append((f"gemini/{MODEL}", lambda: _call_gemini(contents, api_key)))
+    if openai_key:
+        attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
     attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama(contents)))
 
     errors: list[str] = []
@@ -441,6 +589,7 @@ async def run_agent_loop(
     task_id: str,
     on_event,
     approved_commands: tuple[str, ...] = (),
+    read_only: bool = False,
 ) -> dict[str, Any]:
     """Run the request to completion.
 
@@ -565,7 +714,7 @@ async def run_agent_loop(
 
             if name == "run_shell":
                 command = str(args.get("command") or "")
-                needs = approval_reason(command, args.get("cwd"))
+                needs = approval_reason(command, args.get("cwd"), read_only)
                 if needs and normalize_command(command) in pre_approved:
                     # Luka already said yes to exactly this command on this task.
                     await on_event(
@@ -599,6 +748,10 @@ async def run_agent_loop(
                     _read, path, int(args.get("max_bytes") or 60000)
                 )
                 transcript.append({"step": step, "tool": "read_file", "path": path[:300]})
+            elif name == "write_file" and read_only:
+                path = str(args.get("path") or "")
+                result = {"error": "This is a read-only task. Report what you found instead of writing."}
+                transcript.append({"step": step, "tool": "write_file", "path": path[:300], "refused": "read_only"})
             elif name == "write_file":
                 path = str(args.get("path") or "")
                 await on_event("axe.progress", f"Step {step}: writing {path[:160]}", {})

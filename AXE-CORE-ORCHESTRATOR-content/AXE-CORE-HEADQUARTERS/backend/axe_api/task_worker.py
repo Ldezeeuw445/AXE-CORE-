@@ -267,7 +267,10 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         )
 
     try:
-        output = await run_agent_loop(request_text, task["id"], on_event, approved)
+        output = await run_agent_loop(
+            request_text, task["id"], on_event, approved,
+            read_only=task.get("execution_mode") == "read",
+        )
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})
         await context.event(

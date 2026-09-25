@@ -24,6 +24,6 @@ export const useAxeJobStore = create<AxeJobStateShape>((set) => ({
 }));
 
 export function lopendeJobs(jobs: AxeJob[]): AxeJob[] {
-  return jobs.filter((j) => j.state === 'queued' || j.state === 'running');
+  return jobs.filter((j) => j.state === 'queued' || j.state === 'running' || j.state === 'waiting');
 }
 

@@ -10,6 +10,7 @@ import { balkLabel } from '@/domain/tierRouter/axeJobRegels';
 const STAND: Record<string, string> = {
   queued: 'queued',
   running: 'running',
+  waiting: 'needs your OK',
   done: 'done',
   failed: 'failed',
 };
