@@ -14,11 +14,14 @@
  * live captions and barge-in.
  */
 
-export type RealtimeScribeEvent =
-  | { message_type: 'session_started'; session_id?: string }
-  | { message_type: 'partial_transcript'; text?: string }
-  | { message_type: 'committed_transcript'; text?: string }
-  | { message_type: string; error?: string; warning?: string; [key: string]: unknown };
+export interface RealtimeScribeEvent {
+  message_type: string;
+  session_id?: string;
+  text?: string;
+  error?: string;
+  warning?: string;
+  [key: string]: unknown;
+}
 
 export interface RealtimeScribeHandlers {
   onPartial?: (text: string) => void;
