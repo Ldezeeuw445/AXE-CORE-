@@ -8,14 +8,24 @@ export type ChatIntent = 'talk' | 'act';
 const ACT_RE =
   /\b(bouw|build|pas\s+aan|wijzig|change|fix|commit|merge|pr\b|pull request|integreer|integrate|voeg\s+toe|add\s+to|schrijf\s+code|write\s+code|implement|deploy|run\s+|exec|shell|patch|refactor|open\s+pr|maak\s+een\s+branch|create\s+branch|delete\s+file|update\s+file|git\s+)/i;
 
+/**
+ * Korte gesproken computeropdrachten bevatten vaak géén van de klassieke
+ * coding-verbs hierboven: "open Safari", "klik daar", "type dit", "scroll
+ * omlaag". Als die als TALK eindigen zegt AXE wat hij zou kunnen doen in plaats
+ * van het daadwerkelijk te doen. Alleen imperatieve vormen aan het begin tellen,
+ * zodat "wat vind je van Safari openen?" gewoon gesprek blijft.
+ */
+const DIRECT_ACTION_RE =
+  /^(?:(?:hey|hoi|hi)\s+axe[,\s]+)?(?:open|start|launch|sluit|close|klik|click|tik|tap|scroll|type|typ|focus|navigeer|navigate|ga\s+naar|go\s+to|zet\s+.+\s+(?:open|aan|uit)|turn\s+.+\s+(?:on|off)|zoek\s+op|search\s+for)\b/i;
+
 const TALK_RE =
   /\b(wat\s+vind|what\s+do\s+you\s+think|leg\s+uit|explain|waarom|why|hoe\s+werkt|how\s+does|samenvat|summarize|vertel|tell\s+me|brainstorm)\b/i;
 
 export function classifyChatIntent(text: string): ChatIntent {
   const t = (text || '').trim();
   if (!t) return 'talk';
-  // Explicit act verbs win
-  if (ACT_RE.test(t)) return 'act';
+  // Explicit act verbs and direct device commands win.
+  if (ACT_RE.test(t) || DIRECT_ACTION_RE.test(t)) return 'act';
   if (TALK_RE.test(t) && !ACT_RE.test(t)) return 'talk';
   // Short questions → talk; long imperative → act
   if (t.length < 40 && /\?$/.test(t)) return 'talk';
@@ -37,6 +47,6 @@ const SOCIAL_ONLY_RE =
 export function isSocialChatTurn(text: string): boolean {
   const t = (text || '').trim().replace(/[.!?]+$/g, '').trim();
   if (!t) return false;
-  if (ACT_RE.test(t)) return false;
+  if (ACT_RE.test(t) || DIRECT_ACTION_RE.test(t)) return false;
   return SOCIAL_ONLY_RE.test(t);
 }
