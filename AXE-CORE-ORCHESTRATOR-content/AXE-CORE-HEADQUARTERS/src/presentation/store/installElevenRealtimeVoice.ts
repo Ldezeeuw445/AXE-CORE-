@@ -90,14 +90,14 @@ export function installElevenRealtimeVoice(): void {
   const fallbackStop = useVoiceStore.getState().stopListening;
   const baseSendMessage = useVoiceStore.getState().sendMessage;
 
-  const closeRealtime = (setIdle = true) => {
+  const closeRealtime = async (setIdle = true) => {
     realtimeActive = false;
     realtimeStarting = false;
     generation += 1;
     const closing = session;
     session = null;
-    if (closing) void closing.close();
     stopAllAudio();
+    if (closing) await closing.close();
     if (setIdle) {
       useVoiceStore.setState({
         voiceStatus: 'idle',
@@ -251,8 +251,10 @@ export function installElevenRealtimeVoice(): void {
         onError: (message) => {
           if (!realtimeActive || myGeneration !== generation) return;
           console.warn('[AXE realtime voice]', message);
-          closeRealtime(false);
-          void startFallback(`realtime error: ${message}`);
+          void (async () => {
+            await closeRealtime(false);
+            await startFallback(`realtime error: ${message}`);
+          })();
         },
 
         onClosed: (_code, reason) => {
@@ -305,14 +307,14 @@ export function installElevenRealtimeVoice(): void {
         fallbackStop();
         return;
       }
-      closeRealtime(true);
+      void closeRealtime(true);
     },
 
     // Typed input deliberately hangs up a realtime voice call, matching the
     // existing Whisper behaviour. Scribe commits call baseSendMessage directly
     // and therefore do NOT pass through this wrapper.
     sendMessage: async (text: string) => {
-      if (realtimeActive || realtimeStarting) closeRealtime(false);
+      if (realtimeActive || realtimeStarting) await closeRealtime(false);
       return baseSendMessage(text);
     },
   });
