@@ -430,9 +430,16 @@ hotkey om de mic van overal te openen.
 - [x] **6.13** Kern van de sphere spreekt mee met AXE (zelfde signaal als de
       composer-pulse).
 - [x] **6.14** Agent-vensters rond de core op Home (screenshot shell-preview).
-- [ ] **6.15** Machinekeuze: een taak die over de Mac mini gaat (autosync,
-      bestanden daar) moet naar de computer-worker op de Mac mini, niet naar
-      de VPS-lus. Nu draait alles op de VPS.
+- [x] **6.15** Machinekeuze (Rabbit OS3: de cloud denkt, de apparaten doen).
+      De agent-lus op de VPS heeft `list_devices` + `run_on_device`
+      (`backend/axe_api/device_actions.py`): een actie wordt een
+      `computer_use`-rij met `target_device`, die alleen de worker op díe Mac
+      pakt. Tiers gelijk aan `riskTiers.ts` (test bewaakt dat); klikken/typen
+      vraagt één ok per Mac+gereedschap, ingrijpend elke keer, leestaak weigert.
+      Bewezen 25 sep: "welke app staat vooraan op de Mac mini en de iMac" →
+      beide Macs gevraagd, juist antwoord, 3 stappen. iMac mist nog
+      Toegankelijkheid + Schermopname (Luka zet die zelf aan).
+      Worker vergelijkt nu met zijn start-build, niet live HEAD (autosync).
 - [ ] **6.16** Echt getest in de app met stem: een brain dump van een paar
       minuten, onderbreken, resultaten die terugkomen. Nog niet gedaan.
 

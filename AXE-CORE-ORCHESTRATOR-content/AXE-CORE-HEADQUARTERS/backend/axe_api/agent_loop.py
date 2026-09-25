@@ -36,6 +36,8 @@ import subprocess
 import time
 from typing import Any
 
+import device_actions
+
 # Budget. The old loop allowed 10 steps and 2 minutes, which is not enough to
 # do anything real -- a single "read the file, change it, check it built" cycle
 # is already three. These are the numbers for a background task, not a chat
@@ -240,6 +242,39 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "list_devices",
+        "description": (
+            "List Luka's Macs that can act for you (Mac mini, iMac), whether each is "
+            "online, and which workspaces it has. Call this before run_on_device."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"include_offline": {"type": "boolean", "description": "ignored; offline Macs are always listed"}},
+        },
+    },
+    {
+        "name": "run_on_device",
+        "description": (
+            "Run one action on one of Luka's Macs through its computer-worker. Use "
+            "this for anything about a Mac: its files, apps, screen, repo checkouts. "
+            "run_shell is the VPS, not a Mac. Tools include system.info, files.list, "
+            "files.read, files.search, files.write, app.list, app.frontmost, app.open, "
+            "screen.observe, pointer.click, keyboard.type, keyboard.key, git.status, "
+            "git.log, terminal.test, terminal.build, claude_code.run. Clicking, typing "
+            "and writing ask Luka once per device and tool."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device": {"type": "string", "description": "device id from list_devices"},
+                "tool": {"type": "string"},
+                "args": {"type": "object", "description": "the tool's arguments"},
+                "workspace": {"type": "string", "description": "AXE Core (default), AXE Companion or Trading OS"},
+            },
+            "required": ["device", "tool"],
+        },
+    },
+    {
         "name": "finish",
         "description": (
             "Call this ONLY when the work is actually done and you can prove it. "
@@ -299,6 +334,16 @@ Make it the ANSWER, not a description of your work: say what you found or
 what now exists, with the concrete facts (numbers, names, paths). "The root
 disk has 161 GB free and the server has been up for 1 day 21 hours" -- not
 "Reported the free disk space". One to three short sentences.
+
+Luka has devices, and you pick where each piece of work happens:
+  - the VPS (run_shell, read_file, write_file): servers, APIs, the planner.
+  - his Macs (list_devices, run_on_device): the Mac mini is the brain, the iMac
+    the executor. Anything about a Mac's files, apps or screen goes there, to
+    the Mac it is about. If he names no Mac, use whichever is online, Mac mini
+    first. If a Mac is offline, say so rather than guessing its state.
+When the proof for finish() lives on a Mac, verify with a VPS command that
+echoes the fact you observed there (e.g. `echo "iMac frontmost: Safari"`),
+having seen it in a run_on_device answer in this task.
 
 You have {MAX_STEPS} steps. Use them."""
 
@@ -761,6 +806,33 @@ async def run_agent_loop(
                 transcript.append({
                     "step": step, "tool": "write_file", "path": path[:300],
                     "bytes": result.get("bytes_written"),
+                })
+            elif name == "list_devices":
+                await on_event("axe.progress", f"Step {step}: checking which Macs are online", {})
+                result = {"devices": await asyncio.to_thread(device_actions.list_devices)}
+                transcript.append({"step": step, "tool": "list_devices"})
+            elif name == "run_on_device":
+                device = str(args.get("device") or "")
+                tool = str(args.get("tool") or "")
+                dargs = args.get("args") if isinstance(args.get("args"), dict) else {}
+                key = None if read_only else device_actions.approval_key(device, tool, dargs)
+                if key and normalize_command(key) not in pre_approved:
+                    transcript.append({
+                        "step": step, "tool": "run_on_device", "device": device,
+                        "device_tool": tool, "approval_required": key,
+                    })
+                    raise ApprovalRequired(key, f"changes something on {device} ({tool})")
+                await on_event(
+                    "axe.progress", f"Step {step}: {tool} on {device}",
+                    {"device": device, "device_tool": tool},
+                )
+                result = await asyncio.to_thread(
+                    device_actions.run_on_device, device, tool, dargs,
+                    str(args.get("workspace") or "AXE Core"), task_id, read_only,
+                )
+                transcript.append({
+                    "step": step, "tool": "run_on_device", "device": device,
+                    "device_tool": tool, "ok": result.get("ok"),
                 })
             else:
                 result = {"error": f"unknown tool {name!r}"}
