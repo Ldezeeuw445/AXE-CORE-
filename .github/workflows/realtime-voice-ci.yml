@@ -1,0 +1,31 @@
+name: Realtime Voice CI
+
+on:
+  push:
+    branches:
+      - feat/elevenlabs-realtime-voice
+  workflow_dispatch:
+
+env:
+  HQ: AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ env.HQ }}/package-lock.json
+      - name: Install
+        working-directory: ${{ env.HQ }}
+        run: npm ci
+      - name: Typecheck
+        working-directory: ${{ env.HQ }}
+        run: npm run typecheck
+      - name: Realtime voice tests
+        working-directory: ${{ env.HQ }}
+        run: npx vitest run src/infrastructure/gateways/elevenRealtimeScribe.test.ts src/presentation/store/installWhisperVoice.test.ts
