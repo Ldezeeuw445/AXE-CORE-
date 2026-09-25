@@ -2067,6 +2067,23 @@ html:root[data-look],
   border-top: var(--axe-kaart-scheiding);
 }
 
+/* Een tab die zelf al een SchuifBalk in zijn TabRail zet: TabRail levert de
+   kaart en de voet al, dus de binnenste wordt plat en zonder tweede voet. */
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-schuifbalk {
+  padding: 0;
+  flex: none;
+}
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-schuifbalk-kaart {
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-schuifbalk-voet {
+  display: none;
+}
+
 :root[data-look] .axe-browser-vak {
   /* De marges horen hier, niet elders.
      Ik haalde ze weg op de aanname dat .axe-tabruimte om elke pagina ze zou
