@@ -368,7 +368,7 @@ async function monitorTier3(job: AxeJob): Promise<void> {
           gemeldeVraag = sleutel;
           const wacht = { ...job, state: 'waiting' as const };
           useAxeJobStore.getState().patch(job.id, wacht);
-          publiceer(jobWachtTekst(wacht, vraag?.title), { provider: 'tier3', model: job.agent }, 'job');
+          publiceer(jobWachtTekst(wacht, vraag), { provider: 'tier3', model: job.agent }, 'job');
         }
         await new Promise((r) => setTimeout(r, 4_000));
         continue;
@@ -400,6 +400,100 @@ async function monitorTier3(job: AxeJob): Promise<void> {
   } finally {
     taskMonitors.delete(taskId);
   }
+}
+
+interface GesprokenGoedkeuringKandidaat {
+  job: AxeJob;
+  approval: DurableTaskApproval;
+}
+
+/**
+ * AXE heeft de goedkeuringsvraag zelf net hardop gesteld. Een kort "ja" of
+ * "nee" moet dan ook werkelijk de geparkeerde durable task hervatten/stoppen.
+ *
+ * Alleen session-jobs tellen mee: zo kan een losse "ja" nooit per ongeluk een
+ * oude approval uit een ander venster of van gisteren tekenen. Bij meer dan één
+ * open vraag weigeren we te raden welke Luka bedoelt.
+ */
+async function probeerGesprokenGoedkeuring(text: string): Promise<boolean> {
+  const besluit = gesprokenGoedkeuringsBesluit(text);
+  if (!besluit) return false;
+
+  const wachtend = useAxeJobStore.getState().jobs
+    .filter((j) => j.state === 'waiting' && !!j.taskId);
+
+  if (!wachtend.length) return false;
+
+  const kandidaten: GesprokenGoedkeuringKandidaat[] = [];
+  const snapshots = await Promise.all(
+    wachtend.map(async (job) => {
+      try {
+        const snapshot = await getDurableTask(job.taskId!);
+        return { job, snapshot };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  for (const entry of snapshots) {
+    if (!entry) continue;
+    const approval = entry.snapshot.approvals.find((a) => a.status === 'pending');
+    if (approval) kandidaten.push({ job: entry.job, approval });
+  }
+
+  if (!kandidaten.length) return false;
+
+  if (kandidaten.length > 1) {
+    publiceer(
+      `I have ${kandidaten.length} approvals waiting. Tell me which task you mean.`,
+      { provider: 'rules', model: 'spoken-approval/ambiguous' },
+      'ack',
+    );
+    return true;
+  }
+
+  const { job, approval } = kandidaten[0];
+
+  if (besluit === 'approve' && !magMetStemGoedkeuren(approval)) {
+    publiceer(
+      'That approval is too consequential to accept by voice. Use the Approvals control.',
+      { provider: 'rules', model: 'spoken-approval/blocked' },
+      'ack',
+    );
+    return true;
+  }
+
+  try {
+    await decideDurableTaskApproval(
+      approval.task_id,
+      approval.id,
+      besluit === 'approve',
+      besluit === 'approve' ? 'Approved by spoken AXE reply.' : 'Rejected by spoken AXE reply.',
+    );
+
+    if (besluit === 'approve') {
+      useAxeJobStore.getState().patch(job.id, { state: 'running' });
+      publiceer(
+        `Okay. ${agentById(job.agent).name} is continuing.`,
+        { provider: 'rules', model: 'spoken-approval/approved' },
+        'ack',
+      );
+    } else {
+      publiceer(
+        'Okay. I rejected that action.',
+        { provider: 'rules', model: 'spoken-approval/rejected' },
+        'ack',
+      );
+    }
+  } catch (e) {
+    publiceer(
+      `I couldn't apply that approval: ${e instanceof Error ? e.message : String(e)}`,
+      { provider: 'rules', model: 'spoken-approval/error' },
+      'ack',
+    );
+  }
+  return true;
 }
 
 /** Modellen voor het beurtplan, snelste eerst. Groq's gratis dagtegoed kan op
