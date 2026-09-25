@@ -29,7 +29,7 @@
  * Run:  node infra/axe-computer-worker/worker.mjs
  */
 import { execFile } from 'node:child_process';
-import { readFile, readdir, stat, unlink } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { resolve, sep, join, dirname } from 'node:path';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
@@ -541,7 +541,11 @@ async function execute(payload) {
   // Third and last check on protected branches — see the header.
   const branch = (await git(root, 'branch', '--show-current')).trim();
   const writes = !READ_ONLY.has(tool);
-  if (writes && ws.protected.includes(branch)) {
+  // Creating a NEW feature branch is precisely how AXE gets off a protected
+  // branch, so that one operation must be allowed while standing on
+  // orchestrator/main. Every other write remains blocked here.
+  const mayLeaveProtected = tool === 'git.create_branch';
+  if (writes && ws.protected.includes(branch) && !mayLeaveProtected) {
     throw new Error(
       `refusing to ${tool} while on protected branch '${branch}'. Create a feature branch first.`,
     );
@@ -576,6 +580,21 @@ async function execute(payload) {
       return (await readFile(file, 'utf8')).slice(0, MAX_OUTPUT);
     }
 
+    case 'files.write': {
+      const file = safePath(root, args.path);
+      const body = String(args.content ?? '');
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, body, 'utf8');
+      return `wrote ${Buffer.byteLength(body, 'utf8')} bytes to ${file}`;
+    }
+
+    case 'files.delete': {
+      const file = safePath(root, args.path);
+      if (file === root) throw new Error('refusing to delete the workspace root');
+      await rm(file, { recursive: true, force: false });
+      return `deleted ${file}`;
+    }
+
     case 'files.search': {
       const q = String(args.query ?? '').trim();
       if (!q) throw new Error('files.search needs a query');
@@ -591,6 +610,42 @@ async function execute(payload) {
       return git(root, 'checkout', '-b', name);
     }
 
+    case 'git.commit': {
+      const message = String(args.message ?? '').trim();
+      const paths = Array.isArray(args.paths)
+        ? args.paths.map(p => String(p)).filter(Boolean)
+        : [];
+      if (!message) throw new Error('git.commit needs a message');
+      if (!paths.length) throw new Error('git.commit needs explicit paths; refusing implicit git add -A');
+      const safe = paths.map(p => safePath(root, p));
+      await git(root, 'add', '--', ...safe);
+      return git(root, 'commit', '-m', message);
+    }
+
+    case 'git.push': {
+      const remote = String(args.remote ?? 'origin').trim();
+      const target = String(args.branch ?? branch).trim();
+      if (!/^[A-Za-z0-9._-]+$/.test(remote)) throw new Error('invalid git remote');
+      if (!/^[A-Za-z0-9._\/-]+$/.test(target)) throw new Error('invalid git branch');
+      return git(root, 'push', remote, target);
+    }
+
+    case 'git.merge': {
+      const source = String(args.branch ?? args.source ?? '').trim();
+      if (!source || !/^[A-Za-z0-9._\/-]+$/.test(source)) throw new Error('git.merge needs a valid source branch');
+      return git(root, 'merge', '--no-edit', source);
+    }
+
+    case 'git.pr_open': {
+      const title = String(args.title ?? '').trim();
+      const body = String(args.body ?? '').trim();
+      const base = String(args.base ?? 'orchestrator').trim();
+      if (!title) throw new Error('git.pr_open needs a title');
+      if (!/^[A-Za-z0-9._\/-]+$/.test(base)) throw new Error('invalid PR base branch');
+      const gh = env.AXE_GH_BIN ?? '/opt/homebrew/bin/gh';
+      return run(gh, ['pr', 'create', '--title', title, '--body', body, '--base', base, '--head', branch], root);
+    }
+
     case 'terminal.typecheck':
     case 'terminal.lint':
     case 'terminal.test':
@@ -598,6 +653,15 @@ async function execute(payload) {
     case 'terminal.install': {
       const [cmd, argv] = COMMANDS[tool];
       return run(cmd, argv, root);
+    }
+
+    case 'terminal.free': {
+      const command = String(args.command ?? args.cmd ?? '').trim();
+      if (!command) throw new Error('terminal.free needs a command');
+      // This tool is consequential and reaches here only after approval for
+      // the exact arguments. Keep the free shell in one visibly dangerous
+      // tool instead of smuggling shell parsing into all the safe tools.
+      return run('/bin/zsh', ['-lc', command], root);
     }
 
     case 'claude_code.run': {
@@ -609,6 +673,26 @@ async function execute(payload) {
         '--continue',
         '--allowedTools', 'Read,Glob,Grep,Edit,Write',
       ], root);
+    }
+
+    case 'codex.run': {
+      const prompt = String(args.prompt ?? '').trim();
+      if (!prompt) throw new Error('codex.run needs a prompt');
+      const bin = env.AXE_CODEX_BIN ?? '/opt/homebrew/bin/codex';
+      const argv = ['exec', prompt, '-C', '.', '-s', 'workspace-write', '--approve-for-me'];
+      const model = String(args.model ?? '').trim();
+      if (model) argv.push('-m', model);
+      return run(bin, argv, root);
+    }
+
+    case 'cursor.run': {
+      const prompt = String(args.prompt ?? '').trim();
+      if (!prompt) throw new Error('cursor.run needs a prompt');
+      const bin = env.AXE_CURSOR_BIN ?? '/opt/homebrew/bin/cursor-agent';
+      const argv = ['-p', prompt, '--output-format', 'json', '--force'];
+      const model = String(args.model ?? '').trim();
+      if (model) argv.push('--model', model);
+      return run(bin, argv, root);
     }
 
     default:
