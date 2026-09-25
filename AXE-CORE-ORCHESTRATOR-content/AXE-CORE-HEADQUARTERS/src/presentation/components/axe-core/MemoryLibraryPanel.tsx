@@ -31,7 +31,6 @@ import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMem
 import { ObsidianNeuralGraph } from '@/presentation/components/axe-core/ObsidianNeuralGraph';
 import { listRecentObsidianNotes } from '@/infrastructure/persistence/obsidianMemoryService';
 import type { ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
-import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { cn } from '@/shared/utils';
 
 function GrowthSparkline({ history }: { history: number[] }) {
@@ -354,7 +353,7 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
             </AnimatePresence>
           </div>
 
-          <div className={cn(LIST_GRID, 'lg:gap-4 flex-shrink-0')}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4 flex-shrink-0">
             <Shelf
               title="Obsidian notes"
               count={stats?.noteCount ?? 0}

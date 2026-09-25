@@ -22,7 +22,6 @@ import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMem
 import { writeReflection } from '@/infrastructure/persistence/reflectionService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
-import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
@@ -508,7 +507,7 @@ export default function EveFramework() {
             een leeg vlak van 250px met alleen een naam erin naast een kaart
             die wél iets toont -- een doos vol niets is erger dan de plaat.
             Elke kaart houdt nu zijn eigen hoogte. */}
-        <div className={`${LIST_GRID} items-start`}>
+        <div className="axe-eve-kolommen">
           {providers.map(provider => (
             <div key={provider.id} id={`axe-eve-${provider.id}`} className="contents">
             <ProviderCard

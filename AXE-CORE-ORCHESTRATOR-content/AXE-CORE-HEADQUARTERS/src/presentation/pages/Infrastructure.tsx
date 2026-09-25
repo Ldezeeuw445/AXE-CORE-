@@ -8,7 +8,7 @@ import { SystemRegistryPanel } from '@/presentation/components/shared/SystemRegi
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { Menu } from 'lucide-react';
-import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 
 /* ─── Project definitions ──────────────────────────────────────────── */
 const PROJECTS = [
@@ -246,7 +246,7 @@ export default function Infrastructure() {
             <motion.div key={activeProject} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0 p-5 gap-4 overflow-y-auto">
 
               {/* Project header */}
-              <div className="flex items-start justify-between">
+              <Kaart><div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2.5">
                     <span style={{ color: project.color, fontSize: 20 }}>{project.emoji}</span>
@@ -260,11 +260,13 @@ export default function Infrastructure() {
                   <div className="text-lg font-mono font-bold" style={{ color: project.color }}>{totalRows.toLocaleString()}</div>
                   <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>total rows</div>
                 </div>
-              </div>
+              </div></Kaart>
+
+              {/* Drie kaarten naast elkaar: stack, live diensten, modellen. */}
+              <div className="axe-infra-raster">
 
               {/* Tech stack */}
-              <div>
-                <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Tech Stack</p>
+              <Kaart titel="TECH STACK">
                 <div className="flex flex-wrap gap-2">
                   {project.stack.map(s => {
                     const serviceKey = s.name.toLowerCase().replace(/\s+/g, '_');
@@ -280,18 +282,19 @@ export default function Infrastructure() {
                     );
                   })}
                 </div>
-              </div>
+              </Kaart>
 
               {/* Services from core_system_state for this project */}
-              {(projectServiceKeys[activeProject] ?? []).length > 0 && (
-                <div>
-                  <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Live Service Status</p>
-                  <div className={LIST_GRID}>
+              <Kaart titel="LIVE SERVICES">
+              {(projectServiceKeys[activeProject] ?? []).length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No live services tracked for this project.</p>
+              ) : (
+                  <div className="flex flex-col gap-1.5">
                     {(projectServiceKeys[activeProject] ?? []).map(key => {
                       const s = liveStates[key];
                       if (!s) return null;
                       return (
-                        <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                        <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
                           <div>
                             <div className="text-xs" style={{ color: 'var(--text-primary)' }}>{s.display}</div>
                             {s.latency_ms != null && <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{s.latency_ms}ms</div>}
@@ -301,22 +304,22 @@ export default function Infrastructure() {
                       );
                     })}
                   </div>
-                </div>
               )}
+              </Kaart>
 
               {/* Ollama models — per-model card + test */}
-              <div>
-                <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Ollama Models (VPS)</p>
+              <Kaart titel="OLLAMA MODELS (VPS)">
                 <OllamaModelCards />
+              </Kaart>
               </div>
 
+              {/* Architectuur en tabellen naast elkaar. */}
+              <div className="axe-infra-raster axe-infra-raster--twee">
               <SystemRegistryPanel />
 
               {/* Tables */}
-              <div className="flex-1 min-h-0">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[9px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Database Tables</p>
-                  <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="filter tables…" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', outline: 'none', width: 140 }} />
+              <Kaart titel="DATABASE TABLES" actie={<input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="filter tables…" className="text-[10px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)', outline: 'none', width: 140 }} />}>
+                <div className="hidden">
                 </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-8" style={{ color: 'var(--text-muted)' }}>
@@ -327,7 +330,7 @@ export default function Infrastructure() {
                 ) : (
                   <div className="grid grid-cols-1 gap-1 max-h-80 overflow-y-auto pr-1">
                     {filteredTables.map(t => (
-                      <div key={t.tbl} className="flex items-center justify-between px-3 py-1.5 rounded" style={{ background: 'var(--bg-surface)' }}>
+                      <div key={t.tbl} className="flex items-center justify-between px-3 py-1.5 rounded" style={{ background: 'rgba(255,255,255,0.03)' }}>
                         <span className="text-[11px] font-mono" style={{ color: 'var(--text-primary)' }}>{t.tbl}</span>
                         <span className="text-[10px] font-mono ml-2" style={{ color: t.approx_rows > 0 ? project.color : 'var(--text-muted)' }}>
                           {t.approx_rows.toLocaleString()}
@@ -336,6 +339,7 @@ export default function Infrastructure() {
                     ))}
                   </div>
                 )}
+              </Kaart>
               </div>
 
             </motion.div>
@@ -391,12 +395,12 @@ function OllamaModelCards() {
   };
 
   return (
-    <div className={LIST_GRID}>
+    <div className="flex flex-col gap-1.5">
       {models.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No Ollama models found. Is the VPS reachable?</p>}
       {models.map(m => {
         const res = results[m.name];
         return (
-          <div key={m.name} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+          <div key={m.name} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
             <div className="min-w-0 mr-2">
               <div className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{m.name}</div>
               <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>

@@ -409,7 +409,7 @@ export default function AppsPage() {
               10–40 and anything Luka adds lands at 500, so his own apps group
               at the end without needing a second grid of duplicated card. */}
           <SectionLabel>Apps</SectionLabel>
-          <CardGrid cols={3}>
+          <CardGrid cols={4}>
             {apps.map((app, i) => {
               const state = live[app.id] ?? 'unknown';
               const st = STATE_STYLE[state];

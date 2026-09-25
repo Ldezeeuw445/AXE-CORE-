@@ -160,13 +160,6 @@ export default function CrewAI() {
       <TabRuimte vullen>
       <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
-        <div className="min-w-0">
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>CrewAI Specialists</h1>
-          <p className="text-xs-custom max-w-2xl" style={{ color: 'var(--text-muted)' }}>
-            Run a real multi-specialist crew on the VPS as a background job. Pick the specialists, describe the task,
-            and get their synthesized result — this can take minutes on local Ollama models.
-          </p>
-        </div>
         <div
           className="text-[10px] px-2 py-1 rounded-full self-start"
           style={{

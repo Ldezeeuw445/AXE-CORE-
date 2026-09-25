@@ -7051,3 +7051,23 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-agent-raster--sectie { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); }
 .axe-agent-raster--sectie > .widget-card,
 .axe-agent-raster--sectie > .axe-kaart { height: 100%; min-height: 0; }
+
+/* Kaarten in één rij zijn even hoog (MCP-servers, Memory-blokken): het raster
+   rekt ze mee, en de inhoud blijft bovenaan. */
+:root[data-look] .axe-kaart-raster { align-items: stretch; }
+:root[data-look] .axe-kaart-raster > .axe-kaart,
+:root[data-look] .axe-kaart-raster > .widget-card { height: 100%; }
+.axe-finance-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; margin-bottom: 12px; }
+.axe-finance-raster > .widget-card { height: 100%; }
+@media (max-width: 1100px) { .axe-finance-raster { grid-template-columns: 1fr; } }
+.axe-finance-raster { width: 100%; align-self: stretch; }
+.axe-finance-raster + .widget-card { width: 100%; align-self: stretch; }
+/* EVE: kolommen zonder gaten -- open en dichte providerkaarten door elkaar
+   maakten in een raster een trapje. */
+.axe-eve-kolommen { column-width: 340px; column-gap: 12px; }
+.axe-eve-kolommen .axe-kaart { break-inside: avoid; margin-bottom: 12px; width: 100%; }
+/* Infrastructure als dashboard: kaarten naast elkaar, gelijke hoogte per rij. */
+.axe-infra-raster { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.axe-infra-raster--twee { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.axe-infra-raster > * { min-width: 0; height: 100%; }
+@media (max-width: 1100px) { .axe-infra-raster, .axe-infra-raster--twee { grid-template-columns: 1fr; } }

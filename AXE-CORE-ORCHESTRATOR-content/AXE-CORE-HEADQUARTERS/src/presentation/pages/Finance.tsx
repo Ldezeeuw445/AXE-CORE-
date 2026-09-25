@@ -201,6 +201,8 @@ export default function Finance() {
       {/* AXE Algo reconciliation — deliberately its own card, never folded
           into the real-income numbers above. Demo pnl is simulated money;
           it must never look like it adds to what Luka actually earned. */}
+      {/* Digest en invoer naast elkaar, even hoog; het grootboek eronder over de volle breedte. */}
+      <div className="axe-finance-raster">
       <WidgetCard
         title={`AXE ALGO — ${digest ? digest.period : 'LAST DIGEST'}`}
         headerAction={
@@ -363,6 +365,7 @@ export default function Finance() {
           Tip Prime Opinion: na een sessie of cashout log je bedrag + aantal voltooide enquêtes. Geen automatische koppeling — jij blijft de bron van waarheid.
         </p>
       </WidgetCard>
+      </div>
 
       <WidgetCard title="LEDGER">
         {loading && !entries.length ? (
