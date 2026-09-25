@@ -17,7 +17,8 @@
  *   2. the workspace must be one of ours         (path never comes from the row)
  *   3. every resolved path must stay inside it   (defeats ../ and symlinks)
  *   4. credentials are refused by name           (wherever they live)
- *   5. commands are argv against an allowlist    (no shell → no injection)
+ *   5. normal commands are argv against an allowlist; the one free-shell tool
+ *      is consequential and runs only after approval of its exact command
  *   6. protected branches are never written to   (checked here, not upstream)
  *
  * Check 6 is the one worth defending. The UI already refuses to edit on
@@ -617,8 +618,8 @@ async function execute(payload) {
         : [];
       if (!message) throw new Error('git.commit needs a message');
       if (!paths.length) throw new Error('git.commit needs explicit paths; refusing implicit git add -A');
-      const safe = paths.map(p => safePath(root, p));
-      await git(root, 'add', '--', ...safe);
+      paths.forEach(p => safePath(root, p));
+      await git(root, 'add', '--', ...paths);
       return git(root, 'commit', '-m', message);
     }
 
