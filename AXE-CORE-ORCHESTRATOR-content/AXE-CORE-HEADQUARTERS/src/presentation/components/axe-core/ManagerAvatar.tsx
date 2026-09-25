@@ -16,12 +16,9 @@ const DRIEHOEK =
 export function ManagerAvatar({
   agent,
   size = 26,
-  stil = false,
 }: {
   agent: AxeAgent;
   size?: number;
-  /** Stilstaande manager: zelfde vorm, minder aanwezig. */
-  stil?: boolean;
 }) {
   return (
     <svg
@@ -31,7 +28,6 @@ export function ManagerAvatar({
       role="img"
       aria-label={agent.name}
       style={{
-        opacity: stil ? 0.5 : 1,
         flexShrink: 0,
         display: 'block',
         // Zelfde reden als de tekstschaduw in de kolom: in de glasstand staat

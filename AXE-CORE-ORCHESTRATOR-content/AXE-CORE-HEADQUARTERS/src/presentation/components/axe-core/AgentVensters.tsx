@@ -49,8 +49,17 @@ const LEESBAAR = '0 1px 3px rgba(0,0,0,.7)';
  */
 function Rij({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: () => void }) {
   const { agent, job, regel } = rij;
-  const stand = job ? STAND[job.state] : null;
-  const stil = job == null;
+
+  /* Niets wordt gedempt, ook niet wie stilstaat. Luka, 25 sep: "ik wil juist
+     dat het echt zijn kleur heeft, niet gedempt." Hier stond een opacity van
+     0.55 op een stilstaande manager, zodat je oog naar wie er werkt getrokken
+     werd. Maar de vijf driehoekjes zijn herkenningspunten -- je zoekt Trading
+     op zijn kleur -- en die moet je niet inhouden.
+
+     Wat het verschil dan draagt: het statuswoord onder de naam, dat ook voor
+     een stilstaande manager verschijnt, en de regel eronder die hij dan niet
+     heeft. */
+  const stand = job ? STAND[job.state] : { label: 'idle', kleur: 'var(--text-muted)' };
 
   return (
     <button
@@ -59,9 +68,9 @@ function Rij({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: ()
       aria-expanded={open}
       aria-label={`Gesprek met ${agent.name}`}
       className="flex flex-col items-center gap-1 w-full bg-transparent border-0 p-0 text-center"
-      style={{ opacity: stil ? 0.55 : 1, textShadow: LEESBAAR }}
+      style={{ textShadow: LEESBAAR }}
     >
-      <ManagerAvatar agent={agent} size={34} stil={stil} />
+      <ManagerAvatar agent={agent} size={34} />
 
       {/* De korte naam, niet de volle: "NORTHSEA DESK MANAGER" breekt in een
           smalle kolom over drie regels en dan staat de rail scheef. */}
@@ -72,14 +81,12 @@ function Rij({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: ()
         {agent.kort ?? agent.name}
       </span>
 
-      {stand && (
-        <span
-          className="text-[8.5px] tracking-[0.1em] uppercase leading-none"
-          style={{ color: stand.kleur }}
-        >
-          {stand.label}
-        </span>
-      )}
+      <span
+        className="text-[8.5px] tracking-[0.1em] uppercase leading-none"
+        style={{ color: stand.kleur }}
+      >
+        {stand.label}
+      </span>
 
       {regel && (
         <span
