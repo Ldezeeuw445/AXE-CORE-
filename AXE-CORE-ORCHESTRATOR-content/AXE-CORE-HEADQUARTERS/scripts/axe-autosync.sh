@@ -63,8 +63,16 @@ if [[ "$(cat "$MISLUKT" 2>/dev/null)" == "$DOEL" ]]; then
   exit 0
 fi
 
-log "app is ${GEBOUWD:-onbekend}, code is $DOEL — bouwen"
-if env -i HOME="$HOME" USER="$USER" LOGNAME="$USER" SHELL=/bin/zsh TMPDIR="${TMPDIR:-/tmp}" \
+# Nooit bouwen terwijl Luka werkt (25 sep): een build trekt de 8 GB-Mac leeg en
+# herstart AXE CORE onder zijn handen. Pas na 5 minuten niets aanraken, of
+# meteen met AXE_NU=1 (bureaublad: "AXE nu bijwerken").
+STIL=$(ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}')
+if [[ "${AXE_NU:-0}" != "1" && "${STIL:-0}" -lt 300 ]]; then
+  exit 0
+fi
+
+log "app is ${GEBOUWD:-onbekend}, code is $DOEL — bouwen (laagste prioriteit)"
+if taskpolicy -b nice -n 19 env -i HOME="$HOME" USER="$USER" LOGNAME="$USER" SHELL=/bin/zsh TMPDIR="${TMPDIR:-/tmp}" \
      PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
      /bin/bash "$HIER/scripts/axe-bijwerken.sh" >"$HOME/Library/Logs/axe-autosync-bouw.log" 2>&1; then
   rm -f "$MISLUKT"
