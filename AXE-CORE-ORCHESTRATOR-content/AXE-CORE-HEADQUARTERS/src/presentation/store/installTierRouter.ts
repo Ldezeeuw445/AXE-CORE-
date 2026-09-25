@@ -84,17 +84,29 @@ function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
     stand = 'idle';
   }
   if (kiesSpraakPad(text, stand, bron) === 'queue') return;
-  const hoor = () => pushBeurtLatentie();
+  const realtime = isElevenRealtimeVoiceActive();
+  const hoor = () => {
+    // De microfoon mag open blijven, maar de toestand moet wél "speaking" zijn.
+    // Anders hoort Scribe AXE's eigen luidspreker als een nieuwe gebruikersbeurt
+    // en werkt barge-in pas na de stilte-commit in plaats van meteen.
+    useVoiceStore.setState({ voiceStatus: 'speaking' });
+    pushBeurtLatentie();
+  };
+  const klaar = () => {
+    if (realtime) {
+      useVoiceStore.setState({ voiceStatus: 'listening', transcript: '' });
+      return;
+    }
+    if (!chatBlijftLuisteren(useVoiceStore.getState().voiceStatus)) {
+      useVoiceStore.setState({ voiceStatus: 'idle' });
+    }
+  };
   if (bron === 'ack') {
     stopGlobalTts();
-    speakGlobal(text, () => {
-      if (!chatBlijftLuisteren(useVoiceStore.getState().voiceStatus)) {
-        useVoiceStore.setState({ voiceStatus: 'idle' });
-      }
-    }, (reason) => useVoiceStore.setState({ error: reason }), hoor);
+    speakGlobal(text, klaar, (reason) => useVoiceStore.setState({ error: reason }), hoor);
     return;
   }
-  speakGlobal(text, undefined, (reason) => useVoiceStore.setState({ error: reason }), hoor);
+  speakGlobal(text, klaar, (reason) => useVoiceStore.setState({ error: reason }), hoor);
 }
 
 export function pushTierRoute(keuze: AxeRouteKeuze, extra: Partial<RoutingEvent> = {}): void {
