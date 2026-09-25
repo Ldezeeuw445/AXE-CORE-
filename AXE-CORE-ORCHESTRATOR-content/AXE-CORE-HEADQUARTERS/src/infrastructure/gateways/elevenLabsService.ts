@@ -35,6 +35,41 @@ function useDirectElevenLabs(): boolean {
   return import.meta.env.DEV || (import.meta.env.PROD && isTauriRuntime());
 }
 
+/**
+ * Realtime Scribe is enabled only on Luka's local/dev or packaged Tauri
+ * surface, where AXE already allows the user-owned ElevenLabs key for TTS.
+ * The public web build must never pull that key from local storage into a
+ * provider request; there it simply keeps using the existing Whisper path.
+ */
+export function isElevenLabsRealtimeScribeConfigured(): boolean {
+  return !!resolveElevenLabsKey() && (import.meta.env.DEV || isTauriRuntime());
+}
+
+/**
+ * Exchange the local ElevenLabs key for the short-lived, single-use token
+ * required by Scribe's client-side WebSocket. The API key is never put in the
+ * WebSocket URL and the token is consumed as soon as the realtime session
+ * opens.
+ */
+export async function createElevenLabsRealtimeScribeToken(): Promise<string> {
+  if (!isElevenLabsRealtimeScribeConfigured()) {
+    throw new Error('ElevenLabs realtime voice is not configured on this device.');
+  }
+  const key = resolveElevenLabsKey();
+  const response = await fetch(`${ELEVENLABS_BASE_URL}/single-use-token/realtime_scribe`, {
+    method: 'POST',
+    headers: { 'xi-api-key': key },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`ElevenLabs realtime token ${response.status}${body ? `: ${body.slice(0, 180)}` : ''}`);
+  }
+  const data = await response.json() as { token?: string };
+  if (!data.token) throw new Error('ElevenLabs returned no realtime token.');
+  return data.token;
+}
+
 const TTS_MODEL_ID = 'eleven_flash_v2_5';
 const TTS_VOICE_SETTINGS = {
   stability: 0.45,
