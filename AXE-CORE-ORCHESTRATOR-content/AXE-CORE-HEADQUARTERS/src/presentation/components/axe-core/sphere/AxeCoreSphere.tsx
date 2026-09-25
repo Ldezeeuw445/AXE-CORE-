@@ -27,6 +27,8 @@
  * je kijkt ergens ín, niet tegen een schil aan.
  */
 import { useEffect, useRef } from 'react';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 
 const N = 2200;
 
@@ -82,6 +84,10 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
     let w = 0, h = 0, d = 1, frame = 0, t = 0;
     let rotY = 0, rotX = 0.32, zoom = 1, auto = 0;
     let slepen = false, lastX = 0, lastY = 0;
+    // De kern spreekt mee met AXE: hetzelfde signaal als de voice pulse in de
+    // composer (getGlobalTtsLevel bij 'speaking'), dus ze lopen gelijk. Als
+    // Luka praat beweegt alleen de composer; de kern blijft rustig.
+    let stem = 0;
 
     const fit = () => {
       const r = canvas.getBoundingClientRect();
@@ -160,6 +166,10 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       x.clearRect(0, 0, w, h);
 
       const b = boostRef.current;
+      const spreekt = useVoiceStore.getState().voiceStatus === 'speaking';
+      const doel = spreekt ? getGlobalTtsLevel() : 0;
+      // Snel omhoog, rustiger omlaag: lettergrepen zie je, geen flikkering.
+      stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
       // Boven het midden: op de telefoon-plaat staat de composer eronder, en dan
       // oogt het gecentreerde midden te laag. 0.40 tilt de bol wat verder op
       // zonder hem tegen de bovenrand te duwen.
@@ -188,18 +198,19 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       // op klein formaat één lichtende bol i.p.v. deeltjes. Gedempt zodat de
       // korrel wint; bij inzoomen blijft er genoeg kern voor diepte.
       const wijd = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.55 * puls);
-      wijd.addColorStop(0, `rgba(110,200,240,${(0.10 + b * 0.08).toFixed(3)})`);
+      wijd.addColorStop(0, `rgba(110,200,240,${(0.10 + b * 0.08 + stem * 0.14).toFixed(3)})`);
       wijd.addColorStop(0.45, 'rgba(60,130,190,.03)');
       wijd.addColorStop(1, 'rgba(0,0,0,0)');
       x.fillStyle = wijd;
       x.beginPath(); x.arc(cx, cy, R * 0.55 * puls, 0, 6.284); x.fill();
 
-      const kern = x.createRadialGradient(cx, cy, 0, cx, cy, R * 0.11 * puls);
-      kern.addColorStop(0, `rgba(240,252,255,${(0.44 + b * 0.22).toFixed(3)})`);
+      const kernR = R * 0.11 * puls * (1 + stem * 0.9);
+      const kern = x.createRadialGradient(cx, cy, 0, cx, cy, kernR);
+      kern.addColorStop(0, `rgba(240,252,255,${Math.min(1, 0.44 + b * 0.22 + stem * 0.4).toFixed(3)})`);
       kern.addColorStop(0.42, 'rgba(120,215,245,.16)');
       kern.addColorStop(1, 'rgba(0,0,0,0)');
       x.fillStyle = kern;
-      x.beginPath(); x.arc(cx, cy, R * 0.12 * puls, 0, 6.284); x.fill();
+      x.beginPath(); x.arc(cx, cy, kernR * (0.12 / 0.11), 0, 6.284); x.fill();
 
       for (const q of binnen) {
         if (q.depth <= 0.5) continue;
