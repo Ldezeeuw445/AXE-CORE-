@@ -269,6 +269,10 @@ export function installElevenRealtimeVoice(): void {
         await opened.close();
         return;
       }
+      if (!opened.isOpen()) {
+        await opened.close();
+        throw new Error('ElevenLabs realtime connection closed during startup.');
+      }
 
       session = opened;
       realtimeStarting = false;
