@@ -33,3 +33,25 @@ describe('planBeurt', () => {
     expect(invoer).toMatch(/Luka now says: doe die van net ook$/);
   });
 });
+
+describe('planBeurt tegelijk', () => {
+  it('een snel tweede model wint van een traag eerste', async () => {
+    const t0 = Date.now();
+    const plan = await planBeurt('x', {
+      timeoutMs: 2_000,
+      modellen: [
+        () => new Promise((r) => setTimeout(() => r(GOED), 1_000)),
+        async () => GOED.replace('Doe ik.', 'Snel.'),
+      ],
+    });
+    expect(plan?.reply).toBe('Snel.');
+    expect(Date.now() - t0).toBeLessThan(500);
+  });
+
+  it('geen enkel geldig plan = null, niet wachten op de limiet', async () => {
+    const t0 = Date.now();
+    const plan = await planBeurt('x', { timeoutMs: 2_000, modellen: [async () => 'geen json', async () => { throw new Error('402'); }] });
+    expect(plan).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(500);
+  });
+});

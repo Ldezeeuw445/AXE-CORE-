@@ -50,7 +50,7 @@ import { kiesSpraakPad, stemlusVanVoice, zetSpraakSpreker } from '@/application/
 import { chatBlijftLuisteren, injecteerJobResultaat } from '@/application/tierRouter/injecteerJobResultaat';
 import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
 import { planBeurt, type PlanModel } from '@/application/tierRouter/planBeurt';
-import { PLAN_GROQ_MODEL, moetPlannen, type BeurtPlan } from '@/domain/tierRouter/beurtPlan';
+import { PLAN_GROQ_MODEL, isKorteOpdracht, moetPlannen, type BeurtPlan } from '@/domain/tierRouter/beurtPlan';
 import { lopendeJobs } from '@/presentation/store/axeJobStore';
 import { stappenUit } from '@/domain/tierRouter/agentVenster';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
@@ -235,7 +235,7 @@ async function voerTier1Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean
   return true;
 }
 
-async function voerTier2Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
+async function voerTier2Uit(text: string, keuze: AxeRouteKeuze, extra = ''): Promise<boolean> {
   const slot = snelSlot('tier2');
   if (!slot) return false;
 
@@ -249,7 +249,7 @@ async function voerTier2Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean
       role: 'system' as const,
       content:
         `${AXE_SYSTEM_PROMPT}\n\n${CONVERSATION_FIRST_RULE}\n${replyLanguageInstruction()}\n\n` +
-        'Answer quickly. No tools. No markers. Light context only.',
+        'Answer quickly. No tools. No markers. Light context only.' + (extra ? `\n${extra}` : ''),
     },
     ...history.slice(0, -1),
     { role: 'user' as const, content: text },
@@ -522,6 +522,18 @@ function voerJobsUit(text: string, stukken: AxeBeurtStuk[]): boolean {
   return true;
 }
 
+/** Gewoon terugpraten (tier 2, gestreamd), zonder iets te starten. */
+async function praatTerug(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
+  const praat: AxeRouteKeuze = { ...keuze, tier: 2, kind: 'quick', intercept: true, reason: 'praten:geen-plan' };
+  pushTierRoute(praat, { query: text.slice(0, 60) });
+  const conv = useVoiceStore.getState().conversation;
+  if (conv[conv.length - 1]?.role !== 'user' || conv[conv.length - 1]?.text !== text) zetGebruiker(text);
+  const eerlijk = 'Nothing was started this turn. If he asked for something to be done, do not claim it is running: say in a few words you could not start it just now and ask him to say it once more.';
+  if (await voerTier2Uit(text, praat, eerlijk)) return true;
+  haalGebruikerWeg(text);
+  return false;
+}
+
 export function installTierRouter(): void {
   if (installed) return;
   installed = true;
@@ -548,14 +560,9 @@ export function installTierRouter(): void {
         // Alleen regels (geen netwerk): het plan zelf is de echte klassificatie.
         const voorlopig: AxeRouteKeuze = { ...classifyAxeTier(text), intercept: true, latencyMs: 0 };
         if (await probeerPlan(text, voorlopig)) return;
-      }
-
-      if (jobs.length >= 2) {
-        const keuze = await kiesAxeRoute(text, { vraagModel: vraagKlassificeerder });
-        pushTierRoute({ ...keuze, tier: 3, kind: 'agent', intercept: true, reason: `multi:${jobs.length}` }, { query: text.slice(0, 60) });
-        zetGebruiker(text);
-        voerJobsUit(text, jobs);
-        return;
+        // Geen plan: dan is dit een gesprek, geen stapel opdrachten. Knippen op
+        // komma's maakte op 25 sep van één gewoon gesprek 25 agent-taken.
+        if (await praatTerug(text, voorlopig)) return;
       }
 
       const keuze = await kiesAxeRoute(text, {
@@ -582,9 +589,14 @@ export function installTierRouter(): void {
           // staat en kiest de agent. Zonder plan de oude route.
           haalGebruikerWeg(text);
           if (await probeerPlan(text, keuze)) return;
-          zetGebruiker(text);
-          const ok = voerJobsUit(text, stukken.length ? stukken : [{ text, route: keuze }]);
-          if (ok) return;
+          // Zonder plan alleen een korte, duidelijke opdracht als één taak --
+          // nooit geknipt. Al het andere is praten.
+          if (!isKorteOpdracht(text)) {
+            if (await praatTerug(text, keuze)) return;
+          } else {
+            zetGebruiker(text);
+            if (voerJobsUit(text, [{ text, route: keuze }])) return;
+          }
         }
       } catch (e) {
         console.warn('[AXE] tier router failed, falling through:', e);

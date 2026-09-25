@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { moetPlannen, parseBeurtPlan, planPrompt, PLAN_MAX_JOBS } from './beurtPlan';
+import { isKorteOpdracht, moetPlannen, parseBeurtPlan, planPrompt, PLAN_MAX_JOBS } from './beurtPlan';
 
 describe('parseBeurtPlan', () => {
   it('leest een echt antwoord van gpt-4.1-mini (25 sep, brain dump)', () => {
@@ -50,5 +50,15 @@ describe('moetPlannen', () => {
 describe('planPrompt', () => {
   it('noemt wat al loopt, zodat het niet opnieuw start', () => {
     expect(planPrompt(new Date('2026-09-25T02:00:00Z'), ['Check VPS health'])).toMatch(/Already running.*Check VPS health/);
+  });
+});
+
+describe('isKorteOpdracht', () => {
+  it('een korte losse opdracht mag zonder plan één taak worden', () => {
+    expect(isKorteOpdracht('check hoeveel schijf de VPS nog heeft')).toBe(true);
+  });
+  it('een lang verhaal nooit (25 sep: één gesprek werd 25 agent-taken)', () => {
+    const verhaal = 'ja nee maar weet je, ik zat vandaag echt te balen, alles liep vast en dat is gewoon kut, maar daar kan je niks aan doen, maar goed het is wat het is en morgen weer een dag';
+    expect(isKorteOpdracht(verhaal)).toBe(false);
   });
 });

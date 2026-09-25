@@ -440,6 +440,14 @@ hotkey om de mic van overal te openen.
       beide Macs gevraagd, juist antwoord, 3 stappen. iMac mist nog
       Toegankelijkheid + Schermopname (Luka zet die zelf aan).
       Worker vergelijkt nu met zijn start-build, niet live HEAD (autosync).
+- [x] **6.17** Praten blijft praten (25 sep). Een gewoon spraakgesprek werd 25
+      "browser"-taken: het plan viel over zijn 3s-limiet en de terugval knipte
+      op komma's. Nu: plan-modellen tegelijk (eerste geldige wint, 6s), geen
+      plan = gewoon terugpraten (en eerlijk zeggen dat niets gestart is), alleen
+      een korte losse opdracht mag zonder plan één taak worden. Prompt: reageer
+      als een mens, geen help-desk-opvulling; stemmingen/verhalen niet onthouden.
+      Gemeten (gpt-4.1-mini): verhaal/stoom afblazen → 0 taken, ~1,1s;
+      gemengde beurt → 1 taak + 1 herinnering + 1 idee, 1,9s.
 - [ ] **6.16** Echt getest in de app met stem: een brain dump van een paar
       minuten, onderbreken, resultaten die terugkomen. Nog niet gedaan.
 

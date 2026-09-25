@@ -12,6 +12,7 @@
  * en wat een herinnering is. Geen I/O hier; de aanroep zit in application/.
  */
 import type { AxeAgentId } from '@/domain/agents/roster';
+import { splitsAxeBeurten } from '@/domain/tierRouter/splitsAxeBeurten';
 
 export interface PlanJob {
   agent: AxeAgentId;
@@ -43,7 +44,7 @@ export const PLAN_MAX_JOBS = 6;
 /** Groq-model voor het plan: groot genoeg om te begrijpen, ~0,3s. */
 export const PLAN_GROQ_MODEL = 'openai/gpt-oss-120b';
 
-export const PLAN_TIMEOUT_MS = 3_000;
+export const PLAN_TIMEOUT_MS = 6_000;
 
 export function planPrompt(nu: Date, lopend: string[]): string {
   const lopendRegel = lopend.length
@@ -53,11 +54,11 @@ export function planPrompt(nu: Date, lopend: string[]): string {
 Read his whole message and decide what he actually wants. Reply with JSON only:
 {"reply": string, "jobs": [{"agent": string, "title": string, "request": string}], "remember": [string], "reminders": [{"title": string, "due": string|null}]}
 
-- reply: what you say back, spoken. One or two short sentences, in the language he used. Confirm what you are starting, answer small questions directly. Never say you cannot do something that a job can do.
-- jobs: ONLY things he asks to be done now. Not ideas ("we should some day..."), not thinking out loud, not questions you can answer in the reply. Max ${PLAN_MAX_JOBS}.
+- reply: what you say back, spoken, in the language he used. Talk like a real person who knows him well, not like a help desk: react to what he actually said. If he is telling a story, venting or thinking out loud, engage with it -- react, give your honest take, or ask one follow-up question. Never end with filler like "how can I help you". One to three short sentences. When you start jobs, say in a few words what you set in motion. Answer small questions directly. Never say you cannot do something that a job can do.
+- jobs: ONLY things he asks to be done now. Not ideas ("we should some day..."), not thinking out loud, not stories, feelings or opinions, not questions you can answer in the reply. Most turns have no jobs. Max ${PLAN_MAX_JOBS}.
   agent: northsea (commodity desk, leads, mailbox - read only), trading (markets, positions, trading desk), developer (code, repos, builds, servers), browser (look something up on the web), intel (news, research briefs), apps (apps and VPS services), finance (money, subscriptions, credits), thinktank (work out an idea), axe (anything else).
   request: a complete instruction in English that makes sense without this conversation.
-- remember: only facts, ideas and preferences HE said that are worth keeping ("we should clean up the trading desk some day"). Never add your own advice. Short, in his words.
+- remember: only lasting facts, ideas and preferences HE said that are worth keeping next month ("we should clean up the trading desk some day"). Not moods, not passing remarks, not details of a story, not opinions about other people. Never add your own advice. Short, in his words.
 - reminders: things to do or be reminded of later. A reminder is never also a job. due = ISO 8601 with the Amsterdam offset if he named a time; a day without a time means 09:00 that day; else null.
 Now is ${nu.toISOString()} (Luka is in Amsterdam). ${lopendRegel}
 Empty arrays are fine. Plain conversation = just a reply.`;
@@ -84,7 +85,7 @@ export function parseBeurtPlan(raw: string): BeurtPlan | null {
   const obj = eersteObject(raw || '');
   if (!obj || typeof obj !== 'object') return null;
   const o = obj as Record<string, unknown>;
-  const reply = tekst(o.reply, 400);
+  const reply = tekst(o.reply, 600);
   if (!reply) return null;
 
   const jobs: PlanJob[] = [];
@@ -129,4 +130,10 @@ export function moetPlannen(text: string, stukken: number, tier: 1 | 2 | 3): boo
   if (stukken >= 2) return true;
   if (tier === 3) return true;
   return t.length >= 90;
+}
+
+/** Kort en in één stuk: zonder plan nog te vertrouwen als één opdracht. */
+export function isKorteOpdracht(text: string): boolean {
+  const t = (text || '').trim();
+  return t.length > 0 && t.length <= 140 && splitsAxeBeurten(t).length <= 1;
 }
