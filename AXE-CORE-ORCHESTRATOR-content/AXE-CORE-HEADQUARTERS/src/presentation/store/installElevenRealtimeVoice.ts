@@ -242,6 +242,8 @@ export function installElevenRealtimeVoice(): void {
         onError: (message) => {
           if (!realtimeActive || myGeneration !== generation) return;
           console.warn('[AXE realtime voice]', message);
+          closeRealtime(false);
+          void startFallback(`realtime error: ${message}`);
         },
 
         onClosed: (_code, reason) => {
