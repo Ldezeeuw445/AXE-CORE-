@@ -157,7 +157,7 @@ export default function CrewAI() {
           ]}
         />
       </TabRail>
-      <TabRuimte vullen>
+      <TabRuimte>
       <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
         <div

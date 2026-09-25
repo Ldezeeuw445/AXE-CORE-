@@ -1925,6 +1925,17 @@ html:root[data-look],
   margin-bottom: clamp(10px, 1.4vh, 20px);
   min-width: 0;
 }
+/* Een gewone tab staat in de kolom van de Browser-home: precies zo breed als
+   de composer en de onderbalk, in het midden (Luka, 25 sep). Op een breed
+   scherm liepen Agents, MCP, Settings en EVE anders van rand tot rand, met 9
+   tot 13 kaarten op een rij. Alleen wat echt ruimte nodig heeft (--vullen:
+   kalender, kaart, editor, grafiek, terminals) houdt het grote vak. */
+:root[data-look] .axe-tabruimte:not(.axe-tabruimte--vullen) {
+  width: min(var(--axe-barw, 1520px), calc(100% - 2 * var(--axe-onder, 75px)));
+  max-width: 100%;
+  margin-inline: auto;
+  align-self: center;
+}
 
 :root[data-look] .axe-tabruimte--vullen {
   min-height: 0;

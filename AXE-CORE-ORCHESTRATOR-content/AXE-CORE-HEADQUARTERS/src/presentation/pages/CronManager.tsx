@@ -258,7 +258,7 @@ export default function CronManager() {
           ]}
         />
       </TabRail>
-      <TabRuimte vullen>
+      <TabRuimte>
       <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
       <div className="flex flex-none items-center justify-between mb-4 gap-2">
