@@ -1735,18 +1735,27 @@ html:root[data-look],
      tot niets terwijl het icoon (vaste px) blijft staan -- je ziet zwevende
      iconen zonder blok. De balk mag liever horizontaal schuiven (dat kon hij
      al) dan dat de knoppen zichzelf wegdrukken. */
-  flex: 1 1 auto !important;
-  /* 38 en niet 44: 26 tabs in de band van 1326px (venster 1900) kwamen met 44
-     op 1432px uit -- de rij liep er aan beide kanten af (25 sep). Met 38 past
-     hij, en flex rekt ze weer op tot de band vol is. */
-  min-width: 38px;
-  min-height: 41px;
+  /* Gelijke delen van de band, zonder ondergrens: de onderbalk is altijd
+     precies zo breed als de composer en loopt er nooit buiten (25 sep; bij
+     1440 breed liep hij aan beide kanten weg, bij 1900 rechts). Het icoon
+     schaalt mee, zie hieronder. */
+  flex: 1 1 0 !important;
+  min-width: 0;
+  min-height: 0;
   max-width: 76px;
   aspect-ratio: 48 / 52;
   height: auto !important;
   border-radius: clamp(14px, 1.1vw, 19px) !important;
   transition: color 0.15s ease, transform 0.15s ease;
 }
+:root[data-look] .axe-shell .axe-bottomnav button svg {
+  width: min(26px, 56%) !important;
+  height: auto !important;
+}
+:root[data-look] .axe-shell .axe-bottomnav [data-axe-doel='axe-voice-orb-anchor'] {
+  width: clamp(40px, 5vw, 112px) !important;
+}
+:root[data-look] .axe-shell .axe-bottomnav > div { overflow-x: hidden !important; }
 :root[data-look] .axe-shell .axe-bottomnav button:hover { transform: translateY(-2px); }
 /* Het icoon licht wit op als je erover gaat. De kleur staat als `color` op de
    svg zelf (NavTile geeft hem als prop mee), dus een hover-regel op de knop
@@ -1822,14 +1831,9 @@ html:root[data-look],
 :root[data-look] {
   --axe-wolk-b: clamp(300px, 22vw, 440px);
 }
-@media (min-width: 1360px) {
-  :root[data-look][data-chatwolk='aan'] .axe-chatplaat,
-  :root[data-look][data-chatwolk='aan'] .axe-composer {
-    width: calc(100% - 217px - var(--axe-wolk-b) - (100% - var(--axe-barw, 1520px)) / 2);
-    margin-left: calc((100% - var(--axe-barw, 1520px)) / 2) !important;
-    margin-right: auto !important;
-  }
-}
+/* 25 sep: de verschuiving is eruit. Luka: "composer en bottom nav zijn altijd
+   even breed en staan gewoon exact in het midden". De wolk past zich aan de
+   ruimte ernaast aan, niet andersom. */
 
 /* ── Dezelfde breedte als de band, voor wat erboven hangt ─────────────────
  *
