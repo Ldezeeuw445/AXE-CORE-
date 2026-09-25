@@ -458,6 +458,7 @@ function run(cmd, args, cwd) {
   });
 }
 const git = (root, ...a) => run('git', a, root);
+const startBuild = git(REPO, 'rev-parse', '--short', 'HEAD').then(s => s.trim()).catch(() => '');
 
 /* ── the tools ──────────────────────────────────────────────────────────── */
 async function execute(payload) {
@@ -469,7 +470,11 @@ async function execute(payload) {
   // differ because they intentionally control this Mac across deployments.
   if (payload.client_runtime === 'tauri' && tool !== 'system.info') {
     const appBuild = String(payload.client_build ?? '').trim();
-    const workerBuild = (await git(REPO, 'rev-parse', '--short', 'HEAD')).trim();
+    // The build this process was STARTED from, not today's HEAD: autosync
+    // pulls new commits minutes before it rebuilds the app (it waits until the
+    // Mac is idle), and axe-bijwerken restarts this worker together with the
+    // app. Live HEAD therefore refused every action in that window.
+    const workerBuild = await startBuild;
     if (appBuild && appBuild !== 'unknown' && workerBuild && appBuild !== workerBuild) {
       throw new Error(
         `AXE native runtime mismatch: app=${appBuild}, computer-worker=${workerBuild}. Run 'npm run bijwerken' from orchestrator; no computer action was executed.`,
