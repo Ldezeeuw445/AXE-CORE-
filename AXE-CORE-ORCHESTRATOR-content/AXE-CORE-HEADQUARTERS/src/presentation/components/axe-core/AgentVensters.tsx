@@ -20,7 +20,7 @@
  * Alleen stijl en indeling; de data komt uit useAxeJobStore, die de tier-router
  * al bijhoudt.
  */
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { managerRijen } from '@/domain/tierRouter/agentVenster';
@@ -43,59 +43,96 @@ const TIK_MS = 1_000;
  */
 const LEESBAAR = '0 1px 3px rgba(0,0,0,.7)';
 
-/**
- * Eén manager: driehoekje, zijn naam eronder, en daar weer onder wat hij nu
- * doet. Alles onder elkaar en gecentreerd, zoals Luka het tekende.
+/* ── De tegel en het balkje ───────────────────────────────────────────────
+ * Luka, 25 sep, met een beeld erbij: "kan je het gewoon precies zo maken,
+ * zonder dat die blokken dempen maar er gewoon altijd zo zijn."
+ *
+ * Dus: links een tegel per manager -- afgerond vlakje, driehoekje erin, korte
+ * naam eronder -- en daar rechts naast het balkje met wat hij nu zegt. Wie
+ * niets doet houdt zijn tegel precies zoals hij is en krijgt alleen "IDLE"
+ * naast zich. Niets dimt, ooit.
+ *
+ * De tegel en het balkje dragen hetzelfde materiaal als de rest van de schil
+ * (--axe-kaart-*), dus ook in de glasstand blijft de tekst leesbaar. Dat is
+ * wat er misging toen de kolom helemaal kaal zweefde.
  */
-function Rij({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: () => void }) {
-  const { agent, job, regel } = rij;
 
-  /* Niets wordt gedempt, ook niet wie stilstaat. Luka, 25 sep: "ik wil juist
-     dat het echt zijn kleur heeft, niet gedempt." Hier stond een opacity van
-     0.55 op een stilstaande manager, zodat je oog naar wie er werkt getrokken
-     werd. Maar de vijf driehoekjes zijn herkenningspunten -- je zoekt Trading
-     op zijn kleur -- en die moet je niet inhouden.
+const TEGEL: React.CSSProperties = {
+  width: 74,
+  padding: '10px 6px 8px',
+  borderRadius: 16,
+  background: 'var(--axe-kaart-vlak)',
+  border: '1px solid var(--axe-kaart-lijn)',
+  borderTopColor: 'var(--axe-kaart-lijn-boven)',
+};
 
-     Wat het verschil dan draagt: het statuswoord onder de naam, dat ook voor
-     een stilstaande manager verschijnt, en de regel eronder die hij dan niet
-     heeft. */
-  const stand = job ? STAND[job.state] : { label: 'idle', kleur: 'var(--text-muted)' };
+const BALK: React.CSSProperties = {
+  borderRadius: 12,
+  background: 'var(--axe-kaart-vlak)',
+  border: '1px solid var(--axe-kaart-lijn)',
+  borderTopColor: 'var(--axe-kaart-lijn-boven)',
+  padding: '9px 13px',
+};
 
+function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: () => void }) {
+  const { agent } = rij;
   return (
     <button
       type="button"
       onClick={onKies}
       aria-expanded={open}
       aria-label={`Gesprek met ${agent.name}`}
-      className="flex flex-col items-center gap-1 w-full bg-transparent border-0 p-0 text-center"
-      style={{ textShadow: LEESBAAR }}
+      className="flex flex-col items-center gap-1.5 cursor-pointer"
+      style={{ ...TEGEL, textShadow: LEESBAAR }}
     >
-      <ManagerAvatar agent={agent} size={34} />
-
-      {/* De korte naam, niet de volle: "NORTHSEA DESK MANAGER" breekt in een
-          smalle kolom over drie regels en dan staat de rail scheef. */}
+      <ManagerAvatar agent={agent} size={36} />
+      {/* De korte naam: "NORTHSEA DESK MANAGER" past hier niet op één regel. */}
       <span
-        className="text-[9.5px] tracking-[0.13em] uppercase leading-none"
-        style={{ color: agent.accent }}
+        className="text-[8.5px] tracking-[0.12em] uppercase leading-none whitespace-nowrap"
+        style={{ color: 'var(--text-muted)' }}
       >
         {agent.kort ?? agent.name}
       </span>
+    </button>
+  );
+}
 
+function Balkje({ rij, onKies }: { rij: ManagerRij; onKies: () => void }) {
+  const { agent, job, regel } = rij;
+
+  /* Stilstaand: geen balkje, alleen het woord. Zo blijft de rij op zijn plek
+     en zie je in één blik wie er niets doet, zonder iets te dempen. */
+  if (!job) {
+    return (
       <span
-        className="text-[8.5px] tracking-[0.1em] uppercase leading-none"
+        className="text-[9.5px] tracking-[0.1em] uppercase"
+        style={{ color: 'var(--text-muted)', textShadow: LEESBAAR }}
+      >
+        idle
+      </span>
+    );
+  }
+
+  const stand = STAND[job.state];
+  return (
+    <button
+      type="button"
+      onClick={onKies}
+      aria-label={`Gesprek met ${agent.name}`}
+      className="flex items-center gap-3 w-full text-left cursor-pointer min-w-0"
+      style={BALK}
+    >
+      <span className="flex-1 min-w-0 text-[12.5px] leading-snug line-clamp-2">
+        <span style={{ color: agent.accent, fontWeight: 500 }}>{agent.kort ?? agent.name}</span>
+        {' '}
+        <span style={{ color: 'var(--text-secondary)' }}>{regel}</span>
+      </span>
+      <span
+        className="text-[9.5px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0"
         style={{ color: stand.kleur }}
       >
         {stand.label}
       </span>
-
-      {regel && (
-        <span
-          className="w-full text-[11px] leading-snug line-clamp-2 break-words"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          {regel}
-        </span>
-      )}
     </button>
   );
 }
@@ -124,24 +161,29 @@ export function AgentVensters() {
           midden in dit vak te laag oogt. Met top:50% hing de kolom er dus
           onder. Nu volgt hij de sphere. */}
       <div
-        className="pointer-events-auto absolute"
+        className="pointer-events-auto absolute grid items-center"
         style={{
-          left: 'clamp(36px, 6vw, 96px)',
+          left: 'clamp(24px, 3.5vw, 64px)',
           top: '40%',
           transform: 'translateY(-50%)',
-          width: 'clamp(150px, 15vw, 196px)',
+          // Tegelkolom plus balkkolom. Smal genoeg om van de sphere af te
+          // blijven: de stofwolk daarvan begint rond 31% van de breedte, dus
+          // alles bij elkaar mag niet veel verder komen dan dat.
+          width: 'min(30%, 430px)',
+          gridTemplateColumns: 'auto minmax(0, 1fr)',
+          columnGap: 16,
+          rowGap: 18,
         }}
       >
-        <div className="flex flex-col gap-5">
-          {rijen.map((rij) => (
-            <Rij
-              key={rij.agent.id}
-              rij={rij}
-              open={gekozen === rij.agent.id}
-              onKies={() => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id))}
-            />
-          ))}
-        </div>
+        {rijen.map((rij) => {
+          const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
+          return (
+            <Fragment key={rij.agent.id}>
+              <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
+              <Balkje rij={rij} onKies={kies} />
+            </Fragment>
+          );
+        })}
       </div>
 
       {/* Het venster komt rechts van de kolom te staan, niet eroverheen. */}
@@ -153,7 +195,7 @@ export function AgentVensters() {
             style={{
               // Net rechts van de kolom (links + breedte + lucht), en op
               // dezelfde hoogte als de kolom en de sphere.
-              left: 'calc(clamp(36px, 6vw, 96px) + clamp(150px, 15vw, 196px) + 18px)',
+              left: 'calc(clamp(24px, 3.5vw, 64px) + 74px + 16px)',
               top: '40%',
               transform: 'translateY(-50%)',
             }}
