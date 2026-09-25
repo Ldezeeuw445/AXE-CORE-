@@ -60,6 +60,7 @@ import { stappenUit } from '@/domain/tierRouter/agentVenster';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { beurtRegel, leesBeurt, markBeurt, startBeurtIndienNodig } from '@/domain/beurtKlok';
 import { geheugenVoorBeurt, onthoudInGesprek, warmGeheugen } from '@/application/memory/gespreksGeheugen';
+import { isElevenRealtimeVoiceActive } from '@/presentation/store/installElevenRealtimeVoice';
 
 let installed = false;
 const taskMonitors = new Set<string>();
@@ -68,7 +69,20 @@ function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
   try {
     if (localStorage.getItem('axe_response_mode') === 'type') return;
   } catch { /* ignore */ }
-  const stand = stemlusVanVoice(useVoiceStore.getState().voiceStatus, useVoiceStore.getState().error);
+  const voice = useVoiceStore.getState();
+  let stand = stemlusVanVoice(voice.voiceStatus, voice.error);
+  // In de realtime Scribe-lus betekent "listening" meestal: de microfoon staat
+  // klaar, niet dat Luka op dit moment praat. Een achtergrondresultaat daar
+  // eindeloos in de wachtrij zetten maakt een always-on gesprek juist stil.
+  // Alleen als er werkelijk woorden binnenkomen, wacht de job tot zijn beurt.
+  if (
+    bron === 'job' &&
+    isElevenRealtimeVoiceActive() &&
+    stand === 'listening' &&
+    !voice.transcript.trim()
+  ) {
+    stand = 'idle';
+  }
   if (kiesSpraakPad(text, stand, bron) === 'queue') return;
   const hoor = () => pushBeurtLatentie();
   if (bron === 'ack') {
