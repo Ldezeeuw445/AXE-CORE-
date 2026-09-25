@@ -60,53 +60,59 @@ import { stappenUit } from '@/domain/tierRouter/agentVenster';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { beurtRegel, leesBeurt, markBeurt, startBeurtIndienNodig } from '@/domain/beurtKlok';
 import { geheugenVoorBeurt, onthoudInGesprek, warmGeheugen } from '@/application/memory/gespreksGeheugen';
-import { isElevenRealtimeVoiceActive } from '@/presentation/store/installElevenRealtimeVoice';
 
 let installed = false;
 const taskMonitors = new Set<string>();
 
+let realtimeAnnouncer: ((text: string) => void) | null = null;
+
+/**
+ * installOpenAIRealtimeVoice registers here while a realtime voice call is
+ * open, so a background job's result is said IN that call — same voice, no
+ * second TTS call fighting it for the speakers — instead of going out
+ * through the old globalTts path below. Unregister (null) closes the loop.
+ */
+export function setRealtimeJobAnnouncer(fn: ((text: string) => void) | null): void {
+  realtimeAnnouncer = fn;
+}
+
+function announceJobText(text: string, slot: { provider: string; model?: string }): void {
+  if (realtimeAnnouncer) {
+    useVoiceStore.setState((s) => ({
+      conversation: injecteerJobResultaat(s.conversation, text) as ConversationMessage[],
+    }));
+    realtimeAnnouncer(text);
+    return;
+  }
+  publiceer(text, slot, 'job');
+}
+
+/**
+ * `announceJobText` above is now the ONLY path a job result can reach a live
+ * OpenAI Realtime call through — it never touches this function while that
+ * call is open (see installOpenAIRealtimeVoice.ts). Every caller left here
+ * (typed chat, and voice turns coming back through the Whisper fallback
+ * loop's sendMessage calls) is therefore never running during a realtime
+ * call either, so this stays the plain non-realtime speaker, no awareness
+ * of which voice layer is active needed.
+ */
 function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
   try {
     if (localStorage.getItem('axe_response_mode') === 'type') return;
   } catch { /* ignore */ }
-  const voice = useVoiceStore.getState();
-  let stand = stemlusVanVoice(voice.voiceStatus, voice.error);
-  // In de realtime Scribe-lus betekent "listening" meestal: de microfoon staat
-  // klaar, niet dat Luka op dit moment praat. Een achtergrondresultaat daar
-  // eindeloos in de wachtrij zetten maakt een always-on gesprek juist stil.
-  // Alleen als er werkelijk woorden binnenkomen, wacht de job tot zijn beurt.
-  if (
-    bron === 'job' &&
-    isElevenRealtimeVoiceActive() &&
-    stand === 'listening' &&
-    !voice.transcript.trim()
-  ) {
-    stand = 'idle';
-  }
+  const stand = stemlusVanVoice(useVoiceStore.getState().voiceStatus, useVoiceStore.getState().error);
   if (kiesSpraakPad(text, stand, bron) === 'queue') return;
-  const realtime = isElevenRealtimeVoiceActive();
-  const hoor = () => {
-    // De microfoon mag open blijven, maar de toestand moet wél "speaking" zijn.
-    // Anders hoort Scribe AXE's eigen luidspreker als een nieuwe gebruikersbeurt
-    // en werkt barge-in pas na de stilte-commit in plaats van meteen.
-    useVoiceStore.setState({ voiceStatus: 'speaking' });
-    pushBeurtLatentie();
-  };
-  const klaar = () => {
-    if (realtime) {
-      useVoiceStore.setState({ voiceStatus: 'listening', transcript: '' });
-      return;
-    }
-    if (!chatBlijftLuisteren(useVoiceStore.getState().voiceStatus)) {
-      useVoiceStore.setState({ voiceStatus: 'idle' });
-    }
-  };
+  const hoor = () => pushBeurtLatentie();
   if (bron === 'ack') {
     stopGlobalTts();
-    speakGlobal(text, klaar, (reason) => useVoiceStore.setState({ error: reason }), hoor);
+    speakGlobal(text, () => {
+      if (!chatBlijftLuisteren(useVoiceStore.getState().voiceStatus)) {
+        useVoiceStore.setState({ voiceStatus: 'idle' });
+      }
+    }, (reason) => useVoiceStore.setState({ error: reason }), hoor);
     return;
   }
-  speakGlobal(text, klaar, (reason) => useVoiceStore.setState({ error: reason }), hoor);
+  speakGlobal(text, undefined, (reason) => useVoiceStore.setState({ error: reason }), hoor);
 }
 
 export function pushTierRoute(keuze: AxeRouteKeuze, extra: Partial<RoutingEvent> = {}): void {
@@ -367,7 +373,7 @@ function taakTekst(snapshot: DurableTaskSnapshot): string {
 function meldJobKlaar(job: AxeJob): void {
   const tekst = jobResultaatTekst(job);
   useAxeJobStore.getState().patch(job.id, job);
-  publiceer(tekst, { provider: 'tier3', model: job.agent }, 'job');
+  announceJobText(tekst, { provider: 'tier3', model: job.agent });
   recordBeurt(job.sourceText, tekst, 'tier3', `tier3:${job.agent}`);
 }
 
@@ -394,7 +400,7 @@ async function monitorTier3(job: AxeJob): Promise<void> {
           gemeldeVraag = sleutel;
           const wacht = { ...job, state: 'waiting' as const };
           useAxeJobStore.getState().patch(job.id, wacht);
-          publiceer(jobWachtTekst(wacht, vraag), { provider: 'tier3', model: job.agent }, 'job');
+          announceJobText(jobWachtTekst(wacht, vraag), { provider: 'tier3', model: job.agent });
         }
         await new Promise((r) => setTimeout(r, 4_000));
         continue;
@@ -620,8 +626,10 @@ async function probeerPlan(text: string, keuze: AxeRouteKeuze): Promise<boolean>
   return true;
 }
 
-/** Zet jobs uit zonder dat sendMessage daarop wacht. */
-function startAxeJobs(stukken: AxeBeurtStuk[]): void {
+/** Zet jobs uit zonder dat sendMessage daarop wacht. Ook de ingang voor de
+ *  realtime-voice-tool `start_background_task` — zelfde dispatch, zelfde
+ *  monitor, geen tweede takenrij. */
+export function startAxeJobs(stukken: AxeBeurtStuk[]): void {
   const ids = stukken.map((_, i) => `job-${Date.now()}-${i}`);
   let n = 0;
   const queued = jobsVanStukken(stukken, Date.now(), () => ids[n++]);

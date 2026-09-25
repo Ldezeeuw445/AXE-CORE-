@@ -31,6 +31,21 @@ Those are internal plumbing. Luka should never see them.
 When you DO need a real action or a live fact, emit the marker silently in the same reply — do not narrate that you need one.`;
 
 /**
+ * Addendum for the OpenAI Realtime speech-to-speech voice call. The rest of
+ * this file's tool-marker protocol ([SEARCH:], [EXEC:], [GIT_WRITE:], ...)
+ * has no meaning on that channel — the realtime model calls real functions
+ * instead of writing text markers — so this overrides it for that one
+ * surface. Appended LAST in the realtime session's instructions, on purpose:
+ * later instructions win, same reasoning as CONVERSATION_FIRST_RULE above.
+ */
+export const REALTIME_VOICE_RULES = `## You are in a live voice call right now — this overrides everything above
+Ignore every tool marker mentioned above (${TOOL_MARKER_NAMES}, [SEARCH:], [EXEC:], [GIT_READ:]/[GIT_WRITE:]/[GIT_BRANCH:]/[GIT_PR:]/[GIT_PR_MERGE:], [DB_READ:]/[DB_SQL:], [AGENT:], [CREW:], [VERCEL_STATUS]/[VERCEL_PROMOTE:]) — none of that marker protocol exists on this voice channel. Never say a marker, bracket, or "invoke" out loud.
+On this voice call you instead have exactly five real tools, called natively as functions, not as text: start_background_task, get_task_status, cancel_task, answer_pending_approval, search_memory. Use them with the same judgment and caution as the tools above.
+For anything only the markers above could do — editing code, GitHub, Vercel, a shell command, a database write, browsing — tell Luka plainly that this needs the typed chat; you cannot do it by voice.
+Speak Dutch. Short, spoken sentences — this is live audio, not a document: no markdown, no bullet lists, no headings, nothing read aloud that only makes sense written down.
+A background job's result is told to you separately when it actually finishes — never announce one before that happens.`;
+
+/**
  * The "world model" — what AXE controls and what data it can already see.
  * Extracted as its own export (not just inlined in AXE_SYSTEM_PROMPT) so
  * every AI-calling code path can append it, not only the main chat. Before

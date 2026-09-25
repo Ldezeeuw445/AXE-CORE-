@@ -36,7 +36,7 @@ import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { installLiveChat } from '@/presentation/store/installLiveChat'
 import { installWhisperVoice, installWhisperVoiceSendGuard } from '@/presentation/store/installWhisperVoice'
-import { installElevenRealtimeVoice } from '@/presentation/store/installElevenRealtimeVoice'
+import { installOpenAIRealtimeVoice } from '@/presentation/store/installOpenAIRealtimeVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
 import { installTierRouter } from '@/presentation/store/installTierRouter'
@@ -63,10 +63,11 @@ installGesprekSync();
 installSpherePresent();
 // Typed send hangt een lopende Whisper-listen op (na de andere wrappers)
 installWhisperVoiceSendGuard();
-// Native realtime voice: ElevenLabs Scribe keeps the mic open, streams partial
-// words and supports real barge-in. Installed LAST over the proven Whisper
-// loop, which stays the automatic fallback when Scribe cannot start.
-installElevenRealtimeVoice();
+// Native realtime voice: one OpenAI Realtime speech-to-speech call — hears,
+// decides and speaks in the same connection, tools call the existing job/
+// memory/approval stack. Installed LAST over the proven Whisper loop, which
+// stays the automatic fallback when the realtime call cannot start.
+installOpenAIRealtimeVoice();
 // WebXR / Maps3D entry from sphere map projection
 installSphereXR();
 // Continuous memory: every session + chat turns land in the right stores

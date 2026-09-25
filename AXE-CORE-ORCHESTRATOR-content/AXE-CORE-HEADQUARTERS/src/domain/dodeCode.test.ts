@@ -75,6 +75,9 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/domain/chatRouting.ts', 'limitSimpleChatSlots'],
   ['src/domain/memory/hubClassifier.ts', 'hubForAgentRow'],
   ['src/domain/navRegistry.ts', 'loadDynamicNavItems'],
+  // 26 sep 2026: pure helper geknipt uit parseBeurtPlan voor leesbaarheid —
+  // wordt alleen binnen hetzelfde bestand aangeroepen, geen externe consument.
+  ['src/domain/tierRouter/beurtPlan.ts', 'lopendeJobIds'],
   // 18 sep 2026 (AXE × NorthSea integratie): koppeling.ts is wél gekoppeld --
   // DealsTab/CommunicatieTab gebruiken beoordeelKoppeling, koppelLabel enz. --
   // maar deze twee helpers hebben nog géén aanroeper: `normalizeMessageId`

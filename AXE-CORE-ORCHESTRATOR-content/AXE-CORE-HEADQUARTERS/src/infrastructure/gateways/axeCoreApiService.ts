@@ -283,6 +283,21 @@ export async function requestDurableTaskApproval(
   return call('POST', `/tasks/${encodeURIComponent(taskId)}/approvals`, input);
 }
 
+/**
+ * Stop a running/waiting task. A status change, not a delete — the row,
+ * steps and events stay readable afterwards (backend: task_worker's
+ * TaskRepository.cancel, POST /tasks/{id}/cancel, added in 73950a5). Works
+ * without a lease, unlike /transition, so the app can override a task even
+ * while a worker still holds it.
+ */
+export async function cancelDurableTask(
+  taskId: string,
+  reason?: string,
+  by: string = 'luka',
+): Promise<{ task: DurableTaskRun }> {
+  return call('POST', `/tasks/${encodeURIComponent(taskId)}/cancel`, { by, reason });
+}
+
 export async function decideDurableTaskApproval(
   taskId: string,
   approvalId: string,
