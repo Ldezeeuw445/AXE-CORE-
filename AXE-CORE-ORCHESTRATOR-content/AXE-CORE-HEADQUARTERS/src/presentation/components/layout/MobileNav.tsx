@@ -98,10 +98,10 @@ export function MobileNav() {
             // Op de glasplaat-home netjes binnen de rand, precies zoals de
             // licht/donker-knop rechtsboven (AppShell): zelfde hoogte, zelfde
             // marge. Buiten de home in de schermhoek.
-            top: location.pathname === '/'
+            top: (location.pathname === '/' || location.pathname === '/mobile')
               ? 'calc(env(safe-area-inset-top, 0px) + 22px)'
               : 'calc(env(safe-area-inset-top, 0px) + 10px)',
-            left: location.pathname === '/' ? 24 : 12,
+            left: (location.pathname === '/' || location.pathname === '/mobile') ? 24 : 12,
             background: 'var(--surface-bg)',
             border: '1px solid var(--border-subtle)',
             color: 'var(--text-primary)',
