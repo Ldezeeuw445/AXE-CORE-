@@ -40,12 +40,14 @@ function MobileWorldBar() {
 
   return (
     <div
-      className="mx-auto flex h-10 w-[min(76vw,320px)] items-center justify-center gap-1 rounded-[14px] px-1.5"
+      className="mx-auto flex h-[38px] items-center justify-center gap-1 rounded-[14px] px-1.5"
       style={{
         background: 'rgba(7,10,15,.70)',
         border: '1px solid rgba(255,255,255,.10)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,.05), 0 10px 24px rgba(0,0,0,.22)',
+        width: 'min(62vw, 260px)',
         backdropFilter: 'blur(18px)',
+        WebkitBackdropFilter: 'blur(18px)',
       }}
       role="tablist"
       aria-label="AXE worlds"
@@ -140,8 +142,11 @@ function CoreHome() {
   return (
     <>
       <section
-        className="grid flex-none grid-cols-[76px_minmax(0,1fr)_76px] gap-2"
-        style={{ height: 'clamp(220px, 31dvh, 286px)' }}
+        className="grid flex-none gap-2"
+        style={{
+          height: 'clamp(210px, 30dvh, 278px)',
+          gridTemplateColumns: 'clamp(64px, 19vw, 76px) minmax(0, 1fr) clamp(64px, 19vw, 76px)',
+        }}
         aria-label="AXE Core en agents"
       >
         <div className="grid min-h-0 grid-rows-3 gap-2 py-1">
@@ -215,16 +220,17 @@ export default function MobileSystem() {
 
   return (
     <div
-      className="relative z-[1] mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden px-3"
+      className="axe-mobile-home relative z-[1] mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden"
       style={{
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)',
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6px)',
+        paddingTop: 8,
+        paddingBottom: 4,
+        touchAction: 'manipulation',
       }}
     >
       {/* AppShell owns the hamburger + light/dark buttons. Keeping them there
           prevents the duplicate controls/composers that caused the two
           different mobile renders. */}
-      <div className="mb-2 flex-none px-12">
+      <div className="mb-2 flex-none">
         <MobileWorldBar />
       </div>
 
