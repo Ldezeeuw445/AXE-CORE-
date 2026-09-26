@@ -159,6 +159,7 @@ export function MobileComposer() {
           <VisionCaptureButton compact />
           <button
             type="button"
+            className="axe-mobile-mic"
             onClick={() => { void mic(); }}
             title={activeVoice ? 'Stop gesprek' : 'Praat met AXE'}
             aria-pressed={activeVoice}
@@ -182,6 +183,7 @@ export function MobileComposer() {
           </button>
           <button
             type="button"
+            className="axe-mobile-send"
             onClick={() => { void send(); }}
             disabled={!draft.trim() && attachments.length === 0}
             title="Versturen"

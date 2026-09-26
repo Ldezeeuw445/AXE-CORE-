@@ -7111,3 +7111,103 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-infra-raster--twee { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .axe-infra-raster > * { min-width: 0; height: 100%; }
 @media (max-width: 1100px) { .axe-infra-raster, .axe-infra-raster--twee { grid-template-columns: 1fr; } }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CANONICAL MOBILE HOME — native-feeling phone fit
+   Scoped to .axe-mobile-home so the desktop/Tauri composer is untouched.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  :root[data-look] .axe-mobile-home {
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+  }
+
+  :root[data-look] .axe-mobile-home button {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* On a phone there is no desktop bottom-nav under this composer. The old
+     24px desktop reserve made the whole Home look vertically off-centre. */
+  :root[data-look] .axe-mobile-home .axe-composer.axe-vakcomposer {
+    margin: 0 !important;
+    gap: 6px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak {
+    border-radius: 18px;
+    padding: 9px 11px 8px;
+    gap: 7px;
+    box-shadow:
+      0 16px 38px rgba(0,0,0,.34),
+      inset 0 1px 0 rgba(255,255,255,.045),
+      0 0 0 1px rgba(255,255,255,.018);
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-kop {
+    min-height: 18px;
+    font-size: 11px;
+  }
+
+  /* 16px prevents mobile Safari/WebView from zooming the page when the
+     composer receives focus. The resting field is one clean native line and
+     grows only when the prompt actually needs it. */
+  :root[data-look] .axe-mobile-home .axe-vak-invoer {
+    font-size: 16px;
+    line-height: 1.35;
+    height: 28px;
+    min-height: 28px;
+    max-height: 74px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij {
+    gap: 8px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-links,
+  :root[data-look] .axe-mobile-home .axe-vak-rechts {
+    gap: 5px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij button,
+  :root[data-look] .axe-mobile-home .axe-vak-staf button {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* The mic is the primary phone action. This has to outrank the desktop
+     generic "all composer buttons are transparent" rule above. */
+  :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-mic {
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 999px !important;
+    color: #eefcff !important;
+    background:
+      radial-gradient(circle at 40% 32%, rgba(103,232,249,.40), rgba(79,70,229,.34) 52%, rgba(7,10,15,.98) 100%) !important;
+    border: 1px solid rgba(103,232,249,.48) !important;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.025) inset,
+      0 0 20px rgba(59,130,246,.24) !important;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-mic[aria-pressed='true'] {
+    color: #001018 !important;
+    background: var(--accent-cyan) !important;
+    border-color: rgba(165,243,252,.82) !important;
+    box-shadow: 0 0 24px rgba(34,211,238,.48) !important;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-send {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 999px !important;
+  }
+
+  /* The light glass remains visibly Tauri-like, but 64px fullscreen blur is
+     needless GPU work on a phone and makes scroll/keyboard animation feel webby. */
+  :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
+    backdrop-filter: blur(32px) saturate(155%) brightness(1.03) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(155%) brightness(1.03) !important;
+  }
+}
