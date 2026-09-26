@@ -177,13 +177,13 @@ export function AppShell() {
   // De glasplaat is nu de basis van ELKE mobiele tab (niet meer alleen de home):
   // de Tauri-shell waar alleen het midden per tab wisselt. `/mobile` en `/lock`
   // tekenen hun eigen volledige scherm, dus die houden we buiten de plaat.
-  // Zware, volscherm-ervaringen (3D-kaart, browser) passen niet in de plaat met
-  // een composer eronder — die vullen het hele scherm zonder plaat/composer, net
-  // als /mobile en /lock. De lade-hamburger (portal) blijft om weg te navigeren.
+  // Zware, volscherm-ervaringen (3D-kaart, browser) vullen het scherm.
+  // /mobile is juist de canonical telefoon-home en gebruikt DEZELFDE zwevende
+  // glasplaat als de andere mobiele tabs; alleen /lock blijft erbuiten.
   const volScherm = mobileNav
     && (location.pathname === '/maps-3d' || location.pathname === '/browser');
   const opPlaatMobiel = mobileNav
-    && location.pathname !== '/mobile' && location.pathname !== '/lock'
+    && location.pathname !== '/lock'
     && !volScherm;
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
