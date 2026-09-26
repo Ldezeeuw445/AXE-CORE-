@@ -12,6 +12,21 @@ describe('canonical mobile Home wiring', () => {
     expect(shell).toContain('!mobileCommandSurface && opPlaat && !volScherm && <PlaatChat />');
   });
 
+
+  it('renders the /mobile route on the same floating glass plate as native phone tabs', () => {
+    const shell = bron('presentation/components/layout/AppShell.tsx');
+    expect(shell).toContain("location.pathname !== '/lock'");
+    expect(shell).not.toContain("location.pathname !== '/mobile' && location.pathname !== '/lock'");
+  });
+
+  it('gives the mobile mic a real primary native control instead of the desktop transparent-button style', () => {
+    const composer = bron('presentation/components/layout/MobileComposer.tsx');
+    const css = bron('design/axe-look.css');
+    expect(composer).toContain('className="axe-mobile-mic"');
+    expect(css).toContain('.axe-mobile-home .axe-vak-rij .axe-mobile-mic');
+    expect(css).toContain("font-size: 16px");
+  });
+
   it('shows six real roster agents around the Core', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     for (const id of ['trading', 'developer', 'thinktank', 'northsea', 'wingman', 'companion']) {
