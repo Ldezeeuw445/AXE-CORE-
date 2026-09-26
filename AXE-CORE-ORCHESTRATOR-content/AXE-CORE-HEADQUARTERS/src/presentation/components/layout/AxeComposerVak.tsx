@@ -81,6 +81,8 @@ interface Props {
    *  overlay BOVEN het vak (zie axe-look.css), niet als extra rij erin --
    *  anders schuift het invoerveld omlaag zodra je hem openklapt. */
   paneel?: ReactNode;
+  /** Mobile Home already shows the six primary agents around the sphere. */
+  toonAgentsBalk?: boolean;
 }
 
 /* De lichtrand loopt alleen als AXE iets doet.
@@ -101,6 +103,7 @@ export function AxeComposerVak({
   snelactieLijst,
   kop,
   paneel,
+  toonAgentsBalk = true,
 }: Props) {
   const veld = useRef<HTMLTextAreaElement>(null);
   const status = useVoiceStore(s => s.voiceStatus);
@@ -175,7 +178,7 @@ export function AxeComposerVak({
       data-voice-energy={presence.mix > 0.015 ? 'on' : 'off'}
       style={presenceStyle}
     >
-      <AxeAgentsBalk />
+      {toonAgentsBalk && <AxeAgentsBalk />}
       {/* One light around the composer, and it is the voice (Luka, 23 sep
           2026: "alleen deze erin, dat is rustiger en reageert op echt axe of
           ik, dat is realistischer"). The border beam is gone -- a decoration

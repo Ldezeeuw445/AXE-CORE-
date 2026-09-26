@@ -79,7 +79,12 @@ export function setRealtimeJobAnnouncer(fn: ((text: string) => void) | null): vo
 function announceJobText(text: string, slot: { provider: string; model?: string }): void {
   if (realtimeAnnouncer) {
     useVoiceStore.setState((s) => ({
-      conversation: injecteerJobResultaat(s.conversation, text) as ConversationMessage[],
+      conversation: injecteerJobResultaat(
+        s.conversation,
+        text,
+        Date.now(),
+        { model: slot.model, delegate: slot.model as AxeAgentId | undefined },
+      ) as ConversationMessage[],
     }));
     realtimeAnnouncer(text);
     return;
@@ -191,7 +196,12 @@ function publiceer(text: string, slot: { provider: string; model?: string }, bro
   const luistert = chatBlijftLuisteren(useVoiceStore.getState().voiceStatus);
   if (bron === 'job') {
     useVoiceStore.setState((s) => ({
-      conversation: injecteerJobResultaat(s.conversation, visible) as ConversationMessage[],
+      conversation: injecteerJobResultaat(
+        s.conversation,
+        visible,
+        Date.now(),
+        { model: slot.model, delegate: slot.model as AxeAgentId | undefined },
+      ) as ConversationMessage[],
       response: visible,
     }));
   } else {

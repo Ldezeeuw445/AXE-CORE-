@@ -220,7 +220,7 @@ export function AppShell() {
       {/* De wereldschakelaar hoort óók op de telefoon-home: hij is de 1-op-1
           Tauri-manier tussen Core/Neural/Terrain/Architecture. Alleen de
           desktop-balken (TopNav/Sidebar) blijven op mobiel weg. */}
-      {opPlaat && !volScherm && <PlaatViewSwitch />}
+      {!mobileCommandSurface && opPlaat && !volScherm && <PlaatViewSwitch />}
 
       {/* Licht/donker-knop rechtsboven op de telefoon. BUITEN de schil, want de
           schil krijgt in de lichte stand een backdrop-filter (frosted glas) en
@@ -341,7 +341,7 @@ export function AppShell() {
           elke pagina Home met de dingen van die tab erbij. */}
       {/* De volledige composer (met alles erop) hoort óók op de telefoon-home,
           net als in de Tauri-app — niet mijn afgeslankte mobiele composer. */}
-      {opPlaat && !volScherm && <PlaatChat />}
+      {!mobileCommandSurface && opPlaat && !volScherm && <PlaatChat />}
       {/* The chat between Luka and AXE lives in AxePresenceDock's invisible
           cloud right of the composer (23 sep 2026) -- not in a per-tab card. */}
       {/* Luka, 21 sep 2026: on every page including Home now -- the idle particle
