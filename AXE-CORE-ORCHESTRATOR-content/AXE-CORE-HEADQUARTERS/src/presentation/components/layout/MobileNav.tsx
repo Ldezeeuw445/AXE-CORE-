@@ -5,12 +5,13 @@
  * ook al in de app-grid stonden: dubbel, en het kostte ruimte die de composer
  * en de inhoud beter kunnen gebruiken. Dit vervangt die balk door één lade die
  * van links over de volle hoogte inschuift — dicht als je hem niet nodig hebt,
- * open met de knop of een veeg vanaf de linkerrand.
+ * open uitsluitend met de hamburgerknop. Edge-swipes horen bij de twee
+ * operationele AXE-zijlades, niet bij navigatie.
  *
  * De lade zelf is donker glas (net als de Sidebar op de desktop): in beide
  * standen hetzelfde materiaal, lichte inkt. Alleen de plaat eronder wisselt.
  */
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router';
 import {
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 import { getAllNavItems } from '@/domain/navRegistry';
 import { setMobileWallpaper } from '@/presentation/hooks/useWallpaper';
+import { useUIStore } from '@/presentation/store/uiStore';
 import { Image as ImageIcon } from 'lucide-react';
 
 const ROUTE_ICON: Record<string, LucideIcon> = {
@@ -36,7 +38,8 @@ const ROUTE_ICON: Record<string, LucideIcon> = {
 };
 
 export function MobileNav() {
-  const [open, setOpen] = useState(false);
+  const open = useUIStore(s => s.mobileNavOpen);
+  const setOpen = useUIStore(s => s.setMobileNavOpen);
   const navigate = useNavigate();
   const location = useLocation();
   const items = getAllNavItems();
