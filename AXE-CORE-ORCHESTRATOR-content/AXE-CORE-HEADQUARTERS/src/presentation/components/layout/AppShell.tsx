@@ -253,8 +253,11 @@ export function AppShell() {
                 : 'calc(env(safe-area-inset-top, 0px) + 10px)',
               left: 12,
               right: 12,
+              // Home glass itself reaches the physical bottom edge. Keep the
+              // iPhone home-indicator clearance INSIDE the plate via padding,
+              // never as a black gap outside the plate.
               bottom: location.pathname === '/mobile'
-                ? 'max(calc(env(safe-area-inset-bottom, 0px) - 14px), 2px)'
+                ? 0
                 : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
               height: 'auto',
               zIndex: 1,
@@ -268,7 +271,11 @@ export function AppShell() {
               paddingLeft: location.pathname === '/mobile' ? 12 : 14,
               paddingRight: location.pathname === '/mobile' ? 12 : 14,
               paddingTop: location.pathname === '/mobile' ? 6 : 10,
-              paddingBottom: keyboardInset || (location.pathname === '/mobile' ? 1 : 7),
+              paddingBottom: keyboardInset || (
+                location.pathname === '/mobile'
+                  ? 'max(env(safe-area-inset-bottom, 0px), 6px)'
+                  : 7
+              ),
               transition: 'padding-bottom 0.18s ease-out',
             }
           : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }
