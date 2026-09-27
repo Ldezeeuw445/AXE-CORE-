@@ -10,7 +10,7 @@
  * De lade zelf is donker glas (net als de Sidebar op de desktop): in beide
  * standen hetzelfde materiaal, lichte inkt. Alleen de plaat eronder wisselt.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router';
 import {
@@ -40,7 +40,6 @@ export function MobileNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const items = getAllNavItems();
-  const startX = useRef<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const onPickWallpaper = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,25 +51,9 @@ export function MobileNav() {
     e.target.value = '';
   };
 
-  // Veeg vanaf de linkerrand opent de lade. Sluiten gebeurt in go()/backdrop/X,
-  // dus geen effect dat op de route reageert (dat zou set-state-in-effect zijn).
-  useEffect(() => {
-    const onStart = (e: TouchEvent) => {
-      const x = e.touches[0]?.clientX ?? 999;
-      startX.current = x <= 24 ? x : null;
-    };
-    const onMove = (e: TouchEvent) => {
-      if (startX.current == null) return;
-      const dx = (e.touches[0]?.clientX ?? 0) - startX.current;
-      if (dx > 40) { setOpen(true); startX.current = null; }
-    };
-    window.addEventListener('touchstart', onStart, { passive: true });
-    window.addEventListener('touchmove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('touchstart', onStart);
-      window.removeEventListener('touchmove', onMove);
-    };
-  }, []);
+  // Navigatie opent bewust ALLEEN via de hamburger. Edge-swipes zijn gereserveerd
+  // voor de twee AXE-zijlades (Tools links, Status rechts), zodat één gebaar
+  // nooit twee verschillende drawers tegelijk opent.
 
   // Home (`/`) is op de telefoon leeg — de mobiele home is `/mobile`. Stuur de
   // "Home"-regel daarheen, zodat de lade nooit op een leeg scherm uitkomt.
