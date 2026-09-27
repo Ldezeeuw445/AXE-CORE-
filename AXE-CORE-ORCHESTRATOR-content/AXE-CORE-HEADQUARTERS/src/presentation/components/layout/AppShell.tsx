@@ -286,8 +286,10 @@ export function AppShell() {
 
       {/* Main layout area — fills remaining space */}
       <div className="flex-1 flex overflow-hidden relative" style={{ background: 'var(--bg-base)' }}>
-        {/* Left Sidebar — renders on all devices, handles mobile/desktop internally */}
-        {!mobileCommandSurface && <Sidebar />}
+        {/* Sidebar renders as a zero-width Sheet on phone and as the rail on
+            desktop. Keep it mounted on mobile so the left edge swipe/chevron
+            can open the real Tools drawer; only the lock screen suppresses it. */}
+        {(!mobileCommandSurface || location.pathname !== '/lock') && <Sidebar />}
 
         {/* Main Content */}
         <main
@@ -331,8 +333,9 @@ export function AppShell() {
           </ErrorBoundary>
         </main>
 
-        {/* Right Sidebar — renders on all devices, handles mobile/desktop internally */}
-        {!mobileCommandSurface && <RightPanel />}
+        {/* Same contract on the right: on phone this is the Status Sheet,
+            opened by the right edge swipe/chevron; desktop keeps its rail. */}
+        {(!mobileCommandSurface || location.pathname !== '/lock') && <RightPanel />}
       </div>
 
       {/* De chat met AXE: de plaat en de composer, op ELKE pagina.
