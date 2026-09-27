@@ -262,12 +262,12 @@ export function AppShell() {
               // De plaat eindigt vlak boven de home-indicator; de inhoud heeft
               // boven en onder dezelfde 10px marge.
               bottom: location.pathname === '/mobile'
-                ? 'max(3px, calc(env(safe-area-inset-bottom, 0px) - 17px))'
+                ? 'calc(env(safe-area-inset-bottom, 0px) + 6px)'
                 : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
               // Expliciete hoogte voorkomt dat iOS de onderrand aan een
               // verkorte PWA-viewport vastzet. De composer volgt via flex.
               height: location.pathname === '/mobile'
-                ? `calc(${mobileViewportHeight} - env(safe-area-inset-top, 0px) - 2px - max(3px, calc(env(safe-area-inset-bottom, 0px) - 17px)))`
+                ? `calc(${mobileViewportHeight} - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px)`
                 : 'auto',
               zIndex: 1,
               borderRadius: 28,
