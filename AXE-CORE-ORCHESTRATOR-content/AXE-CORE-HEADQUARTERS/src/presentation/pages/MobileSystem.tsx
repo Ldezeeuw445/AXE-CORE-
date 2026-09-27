@@ -210,7 +210,7 @@ export default function MobileSystem() {
 
   return (
     <div
-      className="axe-mobile-home relative z-[1] mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden"
+      className="axe-mobile-home relative z-[1] mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden pb-[2px]"
       style={{
         paddingTop: 0,
         paddingBottom: 0,
