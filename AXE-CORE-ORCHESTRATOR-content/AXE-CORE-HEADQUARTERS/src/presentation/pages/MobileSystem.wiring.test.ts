@@ -54,6 +54,29 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).toContain("gridTemplateColumns: 'clamp(58px, 17.5vw, 68px)");
   });
 
+
+  it('uses icon-only matte world controls and smaller real agent avatars', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    const chat = bron('presentation/components/layout/MobileChat.tsx');
+    expect(mobile).toContain('<span className="sr-only">{label}</span>');
+    expect(mobile).toContain('size={23}');
+    expect(chat).toContain('size={20}');
+    expect(mobile).toContain('axe-mobile-worldbar');
+  });
+
+  it('shares one horizontal edge for agent grid, chat and composer', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    const css = bron('design/axe-look.css');
+    expect((mobile.match(/axe-mobile-edge/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(css).toContain('.axe-mobile-home .axe-mobile-edge');
+  });
+
+  it('extends the mobile glass plate close to the iPhone safe-area hardware', () => {
+    const shell = bron('presentation/components/layout/AppShell.tsx');
+    expect(shell).toContain("calc(env(safe-area-inset-top, 0px) + 2px)");
+    expect(shell).toContain("max(calc(env(safe-area-inset-bottom, 0px) - 14px), 2px)");
+  });
+
   it('shows six real roster agents around the Core', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     for (const id of ['trading', 'developer', 'thinktank', 'northsea', 'wingman', 'companion']) {
