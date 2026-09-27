@@ -30,7 +30,7 @@ describe('canonical mobile Home wiring', () => {
 
   it('centers the phone world switch between equal left and right control reserves', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(mobile).toContain("gridTemplateColumns: '72px minmax(0, 1fr) 72px'");
+    expect(mobile).toContain("gridTemplateColumns: '58px minmax(0, 1fr) 58px'");
   });
 
   it('keeps navigation hamburger tap-only and gives edge swipes to both AXE side drawers', () => {
@@ -49,9 +49,32 @@ describe('canonical mobile Home wiring', () => {
   it('keeps the composer on the mobile safe-area floor and makes agent tiles more compact', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(shell).toContain("location.pathname === '/mobile' ? 2 : 7");
-    expect(mobile).toContain('size={26}');
-    expect(mobile).toContain("gridTemplateColumns: 'clamp(58px, 17.5vw, 68px)");
+    expect(shell).toContain("location.pathname === '/mobile' ? 1 : 7");
+    expect(mobile).toContain('size={23}');
+    expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
+  });
+
+
+  it('uses icon-only matte world controls and smaller real agent avatars', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    const chat = bron('presentation/components/layout/MobileChat.tsx');
+    expect(mobile).toContain('<span className="sr-only">{label}</span>');
+    expect(mobile).toContain('size={23}');
+    expect(chat).toContain('size={20}');
+    expect(mobile).toContain('axe-mobile-worldbar');
+  });
+
+  it('shares one horizontal edge for agent grid, chat and composer', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    const css = bron('design/axe-look.css');
+    expect((mobile.match(/axe-mobile-edge/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(css).toContain('.axe-mobile-home .axe-mobile-edge');
+  });
+
+  it('extends the mobile glass plate close to the iPhone safe-area hardware', () => {
+    const shell = bron('presentation/components/layout/AppShell.tsx');
+    expect(shell).toContain("calc(env(safe-area-inset-top, 0px) + 2px)");
+    expect(shell).toContain("max(calc(env(safe-area-inset-bottom, 0px) - 14px), 2px)");
   });
 
   it('shows six real roster agents around the Core', () => {

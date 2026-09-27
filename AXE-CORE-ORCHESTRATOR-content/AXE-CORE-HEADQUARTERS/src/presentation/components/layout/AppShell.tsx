@@ -229,10 +229,10 @@ export function AppShell() {
           aan de schermhoek. */}
       {mobileNav && (
         <div
-          className="fixed z-[70]"
+          className="axe-mobile-look-toggle fixed z-[70]"
           style={{
-            top: opPlaatMobiel ? 'calc(env(safe-area-inset-top, 0px) + 22px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
-            right: opPlaatMobiel ? 24 : 12,
+            top: opPlaatMobiel ? 'calc(env(safe-area-inset-top, 0px) + 12px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            right: opPlaatMobiel ? 18 : 12,
           }}
         >
           <LookToggle />
@@ -248,11 +248,13 @@ export function AppShell() {
               // statusbalk, onder boven de systeembalk, links/rechts een smalle
               // marge — zo zweeft hij op de achtergrond zoals in de Tauri-app.
               position: 'fixed',
-              top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+              top: location.pathname === '/mobile'
+                ? 'calc(env(safe-area-inset-top, 0px) + 2px)'
+                : 'calc(env(safe-area-inset-top, 0px) + 10px)',
               left: 12,
               right: 12,
               bottom: location.pathname === '/mobile'
-                ? 'max(env(safe-area-inset-bottom, 0px), 2px)'
+                ? 'max(calc(env(safe-area-inset-bottom, 0px) - 14px), 2px)'
                 : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
               height: 'auto',
               zIndex: 1,
@@ -263,10 +265,10 @@ export function AppShell() {
               // Content van de plaatrand af: de composer en de sphere raken zo
               // de ronde hoeken niet. Onder bewust krap gehouden: zo staat de hele
               // composer + chips lager en wint de sphere ruimte bovenin.
-              paddingLeft: 14,
-              paddingRight: 14,
-              paddingTop: 10,
-              paddingBottom: keyboardInset || (location.pathname === '/mobile' ? 2 : 7),
+              paddingLeft: location.pathname === '/mobile' ? 12 : 14,
+              paddingRight: location.pathname === '/mobile' ? 12 : 14,
+              paddingTop: location.pathname === '/mobile' ? 6 : 10,
+              paddingBottom: keyboardInset || (location.pathname === '/mobile' ? 1 : 7),
               transition: 'padding-bottom 0.18s ease-out',
             }
           : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }

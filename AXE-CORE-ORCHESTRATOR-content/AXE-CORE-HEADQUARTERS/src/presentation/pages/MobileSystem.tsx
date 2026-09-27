@@ -40,14 +40,12 @@ function MobileWorldBar() {
 
   return (
     <div
-      className="mx-auto flex h-[38px] w-full items-center justify-center gap-1 rounded-[14px] px-1.5"
+      className="axe-mobile-worldbar mx-auto flex h-[40px] w-full items-center justify-center gap-1 rounded-[14px] px-1"
       style={{
-        background: 'rgba(7,10,15,.70)',
-        border: '1px solid rgba(255,255,255,.10)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,.05), 0 10px 24px rgba(0,0,0,.22)',
-        maxWidth: 264,
-        backdropFilter: 'blur(18px)',
-        WebkitBackdropFilter: 'blur(18px)',
+        background: 'linear-gradient(180deg, rgba(20,20,24,.98), rgba(8,8,10,.99))',
+        border: '1px solid rgba(255,255,255,.09)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,.05), 0 10px 24px rgba(0,0,0,.30)',
+        maxWidth: 138,
       }}
       role="tablist"
       aria-label="AXE worlds"
@@ -62,15 +60,15 @@ function MobileWorldBar() {
             aria-selected={active}
             title={label}
             onClick={() => setCoreView(active ? 'axe' : id)}
-            className="flex h-7 flex-1 items-center justify-center gap-1 rounded-[9px] px-2 text-[10px] font-medium transition-transform active:scale-95"
+            className="flex size-9 flex-1 items-center justify-center rounded-[10px] transition-transform active:scale-95"
             style={{
               color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
               background: active ? 'rgba(34,211,238,.09)' : 'rgba(255,255,255,.025)',
               border: active ? '1px solid rgba(34,211,238,.24)' : '1px solid transparent',
             }}
           >
-            <Icon size={12} />
-            <span>{label}</span>
+            <Icon size={15} />
+            <span className="sr-only">{label}</span>
           </button>
         );
       })}
@@ -96,11 +94,12 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       ? 'WORKING'
       : 'IDLE';
   const detail = job ? regelVan(job) : agent.handles;
+  const compactLabel = agent.id === 'companion' ? 'Companion' : (agent.kort ?? agent.name);
 
   return (
     <button
       type="button"
-      className="flex min-h-0 w-full flex-col items-center justify-center rounded-[12px] px-1 py-1 text-center active:scale-[.98]"
+      className="flex min-h-0 w-full flex-col items-center justify-center overflow-hidden rounded-[11px] px-0.5 py-1 text-center active:scale-[.98]"
       style={{
         background: 'rgba(7,9,13,.82)',
         border: `1px solid ${agent.accent}35`,
@@ -110,14 +109,14 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       title={detail}
       aria-label={`${agent.name}: ${state}`}
     >
-      <ManagerAvatar agent={agent} size={26} />
+      <ManagerAvatar agent={agent} size={23} />
       <span
-        className="mt-0.5 max-w-full truncate text-[8px] font-semibold uppercase tracking-[0.035em]"
+        className="mt-0.5 max-w-full truncate px-0.5 text-[7.5px] font-semibold uppercase tracking-[0.025em]"
         style={{ color: 'var(--text-primary)' }}
       >
-        {agent.kort ?? agent.name}
+        {compactLabel}
       </span>
-      <span className="mt-0.5 flex items-center gap-1 text-[7.5px]" style={{ color: 'var(--text-muted)' }}>
+      <span className="mt-0.5 flex items-center gap-1 text-[7px]" style={{ color: 'var(--text-muted)' }}>
         <span
           className="size-1.5 rounded-full"
           style={{
@@ -142,14 +141,14 @@ function CoreHome() {
   return (
     <>
       <section
-        className="grid flex-none gap-2"
+        className="axe-mobile-edge grid w-full flex-none gap-2"
         style={{
-          height: 'clamp(196px, 27.5dvh, 252px)',
-          gridTemplateColumns: 'clamp(58px, 17.5vw, 68px) minmax(0, 1fr) clamp(58px, 17.5vw, 68px)',
+          height: 'clamp(188px, 26dvh, 238px)',
+          gridTemplateColumns: 'clamp(52px, 15.2vw, 58px) minmax(0, 1fr) clamp(52px, 15.2vw, 58px)',
         }}
         aria-label="AXE Core en agents"
       >
-        <div className="grid min-h-0 grid-rows-3 gap-2 py-1">
+        <div className="grid min-h-0 grid-rows-3 justify-items-start gap-2 py-1">
           {LEFT.map(id => <AgentTile key={id} id={id} />)}
         </div>
 
@@ -176,13 +175,13 @@ function CoreHome() {
           </div>
         </button>
 
-        <div className="grid min-h-0 grid-rows-3 gap-2 py-1">
+        <div className="grid min-h-0 grid-rows-3 justify-items-end gap-2 py-1">
           {RIGHT.map(id => <AgentTile key={id} id={id} />)}
         </div>
       </section>
 
       <div
-        className="my-1.5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px]"
+        className="axe-mobile-edge my-1.5 flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-[20px]"
         style={{
           background: 'rgba(5,8,13,.30)',
           border: '1px solid rgba(255,255,255,.045)',
@@ -231,8 +230,8 @@ export default function MobileSystem() {
           prevents the duplicate controls/composers that caused the two
           different mobile renders. */}
       <div
-        className="mb-2 grid flex-none items-center"
-        style={{ gridTemplateColumns: '72px minmax(0, 1fr) 72px' }}
+        className="mb-2 grid w-full flex-none items-center"
+        style={{ gridTemplateColumns: '58px minmax(0, 1fr) 58px' }}
       >
         <span aria-hidden="true" />
         <MobileWorldBar />
@@ -243,7 +242,7 @@ export default function MobileSystem() {
         ? <CoreHome />
         : <WorldSurface view={coreView} />}
 
-      <div className="mt-auto flex-none">
+      <div className="axe-mobile-edge mt-auto w-full flex-none">
         <MobileComposer />
       </div>
     </div>

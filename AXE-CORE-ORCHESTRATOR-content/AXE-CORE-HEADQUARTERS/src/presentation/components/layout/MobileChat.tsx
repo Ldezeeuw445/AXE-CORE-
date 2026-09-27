@@ -60,19 +60,19 @@ export function MobileChat() {
               data-role={mine ? 'boss' : agent ? 'agent' : 'axe'}
             >
               <div
-                className="mt-1 flex size-8 flex-none items-center justify-center"
+                className="mt-1 flex size-7 flex-none items-center justify-center"
                 aria-hidden="true"
               >
                 {agent ? (
                   <div
-                    className="grid size-8 place-items-center rounded-[10px]"
+                    className="grid size-7 place-items-center rounded-[9px]"
                     style={{
                       background: 'rgba(6,9,14,.82)',
                       border: `1px solid ${agent.accent}55`,
                       boxShadow: `0 0 14px ${agent.accent}20`,
                     }}
                   >
-                    <ManagerAvatar agent={agent} size={24} />
+                    <ManagerAvatar agent={agent} size={20} />
                   </div>
                 ) : (
                   <span
@@ -121,7 +121,7 @@ export function MobileChat() {
 
         {voiceStatus === 'processing' && (
           <div className="flex items-start gap-2">
-            <div className="mt-3 flex size-8 flex-none items-center justify-center">
+            <div className="mt-3 flex size-7 flex-none items-center justify-center">
               <span
                 className="block size-2.5 rounded-full"
                 style={{ background: '#34d399', boxShadow: '0 0 12px #34d399' }}
