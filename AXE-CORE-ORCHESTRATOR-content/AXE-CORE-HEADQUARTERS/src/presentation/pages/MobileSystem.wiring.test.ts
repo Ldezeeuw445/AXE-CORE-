@@ -30,7 +30,7 @@ describe('canonical mobile Home wiring', () => {
 
   it('centers the phone world switch between equal left and right control reserves', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(mobile).toContain("gridTemplateColumns: '72px minmax(0, 1fr) 72px'");
+    expect(mobile).toContain("gridTemplateColumns: '58px minmax(0, 1fr) 58px'");
   });
 
   it('keeps navigation hamburger tap-only and gives edge swipes to both AXE side drawers', () => {
@@ -49,8 +49,8 @@ describe('canonical mobile Home wiring', () => {
   it('keeps the composer on the mobile safe-area floor and makes agent tiles more compact', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(shell).toContain("location.pathname === '/mobile' ? 2 : 7");
-    expect(mobile).toContain('size={26}');
+    expect(shell).toContain("location.pathname === '/mobile' ? 1 : 7");
+    expect(mobile).toContain('size={23}');
     expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
   });
 
