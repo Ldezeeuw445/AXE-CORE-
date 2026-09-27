@@ -534,11 +534,13 @@ export function RightPanel() {
       <Sheet open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
         <SheetContent
           side="right"
-          className="text-white border-l border-white/5 w-[300px] max-w-[85vw] p-0"
+          className="text-white border-l border-white/5 w-[300px] max-w-[86vw] p-0"
           style={{
-            background: 'linear-gradient(180deg, rgba(20,20,24,0.98) 0%, rgba(12,12,15,0.99) 100%)',
-            top: 'calc(66px + env(safe-area-inset-top))',
-            height: 'calc(100dvh - 66px - env(safe-area-inset-top))',
+            background: 'linear-gradient(180deg, rgba(20,20,24,0.985) 0%, rgba(12,12,15,0.995) 100%)',
+            top: isMobile ? 'env(safe-area-inset-top, 0px)' : 'calc(66px + env(safe-area-inset-top))',
+            height: isMobile
+              ? 'calc(100dvh - env(safe-area-inset-top, 0px))'
+              : 'calc(100dvh - 66px - env(safe-area-inset-top))',
           }}
         >
           <SheetHeader className="sr-only">
