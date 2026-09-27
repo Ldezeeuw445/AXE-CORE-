@@ -49,7 +49,7 @@ describe('canonical mobile Home wiring', () => {
   it('keeps the composer on the mobile safe-area floor and makes agent tiles more compact', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(shell).toContain("location.pathname === '/mobile' ? 1 : 7");
+    expect(shell).toContain("max(env(safe-area-inset-bottom, 0px), 6px)");
     expect(mobile).toContain('size={23}');
     expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
   });
@@ -74,7 +74,8 @@ describe('canonical mobile Home wiring', () => {
   it('extends the mobile glass plate close to the iPhone safe-area hardware', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     expect(shell).toContain("calc(env(safe-area-inset-top, 0px) + 2px)");
-    expect(shell).toContain("max(calc(env(safe-area-inset-bottom, 0px) - 14px), 2px)");
+    expect(shell).toContain("bottom: location.pathname === '/mobile'");
+    expect(shell).toContain("? 0");
   });
 
   it('shows six real roster agents around the Core', () => {
