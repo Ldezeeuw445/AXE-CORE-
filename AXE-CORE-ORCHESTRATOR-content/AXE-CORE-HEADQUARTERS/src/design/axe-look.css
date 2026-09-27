@@ -7211,3 +7211,49 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     -webkit-backdrop-filter: blur(32px) saturate(155%) brightness(1.03) !important;
   }
 }
+
+
+/* Final phone Home alignment pass: one shared horizontal edge for agents,
+   chat and composer; matte-black top controls in both light/dark. Desktop
+   remains untouched because every selector is phone-scoped. */
+@media (max-width: 640px) {
+  :root[data-look] .axe-mobile-home .axe-mobile-edge {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-composer.axe-vakcomposer,
+  :root[data-look] .axe-mobile-home .axe-vak {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  :root[data-look] .axe-mobile-look-toggle .axe-daynight {
+    background: linear-gradient(180deg, rgba(20,20,24,.99), rgba(8,8,10,.995)) !important;
+    border: 1px solid rgba(255,255,255,.09);
+    box-shadow: 0 10px 26px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05);
+  }
+
+  :root[data-look] .axe-mobile-look-toggle .axe-dn-btn {
+    color: rgba(238,243,250,.72) !important;
+  }
+
+  :root[data-look] .axe-mobile-look-toggle .axe-dn-btn[aria-pressed='true'] {
+    background: rgba(255,255,255,.10) !important;
+    color: #F7FAFC !important;
+  }
+
+  :root[data-look] .axe-mobile-worldbar button {
+    color: rgba(238,243,250,.72);
+  }
+
+  :root[data-look] .axe-mobile-worldbar button[aria-selected='true'] {
+    background: rgba(255,255,255,.075) !important;
+    color: var(--accent-cyan) !important;
+    border-color: rgba(34,211,238,.22) !important;
+  }
+}
