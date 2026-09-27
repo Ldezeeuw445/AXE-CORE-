@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const ROOT = path.resolve(new URL('.', import.meta.url).pathname, '../../..');
+const ROOT = path.resolve(new URL('.', import.meta.url).pathname, '../..');
 const bron = (rel: string) => readFileSync(path.join(ROOT, rel), 'utf8');
 
 describe('canonical mobile Home wiring', () => {
@@ -16,7 +16,7 @@ describe('canonical mobile Home wiring', () => {
   it('renders the /mobile route on the same floating glass plate as native phone tabs', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     expect(shell).toContain("location.pathname !== '/lock'");
-    expect(shell).not.toContain("location.pathname !== '/mobile' && location.pathname !== '/lock'");
+    expect(shell).toContain("const opPlaatMobiel = mobileNav");
   });
 
   it('gives the mobile mic a real primary native control instead of the desktop transparent-button style', () => {
@@ -49,7 +49,7 @@ describe('canonical mobile Home wiring', () => {
   it('keeps the composer on the mobile safe-area floor and makes agent tiles more compact', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(shell).toContain("max(env(safe-area-inset-bottom, 0px), 6px)");
+    expect(shell).toContain("paddingTop: 10");
     expect(mobile).toContain('size={23}');
     expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
   });
@@ -75,7 +75,7 @@ describe('canonical mobile Home wiring', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     expect(shell).toContain("calc(env(safe-area-inset-top, 0px) + 2px)");
     expect(shell).toContain("bottom: location.pathname === '/mobile'");
-    expect(shell).toContain("? 0");
+    expect(shell).toContain("max(3px, calc(env(safe-area-inset-bottom, 0px) - 17px))");
   });
 
   it('shows six real roster agents around the Core', () => {
@@ -88,8 +88,9 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).not.toContain("'operator'");
   });
 
-  it('keeps only Neural Terrain Architecture in the phone world switch', () => {
+  it('includes the Core return button alongside Neural Terrain Architecture in the phone world switch', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
+    expect(mobile).toContain("label: 'AXE Core sphere'");
     expect(mobile).toContain("label: 'Neural'");
     expect(mobile).toContain("label: 'Terrain'");
     expect(mobile).toContain("label: 'Architecture'");

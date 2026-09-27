@@ -5,7 +5,7 @@
  * three Tauri world controls, six real AXE agents around the Core, one chat
  * timeline and the real AXE composer fixed at the bottom.
  */
-import { BrainCircuit, Mountain, Network } from 'lucide-react';
+import { BrainCircuit, Mountain, Network, Orbit } from 'lucide-react';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
@@ -25,10 +25,11 @@ const LEFT: readonly AxeAgentId[] = ['trading', 'developer', 'thinktank'];
 const RIGHT: readonly AxeAgentId[] = ['northsea', 'wingman', 'companion'];
 
 const WORLDS: ReadonlyArray<{
-  id: Exclude<CoreView, 'axe'>;
+  id: CoreView;
   label: string;
   icon: typeof BrainCircuit;
 }> = [
+  { id: 'axe', label: 'AXE Core sphere', icon: Orbit },
   { id: 'neural', label: 'Neural', icon: BrainCircuit },
   { id: 'terrain', label: 'Terrain', icon: Mountain },
   { id: 'runtime', label: 'Architecture', icon: Network },
@@ -40,12 +41,12 @@ function MobileWorldBar() {
 
   return (
     <div
-      className="axe-mobile-worldbar mx-auto flex h-[40px] w-full items-center justify-center gap-1 rounded-[14px] px-1"
+      className="axe-mobile-worldbar mx-auto flex h-9 w-full items-center justify-center gap-1 rounded-[14px] px-1"
       style={{
         background: 'linear-gradient(180deg, rgba(20,20,24,.98), rgba(8,8,10,.99))',
         border: '1px solid rgba(255,255,255,.09)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,.05), 0 10px 24px rgba(0,0,0,.30)',
-        maxWidth: 138,
+        maxWidth: 176,
       }}
       role="tablist"
       aria-label="AXE worlds"
@@ -101,10 +102,10 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       type="button"
       className="flex min-h-0 w-full flex-col items-center justify-center overflow-hidden rounded-[11px] px-0.5 py-1 text-center active:scale-[.98]"
       style={{
-        background: 'rgba(7,9,13,.82)',
-        border: `1px solid ${agent.accent}35`,
-        boxShadow: `0 8px 18px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.035), 0 0 18px ${agent.accent}10`,
-        backdropFilter: 'blur(14px)',
+        background: 'var(--axe-kaart-vlak)',
+        border: '1px solid var(--axe-kaart-lijn)',
+        borderTopColor: 'var(--axe-kaart-lijn-boven)',
+        boxShadow: 'var(--axe-kaart-schaduw)',
       }}
       title={detail}
       aria-label={`${agent.name}: ${state}`}
@@ -115,16 +116,6 @@ function AgentTile({ id }: { id: AxeAgentId }) {
         style={{ color: 'var(--text-primary)' }}
       >
         {compactLabel}
-      </span>
-      <span className="mt-0.5 flex items-center gap-1 text-[7px]" style={{ color: 'var(--text-muted)' }}>
-        <span
-          className="size-1.5 rounded-full"
-          style={{
-            background: job ? agent.accent : 'rgba(255,255,255,.28)',
-            boxShadow: job ? `0 0 8px ${agent.accent}` : 'none',
-          }}
-        />
-        {state}
       </span>
     </button>
   );
@@ -221,7 +212,7 @@ export default function MobileSystem() {
     <div
       className="axe-mobile-home relative z-[1] mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden"
       style={{
-        paddingTop: 6,
+        paddingTop: 0,
         paddingBottom: 0,
         touchAction: 'manipulation',
       }}

@@ -253,11 +253,10 @@ export function AppShell() {
                 : 'calc(env(safe-area-inset-top, 0px) + 10px)',
               left: 12,
               right: 12,
-              // Home glass itself reaches the physical bottom edge. Keep the
-              // iPhone home-indicator clearance INSIDE the plate via padding,
-              // never as a black gap outside the plate.
+              // De plaat eindigt vlak boven de home-indicator; de inhoud heeft
+              // boven en onder dezelfde 10px marge.
               bottom: location.pathname === '/mobile'
-                ? 0
+                ? 'max(3px, calc(env(safe-area-inset-bottom, 0px) - 17px))'
                 : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
               height: 'auto',
               zIndex: 1,
@@ -270,10 +269,10 @@ export function AppShell() {
               // composer + chips lager en wint de sphere ruimte bovenin.
               paddingLeft: location.pathname === '/mobile' ? 12 : 14,
               paddingRight: location.pathname === '/mobile' ? 12 : 14,
-              paddingTop: location.pathname === '/mobile' ? 6 : 10,
+              paddingTop: 10,
               paddingBottom: keyboardInset || (
                 location.pathname === '/mobile'
-                  ? 'max(env(safe-area-inset-bottom, 0px), 6px)'
+                  ? 10
                   : 7
               ),
               transition: 'padding-bottom 0.18s ease-out',
