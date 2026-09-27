@@ -51,7 +51,7 @@ describe('canonical mobile Home wiring', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     expect(shell).toContain("location.pathname === '/mobile' ? 2 : 7");
     expect(mobile).toContain('size={26}');
-    expect(mobile).toContain("gridTemplateColumns: 'clamp(58px, 17.5vw, 68px)");
+    expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
   });
 
 
