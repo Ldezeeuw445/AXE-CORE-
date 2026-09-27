@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { AppShell } from '@/presentation/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/presentation/hooks/useKeyboardShortcuts';
 import { useClapDetector } from '@/presentation/hooks/useClapDetector';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import LoginPage from '@/presentation/pages/LoginPage';
 import { useAuth } from '@/presentation/contexts/AuthContext';
@@ -60,6 +61,18 @@ const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
 const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
+
+function HomeEntry() {
+  const isMobile = useIsMobile();
+
+  // Existing Samsung/iOS installs can keep an old launch URL forever. The
+  // manifest now starts at #/mobile, but an already-installed shortcut may
+  // still reopen #/ (the desktop Home) until the user navigates away. Make the
+  // route itself authoritative: every phone-sized launch of Home becomes the
+  // canonical mobile Home immediately. Desktop/Tauri keeps the desktop Home.
+  if (isMobile) return <Navigate to="/mobile" replace />;
+  return <Home />;
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading, degraded } = useAuth();
@@ -188,7 +201,7 @@ export default function App() {
           <Route path="/computer-use-overlay" element={<RequireAuth><ComputerUseOverlay /></RequireAuth>} />
           <Route path="/northsea-desktop" element={<RequireAuth><StandaloneNorthseaPage /></RequireAuth>} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-            <Route index element={<Home />} />
+            <Route index element={<HomeEntry />} />
             {/* The page that answers "what actually works". */}
             <Route path="status" element={<StatusPage />} />
             <Route path="ai-core" element={<AICore />} />
