@@ -71,11 +71,14 @@ describe('canonical mobile Home wiring', () => {
     expect(css).toContain('.axe-mobile-home .axe-mobile-edge');
   });
 
-  it('extends the mobile glass plate close to the iPhone safe-area hardware', () => {
+  it('extends the mobile glass plate down to just above the iPhone home indicator', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     expect(shell).toContain("calc(env(safe-area-inset-top, 0px) + 2px)");
     expect(shell).toContain("bottom: location.pathname === '/mobile'");
-    expect(shell).toContain("max(3px, calc(env(safe-area-inset-bottom, 0px) - 17px))");
+    // 34pt inset - 12 = 22pt boven de schermrand, 9pt boven de streep;
+    // zonder inset (zwevende telefoon in Tauri) de oude 14px.
+    expect(shell).toContain("max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px))");
+    expect(shell).not.toContain("'calc(env(safe-area-inset-bottom, 0px) + 14px)'");
   });
 
   it('shows six real roster agents around the Core', () => {

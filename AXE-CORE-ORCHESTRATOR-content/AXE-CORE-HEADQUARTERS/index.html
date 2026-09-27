@@ -32,7 +32,18 @@
     <!-- PWA meta -->
     <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- `black`, NIET `black-translucent`. iOS 26 heeft een WebKit-regressie
+         (bug 301108): een geïnstalleerde PWA met black-translucent +
+         viewport-fit=cover tekent vanaf de bovenrand, maar maakt het venster
+         een statusbalk te kort. Gemeten op Luka's iPhone (402×874): de app
+         tekende tot 812, daaronder 62pt zwart dat geen CSS kan bereiken --
+         100dvh, 100%, innerHeight en visualViewport zijn allemaal 812. Acht
+         commits op 26/27 sep zochten de fout in de plaat; hij zat hier.
+         Met `black` begint het venster onder de statusbalk en loopt het door
+         tot de onderrand, zodat de plaat bij de home-indicator kan komen.
+         iOS leest deze tag alleen bij installeren: app van het beginscherm
+         halen en opnieuw toevoegen. Tauri en Android lezen hem niet. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="AXE CORE" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="AXE CORE" />

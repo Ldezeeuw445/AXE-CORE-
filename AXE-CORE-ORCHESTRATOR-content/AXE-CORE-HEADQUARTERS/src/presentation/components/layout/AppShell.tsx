@@ -24,7 +24,6 @@ import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCom
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { describeFailure } from '@/domain/globalFailure';
 import { magHerstelHerladen, meldGoedeLading } from '@/domain/staleBuildRecovery';
-import { useMobileViewportHeight } from '@/presentation/hooks/useMobileViewportHeight';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
 import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFloatingChat';
@@ -190,11 +189,6 @@ export function AppShell() {
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
   const keyboardInset = useKeyboardInset();
-  const mobileViewportHeight = useMobileViewportHeight();
-  // Bij een langere PWA-plaat hoort ook de toetsenbordruimte bij die hoogte.
-  const homeKeyboardInset = keyboardInset > 0 && mobileViewportHeight.endsWith('px')
-    ? keyboardInset + Math.max(0, Number.parseFloat(mobileViewportHeight) - window.innerHeight)
-    : keyboardInset;
 
   // Fixed to the dynamic viewport height (not min-h) so the shell never grows
   // past the visible area and pushes the BottomNav below the fold — the reason
@@ -259,13 +253,18 @@ export function AppShell() {
                 : 'calc(env(safe-area-inset-top, 0px) + 10px)',
               left: 12,
               right: 12,
-              // De plaat eindigt vlak boven de home-indicator; de inhoud heeft
-              // boven en onder dezelfde 10px marge.
+              // De plaat loopt door tot vlak boven de home-indicator. Die
+              // streep staat 8-13pt boven de schermrand, midden in de 34pt
+              // safe-area; 34 - 12 = 22pt laat 9pt lucht tot de streep.
+              // Zonder home-indicator (inset 0, ook de zwevende telefoon in
+              // Tauri) blijft het de 14px van voorheen. Werkt alleen omdat
+              // index.html de statusbalk op `black` zet -- met
+              // black-translucent tekent iOS 26 de onderste 62pt niet.
               bottom: location.pathname === '/mobile'
-                ? 'calc(env(safe-area-inset-bottom, 0px) + 14px)'
+                ? 'max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px))'
                 : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
-              // Expliciete hoogte voorkomt dat iOS de onderrand aan een
-              // verkorte PWA-viewport vastzet. De composer volgt via flex.
+              // Geen vaste hoogte: top en bottom bepalen hem, de composer
+              // volgt via flex.
               height: 'auto',
               zIndex: 1,
               borderRadius: 28,
@@ -278,7 +277,7 @@ export function AppShell() {
               paddingLeft: location.pathname === '/mobile' ? 12 : 14,
               paddingRight: location.pathname === '/mobile' ? 12 : 14,
               paddingTop: 10,
-              paddingBottom: (location.pathname === '/mobile' ? homeKeyboardInset : keyboardInset) || (
+              paddingBottom: keyboardInset || (
                 location.pathname === '/mobile'
                   ? 10
                   : 7
