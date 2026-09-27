@@ -79,18 +79,19 @@ export function MobileNav() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Menu openen"
-          className="fixed z-[70] flex size-9 items-center justify-center rounded-full active:scale-95"
+          className="axe-mobile-nav-trigger fixed z-[70] flex size-9 items-center justify-center rounded-full active:scale-95"
           style={{
             // Op de glasplaat-home netjes binnen de rand, precies zoals de
             // licht/donker-knop rechtsboven (AppShell): zelfde hoogte, zelfde
             // marge. Buiten de home in de schermhoek.
             top: (location.pathname === '/' || location.pathname === '/mobile')
-              ? 'calc(env(safe-area-inset-top, 0px) + 22px)'
+              ? 'calc(env(safe-area-inset-top, 0px) + 12px)'
               : 'calc(env(safe-area-inset-top, 0px) + 10px)',
-            left: (location.pathname === '/' || location.pathname === '/mobile') ? 24 : 12,
-            background: 'var(--surface-bg)',
-            border: '1px solid var(--border-subtle)',
-            color: 'var(--text-primary)',
+            left: (location.pathname === '/' || location.pathname === '/mobile') ? 18 : 12,
+            background: 'linear-gradient(180deg, rgba(20,20,24,.99), rgba(8,8,10,.995))',
+            border: '1px solid rgba(255,255,255,.09)',
+            color: '#EEF3FA',
+            boxShadow: '0 10px 26px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05)',
           }}
         >
           <Menu size={16} />
