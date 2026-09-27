@@ -251,7 +251,9 @@ export function AppShell() {
               top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
               left: 12,
               right: 12,
-              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
+              bottom: location.pathname === '/mobile'
+                ? 'max(env(safe-area-inset-bottom, 0px), 2px)'
+                : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
               height: 'auto',
               zIndex: 1,
               borderRadius: 28,
@@ -264,7 +266,7 @@ export function AppShell() {
               paddingLeft: 14,
               paddingRight: 14,
               paddingTop: 10,
-              paddingBottom: keyboardInset || 7,
+              paddingBottom: keyboardInset || (location.pathname === '/mobile' ? 2 : 7),
               transition: 'padding-bottom 0.18s ease-out',
             }
           : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }
