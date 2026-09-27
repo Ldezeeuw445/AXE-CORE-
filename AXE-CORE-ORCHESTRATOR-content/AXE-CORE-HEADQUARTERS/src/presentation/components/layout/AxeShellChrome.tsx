@@ -12,6 +12,7 @@
 import { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { useUIStore } from '@/presentation/store/uiStore';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
 /** Binnen deze afstand van de rand gaat een rail open. */
@@ -50,18 +51,88 @@ export function AxeShellChrome() {
       if (wortel.dataset.railPinR !== 'aan' && wortel.dataset.railVastR !== 'aan') wortel.dataset.railR = 'dicht';
     };
 
-    /* Op een aanraakscherm bestaat "muis aan de rand" niet, dus daar reageert
-       hij op een veeg vanaf de zijkant. */
-    let start: number | null = null;
-    const raakAan = (e: TouchEvent) => { start = e.touches[0]?.clientX ?? null; };
+    /* Touch:
+       - telefoon: edge-swipes zijn UITSLUITEND voor de twee AXE-zijlades.
+         De hamburger/navigatie is tap-only (MobileNav), dus links kan nooit
+         meer tegelijk Tools + navigatie openen.
+       - desktop/tablet-touch: behoud het bestaande rail-gedrag.
+
+       We wachten op een duidelijke horizontale beweging en vergelijken die met
+       de verticale afstand. Zo steelt een normale scroll in de chat geen drawer. */
+    type RaakDoel = 'open-l' | 'open-r' | 'close-l' | 'close-r' | 'legacy' | null;
+    let raakStartX: number | null = null;
+    let raakStartY: number | null = null;
+    let raakDoel: RaakDoel = null;
+    let raakUitgevoerd = false;
+
+    const raakAan = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const x = t?.clientX ?? 0;
+      const y = t?.clientY ?? 0;
+      const w = window.innerWidth;
+
+      raakStartX = x;
+      raakStartY = y;
+      raakUitgevoerd = false;
+
+      if (w < 768) {
+        const ui = useUIStore.getState();
+        if (ui.mobileNavOpen) raakDoel = null;
+        else if (ui.leftDrawerOpen) raakDoel = 'close-l';
+        else if (ui.rightDrawerOpen) raakDoel = 'close-r';
+        else if (x <= ZONE) raakDoel = 'open-l';
+        else if (x >= w - ZONE) raakDoel = 'open-r';
+        else raakDoel = null;
+      } else {
+        raakDoel = 'legacy';
+      }
+    };
+
     const raakBeweeg = (e: TouchEvent) => {
-      if (start === null) return;
-      const x = e.touches[0]?.clientX ?? 0, w = window.innerWidth;
-      if (start < ZONE && x > start + 20) wortel.dataset.railL = 'open';
-      if (start > w - ZONE && x < start - 20) wortel.dataset.railR = 'open';
+      if (raakStartX === null || raakStartY === null || raakDoel === null || raakUitgevoerd) return;
+      const t = e.touches[0];
+      const x = t?.clientX ?? raakStartX;
+      const y = t?.clientY ?? raakStartY;
+      const dx = x - raakStartX;
+      const dy = y - raakStartY;
+
+      // Eerst bewijzen dat dit een horizontale swipe is, geen verticale scroll.
+      if (Math.abs(dx) < 28 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+
+      if (window.innerWidth < 768) {
+        const ui = useUIStore.getState();
+        if (raakDoel === 'open-l' && dx > 0) {
+          ui.setRightDrawerOpen(false);
+          ui.setLeftDrawerOpen(true);
+          raakUitgevoerd = true;
+        } else if (raakDoel === 'open-r' && dx < 0) {
+          ui.setLeftDrawerOpen(false);
+          ui.setRightDrawerOpen(true);
+          raakUitgevoerd = true;
+        } else if (raakDoel === 'close-l' && dx < 0) {
+          ui.setLeftDrawerOpen(false);
+          raakUitgevoerd = true;
+        } else if (raakDoel === 'close-r' && dx > 0) {
+          ui.setRightDrawerOpen(false);
+          raakUitgevoerd = true;
+        }
+        return;
+      }
+
+      // Bestaande rail-gesture buiten de telefoon-layout.
+      const w = window.innerWidth;
+      if (raakStartX < ZONE && x > raakStartX + 20) wortel.dataset.railL = 'open';
+      if (raakStartX > w - ZONE && x < raakStartX - 20) wortel.dataset.railR = 'open';
       if (x > BREEDTE && x < w - BREEDTE) verlaat();
     };
-    const raakLos = () => { start = null; };
+
+    const raakLos = () => {
+      raakStartX = null;
+      raakStartY = null;
+      raakDoel = null;
+      raakUitgevoerd = false;
+    };
 
     /* ── De hoogtes ────────────────────────────────────────────────────────
        De rails en de sterrenlucht stoppen boven de onderste chroom. Die hoogte
@@ -352,6 +423,21 @@ export function AxeShellChrome() {
   }, []);
 
   const toggleRail = (kant: 'L' | 'R') => {
+    // Op telefoon zijn de zichtbare zijlades de bestaande Sidebar/RightPanel
+    // Sheets. De chevrons en de edge-swipes sturen dus exact dezelfde state.
+    if (window.innerWidth < 768) {
+      const ui = useUIStore.getState();
+      ui.setMobileNavOpen(false);
+      if (kant === 'L') {
+        ui.setRightDrawerOpen(false);
+        ui.setLeftDrawerOpen(!ui.leftDrawerOpen);
+      } else {
+        ui.setLeftDrawerOpen(false);
+        ui.setRightDrawerOpen(!ui.rightDrawerOpen);
+      }
+      return;
+    }
+
     const wortel = document.documentElement;
     const pin = kant === 'L' ? 'railPinL' : 'railPinR';
     const rail = kant === 'L' ? 'railL' : 'railR';

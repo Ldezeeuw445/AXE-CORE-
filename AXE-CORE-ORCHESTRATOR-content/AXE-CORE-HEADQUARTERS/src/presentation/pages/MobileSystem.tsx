@@ -40,12 +40,12 @@ function MobileWorldBar() {
 
   return (
     <div
-      className="mx-auto flex h-[38px] items-center justify-center gap-1 rounded-[14px] px-1.5"
+      className="mx-auto flex h-[38px] w-full items-center justify-center gap-1 rounded-[14px] px-1.5"
       style={{
         background: 'rgba(7,10,15,.70)',
         border: '1px solid rgba(255,255,255,.10)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,.05), 0 10px 24px rgba(0,0,0,.22)',
-        width: 'min(62vw, 260px)',
+        maxWidth: 264,
         backdropFilter: 'blur(18px)',
         WebkitBackdropFilter: 'blur(18px)',
       }}
@@ -100,7 +100,7 @@ function AgentTile({ id }: { id: AxeAgentId }) {
   return (
     <button
       type="button"
-      className="flex min-h-0 w-full flex-col items-center justify-center rounded-[14px] px-1.5 py-1.5 text-center active:scale-[.98]"
+      className="flex min-h-0 w-full flex-col items-center justify-center rounded-[12px] px-1 py-1 text-center active:scale-[.98]"
       style={{
         background: 'rgba(7,9,13,.82)',
         border: `1px solid ${agent.accent}35`,
@@ -110,14 +110,14 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       title={detail}
       aria-label={`${agent.name}: ${state}`}
     >
-      <ManagerAvatar agent={agent} size={30} />
+      <ManagerAvatar agent={agent} size={26} />
       <span
-        className="mt-0.5 max-w-full truncate text-[9px] font-semibold uppercase tracking-[0.04em]"
+        className="mt-0.5 max-w-full truncate text-[8px] font-semibold uppercase tracking-[0.035em]"
         style={{ color: 'var(--text-primary)' }}
       >
         {agent.kort ?? agent.name}
       </span>
-      <span className="mt-0.5 flex items-center gap-1 text-[8px]" style={{ color: 'var(--text-muted)' }}>
+      <span className="mt-0.5 flex items-center gap-1 text-[7.5px]" style={{ color: 'var(--text-muted)' }}>
         <span
           className="size-1.5 rounded-full"
           style={{
@@ -144,8 +144,8 @@ function CoreHome() {
       <section
         className="grid flex-none gap-2"
         style={{
-          height: 'clamp(210px, 30dvh, 278px)',
-          gridTemplateColumns: 'clamp(64px, 19vw, 76px) minmax(0, 1fr) clamp(64px, 19vw, 76px)',
+          height: 'clamp(196px, 27.5dvh, 252px)',
+          gridTemplateColumns: 'clamp(58px, 17.5vw, 68px) minmax(0, 1fr) clamp(58px, 17.5vw, 68px)',
         }}
         aria-label="AXE Core en agents"
       >
@@ -222,23 +222,28 @@ export default function MobileSystem() {
     <div
       className="axe-mobile-home relative z-[1] mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden"
       style={{
-        paddingTop: 8,
-        paddingBottom: 4,
+        paddingTop: 6,
+        paddingBottom: 0,
         touchAction: 'manipulation',
       }}
     >
       {/* AppShell owns the hamburger + light/dark buttons. Keeping them there
           prevents the duplicate controls/composers that caused the two
           different mobile renders. */}
-      <div className="mb-2 flex-none">
+      <div
+        className="mb-2 grid flex-none items-center"
+        style={{ gridTemplateColumns: '72px minmax(0, 1fr) 72px' }}
+      >
+        <span aria-hidden="true" />
         <MobileWorldBar />
+        <span aria-hidden="true" />
       </div>
 
       {coreView === 'axe'
         ? <CoreHome />
         : <WorldSurface view={coreView} />}
 
-      <div className="flex-none pt-1">
+      <div className="mt-auto flex-none">
         <MobileComposer />
       </div>
     </div>

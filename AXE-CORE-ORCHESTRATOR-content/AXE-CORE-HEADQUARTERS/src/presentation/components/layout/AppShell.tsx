@@ -251,7 +251,9 @@ export function AppShell() {
               top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
               left: 12,
               right: 12,
-              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
+              bottom: location.pathname === '/mobile'
+                ? 'max(env(safe-area-inset-bottom, 0px), 2px)'
+                : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
               height: 'auto',
               zIndex: 1,
               borderRadius: 28,
@@ -264,7 +266,7 @@ export function AppShell() {
               paddingLeft: 14,
               paddingRight: 14,
               paddingTop: 10,
-              paddingBottom: keyboardInset || 7,
+              paddingBottom: keyboardInset || (location.pathname === '/mobile' ? 2 : 7),
               transition: 'padding-bottom 0.18s ease-out',
             }
           : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }
@@ -286,8 +288,10 @@ export function AppShell() {
 
       {/* Main layout area — fills remaining space */}
       <div className="flex-1 flex overflow-hidden relative" style={{ background: 'var(--bg-base)' }}>
-        {/* Left Sidebar — renders on all devices, handles mobile/desktop internally */}
-        {!mobileCommandSurface && <Sidebar />}
+        {/* Sidebar renders as a zero-width Sheet on phone and as the rail on
+            desktop. Keep it mounted on mobile so the left edge swipe/chevron
+            can open the real Tools drawer; only the lock screen suppresses it. */}
+        {(!mobileCommandSurface || location.pathname !== '/lock') && <Sidebar />}
 
         {/* Main Content */}
         <main
@@ -331,8 +335,9 @@ export function AppShell() {
           </ErrorBoundary>
         </main>
 
-        {/* Right Sidebar — renders on all devices, handles mobile/desktop internally */}
-        {!mobileCommandSurface && <RightPanel />}
+        {/* Same contract on the right: on phone this is the Status Sheet,
+            opened by the right edge swipe/chevron; desktop keeps its rail. */}
+        {(!mobileCommandSurface || location.pathname !== '/lock') && <RightPanel />}
       </div>
 
       {/* De chat met AXE: de plaat en de composer, op ELKE pagina.
