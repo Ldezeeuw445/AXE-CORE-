@@ -24,6 +24,7 @@ import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCom
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { describeFailure } from '@/domain/globalFailure';
 import { magHerstelHerladen, meldGoedeLading } from '@/domain/staleBuildRecovery';
+import { useMobileViewportHeight } from '@/presentation/hooks/useMobileViewportHeight';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
 import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFloatingChat';
@@ -189,6 +190,11 @@ export function AppShell() {
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
   const keyboardInset = useKeyboardInset();
+  const mobileViewportHeight = useMobileViewportHeight();
+  // Bij een langere PWA-plaat hoort ook de toetsenbordruimte bij die hoogte.
+  const homeKeyboardInset = keyboardInset > 0 && mobileViewportHeight.endsWith('px')
+    ? keyboardInset + Math.max(0, Number.parseFloat(mobileViewportHeight) - window.innerHeight)
+    : keyboardInset;
 
   // Fixed to the dynamic viewport height (not min-h) so the shell never grows
   // past the visible area and pushes the BottomNav below the fold — the reason
@@ -258,7 +264,11 @@ export function AppShell() {
               bottom: location.pathname === '/mobile'
                 ? 'max(3px, calc(env(safe-area-inset-bottom, 0px) - 17px))'
                 : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
-              height: 'auto',
+              // Expliciete hoogte voorkomt dat iOS de onderrand aan een
+              // verkorte PWA-viewport vastzet. De composer volgt via flex.
+              height: location.pathname === '/mobile'
+                ? `calc(${mobileViewportHeight} - env(safe-area-inset-top, 0px) - 2px - max(3px, calc(env(safe-area-inset-bottom, 0px) - 17px)))`
+                : 'auto',
               zIndex: 1,
               borderRadius: 28,
               // Diepe slagschaduw (zweeft) + een lichte binnenrand bovenaan, zodat
@@ -270,7 +280,7 @@ export function AppShell() {
               paddingLeft: location.pathname === '/mobile' ? 12 : 14,
               paddingRight: location.pathname === '/mobile' ? 12 : 14,
               paddingTop: 10,
-              paddingBottom: keyboardInset || (
+              paddingBottom: (location.pathname === '/mobile' ? homeKeyboardInset : keyboardInset) || (
                 location.pathname === '/mobile'
                   ? 10
                   : 7
