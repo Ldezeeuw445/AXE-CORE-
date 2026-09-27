@@ -94,6 +94,7 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       ? 'WORKING'
       : 'IDLE';
   const detail = job ? regelVan(job) : agent.handles;
+  const compactLabel = agent.id === 'companion' ? 'Companion' : (agent.kort ?? agent.name);
 
   return (
     <button
@@ -113,7 +114,7 @@ function AgentTile({ id }: { id: AxeAgentId }) {
         className="mt-0.5 max-w-full truncate px-0.5 text-[7.5px] font-semibold uppercase tracking-[0.025em]"
         style={{ color: 'var(--text-primary)' }}
       >
-        {agent.kort ?? agent.name}
+        {compactLabel}
       </span>
       <span className="mt-0.5 flex items-center gap-1 text-[7px]" style={{ color: 'var(--text-muted)' }}>
         <span
