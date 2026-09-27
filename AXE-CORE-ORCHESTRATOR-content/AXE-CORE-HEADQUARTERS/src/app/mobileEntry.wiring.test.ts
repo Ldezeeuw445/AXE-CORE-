@@ -7,14 +7,14 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), 'utf8');
 
 describe('mobile PWA entry', () => {
   it('redirects phone-sized root launches to the canonical mobile Home', () => {
-    const app = read('app/App.tsx');
+    const app = read('src/app/App.tsx');
     expect(app).toContain('function HomeEntry()');
     expect(app).toContain('if (isMobile) return <Navigate to="/mobile" replace />;');
     expect(app).toContain('<Route index element={<HomeEntry />} />');
   });
 
   it('keeps the PWA install identity stable and starts on mobile', () => {
-    const manifest = JSON.parse(read('../public/manifest.json')) as {
+    const manifest = JSON.parse(read('public/manifest.json')) as {
       id?: string;
       scope?: string;
       start_url?: string;
