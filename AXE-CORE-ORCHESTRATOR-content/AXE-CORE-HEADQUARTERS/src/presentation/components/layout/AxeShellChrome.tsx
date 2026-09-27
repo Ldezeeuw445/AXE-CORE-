@@ -78,7 +78,8 @@ export function AxeShellChrome() {
 
       if (w < 768) {
         const ui = useUIStore.getState();
-        if (ui.leftDrawerOpen) raakDoel = 'close-l';
+        if (ui.mobileNavOpen) raakDoel = null;
+        else if (ui.leftDrawerOpen) raakDoel = 'close-l';
         else if (ui.rightDrawerOpen) raakDoel = 'close-r';
         else if (x <= ZONE) raakDoel = 'open-l';
         else if (x >= w - ZONE) raakDoel = 'open-r';
@@ -426,6 +427,7 @@ export function AxeShellChrome() {
     // Sheets. De chevrons en de edge-swipes sturen dus exact dezelfde state.
     if (window.innerWidth < 768) {
       const ui = useUIStore.getState();
+      ui.setMobileNavOpen(false);
       if (kant === 'L') {
         ui.setRightDrawerOpen(false);
         ui.setLeftDrawerOpen(!ui.leftDrawerOpen);
