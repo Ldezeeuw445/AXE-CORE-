@@ -38,6 +38,24 @@ dan onder de statusbalk en loopt door tot de onderrand. Twee gevolgen:
   statusbalk" te krijgen — dat haalt de dode band terug. `mobileEntry.wiring.test.ts`
   bewaakt dit.
 
+### De kleur van de statusbalk
+
+iOS 26 negeert `theme-color`. De balk krijgt zijn kleur van de pagina, en
+dat op een moment dat jij niet kiest: bij het opstarten, en daarna pas weer
+als er iets verandert. Twee dingen moeten dus kloppen:
+
+- **`html`/`body` zwart in de iPhone-app.** Ze staan in `axe-look.css` op
+  transparent voor het Mac-glas; `index.html` zet `data-ios-pwa` (alleen als
+  `navigator.standalone === true`) en `axe-look.css` maakt ze daar `#000`.
+- **Geen lichte flits bij het opstarten.** `DEFAULT_LOOK` is `glass` (licht).
+  Staat de look niet lokaal, dan start de app licht tot de cloud antwoordt,
+  en precies dan leest iOS de balk af: lichtblauw (`#D5E6F4`/`#B4C9DD`, dat is
+  de `LICHT`-lucht uit `MobileGlass.tsx`). `lookUitCloud` in `useLook.ts`
+  bewaart de cloud-stand daarom ook lokaal.
+
+Balk lichtblauw bij het openen en zwart na het wisselen van look? Dan is het
+die flits, niet de CSS.
+
 ## Geometrie van Luka's telefoon
 
 Gemeten op zijn screenshot (iPhone 16/17 Pro, @3x):

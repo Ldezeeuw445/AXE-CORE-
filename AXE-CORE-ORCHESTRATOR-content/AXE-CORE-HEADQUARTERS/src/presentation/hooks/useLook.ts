@@ -58,6 +58,33 @@ export function applyStoredLookEarly() {
   apply(resolveLook({ local: readLocal() }));
 }
 
+function lokaleOpslag(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
+  try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; }
+}
+
+/**
+ * Haalt de stand uit de cloud en bewaart hem ook lokaal.
+ *
+ * Dat laatste deed de hook eerst niet: alleen de zon/maan-knop schreef naar
+ * localStorage. Een apparaat dat nooit op die knop drukte (een vers
+ * geïnstalleerde iPhone-app) startte daardoor ELKE keer in DEFAULT_LOOK --
+ * de lichte lucht -- tot de cloud 'black' terugzei. Precies in dat moment leest
+ * iOS 26 de kleur van de statusbalk af: lichtblauw (#B4C9DD, gemeten op Luka's
+ * screenshot van 28 sep), en die bleef staan tot hij zelf van stand wisselde.
+ * Nu start de volgende keer meteen in de juiste stand.
+ */
+export async function lookUitCloud(
+  laad: () => Promise<unknown>,
+  opslag: Pick<Storage, 'getItem' | 'setItem'> | undefined,
+): Promise<Look> {
+  const cloud = await laad();
+  let local: unknown;
+  try { local = opslag?.getItem(KEY); } catch { local = undefined; }
+  const resolved = resolveLook({ cloud, local });
+  try { opslag?.setItem(KEY, resolved); } catch { /* privémodus */ }
+  return resolved;
+}
+
 export function useLook(): [Look, (next: Look) => void] {
   const [look, setLookState] = useState<Look>(() => resolveLook({ local: readLocal() }));
 
@@ -68,9 +95,8 @@ export function useLook(): [Look, (next: Look) => void] {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const cloud = await loadSetting<string | null>(KEY, null);
+      const resolved = await lookUitCloud(() => loadSetting<string | null>(KEY, null), lokaleOpslag());
       if (!alive) return;
-      const resolved = resolveLook({ cloud, local: readLocal() });
       setLookState(resolved);
     })();
     return () => { alive = false; };
