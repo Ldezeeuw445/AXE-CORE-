@@ -329,3 +329,61 @@ export function impactVoorAgent(g: ImpactGeschiedenis): string {
 
   return regels.join('\n');
 }
+
+/** Eén te meten combinatie: een release die eraan komt, op een paar dat hem voelt. */
+export interface ImpactCombo {
+  naam: string;
+  symbool: string;
+  /** De eerstvolgende publicatiedatum, YYYY-MM-DD. */
+  volgende: string;
+  /** De laatste publicaties, nieuwste eerst — die worden gemeten. */
+  publicaties: string[];
+}
+
+/**
+ * Welke (release × paar) de hartslag moet meten.
+ *
+ * Alleen releases die binnen `horizonDagen` weer komen: een agent heeft niets
+ * aan hoe hard de CPI van maart bewoog als de volgende print over vier weken
+ * is. En alleen paren die de valuta van de release raken — `isGedekt` beslist
+ * dat, zodat deze functie geen kalender-kennis hoeft te dupliceren.
+ *
+ * Gesorteerd op nabijheid: de print van morgen gaat voor die van volgende week,
+ * want het quotum per hartslag is klein en de eerste combinaties worden het
+ * eerst gemeten.
+ */
+export function kiesImpactCombos(input: {
+  komend: { date: string; name: string }[];
+  verleden: { date: string; name: string }[];
+  paren: string[];
+  isRelease: (naam: string) => boolean;
+  isGedekt: (symbool: string) => boolean;
+  nu: number;
+  horizonDagen?: number;
+  maxPublicaties?: number;
+}): ImpactCombo[] {
+  const horizon = input.nu + (input.horizonDagen ?? 7) * 86_400_000;
+  const vandaag = new Date(input.nu).toISOString().slice(0, 10);
+  const volgende = new Map<string, string>();
+  for (const e of input.komend) {
+    if (!input.isRelease(e.name) || e.date < vandaag) continue;
+    if (Date.parse(`${e.date}T00:00:00Z`) > horizon) continue;
+    const al = volgende.get(e.name);
+    if (!al || e.date < al) volgende.set(e.name, e.date);
+  }
+
+  const uit: ImpactCombo[] = [];
+  for (const [naam, datum] of [...volgende].sort((a, b) => (a[1] < b[1] ? -1 : 1))) {
+    const publicaties = input.verleden
+      .filter(e => e.name === naam && e.date < vandaag)
+      .map(e => e.date)
+      .sort((a, b) => (a < b ? 1 : -1))
+      .slice(0, input.maxPublicaties ?? 6);
+    // Onder het minimum valt er niets te zeggen; dan ook niets meten.
+    if (publicaties.length < MIN_METINGEN) continue;
+    for (const symbool of input.paren) {
+      if (input.isGedekt(symbool)) uit.push({ naam, symbool, volgende: datum, publicaties });
+    }
+  }
+  return uit;
+}

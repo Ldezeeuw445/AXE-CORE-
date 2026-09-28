@@ -57,7 +57,13 @@ kop "De apps op deze Mac"
 lees_app() {
   local app="$1"
   local sha
-  sha="$(grep -rhoE 'commit:"[0-9a-f]{7,12}"' "$app" 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')"
+  local stamp="$app/Contents/Resources/axe-build-stamp.txt"
+  if [[ -f "$stamp" ]]; then
+    sha="$(tr -d '[:space:]' < "$stamp" | grep -E '^[0-9a-f]{7,12}$' || true)"
+  else
+    sha=""
+  fi
+  [[ -z "$sha" ]] && sha="$(grep -rhoE 'commit:"[0-9a-f]{7,12}"' "$app" 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')"
   local tijd
   tijd="$(stat -f '%Sm' -t '%d %b %H:%M' "$app" 2>/dev/null || echo '?')"
   if [[ -z "$sha" ]]; then
@@ -83,7 +89,12 @@ while IFS= read -r app; do
   [[ -z "$app" ]] && continue
   GEVONDEN=1
   lees_app "$app"
-done < <(mdfind -name 'AXE CORE' 2>/dev/null | grep -E '\.app$' | sort -u)
+done < <( {
+  # Spotlight kan net na een canonical update achterlopen. De app die Luka via
+  # Dock/Spotlight hoort te openen, controleren we daarom altijd expliciet.
+  [[ -d "/Applications/AXE CORE.app" ]] && printf '%s\n' "/Applications/AXE CORE.app"
+  mdfind -name 'AXE CORE' 2>/dev/null | grep -E '\.app$' || true
+} | sort -u )
 
 if [[ "$GEVONDEN" == "0" ]]; then
   echo "  Spotlight vond niets. Dan alleen de bouw hier:"
@@ -92,3 +103,40 @@ if [[ "$GEVONDEN" == "0" ]]; then
 fi
 
 printf '\n  De app zet dezelfde regel zelf boven in beeld op Home.\n'
+
+
+# ── En welke achtergrondworkers draaien echt ─────────────────────────────────
+#
+# De Tauri-app en de computer/browser workers zijn drie aparte processen.
+# Een actuele .app bewijst dus NIET dat Personal Computer Use actueel is.
+kop "AXE achtergrondworkers"
+
+toon_agent() {
+  local label="$1"
+  local expected_path="${2:-}"
+  local domein="gui/$(id -u)/$label"
+  local stand
+  if ! stand="$(launchctl print "$domein" 2>/dev/null)"; then
+    printf '  %-28s %s\n' "$label" 'niet geladen op deze Mac'
+    return
+  fi
+
+  local staat='geladen'
+  [[ "$stand" == *"state = running"* ]] && staat='running'
+  printf '  %-28s %s\n' "$label" "$staat"
+
+  if [[ -n "$expected_path" ]]; then
+    if [[ "$stand" == *"$expected_path"* ]]; then
+      printf '    bron: deze checkout · %s\n' "$expected_path"
+    else
+      let_op "$label wijst NIET naar de worker in deze checkout."
+      printf '    verwacht: %s\n' "$expected_path"
+      printf '    Dit verklaart een app die nieuwe UI toont maar oude Computer Use-capabilities gebruikt.\n'
+    fi
+  fi
+}
+
+toon_agent "com.axe.computer-worker" "$HIER/infra/computer-worker/worker.mjs"
+toon_agent "com.axe.browser-agent"
+
+printf '\n  Na een update moeten app én workers actueel zijn. npm run bijwerken doet beide.\n'

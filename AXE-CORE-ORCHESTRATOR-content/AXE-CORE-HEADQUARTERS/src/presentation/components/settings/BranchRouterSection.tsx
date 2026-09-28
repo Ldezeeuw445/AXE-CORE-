@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Zap, GitBranch, CheckCircle2, XCircle } from 'lucide-react';
+import { RefreshCw, GitBranch, CheckCircle2, XCircle } from 'lucide-react';
 import { getSystemState, checkAllServices, type ServiceState } from '@/application/system/systemService';
 import { claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
 
@@ -125,13 +125,6 @@ function BranchCard({ branch, services, claudeRepoInfo, claudeRepoError }: {
             )}
           </div>
         )}
-
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}>
-          <Zap size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            Read-only monitor. Putting a provider on Primary in Settings does not switch AXE to that branch for everything — LangGraph still classifies each message.
-          </p>
-        </div>
       </div>
     </div>
   );

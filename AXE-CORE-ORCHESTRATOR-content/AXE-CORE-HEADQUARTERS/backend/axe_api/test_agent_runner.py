@@ -38,12 +38,13 @@ class TestCommandos:
         schrijf = a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
         assert "workspace-write" in schrijf and "--approve-for-me" in schrijf
 
-    def test_cursor_forceert_altijd(self):
-        # Altijd, want plan-modus bereikt deze motor niet (zie de weigering
-        # hieronder) en zonder --force hangt hij op een goedkeuring.
+    def test_cursor_schrijft_met_force_en_leest_met_ask(self):
         cmd = a.ENGINES["cursor"]["cmd"]("cursor-agent", "p", "acceptEdits", "")
         assert "--force" in cmd and "-p" in cmd
         assert cmd[cmd.index("--output-format") + 1] == "json"
+        lees = a.ENGINES["cursor"]["cmd"]("cursor-agent", "p", "plan", "")
+        assert "--force" not in lees
+        assert lees[lees.index("--mode") + 1] == "ask"
 
     def test_de_prompt_gaat_nooit_door_een_shell(self):
         # Een lijst en geen string: anders zou een prompt met backticks of een
@@ -59,26 +60,9 @@ class TestAlleenLezen:
         assert a.ENGINES["claude"]["alleen_lezen"] is True
         assert a.ENGINES["codex"]["alleen_lezen"] is True
 
-    def test_cursor_kan_het_niet(self):
-        # Cursor's eigen documentatie: `-p/--print` "has access to all tools,
-        # including write and shell". Er is geen stand die dat wegneemt.
-        assert a.ENGINES["cursor"]["alleen_lezen"] is False
-
-    def test_plan_wordt_geweigerd_voor_een_motor_die_het_niet_kan(self, monkeypatch):
-        pad = _repo()
-        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
-        r = a.run_agent("proef", "lees dit", permission_mode="plan", engine="cursor")
-        assert r["status"] == "error"
-        assert "alleen-lezen" in r["error"]
-
-    def test_de_weigering_komt_voor_de_cli(self, monkeypatch):
-        # Er mag niets gestart zijn. Zou de weigering ná de start komen, dan had
-        # de agent al kunnen schrijven voordat iemand nee zei.
-        pad = _repo()
-        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
-        monkeypatch.setattr(subprocess, "run", _weiger_elke_start)
-        r = a.run_agent("proef", "x", permission_mode="plan", engine="cursor")
-        assert r["status"] == "error"
+    def test_cursor_kan_het_nu_ook(self):
+        # cursor-agent kreeg `--mode ask`: lezen zonder schrijven. Zie _cursor_cmd.
+        assert a.ENGINES["cursor"]["alleen_lezen"] is True
 
 
 def _weiger_elke_start(*args, **kwargs):
@@ -135,3 +119,157 @@ class TestFoutmelding:
 
     def test_lege_stderr_blijft_leeg(self):
         assert a._stderr_staart("") == "" and a._stderr_staart(None) == ""
+
+
+class TestEenSessiePerMotor:
+    """Twee runs op hetzelfde abonnement lopen na elkaar, nooit naast elkaar."""
+
+    def _nep_run(self, log, duur=0.3):
+        import threading as _t
+        import time as _time
+        bezig = {"n": 0, "max": 0}
+        slot = _t.Lock()
+
+        echt = subprocess.run
+
+        def run(cmd, **kw):
+            # git (branch lezen) mag tegelijk; alleen de CLI-start telt.
+            if cmd and cmd[0] == "git":
+                return echt(cmd, **kw)
+            with slot:
+                bezig["n"] += 1
+                bezig["max"] = max(bezig["max"], bezig["n"])
+            _time.sleep(duur)
+            with slot:
+                bezig["n"] -= 1
+            log.append(cmd[0])
+            return subprocess.CompletedProcess(cmd, 0, stdout='{"result": "ok"}', stderr="")
+        return run, bezig
+
+    def test_twee_gelijktijdige_runs_wachten_op_elkaar(self, monkeypatch):
+        import threading as _t
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: "claude")
+        log = []
+        run, bezig = self._nep_run(log)
+        monkeypatch.setattr(subprocess, "run", run)
+        uitslagen = []
+        draden = [_t.Thread(target=lambda: uitslagen.append(a.run_agent("proef", "x", permission_mode="plan", engine="claude"))) for _ in range(3)]
+        for d in draden:
+            d.start()
+        for d in draden:
+            d.join()
+        assert [u["status"] for u in uitslagen] == ["ok", "ok", "ok"]
+        assert bezig["max"] == 1
+
+    def test_een_andere_motor_hoeft_niet_te_wachten(self, monkeypatch):
+        import threading as _t
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        log = []
+        run, bezig = self._nep_run(log)
+        monkeypatch.setattr(subprocess, "run", run)
+        draden = [_t.Thread(target=lambda e=e: a.run_agent("proef", "x", permission_mode="plan", engine=e)) for e in ("claude", "codex")]
+        for d in draden:
+            d.start()
+        for d in draden:
+            d.join()
+        assert bezig["max"] == 2
+
+    def test_te_lang_bezet_start_niet_en_zegt_dat(self, monkeypatch):
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: "claude")
+        monkeypatch.setattr(a, "MOTOR_WACHT", 0)
+        slot = a._motor_slot("claude")
+        slot.acquire()
+        try:
+            r = a.run_agent("proef", "x", permission_mode="plan", engine="claude")
+        finally:
+            slot.release()
+        assert r["status"] == "error" and "bezig met een andere run" in r["error"]
+
+
+class TestTweedeClaude:
+    def test_claude2_is_claude_met_een_eigen_loginmap(self):
+        c2 = a.ENGINES["claude2"]
+        assert c2["cmd"] is a.ENGINES["claude"]["cmd"]
+        assert c2["extra_env"]["CLAUDE_CONFIG_DIR"].endswith(".claude-tweede")
+        c3 = a.ENGINES["claude3"]
+        assert c3["cmd"] is a.ENGINES["claude"]["cmd"]
+        assert c3["extra_env"]["CLAUDE_CONFIG_DIR"].endswith(".claude-derde")
+        c4 = a.ENGINES["claude4"]
+        assert c4["cmd"] is a.ENGINES["claude"]["cmd"]
+        assert c4["extra_env"]["CLAUDE_CONFIG_DIR"].endswith(".claude-vierde")
+        env = a._subprocess_env(c2["blocked_env"], c2["extra_env"])
+        assert env["CLAUDE_CONFIG_DIR"] == c2["extra_env"]["CLAUDE_CONFIG_DIR"]
+
+    def test_geen_sessieproxy_naar_een_claude_motor(self, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:1")
+        monkeypatch.setenv("CLAUDECODE", "1")
+        for naam in ("claude", "claude2", "claude3", "claude4"):
+            env = a._subprocess_env(a.ENGINES[naam]["blocked_env"], a.ENGINES[naam].get("extra_env"))
+            assert "ANTHROPIC_BASE_URL" not in env and "CLAUDECODE" not in env
+
+
+class TestBranchZonderGit:
+    def test_leest_de_branch_uit_head_ook_in_een_worktree(self, tmp_path):
+        repo = _repo("werkbranch")
+        assert a._branch_uit_head(repo) == "werkbranch"
+        # Een worktree: .git is een bestand dat naar de echte gitdir wijst.
+        wt = tmp_path / "wt"
+        subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", "andere", str(wt)], check=True)
+        assert a._branch_uit_head(str(wt)) == "andere"
+
+    def test_losgekoppeld_of_geen_repo_laat_git_beslissen(self, tmp_path):
+        repo = _repo("werkbranch")
+        sha = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        subprocess.run(["git", "-C", repo, "checkout", "-q", sha], check=True)
+        assert a._branch_uit_head(repo) is None
+        assert a._current_branch(repo) == "HEAD"
+        assert a._branch_uit_head(str(tmp_path)) is None
+
+
+class TestWorktree:
+    def test_een_worktree_is_een_checkout(self, tmp_path):
+        (tmp_path / ".git").write_text("gitdir: /ergens/.git/worktrees/x\n")
+        assert a._is_checkout(str(tmp_path))
+        assert not a._is_checkout(str(tmp_path / "leeg"))
+
+
+class TestModelVlag:
+    """Het gekozen model moet in het commando belanden, met de vlag die die CLI kent."""
+
+    def test_elke_motor_krijgt_zijn_eigen_vlag(self):
+        import agent_runner as a
+        claude = a.ENGINES["claude"]["cmd"]("claude", "hoi", "plan", "", "opus")
+        assert "--model" in claude and claude[claude.index("--model") + 1] == "opus"
+
+        codex = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "gpt-5-codex")
+        assert "-m" in codex and codex[codex.index("-m") + 1] == "gpt-5-codex"
+
+        cursor = a.ENGINES["cursor"]["cmd"]("cursor-agent", "hoi", "plan", "", "gpt-5")
+        assert "--model" in cursor and cursor[cursor.index("--model") + 1] == "gpt-5"
+
+    def test_zonder_keuze_staat_er_geen_vlag(self):
+        """Leeg betekent: de CLI houdt zijn eigen standaard."""
+        import agent_runner as a
+        for naam in ("claude", "codex", "cursor"):
+            cmd = a.ENGINES[naam]["cmd"](naam, "hoi", "plan", "/tmp/uit.txt", "")
+            assert "--model" not in cmd and "-m" not in cmd
+
+    def test_codex2_is_een_tweede_chatgpt_abonnement(self):
+        """Eigen CODEX_HOME: dat is wat de limieten scheidt."""
+        import agent_runner as a
+        motor = a.ENGINES["codex2"]
+        assert motor["extra_env"]["CODEX_HOME"].endswith(".codex-tweede")
+        assert motor["bin_default"] == "codex"
+
+    def test_codex3_is_een_derde_chatgpt_abonnement(self):
+        import agent_runner as a
+        motor = a.ENGINES["codex3"]
+        assert motor["cmd"] is a.ENGINES["codex"]["cmd"]
+        assert motor["extra_env"]["CODEX_HOME"].endswith(".codex-derde")
+        assert motor["bin_default"] == "codex"

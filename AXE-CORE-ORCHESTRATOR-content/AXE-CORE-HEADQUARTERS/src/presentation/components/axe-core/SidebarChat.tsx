@@ -33,13 +33,18 @@ export function SidebarChat() {
     // Live chat: never block the composer — a new message interrupts the
     // current turn (stop TTS + supersede in-flight reply in sendMessage).
     if (!t) return;
+    if (voiceStatus !== 'idle') stopListening();
     setText('');
     await sendMessage(t);
   };
 
   const handleMic = async () => {
     try {
-      if (isListening) stopListening();
+      // Not just isListening: during 'processing'/'speaking' the loop is
+      // still running (see installWhisperVoice.ts), and calling
+      // startListening() then is a no-op that leaves you unable to hang up
+      // until AXE finishes talking. Same fix as PlaatChat.tsx.
+      if (voiceStatus !== 'idle') stopListening();
       else await startListening();
     } catch { /* ignore */ }
   };

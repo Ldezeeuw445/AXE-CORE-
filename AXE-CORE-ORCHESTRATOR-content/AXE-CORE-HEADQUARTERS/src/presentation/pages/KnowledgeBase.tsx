@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink, Settings2, Merge } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 
 type AI = 'axe-core' | 'axe-companion' | 'axe-intel';
@@ -47,6 +49,14 @@ function highlightMatches(text: string, query: string): React.ReactNode {
       part
     )
   );
+}
+
+// Quick Notes (QuickNoteDock.tsx) can now store a little sanitized HTML for
+// bold/italic/underline/colour -- plain rows are untouched, but a rich one
+// would otherwise show its literal <b>/<span> tags here, since this preview
+// renders content as text, not markup.
+function platteVoorvertoning(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function fromRow(row: KbDocRow): Doc {
@@ -431,6 +441,39 @@ export default function KnowledgeBase() {
   };
 
   return (
+    <>
+    <TabRail kant="links">
+      <SchuifBalk
+        groepen={[
+          {
+            titel: 'Systems',
+            items: (Object.entries(AI_CFG) as [AI, typeof AI_CFG[AI]][]).map(([id, cfg]) => ({
+              id,
+              label: `${cfg.label} · ${totals[id]}`,
+              icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: cfg.color }} />,
+              actief: activeAI === id,
+              onKies: () => setActiveAI(id),
+            })),
+          },
+          {
+            titel: 'Categories',
+            items: [
+              { id: '__all', label: 'All', actief: selectedCategory === null, onKies: () => setSelectedCategory(null) },
+              ...categoriesForActiveAI.map((c) => ({
+                id: c, label: c, actief: selectedCategory === c, onKies: () => setSelectedCategory(c),
+              })),
+            ],
+          },
+          {
+            titel: 'Actions',
+            items: [
+              { id: 'add', label: 'Add document', icoon: <Plus size={13} />, onKies: () => setAdding(true) },
+              { id: 'manage', label: 'Manage categories', icoon: <Settings2 size={13} />, onKies: () => setManagingCategories(true) },
+            ],
+          },
+        ]}
+      />
+    </TabRail>
     <motion.div
       className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5"
       initial={{ opacity: 0 }}
@@ -738,7 +781,7 @@ export default function KnowledgeBase() {
                         {editing === doc.id ? (
                           <textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={3} className="w-full text-xs-custom px-2 py-1.5 rounded mt-1 outline-none resize-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }} />
                         ) : (
-                          doc.content && <p className="text-xs-custom mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{highlightMatches(doc.content, search)}</p>
+                          doc.content && <p className="text-xs-custom mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{highlightMatches(platteVoorvertoning(doc.content), search)}</p>
                         )}
                         <span className="text-[9px] mt-1 block" style={{ color: 'var(--text-muted)' }}>{new Date(doc.updatedAt).toLocaleDateString()}</span>
                       </div>
@@ -765,5 +808,6 @@ export default function KnowledgeBase() {
       )}
       </div>
     </motion.div>
+    </>
   );
 }

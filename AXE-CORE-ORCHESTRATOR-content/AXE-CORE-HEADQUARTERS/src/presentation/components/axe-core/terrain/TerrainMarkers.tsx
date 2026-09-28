@@ -349,8 +349,11 @@ export function TerrainCameraRig({
       fromTgt: ctl.target.clone(),
       toTgt,
     };
+    // Op de waarden van defaultCam, niet op de array: die is zonder prop elke
+    // render nieuw. Zo animeert hij opnieuw als de telefoon zijn overzicht
+    // verder weg zet, en verandert er op de desktop niets.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  }, [selected, defaultCam[0], defaultCam[1], defaultCam[2]]);
 
   useFrame((_, dt) => {
     const ctl = controlsRef.current;

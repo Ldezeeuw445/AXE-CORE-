@@ -162,3 +162,20 @@ export function allPresets(saved: readonly RiskPreset[]): RiskPreset[] {
 export function applyPreset(preset: RiskPreset): RiskProfile {
   return { ...preset.profile, updatedAt: new Date().toISOString() } as RiskProfile;
 }
+
+/**
+ * Een bewerking van de regels maakt het profiel 'custom'.
+ *
+ * Wie een funded-preset koos en daarna de drawdown aanpaste, hield het label
+ * "funded" terwijl de regels al andere waren — en een label dat liegt is erger
+ * dan geen label. Alleen de modus zelf kiezen laat het label staan; elke andere
+ * wijziging markeert het profiel als aangepast en onthoudt waar het vandaan kwam.
+ */
+export function applyRiskEdit(current: RiskProfile, patch: Partial<RiskProfile>): RiskProfile {
+  const next = { ...current, ...patch } as RiskProfile;
+  if (patch.mode !== undefined) return next;
+  const changed = (Object.keys(patch) as Array<keyof RiskProfile>)
+    .some(k => k !== 'updatedAt' && JSON.stringify(patch[k]) !== JSON.stringify(current[k]));
+  if (!changed || current.mode === 'custom') return next;
+  return { ...next, mode: 'custom', basedOn: current.mode };
+}

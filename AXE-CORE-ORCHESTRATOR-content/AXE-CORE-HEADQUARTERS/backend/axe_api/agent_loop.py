@@ -29,12 +29,16 @@ So this module does the two things that were missing:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import os
 import logging
 import subprocess
 import time
-from typing import Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Awaitable, Callable
+
+import device_actions
 
 # Budget. The old loop allowed 10 steps and 2 minutes, which is not enough to
 # do anything real -- a single "read the file, change it, check it built" cycle
@@ -70,6 +74,16 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "https://ollama.axecompanion.com").r
 OLLAMA_MODEL = os.environ.get("AXE_AGENT_FALLBACK_MODEL", "llama3.1:8b-32k")
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
+# Groq eerst, OpenAI als reserve (25 sep). Gemini gaf 402 "prepayment credits
+# are depleted" en de llama-terugval op deze box deed over één `df` minuten,
+# met de swap vol. Gemeten vanaf de VPS: gpt-oss-120b op Groq geeft een goede
+# tool-call in 0,23s, gpt-4.1-mini op OpenAI in 1,3s. Zonder key slaat de lus
+# die stap gewoon over.
+GROQ_MODEL = os.environ.get("AXE_AGENT_GROQ_MODEL", "openai/gpt-oss-120b")
+OPENAI_MODEL = os.environ.get("AXE_AGENT_OPENAI_MODEL", "gpt-4.1-mini")
+_GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+
 # Cheap insurance on a box that also serves the API. This is not a security
 # boundary -- the agent legitimately has shell here -- it only catches the
 # catastrophic typo that would take the VPS down with it.
@@ -103,8 +117,51 @@ _NEEDS_APPROVAL = (
     "certbot", "psql", "supabase",
 )
 
+# Mail en berichten gaan nooit zonder Luka's ok de deur uit, welke taak het
+# ook is (25 sep). Taken uit het gesprek komen nu echt hier aan, en een shell
+# op de box waar NorthSea en de mailbox draaien kan anders met één curl mailen.
+_OUTBOUND_NEEDS_APPROVAL = (
+    "sendmail", "smtplib", "resend", "mail -s", "mailx",
+    "northsea_verstuur", "/send", "send_email", "send-email",
+)
 
-def approval_reason(command: str, cwd: str | None) -> str | None:
+# Alleen-lezen taken (NorthSea vanuit het gesprek): niets schrijven, niets
+# posten. Lezen blijft vrij.
+_READ_ONLY_NEEDS_APPROVAL = (
+    "curl -x post", "curl -x put", "curl -x patch", "curl -x delete",
+    "curl -d", "curl --data", "--data-raw", "requests.post", "requests.put",
+    "requests.delete", "httpx.post", "httpx.put", "httpx.delete",
+    "rm ", "mv ", "cp ", "tee ", "truncate", "chmod", "chown", ">",
+)
+# Omleidingen die niets schrijven, zodat `2>/dev/null` een leestaak niet stopt.
+_ONSCHULDIGE_OMLEIDING = ("2>&1", "&>/dev/null", "2>/dev/null", ">/dev/null")
+
+# Geld. Een order plaatsen of wijzigen gaat nooit zonder Luka's ok, welke agent
+# het ook vraagt. Nu de Trading Agent een eigen brief krijgt (AGENT_BRIEFS) en
+# echt trading-werk toegewezen kan krijgen, is een shell op deze box één curl
+# verwijderd van een echte MT5-order.
+#
+# Dit zijn de werkelijke ingangen, opgezocht in de app en niet verzonnen:
+#   brokerPlaceOrder / brokerPlacePendingOrder  (gateways/brokerConnector.ts)
+#   metaApiMarketOrder / metaApiPendingOrder / metaApiTradeAction
+#                                               (gateways/metaApiService.ts)
+#   executeDemoTrade                            (het papieren boek)
+#   ORDER_TYPE_*/POSITION_MODIFY/ORDER_MODIFY/ORDER_CANCEL
+#                                               (MetaAPI's actionType)
+#   mt-client-api-v1.*.agiliumtrade.ai/.../trade (de REST-ingang zelf)
+#   /trading/order                              (de API op deze box)
+# Openen én wijzigen staan er allebei in: een stop-loss verzetten is net zo
+# goed geld als een nieuwe order.
+_ORDER_NEEDS_APPROVAL = (
+    "place_order", "placeorder", "brokerplaceorder", "brokerplacependingorder",
+    "metaapimarketorder", "metaapipendingorder", "metaapitradeaction",
+    "executedemotrade", "/trading/order", "mt-client-api", "agiliumtrade",
+    "order_type_buy", "order_type_sell", "position_modify", "position_close",
+    "order_modify", "order_cancel",
+)
+
+
+def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> str | None:
     """Return why this command needs Luka's approval, or None if it may run free.
 
     Conservative in one direction only: an unrecognised command that stays
@@ -117,6 +174,22 @@ def approval_reason(command: str, cwd: str | None) -> str | None:
     for pattern in _NEEDS_APPROVAL:
         if pattern in lowered:
             return f"touches the system ({pattern.strip()})"
+
+    for pattern in _OUTBOUND_NEEDS_APPROVAL:
+        if pattern in lowered:
+            return f"sends something out ({pattern.strip()})"
+
+    for pattern in _ORDER_NEEDS_APPROVAL:
+        if pattern in lowered:
+            return f"places or changes an order ({pattern.strip()})"
+
+    if read_only:
+        schoon = lowered
+        for onschuldig in _ONSCHULDIGE_OMLEIDING:
+            schoon = schoon.replace(onschuldig, "")
+        for pattern in _READ_ONLY_NEEDS_APPROVAL:
+            if pattern in schoon:
+                return f"changes something in a read-only task ({pattern.strip()})"
 
     # Writing outside the workspace. Reading outside stays free -- the agent has
     # to be able to look at its own source in order to work on it.
@@ -142,6 +215,17 @@ class ApprovalRequired(Exception):
         super().__init__(f"needs approval ({reason}): {command}")
         self.command = command
         self.reason = reason
+
+
+class TaskCancelled(Exception):
+    """De taak is onderweg geannuleerd; de lus stopt waar hij staat.
+
+    Ook geen mislukking. De lus draait tot een half uur door, dus "stop" moet
+    ergens aankomen tussen twee stappen in: run_agent_loop vraagt het na aan
+    `should_stop`, vóór elke modelaanroep en vóór elke tooluitvoering, en gooit
+    dit als het antwoord True is. De aanroeper (task_runtime.cancel) zet de taak
+    daarna op `cancelled` -- een geannuleerde taak is geen error-taak.
+    """
 
 
 def normalize_command(command: str) -> str:
@@ -199,6 +283,42 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "list_devices",
+        "description": (
+            "List Luka's Macs that can act for you (Mac mini, iMac), whether each is "
+            "online, and which workspaces it has. Call this before run_on_device."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"include_offline": {"type": "boolean", "description": "ignored; offline Macs are always listed"}},
+        },
+    },
+    {
+        "name": "run_on_device",
+        "description": (
+            "Run one action on one of Luka's Macs through its computer-worker. Use "
+            "this for anything about a Mac: its files, apps, screen, repo checkouts. "
+            "run_shell is the VPS, not a Mac. The Mac worker can inspect and change "
+            "workspace files; observe/control screen, pointer, keyboard, windows and apps; "
+            "run typecheck/lint/test/build/install or an approved free terminal command; "
+            "create branches, inspect/commit/push/merge/open PRs; and delegate coding work "
+            "to claude_code.run, codex.run or cursor.run. Use the narrowest tool that does "
+            "the job. Clicking, typing and writes are approval-gated; consequential actions "
+            "such as terminal.free, git push/merge/PR and delete always require the exact "
+            "approval and cannot be approved by voice."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device": {"type": "string", "description": "device id from list_devices"},
+                "tool": {"type": "string"},
+                "args": {"type": "object", "description": "the tool's arguments"},
+                "workspace": {"type": "string", "description": "AXE Core (default), AXE Companion or Trading OS"},
+            },
+            "required": ["device", "tool"],
+        },
+    },
+    {
         "name": "finish",
         "description": (
             "Call this ONLY when the work is actually done and you can prove it. "
@@ -213,7 +333,10 @@ TOOL_DECLARATIONS = [
             "properties": {
                 "summary": {
                     "type": "string",
-                    "description": "What you actually did, in plain language.",
+                    "description": (
+                        "The answer itself, spoken to Luka: the concrete findings or "
+                        "what now exists (numbers, names, paths). 1-3 short sentences."
+                    ),
                 },
                 "verify_command": {
                     "type": "string",
@@ -250,7 +373,244 @@ How to work:
     to keep working, so make the proof something that genuinely demonstrates
     the result.
 
+The summary you give finish() is read out loud to Luka, mid-conversation.
+Make it the ANSWER, not a description of your work: say what you found or
+what now exists, with the concrete facts (numbers, names, paths). "The root
+disk has 161 GB free and the server has been up for 1 day 21 hours" -- not
+"Reported the free disk space". One to three short sentences.
+
+Luka has devices, and you pick where each piece of work happens:
+  - the VPS (run_shell, read_file, write_file): servers, APIs, the planner.
+  - his Macs (list_devices, run_on_device): the Mac mini is the brain, the iMac
+    the executor. Anything about a Mac's files, apps or screen goes there, to
+    the Mac it is about. If he names no Mac, use whichever is online, Mac mini
+    first. If a Mac is offline, say so rather than guessing its state.
+When the proof for finish() lives on a Mac, verify with a VPS command that
+echoes the fact you observed there (e.g. `echo "iMac frontmost: Safari"`),
+having seen it in a run_on_device answer in this task.
+
+For code work on a Mac, do not pretend the VPS checkout is the user's live app.
+Use list_devices, pick the machine that advertises the workspace, inspect it
+there, create a feature/axe-task-* branch if the checkout is protected, then
+use the Mac tools directly or claude_code.run/codex.run/cursor.run. Verify on
+that same device. The installed AXE app is updated only from orchestrator, so
+do not claim a feature is live until the canonical update has actually landed.
+
 You have {MAX_STEPS} steps. Use them."""
+
+
+# Eén lus, dertien rollen. Tot nu toe was SYSTEM_PROMPT het enige dat het model
+# te horen kreeg, dus "NorthSea Desk Manager" en "Trading Agent" waren etiketten
+# op precies dezelfde agent: dezelfde toon, dezelfde aannames, dezelfde scope.
+# Dit is wat een agent tot díe agent maakt -- zijn rol, wat hij bezit en waar
+# hij van afblijft. Overgenomen uit src/domain/agents/roster.ts (AXE_AGENTS);
+# elke id daar hoort hier een brief te hebben, en test_agent_briefs.py houdt de
+# twee lijsten gelijk.
+#
+# De brief gaat VOOR de system prompt, niet erna: het eerste wat het model
+# leest is wie het is, daarna pas hoe het werkt.
+AGENT_BRIEFS: dict[str, str] = {
+    "axe": (
+        "You are AXE, the orchestrator. You talk to Luka, work out what he "
+        "actually wants, and either answer it yourself or hand it to the "
+        "manager who owns that domain. You hold ambiguous work rather than "
+        "mis-routing it."
+    ),
+    # ── tier 1 — het managerteam ────────────────────────────────────────────
+    "wingman": (
+        "You are the Wingman, AXE's right hand, working for AXE. You run the "
+        "CrewAI crews on the VPS on AXE's behalf and help out anywhere else. "
+        "You prepare and propose; AXE and Luka decide."
+    ),
+    "northsea": (
+        "You are the NorthSea Desk Manager, working for AXE: the commodity "
+        "desk. You research counterparties, cargoes, offers and prices, and "
+        "you report what you found.\n"
+        "HARD LIMIT: this desk is READ-ONLY. You never send an email, a "
+        "message or an offer, never write to the NorthSea database, and never "
+        "switch on any automatic sending. Nothing leaves the desk without "
+        "Luka. If a job needs something sent, say exactly what you would send "
+        "and to whom, and stop there."
+    ),
+    "trading": (
+        "You are the Trading Agent, working for AXE: the AXE Algo trading "
+        "desk. Market analysis, positions, risk and the final trade decision "
+        "are yours, and you own the trading research crew.\n"
+        "HARD LIMIT: money never moves unattended. Placing, modifying, "
+        "closing or cancelling an order — through the broker API, the "
+        "/trading/order endpoint or any script — always needs Luka's "
+        "approval first. Analysing, sizing and proposing a trade is your "
+        "work; executing it is his call."
+    ),
+    "developer": (
+        "You are AXE Developer, working for AXE: the code manager. You read, "
+        "write, build and ship the codebase. Look at the real file before you "
+        "change it, keep the change small, and prove it with a test or a "
+        "build — not with a description of what you did."
+    ),
+    "thinktank": (
+        "You are ThinkTank, working for AXE: the ideas manager. You score and "
+        "rank ideas, turn the survivors into a build plan, and hand that plan "
+        "on. Be concrete: an idea without a next step is not an idea yet."
+    ),
+    # ── tier 2 — de werkers ─────────────────────────────────────────────────
+    "browser": (
+        "You are the Browser agent, working for AXE. You navigate, extract "
+        "and summarise web pages. Report what the page actually said, with "
+        "the URL; never fill in what you did not see."
+    ),
+    "memory": (
+        "You are the Memory manager, working for AXE. You build and maintain "
+        "the durable memory itself: consolidation, decay and the Obsidian "
+        "vault. Only store what was explicitly worth remembering."
+    ),
+    "task": (
+        "You are the Task manager, working for AXE. You pick up tasks from "
+        "the Tasks tab and track them to close. A task is closed when there "
+        "is proof it is done, not when someone said so."
+    ),
+    "cron": (
+        "You are the Cron manager, working for AXE: the self-hosted "
+        "scheduler. You run due schedules with nobody watching, so be "
+        "conservative — a job that should not run twice must not run twice."
+    ),
+    "finance": (
+        "You are the Finance agent, working for AXE: money, credits and every "
+        "subscription. You watch what is left, warn before something runs "
+        "out, and route work to the cheapest engine that can still do it. You "
+        "report numbers; you never buy, top up or cancel anything yourself."
+    ),
+    "apps": (
+        "You are the App manager, working for AXE: the app registry and VPS "
+        "ops. You health-check the services behind AXE CORE and AXE "
+        "Companion, and you can restart them — with approval, and after you "
+        "have said what is actually wrong."
+    ),
+    # ── tier 3 — cross-app assistenten ──────────────────────────────────────
+    "intel": (
+        "You are AXE Intel, working for AXE: market intelligence and signal "
+        "detection inside Trading OS. You surface signals with their source "
+        "and time; you do not trade on them."
+    ),
+    "companion": (
+        "You are AXE Companion, working for AXE: the assistant that lives in "
+        "the other apps and is driven through AXE CORE. Do the work in the "
+        "app you are in, and report back plainly."
+    ),
+}
+
+
+# De brief van de agent die déze beurt draait. Een ContextVar en geen extra
+# parameter op _call_model: die functie wordt in tests vervangen door een dubbel
+# met twee parameters, en een derde argument zou dat stilzwijgend breken. Elke
+# asyncio-taak krijgt zijn eigen kopie van de context, dus twee worker-slots
+# naast elkaar zien elkaars brief nooit.
+_HUIDIGE_BRIEF: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "axe_agent_brief", default=""
+)
+
+
+def systeem_prompt() -> str:
+    """De system prompt zoals het model hem deze beurt krijgt: brief + basis."""
+    brief = _HUIDIGE_BRIEF.get()
+    return f"{brief}\n\n{SYSTEM_PROMPT}" if brief else SYSTEM_PROMPT
+
+
+class ProviderUitgeput(RuntimeError):
+    """Een provider die de rest van de dag toch niets meer gaat doen.
+
+    Twee gevallen, allebei echt gebeurd: Groq's 429 met een dagquotum en
+    Gemini's 402 "prepayment credits are depleted". Erft van RuntimeError, zodat
+    elke bestaande `except Exception`/`except RuntimeError` onveranderd werkt en
+    de foutregel er hetzelfde uitziet als voorheen.
+    """
+
+    def __init__(self, provider: str, status: int, body: str, retry_after: float | None = None):
+        super().__init__(f"{provider} {status}: {body[:300]}")
+        self.status = status
+        self.body = body
+        self.retry_after = retry_after
+
+
+# Afkoeling per provider. Zonder dit probeert de lus elke stap opnieuw Groq
+# (dagquotum op) en Gemini (credits op): tot veertig keer dezelfde 429/402 per
+# taak, veertig keer dezelfde regel in het log, en elke stap twee nutteloze
+# HTTP-rondjes voordat de provider die het wél doet aan de beurt is.
+# Sleutel = de naam uit de attempts-lijst, waarde = monotone tijd waarop hij
+# weer meedoet.
+_AFKOELING: dict[str, float] = {}
+
+# Credits zijn niet aan een dag gebonden: die komen terug als Luka bijvult.
+# Zes uur is lang genoeg om de taak niet te vertragen en kort genoeg dat een
+# bijgevulde provider dezelfde dag weer meedraait.
+_AFKOEL_CREDITS = 6 * 3600
+# Een Retry-After die verder ligt dan een dag geloven we niet blind.
+_AFKOEL_MAX = 24 * 3600
+
+# Een 429 kan een piek van een minuut zijn of een dagquotum. Alleen het tweede
+# verdient afkoeling; een minuutlimiet is over voordat de volgende stap begint.
+# De minuut-markers gaan voor, want Gemini zegt "Quota exceeded ... per minute".
+_MINUUT_MARKERS = ("per minute", "per-minute", "per second", "rpm", "tpm")
+_DAG_MARKERS = ("per day", "per-day", "perday", "daily", "rpd", "tpd", "quota exceeded")
+
+
+def _is_dagquotum(body: str) -> bool:
+    laag = body.lower()
+    if any(m in laag for m in _MINUUT_MARKERS):
+        return False
+    return any(m in laag for m in _DAG_MARKERS)
+
+
+def _seconden_tot_middernacht() -> float:
+    """Tot de reset van het dagquotum (UTC), met een marge van een minuut."""
+    nu = datetime.now(timezone.utc)
+    morgen = (nu + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(60.0, (morgen - nu).total_seconds() + 60)
+
+
+def _afkoelduur(exc: BaseException) -> float | None:
+    """Hoe lang deze provider overgeslagen wordt, of None om het niet te doen."""
+    if not isinstance(exc, ProviderUitgeput):
+        return None
+    if exc.retry_after and exc.retry_after > 0:
+        return min(float(exc.retry_after), _AFKOEL_MAX)
+    if exc.status == 402:
+        return _AFKOEL_CREDITS
+    return _seconden_tot_middernacht()
+
+
+def _provider_fout(provider: str, response: Any) -> RuntimeError:
+    """Vertaal een mislukte HTTP-poging naar de juiste fout.
+
+    ProviderUitgeput als het een dagquotum (429) of opgebruikte credits (402)
+    is, anders een gewone RuntimeError -- een 500 of een timeout is een
+    incident, geen reden om de provider een dag te laten liggen.
+    """
+    body = response.text or ""
+    status = response.status_code
+    if status == 402 or (status == 429 and _is_dagquotum(body)):
+        na = (response.headers or {}).get("retry-after")
+        try:
+            retry_after = float(na) if na is not None else None
+        except (TypeError, ValueError):
+            retry_after = None
+        return ProviderUitgeput(provider, status, body, retry_after)
+    return RuntimeError(f"{provider} {status}: {body[:300]}")
+
+
+# Eén Ollama tegelijk. De VPS heeft 7,7GB en geen swap die dit opvangt: het
+# model is al eens met een OOM door de hele box heen gegaan (AGENTS.md val 4).
+# Zolang de worker één taak tegelijk draaide kwam dat niet samen, maar met K
+# parallelle slots kunnen twee taken nu echt tegelijk op de terugval landen en
+# twee keer hetzelfde model laden. De semafoor laat de tweede wachten in plaats
+# van de box om te duwen.
+_OLLAMA_SLOT = asyncio.Semaphore(1)
+
+
+async def _call_ollama_begrensd(contents: list[dict[str, Any]]) -> dict[str, Any]:
+    """_call_ollama, maar nooit twee tegelijk."""
+    async with _OLLAMA_SLOT:
+        return await _call_ollama(contents)
 
 
 def _shell(command: str, cwd: str | None = None) -> dict[str, Any]:
@@ -306,7 +666,7 @@ async def _call_gemini(contents: list[dict[str, Any]], api_key: str) -> dict[str
     payload = {
         "contents": contents,
         "tools": [{"functionDeclarations": TOOL_DECLARATIONS}],
-        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "systemInstruction": {"parts": [{"text": systeem_prompt()}]},
         "generationConfig": {"temperature": 0.2},
     }
     url = _ENDPOINT.format(model=MODEL)
@@ -316,7 +676,7 @@ async def _call_gemini(contents: list[dict[str, Any]], api_key: str) -> dict[str
             headers={"Content-Type": "application/json"},
         )
     if response.status_code != 200:
-        raise RuntimeError(f"gemini {response.status_code}: {response.text[:300]}")
+        raise _provider_fout("gemini", response)
     data = response.json()
     candidates = data.get("candidates") or []
     if not candidates:
@@ -331,7 +691,7 @@ def _to_ollama_messages(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     and the rest of the code reads it. Only the wire format changes per
     provider, so a fallback cannot subtly lose the conversation.
     """
-    out: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    out: list[dict[str, Any]] = [{"role": "system", "content": systeem_prompt()}]
     for entry in contents:
         role = entry.get("role")
         parts = entry.get("parts") or []
@@ -409,6 +769,98 @@ async def _call_ollama(contents: list[dict[str, Any]]) -> dict[str, Any]:
     return {"parts": parts}
 
 
+def _to_openai_messages(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Gemini's `contents` -> strikte OpenAI `messages`.
+
+    Ollama slikt tool-berichten zonder id; Groq en OpenAI niet. Elke
+    functionCall krijgt een id, en het antwoord erna verwijst ernaar in
+    dezelfde volgorde.
+    """
+    out: list[dict[str, Any]] = [{"role": "system", "content": systeem_prompt()}]
+    open_ids: list[str] = []
+    n = 0
+    for entry in contents:
+        role = entry.get("role")
+        parts = entry.get("parts") or []
+        calls = [p["functionCall"] for p in parts if "functionCall" in p]
+        responses = [p["functionResponse"] for p in parts if "functionResponse" in p]
+        text = " ".join(p["text"] for p in parts if p.get("text"))
+
+        if calls:
+            ids = []
+            for _ in calls:
+                n += 1
+                ids.append(f"call_{n}")
+            open_ids = list(ids)
+            out.append({
+                "role": "assistant",
+                "content": text or None,
+                "tool_calls": [
+                    {"id": i, "type": "function", "function": {
+                        "name": c.get("name"),
+                        "arguments": json.dumps(c.get("args") or {}),
+                    }}
+                    for i, c in zip(ids, calls)
+                ],
+            })
+        elif responses:
+            for r in responses:
+                call_id = open_ids.pop(0) if open_ids else f"call_{n}"
+                out.append({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": json.dumps(r.get("response") or {})[:20000],
+                })
+        elif text:
+            out.append({"role": "assistant" if role == "model" else "user", "content": text})
+    return out
+
+
+async def _call_openai_compat(
+    contents: list[dict[str, Any]], url: str, api_key: str, model: str,
+) -> dict[str, Any]:
+    """Groq of OpenAI, zelfde vorm. Geeft Gemini-vormige content terug."""
+    import httpx
+
+    payload = {
+        "model": model,
+        "messages": _to_openai_messages(contents),
+        "tools": [
+            {"type": "function", "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["parameters"],
+            }}
+            for t in TOOL_DECLARATIONS
+        ],
+        "temperature": 0.2,
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.post(
+            url, json=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        )
+    if response.status_code != 200:
+        raise _provider_fout(model, response)
+
+    message = ((response.json().get("choices") or [{}])[0]).get("message") or {}
+    parts: list[dict[str, Any]] = []
+    if message.get("content"):
+        parts.append({"text": message["content"]})
+    for call in message.get("tool_calls") or []:
+        fn = call.get("function") or {}
+        args = fn.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError:
+                args = {}
+        parts.append({"functionCall": {"name": fn.get("name"), "args": args or {}}})
+    if not parts:
+        raise RuntimeError(f"{model} returned neither text nor a tool call")
+    return {"parts": parts}
+
+
 async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> dict[str, Any]:
     """Try each provider in turn until one answers.
 
@@ -422,16 +874,40 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     llama3.1:8b-32k returns a correct tool call in ~13s while warm.
     """
     attempts: list[tuple[str, Any]] = []
+    groq_key = os.environ.get("GROQ_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if groq_key:
+        attempts.append((f"groq/{GROQ_MODEL}", lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_MODEL)))
     if api_key:
         attempts.append((f"gemini/{MODEL}", lambda: _call_gemini(contents, api_key)))
-    attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama(contents)))
+    if openai_key:
+        attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
+    # De terugval is begrensd: nooit twee Ollama-aanroepen tegelijk op deze box.
+    attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
 
     errors: list[str] = []
     for name, call in attempts:
+        tot = _AFKOELING.get(name)
+        if tot is not None:
+            if tot > time.monotonic():
+                # Stil overslaan. Dat dit gebeurt is één keer gelogd, toen de
+                # provider in de afkoeling ging; het elke stap herhalen is
+                # precies het lawaai dat dit moest oplossen.
+                errors.append(f"{name}: afkoelend")
+                continue
+            _AFKOELING.pop(name, None)
         try:
             return await call()
         except Exception as exc:
-            log.warning("[agent_loop] %s failed: %s", name, str(exc)[:200])
+            seconden = _afkoelduur(exc)
+            if seconden:
+                _AFKOELING[name] = time.monotonic() + seconden
+                log.warning(
+                    "[agent_loop] %s is uitgeput (%s) — overgeslagen voor %d minuten",
+                    name, str(exc)[:160], int(seconden // 60),
+                )
+            else:
+                log.warning("[agent_loop] %s failed: %s", name, str(exc)[:200])
             errors.append(f"{name}: {str(exc)[:150]}")
     raise RuntimeError("every provider failed — " + " | ".join(errors))
 
@@ -441,6 +917,10 @@ async def run_agent_loop(
     task_id: str,
     on_event,
     approved_commands: tuple[str, ...] = (),
+    read_only: bool = False,
+    *,
+    agent: str | None = None,
+    should_stop: Callable[[], Awaitable[bool]] | None = None,
 ) -> dict[str, Any]:
     """Run the request to completion.
 
@@ -450,12 +930,55 @@ async def run_agent_loop(
     `approved_commands` are commands Luka has already approved for THIS task, so
     a resumed attempt runs straight through the thing it previously stopped on
     instead of asking again.
+
+    `agent` is een roster-id uit AGENT_BRIEFS (northsea, trading, ...). Die
+    brief gaat voor de system prompt, zodat de lus als díe agent werkt en niet
+    als een algemene "AXE" met een ander etiket. Onbekend of None = geen brief.
+
+    `should_stop` wordt vóór elke modelaanroep en vóór elke tooluitvoering
+    afgevraagd; geeft hij True, dan stopt de lus met TaskCancelled.
     """
     pre_approved = {normalize_command(c) for c in approved_commands}
     # No longer required. A missing or dead Gemini key now means the loop runs
     # on the local model instead of refusing to start.
     api_key = os.environ.get("GEMINI_API_KEY")
 
+    # De NorthSea-desk is alleen-lezen, wat de aanroeper er ook van vindt. Die
+    # regel staat in zijn brief, maar een brief is een vraag aan het model en
+    # geen garantie -- dit is de garantie.
+    if agent == "northsea":
+        read_only = True
+
+    brief = AGENT_BRIEFS.get(agent or "", "")
+    fiche = _HUIDIGE_BRIEF.set(brief)
+
+    async def stop_gevraagd() -> None:
+        """Werp TaskCancelled als de taak intussen geannuleerd is."""
+        if should_stop is None:
+            return
+        if await should_stop():
+            raise TaskCancelled(f"task {task_id} was cancelled")
+
+    try:
+        return await _lus(
+            request_text, task_id, on_event, pre_approved, read_only,
+            api_key, stop_gevraagd,
+        )
+    finally:
+        _HUIDIGE_BRIEF.reset(fiche)
+
+
+async def _lus(
+    request_text: str,
+    task_id: str,
+    on_event,
+    pre_approved: set[str],
+    read_only: bool,
+    api_key: str | None,
+    stop_gevraagd,
+) -> dict[str, Any]:
+    """De lus zelf. Apart van run_agent_loop zodat de brief-ContextVar in één
+    plek gezet en weer opgeruimd wordt, ook bij ApprovalRequired."""
     contents: list[dict[str, Any]] = [
         {"role": "user", "parts": [{"text": request_text}]}
     ]
@@ -469,6 +992,7 @@ async def run_agent_loop(
                 f"({WALL_CLOCK_SECONDS}s budget). Transcript kept for the next attempt."
             )
 
+        await stop_gevraagd()
         content = await _call_model(contents, api_key)
         parts = content.get("parts") or []
         contents.append({"role": "model", "parts": parts})
@@ -496,6 +1020,10 @@ async def run_agent_loop(
 
         responses = []
         for call in calls:
+            # Vóór elke tooluitvoering, niet alleen per stap: één stap kan
+            # meerdere tools bevatten, en een annulering hoort niet te wachten
+            # tot de rest van de rij is uitgevoerd.
+            await stop_gevraagd()
             name = call.get("name")
             args = call.get("args") or {}
 
@@ -565,7 +1093,7 @@ async def run_agent_loop(
 
             if name == "run_shell":
                 command = str(args.get("command") or "")
-                needs = approval_reason(command, args.get("cwd"))
+                needs = approval_reason(command, args.get("cwd"), read_only)
                 if needs and normalize_command(command) in pre_approved:
                     # Luka already said yes to exactly this command on this task.
                     await on_event(
@@ -599,6 +1127,10 @@ async def run_agent_loop(
                     _read, path, int(args.get("max_bytes") or 60000)
                 )
                 transcript.append({"step": step, "tool": "read_file", "path": path[:300]})
+            elif name == "write_file" and read_only:
+                path = str(args.get("path") or "")
+                result = {"error": "This is a read-only task. Report what you found instead of writing."}
+                transcript.append({"step": step, "tool": "write_file", "path": path[:300], "refused": "read_only"})
             elif name == "write_file":
                 path = str(args.get("path") or "")
                 await on_event("axe.progress", f"Step {step}: writing {path[:160]}", {})
@@ -608,6 +1140,33 @@ async def run_agent_loop(
                 transcript.append({
                     "step": step, "tool": "write_file", "path": path[:300],
                     "bytes": result.get("bytes_written"),
+                })
+            elif name == "list_devices":
+                await on_event("axe.progress", f"Step {step}: checking which Macs are online", {})
+                result = {"devices": await asyncio.to_thread(device_actions.list_devices)}
+                transcript.append({"step": step, "tool": "list_devices"})
+            elif name == "run_on_device":
+                device = str(args.get("device") or "")
+                tool = str(args.get("tool") or "")
+                dargs = args.get("args") if isinstance(args.get("args"), dict) else {}
+                key = None if read_only else device_actions.approval_key(device, tool, dargs)
+                if key and normalize_command(key) not in pre_approved:
+                    transcript.append({
+                        "step": step, "tool": "run_on_device", "device": device,
+                        "device_tool": tool, "approval_required": key,
+                    })
+                    raise ApprovalRequired(key, f"changes something on {device} ({tool})")
+                await on_event(
+                    "axe.progress", f"Step {step}: {tool} on {device}",
+                    {"device": device, "device_tool": tool},
+                )
+                result = await asyncio.to_thread(
+                    device_actions.run_on_device, device, tool, dargs,
+                    str(args.get("workspace") or "AXE Core"), task_id, read_only,
+                )
+                transcript.append({
+                    "step": step, "tool": "run_on_device", "device": device,
+                    "device_tool": tool, "ok": result.get("ok"),
                 })
             else:
                 result = {"error": f"unknown tool {name!r}"}

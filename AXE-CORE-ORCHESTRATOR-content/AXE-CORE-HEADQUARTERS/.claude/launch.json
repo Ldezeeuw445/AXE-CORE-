@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "axe-core",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "PORT=${PORT:-5173} npm run dev"],
       "port": 5173
     }
   ]

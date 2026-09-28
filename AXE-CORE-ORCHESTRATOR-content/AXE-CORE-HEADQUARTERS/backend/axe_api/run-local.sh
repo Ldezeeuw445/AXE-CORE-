@@ -28,6 +28,7 @@ VENV=".venv-local"
 ENV_FILE="${ENV_FILE:-.env.local}"
 PORT="${PORT:-8001}"          # same port nginx proxies to on the VPS
 HOST="${HOST:-127.0.0.1}"     # loopback only: this speaks for your machine
+SETUP_ONLY="${SETUP_ONLY:-0}"
 
 # ── env ───────────────────────────────────────────────────────────────────────
 # A relative ENV_FILE is relative to this script's directory (we cd'd there);
@@ -53,6 +54,14 @@ fi
 
 # WORKSPACE_DIR defaults to /opt/axe-workspace, which does not exist here and
 # main.py creates it at import time — so give it somewhere writable instead.
+# Zonder eigen WORKSPACE_DIR: de eerste repo uit AGENT_REPOS. Dat is dezelfde
+# checkout waar de code-agent in werkt, zodat de bestandsboom van de editor en
+# de agent over hetzelfde spreken. Gemeten 13 september: de boom toonde een lege
+# .workspace-local terwijl de agent in ~/AXE-CORE- bewerkte.
+EERSTE_REPO="${AGENT_REPOS%%,*}"; EERSTE_REPO="${EERSTE_REPO#*=}"
+if [[ -n "${EERSTE_REPO:-}" && -d "$EERSTE_REPO" ]]; then
+  export WORKSPACE_DIR="${WORKSPACE_DIR:-$EERSTE_REPO}"
+fi
 export WORKSPACE_DIR="${WORKSPACE_DIR:-$PWD/.workspace-local}"
 mkdir -p "$WORKSPACE_DIR"
 
@@ -99,6 +108,11 @@ if [ ! -x "$VENV/bin/python" ]; then
   uv venv --python 3.12 "$VENV"
   grep -v browser-use requirements.txt > "$VENV/requirements-local.txt"
   uv pip install --python "$VENV/bin/python" -r "$VENV/requirements-local.txt"
+fi
+
+if [[ "$SETUP_ONLY" == "1" ]]; then
+  echo "axe_api local runtime prepared: $PWD/$VENV"
+  exit 0
 fi
 
 echo

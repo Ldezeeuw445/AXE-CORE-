@@ -55,10 +55,17 @@ export function GlobalCommandPalette() {
           ))}
         </CommandGroup>
         <CommandGroup heading="Quick actions">
-          <CommandItem value="toggle microphone start listening" onSelect={() => { setCommandPaletteOpen(false); go('/'); voice.startListening().catch(() => {}); }}>
-            <Mic /> Start talking to AXE
-            <CommandShortcut>Space</CommandShortcut>
-          </CommandItem>
+          {voice.voiceStatus !== 'idle' ? (
+            <CommandItem value="toggle microphone stop listening hang up" onSelect={() => { setCommandPaletteOpen(false); voice.stopListening(); }}>
+              <Mic /> Stop talking to AXE
+              <CommandShortcut>Space</CommandShortcut>
+            </CommandItem>
+          ) : (
+            <CommandItem value="toggle microphone start listening" onSelect={() => { setCommandPaletteOpen(false); go('/'); voice.startListening().catch(() => {}); }}>
+              <Mic /> Start talking to AXE
+              <CommandShortcut>Space</CommandShortcut>
+            </CommandItem>
+          )}
           <CommandItem value="settings preferences" onSelect={() => go('/settings')}>
             <Settings /> Open Settings
           </CommandItem>

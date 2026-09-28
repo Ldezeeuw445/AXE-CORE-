@@ -1,5 +1,5 @@
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
-import { exaProxyUrl } from '@/infrastructure/config/apiUrl';
+import { exaProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 
 const EXA_API_KEY_SETTING = 'axe_exa_api_key';
 
@@ -33,7 +33,7 @@ export async function testExaKey(key: string): Promise<{ ok: boolean; error?: st
     const res = import.meta.env.PROD
       ? await fetch(exaProxyUrl(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...vpsAuthHeaders(exaProxyUrl()) },
           body: JSON.stringify({ query: 'axe core connectivity test', numResults: 1, key: trimmed || undefined }),
         })
       : await fetch('https://api.exa.ai/search', {
@@ -62,7 +62,7 @@ export async function exaSearch(query: string, numResults = 5): Promise<Array<{ 
     const res = import.meta.env.PROD
       ? await fetch(exaProxyUrl(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...vpsAuthHeaders(exaProxyUrl()) },
           body: JSON.stringify({ query, numResults, key: key ?? undefined }),
         })
       : (key

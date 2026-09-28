@@ -111,6 +111,7 @@ export function actionNudge(toolForms: string): string {
     '2. Zeg in één zin ronduit dat je het niet kunt, en waarom.',
     '',
     'Beweren dat je iets gedaan hebt zonder marker is geen optie.',
+    'Leg het marker-protocol niet uit aan Luka — alleen doen, of ronduit weigeren.',
   ].join('\n');
 }
 

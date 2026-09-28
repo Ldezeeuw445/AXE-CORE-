@@ -59,7 +59,7 @@ export async function listMonitors(): Promise<MonitorInfo[]> {
  *  name fails loudly instead of opening a blank or wrong window. */
 export const OPENABLE_PAGES = [
   'home', 'ai-core', 'apps', 'agents', 'tasks', 'calendar', 'memory', 'obsidian', 'knowledge',
-  'trading', 'finance', 'mcp', 'infrastructure', 'command', 'terminal', 'settings',
+  'trading', 'trading-intel', 'finance', 'mcp', 'infrastructure', 'command', 'terminal', 'settings',
   'table-editor', 'cron-manager', 'control-plane', 'maps-3d', 'crewai', 'developer',
   'code-editor', 'eve', 'browser', 'browser-desktop', 'organization',
 ] as const;
@@ -122,45 +122,79 @@ export async function restoreWindowLayout(): Promise<void> {
 
 /** Open the AXE Browser in its own OS window — Arc-style standalone desktop browser.
  *  Uses the `browser-desktop` route which renders without AppShell chrome. */
-export async function openStandaloneBrowser(monitorIndex = 0): Promise<void> {
+export async function openPersonalComputerUse(): Promise<void> {
   if (!isTauriRuntime()) {
-    window.open(`${window.location.origin}${window.location.pathname}#/browser-desktop`, '_blank');
+    window.open(`${window.location.origin}${window.location.pathname}#/computer-use-overlay`, '_blank', 'width=780,height=360');
     return;
   }
-
-  const monitors = await listMonitors();
-  const monitor = monitors[monitorIndex] ?? monitors[0];
-  if (!monitor) throw new Error('No monitor available');
-
-  const { availableMonitors } = await import('@tauri-apps/api/window');
-  const rawMonitors = await availableMonitors();
-  const rawSorted = rawMonitors.sort((a, b) => a.position.x - b.position.x);
-  const raw = rawSorted[monitorIndex] ?? rawSorted[0];
-  const scale = raw.scaleFactor;
-
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-  const label = 'axe-browser-desktop';
+  const label = 'axe-personal-computer';
   const existing = await WebviewWindow.getByLabel(label);
   if (existing) {
+    await existing.show();
     await existing.setFocus();
+  } else {
+    const win = new WebviewWindow(label, {
+      url: 'index.html#/computer-use-overlay',
+      title: 'AXE Personal Computer Use',
+      width: 780,
+      height: 360,
+      minWidth: 620,
+      minHeight: 220,
+      decorations: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: true,
+      center: true,
+      shadow: true,
+    });
+    await new Promise<void>((resolve, reject) => {
+      win.once('tauri://created', () => resolve());
+      win.once('tauri://error', e => reject(new Error(String(e.payload))));
+    });
+  }
+  // By label, not getCurrentWindow().label === 'main': this always runs from
+  // the main window's own UI (AppShell's corner button, ComputerUse.tsx), so
+  // both should be equivalent — but a check keyed to that exact identity is
+  // one silent label drift away from never minimizing anything, with no error
+  // to say why. Going by label makes the intent ("hide the main window,
+  // whichever object represents it") unambiguous either way.
+  const main = await WebviewWindow.getByLabel('main');
+  if (main) await main.minimize();
+}
+
+export async function restoreMainWindow(): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  const main = await WebviewWindow.getByLabel('main');
+  if (!main) return;
+  await main.unminimize();
+  await main.show();
+  await main.setFocus();
+}
+
+/** Close the current auxiliary window through Tauri itself.
+ * window.close() is only a browser hint and is unreliable for WebviewWindow. */
+export async function closeCurrentAuxWindow(): Promise<void> {
+  if (!isTauriRuntime()) {
+    window.close();
     return;
   }
-
-  const win = new WebviewWindow(label, {
-    url: 'index.html#/browser-desktop',
-    title: 'AXE Browser',
-    x: raw.position.x / scale + 40,
-    y: raw.position.y / scale + 40,
-    width: Math.min(1280, raw.size.width / scale - 80),
-    height: Math.min(860, raw.size.height / scale - 80),
-    theme: 'dark',
-    decorations: true,
-    resizable: true,
-    center: false,
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    win.once('tauri://created', () => resolve());
-    win.once('tauri://error', (e) => reject(new Error(String(e.payload))));
-  });
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  await getCurrentWindow().close();
 }
+
+export async function openStandaloneNorthsea(monitorIndex = 0): Promise<void> {
+  // Use the exact same AppShell route as the main app. The previous
+  // /northsea-desktop route maintained its own shell/chrome and drifted from
+  // dark/light/glass settings. One route, one shell.
+  await openPageOnMonitor('maps-3d', monitorIndex);
+}
+
+export async function openStandaloneBrowser(monitorIndex = 0): Promise<void> {
+  // Standalone means a separate Tauri window, not a separate visual system.
+  // Opening the normal /browser route gives it the same AXE shell, glass
+  // material, dark/light mode, composer and radial navigation as everywhere else.
+  await openPageOnMonitor('browser', monitorIndex);
+}
+

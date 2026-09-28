@@ -20,14 +20,19 @@
  * tweehonderd balken verandert bovendien niet zinvol in een uur; wie hem elke
  * tien minuten opnieuw meet, meet ruis.
  *
- * ## Wat hier NIET gebeurt
+ * ## Gebeurtenisimpact: via de MetaAPI-cache, in een beurtrol
  *
- * Gebeurtenisimpact wordt nog niet gemeten. Dat is zes dagen koersdata per
- * combinatie van release en paar, en met zes releases en zes paren zijn dat
- * zesendertig combinaties — een veelvoud van je uurquotum, ook al is elke dag
- * daarna blijvend gecached. Dat vraagt om een beurtrol over dagen heen of om
- * een betaalde laag, en dat is een keuze en geen detail. Zolang die er niet is
- * zegt het blok voor de agents eerlijk dat die meting ontbreekt.
+ * Zes dagen koersdata per (release × paar) via LSE was een veelvoud van het
+ * uurquotum. Daarom komt de impactmeting niet uit LSE maar uit de M15-historie
+ * van MetaAPI via historyService: één aaneengesloten reeks per paar in de
+ * candle-cache, die na de eerste backfill alleen nog de nieuwe pagina's haalt,
+ * met achtergrondprioriteit door het MetaAPI-budget. Alle releases op één paar
+ * delen die reeks.
+ *
+ * Gemeten wordt alleen wat eraan komt: releases binnen zeven dagen, op paren
+ * die de valuta raken. Per hartslag hooguit `IMPACT_PER_SLAG` combinaties,
+ * en een combinatie die in de laatste twintig uur gemeten is wordt overgeslagen
+ * — een beurtrol, geen stortvloed.
  *
  * ## En wat er nog niet 24/7 aan is
  *
@@ -42,6 +47,10 @@ import { lseBalken } from '@/infrastructure/gateways/lseMarketData';
 import type { OhlcBar } from '@/domain/tradingIntel/demoTypes';
 import { bouwCorrelatieMatrix, correlatieVoorAgent } from '@/domain/tradingIntel/correlatie';
 import { schrijfDeskFeit } from '@/infrastructure/persistence/deskFeitenService';
+import { fetchEconomicReleases, fetchPastReleases } from '@/infrastructure/gateways/researchSources';
+import { getHistory } from '@/application/tradingIntel/historyService';
+import { impactGeschiedenis, impactVoorAgent, kiesImpactCombos, type ImpactCombo } from '@/domain/tradingIntel/gebeurtenisImpact';
+import { COVERED_CURRENCIES, currenciesOf, isHighImpact } from '@/domain/tradingIntel/economicCalendar';
 
 /** Dezelfde paren als de Correlatie-tab, zodat scherm en agent één mand delen. */
 const PAREN = [
@@ -59,7 +68,15 @@ const MIN_REEKSEN = 4;
 let bezig = false;
 let laatsteMeting = 0;
 
-export function __resetHartslag(): void { bezig = false; laatsteMeting = 0; }
+/** Zoveel (release × paar) per hartslag; de rest komt in een volgende beurt. */
+const IMPACT_PER_SLAG = 4;
+/** Een combinatie die zo kort geleden gemeten is, gaat niet opnieuw. */
+const IMPACT_OPNIEUW_NA_MS = 20 * 60 * 60 * 1000;
+const IMPACT_VENSTER_MIN = 60;
+let impactBezig = false;
+const impactGemeten = new Map<string, number>();
+
+export function __resetHartslag(): void { bezig = false; laatsteMeting = 0; impactBezig = false; impactGemeten.clear(); }
 
 export interface HartslagUitslag {
   gedaan: boolean;
@@ -128,6 +145,86 @@ export async function draaiDeskHartslag(force = false): Promise<HartslagUitslag>
   }
 }
 
+export interface ImpactUitslag {
+  gemeten: string[];
+  overgeslagen: string[];
+  reden?: string;
+}
+
+const comboSleutel = (c: ImpactCombo) => `${c.naam}|${c.symbool}|${IMPACT_VENSTER_MIN}`;
+
+/**
+ * Meet de gebeurtenisimpact voor de releases die eraan komen en schrijf elke
+ * combinatie weg als bureaufeit 'gebeurtenis_impact'. Zo bereikt hij AXE Algo
+ * via hetzelfde `deskFeitenBlok` als de correlatie, en staat hij in de trace.
+ *
+ * Een combinatie zonder genoeg metingen wordt óók weggeschreven: "te weinig
+ * gemeten — onbekend, niet rustig" is informatie, stilte is dat niet.
+ */
+export async function draaiImpactMeting(nu = Date.now()): Promise<ImpactUitslag> {
+  if (impactBezig) return { gemeten: [], overgeslagen: [], reden: 'vorige meting loopt nog' };
+  impactBezig = true;
+  try {
+    const [komend, verleden] = await Promise.all([
+      fetchEconomicReleases().catch(() => []),
+      fetchPastReleases(400).catch(() => []),
+    ]);
+    if (!komend.length || !verleden.length) {
+      return { gemeten: [], overgeslagen: [], reden: 'geen kalender (komend of verleden) beschikbaar' };
+    }
+
+    const combos = kiesImpactCombos({
+      komend, verleden, paren: PAREN, nu,
+      isRelease: isHighImpact,
+      isGedekt: sym => currenciesOf(sym).some(c => COVERED_CURRENCIES.has(c)),
+    });
+    const aanDeBeurt = combos
+      .filter(c => nu - (impactGemeten.get(comboSleutel(c)) ?? 0) >= IMPACT_OPNIEUW_NA_MS)
+      .slice(0, IMPACT_PER_SLAG);
+    if (!aanDeBeurt.length) {
+      return { gemeten: [], overgeslagen: [], reden: combos.length ? 'alles recent gemeten' : 'geen high-impact release binnen 7 dagen' };
+    }
+
+    const gemeten: string[] = [];
+    const overgeslagen: string[] = [];
+    for (const c of aanDeBeurt) {
+      const oudste = c.publicaties[c.publicaties.length - 1];
+      const hist = await getHistory({
+        symbol: c.symbool, timeframe: 'm15', provider: 'metaapi',
+        from: new Date(Date.parse(`${oudste}T00:00:00Z`) - 86_400_000).toISOString(),
+      }).catch(e => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+      if (!hist.ok) { overgeslagen.push(`${comboSleutel(c)}: ${hist.error}`); continue; }
+
+      const bars: OhlcBar[] = hist.candles.map(k => ({
+        t: Date.parse(k.time), o: k.open, h: k.high, l: k.low, c: k.close, v: k.volume ?? 0,
+      }));
+      const g = impactGeschiedenis({
+        symbool: c.symbool, naam: c.naam, vensterMinuten: IMPACT_VENSTER_MIN,
+        gebeurtenissen: c.publicaties.map(datum => ({ datum, naam: c.naam })),
+        bars,
+      });
+      const tekst = `GEBEURTENISIMPACT — volgende publicatie ${c.volgende}\n${impactVoorAgent(g)}`;
+      const ok = await schrijfDeskFeit({
+        soort: 'gebeurtenis_impact',
+        sleutel: comboSleutel(c),
+        agentTekst: tekst,
+        data: { volgende: c.volgende, samenvatting: g.samenvatting, metingen: g.metingen, bron: 'metaapi m15' },
+      });
+      if (ok) { impactGemeten.set(comboSleutel(c), nu); gemeten.push(comboSleutel(c)); }
+      else overgeslagen.push(`${comboSleutel(c)}: wegschrijven mislukt`);
+    }
+    return { gemeten, overgeslagen };
+  } finally {
+    impactBezig = false;
+  }
+}
+
+/** Eén tik: eerst de correlatie, dan een beurt gebeurtenisimpact. */
+async function hartslagTik(): Promise<void> {
+  await draaiDeskHartslag().catch(e => console.warn('[deskHartslag] correlatie:', e));
+  await draaiImpactMeting().catch(e => console.warn('[deskHartslag] impact:', e));
+}
+
 /**
  * Start de hartslag en geef terug hoe je hem stopt.
  *
@@ -136,7 +233,7 @@ export async function draaiDeskHartslag(force = false): Promise<HartslagUitslag>
  * precies wanneer je aan het kijken bent of het scherm goed laadt.
  */
 export function startDeskHartslag(): () => void {
-  const eerste = setTimeout(() => { void draaiDeskHartslag(); }, 60_000);
-  const timer = setInterval(() => { void draaiDeskHartslag(); }, HARTSLAG_INTERVAL_MS);
+  const eerste = setTimeout(() => { void hartslagTik(); }, 60_000);
+  const timer = setInterval(() => { void hartslagTik(); }, HARTSLAG_INTERVAL_MS);
   return () => { clearTimeout(eerste); clearInterval(timer); };
 }

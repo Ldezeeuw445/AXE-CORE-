@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
+import { AgentVensters } from '@/presentation/components/axe-core/AgentVensters';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
@@ -14,8 +16,6 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp';
-import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
-import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
 import { BezigVlag } from '@/presentation/components/layout/zweef/BezigVlag';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
@@ -147,8 +147,14 @@ export default function Home() {
               const label = statusLabel[coreStatus] ?? (hasError ? 'ERROR' : hasProvider ? 'CORE ACTIVE' : 'NO AI');
               const color = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--accent-cyan)' : 'var(--warning)');
               const dotColor = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--success)' : 'var(--warning)');
+              /* Het stipje zei alleen DAT er iets was; de orb zegt WAT. Zelfde
+                 teken als het midden van de onderbalk, hier op 20px. */
+              const orbStatus = coreStatus === 'listening' ? 'listening'
+                : coreStatus === 'speaking' ? 'speaking'
+                  : coreStatus === 'thinking' || coreStatus === 'awaiting-approval' ? 'processing'
+                    : 'idle';
               return (<>
-                <LiveIndicator size={6} color={dotColor} />
+                <AxeStatusOrb size={20} status={orbStatus} werk={{ schrijft: coreStatus === 'thinking', fout: hasError }} />
                 <span className="text-xs-custom font-mono-data" style={{ color }}>{label}</span>
               </>);
             })()}
@@ -228,6 +234,8 @@ export default function Home() {
                   zwart, maar slaat dicht op een lichte plaat en dan verdwijnt
                   de vorm in de gloed. Beide blijven bestaan. */}
               {opPlaat ? <AxeCoreSphere /> : <SphereStage status={coreStatus} />}
+              {/* Wie AXE nu aan het werk heeft, in gewone taal, rond de core. */}
+              <AgentVensters />
             </div>
           {/* De drie weergaven vullen het HELE vak, niet alleen het stuk boven
               de chatplaat.
@@ -268,9 +276,6 @@ export default function Home() {
     {/* Buiten de motion.div: framer zet er een transform op en dat zou de
         laag aan de scene binden in plaats van aan het venster. */}
     <BezigVlag />
-    <ZweefLaag>
-      <ZwevendeTelefoon />
-    </ZweefLaag>
     </>
   );
 }

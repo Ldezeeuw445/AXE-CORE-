@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sneltoets",
+  "description": "Global mic shortcut (Option+Space). The shortcut itself is registered in Rust (src-tauri/src/lib.rs), so the webview needs nothing to make it work: listening to the axe://sneltoets-mic event is already covered by core:default. Only is-registered is granted here, so a Settings screen can show whether the shortcut was actually claimed by the OS. NOTE: tauri.conf.json lists its capabilities inline, and a non-empty list means files in this folder are ignored unless referenced by identifier. Add \"sneltoets\" to app.security.capabilities to switch this on.",
+  "platforms": ["macOS", "windows", "linux"],
+  "windows": ["main", "axe-*"],
+  "permissions": ["global-shortcut:allow-is-registered"]
+}

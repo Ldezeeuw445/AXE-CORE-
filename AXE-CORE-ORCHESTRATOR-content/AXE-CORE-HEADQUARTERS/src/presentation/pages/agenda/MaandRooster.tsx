@@ -8,18 +8,14 @@
  * het voorbeeld is het één kaart met echte cellen: je ziet de weken als rijen
  * omdat de lijnen doorlopen, en niet omdat de getallen toevallig uitlijnen.
  *
- * ## De stippen
- *
- * Onder een dagnummer staat een stip per item, in de kleur van dat item. Geen
- * tekst, geen teller: op een maandkalender is "er is iets" genoeg, en WAT het
- * is lees je in de lijst ernaast. Meer dan drie wordt een stip met een plusje,
- * want vijf stippen naast elkaar passen niet in een cel.
+ * Each day shows compact real labels (time + title) instead of anonymous dots.
+ * The app filter keeps the month readable; overflow is explicit rather than hidden.
  */
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { datumSleutel, type RoosterItem } from '@/domain/weekRooster';
 
 const DAGKOPPEN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
-const MAX_STIPPEN = 3;
+const MAX_REGELS = 3;
 
 export function MaandRooster({
   jaar, maand, items, gekozen, opKies, opMaand,
@@ -100,12 +96,14 @@ export function MaandRooster({
             >
               <span className="axe-maand-nr">{c.nr}</span>
               {lijst.length > 0 && (
-                <span className="axe-maand-stippen">
-                  {lijst.slice(0, MAX_STIPPEN).map(it => (
-                    <i key={it.id} style={{ background: it.kleur }} />
+                <span className="axe-maand-items">
+                  {lijst.slice(0, MAX_REGELS).map(it => (
+                    <span className="axe-maand-item" key={it.id} style={{ borderLeftColor: it.kleur }} title={`${it.tijd} · ${it.titel}`}>
+                      <time>{it.tijd}</time><b>{it.titel}</b>
+                    </span>
                   ))}
-                  {lijst.length > MAX_STIPPEN && (
-                    <em title={`${lijst.length} items`}>+</em>
+                  {lijst.length > MAX_REGELS && (
+                    <em title={`${lijst.length} items`}>+${lijst.length - MAX_REGELS} meer</em>
                   )}
                 </span>
               )}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { motion } from 'framer-motion';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { TabRuimte } from '@/presentation/components/layout/tabMaatstaf';
 import {
   Brain,
   Network,
@@ -210,7 +211,9 @@ export default function Organization() {
   const coreBranches = core?.children.filter(node => ['provider', 'model', 'tool', 'infrastructure'].includes(node.kind)) ?? [];
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex min-h-0 flex-1 flex-col overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRuimte vullen>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
           eronder stonden niet: die zijn de stand van deze tab en horen in de
@@ -278,6 +281,8 @@ export default function Organization() {
           )}
         </div>
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

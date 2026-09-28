@@ -7,6 +7,7 @@ import {
   CrosshairMode,
   LineStyle,
   createChart,
+  createSeriesMarkers,
 } from "lightweight-charts";
 import type {
   CandlestickData,
@@ -15,6 +16,8 @@ import type {
   IPriceLine,
   ISeriesApi,
   MouseEventParams,
+  ISeriesMarkersPluginApi,
+  Time,
   UTCTimestamp,
 } from "lightweight-charts";
 import type { MetaApiCandle, ChartOverlayRow, PendingOrderOverlay, AnnotationPoint, ChartAnnotation } from "./types";
@@ -52,6 +55,18 @@ type Props = {
   layoutInsetBottom?: number;
   /** Tighter margins for short landscape viewports. */
   compactLayout?: boolean;
+  /** Pijlen voor in- en uitstappen (replay van een lab-run). Leeg of weggelaten = geen. */
+  markers?: ChartTradeMarker[];
+};
+
+/** Eén pijl op de grafiek: een instap of uitstap op een bar. */
+export type ChartTradeMarker = {
+  /** UTC seconden van de bar. */
+  time: number;
+  position: "aboveBar" | "belowBar";
+  shape: "arrowUp" | "arrowDown" | "circle";
+  color: string;
+  text: string;
 };
 
 export type ChartCanvasHandle = {
@@ -76,6 +91,8 @@ export type ChartCanvasHandle = {
   getRightAxisWidth: () => number;
   /** Scroll the chart time axis by a pixel delta (negative = scroll left / back in time). */
   scrollByPixels: (deltaX: number) => void;
+  /** Vervang alle candles zonder de grafiek te herbouwen (replay: terugspoelen, scrubben). */
+  replaceData: (candles: MetaApiCandle[]) => void;
 };
 
 /** Default native zoom: how many of the most recent bars are visible at first paint
@@ -185,6 +202,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(function ChartCa
     layoutInsetTop = 0,
     layoutInsetBottom = 0,
     compactLayout = false,
+    markers,
   },
   ref,
 ) {
@@ -192,6 +210,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(function ChartCa
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const markersApiRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const lastBarRef = useRef<CandlestickData | null>(null);
   const positionLinesRef = useRef<IPriceLine[]>([]);
   const pendingOrderLinesRef = useRef<IPriceLine[]>([]);
@@ -271,6 +290,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(function ChartCa
       priceLineColor: "rgba(168,180,196,0.55)",
     });
     seriesRef.current = series;
+    markersApiRef.current = null;
 
     const data = buildSeriesData(candles);
     series.setData(data);
@@ -451,6 +471,20 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(function ChartCa
     });
   }, [theme, gridStyle]);
 
+  // Trade-pijlen (replay). De plugin hoort bij de serie; na een herbouw opnieuw aanmaken.
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    const data = (markers ?? []).map(m => ({ ...m, time: m.time as UTCTimestamp }))
+      .sort((a, b) => (a.time as number) - (b.time as number));
+    if (!markersApiRef.current) {
+      if (!data.length) return;
+      markersApiRef.current = createSeriesMarkers(series, data);
+    } else {
+      markersApiRef.current.setMarkers(data);
+    }
+  }, [markers, reloadKey]);
+
   // Render open-position overlays.
   useEffect(() => {
     const series = seriesRef.current;
@@ -554,6 +588,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(function ChartCa
   useImperativeHandle(
     ref,
     () => ({
+      replaceData(next: MetaApiCandle[]) {
+        const series = seriesRef.current;
+        if (!series) return;
+        const data = buildSeriesData(next);
+        series.setData(data);
+        lastBarRef.current = data.length ? data[data.length - 1] : null;
+      },
       updateLastCandle(c: MetaApiCandle) {
         const series = seriesRef.current;
         if (!series) return;

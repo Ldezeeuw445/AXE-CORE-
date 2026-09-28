@@ -15,6 +15,12 @@ groen()  { printf "  \033[32m●\033[0m %-26s %s\n" "$1" "$2"; }
 rood()   { printf "  \033[31m●\033[0m %-26s %s\n" "$1" "$2"; }
 geel()   { printf "  \033[33m●\033[0m %-26s %s\n" "$1" "$2"; }
 kop()    { printf "\n\033[1m%s\033[0m\n" "$1"; }
+# Bij elke rode regel hoort staan WAT je eraan doet, niet alleen dat er iets
+# mis is. Luka's maatstaf: "als er iets fout is, wat er fout is en hoe ik het
+# kan fixen zonder dat ik jou nodig heb." fix() drukt die stap eronder af --
+# ingesprongen en gedimd, zodat hij bij de rode regel hoort maar de meting
+# zelf niet overschreeuwt. Het is een concreet commando, geen "kijk eens".
+fix()    { printf "     \033[2m↳ zelf te doen:\033[0m %s\n" "$1"; }
 
 kop "HOSTS"
 # n8n staat hier NIET bij, met opzet. Die draait op 127.0.0.1:5678 en is nooit
@@ -32,7 +38,18 @@ for hp in "api.axecompanion.com/health" "ollama.axecompanion.com/"; do
   code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "https://$hp" 2>/dev/null)
   t=$(curl -s -o /dev/null -w "%{time_total}" --max-time 8 "https://$hp" 2>/dev/null)
   case "$code" in
-    000) rood "$h" "onbereikbaar (timeout na ${t}s)";;
+    000)
+      rood "$h" "onbereikbaar (timeout na ${t}s)"
+      case "$h" in
+        api.axecompanion.com)
+          # Val 4 uit AGENTS.md: de VPS valt om als ollama te veel geheugen pakt.
+          # Dat is de eerste plek om te kijken, niet de laatste.
+          fix "ssh -i ~/.ssh/axe-core-vps root@212.227.91.79 'systemctl status axe-core-api --no-pager'"
+          fix "geheugen op? (val 4)  ssh ... root@212.227.91.79 'systemctl restart ollama && systemctl restart axe-core-api'"
+          fix "reageert de VPS zelf niet op ssh, dan is de server weg -- herstart hem in het IONOS-paneel" ;;
+        ollama.axecompanion.com)
+          fix "ssh -i ~/.ssh/axe-core-vps root@212.227.91.79 'cat /sys/fs/cgroup/system.slice/ollama.service/memory.events; systemctl restart ollama'" ;;
+      esac ;;
     2*|3*) groen "$h" "HTTP $code in ${t}s";;
     # Nu we het echte gezondheidspad vragen is 4xx wél een signaal: de host
     # antwoordt, maar de dienst erachter niet zoals verwacht.
@@ -55,13 +72,19 @@ groen "waar te kijken" "AXE CORE > Instellingen > Keys, knop Test per kaart"
 
 kop "DATA  (Supabase rechtstreeks, niet via de VPS)"
 U="${VITE_SUPABASE_URL:-}"; K="${VITE_SUPABASE_ANON_KEY:-}"
-if [ -z "$U" ]; then rood "Supabase" "geen URL in .env"; else
+if [ -z "$U" ]; then
+  rood "Supabase" "geen URL in .env"
+  fix "zet VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY in .env (Supabase > Project Settings > API)"
+else
   for t in memory core_notifications core_tasks agent_learning_episodes; do
     n=$(curl -s --max-time 10 "$U/rest/v1/$t?select=id&limit=1" -H "apikey: $K" -H "Authorization: Bearer $K" \
         -H "Prefer: count=exact" -H "Range: 0-0" -D - -o /dev/null 2>/dev/null \
         | grep -i content-range | tr -d '\r' | sed 's|.*/||')
     if [ -z "$n" ]; then
       rood "$t" "niet leesbaar"
+      # Leest de rest wel en deze niet, dan is het geen sleutel- of netwerkfout
+      # maar RLS op juist deze tabel.
+      fix "controleer VITE_SUPABASE_ANON_KEY in .env; blijft alleen '$t' hangen, dan is het RLS -- zie Supabase > Authentication > Policies"
     elif [ "$t" = "agent_learning_episodes" ]; then
       # Deze tabel is de enige harde meting of de leerlus echt rondloopt.
       # Nul rijen is hier geen "leeg maar gezond": het betekent dat er nooit
@@ -71,6 +94,7 @@ if [ -z "$U" ]; then rood "Supabase" "geen URL in .env"; else
       # dat dit stilletjes was losgekoppeld.
       if [ "$n" = "0" ]; then
         rood "leerlus" "0 episodes -- de app heeft niet gedraaid, of de lus is weer losgekoppeld"
+        fix "open de app en laat één cyclus lopen; blijft het 0, dan is de lus los -- draai: npx vitest run learningLoopWiring"
       else
         groen "leerlus" "$n episodes vastgelegd"
       fi
@@ -92,6 +116,7 @@ if [ -z "$SRK" ]; then
   geel "diensten" "kluis niet gevonden -- $VAULT"
 elif [ -z "$U" ]; then
   rood "diensten" "geen Supabase-URL"
+  fix "zet VITE_SUPABASE_URL in .env (Supabase > Project Settings > API)"
 else
   # HOSTS hierboven mat de API zojuist live. Botst die met wat de app onthield,
   # dan is de opgeslagen stand achterhaald -- en dat moet erbij staan, anders
@@ -102,7 +127,10 @@ else
     -H "apikey: $SRK" -H "Authorization: Bearer $SRK" 2>/dev/null \
   | python3 -c "
 import sys, json, datetime, re
-G='\033[32m'; R='\033[31m'; Y='\033[33m'; X='\033[0m'
+G='\033[32m'; R='\033[31m'; Y='\033[33m'; X='\033[0m'; D='\033[2m'
+# Zelfde afspraak als fix() in bash: onder een rode regel staat de stap die
+# Luka zelf kan zetten.
+def fix(s): print('     ' + D + '↳ zelf te doen:' + X + ' ' + s)
 try: rows = json.load(sys.stdin)
 except Exception: print('  (kon niet lezen)'); raise SystemExit
 if not isinstance(rows, list) or not rows:
@@ -139,7 +167,15 @@ _nu = os.environ.get('API_NU','')
 if 'axe_core_api' in aan and _nu != '200':
     _hoe = _nu if _nu else 'geen antwoord'
     print(f'  {R}\u25cf{X} LET OP'.ljust(40) + 'axe_core_api staat hier groen, maar antwoordt NU niet (' + _hoe + ')')
-if uit: print(f'  {R}\u25cf{X} liggen eruit ({len(uit)})'.ljust(40) + ', '.join(uit))
+    fix('de opgeslagen stand is achterhaald -- herstart: ssh -i ~/.ssh/axe-core-vps root@212.227.91.79 \'systemctl restart axe-core-api\'')
+if uit:
+    print(f'  {R}\u25cf{X} liggen eruit ({len(uit)})'.ljust(40) + ', '.join(uit))
+    # De systemd-unit gebruikt koppeltekens, de dienstnaam hier underscores:
+    # 'systemctl restart axe_api' gaf al eens 'Unit not found' terwijl de dienst
+    # gewoon draaide als axe-core-api (zie vps_sync.py). Dus vertaal expliciet.
+    units = ' '.join(n.replace('_', '-') for n in uit)
+    fix('ssh -i ~/.ssh/axe-core-vps root@212.227.91.79 \'systemctl restart ' + units + '\'  (unit met koppeltekens, niet underscores)')
+    fix('of is dit een oude meting? Open de app om te verversen -- HOSTS bovenaan is de live-stand')
 for naam, uur in oud:
     print(f'  {Y}\u25cf{X} {naam}'.ljust(40) + f'niet meer gemeten sinds {uur/24:.0f} dagen')
 "
@@ -181,8 +217,14 @@ uit=$(grep -c " api=000" "$LOG" 2>/dev/null); uit=${uit:-0}
 if [ "$n" -lt 2 ]; then
   geel "logboek" "eerste meting -- draai dit vaker om een patroon te zien"
 else
-  [ "$uit" -gt 0 ] && rood "logboek" "$uit van $n metingen: API onbereikbaar" \
-                   || groen "logboek" "$n metingen, altijd bereikbaar"
+  if [ "$uit" -gt 0 ]; then
+    rood "logboek" "$uit van $n metingen: API onbereikbaar"
+    # Een patroon in de tijdstippen wijst de oorzaak aan: elk uur of na een
+    # cyclus is bijna altijd het geheugen (val 4), niet het netwerk.
+    fix "kijk of de uitval een ritme heeft (hieronder); vaak is het geheugen -- ssh ... root@212.227.91.79 'systemctl restart ollama'"
+  else
+    groen "logboek" "$n metingen, altijd bereikbaar"
+  fi
   echo "     laatste vijf:"
   tail -5 "$LOG" | sed 's/^/       /'
 fi

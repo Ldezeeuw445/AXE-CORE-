@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   agentBasis, agentHostStand, zetAgentHostVoorkeur, agentHostVoorkeur,
-  __resetAgentHost, LOKALE_AGENT_ORIGIN,
+  __resetAgentHost, LOKALE_AGENT_ORIGIN, lokaleAgentFetchOrigin,
 } from '@/infrastructure/config/agentHost';
 
 const VPS = 'https://api.axecompanion.com';
@@ -56,14 +56,14 @@ describe('waar de codeeragent draait', () => {
     const f = fetchWeigert();
     zetAgentHostVoorkeur('lokaal');
 
-    expect(await agentBasis(VPS)).toBe(LOKALE_AGENT_ORIGIN);
+    expect(await agentBasis(VPS)).toBe(lokaleAgentFetchOrigin());
     expect(agentHostStand()).toBe('lokaal');
     expect(f).not.toHaveBeenCalled();
   });
 
   it('auto: lokaal zodra die antwoordt', async () => {
     fetchAntwoordt(true);
-    expect(await agentBasis(VPS)).toBe(LOKALE_AGENT_ORIGIN);
+    expect(await agentBasis(VPS)).toBe(lokaleAgentFetchOrigin());
     expect(agentHostStand()).toBe('lokaal');
   });
 
@@ -109,5 +109,11 @@ describe('waar de codeeragent draait', () => {
     const f = fetchAntwoordt(true);
     await agentBasis(VPS);
     expect(f.mock.calls[0][0]).toBe(`${LOKALE_AGENT_ORIGIN}/health`);
+  });
+
+  it('in Vite-dev gaat /northsea via de lokale-agent-proxy, niet rechtstreeks naar Tailscale', async () => {
+    fetchAntwoordt(true);
+    expect(lokaleAgentFetchOrigin()).toBe('/proxy/lokale-agent');
+    expect(await agentBasis(VPS)).toBe('/proxy/lokale-agent');
   });
 });

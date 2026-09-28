@@ -1,0 +1,11 @@
+name: NorthSea Deal Execution Crew 2
+studio_id: 8c722284-b968-40d4-830f-aac179c21cfa
+studio_url: https://app.crewai.com/studio/v2/projects/8c722284-b968-40d4-830f-aac179c21cfa/editor
+process: sequential
+version: 1
+triggers: []
+exported: reconstructed-from-crew-studio-editor-2026-09-16
+notes: >
+  Handmatige Run in Crew Studio. Geen webhook-trigger. Geen secrets in dit bestand.
+  Inputs: deal_id (verplicht). deal_state_file en deal_state_json mogen leeg.
+default_llm: openai/gpt-5.6-luna

@@ -51,6 +51,14 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
+import re
+
+try:
+    import fcntl  # macOS/Linux; both supported agent hosts
+except ImportError:  # pragma: no cover
+    fcntl = None
 
 log = logging.getLogger("axe_core_api.agent_runner")
 
@@ -62,7 +70,7 @@ ALLOWED_PERMISSION_MODES = ("default", "acceptEdits", "plan")
 DEFAULT_PERMISSION_MODE = "acceptEdits"
 
 
-def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str) -> list:
+def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: str = "") -> list:
     """Codex-aanroep voor één modus.
 
     `default` en `acceptEdits` komen op hetzelfde uit, en dat staat hier met
@@ -73,6 +81,8 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str) -> list
     zijn naam belooft, zolang het maar ergens staat — hier dus.
     """
     cmd = [binary, "exec", str(prompt), "-C", ".", "-o", uitvoerbestand]
+    if model:
+        cmd += ["-m", model]
     if mode == "plan":
         cmd += ["-s", "read-only"]
     else:
@@ -80,34 +90,18 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str) -> list
     return cmd
 
 
-def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
-    return [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
+# Let op: hieronder stonden tot 16 september TWEE definities van _claude_cmd en
+# _cursor_cmd. Python houdt de laatste, dus de eerste twee waren dode code -- en
+# ze verschilden: de dode _cursor_cmd zette altijd --force en negeerde de modus,
+# de levende respecteert plan-modus (--mode ask --trust). Wie de bovenste las,
+# las het gedrag dat NIET draait. Weg, zodat er één waarheid staat.
+def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model: str = "") -> list:
+    cmd = [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
+    # Leeg = de CLI houdt zijn eigen standaard, die met een update meebeweegt.
+    return cmd + (["--model", model] if model else [])
 
 
-def _cursor_cmd(binary: str, prompt: str, _mode: str, _uitvoerbestand: str) -> list:
-    """Cursor-agent, niet-interactief.
-
-    Vlaggen nagelezen in Cursor's eigen documentatie (cursor.com/docs/cli/
-    reference/parameters, 11-9-2026): `-p/--print` voor niet-interactief,
-    `--output-format text|json|stream-json`, `-f/--force` om commando's toe te
-    staan zonder te vragen.
-
-    `--force` staat er altijd op en niet alleen buiten plan-modus, want zonder
-    die vlag blijft een headless run hangen op een goedkeuring die niemand
-    beantwoordt. Dat mag hier zonder voorbehoud, omdat plan-modus deze motor
-    helemaal niet bereikt -- zie "alleen_lezen" in ENGINES hieronder.
-
-    Geen werkmap-vlag: subprocess.run krijgt cwd=repo_path mee, net als bij
-    Claude. Codex heeft zijn `-C` omdat het daar wel nodig bleek.
-    """
-    return [binary, "-p", str(prompt), "--output-format", "json", "--force"]
-
-
-def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
-    return [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
-
-
-def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
+def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model: str = "") -> list:
     """Cursor-agent voor één modus.
 
     NIET GEMETEN OP DEZE HOST. Claude en Codex hierboven zijn allebei tegen een
@@ -126,7 +120,17 @@ def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> li
     vlag hangt hij op een prompt die nooit beantwoord wordt.
     """
     cmd = [binary, "-p", str(prompt), "--output-format", "json"]
-    if mode != "plan":
+    if model:
+        cmd += ["--model", model]
+    if mode == "plan":
+        # Gemeten 14 september, cursor-agent 2026.09.10: `--mode ask` in een
+        # wegwerp-repo met de opdracht "verwijder bewijs.txt". Hij las het
+        # bestand, antwoordde "Ask mode is alleen lezen", en git bleef schoon.
+        # `--mode plan` hield ook alles heel maar gaf alleen een plan terug; ask
+        # geeft een antwoord, en dat is wat chat en AXE Algo vragen. `--trust`
+        # omdat een headless run anders op de werkmap-vraag blijft staan.
+        cmd += ["--mode", "ask", "--trust"]
+    else:
         cmd += ["--force"]
     return cmd
 
@@ -138,12 +142,62 @@ ENGINES = {
         "bin_default": "claude",
         # Gemeten en gedocumenteerd in CLAUDE_CODE_SETUP.md: de CLI verkiest een
         # sleutel in zijn omgeving boven de `claude auth login`-sessie.
-        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+        # ANTHROPIC_BASE_URL en CLAUDECODE ook: gemeten 13 september erfde de API
+        # die vanuit een Claude-sessie gestart was, en dan liep een run via de
+        # proxy van die sessie in plaats van via het eigen abonnement.
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
         "cmd": _claude_cmd,
         "leest_bestand": False,
         "install": "npm i -g @anthropic-ai/claude-code",
         "login": "claude auth login",
         # --permission-mode plan laat hem lezen en niets schrijven.
+        "alleen_lezen": True,
+    },
+    "claude2": {
+        # Een tweede Claude-abonnement op dezelfde Mac. Claude Code bewaart zijn
+        # login per CLAUDE_CONFIG_DIR -- gemeten 13 september: met een eigen map
+        # zegt `claude auth status` loggedIn false terwijl de gewone login Pro is.
+        # Eenmalig inloggen, in vak 3 (Mac · agents):
+        #   CLAUDE_CONFIG_DIR=~/.claude-tweede claude auth login
+        "label": "Claude Code 2",
+        "bin_env": "CLAUDE_BIN",
+        "bin_default": "claude",
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
+        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE2_CONFIG_DIR", "~/.claude-tweede"))},
+        "cmd": _claude_cmd,
+        "leest_bestand": False,
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "login": "CLAUDE_CONFIG_DIR=~/.claude-tweede claude auth login",
+        "alleen_lezen": True,
+    },
+    "claude3": {
+        # Een derde Claude-abonnement, zelfde opzet als claude2 (14 september):
+        # eigen loginmap, dus een los limiet. Eenmalig inloggen in vak 3:
+        #   CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login
+        "label": "Claude Code 3",
+        "bin_env": "CLAUDE_BIN",
+        "bin_default": "claude",
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
+        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE3_CONFIG_DIR", "~/.claude-derde"))},
+        "cmd": _claude_cmd,
+        "leest_bestand": False,
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "login": "CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login",
+        "alleen_lezen": True,
+    },
+    "claude4": {
+        # Een vierde Claude-abonnement, zelfde opzet als claude2/claude3.
+        # Eenmalig inloggen in vak 3:
+        #   CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login
+        "label": "Claude Code 4",
+        "bin_env": "CLAUDE_BIN",
+        "bin_default": "claude",
+        "blocked_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDECODE"),
+        "extra_env": {"CLAUDE_CONFIG_DIR": os.path.expanduser(os.environ.get("CLAUDE4_CONFIG_DIR", "~/.claude-vierde"))},
+        "cmd": _claude_cmd,
+        "leest_bestand": False,
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "login": "CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login",
         "alleen_lezen": True,
     },
     "codex": {
@@ -160,6 +214,39 @@ ENGINES = {
         "install": "npm i -g @openai/codex",
         "login": "codex login",
         # -s read-only, hun eigen sandbox-stand.
+        "alleen_lezen": True,
+    },
+    "codex2": {
+        # Een tweede ChatGPT-abonnement op dezelfde Mac. Codex bewaart zijn
+        # login (auth.json) onder CODEX_HOME -- gemeten 16 september: met een
+        # eigen map zegt `codex doctor` dat CODEX_HOME daarheen wijst, dus een
+        # tweede map is een tweede sessie en dus een tweede limiet.
+        # Eenmalig inloggen, in vak 3 (Mac - agents):
+        #   CODEX_HOME=~/.codex-tweede codex login
+        "label": "Codex 2",
+        "bin_env": "CODEX_BIN",
+        "bin_default": "codex",
+        "blocked_env": ("OPENAI_API_KEY", "OPENAI_BASE_URL"),
+        "extra_env": {"CODEX_HOME": os.path.expanduser(os.environ.get("CODEX2_HOME", "~/.codex-tweede"))},
+        "cmd": _codex_cmd,
+        "leest_bestand": True,
+        "install": "npm i -g @openai/codex",
+        "login": "CODEX_HOME=~/.codex-tweede codex login",
+        "alleen_lezen": True,
+    },
+    "codex3": {
+        # Een derde ChatGPT-abonnement, zelfde opzet als codex2. Eenmalig
+        # inloggen in vak 3 (Mac - agents):
+        #   CODEX_HOME=~/.codex-derde codex login
+        "label": "Codex 3",
+        "bin_env": "CODEX_BIN",
+        "bin_default": "codex",
+        "blocked_env": ("OPENAI_API_KEY", "OPENAI_BASE_URL"),
+        "extra_env": {"CODEX_HOME": os.path.expanduser(os.environ.get("CODEX3_HOME", "~/.codex-derde"))},
+        "cmd": _codex_cmd,
+        "leest_bestand": True,
+        "install": "npm i -g @openai/codex",
+        "login": "CODEX_HOME=~/.codex-derde codex login",
         "alleen_lezen": True,
     },
     "cursor": {
@@ -187,7 +274,9 @@ ENGINES = {
         # stellen herschrijft nooit bestanden -- is het enige wat hem veilig
         # maakt. Een motor die dat niet kan waarmaken hoort daar te weigeren,
         # niet stilletjes schrijfrechten mee te brengen.
-        "alleen_lezen": False,
+        # Achterhaald sinds cursor-agent `--mode ask` heeft (zie _cursor_cmd):
+        # die stand leest en weigert te schrijven, gemeten op 14 september.
+        "alleen_lezen": True,
     },
 }
 
@@ -215,6 +304,10 @@ def _repos() -> dict:
     return out
 
 
+# Hoe lang een run op een bezette motor mag wachten voor hij opgeeft.
+MOTOR_WACHT = int(os.environ.get("AGENT_MOTOR_WACHT", "600"))
+
+
 def _stderr_staart(stderr: str, n: int = 500) -> str:
     """Het stuk van stderr dat de fout noemt: het EINDE, zonder MCP-ruis.
 
@@ -229,10 +322,20 @@ def _stderr_staart(stderr: str, n: int = 500) -> str:
     return "\n".join(regels)[-n:]
 
 
-def _subprocess_env(blocked: tuple) -> dict:
+_MOTOR_SLOTEN: dict[str, threading.Lock] = {}
+_SLOTEN_SLOT = threading.Lock()
+
+
+def _motor_slot(naam: str) -> threading.Lock:
+    with _SLOTEN_SLOT:
+        return _MOTOR_SLOTEN.setdefault(naam, threading.Lock())
+
+
+def _subprocess_env(blocked: tuple, extra: dict | None = None) -> dict:
     env = os.environ.copy()
     for key in blocked:
         env.pop(key, None)
+    env.update(extra or {})
     return env
 
 
@@ -242,15 +345,47 @@ def _current_branch(repo_path: str) -> str:
     Leeg bij een pad dat geen git-worktree is of waar git niet kan antwoorden;
     aanroepers lezen dat als een weigering, niet als toestemming.
     """
+    # Eerst .git/HEAD zelf lezen. Gemeten 14 september: `git rev-parse` op de
+    # repo's op de USB-SSD liep telkens tegen de 15s time-out terwijl er een
+    # agent in een andere repo werkte, en /claude/repos (een async route) hield
+    # daarmee de hele API 45 seconden stil. HEAD lezen is één klein bestand.
+    branch = _branch_uit_head(repo_path)
+    if branch is not None:
+        return branch
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=repo_path, capture_output=True, text=True, timeout=15,
+            cwd=repo_path, capture_output=True, text=True, timeout=5,
         )
     except Exception as e:  # noqa: BLE001
         log.warning("branch check failed in %s: %s", repo_path, e)
         return ""
     return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def _branch_uit_head(repo_path: str) -> str | None:
+    """De branch uit .git/HEAD, ook in een worktree (.git is dan een bestand met gitdir).
+
+    None als het geen gewone branch-HEAD is (losgekoppeld, of onleesbaar): dan
+    beslist git zelf. "HEAD" wordt nooit teruggegeven als branchnaam.
+    """
+    try:
+        git = os.path.join(repo_path, ".git")
+        if os.path.isfile(git):
+            with open(git, "r", encoding="utf-8") as f:
+                regel = f.read().strip()
+            if not regel.startswith("gitdir:"):
+                return None
+            git = regel.split(":", 1)[1].strip()
+            if not os.path.isabs(git):
+                git = os.path.normpath(os.path.join(repo_path, git))
+        with open(os.path.join(git, "HEAD"), "r", encoding="utf-8") as f:
+            head = f.read().strip()
+    except OSError:
+        return None
+    if head.startswith("ref: refs/heads/"):
+        return head[len("ref: refs/heads/"):]
+    return None
 
 
 def _binary(engine: dict) -> str | None:
@@ -261,12 +396,132 @@ def _binary(engine: dict) -> str | None:
     return naam if os.path.isabs(naam) and os.path.exists(naam) else None
 
 
+
+# ── Subscription usage ledger ────────────────────────────────────────────────
+# The CLIs do not expose a trustworthy "47% of weekly subscription left"
+# endpoint. AXE therefore records what IT actually used and any real limit
+# message the CLI emitted. No prompt/result content is persisted here.
+_AGENT_USAGE_FILE = os.path.expanduser(
+    os.environ.get("AXE_AGENT_USAGE_FILE", "~/.axe/agent-usage.json")
+)
+_AGENT_USAGE_LOCK = threading.Lock()
+_AGENT_USAGE_MAX_EVENTS = 2000
+
+
+def _usage_state() -> dict:
+    try:
+        with open(_AGENT_USAGE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {"events": []}
+    except (OSError, ValueError, TypeError):
+        return {"events": []}
+
+
+def _usage_transaction(mutator):
+    directory = os.path.dirname(_AGENT_USAGE_FILE) or "."
+    os.makedirs(directory, exist_ok=True)
+    lock_path = _AGENT_USAGE_FILE + ".lock"
+    with _AGENT_USAGE_LOCK:
+        with open(lock_path, "a+", encoding="utf-8") as lock:
+            if fcntl is not None:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                state = _usage_state()
+                result = mutator(state)
+                tmp = _AGENT_USAGE_FILE + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as out:
+                    json.dump(state, out, separators=(",", ":"))
+                os.replace(tmp, _AGENT_USAGE_FILE)
+                return result
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def _limit_message(text: str) -> str | None:
+    if not re.search(r"usage limit|rate limit|quota exceeded|too many requests|\b429\b", text or "", re.I):
+        return None
+    # Keep the useful clause (often contains "try again at …"), never the whole
+    # stderr transcript.
+    clean = " ".join((text or "").split())
+    m = re.search(r"(.{0,90}(?:usage limit|rate limit|quota exceeded|too many requests|\b429\b).{0,180})", clean, re.I)
+    return (m.group(1) if m else clean)[:280]
+
+
+def _record_agent_usage(engine: str, repo: str, result: dict, started_at: float, model: str = "") -> None:
+    meta = result.get("meta") if isinstance(result, dict) else None
+    usage = meta.get("usage") if isinstance(meta, dict) and isinstance(meta.get("usage"), dict) else {}
+    errorish = str(result.get("error") or (result.get("result") if result.get("status") == "error" else "") or "")
+    event = {
+        "ts": time.time(),
+        "engine": engine,
+        "repo": repo,
+        "status": result.get("status") or "error",
+        "duration_s": round(max(0.0, time.time() - started_at), 2),
+        "model": model or None,
+        "input_tokens": usage.get("input_tokens"),
+        "output_tokens": usage.get("output_tokens"),
+        "cache_read_tokens": usage.get("cache_read_input_tokens"),
+        "limit_message": _limit_message(errorish),
+    }
+
+    def mutate(state):
+        events = state.setdefault("events", [])
+        events.append(event)
+        state["events"] = events[-_AGENT_USAGE_MAX_EVENTS:]
+
+    try:
+        _usage_transaction(mutate)
+    except Exception as e:  # noqa: BLE001
+        log.warning("agent usage ledger write failed: %s", str(e)[:160])
+
+
+def agent_usage_status() -> dict:
+    """Privacy-safe observed usage per subscription seat.
+
+    Counts are AXE runs, not vendor billing percentages. Exact remaining plan
+    quota is deliberately reported as unavailable unless a CLI starts exposing
+    it machine-readably.
+    """
+    state = _usage_state()
+    events = state.get("events") if isinstance(state.get("events"), list) else []
+    now = time.time()
+    out = {}
+    for name, motor in ENGINES.items():
+        own = [e for e in events if isinstance(e, dict) and e.get("engine") == name]
+        day = [e for e in own if float(e.get("ts") or 0) >= now - 86400]
+        week = [e for e in own if float(e.get("ts") or 0) >= now - 7 * 86400]
+        last = max(own, key=lambda e: float(e.get("ts") or 0), default=None)
+        limits = [e for e in own if e.get("limit_message")]
+        last_limit = max(limits, key=lambda e: float(e.get("ts") or 0), default=None)
+
+        def isum(rows, key):
+            return sum(int(e.get(key) or 0) for e in rows)
+
+        out[name] = {
+            "label": motor["label"],
+            "runs_24h": len(day),
+            "runs_7d": len(week),
+            "ok_7d": sum(1 for e in week if e.get("status") == "ok"),
+            "failed_7d": sum(1 for e in week if e.get("status") != "ok"),
+            "input_tokens_7d": isum(week, "input_tokens"),
+            "output_tokens_7d": isum(week, "output_tokens"),
+            "last_run_at": last.get("ts") if last else None,
+            "last_status": last.get("status") if last else None,
+            "last_limit_at": last_limit.get("ts") if last_limit else None,
+            "last_limit_message": last_limit.get("limit_message") if last_limit else None,
+            "exact_remaining_available": False,
+            "remaining_note": "De CLI geeft geen exact resterend abonnementssaldo machine-readable terug.",
+        }
+    return out
+
 def run_agent(
     repo: str,
     prompt: str,
     permission_mode: str = None,
     timeout: int = None,
     engine: str = DEFAULT_ENGINE,
+    model: str = "",
 ) -> dict:
     """Draai één sessie van `engine` in `repo`.
 
@@ -297,7 +552,7 @@ def run_agent(
 
     if not os.path.isdir(repo_path):
         return {"status": "error", "error": f"Repo '{repo}' wijst naar {repo_path}, dat hier niet bestaat."}
-    if not os.path.isdir(os.path.join(repo_path, ".git")):
+    if not _is_checkout(repo_path):
         return {"status": "error", "error": f"Repo '{repo}' ({repo_path}) is geen git-checkout."}
 
     mode = (permission_mode or DEFAULT_PERMISSION_MODE).strip()
@@ -342,6 +597,26 @@ def run_agent(
         }
 
     limit = int(timeout or DEFAULT_TIMEOUT)
+
+    # Eén sessie per abonnement tegelijk. Gemeten 13 september: zes gelijktijdige
+    # `codex exec`-runs van de trading-desk maakten het limiet in een uur op. De
+    # app verdeelt de abonnementen nu over de agents (domain/agentMotoren.ts);
+    # dit is het vangnet als er tóch twee tegelijk komen: de tweede wacht.
+    slot = _motor_slot(motornaam)
+    begin = time.monotonic()
+    if not slot.acquire(timeout=MOTOR_WACHT):
+        return {"status": "error", "engine": motornaam, "repo": repo, "branch": branch,
+                "error": f"{motor['label']} was {MOTOR_WACHT}s bezig met een andere run; deze is niet gestart."}
+    gewacht = round(time.monotonic() - begin, 1)
+    if gewacht >= 1:
+        log.info("%s: %.1fs gewacht op een andere run", motornaam, gewacht)
+
+    run_started = time.time()
+
+    def finish(result: dict) -> dict:
+        _record_agent_usage(motornaam, repo, result, run_started, (model or "").strip())
+        return result
+
     uitvoer = ""
     tmp = None
     try:
@@ -349,9 +624,9 @@ def run_agent(
             fd, tmp = tempfile.mkstemp(prefix="axe-agent-", suffix=".txt")
             os.close(fd)
 
-        cmd = motor["cmd"](binary, prompt, mode, tmp or "")
+        cmd = motor["cmd"](binary, prompt, mode, tmp or "", (model or "").strip())
         proc = subprocess.run(
-            cmd, cwd=repo_path, env=_subprocess_env(motor["blocked_env"]),
+            cmd, cwd=repo_path, env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")),
             capture_output=True, text=True, timeout=limit,
         )
 
@@ -362,10 +637,11 @@ def run_agent(
             except Exception as e:  # noqa: BLE001
                 log.warning("kon %s niet lezen: %s", tmp, e)
     except subprocess.TimeoutExpired:
-        return {"status": "error", "error": f"{motor['label']} liep langer dan {limit}s", "repo": repo, "branch": branch, "engine": motornaam}
+        return finish({"status": "error", "error": f"{motor['label']} liep langer dan {limit}s", "repo": repo, "branch": branch, "engine": motornaam})
     except Exception as e:  # noqa: BLE001
-        return {"status": "error", "error": f"{type(e).__name__}: {e}", "repo": repo, "branch": branch, "engine": motornaam}
+        return finish({"status": "error", "error": f"{type(e).__name__}: {e}", "repo": repo, "branch": branch, "engine": motornaam})
     finally:
+        slot.release()
         if tmp and os.path.exists(tmp):
             try:
                 os.unlink(tmp)
@@ -377,15 +653,15 @@ def run_agent(
 
     if motor["leest_bestand"]:
         if proc.returncode != 0 and not uitvoer:
-            return {**basis, "status": "error",
-                    "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"}
-        return {**basis, "status": "error" if proc.returncode != 0 else "ok",
-                "result": (uitvoer or stdout)[:8000]}
+            return finish({**basis, "status": "error",
+                    "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"})
+        return finish({**basis, "status": "error" if proc.returncode != 0 else "ok",
+                "result": (uitvoer or stdout)[:8000]})
 
     # Claude: JSON op stdout.
     if proc.returncode != 0 and not stdout:
-        return {**basis, "status": "error",
-                "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"}
+        return finish({**basis, "status": "error",
+                "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"})
 
     try:
         parsed = json.loads(stdout) if stdout else None
@@ -395,8 +671,8 @@ def run_agent(
     if parsed is None:
         # --output-format json houdt normaal stand, maar een versiewissel of een
         # wrapper op PATH mag geen verzonnen succes worden.
-        return {**basis, "status": "error" if proc.returncode != 0 else "ok",
-                "result": stdout[:8000], "raw": True}
+        return finish({**basis, "status": "error" if proc.returncode != 0 else "ok",
+                "result": stdout[:8000], "raw": True})
 
     mislukt = proc.returncode != 0
     result_text = ""
@@ -409,9 +685,9 @@ def run_agent(
         if parsed.get("is_error") is True:
             mislukt = True
 
-    return {**basis, "status": "error" if mislukt else "ok",
+    return finish({**basis, "status": "error" if mislukt else "ok",
             "result": result_text or stdout[:8000],
-            "meta": parsed if isinstance(parsed, dict) else None}
+            "meta": parsed if isinstance(parsed, dict) else None})
 
 
 def _git(repo_path: str, *args: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -444,7 +720,7 @@ def _repo_pad(repo: str) -> tuple:
     if not repo or repo not in repos:
         return None, None, f"Onbekende repo '{repo}'. Toegestaan: {', '.join(sorted(repos)) or '(geen)'}"
     pad = repos[repo]
-    if not os.path.isdir(os.path.join(pad, ".git")):
+    if not _is_checkout(pad):
         return None, None, f"Repo '{repo}' ({pad}) is geen git-checkout."
     branch = _current_branch(pad)
     if not branch:
@@ -572,12 +848,22 @@ def whitelisted_repos() -> dict:
     return _repos()
 
 
+def _is_checkout(pad: str) -> bool:
+    """Een git-checkout: `.git` als map, of als bestand in een worktree.
+
+    Gemeten 14 september: de agent-werkkopieën in /Volumes/EagetSSD/agent-werk
+    zijn worktrees, en daar is `.git` een bestand met "gitdir: ...". isdir gaf
+    False en alle drie heetten "bestaat niet".
+    """
+    return os.path.exists(os.path.join(pad, ".git"))
+
+
 def repo_status() -> dict:
     """Wat /health eerlijk moet kunnen zeggen: welke repo's er staan, of ze
     bestaan, en op welke branch ze nu zitten."""
     out = {}
     for name, path in sorted(whitelisted_repos().items()):
-        exists = os.path.isdir(os.path.join(path, ".git"))
+        exists = _is_checkout(path)
         branch = _current_branch(path) if exists else ""
         out[name] = {
             "path": path,

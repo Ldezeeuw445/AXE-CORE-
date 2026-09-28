@@ -8,6 +8,12 @@ repository = ""
 edition = "2021"
 rust-version = "1.70"
 
+# Mobiel (Android/iOS) heeft een library-target nodig die de app-logica draagt
+# en een .so voor het toestel maakt; de desktop-binary (main.rs) roept run() aan.
+[lib]
+name = "axe_core_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
 
@@ -20,6 +26,14 @@ serde_json = "1.0"
 # wel doorzichtig maar zie je je bureaublad SCHERP -- en dat is geen matglas.
 [target."cfg(target_os = \"macos\")".dependencies]
 window-vibrancy = "0.5"
+
+# De globale sneltoets (Option+Space) die de mic opent terwijl een ANDERE app
+# voorop staat. Bewust NIET bij de gewone dependencies: op Android en iOS
+# bestaat er geen systeembrede sneltoets, en de crate bouwt daar niet. Deze
+# cfg is precies het spiegelbeeld van `#[cfg(desktop)]` in lib.rs, zodat de
+# import en het gebruik altijd samen aan of samen uit staan.
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-global-shortcut = "2"
 
 [features]
 default = ["custom-protocol"]

@@ -12,10 +12,15 @@ import logging
 import subprocess
 import tempfile
 
+from zuinig import Bezet, lagere_prioriteit, slot
+
 log = logging.getLogger("axe_core_api.crew_runner")
 CREW_VENV_PY = os.environ.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3")
 RUNNER = os.path.join(os.path.dirname(__file__), "run_crew.py")
-CREW_TIMEOUT = int(os.environ.get("CREW_TIMEOUT", "600"))
+# 300 en niet 600: de app wacht hooguit 90 s op een crew. Wat daarna nog
+# tien minuten doorliep hield alleen een slot bezet (zie zuinig.py).
+CREW_TIMEOUT = int(os.environ.get("CREW_TIMEOUT", "300"))
+CREW_MAX = int(os.environ.get("CREW_MAX", "2"))
 
 
 def run_crew(task: str, context: str | None = None, conversation: list | None = None, specialists: list | None = None) -> dict:
@@ -41,10 +46,12 @@ def run_crew(task: str, context: str | None = None, conversation: list | None = 
         result_file = tempfile.NamedTemporaryFile("r", suffix=".json", delete=False)
         result_file.close()
 
-        proc = subprocess.run(
-            [CREW_VENV_PY, RUNNER, payload_file.name, result_file.name],
-            capture_output=True, text=True, timeout=CREW_TIMEOUT,
-        )
+        with slot("crew", CREW_MAX, wacht_s=10, sleutel=str(task)):
+            proc = subprocess.run(
+                [CREW_VENV_PY, RUNNER, payload_file.name, result_file.name],
+                capture_output=True, text=True, timeout=CREW_TIMEOUT,
+                preexec_fn=lagere_prioriteit,
+            )
 
         out = ""
         try:
@@ -59,6 +66,8 @@ def run_crew(task: str, context: str | None = None, conversation: list | None = 
             except json.JSONDecodeError:
                 return {"status": "error", "error": f"Bad crew output: {out[:500]}"}
         return {"status": "error", "error": f"No result from crew. stderr: {proc.stderr[:500]}"}
+    except Bezet as e:
+        return {"status": "error", "error": f"Crew niet gestart: {e}"}
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": f"Crew run timed out after {CREW_TIMEOUT}s"}
     except Exception as e:  # noqa: BLE001

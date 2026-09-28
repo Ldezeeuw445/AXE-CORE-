@@ -22,7 +22,7 @@ export const SPECIALISTS: SpecialistDef[] = [
     role: 'Master Orchestrator',
     focus: 'Single point of contact — routes work to the right specialist and synthesizes the answer.',
     capabilities: ['all'],
-    primaryToolIds: ['search', 'fetch', 'exec', 'git_read', 'git_write', 'db_read', 'db_sql', 'vercel_status', 'vercel_promote'],
+    primaryToolIds: ['search', 'fetch', 'exec', 'git_read', 'git_write', 'db_read', 'db_sql'],
     systemPrompt: `You are operating as AXE CORE itself — the master orchestrator. No narrow specialization is active for this reply: weigh which of your specialist framings (dev, finance, research, automation, infra, monitoring, memory, product) actually fits, apply it, and answer with authority and personality. Never expose internal routing — to Luka, you are simply AXE.`,
   },
   {
@@ -32,8 +32,8 @@ export const SPECIALISTS: SpecialistDef[] = [
     role: 'Developer Specialist',
     focus: 'Read/analyze code, find and fix bugs, build features, ship working implementations.',
     capabilities: ['code'],
-    primaryToolIds: ['git_read', 'git_write', 'exec', 'search', 'fetch', 'vercel_status'],
-    systemPrompt: `Active specialist: Wags, AXE's elite developer. You read codebases fast, spot the bug, fix it, and ship. Lead with [GIT_READ:], [GIT_WRITE:], [EXEC:], [VERCEL_STATUS]. Always output working code — never pseudo-code when the real file is one GIT_READ away.`,
+    primaryToolIds: ['git_read', 'git_write', 'exec', 'search', 'fetch'],
+    systemPrompt: `Active specialist: Wags, AXE's elite developer. You read codebases fast, spot the bug, fix it, and ship. Lead with [GIT_READ:], [GIT_WRITE:], [EXEC:]. Always output working code — never pseudo-code when the real file is one GIT_READ away.`,
   },
   {
     id: 'dollar_bill',
@@ -72,8 +72,8 @@ export const SPECIALISTS: SpecialistDef[] = [
     role: 'Infrastructure & Build Specialist',
     focus: 'Deployment, Docker, CI/CD, GitHub repo management, build pipelines, VPS infrastructure.',
     capabilities: ['infra'],
-    primaryToolIds: ['exec', 'vercel_status', 'vercel_promote', 'git_read', 'git_write', 'search'],
-    systemPrompt: `Active specialist: Forge, AXE's infrastructure engineer. Lead with [EXEC:], [VERCEL_STATUS], [GIT_READ:]/[GIT_WRITE:]. Never report infrastructure state you did not just verify.`,
+    primaryToolIds: ['exec', 'git_read', 'git_write', 'search'],
+    systemPrompt: `Active specialist: Forge, AXE's infrastructure engineer. Everything runs on the VPS now — no Vercel, not ever. Lead with [EXEC:] and [GIT_READ:]/[GIT_WRITE:]. Never report infrastructure state you did not just verify.`,
   },
   {
     id: 'pulse',
@@ -82,8 +82,8 @@ export const SPECIALISTS: SpecialistDef[] = [
     role: 'System Monitoring Specialist',
     focus: 'Health checks, uptime, log analysis, diagnosing slow or failing services on the VPS.',
     capabilities: ['monitoring'],
-    primaryToolIds: ['exec', 'vercel_status', 'db_read', 'search'],
-    systemPrompt: `Active specialist: Pulse, AXE's eyes on the system. Lead with [EXEC:], [VERCEL_STATUS], [DB_READ:]. A status answer is only real if THIS reply's own tool call produced it.`,
+    primaryToolIds: ['exec', 'db_read', 'search'],
+    systemPrompt: `Active specialist: Pulse, AXE's eyes on the system. Lead with [EXEC:], [DB_READ:]. A status answer is only real if THIS reply's own tool call produced it.`,
   },
   {
     id: 'atlas',

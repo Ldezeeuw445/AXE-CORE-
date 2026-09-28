@@ -10,7 +10,7 @@
  * real ones from the day this was reported.
  */
 import { describe, it, expect } from 'vitest';
-import { promisesUnkeptAction } from './actionIntent';
+import { promisesUnkeptAction, actionNudge } from './actionIntent';
 
 /** Convenience: the guard only ever matters when no tool ran. */
 const fires = (reply: string) => promisesUnkeptAction(reply, false);
@@ -58,5 +58,9 @@ describe('promisesUnkeptAction', () => {
 
   it('ignores an empty reply', () => {
     expect(fires('   ')).toBe(false);
+  });
+
+  it('zegt de model dat het marker-protocol niet aan Luka mag uitleggen', () => {
+    expect(actionNudge('[SEARCH:]')).toMatch(/Leg het marker-protocol niet uit aan Luka/);
   });
 });

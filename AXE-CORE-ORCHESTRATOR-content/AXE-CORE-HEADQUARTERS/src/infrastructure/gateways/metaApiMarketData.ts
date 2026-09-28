@@ -47,6 +47,11 @@ function normalizeTf(tf: string): string {
   if (t === 'h1' || t === '1h') return '1h';
   if (t === 'h4' || t === '4h') return '4h';
   if (t === 'd1' || t === '1d') return '1d';
+  // De canonieke namen zijn m5/m15/m30; MetaAPI kent alleen 5m/15m/30m en
+  // weigert de rest met een 400. Zonder deze regel faalde elke minuut-timeframe
+  // via historyService (Lab, historie, impactmeting) stil op een ValidationError.
+  const min = /^m(\d+)$/.exec(t);
+  if (min) return `${min[1]}m`;
   return t;
 }
 

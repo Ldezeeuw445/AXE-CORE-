@@ -27,22 +27,24 @@ buildGlobalMemoryContext → buildDurableMemoryContext → searchGlobalBrain
   → noteRetrieval      ← hier ontstaat de beurt
 ```
 
-Daarna sluit `noteTurnOutcome` hem af met 'good' of 'poor'.
+Daarna sluit `noteTurnOutcome` of `noteOwnerOutcome` hem af met 'good' of
+'poor'. `noteRetrieval` opent tegelijk een episode in Supabase, zodat de
+versterking (`applyAgentReinforcement`) dezelfde beurt ziet. Het episode-id
+komt later binnen — ophalen is synchroon, `openEpisode` niet — en hangt dan
+aan de beurt. Was het oordeel er al, dan wordt de episode alsnog gesloten.
 
-Handel loopt via episodes: `buildTradingAgentContextWithEpisode` → `openEpisode`
-→ `closeTradingEpisodeForTrade` (zoekt terug op symbool plus openingstijd, dus
-het episode-id hoeft niet meegedragen te worden) → `applyAgentReinforcement`,
-dat het gewicht van een herinnering verhoogt. **Alleen omhoog, nooit omlaag.**
+Handel loopt via zijn eigen episodes: `buildTradingAgentContextWithEpisode` →
+`openEpisode` → `closeTradingEpisodeForTrade` (zoekt terug op symbool plus
+openingstijd, dus het episode-id hoeft niet meegedragen te worden) →
+`applyAgentReinforcement`, dat het gewicht van een herinnering verhoogt.
+**Alleen omhoog, nooit omlaag.**
 
 ## Wat er nog niet klopt
 
-Alleen handel voedt die versterking. Chat, browser en code-editor leggen hun
-beurten wél netjes vast, maar in de browseropslag — en de versterking leest
-alleen Supabase. Die beurten worden dus opgeschreven en er gebeurt nooit iets
-mee, en op een tweede computer beginnen ze weer bij nul.
-
-AXE Core leert op dit moment dus alleen van handelen. De reparatie is een
-koppeling, geen herbouw: de twee vormen passen op elkaar.
+De koppeling staat er. Wat nog openstaat is gebruik, niet de brug: browser,
+code-editor en research hebben (gemeten 23 september) nul rijen, en van de
+twee chat-episodes die er wél waren was er tot de race-fix geen enkele
+gesloten. Zonder sluiten leert de versterking nog steeds niets van chat.
 
 ## Waar het staat
 

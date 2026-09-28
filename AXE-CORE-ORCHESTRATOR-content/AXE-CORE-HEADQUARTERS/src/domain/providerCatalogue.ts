@@ -49,6 +49,10 @@ export const PROVIDER_KEY_CATALOGUE: ProviderInvoer[] = [
   { id: 'abonnement',  name: 'Abonnement (CLI)', icon: 'Terminal', accent: '#22D3EE', placeholder: '(geen key — je bent ingelogd)', defaultModel: STANDAARD_MOTOR, docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     icon: 'Search', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
   { id: 'elevenlabs',  name: 'ElevenLabs',     icon: 'Mic', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
+  { id: 'cartesia',    name: 'Cartesia',       icon: 'Mic', accent: '#22D3EE', placeholder: 'sk_car_...',          defaultModel: 'sonic-3',                    docsUrl: 'https://play.cartesia.ai/keys',               free: false, needsKey: true },
   { id: 'tavily',      name: 'Tavily Search',  icon: 'Globe', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
+  // Onderzoek met bronnen, geen chatmodel. De sleutel staat op de VPS
+  // (PERPLEXITY_API_KEY) en mag niet in de browser — zie perplexityResearchService.
+  { id: 'perplexity',  name: 'Perplexity',     icon: 'Compass', accent: '#1FB8A5', placeholder: '(server-managed credential)', defaultModel: 'Research / web intelligence', docsUrl: 'https://docs.perplexity.ai',              free: false, needsKey: false },
   { id: 'axon',        name: 'AXON Memory',    icon: 'Brain', accent: '#14B8A6', placeholder: 'axon_live_...',       defaultModel: '',                           docsUrl: 'https://app.axon-memory.com',             free: true,  needsKey: true },
 ];

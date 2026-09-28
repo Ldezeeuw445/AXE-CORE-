@@ -11,6 +11,7 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { beginChatTurn, isCurrentChatTurn } from '@/presentation/store/chatTurn';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 
 let installed = false;
 
@@ -55,7 +56,9 @@ export function installLiveChat() {
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
 
-      // Interrupt speech so the new turn feels immediate
+      // Interrupt speech so the new turn feels immediate — George too, not
+      // only the dead Fish/ElevenLabs paths.
+      stopGlobalTts();
       stopTTS();
       stopFishAudio();
 

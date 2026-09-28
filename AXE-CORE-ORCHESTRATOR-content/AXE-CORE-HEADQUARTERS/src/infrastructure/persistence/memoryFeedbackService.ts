@@ -27,7 +27,8 @@
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
-import { LOOP_AGENTS, type LoopAgent } from '@/domain/memory/agentLoop';
+import { type LoopAgent, isLoopAgent } from '@/domain/memory/agentLoop';
+import { AGENT_CATALOG } from '@/domain/agents/catalog';
 
 const LS_KEY = 'axe_memory_feedback_v1';
 const MAX_TURNS = 60;
@@ -113,8 +114,63 @@ function newTurnId(): string {
  */
 export function loopAgentVoor(owner: string | undefined): LoopAgent | null {
   if (!owner) return null;
-  if (owner === 'local-code') return 'code-editor';
-  return (LOOP_AGENTS as readonly string[]).includes(owner) ? (owner as LoopAgent) : null;
+
+  // Legacy names that predate the canonical roster. Keep these at the boundary
+  // rather than growing another hand-maintained agent list.
+  if (
+    owner === 'local-code' || owner === 'code-editor' || owner === 'code_agent'
+    || owner === 'axe_code' || owner === 'axe_developer'
+  ) return 'code-editor';
+  if (owner === 'chat' || owner === 'global' || owner === 'axe_core' || owner === 'axe-core') return 'chat';
+  if (owner === 'research' || owner === 'axe_research') return 'research';
+  if (owner === 'axe_algo') return 'trading';
+  if (owner === 'browser_agent') return 'browser';
+  if (owner === 'crewai_manager') return 'wingman';
+  // defaultAgents.ts's memory_namespace strings drift from this file's/
+  // roster.ts's own naming ('tasks' vs 'task', 'thinkthanks' vs 'thinktank')
+  // -- found by hand-tracing loopAgentVoor for every DEFAULT_AGENTS row after
+  // the 22-23 sep 2026 wiring pass, the same class of false "not wired yet"
+  // that AXE Core's own 'axe-core'/'axe_core' mismatch (fixed just above)
+  // already caused once. Aliased here rather than renaming defaultAgents.ts,
+  // since that id is also the Supabase memory table prefix in places.
+  if (owner === 'tasks') return 'task';
+  if (owner === 'thinkthanks' || owner === 'thinkthanks-agent') return 'thinktank';
+
+  // Current chat/routing code passes namespaceFor(agent), not the agent id.
+  // Resolve that namespace through the canonical catalog so adding/renaming a
+  // roster agent does not require a second status list here.
+  const catalog = AGENT_CATALOG.find(a =>
+    a.kind === 'core' && (a.id === owner || a.namespace === owner),
+  );
+  if (!catalog) return isLoopAgent(owner) ? owner : null;
+  if (catalog.id === 'axe') return 'chat';
+  if (catalog.id === 'developer') return 'code-editor';
+  return isLoopAgent(catalog.id) ? catalog.id : null;
+}
+
+/**
+ * Oordeel dat binnenkwam voordat de beurt bestond.
+ *
+ * voiceStore geeft geheugen 500ms; het antwoord is er vaak eerder. Dan roept
+ * hij latestOpenTurnId aan en krijgt null -- het oordeel verdween, en de
+ * episode die daarna wél openging bleef voor altijd op unknown staan.
+ * Gemeten 23 september: twee chat-episodes, beide geopend, geen gesloten.
+ */
+const PENDING_TTL_MS = 45_000;
+const pendingByOwner = new Map<string, { verdict: TurnVerdict; at: number }>();
+
+function takePending(owner: string | undefined): TurnVerdict | null {
+  if (!owner) return null;
+  const p = pendingByOwner.get(owner);
+  if (!p) return null;
+  pendingByOwner.delete(owner);
+  if (Date.now() - p.at > PENDING_TTL_MS) return null;
+  return p.verdict;
+}
+
+/** Alleen voor tests: een uitgesteld oordeel mag niet in de volgende case lekken. */
+export function wisUitgesteldOordeel(): void {
+  pendingByOwner.clear();
 }
 
 export function noteRetrieval(
@@ -146,10 +202,11 @@ export function noteRetrieval(
   const agent = loopAgentVoor(owner);
   const ids = memoryIds.filter((x): x is string => !!x);
   const keys = memoryKeys.filter((x): x is string => !!x);
-  // Geen herinneringen betekent niets om te versterken. Zo'n episode zou een
-  // rij zijn die nooit iets kan opleveren, en hij zou de tellingen per agent
-  // vertekenen -- dan lijkt er geleerd te worden waar niets viel te leren.
-  if (agent && (ids.length || keys.length)) {
+  // Ook zonder herinneringen. Anders blijft chat onzichtbaar in
+  // agent_learning_episodes wanneer RAG niets teruggeeft -- het meetcriterium
+  // van bouwlijst 2.0. Versterking slaat lege episodes over
+  // (pendingForReinforcement); openen bewijst alleen dat de lus liep.
+  if (agent) {
     void openEpisode({
       agent,
       subject: query.slice(0, 200),
@@ -159,6 +216,10 @@ export function noteRetrieval(
       .then(episodeId => { if (episodeId) koppelEpisode(id, episodeId); })
       .catch(() => { /* de beurt zelf staat er al; dit is de duurzame kopie */ });
   }
+
+  // Het antwoord was er eerder dan het ophalen. Koppel het oordeel nu.
+  const pending = takePending(owner);
+  if (pending) noteTurnOutcome(id, pending);
 
   return id;
 }
@@ -170,6 +231,12 @@ function koppelEpisode(turnId: string, episodeId: string): void {
   if (!t) return;   // beurt al verlopen of weggerold — dan is er niets te koppelen
   t.episodeId = episodeId;
   save(turns);
+  // De uitslag was er eerder dan Supabase. Zonder dit blijft de episode
+  // openstaan en versterkt hij nooit iets -- de twee chat-rijen van
+  // 22-23 september: geopend, never closed.
+  if (t.verdict !== 'unknown') {
+    void closeEpisode(episodeId, t.verdict).catch(() => { /* niet fataal */ });
+  }
 }
 
 /** The most recent turn that has not been judged yet, if it is still fresh. */
@@ -208,6 +275,24 @@ export function noteTurnOutcome(turnId: string | null, verdict: TurnVerdict): vo
 }
 
 /**
+ * Sluit de openstaande beurt van deze eigenaar, of onthoudt het oordeel
+ * tot noteRetrieval hem opent.
+ *
+ * De chat kent het turn-id niet: ophalen zit achter een raceTimeout van
+ * 500ms. latestOpenTurnId(owner) is dan vaak null, en het oordeel verdween.
+ */
+export function noteOwnerOutcome(owner: string | undefined, verdict: TurnVerdict): void {
+  if (verdict === 'unknown') return;
+  const id = latestOpenTurnId(owner);
+  if (id) {
+    noteTurnOutcome(id, verdict);
+    return;
+  }
+  if (!owner) return;
+  pendingByOwner.set(owner, { verdict, at: Date.now() });
+}
+
+/**
  * Judge a turn by the question it answered.
  *
  * conversationReviewService grades exchanges on its own schedule, well after
@@ -226,13 +311,22 @@ export function noteTurnOutcomeByQuery(userText: string, verdict: TurnVerdict): 
   if (needle.length < 8) return 0;
   const turns = load();
   let hit = 0;
+  const episodesToClose: string[] = [];
   for (const t of turns) {
     if (t.verdict !== 'unknown') continue;
     if (t.query.slice(0, 60).toLowerCase().trim() !== needle) continue;
     t.verdict = verdict;
+    if (t.episodeId) episodesToClose.push(t.episodeId);
     hit++;
   }
   if (hit) save(turns);
+
+  // Keep only the episodes changed by THIS review in lockstep. The same
+  // question may have been asked earlier; already-judged historical turns must
+  // not be re-closed just because their wording matches again.
+  for (const episodeId of episodesToClose) {
+    void closeEpisode(episodeId, verdict).catch(() => { /* non-fatal side effect */ });
+  }
   return hit;
 }
 

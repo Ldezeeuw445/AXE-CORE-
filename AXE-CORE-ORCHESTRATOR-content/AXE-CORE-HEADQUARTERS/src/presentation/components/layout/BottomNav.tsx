@@ -3,9 +3,9 @@ import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
-  Bot, Megaphone, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, type LucideIcon,
-  TerminalSquare,
+  Bot, Megaphone, BookOpenCheck, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
+  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb,
+  TerminalSquare, Monitor, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -39,11 +39,18 @@ const rightItems: NavItem[] = [
   { icon: Bot, label: navLabel('/agents'), path: '/agents' },
   { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
   { icon: CalendarDays, label: navLabel('/calendar'), path: '/calendar' },
+  { icon: BookOpenCheck, label: navLabel('/ledger'), path: '/ledger' },
   { icon: ListTodo, label: navLabel('/tasks'), path: '/tasks' },
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
   { icon: LineChart, label: navLabel('/trading-intel'), path: '/trading-intel' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
   { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
+  // In navRegistry sinds integration/axe-desktop-final maar zonder deur hier --
+  // precies wat de comment hierboven waarschuwt. /computer-use-overlay en
+  // /northsea-desktop horen hier NIET bij: die zijn losse vensters (App.tsx
+  // buiten de AppShell-routes) en staan in navBereikbaar.test.ts's
+  // BEWUST_VERBORGEN, niet hier.
+  { icon: Monitor, label: navLabel('/computer-use'), path: '/computer-use' },
   // Naast de code-editor, want dat is waar je hem nodig hebt: een bouw draaien,
   // de lokale API herstarten, een poort vrijmaken. Deze lijst is met de hand
   // gemaakt en staat los van navRegistry -- een route toevoegen zonder deze
@@ -193,12 +200,14 @@ function AxeVoiceOrb() {
 
      De canvas blijft bestaan voor de stand zonder plaat; welke je ziet is één
      voorwaarde, geen tweede component. */
+  /* Op de plaat: het gedeelde statusteken (AxeStatusOrb), 64px -- de maat die
+     thinking-orbs voert voor "groot". Elke stand heeft nu zijn eigen orb, dus
+     je ziet aan het midden van de balk wát AXE doet en niet alleen dát hij
+     bezig is. Spreken blijft de equalizer, met zeven staafjes. */
   if (opPlaat) {
     return (
-      <div className="axe-voice-orb" title={STATUS_LABEL[status]}>
-        <span className="axe-eq" style={{ ['--eq-ink' as string]: STATUS_COLOR[status] }}>
-          <i /><i /><i /><i /><i />
-        </span>
+      <div className="axe-voice-orb" title="AXE presence is beside the composer">
+        <span className="text-[9px] font-mono tracking-[0.18em] uppercase" style={{ color: 'var(--text-muted)' }}>AXE</span>
       </div>
     );
   }
@@ -266,6 +275,9 @@ function NavTile({
       title={item.label}
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
+      // Een doel voor de zwevende bol: meldt iets op deze tab terwijl je er
+      // niet bent, dan vliegt hij naar dit icoon (shared/axeActiviteit).
+      data-axe-doel={item.path}
       className="flex items-center justify-center rounded-[16px] transition-all flex-shrink-0 active:scale-95"
       style={{
         width: size,
@@ -297,6 +309,7 @@ export function BottomNav() {
   return (
     <div
       className="axe-bottomnav flex-shrink-0 w-full overflow-hidden"
+      data-axe-doel="axe-bottom-nav"
       style={{
         // Explicitly stacked, because in normal flow this sat at level 0 and
         // any in-page overlay covered it. ChartToolsDrawer's invisible
@@ -347,6 +360,7 @@ export function BottomNav() {
 
         <div
           className="hidden sm:flex flex-shrink-0 w-28 h-full items-center justify-center"
+          data-axe-doel="axe-voice-orb-anchor"
           style={{
             borderLeft: '1px solid rgba(255,255,255,0.05)',
             borderRight: '1px solid rgba(255,255,255,0.05)',

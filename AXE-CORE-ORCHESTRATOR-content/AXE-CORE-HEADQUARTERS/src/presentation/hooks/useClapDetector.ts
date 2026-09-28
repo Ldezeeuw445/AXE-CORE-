@@ -49,6 +49,9 @@ export function useClapDetector(enabled: boolean, onClap: () => void) {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
 
         audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume().catch(() => {});
+        }
         const source = audioCtx.createMediaStreamSource(stream);
         // 1 in / 1 out channel — this node doesn't emit audio, it only
         // observes it, but Web Audio requires a real output to keep the

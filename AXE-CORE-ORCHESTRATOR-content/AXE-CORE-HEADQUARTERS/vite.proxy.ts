@@ -165,6 +165,21 @@ export function devProxy(): Record<string, ProxyOptions> {
         });
       },
     },
+    // iMac/dev: /northsea/* gaat naar de axe_api op de Mac mini, die AUTH eist.
+    // Zonder deze proxy praat de browser rechtstreeks met Tailscale en krijgt
+    // hij 401 (geen Bearer). De sleutel blijft server-side, net als /proxy/axecore.
+    '/proxy/lokale-agent': {
+      target: process.env.VITE_LOKALE_AGENT_ORIGIN || 'http://127.0.0.1:8001',
+      changeOrigin: true,
+      secure: false,
+      rewrite: (p) => p.replace(/^\/proxy\/lokale-agent/, ''),
+      configure: (proxy) => {
+        proxy.on('proxyReq', (proxyReq) => {
+          const key = process.env.AXE_CORE_API_KEY;
+          if (key) proxyReq.setHeader('Authorization', `Bearer ${key}`);
+        });
+      },
+    },
     '/api/browse': {
       target: 'http://localhost:8080',
       changeOrigin: false,

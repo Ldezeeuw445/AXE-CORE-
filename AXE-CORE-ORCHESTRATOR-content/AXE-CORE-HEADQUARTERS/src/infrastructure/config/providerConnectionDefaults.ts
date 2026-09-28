@@ -10,7 +10,12 @@ const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
   openclaw: import.meta.env.VITE_OPENCLAW_URL ?? '',
   kilocode: import.meta.env.VITE_KILOCODE_URL ?? '',
   crewai: import.meta.env.VITE_CREWAI_URL ?? '',
-  hermes: import.meta.env.VITE_HERMES_URL ?? '',
+  // Hermes is not its own service -- it's an Ollama model (hermes3:8b), see
+  // providers.ts's own comment on this. A separate VITE_HERMES_URL never
+  // existed, so this always resolved to '' -> undefined -> the dead
+  // '/proxy/hermes' fallback below, which is what threw "Request URL is
+  // missing an 'http://' or 'https://' protocol" on Test. Share Ollama's URL.
+  hermes: OLLAMA_DEFAULT_URL,
   groq: import.meta.env.VITE_GROQ_URL ?? '',
 };
 
@@ -21,7 +26,8 @@ const PROXY_BASE_URLS: Partial<Record<ProviderId, string>> = {
   openclaw: '/proxy/openclaw',
   kilocode: '/proxy/kilocode',
   crewai: '/proxy/crewai',
-  hermes: '/proxy/hermes',
+  // Same reasoning as ENV_BASE_URLS.hermes above.
+  hermes: '/proxy/ollama',
 };
 
 export function getDefaultProviderBaseUrl(providerId: ProviderId): string | undefined {

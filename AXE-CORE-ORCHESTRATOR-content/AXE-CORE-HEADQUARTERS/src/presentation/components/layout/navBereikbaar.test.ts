@@ -22,6 +22,8 @@ const NAV = 'src/presentation/components/layout/BottomNav.tsx';
  * te laten verdwijnen -- en dan bewaakt deze test niets meer.
  */
 const BEWUST_VERBORGEN: Record<string, string> = {
+  '/device': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
+  '/lock': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
   '/': 'Home heeft zijn eigen icoon, staat als eerste in leftItems',
   '/mobile': 'Alleen voor het telefoonoppervlak',
   '/login': 'Voor wie niet ingelogd is; dan is er geen balk',
@@ -34,8 +36,16 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/trading': 'Sneltoets r, en de ThinkThanks-router linkt ernaartoe',
   '/memory/explore': 'Vanuit Terrain — NeuralMemorySystem linkt de hubs ernaartoe',
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
+  '/dev-strategy-lab-preview': 'Ontwikkelvoorbeeld, alleen in npm run dev (Strategy Lab buiten de login)',
   '/dev-browser-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-standalone': 'Ontwikkelvoorbeeld',
+  // integration/axe-desktop-final: eigen vensters, geregistreerd in App.tsx
+  // BUITEN de AppShell-routes, en geopend via windowManagerService.ts
+  // (openPersonalComputerUse/openStandaloneNorthsea), niet via een klik in de
+  // balk van het hoofdvenster. /computer-use zelf (de volle pagina, WEL binnen
+  // de AppShell) staat gewoon in rightItems hierboven.
+  '/computer-use-overlay': 'Los venster (Personal Computer Use compact), geopend via windowManagerService',
+  '/northsea-desktop': 'Los venster (NorthSea Global Trade Center), geopend via windowManagerService',
 
   // NAGEMETEN 11-9-2026: deze twee hebben NUL verwijzingen in de hele broncode
   // en staan niet in de balk. Ze zijn dus vanuit de app niet te bereiken --

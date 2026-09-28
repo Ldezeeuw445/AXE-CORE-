@@ -3,6 +3,26 @@ import { ontwerpModus } from '@/infrastructure/supabase/ontwerpModus';
 import { ontwerpClient } from '@/infrastructure/supabase/ontwerpData';
 
 let _client: SupabaseClient | null = null;
+
+/**
+ * Alleen voor de headless VPS-runner (src/app/deskRunner.ts): een client met de
+ * service role en een vaste gebruiker, zodat dezelfde cyclus als in de app
+ * dezelfde rijen leest en schrijft. De sleutel komt uit de omgeving van de VPS
+ * en nooit uit de bundel; in een browser weigert dit, zodat een service-sleutel
+ * nooit in een client belandt.
+ */
+let _server: { client: SupabaseClient; userId: string } | null = null;
+
+export function installServerIdentity(input: { url: string; serviceKey: string; userId: string }): void {
+  if (typeof window !== 'undefined' || typeof document !== 'undefined') {
+    throw new Error('installServerIdentity is for the headless runner only — refusing in a browser');
+  }
+  if (!input.url || !input.serviceKey || !input.userId) throw new Error('installServerIdentity: url, serviceKey and userId are required');
+  _server = {
+    client: createClient(input.url, input.serviceKey, { auth: { persistSession: false, autoRefreshToken: false } }),
+    userId: input.userId,
+  };
+}
 let _lastUrl = '';
 let _lastKey = '';
 
@@ -34,6 +54,7 @@ const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
  * anything called from a poll or an interval.
  */
 export async function currentUserId(sb: SupabaseClient): Promise<string | null> {
+  if (_server && sb === _server.client) return _server.userId;
   const { data: { session } } = await sb.auth.getSession();
   return session?.user?.id ?? null;
 }
@@ -56,6 +77,7 @@ function readOverride(key: string): string | null {
 }
 
 export function getSupabase(): SupabaseClient | null {
+  if (_server) return _server.client;
   // Ontwerpmodus: verzonnen rijen in plaats van een echte verbinding, zodat de
   // tabs iets tonen om te beoordelen. Staat hier en niet in de pagina's, want
   // dit is het enige punt waar alle data langskomt -- 37 tabs aanpassen zou 37

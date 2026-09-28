@@ -92,18 +92,13 @@ export function AxeCard({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'rounded-xl text-left w-full transition-all duration-200',
+        'axe-kaart rounded-xl text-left w-full transition-all duration-200',
         pad,
         hover && 'hover:border-[var(--tint-line)] hover:bg-[rgba(255,255,255,0.02)]',
         onClick && 'cursor-pointer',
         className,
       )}
-      style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        boxShadow: '0 0 0 1px rgba(0,0,0,0.4) inset',
-        ...style,
-      }}
+      style={style}
     >
       {children}
     </Comp>

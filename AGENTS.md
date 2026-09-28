@@ -15,6 +15,24 @@ begint die verder gaat dan één regel verzetten.
 
 ---
 
+## Eén lijn, twee Macs, één app (Luka, 25 sep)
+
+Luka wil geen takken, commits of pull requests zien. Alleen: gedaan, en te zien
+in de app.
+
+- **Werk af = in `orchestrator`.** Tests groen → `git push origin HEAD:orchestrator`.
+  Geen werk achterlaten op een eigen tak, geen PR, geen "wil je dat ik merge?".
+  Een sessietak mag als wachtkamer, maar is leeg als je klaar bent.
+- **Beide Macs bouwen zichzelf.** `com.axe.autosync` (`scripts/axe-autosync.sh`)
+  draait elke 5 minuten op de Mac mini én de iMac: pusht eigen commits, haalt
+  nieuwe binnen en bouwt/installeert `/Applications/AXE CORE.app` als de
+  build-stempel niet de huidige commit is. Handmatig bouwen hoeft niet meer.
+- **Controleren:** Home toont `build <sha>`; op beide Macs hetzelfde. Log:
+  `~/Library/Logs/axe-autosync.log`.
+- Dezelfde app, dezelfde mogelijkheden. De Mac mini blijft het brein (lokale
+  API :8001, planner); de iMac-app praat daar via Tailscale mee. Start op de
+  iMac geen tweede axe_api.
+
 ## Waar je bent
 
 | | |
@@ -113,6 +131,53 @@ onterecht vinkje is erger dan geen vinkje.
 
 **Kleur zit in letters, niet in vlakken.** Zie `UI-MAATSTAF.md`.
 
+**AXE is de baas, niet een chatbot.** Elke beurt (typen of stem) gaat door
+de tier-router: 1 = regels + opgeslagen data, 2 = klein snel model, 3 =
+bestaande agent op de achtergrond. Meerdere taken in één zin worden
+geknipt en lopen parallel; de chat wacht daar niet op. De classifier
+schrijft geen antwoord. Timeout of fout → het pad dat er al was. Stem:
+eerste complete zin speelt terwijl de LLM nog tokens stuurt; barge-in
+stopt TTS; de orb volgt mic en afspeelniveau. De vier fases staan in
+`BOUWLIJST.md` §6 — verwar deze tiers niet met de roster-tiers in
+`roster.ts`.
+
+### UI-regel — één inhoudsruimte, inhoud bepaalt de maat
+
+De Browser-tab is de meetlat. Elke andere tab gebruikt dezelfde schil-primitieven
+(`TabRuimte`, `Kaart`, `SectieBlok`, `SchuifBalk` in
+`src/presentation/components/layout/tabMaatstaf.tsx`). Geen eigen raster, geen
+eigen kaartmateriaal, geen eigen ladevorm. Uitwerking en hoe je het meet: het
+hoofdstuk **De vijf layoutregels** in
+`AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/UI-MAATSTAF.md`.
+
+1. **Eén vaste inhoudsruimte.** Dat is het vak dat de Browser-plaat inneemt
+   als er een domein open is (NorthSea-desk gebruikt precies dat vak, zonder
+   plaat). Dezelfde marges tot de schilranden, de composer en het dock, op
+   elke tab. Alleen via `TabRuimte` / `.axe-tabruimte`.
+2. **Die ruimte is een MAXIMUM, geen doel.** Inhoud bepaalt de maat. Kaarten
+   groeien met hun inhoud; kaarten van hetzelfde type zijn even groot op één
+   raster. Nooit een kleine kaart oprekken tot de rij vol is, nooit een zware
+   kaart platdrukken. Wat de ruimte niet vult, blijft gecentreerd met lucht
+   (Browser-home: drie composers boven het snelkoppelingenraster). Alleen wat
+   het écht nodig heeft vult het hele vak: een website, de NorthSea-kaart, de
+   agenda, grote tabellen.
+3. **Kaarten zijn matzwart.** Zelfde materiaal als de kaarten op Browser-home:
+   `Kaart` / `.axe-kaart`, tokens `--axe-kaart-*`. Dunne lichte rand (~1px,
+   wit met lage dekking, bovenrand iets helderder) plus een zachte donkere
+   schaduw — leesbaar tegen donker bureaublad achter de transparante schil,
+   en zwevend in de lichte stand. Subtiel; geen gekleurde neongloed.
+4. **Secties** gebruiken het blok van de Agents-tab (WAR ROOM / WINGMAN'S
+   CREW): `SectieBlok` / `.axe-sectie`.
+5. **Linker schuifbalken** hebben per tab eigen inhoud, maar dezelfde vorm
+   als de Browser-lade: binnenkaart met vaste afstand tot de rand, gegroepeerde
+   secties, Settings + Profile onderaan. `SchuifBalk` / `.axe-schuifbalk`.
+
+Tegenvoorbeeld: drie stat-kaarten oprekken tot volle-breedte-balken, of
+serverkaarten in een krappe 1fr-rij proppen. Dat is de oude MCP-tab.
+
+Composer, chat, voice en AICore horen hier niet bij — die hebben een eigen
+spoor. Alleen stijl en indeling; geen data, hooks, stores of API.
+
 ## Waar de rest staat
 
 | Bestand | Waarvoor |
@@ -125,6 +190,20 @@ onterecht vinkje is erger dan geen vinkje.
 | `ARCHITECTURE.md` | de lagen en waarom |
 | `WERKVERDELING.md` | wie waaraan werkt, en welke bestanden van wie zijn |
 | `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
+| `os3/` | Skill AXE + SETUP. CLI + hek bovenop bestaande workers. OS3 optioneel. |
+
+## Architectuur: CLI bovenop wat er al is
+
+AXE is interface, persoonlijkheid en geheugen. Uitvoering op Luka's
+machines bestaat al: `infra/computer-worker` (launchd),
+`infra/claude-local-worker`, durable kernel (`core_tasks`), leerlus +
+RAG (`rag_memories`, `agent_learning_episodes`). De `axe`-CLI en het
+hek (`cli_laag.py`) zitten daar bovenop. Geen tweede node-daemon, geen
+tweede geheugenstore. Inventaris: bouwlijst §8.
+
+Rabbit OS3 is een optionele extra executor via dezelfde CLI. Er is geen
+publieke OS3-API; OS3 belt AXE, niet andersom. Staat sinds 25 sep in
+`orchestrator`; zonder OS3-koppeling doet de laag niets.
 
 Dit bestand staat in de hoofdmap omdat elke assistent het daar als eerste leest.
 Klopt er iets niet meer, verander het hier — niet in je eigen sessie-geheugen.

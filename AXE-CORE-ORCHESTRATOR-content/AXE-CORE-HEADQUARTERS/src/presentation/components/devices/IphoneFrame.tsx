@@ -14,7 +14,7 @@ export function IphoneFrame({ children, className = '' }: { children: ReactNode;
         <span className="axe-iphone__knop axe-iphone__knop--vol1" />
         <span className="axe-iphone__knop axe-iphone__knop--vol2" />
         <span className="axe-iphone__knop axe-iphone__knop--aan" />
-        <div className="axe-iphone__scherm">
+        <div className="axe-iphone__scherm" data-geen-greep>
           <div className="axe-iphone__eiland" />
           {children}
         </div>

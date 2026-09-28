@@ -22,11 +22,10 @@
  * Op die plek staat nu de radiaal-dok, gespiegeld, met de kill switch in het
  * gat. Dat is wel iets dat je vanuit elke tab binnen handbereik wilt hebben.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { OctagonX } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
-import { useDokStore } from '@/presentation/store/dokStore';
 import { TradingTabZuil } from './TradingTabZuil';
 
 export function TradingRail({
@@ -42,20 +41,6 @@ export function TradingRail({
   killBezig: boolean;
 }) {
   const [vraagt, setVraagt] = useState(false);
-  const zetRechtsHoek = useDokStore(s => s.zetRechtsHoek);
-
-  /* De kill switch in het gat van de rechter dok, zolang je op deze tab bent.
-     Bij het verlaten weer weg: een knop die posities sluit hoort niet op een
-     pagina te blijven staan waar je niets met posities doet. */
-  useEffect(() => {
-    zetRechtsHoek({
-      teken: <KillVorm bezig={killBezig} />,
-      label: 'Kill switch — alles plat en de autopilot uit',
-      doe: () => setVraagt(true),
-    });
-    return () => zetRechtsHoek(null);
-  }, [zetRechtsHoek, killBezig]);
-
   return (
     <>
       {/* De rechter schuifbalk toont op elke tab iets anders. Op Home blijven
@@ -128,22 +113,6 @@ function KillBevestiging({ bezig, onJa, onNee }: { bezig: boolean; onJa: () => v
         </div>
       </div>
     </div>
-  );
-}
-
-
-/**
- * De vorm in het gat: een rood stopvlak in plaats van de cyane driehoek.
- *
- * Rood en niet cyaan, want dit is het enige knopje in de app dat posities
- * sluit. Wet 10 gaat over status, niet over dit: een noodstop hoort de kleur
- * te hebben die iedereen ervoor kent.
- */
-function KillVorm({ bezig }: { bezig: boolean }) {
-  return (
-    <span className="axe-dok-kill" data-bezig={bezig ? 'ja' : undefined}>
-      <OctagonX size={20} />
-    </span>
   );
 }
 

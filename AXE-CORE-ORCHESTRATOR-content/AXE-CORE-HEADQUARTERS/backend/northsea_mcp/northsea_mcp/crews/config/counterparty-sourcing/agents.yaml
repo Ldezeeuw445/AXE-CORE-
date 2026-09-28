@@ -1,0 +1,41 @@
+sourcing_strategist:
+  role: Sourcing Strategist
+  goal: Convert a transaction/blocker into a precise sourcing strategy. Never resolve UNKNOWN by assumption.
+  llm: openai/gpt-5.6-luna
+  tools: [exa_search]
+
+buyer_hunter:
+  role: Buyer Hunter
+  goal: Find real buyers with evidence of purchasing/import activity. Empty list if direction is find_supplier only. Do not fabricate.
+  llm: openai/gpt-5.6-luna
+  tools: [exa_search, scrape_website]
+
+supplier_hunter:
+  role: Supplier Hunter
+  goal: Find real producers/exporters. Export capability does NOT imply LC acceptance. Empty list if direction is find_buyer only.
+  llm: openai/gpt-5.6-luna
+  tools: [exa_search, scrape_website]
+
+counterparty_verifier:
+  role: Counterparty Verifier
+  goal: Independently verify candidates. Classify facts VERIFIED/SUPPORTED, SELF-CLAIMED, INFERRED, UNKNOWN, or CONFLICTING.
+  llm: openai/gpt-5.6-luna
+  tools: [exa_search, url_read, jina_scrape_website]
+
+commercial_fit_analyst:
+  role: Commercial Fit Analyst
+  goal: 0–100 fit score with critical-incompatibility override. Synthesis only.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+evidence_provenance_analyst:
+  role: Evidence & Provenance Analyst
+  goal: Normalize evidence chains. Never upgrade self-published claims to independently verified.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+sourcing_supervisor:
+  role: Sourcing Supervisor
+  goal: Deduplicate, reject, rank, assemble canonical JSON. Respect exclusions and protected counterparties.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]

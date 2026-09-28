@@ -5,7 +5,13 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { STAT_ROW } from '@/presentation/components/surface/Page';
+import { TabRuimte, Kaart, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { SchedulesBlock } from '@/presentation/pages/controlPlane/SchedulesBlock';
+import { TasksBlock } from '@/presentation/pages/controlPlane/TasksBlock';
+import { useSchedules, useTasks } from '@/presentation/pages/controlPlane/useControlPlaneData';
+import { useNow } from '@/presentation/components/agents/useAgentActivity';
+import '@/presentation/pages/controlPlane/controlPlane.css';
 
 function kindLabel(kind: ControlPlaneRoute['kind']) {
   switch (kind) {
@@ -32,10 +38,14 @@ function asString(value: unknown): string {
 }
 
 export default function ControlPlane() {
+  const schedules = useSchedules();
+  const taken = useTasks();
+  const now = useNow();
   const [routes, setRoutes] = useState<ControlPlaneRoute[]>([]);
   const [tasks, setTasks] = useState<TableRow[]>([]);
   const [events, setEvents] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [soort, setSoort] = useState<ControlPlaneRoute['kind'] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -91,7 +101,26 @@ export default function ControlPlane() {
   const highlightRoutes = routes.filter(r => ['google_maps', 'smartthings', 'hermes', 'langgraph'].some(token => `${r.path} ${r.target ?? ''} ${r.display_name}`.toLowerCase().includes(token)));
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[{
+            titel: 'Route registry',
+            items: [
+              { id: 'all', label: `All · ${routes.length}`, actief: soort === null, onKies: () => setSoort(null) },
+              ...(['public', 'internal', 'hook', 'integration'] as const).map((k) => ({
+                id: k,
+                label: `${kindLabel(k)} · ${routes.filter(r => r.kind === k).length}`,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: kindColor(k) }} />,
+                actief: soort === k,
+                onKies: () => setSoort(k),
+              })),
+            ],
+          }]}
+        />
+      </TabRail>
+      <TabRuimte>
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -102,21 +131,21 @@ export default function ControlPlane() {
         </div>
       </div>
 
-      <div className={`${STAT_ROW} flex-none`}>
+      <StatRij className="flex-none">
         {[
           { label: 'Public', value: counts.public, color: 'var(--accent-cyan)' },
           { label: 'Internal', value: counts.internal, color: '#a78bfa' },
           { label: 'Hooks', value: counts.hook, color: 'var(--warning)' },
           { label: 'Integrations', value: counts.integration, color: 'var(--success)' },
         ].map(card => (
-          <WidgetCard key={card.label} title="">
+          <Kaart key={card.label} compact>
             <div className="text-center py-1">
               <div className="text-2xl font-bold font-mono-data" style={{ color: card.color }}>{card.value}</div>
               <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{card.label}</div>
             </div>
-          </WidgetCard>
+          </Kaart>
         ))}
-      </div>
+      </StatRij>
 
       {error && (
         <div className="mb-4 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -137,7 +166,7 @@ export default function ControlPlane() {
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>Loading routes…</p>
             ) : routes.length === 0 ? (
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>No route registry entries found.</p>
-            ) : routes.map(route => (
+            ) : routes.filter(r => !soort || r.kind === soort).map(route => (
               <div key={route.id} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${kindColor(route.kind)}22` }}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -176,67 +205,14 @@ export default function ControlPlane() {
           </div>
         </WidgetCard>
 
-        <WidgetCard title="Integration Focus">
-          <div className="space-y-3">
-            {highlightRoutes.length > 0 ? highlightRoutes.map(route => (
-              <div key={route.id} className="rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{route.display_name}</div>
-                    <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{route.path}</div>
-                  </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--success)' }}>
-                    {route.kind}
-                  </span>
-                </div>
-                <div className="mt-2 text-[10px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                  {route.target === 'google_maps' && 'Google Maps is exposed as a free-view integration: wire a browser/API key when you want actual map tiles, but the architecture is ready either way.'}
-                  {route.target === 'smartthings' && 'SmartThings control is set up as an execution integration with a PAT-based token slot, so device commands can be dispatched without touching the web shell.'}
-                  {route.target === 'hermes' && 'Hermes Agent is wired as a first-class optional endpoint for self-improving agent workflows and skill-driven automation.'}
-                  {route.target === 'langgraph' && 'LangGraph is the orchestrator path: it receives tasks, routes them to the right specialist, and dispatches execution through the VPS API.'}
-                  {!['google_maps', 'smartthings', 'hermes', 'langgraph'].some(token => `${route.path} ${route.target ?? ''}`.toLowerCase().includes(token)) && route.description}
-                </div>
-              </div>
-            )) : (
-              <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>No highlighted integrations found.</p>
-              </div>
-            )}
-
-            <div className="rounded-xl p-3" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <Brain size={13} style={{ color: 'var(--accent-cyan)' }} />
-                <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>Architecture notes</div>
-              </div>
-              <ul className="space-y-1 text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                <li>• Tasks, steps, tool calls, approvals, patches, memory, and events are persisted separately.</li>
-                <li>• Public API, internal dispatch, and hooks are split in the registry for cleaner control boundaries.</li>
-                <li>• Google Maps and SmartThings are modeled from the start so they can be switched on without redesign.</li>
-              </ul>
-            </div>
-          </div>
+        {/* Schema's en taken: elk met een eigen ritme en knoppen (run now,
+            goedkeuren). Vervangt "Integration Focus" en "Recent Tasks". */}
+        <WidgetCard title="Schedules">
+          <SchedulesBlock peiling={schedules} now={now} />
         </WidgetCard>
 
-        <WidgetCard title="Recent Tasks">
-          <div className="space-y-2">
-            {tasks.length === 0 ? (
-              <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>No tasks yet.</p>
-            ) : tasks.map(task => (
-              <div key={String(task.id)} className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-small font-medium truncate" style={{ color: 'var(--text-primary)' }}>{asString(task.title)}</div>
-                    <div className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>
-                      {asString(task.status)} · {asString(task.priority)} · {asString(task.execution_mode)}
-                    </div>
-                  </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
-                    {asString(task.source_app)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+        <WidgetCard title="Tasks">
+          <TasksBlock peiling={taken} now={now} />
         </WidgetCard>
 
         <WidgetCard title="Recent Events">
@@ -260,6 +236,8 @@ export default function ControlPlane() {
           </div>
         </WidgetCard>
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

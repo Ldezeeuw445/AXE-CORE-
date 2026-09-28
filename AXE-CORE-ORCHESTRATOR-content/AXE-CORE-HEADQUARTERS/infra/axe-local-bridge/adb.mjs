@@ -52,6 +52,27 @@ export function adbPath() {
   return ADB_CANDIDATES.find(p => existsSync(p)) ?? null;
 }
 
+/**
+ * The device manager is pinned to one phone: the Samsung Galaxy A17.
+ *
+ * adb sees every phone plugged into the Mac, and a tap sent to the wrong one
+ * cannot be taken back — so `runAdb` refuses any device that is not an A17.
+ * The pin lives here, in the bridge, for the same reason the action allowlist
+ * does: a limit enforced only in the browser is a limit anyone can edit.
+ *
+ * adb reports the model with underscores (`SM_A175F`); the family test flattens
+ * that away. `AXE_PHONE_MODELS` (comma-separated substrings, case-insensitive)
+ * widens the pin when a second device is deliberately in play.
+ */
+export function isA17Model(model) {
+  if (!model) return false;
+  const norm = String(model).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (/^SMA17/.test(norm)) return true;
+  const extra = (process.env.AXE_PHONE_MODELS || '')
+    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  return extra.some(m => norm.includes(m.replace(/[^A-Z0-9]/g, '')));
+}
+
 /** Keys worth pressing. An allowlist, because a keycode is never user prose. */
 const KEYCODES = new Set([
   'HOME', 'BACK', 'ENTER', 'TAB', 'DEL', 'ESCAPE', 'SPACE',
@@ -291,9 +312,17 @@ export async function runAdb(action, params = {}, serial = null) {
       : 'no device attached — plug the phone in, or pair it over wifi';
     throw new Error(hint);
   }
-  const target = serial ?? usable[0].serial;
-  if (!usable.some(d => d.serial === target)) {
-    throw new Error(`device ${target} is not connected (adb sees: ${usable.map(d => d.serial).join(', ')})`);
+  // The device manager only ever drives the A17. Any other phone adb happens
+  // to see is ignored rather than driven — see isA17Model above.
+  const allowed = usable.filter(d => isA17Model(d.model));
+  if (allowed.length === 0) {
+    const seen = usable.map(d => `${d.model ?? d.serial}`).join(', ');
+    throw new Error(`device manager is pinned to the Samsung A17; the attached device(s) [${seen}] are not an A17 — plug in the A17, or set AXE_PHONE_MODELS to widen the pin`);
+  }
+  const target = serial ?? allowed[0].serial;
+  if (!allowed.some(d => d.serial === target)) {
+    const seen = allowed.map(d => `${d.serial} (${d.model ?? '?'})`).join(', ');
+    throw new Error(`device ${target} is not the pinned A17 (usable A17s: ${seen})`);
   }
 
   const { args, binary = false, timeout = 30_000 } = spec.build(params);

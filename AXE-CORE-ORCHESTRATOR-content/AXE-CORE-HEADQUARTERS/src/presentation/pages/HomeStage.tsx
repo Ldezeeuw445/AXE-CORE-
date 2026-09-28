@@ -30,6 +30,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BrainCircuit, Mountain, Network, Layers, Square } from 'lucide-react';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
+import { AgentVensters } from '@/presentation/components/axe-core/AgentVensters';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
@@ -101,6 +102,10 @@ export default function HomeStage() {
               de vorm in de gloed laat verdwijnen. SphereStage blijft bestaan,
               dus terug is één import. */}
           <AxeCoreSphere />
+          {/* Dezelfde managerkolom als op Home: links naast de sphere, alle
+              vijf, zwevend. Hij hoort hier omdat je anders alleen de sphere
+              beoordeelt terwijl de kolom er in de app naast staat. */}
+          <AgentVensters />
         </div>
 
         <AnimatePresence>

@@ -4,25 +4,31 @@
  * code-agent via de AXE-composer. Monaco, echte xterm, echte motoren.
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, type CSSProperties } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
-import { PlaatRail } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatRail, PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
+import { useCodeAgentKop } from '@/presentation/store/codeAgentKopStore';
+import { codeSnelacties } from '@/domain/codeSnelacties';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Check, ChevronRight, Code2, Columns2, Command, FileCode, FilePlus, Files, Folder, FolderOpen, GitBranch, Layers, Monitor, MousePointer2, Play, RefreshCw, Save, Search, Send, Smartphone, Tablet, Terminal, Trash2, X, Zap } from 'lucide-react';
+import { Bot, Braces, Check, ChevronRight, Code2, Columns2, Command, Cpu, Hand, LayoutGrid, MonitorSmartphone, MousePointerClick, PanelRight, Sparkle, Sparkles, FileCode, FilePlus, Files, Folder, FolderOpen, GitBranch, Layers, Monitor, MousePointer2, Play, RefreshCw, Save, Search, Send, Smartphone, Tablet, Terminal, Trash2, X, Zap } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
-import { hostVanDeEditor } from '@/domain/terminalHosts';
-import { axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
+import { hostVanDeEditor, type TerminalHost } from '@/domain/terminalHosts';
+import { AGENT_LABEL, HOOFD_AGENTS, type MotorToewijzing } from '@/domain/agentMotoren';
+import { leesToewijzing, kiesMotor } from '@/infrastructure/persistence/agentMotorenOpslag';
 import {
   listWorkspaceDirectory, readWorkspaceFile, writeWorkspaceFile,
   createWorkspaceEntry, deleteWorkspaceEntry, searchWorkspace,
-  moveWorkspaceEntry,
+  moveWorkspaceEntry, editorBasis, zetEditorRepo,
   type SearchResult,
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
+import { openLeerbeurt, metGeheugen, sluitLeerbeurt } from '@/application/agents/abonnementLeerlus';
+import { classifyCodeTaskComplexity } from '@/domain/codeTaskComplexity';
 import {
   agentHostVoorkeur, zetAgentHostVoorkeur, agentHostStand,
   LOKALE_AGENT_ORIGIN, type AgentHostVoorkeur,
@@ -37,6 +43,7 @@ import {
 } from '@/presentation/components/axe-core/CodeStudioExtras';
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
+import { meldActiviteit } from '@/shared/axeActiviteit';
 
 /**
  * De drie motoren waar dit paneel een taak aan kan geven, met dezelfde namen
@@ -50,8 +57,9 @@ import Editor, { DiffEditor } from '@monaco-editor/react';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'codex', 'cursor'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
+type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
 
 /**
  * De motoren die een échte CLI in een checkout zijn, op een abonnement.
@@ -61,23 +69,19 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
  * zie backend/axe_api/agent_runner.py. Daarom staan ze hier als set en niet als
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
-/**
- * De machine van het terminalvak onder de editor.
- *
- * Hetzelfde adres als waar de bestandsboom en de code-agent op uitkomen, want
- * dat MOET dezelfde machine zijn -- zie hostVanDeEditor(). Dezelfde aanroep
- * als in workspaceFilesService, zodat er geen tweede plek is die er anders
- * over kan gaan denken.
- */
-const EDITOR_HOST = hostVanDeEditor(axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore'));
 
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex', 'cursor']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', claude4: 'Claude 4', codex: 'Codex', codex2: 'Codex 2', codex3: 'Codex 3', cursor: 'Cursor' };
 
 /** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
 const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [
   { id: 'claude', uitleg: 'Claude Code — de echte CLI in een gewhiteliste checkout, op je Anthropic-abonnement' },
+  { id: 'claude2', uitleg: 'Claude Code op je tweede Claude-abonnement (eigen login in ~/.claude-tweede)' },
+  { id: 'claude3', uitleg: 'Claude Code op je derde Claude-abonnement (eigen login in ~/.claude-derde)' },
+  { id: 'claude4', uitleg: 'Claude Code op je vierde Claude-abonnement (eigen login in ~/.claude-vierde)' },
   { id: 'codex', uitleg: 'Codex — dezelfde opzet, op je ChatGPT-abonnement' },
+  { id: 'codex2', uitleg: 'Codex op je tweede ChatGPT-abonnement (eigen login in ~/.codex-tweede)' },
+  { id: 'codex3', uitleg: 'Codex op je derde ChatGPT-abonnement (eigen login in ~/.codex-derde)' },
   { id: 'cursor', uitleg: 'Cursor — dezelfde opzet, op je Cursor-abonnement' },
 ];
 
@@ -140,6 +144,10 @@ interface AgentMessage {
   filesRead?: string[];
   autoApplied?: boolean;
   ranCommand?: AgentTurn['ranCommand'];
+  /** Eén knop onder een 'status'-melding — nu alleen gebruikt om de
+   *  gratis-voor-simpel-substitutie (zie classifyCodeTaskComplexity) in één
+   *  klik terug te draaien naar het gepinde abonnement. */
+  action?: { label: string; run: () => void };
 }
 
 type SidebarMode = 'files' | 'search' | 'git';
@@ -213,6 +221,16 @@ function removeNode(nodes: FileNode[], target: string): FileNode[] {
 }
 
 function uid(): string { return Math.random().toString(36).slice(2, 8); }
+
+function repoKleur(naam: string): string {
+  const n = naam.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (n.includes('axon')) return '#A78BFA';
+  if (n.includes('companion')) return '#34D399';
+  if (n.includes('trading')) return '#F5A524';
+  if (n.includes('northsea')) return '#B87333';
+  if (n.includes('axecore') || n.includes('axehq')) return '#22D3EE';
+  return '#94A3B8';
+}
 
 function fuzzyScore(query: string, text: string): number {
   const q = query.toLowerCase();
@@ -476,7 +494,6 @@ export default function CodeEditorPage() {
   /* Of de plaat-schil eronder ligt. Zonder plaat blijft deze pagina zich
      gedragen zoals hij altijd deed -- dat is wat 'de schil is de basis'
      betekent: de pagina hangt ervan af, niet andersom. */
-  const opPlaat = useHeeftPlaat();
   const voice = useVoiceStore();
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [rootLoading, setRootLoading] = useState(true);
@@ -533,11 +550,48 @@ export default function CodeEditorPage() {
   const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
   useEffect(() => { localStorage.setItem('axe_code_agent_mode', agentMode ? 'on' : 'off'); }, [agentMode]);
   const agentAbortRef = useRef<AbortController | null>(null);
-  const [agentEngine, setAgentEngine] = useState<AgentEngine>(() => {
-    const stored = localStorage.getItem('axe_code_agent_engine');
-    return AGENT_ENGINES.includes(stored as AgentEngine) ? (stored as AgentEngine) : 'native';
+  // De abonnementen zijn verdeeld over de vijf tier-1 managers (Instellingen →
+  // Motoren per agent). Het abonnement van AXE Developer komt daarvandaan;
+  // Native en Hands zijn geen abonnement en blijven een keuze hier. Zie
+  // domain/agentMotoren.ts.
+  const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
+  useEffect(() => {
+    const bij = () => setToewijzing(leesToewijzing());
+    window.addEventListener('axe:agent-motoren', bij);
+    window.addEventListener('storage', bij);
+    return () => { window.removeEventListener('axe:agent-motoren', bij); window.removeEventListener('storage', bij); };
+  }, []);
+  const [agentEngine, setAgentEngineRauw] = useState<AgentEngine>(() => {
+    const eigen = leesToewijzing()['developer'];
+    if (eigen !== 'sleutels') return eigen;
+    // Zonder abonnement: Native of Hands, zoals de vorige keer. Een opgeslagen
+    // CLI telt niet meer -- die komt uit de toewijzing.
+    const stored = localStorage.getItem('axe_code_agent_engine') as AgentEngine | null;
+    return stored && AGENT_ENGINES.includes(stored) && !CLI_MOTOREN.has(stored) ? stored : 'native';
   });
   useEffect(() => { localStorage.setItem('axe_code_agent_engine', agentEngine); }, [agentEngine]);
+  // Een CLI-knop is een toewijzing: wie een vrij abonnement kiest, geeft het aan
+  // de Code Agent. Native of Hands kiezen geeft zijn abonnement weer vrij.
+  const agentEngineRef = useRef(agentEngine);
+  agentEngineRef.current = agentEngine;
+  const setAgentEngine = useCallback((volgende: AgentEngine | ((huidig: AgentEngine) => AgentEngine)) => {
+    const motor = typeof volgende === 'function' ? volgende(agentEngineRef.current) : volgende;
+    setToewijzing(kiesMotor('developer', CLI_MOTOREN.has(motor) ? motor as CliMotor : 'sleutels'));
+    setAgentEngineRauw(motor);
+  }, []);
+  // Verandert de verdeling elders (Instellingen, een ander venster), dan schuift
+  // de motor hier mee -- anders draait de editor op een abonnement dat inmiddels
+  // van een andere agent is.
+  const eigenMotor = toewijzing['developer'];
+  useEffect(() => {
+    if (eigenMotor !== 'sleutels') setAgentEngineRauw(eigenMotor);
+    else setAgentEngineRauw(huidig => (huidig === 'native' || huidig === 'openhands') ? huidig : 'native');
+  }, [eigenMotor]);
+  // Van welke andere agent dit abonnement is, of null als het vrij is.
+  const eigenaarVan = (motor: string): string | null => {
+    const ander = HOOFD_AGENTS.find(a => a !== 'developer' && toewijzing[a] === motor);
+    return ander ? AGENT_LABEL[ander] : null;
+  };
 
   // Branch C. The repo list comes from the host running axe_api — it is the
   // one that decides what may be touched (CLAUDE_CODE_REPOS), so asking it is
@@ -564,7 +618,8 @@ export default function CodeEditorPage() {
   useEffect(() => { if (claudeRepo) localStorage.setItem('axe_code_claude_repo', claudeRepo); }, [claudeRepo]);
 
   useEffect(() => {
-    if (!CLI_MOTOREN.has(agentEngine)) return;
+    // Ook zonder CLI-motor: de repo-lijst bepaalt ook in welke repo de
+    // bestanden staan, en die heb je bij Native en Hands net zo goed nodig.
     let cancelled = false;
     setClaudeReposError(null);
     claudeRepos()
@@ -575,7 +630,10 @@ export default function CodeEditorPage() {
         setHostStand(agentHostStand());
         // Only auto-pick something that can actually run right now, so the
         // picker never shows a repo that the host would refuse on submit.
-        setClaudeRepo(prev => (prev && repos[prev]?.runnable
+        // Een gekozen repo blijft staan zolang hij bestaat, ook op een beschermde
+        // branch: bestanden bewerken mag daar, alleen een agent laten draaien
+        // niet -- en dat zegt de host dan zelf bij het versturen.
+        setClaudeRepo(prev => (prev && repos[prev]
           ? prev
           : Object.keys(repos).find(n => repos[n]?.runnable) ?? ''));
       })
@@ -619,6 +677,7 @@ export default function CodeEditorPage() {
   const isMobile = useIsMobile();
 
   const reloadTree = useCallback(async () => {
+    zetEditorRepo(claudeRepo);
     try {
       const nodes = await listWorkspaceDirectory('');
       setFileTree(nodes.map(n => ({ ...n, expanded: false, loaded: n.type === 'file' })));
@@ -626,15 +685,32 @@ export default function CodeEditorPage() {
     } catch (err) {
       setRootError(err instanceof Error ? err.message : 'Failed to load project files');
     }
-  }, []);
+  }, [claudeRepo]);
 
+  // Herladen bij een andere hostkeuze: de boom hoort bij de machine waar de
+  // agent werkt, en die kan net veranderd zijn.
   useEffect(() => {
     void (async () => {
       try {
         await reloadTree();
       } finally { setRootLoading(false); }
     })();
-  }, [reloadTree]);
+  }, [reloadTree, hostVoorkeur]);
+
+  /**
+   * De machine van het terminalvak onder de editor.
+   *
+   * Dezelfde uitkomst als de bestandsboom en de code-agent -- editorBasis() is
+   * agentBasis(), dus bestanden, agent en shell staan op dezelfde machine.
+   * Eerder volgde het vak het algemene API-adres, en dat is in de verpakte app
+   * altijd de VPS: bestanden en shell op de VPS, de agent op deze Mac.
+   */
+  const [editorHost, setEditorHost] = useState<TerminalHost | null>(null);
+  useEffect(() => {
+    let weg = false;
+    void editorBasis().then(basis => { if (!weg) setEditorHost(hostVanDeEditor(basis)); });
+    return () => { weg = true; };
+  }, [hostVoorkeur]);
 
   useEffect(() => {
     agentChatRef.current?.scrollTo(0, agentChatRef.current.scrollHeight);
@@ -830,14 +906,36 @@ export default function CodeEditorPage() {
     [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot, voice.fallback3Slot]
       .filter((s): s is KeySlot => s !== null);
 
-  const handleAgentSubmit = useCallback(async (overrideInstruction?: string) => {
+  const handleAgentSubmit = useCallback(async (overrideInstruction?: string, negeerClassificatie = false) => {
     const instruction = (overrideInstruction ?? agentInput).trim();
     if (!instruction || agentBusy) return;
     setAgentInput('');
     setAgentBusy(true);
     setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
 
-    if (agentEngine === 'openhands') {
+    // Simpele taken op een gepind abonnement: OpenHands is gratis en is voor
+    // een typo, hernoem of ander klein ding vaak genoeg. Nooit stilzwijgend
+    // -- de melding hieronder zegt wat er gebeurde, met één knop om het
+    // abonnement alsnog te forceren voor precies déze beurt (negeerClassificatie
+    // laat het bij een herhaalde aanroep niet weer omslaan naar OpenHands).
+    // Zie domain/codeTaskComplexity.ts voor waarom dit conservatief is.
+    let werkelijkeEngine = agentEngine;
+    if (!negeerClassificatie && CLI_MOTOREN.has(agentEngine) && classifyCodeTaskComplexity(instruction) === 'simple') {
+      werkelijkeEngine = 'openhands';
+      const motorLabel = MOTOR_LABEL[agentEngine] ?? agentEngine;
+      setAgentMessages(prev => [...prev, {
+        role: 'status',
+        text: `Dit lijkt een simpele taak — OpenHands gebruikt (gratis) in plaats van ${motorLabel}.`,
+        action: { label: `Toch ${motorLabel} gebruiken`, run: () => { void handleAgentSubmit(instruction, true); } },
+      }]);
+    }
+
+    meldActiviteit({
+      doelen: ['editor', '/code-editor'],
+      label: `${werkelijkeEngine === 'native' ? 'AXE Native' : werkelijkeEngine === 'openhands' ? 'OpenHands' : MOTOR_LABEL[werkelijkeEngine] ?? werkelijkeEngine} werkt in ${claudeRepo || 'de repo'}: ${instruction.slice(0, 48)}`,
+    });
+
+    if (werkelijkeEngine === 'openhands') {
       setAgentMessages(prev => [...prev, { role: 'status', text: 'Sending task to OpenHands…' }]);
       try {
         const context = activeTab ? `Active file: ${activeTab.path}\n\n${activeTab.content.slice(0, 8000)}` : undefined;
@@ -851,8 +949,8 @@ export default function CodeEditorPage() {
       return;
     }
 
-    if (CLI_MOTOREN.has(agentEngine)) {
-      const motorLabel = MOTOR_LABEL[agentEngine] ?? agentEngine;
+    if (CLI_MOTOREN.has(werkelijkeEngine)) {
+      const motorLabel = MOTOR_LABEL[werkelijkeEngine] ?? werkelijkeEngine;
       if (!claudeRepo) {
         setAgentMessages(prev => [...prev, {
           role: 'agent',
@@ -873,10 +971,14 @@ export default function CodeEditorPage() {
         // The active file is context, not an instruction: Claude Code reads the
         // checkout itself, so pasting the whole file would just duplicate what
         // it can already open — the path is the useful part.
-        const prompt = activeTab
+        const opdracht = activeTab
           ? `${instruction}\n\n(The file currently open in the editor is ${activeTab.path}.)`
           : instruction;
-        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as 'claude' | 'codex' | 'cursor' });
+        // Dezelfde leerlus als de chat: gedeeld geheugen mee, uitkomst terug.
+        // Zie application/agents/abonnementLeerlus.ts.
+        const leer = await openLeerbeurt(`${instruction} ${claudeRepo} ${activeTab?.path ?? ''}`, 'code-editor');
+        const prompt = metGeheugen(opdracht, leer);
+        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: werkelijkeEngine as CliMotor });
         // A refusal comes back as HTTP 200 with status 'error' — reading the
         // body is the only way to tell a guarded refusal from a finished run.
         const text = res.status === 'ok'
@@ -888,6 +990,10 @@ export default function CodeEditorPage() {
           patches: [],
         }]);
         if (res.status === 'ok') setRunTeller(n => n + 1);
+        sluitLeerbeurt(leer, res.status === 'ok', {
+          wie: `Code Agent · ${motorLabel} · ${claudeRepo}`, opdracht: instruction, uitkomst: text,
+          metadata: { repo: claudeRepo, branch: res.branch, motor: werkelijkeEngine },
+        });
         // It edited files on disk directly, so what is open here is now stale.
         if (res.status === 'ok' && activeTab) {
           void readWorkspaceFile(activeTab.path)
@@ -980,6 +1086,7 @@ export default function CodeEditorPage() {
   const acceptPatch = useCallback(async (msgIdx: number, patchId: string) => {
     const patch = agentMessages[msgIdx]?.patches?.find(p => p.id === patchId);
     if (!patch) return;
+    meldActiviteit({ doelen: ['editor', '/code-editor'], label: `past ${patch.file.split('/').pop()} aan`, kleur: '#34d399' });
     const inMemoryTab = openTabs.find(t => t.path === patch.file);
     if (inMemoryTab) {
       const next = applyPatch(inMemoryTab.content, patch);
@@ -1102,6 +1209,21 @@ export default function CodeEditorPage() {
     onMove: (from: string, to: string) => { void moveNode(from, to); },
   };
 
+  /* Een andere repo kiezen. Open tabs horen bij de vorige repo: hun paden
+     zouden in de nieuwe repo naar een ander (of geen) bestand wijzen, en
+     opslaan zou dan in de verkeerde boom schrijven. Daarom eerst opslaan. */
+  const kiesRepo = (naam: string) => {
+    if (naam === claudeRepo) return;
+    if (openTabs.some(t => t.content !== t.savedContent)) {
+      toast.error('Sla eerst je open wijzigingen op — ze horen bij de vorige repo.');
+      return;
+    }
+    setOpenTabs([]);
+    setActiveTabPath(null);
+    setSplitTabPath(null);
+    setClaudeRepo(naam);
+  };
+
   const laatsteAgent = [...agentMessages].reverse().find(m => m.role === 'agent' || m.role === 'status' || m.role === 'plan');
   const agentSpoorTekst = agentBusy
     ? 'Agent working…'
@@ -1109,8 +1231,70 @@ export default function CodeEditorPage() {
       ? (laatsteAgent.planSteps?.[0] ?? 'Plan')
       : (laatsteAgent?.text ?? '').split('\n')[0] || '';
 
+  const zetKop = useCodeAgentKop(st => st.zet);
+  const motorNaam = agentEngine === 'native' ? 'AXE Native' : agentEngine === 'openhands' ? 'OpenHands' : MOTOR_LABEL[agentEngine] ?? agentEngine;
+  const kopSnelacties = useMemo(
+    () => codeSnelacties({ repo: claudeRepo, bestand: activeTab?.path ?? null, patchOpen: Boolean(activePendingPatch) }),
+    [claudeRepo, activeTab?.path, activePendingPatch],
+  );
+  useEffect(() => {
+    zetKop({ motor: motorNaam, repo: claudeRepo, branch: claudeRepoInfo?.branch ?? undefined, spoor: agentSpoorTekst, snelacties: kopSnelacties });
+  }, [zetKop, motorNaam, claudeRepo, claudeRepoInfo?.branch, agentSpoorTekst, kopSnelacties]);
+  useEffect(() => () => zetKop(null), [zetKop]);
+
+  /* Links van de composer: wat je ziet en welke panelen er openstaan. Rechts:
+     wie het werk doet. Zelfde bouwsteen en plek als de tabs op trading, zodat
+     deze tab geen eigen balk bovenin nodig heeft. */
+  const weergaveItems: ZuilItem[] = [
+    { id: 'code', label: 'Code', icoon: <Code2 size={17} />, kleur: '#22D3EE', aan: studioStand === 'code' },
+    { id: 'canvas', label: 'Canvas', icoon: <LayoutGrid size={17} />, kleur: '#A78BFA', aan: studioStand === 'canvas' },
+    { id: 'preview', label: 'Preview · alle toestellen', icoon: <MonitorSmartphone size={17} />, kleur: '#F5A524', aan: studioStand === 'preview' },
+    { id: 'files', label: 'Bestanden', icoon: <FolderOpen size={17} />, kleur: '#22D3EE', aan: showFiles },
+    { id: 'term', label: 'Terminal', icoon: <Terminal size={17} />, kleur: '#34D399', aan: showTerminal },
+    { id: 'paneel', label: 'Preview-paneel', icoon: <PanelRight size={17} />, kleur: '#F5A524', aan: showPreview },
+    { id: 'design', label: 'Design mode', icoon: <MousePointer2 size={17} />, kleur: '#A78BFA', aan: designMode },
+    { id: 'run', label: 'Run actief bestand', icoon: <Play size={17} />, kleur: '#34D399', aan: false, uit: !activeTab },
+    { id: 'palet', label: 'Commando’s  ⌘K', icoon: <Command size={17} />, kleur: '#E5E7EB', aan: false },
+  ];
+  const kiesWeergave = (id: string) => {
+    if (id === 'code' || id === 'canvas' || id === 'preview') setStudioStand(id);
+    else if (id === 'files') setShowFiles(v => !v);
+    else if (id === 'term') setShowTerminal(v => !v);
+    else if (id === 'paneel') setShowPreview(v => !v);
+    else if (id === 'design') { setDesignMode(v => !v); setShowPreview(true); }
+    else if (id === 'run') runFile();
+    else if (id === 'palet') { setPaletteMode('all'); setPaletteOpen(true); }
+  };
+  const MOTOR_ICOON: Record<string, React.ReactNode> = {
+    native: <Cpu size={17} />, openhands: <Hand size={17} />, claude: <Sparkle size={17} />,
+    claude2: <Sparkles size={17} />, claude3: <Sparkles size={17} />, claude4: <Sparkles size={17} />,
+    codex: <Braces size={17} />, codex2: <Braces size={17} />, codex3: <Braces size={17} />, cursor: <MousePointerClick size={17} />,
+  };
+  const MOTOR_KLEUR: Record<string, string> = {
+    native: '#22D3EE', openhands: '#F5A524', claude: '#D97757', claude2: '#E8A488', claude3: '#F4C7B0', claude4: '#FADCD0',
+    codex: '#E5E7EB', codex2: '#C7CACE', codex3: '#A9ADB3', cursor: '#8B7CF6',
+  };
+  const motorItems: ZuilItem[] = (['native', 'openhands', ...CLI_MOTOR_KNOPPEN.map(k => k.id)] as AgentEngine[]).map(id => {
+    const cli = CLI_MOTOR_KNOPPEN.find(k => k.id === id);
+    const m = motoren?.[id];
+    const eigenaar = cli ? eigenaarVan(id) : null;
+    const ontbreekt = cli && m ? !m.aanwezig : false;
+    return {
+      id,
+      label: id === 'native' ? 'AXE Native' : id === 'openhands' ? 'OpenHands' : MOTOR_LABEL[id],
+      icoon: MOTOR_ICOON[id],
+      kleur: MOTOR_KLEUR[id],
+      uit: Boolean(eigenaar),
+      uitleg: eigenaar
+        ? `${MOTOR_LABEL[id]} — hoort bij ${eigenaar}. Verdeel het anders in Instellingen → Motoren per agent.`
+        : ontbreekt
+          ? `${MOTOR_LABEL[id]} staat niet op deze host — installeer en log in met \`${m?.login ?? ''}\`.`
+          : cli?.uitleg ?? (id === 'native' ? 'AXE Native — de lus in de app, op je API-sleutels' : 'OpenHands — de agent in zijn sandbox op de VPS'),
+    };
+  });
+
   return (
-    <motion.div className="h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <AnimatePresence>
         {paletteOpen && (
           <motion.div className="absolute inset-0 z-50 flex items-start justify-center pt-14"
@@ -1232,7 +1416,32 @@ export default function CodeEditorPage() {
                   </div>
                 )}
                 {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
-                {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
+                {claudeRepoMap && Object.entries(claudeRepoMap).map(([naam, info]) => {
+                        const actief = naam === claudeRepo;
+                        const kleur = repoKleur(naam);
+                        return (
+                          <div key={naam} className="axe-code-repo-root">
+                            <button
+                              type="button"
+                              className="axe-code-repo-root__button"
+                              data-open={actief ? 'ja' : 'nee'}
+                              onClick={() => kiesRepo(naam)}
+                              title={`${naam} · ${info.branch || 'no branch'}`}
+                              style={{ '--repo-color': kleur } as CSSProperties}
+                            >
+                              <ChevronRight size={10} />
+                              <Folder size={12} />
+                              <strong>{naam}</strong>
+                              <span>{info.branch || '—'}</span>
+                            </button>
+                            {actief && (
+                              <div className="axe-code-repo-root__tree">
+                                {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={1} {...treeProps} />)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
               </div>
             )}
             {sidebarMode === 'git' && (
@@ -1254,9 +1463,18 @@ export default function CodeEditorPage() {
         data-term={showTerminal ? 'aan' : 'uit'}
         data-ontwerp={designMode ? 'aan' : 'uit'}
       >
-        <div className="axe-studio-balk">
-          <span className="axe-studio-pad"><Code2 size={12} /> <b>AXE-CORE-HEADQUARTERS</b></span>
-          {isMobile && (
+        {!isMobile && (
+          <>
+            <PlaatSlot slot="links">
+              <IcoonZuil items={weergaveItems} actief={studioStand} kies={kiesWeergave} />
+            </PlaatSlot>
+            <PlaatSlot slot="rechts">
+              <IcoonZuil items={motorItems} actief={agentEngine} kies={id => setAgentEngine(id as AgentEngine)} kant="rechts" />
+            </PlaatSlot>
+          </>
+        )}
+        {isMobile && (
+          <div className="axe-studio-balk">
             <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
               <SheetTrigger asChild>
                 <button type="button"><FolderOpen size={10} /> Files</button>
@@ -1268,56 +1486,27 @@ export default function CodeEditorPage() {
                 </div>
               </SheetContent>
             </Sheet>
-          )}
-          <span className="axe-studio-groei" />
-          <span className="axe-studio-standen">
-            <button type="button" data-aan={studioStand === 'code' ? 'ja' : undefined} onClick={() => setStudioStand('code')}>Code</button>
-            <button type="button" data-aan={studioStand === 'canvas' ? 'ja' : undefined} onClick={() => setStudioStand('canvas')}>Canvas</button>
-            <button type="button" data-aan={studioStand === 'preview' ? 'ja' : undefined} onClick={() => setStudioStand('preview')}>Preview</button>
-          </span>
-          <button type="button" data-aan={designMode ? 'ja' : undefined} title="Design mode"
-            onClick={() => { setDesignMode(v => !v); setShowPreview(true); }}>
-            <MousePointer2 size={11} /> Design
-          </button>
-          <button type="button" data-aan={showFiles ? 'ja' : undefined} onClick={() => setShowFiles(v => !v)}>Files</button>
-          <button type="button" data-aan={showPreview ? 'ja' : undefined} onClick={() => setShowPreview(v => !v)}>Preview</button>
-          <button type="button" data-aan={showTerminal ? 'ja' : undefined} onClick={() => setShowTerminal(v => !v)}>
-            <Terminal size={11} /> Term
-          </button>
-          <button type="button" onClick={runFile} title="Run active file"><Play size={11} /> Run</button>
-          <span className="axe-studio-motor" title="Which code agent — chosen here, in the editor">
-            <button type="button" data-aan={agentEngine === 'native' ? 'ja' : undefined} onClick={() => setAgentEngine('native')}>Native</button>
-            <button type="button" data-aan={agentEngine === 'openhands' ? 'ja' : undefined} onClick={() => setAgentEngine('openhands')}>Hands</button>
-            {CLI_MOTOR_KNOPPEN.map(({ id, uitleg }) => {
-              const m = motoren?.[id];
-              const ontbreekt = m ? !m.aanwezig : false;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  data-aan={agentEngine === id ? 'ja' : undefined}
-                  style={ontbreekt ? { opacity: 0.45 } : undefined}
-                  title={ontbreekt
-                    ? `${MOTOR_LABEL[id]} staat niet op deze host — log in met \`${m?.login ?? ''}\` nadat je hem hebt geïnstalleerd.`
-                    : uitleg}
-                  onClick={() => setAgentEngine(id)}
-                >
-                  {id === 'claude' ? 'Claude' : MOTOR_LABEL[id]}
-                </button>
-              );
-            })}
-          </span>
-          <button type="button" title="Ask agent — type in the AXE composer" onClick={focusComposer}>
-            <Bot size={11} /> Ask agent <span className="t-mono" style={{ opacity: 0.5 }}>⌘K</span>
-          </button>
-        </div>
+          </div>
+        )}
 
         {studioStand === 'code' && (
           <div className="axe-studio-kolommen">
             {showFiles && (
-              <aside className="axe-studio-kaart">
+              /* Een section en GEEN aside: axe-look.css maakt van elke aside in
+                 de schil een verborgen zijlade (position: fixed, buiten beeld).
+                 Als aside viel deze kolom uit het rooster, schoof de editor in
+                 het 220px-vak van de bestanden en bleef rechts een lege kolom. */
+              <section className="axe-studio-kaart axe-studio-bestanden" data-axe-doel="bestanden">
                 <div className="axe-studio-kop">
-                  <span>Files</span>
+                  <label className="axe-studio-repo" title="In welke repo je werkt — bestanden én code-agent">
+                    <GitBranch size={11} />
+                    <select value={claudeRepo} onChange={e => kiesRepo(e.target.value)} aria-label="Repo">
+                      {!claudeRepoMap && <option value={claudeRepo}>{claudeRepo || 'workspace'}</option>}
+                      {claudeRepoMap && Object.entries(claudeRepoMap).map(([naam, r]) => (
+                        <option key={naam} value={naam}>{naam} · {r.branch}{r.runnable ? '' : ' (alleen bestanden)'}</option>
+                      ))}
+                    </select>
+                  </label>
                   <span className="rechts">
                     <button type="button" onClick={() => void addFile()} title="New file"><FilePlus size={11} /></button>
                     <button type="button" onClick={() => void reloadTree()} title="Reload"><RefreshCw size={11} /></button>
@@ -1351,7 +1540,32 @@ export default function CodeEditorPage() {
                         </div>
                       )}
                       {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
-                      {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
+                      {claudeRepoMap && Object.entries(claudeRepoMap).map(([naam, info]) => {
+                        const actief = naam === claudeRepo;
+                        const kleur = repoKleur(naam);
+                        return (
+                          <div key={naam} className="axe-code-repo-root">
+                            <button
+                              type="button"
+                              className="axe-code-repo-root__button"
+                              data-open={actief ? 'ja' : 'nee'}
+                              onClick={() => kiesRepo(naam)}
+                              title={`${naam} · ${info.branch || 'no branch'}`}
+                              style={{ '--repo-color': kleur } as React.CSSProperties}
+                            >
+                              <ChevronRight size={10} />
+                              <Folder size={12} />
+                              <strong>{naam}</strong>
+                              <span>{info.branch || '—'}</span>
+                            </button>
+                            {actief && (
+                              <div className="axe-code-repo-root__tree">
+                                {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={1} {...treeProps} />)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {sidebarMode === 'search' && (
@@ -1385,10 +1599,10 @@ export default function CodeEditorPage() {
                     }} />
                   )}
                 </div>
-              </aside>
+              </section>
             )}
 
-            <section className="axe-studio-kaart axe-studio-editor">
+            <section className="axe-studio-kaart axe-studio-editor" data-axe-doel="editor">
               <div className="axe-studio-tabs">
                 {openTabs.map(tab => {
                   const isActive = tab.path === activeTabPath || tab.path === splitTabPath;
@@ -1431,10 +1645,14 @@ export default function CodeEditorPage() {
                   {indeling === 'uit' ? (
                     <SleepVlak onBestand={neemBestandAan} />
                   ) : (
+                    /* Geen eigen plaat en geen marge per paneel meer: de editorkaart
+                       van de studio IS de plaat. Een tweede kaart erbinnen gaf dubbele
+                       randen en 12px rondom, en liet Monaco maar 236px van 285 over
+                       (gemeten 13 sep op 1440x900). */
                     <div id="axe-split-container"
-                      className={`flex-1 min-h-0 flex ${opPlaat ? 'gap-3 p-3' : ''} ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
-                      <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined} style={{
-                        flex: gesplitst ? `0 0 calc(${splitRatio * 100}% - ${opPlaat ? 12 : 0}px)` : 1,
+                      className={`flex-1 min-h-0 flex ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
+                      <div style={{
+                        flex: gesplitst ? `0 0 ${splitRatio * 100}%` : 1,
                         minWidth: 0, minHeight: 0, display: 'flex',
                       }}>
                         <EditorPane tab={activeTab} activePendingPatch={activePendingPatch} isMobile={isMobile}
@@ -1451,8 +1669,7 @@ export default function CodeEditorPage() {
                             orientation={indeling === 'kolommen' ? 'vertical' : 'horizontal'}
                             onRatioChange={setSplitRatio}
                           />
-                          <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined}
-                            style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
+                          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
                             <EditorPane tab={splitTab} activePendingPatch={null} isMobile={isMobile}
                               onChange={updateContent}
                               onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
@@ -1467,7 +1684,7 @@ export default function CodeEditorPage() {
                   )}
                 </div>
                 {showAgent && (
-                  <aside className="axe-studio-agent">
+                  <section className="axe-studio-agent">
                     <div className="axe-studio-kop">
                       <span>Code agent</span>
                       <span className="rechts">
@@ -1548,8 +1765,23 @@ export default function CodeEditorPage() {
                             </ol>
                           )}
                           {msg.role === 'status' && (
-                            <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                              <RefreshCw size={8} className="animate-spin flex-shrink-0" /><span>{msg.text}</span>
+                            <div className="flex items-center gap-1.5 text-[9px] flex-wrap" style={{ color: 'var(--text-muted)' }}>
+                              {/* Een melding met een knop is een blijvende notitie
+                                  (bijv. "simpele taak, OpenHands gebruikt"), geen
+                                  "bezig"-regel die zo verdwijnt -- die krijgt dus
+                                  geen draaiend icoon. */}
+                              {!msg.action && <RefreshCw size={8} className="animate-spin flex-shrink-0" />}
+                              <span>{msg.text}</span>
+                              {msg.action && (
+                                <button
+                                  type="button"
+                                  onClick={msg.action.run}
+                                  className="rounded-full px-1.5 py-0.5"
+                                  style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}
+                                >
+                                  {msg.action.label}
+                                </button>
+                              )}
                             </div>
                           )}
                           {msg.role === 'user' && (
@@ -1575,24 +1807,24 @@ export default function CodeEditorPage() {
                         </div>
                       ))}
                     </div>
-                  </aside>
+                  </section>
                 )}
               </div>
-              <div className="axe-studio-term">
+              <div className="axe-studio-term" data-axe-doel="terminal">
                 <button type="button" className="axe-studio-termkop" onClick={() => setShowTerminal(v => !v)}
                   title={showTerminal ? 'Fold terminal' : 'Open terminal'}>
                   <span>Terminal</span>
                   {/* De NAAM van de machine, niet de belofte "this worktree".
                       Dat stond er, terwijl het vak zonder wsBasis op de VPS
                       uitkwam -- een label dat iets zegt wat niet zo was. */}
-                  <span className="axe-studio-chip">{EDITOR_HOST.naam}</span>
+                  <span className="axe-studio-chip">{editorHost?.naam ?? '…'}</span>
                   <span className="rechts">{showTerminal ? 'Fold' : 'Terminal · zsh'}</span>
                 </button>
                 <div className="axe-studio-termbody">
                   {/* Expliciet dezelfde machine als waar de code-agent draait.
                       Zonder wsBasis valt XtermTerminal terug op de VPS -- zie
                       hostVanDeEditor() in domain/terminalHosts.ts. */}
-                  <XtermTerminal ref={termRef} wsBasis={EDITOR_HOST.wsUrl} style={{ height: '100%' }} />
+                  {editorHost && <XtermTerminal key={editorHost.wsUrl} ref={termRef} wsBasis={editorHost.wsUrl} style={{ height: '100%' }} />}
                 </div>
                 <div className="axe-studio-termregel">
                   <input value={termInput} onChange={e => setTermInput(e.target.value)}
@@ -1633,7 +1865,7 @@ export default function CodeEditorPage() {
 
         {studioStand === 'canvas' && (
           <div className="axe-studio-canvas">
-            <aside className="axe-studio-kaart">
+            <section className="axe-studio-kaart">
               <div className="axe-studio-kop"><span>Layers</span></div>
               <div className="axe-studio-lagen">
                 {flattenFiles(fileTree).slice(0, 24).map(n => (
@@ -1644,7 +1876,7 @@ export default function CodeEditorPage() {
                 ))}
                 {fileTree.length === 0 && <div className="r">No files yet</div>}
               </div>
-            </aside>
+            </section>
             <section className="axe-studio-kaart axe-studio-artboard">
               <div className="axe-studio-kop">
                 <span>Canvas</span>
@@ -1662,19 +1894,19 @@ export default function CodeEditorPage() {
                   isMobile={isMobile}
                   embed
                   kader={studioDevice}
-                  layout="podium"
+                  layout="raster"
                   designMode={designMode}
                   onDesignModeChange={setDesignMode}
                   onClose={() => setStudioStand('code')}
                 />
               </div>
             </section>
-            <aside className="axe-studio-kaart">
+            <section className="axe-studio-kaart">
               <div className="axe-studio-kop"><span>Inspect</span></div>
               <div className="p-3 text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                 Design mode lives on the live preview. Apply writes the iframe; To agent sends a diff to the code agent.
               </div>
-            </aside>
+            </section>
           </div>
         )}
 

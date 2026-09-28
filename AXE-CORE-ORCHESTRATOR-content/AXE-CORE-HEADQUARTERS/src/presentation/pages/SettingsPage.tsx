@@ -1,21 +1,31 @@
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
+import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, isOpenAiTtsConfigured, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
 import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
-import { speakGlobal } from '@/infrastructure/gateways/globalTts';
+import { speakGlobal, stopGlobalTts, gekozenStemMotor, zetStemMotor } from '@/infrastructure/gateways/globalTts';
+import { STEM_MOTOREN, type StemMotor } from '@/domain/stemMotor';
+import { getCartesiaVoiceId, isCartesiaConfigured, setCartesiaVoiceId } from '@/infrastructure/gateways/cartesiaTtsService';
+import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
+import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import {
+  TabRuimte, Kaart, KaartRaster, SectieBlok, SchuifBalk,
+} from '@/presentation/components/layout/tabMaatstaf';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
 import { ProviderCard } from '@/presentation/components/settings/ProviderCard';
+import { StatusKaart, duur } from '@/presentation/components/settings/StatusKaart';
 import type { KaartStand } from '@/domain/providerCardStand';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
 // Vier onbeschermde schrijfacties stonden hier. Met een volle opslag gooide de
@@ -28,8 +38,9 @@ import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegist
 import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
-import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key,  Mic, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
+  getSelectedVoiceId,
   setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
 } from '@/infrastructure/gateways/elevenLabsService';
@@ -38,6 +49,13 @@ import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructu
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
+import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import {
+  readAllProviderUsage,
+  refreshProviderBalance,
+  type ProviderUsageSnapshot,
+} from '@/infrastructure/persistence/providerUsageService';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -120,7 +138,7 @@ const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crew
  * once already; a fifth entry would have had to be added four times, and
  * missing one of them is invisible until a good key reads as broken.
  */
-const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon']);
+const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon', 'perplexity']);
 
 /** The subset that needs nothing but a key — no base URL, no model to pick. */
 
@@ -329,6 +347,8 @@ function ProviderKeysSection() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   const [addProviderError, setAddProviderError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<Record<string, ProviderUsageSnapshot>>(() => readAllProviderUsage());
+  const [usageRefreshing, setUsageRefreshing] = useState(false);
 
   // Welke providers de VPS zelf kan bedienen.
   //
@@ -344,21 +364,89 @@ function ProviderKeysSection() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const served: string[] = [];
       try {
         const res = await fetch(apiUrl('/api/proxy/ai/providers'));
-        if (!res.ok) { if (!cancelled) setServerProviders(new Set()); return; }
-        const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
-        if (cancelled) return;
-        setServerProviders(new Set([...(body.providers ?? []), ...(body.keyless ?? [])]));
+        if (res.ok) {
+          const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
+          served.push(...(body.providers ?? []), ...(body.keyless ?? []));
+          // Cache for the chat runtime: it must know which providers the VPS serves
+          // (with the VPS's own key), so AXE can route e.g. Gemini through the proxy
+          // even though there is no local key on this device. Without this the chat
+          // cascade silently drops every VPS-only provider and falls to Ollama.
+          // Perplexity hoort hier NIET in: dat is onderzoek, geen chat-slot.
+          try { localStorage.setItem('axe_server_providers', JSON.stringify(served)); } catch { /* ignore */ }
+        }
       } catch {
-        // Server onbereikbaar. Een lege set is hier beter dan null blijven:
-        // het scherm valt terug op het oude gedrag, en de automatische meting
-        // hieronder blijft niet eeuwig wachten op een antwoord dat niet komt.
-        if (!cancelled) setServerProviders(new Set());
+        // Server onbereikbaar. De lijst hieronder mag leeg blijven; een
+        // onderzoek-probe mag Gemini/Groq niet van het scherm vegen.
       }
+      const namen = new Set(served);
+      try {
+        const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+        const pplx = await testPerplexityOpServer();
+        if (pplx.ok) namen.add('perplexity');
+        if (!cancelled) {
+          setKeys(prev => {
+            const next = {
+              ...prev,
+              perplexity: {
+                ...prev.perplexity,
+                lastTest: pplx.ok ? 'ok' as const : 'fail' as const,
+                lastTestAt: new Date().toISOString(),
+                lastError: pplx.ok ? undefined : (pplx.error || 'Not configured'),
+              },
+            };
+            saveProviderKeys(next);
+            return next;
+          });
+        }
+      } catch {
+        // Onderzoekszijde apart: een fout hier mag OpenAI/Groq niet op "geen
+        // server-sleutel" zetten.
+      }
+      if (!cancelled) setServerProviders(namen);
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const sync = () => setUsage(readAllProviderUsage());
+    window.addEventListener('axe:provider-usage', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('axe:provider-usage', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  const BALANCE_PROVIDERS = new Set(['openrouter', 'openrouter2', 'elevenlabs', 'deepseek']);
+  const refreshUsage = async (onlyId?: string) => {
+    if (usageRefreshing) return;
+    setUsageRefreshing(true);
+    try {
+      const ids = onlyId
+        ? [onlyId]
+        : PROVIDER_KEY_CATALOGUE.map(p => p.id).filter(id => BALANCE_PROVIDERS.has(id));
+      for (const id of ids) {
+        if (!BALANCE_PROVIDERS.has(id)) continue;
+        const key = keys[id]?.key;
+        if (!key && !(serverProviders?.has(id) ?? false)) continue;
+        try { await refreshProviderBalance(id, key); } catch { /* one provider must not block the rest */ }
+      }
+      setUsage(readAllProviderUsage());
+    } finally {
+      setUsageRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (serverProviders === null) return;
+    void refreshUsage();
+    // Settings-open + manual refresh is deliberate: exact balance endpoints
+    // should not become a background poller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverProviders]);
 
 
   // Known-format defaults — there's exactly one real endpoint for these two
@@ -376,7 +464,16 @@ function ProviderKeysSection() {
       const storedCustom = await loadSetting<CustomProvider[]>(CUSTOM_PROVIDERS_KEY, []);
       if (!alive) return;
       cloudSnapshot = stored;
-      if (Object.keys(stored).length > 0) setKeys(prev => ({ ...prev, ...stored }));
+      if (Object.keys(stored).length > 0) setKeys(prev => {
+        const merged = { ...prev, ...stored };
+        // Persist the Supabase-synced keys to THIS device's localStorage. The
+        // chat runtime (getProviderKeySlot / collectAllSlots) reads localStorage
+        // only, so a key set on another device (or synced from the cloud) shows
+        // "Connected" here but was invisible to AXE's chat — which is why AXE
+        // fell back to Ollama instead of using Gemini. Now they share one source.
+        try { localStorage.setItem('axe_llm_connections', JSON.stringify(merged)); } catch { /* ignore */ }
+        return merged;
+      });
       if (storedCustom.length > 0) setCustomProviders(storedCustom);
     };
     void hydrate();
@@ -436,6 +533,36 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (stOk) delete n[id]; else n[id] = msg; return n; });
+      return;
+    }
+
+    // Perplexity is research on the VPS, not an LLM. Never probe it as chat
+    // (that would spend a paid question) and never send a browser key — the
+    // key lives on the server.
+    if (id === 'perplexity') {
+      const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');
+      const { ok: pxOk, error: pxErr } = await testPerplexityOpServer();
+      setTesting(t => ({ ...t, [id]: pxOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: pxOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: pxOk ? undefined : pxErr } };
+        saveConnections(next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (pxOk) delete n[id]; else n[id] = pxErr ?? 'Not configured'; return n; });
+      return;
+    }
+
+    // Cartesia is TTS, not an LLM — list voices, don't chat-complete.
+    if (id === 'cartesia') {
+      const { testCartesiaKey } = await import('@/infrastructure/gateways/cartesiaTtsService');
+      const { ok: caOk, error: caErr } = await testCartesiaKey(conn.key ?? '');
+      setTesting(t => ({ ...t, [id]: caOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: caOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: caOk ? undefined : caErr } };
+        saveConnections(next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (caOk) delete n[id]; else n[id] = caErr ?? 'Cartesia test mislukt'; return n; });
       return;
     }
 
@@ -564,6 +691,10 @@ function ProviderKeysSection() {
         return next;
       });
     }
+    if (!isAutoTest && BALANCE_PROVIDERS.has(id)) {
+      void refreshUsage(id);
+    }
+
     // Only an explicit, manual "Test" click may promote a provider to
     // primary. The background self-test on Settings load used to do this
     // too — silently swapping AXE's actual chat provider to whichever one
@@ -650,6 +781,7 @@ function ProviderKeysSection() {
 
   return (
     <div>
+      <AgentMotorenSection />
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -660,6 +792,14 @@ function ProviderKeysSection() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => { void refreshUsage(); }}
+            disabled={usageRefreshing}
+            title="Refresh exact provider balances where supported"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+            style={{ border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)', opacity: usageRefreshing ? 0.6 : 1 }}>
+            <RefreshCw size={12} className={usageRefreshing ? 'animate-spin' : ''} /> Usage
+          </button>
           <button
             onClick={() => { voice.clearRoutingLog(); }}
             title="Wis routing history (ROUTER TRACE)"
@@ -703,8 +843,8 @@ function ProviderKeysSection() {
         </div>
       )}
 
-      {/* Provider cards grid */}
-      <div className={LIST_GRID}>
+      {/* Provider cards grid — gelijke kolommen, geen 1fr-rek. */}
+      <KaartRaster>
         {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
           const isCustom = customProviders.some(p => p.id === cat.id);
@@ -736,124 +876,148 @@ function ProviderKeysSection() {
               modellen={MODEL_CHIPS[cat.id] ?? []}
               isPrimair={isPrimary}
               aangepast={isCustom}
+              gebruik={usage[cat.id] ?? null}
               onSleutel={(waarde) => update(cat.id, 'key', waarde)}
               onModel={(model) => update(cat.id, 'model', model)}
               onTest={() => testProvider(cat.id, isCustom)}
               onToonSleutel={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))}
-              onPrimair={() => voice.setPrimarySlot(isPrimary ? null : {
-                provider: cat.id as ProviderId,
-                key: conn.key ?? '',
-                model: conn.model || standaardModel || '',
-                baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
-              })}
               onVerwijder={isCustom ? () => removeCustomProvider(cat.id) : undefined}
             />
           );
         })}
-      </div>
+      </KaartRaster>
     </div>
   );
 }
 
 /**
- * De stemkeuze: vier, en niet een bibliotheek.
- *
- * Hier stond de HELE ElevenLabs-lijst: tientallen namen met land en
- * omschrijving, opgehaald bij het openen. Voor dit doel klinken die
- * nauwelijks verschillend, dus je luisterde twintig voorbeelden en koos
- * alsnog de eerste -- een keuzelijst die je niet kunt beantwoorden is geen
- * keuze maar werk.
- *
- * Nu vier: AXE (Fish), een man, een vrouw, en de browser als vangnet. De lijst
- * staat in domain/stemKeuzes met een test die hem kort houdt.
- *
- * Kiezen zet MEEBEEN de motor. Dat was hiervoor twee losse instellingen -- een
- * stem hier en een provider verderop -- en je kon dus een ElevenLabs-stem
- * kiezen terwijl Fish aan het praten was. Eén keuze, één uitkomst.
+ * De stem is geen keuze meer. AXE spreekt George; Cedar alleen als George
+ * niets hoorbaars kan maken. Dit blok toont die identiteit en of de lokale
+ * dienst (com.axe.tts) echt draait — groen of rood, met wat je eraan doet.
+ * Listen gaat door speakGlobal, dezelfde keten als elk chatantwoord.
  */
+function fishSleutelAanwezig(): boolean {
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>;
+    if ((conns.fishaudio?.key ?? conns.fish?.key ?? '').trim()) return true;
+  } catch { /* ignore */ }
+  return Boolean(import.meta.env.VITE_FISH_AUDIO_API_KEY);
+}
+
+function motorAan(id: StemMotor): boolean {
+  if (id === 'george') return true;
+  if (id === 'cedar') return isOpenAiTtsConfigured();
+  if (id === 'elevenlabs-flash' || id === 'elevenlabs-v3') return isElevenLabsConfigured();
+  if (id === 'cartesia') return isCartesiaConfigured();
+  if (id === 'fish') return fishSleutelAanwezig();
+  return false;
+}
+
 function VoiceSection() {
-  const [gekozen, setGekozen] = useState<string>(() => {
-    try { return localStorage.getItem(STEM_SLEUTEL) ?? STANDAARD_STEM; } catch { return STANDAARD_STEM; }
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [stand, setStand] = useState<StemStand | null>(null);
+  const [motor, setMotor] = useState<StemMotor>(() => gekozenStemMotor());
+  const [elVoice, setElVoice] = useState(() => {
+    try { return getSelectedVoiceId(); } catch { return ''; }
   });
-  const [speelt, setSpeelt] = useState<string | null>(null);
-  const [melding, setMelding] = useState<string | null>(null);
+  const [caVoice, setCaVoice] = useState(() => {
+    try { return getCartesiaVoiceId(); } catch { return ''; }
+  });
 
-  const kies = (id: string) => {
-    const stem = stemVan(id);
-    setGekozen(stem.id);
-    try {
-      localStorage.setItem(STEM_SLEUTEL, stem.id);
-      // De motor mee. Zonder dit kies je een ElevenLabs-stem terwijl Fish
-      // blijft praten -- de instelling die niets deed.
-      localStorage.setItem(TTS_PROVIDER_KEY, stem.motor);
-    } catch { /* volle opslag mag de keuze niet blokkeren */ }
-    if (stem.stemId) setSelectedVoiceId(stem.stemId);
-  };
+  useEffect(() => {
+    let live = true;
+    void probeGeorgeStem().then((s) => { if (live) setStand(s); });
+    return () => { live = false; };
+  }, []);
 
-  const proef = (id: string) => {
-    stopTTS();
-    if (speelt === id) { setSpeelt(null); return; }
-    const stem = stemVan(id);
-    setSpeelt(id);
-    setMelding(null);
-    if (stem.motor === 'elevenlabs' && stem.stemId) {
-      setSelectedVoiceId(stem.stemId);
-      void speakWithElevenLabs(
-        'Hoi Luka, zo klinkt deze stem.',
-        () => setSpeelt(null),
-        () => setSpeelt(null),
-        (reden) => setMelding(`ElevenLabs speelde dit niet af — je hoorde de browser. Reden: ${reden}`),
-      );
-      return;
-    }
-    // Fish en browser lopen allebei via de globale TTS; die kiest op de
-    // provider die we net hebben gezet.
+  const listen = () => {
+    if (playing) { stopGlobalTts(); setPlaying(false); return; }
+    setError(null);
+    setPlaying(true);
     speakGlobal(
-      'Hoi Luka, zo klinkt deze stem.',
-      () => setSpeelt(null),
-      (reden) => { setSpeelt(null); setMelding(`Kon deze stem niet afspelen: ${reden}`); },
+      'Hi Luka, this is the AXE voice.',
+      () => setPlaying(false),
+      (reason) => { setPlaying(false); setError(`Could not play the voice: ${reason}`); },
     );
   };
 
+  const kies = (id: StemMotor) => {
+    if (!motorAan(id)) return;
+    zetStemMotor(id);
+    setMotor(id);
+  };
+
+  const standKleur = stand == null
+    ? 'var(--text-muted)'
+    : stand.ok ? 'var(--success)' : 'var(--error)';
+
+  // Gemeten: first-audio van de laatste beurten (routeringslog) — alleen voor
+  // de stem die nu spreekt. De rest toont de opgegeven typische waarde.
+  const routingLog = useVoiceStore(st => st.routingLog);
+  const gemeten = (() => {
+    const ms = routingLog.map(ev => ev.firstAudioMs).filter((x): x is number => typeof x === 'number').slice(0, 20);
+    return ms.length ? Math.round(ms.reduce((x, y) => x + y, 0) / ms.length) : null;
+  })();
+  const actieveNaam = STEM_MOTOREN.find(m => m.id === motor)?.naam ?? 'George';
+
   return (
-    <WidgetCard title="STEM" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
-      <div className="space-y-1.5">
-        <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
-          Welke stem AXE gebruikt. Dit staat los van welk model je vragen beantwoordt.
-        </p>
-        {melding && (
-          <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
-            <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-            <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{melding}</p>
+    <>
+      <StatusKaart
+        naam="Voice test"
+        accent="var(--accent-cyan)"
+        rol={STEM_UI.uitleg}
+        stand={stand == null ? { toon: 'muted', tekst: 'Checking' } : stand.ok ? { toon: 'ok', tekst: 'George running' } : { toon: 'bad', tekst: 'George down' }}
+        keuze={
+          <button type="button" onClick={listen} className="axe-agentkaart-knop">
+            <Play size={12} /> {playing ? STEM_UI.speelt : `${STEM_UI.luister} · ${actieveNaam}`}
+          </button>
+        }
+        stats={[
+          { label: 'In use', waarde: actieveNaam },
+          { label: 'First audio', waarde: gemeten != null ? duur(gemeten) : '—' },
+          { label: 'Turns', waarde: String(routingLog.length) },
+          { label: 'Fallback', waarde: 'Cedar' },
+        ]}
+        melding={error ?? stand?.watNu ?? undefined}
+      />
+      {STEM_MOTOREN.map((m) => {
+        const aan = motorAan(m.id);
+        const actief = motor === m.id;
+        return (
+          <StatusKaart
+            key={m.id}
+            naam={m.naam}
+            accent={actief ? 'var(--accent-cyan)' : 'var(--text-muted)'}
+            rol={m.regel}
+            stand={actief ? { toon: 'ok', tekst: 'In use' } : aan ? { toon: 'info', tekst: 'Available' } : { toon: 'muted', tekst: 'Needs key' }}
+            keuze={
+              <button type="button" disabled={!aan || actief} onClick={() => kies(m.id)} className="axe-agentkaart-knop" data-axe-stem-motor={m.id} data-axe-stem-aan={aan ? '1' : '0'}>
+                {actief ? 'In use' : aan ? 'Use this voice' : `Needs key · ${m.sleutel}`}
+              </button>
+            }
+            stats={[
+              { label: actief && gemeten != null ? 'Measured' : 'Typical', waarde: actief && gemeten != null ? duur(gemeten) : m.latency.split(' ')[0] },
+              { label: 'Streaming', waarde: m.streaming ? 'Yes' : 'No' },
+              { label: 'Key', waarde: m.id === 'george' ? 'None' : aan ? 'Set' : 'Missing' },
+              { label: 'Where', waarde: m.id === 'george' ? 'This Mac' : 'Cloud' },
+            ]}
+          />
+        );
+      })}
+      <StatusKaart
+        naam="Voice IDs"
+        accent="var(--text-secondary)"
+        rol="Paste from the ElevenLabs Voice Library or Cartesia. Empty keeps the default."
+        stand={{ toon: elVoice || caVoice ? 'info' : 'muted', tekst: elVoice || caVoice ? 'Custom' : 'Default' }}
+        keuze={
+          <div className="flex flex-col gap-2">
+            <input value={elVoice} onChange={(e) => { setElVoice(e.target.value); setSelectedVoiceId(e.target.value); }} placeholder="ElevenLabs voice ID" aria-label="ElevenLabs voice ID" />
+            <input value={caVoice} onChange={(e) => { setCaVoice(e.target.value); setCartesiaVoiceId(e.target.value); }} placeholder="Cartesia voice ID" aria-label="Cartesia voice ID" />
           </div>
-        )}
-        {STEMMEN.map(v => {
-          const aan = v.id === gekozen;
-          const bezig = v.id === speelt;
-          const kan = v.motor !== 'elevenlabs' || isElevenLabsConfigured();
-          return (
-            <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
-              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', opacity: kan ? 1 : 0.55 }}>
-              <button onClick={() => kan && kies(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0" disabled={!kan}>
-                <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: aan ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
-                <span className="min-w-0">
-                  <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{v.naam}</span>
-                  <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>
-                    {/* Waarom hij niet kan, in plaats van een knop die niets doet. */}
-                    {kan ? v.uitleg : 'Geen ElevenLabs-sleutel (VITE_ELEVENLABS_API_KEY)'}
-                  </p>
-                </span>
-              </button>
-              <button onClick={() => kan && proef(v.id)} disabled={!kan}
-                className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-                style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: bezig ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
-                <Play size={11} /> {bezig ? 'Speelt…' : 'Beluister'}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </WidgetCard>
+        }
+      />
+    </>
   );
 }
 
@@ -862,8 +1026,10 @@ const STEM_SLEUTEL = 'axe_stem';
 
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
-function loadTtsProvider(): 'fish' | 'elevenlabs' | 'browser' {
-  try { return (localStorage.getItem(TTS_PROVIDER_KEY) as 'fish' | 'elevenlabs' | 'browser') || 'fish'; } catch { return 'fish'; }
+type TtsKeuze = 'fish' | 'elevenlabs' | 'openai' | 'browser';
+
+function loadTtsProvider(): TtsKeuze {
+  try { return (localStorage.getItem(TTS_PROVIDER_KEY) as TtsKeuze) || 'fish'; } catch { return 'fish'; }
 }
 
 /** Voice provider — Fish Audio is the default (no paid ElevenLabs account),
@@ -875,8 +1041,9 @@ function FishAudioSection() {
   const [voiceId, setVoiceIdState] = useState(getFishVoiceId);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openAiStem, setOpenAiStemState] = useState<OpenAiStem>(getOpenAiStem);
 
-  const chooseProvider = (next: 'fish' | 'elevenlabs' | 'browser') => {
+  const chooseProvider = (next: TtsKeuze) => {
     setProvider(next);
     try { localStorage.setItem(TTS_PROVIDER_KEY, next); } catch { /* ignore */ }
   };
@@ -915,11 +1082,40 @@ function FishAudioSection() {
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           ElevenLabs
         </button>
+        <button onClick={() => chooseProvider('openai')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'openai' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          OpenAI
+        </button>
         <button onClick={() => chooseProvider('browser')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Browser (built-in)
         </button>
       </div>
+
+      {/* Arbor staat hier niet tussen, en dat is geen omissie: Arbor, Breeze,
+          Juniper, Cove en Ember zijn stemmen van de ChatGPT-APP. De API voert
+          een andere vaste lijst (nagelezen in OpenAI's TTS-gids, 16 sep 2026);
+          een app-stem is niet met een sleutel op te halen. marin en cedar zijn
+          OpenAI's eigen aanbeveling en staan daarom bovenaan. */}
+      {provider === 'openai' && (
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            <select
+              value={openAiStem}
+              onChange={e => { const v = e.target.value as OpenAiStem; setOpenAiStem(v); setOpenAiStemState(v); }}
+              className="flex-1 rounded-lg px-2 py-1.5 text-xs-custom"
+              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              aria-label="OpenAI-stem"
+            >
+              {OPENAI_STEMMEN.map(v => <option key={v} value={v}>{v}{v === 'marin' || v === 'cedar' ? ' — aanbevolen' : ''}</option>)}
+            </select>
+          </div>
+          <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+            Arbor, Breeze, Juniper, Cove en Ember zijn alleen in de ChatGPT-app beschikbaar, niet via de API.
+            Gebruikt gpt-4o-mini-tts met je OpenAI-sleutel uit Connections.
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-1.5">
         <input
@@ -946,7 +1142,6 @@ function FishAudioSection() {
 }
 
 function OllamaModelsSection() {
-  const voice = useVoiceStore();
   const [registry, setRegistry] = useState(getStoredLlmModelRegistry());
   const [health, setHealth] = useState<Record<string, OllamaModelHealth>>(loadOllamaModelHealth());
   const [syncing, setSyncing] = useState(false);
@@ -981,7 +1176,7 @@ function OllamaModelsSection() {
     try {
       const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
       const baseUrl = conns.ollama?.baseUrl ?? OLLAMA_BASE_URL;
-      const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
+      const res = await fetch(`${baseUrl}/api/tags`, { headers: ollamaHeaders(baseUrl), signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
       const data = await res.json();
       const names = (data?.models ?? [])
@@ -1022,12 +1217,47 @@ function OllamaModelsSection() {
       ...health,
       [modelName]: { ...health[modelName], status: 'testing', lastTestAt: new Date().toISOString(), baseUrl },
     });
-    const ok = await voice.testSlot({ provider: 'ollama', key: '', model: modelName, baseUrl });
-    const err = ok ? undefined : (useVoiceStore.getState().error ?? 'Test mislukt').slice(0, 180);
-    if (!ok) useVoiceStore.setState({ error: null }); // see the Gemini test above — don't leak into the shared live-chat error banner
+
+    let ok = false;
+    let err: string | undefined;
+    try {
+      // Test the model on Ollama itself. The generic provider test went through
+      // AXE's proxy and could abort while an 8B model was still cold-loading,
+      // producing "Fetch is aborted" even though /api/tags proved the box was
+      // reachable. A model-health card should test the model, not the proxy.
+      const root = baseUrl.replace(/\/+$/, '');
+      const res = await fetch(`${root}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...ollamaHeaders(root) },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: 'user', content: 'Reply only with OK' }],
+          stream: false,
+          think: false,
+          keep_alive: '5m',
+          options: { num_predict: 8, temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(180_000),
+      });
+      const raw = await res.text();
+      if (!res.ok) {
+        const detail = raw.replace(/\s+/g, ' ').trim().slice(0, 180);
+        throw new Error(`Ollama HTTP ${res.status}${detail ? `: ${detail}` : ''}`);
+      }
+      const data = JSON.parse(raw) as { message?: { content?: string }; response?: string };
+      if (!(data.message?.content ?? data.response ?? '').trim()) throw new Error('Ollama returned no content');
+      ok = true;
+    } catch (e) {
+      err = e instanceof Error
+        ? (e.name === 'TimeoutError' || /abort/i.test(e.message)
+          ? `Ollama model ${modelName} did not answer within 180s`
+          : e.message)
+        : String(e);
+    }
+
     saveHealth({
       ...health,
-      [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err, baseUrl },
+      [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err?.slice(0, 180), baseUrl },
     });
     setTesting(prev => ({ ...prev, [modelName]: false }));
   };
@@ -1115,7 +1345,7 @@ function OllamaModelsSection() {
               : `● Sync mislukt (${syncState.error}) — onderstaande lijst is gecached, niet bevestigd live op ${new Date(syncState.at).toLocaleTimeString()}`}
           </div>
         )}
-        <div className={LIST_GRID}>
+        <KaartRaster>
           {models.map(model => {
             const state = health[model.name];
             const isOk = state?.status === 'ok';
@@ -1148,11 +1378,10 @@ function OllamaModelsSection() {
                 onModel={() => {}}
                 onTest={() => testModel(model.name)}
                 onToonSleutel={() => {}}
-                onPrimair={() => {}}
               />
             );
           })}
-        </div>
+        </KaartRaster>
       </div>
   );
 }
@@ -1732,7 +1961,6 @@ const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
   { id: 'git_write', label: 'Commit files to GitHub' },
   { id: 'git_pr_merge', label: 'Pull requests mergen' },
   { id: 'db_sql', label: 'SQL draaien op Supabase' },
-  { id: 'vercel_promote', label: 'Vercel-deployment promoten' },
   { id: 'agent', label: 'Hand tasks to an external agent' },
   { id: 'smart_home', label: 'Smart home (SmartThings)' },
   // These two reach the worktree the running app is served from, so they
@@ -1809,6 +2037,12 @@ export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
+  const [sectie, setSectie] = useState('providers');
+  // Eén sectie tegelijk, zoals de Browser: de lade kiest, het vak toont die
+  // ene sectie als dashboard in kaarten (25 sep).
+  const kiesSectie = (id: string) => {
+    setSectie(id);
+  };
 
   useEffect(() => { voice.checkMicPermission(); }, []);
   useEffect(() => { loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled); }, []);
@@ -1839,132 +2073,119 @@ export default function SettingsPage() {
   }, [voice.micPermission]);
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <h1 className="flex-none text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <BuildStampLine />
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: 'Setup',
+              items: [
+                { id: 'providers', label: 'Providers', actief: sectie === 'providers', onKies: () => kiesSectie('providers') },
+                { id: 'voice', label: 'Voice', actief: sectie === 'voice', onKies: () => kiesSectie('voice') },
+                { id: 'trust', label: 'Trust', actief: sectie === 'trust', onKies: () => kiesSectie('trust') },
+              ],
+            },
+            {
+              titel: 'System',
+              items: [
+                { id: 'routing', label: 'Routing', actief: sectie === 'routing', onKies: () => kiesSectie('routing') },
+                { id: 'system', label: 'Services', actief: sectie === 'system', onKies: () => kiesSectie('system') },
+              ],
+            },
+          ]}
+        />
+      </TabRail>
+      <TabRuimte className="axe-settings">
+        <BuildStampLine />
+        {/* Says so when a save only reached this device. Without it, pasting an
+            API key while signed out looks identical to pasting one that worked,
+            and every background agent keeps using the old value. */}
+        <UnsyncedSettingsBanner />
 
-      {/* Says so when a save only reached this device. Without it, pasting an
-          API key while signed out looks identical to pasting one that worked,
-          and every background agent keeps using the old value. */}
-      <UnsyncedSettingsBanner />
+        {sectie === 'providers' && (
+        <SectieBlok id="providers" titel="PROVIDERS">
+          <ProviderKeysSection />
+          <OllamaModelsSection />
+        </SectieBlok>
+        )}
 
-      <div className="space-y-4">
-
-         {/* ── Provider Keys (unified smart-router keys) ────────────── */}
-         <ProviderKeysSection />
-
-         {/* ── Ollama Models ─────────────────────────────────────────── */}
-        <OllamaModelsSection />
-
-        {/* ── Microphone ───────────────────────────────────────────── */}
-        <WidgetCard title="MICROPHONE" headerAction={<Mic size={14} style={{ color: 'var(--text-muted)' }} />}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-small" style={{ color: 'var(--text-primary)' }}>Browser microphone access</p>
-                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Permission: <span style={{ color: voice.micPermission === 'granted' ? 'var(--success)' : voice.micPermission === 'denied' ? 'var(--error)' : 'var(--warning)' }}>{voice.micPermission}</span>
-                  {' · '}Recognition supported: <span style={{ color: voice.recognitionSupported ? 'var(--success)' : 'var(--error)' }}>{voice.recognitionSupported ? 'yes' : 'no'}</span>
-                </p>
-              </div>
-              <button onClick={testMic} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs-custom"
-                style={{ border: '1px solid var(--border-subtle)', color: micTest === 'ok' ? 'var(--success)' : micTest === 'denied' ? 'var(--error)' : 'var(--accent-cyan)', fontWeight: micTest === 'idle' ? 500 : 600 }}>
+        {sectie === 'voice' && (
+        <SectieBlok id="voice" titel="VOICE">
+          <div className="axe-agent-raster axe-agent-raster--ruim">
+          <StatusKaart
+            naam="Microphone"
+            accent="var(--accent-cyan)"
+            rol="Browser microphone access. Use the circle button in the bottom bar to talk to AXE."
+            stand={voice.micPermission === 'granted' ? { toon: 'ok', tekst: 'Granted' } : voice.micPermission === 'denied' ? { toon: 'bad', tekst: 'Blocked' } : { toon: 'warn', tekst: String(voice.micPermission) }}
+            keuze={
+              <button type="button" onClick={testMic} className="axe-agentkaart-knop">
                 {micTest === 'testing' ? <RefreshCw size={12} className="animate-spin" /> : <Mic size={12} />}
-                {micTest === 'idle' ? 'Test Mic' : micTest === 'testing' ? 'Testing...' : micTest === 'ok' ? 'Mic Works!' : 'Permission Denied'}
+                {micTest === 'idle' ? 'Test mic' : micTest === 'testing' ? 'Testing…' : micTest === 'ok' ? 'Mic works' : 'Permission denied'}
               </button>
-            </div>
-            {voice.micPermission === 'denied' && (
-              <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-                <AlertTriangle size={13} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
-                <p className="text-xs-custom" style={{ color: 'var(--error)' }}>
-                  Microphone blocked. Click the lock icon in the address bar → Site Settings → Microphone → Allow → Refresh page.
-                </p>
-              </div>
-            )}
-            {micTest === 'ok' && (
-              <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
-                <Check size={13} style={{ color: 'var(--success)', flexShrink: 0, marginTop: 1 }} />
-                <p className="text-xs-custom" style={{ color: 'var(--success)' }}>Microphone is working correctly. Use the circle button in the bottom bar to talk to AXE.</p>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border-active)' }}>
-              <div>
-                <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
-                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Clap twice (or three times) to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
-                </p>
-              </div>
-              <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
-                className="relative flex-shrink-0 rounded-full transition-colors"
-                style={{ width: 38, height: 22, background: clapEnabled ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}>
-                <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
-              </button>
-            </div>
+            }
+            stats={[
+              { label: 'Permission', waarde: String(voice.micPermission) },
+              { label: 'Recognition', waarde: voice.recognitionSupported ? 'Yes' : 'No' },
+              { label: 'Last test', waarde: micTest === 'idle' ? '—' : micTest },
+              { label: 'Clap', waarde: clapEnabled ? 'On' : 'Off' },
+            ]}
+            melding={voice.micPermission === 'denied' ? 'Microphone blocked: allow it in the site / app settings and reload.' : undefined}
+          />
+          <StatusKaart
+            naam="Clap to activate"
+            accent="var(--text-secondary)"
+            rol="Clap three times, sharply, to open AXE and start listening from anywhere. Keeps the mic on in the background while enabled."
+            stand={clapEnabled ? { toon: 'ok', tekst: 'On' } : { toon: 'muted', tekst: 'Off' }}
+            keuze={
+              <label className="axe-agentkaart-schakel">
+                <input type="checkbox" checked={clapEnabled} onChange={toggleClap} />
+                Clap to activate {clapEnabled ? 'on' : 'off'}
+              </label>
+            }
+          />
+          <VoiceSection />
           </div>
-        </WidgetCard>
+        </SectieBlok>
+        )}
 
-        {/* ── Voice (ElevenLabs TTS) ───────────────────────────────── */}
-        <VoiceSection />
+        {sectie === 'trust' && (
+        <SectieBlok id="trust" titel="TRUST">
+          <div className="axe-agent-raster axe-agent-raster--sectie">
+          <MindsetQuotesSection />
+          <TrustLevelsSection />
+          <LookSection />
+          <ToolCallingSection />
+          </div>
+        </SectieBlok>
+        )}
 
-        {/* ── Fish Audio (second, optional voice provider) ──────────── */}
-        <FishAudioSection />
+        {sectie === 'routing' && (
+        <SectieBlok id="routing" titel="ROUTING">
+          <div className="axe-agent-raster axe-agent-raster--sectie">
+          <Kaart titel="AXE BRANCHES">
+            <BranchRouterSection />
+          </Kaart>
+          <Kaart titel="CAPABILITY ROUTER">
+            <CapabilityRouterSection />
+          </Kaart>
+          </div>
+        </SectieBlok>
+        )}
 
-        {/* ── AXE Quotes (between voice and trust) ─────────────────── */}
-        <MindsetQuotesSection />
+        {sectie === 'system' && (
+        <SectieBlok id="system" titel="SYSTEM">
+          <div className="axe-agent-raster axe-agent-raster--sectie">
+          <RemoteTerminalSection />
+          <ServiceHealthSection />
+          <Kaart titel="DEVELOPER — GITHUB REPOS">
+            <GitHubReposSection />
+          </Kaart>
+          </div>
+        </SectieBlok>
+        )}
 
-        {/* ── Trust & Autonomie (capability ladder) ─────────────────── */}
-        <TrustLevelsSection />
 
-        {/* Tool calling — direct onder de trust-ladder, want het is dezelfde
-            vraag: wat mag AXE zelf doen. */}
-        <LookSection />
-        <ToolCallingSection />
-
-        {/* ── AXE Branches (A/B/C) ──────────────────────────────── */}
-        <WidgetCard title="AXE BRANCHES">
-          <BranchRouterSection />
-        </WidgetCard>
-
-        {/* ── Capability Router ─────────────────────────────────── */}
-        <WidgetCard title="CAPABILITY ROUTER">
-          <CapabilityRouterSection />
-        </WidgetCard>
-
-        {/* ── Remote Terminal ───────────────────────────────────── */}
-        <RemoteTerminalSection />
-
-        {/* ── Live Services ──────────────────────────────────────── */}
-        <ServiceHealthSection />
-
-        {/* ── Developer: GitHub Repos ───────────────────────────────── */}
-        <WidgetCard title="DEVELOPER — GITHUB REPOS">
-          <GitHubReposSection />
-        </WidgetCard>
-
-        {/* ── General settings grid ─────────────────────────────────────── */}
-        <div className={LIST_GRID}>
-          {[
-            { title: 'Appearance', icon: Palette, items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
-            { title: 'Keyboard',   icon: '⌨️', items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },
-            { title: 'Security',   icon: Lock, items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
-            { title: 'System',     icon: Settings, items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
-          ].map(group => (
-            <WidgetCard key={group.title} title={`${group.icon} ${group.title}`}>
-              <div className="space-y-2">
-                {group.items.map(item => (
-                  <div key={item.k} className="flex items-center justify-between py-0.5">
-                    <span className="text-small" style={{ color: 'var(--text-secondary)' }}>{item.k}</span>
-                    <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-primary)' }}>{item.v}</span>
-                  </div>
-                ))}
-              </div>
-            </WidgetCard>
-          ))}
-        </div>
-      </div>
-      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

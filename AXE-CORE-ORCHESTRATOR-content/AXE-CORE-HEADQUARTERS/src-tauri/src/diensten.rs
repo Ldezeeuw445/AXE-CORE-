@@ -156,6 +156,11 @@ pub fn start_dienst(id: &str) -> Result<String, String> {
     let p = plan(id).ok_or_else(|| format!("Onbekende dienst: {id}"))?;
 
     if luistert(p.poort) {
+        // Overnemen, niet negeren. Gemeten 14 september: de app startte om 15:36
+        // terwijl een oudere API nog op 8001 liep. Die telde niet als "van ons",
+        // dus toen hij om 15:52 stopte zette de bewaker hem nooit meer aan -- en
+        // de planner lag een half uur stil zonder dat iemand het zag.
+        onthoud_gestart(p.id);
         return Ok(format!(
             "{} luisterde al op poort {} — niets gestart.",
             p.naam, p.poort

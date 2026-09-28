@@ -2,8 +2,21 @@
  * Professional trading-bot domain types.
  * Paper / demo first; live brokers plug in via connectors.
  */
+import type { DecisionVerdict } from '@/domain/tradingIntel/decisionVerdict';
 
-export type RiskMode = 'personal_demo' | 'funded_challenge' | 'funded_live_rules';
+/**
+ * Welk soort account dit is. 'custom' bestond niet: wie een preset aanpaste,
+ * hield het label van de preset terwijl de regels al lang andere waren.
+ */
+export type RiskMode = 'personal_demo' | 'funded_challenge' | 'funded_live_rules' | 'custom';
+
+/** Een tijdvenster waarin geopend mag worden, in `resetTimezone`. HH:MM, 24 uur. */
+export interface SessionWindow {
+  start: string;
+  end: string;
+  /** 0 = zondag … 6 = zaterdag. Leeg of weggelaten = elke dag. */
+  days?: number[];
+}
 
 export type BrokerKind = 'paper_live_prices' | 'mt5_demo' | 'krypt' | 'none';
 
@@ -26,6 +39,47 @@ export interface RiskProfile {
   maxDrawdownPct?: number;
   /** Funded: profit target before scaling (challenge) */
   profitTargetPct?: number;
+
+  // ── Accountregels (alle optioneel: een bewaard profiel van vóór deze velden
+  //    blijft werken, en een veld dat ontbreekt legt niets op) ──────────────
+
+  /** Waar een aangepast profiel van afstamt, als mode 'custom' is. */
+  basedOn?: Exclude<RiskMode, 'custom'>;
+  /**
+   * Startsaldo van het account (challenge-start). Basis voor statische
+   * drawdown, de winstdoelstelling en de dagverliesgrens als die op het
+   * startsaldo gemeten wordt. Zonder dit veld is statische drawdown niet te
+   * berekenen en valt hij terug op de trailing breaker.
+   */
+  initialBalance?: number;
+  /** Wanneer de challenge begon (ISO). Telt handelsdagen en consistentie vanaf hier. */
+  startedAt?: string;
+  /** 'trailing' = vanaf de hoogste equity (de bestaande breaker); 'static' = vanaf initialBalance. */
+  drawdownType?: 'trailing' | 'static';
+  /** Waarop de dagverliesgrens gemeten wordt: saldo bij dagstart (standaard) of het startsaldo. */
+  dailyLossBase?: 'dayStartBalance' | 'initialBalance';
+  /** Waarop risk/trade berekend wordt. Standaard 'equity', zoals voorheen. */
+  sizingBase?: 'equity' | 'balance' | 'initialBalance';
+  /** IANA-tijdzone waarin de handelsdag omslaat (standaard 'UTC'). */
+  resetTimezone?: string;
+  /** Maximaal aantal gelijktijdig open posities. Weggelaten = geen grens. */
+  maxConcurrentPositions?: number;
+  /** Dagwinstdoel als fractie; bereikt = geen nieuwe posities meer die dag. */
+  dailyProfitTargetPct?: number;
+  /** Wat er gebeurt als profitTargetPct bereikt is. */
+  profitTargetAction?: 'halt' | 'continue';
+  /** Grootste dagwinst als max. fractie van de totale winst (prop-consistentieregel). */
+  consistencyPct?: number;
+  /** Minimum aantal handelsdagen voor een challenge als gehaald telt. */
+  minTradingDays?: number;
+  /** Alleen openen binnen deze vensters. Weggelaten = altijd. */
+  sessionWindows?: SessionWindow[];
+  /**
+   * 'high_impact_day': geen nieuwe positie op een dag met een high-impact
+   * release voor een valuta van het paar. De kalender kent alleen datums en
+   * alleen USD (zie economicCalendar.ts), dus fijner kan het niet eerlijk.
+   */
+  newsRestriction?: 'off' | 'high_impact_day';
   updatedAt: string;
 }
 
@@ -86,6 +140,9 @@ export interface ThinkingTrace {
    * written before this carry neither. */
   strategy?: string;
   timeframe?: string;
+  /** Dezelfde beslissing in velden: PASS/BLOCK/WAIT, poorten, sizing, account,
+   *  uitvoering en — later — de uitkomst. Ontbreekt op oudere sporen. */
+  verdict?: DecisionVerdict;
 }
 
 /** One closed trade's outcome, kept only for the rolling learning window. */
@@ -94,6 +151,8 @@ export interface LearningOutcome {
   win: boolean;
   symbol: string;
   closedAt: string;
+  /** Waar de uitkomst vandaan komt (evidence.ts). Ontbreekt op oudere uitkomsten = legacy. */
+  environment?: 'paper' | 'demo' | 'live' | 'unknown';
 }
 
 export interface AgentLearningStats {

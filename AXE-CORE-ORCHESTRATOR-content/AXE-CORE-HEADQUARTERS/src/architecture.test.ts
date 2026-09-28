@@ -53,7 +53,6 @@ const KNOWN = new Set([
   'domain/catalogs/defaultAgents.ts',
   'domain/catalogs/mindsetLines.ts',
   'application/sphere/presentOnSphere.ts',
-  'application/tradingIntel/backtestEngine.ts',
   // The worst one, and the one worth fixing first: 2 263 lines of
   // infrastructure importing a React store. A gateway that reads UI state
   // cannot be used from a worker, a test, or the VPS — it is only a gateway

@@ -11,7 +11,7 @@
  * accenten ver genoeg uit elkaar houdt.
  */
 import { Brain, Sparkles, CirclePlay, WandSparkles } from 'lucide-react';
-import { SNELACTIES, type SnelactieIcoon } from '@/domain/snelacties';
+import { SNELACTIES, type Snelactie, type SnelactieIcoon } from '@/domain/snelacties';
 
 const ICOON: Record<SnelactieIcoon, typeof Brain> = {
   brein: Brain,
@@ -20,10 +20,10 @@ const ICOON: Record<SnelactieIcoon, typeof Brain> = {
   scherpen: WandSparkles,
 };
 
-export function ComposerSnelacties({ onKies }: { onKies: (prompt: string) => void }) {
+export function ComposerSnelacties({ onKies, acties = SNELACTIES }: { onKies: (prompt: string) => void; acties?: readonly Snelactie[] }) {
   return (
     <div className="axe-snelacties">
-      {SNELACTIES.map((actie) => {
+      {acties.map((actie) => {
         const Icoon = ICOON[actie.icoon];
         return (
           <button

@@ -23,11 +23,14 @@ from camofox_client import (
     camofox_type,
 )
 
-_tasks: dict[str, dict[str, Any]] = {}
+from browser_task_store import get_task, patch_task, put_task
 
 
 def get_camofox_task(task_id: str) -> dict[str, Any] | None:
-    return _tasks.get(task_id)
+    task = get_task(task_id)
+    if task and task.get("provider") not in (None, "camofox"):
+        return None
+    return task
 
 
 async def _llm_decide(task: str, snapshot_text: str, history: list[dict]) -> dict:
@@ -67,9 +70,15 @@ async def _run_camofox_loop(task_id: str, task: str, mode: str) -> None:
     tab_id: str | None = None
     try:
         await camofox_health()
-        tab_id = await camofox_create_tab("about:blank")
-        _tasks[task_id]["sessionId"] = tab_id
-        _tasks[task_id]["message"] = f"Camofox tab created: {tab_id}"
+        # Camofox weigert about:blank. Begin op het adres uit de opdracht,
+        # anders op een gewone https-pagina.
+        start_url = "https://example.com"
+        for word in task.split():
+            if word.startswith(("http://", "https://")):
+                start_url = word.rstrip(".,)")
+                break
+        tab_id = await camofox_create_tab(start_url)
+        patch_task(task_id, sessionId=tab_id, message=f"Camofox tab created: {tab_id}")
 
         history: list[dict] = []
         max_steps = 15 if mode == "research" else 10
@@ -80,14 +89,13 @@ async def _run_camofox_loop(task_id: str, task: str, mode: str) -> None:
             decision = await _llm_decide(task, snap_text, history)
             action = decision.get("action", {})
             msg = decision.get("message", "Working…")
-            _tasks[task_id]["message"] = msg
+            patch_task(task_id, message=msg)
 
             history.append({"role": "assistant", "content": json.dumps(decision)})
 
             atype = action.get("type", "done")
             if atype == "done":
-                _tasks[task_id]["status"] = "ok"
-                _tasks[task_id]["message"] = msg or "Task completed."
+                patch_task(task_id, status="ok", message=msg or "Task completed.")
                 return
             if atype == "navigate" and action.get("url"):
                 await camofox_navigate(tab_id, action["url"])
@@ -96,21 +104,18 @@ async def _run_camofox_loop(task_id: str, task: str, mode: str) -> None:
             elif atype == "type" and action.get("ref"):
                 await camofox_type(tab_id, action["ref"], action.get("text", ""), action.get("submit", False))
             else:
-                _tasks[task_id]["status"] = "ok"
-                _tasks[task_id]["message"] = msg
+                patch_task(task_id, status="ok", message=msg)
                 return
 
             await asyncio.sleep(0.5)
 
-        _tasks[task_id]["status"] = "ok"
-        _tasks[task_id]["message"] = "Reached step limit — partial completion."
+        patch_task(task_id, status="ok", message="Reached step limit — partial completion.")
 
     except HTTPException as e:
-        _tasks[task_id]["status"] = "error"
-        _tasks[task_id]["message"] = e.detail if isinstance(e.detail, str) else str(e.detail)
+        detail = e.detail if isinstance(e.detail, str) else str(e.detail)
+        patch_task(task_id, status="error", message=detail)
     except Exception as e:
-        _tasks[task_id]["status"] = "error"
-        _tasks[task_id]["message"] = str(e)[:500]
+        patch_task(task_id, status="error", message=str(e)[:500])
     finally:
         if tab_id:
             try:
@@ -121,7 +126,7 @@ async def _run_camofox_loop(task_id: str, task: str, mode: str) -> None:
 
 async def run_camofox_task(task: str, mode: str = "stealth") -> dict[str, Any]:
     task_id = f"cf_{uuid.uuid4().hex[:12]}"
-    _tasks[task_id] = {
+    record = put_task({
         "id": task_id,
         "provider": "camofox",
         "status": "running",
@@ -130,6 +135,6 @@ async def run_camofox_task(task: str, mode: str = "stealth") -> dict[str, Any]:
         "created_at": time.time(),
         "task": task,
         "mode": mode,
-    }
+    })
     asyncio.create_task(_run_camofox_loop(task_id, task, mode))
-    return {"taskId": task_id, "status": "running", "message": _tasks[task_id]["message"]}
+    return {"taskId": task_id, "status": "running", "message": record["message"]}

@@ -27,6 +27,11 @@ const WATCH_KEY = 'axe_trading_intel_watchlist';
 // second, independent report array hit the same ceiling. MAX_REPORTS below
 // keeps it from refilling.
 const MAX_REPORTS = 150;
+/* De LOKALE kopie is kleiner dan de duurzame. Gemeten 13 september: 150
+   rapporten waren 1,3 miljoen tekens, samen met de embedding-cache zat de app
+   boven WebKit's 5 MB, en elke autopilotcyclus eindigde op "The quota has been
+   exceeded" -- zie listIntelReports. De cloud (saveSetting) houdt er 150. */
+const LOCAL_MAX_REPORTS = 40;
 
 function writeLocalCopy(key: string, json: string): boolean {
   try {
@@ -52,7 +57,7 @@ function loadLocalReports(): TradingIntelReport[] {
 
 function saveLocalReports(reports: TradingIntelReport[]): void {
   const capped = [...reports].sort(sortReports).slice(0, MAX_REPORTS);
-  writeLocalCopy(REPORTS_KEY, JSON.stringify(capped));
+  writeLocalCopy(REPORTS_KEY, JSON.stringify(capped.slice(0, LOCAL_MAX_REPORTS)));
   void saveSetting(REPORTS_KEY, capped);
 }
 
@@ -103,7 +108,9 @@ export async function listIntelReports(): Promise<TradingIntelReport[]> {
     console.warn(`[tradingIntelService] pruned ${removed} report(s) stuck in "running" — abandoned mid-cycle, not a real result`);
     saveLocalReports(pruned);
   } else if (Array.isArray(fromCloud) && fromCloud.length > 0) {
-    localStorage.setItem(REPORTS_KEY, JSON.stringify(fromCloud));
+    // Via writeLocalCopy en afgetopt. Dit was een kale setItem met de hele
+    // cloudlijst: vol = exception = elke autopilotcyclus stopte hier.
+    writeLocalCopy(REPORTS_KEY, JSON.stringify([...fromCloud].sort(sortReports).slice(0, LOCAL_MAX_REPORTS)));
   }
   return [...pruned].sort(sortReports);
 }

@@ -73,6 +73,16 @@ MANIFEST = {
     "/opt/axe-core-api/agent_loop.py": ("backend/axe_api/agent_loop.py", "axe-task-worker"),
     "/opt/axe-core-api/browser_agent.py": ("backend/axe_api/browser_agent.py", "axe-core-api"),
     "/opt/axe-core-api/crew_runner.py": ("backend/axe_api/crew_runner.py", "axe-core-api"),
+    # main.py importeert dit bij het opstarten. Zonder deze regel ship je
+    # main.py zonder zijn module en start de hele API niet meer.
+    "/opt/axe-core-api/perplexity_agent.py": ("backend/axe_api/perplexity_agent.py", "axe-core-api"),
+    # Deze twee importeert main.py ook, en ze stonden niet in het manifest: zuinig
+    # kwam er met de hand op, planner nooit. Een module die main.py nodig heeft en
+    # die deploy niet meestuurt is een API die niet opstart -- of, sinds de
+    # imports beschermd zijn, een functie die stil ontbreekt.
+    "/opt/axe-core-api/zuinig.py": ("backend/axe_api/zuinig.py", "axe-core-api"),
+    "/opt/axe-core-api/planner.py": ("backend/axe_api/planner.py", "axe-core-api"),
+    "/opt/axe-core-api/cli_laag.py": ("backend/axe_api/cli_laag.py", "axe-core-api"),
     "/opt/axe-core-api/run_crew.py": ("backend/axe_api/run_crew.py", None),
     "/opt/axe-core-api/flow_runner.py": ("infra/axe-core-api/flow_runner.py", "axe-core-api"),
     "/opt/axe-core-api/run_flow.py": ("infra/axe-core-api/run_flow.py", None),
@@ -86,6 +96,13 @@ MANIFEST = {
     "/etc/systemd/system/axe-browser-agent.service": ("backend/axe_api/axe-browser-agent.service", "axe-browser-agent"),
     "/etc/systemd/system/axe-core-api.service": ("backend/axe_api/axe-core-api.service", "axe-core-api"),
     "/etc/systemd/system/axe-task-worker.service": ("backend/axe_api/axe-task-worker.service", "axe-task-worker"),
+    # main.py importeert planning (de planner-uitvoerder achter /cron/tick). Hij
+    # stond niet in het manifest, dus een fix eraan kon nooit worden uitgerold
+    # of op drift gecontroleerd (23 sep 2026: de hangende-run-fix).
+    "/opt/axe-core-api/planning.py": ("backend/axe_api/planning.py", "axe-core-api"),
+    # AXE's stem als terugval (George/Kokoro, lazy). Venv + model: install_vps.sh.
+    "/opt/axe-tts/app.py": ("backend/axe_tts/app.py", "axe-tts"),
+    "/etc/systemd/system/axe-tts.service": ("backend/axe_tts/axe-tts.service", "axe-tts"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

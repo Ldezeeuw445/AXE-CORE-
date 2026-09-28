@@ -1,0 +1,48 @@
+deal_state_ingestion:
+  description: >
+    Read and parse the canonical deal state for deal {deal_id}. The deal state may
+    be a file path ({deal_state_file}), JSON ({deal_state_json}), or both. Normalize
+    pipeline stage SEARCH/MATCH/QUALIFY/VERIFY/PROTECT/CONNECT/EXECUTE/CLOSE and
+    gates G1–G9.
+  expected_output: Normalized deal_state object for all downstream agents.
+  agent: deal_manager
+  async_execution: false
+
+buyer_qualification:
+  description: Qualify the buyer for deal {deal_id} from deal_state. Cap score at 10 if legal entity, authority, or payment instrument is MISSING/FAILED.
+  expected_output: buyer_qualification with item status, sub-scores, buyer_score 0–20, buyer_blockers.
+  agent: buyer_qualification_agent
+  async_execution: true
+
+seller_qualification:
+  description: Qualify the seller for deal {deal_id} from deal_state. Cap score at 10 if principal/authorized status, allocation, or spec is MISSING/FAILED.
+  expected_output: seller_qualification with item status, sub-scores, seller_score 0–20, seller_blockers.
+  agent: seller_qualification_agent
+  async_execution: true
+
+commercial_alignment_gap_matrix:
+  description: Eight-dimension GREEN/AMBER/RED gap matrix. Unconfirmed terms are RED/UNCONFIRMED, never assumed aligned.
+  expected_output: commercial_gaps report.
+  agent: commercial_alignment_agent
+
+evidence_protection_assessment:
+  description: Score eight document/protection categories COMPLETE/PARTIAL/MISSING. NorthSea does not sign or commit via this task.
+  expected_output: evidence_status.
+  agent: trade_documentation_protection_agent
+
+logistics_execution_assessment:
+  description: Logistics feasibility for deal {deal_id}. ORIGIN UNCONFIRMED if not evidenced. Logistics score cannot exceed 5 if origin unconfirmed.
+  expected_output: logistics_assessment with logistics_score 0–10.
+  agent: logistics_execution_agent
+
+deal_risk_assessment:
+  description: Nine-category risk scan. Rate flags LOW/MEDIUM/HIGH/CRITICAL.
+  expected_output: risk_flags list.
+  agent: deal_risk_agent
+
+next_best_action_deal_output:
+  description: >
+    Sum readiness_score (max 100). One current_blocker. One next_best_action with
+    owner, deadline days, missing evidence, approval type. CRITICAL risks first.
+  expected_output: Final structured deal output.
+  agent: next_best_action_agent

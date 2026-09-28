@@ -18,9 +18,10 @@
  *
  * ## Ingebouwd versus zelf toegevoegd
  *
- * De twee die er altijd zijn staan hier. De rest (een iMac, een tweede VPS)
- * voegt de gebruiker toe; die worden lokaal bewaard, want een adres in je eigen
- * netwerk hoort niet in een gedeelde bundel.
+ * De acht vakken staan hier. Een extra machine voegt de gebruiker toe; die
+ * wordt lokaal bewaard, want een adres in je eigen netwerk hoort niet in een
+ * gedeelde bundel. De iMac is geen extra machine: hij heeft een vast
+ * Tailscale-adres, en zonder dat in deze lijst is vak 7 na elke herstart leeg.
  */
 
 export interface TerminalHost {
@@ -101,16 +102,21 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
     id: 'vps-hetzner',
     naam: 'VPS Hetzner',
     waarvoor: 'Ollama en de modellen — de tweede server',
-    // Leeg: het adres staat hier niet en mag niet verzonnen worden. Het scherm
-    // toont dan een invulveld in plaats van een knop die stil faalt.
-    wsUrl: '',
+    // Gemeten 13 september: tot die dag stond hier een Docker-container van
+    // 10 juli op publieke poort 4022 die elk token accepteerde. Nu draait de
+    // huidige terminal-server als systemd-dienst op 127.0.0.1, met Supabase-
+    // token en allowlist, en nginx geeft dit adres. Zelfde vorm als Strato.
+    wsUrl: 'wss://ollama.axecompanion.com/terminal',
     ingebouwd: true,
   },
   {
     id: 'imac',
     naam: 'iMac',
-    waarvoor: 'De andere Mac',
-    wsUrl: '',
+    waarvoor: 'Computer use, browser, camera — de uitvoerder',
+    // Tailscale Serve op de iMac, niet het thuisnetwerk. Zonder dit adres in
+    // de bundel is vak 7 na een herstart van de Mac-mini-app weer leeg, omdat
+    // localStorage daar niet overleeft wat hier wel ingevuld was.
+    wsUrl: 'wss://main-imac-luka.tail03735e.ts.net:4022/terminal',
     ingebouwd: true,
   },
   {

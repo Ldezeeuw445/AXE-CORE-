@@ -10,7 +10,9 @@ import { SchaalHouder } from '@/presentation/components/axe-core/SchaalHouder';
 import { TOESTEL_MAAT } from '@/presentation/components/devices/toestelMaat';
 
 export type PreviewKader = 'none' | 'phone' | 'tablet' | 'desktop';
-export type PreviewLayout = 'column' | 'podium' | 'devices';
+/** 'raster': de drie toestellen rechtstreeks op het raster van het Canvas,
+ *  ook zonder draaiende dev-server -- dan staat er in elk scherm een startknop. */
+export type PreviewLayout = 'column' | 'podium' | 'devices' | 'raster';
 
 /**
  * Design-mode bridge injected into the preview iframe (same-origin only).
@@ -440,7 +442,7 @@ export function PreviewPanel({
         <span className="axe-preview-kop text-[10px] font-medium flex-1">PREVIEW</span>
         {running && url && (
           <button
-            onClick={() => setDesignMode(v => !v)}
+            onClick={() => setDesignMode(!designMode)}
             title="Design Mode — click elements, drag to reorder, edit styles"
             className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]"
             style={{
@@ -458,7 +460,30 @@ export function PreviewPanel({
         )}
       </div>
 
-      {running && url ? (
+      {layout === 'raster' ? (
+        <div className="flex-1 min-h-0 axe-raster">
+          <div className="axe-studio-rij">
+            {(['phone', 'tablet', 'desktop'] as const).map(naam => {
+              const m = TOESTEL_MAAT[naam];
+              return (
+                <div key={naam} className="axe-studio-plek" data-aan={kader === naam ? 'ja' : undefined}>
+                  <KaderOm kader={naam} url={url}>
+                    {running && url ? iframeEl(naam === 'phone' ? iframeRef : undefined, `Preview ${m.label}`) : (
+                      <div className="axe-raster-leeg">
+                        <button type="button" onClick={() => void handleStart()} disabled={busy} title="Start de dev-server (npm run dev)">
+                          <Play size={64} />
+                        </button>
+                        <span>{error ?? (running ? 'Server draait, adres volgt…' : 'Start de dev-server')}</span>
+                      </div>
+                    )}
+                  </KaderOm>
+                  <span className="kop">{naam} · <b>{m.label}</b></span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : running && url ? (
         <div className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 min-h-0 relative">
             {layout === 'devices' ? (

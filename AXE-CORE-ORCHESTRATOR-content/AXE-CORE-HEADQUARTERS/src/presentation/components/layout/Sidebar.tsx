@@ -18,17 +18,23 @@ import {
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { ThinkThanksWidget } from '@/presentation/components/widgets/ThinkThanksWidget';
 import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
+import { LadeKaart } from '@/presentation/components/layout/tabMaatstaf';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
-import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
-import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
+import { VPS_API_ORIGIN, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
+import { webProxyStand } from '@/domain/webProxyStand';
 import { useLocation } from 'react-router';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
+import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
+import { LadeSlot } from '@/presentation/components/layout/LadeSlot';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
   const [supaOk, setSupaOk] = useState<boolean | null>(null);
   const [llmCount, setLlmCount] = useState(0);
+  const [stem, setStem] = useState<StemStand | null>(null);
   const voice = useVoiceStore();
 
   useEffect(() => {
@@ -49,31 +55,27 @@ function AICoreSystemLeft() {
       } catch { setSupaOk(false); }
     };
     void ping();
+    void probeGeorgeStem().then(setStem);
   }, []);
 
-  let tts = 'Fish Audio';
-  try {
-    const p = localStorage.getItem('axe_tts_provider');
-    if (p === 'elevenlabs') tts = 'ElevenLabs';
-    else if (p === 'browser') tts = 'Browser';
-  } catch { /* ignore */ }
-
   const provider = voice.activeProvider || voice.primarySlot?.provider || '—';
+  const stemVal = stem == null ? '…' : stem.ok ? STEM_UI.kortLive : STEM_UI.kortDood;
+  const stemFout = stem?.ok === false;
 
   return (
     <div className="space-y-1.5">
       {[
         { icon: Activity, label: 'Status', val: llmCount > 0 ? 'Online' : 'No AI', ok: llmCount > 0 },
         { icon: Cpu, label: 'Primary', val: String(provider), ok: !!voice.activeProvider || !!voice.primarySlot },
-        { icon: Mic, label: 'Voice', val: tts, ok: true },
+        { icon: Mic, label: 'Voice', val: stemVal, ok: stem?.ok === true, fout: stemFout },
         { icon: Zap, label: 'Memory', val: supaOk ? `OK · ${voice.conversation.length} msgs` : supaOk === null ? '…' : 'offline', ok: supaOk === true },
-      ].map(({ icon: Icon, label, val, ok }) => (
+      ].map(({ icon: Icon, label, val, ok, fout }) => (
         <div key={label} className="flex items-center justify-between gap-1">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+            <Icon size={11} style={{ color: fout ? 'var(--error)' : ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
             <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
           </div>
-          <span className="text-[10px] font-mono truncate max-w-[100px]" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+          <span className="text-[10px] font-mono truncate max-w-[100px]" style={{ color: fout ? 'var(--error)' : ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>
             {val}
           </span>
         </div>
@@ -130,8 +132,16 @@ function VpsRow({ label, origin, state }: { label: string; origin: string; state
   );
 }
 
+/* De web-app praat niet rechtstreeks met de VPS maar via een same-origin proxy
+   (Cloudflare Pages Functions); de ingepakte Tauri-app wel rechtstreeks. Stond
+   dat samen in één "Strato"-regel, dan leek een kapotte proxy op een dode VPS
+   -- precies wat er op 28 sep gebeurde. */
+const AXE_API_BASIS = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
+const VIA_PROXY = AXE_API_BASIS !== VPS_API_ORIGIN;
+
 function VpsHealthWidget() {
   const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
+  const [proxy, setProxy] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [hetzner, setHetzner] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcp, setGcp] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcpConfigured, setGcpConfigured] = useState(false);
@@ -139,15 +149,14 @@ function VpsHealthWidget() {
   useEffect(() => {
     let cancelled = false;
 
+    // Rechtstreeks: /health is openbaar en de VPS staat CORS toe vanaf
+    // axeheadquarters.com. Zo meet deze regel de VPS en niets anders.
     const tickStrato = async () => {
       const t0 = performance.now();
       try {
-        const health = await Promise.race([
-          checkAxeApi(),
-          new Promise<null>((_, reject) =>
-            window.setTimeout(() => reject(new Error('timeout')), 6000),
-          ),
-        ]) as Awaited<ReturnType<typeof checkAxeApi>>;
+        const res = await fetch(`${VPS_API_ORIGIN}/health`, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const health = await res.json() as { status?: string; supabase?: boolean; n8n?: boolean; github?: boolean };
 
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
@@ -156,7 +165,6 @@ function VpsHealthWidget() {
         if (health.supabase) bits.push('supabase');
         if (health.n8n) bits.push('n8n');
         if (health.github) bits.push('github');
-        if (health.vercel) bits.push('vercel');
 
         if (health.status === 'ok' || health.status === 'healthy' || bits.length > 0) {
           setStrato({ status: 'online', latencyMs: ms, detail: bits.length ? bits.join(' · ') : 'API healthy' });
@@ -172,7 +180,7 @@ function VpsHealthWidget() {
     const tickHetzner = async () => {
       const t0 = performance.now();
       try {
-        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { signal: AbortSignal.timeout(6000) });
+        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { headers: ollamaHeaders(OLLAMA_HEALTH_URL), signal: AbortSignal.timeout(6000) });
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
         if (!res.ok) {
@@ -223,7 +231,23 @@ function VpsHealthWidget() {
       }
     };
 
-    const tick = () => { void tickStrato(); void tickHetzner(); void tickGcp(); };
+    const tickProxy = async () => {
+      if (!VIA_PROXY) return;
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`${AXE_API_BASIS}/health`, { signal: AbortSignal.timeout(6000) });
+        const contentType = res.headers.get('content-type') ?? '';
+        const body = contentType.includes('json') ? await res.json().catch(() => null) : null;
+        if (cancelled) return;
+        const stand = webProxyStand({ status: res.status, contentType, body });
+        setProxy({ ...stand, latencyMs: stand.status === 'online' ? Math.round(performance.now() - t0) : null });
+      } catch {
+        if (cancelled) return;
+        setProxy({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+      }
+    };
+
+    const tick = () => { void tickStrato(); void tickProxy(); void tickHetzner(); void tickGcp(); };
     tick();
     const id = window.setInterval(tick, 30_000);
     return () => {
@@ -235,6 +259,12 @@ function VpsHealthWidget() {
   return (
     <div className="space-y-3">
       <VpsRow label="Strato" origin={VPS_API_ORIGIN} state={strato} />
+      {VIA_PROXY && (
+        <>
+          <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+          <VpsRow label="Web proxy" origin={`${typeof window !== 'undefined' ? window.location.host : ''}${AXE_API_BASIS}`} state={proxy} />
+        </>
+      )}
       <div style={{ height: 1, background: 'var(--border-subtle)' }} />
       <VpsRow label="Hetzner" origin={OLLAMA_HEALTH_URL} state={hetzner} />
       {gcpConfigured && (
@@ -255,6 +285,16 @@ export function Sidebar() {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   const isCompact = isMobile || isTablet;
+  const opHome = useLocation().pathname === '/';
+
+  const sluitPaneel = () => {
+    if (typeof document !== 'undefined' && document.documentElement.dataset.look) {
+      delete document.documentElement.dataset.railPinL;
+      document.documentElement.dataset.railL = 'dicht';
+      return;
+    }
+    toggleLeftPanel();
+  };
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden">
@@ -273,13 +313,16 @@ export function Sidebar() {
             <X size={16} style={{ color: 'var(--text-muted)' }} />
           </button>
         ) : (
-          <button onClick={toggleLeftPanel} className="p-1 rounded-md hover:bg-white/5" title="Collapse">
+          <button onClick={sluitPaneel} className="p-1 rounded-md hover:bg-white/5" title="Collapse">
             {leftPanelOpen ? <ChevronLeft size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
           </button>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 pt-2 space-y-2">
+        {/* Telefoon: de linker widgets van de tab die open staat (Neural,
+            Terrain), bovenaan deze lade -- zie ladeSloten.ts. */}
+        {isMobile && <LadeSlot naam="links" />}
         <WidgetCard title="THINKTHANKS" icon={<Lightbulb size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <ThinkThanksWidget />
         </WidgetCard>
@@ -326,8 +369,12 @@ export function Sidebar() {
       <Sheet open={leftDrawerOpen} onOpenChange={setLeftDrawerOpen}>
         <SheetContent
           side="left"
-          className="bg-black text-white border-r border-white/5 w-[280px] max-w-[85vw] p-0"
-          style={{ backgroundColor: 'var(--bg-base)' }}
+          className="text-white border-r border-white/5 w-[300px] max-w-[86vw] p-0"
+          style={{
+            background: 'linear-gradient(180deg, rgba(20,20,24,0.985) 0%, rgba(12,12,15,0.995) 100%)',
+            top: isMobile ? 'env(safe-area-inset-top, 0px)' : undefined,
+            height: isMobile ? 'calc(100dvh - env(safe-area-inset-top, 0px))' : undefined,
+          }}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Tools</SheetTitle>
@@ -338,8 +385,6 @@ export function Sidebar() {
       </Sheet>
     );
   }
-
-  const opHome = useLocation().pathname === '/';
 
   if (!leftPanelOpen) {
     return (
@@ -390,7 +435,9 @@ export function Sidebar() {
         * dat niet doet, heeft hier niets te zoeken. Zie de CSS-regel die de
         * lege balk inklapt. */}
       {opHome && (
-        <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">{content}</div>
+        <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">
+          <LadeKaart kant="links">{content}</LadeKaart>
+        </div>
       )}
     </aside>
   );

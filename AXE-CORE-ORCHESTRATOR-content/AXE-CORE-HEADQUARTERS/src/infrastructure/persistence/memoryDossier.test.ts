@@ -14,6 +14,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 let supabaseImpl: unknown = null;
 const getSupabase = vi.fn(() => supabaseImpl);
 vi.mock('@/infrastructure/supabase/supabaseClient', () => ({ getSupabase }));
+vi.mock('@/infrastructure/persistence/agentFeedbackService', () => ({
+  openEpisode: vi.fn(async () => null),
+  closeEpisode: vi.fn(async () => false),
+}));
 
 const store = new Map<string, string>();
 vi.stubGlobal('localStorage', {

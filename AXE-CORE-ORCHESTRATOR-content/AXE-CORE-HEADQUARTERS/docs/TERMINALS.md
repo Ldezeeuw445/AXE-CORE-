@@ -119,17 +119,44 @@ journalctl -u axe-terminal -n 40 --no-pager
 
 Ollama met 18 modellen. Draait als dienst; geen venster nodig.
 
+**Terminal (vak 6):** `wss://ollama.axecompanion.com/terminal`. Dienst
+`axe-terminal` (systemd), code in `/opt/axe-terminal`, omgeving in
+`/etc/axe-terminal.env`, luistert alleen op `127.0.0.1:4022`; nginx geeft TLS.
+Bijwerken: kopieer `terminal-server.cjs` en `terminalShell.cjs` naar
+`/opt/axe-terminal` en `systemctl restart axe-terminal`.
+
+> Tot 13 september stond hier de Docker-container `axe-terminal-server`
+> (10 juli) op **publieke** poort 4022, en die accepteerde elk token. Docker
+> publiceert poorten langs ufw heen, dus "ufw staat alleen 22 toe" beschermde
+> niets. De container is gestopt en start niet meer vanzelf.
+
 ```bash
-systemctl --no-pager status ollama --lines=0
+systemctl --no-pager status axe-terminal ollama --lines=0
 ollama list
 journalctl -u ollama -n 40 --no-pager
 ```
 
-### iMac
+### iMac — `main-imac-luka` (gebruiker `lukadezeeuw`)
 
-Nog geen adres. Zodra je `terminal-server.cjs` daar draait en het adres invult
-in de Terminals-tab, geldt hetzelfde als voor deze Mac: **dat venster moet open
-blijven**.
+**Terminal (vak 7):** `wss://main-imac-luka.tail03735e.ts.net:4022/terminal` —
+staat in `terminalHosts.ts`. Zonder dat in de bundel is het vak na een herstart
+van de Mac-mini-app leeg, omdat een lokaal ingevuld adres daar niet overleeft.
+
+- Draait als LaunchAgent `com.axe.terminal` uit `~/.axe-terminal` (los van de
+  checkout in `~/Projects/AXE-CORE-`, zodat een pull of lokale wijziging daar
+  de terminal niet raakt). Log: `/tmp/axe-terminal.log`.
+- Luistert alleen op `127.0.0.1:4022`. **Tailscale Serve** geeft het HTTPS-adres,
+  alleen binnen je tailnet; op het thuisnetwerk is 4022 dicht.
+- Zelfde muur als overal: Supabase-token en `AXE_TERMINAL_ALLOWED_USER_IDS`.
+- Bijwerken: kopieer `terminal-server.cjs` en `terminalShell.cjs` naar
+  `~/.axe-terminal/` en `launchctl kickstart -k gui/$(id -u)/com.axe.terminal`.
+- Uitzetten: `tailscale serve --https=4022 off` en
+  `launchctl bootout gui/$(id -u)/com.axe.terminal`.
+
+Gemeten 13 september: `claude` en `codex` staan erop (codex ingelogd, claude
+niet), `cursor-agent` is toen geïnstalleerd. Inloggen doe je in vak 7 zelf,
+want de sleutelhanger van de iMac is alleen in je eigen sessie open — via ssh
+zegt cursor-agent *"login keychain is locked"*.
 
 ---
 

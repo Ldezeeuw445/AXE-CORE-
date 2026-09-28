@@ -12,12 +12,18 @@ const MODE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
   search: Search,
 };
 
+export interface BrowserComposerFeedback {
+  status: 'running' | 'ok' | 'error' | 'agent_started';
+  message: string;
+}
+
 interface BrowserAIComposerProps {
   provider: BrowserAIProviderConfig;
   isActive: boolean;
   /** Side-by-side home layout — always visible, tighter card. */
   compact?: boolean;
   isLoading?: boolean;
+  feedback?: BrowserComposerFeedback | null;
   onFocus: () => void;
   onSubmit: (message: string, mode?: string) => void;
 }
@@ -53,6 +59,7 @@ export function BrowserAIComposer({
   isActive,
   compact = false,
   isLoading,
+  feedback,
   onFocus,
   onSubmit,
 }: BrowserAIComposerProps) {
@@ -162,6 +169,28 @@ export function BrowserAIComposer({
           </div>
         </div>
       </form>
+
+      {feedback && (
+        <div className={compact ? 'px-3 pb-3 -mt-1' : 'px-4 pb-4 -mt-1'}>
+          <div
+            className="rounded-md px-2.5 py-2 text-[10px] leading-snug"
+            style={{
+              background: 'var(--tint)',
+              border: feedback.status === 'error' ? '1px solid rgba(239,68,68,.24)' : '1px solid var(--tint-line)',
+              color: feedback.status === 'error'
+                ? 'var(--error)'
+                : feedback.status === 'running'
+                  ? 'var(--accent-cyan)'
+                  : 'var(--text-secondary)',
+            }}
+          >
+            <span className="font-medium">
+              {feedback.status === 'running' ? 'Bezig · ' : feedback.status === 'error' ? 'Fout · ' : 'Uitkomst · '}
+            </span>
+            {feedback.message}
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }

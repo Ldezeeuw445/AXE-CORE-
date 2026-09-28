@@ -278,6 +278,14 @@
 html:root[data-look],
 :root[data-look] body,
 :root[data-look] #root { background: transparent !important; }
+/* Behalve in de iPhone-app van het beginscherm (data-ios-pwa, gezet in
+   index.html): daar is geen bureaublad om doorheen te kijken, en iOS 26 kleurt
+   de statusbalk naar de achtergrond van body. Doorzichtig werd lichtblauw
+   (#D5E6F4, gemeten op Luka's screenshot van 27 sep); zwart geeft een zwarte
+   balk met witte tijd en iconen. De plaat en de lucht liggen er vast
+   overheen, dus verder verandert er niets. Tauri zet data-ios-pwa nooit. */
+html:root[data-look][data-ios-pwa],
+:root[data-look][data-ios-pwa] body { background-color: #000 !important; }
 :root[data-look] .axe-schemer { display: none !important; }
 
 :root[data-look='black'] .axe-shell {
@@ -456,30 +464,29 @@ html:root[data-look],
 
 /* Eén materiaal voor alles wat een kaart is — de widgets in de rails, de
    blokken op elke pagina en de commandobalk lezen uit dezelfde tokens, dus
-   ze kunnen niet uit de pas gaan lopen. */
+   ze kunnen niet uit de pas gaan lopen. Matzwart, dunne lichte rand, zachte
+   schaduw. Geen cyaan gloed. */
+:root[data-look] .axe-kaart,
 :root[data-look] .widget-card,
 :root[data-look] .axe-shell .axe-surface,
 :root[data-look] .axe-shell .axe-surface--flat,
 :root[data-look] .axe-shell .axe-surface--inset {
-  background: var(--surface-bg);
-  border-color: transparent;
-  box-shadow: var(--surface-edge);
-  /* Hier stond var(--card-blur). De regel verderop zet hem toch al op none;
-     twee regels die het tegenovergestelde zeggen over hetzelfde element zijn
-     een val voor de volgende lezer. Zie daar voor het waarom. */
+  background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn);
+  border-radius: var(--axe-kaart-hoek);
+  box-shadow: var(--axe-kaart-schaduw);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-/* De hover-regel in index.css staat op !important en moet hier expliciet
-   terug: een rand die alleen bij aanwijzen verschijnt is nog steeds een rand.
-
-   `none` mag hier niet staan — dat wist ook de lichtstreep die de kaart tot
-   ruit maakt, en dan valt de kaart bij aanwijzen uit elkaar. De streep blijft;
-   alleen de cyaan gloed eromheen gaat weg. */
+/* Hover: bovenrand iets helderder, geen neon. */
+:root[data-look] .axe-kaart:hover,
 :root[data-look] .widget-card:hover,
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border']:hover,
 :root[data-look] .axe-shell [class*='rounded-2xl'][class*='border']:hover {
-  border-color: transparent !important;
-  box-shadow: var(--surface-edge) !important;
+  border-color: var(--axe-kaart-lijn) !important;
+  box-shadow: var(--axe-kaart-schaduw) !important;
 }
 
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border-white'],
@@ -572,6 +579,56 @@ html:root[data-look],
   -webkit-backdrop-filter: none;
 }
 
+/* ── De mobiele glasplaat ────────────────────────────────────────────────
+ *
+ * Op de telefoon-home IS de schil de zwevende glasplaat uit de "AXE Glass
+ * Plate"-mockup: een paneel met een kier eromheen (de inset staat inline in
+ * AppShell), een randje en een subtiele vulling die het van de achtergrond
+ * (MobileGlass) aftekent. De inhoud eronder — sphere, cijfers, chat, composer —
+ * houdt zijn eigen donkere materiaal; dit is alleen de plaat waarop het ligt.
+ *
+ * Waarom een klasse met !important: de shell-achtergrond hierboven staat op
+ * `transparent !important` (glass) en `var(--axe-plaat) !important` (black), en
+ * dat moet de plaatvulling overrulen. Geen backdrop-filter op de plaat: die zou
+ * de eigen matglas-lagen van de chat en de composer platslaan (een element met
+ * backdrop-filter is de backdrop-root voor alles erbinnen). */
+:root[data-look] .axe-shell.axe-plaat-mobiel {
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── Border-beam op de composer ──────────────────────────────────────────
+ * De gloed rond de home-composer komt nu uit de `border-beam`-library
+ * (size="pulse-outside", colorVariant="colorful") in HomeCommandComposer.tsx.
+ * Het eerdere handgemaakte `.axe-beam` (conic-rand / radiale golf in CSS) is
+ * verwijderd — de library doet de pulse-outside halo netjes rond de doos. */
+/* Een klein koel tintje i.p.v. zuiver wit, en een tikje meer dekking bovenaan:
+   dat geeft de plaat iets glasachtigs (licht dat bovenin vangt) zonder dat het
+   een dichte kaart wordt. */
+/* Lichte stand = FROSTED glas over de kleur-grond (MobileGlass): een echte
+   backdrop-blur vervaagt de kleurige gradient tot matglas, met een lichte sluier
+   erover. Zo tekent de plaat zich af tegen de grond en scheidt hij de sphere van
+   de achtergrond (die vervaagt erachter, de sphere blijft scherp erop).
+   De licht/donker-knop staat buiten de schil (AppShell), dus deze backdrop-filter
+   verschuift hem niet meer. */
+:root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
+  background:
+    radial-gradient(130% 80% at 50% -14%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, rgba(248, 250, 253, 0.24) 0%, rgba(240, 245, 250, 0.15) 100%) !important;
+  /* FROST helemaal vol (à la liquid-glass): een zware blur vervaagt de kleur-
+     grond tot een zacht melkig matglas met kleurzweempjes — dát is het Tauri-
+     light-glas-effect. */
+  backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.38) !important;
+}
+:root[data-look='black'] .axe-shell.axe-plaat-mobiel {
+  background:
+    radial-gradient(130% 80% at 50% -12%, rgba(212, 222, 255, 0.11), rgba(212, 222, 255, 0) 62%),
+    linear-gradient(180deg, rgba(192, 210, 250, 0.15) 0%, rgba(162, 182, 230, 0.062) 50%, rgba(144, 164, 220, 0.028) 100%) !important;
+}
+
 /* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de
    galaxy doorkomt, saturate 0 trekt de kleur naar grijs — donker glas dat
    leeft, geen effen zwart vlak. */
@@ -632,8 +689,16 @@ html:root[data-look],
   /* Tot de BOVENKANT van de chatplaat, niet tot de voet.
      Ze liepen door tot achter de onderste band, dus een uitgeschoven rail lag
      over de tab-panelen en de chat heen. Nu houdt hij op waar de band begint --
-     dan staan ze naast elkaar in plaats van over elkaar. */
-  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px);
+     dan staan ze naast elkaar in plaats van over elkaar.
+
+     Corrective round 4, Fix D: dit hield al geen rekening met MemoryDock --
+     dat dok hangt ZELF ook boven --axe-chat-top (zie .axe-slot--dock
+     hieronder), dus deze formule liet de rail doorlopen tot een lijn die,
+     zodra het dok open- of dichtklapt, binnen zijn eigen hoogte valt. Het dok
+     bestond niet toen dit geschreven werd. --axe-dock-hoog is 0 op elke tab
+     zonder dok (het slot is dan leeg en `:empty { display:none }` geeft een
+     rect van nul), dus dit is op elke andere pagina exact de oude regel. */
+  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px + var(--axe-dock-hoog, 0px));
   /* Een kwart breder dan de 302px waar ze op stonden. Smaller kapte namen af,
      en een schuifbalk waarin je horizontaal moet scrollen om een woord te
      lezen is geen schuifbalk maar een kier. Verticaal scrollen is prima. */
@@ -679,6 +744,47 @@ html:root[data-look],
   opacity: 1;
 }
 
+/* Een lade zonder inhoud gaat niet open (25 sep). Een tab die rechts (of
+   links) niets eigens heeft, liet bij de rand een grote lege zwarte lade
+   zien. Leeg = het vakje van de tab is leeg EN er staat geen standaard-
+   inhoud (die heeft alleen Home). Dan ook geen randknop en geen streepje. */
+:root[data-look] .axe-shell aside:has(> #axe-rail-links:empty):not(:has(.axe-rail-standaard)),
+:root[data-look] .axe-shell aside:has(> #axe-rail-rechts:empty):not(:has(.axe-rail-standaard)),
+:root[data-look] .axe-shell [data-rail='right']:has(#axe-rail-rechts:empty):not(:has(.axe-rail-standaard)) {
+  transform: translateX(calc(-100% - 40px)) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+:root[data-look] .axe-shell [data-rail='right']:has(#axe-rail-rechts:empty):not(:has(.axe-rail-standaard)) {
+  transform: translateX(calc(100% + 40px)) !important;
+}
+:root[data-look]:has(.axe-shell aside #axe-rail-links:empty):not(:has(.axe-shell .axe-rail-standaard)):not(:has(.axe-browser-lade)) .axe-railtoggle--l,
+:root[data-look]:has(.axe-shell aside #axe-rail-links:empty):not(:has(.axe-shell .axe-rail-standaard)):not(:has(.axe-browser-lade)) .axe-railhint--l,
+:root[data-look]:has(.axe-shell #axe-rail-rechts:empty):not(:has(.axe-shell [data-rail='right'] .axe-rail-standaard)) .axe-railtoggle--r,
+:root[data-look]:has(.axe-shell #axe-rail-rechts:empty):not(:has(.axe-shell [data-rail='right'] .axe-rail-standaard)) .axe-railhint--r {
+  display: none !important;
+}
+
+/* `RightPanel.tsx`'s own panel, EXPLICITLY pinned open via its own chevron
+ * toggle (`data-rail-vast='ja'`) rather than the mouse-near-the-edge gesture
+ * every other `[data-rail]` still uses. Same visible result as the hover
+ * rule above (on screen, not translated away) plus `position: relative` so
+ * it takes real space in the flex row next to `<main>` instead of floating
+ * over it -- but as its OWN selector, not a silent inline override, so
+ * anything else that reads `[data-rail='right']` (AxePresenceDock's
+ * obstacle check) can tell "pinned" apart from "hover-revealed" instead of
+ * treating every visible right rail the same way. See RightPanel.tsx and
+ * AxePresenceDock.tsx's `vindZichtbareRechterRail` for the other half. */
+:root[data-look] .axe-shell [data-rail='right'][data-rail-vast='ja'] {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  opacity: 1;
+}
+
 /* Een dun streepje aan de rand verraadt dat ze er zijn. Een verstopte lade
    zonder aanwijzing is geen ontwerp maar een raadsel. */
 .axe-railhint {
@@ -699,6 +805,38 @@ html:root[data-look],
 .axe-railhint--r { right: 6px; }
 :root[data-rail-l='open'] .axe-railhint--l,
 :root[data-rail-r='open'] .axe-railhint--r { opacity: 0; }
+
+.axe-railtoggle {
+  position: fixed;
+  top: 50%;
+  width: 24px;
+  height: 44px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 31;
+  color: rgba(238, 243, 250, 0.78);
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.88), rgba(10, 10, 12, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 30px -20px rgba(0, 0, 0, 0.9);
+  opacity: 0.36;
+  transform: translateY(-50%);
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+:root[data-look] .axe-railtoggle { display: flex; }
+.axe-railtoggle--l { left: 6px; }
+.axe-railtoggle--r { right: 6px; }
+.axe-railtoggle:hover,
+:root[data-rail-pin-l='aan'] .axe-railtoggle--l,
+:root[data-rail-pin-r='aan'] .axe-railtoggle--r {
+  opacity: 0.88;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+:root[data-rail-l='open'] .axe-railtoggle--l { transform: translateY(-50%) translateX(10px); }
+:root[data-rail-r='open'] .axe-railtoggle--r { transform: translateY(-50%) translateX(-10px); }
 
 /* De widgets liggen OP de plaat, niet erin. */
 :root[data-look] .axe-shell aside .widget-card {
@@ -833,10 +971,13 @@ html:root[data-look],
   --axe-vak-vlak: #0E0E12;
   --axe-vak-lijn: rgba(255, 255, 255, 0.075);
   --axe-vak-hoek: 24px;
+  /* 23 sep: Luka wil de composer "wat meer laten zweven". Beide schaduwen
+     vallen verder en waaieren breder uit (was 16/30/-14 en 44/66/-38); dat is
+     wat het oog als hoogte leest. */
   --axe-vak-zweef:
-    0 1px 0 rgba(255, 255, 255, 0.045) inset,
-    0 16px 30px -14px rgba(0, 0, 0, 0.85),
-    0 44px 66px -38px rgba(0, 0, 0, 0.9);
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 24px 44px -16px rgba(0, 0, 0, 0.88),
+    0 68px 104px -46px rgba(0, 0, 0, 0.95);
 
   /* ── Het materiaal van een KAART ──────────────────────────────────────
    *
@@ -881,13 +1022,25 @@ html:root[data-look],
   --text-secondary: rgba(255, 255, 255, 0.78);
   --text-muted: rgba(255, 255, 255, 0.6);
 
-  --axe-kaart-vlak: #17181C;
-  --axe-kaart-lijn: rgba(255, 255, 255, 0.08);
+  /* ── Het ene kaartmateriaal (Luka, 25 sep) ───────────────────────────
+     Exact het matzwart van de Browser-home (.axe-panel--inset): hetzelfde
+     verloop van bijna-zwart naar zwart, 18px hoek. Daarbij de dunne rand die
+     hij vroeg: 1px wit op lage dekking, bovenkant iets lichter (alsof er licht
+     op valt), en een zachte donkere schaduw eronder. De rand houdt de kaart
+     zichtbaar op een donker bureaublad achter het glas; de schaduw laat hem
+     zweven op licht. Geen gekleurde gloed. Eén bron: elke kaart en de
+     Browser-kaarten zelf lezen hieruit. */
+  --axe-kaart-vlak: linear-gradient(180deg, rgba(23, 23, 23, 0.94), rgba(12, 12, 12, 0.96));
+  --axe-kaart-lijn: rgba(255, 255, 255, 0.07);
+  --axe-kaart-lijn-boven: rgba(255, 255, 255, 0.12);
   --axe-kaart-hoek: 18px;
-  --axe-kaart-zweef:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 2px 4px rgba(0, 0, 0, 0.4),
-    0 12px 22px -12px rgba(0, 0, 0, 0.6);
+  --axe-kaart-schaduw:
+    inset 0 1px 0 var(--axe-kaart-lijn-boven),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 10px 28px -14px rgba(0, 0, 0, 0.6);
+  --axe-kaart-zweef: var(--axe-kaart-schaduw);
+  --axe-kaart-kolom: 300px;
+  --axe-kaart-kolom-ruim: 340px;
   /* De scheidingslijn BINNEN een kaart. Niet nog een kleur, alleen een lijn. */
   --axe-kaart-scheiding: 1px solid rgba(255, 255, 255, 0.055);
 
@@ -1127,8 +1280,21 @@ html:root[data-look],
   background: none !important;
   background-color: transparent !important;
   border-bottom: 0 !important;
-  height: calc(66px + env(safe-area-inset-top)) !important;
-  min-height: calc(66px + env(safe-area-inset-top)) !important;
+  height: calc(var(--axe-kop-h) + env(safe-area-inset-top)) !important;
+  min-height: calc(var(--axe-kop-h) + env(safe-area-inset-top)) !important;
+}
+
+/* De hoogte van de kopregel staat op EEN plek.
+ *
+ * Hij stond op drie: 48px als inline-stijl in TopNav.tsx (dood, want de regel
+ * hierboven overschreef hem met !important), 66px hier, en 16px als losse
+ * `top` onder de view-balk die daar niet mee meerekende. Drie getallen voor
+ * een balk waar alles op dezelfde lijn hoort te liggen -- dat liep uit elkaar
+ * zodra er een van veranderde, en dat is ook gebeurd.
+ *
+ * Nu: dit token is de balk. Wie erop wil liggen rekent zichzelf uit. */
+:root[data-look] {
+  --axe-kop-h: 66px;
 }
 
 /* ── Geen eigen balk: de kopregel LIGT op de vensterbalk ───────────────
@@ -1368,7 +1534,20 @@ html:root[data-look],
    flow van welke pagina er ook open staat. */
 :root[data-look] .axe-viewctl {
   position: fixed;
-  top: 16px;
+  /* Op het HART van de kopregel, niet op een geraden 16px.
+   *
+   * `.axe-topbar > *` zet elk kind op 34px, dus alles in die balk ligt op
+   * hartlijn 33 (bij een balk van 66). De pil is ~45px hoog en stond op
+   * top:16, dus op hartlijn 38: vijf pixels lager dan de statusregel links en
+   * de klok rechts, met 5px lucht onder zich tegen 16px erboven. Zo hangt hij
+   * aan de onderrand en steekt hij de inhoud in -- "de pil valt onder de top
+   * bar", precies zoals gemeld.
+   *
+   * De hoogte wordt gemeten (AxeShellChrome, --axe-viewctl-h) omdat ze
+   * varieert: op mobiel vallen de labels weg en de knoppen clampen mee met de
+   * vensterbreedte. De 44px-terugval is alleen voor het ene frame voor de
+   * eerste meting. */
+  top: calc(env(safe-area-inset-top, 0px) + (var(--axe-kop-h, 66px) - var(--axe-viewctl-h, 44px)) / 2);
   left: 50%;
   right: auto;
   transform: translateX(-50%);
@@ -1383,6 +1562,17 @@ html:root[data-look],
    * De rechten zijn nu ook goedgezet (core:window:allow-start-dragging in
    * tauri.conf.json), zodat slepen echt werkt in plaats van te klagen. */
   z-index: 1200;
+}
+
+/* Op de telefoon onder de statusbalk én binnen de glasplaat-rand: top:16 zonder
+   safe-area zette de wereldschakelaar in de statusregel, boven de plaat uit. */
+@media (max-width: 767px) {
+  :root[data-look] .axe-viewctl {
+    /* Op de telefoon is er geen kopregel om op te liggen: daar hangt hij onder
+       de statusbalk, binnen de glasplaat-rand. Vier pixels lager dan de
+       desktop-hartlijn, want daar staat geen balk omheen. */
+    top: calc(env(safe-area-inset-top, 0px) + 20px);
+  }
 }
 
 /* Home's eigen CORE ACTIVE staat nu in de kopregel. Twee keer dezelfde status,
@@ -1440,6 +1630,14 @@ html:root[data-look],
   border: 0 !important;
   box-shadow: none !important;
   gap: clamp(13px, 1vw, 19px) !important;
+}
+
+/* Mobiel: de knoprij van de composer past alleen als één compacte balk (de
+   "vierkante" Tauri-composer) als de ruime desktop-gap kleiner wordt; met
+   clamp(13px,…) × zes gaten klapte de input naar bijna niets. */
+@media (max-width: 640px) {
+  :root[data-look] .axe-composer .axe-gemini-inner,
+  :root[data-look] .axe-composer .axe-gemini-inner-subtle { gap: 5px !important; }
 }
 
 /* Het cyaan ruitje vooraan. In de demo is dat het eerste wat je ziet -- de
@@ -1577,9 +1775,17 @@ html:root[data-look],
 :root[data-look] .axe-eq i:nth-child(3) { animation-delay: -0.15s; }
 :root[data-look] .axe-eq i:nth-child(4) { animation-delay: -0.45s; }
 :root[data-look] .axe-eq i:nth-child(5) { animation-delay: -0.75s; }
+/* Zeven staafjes en niet vijf: de spreekstand staat naast de orbs van
+   thinking-orbs, en die hebben veel meer punten. Met vijf las de balk als een
+   ander soort ding dan de rest van de reeks. */
+:root[data-look] .axe-eq i:nth-child(6) { animation-delay: -0.3s; }
+:root[data-look] .axe-eq i:nth-child(7) { animation-delay: -1.05s; }
 @keyframes axe-eq {
   0%, 100% { height: 5px; }
   50%      { height: 26px; }
+}
+:root[data-look] .axe-eq[data-live="on"] i {
+  animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
   :root[data-look] .axe-eq i { animation: none; height: 14px; }
@@ -1594,15 +1800,27 @@ html:root[data-look],
      tot niets terwijl het icoon (vaste px) blijft staan -- je ziet zwevende
      iconen zonder blok. De balk mag liever horizontaal schuiven (dat kon hij
      al) dan dat de knoppen zichzelf wegdrukken. */
-  flex: 1 1 auto !important;
-  min-width: 44px;
-  min-height: 46px;
+  /* Gelijke delen van de band, zonder ondergrens: de onderbalk is altijd
+     precies zo breed als de composer en loopt er nooit buiten (25 sep; bij
+     1440 breed liep hij aan beide kanten weg, bij 1900 rechts). Het icoon
+     schaalt mee, zie hieronder. */
+  flex: 1 1 0 !important;
+  min-width: 0;
+  min-height: 0;
   max-width: 76px;
   aspect-ratio: 48 / 52;
   height: auto !important;
   border-radius: clamp(14px, 1.1vw, 19px) !important;
   transition: color 0.15s ease, transform 0.15s ease;
 }
+:root[data-look] .axe-shell .axe-bottomnav button svg {
+  width: min(26px, 56%) !important;
+  height: auto !important;
+}
+:root[data-look] .axe-shell .axe-bottomnav [data-axe-doel='axe-voice-orb-anchor'] {
+  width: clamp(40px, 5vw, 112px) !important;
+}
+:root[data-look] .axe-shell .axe-bottomnav > div { overflow-x: hidden !important; }
 :root[data-look] .axe-shell .axe-bottomnav button:hover { transform: translateY(-2px); }
 /* Het icoon licht wit op als je erover gaat. De kleur staat als `color` op de
    svg zelf (NavTile geeft hem als prop mee), dus een hover-regel op de knop
@@ -1663,6 +1881,25 @@ html:root[data-look],
   }
 }
 
+/* ── Ruimte voor de chatwolk naast de composer (23 sep 2026) ──────────────
+ *
+ * De band liet rechts 287px over, en daar staat ook de radiaalnav: er bleef
+ * ~82px over voor het gesprek, dus Luka zag de wolk nooit. Zolang de wolk
+ * gewenst is (AxePresenceDock zet `data-chatwolk='aan'`: niet op Home met de
+ * plaat open, niet op tabs met eigen zij-inhoud, niet onder 1360px) beginnen
+ * de chatplaat en de composer op de LINKERlijn van de band en houden ze rechts
+ * een kolom vrij. De onderbalk blijft gecentreerd en volle band.
+ *
+ * 217px = RADIAAL_RESERVE 190 + VOOR_OBSTAKEL_GAP 12 + NA_COMPOSER_GAP 15
+ * (AxePresenceDock.tsx); 1360 = WOLK_MIN_VENSTER daar. Verandert één van die,
+ * dan dit ook. */
+:root[data-look] {
+  --axe-wolk-b: clamp(300px, 22vw, 440px);
+}
+/* 25 sep: de verschuiving is eruit. Luka: "composer en bottom nav zijn altijd
+   even breed en staan gewoon exact in het midden". De wolk past zich aan de
+   ruimte ernaast aan, niet andersom. */
+
 /* ── Dezelfde breedte als de band, voor wat erboven hangt ─────────────────
  *
  * De chatplaat, de composer en de nav delen één uitgerekende breedte. Wat
@@ -1711,14 +1948,12 @@ html:root[data-look],
 /* ── De ruimte van een tab ────────────────────────────────────────────────
  *
  * Dezelfde marges als het vak waarin een geladen website valt, maar zonder de
- * plaat eronder. Dat vak bepaalt hoeveel ruimte er op deze schil bruikbaar is:
- * genoeg marge opzij om de schuifbalken vrij te houden, en onder om de
- * chatplaat niet te raken.
+ * plaat eronder. Dat vak is het MAXIMUM, geen doel: inhoud bepaalt de maat.
+ * Alleen een website, kaart, agenda of grote tabel vult het (vullen).
  *
  * Waarom niet de bandbreedte. Die is smaller -- 1026 tegen 1280 bij een venster
- * van 1600 -- en hoort bij de composer en de chatplaat. Een tab die daarop
- * uitlijnt laat aan weerskanten een strook plaat leeg die hij had kunnen
- * gebruiken. De composer mag smal zijn; een pagina niet.
+ * van 1600 -- en hoort bij de composer en de chatplaat. De tabruimte is de
+ * buitenrand die elke tab deelt met het browservak.
  *
  * De uitzondering is de startpagina van de browser: die lijnt WEL op de band
  * uit, omdat hij vlak boven de composer staat en daar samen mee moet ogen. */
@@ -1727,6 +1962,230 @@ html:root[data-look],
   margin-bottom: clamp(10px, 1.4vh, 20px);
   min-width: 0;
 }
+/* Een gewone tab staat in de kolom van de Browser-home: precies zo breed als
+   de composer en de onderbalk, in het midden (Luka, 25 sep). Op een breed
+   scherm liepen Agents, MCP, Settings en EVE anders van rand tot rand, met 9
+   tot 13 kaarten op een rij. Alleen wat echt ruimte nodig heeft (--vullen:
+   kalender, kaart, editor, grafiek, terminals) houdt het grote vak. */
+:root[data-look] .axe-tabruimte:not(.axe-tabruimte--vullen) {
+  width: min(var(--axe-barw, 1520px), calc(100% - 2 * var(--axe-onder, 75px)));
+  max-width: 100%;
+  margin-inline: auto;
+  align-self: center;
+}
+
+:root[data-look] .axe-tabruimte--vullen {
+  min-height: 0;
+}
+
+:root[data-look] .axe-inhoud {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 20px;
+}
+
+:root[data-look] .axe-inhoud > * {
+  max-width: 100%;
+}
+
+:root[data-look] .axe-inhoud--vullen {
+  align-items: stretch;
+  overflow: hidden;
+  padding-top: 0;
+}
+
+:root[data-look] .axe-inhoud--vullen > * {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Kaartkop en lijf — het materiaal staat bij .axe-kaart hierboven. */
+:root[data-look] .axe-kaart--compact {
+  width: 148px;
+  flex: 0 0 148px;
+}
+
+:root[data-look] .axe-kaart-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+
+:root[data-look] .axe-kaart-titel {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+:root[data-look] .axe-kaart-lijf {
+  padding: 12px 14px 14px;
+  min-width: 0;
+}
+
+:root[data-look] .axe-kaart--compact .axe-kaart-lijf {
+  padding: 10px 12px 12px;
+}
+
+/* Sectie — WAR ROOM / WINGMAN'S CREW. */
+:root[data-look] .axe-sectie {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+:root[data-look] .axe-sectie-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+:root[data-look] .axe-sectie-titel {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+:root[data-look] .axe-sectie-lijf {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Gelijke kaarten, geen 1fr-rek. auto-fit + vaste kolom: lege sporen
+   klappen in, restant blijft lucht. */
+:root[data-look] .axe-kaart-raster {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, var(--axe-kaart-kolom));
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+:root[data-look] .axe-kaart-raster--ruim {
+  grid-template-columns: repeat(auto-fit, var(--axe-kaart-kolom-ruim));
+}
+
+:root[data-look] .axe-stat-rij {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+/* Linker schuifbalk — binnenkaart, vaste afstand tot de railrand.
+   Direct kind van .axe-rail-host blijft doorzichtig (die regel wist
+   achtergronden); de kaart is het kleinkind. */
+:root[data-look] .axe-rail-host:has(.axe-schuifbalk) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+:root[data-look] .axe-schuifbalk {
+  height: 100%;
+  min-height: 0;
+  padding: 12px;
+  display: flex;
+  box-sizing: border-box;
+}
+
+:root[data-look] .axe-schuifbalk-kaart {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--axe-kaart-hoek);
+  background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn);
+  box-shadow: var(--axe-kaart-schaduw);
+}
+
+:root[data-look] .axe-schuifbalk-lijf {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+:root[data-look] .axe-schuifbalk-groep,
+:root[data-look] .axe-schuifbalk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+:root[data-look] .axe-schuifbalk-voet {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: var(--axe-kaart-scheiding);
+}
+
+/* Een tab die zelf al een SchuifBalk in zijn TabRail zet: TabRail levert de
+   kaart en de voet al, dus de binnenste wordt plat en zonder tweede voet. */
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-schuifbalk {
+  padding: 0;
+  flex: none;
+}
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-schuifbalk-kaart {
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-schuifbalk-voet {
+  display: none;
+}
+
+/* Alles in de lade staat in DE kaart van de lade (Luka, 25 sep: "inside card
+   erin, nette layout"). Een WidgetCard of Kaart daarbinnen wordt een sectie:
+   geen eigen vlak, rand of schaduw, wel zijn kop. */
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .widget-card,
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-kaart {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-radius: 0 !important;
+}
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .widget-card + .widget-card,
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf .axe-kaart + .axe-kaart {
+  border-top: var(--axe-kaart-scheiding) !important;
+  padding-top: 10px !important;
+}
+/* Niets steekt buiten de kaart. */
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf { overflow-x: hidden; }
+:root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf * { max-width: 100%; }
 
 :root[data-look] .axe-browser-vak {
   /* De marges horen hier, niet elders.
@@ -1857,6 +2316,15 @@ html:root[data-look],
   z-index: 2;
 }
 :root[data-look] .axe-chatplaat { z-index: 1; }
+
+/* Fix 5 was hier (ronde 1): `.axe-chatplaat[data-dicht='ja'] .axe-vak-kop`
+   kreeg z-index 3 omdat de ingeklapte chatplaat's kopregel een BROER van de
+   composer was en er door de composer overheen getekend kon worden.
+   Verwijderd in ronde 5: `.axe-vak-kop` is nu een kind van `.axe-vak` zelf
+   (zie AxeComposerVak) en bestaat niet meer als los element binnen
+   `.axe-chatplaat` -- deze selector matcht dus niets meer. Er is geen aparte
+   doos meer om achter iets te verdwijnen, dus geen z-index-lap meer nodig.
+   Structureel opgelost in plaats van nog een laag erbovenop. */
 
 /* ── Geen cyaan doosjes in de kop ────────────────────────────────────────
    Cyaan is in dit ontwerp een ACCENT: een ruitje, een driehoekje, een lijn
@@ -2123,6 +2591,106 @@ html:root[data-look],
 :root[data-look] .axe-slot::-webkit-scrollbar { display: none; }
 :root[data-look] .axe-slot > * { pointer-events: auto; }
 :root[data-look] .axe-slot:empty { display: none; }
+/* Telefoon: dezelfde gastheer, maar in een lade (ladeSloten.ts). Geen vaste
+   kolom naast de plaat -- gewoon meelopen in de lade, volle breedte. Alleen dit
+   element heeft axe-slot--lade; de desktopsloten raakt dit niet. !important
+   omdat axe-slot--hoog (Neural/Terrain zetten die) top/bottom/position zet. */
+:root[data-look] .axe-slot.axe-slot--lade {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  z-index: auto !important;
+  overflow: visible !important;
+  pointer-events: auto;
+  margin-bottom: 10px;
+}
+/* Terrain verbergt zijn kolommen onder 900px (NeuralMemorySystem.css), omdat ze
+   op de telefoon óver het landschap lagen. In de lade liggen ze nergens
+   overheen, dus daar horen ze weer te staan. */
+:root[data-look] .axe-slot.axe-slot--lade > .nm-sidebar {
+  display: flex !important;
+}
+
+/* Corrective (evaluator round 1, issue 2): `RadiaalDok.tsx`'s right-hand ring
+ * shares this bottom-right corner with whatever a tab has portalled into
+ * `rechts` (the Code Editor's motor/view `IcoonZuil`, for one). The dock
+ * itself never moves -- its toggle stays exactly where you clicked it -- so
+ * while the ring is open, the slot fades and stops taking clicks instead:
+ * one thing asking for attention in this corner at a time, not two
+ * overlapping sets of small round buttons. Reverts the moment the ring
+ * closes (see the effect in RadiaalDok.tsx that adds/removes this class). */
+:root[data-look] .axe-slot--wijkt-voor-dok {
+  opacity: 0.1;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* ── De adaptieve chatwolk (AdaptiveChatCloud.tsx) ──────────────────────────
+ * Zelfde materiaal als `.axe-paneel` hierboven (dezelfde `--axe-chat`-
+ * gradient, dezelfde randen/schaduw) zodat hij niet als een vreemd blokje
+ * naast de andere sleufpanelen oogt -- maar met EIGEN klassen, expres niet
+ * `.axe-paneel`/`.axe-paneel-body`: die verdwijnen volledig zodra
+ * `data-chat='dicht'` staat (regel 2422 hierboven), wat op elke pagina
+ * behalve Home de standaardstand is. Gemeten: met `.axe-paneel-body` bleef
+ * alleen de kop over en mat de knoppenrij 0×0. Deze wolk is geen
+ * gesprekspaneel dat mag verdwijnen als de chat dichtklapt -- het is een
+ * permanente snelkoppelingsstrook, dus hij luistert niet naar die regel. */
+:root[data-look] .axe-adaptieve-wolk {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: var(--axe-chat);
+  backdrop-filter: var(--chat-filter);
+  -webkit-backdrop-filter: var(--chat-filter);
+  box-shadow:
+    var(--axe-bar-rand),
+    0 -1px 0 rgba(0, 0, 0, 0.85) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 4px 9px -3px rgba(0, 0, 0, 0.75);
+  color: var(--text-secondary);
+  box-sizing: border-box;
+}
+:root[data-look] .axe-adaptieve-wolk-kop {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+:root[data-look] .axe-adaptieve-wolk-sub {
+  margin: 0 0 10px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+:root[data-look] .axe-adaptieve-wolk-rij {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+:root[data-look] .axe-adaptieve-wolk-knop {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #FFFFFF;
+  background: var(--axe-barbtn);
+  box-shadow: var(--axe-tegel-op);
+  transition: color 0.15s ease, box-shadow 0.15s ease;
+}
+:root[data-look] .axe-adaptieve-wolk-knop:hover {
+  box-shadow: var(--axe-tegel-op), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+:root[data-look] .axe-adaptieve-wolk-knop:active {
+  box-shadow: var(--axe-tegel-in);
+}
 
 /* De tab-panelen staan NAAST de chatplaat, niet als kolommen langs de rand.
  *
@@ -2221,6 +2789,41 @@ html:root[data-look],
   right: 14px;
   width: calc(var(--axe-chat-rechts, 268px) - 26px);
   align-items: flex-end;
+}
+
+/* ── Corrective round 2, Fix 1: de hoge kolommen krijgen de geometrie van de
+ * rail zelf, niet hun eigen getallen ──────────────────────────────────────
+ *
+ * De hoge kolommen (Neural, Terrain) bleven ALTIJD staan -- dat is gewenst,
+ * Luka wil geen PlaatRail en geen verbergen. Het echte probleem was dat ze
+ * een andere doos waren dan de rail die eroverheen schuift: andere breedte
+ * (242px vs 380px), andere randafstand (14px vs 20px) en vooral een andere
+ * `bottom`-formule (--axe-chat-onder vs 100dvh - --axe-chat-top), die niet
+ * garandeert dat "net boven de chatplaat" op dezelfde regel uitkomt. Daardoor
+ * liep de kolom door tot naast de composer in plaats van te stoppen waar de
+ * rail ook stopt.
+ *
+ * Dit kopieert daarom letterlijk de vier uitdrukkingen van `.axe-shell aside`
+ * (open stand, hierboven) in plaats van nieuwe getallen te verzinnen: zo is de
+ * doos van de kolom exact de doos van de rail, en schuift de rail er precies
+ * overheen en weer weg. Alleen de hoog+links/rechts combinatie: de onderband-
+ * stand van dezelfde klassen (hierboven, zonder --hoog) blijft ongemoeid.
+ *
+ * Corrective round 4, Fix D: nog steeds letterlijk gekopieerd van
+ * `.axe-shell aside`, inclusief de `--axe-dock-hoog`-term die daar nu bij
+ * staat -- anders was dit precies de asymmetrie die Fix D moest oplossen: de
+ * rail zou het dok wel ontwijken en de kolom ernaast niet. */
+:root[data-look] .axe-slot--hoog.axe-slot--links,
+:root[data-look] .axe-slot--hoog.axe-slot--rechts {
+  top: calc(66px + env(safe-area-inset-top) + 10px);
+  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px + var(--axe-dock-hoog, 0px));
+  width: var(--axe-rail-breedte);
+}
+:root[data-look] .axe-slot--hoog.axe-slot--links {
+  left: 20px;
+}
+:root[data-look] .axe-slot--hoog.axe-slot--rechts {
+  right: 20px;
 }
 
 /* Onder de 1100px is er geen ruimte naast de plaat; dan vallen ze weg in plaats
@@ -2372,10 +2975,10 @@ html:root[data-look],
  * zichzelf. */
 .axe-rail-host:empty { display: none; }
 
-/* Een balk zonder inhoud klapt weg in plaats van als lege koker te blijven
-   staan. Sinds de standaardinhoud alleen nog op Home hangt, houdt een tab
-   zonder eigen rail anders 300px leegte over aan de zijkant. */
-aside:has(> .axe-rail-host:empty):not(:has(> .axe-rail-standaard)) { display: none; }
+/* Een tab zonder eigen railinhoud houdt toch dezelfde lade over. Leeg is hier
+   een bewuste basisstaat: elke tab heeft links en rechts dezelfde hover/click
+   mechaniek, en de inhoud kan per tab later groeien zonder de shell opnieuw te
+   verbouwen. */
 
 /* ── Wat een tab in de rail zet, IS de rail ──────────────────────────────
  *
@@ -2416,7 +3019,10 @@ aside:has(> .axe-rail-host:empty):not(:has(> .axe-rail-standaard)) { display: no
 }
 /* Een kolom die op md: pas zichtbaar wordt hoort in de rail altijd te tonen --
    de rail zelf beslist al of hij er is. */
-.axe-rail-host .hidden { display: flex !important; }
+/* Alleen wat op kleine schermen verborgen is (`hidden md:flex` e.d.). Stond op
+   ELKE .hidden, en toonde zo ook wat echt verborgen hoort: de ruwe
+   bestandsknop van ThinkThanks, lege weergaven (25 sep). */
+.axe-rail-host .hidden:is([class*="sm:"], [class*="md:"], [class*="lg:"], [class*="xl:"]) { display: flex !important; }
 aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 :root[data-look] .axe-dock {
@@ -2542,35 +3148,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
    Zelfde recept als .axe-paneel, met opzet: een kaart in de rail en een kaart
    op een pagina horen hetzelfde materiaal te zijn. */
+:root[data-look] .axe-kaart,
 :root[data-look] .axe-shell .widget-card,
 :root[data-look] .axe-shell .axe-surface,
 :root[data-look] .axe-shell .axe-surface--flat,
 :root[data-look] .axe-shell .axe-surface--inset {
-  /* EXACT de chatplaat. Eén materiaal voor alles wat op de plaat ligt: de
-     chatplaat, de tab-panelen ernaast, de widgets in de rails en de kaarten op
-     elke pagina. Zodra er twee soorten glas zijn ga je ze vergelijken, en dan
-     valt het verschil op in plaats van de inhoud. */
-  background: var(--axe-chat) !important;
-  /* ── Geen backdrop-filter op kaarten ──────────────────────────────────
-   *
-   * Hier stond var(--chat-filter): blur(40px). Achter een kaart ligt de
-   * plaat, en die is bijna effen -- een effen vlak vervagen geeft datzelfde
-   * effen vlak terug. Op AI Core zijn dat zeven schermgrote vervagingen per
-   * frame die niets laten zien. Finance vijf, Control Plane vijf.
-   *
-   * De blur blijft waar er wél iets achter beweegt: de plaat zelf (je
-   * bureaublad, via NSVisualEffect) en de chatplaat en rails op Home (de
-   * sphere). Daar doet hij werk; hier kostte hij alleen. */
+  /* Matzwart als Browser-home. Tokens één keer hierboven; deze regel bestaat
+     alleen omdat eerdere experimenten !important zetten en anders winnen. */
+  background: var(--axe-kaart-vlak) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 0 !important;
-  border-radius: 22px !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.09) inset,
-    1px 0 0 rgba(255, 255, 255, 0.03) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 20px 44px -18px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid var(--axe-kaart-lijn) !important;
+  border-radius: var(--axe-kaart-hoek) !important;
+  box-shadow: var(--axe-kaart-schaduw) !important;
 }
 
 /* ── 3. Kleur zit in de letters, niet in een blokje ──────────────────────
@@ -3153,19 +3743,33 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   /* Tegen de chatplaat aan. Ze stonden 16px van elkaar met elk hun eigen rand
      en hoeken, en dat is precies het gestapelde dat eruit moest. */
   margin-top: 0 !important;
+  /* Meer lucht tot de onderbalk (was de 14px van .axe-composer): samen met de
+     diepere --axe-vak-zweef laat dat het vak zweven i.p.v. op de nav te rusten.
+     Alles eromheen meet de composer, dus wolk, orb en panelen schuiven mee. */
+  margin-bottom: 24px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* De kopregel: model · persona links, gereedschap rechts. Geen vlak, geen
-   lijn -- in het voorbeeld zweeft die tekst boven het vak. */
+/* De kopregel: model · persona links, gereedschap rechts.
+ *
+ * Corrective round 5: dit stond hier als een los strookje BOVEN het vak
+ * ("geen vlak, geen lijn -- de tekst zweeft erboven"), met zijn eigen 6px
+ * zijpadding om optisch tegen de plaat's padding aan te sluiten. Dat is
+ * precies waarom dit stukje bleef terugkomen met z-index-lapmiddelen (ronde 1
+ * Fix 5): een los vlak zonder eigen achtergrond kan altijd door iets erachter
+ * geraakt worden.
+ *
+ * Nu is dit de EERSTE rij BINNEN `.axe-vak` (zie AxeComposerVak) -- geen
+ * eigen zijpadding meer, want die komt al van `.axe-vak` zelf. Zonder dat zou
+ * deze rij een tandje verder naar binnen staan dan de tekst en de knoppen
+ * eronder, en dat leest als scheef in wat nu ÉÉN doorlopende kaart is. */
 :root[data-look] .axe-vak-kop {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 6px;
   min-height: 22px;
   font-size: clamp(11px, 0.85vw, 13px);
   color: var(--text-secondary);
@@ -3192,6 +3796,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   display: flex;
   flex-direction: column;
   gap: clamp(8px, 0.7vw, 14px);
+  transition: box-shadow 90ms linear;
+}
+
+/* Real voice energy fallback/confirmation layer. VoiceBeam remains the primary
+   animated visualization, but the composer itself now also exposes the same
+   measured RMS signal as a visible inner bloom. This prevents a valid audio
+   analyser from becoming invisible because a third-party beam wrapper changes
+   stacking/overflow. Zero energy = zero extra glow. */
+:root[data-look] .axe-vakcomposer[data-voice-energy='on'] .axe-vak {
+  box-shadow:
+    var(--axe-vak-zweef),
+    0 0 var(--axe-voice-spread, 24px) rgba(34,211,238,var(--axe-voice-alpha,0)),
+    0 0 var(--axe-voice-spread-soft, 34px) rgba(168,85,247,var(--axe-voice-alpha-soft,0));
 }
 
 :root[data-look] .axe-vak-boven {
@@ -3446,15 +4063,39 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 
 /* Het paneel achter de klok: gesprekken en status, op één rij die mag wrappen.
-   Hier staan de dingen die eerst de kopregel vulden. */
+   Hier staan de dingen die eerst de kopregel vulden.
+
+   Corrective round 5, de uitzondering op "alles zit nu in het vak": de
+   klok-knop die dit paneel opent, zit sinds deze ronde IN `.axe-vak`
+   (`.axe-vak-kop`). Zou dit paneel als gewone flow-rij meeverhuizen, dan
+   klapt hij BINNEN het vak open -- tussen de kop en het invoerveld -- en
+   duwt hij de plek waar je typt bij elke klik omlaag. Dat is niet "boven de
+   composer uitklappen", dat is een tweede doos IN de doos.
+
+   Dus: losgemaakt uit de flow. `.axe-composer` (de ouder waarin dit element
+   nu hangt, zie AxeComposerVak) heeft `position: relative`, dus `bottom:
+   100%` zet de onderkant van dit paneel precies op de BOVENkant van
+   `.axe-composer` -- en omdat het vak het eerste kind is, is dat exact de
+   bovenkant van `.axe-vak`. Eigen achtergrond/rand/schaduw erbij, want een
+   overlay op willekeurige inhoud erachter (de sterrenlucht, een projectie)
+   heeft een eigen vlak nodig om leesbaar te blijven -- dat kreeg hij eerder
+   gratis van de chatplaat waar hij toen IN stond. */
 :root[data-look] .axe-kop-paneel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  z-index: 5;
+  margin-bottom: 8px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: clamp(6px, 0.5vw, 12px);
-  padding: 8px 6px 10px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 14px;
+  border-radius: var(--axe-vak-hoek);
+  border: 1px solid var(--axe-vak-lijn);
+  background: var(--axe-vak-vlak);
+  box-shadow: var(--axe-vak-zweef);
   font-size: 10px;
 }
 :root[data-look] .axe-kop-paneel .axe-cstat {
@@ -3651,6 +4292,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     opacity 0.2s ease,
     background 0.15s ease,
     color 0.15s ease;
+}
+:root[data-look] .axe-dok-tab[data-aan='ja'] {
+  color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-cyan) 45%, transparent) inset, 0 0 14px -4px var(--accent-cyan);
 }
 :root[data-look] .axe-dok-tab:hover {
   box-shadow: var(--axe-tegel-op), 0 0 0 1px rgba(255, 255, 255, 0.12);
@@ -4037,7 +4682,34 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 :root[data-look] .axe-tabzuil-knop:hover { opacity: 0.85; }
+:root[data-look] .axe-tabzuil-knop[data-uit='ja'] { opacity: 0.12; cursor: not-allowed; }
+/* Rechts van de composer: tegen de composer aan, dus links uitgelijnd. */
+:root[data-look] .axe-tabzuil[data-kant='rechts'] { align-items: flex-start; }
+:root[data-look] .axe-tabzuil[data-kant='rechts'] .axe-tabzuil-rooster { justify-content: start; }
+:root[data-look] .axe-tabzuil[data-kant='rechts'] .axe-tabzuil-naam { text-align: left; padding: 0 0 0 4px; }
 :root[data-look] .axe-tabzuil-knop[data-aan='ja'] { opacity: 1; }
+
+/* In de onderband: precies zo hoog als de composer, en daartussen gecentreerd.
+ *
+ * Gemeten 14 september op 1440x900: het slot loopt van de chatkop tot de
+ * onderkant van de composer (181px), de composer zelf is 159px. Onderaan
+ * uitgelijnd stonden de iconen dus lager dan het midden van de composer, en de
+ * rechter zuil stond met zijn 84px aan de VERRE kant van het slot -- tegen de
+ * radiaal-dok in plaats van tegen de composer. Nu vullen beide de breedte van
+ * hun slot (zodat data-kant bepaalt waar het rooster ligt) en de hoogte van de
+ * composer. */
+:root[data-look] .axe-slot--links > .axe-tabzuil,
+:root[data-look] .axe-slot--rechts > .axe-tabzuil {
+  align-self: stretch;
+  margin-top: auto;
+  height: var(--axe-composer-hoog, auto);
+  justify-content: center;
+  /* Iets boven het midden: rooster plus naamregel (84 + 18px) staan in de
+     composer, met de naam nog binnen zijn onderkant. Gemeten 14 sep, 1440x900:
+     iconen 20px onder de bovenkant van de composer (was 29) en de naamregel
+     eindigt 37px boven de onderkant. Luka: "mogen nog een stukje omhoog". */
+  padding: 0 0 18px;
+}
 
 /* Vaste hoogte, ook leeg: een regel die komt en gaat duwt het rooster op en
    neer terwijl je er met je muis overheen gaat. Rechts uitgelijnd, zodat hij
@@ -5073,10 +5745,6 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    om een geladen website. Eén verloop, één haarlijn, één schaduw. */
 :root[data-look='black'] .axe-chatplaat,
 :root[data-look='black'] .axe-paneel,
-:root[data-look='black'] .axe-shell .widget-card,
-:root[data-look='black'] .axe-shell .axe-surface,
-:root[data-look='black'] .axe-shell .axe-surface--flat,
-:root[data-look='black'] .axe-shell .axe-surface--inset,
 :root[data-look='black'] .axe-shell aside,
 :root[data-look='black'] .axe-slot--rail,
 :root[data-look='black'] .axe-browser-vak {
@@ -5088,6 +5756,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   box-shadow: var(--kaart-rand), var(--kaart-schaduw), 0 32px 64px -26px rgba(var(--accent-rgb), var(--gloed, 0)) !important;
   backdrop-filter: var(--kaart-filter);
   -webkit-backdrop-filter: var(--kaart-filter);
+}
+
+/* Pagina-kaarten: matzwart, geen chatplaat-gloed. */
+:root[data-look='black'] .axe-kaart,
+:root[data-look='black'] .axe-shell .widget-card,
+:root[data-look='black'] .axe-shell .axe-surface,
+:root[data-look='black'] .axe-shell .axe-surface--flat,
+:root[data-look='black'] .axe-shell .axe-surface--inset {
+  background: var(--axe-kaart-vlak) !important;
+  border: 1px solid var(--axe-kaart-lijn) !important;
+  box-shadow: var(--axe-kaart-schaduw) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 /* De rails zijn geen kaart die je optilt; de vervaging erachter kost een
    volledige schermvervaging per rail en je ziet er niets van omdat er alleen
@@ -5104,11 +5785,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 /* Kaart 18, plaat 22. De ingeklapte chatbalk houdt zijn 14 (zie
    [data-dicht='ja'] hierboven): een balk hoort eruit te zien als een balk. */
+:root[data-look='black'] .axe-kaart,
 :root[data-look='black'] .axe-shell .widget-card,
 :root[data-look='black'] .axe-shell .axe-surface,
 :root[data-look='black'] .axe-shell .axe-surface--flat,
 :root[data-look='black'] .axe-shell .axe-surface--inset {
-  border-radius: var(--r-kaart) !important;
+  border-radius: var(--axe-kaart-hoek) !important;
 }
 :root[data-look='black'] .axe-chatplaat:not([data-dicht='ja']) {
   border-radius: var(--r-plaat) !important;
@@ -5116,19 +5798,15 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 /* Het lichtmodel: rust is een haarlijn, hover is een iets sterkere haarlijn,
    een iets sterkere accentrand en één pixel lift in 140 ms. Geen gloed -- die
    is voor wat werkt. */
+:root[data-look='black'] .axe-kaart,
 :root[data-look='black'] .axe-shell .widget-card,
 :root[data-look='black'] .axe-shell .axe-surface {
-  transition: box-shadow var(--snel) var(--ease), transform var(--snel) var(--ease);
+  transition: box-shadow var(--snel) var(--ease);
 }
+:root[data-look='black'] .axe-kaart:hover,
 :root[data-look='black'] .axe-shell .widget-card:hover,
 :root[data-look='black'] .axe-shell .axe-surface:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.16) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 0 2px rgba(var(--accent-rgb), 0.07),
-    var(--kaart-schaduw) !important;
-  transform: translateY(-1px);
+  box-shadow: var(--axe-kaart-schaduw) !important;
 }
 /* Actief en werkend: de onderglow, en bij werkend ademt hij. Klassen, zodat
    een component ze kan zetten zonder zelf een schaduw te kennen. */
@@ -5266,19 +5944,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    Hij zweeft OVER het chroom, groot genoeg om te gebruiken. */
 .axe-telefoon__lijf { position: absolute; inset: 0; }
 .axe-telefoon__lijf--entree {
-  animation: axe-telefoon-entree 680ms var(--ease) both;
+  animation: axe-telefoon-entree 680ms var(--ease) backwards;
 }
 .axe-telefoon__lijf--zweeft {
   animation: axe-telefoon-zweef 5.2s ease-in-out infinite;
 }
 .axe-telefoon__lijf--entree.axe-telefoon__lijf--zweeft {
   animation:
-    axe-telefoon-entree 680ms var(--ease) both,
+    axe-telefoon-entree 680ms var(--ease) backwards,
     axe-telefoon-zweef 5.2s ease-in-out 680ms infinite;
 }
 @keyframes axe-telefoon-entree {
-  from { transform: translateY(110%) scale(0.92); opacity: 0; filter: blur(8px); }
-  to   { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+  /* Geen opacity 0 en geen blur als beginstand: loopt de animatie om welke
+     reden ook niet (WebKit in de app), dan bleef hij onzichtbaar staan. */
+  from { transform: translateY(40px) scale(0.96); }
+  to   { transform: translateY(0) scale(1); }
 }
 @keyframes axe-telefoon-zweef {
   0%, 100% { transform: translateY(0); }
@@ -5306,7 +5986,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 .axe-telefoon__kop > svg { width: 12px; height: 12px; flex: none; }
 .axe-telefoon__kop .axe-groei { flex: 1; }
-.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 43px; --schaal: var(--tel-schaal, 0.92); }
+.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 0; --schaal: var(--tel-schaal, 0.92); }
+/* Geen kopbalk: je sleept aan de rand van het toestel. */
+.axe-telefoon .axe-iphone { cursor: grab; }
+.axe-telefoon .axe-iphone__scherm { cursor: auto; }
+.axe-zwever--sleept .axe-iphone { cursor: grabbing; }
 /* Liggend: om het eigen midden gedraaid, en de zwever wordt zo breed als de
    telefoon hoog was, zodat hij niet buiten het venster valt. */
 .axe-telefoon--liggend .axe-toestel {
@@ -5751,4 +6435,882 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   .axe-aanwezig__ringen i { animation: none; }
   :root[data-look='black'] .axe-shell .widget-card:hover,
   :root[data-look='black'] .axe-shell .axe-surface:hover { transform: none; }
+}
+
+/* ── De vrije bol: overal, zonder HUD, en hij vliegt uit ──────────────────
+   Zie ZwevendeBol.tsx. De ring van RAND px rond de bol is de greep; het
+   canvas erin draai je. */
+.axe-bol-vrij__greep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  cursor: grab;
+}
+.axe-zwever--sleept .axe-bol-vrij__greep { cursor: grabbing; }
+.axe-bol-vrij__bol { transition: opacity 0.5s ease, transform 0.5s ease; }
+/* Uiteen: de bol wordt zwak terwijl zijn deeltjes onderweg zijn. */
+.axe-bol-vrij__bol--uiteen { opacity: 0.18; transform: scale(0.86); }
+
+.axe-bolvlucht {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.axe-bolvlucht__canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.axe-bolvlucht__label {
+  position: absolute;
+  max-width: 420px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font: 500 11px/1.2 var(--mono);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.axe-bolvlucht__label--aan { opacity: 1; transform: none; }
+.axe-bolvlucht__wie { opacity: 0.6; margin-right: 4px; }
+
+
+/* Sinds 23 sep zit er GEEN border-beam meer in de composer (alleen VoiceBeam),
+   dus deze regel is inert; laten staan voor als hij terugkomt.
+   Composer-gloed (border-beam, pulse-outside). De bloom-laag heeft z-index -1;
+   zonder eigen stapelcontext zakt hij achter de glasplaat en zie je alleen een
+   dun randje. isolation houdt hem achter het invoervak maar vóór de plaat. */
+.axe-vakcomposer [data-beam] { isolation: isolate; }
+
+
+/* ══ AXE GLOBAL PRESENCE ══════════════════════════════════════════════════
+ * Home keeps the full Core Sphere. This compact presence belongs to the
+ * shell and therefore follows every workspace without sitting on top of its
+ * map, browser, chart or editor.
+ *
+ * Luka, 20-21 sep 2026 (live review, rounds 1-4): the composer/chatplaat
+ * must stay exactly where axe-look.css already puts it -- the SAME centred,
+ * bottomnav-matching width as always. This presence never makes the
+ * composer shrink or move; it positions ITSELF, measured in JS against real
+ * anchors (AxePresenceDock.tsx: the bottom nav's AXE-label slot for idle,
+ * the composer's own right edge and any visible right rail for active) --
+ * `left`/`width`/`top-anchor` below come from inline style, not a guessed
+ * per-page offset. This stylesheet only supplies what does NOT vary: the
+ * look, and the two things JS does not compute (idle's bottom offset,
+ * active's vertical band).
+ */
+@media (min-width: 640px) {
+  /* Idle: just the particle, resting under the "AXE" label in the bottom nav
+     (aria-hidden, non-interactive -- it is a status glance, not a control).
+     `left` is set inline once measured; 50% is only the pre-measurement
+     fallback for the first paint. */
+  /* `top`/`left` are the anchor slot's real measured centre (AxePresenceDock.tsx),
+     not this fixed bottom: 22px guess -- that put the particle right on the
+     bottom nav's own top edge on some window heights instead of centred in
+     the slot (round 5 live review). translate(-50%, -50%) treats left/top as
+     the CENTRE point, matching how the horizontal half already worked. */
+  :root[data-look] .axe-presence-idle {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 104;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    transition: opacity 200ms ease, left 200ms ease, top 200ms ease;
+  }
+
+  /* Active: beside the composer, in the space before the right radial (or any
+     currently-open right rail). `left`/`width` are set inline per the
+     vol/compact/mini measurement in AxePresenceDock.tsx; this only supplies
+     the vertical band, matched to the composer's own measured box so the two
+     sit on the same line. */
+  :root[data-look] .axe-presence-dock {
+    position: fixed;
+    bottom: var(--axe-composer-onder, 104px);
+    height: var(--axe-composer-hoog, 90px);
+    /* Fix C: on Neural/Terrain, AxePresenceDock.tsx caps `height` inline
+       (`maxHoogte`) whenever MemoryDock's measured rect would otherwise
+       reach into this box. Without clipping here, the exchange text --
+       already 2-line-clamped, but the box itself is now shorter than that
+       clamp assumes -- could still paint past the shortened box. */
+    overflow: hidden;
+    z-index: 104;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px 8px 4px;
+    pointer-events: auto;
+    transition: opacity 200ms ease, left 200ms ease, width 200ms ease;
+  }
+  /* Compact/mini: no left-padding slack to spare -- the orb sits flush. */
+  :root[data-look] .axe-presence-dock[data-modus='compact'],
+  :root[data-look] .axe-presence-dock[data-modus='mini'] {
+    padding: 4px;
+    gap: 6px;
+  }
+
+  :root[data-look] .axe-presence-dock__orb {
+    width: 68px;
+    min-width: 68px;
+    height: 68px;
+    display: grid;
+    place-items: center;
+    /* Corrective (evaluator round 1, issue 6): AxeStatusOrb always renders a
+       fixed 64px canvas here (thinking-orbs ships exactly two presets, 20 or
+       64 -- see AxePresenceDock.tsx's own comment on the JSX), but this box
+       shrinks to 44px in compact and 32px in mini. `.axe-presence-dock`
+       itself has `overflow: hidden`, which clips the CARD's own edge -- but
+       measured live the canvas still reported a 64px rect reaching past its
+       own orb container into the composer's button row, so the parent's
+       clip alone wasn't enough to stop it registering there. Clamping here
+       too, on the orb's own box, is the one place this can't drift again
+       regardless of which ancestor's overflow rule changes. */
+    overflow: hidden;
+  }
+  :root[data-look] .axe-presence-dock[data-modus='mini'] .axe-presence-dock__orb {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+  }
+  /* Corrective round 7, Fix 3: `compact` used to keep the full 68px orb, which
+     at BREEDTE_COMPACT (132px) left the text column (`__body`) only ~50px
+     wide -- unreadable even now that `__exchange` actually renders text in
+     compact (see the JSX above). Shrinking the orb here, part-way to mini's
+     32px, hands that space to the thing Luka actually wants legible: what
+     AXE said. Not a full solution to "is there ever truly enough geometric
+     room" (that depends on the composer/radial obstacle math, verified
+     separately), but it stops the orb itself from being the reason a
+     technically-adequate compact width still reads as empty. */
+  :root[data-look] .axe-presence-dock[data-modus='compact'] .axe-presence-dock__orb {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  :root[data-look] .axe-presence-dock__body {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  :root[data-look] .axe-presence-dock__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font: 600 9px/1.2 var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+  }
+
+  :root[data-look] .axe-presence-dock__exchange {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+  :root[data-look] .axe-presence-dock__exchange p {
+    margin: 0;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 9px;
+    line-height: 1.3;
+    color: var(--text-secondary);
+  }
+  :root[data-look] .axe-presence-dock__exchange p[data-van='mij'] {
+    color: var(--text-muted);
+  }
+  :root[data-look] .axe-presence-dock__exchange p[data-van='axe'] {
+    color: color-mix(in srgb, var(--accent-cyan) 78%, var(--text-primary));
+  }
+
+  :root[data-look] .axe-presence-dock__approval {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 24px 24px;
+    align-items: center;
+    gap: 3px;
+  }
+  :root[data-look] .axe-presence-dock__approval > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9px;
+    color: var(--warning);
+  }
+  :root[data-look] .axe-presence-dock__approval button {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    background: var(--axe-barbtn);
+    color: var(--text-secondary);
+    box-shadow: var(--axe-tegel-op);
+  }
+  :root[data-look] .axe-presence-dock__approval button:active {
+    box-shadow: var(--axe-tegel-in);
+  }
+
+  /* Corrective round 6, Part 4: this used to hide the card outright the
+     instant the right radial ring opened -- a blunt fix from before
+     AxePresenceDock measured the ring as a real obstacle. Luka's ask was
+     the opposite of "make it vanish": the card should shrink around
+     whatever is actually on screen (see `HORIZONTALE_OBSTAKELS` in
+     AxePresenceDock.tsx, which now measures the open ring via
+     `[data-axe-doel="radiaal-rechts"]` and narrows the card's ceiling
+     instead). Keeping this rule too would just paper back over that fix --
+     the card would compute a correct, adapted width and then still be
+     switched off by CSS regardless. Removed rather than kept "just in
+     case". */
+}
+
+/* Luka, 21 sep 2026 (round 4): the active card now has a compact/mini variant
+   specifically for "not enough room", so a hard cutoff at 1280px undid the
+   point of building it -- narrowed to where even the 40px mini badge would
+   crowd a composer that has itself gone edge-to-edge (see the <1100px
+   composer-width rule elsewhere in this file). The idle particle is a plain
+   20px dot in the bottom nav and was never the problem; it is not gated here. */
+@media (max-width: 640px) {
+  :root[data-look] .axe-presence-dock { display: none; }
+}
+
+/* ── Spatial unification: content lives ON the Tauri shell ─────────────── */
+:root[data-look] .axe-trading-memory {
+  /* Same usable shell area as browser content; no quarter-width dashboard. */
+  width: auto;
+  min-width: 0;
+  height: 100%;
+}
+:root[data-look] .axe-trading-memory > div:last-child {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+:root[data-look] .axe-trading-memory-grid {
+  flex: 1;
+  min-height: 0;
+  align-content: stretch;
+  grid-auto-rows: minmax(180px, 1fr) !important;
+}
+
+/* Month is an operational calendar: show what happens, not just that something happens. */
+:root[data-look] .axe-maand-items {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+:root[data-look] .axe-maand-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+  padding-left: 5px;
+  border-left: 2px solid currentColor;
+  text-align: left;
+  line-height: 1.2;
+}
+:root[data-look] .axe-maand-item time {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 8.5px;
+  color: var(--text-muted);
+}
+:root[data-look] .axe-maand-item b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 550;
+  color: var(--text-secondary);
+}
+:root[data-look] .axe-maand-items em {
+  font-size: 8.5px;
+  font-style: normal;
+  color: var(--text-muted);
+  text-align: left;
+}
+:root[data-look] .axe-week-blok {
+  min-height: 28px;
+  padding: 3px 5px 3px 7px;
+}
+:root[data-look] .axe-week-bloktitel,
+:root[data-look] .axe-week-bloktijd {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ── Personal Computer Use compact Tauri surface ─────────────────────── */
+.computer-use-overlay {
+  height: 100dvh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: transparent;
+  color: var(--text-primary);
+}
+/* The PCU shell pulse belongs BEHIND the complete card. It deliberately does
+   not use BorderBeam: that component owns its own wrapper geometry and changed
+   the silhouette Luka had already approved. This wrapper has exactly the old
+   card footprint and only paints a monochrome breathing perimeter outside it. */
+.computer-use-overlay__pulse-shell {
+  position: relative;
+  width: min(744px, 100%);
+  max-height: calc(100dvh - 36px);
+  border-radius: 30px;
+  isolation: isolate;
+}
+.computer-use-overlay__pulse-shell::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 36px;
+  border: 1px solid rgba(255,255,255,.68);
+  box-shadow:
+    0 0 12px rgba(255,255,255,.18),
+    0 0 30px rgba(255,255,255,.10);
+  opacity: .48;
+  transform: scale(.997);
+  animation: axe-pcu-mono-pulse 2.8s ease-in-out infinite;
+}
+@keyframes axe-pcu-mono-pulse {
+  0%, 100% {
+    opacity: .34;
+    transform: scale(.996);
+    box-shadow:
+      0 0 10px rgba(255,255,255,.14),
+      0 0 24px rgba(255,255,255,.07);
+  }
+  50% {
+    opacity: .86;
+    transform: scale(1.004);
+    box-shadow:
+      0 0 16px rgba(255,255,255,.28),
+      0 0 40px rgba(255,255,255,.13);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .computer-use-overlay__pulse-shell::before { animation: none; opacity: .56; }
+}
+.computer-use-overlay__card {
+  position: relative;
+  width: 100%;
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: color-mix(in srgb, var(--bg-base) 72%, transparent);
+  box-shadow: 0 24px 80px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.08);
+  backdrop-filter: blur(28px) saturate(1.15);
+  -webkit-backdrop-filter: blur(28px) saturate(1.15);
+  padding: 14px;
+}
+/* Frameless window (decorations:false) — no native title bar to grab or edge
+   to resize from, so both handles are explicit and call the window's own
+   drag APIs (see beginWindowDrag/beginWindowResize in ComputerUseOverlay.tsx). */
+.computer-use-overlay__draghandle {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: grab;
+  z-index: 2;
+}
+.computer-use-overlay__draghandle:active { cursor: grabbing; }
+.computer-use-overlay__resizehandle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
+  z-index: 2;
+  /* A subtle corner grip, not an icon — this sits over the footer's own
+     buttons, so anything louder would compete with "Close" for attention. */
+  background:
+    linear-gradient(135deg, transparent 0 50%, rgba(255,255,255,.22) 50% 58%, transparent 58% 100%),
+    linear-gradient(135deg, transparent 0 68%, rgba(255,255,255,.22) 68% 76%, transparent 76% 100%);
+}
+/* Luka, 20 sep 2026 (live review): this was a hardcoded light/white pill
+   regardless of the app's actual theme -- the same --axe-bar pill the real
+   composer uses (axe-look.css's .axe-composer), so light/dark follows the
+   shell instead of always looking like a white messaging-app bubble. */
+.computer-use-overlay__composer {
+  height: 78px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--axe-bar);
+  backdrop-filter: var(--axe-bar-filter);
+  -webkit-backdrop-filter: var(--axe-bar-filter);
+  color: var(--text-primary);
+  box-shadow: var(--axe-bar-schaduw);
+}
+/* AxeStatusOrb only ships two tuned presets (20 inline-text, 64 chat-avatar) --
+   this is the chat-avatar scale, so the slot is sized to match it exactly. */
+.computer-use-overlay__particle { width: 64px; height: 64px; display: grid; place-items: center; flex: none; }
+.computer-use-overlay__composer input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text-primary); font-size: 16px; }
+.computer-use-overlay__composer input::placeholder { color: var(--text-muted); }
+.computer-use-overlay__icon,.computer-use-overlay__plus { display:grid; place-items:center; width:34px; height:34px; border:0; border-radius:50%; background:transparent; color:var(--text-secondary); }
+.computer-use-overlay__plus { background: var(--axe-barbtn); color: var(--text-primary); }
+.computer-use-overlay__plus:disabled { opacity:.35; }
+.computer-use-overlay__meta { display:flex; justify-content:space-between; gap:12px; padding:10px 8px 4px; font-size:10px; letter-spacing:.04em; color:var(--text-muted); }
+.computer-use-overlay__meta .is-online { color:var(--success); }
+.computer-use-overlay__meta .is-offline { color:var(--warning); }
+.computer-use-overlay__permissions { display:flex; gap:6px; padding:4px 8px 0; }
+.computer-use-overlay__permissions button { border:1px solid rgba(255,255,255,.09); border-radius:999px; background:rgba(255,255,255,.035); color:var(--text-muted); padding:4px 8px; font-size:9px; letter-spacing:.03em; }
+.computer-use-overlay__permissions button[data-ready="yes"] { border-color:color-mix(in srgb,var(--success) 35%,transparent); color:var(--success); }
+.computer-use-overlay__permissions button[data-ready="no"] { border-color:color-mix(in srgb,var(--warning) 35%,transparent); color:var(--warning); cursor:pointer; }
+.computer-use-overlay__reply { margin:5px 6px 0; max-height:64px; overflow:auto; font-size:12px; line-height:1.45; color:var(--text-secondary); }
+.computer-use-overlay__quick { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:10px 4px 4px; }
+.computer-use-overlay__quick button { min-width:0; height:70px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; border:1px solid rgba(255,255,255,.08); border-radius:16px; background:rgba(255,255,255,.035); color:var(--text-secondary); font-size:11px; }
+.computer-use-overlay__quick button:hover { background:rgba(255,255,255,.07); color:var(--text-primary); }
+.computer-use-overlay__footer { display:flex; justify-content:flex-end; gap:8px; padding:8px 4px 0; }
+.computer-use-overlay__footer button { display:inline-flex; align-items:center; gap:5px; border:0; background:transparent; color:var(--text-muted); font-size:10px; }
+/* AxeStatusOrb only ships two tuned presets (20 inline-text, 64 chat-avatar) --
+   this is the chat-avatar scale, so the badge is sized to match it exactly. */
+.standalone-axe-particle { position:absolute; top:56px; right:14px; z-index:60; width:64px; height:64px; display:grid; place-items:center; border-radius:50%; background:rgba(5,10,12,.42); border:1px solid rgba(255,255,255,.08); backdrop-filter:blur(16px); pointer-events:auto; }
+@media (max-width: 680px) {
+  .computer-use-overlay { padding:10px; }
+  .computer-use-overlay__pulse-shell { border-radius:24px; }
+  .computer-use-overlay__pulse-shell::before { border-radius:30px; }
+  .computer-use-overlay__card { border-radius:24px; }
+  .computer-use-overlay__quick { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+/* Luka, 21 sep 2026: height = composer's own height + everything below it
+   down to the window edge (gap + bottom nav + its margin) -- the same two
+   measured variables AxeShellChrome.tsx already exposes, so this is exactly
+   "bottom nav + composer + the gap between them", not a guessed pixel count.
+   Width: 290px is ~15% over the previous 252px, with a viewport clamp so it
+   never fights for space on a narrow window. Same background/border/shadow
+   as before -- only size and the toolbar are new. */
+/* 21 sep: top/left/width/height come from the component's own inline style
+   now (a real measured position — see standaardPositie() in
+   QuickNoteDock.tsx — plus whatever the drag/resize handles moved it to
+   since), not a CSS calc() approximation. The calc() version drifted onto
+   the bottom nav's own icon row on some layouts because it approximated
+   "composer + the gap below it" from custom properties instead of the
+   composer's and bottom nav's real measured edges. position:fixed with
+   plain top/left (not bottom) is required for that JS-driven position to
+   apply directly. */
+.axe-quick-note{position:fixed;z-index:106;min-height:176px;display:flex;flex-direction:column;overflow:hidden;border-radius:20px;background:linear-gradient(180deg,rgba(27,27,31,.98),rgba(12,12,14,.98));border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.07);color:var(--text-primary)}
+.axe-quick-note__sleepgreep{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:48px;height:14px;display:grid;place-items:center;color:var(--text-muted);cursor:grab;z-index:2}
+.axe-quick-note__sleepgreep:active{cursor:grabbing}
+.axe-quick-note__formaatgreep{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:se-resize;z-index:2;background:linear-gradient(135deg,transparent 0 50%,rgba(255,255,255,.2) 50% 58%,transparent 58% 100%),linear-gradient(135deg,transparent 0 68%,rgba(255,255,255,.2) 68% 76%,transparent 76% 100%)}
+.axe-quick-note__head,.axe-quick-note__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px}.axe-quick-note__head{padding-top:15px;border-bottom:1px solid rgba(255,255,255,.05)}.axe-quick-note__head span{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--text-secondary)}.axe-quick-note__head button,.axe-quick-note__foot button{border:0;background:transparent;color:var(--text-muted)}
+/* Toolbar: bold/italic/underline + the six colour dots, one compact row
+   between the header and the note body. onMouseDown={preventDefault} in the
+   component (not CSS) is what keeps the note's own text selection alive when
+   these are clicked -- this block is only appearance. */
+.axe-quick-note__toolbar{display:flex;align-items:center;gap:3px;padding:6px 9px;border-bottom:1px solid rgba(255,255,255,.05)}
+.axe-quick-note__toolbar>button{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:var(--text-secondary)}
+.axe-quick-note__toolbar>button:hover{background:rgba(255,255,255,.06);color:var(--text-primary)}
+.axe-quick-note__kleuren{display:flex;align-items:center;gap:4px;margin-left:4px;padding-left:7px;border-left:1px solid rgba(255,255,255,.08)}
+.axe-quick-note__kleur{width:13px;height:13px;border-radius:50%;border:1px solid rgba(255,255,255,.25);padding:0}
+.axe-quick-note__kleur:hover{transform:scale(1.15)}
+.axe-quick-note__vak{flex:1;overflow-y:auto;outline:0;padding:11px;color:var(--text-primary);font:13px/1.5 var(--ui);cursor:text}
+.axe-quick-note__vak[data-leeg='ja']::before{content:attr(data-placeholder);color:var(--text-muted)}
+.axe-quick-note__foot{border-top:1px solid rgba(255,255,255,.05);font-size:10px;color:var(--text-muted)}.axe-quick-note__foot button{display:inline-flex;align-items:center;gap:5px;border-radius:9px;padding:5px 9px;background:rgba(34,211,238,.09);color:var(--accent-cyan)}.axe-quick-note__foot button:disabled{opacity:.38}
+.northsea-standalone-shell{position:relative;display:flex;flex-direction:column;color:var(--text-primary)}.northsea-standalone-shell__top{height:52px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;background:rgba(10,12,15,.72);border-bottom:1px solid rgba(255,255,255,.06);backdrop-filter:blur(18px)}.northsea-standalone-shell__top strong{color:var(--accent-cyan);font-size:11px;letter-spacing:.16em}.northsea-standalone-shell__top>span{color:var(--text-muted);font-size:9px;letter-spacing:.12em}.northsea-standalone-shell__top #axe-slot-topbalk,.northsea-standalone-shell__top #axe-slot-topbalk-rechts{display:flex;align-items:center;gap:6px}.northsea-standalone-shell__main{min-height:0;flex:1;display:flex;overflow:hidden}.northsea-standalone-shell__main>*{min-height:0;flex:1}
+
+
+/* Right radial uses an explicit Lucide outline triangle from AppShell. */
+.axe-dok[data-kant="rechts"] .axe-dok-hoek{color:var(--accent-cyan)}
+.axe-dok[data-kant="rechts"] .axe-dok-hoek:hover>svg{filter:drop-shadow(0 0 9px rgba(34,211,238,.55));transform:scale(1.06)}
+
+
+/* De Browser-kaarten zijn de maat, en krijgen nu ook de dunne zweefrand. */
+:root[data-look] .axe-panel--inset {
+  box-shadow: 0 0 0 1px var(--axe-kaart-lijn), var(--axe-kaart-schaduw) !important;
+}
+
+/* Settings → Motoren: losse kaarten naast elkaar, elk zijn eigen hoogte. */
+.axe-motoren-raster {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+.axe-motoren-raster > .axe-kaart { flex: 1 1 360px; max-width: 560px; padding: 16px; }
+
+/* Settings als dashboard (25 sep): de kaarten van een sectie staan naast
+   elkaar, elk zijn eigen hoogte. Wat geen kaart is (een eigen raster zoals
+   de providerkaarten of de motoren) neemt de hele breedte. */
+:root[data-look] .axe-settings .axe-sectie-lijf {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  gap: 12px;
+  align-items: flex-start !important;
+}
+.axe-settings .axe-sectie-lijf > .axe-kaart,
+.axe-settings .axe-sectie-lijf > .widget-card { flex: 1 1 440px; max-width: 100%; min-width: 0; }
+.axe-settings .axe-sectie-lijf > :not(.axe-kaart):not(.widget-card) { flex: 1 1 100%; min-width: 0; }
+/* In een motorkaart: naam + uitleg boven, keuze op volle breedte eronder.
+   Naast elkaar werd de tekst een kolommetje van één woord breed. */
+.axe-motoren-raster .axe-kaart .justify-between:has(> select),
+.axe-motoren-raster .axe-kaart .justify-between:has(> input) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: var(--axe-kaart-scheiding);
+}
+.axe-motoren-raster .axe-kaart .justify-between:has(> select):last-child,
+.axe-motoren-raster .axe-kaart .justify-between:has(> input):last-child { border-bottom: 0; }
+.axe-motoren-raster .axe-kaart .justify-between > select,
+.axe-motoren-raster .axe-kaart .justify-between > input { width: 100% !important; }
+
+/* ── Settings → agentkaarten (25 sep) ─────────────────────────────────────
+   Gelijke kaarten op één raster, zoals de Browser en de dashboardvoorbeelden:
+   naam + stand, één regel wat hij doet, de keuze, vier cijfers, balken. */
+.axe-motoren { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.axe-agent-sectiekop { display: flex; align-items: baseline; gap: 12px; margin-top: 8px; }
+.axe-agent-sectiekop h3 { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); }
+.axe-agent-sectiekop p { font-size: 11px; color: var(--text-muted); }
+.axe-agent-raster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.axe-agent-raster--klein { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.axe-agent-raster--ruim { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.axe-agentkaart { padding: 14px 14px 12px; gap: 10px; min-height: 0; }
+.axe-agentkaart-kop { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.axe-agentkaart-kop b { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-agentkaart-stip { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+.axe-agentkaart-stand { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 500; white-space: nowrap; }
+.axe-agentkaart-stand > span { width: 6px; height: 6px; border-radius: 999px; display: inline-block; }
+.axe-agentkaart-rol {
+  font-size: 11px; line-height: 1.45; color: var(--text-muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 32px;
+}
+.axe-agentkaart-keuze select,
+.axe-agentkaart-keuze input:not([type='checkbox']) {
+  width: 100%; border-radius: 10px; padding: 7px 10px; font-size: 12px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-primary);
+}
+.axe-agentkaart-schakel { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); padding: 7px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); white-space: nowrap; }
+.axe-agentkaart-schakel input { width: 14px; height: 14px; accent-color: var(--accent-cyan); }
+.axe-agentkaart-stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
+  padding-top: 10px; border-top: var(--axe-kaart-scheiding); margin-top: auto;
+}
+.axe-agentkaart-stats > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.axe-agentkaart-stats span { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.axe-agentkaart-stats b { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.axe-agentkaart-balken { display: flex; flex-direction: column; gap: 7px; }
+.axe-agentkaart-balk > div { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+.axe-agentkaart-balk b { color: var(--text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.axe-agentkaart-balk i { display: block; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.axe-agentkaart-balk em { display: block; height: 100%; border-radius: 999px; }
+.axe-agentkaart-melding { font-size: 10px; color: var(--warning); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-agentkaart--klein .axe-agentkaart-rol { -webkit-line-clamp: 2; }
+/* In Settings lijnen alle rasters op dezelfde volle breedte uit, zodat de
+   providerkaarten onder de agentkaarten één geheel vormen. */
+:root[data-look] .axe-settings .axe-kaart-raster {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  justify-content: stretch;
+}
+
+/* ── Kalender zoals Luka's voorbeeld (25 sep) ─────────────────────────────
+   Links mini-maand + vandaag, rechts het weekrooster met hoge uurrijen die
+   scrollen, gevulde blokken in de kleur van hun app, en een nu-lijn. */
+.axe-kalender { display: flex; gap: 12px; flex: 1; min-height: 0; padding: 10px; }
+.axe-kalender .axe-week { margin: 0; }
+.axe-minimaand {
+  width: 250px; flex: none; display: flex; flex-direction: column; gap: 14px; padding: 14px;
+  border-radius: var(--axe-kaart-hoek); background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn); box-shadow: var(--axe-kaart-schaduw); overflow-y: auto;
+}
+.axe-minimaand header { display: flex; align-items: center; justify-content: space-between; }
+.axe-minimaand header b { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.axe-minimaand header button { padding: 4px; border-radius: 6px; color: var(--text-muted); }
+.axe-minimaand header button:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.axe-minimaand-raster { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.axe-minimaand-kop { font-size: 9px; font-weight: 600; letter-spacing: .06em; text-align: center; color: var(--text-muted); padding-bottom: 4px; }
+.axe-minimaand-raster button {
+  position: relative; height: 28px; border-radius: 7px; font-size: 11px; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.axe-minimaand-raster button:hover { background: rgba(255, 255, 255, 0.06); }
+.axe-minimaand-raster button[data-buiten='ja'] { color: var(--text-muted); opacity: .45; }
+.axe-minimaand-raster button[data-week='ja'] { background: rgba(255, 255, 255, 0.05); }
+.axe-minimaand-raster button[data-vandaag='ja'] { background: #f97316; color: #fff; font-weight: 700; }
+.axe-minimaand-raster button i { position: absolute; bottom: 3px; left: 50%; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 99px; background: #f97316; }
+.axe-minimaand-raster button[data-vandaag='ja'] i { background: #fff; }
+.axe-minimaand-vandaag { border-top: var(--axe-kaart-scheiding); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.axe-minimaand-label { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-secondary); }
+.axe-minimaand-label em { font-style: normal; margin-left: 6px; color: var(--text-muted); }
+.axe-minimaand-vandaag p { font-size: 11px; color: var(--text-muted); }
+.axe-minimaand-vandaag ul { display: flex; flex-direction: column; gap: 6px; }
+.axe-minimaand-vandaag li { display: grid; grid-template-columns: 8px 38px minmax(0, 1fr); align-items: center; gap: 6px; font-size: 11px; }
+.axe-minimaand-vandaag li i { width: 7px; height: 7px; border-radius: 3px; }
+.axe-minimaand-vandaag li span { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.axe-minimaand-vandaag li b { font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Rooster: hoge uurrijen, verticaal scrollen. */
+:root[data-look] .axe-week-rol { overflow-y: auto; }
+:root[data-look] .axe-week-raster { height: auto; grid-template-rows: auto repeat(var(--uren), 58px); }
+:root[data-look] .axe-week-dagkop { flex-direction: row; justify-content: center; gap: 6px; padding: 12px 4px; }
+:root[data-look] .axe-week-dagnaam { font-size: 12px; color: var(--text-muted); }
+:root[data-look] .axe-week-dagnr { font-size: 13px; font-weight: 600; color: var(--text-secondary); padding: 1px 6px; border-radius: 6px; }
+:root[data-look] .axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnr { background: #f97316; color: #fff; }
+:root[data-look] .axe-week-dagkop[data-vandaag='ja'] .axe-week-dagnaam { color: var(--text-primary); opacity: 1; }
+:root[data-look] .axe-week-dagtel { display: none; }
+:root[data-look] .axe-week-kolom[data-vandaag='ja'] { background: rgba(255, 255, 255, 0.015); }
+
+/* Blokken zoals het voorbeeld: gevuld in de kleur van de app, tijd bovenaan
+   in een iets sterkere band, dan soort en titel. */
+:root[data-look] .axe-week-blok {
+  left: 4px; right: 4px; min-height: 30px; padding: 0 0 5px; gap: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--blok, #64748b) 34%, #121214);
+  border: 1px solid color-mix(in srgb, var(--blok, #64748b) 55%, transparent);
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.8);
+  color: rgba(255, 255, 255, 0.92);
+}
+:root[data-look] .axe-week-blok:hover { filter: brightness(1.12); }
+:root[data-look] .axe-week-bloktijd {
+  width: 100%; padding: 3px 7px; font-size: 10px; font-weight: 600; text-align: center;
+  background: color-mix(in srgb, var(--blok, #64748b) 60%, #121214); color: #fff;
+}
+:root[data-look] .axe-week-bloksoort { padding: 0 7px; font-size: 10px; font-weight: 700; color: #fff; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root[data-look] .axe-week-bloktitel { padding: 0 7px; font-size: 10.5px; color: rgba(255, 255, 255, 0.78) !important; }
+
+/* De nu-lijn: zacht over de hele week, fel in vandaag. */
+.axe-week-nulijn { position: absolute; left: 0; right: 0; height: 1px; background: rgba(249, 115, 22, 0.35); z-index: 2; pointer-events: none; }
+.axe-week-nulijn[data-vandaag='ja'] { height: 2px; background: #f97316; }
+.axe-week-nulijn[data-vandaag='ja']::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 99px; background: #f97316; }
+:root[data-look] .axe-week-meer { --blok: #475569; align-items: center; }
+
+/* De ladevoet compact (25 sep): 2 x 2 kleine knoppen in plaats van vier
+   regels -- de lade stopt boven de composer, en vier regels namen een derde
+   van de ruimte waar de inhoud had moeten staan. */
+:root[data-look] .axe-schuifbalk-voet--compact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+:root[data-look] .axe-voetknop {
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  padding: 6px 8px; border-radius: 9px; font-size: 11px; font-weight: 500;
+  color: var(--text-secondary); background: rgba(255, 255, 255, 0.03);
+}
+:root[data-look] .axe-voetknop svg { flex: none; color: var(--text-muted); }
+:root[data-look] .axe-voetknop span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root[data-look] .axe-voetknop:hover { background: rgba(255, 255, 255, 0.07); color: var(--text-primary); }
+.axe-agentkaart-knop {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 10px; border-radius: 10px; font-size: 12px; font-weight: 500;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.09); color: var(--text-primary);
+}
+.axe-agentkaart-knop:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
+.axe-agentkaart-knop:disabled { color: var(--text-muted); cursor: default; }
+.axe-agentkaart-keuze .flex input { width: 100%; }
+/* Settings-secties met grotere onderdelen: gelijke kolommen, uitgelijnd. */
+.axe-agent-raster--sectie { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); }
+.axe-agent-raster--sectie > .widget-card,
+.axe-agent-raster--sectie > .axe-kaart { height: 100%; min-height: 0; }
+
+/* Kaarten in één rij zijn even hoog (MCP-servers, Memory-blokken): het raster
+   rekt ze mee, en de inhoud blijft bovenaan. */
+:root[data-look] .axe-kaart-raster { align-items: stretch; }
+:root[data-look] .axe-kaart-raster > .axe-kaart,
+:root[data-look] .axe-kaart-raster > .widget-card { height: 100%; }
+.axe-finance-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; margin-bottom: 12px; }
+.axe-finance-raster > .widget-card { height: 100%; }
+@media (max-width: 1100px) { .axe-finance-raster { grid-template-columns: 1fr; } }
+.axe-finance-raster { width: 100%; align-self: stretch; }
+.axe-finance-raster + .widget-card { width: 100%; align-self: stretch; }
+/* EVE: kolommen zonder gaten -- open en dichte providerkaarten door elkaar
+   maakten in een raster een trapje. */
+.axe-eve-kolommen { column-width: 340px; column-gap: 12px; }
+.axe-eve-kolommen .axe-kaart { break-inside: avoid; margin-bottom: 12px; width: 100%; }
+/* Infrastructure als dashboard: kaarten naast elkaar, gelijke hoogte per rij. */
+.axe-infra-raster { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.axe-infra-raster--twee { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.axe-infra-raster > * { min-width: 0; height: 100%; }
+@media (max-width: 1100px) { .axe-infra-raster, .axe-infra-raster--twee { grid-template-columns: 1fr; } }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CANONICAL MOBILE HOME — native-feeling phone fit
+   Scoped to .axe-mobile-home so the desktop/Tauri composer is untouched.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  :root[data-look] .axe-mobile-home {
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+  }
+
+  :root[data-look] .axe-mobile-home button {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* On a phone there is no desktop bottom-nav under this composer. The old
+     24px desktop reserve made the whole Home look vertically off-centre. */
+  :root[data-look] .axe-mobile-home .axe-composer.axe-vakcomposer {
+    margin: 0 !important;
+    gap: 6px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak {
+    border-radius: 18px;
+    padding: 9px 11px 8px;
+    gap: 7px;
+    box-shadow:
+      0 16px 38px rgba(0,0,0,.34),
+      inset 0 1px 0 rgba(255,255,255,.045),
+      0 0 0 1px rgba(255,255,255,.018);
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-kop {
+    min-height: 18px;
+    font-size: 11px;
+  }
+
+  /* 16px prevents mobile Safari/WebView from zooming the page when the
+     composer receives focus. The resting field is one clean native line and
+     grows only when the prompt actually needs it. */
+  :root[data-look] .axe-mobile-home .axe-vak-invoer {
+    font-size: 16px;
+    line-height: 1.35;
+    height: 28px;
+    min-height: 28px;
+    max-height: 74px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij {
+    gap: 8px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-links,
+  :root[data-look] .axe-mobile-home .axe-vak-rechts {
+    gap: 5px;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij button,
+  :root[data-look] .axe-mobile-home .axe-vak-staf button {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* The mic is the primary phone action. This has to outrank the desktop
+     generic "all composer buttons are transparent" rule above. */
+  :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-mic {
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 999px !important;
+    color: #eefcff !important;
+    background:
+      radial-gradient(circle at 40% 32%, rgba(103,232,249,.40), rgba(79,70,229,.34) 52%, rgba(7,10,15,.98) 100%) !important;
+    border: 1px solid rgba(103,232,249,.48) !important;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.025) inset,
+      0 0 20px rgba(59,130,246,.24) !important;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-mic[aria-pressed='true'] {
+    color: #001018 !important;
+    background: var(--accent-cyan) !important;
+    border-color: rgba(165,243,252,.82) !important;
+    box-shadow: 0 0 24px rgba(34,211,238,.48) !important;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-send {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 999px !important;
+  }
+
+  /* The light glass remains visibly Tauri-like, but 64px fullscreen blur is
+     needless GPU work on a phone and makes scroll/keyboard animation feel webby. */
+  :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
+    backdrop-filter: blur(32px) saturate(155%) brightness(1.03) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(155%) brightness(1.03) !important;
+  }
+}
+
+
+/* Final phone Home alignment pass: one shared horizontal edge for agents,
+   chat and composer; matte-black top controls in both light/dark. Desktop
+   remains untouched because every selector is phone-scoped. */
+@media (max-width: 640px) {
+  :root[data-look] .axe-mobile-home .axe-mobile-edge {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  :root[data-look] .axe-mobile-home .axe-composer.axe-vakcomposer,
+  :root[data-look] .axe-mobile-home .axe-vak {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  :root[data-look] .axe-mobile-look-toggle .axe-daynight {
+    height: 36px;
+    box-sizing: border-box;
+    align-items: center;
+    background: linear-gradient(180deg, rgba(20,20,24,.99), rgba(8,8,10,.995)) !important;
+    border: 1px solid rgba(255,255,255,.09);
+    box-shadow: 0 10px 26px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05);
+  }
+
+  :root[data-look] .axe-mobile-look-toggle .axe-dn-btn {
+    color: rgba(238,243,250,.72) !important;
+  }
+
+  :root[data-look] .axe-mobile-look-toggle .axe-dn-btn[aria-pressed='true'] {
+    background: rgba(255,255,255,.10) !important;
+    color: #F7FAFC !important;
+  }
+
+  :root[data-look] .axe-mobile-worldbar button {
+    color: rgba(238,243,250,.72);
+  }
+
+  :root[data-look] .axe-mobile-worldbar button[aria-selected='true'] {
+    background: rgba(255,255,255,.075) !important;
+    color: var(--accent-cyan) !important;
+    border-color: rgba(34,211,238,.22) !important;
+  }
 }

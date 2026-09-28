@@ -26,9 +26,13 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Bell, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
+import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
+import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { openPageOnMonitor, openStandaloneBrowser, openStandaloneNorthsea } from '@/infrastructure/gateways/windowManagerService';
+import { openRegisteredProductShell } from '@/infrastructure/gateways/productWindowService';
+import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
 /** Afstand van het midden tot een tab. */
 const STRAAL = 92;
@@ -61,6 +65,8 @@ export interface DokTab {
   /** Een icoon, of een letter -- de N is geen icoon maar een letterteken. */
   teken: React.ReactNode;
   doe: () => void;
+  /** Staat wat deze tab aanzet nu aan? Dan licht hij op. */
+  aan?: boolean;
 }
 
 interface Props {
@@ -78,6 +84,7 @@ interface Props {
 
 export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, opHoek }: Props) {
   const navigate = useNavigate();
+  const telefoonAan = useTelefoonZichtbaar();
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
   const [open, setOpen] = useState(false);
   const [zweeft, setZweeft] = useState<string | null>(null);
@@ -99,17 +106,56 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
     };
   }, [open, sluit]);
 
-  const standaardTabs: DokTab[] = [
-    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => navigate('/mobile') },
-    { id: 'notities', label: 'Notities', teken: <StickyNote size={18} />, doe: () => navigate('/obsidian') },
-    // Een sierlijke hoofdletter N, geen icoon. Als letterteken en niet als svg:
-    // hij hoort mee te kleuren en mee te schalen met de rest van de ring.
-    { id: 'notion', label: 'Notion', teken: <span className="axe-dok-n">N</span>, doe: () => navigate('/knowledge') },
-    // Dit was een route zonder deur: /browser-desktop stond in App.tsx en was
-    // vanuit de app nergens te bereiken. Nu wel.
-    { id: 'venster', label: 'Extra venster', teken: <PanelRightOpen size={18} />, doe: () => navigate('/browser-desktop') },
+  /* Corrective (evaluator round 1, issue 2): op de rechterkant deelt deze
+   * dok zijn hoek van het scherm met de onderband-`rechts`-sleuf (`PlaatSlot
+   * slot="rechts"`, zie PlaatSlots.tsx) -- de Code Editor hangt daar zijn
+   * eigen motor/weergave-iconenzuil in (`IcoonZuil`, met o.a. de `{}`-tekens
+   * van codex en de cursor-cursor van Cursor).
+   *
+   * Eerdere poging schoof de hele dok (`right:`) naar links tot voorbij die
+   * sleuf. Gemeten in de app, 1440×900 op de Code Editor: dat zette de
+   * geopende ring er middenin over de composer heen -- op de camera-, mic- en
+   * verstuurknop, en over de onderste navigatie -- en liet de knop zelf
+   * ~275px van de plek springen waar net op geklikt was. Een knop die
+   * wegspringt zodra je hem indrukt is een eigen, nieuwe fout, los van of de
+   * botsing zelf is opgelost.
+   *
+   * Dus: de dok blijft ALTIJD op zijn vaste `right: 16px`-hoek, ook open --
+   * de knop staat waar je hem indrukte. In plaats daarvan krijgt de sleuf
+   * zelf een klasse zolang de ring open is, die zijn inhoud laat wegvallen
+   * (dezelfde beweging als een `WidgetCard` die plaatsmaakt) -- geen
+   * verplaatsing, geen herberekende posities, alleen "twee dingen kunnen niet
+   * tegelijk om aandacht vragen op dezelfde plek, dus wint de ring zolang hij
+   * open is". Sluit je de ring, dan komt de zuil vanzelf terug. */
+  useEffect(() => {
+    if (kant !== 'rechts') return;
+    const el = document.getElementById(SLOT_ID.rechts);
+    if (!el) return;
+    if (open) el.classList.add('axe-slot--wijkt-voor-dok');
+    return () => el.classList.remove('axe-slot--wijkt-voor-dok');
+  }, [kant, open]);
+
+  const linkerTabs: DokTab[] = [
+    { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },
+    { id: 'notities', label: 'Quick Note', teken: <StickyNote size={18} />, doe: () => window.dispatchEvent(new CustomEvent('axe-toggle-quick-note')) },
+    { id: 'northsea', label: 'NorthSea shell', teken: <span className="axe-dok-n">N</span>, doe: () => { void openStandaloneNorthsea(); } },
+    { id: 'browser', label: 'Browser shell', teken: <PanelRightOpen size={18} />, doe: () => { void openStandaloneBrowser(); } },
     { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
   ];
+  const openProduct = (name: string) => {
+    void openRegisteredProductShell(name).catch(err => {
+      console.error('[RadiaalDok] product shell failed', name, err);
+      navigate('/apps');
+    });
+  };
+  const rechterTabs: DokTab[] = [
+    { id: 'code', label: 'Code Studio window', teken: <Code2 size={18} />, doe: () => { void openPageOnMonitor('code-editor', 0); } },
+    { id: 'axon', label: 'AXON Memory', teken: <BrainCircuit size={18} />, doe: () => openProduct('AXON Memory') },
+    { id: 'companion', label: 'AXE Companion', teken: <Bot size={18} />, doe: () => openProduct('AXE Companion') },
+    { id: 'trading-os', label: 'Trading OS', teken: <span className="axe-dok-n">T</span>, doe: () => openProduct('Trading OS') },
+    { id: 'apps', label: 'Apps', teken: <AppWindow size={18} />, doe: () => navigate('/apps') },
+  ];
+  const standaardTabs = kant === 'links' ? linkerTabs : rechterTabs;
 
   const tabs = eigenTabs ?? standaardTabs;
   const punten = radiaalPosities(tabs.length, {
@@ -122,6 +168,12 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
      rechts op +STRAAL. Dezelfde straal als de tabs: even ver van het midden,
      alleen in het stuk waar de boog ontbreekt. */
   const hoekX = kant === 'links' ? -STRAAL : STRAAL;
+  /* Corrective round 6, Part 4: de rechter ring had helemaal geen
+     data-axe-doel -- alleen de linker kreeg er een (voor de driehoek/
+     focus-composer), dus AxePresenceDock's `vindDoel()` kon deze ring nooit
+     vinden en dus nooit als obstakel meetellen. Zelfde naamgeving als links,
+     gespiegeld. */
+  const axeDoel = kant === 'links' ? 'radiaal-links' : 'radiaal-rechts';
 
   return (
     <div
@@ -129,6 +181,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
       className="axe-dok"
       data-open={open ? 'ja' : 'nee'}
       data-kant={kant}
+      data-axe-doel={axeDoel}
       style={{ width: vak, height: vak }}
     >
       {/* De ring zelf: een schijf met een dikke rand, puur decor. Als eigen
@@ -145,6 +198,8 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
             className="axe-dok-tab"
             title={tab.label}
             aria-label={tab.label}
+            aria-pressed={tab.aan}
+            data-aan={tab.aan ? 'ja' : undefined}
             tabIndex={open ? 0 : -1}
             onMouseEnter={() => setZweeft(tab.id)}
             onMouseLeave={() => setZweeft(null)}

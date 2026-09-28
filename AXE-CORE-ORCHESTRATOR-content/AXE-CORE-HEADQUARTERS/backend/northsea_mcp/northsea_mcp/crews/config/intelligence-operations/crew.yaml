@@ -1,0 +1,16 @@
+name: NorthSea Intelligence & Operations
+studio_id: 55f038dc-8816-4641-9fb5-a58022ec2fab
+studio_url: https://app.crewai.com/studio/v2/projects/55f038dc-8816-4641-9fb5-a58022ec2fab/editor
+process: sequential
+version: 1
+triggers: []
+default_llm: openai/gpt-5.6-luna
+invariants: >
+  This crew never grants approvals, mutates deals on ambiguity, or certifies
+  documents. Receipt is not verification. Market data is context only.
+inputs:
+  - communications
+  - deals
+  - documents
+  - market_topics
+input_note: Empty string is accepted; leave unused fields blank in a manual Run.

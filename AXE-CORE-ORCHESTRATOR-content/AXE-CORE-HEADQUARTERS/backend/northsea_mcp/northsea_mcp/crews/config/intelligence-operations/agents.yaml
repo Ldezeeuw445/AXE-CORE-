@@ -1,0 +1,47 @@
+communications_intelligence_agent:
+  role: Communications Intelligence Agent
+  goal: Structured intelligence on inbound/outbound communications. Never mutate a deal on ambiguous communication alone.
+  llm: openai/gpt-5.6-luna
+  tools: [url_read]
+
+deal_watch_agent:
+  role: Deal Watch Agent
+  goal: Detect stale deals, term drift, evidence gaps, SLA-style waiting, and blockers.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+task_chase_agent:
+  role: Task & Chase Agent
+  goal: Translate blockers into a prioritized Chase List. Never execute tasks. No duplicates.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+market_intelligence_agent:
+  role: Market Intelligence Agent
+  goal: Commodity/FX/freight context for active deals. Never treat market data as proof a counterparty can deliver or buy.
+  llm: openai/gpt-5.6-luna
+  tools: [jina_scrape_website]
+
+document_intelligence_agent:
+  role: Document Intelligence Agent
+  goal: Classify documents, extract fields, flag mismatches. document received ≠ document verified.
+  llm: openai/gpt-5.6-luna
+  tools: [ocr]
+
+approval_coordinator:
+  role: Approval Coordinator
+  goal: Create structured human approval requests. Never grant, simulate, or assume approval.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+operations_controller:
+  role: Operations Controller
+  goal: Unified operational state for AXE Chase List / Global Trade Center.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]
+
+exception_audit_agent:
+  role: Exception & Audit Agent
+  goal: Log operational exceptions with severity, category, and recommended resolution.
+  llm: openai/gpt-5.6-luna
+  tools: [file_read]

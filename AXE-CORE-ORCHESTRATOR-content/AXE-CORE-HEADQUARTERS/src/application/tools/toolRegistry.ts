@@ -19,12 +19,13 @@ import '@/domain/tools/registerPhoneCatalog';
 import '@/domain/tools/registerMacCatalog';
 import '@/domain/tools/registerComputerCatalog';
 import '@/domain/tools/registerAirtopCatalog';
+import '@/domain/tools/registerPerplexityCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 import {
   isAxeApiConfigured, execCommand, ghGetFile, ghUpdateFile,
   ghCreateBranch, ghCreatePr, ghGetPr, ghMergePr,
-  sbGetRows, sbRunSql, vercelListDeployments, vercelPromote,
+  sbGetRows, sbRunSql,
   osintAll, osintLayer, crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode,
 } from '@/infrastructure/gateways/axeCoreApiService';
@@ -50,6 +51,7 @@ import { PHONE_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.phone';
 import { MAC_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.mac';
 import { COMPUTER_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.computer';
 import { AIRTOP_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.airtop';
+import { PERPLEXITY_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.perplexity';
 import {
   isLocalBridgeConfigured, localRead, localWrite, localRun, type BridgeCommand,
 } from '@/infrastructure/gateways/localBridgeService';
@@ -70,7 +72,6 @@ interface GitBranchArgs { repo: string; branch: string; from?: string; [key: str
 interface GitPrArgs { repo: string; title: string; head: string; body?: string; base?: string; [key: string]: unknown }
 interface DbReadArgs { table: string; limit?: number; [key: string]: unknown }
 interface DbSqlArgs { query: string; [key: string]: unknown }
-interface VercelPromoteArgs { deploymentId: string; [key: string]: unknown }
 
 function parseJsonArgs<T extends Record<string, unknown>>(raw: string, required: (keyof T)[]): T | null {
   try {
@@ -391,28 +392,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     onError: (msg) => `Supabase call failed: ${msg}`,
   },
   {
-    ...catalogEntry('vercel_status'),
-    available: () => isAxeApiConfigured,
-    run: async () => {
-      const deployments = await vercelListDeployments(10);
-      return `VERCEL_STATUS:\n${deployments.map(d => `- ${d.state} ${d.url}`).join('\n')}`;
-    },
-    onError: (msg) => `Vercel call failed: ${msg}`,
-  },
-  {
-    ...catalogEntry('vercel_promote'),
-    available: () => isAxeApiConfigured,
-    run: async (raw, ctx) => {
-      const args = parseJsonArgs<VercelPromoteArgs>(raw, ['deploymentId']);
-      if (!args) return 'VERCEL_PROMOTE failed.';
-      const approved = await ctx.requestApproval('vercel_promote', 'Promote deployment', args.deploymentId);
-      if (!approved) return NOT_APPROVED('VERCEL_PROMOTE', 'promote');
-      const r = await vercelPromote(args.deploymentId);
-      return `VERCEL_PROMOTE ${r.promoted ? 'ok' : 'failed'}`;
-    },
-    onError: (msg) => `Vercel call failed: ${msg}`,
-  },
-  {
     ...catalogEntry('open_window'),
     available: () => multiMonitorAvailable(),
     run: async (raw) => {
@@ -433,6 +412,7 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   ...BROWSER_AGENT_TOOL_RUNTIMES as ToolRuntime[],
   ...PHONE_TOOL_RUNTIMES as ToolRuntime[],
   ...AIRTOP_TOOL_RUNTIMES as ToolRuntime[],
+  ...PERPLEXITY_TOOL_RUNTIMES as ToolRuntime[],
   /* De Mac en de computer-relay. Deze twee stonden hierboven wél geimporteerd
      (MAC) of helemaal niet (COMPUTER), en werden nergens uitgerold -- terwijl
      registerMacCatalog en registerComputerCatalog hun gereedschappen wél

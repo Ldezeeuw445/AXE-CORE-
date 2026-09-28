@@ -209,6 +209,15 @@ export async function executeDemoTrade(input: {
   // "self-improving" actually true instead of dead code. Fire-and-forget:
   // the trade itself already succeeded, a learning-write hiccup shouldn't
   // fail the fill.
+  // EEN SPIEGEL VAN EEN BROKER-CLOSE LEERT NIET.
+  //
+  // brokerPlaceOrder spiegelt elke MetaAPI-order in dit boek (venue 'metaapi').
+  // Sluit AXE zo'n positie, dan kwam de uitkomst hier binnen als "papier" én
+  // later nog eens van de reconciler uit de echte dealhistorie: dezelfde trade
+  // twee keer in het ledger, en de eerste keer met het rendement van de koers in
+  // plaats van dat van het account. De reconciler is de bron voor alles wat bij
+  // de broker gebeurde; dit boek leert alleen van echte papieren vullingen.
+  const venue = input.venue ?? 'paper';
   if (realizedPnl != null) {
     // Report the ORIGINAL entry decision, not this closing call's own
     // strategy/confidence/timeframe — those describe why the position is
@@ -219,7 +228,7 @@ export async function executeDemoTrade(input: {
     const entryTimeframe = closedEntrySnapshot?.timeframe ?? input.timeframe;
     const entryConfidence = closedEntrySnapshot?.confidence ?? input.confidence;
     const openTradeId = closedEntrySnapshot?.id ?? trade.id;
-    void recordTradeOutcome({
+    if (venue === 'paper') void recordTradeOutcome({
       symbol,
       pnl: realizedPnl,
       confidence: entryConfidence,
@@ -230,6 +239,7 @@ export async function executeDemoTrade(input: {
       returnPct: realizedReturnPct ?? undefined,
       side: 'buy', // the demo book never opens shorts — every close is against a long
       account: input.accountLabel ?? undefined,
+      environment: 'paper',
     }).catch(() => { /* non-fatal */ });
 
     void recordTradeClosed({

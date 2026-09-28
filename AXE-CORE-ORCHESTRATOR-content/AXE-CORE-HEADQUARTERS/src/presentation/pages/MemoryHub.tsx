@@ -52,7 +52,7 @@ export default function MemoryHub() {
 
   return (
     <motion.div
-      className="h-full flex flex-col overflow-hidden"
+      className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}

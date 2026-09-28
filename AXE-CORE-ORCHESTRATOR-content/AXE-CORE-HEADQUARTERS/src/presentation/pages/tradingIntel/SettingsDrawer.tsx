@@ -14,6 +14,8 @@ import { getAccounts, type TradingAccount } from '@/infrastructure/persistence/t
 import { getRiskProfile, saveRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import { PROVIDERS } from '@/domain/providers';
 import type { TradingDeskState } from './useTradingDeskState';
+import { AccountRulesFields } from './AccountRulesFields';
+import { applyRiskEdit } from '@/domain/tradingIntel/riskPresets';
 
 const INPUT_CLS = 'rounded px-2 py-1.5 text-[12px] w-full';
 const INPUT_STYLE = { background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
@@ -126,7 +128,7 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
   const commit = (patch: Partial<RiskProfile>) => {
     if (!risicoAccount) { void updateRiskProfile(patch); return; }
     if (!eigenRisk) return;
-    const next = { ...eigenRisk, ...patch };
+    const next = applyRiskEdit(eigenRisk, patch);
     /* Meteen tonen en dan pas bewaren: een schuifregelaar die terugspringt
        terwijl de schrijfactie loopt leest als een geweigerde invoer. */
     setEigenRisk(next);
@@ -299,7 +301,7 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
             </p>
           )}
           <div className="flex gap-2 mb-3">
-            {([['personal_demo', 'personal'], ['funded_challenge', 'funded'], ['funded_live_rules', 'funded live']] as const).map(([m, label]) => (
+            {([['personal_demo', 'personal'], ['funded_challenge', 'funded'], ['funded_live_rules', 'funded live'], ['custom', 'custom']] as const).map(([m, label]) => (
               <button
                 key={m}
                 type="button"
@@ -325,19 +327,24 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
           </p>
           {actiefRisk ? (
             <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
-              <PctField label="Risk / trade" value={actiefRisk.riskPerTradePct} max={50} onCommit={v => commit({ riskPerTradePct: v })} hint="of equity per position" />
-              <PctField label="Max open risk" value={actiefRisk.maxOpenRiskPct} onCommit={v => commit({ maxOpenRiskPct: v })} hint="all positions combined" />
-              <PctField label="Daily loss halt" value={actiefRisk.maxDailyLossPct} onCommit={v => commit({ maxDailyLossPct: v })} hint="stops trading for the day" />
+              <PctField label="Risk / trade" value={actiefRisk.riskPerTradePct} max={50} onCommit={v => commit({ riskPerTradePct: v })} hint="money lost if the stop is hit" />
+              <PctField label="Max open risk" value={actiefRisk.maxOpenRiskPct} onCommit={v => commit({ maxOpenRiskPct: v })} hint="all open stops combined" />
+              <PctField label="Daily loss halt" value={actiefRisk.maxDailyLossPct} onCommit={v => commit({ maxDailyLossPct: v })} hint="no new opens until the day resets" />
               <PctField label="Max drawdown" value={actiefRisk.maxDrawdownPct ?? 0.12} onCommit={v => commit({ maxDrawdownPct: v })} hint="peak-to-trough breaker" />
               <NumField label="Max trades / day" value={actiefRisk.maxTradesPerDay} onCommit={v => commit({ maxTradesPerDay: v })} />
               <PctField label="Min confidence" value={actiefRisk.minConfidence} onCommit={v => commit({ minConfidence: v })} hint="floor to allow a fill" />
-              {actiefRisk.mode !== 'personal_demo' && (
-                <PctField label="Profit target" value={actiefRisk.profitTargetPct ?? 0.1} max={500} onCommit={v => commit({ profitTargetPct: v })} hint="challenge goal" />
-              )}
               <label className="flex items-center gap-2 self-end pb-1.5">
                 <input type="checkbox" checked={actiefRisk.allowShort} onChange={e => commit({ allowShort: e.target.checked })} />
                 <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>Allow short</span>
               </label>
+              {actiefRisk.mode === 'custom' && actiefRisk.basedOn && (
+                <p className="text-[10px] col-span-full" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                  Custom — started from {actiefRisk.basedOn.replace(/_/g, ' ')}.
+                </p>
+              )}
+              <div className="col-span-full">
+                <AccountRulesFields key={`${risicoAccount ?? 'desk'}-${actiefRisk.updatedAt}`} risk={actiefRisk} commit={commit} />
+              </div>
             </div>
           ) : (
             <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{risicoBezig ? 'Profiel laden…' : 'Loading risk profile…'}</p>
@@ -381,6 +388,16 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
             {autopilot?.lastRunAt ? `Last cycle ${new Date(autopilot.lastRunAt).toLocaleString('en-US')}` : 'No cycle run yet.'}
             {autopilot?.lastResult ? ` · ${autopilot.lastResult}` : ''}
           </p>
+          {autopilot && (
+            <p className="text-[10px] mt-1 font-mono-data" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              {`This instance ${autopilot.instance}`}
+              {autopilot.nextDueAt ? ` · next due ${new Date(autopilot.nextDueAt).toLocaleString('en-US')}` : ''}
+              {autopilot.lease
+                ? ` · last claimed by ${autopilot.lease.holder} (lease until ${new Date(autopilot.lease.expiresAt).toLocaleTimeString('en-US')})`
+                : ' · no cross-device lease yet'}
+              {autopilot.lastSkip ? ` · ${autopilot.lastSkip}` : ''}
+            </p>
+          )}
         </WidgetCard>
 
         <WidgetCard title="Trading model">

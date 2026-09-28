@@ -44,7 +44,9 @@ function wilReset(): boolean {
 
 /* Wat je niet mag pakken om te slepen: alles waar je op klikt of in typt, en
    het canvas van de bol -- dat draait zelf mee met de muis. */
-const NIET_SLEPEN = 'button, input, textarea, select, a, canvas, iframe';
+// [data-geen-greep]: binnen een greep het deel dat zelf aangeraakt wordt, zoals
+// het scherm van de telefoon -- die sleep je aan de rand, niet aan zijn apps.
+const NIET_SLEPEN = 'button, input, textarea, select, a, canvas, iframe, [data-geen-greep]';
 
 interface Sleep { sx: number; sy: number; l: number; t: number; maat: Maat }
 

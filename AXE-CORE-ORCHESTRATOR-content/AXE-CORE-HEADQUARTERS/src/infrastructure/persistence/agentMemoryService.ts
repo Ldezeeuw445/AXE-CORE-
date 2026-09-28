@@ -29,6 +29,7 @@
  */
 import { sbGetRows, sbInsertRow, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { meldActiviteit } from '@/shared/axeActiviteit';
 
 /** The namespaces that exist. Agents own memory; capabilities do not. */
 export type MemoryNamespace =
@@ -91,6 +92,7 @@ export async function remember(input: RememberInput): Promise<boolean> {
   if (!isAxeApiConfigured) return false;
   const content = input.content?.trim();
   if (!content) return false;
+  meldActiviteit({ doelen: ['geheugen', '/memory'], label: `onthoudt: ${content.slice(0, 60)}`, kleur: '#a78bfa' });
 
   try {
     await sbInsertRow('memory', {

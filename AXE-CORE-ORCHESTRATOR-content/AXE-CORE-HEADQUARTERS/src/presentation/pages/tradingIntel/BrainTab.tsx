@@ -30,6 +30,7 @@ import {
 import { DESK_AGENT_MODELS, slotsPreferring, modelLabel, loadConfiguredSlots } from '@/application/tradingIntel/deskAgentModels';
 import { buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { DecisionLog } from './DecisionLog';
 
 /**
  * Another application's row, shown as what it is: a source this agent has not
@@ -205,8 +206,9 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-3 h-full min-h-0">
-      <div className="flex-1 min-w-0 min-h-0">
+      <div className="flex-1 min-w-0 min-h-0 overflow-y-auto space-y-3">
         <BrainPipeline lanes={lanes} />
+        <DecisionLog traces={desk.recentTraces} />
       </div>
       <div className="w-full lg:w-[320px] shrink-0 min-h-0 h-[60vh] lg:h-auto">
         <TradingChatPanel desk={desk} />

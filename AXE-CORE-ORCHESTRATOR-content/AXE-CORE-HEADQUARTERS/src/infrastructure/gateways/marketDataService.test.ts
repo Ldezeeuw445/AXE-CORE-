@@ -51,7 +51,7 @@ describe('assertTradeable', () => {
     // sending the order to MT5. Binance's AUDUSDT is a different instrument on
     // a different book; a stop computed from it sits at a level the broker
     // never printed. Less obviously wrong than gold at $105, and worse for it.
-    for (const source of ['binance', 'stooq', 'synthetic']) {
+    for (const source of ['lse', 'binance', 'binance:BTCUSDT', 'stooq', 'synthetic']) {
       expect(() => assertTradeable(snap(source, 4529.1))).toThrow(/broker price/i);
     }
   });

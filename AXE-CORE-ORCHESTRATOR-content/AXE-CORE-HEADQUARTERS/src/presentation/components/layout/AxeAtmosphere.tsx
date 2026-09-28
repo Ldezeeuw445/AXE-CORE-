@@ -181,7 +181,7 @@ function useSterren() {
 
     const lus = (nu: number) => {
       frame = requestAnimationFrame(lus);
-      if (document.hidden) return;
+      if (document.hidden || !document.hasFocus()) return;
       // Eerste frame, of terug uit de achtergrond: alleen de klok gelijkzetten.
       // Zonder dit is nu-vorige de hele looptijd van de pagina en springt het
       // flonkeren in één keer honderden radialen door.

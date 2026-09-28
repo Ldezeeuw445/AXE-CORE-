@@ -1,0 +1,31 @@
+// northsea-command-center v3 (P0.1). Datavragen ongewijzigd t.o.v. v2; nieuw is de autorisatie.
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { authorizeCommandCenter, envFromDeno } from "../_shared/auth.ts";
+const json=(b:unknown,s=200)=>new Response(JSON.stringify(b),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
+Deno.serve(async(req)=>{if(!["GET","POST"].includes(req.method))return json({ok:false,error:"method_not_allowed"},405);
+// P0.1: expliciete autorisatie VOOR elke lezing met service-role-rechten.
+const beslissing=await authorizeCommandCenter(req,envFromDeno((k)=>Deno.env.get(k)));
+if(!beslissing.allowed){console.warn("command-center denied",beslissing.reason);return json({ok:false,error:beslissing.status===401?"unauthorized":beslissing.status===503?"authorization_unavailable":"forbidden"},beslissing.status);}
+try{const sb=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false}});
+const [companies,buyers,suppliers,opps,calls,comms,verifications,docs,commissions,drafts,campaigns,candidates,assessments,queue]=await Promise.all([
+sb.from("companies").select("id,company_name,country,city,website,company_type,commodity_focus,verification_score,verification_status,source_type,updated_at").order("updated_at",{ascending:false}).limit(300),
+sb.from("buyer_requirements").select("*,companies(id,company_name,country,verification_score,verification_status)").order("updated_at",{ascending:false}).limit(300),
+sb.from("supplier_offers").select("*,companies(id,company_name,country,verification_score,verification_status)").order("updated_at",{ascending:false}).limit(300),
+sb.from("opportunities").select("*,buyer_requirements(id,commodity,product,grade,purity,quantity_mt,frequency,destination,incoterm,payment_terms,status,companies(id,company_name,country,verification_score,verification_status)),supplier_offers(id,commodity,product,grade,purity,origin,quantity_mt,monthly_capacity_mt,loading_port,incoterm,payment_terms,status,companies(id,company_name,country,verification_score,verification_status))").order("updated_at",{ascending:false}).limit(300),
+sb.from("call_intelligence").select("*,communications(id,subject,occurred_at,company_id,contact_id)").order("created_at",{ascending:false}).limit(100),
+sb.from("communications").select("id,company_id,contact_id,opportunity_id,direction,channel,subject,body,external_message_id,occurred_at").order("occurred_at",{ascending:false}).limit(200),
+sb.from("verification_checks").select("*,companies(id,company_name)").order("checked_at",{ascending:false}).limit(150),
+sb.from("deal_documents").select("*").order("updated_at",{ascending:false}).limit(150),
+sb.from("commissions").select("*").order("updated_at",{ascending:false}).limit(150),
+sb.from("reply_drafts").select("*").order("updated_at",{ascending:false}).limit(150),
+sb.from("sourcing_campaigns").select("*").order("priority",{ascending:false}).limit(300),
+sb.from("sourcing_candidates").select("*").order("fit_score",{ascending:false}).limit(500),
+sb.from("match_assessments").select("*").order("assessed_at",{ascending:false}).limit(300),
+sb.from("action_queue").select("*").in("status",["open","in_progress","waiting"]).order("priority",{ascending:false}).limit(300)
+]);
+const results=[companies,buyers,suppliers,opps,calls,comms,verifications,docs,commissions,drafts,campaigns,candidates,assessments,queue];const errors=results.map((x:any)=>x.error).filter(Boolean);const o=opps.data??[],ca=campaigns.data??[],cand=candidates.data??[],ma=assessments.data??[],aq=queue.data??[],c=calls.data??[],cm=comms.data??[],dr=drafts.data??[];
+const activeStages=new Set(["identified","verifying","qualified","contacted","engaged","matching","introduced","negotiating","contracting","shipment","commission_due"]);
+const liveCalls=c.filter((x:any)=>!x.raw_event?.test);const stats={companies:(companies.data??[]).length,buyers:(buyers.data??[]).length,suppliers:(suppliers.data??[]).length,active_opportunities:o.filter((x:any)=>activeStages.has(x.stage)).length,sourcing_campaigns:ca.filter((x:any)=>x.status==="active").length,find_supplier:ca.filter((x:any)=>x.status==="active"&&x.direction==="find_supplier").length,find_buyer:ca.filter((x:any)=>x.status==="active"&&x.direction==="find_buyer").length,candidates:cand.length,qualified_candidates:cand.filter((x:any)=>x.status==="qualified"||x.status==="converted").length,executable_matches:ma.filter((x:any)=>x.executable).length,open_actions:aq.filter((x:any)=>x.status==="open").length,requires_human_review:liveCalls.filter((x:any)=>x.requires_human_review).length,pending_drafts:dr.filter((x:any)=>x.approval_status==="pending"&&!x.sent_at&&!String(x.to_email??"").includes("ai-voicereceptionist.com")).length,communications_24h:cm.filter((x:any)=>Date.now()-new Date(x.occurred_at).getTime()<86400000).length};
+const closest=o.filter((x:any)=>activeStages.has(x.stage)).sort((a:any,b:any)=>(b.match_score??0)-(a.match_score??0)).slice(0,12).map((x:any)=>{const a=ma.find((m:any)=>m.opportunity_id===x.id);return {opportunity_id:x.id,stage:x.stage,match_score:x.match_score,executable:a?.executable??false,blockers:a?.blockers??[],missing_information:a?.missing_information??[],buyer:x.buyer_requirements?.companies?.company_name??null,supplier:x.supplier_offers?.companies?.company_name??null,commodity:x.buyer_requirements?.commodity??x.supplier_offers?.commodity??null,next_action:x.next_action};});
+return json({ok:true,generated_at:new Date().toISOString(),stats,closest_to_execution:closest,action_queue:aq,sourcing_campaigns:ca,sourcing_candidates:cand,match_assessments:ma,companies:companies.data??[],buyers:buyers.data??[],suppliers:suppliers.data??[],opportunities:o,calls:liveCalls,communications:cm,verifications:verifications.data??[],documents:docs.data??[],commissions:commissions.data??[],reply_drafts:dr,errors:errors.map((e:any)=>e.message)});}catch(e){console.error(e);return json({ok:false,error:"snapshot_failed"},500);}});

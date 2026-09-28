@@ -4,9 +4,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { TabRuimte, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { STAT_ROW } from '@/presentation/components/surface/Page';
 import {
   DollarSign,
   TrendingUp,
@@ -14,6 +14,8 @@ import {
   Trash2,
   ClipboardList,
   RefreshCw,
+  Bot,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   addIncomeEntry,
@@ -24,6 +26,11 @@ import {
   type IncomeEntry,
   type IncomeSource,
 } from '@/infrastructure/persistence/incomeLedgerService';
+import {
+  getLastFinanceDigest,
+  runFinanceDigest,
+  type FinanceDigest,
+} from '@/infrastructure/persistence/financeDigestService';
 
 function fmt(n: number, currency = 'EUR') {
   try {
@@ -44,6 +51,19 @@ export default function Finance() {
   const [currency, setCurrency] = useState('EUR');
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<IncomeSource | 'all'>('all');
+  const [digest, setDigest] = useState<FinanceDigest | null>(() => getLastFinanceDigest());
+  const [digestRunning, setDigestRunning] = useState(false);
+
+  const runDigestNow = useCallback(async () => {
+    setDigestRunning(true);
+    try {
+      setDigest(await runFinanceDigest());
+    } catch (err) {
+      console.warn('[Finance] digest run failed:', err);
+    } finally {
+      setDigestRunning(false);
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -95,11 +115,30 @@ export default function Finance() {
 
   return (
     <motion.div
-      className="p-6 h-full overflow-y-auto"
+      className="flex min-h-0 flex-1 flex-col"
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[{
+            titel: 'Source',
+            items: [
+              { id: 'all', label: `All (${entries.length})`, actief: filter === 'all', onKies: () => setFilter('all') },
+              ...INCOME_SOURCES
+                .filter(s => entries.some(e => e.source === s.id) || filter === s.id)
+                .map(s => ({
+                  id: s.id,
+                  label: `${s.label} (${entries.filter(e => e.source === s.id).length})`,
+                  actief: filter === s.id,
+                  onKies: () => setFilter(s.id),
+                })),
+            ],
+          }]}
+        />
+      </TabRail>
+      <TabRuimte>
       <div className="flex items-center justify-between mb-6">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -113,7 +152,7 @@ export default function Finance() {
       </div>
 
       {/* Metrics */}
-      <div className={STAT_ROW}>
+      <StatRij>
         <WidgetCard title="THIS MONTH">
           <div className="flex items-center gap-2">
             <DollarSign size={16} style={{ color: 'var(--success)' }} />
@@ -157,7 +196,93 @@ export default function Finance() {
             )}
           </div>
         </WidgetCard>
-      </div>
+      </StatRij>
+
+      {/* AXE Algo reconciliation — deliberately its own card, never folded
+          into the real-income numbers above. Demo pnl is simulated money;
+          it must never look like it adds to what Luka actually earned. */}
+      {/* Digest en invoer naast elkaar, even hoog; het grootboek eronder over de volle breedte. */}
+      <div className="axe-finance-raster">
+      <WidgetCard
+        title={`AXE ALGO — ${digest ? digest.period : 'LAST DIGEST'}`}
+        headerAction={
+          <button
+            onClick={() => void runDigestNow()}
+            disabled={digestRunning}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
+            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)', opacity: digestRunning ? 0.5 : 1 }}
+          >
+            <Bot size={11} className={digestRunning ? 'animate-pulse' : ''} /> {digestRunning ? 'Running…' : 'Run digest'}
+          </button>
+        }
+      >
+        {!digest ? (
+          <div className="py-4 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            No digest yet — click "Run digest" to reconcile the income ledger against AXE Algo's trade journal.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))]">
+              <div
+                className="p-2 rounded-lg"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}
+              >
+                <p className="text-[9px] mb-1" style={{ color: 'var(--text-muted)' }}>DEMO P&amp;L (simulated)</p>
+                <p
+                  className="text-sm font-semibold font-mono"
+                  style={{ color: digest.algoDemoPnlTotal > 0 ? 'var(--success)' : digest.algoDemoPnlTotal < 0 ? 'var(--error)' : 'var(--text-primary)' }}
+                >
+                  {fmt(digest.algoDemoPnlTotal)}
+                </p>
+                <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  {digest.algoDemoTradeCount} trades · {(digest.algoDemoWinRate * 100).toFixed(0)}% win
+                </p>
+              </div>
+
+              {(digest.algoLiveTradeCount > 0 || digest.algoLivePnlTotal !== 0) && (
+                <div
+                  className="p-2 rounded-lg"
+                  style={{ background: 'var(--bg-base)', border: '2px solid var(--warning)' }}
+                >
+                  <p className="text-[9px] mb-1 font-semibold" style={{ color: 'var(--warning)' }}>LIVE P&amp;L — REAL MONEY</p>
+                  <p
+                    className="text-sm font-bold font-mono"
+                    style={{ color: digest.algoLivePnlTotal > 0 ? 'var(--success)' : digest.algoLivePnlTotal < 0 ? 'var(--error)' : 'var(--text-primary)' }}
+                  >
+                    {fmt(digest.algoLivePnlTotal)}
+                  </p>
+                  <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {digest.algoLiveTradeCount} trades · {(digest.algoLiveWinRate * 100).toFixed(0)}% win
+                  </p>
+                </div>
+              )}
+
+              {digest.unclassifiedTradeCount > 0 && (
+                <div
+                  className="p-2 rounded-lg"
+                  style={{ background: 'var(--bg-base)', border: '1px dashed var(--border-active)' }}
+                >
+                  <p className="text-[9px] mb-1 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                    <AlertTriangle size={10} /> UNCLASSIFIED
+                  </p>
+                  <p className="text-sm font-semibold font-mono" style={{ color: 'var(--text-secondary)' }}>
+                    {fmt(digest.unclassifiedPnlTotal)}
+                  </p>
+                  <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {digest.unclassifiedTradeCount} trades — environment could not be resolved
+                  </p>
+                </div>
+              )}
+            </div>
+            <p
+              className="text-[9px] mt-2"
+              style={{ color: digest.verdict === 'poor' ? 'var(--error)' : 'var(--text-muted)' }}
+            >
+              {digest.verdict === 'poor' ? '⚠ ' : ''}{digest.note}
+            </p>
+          </>
+        )}
+      </WidgetCard>
 
       {/* Add entry */}
       <WidgetCard title="LOG INCOME">
@@ -240,47 +365,7 @@ export default function Finance() {
           Tip Prime Opinion: na een sessie of cashout log je bedrag + aantal voltooide enquêtes. Geen automatische koppeling — jij blijft de bron van waarheid.
         </p>
       </WidgetCard>
-
-      {/* Filters + list */}
-      {/* De bronfilters stonden tussen de kaarten en de lijst in.
-          In de schuifbalk kun je er even goed bij, zonder dat het altijd
-          breedte kost. */}
-      <TabRail kant="links">
-        <div className="axe-paneel">
-          <h2 className="axe-paneel-kop">Bron</h2>
-          <div className="axe-paneel-body">
-          <div className="mt-4 flex flex-wrap gap-1.5 mb-3">
-            <button
-              onClick={() => setFilter('all')}
-              className="text-[10px] px-2 py-0.5 rounded font-mono"
-              style={{
-                background: filter === 'all' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)',
-                color: filter === 'all' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              }}
-            >
-              all ({entries.length})
-            </button>
-            {INCOME_SOURCES.map(s => {
-              const n = entries.filter(e => e.source === s.id).length;
-              if (!n && filter !== s.id) return null;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setFilter(s.id)}
-                  className="text-[10px] px-2 py-0.5 rounded font-mono"
-                  style={{
-                    background: filter === s.id ? `${s.color}22` : 'rgba(255,255,255,0.04)',
-                    color: filter === s.id ? s.color : 'var(--text-muted)',
-                  }}
-                >
-                  {s.label} ({n})
-                </button>
-              );
-            })}
-          </div>
-          </div>
-        </div>
-      </TabRail>
+      </div>
 
       <WidgetCard title="LEDGER">
         {loading && !entries.length ? (
@@ -332,6 +417,7 @@ export default function Finance() {
           </div>
         )}
       </WidgetCard>
+      </TabRuimte>
     </motion.div>
   );
 }

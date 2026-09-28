@@ -7,9 +7,9 @@ import { getMetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { fetchMarketSnapshot, sma, rsi } from '@/infrastructure/gateways/marketDataService';
 import { detectAllSmc, type Bar } from '@/presentation/components/trading/smcDetect';
 import {
-  getDemoAccount, executeDemoTrade, equity, unrealizedPnl, markPositions,
+  getDemoAccount, equity, unrealizedPnl, markPositions,
 } from '@/infrastructure/persistence/demoTradingService';
-import { brokerPlaceOrder } from '@/infrastructure/gateways/brokerConnector';
+import { placeManualMarketOrder } from '@/application/tradingIntel/manualOrders';
 import type { DemoAccount } from '@/domain/tradingIntel/demoTypes';
 import { toast } from 'sonner';
 import CompanionChartDesk, { barsToMetaApiCandles } from '@/presentation/components/trading/companion/CompanionChartDesk';
@@ -163,14 +163,13 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
     if (!Number.isFinite(q) || q <= 0) { toast.error('Invalid quantity'); return; }
     setBusy(true);
     try {
-      const res = await brokerPlaceOrder({ symbol, side, qty: q, reason: 'Manual desk execution', confidence: 1 });
+      // Door dezelfde poort als AXE Algo. Geen papieren terugval na een
+      // weigering: die omzeilde precies de controle die weigerde.
+      const res = await placeManualMarketOrder({ symbol, side, qty: q });
       if (!res.ok) {
-        const price = last || (await fetchMarketSnapshot(symbol)).last;
-        const paper = await executeDemoTrade({ symbol, side, qty: q, price, reason: 'Manual desk (paper)', confidence: 1 });
-        if ('error' in paper) toast.error(paper.error);
-        else { toast.success(`${side.toUpperCase()} ${q} ${symbol} @ ${price}`); setAccount(paper.account); }
+        toast.error(res.stage === 'gate' ? `Risk gate: ${res.error}` : res.error);
       } else {
-        toast.success(`${side.toUpperCase()} via ${res.venue || 'broker'} @ ${res.price ?? 'mkt'}`);
+        toast.success(`${side.toUpperCase()} via ${res.venue} @ ${res.price ?? 'mkt'}`);
         await reloadAccount();
       }
     } catch (e) {

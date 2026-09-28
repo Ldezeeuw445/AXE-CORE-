@@ -65,6 +65,11 @@ let catalogus: LseCatalogusRegel[] | null = null;
 let catalogusOp = 0;
 const CATALOGUS_TTL_MS = 6 * 60 * 60 * 1000;
 
+/** De (gecachete) catalogus, voor schermen die er zelf in willen zoeken. */
+export async function lseCatalogus(): Promise<LseCatalogusRegel[]> {
+  return haalCatalogus().catch(() => [] as LseCatalogusRegel[]);
+}
+
 export function __resetLseCatalogus(): void {
   catalogus = null; catalogusOp = 0; dagCache.clear();
 }

@@ -74,6 +74,48 @@ export const DEFAULT_AGENTS: CoreAgent[] = [
     tags: ['dev'],
   },
   {
+    id: 'wingman-agent',
+    name: 'wingman-agent',
+    display_name: 'Wingman',
+    role: 'assistant',
+    description: 'Runs the free CrewAI crew from the Crew tab on AXE\'s behalf, and helps anywhere.',
+    system_prompt: 'You are the AXE Wingman. You run the CrewAI specialists and report back plainly.',
+    memory_namespace: 'wingman',
+    toolset: ['crew', 'specialists'],
+    model_provider: 'abonnement',
+    model_name: '',
+    status: 'active',
+    version: '1.0',
+    capabilities: ['crew-run', 'specialists'],
+    supabase_tables: [],
+    app_url: null,
+    tags: ['wingman', 'tab:crewai'],
+  },
+  {
+    // Toegevoegd 23 sep 2026: staat al langer als echte, werkende tier-1
+    // agent in roster.ts (id 'northsea', "CONFIRMED ARCHITECTURE" 17 sep
+    // 2026) maar ontbrak hier -- dus een echte agent was onzichtbaar op het
+    // Agents-tabblad terwijl app-manager, die niets doet, wel een kaart
+    // had. Nog GEEN leerlus (grep bevestigt: nergens een openEpisode voor
+    // 'northsea') -- dat volgt in dezelfde ronde als de andere zes.
+    id: 'northsea-agent',
+    name: 'northsea-agent',
+    display_name: 'NorthSea Desk Manager',
+    role: 'analyst',
+    description: 'Runs the NorthSea crews and moves deals — decides before you where it safely can.',
+    system_prompt: 'You are the NorthSea Desk Manager. You run the NorthSea trade-desk crews, move deals through their gates, and decide only where it is safe to.',
+    memory_namespace: 'northsea',
+    toolset: ['northsea-mcp', 'crews', 'deal-gates'],
+    model_provider: 'abonnement',
+    model_name: '',
+    status: 'active',
+    version: '1.0',
+    capabilities: ['deal-pipeline', 'crew-run', 'counterparty-research'],
+    supabase_tables: [],
+    app_url: null,
+    tags: ['northsea', 'tab:maps-3d'],
+  },
+  {
     id: 'trading-agent',
     name: 'trading-agent',
     display_name: 'Trading Agent',
@@ -132,15 +174,18 @@ export const DEFAULT_AGENTS: CoreAgent[] = [
     name: 'finance-agent',
     display_name: 'Finance Agent',
     role: 'analyst',
-    description: 'P&L, books, and finance tab intelligence.',
+    // Narrowed to what actually exists: financeDigestService.ts reconciles
+    // the manual income ledger against AXE Algo's trade journal once a day.
+    // No books/ledger tooling beyond that has been built.
+    description: 'Reconciles the manual income ledger against AXE Algo\'s trade journal (demo/live/unclassified).',
     system_prompt: 'You are the AXE Finance Agent. Track P&L, books, and financial context.',
     memory_namespace: 'finance',
-    toolset: ['ledger', 'reports'],
+    toolset: ['income_summary', 'algo_reconciliation'],
     model_provider: 'google',
     model_name: 'gemini-3.5-flash',
     status: 'active',
     version: '1.0',
-    capabilities: ['pnl', 'books', 'reports'],
+    capabilities: ['income_summary', 'algo_reconciliation'],
     supabase_tables: [],
     app_url: null,
     tags: ['finance', 'tab:finance'],
@@ -204,15 +249,19 @@ export const DEFAULT_AGENTS: CoreAgent[] = [
     name: 'app-manager',
     display_name: 'App Manager',
     role: 'developer',
-    description: 'App registry, integrations, and cross-app surfaces.',
+    // Was a stub (registry only, no real action) until App Manager got a
+    // genuine VPS health-check/restart via axeCoreApiService.ts's
+    // vpsStatus()/buildStatus()/vpsServiceRestart() — same day as the
+    // roster.ts 'apps' domain agent and its LOOP_AGENTS episode wiring.
+    description: 'App registry, VPS health checks, and service restarts for AXE CORE and AXE Companion.',
     system_prompt: 'You are the AXE App Manager.',
     memory_namespace: 'apps',
-    toolset: ['apps', 'integrations'],
+    toolset: ['apps', 'integrations', 'vps-status', 'vps-restart'],
     model_provider: 'google',
     model_name: 'gemini-3.5-flash',
     status: 'active',
     version: '1.0',
-    capabilities: ['registry', 'integrations'],
+    capabilities: ['registry', 'integrations', 'health-check', 'restart'],
     supabase_tables: [],
     app_url: null,
     tags: ['apps', 'tab:apps'],

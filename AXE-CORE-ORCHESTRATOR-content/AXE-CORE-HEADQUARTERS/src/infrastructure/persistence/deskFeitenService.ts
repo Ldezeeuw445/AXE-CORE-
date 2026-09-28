@@ -52,6 +52,16 @@ export interface DeskFeit {
 export const VERS_GENOEG_MS = 6 * 60 * 60 * 1000;
 
 /**
+ * Per soort hoe lang een meting geldt. Een correlatie beschrijft vandaag; een
+ * gebeurtenisimpact beschrijft de laatste zes publicaties, en die verandert pas
+ * als er een nieuwe bij komt — een week oud is hij nog steeds de meting.
+ */
+const VERS_PER_SOORT: Record<DeskFeitSoort, number> = {
+  correlatie: VERS_GENOEG_MS,
+  gebeurtenis_impact: 7 * 24 * 60 * 60 * 1000,
+};
+
+/**
  * Schrijf één gemeten feit weg.
  *
  * Geeft false terug in plaats van te werpen: dit hangt aan een hartslag, en een
@@ -100,19 +110,21 @@ interface RuweRegel {
  *        erop alsof het van vanochtend is.
  */
 export async function leesDeskFeiten(
-  maxOuderdomMs = VERS_GENOEG_MS,
+  maxOuderdomMs?: number,
 ): Promise<DeskFeit[]> {
   const sb = getSupabase();
   if (!sb) return [];
 
-  const grens = new Date(Date.now() - maxOuderdomMs).toISOString();
+  const venster = (soort: string) => maxOuderdomMs ?? VERS_PER_SOORT[soort as DeskFeitSoort] ?? VERS_GENOEG_MS;
+  const nu = Date.now();
+  const grens = new Date(nu - Math.max(maxOuderdomMs ?? 0, ...Object.values(VERS_PER_SOORT))).toISOString();
   const { data, error } = await sb
     .from('core_desk_feiten')
     .select('soort, sleutel, agent_tekst, gemeten_op, data')
     .eq('user_id', AXE_USER_ID)
     .gte('gemeten_op', grens)
     .order('gemeten_op', { ascending: false })
-    .limit(60);
+    .limit(200);
 
   if (error) {
     console.error('[deskFeiten] lezen mislukt', error.message);
@@ -127,6 +139,8 @@ export async function leesDeskFeiten(
     const k = `${r.soort}|${r.sleutel}`;
     if (gezien.has(k)) continue;
     gezien.add(k);
+    // Per soort de eigen houdbaarheid: de query haalt het ruimste venster op.
+    if (nu - Date.parse(r.gemeten_op) > venster(r.soort)) continue;
     uit.push({
       soort: r.soort as DeskFeitSoort,
       sleutel: r.sleutel,
@@ -148,7 +162,12 @@ export async function leesDeskFeiten(
  * Leeg is niet stil: staat er niets, dan zegt dit blok dát, zodat "het bureau
  * heeft niets gemeten" niet leest als "er is niets aan de hand".
  */
-export function deskFeitenBlok(feiten: DeskFeit[], nu = Date.now()): string {
+export function deskFeitenBlok(feiten: DeskFeit[], nu = Date.now(), symbool?: string): string {
+  // Impact is per paar: de CPI-uitslag op goud hoort niet in de run voor EURUSD.
+  if (symbool) {
+    const s = symbool.trim().toUpperCase();
+    feiten = feiten.filter(f => f.soort !== 'gebeurtenis_impact' || f.sleutel.split('|')[1] === s);
+  }
   if (!feiten.length) {
     return 'BUREAUFEITEN: geen verse meting beschikbaar (correlatie noch '
       + 'gebeurtenisimpact). Dat is niet "rustig" — het is niet gemeten. '

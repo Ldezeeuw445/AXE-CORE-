@@ -2,7 +2,8 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { TabRuimte, Kaart, SectieBlok, KaartRaster, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { NAAST_CORE, appVan, appMeta as appInfo, type AppId } from '@/domain/apps';
 import { CronTabel, type TabelActies, type KolomTekst } from './cron/CronTabel';
 import { toast } from '@/presentation/components/shared/toast';
@@ -41,6 +42,9 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
   flow:    { label: 'CrewAI Flow', icon: Workflow,     color: '#c4b5fd' },
   exec:    { label: 'VPS Command', icon: Terminal,     color: 'var(--warning)' },
   webhook: { label: 'Webhook',    icon: Globe,         color: 'var(--success)' },
+  observed: { label: 'Draait elders', icon: Workflow,  color: 'var(--text-muted)' },
+  planner: { label: 'Planner (Mac)', icon: Bot,        color: '#F472B6' },
+  northsea: { label: 'NorthSea-desk', icon: Globe,     color: '#F472B6' },
 };
 
 /* ── App tabs ─────────────────────────────────────────────────────────────
@@ -108,6 +112,7 @@ function draftToPayload(d: Draft): Record<string, unknown> {
     }
     case 'flow':
       return { flow: d.flowName, inputs: { asset: d.flowAsset, topic: d.flowTopic, depth: d.flowDepth } };
+    default: return {};
   }
 }
 
@@ -218,8 +223,8 @@ export default function CronManager() {
     bezig: id => busy.has(id),
   };
   const kolomTekst: KolomTekst = {
-    soort: s => ACTION_META[s.action_type].label,
-    soortKleur: s => ACTION_META[s.action_type].color,
+    soort: s => `${(ACTION_META[s.action_type] ?? ACTION_META.exec).label}${s.executor === 'mac' ? ' · Mac' : ''}`,
+    soortKleur: s => (ACTION_META[s.action_type] ?? ACTION_META.exec).color,
     menselijk: cronToHuman,
     tijd: fmt,
   };
@@ -228,9 +233,33 @@ export default function CronManager() {
     /* Flexkolom: kop en app-tabs vast, de schema's krijgen de rest van de
        hoogte. Eerst schoof de hele pagina en stond alles bovenin. */
     <motion.div
-      className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-6"
+      className="flex min-h-0 flex-1 flex-col"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
     >
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[
+            {
+              titel: 'Apps',
+              items: (['axe_core', ...NAAST_ELKAAR] as AppId[]).map((id) => ({
+                id,
+                label: `${appInfo(id).label} · ${voorApp(id).length}`,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: appInfo(id).kleur }} />,
+                onKies: () => document.getElementById(`axe-cron-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+              })),
+            },
+            {
+              titel: 'Actions',
+              items: [
+                { id: 'new', label: 'New schedule', icoon: <Plus size={13} />, onKies: openNew },
+                { id: 'refresh', label: 'Refresh', icoon: <RefreshCw size={13} />, onKies: () => void load() },
+              ],
+            },
+          ]}
+        />
+      </TabRail>
+      <TabRuimte>
+      <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
       <div className="flex flex-none items-center justify-between mb-4 gap-2">
       {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
@@ -274,7 +303,8 @@ export default function CronManager() {
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             className="mb-5 overflow-hidden"
           >
-            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)' }}>
+            <Kaart titel="New schedule">
+              <div className="space-y-3">
               <input
                 value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
                 placeholder="Naam (bijv. 'Ochtend-briefing')"
@@ -304,7 +334,7 @@ export default function CronManager() {
 
               {/* Action type */}
               <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(ACTION_META) as CronActionType[]).map(t => {
+                {(Object.keys(ACTION_META) as CronActionType[]).filter(t => !['observed', 'planner', 'northsea'].includes(t)).map(t => {
                   const M = ACTION_META[t]; const Icon = M.icon; const sel = draft.action_type === t;
                   return (
                     <button key={t} onClick={() => setDraft(d => ({ ...d, action_type: t }))}
@@ -400,22 +430,25 @@ export default function CronManager() {
                   {busy.has('__new__') ? 'Working…' : 'Create'}
                 </button>
               </div>
-            </div>
+              </div>
+            </Kaart>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* List */}
       {loading ? (
-        <div className={LIST_GRID}>
+        <KaartRaster>
           {[...Array(3)].map((_, i) => <div key={i} className="h-36 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />)}
-        </div>
+        </KaartRaster>
       ) : (
         /* AXE Core over de VOLLE breedte, de vier anderen eronder naast
            elkaar. Zie de uitleg bij APP_TABS: dat is geen smaak maar het
            verschil tussen lokaal draaien en een webhook. */
+        <SectieBlok titel="CRON JOBS">
         <div className="axe-cronvel">
           <CronTabel
+            anker="axe-cron-axe_core"
             titel={appInfo('axe_core').label}
             onderschrift={appInfo('axe_core').blurb}
             kleur={appInfo('axe_core').kleur}
@@ -429,6 +462,7 @@ export default function CronManager() {
             {NAAST_ELKAAR.map(id => (
               <CronTabel
                 key={id}
+                anker={`axe-cron-${id}`}
                 titel={appInfo(id).label}
                 onderschrift={appInfo(id).blurb}
                 kleur={appInfo(id).kleur}
@@ -441,8 +475,11 @@ export default function CronManager() {
             ))}
           </div>
         </div>
+        </SectieBlok>
       )}
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

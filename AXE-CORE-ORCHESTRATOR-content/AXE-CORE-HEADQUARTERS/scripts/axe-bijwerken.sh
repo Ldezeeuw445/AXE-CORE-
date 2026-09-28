@@ -32,6 +32,7 @@ BUNDEL="src-tauri/target/release/bundle/macos"
 APP="$BUNDEL/AXE CORE.app"
 zeg() { printf '\n\033[36m▸ %s\033[0m\n' "$*"; }
 stop() { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
+trap 'rc=$?; printf "\n\033[31m✖ AXE update stopte bij regel %s: %s (exit %s)\033[0m\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2' ERR
 
 # ── 1. Niets kwijtraken ──────────────────────────────────────────────────────
 zeg "Controleren of er onopgeslagen werk staat"
@@ -73,9 +74,7 @@ VOOR="$(git rev-parse HEAD)"
 # veranderd" ontstaat, dus het script zegt het hardop.
 VERWACHT="orchestrator"
 if [[ "$TAK" != "$VERWACHT" ]]; then
-  printf '\n\033[33m! Je staat op tak "%s" en niet op "%s".\033[0m\n' "$TAK" "$VERWACHT"
-  printf '  Het werk staat op %s. Overstappen met:\n' "$VERWACHT"
-  printf '    git checkout %s && npm run bijwerken\n\n' "$VERWACHT"
+  stop "Canonical AXE CORE wordt ALLEEN uit '$VERWACHT' gebouwd. Je staat op '$TAK'. Gebruik voor featurewerk npm run tauri:dev of npm run tauri:check; gebruik npm run bijwerken pas nadat het werk in orchestrator zit."
 fi
 
 zeg "Binnenhalen op '$TAK'"
@@ -100,8 +99,8 @@ else
   git log --oneline "$VOOR..$NA" | sed 's/^/    /'
 fi
 
-zeg "Pakketten"
-npm install
+zeg "Pakketten (exact uit package-lock)"
+npm ci --no-audit --no-fund
 
 # ── 2. Oude rommel weg vóór de bouw ──────────────────────────────────────────
 # De tijdelijke images van afgebroken dmg-stappen. Die zijn 40 MB per stuk en
@@ -132,9 +131,52 @@ done
 
 # ── 3. Bouwen ────────────────────────────────────────────────────────────────
 zeg "Bouwen"
-npm run tauri:build
+# Ondertekenen met het eigen certificaat als dat er is (docs/MAC-ONDERTEKENEN.md).
+# Zonder: adhoc, en dan vraagt macOS na elke build opnieuw om de SSD -- en tot
+# iemand klikt geeft alles wat de kluis leest een 502. Met: één vaste identiteit
+# (com.axe.core + dit certificaat), en de toestemming blijft staan. Een
+# ingestelde APPLE_SIGNING_IDENTITY gaat altijd voor.
+if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  for naam in "AXE Core dev" "AXE Core Dev"; do
+    if security find-identity -p codesigning 2>/dev/null | grep -q "\"$naam\""; then
+      export APPLE_SIGNING_IDENTITY="$naam"
+      break
+    fi
+  done
+fi
+if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  printf '\033[36m▸ Ondertekenen met "%s"\033[0m\n' "$APPLE_SIGNING_IDENTITY"
+else
+  stop "Geen vast AXE signing-certificaat. Canonical update stopt hier bewust: een adhoc build zou een tweede macOS-identiteit/TCC-set maken. Zie docs/MAC-ONDERTEKENEN.md."
+fi
+
+zeg "Native helpers bouwen"
+bash infra/computer-worker/native/build.sh
+bash infra/computer-worker/camera/build.sh
+
+zeg "Lokale AXE runtime voorbereiden"
+SETUP_ONLY=1 bash backend/axe_api/run-local.sh
+
+AXE_CANONICAL_BUILD=1 npm run tauri:build
 
 [[ -d "$APP" ]] || stop "De bouw gaf geen $APP. Lees de uitvoer hierboven."
+
+# Deterministic build identity inside the .app.
+#
+# Grepping minified JS is not a stable verification contract: bundlers are
+# allowed to rename/reshape object literals and macOS grep can also classify
+# bundled assets as binary. The source build stamp still exists for the UI,
+# but the updater verifies a plain text resource that it owns itself.
+VERWACHT_SHA="$(git rev-parse --short HEAD)"
+STAMP_FILE="$APP/Contents/Resources/axe-build-stamp.txt"
+mkdir -p "$(dirname "$STAMP_FILE")"
+printf '%s\n' "$VERWACHT_SHA" > "$STAMP_FILE"
+
+# Tauri signed the bundle before this updater-owned resource existed. Re-sign
+# with the same stable identity so adding the deterministic stamp does not
+# invalidate the native bundle signature or its TCC identity.
+codesign --force --deep --sign "$APPLE_SIGNING_IDENTITY" "$APP"
+codesign --verify --deep --strict "$APP" || stop "Gebouwde AXE CORE signature-verificatie faalde na build-stamp."
 
 # ── 4. De oude afsluiten ─────────────────────────────────────────────────────
 # Tauri laat geen tweede instantie toe: draait de oude nog, dan lijkt de nieuwe
@@ -179,30 +221,60 @@ for poort in 4022 8001; do
         zeg "Achtergebleven dienst op poort $poort afsluiten (pid $pid)"
         kill "$pid" 2>/dev/null || true
         ;;
+      */AXE-CORE-HEADQUARTERS|*/AXE-CORE-HEADQUARTERS/*)
+        # Canonical AXE owns 4022/8001. An older AXE worktree on the same
+        # canonical port is not an unrelated service; leaving it alive makes
+        # the newly installed app silently talk to the old runtime.
+        zeg "Oude AXE-dienst uit andere worktree op poort $poort afsluiten (pid $pid · $werkmap)"
+        kill "$pid" 2>/dev/null || true
+        ;;
       *)
-        [[ -n "$werkmap" ]] && printf '  \033[33m! poort %s is bezet door iets buiten deze checkout (%s) -- blijft staan\033[0m\n' "$poort" "$werkmap"
+        [[ -n "$werkmap" ]] && printf '  \033[33m! poort %s is bezet door iets buiten AXE (%s) -- blijft staan\033[0m\n' "$poort" "$werkmap"
         ;;
     esac
   done
 done
+
+# ── 4c. canonical launchd-workers ───────────────────────────────────────────
+#
+# Beide achtergrondworkers worden opnieuw geregistreerd vanuit DEZE canonical
+# orchestrator-checkout. Dat maakt hun bronpad onderdeel van dezelfde update als
+# de .app en voorkomt dat launchd stil naar een oude worktree blijft wijzen.
+zeg "Canonical computer-worker registreren"
+bash scripts/install-computer-worker-launchd.sh
+
+zeg "Canonical browser-agent registreren"
+bash scripts/install-browser-agent-launchd.sh
 
 # ── 5. Starten ───────────────────────────────────────────────────────────────
 # Een zelfgebouwde app is niet ondertekend; zonder dit weigert Gatekeeper hem
 # zwijgend en gebeurt er bij dubbelklikken niets.
 xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 
-# De kopie in /Applications is van een dmg-installatie en wordt door een bouw
-# NOOIT bijgewerkt. Hij heet net zo, dus in Spotlight staan er twee "AXE CORE"
-# en pak je soms de verkeerde -- precies waardoor het leek alsof een wijziging
-# er niet in zat.
+# De kopie in /Applications: bijwerken, niet alleen melden.
 #
-# Melden en niet weggooien: dat staat buiten deze repo en is niet aan een
-# bouwscript om te beslissen.
-if [[ -d "/Applications/AXE CORE.app" ]]; then
-  printf '\n\033[33m! Er staat ook een AXE CORE in /Applications. Die wordt hier niet bijgewerkt\n'
-  printf '  en verschijnt in Spotlight naast deze. Weghalen met:\n'
-  printf '    rm -rf "/Applications/AXE CORE.app"\033[0m\n'
-fi
+# Tot 16 september werd hij hier nooit aangeraakt, omdat een nieuwe build
+# adhoc ondertekend was en macOS hem als een andere app zag. Luka opent AXE
+# via Dock en Spotlight -- en die pakten de oude kopie, die dan om toestemming
+# vroeg en de wijzigingen van vandaag niet had. Nu elke build met hetzelfde
+# certificaat ondertekend is (zie hierboven), blijft de toestemming staan en
+# kan de kopie gewoon vervangen worden. Zonder certificaat blijft hij staan,
+# want dan zou vervangen juist wel om toestemming vragen.
+CANONICAL_APP="/Applications/AXE CORE.app"
+zeg "Één canonical app installeren: $CANONICAL_APP"
+rm -rf "$CANONICAL_APP"
+ditto "$APP" "$CANONICAL_APP"
+xattr -dr com.apple.quarantine "$CANONICAL_APP" 2>/dev/null || true
+codesign --verify --deep --strict "$CANONICAL_APP" || stop "Canonical AXE CORE signature-verificatie faalde."
+
+APP_SHA="$(cat "$CANONICAL_APP/Contents/Resources/axe-build-stamp.txt" 2>/dev/null || true)"
+[[ -n "$APP_SHA" ]] || stop "Canonical app bevat geen deterministische build-stempel."
+[[ "$APP_SHA" == "$VERWACHT_SHA" ]] || stop "Canonical app is uit $APP_SHA gebouwd maar repo staat op $VERWACHT_SHA."
+
+# De release-bundle was vroeger óók Spotlight-startbaar. Na verificatie is
+# /Applications de enige gebruikersapp; de build-output blijft geen tweede AXE.
+rm -rf "$APP"
+APP="$CANONICAL_APP"
 
 zeg "Starten — $(date '+%H:%M') · gebouwd uit $(git rev-parse --short HEAD)"
 open "$APP"
@@ -211,9 +283,7 @@ open "$APP"
 # staat, dan kijk je naar een andere app -- `npm run welke` zegt welke.
 printf '\n  In de app staat boven op Home: build %s\n' "$(git rev-parse --short HEAD)"
 printf '  Staat er iets anders? Dan draait er een andere kopie: npm run welke\n\n'
-printf '  \033[36mMoet blijven draaien in een EIGEN venster:\033[0m\n'
-printf '    npm run terminal   — de shell-server, anders verbindt de Terminals-tab niet\n'
-printf '    backend/axe_api/run-local.sh   — de lokale API, anders geeft de Code Agent 404\n'
+printf '  \033[32mCanonical runtime: /Applications/AXE CORE.app + launchd-workers + lokale diensten.\033[0m\n'
 
 echo
 echo "Opent hij niet, start hem dan direct om de fout te zien:"

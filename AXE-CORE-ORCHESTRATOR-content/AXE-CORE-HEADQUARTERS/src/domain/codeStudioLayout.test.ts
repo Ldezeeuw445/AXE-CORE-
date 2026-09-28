@@ -32,10 +32,11 @@ describe('code studio staat in de echte tab, niet alleen in de galerij', () => {
     expect(css).toMatch(/\.axe-studio-editor[\s\S]*148px/);
   });
 
-  it('kiest de motor in de editorbalk en vraagt via Ask agent', () => {
-    expect(pagina).toMatch(/Ask agent/);
-    expect(pagina).toMatch(/setAgentEngine\('native'\)/);
-    expect(pagina).toMatch(/setAgentEngine\('openhands'\)/);
+  it('kiest de motor in de zuil rechts van de composer, en vraagt via de composer', () => {
+    // De balk bovenin is weg (13 sep): de motoren staan naast de composer, zoals
+    // de tabs op trading. Vragen gaat via de composer zelf -- en ⌘K blijft.
+    expect(pagina).toMatch(/\['native', 'openhands', \.\.\.CLI_MOTOR_KNOPPEN/);
+    expect(pagina).toMatch(/kies=\{id => setAgentEngine\(id as AgentEngine\)\} kant="rechts"/);
     expect(pagina).toMatch(/focusComposer/);
   });
 

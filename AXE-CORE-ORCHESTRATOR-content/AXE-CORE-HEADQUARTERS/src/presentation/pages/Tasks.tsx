@@ -4,13 +4,16 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, X, Zap, Clock } from 'lucide-react';
-import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { TabRuimte, Kaart, SchuifBalk, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
 import { AppTaken, AppCijfers, type AppTaak } from './taken/AppTaken';
 import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
-  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
-  type DurableTaskRun,
+  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask, plannerTaken, northseaTab,
+  type DurableTaskRun, type PlannerTaak,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { isNorthseaWerk, northseaTaken, type WerkTaak } from '@/domain/northsea/werk';
+import { PlannerTaken } from '@/presentation/components/tasks/PlannerTaken';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -30,6 +33,14 @@ interface Task {
   dueAt?: number;
   /** Welke van de vijf apps. Uit metadata.app; onbekend valt terug op AXE Core. */
   app: AppId;
+  /**
+   * Leerlus-episode (agent 'task'), uit metadata.episodeId. Alleen gezet voor
+   * taken die via addTask() op deze pagina zijn aangemaakt -- planner-taken
+   * (plannerAlsRij) en NorthSea-desk-taken (nsTaken) krijgen er nooit een,
+   * dus deze aanwezigheid is meteen de eigenaarschapstoets: geen episode, dan
+   * raakt updateStatus/removeTask hem niet aan.
+   */
+  episodeId?: string;
 }
 
 const STATUS_CFG: Record<TaskStatus, { color: string; label: string }> = {
@@ -76,6 +87,26 @@ function dueFromRow(row: DurableTaskRun): number | undefined {
 
 /** Human due-date label + whether it's overdue (only meaningful for open tasks). */
 
+/**
+ * Een planner-taak als rij van dit bord.
+ *
+ * De planner draait op de agent-host en niet via de VPS-takenlijst, dus zijn
+ * taken komen apart binnen. Zijn `uiStatus` staat op 'todo' vanaf het aanmaken
+ * en schuift niet mee; de echte status wel. Daarom weg ermee, dan leest
+ * uiStatusOf de status zelf.
+ */
+function plannerAlsRij(t: PlannerTaak): DurableTaskRun {
+  const { uiStatus: _genegeerd, ...metadata } = (t.metadata ?? {}) as Record<string, unknown>;
+  return {
+    ...(t as unknown as DurableTaskRun),
+    goal: t.goal ?? '',
+    priority: (['low', 'medium', 'high', 'critical'].includes(t.priority) ? t.priority : 'medium') as DurableTaskRun['priority'],
+    status: t.status as DurableTaskRun['status'],
+    assignee: (metadata.agent as string | undefined) ?? t.assignee ?? 'AXE Core',
+    metadata: { ...metadata, planner: true },
+  };
+}
+
 function normalizeRows(rows: DurableTaskRun[]): Task[] {
   return rows.map(row => ({
     id: row.id,
@@ -89,11 +120,17 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
     routedBy: row.assignee === 'AXE Core' ? 'user' : 'axe-core',
     dueAt: dueFromRow(row),
     app: appVan(row.metadata),
+    episodeId: typeof row.metadata?.episodeId === 'string' ? row.metadata.episodeId : undefined,
   }));
 }
 
 export default function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  /* De open taken van de NorthSea-desk. Die staan in AXE Commodities en niet
+     in core_tasks, dus zonder dit blijft de NorthSea-kolom leeg terwijl er
+     werk ligt. Ze zijn hier te lezen, niet te beheren: afvinken doe je op de
+     desk, waar de deal omheen staat. */
+  const [nsTaken, setNsTaken] = useState<WerkTaak[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [filterStatus, setFilterStatus] = useState<TaskStatus | 'all'>('all');
@@ -108,8 +145,18 @@ export default function Tasks() {
 
   const refresh = async () => {
     try {
-      const { tasks: rows } = await listDurableTasks({ limit: 100 });
-      setTasks(normalizeRows(rows));
+      // Twee bronnen, elk apart: de takenlijst op de VPS en de planner op de
+      // agent-host. Valt er één weg, dan staat de ander er nog.
+      const [lijst, planner, desk] = await Promise.allSettled([
+        listDurableTasks({ limit: 100 }), plannerTaken(60), northseaTab('werk'),
+      ]);
+      // De desk is een extra bron: valt hij weg, dan blijft de rest staan.
+      setNsTaken(desk.status === 'fulfilled' ? northseaTaken(desk.value.taken) : []);
+      const rows = lijst.status === 'fulfilled' ? lijst.value.tasks : [];
+      const plannerRows = planner.status === 'fulfilled' ? planner.value.taken.map(plannerAlsRij) : [];
+      // Planner-rijen alleen uit de planner zelf: die heeft de actuele status.
+      setTasks(normalizeRows([...rows.filter(r => r.capability !== 'planner'), ...plannerRows]));
+      if (lijst.status === 'rejected' && planner.status === 'rejected') throw lijst.reason;
     } catch (e) {
       // Leave whatever was last loaded rather than blanking the board, but
       // say so — a silent failure here is indistinguishable from "no tasks".
@@ -147,6 +194,13 @@ export default function Tasks() {
     // it, and leaves a memory trail tagged agentId 'task_agent' — the same
     // pattern cron_manager/crewai_manager already use.
     const dueIso = newTask.dueAt ? new Date(newTask.dueAt).toISOString() : undefined;
+    // Loop wiring (LOOP_AGENTS 'task'): this is the one place a task the user
+    // actually manages here gets created, so it's the one place an episode
+    // opens. Opened before the create call (same order as CrewAI.tsx's
+    // wingman wiring) so the id can ride along in the row's own metadata --
+    // that's what lets updateStatus/removeTask find it again later without a
+    // parallel map that `refresh()` would just overwrite anyway.
+    const episodeId = await openEpisode({ agent: 'task', subject: newTask.title.trim() });
     try {
       await createDurableTask({
         title: newTask.title.trim(),
@@ -161,6 +215,7 @@ export default function Tasks() {
           uiStatus: 'todo', progress: 0,
           routedBy: newTask.assignee === 'AXE Core' ? 'user' : 'axe-core',
           ...(dueIso ? { dueAt: dueIso } : {}),
+          ...(episodeId ? { episodeId } : {}),
         }),
       });
       // De app blijft staan: maak je er twee achter elkaar voor Companion,
@@ -174,17 +229,31 @@ export default function Tasks() {
   };
 
   const updateStatus = async (id: string, status: TaskStatus) => {
+    const task = tasks.find(t => t.id === id);
     try {
       await updateDurableTask(id, {
         /* De app MOET mee. metadata wordt vervangen en niet samengevoegd:
            zonder dit veld verliest een taak zijn app zodra je hem afvinkt, en
            springt hij naar de AXE Core-kolom. Dat is precies het soort stille
-           verhuizing waar je nooit achter komt. */
+           verhuizing waar je nooit achter komt. Dezelfde reden geldt voor
+           episodeId: zonder herhalen hier verdwijnt de leerlus-koppeling
+           zodra een taak twee keer van status wisselt. */
         metadata: metMetaApp(
-          tasks.find(t => t.id === id)?.app ?? 'axe_core',
-          { uiStatus: status, progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0 },
+          task?.app ?? 'axe_core',
+          {
+            uiStatus: status,
+            progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0,
+            ...(task?.episodeId ? { episodeId: task.episodeId } : {}),
+          },
         ),
       });
+      // Alleen sluiten voor taken die deze pagina zelf opende (episodeId
+      // gezet in addTask) -- planner- en NorthSea-desk-taken hebben er nooit
+      // een, dus dit raakt ze niet.
+      if (task?.episodeId) {
+        if (status === 'done') void closeEpisode(task.episodeId, 'good');
+        else if (status === 'blocked') void closeEpisode(task.episodeId, 'poor');
+      }
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not update task');
@@ -193,8 +262,15 @@ export default function Tasks() {
 
 
   const removeTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
     try {
       await deleteDurableTask(id);
+      // 'unknown' en niet 'poor': verwijderen is niet per se mislukken (kan
+      // een duplicaat zijn, of niet meer nodig). Alleen sluiten als hij nog
+      // openstond -- was hij al done/blocked, dan sloot updateStatus hem al.
+      if (task?.episodeId && task.status !== 'done' && task.status !== 'blocked') {
+        void closeEpisode(task.episodeId, 'unknown');
+      }
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not delete task');
@@ -245,8 +321,8 @@ export default function Tasks() {
   /* De taken van één app, in de vorm die AppTaken leest. Het statusfilter uit
      de schuifbalk werkt gewoon door: kies je 'todo', dan tonen alle vijf de
      panelen alleen dat. */
-  const takenVan = (app: AppId): AppTaak[] =>
-    displayed
+  const takenVan = (app: AppId): AppTaak[] => {
+    const eigen = displayed
       .filter(t => t.app === app)
       .map(t => ({
         id: t.id,
@@ -258,6 +334,12 @@ export default function Tasks() {
         klaar: t.status === 'done',
         stand: t.status,
       }));
+    if (app !== 'northsea') return eigen;
+    // Hetzelfde statusfilter geldt voor de desk-taken; anders zou 'todo' bij
+    // NorthSea ineens alles tonen.
+    const desk = filterStatus === 'all' ? nsTaken : nsTaken.filter(t => t.stand === filterStatus);
+    return [...eigen, ...desk];
+  };
 
   /* Het formulier openen MET die app erin. Zonder dit moest je hem in het
      formulier nog eens kiezen terwijl je net op de + van die app klikte. */
@@ -268,7 +350,22 @@ export default function Tasks() {
 
   return (
     /* Flexkolom: knoppen en cijfers vast, de takenlijst krijgt de rest. */
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <TabRail kant="links">
+        <SchuifBalk
+          groepen={[{
+            titel: 'Status',
+            items: (['all', 'todo', 'in-progress', 'done', 'blocked'] as const).map(f => ({
+              id: f,
+              label: f === 'all' ? 'All' : STATUS_CFG[f as TaskStatus]?.label ?? f,
+              actief: filterStatus === f,
+              onKies: () => setFilterStatus(f),
+            })),
+          }]}
+        />
+      </TabRail>
+      <TabRuimte>
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -292,6 +389,8 @@ export default function Tasks() {
         </div>
       </div>
 
+      <PlannerTaken />
+
       {/* De cijferrij die hier stond telde ALLE apps bij elkaar op. Dat getal
           beantwoordt geen vraag die je hebt: "twaalf te doen" zegt niets als je
           wil weten of Companion achterloopt. Hij staat nu per kaart, op dezelfde
@@ -300,7 +399,7 @@ export default function Tasks() {
       <AnimatePresence>
         {adding && (
           <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -8, height: 0 }} className="overflow-hidden mb-4">
-            <WidgetCard title="New Task">
+            <Kaart titel="New Task">
               <div className="space-y-2.5">
                 <input
                   autoFocus
@@ -364,39 +463,10 @@ export default function Tasks() {
                   <button onClick={() => setAdding(false)} className="px-2 py-1.5 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}><X size={13} /></button>
                 </div>
               </div>
-            </WidgetCard>
+            </Kaart>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* De statusfilters kostten een regel boven elke lijst, terwijl je er
-          meestal maar één keer aan draait.
-          In de schuifbalk kun je er even goed bij, zonder dat het altijd
-          breedte kost. */}
-      <TabRail kant="links">
-        <div className="axe-paneel">
-          <h2 className="axe-paneel-kop">Status</h2>
-          <div className="axe-paneel-body">
-          <div className="flex flex-wrap gap-1 mb-3">
-            {(['all', 'todo', 'in-progress', 'done', 'blocked'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilterStatus(f)}
-                className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
-                style={{ background: filterStatus === f ? 'var(--bg-active)' : 'transparent', color: filterStatus === f ? 'var(--accent-cyan)' : 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}
-              >
-                {f === 'all' ? 'All' : STATUS_CFG[f as TaskStatus]?.label ?? f}
-                {f !== 'all' && tasks.filter(t => t.status === f).length > 0 && (
-                  <span className="ml-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                    {tasks.filter(t => t.status === f).length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-          </div>
-        </div>
-      </TabRail>
 
       {/* De lijst is de enige schuif, en hij vult wat er onder de cijfers over
           is. De lege staat gebruikt diezelfde ruimte in plaats van als strookje
@@ -417,6 +487,7 @@ export default function Tasks() {
         * lokaal draaien tegenover een webhook. Bij taken is dat verschil er
         * niet -- een taak is een taak, welke app hij ook raakt. Dan zijn vijf
         * gelijke kolommen eerlijker dan er één uitlichten. */}
+      <SectieBlok titel="TASKS">
       <div className="axe-appvijf">
         {APPS.map(a => (
           /* Twee losse kaarten per kolom: de cijfers erboven, het paneel
@@ -429,14 +500,23 @@ export default function Tasks() {
               blurb={a.blurb}
               taken={takenVan(a.id)}
               opNieuw={() => nieuwVoor(a.id)}
-              opKlaar={t => { void updateStatus(t.id, 'done'); }}
-              opWeg={t => { void removeTask(t.id); }}
+              opKlaar={t => {
+                if (isNorthseaWerk(t.id)) { toast.info('Deze taak staat op de NorthSea-desk. Afvinken doe je daar, bij de deal.'); return; }
+                void updateStatus(t.id, 'done');
+              }}
+              opWeg={t => {
+                if (isNorthseaWerk(t.id)) { toast.info('Deze taak komt uit AXE Commodities en wordt daar beheerd.'); return; }
+                void removeTask(t.id);
+              }}
             />
           </div>
         ))}
       </div>
+      </SectieBlok>
 
       </div>
+      </div>
+      </TabRuimte>
     </motion.div>
   );
 }

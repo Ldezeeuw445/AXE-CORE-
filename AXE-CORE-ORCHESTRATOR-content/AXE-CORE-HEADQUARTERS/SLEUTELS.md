@@ -71,6 +71,7 @@ grep '^OPENAI' /Volumes/EagetSSD/AXE-VAULT/secrets.env
 | De app bouwt maar mist iets | `.env`, vergelijken met de kluis |
 | De VPS geeft 401 of 500 | `/opt/axe-core-api/.env` op de host |
 | Je bent alles kwijt | de kluis. Altijd de kluis. |
+| Stem (ElevenLabs / Cartesia / Cedar / Fish) | Settings → Keys (`elevenlabs`, `cartesia`, `openai`, `fish` / `fishaudio`) of de `VITE_ELEVENLABS_API_KEY` / `VITE_CARTESIA_API_KEY` / `VITE_OPENAI_API_KEY` / `VITE_FISH_AUDIO_API_KEY` namen in `.env`. George heeft geen sleutel. |
 
 ## Wat hier niet in staat
 

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { AppShell } from '@/presentation/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/presentation/hooks/useKeyboardShortcuts';
 import { useClapDetector } from '@/presentation/hooks/useClapDetector';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import LoginPage from '@/presentation/pages/LoginPage';
 import { useAuth } from '@/presentation/contexts/AuthContext';
@@ -37,18 +38,41 @@ const TableEditor = lazy(() => import('@/presentation/pages/TableEditor'));
 const CronManager = lazy(() => import('@/presentation/pages/CronManager'));
 const ControlPlane = lazy(() => import('@/presentation/pages/ControlPlane'));
 const Maps3D = lazy(() => import('@/presentation/pages/Maps3D'));
+// Alleen in dev: de Strategy Lab buiten de login-muur, voor visuele controle.
+const StrategyLabDevPreview = import.meta.env.DEV
+  ? lazy(() => import('@/presentation/pages/tradingIntel/lab/StrategyLabDevPreview'))
+  : null;
+const NorthseaDesk = lazy(() => import('@/presentation/pages/northsea/NorthseaDesk'));
+const Grootboek = lazy(() => import('@/presentation/pages/Grootboek'));
 const CrewAI = lazy(() => import('@/presentation/pages/CrewAI'));
 const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'));
 const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
 const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
+const ComputerUse = lazy(() => import('@/presentation/pages/ComputerUse'));
+const ComputerUseOverlay = lazy(() => import('@/presentation/pages/ComputerUseOverlay'));
+const StandaloneNorthseaPage = lazy(() => import('@/presentation/pages/StandaloneNorthseaPage'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
 const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
+const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
+const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
+
+function HomeEntry() {
+  const isMobile = useIsMobile();
+
+  // Existing Samsung/iOS installs can keep an old launch URL forever. The
+  // manifest now starts at #/mobile, but an already-installed shortcut may
+  // still reopen #/ (the desktop Home) until the user navigates away. Make the
+  // route itself authoritative: every phone-sized launch of Home becomes the
+  // canonical mobile Home immediately. Desktop/Tauri keeps the desktop Home.
+  if (isMobile) return <Navigate to="/mobile" replace />;
+  return <Home />;
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading, degraded } = useAuth();
@@ -169,12 +193,15 @@ export default function App() {
               already redirected here stayed here. */}
           <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
+          {StrategyLabDevPreview && <Route path="/dev-strategy-lab-preview" element={<StrategyLabDevPreview />} />}
           <Route path="/dev-browser-preview" element={<div className="h-[100dvh] w-full overflow-hidden"><BrowserPage /></div>} />
           {/* Standalone desktop browser — no AppShell chrome */}
           <Route path="/dev-browser-standalone" element={<StandaloneBrowserPage />} />
           <Route path="/browser-desktop" element={<RequireAuth><StandaloneBrowserPage /></RequireAuth>} />
+          <Route path="/computer-use-overlay" element={<RequireAuth><ComputerUseOverlay /></RequireAuth>} />
+          <Route path="/northsea-desktop" element={<RequireAuth><StandaloneNorthseaPage /></RequireAuth>} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-            <Route index element={<Home />} />
+            <Route index element={<HomeEntry />} />
             {/* The page that answers "what actually works". */}
             <Route path="status" element={<StatusPage />} />
             <Route path="ai-core" element={<AICore />} />
@@ -182,6 +209,7 @@ export default function App() {
             <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="calendar" element={<CalendarPage />} />
+            <Route path="ledger" element={<Grootboek />} />
             <Route path="memory" element={<MemoryHub />} />
             <Route path="memory/explore" element={<Memory />} />
             <Route path="memory/trading" element={<TradingMemory />} />
@@ -201,15 +229,23 @@ export default function App() {
             <Route path="table-editor" element={<TableEditor />} />
             <Route path="cron-manager" element={<CronManager />} />
             <Route path="control-plane" element={<ControlPlane />} />
-            <Route path="maps-3d" element={<Maps3D />} />
+            {/* De Maps-tab is de NorthSea Commodity desk (Luka, 14 september). De
+                oude 3D-kaart staat nog op /dev-map-preview. */}
+            <Route path="maps-3d" element={<NorthseaDesk />} />
             <Route path="crewai" element={<CrewAI />} />
             <Route path="developer" element={<CommandCenter />} />
             <Route path="code-editor" element={<CodeEditorPage />} />
             <Route path="eve" element={<EveFramework />} />
             <Route path="browser" element={<BrowserPage />} />
+            <Route path="computer-use" element={<ComputerUse />} />
             <Route path="organization" element={<Organization />} />
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />
+            <Route path="device" element={<DeviceManager />} />
+            {/* Lock Screen — binnen de AppShell, maar als command-surface
+                (zie AppShell): alle chrome weg, de plaat blijft eronder, dus
+                exact de app-look met licht/donker. */}
+            <Route path="lock" element={<LockScreen />} />
           </Route>
         </Routes>
       </NotificationProvider>

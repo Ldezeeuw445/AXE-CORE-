@@ -114,10 +114,18 @@ async def browser_ai_health():
     from camofox_client import camofox_health, CAMOFOX_BASE
 
     status: dict = {"deepseek": bool(os.getenv("DEEPSEEK_API_KEY")), "browser_use": False, "camofox": False}
+    if not status["deepseek"]:
+        status["deepseek_note"] = "DEEPSEEK_API_KEY is not set on the VPS"
     try:
         import browser_use  # noqa: F401
         status["browser_use"] = True
-        status["browser_use_note"] = "browser-use package installed"
+        if os.getenv("BROWSER_USE_API_KEY"):
+            status["browser_use_note"] = "browser-use cloud"
+        elif os.getenv("OPENAI_API_KEY"):
+            status["browser_use_note"] = "browser-use via OpenAI"
+        else:
+            status["browser_use"] = False
+            status["browser_use_note"] = "browser-use installed, no BROWSER_USE_API_KEY or OPENAI_API_KEY"
     except ImportError:
         status["browser_use_note"] = "browser-use not installed — using Playwright fallback"
 

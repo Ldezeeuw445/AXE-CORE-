@@ -3,6 +3,7 @@ import { HashRouter } from 'react-router'
 import { Toaster } from 'sonner'
 import '@/app/index.css'
 import { applyStoredLookEarly } from '@/presentation/hooks/useLook'
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl'
 
 // Vóór de eerste render: anders ziet frame 1 de standaardstand en klapt het
 // scherm daarna om -- een flits die eruitziet als een fout.
@@ -17,12 +18,29 @@ try {
     document.documentElement.classList.add("axe-tauri")
   }
 } catch { /* geen window */ }
+
+// "ResizeObserver loop completed with undelivered notifications" is een bekende,
+// onschuldige browser-waarschuwing (o.a. van xterm/kaartcomponenten die tijdens
+// een resize opnieuw meten). In de Tauri-debug-webview komt zo'n onafgevangen
+// error als rode banner over de app. Deze ene slikken we, de rest laten we staan.
+try {
+  window.addEventListener('error', (e) => {
+    if (e?.message && /ResizeObserver loop/i.test(e.message)) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  });
+} catch { /* geen window */ }
+
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { installLiveChat } from '@/presentation/store/installLiveChat'
-import { installWhisperVoice } from '@/presentation/store/installWhisperVoice'
+import { installWhisperVoice, installWhisperVoiceSendGuard } from '@/presentation/store/installWhisperVoice'
+import { installOpenAIRealtimeVoice } from '@/presentation/store/installOpenAIRealtimeVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
+import { installTierRouter } from '@/presentation/store/installTierRouter'
+import { installGesprekSync } from '@/presentation/store/installGesprekSync'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 import { installContinuousMemory } from '@/infrastructure/persistence/continuousMemoryService'
@@ -32,12 +50,24 @@ import { installMemoryFlushHooks } from '@/infrastructure/persistence/memoryReco
 installLiveChat();
 // Voice conversation: Whisper STT + listen→reply→listen loop (until mic stop)
 installWhisperVoice();
-// Fish Audio: default identity voice id + TTS provider
+// Wis de dode TTS-picker (Fish/ElevenLabs) zodat geen statusrij hem terugleest
 installFishVoice();
-// Stable identity: short Gemini cascade for simple chat + Fish TTS on replies
+// Stable identity: korte cascade voor simpele chat; stem blijft George
 installStableChat();
+// Jarvis-route: tier 1/2/3 vóór de grote cascade. Ná stable, vóór de
+// send-guard: typed send hangt Whisper nog steeds op, en fallback valt
+// terug op het pad dat hierboven al staat.
+installTierRouter();
+installGesprekSync();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
+// Typed send hangt een lopende Whisper-listen op (na de andere wrappers)
+installWhisperVoiceSendGuard();
+// Native realtime voice: one OpenAI Realtime speech-to-speech call — hears,
+// decides and speaks in the same connection, tools call the existing job/
+// memory/approval stack. Installed LAST over the proven Whisper loop, which
+// stays the automatic fallback when the realtime call cannot start.
+installOpenAIRealtimeVoice();
 // WebXR / Maps3D entry from sphere map projection
 installSphereXR();
 // Continuous memory: every session + chat turns land in the right stores

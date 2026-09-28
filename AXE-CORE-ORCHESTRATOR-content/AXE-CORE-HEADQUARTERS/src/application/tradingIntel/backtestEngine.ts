@@ -10,7 +10,7 @@
  */
 import { metaApiGetHistoricalCandles, metaApiGetHistoricalCandlesPaged, type MetaApiCandle } from '@/infrastructure/gateways/metaApiMarketData';
 import { fetchHistoricalCandles } from '@/infrastructure/gateways/axeCoreApiService';
-import { smaSeries, rsiSeries } from '@/presentation/components/trading/companion/indicatorMath';
+import { smaSeries, rsiSeries } from '@/domain/tradingIntel/indicatorMath';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries, type StrategySignal } from '@/application/tradingIntel/strategySignals';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
@@ -31,6 +31,8 @@ export interface BacktestTrade {
 export interface BacktestResult {
   symbol: string;
   strategy: BacktestStrategyId;
+  /** Op welke timeframe getest is — ontbrak, dus een bewaarde run zei het niet. */
+  timeframe?: string;
   candleCount: number;
   trades: BacktestTrade[];
   totalTrades: number;
@@ -55,7 +57,7 @@ const WARMUP_BARS = 51;
  * they replay the exact same candles instead of two independently-fetched
  * (and potentially inconsistent) series.
  */
-async function loadBacktestSeries(
+export async function loadBacktestSeries(
   symbol: string,
   timeframe: string,
   limit: number,
@@ -97,16 +99,25 @@ async function loadBacktestSeries(
       };
     }
   }
+  return { ok: true, candles, series: buildSeriesFromCandles(candles), source };
+}
+
+/**
+ * De StrategySeries die strategySignals leest, uit candles — één definitie
+ * voor de signaaltest, de zelftest en de Strategy Lab (die uit de cache leest).
+ */
+export function buildSeriesFromCandles(
+  candles: ReadonlyArray<{ time: string; open: number; high: number; low: number; close: number; tickVolume?: number; volume?: number }>,
+): StrategySeries {
   const closes = candles.map(c => c.close);
   // volumetric-ob needs real volume — MetaAPI candles carry tickVolume/volume,
   // TwelveData's fallback always has a `volume` field (often 0 for FX, which
   // the strategy's own averaging naturally treats as "no signal" rather than
   // a fabricated one). Only attach the series when every bar actually has a
   // value at all.
-  const volumeOf = (c: (typeof candles)[number]): number | undefined =>
-    'tickVolume' in c ? (c.tickVolume ?? c.volume) : c.volume;
+  const volumeOf = (c: (typeof candles)[number]): number | undefined => c.tickVolume ?? c.volume;
   const volumes = candles.every(c => volumeOf(c) != null) ? candles.map(c => volumeOf(c) as number) : undefined;
-  const series: StrategySeries = {
+  return {
     closes,
     highs: candles.map(c => c.high),
     lows: candles.map(c => c.low),
@@ -117,7 +128,6 @@ async function loadBacktestSeries(
     sma50: smaSeries(closes, 50),
     rsi14: rsiSeries(closes, 14),
   };
-  return { ok: true, candles, series, source };
 }
 
 /**
@@ -228,6 +238,7 @@ export async function runBacktest(input: {
   const result: BacktestResult = {
     symbol,
     strategy: input.strategy,
+    timeframe,
     ...metrics,
     note:
       (DISTINCT_STRATEGIES.has(input.strategy)
@@ -287,6 +298,7 @@ export async function runComboBacktest(input: {
   const result: BacktestResult = {
     symbol,
     strategy: comboId,
+    timeframe,
     ...metrics,
     note:
       `Confluence backtest — requires ${minAgree}/${strategies.length} of [${strategies.join(', ')}] to agree on direction at the same bar.` +
@@ -345,6 +357,25 @@ export interface SavedStrategyRun {
   totalTrades: number;
   profitFactor: number;
   maxDrawdownPct: number;
+  /**
+   * Genoeg om de run later te heropenen. Bewaarde runs hielden alleen
+   * samenvattende cijfers; de trades en de equitycurve waren weg zodra je een
+   * andere strategie aanklikte. Optioneel: runs van vóór dit veld hebben het niet.
+   */
+  timeframe?: string;
+  candleCount?: number;
+  trades?: BacktestTrade[];
+  equityCurve?: number[];
+}
+
+/** Hooguit `max` punten, met het laagste punt per emmer en het laatste punt. */
+function thinCurve(curve: number[], max = 400): number[] {
+  if (curve.length <= max) return curve;
+  const size = Math.ceil(curve.length / max);
+  const out: number[] = [];
+  for (let k = 0; k < curve.length; k += size) out.push(Math.min(...curve.slice(k, k + size)));
+  out.push(curve[curve.length - 1]);
+  return out;
 }
 
 const SAVED_STRATEGIES_KEY = 'axe_trading_saved_strategies';
@@ -366,6 +397,10 @@ export async function saveStrategyRun(result: BacktestResult, note?: string): Pr
     totalTrades: result.totalTrades,
     profitFactor: result.profitFactor,
     maxDrawdownPct: result.maxDrawdownPct,
+    timeframe: result.timeframe,
+    candleCount: result.candleCount,
+    trades: result.trades.slice(-1000),
+    equityCurve: thinCurve(result.equityCurve),
   };
   const next = [entry, ...existing].slice(0, 100);
   await saveSetting(SAVED_STRATEGIES_KEY, next);

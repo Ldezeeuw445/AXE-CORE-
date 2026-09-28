@@ -1,5 +1,5 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export interface MCPServer {
   id: string;
@@ -17,7 +17,6 @@ const DEFAULT_SERVERS: MCPServer[] = [
   { id: 'openrouter', name: 'OpenRouter MCP',  category: 'ai',      status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://openrouter.ai/docs/features/mcp',              envKey: 'OPENROUTER_API_KEY' },
   { id: 'railway',    name: 'Railway',         category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://docs.railway.app/mcp',                       envKey: 'RAILWAY_TOKEN' },
   { id: 'resend',     name: 'Resend',          category: 'comms',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://resend.com/docs/mcp',                         envKey: 'RESEND_API_KEY' },
-  { id: 'vercel',     name: 'Vercel',          category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://vercel.com/docs/mcp',                         envKey: 'VERCEL_TOKEN' },
   { id: 'cloudflare', name: 'Cloudflare',      category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://developers.cloudflare.com/mcp',               envKey: 'CF_API_TOKEN' },
   { id: 'github',     name: 'GitHub',          category: 'dev',     status: 'not-linked', latency: null, version: '1.5.0', docsUrl: 'https://github.com/modelcontextprotocol/servers',     envKey: 'GITHUB_TOKEN' },
   { id: 'filesystem', name: 'Filesystem',      category: 'dev',     status: 'not-linked', latency: null, version: '1.2.0', docsUrl: 'https://modelcontextprotocol.io',                    envKey: '' },
@@ -43,26 +42,6 @@ function coerceStatus(status: string | null | undefined): MCPServer['status'] {
   if (status === 'active') return 'online';
   if (status === 'configured') return 'standby';
   return 'not-linked';
-}
-
-function toDbRow(server: MCPServer) {
-  return {
-    name: server.id,
-    display_name: server.name,
-    description: `${server.category} MCP server`,
-    transport: 'stdio',
-    command: server.envKey ? `npx ${server.id}` : null,
-    url: null,
-    capabilities: [server.category],
-    status: server.status === 'online' ? 'active' : server.status === 'standby' ? 'configured' : 'not_configured',
-    metadata: {
-      category: server.category,
-      version: server.version ?? null,
-      latency: server.latency ?? null,
-      docsUrl: server.docsUrl,
-      envKey: server.envKey ?? null,
-    },
-  };
 }
 
 function fromDbRow(row: CoreMcpRow): MCPServer {
@@ -98,10 +77,6 @@ function loadLocalMcpServers(): MCPServer[] {
   }
 }
 
-export function getDefaultMcpServers(): MCPServer[] {
-  return DEFAULT_SERVERS;
-}
-
 export async function loadMcpServers(): Promise<MCPServer[]> {
   const fallback = await loadSetting<MCPServer[]>('axe_mcp_servers', DEFAULT_SERVERS);
   const local = loadLocalMcpServers();
@@ -118,19 +93,4 @@ export async function loadMcpServers(): Promise<MCPServer[]> {
     // fall back to local cache
   }
   return mergeWithDefaults(local.length ? local : fallback);
-}
-
-export async function saveMcpServers(servers: MCPServer[]): Promise<void> {
-  const merged = mergeWithDefaults(servers);
-  localStorage.setItem('axe_mcp_servers', JSON.stringify(merged));
-  void saveSetting('axe_mcp_servers', merged);
-
-  const sb = getSupabase();
-  if (!sb) return;
-  try {
-    const rows = merged.map(toDbRow);
-    await sb.from('core_mcp_servers').upsert(rows, { onConflict: 'name' });
-  } catch {
-    // Ignore, local persistence still succeeded.
-  }
 }

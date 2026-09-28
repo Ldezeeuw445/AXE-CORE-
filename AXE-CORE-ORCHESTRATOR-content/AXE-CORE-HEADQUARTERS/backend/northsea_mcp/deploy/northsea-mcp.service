@@ -1,0 +1,36 @@
+# NorthSea Commodity Partners MCP — systemd-unit op de API-box (212.227.91.79).
+# Eigen gebruiker, eigen venv, alleen de state-map schrijfbaar. Eén worker: de
+# limieten en idempotentie delen één SQLite-bestand, en MCP-verkeer is licht.
+[Unit]
+Description=NorthSea Commodity Partners MCP (remote MCP facade)
+After=network-online.target axe-core-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=northsea-mcp
+Group=northsea-mcp
+WorkingDirectory=/opt/northsea-mcp/app
+EnvironmentFile=/opt/northsea-mcp/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/northsea-mcp/venv/bin/uvicorn --factory northsea_mcp.app:create --host 127.0.0.1 --port 8040 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1 --timeout-graceful-shutdown 20
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/opt/northsea-mcp/state
+MemoryMax=512M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

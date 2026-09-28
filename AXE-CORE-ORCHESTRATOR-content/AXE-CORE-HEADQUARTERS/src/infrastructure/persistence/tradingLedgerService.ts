@@ -23,6 +23,12 @@ import {
   type GlobalMemoryEntry,
 } from '@/infrastructure/persistence/globalMemoryService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import {
+  ALL_EVIDENCE,
+  EVIDENCE_ENVS,
+  type EvidenceEnv,
+  type EvidencePolicy,
+} from '@/domain/tradingIntel/evidence';
 
 const CATEGORY = 'trading_memory';
 const PREFIX = 'tl:';
@@ -38,6 +44,16 @@ export interface LedgerBacktestPrior {
   timeframe: string;
   bars: number;
   at: string;
+}
+
+/** De live-tellers, los van waar ze vandaan komen. */
+export interface LiveCounters {
+  trades: number;
+  wins: number;
+  losses: number;
+  grossWinPct: number;
+  grossLossPct: number;
+  netReturnPct: number;
 }
 
 export interface LedgerEntry {
@@ -73,6 +89,13 @@ export interface LedgerEntry {
   netReturnPct: number;
   lastTradeAt?: string;
   firstTradeAt?: string;
+  /**
+   * Dezelfde tellers per omgeving (evidence.ts). De tellers hierboven blijven
+   * het totaal over alles, zodat elk bestaand scherm hetzelfde getal toont;
+   * het deel van het totaal dat hier niet in staat is 'legacy' — van vóór de
+   * omgevingen — en wordt nooit achteraf een omgeving toegekend.
+   */
+  byEnv?: Partial<Record<EvidenceEnv, LiveCounters>>;
   // ── latest self-test (backtest) prior ──
   backtest?: LedgerBacktestPrior;
   updatedAt: string;
@@ -90,6 +113,47 @@ export interface LedgerStats extends LedgerEntry {
   confidence: number;
   /** False when the live counters are impossible and were ignored for ranking. */
   liveTrusted: boolean;
+  /** Welk bewijs deze cijfers dragen, en hoeveel trades er per soort achter zitten. */
+  evidence: {
+    policy: string;
+    /** Trades die in de ranking meetellen onder dit beleid. */
+    counted: number;
+    byEnv: Partial<Record<EvidenceEnv, number>>;
+    legacy: number;
+  };
+}
+
+const ZERO: LiveCounters = { trades: 0, wins: 0, losses: 0, grossWinPct: 0, grossLossPct: 0, netReturnPct: 0 };
+
+function addCounters(a: LiveCounters, b: LiveCounters, sign = 1): LiveCounters {
+  return {
+    trades: a.trades + sign * b.trades,
+    wins: a.wins + sign * b.wins,
+    losses: a.losses + sign * b.losses,
+    grossWinPct: a.grossWinPct + sign * b.grossWinPct,
+    grossLossPct: a.grossLossPct + sign * b.grossLossPct,
+    netReturnPct: a.netReturnPct + sign * b.netReturnPct,
+  };
+}
+
+/** Het ongelabelde deel: totaal min alles wat een omgeving heeft. Nooit negatief. */
+export function legacyCounters(e: LedgerEntry): LiveCounters {
+  let rest: LiveCounters = { ...ZERO, trades: e.trades, wins: e.wins, losses: e.losses, grossWinPct: e.grossWinPct, grossLossPct: e.grossLossPct, netReturnPct: e.netReturnPct };
+  for (const env of EVIDENCE_ENVS) {
+    const c = e.byEnv?.[env];
+    if (c) rest = addCounters(rest, c, -1);
+  }
+  return rest.trades > 0 ? rest : { ...ZERO };
+}
+
+/** De tellers die onder dit beleid meetellen. */
+export function countersFor(e: LedgerEntry, policy: EvidencePolicy = ALL_EVIDENCE): LiveCounters {
+  let sum: LiveCounters = policy.includeLegacy ? legacyCounters(e) : { ...ZERO };
+  for (const env of policy.envs) {
+    const c = e.byEnv?.[env];
+    if (c) sum = addCounters(sum, c);
+  }
+  return sum;
 }
 
 function normPair(p: string): string {
@@ -185,14 +249,23 @@ export const MAX_PLAUSIBLE_RETURN_PER_TRADE = 0.5;
  * worth ranking on, and throwing away evidence because part of it is wrong is
  * how you lose the part that was right.
  */
-export function liveRecordIsPlausible(e: LedgerEntry): boolean {
+export function liveRecordIsPlausible(e: LiveCounters): boolean {
   if (e.trades <= 0) return true;
   const perTrade = Math.max(Math.abs(e.grossWinPct), Math.abs(e.grossLossPct)) / e.trades;
   return perTrade <= MAX_PLAUSIBLE_RETURN_PER_TRADE;
 }
 
-/** Derive read-side stats + a ranking metric from a raw entry. */
-export function ledgerStats(e: LedgerEntry): LedgerStats {
+/**
+ * Derive read-side stats + a ranking metric from a raw entry.
+ *
+ * `policy` bepaalt welk live-bewijs meetelt. Zonder beleid: alles, zoals het
+ * altijd was. Een live/funded account geeft evidencePolicyFor('live') mee, en
+ * rekent dan alleen op live/funded uitkomsten — demo, papier en legacy tellen
+ * voor dat account niet als bewijs.
+ */
+export function ledgerStats(entry: LedgerEntry, policy: EvidencePolicy = ALL_EVIDENCE): LedgerStats {
+  const counted = countersFor(entry, policy);
+  const e: LedgerEntry = { ...entry, ...counted };
   const winRate = e.trades > 0 ? e.wins / e.trades : 0;
   const avgWinPct = e.wins > 0 ? e.grossWinPct / e.wins : 0;
   const avgLossPct = e.losses > 0 ? e.grossLossPct / e.losses : 0;
@@ -213,7 +286,15 @@ export function ledgerStats(e: LedgerEntry): LedgerStats {
   // having any backtest at all.
   const confidence = (trusted ? Math.min(1, e.trades / 30) * 0.8 : 0) + (e.backtest ? 0.2 : 0);
 
-  return { ...e, winRate, avgWinPct, avgLossPct, profitFactor, expectancy, confidence, liveTrusted: trusted };
+  const byEnv: Partial<Record<EvidenceEnv, number>> = {};
+  for (const env of EVIDENCE_ENVS) {
+    const c = entry.byEnv?.[env];
+    if (c?.trades) byEnv[env] = c.trades;
+  }
+  return {
+    ...e, winRate, avgWinPct, avgLossPct, profitFactor, expectancy, confidence, liveTrusted: trusted,
+    evidence: { policy: policy.label, counted: counted.trades, byEnv, legacy: legacyCounters(entry).trades },
+  };
 }
 
 function parseEntry(row: GlobalMemoryEntry): LedgerEntry | null {
@@ -287,19 +368,19 @@ export async function getLedger(pair?: string, run?: string): Promise<LedgerStat
   let filtered = pair ? all.filter(e => e.pair === normPair(pair)) : all;
   if (run !== undefined) filtered = filtered.filter(e => e.run === normRun(run));
   return filtered
-    .map(ledgerStats)
+    .map(e => ledgerStats(e))
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
 export async function getLedgerEntry(
-  pair: string, strategy: string, run?: string,
+  pair: string, strategy: string, run?: string, policy: EvidencePolicy = ALL_EVIDENCE,
 ): Promise<LedgerStats | null> {
   const all = await loadAll();
   const found = all.find(e =>
     e.pair === normPair(pair)
     && e.strategy === normStrategy(strategy)
     && (run === undefined || e.run === normRun(run)));
-  return found ? ledgerStats(found) : null;
+  return found ? ledgerStats(found, policy) : null;
 }
 
 /** Record one CLOSED live trade's outcome against its (pair, strategy) bucket. */
@@ -313,6 +394,11 @@ export async function recordLedgerTrade(input: {
   timeframe?: string;
   /** Realized return as a fraction of the account, e.g. +0.012 = +1.2%. */
   returnPct: number;
+  /**
+   * Waar deze uitkomst vandaan komt. Weggelaten = 'unknown' — expliciet
+   * onbekend, en dus nooit als live/funded bewijs gerekend.
+   */
+  environment?: EvidenceEnv;
 }): Promise<void> {
   const all = await loadAll();
   const existing = all.find(e =>
@@ -327,6 +413,13 @@ export async function recordLedgerTrade(input: {
   if (r > 0) { e.wins += 1; e.grossWinPct += r; }
   else if (r < 0) { e.losses += 1; e.grossLossPct += r; }
   e.netReturnPct += r;
+  const env: EvidenceEnv = input.environment ?? 'unknown';
+  const c = { ...ZERO, ...(e.byEnv?.[env] ?? {}) };
+  c.trades += 1;
+  if (r > 0) { c.wins += 1; c.grossWinPct += r; }
+  else if (r < 0) { c.losses += 1; c.grossLossPct += r; }
+  c.netReturnPct += r;
+  e.byEnv = { ...(e.byEnv ?? {}), [env]: c };
   const now = new Date().toISOString();
   e.lastTradeAt = now;
   if (!e.firstTradeAt) e.firstTradeAt = now;
@@ -393,6 +486,8 @@ export async function rankStrategiesForPair(
    * answer. Defaults to run-1 so every existing caller keeps its behaviour.
    */
   run: string = DEFAULT_RUN,
+  /** Welk live-bewijs meetelt; zie evidencePolicyFor. Standaard alles. */
+  policy: EvidencePolicy = ALL_EVIDENCE,
 ): Promise<StrategyRanking[]> {
   const all = await loadAll();
   const EXPLORE_SCORE = 0.0005; // tiny: below any real positive edge, above a proven negative one
@@ -408,7 +503,7 @@ export async function rankStrategiesForPair(
         && e.pair === normPair(pair)
         && e.strategy === normStrategy(strategy)
         && e.timeframe === normTf(timeframe));
-      const stats = raw ? ledgerStats(raw) : null;
+      const stats = raw ? ledgerStats(raw, policy) : null;
       const tested = !!stats && (stats.trades > 0 || !!stats.backtest);
       const score = tested && stats ? stats.expectancy : EXPLORE_SCORE;
       ranked.push({ strategy, timeframe: normTf(timeframe), stats, score, tested });

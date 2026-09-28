@@ -40,6 +40,13 @@ export interface GlobalMemoryStats {
    *  metadata.agentId are counted here — see the loop below for why that
    *  means they are subtracted from their old bucket, not double-counted. */
   agentCounts: Record<string, number>;
+  /** Corrective round 4, Fix E: the same global/RAG/Obsidian split
+   *  `NeuralMemorySystem`'s own hook already exposes for MemoryDock's "Memory
+   *  Capacity" column (round 1's Fix 7) — this hook loaded all three sources
+   *  all along, it just never handed their individual sizes back. Added here
+   *  so Neural's sidebar can show the same real breakdown instead of
+   *  reinventing it. */
+  sourceCounts: { global: number; rag: number; notes: number };
   total: number;
   connections: number;
   lastUpdatedAt: string | null;
@@ -76,6 +83,7 @@ export function timeAgo(ts: number): string {
 export function useGlobalMemoryStats(): GlobalMemoryStats {
   const [hubCounts, setHubCounts] = useState<Record<HubId, number>>(EMPTY_COUNTS);
   const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
+  const [sourceCounts, setSourceCounts] = useState({ global: 0, rag: 0, notes: 0 });
   const [total, setTotal] = useState(0);
   const [connections, setConnections] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
@@ -143,6 +151,7 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
       }
       setHubCounts(counts);
       setAgentCounts(agents);
+      setSourceCounts({ global: globals.length, rag: rag.length, notes: notes.length });
       setTotal(counted?.ok ? counted.total : globals.length + rag.length + notes.length);
       // Wikilinks are the only genuine edges we hold; counting anything else
       // would just be a number that moves.
@@ -229,5 +238,5 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
     return () => unsubs.forEach(u => u());
   }, [pushStream]);
 
-  return { hubCounts, agentCounts, total, connections, lastUpdatedAt, integrityPct, stream, loading };
+  return { hubCounts, agentCounts, sourceCounts, total, connections, lastUpdatedAt, integrityPct, stream, loading };
 }

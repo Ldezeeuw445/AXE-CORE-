@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   chatModelKeuzes, providersMetSleutel, modelLabel, isActief,
-  merkVan, merkenMetKeuzes, keuzesVanMerk, actiefMerk,
+  merkVan, merkenMetKeuzes, keuzesVanMerk, actiefMerk, paidApiKeuzes, workerKeuzes,
 } from '@/domain/chatModelKeuzes';
 import type { ProviderId } from '@/domain/providers';
 
-const ALLE = ['anthropic', 'openai', 'google', 'ollama', 'groq'] as ProviderId[];
+const ALLE = ['anthropic', 'openai', 'google', 'ollama', 'groq', 'abonnement'] as ProviderId[];
 
 describe('welke providers meedoen', () => {
   it('alleen die een sleutel hebben', () => {
@@ -16,8 +16,18 @@ describe('welke providers meedoen', () => {
     expect(p).not.toContain('openai');
   });
 
-  it('ollama telt mee zonder sleutel', () => {
-    expect(providersMetSleutel({}, ALLE)).toContain('ollama');
+  it('nooit Ollama, ook niet als het ergens een "sleutel" heeft', () => {
+    // AXE's brein-keuze mag nooit Ollama zijn (CONFIRMED ARCHITECTURE, 17 sep) --
+    // een dode lokale default maakte AXE eerder stil "unavailable" (zie
+    // commit 4a01aa70 op providers.ts).
+    expect(providersMetSleutel({ ollama: { key: 'x' } }, ALLE)).not.toContain('ollama');
+    expect(providersMetSleutel({}, ALLE)).not.toContain('ollama');
+  });
+
+  it('nooit de abonnementsweg, ook niet als het een "sleutel" heeft', () => {
+    // De abonnementsweg is voor de tier-1 managers (agentMotoren.ts), niet
+    // voor AXE's eigen model-antwoord.
+    expect(providersMetSleutel({ abonnement: { key: 'x' } }, ALLE)).not.toContain('abonnement');
   });
 
   it('een lege sleutel telt niet als een sleutel', () => {
@@ -30,17 +40,14 @@ describe('welke providers meedoen', () => {
 });
 
 describe('de lijst', () => {
-  it('zet het abonnement bovenaan', () => {
-    // De enige weg die niets per token kost hoort bovenaan bij een keuze die je
-    // vaak maakt.
-    const lijst = chatModelKeuzes({ anthropic: { key: 'x' } }, ALLE);
-    expect(lijst[0].opAbonnement).toBe(true);
+  it('biedt nooit de abonnementsweg aan', () => {
+    const lijst = chatModelKeuzes({}, ALLE);
+    expect(lijst.some(k => k.provider === 'abonnement')).toBe(false);
   });
 
-  it('biedt het abonnement ook zonder enige sleutel aan', () => {
-    // Die weg HEEFT geen sleutel, dus hij kan er ook niet een missen.
-    const lijst = chatModelKeuzes({}, ALLE);
-    expect(lijst.some(k => k.opAbonnement)).toBe(true);
+  it('biedt nooit Ollama aan, met of zonder sleutel', () => {
+    expect(chatModelKeuzes({}, ALLE).some(k => k.provider === 'ollama')).toBe(false);
+    expect(chatModelKeuzes({ ollama: { key: 'x' } }, ALLE).some(k => k.provider === 'ollama')).toBe(false);
   });
 
   it('laat een provider zonder sleutel weg', () => {
@@ -62,11 +69,6 @@ describe('de lijst', () => {
 });
 
 describe('labels', () => {
-  it('maakt van een motornaam iets leesbaars', () => {
-    expect(modelLabel('abonnement' as ProviderId, 'codex')).toContain('ChatGPT');
-    expect(modelLabel('abonnement' as ProviderId, 'claude')).toContain('Claude');
-  });
-
   it('laat een echt model-id staan zoals het is', () => {
     // Dat is wat de provider verwacht; er iets moois van maken zou betekenen dat
     // je het ergens weer terug moet vertalen.
@@ -90,15 +92,42 @@ describe('welke actief is', () => {
   });
 });
 
+describe('tier-2 (Agents-tab workers): mag wél Ollama, anders dan AXE zelf', () => {
+  it('zet Ollama vooraan als het meedoet in de providerlijst', () => {
+    const lijst = workerKeuzes({}, ALLE);
+    expect(lijst[0].provider).toBe('ollama');
+  });
+
+  it('laat Ollama weg als het niet in de providerlijst zit', () => {
+    const zonderOllama = ['anthropic', 'openai'] as ProviderId[];
+    const lijst = workerKeuzes({ anthropic: { key: 'x' } }, zonderOllama);
+    expect(lijst.some(k => k.provider === 'ollama')).toBe(false);
+  });
+
+  it('bevat verder dezelfde keuzes als chatModelKeuzes', () => {
+    const conns = { anthropic: { key: 'x' } };
+    const basis = chatModelKeuzes(conns, ALLE);
+    const workers = workerKeuzes(conns, ALLE).filter(k => k.provider !== 'ollama');
+    expect(workers).toEqual(basis);
+  });
+});
+
+describe('tier-3 (AXE Intel / AXE Companion): alleen betaalde Anthropic/OpenAI', () => {
+  it('laat Google, Groq en de rest weg, ook met een sleutel', () => {
+    const lijst = paidApiKeuzes({ anthropic: { key: 'x' }, openai: { key: 'x' }, google: { key: 'x' }, groq: { key: 'x' } }, ALLE);
+    expect(lijst.every(k => k.provider === 'anthropic' || k.provider === 'openai')).toBe(true);
+    expect(lijst.some(k => k.provider === 'google')).toBe(false);
+  });
+
+  it('nooit lager dan gpt-4o-mini in de OpenAI-lijst', () => {
+    const lijst = paidApiKeuzes({ openai: { key: 'x' } }, ALLE).filter(k => k.provider === 'openai');
+    expect(lijst.some(k => k.model === 'gpt-4o-mini')).toBe(true);
+    expect(lijst.some(k => /gpt-3|gpt-4o-nano|gpt-4-turbo-mini/.test(k.model))).toBe(false);
+  });
+});
+
 describe('merken', () => {
   const alles = chatModelKeuzes({ anthropic: { key: 'x' }, openai: { key: 'x' } }, ALLE);
-
-  it('deelt de abonnementsweg op naar merk, niet naar provider', () => {
-    // Eén provider ('abonnement') draagt twee merken: codex is ChatGPT, claude
-    // is Claude. Op provider alleen indelen zou ze allebei onder één kop zetten.
-    expect(merkVan({ provider: 'abonnement' as ProviderId, model: 'codex', label: '', toelichting: '' })).toBe('chatgpt');
-    expect(merkVan({ provider: 'abonnement' as ProviderId, model: 'claude', label: '', toelichting: '' })).toBe('claude');
-  });
 
   it('zet de API-providers onder hun eigen merk', () => {
     expect(merkVan({ provider: 'anthropic' as ProviderId, model: 'claude-sonnet-5', label: '', toelichting: '' })).toBe('claude');
@@ -112,17 +141,16 @@ describe('merken', () => {
 
   it('laat een merk weg dat niets te kiezen heeft', () => {
     // Een knop die niets oplevert probeer je één keer en wantrouw je daarna.
-    // Google/Groq hebben hier geen sleutel, dus 'overig' hoort te ontbreken --
-    // op ollama na, die altijd meedoet. Daarom testen we met een lijst zonder.
-    const zonderOllama = ['anthropic', 'openai'] as ProviderId[];
-    const m = merkenMetKeuzes(chatModelKeuzes({ anthropic: { key: 'x' } }, zonderOllama));
+    // Zonder Ollama-uitzondering blijft 'overig' nu ook gewoon leeg zonder
+    // sleutel.
+    const m = merkenMetKeuzes(chatModelKeuzes({ anthropic: { key: 'x' } }, ALLE));
     expect(m).not.toContain('overig');
     expect(m).toContain('claude');
   });
 
-  it('zet binnen een merk het abonnement bovenaan', () => {
+  it('geeft elke keuze binnen een merk terug', () => {
     const claude = keuzesVanMerk(alles, 'claude');
-    expect(claude[0].opAbonnement).toBe(true);
+    expect(claude.every(k => k.provider === 'anthropic')).toBe(true);
   });
 
   it('geen primair slot betekent native', () => {

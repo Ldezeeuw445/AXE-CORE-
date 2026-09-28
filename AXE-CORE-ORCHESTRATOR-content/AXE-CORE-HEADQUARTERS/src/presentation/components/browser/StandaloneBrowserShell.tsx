@@ -5,6 +5,7 @@ import { BrowserUnifiedSidebar } from '@/presentation/components/browser/Browser
 import type { BrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
 
 import { multiMonitorAvailable, openStandaloneBrowser } from '@/infrastructure/gateways/windowManagerService';
+import { StandaloneAxeParticle } from '@/presentation/components/browser/StandaloneAxeParticle';
 
 interface StandaloneBrowserShellProps {
   children: ReactNode;
@@ -33,6 +34,8 @@ export function StandaloneBrowserShell({
           AXE Browser Demo — mock AI, geen login
         </div>
       )}
+
+      <StandaloneAxeParticle />
 
       <BrowserUnifiedSidebar
         standalone

@@ -9,7 +9,11 @@
  * om iets uit te laten komen, en dan hoort de app zich te gedragen zoals hij
  * altijd deed.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { useUIStore } from '@/presentation/store/uiStore';
+import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
 /** Binnen deze afstand van de rand gaat een rail open. */
 const ZONE = 34;
@@ -18,30 +22,117 @@ const ZONE = 34;
 const BREEDTE = 302 + 40;
 
 export function AxeShellChrome() {
+  const coreView = useCoreViewStore(s => s.coreView);
+
+  /* Corrective round 5, Fix 1: `meetHoogte`/`meetMidden` leven in de
+     mount-effect hieronder (deps `[]`) en zijn dus alleen als closure
+     bereikbaar. De tab-wissel-effect verderop moet DEZELFDE functies kunnen
+     aanroepen -- niet een kopie -- anders meet hij met verouderde
+     querySelector-resultaten uit het allereerste render. Refs geven dat
+     tweede effect een stabiele handle naar de actuele functies zonder de
+     mount-effect zelf te herstarten bij elke tab-wissel. */
+  const meetHoogteRef = useRef<() => void>(() => {});
+  const meetMiddenRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     const wortel = document.documentElement;
 
     /* ── De rails ──────────────────────────────────────────────────────── */
     const meetMuis = (x: number) => {
       const w = window.innerWidth;
-      wortel.dataset.railL = x <= (wortel.dataset.railL === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
-      wortel.dataset.railR = x >= w - (wortel.dataset.railR === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
+      const linksVast = wortel.dataset.railPinL === 'aan' || wortel.dataset.railVastL === 'aan';
+      const rechtsVast = wortel.dataset.railPinR === 'aan' || wortel.dataset.railVastR === 'aan';
+      if (!linksVast) wortel.dataset.railL = x <= (wortel.dataset.railL === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
+      if (!rechtsVast) wortel.dataset.railR = x >= w - (wortel.dataset.railR === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
     };
     const beweeg = (e: PointerEvent) => { if (e.pointerType !== 'touch') meetMuis(e.clientX); };
-    const verlaat = () => { wortel.dataset.railL = 'dicht'; wortel.dataset.railR = 'dicht'; };
+    const verlaat = () => {
+      if (wortel.dataset.railPinL !== 'aan' && wortel.dataset.railVastL !== 'aan') wortel.dataset.railL = 'dicht';
+      if (wortel.dataset.railPinR !== 'aan' && wortel.dataset.railVastR !== 'aan') wortel.dataset.railR = 'dicht';
+    };
 
-    /* Op een aanraakscherm bestaat "muis aan de rand" niet, dus daar reageert
-       hij op een veeg vanaf de zijkant. */
-    let start: number | null = null;
-    const raakAan = (e: TouchEvent) => { start = e.touches[0]?.clientX ?? null; };
+    /* Touch:
+       - telefoon: edge-swipes zijn UITSLUITEND voor de twee AXE-zijlades.
+         De hamburger/navigatie is tap-only (MobileNav), dus links kan nooit
+         meer tegelijk Tools + navigatie openen.
+       - desktop/tablet-touch: behoud het bestaande rail-gedrag.
+
+       We wachten op een duidelijke horizontale beweging en vergelijken die met
+       de verticale afstand. Zo steelt een normale scroll in de chat geen drawer. */
+    type RaakDoel = 'open-l' | 'open-r' | 'close-l' | 'close-r' | 'legacy' | null;
+    let raakStartX: number | null = null;
+    let raakStartY: number | null = null;
+    let raakDoel: RaakDoel = null;
+    let raakUitgevoerd = false;
+
+    const raakAan = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const x = t?.clientX ?? 0;
+      const y = t?.clientY ?? 0;
+      const w = window.innerWidth;
+
+      raakStartX = x;
+      raakStartY = y;
+      raakUitgevoerd = false;
+
+      if (w < 768) {
+        const ui = useUIStore.getState();
+        if (ui.mobileNavOpen) raakDoel = null;
+        else if (ui.leftDrawerOpen) raakDoel = 'close-l';
+        else if (ui.rightDrawerOpen) raakDoel = 'close-r';
+        else if (x <= ZONE) raakDoel = 'open-l';
+        else if (x >= w - ZONE) raakDoel = 'open-r';
+        else raakDoel = null;
+      } else {
+        raakDoel = 'legacy';
+      }
+    };
+
     const raakBeweeg = (e: TouchEvent) => {
-      if (start === null) return;
-      const x = e.touches[0]?.clientX ?? 0, w = window.innerWidth;
-      if (start < ZONE && x > start + 20) wortel.dataset.railL = 'open';
-      if (start > w - ZONE && x < start - 20) wortel.dataset.railR = 'open';
+      if (raakStartX === null || raakStartY === null || raakDoel === null || raakUitgevoerd) return;
+      const t = e.touches[0];
+      const x = t?.clientX ?? raakStartX;
+      const y = t?.clientY ?? raakStartY;
+      const dx = x - raakStartX;
+      const dy = y - raakStartY;
+
+      // Eerst bewijzen dat dit een horizontale swipe is, geen verticale scroll.
+      if (Math.abs(dx) < 28 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+
+      if (window.innerWidth < 768) {
+        const ui = useUIStore.getState();
+        if (raakDoel === 'open-l' && dx > 0) {
+          ui.setRightDrawerOpen(false);
+          ui.setLeftDrawerOpen(true);
+          raakUitgevoerd = true;
+        } else if (raakDoel === 'open-r' && dx < 0) {
+          ui.setLeftDrawerOpen(false);
+          ui.setRightDrawerOpen(true);
+          raakUitgevoerd = true;
+        } else if (raakDoel === 'close-l' && dx < 0) {
+          ui.setLeftDrawerOpen(false);
+          raakUitgevoerd = true;
+        } else if (raakDoel === 'close-r' && dx > 0) {
+          ui.setRightDrawerOpen(false);
+          raakUitgevoerd = true;
+        }
+        return;
+      }
+
+      // Bestaande rail-gesture buiten de telefoon-layout.
+      const w = window.innerWidth;
+      if (raakStartX < ZONE && x > raakStartX + 20) wortel.dataset.railL = 'open';
+      if (raakStartX > w - ZONE && x < raakStartX - 20) wortel.dataset.railR = 'open';
       if (x > BREEDTE && x < w - BREEDTE) verlaat();
     };
-    const raakLos = () => { start = null; };
+
+    const raakLos = () => {
+      raakStartX = null;
+      raakStartY = null;
+      raakDoel = null;
+      raakUitgevoerd = false;
+    };
 
     /* ── De hoogtes ────────────────────────────────────────────────────────
        De rails en de sterrenlucht stoppen boven de onderste chroom. Die hoogte
@@ -76,7 +167,12 @@ export function AxeShellChrome() {
         if (r.height > OPEN_VANAF) {
           const hoofd = document.querySelector('main');
           const top = hoofd ? hoofd.getBoundingClientRect().top : 0;
-          const vak = Math.max(0, Math.round(r.top - top));
+          /* De bol staat gecentreerd in dit vak, dus het vak iets korter maken
+             tilt hem op. Gevraagd op 16 september: meer lucht tussen de core en
+             de composer -- ze stonden zo dicht op elkaar dat de bol op de plaat
+             leek te rusten in plaats van erboven te zweven. */
+          const ADEM = 56;
+          const vak = Math.max(0, Math.round(r.top - top) - ADEM);
           if (vak > 0) wortel.style.setProperty('--axe-bol-vak', `${vak}px`);
         }
         wortel.style.setProperty('--axe-chat-hoog', `${Math.round(r.height)}px`);
@@ -119,7 +215,22 @@ export function AxeShellChrome() {
       if (vak) {
         wortel.style.setProperty('--axe-vak-hoog', `${Math.round(vak.getBoundingClientRect().height)}px`);
       }
+
+      /* Corrective round 4, Fix D: hoe hoog het geheugendok (MemoryDock) op
+       * dit moment werkelijk is -- leeg (geen route gebruikt hem, of het
+       * slot staat op `:empty { display:none }`) is dat 0, dichtgeklapt is
+       * het de koprij, opengeklapt de koprij plus de kolommen.
+       *
+       * Dit bestond niet toen `.axe-slot--hoog.axe-slot--links/rechts` en
+       * `.axe-shell aside` hun `bottom`-formule kregen (round 2): die stopt
+       * op --axe-chat-top, de bovenkant van de chatplaat, en weet niets van
+       * een dok dat DAARBOVEN hangt. Met deze maat kunnen beide formules
+       * zichzelf corrigeren zonder dat het dok ooit met naam genoemd hoeft
+       * te worden op de plek waar ze staan. */
+      const dok = document.getElementById('axe-slot-dock');
+      wortel.style.setProperty('--axe-dock-hoog', `${dok ? Math.round(dok.getBoundingClientRect().height) : 0}px`);
     };
+    meetHoogteRef.current = meetHoogte;
 
     /* ── De breedte van de view-knoppen ──────────────────────────────────
        Ze staan fixed in het midden, dus de kopbalk weet niet dat ze bestaan.
@@ -129,9 +240,50 @@ export function AxeShellChrome() {
     let midden: Element | null = null;
     const meetMidden = () => {
       midden = document.querySelector('.axe-viewctl');
-      const b = midden ? Math.ceil(midden.getBoundingClientRect().width) + 24 : 0;
+      const pil = midden ? midden.getBoundingClientRect() : null;
+
+      /* ── De hoogte van de balk, zodat hij op het hart van de kopregel ligt
+       * ────────────────────────────────────────────────────────────────────
+       * `.axe-topbar > *` zet elk kind op 34px hoog; in een kopbalk van 66px
+       * liggen die dus op hartlijn 33. De view-balk is ~45px hoog en stond
+       * hard op `top: 16px`, dus op hartlijn 38 -- vijf pixels lager dan al
+       * het andere in die balk, met nog maar 5px lucht onder zich. Dat leest
+       * als "de pil zakt uit de balk", en dat is precies wat het was.
+       *
+       * De hoogte is niet te raden: hij hangt af van de labels (Awareness
+       * verdwijnt op mobiel) en van de vensterbreedte (de knoppen clampen).
+       * Meten dus, en de CSS rekent het hart er zelf uit. */
+      wortel.style.setProperty('--axe-viewctl-h', `${pil ? Math.ceil(pil.height) : 0}px`);
+
+      /* ── Het gat in de kopbalk, op de plek waar de pil ECHT ligt ─────────
+       * Dit was `breedte + 24`, als los blokje in de flex-rij. Maar de pil
+       * ligt `fixed` en centreert op het SCHERM, terwijl het blokje landt waar
+       * flexbox het neerzet -- tussen links en rechts. Die twee vallen alleen
+       * samen als de groepen ernaast even breed zijn, en dat zijn ze niet
+       * (311px links, 592px rechts): het gat lag 68px naast de pil.
+       *
+       * Gemeten op 1900px botste er niets, dus het bleef onopgemerkt; onder
+       * ~1750px schuift de klokgroep er wel degelijk onder. Daarom reserveren
+       * we nu tot waar de pil daadwerkelijk EINDIGT, gerekend vanaf de plek
+       * waar dit blokje in de rij begint. Eén getal, altijd kloppend, ook als
+       * het linkerslot vol loopt. */
+      const gat = document.querySelector('.axe-topbar-midden');
+      const begin = gat ? gat.getBoundingClientRect().left : 0;
+      const b = pil ? Math.max(0, Math.ceil(pil.right + 12 - begin)) : 0;
       wortel.style.setProperty('--axe-viewctl-b', `${b}px`);
+
+      /* Corrective round 4, Fix B: waar de balk zelf ophoudt, zodat Neural en
+       * Terrain's eigen "Search memories..."-composer daar ONDER kan
+       * beginnen. Stond hardcoded op top:56px in allebei se eigen css --
+       * geraden, en 1-4px te weinig zodra de balk zijn volle hoogte pakt (5px
+       * buitenpadding + een knop van 7px padding rond een 13px icoon = ~41px
+       * vanaf top:16px, dus rond de 57px). Gemeten in plaats van geraden
+       * betekent ook dat dit blijft kloppen als de balk ooit van hoogte
+       * verandert (Awareness-label weg op mobiel, een vijfde weergave, etc). */
+      const onder = pil ? Math.ceil(pil.bottom) + 8 : 64;
+      wortel.style.setProperty('--axe-viewctl-onder', `${onder}px`);
     };
+    meetMiddenRef.current = meetMidden;
 
     meetMuis(window.innerWidth / 2);
     meetHoogte();
@@ -159,13 +311,60 @@ export function AxeShellChrome() {
          eerste frame staan. */
       const vak = document.querySelector('.axe-vak');
       if (vak) obs.observe(vak);
+      /* Het dok wisselt van hoogte puur door dicht/open te klikken -- geen van
+         de andere gemeten elementen verandert daarbij mee, dus zonder een
+         eigen observer hier zou --axe-dock-hoog alleen bijwerken bij een
+         window-resize. */
+      const dok = document.getElementById('axe-slot-dock');
+      if (dok) obs.observe(dok);
     }
+
+    /* Corrective round 6, Part 3: Neural's tab-switch race was still not
+     * fixed by the timed retries in the tab-switch effect below -- Terrain
+     * is fine, Neural still reverts. The reason is knowable, not random:
+     * Neural's sidebar content is not always present when this component
+     * measures -- `useSlotAdoptie` (PlaatSlots.tsx) only `appendChild`s the
+     * real `#sidebar-left`/`#sidebar-right` DOM into `#axe-slot-links`/
+     * `#axe-slot-rechts` after `countsReady` (NeuralBrain.tsx: `stats.total >
+     * 0`, a Supabase-backed fetch) makes the scene-build effect run at all.
+     * That fetch can take longer than the fixed rAF/150ms/300ms window below,
+     * especially right after a tab switch -- so those retries can all fire
+     * BEFORE adoption happens, and nothing re-measures once it finally does.
+     * Terrain never hits this: its columns are plain React portals
+     * (PlaatSlot), present on the very first render, no fetch-gated adoption
+     * involved.
+     *
+     * The adoption itself IS the precise, deterministic signal: it is a
+     * `childList` mutation on the slot host (`gastheer.appendChild(el)`).
+     * Watching the three slot hosts directly for exactly that mutation means
+     * this re-measures the instant content actually lands (or leaves) --
+     * `useSlotAdoptie`'s cleanup does `ouder.insertBefore(el, naast)`, which
+     * is also a `childList` change on the host it removes `el` FROM, so
+     * leaving a tab re-measures too, not just arriving on one. No guessing at
+     * a number that has to cover an unbounded network fetch. */
+    let slotAdoptieObs: MutationObserver | null = null;
+    if ('MutationObserver' in window) {
+      slotAdoptieObs = new MutationObserver(() => { meetHoogte(); meetMidden(); });
+    }
+    const geobserveerdeSloten = new Set<string>();
+    const volgSlotAdoptie = () => {
+      if (!slotAdoptieObs) return;
+      for (const naam of ['links', 'rechts', 'dock'] as const) {
+        if (geobserveerdeSloten.has(naam)) continue;
+        const host = document.getElementById(SLOT_ID[naam]);
+        if (host) {
+          slotAdoptieObs.observe(host, { childList: true });
+          geobserveerdeSloten.add(naam);
+        }
+      }
+    };
 
     /* De view-knoppen komen en gaan met de pagina, dus kijken we naar de DOM
        zelf en niet alleen naar hun maat: op een tab zonder die knoppen moet de
        gereserveerde ruimte terug naar nul, anders staat de klok scheef. */
     let middenObs: ResizeObserver | null = null;
     let domObs: MutationObserver | null = null;
+    let dokGevonden = false;
     const volgMidden = () => {
       meetMidden();
       middenObs?.disconnect();
@@ -173,6 +372,23 @@ export function AxeShellChrome() {
         middenObs = new ResizeObserver(meetMidden);
         middenObs.observe(midden);
       }
+      /* Het dok-slot bestaat pas zodra PlaatSlotHosts mount (na opPlaat), wat
+         later kan zijn dan dit effect. Zodra de bodymutatie hem alsnog laat
+         zien, alsnog opnemen in de hoogte-observer hierboven en meteen een
+         keer meten -- anders blijft --axe-dock-hoog op 0 staan op de eerste
+         tab die het dok daadwerkelijk gebruikt. */
+      if (!dokGevonden) {
+        const dok = document.getElementById('axe-slot-dock');
+        if (dok) {
+          dokGevonden = true;
+          obs?.observe(dok);
+          meetHoogte();
+        }
+      }
+      /* Zelfde late-binding-probleem als het dok hierboven, nu voor de drie
+         adoptie-gastheren: ze bestaan pas na PlaatSlotHosts, dus dezelfde
+         bodymutatie die dokGevonden bijwerkt, probeert ook deze opnieuw. */
+      volgSlotAdoptie();
     };
     volgMidden();
     if ('MutationObserver' in window) {
@@ -191,15 +407,116 @@ export function AxeShellChrome() {
       window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
       middenObs?.disconnect();
-      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-onder', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog', '--axe-vak-hoog']) {
+      slotAdoptieObs?.disconnect();
+      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-onder', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog', '--axe-vak-hoog', '--axe-dock-hoog']) {
         wortel.style.removeProperty(naam);
       }
       domObs?.disconnect();
       wortel.style.removeProperty('--axe-viewctl-b');
+      wortel.style.removeProperty('--axe-viewctl-h');
+      wortel.style.removeProperty('--axe-viewctl-onder');
       delete wortel.dataset.railL;
       delete wortel.dataset.railR;
+      delete wortel.dataset.railPinL;
+      delete wortel.dataset.railPinR;
     };
   }, []);
+
+  const toggleRail = (kant: 'L' | 'R') => {
+    // Op telefoon zijn de zichtbare zijlades de bestaande Sidebar/RightPanel
+    // Sheets. De chevrons en de edge-swipes sturen dus exact dezelfde state.
+    if (window.innerWidth < 768) {
+      const ui = useUIStore.getState();
+      ui.setMobileNavOpen(false);
+      if (kant === 'L') {
+        ui.setRightDrawerOpen(false);
+        ui.setLeftDrawerOpen(!ui.leftDrawerOpen);
+      } else {
+        ui.setLeftDrawerOpen(false);
+        ui.setRightDrawerOpen(!ui.rightDrawerOpen);
+      }
+      return;
+    }
+
+    const wortel = document.documentElement;
+    const pin = kant === 'L' ? 'railPinL' : 'railPinR';
+    const rail = kant === 'L' ? 'railL' : 'railR';
+    if (wortel.dataset[pin] === 'aan') {
+      delete wortel.dataset[pin];
+      wortel.dataset[rail] = 'dicht';
+    } else {
+      wortel.dataset[pin] = 'aan';
+      wortel.dataset[rail] = 'open';
+    }
+  };
+
+  /* Corrective round 5, Fix 1: "Neural was correct voor een moment, toen
+     Terrain ook, toen sprongen beide terug" -- de meet-effect hierboven is
+     puur REACTIEF: hij hermeet pas als een geobserveerd element (`voet`,
+     `.axe-chatplaat`, `.axe-composer`, `.axe-vak`, `#axe-slot-dock`) zelf van
+     MAAT verandert, of het venster resized. Een tab-wissel doet geen van
+     beide betrouwbaar: Neural en Terrain adopteren hun zijbalk-inhoud in
+     dezelfde gastheer-elementen (`#axe-slot-links/rechts/dock`, zie
+     `useSlotAdoptie` in PlaatSlots.tsx) via hun EIGEN `requestAnimationFrame`
+     -- de knop klikken, React commit de nieuwe boom, en pas een frame later
+     verplaatst die hook de content erin. Een size-observer op de gastheer
+     kan die overgang oppikken op een moment dat de inhoud half verplaatst is
+     (tijdelijk correcte tussenmaat), en daarna niets triggert een verse
+     meting zodra alles echt stil ligt -- vandaar "goed voor een moment, dan
+     terug".
+
+     Omdat de volgorde tussen ONZE eigen rAF hieronder en de rAF van
+     `useSlotAdoptie` niet gegarandeerd is (beide worden in dezelfde
+     effect-flush ingepland; welke component eerder in de boom staat bepaalt
+     wie eerder plant, niet wie eerder klaar is), meet dit effect niet één
+     keer opnieuw maar een paar keer over een kort venster: meteen (voor de
+     snelste gevallen), op de eerstvolgende rAF (vangt de adoptie als die in
+     dezelfde frame klaar is), en dan nog twee keer via setTimeout (150ms en
+     300ms) als achtervang voor tragere adoptie of een tussenliggende
+     animatie. Dat laatste stel garandeert een verse, sluitende meting ruim
+     binnen wat als een klap aanvoelt, ongeacht de exacte rAF-volgorde --
+     zonder de precieze async-veroorzaker te hoeven vastpinnen.
+
+     Additief: de ResizeObservers/MutationObserver hierboven blijven gewoon
+     bestaan als vangnet voor alle andere gevallen (typen, venster-resize,
+     dok open/dicht). Dit effect vervangt niets, het voegt alleen de
+     tab-wissel toe als vierde trigger naast maat, resize en DOM-mutatie.
+
+     Corrective round 6, Part 3: dit vaste venster (meteen, rAF, 150ms, 300ms)
+     loste Terrain op maar NIET Neural -- Neural's eigen scene-build-effect
+     wacht zelf op `countsReady` (NeuralBrain.tsx: `stats.total > 0`, een
+     Supabase-fetch) voor hij draait, en pas ALS hij draait roept hij
+     `useSlotAdoptie` aan die de zijbalk-inhoud verhuist. Die fetch kan
+     langer duren dan 300ms, zeker vlak na een tab-wissel -- dan vuren alle
+     vier de pogingen hierboven voordat de adoptie ooit gebeurd is, en daarna
+     triggert niets nog een verse meting. Terrain heeft dit probleem niet:
+     zijn kolommen zijn gewone React-portals (PlaatSlot), aanwezig vanaf de
+     eerste render, geen fetch-gate ertussen.
+
+     De oplossing staat niet hier maar in de mount-effect hierboven
+     (`slotAdoptieObs`): een MutationObserver op de drie sloot-gastheren zelf
+     (`#axe-slot-links/-rechts/-dock`) die precies vuurt op de `childList`-
+     mutatie die `appendChild`/`insertBefore` daadwerkelijk is -- het exacte,
+     deterministische moment waarop inhoud verschijnt of vertrekt, ongeacht
+     hoelang de fetch duurde. Dit effect (de vaste tijdvensters) blijft
+     ernaast bestaan als extra vangnet -- goedkoop, en Terrain profiteert er
+     toch al van -- maar de DOM-mutatie is nu de trigger die Neural's trage,
+     data-afhankelijke geval daadwerkelijk garandeert. */
+  useEffect(() => {
+    const opnieuwMeten = () => {
+      meetHoogteRef.current();
+      meetMiddenRef.current();
+    };
+    opnieuwMeten();
+    const raf = requestAnimationFrame(opnieuwMeten);
+    const t1 = window.setTimeout(opnieuwMeten, 150);
+    const t2 = window.setTimeout(opnieuwMeten, 300);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [coreView]);
 
   return (
     <>
@@ -208,6 +525,24 @@ export function AxeShellChrome() {
       <div className="axe-sleepstrip" data-tauri-drag-region aria-hidden="true" />
       <div className="axe-railhint axe-railhint--l" aria-hidden="true" />
       <div className="axe-railhint axe-railhint--r" aria-hidden="true" />
+      <button
+        type="button"
+        className="axe-railtoggle axe-railtoggle--l"
+        aria-label="Linkerlade openen of sluiten"
+        title="Linkerlade"
+        onClick={() => toggleRail('L')}
+      >
+        <ChevronRight size={13} />
+      </button>
+      <button
+        type="button"
+        className="axe-railtoggle axe-railtoggle--r"
+        aria-label="Rechterlade openen of sluiten"
+        title="Rechterlade"
+        onClick={() => toggleRail('R')}
+      >
+        <ChevronLeft size={13} />
+      </button>
     </>
   );
 }

@@ -1,0 +1,461 @@
+/**
+ * strategyLab — één realistische testrun: echte candles, het echte signaal,
+ * een account met geld, kosten, stops en (optioneel) de regels van een account.
+ *
+ * Samengesteld uit wat er al is, niets opnieuw:
+ *   candles       backtestEngine.loadBacktestSeries (MetaAPI, TwelveData-terugval)
+ *   signaal       strategySignals.computeStrategySignal — hetzelfde als live
+ *   instrument    de specificatie van de broker als er een account verbonden is,
+ *                 anders een schatting die zich zo noemt
+ *   rekenen       domain/strategyLab/simulate
+ *   regels        evaluateAccountRules, via het profiel
+ *
+ * Het resultaat draagt alles wat nodig is om het eerlijk te vergelijken: engine,
+ * strategie, symbool, timeframe, periode, steekproef, kosten- en
+ * risico-aannames, en waarschuwingen.
+ */
+import type { RiskProfile } from '@/domain/tradingIntel/botTypes';
+import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
+import { buildSeriesFromCandles, loadBacktestSeries } from '@/application/tradingIntel/backtestEngine';
+import { getHistory } from '@/application/tradingIntel/historyService';
+import { barMs } from '@/domain/tradingIntel/candleCache';
+import { canonicalTimeframe } from '@/domain/tradingIntel/timeframes';
+import { getLedger, type LedgerStats } from '@/infrastructure/persistence/tradingLedgerService';
+import {
+  bootstrapTrades, liveVsBacktest, regimeBreakdown, trainValidationTest, walkForward,
+  type BootstrapReport, type Divergence, type RegimeRow, type RobustInput, type TrainValTestReport, type WalkForwardReport,
+} from '@/domain/tradingIntel/strategyLab/robustness';
+import {
+  simulateAccount,
+  type LabBar,
+  type LabConfig,
+  type LabCosts,
+  type LabRun,
+  type LabSizing,
+  type LabSignal,
+} from '@/domain/tradingIntel/strategyLab/simulate';
+import {
+  brokerInstrument,
+  estimateInstrument,
+  type LabInstrument,
+} from '@/domain/tradingIntel/strategyLab/instrumentEstimate';
+import { currenciesOf, COVERED_CURRENCIES, isHighImpact } from '@/domain/tradingIntel/economicCalendar';
+import { loadInstrumentSpec, resolveOrderAccount } from '@/application/tradingIntel/preTradeGateService';
+import { fetchEconomicReleases } from '@/infrastructure/gateways/researchSources';
+import { metaApiAccountInfoFor } from '@/infrastructure/gateways/metaApiService';
+import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+
+export type LabStrategy =
+  | { kind: 'single'; strategy: StrategyId }
+  | { kind: 'combo'; strategies: StrategyId[]; minAgree: number };
+
+export interface StrategyLabInput {
+  symbol: string;
+  timeframe: string;
+  strategy: LabStrategy;
+  /** Aantal bars om op te halen (vóór de From/To-selectie). */
+  limit: number;
+  /** ISO-datums; bars daarbuiten doen niet mee. */
+  from?: string | null;
+  to?: string | null;
+  startingBalance: number;
+  sizing: LabSizing;
+  costs: LabCosts;
+  maxConcurrent?: number;
+  maxTradesPerDay?: number | null;
+  maxHoldBars?: number | null;
+  allowShort?: boolean;
+  atrMultiple?: number;
+  rewardRisk?: number | null;
+  exitOnOppositeSignal?: boolean;
+  /** Accountregels (en funded-bewaking) — een profiel van een account of een eigen. */
+  profile?: RiskProfile | null;
+  profileLabel?: string | null;
+  /** Probeer de specificatie van de broker (standaard ja). */
+  useBrokerSpec?: boolean;
+  /** Lees uit de candle-cache (standaard ja). */
+  useCache?: boolean;
+}
+
+export interface LabMeta {
+  engine: 'axe-lab';
+  strategyLabel: string;
+  symbol: string;
+  timeframe: string;
+  from: string | null;
+  to: string | null;
+  bars: number;
+  source: 'metaapi' | 'twelvedata';
+  instrumentSource: 'broker' | 'estimate';
+  pnlCurrency: string;
+  startingBalance: number;
+  sizing: LabSizing;
+  costs: LabCosts;
+  stop: { atrMultiple: number; rewardRisk: number | null };
+  profileLabel: string | null;
+  /** Hoe diep de gebruikte geschiedenis werkelijk is, en of ze uit de cache kwam. */
+  history: string | null;
+  sample: number;
+  warnings: string[];
+  ranAt: string;
+}
+
+export interface StrategyLabResult {
+  meta: LabMeta;
+  run: LabRun;
+}
+
+function strategyLabel(s: LabStrategy): string {
+  return s.kind === 'single' ? s.strategy : `combo ${s.minAgree}/${s.strategies.length}: ${s.strategies.join('+')}`;
+}
+
+/** Dagen (New York) met een high-impact release voor dit paar; null als de kalender er niets over kan zeggen. */
+async function highImpactDaysFor(symbol: string): Promise<Set<string> | null> {
+  if (!currenciesOf(symbol).some(c => COVERED_CURRENCIES.has(c))) return null;
+  const events = await fetchEconomicReleases().catch(() => null);
+  if (!events?.length) return null;
+  return new Set(events.filter(e => isHighImpact(e.name)).map(e => e.date));
+}
+
+/**
+ * Candles voor de lab: eerst de cache (historyService), die alleen het
+ * ontbrekende bij MetaAPI ophaalt — met From/To zo ver terug als MetaAPI gaat.
+ * Lukt dat niet (geen MT5 verbonden, broker kent het symbool niet), dan de oude
+ * route via loadBacktestSeries met de TwelveData-terugval.
+ */
+async function loadLabSeries(input: StrategyLabInput & { limit: number }): Promise<
+  | { ok: true; candles: Array<{ time: string; open: number; high: number; low: number; close: number; volume?: number }>; series: ReturnType<typeof buildSeriesFromCandles>; source: 'metaapi' | 'twelvedata'; depth: string | null }
+  | { ok: false; error: string }
+> {
+  if (input.useCache !== false) {
+    // Opwarmen: 60 bars vóór From meenemen, zodat de eerste bar in de periode een signaal kan hebben.
+    const warmFrom = input.from ? new Date(Date.parse(input.from) - 60 * barMs(input.timeframe)).toISOString() : null;
+    const hist = await getHistory({ symbol: input.symbol, timeframe: input.timeframe, from: warmFrom, to: input.to ?? null, minBars: input.limit });
+    if (hist.ok && hist.candles.length >= 60) {
+      const candles = input.from ? hist.candles : hist.candles.slice(-input.limit);
+      const c = hist.coverage;
+      return {
+        ok: true, candles, series: buildSeriesFromCandles(candles), source: 'metaapi',
+        depth: `${c.provider} ${c.timeframe}: ${c.count} bars cached, ${c.from?.slice(0, 10)} → ${c.to?.slice(0, 10)}${c.exhaustedBefore ? ' (all the provider has)' : ''}${hist.fromCache ? ' · from cache' : ` · ${hist.pagesFetched} page(s) fetched`}`,
+      };
+    }
+  }
+  const loaded = await loadBacktestSeries(input.symbol, input.timeframe, input.limit);
+  if (!loaded.ok) return loaded;
+  return { ok: true, candles: loaded.candles, series: loaded.series, source: loaded.source, depth: null };
+}
+
+/** Alles wat een lab-run voorbereidt: candles, venster, signaal, instrument, simulatie-instellingen. */
+interface PreparedLab {
+  symbol: string;
+  loaded: Extract<Awaited<ReturnType<typeof loadLabSeries>>, { ok: true }>;
+  bars: LabBar[];
+  warmupBars: number;
+  signalAt: (i: number) => LabSignal;
+  cfg: LabConfig;
+  fromMs: number;
+  highImpactDays: Set<string> | null;
+}
+
+async function prepareLab(input: StrategyLabInput): Promise<{ ok: true; lab: PreparedLab } | { ok: false; error: string }> {
+  const symbol = input.symbol.trim().toUpperCase();
+  const limit = Math.min(Math.max(input.limit, 100), 20_000);
+  const loaded = await loadLabSeries({ ...input, symbol, limit });
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+
+  // From/To: alleen bars binnen de periode, maar de signalen blijven op de hele
+  // reeks berekend zodat de opwarmperiode vóór From niet wegvalt.
+  const fromMs = input.from ? Date.parse(input.from) : -Infinity;
+  const toMs = input.to ? Date.parse(input.to) : Infinity;
+  const idx = loaded.candles.map((c, i) => ({ c, i })).filter(({ c }) => {
+    const t = Date.parse(c.time);
+    return t >= fromMs && t <= toMs;
+  });
+  if (idx.length < 60) return { ok: false, error: `Only ${idx.length} bars in the selected period — need at least 60.` };
+  const offset = idx[0].i;
+  // Opwarmen met bars van vóór From, zodat de eerste bar in de periode al een signaal kan hebben.
+  const warmStart = Math.max(0, offset - 60);
+  const window = loaded.candles.slice(warmStart, idx[idx.length - 1].i + 1);
+  const bars: LabBar[] = window.map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+  const warmupBars = Math.max(offset - warmStart, 51);
+
+  const signalAt = (i: number): LabSignal => {
+    const at = warmStart + i;
+    if (input.strategy.kind === 'single') return computeStrategySignal(input.strategy.strategy, loaded.series, at);
+    let buys = 0; let sells = 0;
+    for (const s of input.strategy.strategies) {
+      const v = computeStrategySignal(s, loaded.series, at);
+      if (v === 'buy') buys++; else if (v === 'sell') sells++;
+    }
+    if (buys >= input.strategy.minAgree && buys > sells) return 'buy';
+    if (sells >= input.strategy.minAgree && sells > buys) return 'sell';
+    return 'hold';
+  };
+
+  let instrument: LabInstrument = estimateInstrument(symbol);
+  if (input.useBrokerSpec !== false) {
+    const account = await resolveOrderAccount().catch(() => null);
+    if (account) {
+      // De valuta van het account, zodat P&L en risico hun echte eenheid dragen.
+      const info = await metaApiAccountInfoFor(account).catch(() => null);
+      const currency = info?.ok ? info.info.currency : null;
+      const spec = await loadInstrumentSpec(account, symbol, currency).catch(() => null);
+      if (spec?.ok) instrument = brokerInstrument(spec.spec);
+    }
+  }
+
+  const highImpactDays = input.profile?.newsRestriction === 'high_impact_day' ? await highImpactDaysFor(symbol) : null;
+
+  const cfg: LabConfig = {
+    startingBalance: input.startingBalance,
+    sizing: input.sizing,
+    instrument,
+    costs: input.costs,
+    atrMultiple: input.atrMultiple,
+    rewardRisk: input.rewardRisk,
+    maxConcurrent: input.maxConcurrent,
+    maxTradesPerDay: input.maxTradesPerDay,
+    maxHoldBars: input.maxHoldBars,
+    allowShort: input.allowShort,
+    exitOnOppositeSignal: input.exitOnOppositeSignal,
+    warmupBars,
+    profile: input.profile ?? null,
+    highImpactDays,
+  };
+  return { ok: true, lab: { symbol, loaded, bars, warmupBars, signalAt, cfg, fromMs, highImpactDays } };
+}
+
+export async function runStrategyLab(input: StrategyLabInput): Promise<{ ok: true; result: StrategyLabResult } | { ok: false; error: string }> {
+  const prepared = await prepareLab(input);
+  if (!prepared.ok) return prepared;
+  const { symbol, loaded, bars, warmupBars, signalAt, cfg, fromMs, highImpactDays } = prepared.lab;
+  const instrument = cfg.instrument;
+  const run = simulateAccount(bars, signalAt, cfg);
+
+  const warnings = [...run.warnings];
+  if (loaded.source === 'twelvedata') warnings.push('Candles from TwelveData, not the broker feed the live agent trades against');
+  if (input.strategy.kind === 'single' && !DISTINCT_STRATEGIES.has(input.strategy.strategy)) {
+    warnings.push(`${input.strategy.strategy} has no dedicated logic — generic trend+RSI proxy`);
+  }
+  if (input.profile?.newsRestriction === 'high_impact_day' && !highImpactDays) {
+    warnings.push('News restriction requested but the calendar cannot answer for this pair — not applied');
+  }
+  if (Number.isFinite(fromMs) && Date.parse(loaded.candles[0].time) > fromMs) {
+    warnings.push(`History starts ${loaded.candles[0].time.slice(0, 10)}, later than the requested From date`);
+  }
+
+  return {
+    ok: true,
+    result: {
+      meta: {
+        engine: 'axe-lab',
+        strategyLabel: strategyLabel(input.strategy),
+        symbol,
+        timeframe: input.timeframe,
+        from: bars[warmupBars]?.time ?? null,
+        to: bars[bars.length - 1]?.time ?? null,
+        bars: bars.length - warmupBars,
+        source: loaded.source,
+        instrumentSource: instrument.spec.source,
+        pnlCurrency: instrument.pnlCurrency,
+        startingBalance: input.startingBalance,
+        sizing: input.sizing,
+        costs: input.costs,
+        stop: { atrMultiple: input.atrMultiple ?? 1.5, rewardRisk: input.rewardRisk === undefined ? 1.5 : input.rewardRisk },
+        profileLabel: input.profileLabel ?? (input.profile ? input.profile.mode : null),
+        history: loaded.depth,
+        sample: run.metrics.totalTrades,
+        warnings,
+        ranAt: new Date().toISOString(),
+      },
+      run,
+    },
+  };
+}
+
+// ── Bewaarde lab-runs: genoeg om een test later te heropenen ─────────────────
+
+export interface SavedLabRun {
+  id: string;
+  savedAt: string;
+  note?: string;
+  meta: LabMeta;
+  metrics: LabRun['metrics'];
+  funded: LabRun['funded'];
+  trades: LabRun['trades'];
+  equity: LabRun['equity'];
+  events: LabRun['events'];
+}
+
+const LAB_RUNS_KEY = 'axe_strategy_lab_runs';
+const MAX_SAVED = 30;
+const MAX_EQUITY_POINTS = 400;
+const MAX_TRADES = 1000;
+
+/** Minder punten, maar pieken en dalen blijven: per emmer het laagste punt, plus het laatste. */
+function downsampleEquity(points: LabRun['equity'], max = MAX_EQUITY_POINTS): LabRun['equity'] {
+  if (points.length <= max) return points;
+  const size = Math.ceil(points.length / max);
+  const out: LabRun['equity'] = [];
+  for (let k = 0; k < points.length; k += size) {
+    const bucket = points.slice(k, k + size);
+    out.push(bucket.reduce((a, b) => (b.worstEquity < a.worstEquity ? b : a)));
+  }
+  const last = points[points.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
+export async function getSavedLabRuns(): Promise<SavedLabRun[]> {
+  return loadSetting<SavedLabRun[]>(LAB_RUNS_KEY, []);
+}
+
+export async function saveLabRun(result: StrategyLabResult, note?: string): Promise<SavedLabRun[]> {
+  const entry: SavedLabRun = {
+    id: `lab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    savedAt: new Date().toISOString(),
+    note,
+    meta: result.meta,
+    metrics: result.run.metrics,
+    funded: result.run.funded,
+    trades: result.run.trades.slice(-MAX_TRADES),
+    equity: downsampleEquity(result.run.equity),
+    events: result.run.events.filter(e => e.kind !== 'blocked').concat(result.run.events.filter(e => e.kind === 'blocked').slice(0, 20)),
+  };
+  const next = [entry, ...(await getSavedLabRuns())].slice(0, MAX_SAVED);
+  await saveSetting(LAB_RUNS_KEY, next);
+  return next;
+}
+
+export async function deleteLabRun(id: string): Promise<SavedLabRun[]> {
+  const next = (await getSavedLabRuns()).filter(r => r.id !== id);
+  await saveSetting(LAB_RUNS_KEY, next);
+  return next;
+}
+
+// ── Matrix: strategie × paar × timeframe ─────────────────────────────────────
+
+export interface MatrixCell {
+  strategy: StrategyId;
+  symbol: string;
+  timeframe: string;
+  ok: boolean;
+  error?: string;
+  trades: number;
+  netReturnPct: number;
+  profitFactor: number;
+  maxDrawdownPct: number;
+  avgR: number;
+  expectancy: number;
+  funded: 'PASS' | 'ACTIVE' | 'BREACHED' | null;
+  /** Te weinig trades om iets over een edge te zeggen. */
+  smallSample: boolean;
+}
+
+/** Onder dit aantal trades is een cel ruis, geen edge (zelfde grens als de lab-waarschuwing). */
+export const MATRIX_MIN_TRADES = 30;
+
+/**
+ * Dezelfde lab-run voor elke combinatie, na elkaar. Na elkaar omdat elke eerste
+ * keer per (paar, timeframe) MetaAPI-pagina's kost; de cache maakt elke volgende
+ * strategie op dezelfde reeks gratis.
+ */
+export async function runStrategyMatrix(input: {
+  strategies: StrategyId[];
+  symbols: string[];
+  timeframes: string[];
+  base: Omit<StrategyLabInput, 'symbol' | 'timeframe' | 'strategy'>;
+  onProgress?: (done: number, total: number, label: string) => void;
+  shouldStop?: () => boolean;
+}): Promise<MatrixCell[]> {
+  const cells: MatrixCell[] = [];
+  const total = input.strategies.length * input.symbols.length * input.timeframes.length;
+  let done = 0;
+  for (const symbol of input.symbols) {
+    for (const timeframe of input.timeframes) {
+      for (const strategy of input.strategies) {
+        if (input.shouldStop?.()) return cells;
+        input.onProgress?.(done, total, `${strategy} · ${symbol} ${timeframe}`);
+        const res = await runStrategyLab({ ...input.base, symbol, timeframe, strategy: { kind: 'single', strategy } });
+        done += 1;
+        if (!res.ok) {
+          cells.push({
+            strategy, symbol, timeframe, ok: false, error: res.error, trades: 0, netReturnPct: 0,
+            profitFactor: 0, maxDrawdownPct: 0, avgR: 0, expectancy: 0, funded: null, smallSample: true,
+          });
+          continue;
+        }
+        const m = res.result.run.metrics;
+        cells.push({
+          strategy, symbol: res.result.meta.symbol, timeframe, ok: true, trades: m.totalTrades,
+          netReturnPct: m.netReturnPct, profitFactor: m.profitFactor, maxDrawdownPct: m.maxDrawdownPct,
+          avgR: m.avgR, expectancy: m.expectancy, funded: res.result.run.funded?.status ?? null,
+          smallSample: m.totalTrades < MATRIX_MIN_TRADES,
+        });
+      }
+    }
+  }
+  input.onProgress?.(done, total, '');
+  return cells;
+}
+
+// ── Robuustheid ──────────────────────────────────────────────────────────────
+
+export interface RobustnessResult {
+  symbol: string;
+  timeframe: string;
+  strategyLabel: string;
+  bars: number;
+  grid: { atrMultiple: number[]; rewardRisk: Array<number | null> };
+  trainValTest: TrainValTestReport;
+  walkForward: WalkForwardReport;
+  /** Op de trades van één volledige run met de lab-instellingen. */
+  bootstrap: BootstrapReport;
+  regimes: RegimeRow[];
+  fullRunTrades: number;
+  divergence: Divergence | null;
+  warnings: string[];
+}
+
+export const DEFAULT_GRID = { atrMultiple: [1, 1.5, 2, 2.5], rewardRisk: [1, 1.5, 2, 3] as Array<number | null> };
+
+export async function runRobustness(
+  input: StrategyLabInput,
+  opts: { grid?: { atrMultiple: number[]; rewardRisk: Array<number | null> }; folds?: number } = {},
+): Promise<{ ok: true; result: RobustnessResult } | { ok: false; error: string }> {
+  const prepared = await prepareLab(input);
+  if (!prepared.ok) return prepared;
+  const { bars, signalAt, cfg, symbol } = prepared.lab;
+  const grid = opts.grid ?? DEFAULT_GRID;
+  const rInput: RobustInput = { bars, signalAt, cfg };
+  const trainValTest = trainValidationTest(rInput, grid);
+  const wf = walkForward(rInput, grid, opts.folds ?? 4);
+  const full = simulateAccount(bars, signalAt, cfg);
+  const bootstrap = bootstrapTrades(full.trades.map(t => t.pnl), cfg.startingBalance, { drawdownThreshold: 0.1 });
+  const regimes = regimeBreakdown(bars, full.trades);
+
+  let divergence: Divergence | null = null;
+  if (input.strategy.kind === 'single') {
+    const tf = canonicalTimeframe(input.timeframe) ?? 'h1';
+    const strategyId = input.strategy.strategy;
+    const ledger: LedgerStats[] = await getLedger(symbol).catch(() => []);
+    const row = ledger.find(e => e.strategy === strategyId && e.timeframe === tf);
+    if (row?.backtest) {
+      divergence = liveVsBacktest({
+        liveTrades: row.trades, liveNetReturnPct: row.netReturnPct,
+        backtestTrades: row.backtest.trades, backtestNetReturnPct: row.backtest.netReturnPct,
+      });
+    }
+  }
+
+  const warnings = [...trainValTest.warnings, ...wf.warnings];
+  if (full.trades.length < 30) warnings.push(`Only ${full.trades.length} trades in the full run — every statistic here is fragile`);
+  warnings.push('Bootstrap assumes trades are independent; clustered losses make real drawdowns worse');
+  return {
+    ok: true,
+    result: {
+      symbol, timeframe: input.timeframe, strategyLabel: strategyLabel(input.strategy), bars: bars.length,
+      grid, trainValTest, walkForward: wf, bootstrap, regimes, fullRunTrades: full.trades.length, divergence, warnings,
+    },
+  };
+}

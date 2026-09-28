@@ -13,8 +13,12 @@
  *   AXE_CORE_API_KEY = <your secret key>
  */
 
-import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
+import type { NorthseaOverzicht } from '@/domain/northsea/chase';
+import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
+import type { KeystoreEntry, OpsCronJob, OpsCronRun } from '@/domain/controlPlane';
+import { axeCoreApiUrl, axeCoreApiExtraHeaders, axeApiAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { agentBasis } from '@/infrastructure/config/agentHost';
+import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
 
 // axeCoreApiUrl() only rewrites this to a direct api.axecompanion.com call
 // inside a PACKAGED Tauri app that was built with VITE_AXE_CORE_API_KEY set;
@@ -44,7 +48,13 @@ async function basisVoor(path: string): Promise<string> {
   // De codeeragent bewerkt bestanden op de machine waar hij draait, dus die
   // machine is een keuze — zie config/agentHost.ts. Al het andere (marktdata,
   // geheugen, proxies) blijft waar de sleutels staan.
-  if (path.startsWith('/claude/')) return await agentBasis(BASE_URL).catch(() => BASE_URL);
+  // De preview draait in de repo van de editor, dus op dezelfde machine.
+  // De preview draait in de repo van de editor, en de planner draait waar de
+  // abonnementen staan: allebei op de agent-host, niet op de VPS.
+  // De MCP-hub ook: die gebruikt de sleutels en de gh-login van de agent-host.
+  if (path.startsWith('/claude/') || path.startsWith('/preview/') || path.startsWith('/planner/') || path.startsWith('/mcp/hub') || path.startsWith('/northsea/')) {
+    return await agentBasis(BASE_URL).catch(() => BASE_URL);
+  }
   if (!path.startsWith('/browser/agent')) return BASE_URL;
   return (await browserBasis().catch(() => '')) || BASE_URL;
 }
@@ -54,9 +64,16 @@ async function call<T = unknown>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${await basisVoor(path)}${path}`, {
+  const basis = await basisVoor(path);
+  const url = `${basis}${path}`;
+  const res = await fetch(url, {
     method,
-    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
+    headers: {
+      'Content-Type': 'application/json',
+      ...axeCoreApiExtraHeaders(),
+      ...axeApiAuthHeaders(url),
+      ...(path.startsWith('/preview/') ? editorRepoHeaders() : {}),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
@@ -72,7 +89,6 @@ export async function checkAxeApi(): Promise<{
   supabase: boolean;
   n8n: boolean;
   github: boolean;
-  vercel: boolean;
 }> {
   return call('GET', '/health');
 }
@@ -131,6 +147,9 @@ export interface DurableTaskApproval {
   kind: string;
   title: string;
   detail: string;
+  /** The backend stores the exact command/reason here. Voice approval must
+   * inspect this instead of guessing from the human title. */
+  metadata?: ({ command?: string | null; reason?: string | null } & Record<string, unknown>) | null;
   decided_by?: string | null;
   decision_reason?: string | null;
   created_at: string;
@@ -262,6 +281,21 @@ export async function requestDurableTaskApproval(
   },
 ): Promise<{ approval: DurableTaskApproval }> {
   return call('POST', `/tasks/${encodeURIComponent(taskId)}/approvals`, input);
+}
+
+/**
+ * Stop a running/waiting task. A status change, not a delete — the row,
+ * steps and events stay readable afterwards (backend: task_worker's
+ * TaskRepository.cancel, POST /tasks/{id}/cancel, added in 73950a5). Works
+ * without a lease, unlike /transition, so the app can override a task even
+ * while a worker still holds it.
+ */
+export async function cancelDurableTask(
+  taskId: string,
+  reason?: string,
+  by: string = 'luka',
+): Promise<{ task: DurableTaskRun }> {
+  return call('POST', `/tasks/${encodeURIComponent(taskId)}/cancel`, { by, reason });
 }
 
 export async function decideDurableTaskApproval(
@@ -421,7 +455,9 @@ export async function n8nListExecutions(wfId?: string): Promise<unknown[]> {
 // SELF-HOSTED SCHEDULER (core_schedules) — replaces n8n for cron. AXE owns the
 // whole loop: schedules in Postgres, a CRON_KEY-secured tick on the VPS runs them.
 // ══════════════════════════════════════════════════════════════════════════════
-export type CronActionType = 'prompt' | 'exec' | 'webhook' | 'crew' | 'flow';
+export type CronActionType = 'prompt' | 'exec' | 'webhook' | 'crew' | 'flow' | 'observed' | 'planner' | 'northsea';
+/** Waar een job draait: de VPS, de Mac (agent-host) of Supabase zelf (pg_cron). */
+export type CronExecutor = 'vps' | 'mac' | 'supabase';
 
 export interface CronSchedule {
   id: string;
@@ -433,10 +469,17 @@ export interface CronSchedule {
   enabled: boolean;
   next_run_at: string | null;
   last_run_at: string | null;
-  last_status: 'ok' | 'fail' | null;
+  last_status: 'ok' | 'fail' | 'timeout' | 'skipped' | null;
   last_result: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  /** Sinds 16 sep 2026 kolommen (planning.py); oudere API's sturen ze niet. */
+  app?: string;
+  executor?: CronExecutor;
+  job_key?: string | null;
+  description?: string | null;
+  consecutive_failures?: number;
+  max_runtime_s?: number;
 }
 
 export interface CronScheduleInput {
@@ -470,6 +513,110 @@ export async function cronDeleteSchedule(id: string): Promise<void> {
 
 export async function cronRunNow(id: string): Promise<{ result: { status: string; output: string } }> {
   return call('POST', `/cron/schedules/${id}/run`);
+}
+
+// ── Grootboek en agenda: alle jobs en taken van alle apps ─────────────────────
+
+export type LedgerSource = 'schedule' | 'planner' | 'launchd' | 'northsea' | 'manual' | 'pg_cron' | 'task';
+
+export interface LedgerEntry {
+  at: string;
+  app: string;
+  source: LedgerSource;
+  /** 'run' voor een job, anders de capability van de taak. */
+  kind: string;
+  name: string;
+  status: string;
+  duration_ms: number | null;
+  detail: string;
+  ref_id: string;
+  /** vps, mac of supabase; leeg bij taken. */
+  executor?: string | null;
+}
+
+export async function ledgerList(opts: { app?: string; source?: LedgerSource; hours?: number; limit?: number } = {}): Promise<LedgerEntry[]> {
+  const q = new URLSearchParams();
+  if (opts.app) q.set('app_id', opts.app);
+  if (opts.source) q.set('source', opts.source);
+  q.set('hours', String(opts.hours ?? 168));
+  q.set('limit', String(opts.limit ?? 500));
+  const { entries } = await call<{ entries: LedgerEntry[] }>('GET', `/ledger?${q.toString()}`);
+  return entries ?? [];
+}
+
+export interface CalendarJobItem {
+  key: string;
+  job_key: string;
+  bron: 'schedule' | 'pg_cron';
+  app: string;
+  naam: string;
+  executor: CronExecutor;
+  soort: string;
+  at: string;
+  tot: string | null;
+  aantal: number;
+  herhaling: string | null;
+  cron: string;
+}
+
+export interface CalendarJob {
+  job_key: string;
+  id: string | null;
+  bron: 'schedule' | 'pg_cron';
+  naam: string;
+  app: string;
+  executor: CronExecutor;
+  soort: string;
+  cron: string;
+  enabled: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_status: string | null;
+  consecutive_failures: number | null;
+  description: string | null;
+}
+
+export async function calendarJobs(van: Date, tot: Date): Promise<{ items: CalendarJobItem[]; jobs: CalendarJob[] }> {
+  const q = new URLSearchParams({ van: van.toISOString(), tot: tot.toISOString() });
+  return call('GET', `/calendar/jobs?${q.toString()}`);
+}
+
+// ── Ops-register (axe_ops): cronjobs per app en de sleutelkluis ──────────────
+// De VPS-API is de brug: de browser ziet de service_role-sleutel nooit. Zie
+// "Keystore & cron control plane" in backend/axe_api/main.py.
+
+export async function opsCronJobs(app: string): Promise<OpsCronJob[]> {
+  const { jobs } = await call<{ jobs: OpsCronJob[] }>('GET', `/cron/jobs?app_name=${encodeURIComponent(app)}`);
+  return jobs ?? [];
+}
+
+export async function opsCronRuns(app: string, name?: string, limit = 20): Promise<OpsCronRun[]> {
+  const q = new URLSearchParams({ app_name: app, limit: String(limit) });
+  if (name) q.set('name', name);
+  const { runs } = await call<{ runs: OpsCronRun[] }>('GET', `/cron/runs?${q.toString()}`);
+  return runs ?? [];
+}
+
+/** 202: pg_net vuurt asynchroon; de uitkomst staat binnen een minuut in /cron/runs. */
+export async function opsCronRunNow(app: string, name: string): Promise<{ ok: boolean; request_id: number | null; note?: string }> {
+  return call('POST', `/cron/jobs/${encodeURIComponent(app)}/${encodeURIComponent(name)}/run`);
+}
+
+/** Namen en of ze gevuld zijn -- nooit waarden. */
+export async function keystoreList(app: string): Promise<KeystoreEntry[]> {
+  const { keys } = await call<{ keys: KeystoreEntry[] }>('GET', `/keystore/${encodeURIComponent(app)}`);
+  return keys ?? [];
+}
+
+/** Open vragen van de takenkernel (core_approvals is alleen service_role). */
+export async function listPendingApprovals(limit = 50): Promise<DurableTaskApproval[]> {
+  const { approvals } = await call<{ approvals: DurableTaskApproval[] }>('GET', `/approvals?status=pending&limit=${limit}`);
+  return approvals ?? [];
+}
+
+/** De echte routekaart van de draaiende API (FastAPI's eigen /openapi.json). */
+export async function apiOpenApi(): Promise<unknown> {
+  return call('GET', '/openapi.json');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -515,32 +662,6 @@ export async function ghMergePr(repo: string, number: number, mergeMethod: 'merg
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VERCEL
-// ══════════════════════════════════════════════════════════════════════════════
-
-export interface VercelDeployment {
-  id: string;
-  url: string;
-  state: string;
-  target: string | null;
-  createdAt: number;
-  commitMessage?: string;
-  commitSha?: string;
-}
-
-export async function vercelListDeployments(limit = 10, projectId?: string): Promise<VercelDeployment[]> {
-  return call('GET', `/vercel/deployments?limit=${limit}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`);
-}
-
-export async function vercelGetDeployment(id: string): Promise<VercelDeployment & { ready?: number; aliasError?: unknown }> {
-  return call('GET', `/vercel/deployment/${id}`);
-}
-
-export async function vercelPromote(deploymentId: string): Promise<{ promoted: boolean; deployment_id: string }> {
-  return call('POST', `/vercel/promote/${deploymentId}`);
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
 // Control Plane
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -556,6 +677,11 @@ export interface ControlPlaneRoute {
   auth_required: boolean;
   enabled: boolean;
   metadata?: Record<string, unknown>;
+}
+
+export async function apiListRoutes(kind?: ControlPlaneRoute['kind']): Promise<ControlPlaneRoute[]> {
+  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+  return call('GET', `/api/routes${qs}`);
 }
 
 export interface ControlPlaneTaskStep {
@@ -609,11 +735,6 @@ export interface AgentExecutePayload {
   task: string;
   context?: string;
   conversation?: Array<{ role: string; content: string }>;
-}
-
-export async function apiListRoutes(kind?: ControlPlaneRoute['kind']): Promise<ControlPlaneRoute[]> {
-  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
-  return call('GET', `/api/routes${qs}`);
 }
 
 export async function apiListTasks(limit = 50, status?: string): Promise<unknown[]> {
@@ -761,6 +882,8 @@ export interface ClaudeRunRequest {
   timeout?: number;
   /** Weggelaten is 'claude', zodat oudere aanroepers niets merken. */
   engine?: AgentEngine;
+  /** Het model voor deze motor. Leeg = de CLI kiest zelf. */
+  model?: string;
 }
 
 export interface ClaudeRunResult {
@@ -844,12 +967,29 @@ export async function agentCommit(
   return call('POST', '/claude/commit', { repo, bericht, push });
 }
 
+export interface AgentSubscriptionUsage {
+  label: string;
+  runs_24h: number;
+  runs_7d: number;
+  ok_7d: number;
+  failed_7d: number;
+  input_tokens_7d: number;
+  output_tokens_7d: number;
+  last_run_at: number | null;
+  last_status: string | null;
+  last_limit_at: number | null;
+  last_limit_message: string | null;
+  exact_remaining_available: boolean;
+  remaining_note: string;
+}
+
 /** Which repos this host will let Claude Code touch, and their live branches. */
 export async function claudeRepos(): Promise<{
   repos: Record<string, ClaudeRepoInfo>;
   permission_modes: ClaudePermissionMode[];
   /** Welke CLI's op de host staan. Aanwezigheid, niet of je ingelogd bent. */
-  engines?: Record<string, { label: string; aanwezig: boolean; login: string }>;
+  engines?: Record<string, { label: string; aanwezig: boolean; login: string; alleen_lezen?: boolean }>;
+  usage?: Record<string, AgentSubscriptionUsage>;
 }> {
   return call('GET', '/claude/repos');
 }
@@ -943,12 +1083,228 @@ export async function mcpSaveServers(servers: Array<Record<string, unknown>>): P
   return call('POST', '/mcp/servers', servers);
 }
 
-export async function mcpTestServer(serverId: string): Promise<{ status: string; latency: number | null; error?: string }> {
-  return call('POST', `/mcp/servers/${encodeURIComponent(serverId)}/test`, {});
+// MCP-hub op de agent-host (backend/axe_api/mcp_hub.py): echte MCP over
+// Streamable HTTP. De oude /mcp/servers-routes spraken geen MCP.
+export interface McpHubServer {
+  id: string;
+  /** Het soort server; een verbinding is één exemplaar ervan. */
+  sjabloon: string;
+  naam: string;
+  transport: 'http' | 'stdio';
+  velden: Record<string, string>;
+  /** Zelf toegevoegd (een tweede project of account), dus ook te verwijderen. */
+  extra: boolean;
+  categorie: 'ai' | 'infra' | 'storage' | 'comms' | 'dev';
+  docs: string;
+  uitleg: string;
+  sleutelnaam: string | null;
+  /** Waar de sleutel vandaan komt, of 'ontbreekt'. Nooit de waarde. */
+  sleutel: string;
+  klaar: boolean;
+  per_dag: number | null;
+}
+export interface McpHubTest {
+  status: 'online' | 'offline' | 'sleutel_ontbreekt';
+  latency?: number;
+  fout?: string;
+  sleutelnaam?: string;
+  tools?: { name: string; description: string }[];
+}
+// NorthSea: de commodity desk leest AXE Commodities alleen-lezen via de
+// MCP-hub op de agent-host (backend/axe_api/northsea.py).
+export function northseaOverzicht(vers = false): Promise<NorthseaOverzicht> {
+  return call('GET', `/northsea/overzicht${vers ? '?vers=true' : ''}`);
 }
 
-export async function mcpCallTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<{ status: string; result?: unknown; error?: string }> {
-  return call('POST', '/mcp/tools/call', { server_name: serverName, tool_name: toolName, arguments: args });
+// De tabbladen naast Live Map: één vaste query per tabblad (northsea.TAB_SQL).
+// Een lokale API van vóór deze tabbladen geeft 404; het tabblad zegt dat dan zelf.
+/** Kan deze Mac versturen? De desk vraagt dit voordat hij een knop toont. */
+export async function northseaVerstuurStatus(): Promise<{ kan_versturen: boolean; reden: string }> {
+  return call('GET', '/northsea/verstuur/status');
+}
+
+/**
+ * Eén goedgekeurd concept versturen.
+ *
+ * Gooit met de weigering van de edge function eráán vast
+ * (`human_approval_provenance_missing`, `contact_policy_blocked`,
+ * `draft_not_approved`). Die drie vragen om drie verschillende handelingen, dus
+ * het scherm toont ze onveranderd.
+ */
+export async function northseaVerstuurConcept(
+  draftId: string,
+  requestedBy = 'axe-core-desk',
+): Promise<{ ok: boolean; resend_email_id?: string; duplicate?: boolean }> {
+  return call('POST', `/northsea/concept/${encodeURIComponent(draftId)}/verstuur`, { requested_by: requestedBy });
+}
+
+export function northseaTab<T extends TabNaam>(naam: T, vers = false): Promise<TabData[T]> {
+  return call('GET', `/northsea/tab/${naam}${vers ? '?vers=true' : ''}`);
+}
+
+/**
+ * Eén governed NorthSea-actie (backend/axe_api/northsea_gateway.py): AXE CORE
+ * als MCP-client van de NorthSea MCP, dezelfde grens als ChatGPT/Claude al
+ * gebruiken. Geen eigen crew, geen eigen research -- de NorthSea MCP-tool
+ * doet het werk en dit geeft zijn structured result ongewijzigd terug,
+ * inclusief het `crew`-blok (route/backend/actual_crew/fallback_used) als de
+ * tool CrewAI gebruikte. Alleen lees-/onderzoeksacties: zie ACTIONS in
+ * northsea_gateway.py -- versturen/goedkeuren/schrijven staan hier niet in.
+ */
+export type NorthseaActie =
+  | 'get_next_actions' | 'review_deal' | 'qualify_opportunity' | 'investigate_blockers'
+  | 'assess_match' | 'process_reply' | 'research_counterparty' | 'prepare_outreach'
+  | 'get_live_operations';
+
+export async function northseaActie(actie: NorthseaActie, params: Record<string, unknown>): Promise<{
+  action: string; tool: string; result: Record<string, unknown>;
+}> {
+  return call('POST', `/northsea/action/${actie}`, { params });
+}
+
+/**
+ * northsea_get_live_operations, ongewijzigd doorgegeven (backend/northsea_mcp/
+ * northsea_mcp/readtools.py::live_operations). Veldnamen blijven Engels/snake_case,
+ * exact zoals de tool ze teruggeeft -- dit is geen SQL-aliascontract zoals TabData,
+ * maar een passthrough van één bestaande MCP-tool.
+ */
+export interface NorthseaApprovalRow {
+  approval_id: string;
+  kind: string;
+  deal_id?: string | null;
+  deal?: string | null;
+  subject?: string | null;
+  gate?: string | null;
+  status?: string | null;
+  approval_type?: string | null;
+  sensitive_action?: boolean;
+  communication_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface NorthseaLiveOperations {
+  generated_at: string;
+  now_running: { note: string };
+  recently_completed: Array<{ actor: string; action: string; at: string | null; summary: unknown }>;
+  waiting: {
+    followups_scheduled: number;
+    chase_waiting_reply: number;
+    items: Array<{ deal_id: string | null; due_at: string | null; reason: string | null }>;
+  };
+  approval_required: { count: number; items: NorthseaApprovalRow[] };
+  failed: {
+    last_failed_tick_at: string | null;
+    research_failed_permanently: Array<{ action_queue_id: string; deal_id: string | null; blocker: string | null }>;
+    crew_reviews_skipped_recent: Array<{ at: string | null; reason: string | null }>;
+  };
+  next_scheduled: {
+    next_run_at?: string | null; last_run_at?: string | null; last_status?: string | null;
+    enabled?: boolean; consecutive_failures?: number; source?: string; note?: string;
+  };
+  definition: string;
+  source: string[];
+}
+
+export async function northseaLiveOperations(): Promise<NorthseaLiveOperations> {
+  const { result } = await northseaActie('get_live_operations', {});
+  return result as unknown as NorthseaLiveOperations;
+}
+
+// ── NorthSea Commodity — App Manager summary (pipeline / health / comms) ───
+// Three more read-only NorthSea MCP tools, each behind its own GET endpoint
+// (backend/axe_api/main.py's /northsea/pipeline-summary, /northsea/system-health,
+// /northsea/communications-metrics) rather than northseaActie() above — App
+// Manager (AppsPage.tsx) wants these on load, same as vpsStatus()/buildStatus().
+// Field names mirror the tools' real return shape (backend/northsea_mcp/
+// northsea_mcp/readtools.py::pipeline_summary/system_health/communications_metrics)
+// exactly; nothing here invents a field the tool doesn't return.
+
+export interface NorthseaPipelineMetric {
+  name: string;
+  value: number;
+  definition: string;
+  source: string[];
+  ids?: string[];
+}
+
+export interface NorthseaPipelineSummary {
+  generated_at: string;
+  metrics: NorthseaPipelineMetric[];
+  by_stage: Record<string, number>;
+  by_execution_state_excluding_lost: Record<string, number>;
+  by_qualification_status: Record<string, number>;
+  readiness_buckets: Record<string, number>;
+  map_state_counts: Record<string, number>;
+  notes: string[];
+  by_gate_passed: Record<string, number>;
+  source: string[];
+}
+
+/** Deal-pipeline counts (open/active/blocked/awaiting-approval/won) plus the
+ *  stage and gate funnel — northsea_get_pipeline_summary, unchanged. */
+export async function northseaPipelineSummary(): Promise<NorthseaPipelineSummary> {
+  return call('GET', '/northsea/pipeline-summary');
+}
+
+export interface NorthseaSystemHealth {
+  generated_at: string;
+  mcp_version: string;
+  database: {
+    reachable: boolean; tables_loaded: number; load_ms?: number;
+    table_errors: Record<string, string>; truncated_tables: string[];
+  };
+  scheduler: {
+    next_run_at?: string | null; last_run_at?: string | null; last_status?: string | null;
+    enabled?: boolean; consecutive_failures?: number; source?: string; note?: string;
+  };
+  crewai: { available: boolean | null; note: string; routes?: unknown; fallback?: unknown; studio_optional?: unknown };
+  research: Record<string, unknown>;
+  not_covered: string[];
+  source: string[];
+}
+
+/** Scheduler/database/CrewAI-availability status — northsea_get_system_health,
+ *  unchanged. `not_covered` lists what this check deliberately does not see
+ *  (the AXE CORE desktop runtime, Resend delivery, edge function health). */
+export async function northseaSystemHealth(): Promise<NorthseaSystemHealth> {
+  return call('GET', '/northsea/system-health');
+}
+
+export interface NorthseaCommunicationsMetrics {
+  generated_at: string;
+  window_weeks: number;
+  by_week: Record<string, Record<string, number>>;
+  by_channel: Record<string, number>;
+  outbound_email_delivery: Record<string, number>;
+  bounced_total: number;
+  inbound_with_analysis: number;
+  inbound_total: number;
+  drafts_by_status: Record<string, number>;
+  definition: string;
+  source: string[];
+}
+
+/** Weekly inbound/outbound communication volume — northsea_get_communications_metrics,
+ *  unchanged. `weeks` defaults to 12, matching the tool's own default. */
+export async function northseaCommunicationsMetrics(weeks = 12): Promise<NorthseaCommunicationsMetrics> {
+  return call('GET', `/northsea/communications-metrics?weeks=${weeks}`);
+}
+
+export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }
+export function mcpHubLijst(): Promise<{ servers: McpHubServer[]; sjablonen: McpHubSjabloon[] }> { return call('GET', '/mcp/hub'); }
+export function mcpHubVoegToe(sjabloon: string, label: string, velden: Record<string, string>): Promise<McpHubServer> {
+  return call('POST', '/mcp/hub/verbinding', { sjabloon, label, velden });
+}
+export function mcpHubVerwijder(id: string): Promise<{ verwijderd: string }> {
+  return call('DELETE', `/mcp/hub/verbinding/${encodeURIComponent(id)}`);
+}
+export function mcpHubTest(id: string): Promise<McpHubTest> { return call('POST', `/mcp/hub/${encodeURIComponent(id)}/test`, {}); }
+export function mcpHubRoep(id: string, tool: string, args: Record<string, unknown>): Promise<{ status: string; result?: unknown; error?: string }> {
+  return call('POST', `/mcp/hub/${encodeURIComponent(id)}/call`, { tool, arguments: args });
+}
+export function mcpHubSleutel(id: string, waarde: string): Promise<McpHubTest & { opgeslagen: string }> {
+  return call('PUT', `/mcp/hub/${encodeURIComponent(id)}/sleutel`, { waarde });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1283,6 +1639,70 @@ export async function frameworksStatus(): Promise<FrameworksStatus> {
   return call('GET', '/frameworks/status');
 }
 
+// ── App Manager — real VPS status, build freshness, service restart ────────
+// The App Manager tab used to guess a service's health from a no-cors fetch
+// against its public URL (opaque: reachable-or-not, nothing about the
+// process behind it). These three mirror the `axe_vps_status`/`axe_build`/
+// `axe_vps_service` MCP tools' equivalent HTTP surface — see main.py's
+// /vps/status, /build/status, /vps/service/restart — following exactly the
+// same call() proxy pattern as frameworksStatus() above.
+
+export interface VpsServiceState {
+  active: boolean | null;
+  state?: string | null;
+  error?: string;
+}
+
+export interface VpsStatus {
+  ok: boolean;
+  host: string;
+  services: Record<string, VpsServiceState>;
+  load: number[] | null;
+  disk: { total_gb?: number; used_gb?: number; free_gb?: number; used_pct?: number | null; error?: string };
+  memory: { available: boolean; total_mb?: number; used_mb?: number; used_pct?: number | null; reason?: string; error?: string };
+  timestamp: string;
+}
+
+/** Which of the six known VPS systemd services are up, plus load/disk/
+ *  memory — the App Manager tab's real "Check health" data. */
+export async function vpsStatus(): Promise<VpsStatus> {
+  return call('GET', '/vps/status');
+}
+
+export interface BuildStatusCommit {
+  sha: string;
+  short_sha: string;
+  message: string;
+  date: string;
+}
+
+export interface BuildStatus {
+  ok: boolean;
+  applicable: boolean;
+  reason?: string;
+  running_file: string;
+  repo_root?: string;
+  branch?: string | null;
+  commit?: BuildStatusCommit | null;
+  uncommitted_files?: number | null;
+  stale_vs_latest_commit?: boolean | null;
+}
+
+/** Git branch/commit/uncommitted-count for the checkout the VPS API is
+ *  actually running from — `applicable: false` (not fabricated) when this
+ *  host isn't running out of a git checkout at all. */
+export async function buildStatus(): Promise<BuildStatus> {
+  return call('GET', '/build/status');
+}
+
+/** Restart one of the six known VPS systemd services. Destructive — the
+ *  server rejects anything outside that allowlist with a 400. Callers must
+ *  confirm with the user first (see AppsPage.tsx); this function itself does
+ *  not ask. */
+export async function vpsServiceRestart(service: string): Promise<{ ok: boolean; service: string; action: string; note: string }> {
+  return call('POST', '/vps/service/restart', { service });
+}
+
 /** Real historical OHLC (TwelveData, server-side key) — fallback/supplement
  *  to MetaAPI's own broker history for backtesting and cold-start decisions
  *  when no MT5 account is connected yet or the broker doesn't carry the
@@ -1309,4 +1729,64 @@ export interface MarketNewsItem {
  *  actual current events instead of only the LLM's own dated knowledge. */
 export async function fetchMarketNews(category = 'forex', limit = 20): Promise<{ category: string; source: string; news: MarketNewsItem[] }> {
   return call('GET', `/market/news?category=${encodeURIComponent(category)}&limit=${limit}`);
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PLANNER — de drie hoofdagents plannen zelf (backend/axe_api/planner.py)
+// ══════════════════════════════════════════════════════════════════════════════
+export interface PlannerAgentVerslag {
+  motor: string;
+  /** Motor used to THINK of proposals; execution still uses `motor`. */
+  plan_motor?: string;
+  /** Explicit fallback when the cheap planning route could not produce valid JSON. */
+  plan_terugval?: { van: string; naar: string; reden: string };
+  voorstellen?: string[];
+  fout?: string;
+  uitgevoerd?: { taak: string; ok?: boolean; fout?: string | null; overgeslagen?: string };
+  goedgekeurd_uitgevoerd?: { taak: string; ok?: boolean; fout?: string | null; overgeslagen?: string };
+}
+export interface PlannerStatus {
+  host_kan: boolean;
+  aan: boolean;
+  bezig: boolean;
+  interval_s: number;
+  dagbudget: number;
+  gebruik_vandaag: Record<string, number>;
+  koeling: Record<string, string>;
+  motoren: Record<string, string>;
+  laatste_ronde: { begon: string; klaar?: string; agents: Record<string, PlannerAgentVerslag> } | null;
+}
+export interface PlannerTaak {
+  id: string;
+  title: string;
+  goal: string | null;
+  description: string | null;
+  status: string;
+  priority: string;
+  assignee: string | null;
+  metadata: {
+    agent?: string;
+    motor?: string;
+    risico?: 'lezen' | 'schrijven';
+    goedkeuring?: 'niet_nodig' | 'nodig' | 'ja' | 'afgewezen';
+    pogingen?: number;
+    uiStatus?: string;
+    app?: string;
+  } | null;
+  result: { output?: string } | null;
+  error: { message?: string } | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export function plannerStatus(): Promise<PlannerStatus> { return call('GET', '/planner/status'); }
+export function plannerTaken(limit = 40): Promise<{ taken: PlannerTaak[] }> { return call('GET', `/planner/taken?limit=${limit}`); }
+export function plannerZetMotoren(motoren: Record<string, string>): Promise<{ motoren: Record<string, string> }> {
+  return call('PUT', '/planner/motoren', { motoren });
+}
+export function plannerZetAan(aan: boolean): Promise<{ aan: boolean; host_kan: boolean }> { return call('PUT', '/planner/aan', { aan }); }
+export function plannerRonde(): Promise<{ gestart: boolean; reden?: string }> { return call('POST', '/planner/ronde'); }
+export function plannerBesluit(id: string, goedkeuren: boolean): Promise<{ id: string; goedkeuring: string }> {
+  return call('POST', `/planner/taken/${encodeURIComponent(id)}/besluit`, { goedkeuren });
 }

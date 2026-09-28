@@ -22,7 +22,6 @@ const CREAM = '#F5F0E6';
  * parse colour strings themselves and do not resolve CSS variables —
  * they ignore var(--x) silently, with no error, so a token here breaks
  * the render in a way nothing catches. Tokens are for CSS only. */
-const BG = '#000000';
 
 function folderOf(path: string): string {
   const parts = path.replace(/^AXE\//, '').split('/');
@@ -136,9 +135,9 @@ export function ObsidianNeuralGraph({
       const hubs = hubsRef.current;
       const hitNodes: DrawNode[] = [];
 
+      // The Tauri shell is the only page background. Keep the graph canvas
+      // transparent so Obsidian reads like Architecture, not a black rectangle.
       ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = BG;
-      ctx.fillRect(0, 0, W, H);
 
       const gs = 22;
       ctx.fillStyle = 'rgba(255,255,255,0.035)';
@@ -481,7 +480,7 @@ export function ObsidianNeuralGraph({
   const activeHub = hubsRef.current.find(h => h.id === drillHub);
 
   return (
-    <div className="absolute inset-0" style={{ background: 'var(--bg-base)' }}>
+    <div className="absolute inset-0" style={{ background: 'transparent' }}>
       <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
 
       {drillHub && (

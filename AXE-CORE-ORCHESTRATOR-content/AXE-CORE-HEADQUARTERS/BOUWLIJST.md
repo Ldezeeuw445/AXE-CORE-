@@ -1,6 +1,6 @@
 # AXE CORE — bouwlijst
 
-Bijgewerkt 9 september 2026. Alles hieronder is **gemeten**, niet aangenomen.
+Bijgewerkt 24 september 2026. Alles hieronder is **gemeten**, niet aangenomen.
 Staat er een aanname, dan staat erbij dat het er een is.
 
 Lees eerst `AGENTS.md` in de hoofdmap. Werk je hieraan met Cursor of Cowork:
@@ -25,60 +25,86 @@ zet je naam bij het punt dat je oppakt, zodat we niet twee keer hetzelfde doen.
 
 ## 1 — Tabs kloppend maken
 
-De browser-tab is de meetlat. Elke andere tab moet daaraan voldoen.
+De browser-tab is de meetlat. De vijf layoutregels staan in `AGENTS.md` en
+`UI-MAATSTAF.md`. Primitieven: `TabRuimte`, `Kaart`, `SectieBlok`, `SchuifBalk`
+in `src/presentation/components/layout/tabMaatstaf.tsx`. Alleen stijl en
+indeling — geen data, hooks, stores of API. Composer, chat, voice en AICore
+blijven buiten dit spoor (eigen PR).
 
-- [ ] **1.1** Per tab langs `UI-MAATSTAF.md`. Nog niet gedaan voor: Agents,
-      Apps, Knowledge, Control Plane, Calendar, Cron, Organization, Terminal,
-      Obsidian, Maps, EVE, CrewAI, Table editor, Command, Developer.
+Volgorde, bewust: eerst de regel en de gedeelde vorm, dan Settings (Luka's
+belangrijkste tab), dan MCP (het tegenvoorbeeld), dan de rest.
+
+- [x] **1.0** Regel vastgelegd in `AGENTS.md`, `UI-MAATSTAF.md` en hier.
+      Gedeelde primitieven + tokens (`--axe-kaart-*`, één definitie, test
+      `kaartMateriaal.test.ts`) horen in dezelfde PR als 1.0a/1.0b.
+      Aanvulling 24 september: elke tab heeft links én rechts dezelfde
+      hover/click-lade. Rechts mag leeg zijn totdat een tab echte context heeft.
+- [x] **1.0a** Settings: gegroepeerde matzwarte kaarten in sectieblokken,
+      Browser-vormige schuifbalk (Providers / Voice / Trust / Routing /
+      System / General), inhoud gecentreerd in `TabRuimte`.
+- [x] **1.0b** MCP: compacte stat-kaarten (niet meer `STAT_ROW` die drie
+      cijfers tot balken rekt), ruimere serverkaarten in `.axe-kaart-raster`,
+      tool-tester in een Agents-sectieblok, zelfde schuifbalkvorm.
+- [x] **1.0c** Calendar, Cron, Tasks: `TabRuimte` (Calendar/Cron/Tasks
+      vullen), Tasks-schuifbalk Status, Cron-formulier als `Kaart`,
+      TASKS/CRON JOBS als `SectieBlok`. Geen `LIST_GRID` meer op Cron.
+- [ ] **1.0d** Resterende tabs dezelfde primitieven. Gedaan: Finance
+      (`StatRij` + Source-schuifbalk), Control Plane + CrewAI (`StatRij`,
+      geen `STAT_ROW`), Organization (`TabRuimte vullen`). Nog open:
+      Agents, Apps, Knowledge, Terminal, Obsidian, Maps, EVE,
+      Table editor, Command, Developer, Infrastructure, Memory,
+      Home (alleen wat geen composer/AICore is).
+- [ ] **1.1** Per tab langs `UI-MAATSTAF.md` — volgt uit 1.0c/1.0d.
 - [ ] **1.2** Vier tabs gebruiken minder dan de helft van de hoogte:
-      eve 32%, tasks 46%, cron-manager 47%, mcp 50%.
+      eve 32%, tasks 46%, cron-manager 47%, mcp 50%. MCP hoort na 1.0b
+      inhoud-bepaald te zijn (niet opgerekt); hermeten na pull.
 
 ## 2 — Agents
 
-### ⚠ Eerst dit: er zijn twee leerlussen, en maar één telt mee
+### Twee vormen, één lus
 
-Gemeten 9 september op `agent_learning_episodes`:
-
-| | waar het staat | voedt de versterking |
-|---|---|---|
-| **trading** | Supabase, 1099 episodes | **ja** |
-| chat, browser, code-editor, lokale code | `localStorage`, per apparaat | **nee** |
-
-De andere agents leggen hun beurten wél vast — ze zijn niet stuk. Maar dat
-gebeurt in `axe_memory_feedback_v1` in de browseropslag, en
-`applyAgentReinforcement` leest alleen uit Supabase. Die beurten worden dus
-opgeschreven en er gebeurt nooit iets mee. Op een tweede computer beginnen ze
-bovendien weer bij nul.
-
-**AXE Core leert dus alleen van trading.** Van elk gesprek, elke browsertaak en
-elke code-bewerking wordt netjes bijgehouden wat eruit kwam, en dat verdampt.
-
-**De reparatie is een koppeling, geen herbouw.** De twee vormen passen op
-elkaar:
+De koppeling staat er. Beurten blijven in localStorage (kort, per apparaat);
+episodes gaan naar Supabase (duurzaam, voor de versterking). `noteRetrieval`
+opent beide; `noteTurnOutcome` / `noteOwnerOutcome` sluiten beide.
 
 ```
 noteRetrieval(query,  memoryIds, memoryKeys, owner)  → turnId  (localStorage)
 openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
 ```
 
-- [ ] **2.0** `noteRetrieval` opent óók een episode; `noteTurnOutcome` sluit
-      hem. Dan is er één lus en werkt de versterking voor iedereen.
+- [x] **2.0** `noteRetrieval` opent óók een episode; het oordeel sluit hem.
+      `'local-code'` valt onder `'code-editor'`. Offline (`openEpisode` →
+      null of een throw) laat de beurt in localStorage gewoon werken.
 
-  Drie dingen om op te letten:
-  1. `noteRetrieval` is synchroon en geeft een string terug; `openEpisode` is
-     async. Het episodeId moet dus op de beurt bewaard worden zodra het er is,
-     zonder de aanroeper te laten wachten.
-  2. `LoopAgent` kent `'chat' | 'trading' | 'code-editor' | 'browser' |
-     'research'`. De eigenaar `'local-code'` die ik zette staat daar niet in —
-     kies of die erbij hoort of onder `code-editor` valt.
-  3. Zonder Supabase-sessie geeft `openEpisode` netjes null. De beurt in
-     localStorage moet dan gewoon blijven werken; offline mag geen fout geven.
+  De brug bestond al (commit `72f8e6ea`) maar de lus kwam niet rond.
+  Gemeten 23 september op AXE Companion:
 
-  **Meet je resultaat zo:** voer een chatbericht in, en daarna:
+  | agent | geopend | gesloten |
+  |---|---|---|
+  | trading | 5024 | 72 |
+  | chat | **2** | **0** |
+  | browser, code-editor, research | 0 | 0 |
+
+  Beide chat-rijen hadden herinneringen, `verdict = unknown`, `closed_at`
+  null. Oorzaak: `openEpisode` is async en voiceStore geeft geheugen 500ms;
+  het oordeel kwam eerder dan het episode-id (of eerder dan de beurt zelf)
+  en verdween. Zonder sluiten leest `applyAgentReinforcement` ze nooit.
+
+  Tests die falen op de oude code: oordeel vóór episode-id, oordeel vóór
+  ophalen, `openEpisode` null/throw, lege RAG opent wél een `chat`-rij,
+  voiceStore roept `noteOwnerOutcome` aan (`beurtNaarEpisode.test.ts`,
+  `learningLoopWiring.test.ts`).
+
+  **Live nabouwen, in de draaiende app:**
   ```sql
-  select agent, count(*) from agent_learning_episodes group by agent;
+  select agent, count(*) filter (where closed_at is not null) as closed,
+         count(*) as opened
+  from agent_learning_episodes
+  group by agent;
   ```
-  Er hoort een rij `chat` bij te komen. Nu staat daar alleen `trading`.
+  Na één chatbericht hoort `chat.opened` omhoog te gaan, en na het antwoord
+  `chat.closed` ook. Hier geen composer-sessie, dus dat laatste is niet
+  live gemeten.
 
 
 - [ ] **2.1** **De agents-tab toont dubbelen.** 18 agents in `core_agents`,
@@ -245,6 +271,13 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       **Niet om op te handelen**: `assertTradeable` blijft de prijs van de
       rekening eisen die de order vult. LSE is voor de grafiek, backtests en
       context — `source: 'lse'`, zodat de bewaker hem herkent en weigert.
+- [x] **3.3c — execution vraagt geen fill op LSE/Binance** Gemeten in tests
+      (niet live): `fetchTradeableSnapshot` loopt niet meer door de
+      grafiek-cascade. Als MetaAPI zwijgt wordt LSE niet aangeroepen, de
+      cyclus stopt vóór research (`magDureCyclus` / `probeerBrokerPrijs`),
+      en `brokerPlaceOrder` weigert met `venue: 'price'`. DJ30 telt als
+      US30 (register-alias, bewezen); GER40→DE30 niet. **3.1e blijft open**
+      — een live cyclus met een order is nog niet gemeten.
 - [ ] **3.3b — hernoemde symbolen** `GER40` heet bij LSE `DE30/EUR`. De
       vertaling zoekt in de catalogus en raadt geen hernoemingen, dus die geeft
       niets terug. Een tabel kan dat oplossen, maar alleen op bewijs per stuk —
@@ -295,6 +328,144 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
 
 ---
 
+## 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis)
+
+Aangepast van de Jarvis OS 2.0 / Jev-slides naar wat AXE Core al is: de
+baas-chat naast de composer, de bestaande agents (War Room / Wingman,
+NorthSea Desk, Trading / AXE Algo, Developer, …), de leerlus (#172),
+RAG per taak, George (#173), first-token (#175), Whisper (#178) en de
+LLM-cascade. Geen Obsidian-plicht, geen Claude Code-plicht. Twee deuren
+(Home/HUD + dashboard) delen één brein.
+
+Dit is **niet** de roster-tier in `roster.ts` (manager / worker /
+assistant). Dit is de aanvraag-route.
+
+### Fase 1 — tier-router (deze PR)
+
+- [x] **6.1** Elke beurt door een classifier die tier 1/2/3 teruggeeft,
+      plus agent/skill bij tier 3, in ruim onder 1s. Regels eerst;
+      optioneel Groq `llama-3.1-8b-instant` bij twijfel; timeout 700ms
+      → huidig pad.
+- [x] **6.2** Tier 1 antwoordt zonder groot model: groet (`hey axe`),
+      status, taken / prioriteiten / agenda uit opgeslagen data.
+- [x] **6.3** Tier 2 = klein snel model, lichte context, gestreamd.
+- [x] **6.4** Tier 3 erkent meteen, zet een durable task bij de bestaande
+      agent, schrijft het resultaat in de leerlus/RAG.
+- [x] **6.5** Cognitive stream toont `route · tier N · … · Nms`.
+      Latency staat op het `RoutingEvent`.
+- [x] **6.5a** Multi-intent: één zin met meerdere taken wordt geknipt
+      (NL + EN), elk stuk een eigen job, parallel, één korte ack.
+      De chat blijft open voor nieuwe T1/T2-beurten.
+- [x] **6.5b** Agents-balk boven de composer (`N agents running`),
+      matzwart met dunne lijn; klik opent naam / agent / stand.
+- [x] **6.5c** Klaar job komt als korte samenvatting in de chat.
+      George TTS wacht als de gebruiker praat (spraakrij + barge-in).
+      `Wat heb je gedaan?` / `status` is T1 uit de job-store.
+- [x] **6.5d** Zin-voor-zin TTS tijdens de LLM-stream: eerste complete
+      zin speelt terwijl de rest nog komt. Per-beurt `lat · stt · route
+      · token · audio` in de cognitive stream.
+- [x] **6.5e** Orb volgt mic (listening) en TTS-analyser (speaking).
+      Settings-schakelaar: George (standaard), Cedar, ElevenLabs Flash
+      v2.5, ElevenLabs v3 Conversational, Cartesia Sonic, Fish.
+      Sleutels alleen via Settings → Keys / `VITE_*` — geen waarden
+      in de repo.
+
+**Al aanwezig vóór deze PR:** `classifyQuery` / `classifyChatIntent` /
+`isSocialChatTurn` / `routeFast` / `delegateFor`, durable tasks + monitor
+in `installStableChat`, first-token stream, leerlus (`noteRetrieval` →
+`noteOwnerOutcome`), Groq-slot, Whisper-lus + barge-in (#178).
+
+**Nog niet:** gemeten latency op de Mac (regels zijn in tests <5ms;
+het model-pad is begrensd op 700ms). NorthSea auto-send blijft uit.
+
+### Fase 2 — gestructureerd geheugen
+
+- [ ] **6.6** Vaste mappen: inbox / projects / content / wiki. Dagelijks
+      briefje met plan, top 3, agenda. Elke taak laat een rapport achter.
+      Harvest: een klaar project wordt een wiki-artikel.
+
+**Al aanwezig:** RAG (`searchRagMemories`), leerlus + episodes, namespaces
+(`axe_trader`, `global`, …), `writeConversationMemory`, Obsidian-tab,
+continuous memory. **Ontbreekt:** de vaste structuur, het dagelijkse
+briefje, rapport-per-taak, harvest.
+
+### Fase 3 — skills als knoppen
+
+- [ ] **6.7** Plan Today, Inbox Brief, Intel Brief, Deep Research, Weekly
+      Review: dezelfde knoppen op Home/HUD en het dashboard, elk een
+      nagekeken skill, ook via stem.
+
+**Al aanwezig:** `skillRegistryService` / Architecture-skills, War Room,
+delegate-signalen. **Ontbreekt:** die vijf knoppen als één bron, stem-
+aanroepbaar, gekoppeld aan de router.
+
+### Fase 4 — stem-UX
+
+- [ ] **6.8** Spreken, pauze = versturen, Esc = stop, globale hotkey,
+      een bol die altijd idle / listening / working / speaking / error
+      toont.
+
+**Al aanwezig:** Whisper-lus, George (Kokoro), `voiceStatus`, Home-bol
+die meeloopt met die status, `statusOrb.ts` (idle/listening/thinking/
+speaking/error), #178 stilte-wacht, Esc stopt de stemlus, barge-in
+kapt TTS af, job-spraak wacht in de rij, zin-voor-zin TTS, orb op
+mic + TTS-niveau, stem-motor in Settings. **Ontbreekt:** globale
+hotkey om de mic van overal te openen.
+
+### Fase 5 — OS3-gevoel: praten terwijl het werk doorloopt (25 sep)
+
+- [x] **6.9** Achtergrondtaken uit het gesprek worden echt uitgevoerd.
+      Bewijs: nul tier-3-taken ooit (core_tasks, 25 sep); Gemini gaf 402,
+      'code'/'trading'/'research' hadden geen handler. Nu alles `agentic`,
+      agent-lus op Groq → OpenAI → Gemini → ollama. Smoketest op de VPS:
+      klaar en bewezen in 2 stappen, samenvatting is het antwoord zelf.
+- [x] **6.10** Leestaken zijn echt dicht: `execution_mode=read` blokkeert
+      schrijven en posten; mail/versturen vraagt altijd je ok. Smoketest:
+      schrijfopdracht in een leestaak schreef niets.
+- [x] **6.11** Beurtplan: één snel model leest de hele beurt (brain dump) en
+      scheidt opdrachten, dingen om te onthouden, herinneringen en praten.
+      Getest op echte Nederlandse zinnen met gpt-4.1-mini (Groq's gratis
+      dagtegoed was op). Geen plan binnen 3s = oude regelroute.
+- [x] **6.12** Een taak die op je ok wacht, meldt zich één keer in het gesprek.
+- [x] **6.13** Kern van de sphere spreekt mee met AXE (zelfde signaal als de
+      composer-pulse).
+- [x] **6.14** Agent-vensters rond de core op Home (screenshot shell-preview).
+- [x] **6.15** Machinekeuze (Rabbit OS3: de cloud denkt, de apparaten doen).
+      De agent-lus op de VPS heeft `list_devices` + `run_on_device`
+      (`backend/axe_api/device_actions.py`): een actie wordt een
+      `computer_use`-rij met `target_device`, die alleen de worker op díe Mac
+      pakt. Tiers gelijk aan `riskTiers.ts` (test bewaakt dat); klikken/typen
+      vraagt één ok per Mac+gereedschap, ingrijpend elke keer, leestaak weigert.
+      Bewezen 25 sep: "welke app staat vooraan op de Mac mini en de iMac" →
+      beide Macs gevraagd, juist antwoord, 3 stappen. iMac mist nog
+      Toegankelijkheid + Schermopname (Luka zet die zelf aan).
+      Worker vergelijkt nu met zijn start-build, niet live HEAD (autosync).
+- [x] **6.17** Praten blijft praten (25 sep). Een gewoon spraakgesprek werd 25
+      "browser"-taken: het plan viel over zijn 3s-limiet en de terugval knipte
+      op komma's. Nu: plan-modellen tegelijk (eerste geldige wint, 6s), geen
+      plan = gewoon terugpraten (en eerlijk zeggen dat niets gestart is), alleen
+      een korte losse opdracht mag zonder plan één taak worden. Prompt: reageer
+      als een mens, geen help-desk-opvulling; stemmingen/verhalen niet onthouden.
+      Gemeten (gpt-4.1-mini): verhaal/stoom afblazen → 0 taken, ~1,1s;
+      gemengde beurt → 1 taak + 1 herinnering + 1 idee, 1,9s.
+- [x] **6.18** AXE onthoudt en gebruikt het (25 sep). Alles werd al opgeslagen
+      (rag_memories ~400/dag), maar het snelle gesprekspad las niets terug
+      (RAG-budget 0 ms). Nu `application/memory/gespreksGeheugen.ts`: profiel +
+      recente herinneringen altijd warm (0 ms), zoeken op de beurt met 600 ms
+      grens (400 ms voor snelle antwoorden); blok gaat in plan én tier 2.
+      Plan onthoudt alles wat later telt (ideeën, mensen, feiten), niet opvulling.
+      Gemeten: "wat wilde ik opschonen?" → "de trading desk, toch?", 1,2s.
+- [x] **6.19** Eén gesprek op alle apparaten (OS3). Berichten dragen
+      `metadata.device`; `installGesprekSync` kijkt elke 4s wat andere apparaten
+      opsloegen: erbij in dit gesprek, of meeverhuizen naar het gesprek waar Luka
+      elders mee verderging (alleen als AXE hier stil is). Gesprek laadt de
+      nieuwste 500 i.p.v. de oudste; Supabase-terugval filterde op de verkeerde
+      user_id en gaf altijd niets.
+- [ ] **6.16** Echt getest in de app met stem: een brain dump van een paar
+      minuten, onderbreken, resultaten die terugkomen. Nog niet gedaan.
+
+---
+
 ## Hoe je een punt afvinkt
 
 Niet omdat de code er staat. Alleen met bewijs dat losstaat van je eigen
@@ -302,3 +473,73 @@ redenering: een test die faalt zonder je wijziging, een meting, een screenshot.
 
 Blijkt een punt niet te kloppen, verbeter dan de tekst hier in plaats van er
 stilletjes iets anders van te maken.
+
+---
+
+## 7 — axe-commandolaag (CLI + hek, geen tweede agent)
+
+De CLI en het hek zitten **bovenop wat er al is**. Geen nieuwe
+node-daemon, geen nieuwe geheugenstore. Rabbit OS3 is een optionele
+extra executor via dezelfde `cli/axe`.
+
+- [x] **7.1** `axe` CLI (Python 3, geen extra packages) + geteste parser,
+      guardrails en JSON-uitvoer (`src/cli/*.test.ts`, `cli/test_axe_laag.py`).
+- [x] **7.2** Commando's mappen op wat er al is: taken, geheugen/RAG,
+      agents/durable kernel, NorthSea (read-only), trading cockpit, cron, MCP,
+      `axe node list` → bestaande `core_computer_workers`.
+- [x] **7.3** Hek: alleen-lezen tot `--write`; hard geblokkeerd: mail,
+      NorthSea `auto_send_*`, merge naar `orchestrator`, wissen.
+- [x] **7.4** `os3/SKILL.md` + `os3/SETUP.md`.
+- [ ] **7.5** Gemeten op de Mac mini en de VPS: `axe status --json` en de
+      vijf testprompts uit SETUP.md. Hier niet live gemeten.
+- [ ] **7.6** `cli_laag.py` op de box (`vps_sync.py check` na deploy).
+- [ ] **7.7** AXON-read in chat — **niet** een vierde store. Write-bridge
+      bestaat (`axonMemoryBridge.ts`); CLI-label `axon` is een stub op RAG.
+      Alleen doen als je de bestaande `axonContextPack` in
+      `buildDurableMemoryContext` hangt.
+
+---
+
+## 8 — Inventaris: bestaat / deels / ontbreekt
+
+Niet bouwen wat hier **bestaat**. Uitbreiden waar het **deels** is.
+Alleen het **ontbrekende** is werk — en dat is niet "een node-agent" of
+"een memory backend".
+
+Status is gemeten aan **aanroepers**, niet aan definities (val 2).
+
+### Uitvoering / machines
+
+| Stuk | Status | Waar (aanroeper) | Tabellen | Niet doen |
+|---|---|---|---|---|
+| Computer-use worker | **bestaat** | `infra/computer-worker/worker.mjs` ← Computer Use-tab, `toolRegistry.computer.ts`, launchd `com.axe.computer-worker` | `core_computer_workers`, `core_tasks` (`computer_use`, `target_device`), `core_task_events`, `core_trust_levels` | Geen tweede daemon, geen `core_nodes` |
+| Claude-local / Mac-relay | **deels** | `infra/claude-local-worker/worker.mjs` ← `macRelayService.ts`, `[MAC:]`, voice; **geen launchd** | `core_tasks` (`claude_local`) | Geen `target_device`; niet vervangen door `axe node run` |
+| Durable task kernel | **bestaat** | `task_runtime.py` / `task_worker.py` ← `/tasks*`, CLI `agent run`, ControlPlane, planner | `core_tasks`, `core_task_steps`, `core_approvals`, `core_task_events` | Geen parallelle job-queue |
+| Device Manager (PR #149) | **deels** | `MobileSystem.tsx`, `device-manager/*`; native Android buiten repo | via `core_tasks` + loopback ADB `:4599` | Geen Samsung-side worker in deze repo |
+| Browser-agent | **bestaat** | `browser_agent_app.py`, `com.axe.browser-agent` | — (in-process) | Niet via `core_tasks` |
+| Terminal / mac-tunnel | **deels** | `terminal-server.cjs` (lokaal), `infra/axe-mac-tunnel` (handmatig) | — | Tunnel is outbound WebSocket, geen node-agent |
+| LiveKit `core_devices` | **deels** | `livekitService.ts` | `core_devices`, `core_voice_*` | **Andere tabel** dan workers; niet hergebruiken voor executie |
+| `axe node list` | **bestaat** (deze PR) | `GET /cli/nodes` leest `core_computer_workers` (45s, zelfde als `onlineDevices()`) | zelfde | Geen register/run/pairing |
+| Nieuwe `axe node` daemon | **ontbreekt — bewust** | — | — | Niet bouwen; computer-worker ís de outbound executor |
+| Pairing-token / `core_node_secrets` | **ontbreekt — bewust** | — | — | Workers auth'en al via service role / API-key |
+
+### Geheugen / leerlus / agents
+
+| Stuk | Status | Waar (aanroeper) | Tabellen | Niet doen |
+|---|---|---|---|---|
+| Leerlus PR #172 | **bestaat** | `noteRetrieval` / `noteOwnerOutcome` ← chat, voice, browser, code-editor; `axeBootstrap` 15 min | `agent_learning_episodes` + localStorage beurten | Geen tweede reinforcement |
+| RAG semantisch | **bestaat** | `searchRagMemories` ← `searchGlobalBrain` ← `buildGlobalMemoryContext` (chat, agents) | `rag_memories`, RPC `match_rag_memories` | Geen tweede vectorstore |
+| `global_memory` | **bestaat** | `memoryRecorder`, `/memory/upsert`, workers | `global_memory` | CLI-audit mag hierin, geen nieuwe event-log |
+| Agent-namespaces | **bestaat** | `agentMemoryService` + `catalog.ts` `namespace` | `memory` | — |
+| RAG per taak / bestanden per taak | **ontbreekt** | worker schrijft `global_memory` key `task_agent:{id}` | geen task-scoped RAG | Alleen bouwen als Luka dat apart vraagt |
+| CLI `axe memory` | **bestaat** (deze PR) | `/cli/memory/search\|add` → RAG + global; ILIKE, niet pgvector | zelfde | Geen AXON-transport tot read-pad bestaat |
+| AXON-product | **bestaat** (extern) | `axonMemoryBridge.ts` write vanuit trading | AXON-Supabase | Geen vierde store in AXE |
+| AXON-read in chat | **ontbreekt** | `axonContextPack` alleen in tests | — | Hang in `buildDurableMemoryContext`, niet een nieuwe backend |
+| Roster + dispatch | **bestaat** | `roster.ts` → voice; CLI → `/cli/agents/{id}/run` → `core_tasks` | `core_agents` (UI), roster (code) | 18 DB-rijen vs 13 roster — niet hier oplossen |
+| Loop-wiring research/northsea/developer | **ontbreekt** | in `LOOP_AGENTS` maar geen `openEpisode`-aanroeper | — | Geen CLI-werk |
+| `agenticEngine.ts` | **dood** | geen importeurs; echte runs via Python `task_worker.py` | — | Niet "aansluiten" zonder meting |
+
+### Wat deze PR wél is
+
+CLI + hek + `axe node list` als leesbril op de bestaande worker-tabel.
+OS3-skill als optionele extra. Verder niets.
