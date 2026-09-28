@@ -22,8 +22,8 @@ import { LadeKaart } from '@/presentation/components/layout/tabMaatstaf';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
-import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
-import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
+import { VPS_API_ORIGIN, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
+import { webProxyStand } from '@/domain/webProxyStand';
 import { useLocation } from 'react-router';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
@@ -132,8 +132,16 @@ function VpsRow({ label, origin, state }: { label: string; origin: string; state
   );
 }
 
+/* De web-app praat niet rechtstreeks met de VPS maar via een same-origin proxy
+   (Cloudflare Pages Functions); de ingepakte Tauri-app wel rechtstreeks. Stond
+   dat samen in één "Strato"-regel, dan leek een kapotte proxy op een dode VPS
+   -- precies wat er op 28 sep gebeurde. */
+const AXE_API_BASIS = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
+const VIA_PROXY = AXE_API_BASIS !== VPS_API_ORIGIN;
+
 function VpsHealthWidget() {
   const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
+  const [proxy, setProxy] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [hetzner, setHetzner] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcp, setGcp] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcpConfigured, setGcpConfigured] = useState(false);
@@ -141,15 +149,14 @@ function VpsHealthWidget() {
   useEffect(() => {
     let cancelled = false;
 
+    // Rechtstreeks: /health is openbaar en de VPS staat CORS toe vanaf
+    // axeheadquarters.com. Zo meet deze regel de VPS en niets anders.
     const tickStrato = async () => {
       const t0 = performance.now();
       try {
-        const health = await Promise.race([
-          checkAxeApi(),
-          new Promise<null>((_, reject) =>
-            window.setTimeout(() => reject(new Error('timeout')), 6000),
-          ),
-        ]) as Awaited<ReturnType<typeof checkAxeApi>>;
+        const res = await fetch(`${VPS_API_ORIGIN}/health`, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const health = await res.json() as { status?: string; supabase?: boolean; n8n?: boolean; github?: boolean };
 
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
@@ -224,7 +231,23 @@ function VpsHealthWidget() {
       }
     };
 
-    const tick = () => { void tickStrato(); void tickHetzner(); void tickGcp(); };
+    const tickProxy = async () => {
+      if (!VIA_PROXY) return;
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`${AXE_API_BASIS}/health`, { signal: AbortSignal.timeout(6000) });
+        const contentType = res.headers.get('content-type') ?? '';
+        const body = contentType.includes('json') ? await res.json().catch(() => null) : null;
+        if (cancelled) return;
+        const stand = webProxyStand({ status: res.status, contentType, body });
+        setProxy({ ...stand, latencyMs: stand.status === 'online' ? Math.round(performance.now() - t0) : null });
+      } catch {
+        if (cancelled) return;
+        setProxy({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+      }
+    };
+
+    const tick = () => { void tickStrato(); void tickProxy(); void tickHetzner(); void tickGcp(); };
     tick();
     const id = window.setInterval(tick, 30_000);
     return () => {
@@ -236,6 +259,12 @@ function VpsHealthWidget() {
   return (
     <div className="space-y-3">
       <VpsRow label="Strato" origin={VPS_API_ORIGIN} state={strato} />
+      {VIA_PROXY && (
+        <>
+          <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+          <VpsRow label="Web proxy" origin={`${typeof window !== 'undefined' ? window.location.host : ''}${AXE_API_BASIS}`} state={proxy} />
+        </>
+      )}
       <div style={{ height: 1, background: 'var(--border-subtle)' }} />
       <VpsRow label="Hetzner" origin={OLLAMA_HEALTH_URL} state={hetzner} />
       {gcpConfigured && (
