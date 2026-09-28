@@ -49,6 +49,26 @@ export function jwtInhoud(authorization: string | null): { sub?: string; role?: 
   }
 }
 
+/**
+ * Een fout van boven in het functielog: welk pad, welke provider en welk
+ * model, en wat de VPS zei. Nooit de sleutel: uit de body komen alleen
+ * provider en model mee (de client kan er een providersleutel in zetten).
+ *
+ * Bestaat sinds 28 sep: /proxy/ai gaf 502 en "all providers failed", en
+ * nergens stond waarom.
+ */
+async function logFout(pad: string, upstream: Response, body: ArrayBuffer | undefined): Promise<void> {
+  let provider: unknown;
+  let model: unknown;
+  try {
+    const verzoek = body ? JSON.parse(new TextDecoder().decode(body)) : null;
+    provider = verzoek?.provider;
+    model = verzoek?.model;
+  } catch { /* geen JSON */ }
+  const fout = await upstream.clone().text().catch(() => '');
+  console.warn(JSON.stringify({ axeProxyFout: pad, status: upstream.status, provider, model, fout: fout.slice(0, 300) }));
+}
+
 export async function behandel(req: Request, omg: ProxyOmgeving, doeFetch: typeof fetch = fetch): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
@@ -77,11 +97,9 @@ export async function behandel(req: Request, omg: ProxyOmgeving, doeFetch: typeo
   if (repo) headers['X-AXE-Repo'] = repo;
 
   try {
-    const upstream = await doeFetch(`${omg.vps}${pad}${url.search}`, {
-      method: req.method,
-      headers,
-      body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer(),
-    });
+    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer();
+    const upstream = await doeFetch(`${omg.vps}${pad}${url.search}`, { method: req.method, headers, body });
+    if (!upstream.ok) await logFout(pad, upstream, body);
     // Status en body ongewijzigd door, ook een stream (/proxy/ai).
     return new Response(upstream.body, {
       status: upstream.status,

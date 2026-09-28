@@ -53,6 +53,18 @@ describe('axe-core-proxy', () => {
     expect((init.headers as Record<string, string>)['X-AXE-Repo']).toBe('axe-core');
   });
 
+  it('logt een fout van boven met provider en model, zonder de sleutel', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const f = vps({ detail: 'groq: 401 invalid api key' }, 502);
+    await behandel(new Request(`${BASIS}/proxy/ai`, { method: 'POST', headers: { Authorization: `Bearer ${jwt({ sub: EIGENAAR, role: 'authenticated' })}` }, body: '{"provider":"groq","model":"llama","key":"geheim-providersleutel"}' }), omg, f);
+    const regel = String(warn.mock.calls[0][0]);
+    expect(JSON.parse(regel)).toMatchObject({ axeProxyFout: '/proxy/ai', status: 502, provider: 'groq', model: 'llama' });
+    expect(regel).toContain('invalid api key');
+    expect(regel).not.toContain('geheim-providersleutel');
+    expect(regel).not.toContain('vps-sleutel');
+    warn.mockRestore();
+  });
+
   it('beantwoordt de preflight zonder token', async () => {
     const res = await behandel(new Request(`${BASIS}/health`, { method: 'OPTIONS' }), omg, vps());
     expect(res.status).toBe(204);
