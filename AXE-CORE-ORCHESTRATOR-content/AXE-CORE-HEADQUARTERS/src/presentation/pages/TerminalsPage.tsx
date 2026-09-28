@@ -135,7 +135,12 @@ export default function TerminalsPage() {
         {/* Wat er open MOET blijven staan, op de plek waar je het nodig hebt.
             Het stond alleen in docs/TERMINALS.md, en een document dat je moet
             opzoeken bestaat niet op het moment dat je het nodig hebt. */}
-        <span className="text-[9.5px] flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+        {/* Op een telefoon weg. Deze regel is drie keer zo lang als de rest van
+            de kopregel en wikkelt daar over drie regels -- hij duwt de
+            machinekiezer naar beneden terwijl hij alleen iets HERHAALT wat in
+            het API-vak zelf al bij de commando's staat. Op een breed scherm
+            past hij en hoort hij er te staan. */}
+        <span className="hidden text-[9.5px] items-center gap-2 md:flex" style={{ color: 'var(--text-muted)' }}>
           <span className="axe-term-blijft" aria-hidden="true" />
           {/* Wat er open MOET blijven staan. Sinds AXE CORE de diensten zelf
               start is dat op deze Mac niets meer -- en dan hoort die regel er

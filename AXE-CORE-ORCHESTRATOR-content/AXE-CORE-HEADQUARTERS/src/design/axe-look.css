@@ -1978,6 +1978,41 @@ html:root[data-look][data-ios-pwa],
   min-height: 0;
 }
 
+/* ── Op een telefoon is er geen ruimte om weg te geven ────────────────────
+ *
+ * De twee regels hierboven zijn op 25 september geschreven tegen een BREED
+ * scherm: daar liepen Agents, MCP, Settings en EVE van rand tot rand met
+ * dertien kaarten op een rij, en een marge loste dat op. Voor een smal scherm
+ * is er toen niets bijgekomen, en de som pakt daar rampzalig uit.
+ *
+ * Doorgerekend op 390px: `margin-inline: clamp(14px, 10vw, 230px)` geeft 39px
+ * aan weerskanten, en `calc(100% - 2 * 75px)` haalt er nog eens 150px af. Wat
+ * overblijft is ongeveer 210 pixels inhoud -- smaller dan de meeste kopregels
+ * en knoppenrijen in deze app. Alles wat niet meekrimpt loopt buiten dat vak,
+ * en omdat de pagina's `overflow-hidden` staan zie je dat niet als "te smal"
+ * maar als LEEG. Vandaar dat bijna elke tab op de telefoon niets toonde
+ * terwijl de pagina wel degelijk gerenderd werd.
+ *
+ * Dezelfde selector als hierboven, zodat hij op specificiteit gelijk staat en
+ * de volgorde beslist; dit blok staat later, dus het wint. `width: auto` in
+ * plaats van een som: op een telefoon IS de plaat de breedte, en elke pixel
+ * die je eraf haalt is er een die de inhoud niet heeft.
+ *
+ * 767px en niet 700: dit is dezelfde grens als useIsMobile (768), zodat de
+ * layout en de code het over hetzelfde scherm hebben. Twee grenzen die net
+ * niet samenvallen geven een strook breedtes waarin het ene de telefoon ziet
+ * en het andere niet. */
+@media (max-width: 767px) {
+  :root[data-look] .axe-tabruimte,
+  :root[data-look] .axe-tabruimte:not(.axe-tabruimte--vullen) {
+    width: auto;
+    max-width: none;
+    margin-inline: 8px;
+    margin-bottom: 8px;
+    align-self: stretch;
+  }
+}
+
 :root[data-look] .axe-inhoud {
   width: 100%;
   min-width: 0;
