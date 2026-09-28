@@ -7,7 +7,7 @@
  *  2. VPS axecompanion.com/browse (production / Vercel)
  *  3. Direct browser fetch (CORS-permitting fallback)
  */
-import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { apiUrl, axeCoreApiExtraHeaders, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 
 export interface BrowseIntel {
   scriptSrcs: string[];
@@ -161,8 +161,10 @@ export async function browseFetch(url: string): Promise<BrowseResult> {
 
   // ── 2. VPS proxy ────────────────────────────────────────────────────────
   try {
-    const BASE = apiUrl(import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore');
+    // Zelfde weg als axeCoreApiService: web via axe-core-proxy, Tauri rechtstreeks.
+    const BASE = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
     const res = await fetch(`${BASE}/browse?url=${encodeURIComponent(url)}`, {
+      headers: axeCoreApiExtraHeaders(),
       signal: AbortSignal.timeout(18_000),
     });
     if (res.ok) {

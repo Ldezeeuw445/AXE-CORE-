@@ -99,16 +99,36 @@ export function apiUrl(path: string): string {
 // 14 sep eisen ze AXE_CORE_API_KEY, net als de rest: zie vpsAuthHeaders().
 export const VPS_API_ORIGIN = (import.meta.env.VITE_VPS_API_ORIGIN as string | undefined) ?? 'https://api.axecompanion.com';
 
-/** Resolves the AI-provider proxy: VPS directly when packaged, else the
- *  normal apiUrl('/api/proxy/ai') (Vercel prod, or the dev proxy). */
+/**
+ * De web-app (axeheadquarters.com) naar de VPS: de Supabase-functie
+ * axe-core-proxy (supabase/functions/axe-core-proxy). Die zet de sleutel uit de
+ * Supabase-secrets erbij, maar alleen voor Luka's eigen login -- de browser ziet
+ * de sleutel nooit, en een vreemde komt er niet door.
+ *
+ * Tot 28 sep liep dit via /api op Cloudflare Pages. Die functies draaiden sinds
+ * 27 sep 16:00 niet meer, en ze zetten de sleutel op elk verzoek van wie dan ook.
+ * De verpakte apps (Tauri) gaan nog steeds rechtstreeks naar de VPS; dev via Vite.
+ */
+const SUPABASE_BASIS = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://pqnngpcgbdwxavbatbia.supabase.co').replace(/\/$/, '');
+export const WEB_AXE_PROXY = `${SUPABASE_BASIS}/functions/v1/axe-core-proxy`;
+
+/** Alleen de gebouwde web-app gaat via WEB_AXE_PROXY. */
+function viaWebProxy(): boolean {
+  return import.meta.env.PROD && !isPackagedShell();
+}
+
+/** Resolves the AI-provider proxy: VPS directly when packaged, the Supabase
+ *  proxy on the web, else the dev proxy. */
 export function aiProxyUrl(): string {
   if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/ai`;
+  if (viaWebProxy()) return `${WEB_AXE_PROXY}/proxy/ai`;
   return apiUrl('/api/proxy/ai');
 }
 
 /** Resolves the Exa search proxy the same way. */
 export function exaProxyUrl(): string {
   if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/exa`;
+  if (viaWebProxy()) return `${WEB_AXE_PROXY}/proxy/exa`;
   return apiUrl('/api/exa');
 }
 
@@ -151,6 +171,7 @@ function axeCoreApiKey(): string | undefined {
  *  normal Vercel-proxied path. */
 export function axeCoreApiUrl(devPath: string, prodPath: string): string {
   if (import.meta.env.PROD && isPackagedShell() && axeCoreApiKey()) return VPS_API_ORIGIN;
+  if (viaWebProxy() && prodPath === '/api/proxy/axecore') return WEB_AXE_PROXY;
   return apiUrl(import.meta.env.DEV ? devPath : prodPath);
 }
 

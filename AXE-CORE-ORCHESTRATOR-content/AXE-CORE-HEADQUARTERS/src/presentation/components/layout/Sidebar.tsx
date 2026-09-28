@@ -132,12 +132,21 @@ function VpsRow({ label, origin, state }: { label: string; origin: string; state
   );
 }
 
-/* De web-app praat niet rechtstreeks met de VPS maar via een same-origin proxy
-   (Cloudflare Pages Functions); de ingepakte Tauri-app wel rechtstreeks. Stond
-   dat samen in één "Strato"-regel, dan leek een kapotte proxy op een dode VPS
-   -- precies wat er op 28 sep gebeurde. */
+/* De web-app praat niet rechtstreeks met de VPS maar via een proxy (sinds
+   28 sep axe-core-proxy op Supabase); de ingepakte Tauri-app wel rechtstreeks.
+   Stond dat samen in één "Strato"-regel, dan leek een kapotte proxy op een dode
+   VPS -- precies wat er op 28 sep gebeurde. */
 const AXE_API_BASIS = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 const VIA_PROXY = AXE_API_BASIS !== VPS_API_ORIGIN;
+/** Host + pad van de proxy, of hij nu relatief (dev) of absoluut (Supabase) is. */
+function proxyAdres(basis: string): string {
+  try {
+    const u = new URL(basis, window.location.href);
+    return `${u.host}${u.pathname}`;
+  } catch {
+    return basis;
+  }
+}
 
 function VpsHealthWidget() {
   const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
@@ -262,7 +271,7 @@ function VpsHealthWidget() {
       {VIA_PROXY && (
         <>
           <div style={{ height: 1, background: 'var(--border-subtle)' }} />
-          <VpsRow label="Web proxy" origin={`${typeof window !== 'undefined' ? window.location.host : ''}${AXE_API_BASIS}`} state={proxy} />
+          <VpsRow label="Web proxy" origin={proxyAdres(AXE_API_BASIS)} state={proxy} />
         </>
       )}
       <div style={{ height: 1, background: 'var(--border-subtle)' }} />
