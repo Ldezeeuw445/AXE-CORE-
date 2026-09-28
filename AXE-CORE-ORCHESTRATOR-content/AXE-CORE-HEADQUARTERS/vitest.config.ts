@@ -22,7 +22,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    // scripts/: de Pages-worker voor /api draait niet in de app, maar hoort getest.
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.ts'],
+    // supabase/functions/: draait niet in de app, maar hoort getest.
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'supabase/functions/**/*.test.ts'],
   },
 });

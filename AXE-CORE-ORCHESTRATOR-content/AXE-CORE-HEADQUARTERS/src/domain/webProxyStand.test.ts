@@ -7,16 +7,23 @@ describe('de web-proxy los van de VPS gemeten', () => {
   it('herkent dat de Cloudflare-functies niet draaien aan de app-pagina', () => {
     const s = webProxyStand({ status: 200, contentType: 'text/html; charset=utf-8', body: null });
     expect(s.status).toBe('offline');
-    expect(s.detail).toContain('Cloudflare functions not deployed');
+    expect(s.detail).toContain('returns the app page');
   });
 
   it('herkent hetzelfde aan een 405', () => {
     expect(webProxyStand({ status: 405, contentType: '', body: null }).status).toBe('offline');
   });
 
-  it('zegt het als de sleutel op Pages ontbreekt', () => {
-    const s = webProxyStand({ status: 503, contentType: 'application/json', body: { detail: 'AXE_CORE_API_KEY staat niet ingesteld op deze Pages-omgeving' } });
-    expect(s).toEqual({ status: 'offline', detail: 'AXE_CORE_API_KEY missing in Cloudflare Pages settings' });
+  it('zegt het als de sleutel in de Supabase-secrets ontbreekt', () => {
+    const s = webProxyStand({ status: 503, contentType: 'application/json', body: { detail: 'AXE_CORE_API_KEY is not set in the Supabase secrets of axe-core-proxy' } });
+    expect(s).toEqual({ status: 'offline', detail: 'AXE_CORE_API_KEY missing in the Supabase secrets' });
+  });
+
+  // axe-core-proxy laat alleen Luka's eigen login door.
+  it('zegt het als je niet als eigenaar bent ingelogd', () => {
+    for (const status of [401, 403]) {
+      expect(webProxyStand({ status, contentType: 'application/json', body: { detail: 'x' } }).detail).toBe('not signed in as the AXE CORE owner');
+    }
   });
 
   it('is groen als de proxy JSON van de VPS doorgeeft', () => {

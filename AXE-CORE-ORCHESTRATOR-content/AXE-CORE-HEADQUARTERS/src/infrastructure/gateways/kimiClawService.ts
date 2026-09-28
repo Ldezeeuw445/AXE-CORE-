@@ -4,18 +4,18 @@
  * Uses the same pattern as axeCoreApiService.
  */
 
-import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { axeCoreApiExtraHeaders, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 
-// See axeCoreApiService.ts — same-origin server-side proxy in both dev and
-// prod; the bearer key is attached by the proxy, never by the browser.
-// apiUrl() only rewrites this inside a packaged Tauri app (no server behind
-// the static bundle); it's a no-op everywhere else.
-const BASE_URL = apiUrl(import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore');
+// Zelfde weg als axeCoreApiService: dev via Vite, de web-app via axe-core-proxy
+// (Supabase, zet de sleutel server-side), de verpakte app rechtstreeks met de
+// ingebakken sleutel. Tot 28 sep via apiUrl(), dat Tauri naar /api op het
+// domein stuurde -- een proxy die er niet meer is.
+const BASE_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 
 async function call<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {

@@ -27,7 +27,7 @@ import { providerIcoon } from '@/presentation/components/settings/providerIcoon'
 import { ProviderCard } from '@/presentation/components/settings/ProviderCard';
 import { StatusKaart, duur } from '@/presentation/components/settings/StatusKaart';
 import type { KaartStand } from '@/domain/providerCardStand';
-import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { haalServerProviders } from '@/infrastructure/config/serverProviders';
 // Vier onbeschermde schrijfacties stonden hier. Met een volle opslag gooide de
 // eerste daarvan tijdens het laden, en crashte de hele instellingenpagina.
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
@@ -364,23 +364,12 @@ function ProviderKeysSection() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const served: string[] = [];
-      try {
-        const res = await fetch(apiUrl('/api/proxy/ai/providers'));
-        if (res.ok) {
-          const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
-          served.push(...(body.providers ?? []), ...(body.keyless ?? []));
-          // Cache for the chat runtime: it must know which providers the VPS serves
-          // (with the VPS's own key), so AXE can route e.g. Gemini through the proxy
-          // even though there is no local key on this device. Without this the chat
-          // cascade silently drops every VPS-only provider and falls to Ollama.
-          // Perplexity hoort hier NIET in: dat is onderzoek, geen chat-slot.
-          try { localStorage.setItem('axe_server_providers', JSON.stringify(served)); } catch { /* ignore */ }
-        }
-      } catch {
-        // Server onbereikbaar. De lijst hieronder mag leeg blijven; een
-        // onderzoek-probe mag Gemini/Groq niet van het scherm vegen.
-      }
+      // Dezelfde lijst die de chat gebruikt (serverProviders.ts): zonder hem valt
+      // elke provider die alleen op de VPS een sleutel heeft uit de chat.
+      // Perplexity hoort hier NIET in: dat is onderzoek, geen chat-slot.
+      // Server onbereikbaar: dan blijft de lijst leeg; een onderzoek-probe mag
+      // Gemini/Groq niet van het scherm vegen.
+      const served: string[] = (await haalServerProviders()) ?? [];
       const namen = new Set(served);
       try {
         const { testPerplexityOpServer } = await import('@/infrastructure/gateways/perplexityResearchService');

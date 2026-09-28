@@ -124,12 +124,15 @@ describe('verpakte Tauri-app: elke proxy-aanroeper stuurt de Bearer mee', () => 
 describe('buiten de verpakte app gaat de sleutel nergens heen', () => {
   beforeEach(() => omgeving({ tauri: false }));
 
-  it('web-build: chat gaat naar de eigen /api/proxy/ai, zonder Bearer', async () => {
+  // Sinds 28 sep via axe-core-proxy op Supabase in plaats van /api op Pages. De
+  // VPS-sleutel zet die proxy er zelf bij; de app stuurt hem niet mee (de
+  // sessie komt er in de echte app bij via webProxyAuth, niet hier).
+  it('web-build: chat gaat naar axe-core-proxy, zonder de VPS-sleutel', async () => {
     const { callProvider } = await import('@/infrastructure/gateways/llmGateway');
     await callProvider({ provider: 'openai', key: '', model: 'gpt-4o-mini' } as never, [
       { role: 'user', content: 'hoi' },
     ]);
-    expect(aanroepen.map(a => a.url)).toEqual(['/api/proxy/ai']);
+    expect(aanroepen.map(a => a.url)).toEqual(['https://pqnngpcgbdwxavbatbia.supabase.co/functions/v1/axe-core-proxy/proxy/ai']);
     expect(aanroepen[0].headers.Authorization).toBeUndefined();
   });
 

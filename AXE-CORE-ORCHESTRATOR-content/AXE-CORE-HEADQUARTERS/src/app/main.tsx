@@ -3,11 +3,33 @@ import { HashRouter } from 'react-router'
 import { Toaster } from 'sonner'
 import '@/app/index.css'
 import { applyStoredLookEarly } from '@/presentation/hooks/useLook'
-import { isTauriRuntime } from '@/infrastructure/config/apiUrl'
+import { isAndroidShellRuntime, isTauriRuntime, WEB_AXE_PROXY } from '@/infrastructure/config/apiUrl'
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient'
+import { installeerWebProxyAuth } from '@/infrastructure/supabase/webProxyAuth'
+import { haalServerProviders } from '@/infrastructure/config/serverProviders'
 
 // Vóór de eerste render: anders ziet frame 1 de standaardstand en klapt het
 // scherm daarna om -- een flits die eruitziet als een fout.
 applyStoredLookEarly()
+
+// Web-app: de AXE API loopt via Supabase (axe-core-proxy), en die laat alleen
+// Luka's eigen login door. Hier gaat de sessie op elk verzoek daarheen, vóór er
+// één vertrekt. De verpakte apps praten rechtstreeks met de VPS.
+if (import.meta.env.PROD && !isTauriRuntime() && !isAndroidShellRuntime()) {
+  installeerWebProxyAuth(
+    WEB_AXE_PROXY,
+    async () => (await getSupabase()?.auth.getSession())?.data.session?.access_token ?? null,
+    (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '',
+  )
+  // Pas na het inloggen komt de proxy erdoor; dan meteen de lijst verversen.
+  getSupabase()?.auth.onAuthStateChange((gebeurtenis) => {
+    if (gebeurtenis === 'SIGNED_IN' || gebeurtenis === 'INITIAL_SESSION') void haalServerProviders()
+  })
+}
+
+// Welke providers de VPS zelf bedient: de chat heeft die lijst nodig, en tot
+// 28 sep vulde alleen het instellingenscherm hem (zie serverProviders.ts).
+void haalServerProviders()
 
 // In de Tauri-app staan de macOS-verkeerslichten linksboven over de
 // inhoud (titleBarStyle Overlay). Deze klasse laat de CSS daar ruimte

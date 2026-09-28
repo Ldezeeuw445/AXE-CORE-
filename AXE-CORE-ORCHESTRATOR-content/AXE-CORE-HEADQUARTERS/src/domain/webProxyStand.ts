@@ -1,6 +1,7 @@
 /**
- * Wat de web-proxy (`/api/proxy/axecore`, Cloudflare Pages Functions) werkelijk
- * doet, gelezen uit één antwoord op `/health`.
+ * Wat de web-proxy werkelijk doet, gelezen uit één antwoord op `/health`.
+ * Sinds 28 sep is dat axe-core-proxy op Supabase; daarvoor /api op Cloudflare
+ * Pages, en van die tijd is de app-pagina-herkenning hieronder.
  *
  * Op 28 sep stond "Strato" in de telefoon-app op offline terwijl de VPS
  * kerngezond was. De web-app praat niet rechtstreeks met de VPS maar via deze
@@ -14,13 +15,17 @@ export type ProxyStand = { status: 'online' | 'degraded' | 'offline'; detail: st
 
 export function webProxyStand(antwoord: { status: number; contentType: string; body: unknown }): ProxyStand {
   const { status, contentType, body } = antwoord;
-  // De functies draaien niet: Pages serveert de app zelf (GET) of weigert (POST).
+  // Geen proxy achter het adres: de host serveert de app zelf (GET) of weigert (POST).
   if (contentType.includes('text/html') || status === 405) {
-    return { status: 'offline', detail: 'Cloudflare functions not deployed — /api returns the app page' };
+    return { status: 'offline', detail: 'no proxy at this address — it returns the app page' };
   }
   const detail = body && typeof body === 'object' && 'detail' in body ? String((body as { detail: unknown }).detail) : '';
   if (status === 503 && detail.includes('AXE_CORE_API_KEY')) {
-    return { status: 'offline', detail: 'AXE_CORE_API_KEY missing in Cloudflare Pages settings' };
+    return { status: 'offline', detail: 'AXE_CORE_API_KEY missing in the Supabase secrets' };
+  }
+  // axe-core-proxy laat alleen de eigenaar door: 401 zonder geldige sessie, 403 voor een ander.
+  if (status === 401 || status === 403) {
+    return { status: 'offline', detail: 'not signed in as the AXE CORE owner' };
   }
   if (status >= 200 && status < 300 && body && typeof body === 'object') {
     return { status: 'online', detail: 'proxy → VPS ok' };
