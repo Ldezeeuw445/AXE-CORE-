@@ -5,6 +5,7 @@
  * three Tauri world controls, six real AXE agents around the Core, one chat
  * timeline and the real AXE composer fixed at the bottom.
  */
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { BrainCircuit, Mountain, Network, Orbit } from 'lucide-react';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
@@ -13,7 +14,7 @@ import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanv
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MobileComposer } from '@/presentation/components/layout/MobileComposer';
 import { MobileChat } from '@/presentation/components/layout/MobileChat';
-import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatSlot, SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 import { AXE_AGENTS, agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
 import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 import { managerVan, regelVan } from '@/domain/tierRouter/agentVenster';
@@ -183,13 +184,23 @@ function CoreHome() {
  * wereldknoppen erboven en de composer eronder. De schil zet het slot 'wereld'
  * neer (AppShell); de zijwidgets van de wereld staan in de laden (ladeSloten).
  */
+const ARCHITECTUUR_VRIJ = {
+  position: 'absolute',
+  inset: 'var(--wereld-vrij-boven, 0px) 0 var(--wereld-vrij-onder, 0px) 0',
+  height: 'auto',
+} as const;
+
 function WorldSurface({ view }: { view: Exclude<CoreView, 'axe'> }) {
   // `relative isolate` is geen opmaak maar de rand: Terrain (.axe-neural-embed)
   // staat absolute en hoort binnen deze laag te blijven. Zonder rand lag zijn
   // canvas over de wereldknoppen (28 sep, 13..787 over de balk).
   return (
     <PlaatSlot slot="wereld">
-      <div className="relative isolate h-full w-full">
+      {/* Architecture is plat en heeft geen draaiende camera: die ligt precies in
+          de vrije ruimte, dus in het midden, met zijn cijferstrook boven de
+          composer. Neural en Terrain vullen de plaat en leggen hun midden zelf
+          goed (wereldBeeld.ts). */}
+      <div className="relative isolate h-full w-full" style={view === 'runtime' ? ARCHITECTUUR_VRIJ : undefined}>
         {view === 'neural' && <NeuralBrain />}
         {view === 'terrain' && <NeuralMemorySystem />}
         {view === 'runtime' && <RuntimeWorkspace />}
@@ -198,9 +209,44 @@ function WorldSurface({ view }: { view: Exclude<CoreView, 'axe'> }) {
   );
 }
 
+/**
+ * Zet op het wereldslot hoeveel pixels de wereldknoppen boven en de composer
+ * onder innemen. Een 3D-wereld legt zijn midden dan in wat vrij is en kiest
+ * een afstand waarop hij past (wereldBeeld.ts). Verandert het, dan krijgt het
+ * slot een 'wereldvrij'-seintje -- zijn eigen maat verandert daarbij niet.
+ */
+function useVrijeRuimteOpWereld(balk: RefObject<HTMLElement | null>, composer: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    let vorige = '';
+    const meet = () => {
+      const slot = document.getElementById(SLOT_ID.wereld);
+      const b = balk.current, c = composer.current;
+      if (!slot || !b || !c) return;
+      const s = slot.getBoundingClientRect();
+      const boven = Math.max(0, Math.round(b.getBoundingClientRect().bottom - s.top));
+      const onder = Math.max(0, Math.round(s.bottom - c.getBoundingClientRect().top));
+      const nu = `${boven}/${onder}`;
+      if (nu === vorige) return;
+      vorige = nu;
+      slot.style.setProperty('--wereld-vrij-boven', `${boven}px`);
+      slot.style.setProperty('--wereld-vrij-onder', `${onder}px`);
+      slot.dispatchEvent(new Event('wereldvrij'));
+    };
+    meet();
+    const ro = new ResizeObserver(meet);
+    if (balk.current) ro.observe(balk.current);
+    if (composer.current) ro.observe(composer.current);
+    window.addEventListener('resize', meet);
+    return () => { ro.disconnect(); window.removeEventListener('resize', meet); };
+  }, [balk, composer]);
+}
+
 export default function MobileSystem() {
   const coreView = useCoreViewStore(s => s.coreView);
   const wereld = coreView !== 'axe';
+  const balkRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  useVrijeRuimteOpWereld(balkRef, composerRef);
 
   // Keep this explicit so a roster edit cannot silently turn the six phone
   // tiles into made-up placeholders.
@@ -226,6 +272,7 @@ export default function MobileSystem() {
           different mobile renders. */}
       {/* Boven elke wereld: de weg terug mag nooit onder een canvas liggen. */}
       <div
+        ref={balkRef}
         className="relative z-[5] mb-2 grid w-full flex-none items-center"
         style={{ gridTemplateColumns: '58px minmax(0, 1fr) 58px', pointerEvents: 'auto' }}
       >
@@ -243,7 +290,7 @@ export default function MobileSystem() {
         )
         : <CoreHome />}
 
-      <div className="axe-mobile-edge mt-auto w-full flex-none" style={{ pointerEvents: 'auto' }}>
+      <div ref={composerRef} className="axe-mobile-edge mt-auto w-full flex-none" style={{ pointerEvents: 'auto' }}>
         <MobileComposer />
       </div>
     </div>

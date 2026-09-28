@@ -101,6 +101,19 @@ Zo is het gebouwd, en zo hergebruik je het:
   de rechterlade) maken de GPU-loze emulator traag: een lade die pas na 13 s
   sluit is daar geen bug, meet het met een wachtlus i.p.v. een vaste pauze.
 
+### 3D in de vrije ruimte
+
+Een wereld over de hele plaat ligt deels onder de knoppen en de composer, en
+een staand scherm heeft een smalle horizontale kijkhoek: met de desktop-camera
+viel het brein links en rechts weg en zat Terrain op één berg ingezoomd.
+MobileSystem zet `--wereld-vrij-boven/-onder` op het wereldslot (en een
+`wereldvrij`-seintje als dat verandert); `wereldBeeld.ts` geeft een wereld
+`middenVerschuiving` (voor `camera.setViewOffset`) en `pasAfstand` (afstand
+waarop een straal in de vrije ruimte past). Buiten het slot -- desktop -- is
+er geen vrije ruimte en verandert er niets. Een platte wereld (Architecture)
+leg je gewoon ín de vrije ruimte. En check of zoomen met twee vingers kan:
+Neural had alleen het scrollwiel.
+
 ## Een wereld of paneel dat de balk afdekt
 
 Staat er iets `absolute` in een mobiel vak zonder `position: relative` erom,

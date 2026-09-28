@@ -15,7 +15,7 @@ import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop'
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
@@ -29,6 +29,29 @@ import {
 import TerrainSceneMesh from './TerrainSceneMesh';
 import TerrainMarkers, { TerrainCameraRig, computeLeafRing, type LeafNodeData } from './TerrainMarkers';
 import type { BrainHub, BrainLeaf } from '../NeuralMemorySystem';
+import { leesVrijeRuimte, middenVerschuiving, pasAfstand, WERELD_SLOT_SELECTOR } from '../wereldBeeld';
+
+/* Telefoon-Home (wereldBeeld.ts). Het overzicht van TerrainCameraRig staat op
+   [0, 18, 31] rond [0, 0.5, 0] -- afstand ~35,6. Op een staand scherm zie je
+   daarvandaan maar ~15 eenheden breed, terwijl de bergen tot ~21 van het
+   midden staan: te ingezoomd. TERREIN_STRAAL is wat er in de breedte hoort te
+   passen; de richting blijft dezelfde, alleen verder weg. */
+const OVERZICHT_DOEL: [number, number, number] = [0, 0.5, 0];
+const OVERZICHT_RICHTING = new THREE.Vector3(0, 17.5, 31).normalize();
+const OVERZICHT_AFSTAND = Math.hypot(17.5, 31);
+const TERREIN_STRAAL = 14;
+
+/** Legt het beeld in het midden van de vrije ruimte (setViewOffset). */
+function TelefoonBeeld({ dy }: { dy: number }) {
+  const camera = useThree((st) => st.camera) as THREE.PerspectiveCamera;
+  const size = useThree((st) => st.size);
+  useEffect(() => {
+    if (dy) camera.setViewOffset(size.width, size.height, 0, dy, size.width, size.height);
+    else camera.clearViewOffset();
+    return () => { camera.clearViewOffset(); };
+  }, [camera, size.width, size.height, dy]);
+  return null;
+}
 
 /** Convert the app's live BrainHub data into a terrain config (gold caps). */
 function configFromBrainHubs(hubs: BrainHub[]): TerrainConfig {
@@ -190,12 +213,43 @@ export default function MemoryTerrainMap({
   const frameloop = useFrameloop();
   const opPlaat = useHeeftPlaat();
 
+  /* Alleen in het wereldslot van de telefoon, en alleen staand. */
+  const vlakRef = useRef<HTMLDivElement | null>(null);
+  const [telefoon, setTelefoon] = useState<{ dy: number; afstand: number } | null>(null);
+  useEffect(() => {
+    const el = vlakRef.current;
+    if (!el) return;
+    const meet = () => {
+      const vrij = leesVrijeRuimte(el);
+      const r = el.getBoundingClientRect();
+      if (!vrij || r.height <= r.width) { setTelefoon(null); return; }
+      const afstand = Math.max(OVERZICHT_AFSTAND, pasAfstand({
+        straal: TERREIN_STRAAL, vfovGraden: 48, breedte: r.width, hoogte: r.height, vrij, marge: 0.9,
+      }));
+      const dy = middenVerschuiving(vrij);
+      setTelefoon((oud) => (oud && Math.abs(oud.afstand - afstand) < 0.5 && oud.dy === dy ? oud : { dy, afstand }));
+    };
+    meet();
+    const ro = new ResizeObserver(meet);
+    ro.observe(el);
+    const slot = el.closest(WERELD_SLOT_SELECTOR);
+    slot?.addEventListener('wereldvrij', meet);
+    return () => { ro.disconnect(); slot?.removeEventListener('wereldvrij', meet); };
+  }, []);
+  const overzicht = useMemo<[number, number, number] | undefined>(() => {
+    if (!telefoon) return undefined;
+    const p = OVERZICHT_RICHTING.clone().multiplyScalar(telefoon.afstand);
+    return [p.x + OVERZICHT_DOEL[0], p.y + OVERZICHT_DOEL[1], p.z + OVERZICHT_DOEL[2]];
+  }, [telefoon]);
+  // Mist en uitzoomgrens schalen mee, anders verdwijnt het verre overzicht in de mist.
+  const verder = telefoon ? telefoon.afstand / OVERZICHT_AFSTAND : 1;
+
   return (
     /* axe-scene-vlak: op de plaat wordt deze achtergrond doorzichtig gezet.
        Dit dekkende #020409 was het vak dat je om het terrein zag staan -- de
        scene hoort OP de plaat te liggen, niet in een eigen venster. Zonder
        data-look blijft hij zoals hij was. */
-    <div className="axe-scene-vlak" style={{ width: '100%', height: '100%', background: '#020409' }}>
+    <div ref={vlakRef} className="axe-scene-vlak" style={{ width: '100%', height: '100%', background: '#020409' }}>
       <Canvas
         key={canvasKey}
         /* Stil zodra het venster niet vooraan staat: dit is de zwaarste scene
@@ -234,7 +288,7 @@ export default function MemoryTerrainMap({
         {/* De mist vervaagde naar een eigen donkerblauw. Op een doorzichtige
             achtergrond wordt dat een gekleurde waas waar de plaat hoort te
             zijn; verder weg beginnen laat het landschap gewoon uitlopen. */}
-        <fog attach="fog" args={['#020409', opPlaat ? 90 : 55, opPlaat ? 190 : 130]} />
+        <fog attach="fog" args={['#020409', (opPlaat ? 90 : 55) * verder, (opPlaat ? 190 : 130) * verder]} />
         <RiseIn>
           <TerrainSceneMesh engine={engine} resolution={isMobile ? 128 : 200} shadowsEnabled={!isMobile} />
           <TerrainMarkers
@@ -252,14 +306,15 @@ export default function MemoryTerrainMap({
             hemels over elkaar leest als ruis. Bovendien 3000 punten minder om
             per frame te tekenen. */}
         {!opPlaat && <Stars radius={150} depth={70} count={isMobile ? 1200 : 3000} factor={3.2} saturation={0} fade speed={0.5} />}
-        <TerrainCameraRig engine={engine} selected={selected} controlsRef={controlsRef} />
+        <TelefoonBeeld dy={telefoon?.dy ?? 0} />
+        <TerrainCameraRig engine={engine} selected={selected} controlsRef={controlsRef} defaultCam={overzicht} />
         <OrbitControls
           ref={controlsRef}
           enablePan={false}
           enableDamping
           dampingFactor={0.08}
           minDistance={5}
-          maxDistance={58}
+          maxDistance={telefoon ? Math.max(58, telefoon.afstand * 1.5) : 58}
           maxPolarAngle={1.42}
           autoRotate={autoRotate}
           autoRotateSpeed={0.35}

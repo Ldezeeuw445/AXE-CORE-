@@ -14,6 +14,7 @@
  */
 import { applySceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
 import { SLOT_ID, useSlotAdoptie } from '@/presentation/components/layout/PlaatSlots';
+import { leesVrijeRuimte, middenVerschuiving, pasAfstand, WERELD_SLOT_SELECTOR, type VrijeRuimte } from '@/presentation/components/axe-core/wereldBeeld';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { createElement, memo, useEffect, useRef, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -415,12 +416,22 @@ export default function NeuralBrain() {
       return { w: Math.max(1, r.width), h: Math.max(1, r.height) };
     };
 
+    /* Telefoon-Home (wereldBeeld.ts): het brein in het midden van de vrije
+       ruimte tussen de wereldknoppen en de composer, op een afstand waarop het
+       helemaal past. Buiten het wereldslot (desktop) is er geen vrije ruimte
+       en blijft alles zoals het was. Wordt ingevuld zodra de camera-stand er is. */
+    let pasTelefoonAfstand: ((w: number, h: number, vrij: VrijeRuimte | null) => void) | null = null;
+
     function resize() {
       const { w, h } = viewSize();
       renderer.setSize(w, h, false);
       composer.setSize(w, h);
       camera.aspect = w / h;
+      const vrij = leesVrijeRuimte(root);
+      if (vrij) camera.setViewOffset(w, h, 0, middenVerschuiving(vrij), w, h);
+      else camera.clearViewOffset();
       camera.updateProjectionMatrix();
+      pasTelefoonAfstand?.(w, h, vrij);
     }
     resize();
 
@@ -953,6 +964,9 @@ export default function NeuralBrain() {
     const brainGeo = buildBrainGeometry(122000, 2600);
     const brainPoints = new THREE.Points(brainGeo.points, brainMat);
     brainGroup.add(brainPoints);
+    // Hoe groot het brein is, voor de passende afstand op de telefoon.
+    brainGeo.points.computeBoundingSphere();
+    const hersenStraal = brainGeo.points.boundingSphere?.radius ?? 5;
 
     // Fix 6: the "sparkles" layer -- 1700 extra bright, full-opacity
     // star-sprites scattered back over the whole shell, on top of
@@ -1127,6 +1141,24 @@ export default function NeuralBrain() {
     }
     updateCameraFromState();
 
+    /* Telefoon: op een staand scherm is de horizontale kijkhoek smal, en op 13
+       viel het brein links en rechts weg. Hier de afstand waarop het past, en
+       zolang je zelf niet zoomt volgt de camera die. */
+    let telefoonAfstand: number | null = null;
+    let zelfGezoomd = false;
+    pasTelefoonAfstand = (w, h, vrij) => {
+      if (!vrij || h <= w) { telefoonAfstand = null; return; }
+      const eerste = telefoonAfstand === null;
+      telefoonAfstand = Math.max(VIEW.distance, pasAfstand({
+        straal: hersenStraal, vfovGraden: camera.fov, breedte: w, hoogte: h, vrij, marge: 0.9,
+      }));
+      if (!activeHub && !zelfGezoomd) {
+        goal.distance = telefoonAfstand;
+        if (eerste) state.distance = telefoonAfstand;
+      }
+    };
+    const maxAfstand = () => Math.max(22, (telefoonAfstand ?? 0) * 1.6);
+
     /* ============================== POINTER ============================== */
     let isDown = false, moved = 0, lastX = 0, lastY = 0;
     const onPointerDown = (e: PointerEvent) => {
@@ -1135,7 +1167,45 @@ export default function NeuralBrain() {
     };
     canvas.addEventListener('pointerdown', onPointerDown);
 
+    /* Knijpen om te zoomen. Er was alleen het scrollwiel, en dat heeft een
+       telefoon niet. Twee vingers op het brein: de verhouding van hun afstand
+       zet de camera-afstand; draaien staat dan stil. */
+    const aanrakingen = new Map<number, { x: number; y: number }>();
+    let knijpAfstand = 0;
+    const tweeVingers = () => {
+      const p = [...aanrakingen.values()];
+      return p.length < 2 ? 0 : Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+    };
+    const onAanraking = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      aanrakingen.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (aanrakingen.size === 2) knijpAfstand = tweeVingers();
+    };
+    const onLoslaten = (e: PointerEvent) => {
+      aanrakingen.delete(e.pointerId);
+      if (aanrakingen.size < 2) knijpAfstand = 0;
+    };
+    canvas.addEventListener('pointerdown', onAanraking);
+    window.addEventListener('pointerup', onLoslaten);
+    window.addEventListener('pointercancel', onLoslaten);
+    // Anders pakt de browser het knijpen en slepen zelf af (pointercancel).
+    if (leesVrijeRuimte(root)) canvas.style.touchAction = 'none';
+
     function onPointerMove(e: PointerEvent) {
+      if (aanrakingen.has(e.pointerId)) {
+        aanrakingen.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (aanrakingen.size >= 2) {
+          const d = tweeVingers();
+          if (knijpAfstand > 0 && d > 0) {
+            const min = activeHub ? 1.8 : 3.5, max = activeHub ? 9 : maxAfstand();
+            goal.distance = THREE.MathUtils.clamp(goal.distance * (knijpAfstand / d), min, max);
+            zelfGezoomd = true;
+          }
+          knijpAfstand = d;
+          moved += 10; // na knijpen geen klik
+          return;
+        }
+      }
       if (!isDown) return;
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
@@ -1158,8 +1228,9 @@ export default function NeuralBrain() {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const min = activeHub ? 1.8 : 3.5, max = activeHub ? 9 : 22;
+      const min = activeHub ? 1.8 : 3.5, max = activeHub ? 9 : maxAfstand();
       goal.distance = THREE.MathUtils.clamp(goal.distance + e.deltaY * 0.012, min, max);
+      zelfGezoomd = true;
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
@@ -1360,7 +1431,7 @@ export default function NeuralBrain() {
       activeHub = null;
       clearTree();
       goal.target.set(0, 0, 0);
-      goal.distance = 14.5;
+      goal.distance = telefoonAfstand ?? 14.5;
       const backBtn = q('#back-btn'); if (backBtn) backBtn.style.display = 'none';
       const hubInfo = q('#hub-info'); if (hubInfo) hubInfo.style.display = 'none';
       const about = q('#about-text');
@@ -1536,6 +1607,9 @@ export default function NeuralBrain() {
     const ro = new ResizeObserver(() => { resize(); resizeMini(); });
     ro.observe(root);
     window.addEventListener('resize', resize);
+    // De telefoon-Home meldt het als knoppen of composer van maat veranderen.
+    const wereldSlot = root.closest(WERELD_SLOT_SELECTOR);
+    wereldSlot?.addEventListener('wereldvrij', resize);
 
     /* ============================== ANIMATE ============================== */
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -1658,6 +1732,10 @@ export default function NeuralBrain() {
       window.removeEventListener('keydown', onKeyDown);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('pointerdown', onAanraking);
+      window.removeEventListener('pointerup', onLoslaten);
+      window.removeEventListener('pointercancel', onLoslaten);
+      wereldSlot?.removeEventListener('wereldvrij', resize);
       neuralInput?.removeEventListener('keydown', onInputKey);
       clearTree();
       composer.dispose();

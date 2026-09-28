@@ -93,7 +93,7 @@ describe('canonical mobile Home wiring', () => {
   it('keeps every world inside its own layer and the world switch above it', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     expect(mobile).toContain('<PlaatSlot slot="wereld">');
-    expect(mobile).toContain('<div className="relative isolate h-full w-full">');
+    expect(mobile).toContain('<div className="relative isolate h-full w-full" style={view === \'runtime\' ? ARCHITECTUUR_VRIJ : undefined}>');
     expect(mobile).toContain('className="relative z-[5] mb-2 grid w-full flex-none items-center"');
   });
 
@@ -108,6 +108,24 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).toContain("pointerEvents: wereld ? 'none' : undefined");
     // De weg terug en de composer blijven aantikbaar.
     expect((mobile.match(/pointerEvents: 'auto'/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Luka, 28 sep: brein en terrein in het midden van de vrije ruimte, niet te
+  // ingezoomd, en nog te draaien en te zoomen.
+  it('centres the 3D worlds in the free space and fits them on a portrait phone', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    const brein = bron('presentation/components/axe-core/NeuralBrain.tsx');
+    const terrein = bron('presentation/components/axe-core/terrain/MemoryTerrainMap.tsx');
+    expect(mobile).toContain("slot.style.setProperty('--wereld-vrij-boven', `${boven}px`);");
+    expect(mobile).toContain("slot.dispatchEvent(new Event('wereldvrij'));");
+    for (const wereld of [brein, terrein]) {
+      expect(wereld).toContain('leesVrijeRuimte(');
+      expect(wereld).toContain('middenVerschuiving(');
+      expect(wereld).toContain('pasAfstand(');
+    }
+    // Neural kon op de telefoon niet zoomen: alleen het scrollwiel.
+    expect(brein).toContain("if (e.pointerType !== 'touch') return;");
+    expect(brein).toContain("if (leesVrijeRuimte(root)) canvas.style.touchAction = 'none';");
   });
 
   it('moves the side widgets of a world into the phone drawers, not on desktop', () => {
