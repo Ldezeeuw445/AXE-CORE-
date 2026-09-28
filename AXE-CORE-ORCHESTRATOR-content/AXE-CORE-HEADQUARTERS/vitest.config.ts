@@ -22,6 +22,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // scripts/: de Pages-worker voor /api draait niet in de app, maar hoort getest.
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.ts'],
   },
 });

@@ -13,7 +13,18 @@
  */
 const VPS = 'https://api.axecompanion.com';
 
-export async function forward(request: Request, path: string): Promise<Response> {
+/**
+ * Sinds 14 sep eist de VPS AXE_CORE_API_KEY ook op /proxy/ai en /proxy/exa
+ * (ze vulden een lege providersleutel zelf aan: open kranen op Luka's kosten).
+ * Deze hop stuurde geen sleutel mee, dus vanaf de web-app gaf elke chat en
+ * elke zoekvraag 401 -- gezien op 28 sep, toen de routes eindelijk draaiden.
+ * Dezelfde server-only variabele als /api/proxy/axecore; de browser ziet hem niet.
+ */
+export interface ForwardEnv {
+  AXE_CORE_API_KEY?: string;
+}
+
+export async function forward(request: Request, path: string, env: ForwardEnv = {}): Promise<Response> {
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -27,7 +38,10 @@ export async function forward(request: Request, path: string): Promise<Response>
   try {
     const upstream = await fetch(`${VPS}${path}`, {
       method: request.method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(env.AXE_CORE_API_KEY ? { Authorization: `Bearer ${env.AXE_CORE_API_KEY}` } : {}),
+      },
       body: request.method === 'POST' ? await request.text() : undefined,
     });
 

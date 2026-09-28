@@ -1,4 +1,4 @@
-import { forward } from '../../_forward';
+import { forward, type ForwardEnv } from '../../_forward';
 
 /**
  * /api/proxy/ai en alles eronder → de VPS.
@@ -9,11 +9,12 @@ import { forward } from '../../_forward';
  * dekt de bare route én alles eronder, zodat een nieuw endpoint op de VPS
  * hier niet opnieuw vergeten kan worden.
  */
-export const onRequest = ({ request, params }: {
+export const onRequest = ({ request, params, env }: {
   request: Request;
   params: { path?: string | string[] };
+  env?: ForwardEnv;
 }) => {
   const segments = Array.isArray(params.path) ? params.path : params.path ? [params.path] : [];
   const suffix = segments.length ? `/${segments.join('/')}` : '';
-  return forward(request, `/proxy/ai${suffix}`);
+  return forward(request, `/proxy/ai${suffix}`, env);
 };
