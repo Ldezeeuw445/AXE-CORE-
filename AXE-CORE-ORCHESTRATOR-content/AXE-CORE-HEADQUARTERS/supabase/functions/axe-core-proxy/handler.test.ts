@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { behandel, jwtInhoud } from './handler';
 
 const EIGENAAR = 'acff7a12-1111-481d-a7a9-cc07583b8069';
-const omg = { sleutel: 'vps-sleutel', vps: 'https://api.axecompanion.com', eigenaren: [EIGENAAR] };
+const omg = { sleutel: async () => 'vps-sleutel' as string | undefined, vps: 'https://api.axecompanion.com', eigenaren: [EIGENAAR] };
 
 /** Een JWT zoals de gateway hem doorlaat; de handtekening controleert die, niet wij. */
 const jwt = (inhoud: object) => `e30.${btoa(JSON.stringify(inhoud)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')}.x`;
@@ -27,15 +27,18 @@ describe('axe-core-proxy', () => {
   // Dit is het gat dat de Pages-proxy had: de sleutel voor iedereen.
   it('laat de anon-sleutel, een andere gebruiker en geen token niet door', async () => {
     const f = vps();
+    const sleutel = vi.fn(async () => 'vps-sleutel');
     for (const auth of [`Bearer ${jwt({ role: 'anon' })}`, `Bearer ${jwt({ sub: 'iemand-anders', role: 'authenticated' })}`, '']) {
-      const res = await behandel(new Request(`${BASIS}/internal/exec`, { method: 'POST', headers: auth ? { Authorization: auth } : {}, body: '{}' }), omg, f);
+      const res = await behandel(new Request(`${BASIS}/internal/exec`, { method: 'POST', headers: auth ? { Authorization: auth } : {}, body: '{}' }), { ...omg, sleutel }, f);
       expect(res.status).toBe(403);
     }
     expect(f).not.toHaveBeenCalled();
+    // Voor een vreemde wordt de sleutel niet eens opgehaald.
+    expect(sleutel).not.toHaveBeenCalled();
   });
 
   it('zegt dat de sleutel ontbreekt in plaats van een 401 door te geven', async () => {
-    const res = await behandel(new Request(`${BASIS}/health`, { headers: { Authorization: `Bearer ${jwt({ sub: EIGENAAR, role: 'authenticated' })}` } }), { ...omg, sleutel: undefined }, vps());
+    const res = await behandel(new Request(`${BASIS}/health`, { headers: { Authorization: `Bearer ${jwt({ sub: EIGENAAR, role: 'authenticated' })}` } }), { ...omg, sleutel: async () => undefined }, vps());
     expect(res.status).toBe(503);
     expect(JSON.stringify(await res.json())).toContain('AXE_CORE_API_KEY');
   });

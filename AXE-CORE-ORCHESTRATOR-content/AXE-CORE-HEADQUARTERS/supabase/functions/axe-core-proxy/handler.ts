@@ -18,8 +18,8 @@
  */
 
 export interface ProxyOmgeving {
-  /** AXE_CORE_API_KEY uit de Supabase-secrets. */
-  sleutel: string | undefined;
+  /** De VPS-sleutel; pas opgehaald nadat de beller de eigenaar blijkt (zie index.ts). */
+  sleutel: () => Promise<string | undefined>;
   /** https://api.axecompanion.com, zonder slash aan het eind. */
   vps: string;
   /** Supabase-gebruikers die erdoor mogen. */
@@ -60,15 +60,16 @@ export async function behandel(req: Request, omg: ProxyOmgeving, doeFetch: typeo
 
   // Een ontbrekende sleutel is een instelling, geen mislukte aanroep: zeg dat,
   // in plaats van een 401 van boven door te geven die op "geen toegang" lijkt.
-  if (!omg.sleutel) {
-    return json({ detail: 'AXE_CORE_API_KEY is not set in the Supabase secrets of axe-core-proxy' }, 503);
+  const sleutel = await omg.sleutel();
+  if (!sleutel) {
+    return json({ detail: 'no VPS key: app_secrets.axe_core_api_key and the AXE_CORE_API_KEY secret are both empty' }, 503);
   }
 
   const url = new URL(req.url);
   const pad = url.pathname.replace(/^.*?\/axe-core-proxy/, '') || '/';
   const headers: Record<string, string> = {
     'Content-Type': req.headers.get('content-type') ?? 'application/json',
-    Authorization: `Bearer ${omg.sleutel}`,
+    Authorization: `Bearer ${sleutel}`,
   };
   const accept = req.headers.get('accept');
   if (accept) headers.Accept = accept;
