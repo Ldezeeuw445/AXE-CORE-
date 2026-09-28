@@ -128,6 +128,24 @@ describe('canonical mobile Home wiring', () => {
     expect(brein).toContain("if (leesVrijeRuimte(root)) canvas.style.touchAction = 'none';");
   });
 
+  // Luka, 28 sep: op de telefoon hubs als icoon (net als Terrain), de zoekbalk
+  // even groot als de wereldbalk met alleen "Search Memories", en de hubkaart
+  // in de rechterlade in plaats van half achter de composer.
+  it('keeps Neural calm on the phone: icon hubs, bar-sized search, hub card in the right drawer', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    const brein = bron('presentation/components/axe-core/NeuralBrain.tsx');
+    const css = bron('presentation/components/axe-core/NeuralBrain.css');
+    expect(mobile).toContain("slot.style.setProperty('--wereld-balk-breedte'");
+    expect(brein).toContain("zoek.placeholder = 'Search Memories';");
+    expect(brein).toContain("rechts.prepend(kaart);");
+    // Alleen in het wereldslot: desktop houdt namen, zoekbalk en kaart.
+    expect(css).toContain('#axe-slot-wereld .axe-neural-root .hub-label-text{ display:none; }');
+    expect(css).toContain('width:var(--wereld-balk-breedte, 176px);');
+    expect(css).toContain('#axe-slot-wereld .axe-neural-root #composer .nb-mic-ico{ display:none; }');
+    expect(css).toContain('.axe-slot #hub-info{ display:none;');
+    expect(css).not.toMatch(/^\.axe-neural-root \.hub-label-text/m);
+  });
+
   it('moves the side widgets of a world into the phone drawers, not on desktop', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const links = bron('presentation/components/layout/Sidebar.tsx');

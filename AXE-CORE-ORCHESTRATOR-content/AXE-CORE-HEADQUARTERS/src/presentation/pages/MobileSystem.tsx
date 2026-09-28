@@ -225,11 +225,17 @@ function useVrijeRuimteOpWereld(balk: RefObject<HTMLElement | null>, composer: R
       const s = slot.getBoundingClientRect();
       const boven = Math.max(0, Math.round(b.getBoundingClientRect().bottom - s.top));
       const onder = Math.max(0, Math.round(s.bottom - c.getBoundingClientRect().top));
-      const nu = `${boven}/${onder}`;
+      // De wereldbalk zelf, zodat een zoekbalk eronder (Neural) even groot is.
+      const wb = b.querySelector('.axe-mobile-worldbar')?.getBoundingClientRect();
+      const nu = `${boven}/${onder}/${wb ? `${Math.round(wb.width)}x${Math.round(wb.height)}` : ''}`;
       if (nu === vorige) return;
       vorige = nu;
       slot.style.setProperty('--wereld-vrij-boven', `${boven}px`);
       slot.style.setProperty('--wereld-vrij-onder', `${onder}px`);
+      if (wb && wb.width > 0) {
+        slot.style.setProperty('--wereld-balk-breedte', `${Math.round(wb.width)}px`);
+        slot.style.setProperty('--wereld-balk-hoogte', `${Math.round(wb.height)}px`);
+      }
       slot.dispatchEvent(new Event('wereldvrij'));
     };
     meet();

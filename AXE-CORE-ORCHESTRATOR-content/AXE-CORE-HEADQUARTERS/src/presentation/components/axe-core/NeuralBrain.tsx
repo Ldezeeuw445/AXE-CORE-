@@ -66,9 +66,9 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
 
 <div id="composer">
   <div class="box">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><path d="M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3z"/></svg>
+    <svg class="nb-zoek-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><path d="M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3z"/></svg>
     <input id="neural-input" type="text" placeholder="Search memories or ask AXE Core..." />
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    <svg class="nb-mic-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
   </div>
   <div class="reply" id="neural-reply"></div>
 </div>
@@ -421,6 +421,8 @@ export default function NeuralBrain() {
        helemaal past. Buiten het wereldslot (desktop) is er geen vrije ruimte
        en blijft alles zoals het was. Wordt ingevuld zodra de camera-stand er is. */
     let pasTelefoonAfstand: ((w: number, h: number, vrij: VrijeRuimte | null) => void) | null = null;
+    /** De vrije ruimte op de telefoon, voor de hub-iconen; null op desktop. */
+    let telefoonVrij: VrijeRuimte | null = null;
 
     function resize() {
       const { w, h } = viewSize();
@@ -428,6 +430,7 @@ export default function NeuralBrain() {
       composer.setSize(w, h);
       camera.aspect = w / h;
       const vrij = leesVrijeRuimte(root);
+      telefoonVrij = vrij;
       if (vrij) camera.setViewOffset(w, h, 0, middenVerschuiving(vrij), w, h);
       else camera.clearViewOffset();
       camera.updateProjectionMatrix();
@@ -1088,7 +1091,11 @@ export default function NeuralBrain() {
       // sidebar row and Terrain's own summit markers instead of a bare dot --
       // "gebruik dezelfde icons als op terrain, het is tenslotte dezelfde
       // memory" (Luka).
-      el.innerHTML = `<span class="hub-label-icon" style="color:${hex}; background:${hex}1a; border-color:${hex}aa;">${hubIconSvg(hub.id, 11)}</span><span><span style="color:var(--text)">${hub.name}</span><span class="sub" data-hub-sub="${hub.id}">${hub.count} memories</span></span>`;
+      el.innerHTML = `<span class="hub-label-icon" style="color:${hex}; background:${hex}1a; border-color:${hex}aa;">${hubIconSvg(hub.id, 11)}</span><span class="hub-label-text"><span style="color:var(--text)">${hub.name}</span><span class="sub" data-hub-sub="${hub.id}">${hub.count} memories</span></span>`;
+      // Op de telefoon staat alleen het icoon er (NeuralBrain.css); de naam
+      // blijft zo voor voorlezen en voor een lange druk.
+      el.setAttribute('aria-label', hub.name);
+      el.title = hub.name;
       el.addEventListener('click', () => zoomToHub(hub));
       labelsLayer.appendChild(el);
       hubLabelEls[hub.id] = el;
@@ -1190,6 +1197,26 @@ export default function NeuralBrain() {
     window.addEventListener('pointercancel', onLoslaten);
     // Anders pakt de browser het knijpen en slepen zelf af (pointercancel).
     if (leesVrijeRuimte(root)) canvas.style.touchAction = 'none';
+
+    /* Telefoon (Luka, 28 sep): de zoekbalk even groot als de wereldbalk met
+       alleen "Search Memories", en de hubkaart ("Global Memory / Preferences")
+       in de rechterlade in plaats van half achter de composer. Bovenaan in
+       #sidebar-right, dat de lade al in gaat; q() vindt hem daar nog. De weg
+       terug staat nu waar de kaart stond, net boven de composer.
+       q() en niet root.querySelector: dit stuk loopt pas na de adoptie, en dan
+       staat #sidebar-right al in de lade (gemeten: de kaart bleef achter). */
+    if (leesVrijeRuimte(root)) {
+      const zoek = q<HTMLInputElement>('#neural-input');
+      if (zoek) zoek.placeholder = 'Search Memories';
+      const terug = q('#back-btn');
+      if (terug) terug.textContent = '← Global Memory';
+      const kaart = q('#hub-info');
+      const rechts = q('#sidebar-right');
+      if (kaart && rechts) {
+        kaart.classList.add('panel');
+        rechts.prepend(kaart);
+      }
+    }
 
     function onPointerMove(e: PointerEvent) {
       if (aanrakingen.has(e.pointerId)) {
@@ -1688,10 +1715,21 @@ export default function NeuralBrain() {
         if (!activeHub) {
           const dx = s.x - cc.x, dy = s.y - cc.y, len = Math.hypot(dx, dy) || 1;
           const ux = dx / len, uy = dy / len;
-          const lx = s.x + ux * 58, ly = s.y + uy * 58;
+          let lx = s.x + ux * 58, ly = s.y + uy * 58;
+          let x1 = lx - ux * 20, y1 = ly - uy * 20;
+          if (telefoonVrij) {
+            /* Telefoon: alleen het icoon, dichter bij zijn knoop, en binnen de
+               plaat. Aan de rand viel Insights half weg en lag Preferences op
+               het pijltje van de rechterlade, zodat een tik de lade opende. */
+            const zij = 42;
+            lx = THREE.MathUtils.clamp(s.x + ux * 44, zij, w - zij);
+            ly = THREE.MathUtils.clamp(s.y + uy * 44, telefoonVrij.boven + 70, h - telefoonVrij.onder - 24);
+            const ex = lx - s.x, ey = ly - s.y, el2 = Math.hypot(ex, ey) || 1;
+            const kort = Math.min(18, el2);
+            x1 = lx - (ex / el2) * kort; y1 = ly - (ey / el2) * kort;
+          }
           el.style.left = lx + 'px';
           el.style.top = ly + 'px';
-          const x1 = lx - ux * 20, y1 = ly - uy * 20;
           [line.glow, line.core].forEach(el2 => {
             el2.setAttribute('x1', String(x1));
             el2.setAttribute('y1', String(y1));
