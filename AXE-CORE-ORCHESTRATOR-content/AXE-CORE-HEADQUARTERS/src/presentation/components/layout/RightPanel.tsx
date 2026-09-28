@@ -29,6 +29,7 @@ import {
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { LadeKaart } from '@/presentation/components/layout/tabMaatstaf';
+import { LadeSlot } from '@/presentation/components/layout/LadeSlot';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const quickActionIcons: Record<string, React.ComponentType<any>> = {
@@ -465,6 +466,9 @@ export function RightPanel() {
         </button>
       </div>
       <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
+        {/* Telefoon: de rechter widgets van de tab die open staat (Neural,
+            Terrain), bovenaan deze lade -- zie ladeSloten.ts. */}
+        {isMobile && <LadeSlot naam="rechts" />}
         <RailKamerKiezer kamer={kamer} opKamer={setKamer} />
 
         {kamer === 'status' && (

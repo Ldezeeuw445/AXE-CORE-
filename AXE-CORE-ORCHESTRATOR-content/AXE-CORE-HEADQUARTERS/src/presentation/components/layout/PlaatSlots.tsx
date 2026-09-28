@@ -39,7 +39,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-export type SlotNaam = 'links' | 'rechts' | 'dock' | 'rail' | 'topbalk';
+export type SlotNaam = 'links' | 'rechts' | 'dock' | 'rail' | 'topbalk' | 'wereld';
 
 /**
  * Exported so anything that adopts an EXISTING (non-React) element into a slot
@@ -56,6 +56,10 @@ export const SLOT_ID: Record<SlotNaam, string> = {
      de kill switch en de autopilot horen bovenin, niet in een paneel dat je
      eerst moet openen. De schil hoeft daarvoor niets van trading te weten. */
   topbalk: 'axe-slot-topbalk',
+  /* Alleen op de telefoon-Home: de hele plaat, áchter de wereldknoppen en de
+     composer. Neural, Terrain en Architecture vullen daar de plaat in plaats
+     van een vak ertussen (AppShell zet hem neer, MobileSystem vult hem). */
+  wereld: 'axe-slot-wereld',
 };
 
 /**

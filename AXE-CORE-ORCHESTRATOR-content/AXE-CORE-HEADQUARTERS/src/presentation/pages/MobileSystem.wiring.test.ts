@@ -90,10 +90,42 @@ describe('canonical mobile Home wiring', () => {
 
   // Terrain staat absolute; zonder rand om het vak lag zijn canvas over de
   // wereldknoppen en kon je na één keer Terrain niet meer wisselen (28 sep).
-  it('keeps every world inside its own box and the world switch above it', () => {
+  it('keeps every world inside its own layer and the world switch above it', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(mobile).toContain('className="relative isolate my-2 min-h-0 flex-1 overflow-hidden rounded-[20px]"');
+    expect(mobile).toContain('<PlaatSlot slot="wereld">');
+    expect(mobile).toContain('<div className="relative isolate h-full w-full">');
     expect(mobile).toContain('className="relative z-[5] mb-2 grid w-full flex-none items-center"');
+  });
+
+  // Luka, 28 sep: op de telefoon vult de wereld de hele plaat, en de zijwidgets
+  // van Neural en Terrain staan in de laden. Desktop houdt zijn eigen sloten.
+  it('fills the whole plate with the world and lets touches through to it', () => {
+    const shell = bron('presentation/components/layout/AppShell.tsx');
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    expect(shell).toContain('id={SLOT_ID.wereld}');
+    expect(shell).toContain("const telefoonHome = opPlaatMobiel && location.pathname === '/mobile';");
+    expect(shell).toContain("pointerEvents: mobielWereld ? 'none' : undefined");
+    expect(mobile).toContain("pointerEvents: wereld ? 'none' : undefined");
+    // De weg terug en de composer blijven aantikbaar.
+    expect((mobile.match(/pointerEvents: 'auto'/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('moves the side widgets of a world into the phone drawers, not on desktop', () => {
+    const shell = bron('presentation/components/layout/AppShell.tsx');
+    const links = bron('presentation/components/layout/Sidebar.tsx');
+    const rechts = bron('presentation/components/layout/RightPanel.tsx');
+    const lade = bron('presentation/components/layout/ladeSloten.ts');
+    const css = bron('design/axe-look.css');
+    expect(shell).toContain("useLadeSloten(mobileCommandSurface && location.pathname !== '/lock');");
+    // Desktop-sloten en ladesloten sluiten elkaar uit.
+    expect(shell).toContain('{!mobileCommandSurface && opPlaat && <PlaatSlotHosts />}');
+    expect(links).toContain('{isMobile && <LadeSlot naam="links" />}');
+    expect(rechts).toContain('{isMobile && <LadeSlot naam="rechts" />}');
+    // Geparkeerd buiten React, zodat een dichte Sheet de widgets niet meeneemt.
+    expect(lade).toContain("el.className = 'axe-slot axe-slot--lade';");
+    expect(lade).toContain('parkeerplaats().appendChild(gastheer);');
+    expect(css).toContain(':root[data-look] .axe-slot.axe-slot--lade {');
+    expect(css).toContain(':root[data-look] .axe-slot.axe-slot--lade > .nm-sidebar {');
   });
 
   // Op de telefoon was de bol een waas: DPR begrensd op 2 op een 3x-scherm, en

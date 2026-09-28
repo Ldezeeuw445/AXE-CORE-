@@ -73,6 +73,34 @@ hun onderlinge afstand en tekent ze als voorgetekende lichtpuntjes. Meet een
 canvas met `canvas.width` tegen zijn CSS-maat, en vergelijk een uitsnede op
 ware pixels, vóór en na.
 
+## De basis van elke tab op de telefoon (Luka, 28 sep)
+
+Bovenin: hamburger links, de balk van de tab in het midden, licht/donker
+rechts (AppShell zet hamburger en licht/donker al neer). Onderin: de composer.
+Daartussen: de inhoud van de tab over de **hele plaat**, niet in een vak.
+Zijwidgets gaan **in de laden**, niet naast of over de inhoud.
+
+Zo is het gebouwd, en zo hergebruik je het:
+
+- **Laden** (`ladeSloten.ts` + `LadeSlot.tsx`): op de telefoon krijgen
+  `#axe-slot-links` en `#axe-slot-rechts` een gastheer die buiten React
+  geparkeerd staat en de linker-/rechterlade in schuift zolang die open is. Wat
+  een tab via `PlaatSlot slot="links|rechts"` of `useSlotAdoptie` aanlevert,
+  komt dus vanzelf in de lade; desktop houdt zijn eigen `PlaatSlotHosts`. Een
+  Radix-Sheet haalt dicht zijn inhoud weg, daarom de parkeerplaats.
+- **Hele plaat** (slot `wereld`): AppShell zet op de telefoon-Home een laag
+  over de volle plaat neer, áchter alles. Het midden laat aanraking door
+  (`pointer-events: none` op de schil-inhoud); de balk en de composer zetten
+  het terug op `auto`. Test dat met `elementFromPoint` in het midden én op
+  de knoppen.
+- Zijkolommen die een tab onder een breedte verbergt (Terrain onder 900px)
+  zet `.axe-slot--lade` weer aan; kijk of een widget in de lade 0 hoog is.
+- In de emulator opent een veeg vanaf de rand "terug" en verlaat hij de app;
+  open de laden met `.axe-railtoggle--l/--r`. Op de iPhone-app bestaat dat
+  terug-gebaar niet. Twee WebGL-scènes tegelijk (Terrain + zijn miniatuur in
+  de rechterlade) maken de GPU-loze emulator traag: een lade die pas na 13 s
+  sluit is daar geen bug, meet het met een wachtlus i.p.v. een vaste pauze.
+
 ## Een wereld of paneel dat de balk afdekt
 
 Staat er iets `absolute` in een mobiel vak zonder `position: relative` erom,

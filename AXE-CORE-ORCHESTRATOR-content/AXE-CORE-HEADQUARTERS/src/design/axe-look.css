@@ -2591,6 +2591,26 @@ html:root[data-look][data-ios-pwa],
 :root[data-look] .axe-slot::-webkit-scrollbar { display: none; }
 :root[data-look] .axe-slot > * { pointer-events: auto; }
 :root[data-look] .axe-slot:empty { display: none; }
+/* Telefoon: dezelfde gastheer, maar in een lade (ladeSloten.ts). Geen vaste
+   kolom naast de plaat -- gewoon meelopen in de lade, volle breedte. Alleen dit
+   element heeft axe-slot--lade; de desktopsloten raakt dit niet. !important
+   omdat axe-slot--hoog (Neural/Terrain zetten die) top/bottom/position zet. */
+:root[data-look] .axe-slot.axe-slot--lade {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  z-index: auto !important;
+  overflow: visible !important;
+  pointer-events: auto;
+  margin-bottom: 10px;
+}
+/* Terrain verbergt zijn kolommen onder 900px (NeuralMemorySystem.css), omdat ze
+   op de telefoon óver het landschap lagen. In de lade liggen ze nergens
+   overheen, dus daar horen ze weer te staan. */
+:root[data-look] .axe-slot.axe-slot--lade > .nm-sidebar {
+  display: flex !important;
+}
 
 /* Corrective (evaluator round 1, issue 2): `RadiaalDok.tsx`'s right-hand ring
  * shares this bottom-right corner with whatever a tab has portalled into

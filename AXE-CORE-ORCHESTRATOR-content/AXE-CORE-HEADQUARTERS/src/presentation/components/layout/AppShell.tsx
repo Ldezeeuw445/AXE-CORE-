@@ -5,7 +5,8 @@ import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { MobileGlass, LookToggle } from '@/presentation/components/layout/MobileGlass';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
-import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatSlotHosts, SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
+import { useLadeSloten } from '@/presentation/components/layout/ladeSloten';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
 import { TaskCompletionToasts } from '@/presentation/components/layout/TaskCompletionToasts';
 import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
@@ -189,6 +190,16 @@ export function AppShell() {
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
   const keyboardInset = useKeyboardInset();
+  // Telefoon: de zijsloten van een tab wonen in de laden, niet naast de plaat
+  // (ladeSloten.ts). Op de desktop zet PlaatSlotHosts ze neer; die twee sluiten
+  // elkaar uit via mobileCommandSurface.
+  useLadeSloten(mobileCommandSurface && location.pathname !== '/lock');
+  // Telefoon-Home met Neural, Terrain of Architecture: de wereld vult de hele
+  // plaat (slot 'wereld'), en het midden laat aanraking door naar die wereld --
+  // alleen de wereldknoppen en de composer vangen nog tikken (MobileSystem).
+  const coreView = useCoreViewStore(s => s.coreView);
+  const telefoonHome = opPlaatMobiel && location.pathname === '/mobile';
+  const mobielWereld = telefoonHome && coreView !== 'axe';
 
   // Fixed to the dynamic viewport height (not min-h) so the shell never grows
   // past the visible area and pushes the BottomNav below the fold — the reason
@@ -297,12 +308,24 @@ export function AppShell() {
           geheel -- niet met de rails erin. Een rail op 40 verloor het dan van
           een slot op 30, en de standaardwidgets verdwenen achter de panelen van
           de tab. Binnen dezelfde context doen die getallen weer wat ze zeggen. */}
+      {/* De wereld van de telefoon-Home, over de hele plaat en áchter alles
+          wat erna komt: eerste kind, z-index 0, de ronding van de plaat. */}
+      {telefoonHome && (
+        <div
+          id={SLOT_ID.wereld}
+          className="axe-mobiel-wereld"
+          style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 'inherit', overflow: 'hidden' }}
+        />
+      )}
       {!mobileCommandSurface && opPlaat && <PlaatSlotHosts />}
       {/* Top Navigation */}
       {!mobileCommandSurface && <TopNav />}
 
       {/* Main layout area — fills remaining space */}
-      <div className="flex-1 flex overflow-hidden relative" style={{ background: 'var(--bg-base)' }}>
+      <div
+        className="flex-1 flex overflow-hidden relative"
+        style={{ background: 'var(--bg-base)', pointerEvents: mobielWereld ? 'none' : undefined }}
+      >
         {/* Sidebar renders as a zero-width Sheet on phone and as the rail on
             desktop. Keep it mounted on mobile so the left edge swipe/chevron
             can open the real Tools drawer; only the lock screen suppresses it. */}

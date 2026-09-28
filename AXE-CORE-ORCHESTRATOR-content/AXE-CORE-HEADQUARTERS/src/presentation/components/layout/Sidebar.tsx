@@ -28,6 +28,7 @@ import { useLocation } from 'react-router';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
 import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
+import { LadeSlot } from '@/presentation/components/layout/LadeSlot';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
@@ -290,6 +291,9 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 pt-2 space-y-2">
+        {/* Telefoon: de linker widgets van de tab die open staat (Neural,
+            Terrain), bovenaan deze lade -- zie ladeSloten.ts. */}
+        {isMobile && <LadeSlot naam="links" />}
         <WidgetCard title="THINKTHANKS" icon={<Lightbulb size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <ThinkThanksWidget />
         </WidgetCard>

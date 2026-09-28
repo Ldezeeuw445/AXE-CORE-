@@ -13,6 +13,7 @@ import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanv
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MobileComposer } from '@/presentation/components/layout/MobileComposer';
 import { MobileChat } from '@/presentation/components/layout/MobileChat';
+import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
 import { AXE_AGENTS, agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
 import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 import { managerVan, regelVan } from '@/domain/tierRouter/agentVenster';
@@ -176,26 +177,30 @@ function CoreHome() {
   );
 }
 
+/**
+ * De wereld over de hele plaat (Luka, 28 sep): geen vak tussen de knoppen en de
+ * composer meer, maar Neural, Terrain of Architecture als de plaat zelf, met de
+ * wereldknoppen erboven en de composer eronder. De schil zet het slot 'wereld'
+ * neer (AppShell); de zijwidgets van de wereld staan in de laden (ladeSloten).
+ */
 function WorldSurface({ view }: { view: Exclude<CoreView, 'axe'> }) {
-  // `relative isolate` is geen opmaak maar de rand van het vak. Terrain
-  // (.axe-neural-embed) staat absolute; zonder positionering hier rekte hij
-  // zich uit tot de hele .axe-mobile-home en lag zijn canvas over de
-  // wereldknoppen. Na één keer Terrain kwam elke tik op dat canvas terecht en
-  // kon je niet meer terug (Luka, 28 sep; nagebootst: 13..787 over de balk).
+  // `relative isolate` is geen opmaak maar de rand: Terrain (.axe-neural-embed)
+  // staat absolute en hoort binnen deze laag te blijven. Zonder rand lag zijn
+  // canvas over de wereldknoppen (28 sep, 13..787 over de balk).
   return (
-    <div
-      className="relative isolate my-2 min-h-0 flex-1 overflow-hidden rounded-[20px]"
-      style={{ border: '1px solid rgba(255,255,255,.07)', background: 'rgba(0,0,0,.18)' }}
-    >
-      {view === 'neural' && <NeuralBrain />}
-      {view === 'terrain' && <NeuralMemorySystem />}
-      {view === 'runtime' && <RuntimeWorkspace />}
-    </div>
+    <PlaatSlot slot="wereld">
+      <div className="relative isolate h-full w-full">
+        {view === 'neural' && <NeuralBrain />}
+        {view === 'terrain' && <NeuralMemorySystem />}
+        {view === 'runtime' && <RuntimeWorkspace />}
+      </div>
+    </PlaatSlot>
   );
 }
 
 export default function MobileSystem() {
   const coreView = useCoreViewStore(s => s.coreView);
+  const wereld = coreView !== 'axe';
 
   // Keep this explicit so a roster edit cannot silently turn the six phone
   // tiles into made-up placeholders.
@@ -211,6 +216,9 @@ export default function MobileSystem() {
         paddingTop: 0,
         paddingBottom: 0,
         touchAction: 'manipulation',
+        // Met een wereld open is het midden van de wereld: slepen en knijpen
+        // gaan erdoorheen. Alleen de balk en de composer vangen nog tikken.
+        pointerEvents: wereld ? 'none' : undefined,
       }}
     >
       {/* AppShell owns the hamburger + light/dark buttons. Keeping them there
@@ -219,18 +227,23 @@ export default function MobileSystem() {
       {/* Boven elke wereld: de weg terug mag nooit onder een canvas liggen. */}
       <div
         className="relative z-[5] mb-2 grid w-full flex-none items-center"
-        style={{ gridTemplateColumns: '58px minmax(0, 1fr) 58px' }}
+        style={{ gridTemplateColumns: '58px minmax(0, 1fr) 58px', pointerEvents: 'auto' }}
       >
         <span aria-hidden="true" />
         <MobileWorldBar />
         <span aria-hidden="true" />
       </div>
 
-      {coreView === 'axe'
-        ? <CoreHome />
-        : <WorldSurface view={coreView} />}
+      {wereld
+        ? (
+          <>
+            <div className="min-h-0 flex-1" aria-hidden="true" />
+            <WorldSurface view={coreView} />
+          </>
+        )
+        : <CoreHome />}
 
-      <div className="axe-mobile-edge mt-auto w-full flex-none">
+      <div className="axe-mobile-edge mt-auto w-full flex-none" style={{ pointerEvents: 'auto' }}>
         <MobileComposer />
       </div>
     </div>
