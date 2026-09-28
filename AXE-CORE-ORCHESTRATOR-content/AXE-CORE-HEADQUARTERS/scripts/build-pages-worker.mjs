@@ -3,7 +3,8 @@
  * <out>/_routes.json, zodat alleen /api de worker raakt. Waarom een worker en
  * niet functions/: zie de kop van pagesWorker.ts.
  *
- * Alleen `build:web` roept dit aan; de Tauri-build heeft geen proxy nodig.
+ * vite.config.ts (plugin axe-pages-worker) roept dit na elke webbouw aan; de
+ * Tauri-build en de APK hebben geen proxy nodig en slaan het over.
  */
 import { build } from 'esbuild';
 import { writeFileSync } from 'node:fs';

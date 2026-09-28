@@ -1,7 +1,7 @@
 import path from 'path';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { devProxy } from './vite.proxy';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -87,6 +87,27 @@ const BUILD_STAMP = {
   })(),
 };
 
+/**
+ * De Pages-worker voor /api (scripts/pagesWorker.ts) bij elke webbouw.
+ *
+ * Stond eerst alleen in `build:web`. Na die push stond de bouw van dezelfde
+ * commit live, maar gaf /api nog steeds de app-pagina (28 sep): Pages draait
+ * dus een ander bouwcommando dan dat script. Hier gebeurt het bij elke
+ * `vite build` voor het web, welk commando er ook omheen staat. Tauri en de
+ * APK hebben geen /api en krijgen hem niet.
+ */
+const pagesWorker = (): Plugin => ({
+  name: 'axe-pages-worker',
+  apply: 'build',
+  closeBundle() {
+    if (isTauriBuild || isAndroidShell || isGitHubPages) return;
+    execFileSync(process.execPath, ['scripts/build-pages-worker.mjs', 'dist/public'], {
+      cwd: import.meta.dirname,
+      stdio: 'inherit',
+    });
+  },
+});
+
 // Functievorm, niet een plat object: alleen zo vertelt Vite ons of dit een
 // bouw is of een dev-server. process.env.NODE_ENV is hier nog niet gezet --
 // nagemeten, de nepdata stond gewoon in dist/public toen ik daarop vertrouwde.
@@ -95,6 +116,7 @@ export default defineConfig(async ({ command }) => ({
   define: { __BUILD_STAMP__: JSON.stringify(BUILD_STAMP) },
   plugins: [
     react(),
+    pagesWorker(),
     VitePWA({
       // Desktop-Tauri houdt de zelf-opruimende worker (selfDestroying); een
       // APK-bouw (AXE_TAURI_BUILD=1) zet PWA volledig uit — geen sw.js, geen
@@ -115,6 +137,9 @@ export default defineConfig(async ({ command }) => ({
         // build.rollupOptions.output.manualChunks for exactly this.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf}'],
+        // De Pages-worker is servercode, geen app-bestand: Pages serveert hem
+        // niet, dus in de precache zou hij als app-pagina belanden.
+        globIgnores: ['**/node_modules/**/*', '_worker.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/a\.basemaps\.cartocdn\.com\/.*/i,
