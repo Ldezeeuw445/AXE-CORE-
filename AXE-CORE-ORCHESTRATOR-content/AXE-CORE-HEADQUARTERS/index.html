@@ -113,6 +113,26 @@
         -webkit-user-select: none;
         user-select: none;
       }
+      /* De strook onder de iOS-statusbalk. iOS 26 kleurt die balk naar het
+         vaste element dat bovenaan de pagina ligt, en kijkt alleen bij het
+         opstarten en als zo'n element verschijnt of verdwijnt. Gemeten op
+         Luka's iPhone (28 sep): na installeren lichtblauw, na look wisselen
+         nog steeds, pas na de zijlade open en dicht zwart -- die lade is
+         precies zo'n vast element. Deze strook is er vanaf de eerste frame,
+         altijd zwart, over de volle breedte en bovenop alles. Hij is zo hoog
+         als de ruimte boven de plaat (2px), dus je ziet hem niet: hij loopt
+         door in de zwarte balk. Alleen in de iPhone-app (data-ios-pwa). */
+      #axe-ios-balk { display: none; }
+      html[data-ios-pwa] #axe-ios-balk {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: calc(env(safe-area-inset-top, 0px) + 2px);
+        background-color: #000;
+        z-index: 2147483647;
+      }
     </style>
     <script>
       /* De plaat-stand vóór React.
@@ -136,10 +156,23 @@
        * geeft html/body daarop een zwarte achtergrond: iOS 26 kleurt de
        * statusbalk naar de body (theme-color negeert hij), en die is voor het
        * Mac-glas doorzichtig. Doorzichtig gaf een lichtblauwe balk. */
-      if (window.navigator.standalone === true) document.documentElement.dataset.iosPwa = '1';
+      if (window.navigator.standalone === true) {
+        document.documentElement.dataset.iosPwa = '1';
+        /* Een verse installatie heeft nog geen look. De standaard is licht
+         * (glass), en die lichte lucht stond er precies op het moment dat iOS
+         * de statusbalk afleest. Op de telefoon dus donker beginnen; de
+         * cloud-keuze neemt het daarna over (useLook). */
+        try {
+          if (!localStorage.getItem('axe_look')) {
+            localStorage.setItem('axe_look', 'black');
+            document.documentElement.dataset.look = 'black';
+          }
+        } catch (e) { /* privémodus */ }
+      }
     </script>
   </head>
   <body>
+    <div id="axe-ios-balk" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/app/main.tsx"></script>
   </body>

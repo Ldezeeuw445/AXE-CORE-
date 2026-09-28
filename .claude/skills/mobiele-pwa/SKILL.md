@@ -56,6 +56,21 @@ als er iets verandert. Twee dingen moeten dus kloppen:
 Balk lichtblauw bij het openen en zwart na het wisselen van look? Dan is het
 die flits, niet de CSS.
 
+Correctie 28 sep: `body` alleen was niet genoeg. iOS leest de kleur van het
+**vaste element bovenaan de pagina**, en herziet hem alleen als zo'n element
+verschijnt of verdwijnt (de zijlade open/dicht deed het; van look wisselen
+niet altijd). Daarom staat er in `index.html` een vaste zwarte strook
+`#axe-ios-balk` (volle breedte, 2px, bovenop alles, alleen bij `data-ios-pwa`),
+aanwezig vanaf de eerste frame, en start een verse installatie in `black`.
+
+## Een wereld of paneel dat de balk afdekt
+
+Staat er iets `absolute` in een mobiel vak zonder `position: relative` erom,
+dan rekt het zich uit tot de hele `.axe-mobile-home` en ligt het over de
+knoppen. Terrain deed dat: na één keer Terrain werkte geen wereldknop meer.
+Test het met `document.elementFromPoint` op de knoppen ná de wissel, niet
+alleen ervoor.
+
 ## Geometrie van Luka's telefoon
 
 Gemeten op zijn screenshot (iPhone 16/17 Pro, @3x):

@@ -39,9 +39,21 @@ describe('mobile PWA entry', () => {
   it('paints html/body black only in the installed iPhone app, so the status bar is black', () => {
     const html = read('index.html');
     const css = read('src/design/axe-look.css');
-    expect(html).toContain("if (window.navigator.standalone === true) document.documentElement.dataset.iosPwa = '1';");
+    expect(html).toMatch(/if \(window\.navigator\.standalone === true\) \{\s*document\.documentElement\.dataset\.iosPwa = '1';/);
     expect(css).toContain(':root[data-look][data-ios-pwa] body { background-color: #000 !important; }');
     // Tauri blijft doorzichtig: de algemene regel staat er nog.
     expect(css).toContain(':root[data-look] #root { background: transparent !important; }');
+  });
+
+  // iOS 26 leest de balkkleur van het vaste element bovenaan, alleen bij
+  // opstarten en als zo'n element verschijnt. Na installeren bleef hij
+  // lichtblauw tot de zijlade open en dicht ging (28 sep).
+  it('puts a black fixed strip at the top of the iPhone app from the first frame', () => {
+    const html = read('index.html');
+    expect(html).toContain('<div id="axe-ios-balk" aria-hidden="true"></div>');
+    expect(html).toContain('#axe-ios-balk { display: none; }');
+    expect(html).toMatch(/html\[data-ios-pwa\] #axe-ios-balk \{[^}]*position: fixed;[^}]*top: 0;[^}]*background-color: #000;/);
+    // Verse installatie start donker, niet in de lichte standaardlook.
+    expect(html).toMatch(/if \(!localStorage\.getItem\('axe_look'\)\) \{\s*localStorage\.setItem\('axe_look', 'black'\);/);
   });
 });

@@ -177,9 +177,14 @@ function CoreHome() {
 }
 
 function WorldSurface({ view }: { view: Exclude<CoreView, 'axe'> }) {
+  // `relative isolate` is geen opmaak maar de rand van het vak. Terrain
+  // (.axe-neural-embed) staat absolute; zonder positionering hier rekte hij
+  // zich uit tot de hele .axe-mobile-home en lag zijn canvas over de
+  // wereldknoppen. Na één keer Terrain kwam elke tik op dat canvas terecht en
+  // kon je niet meer terug (Luka, 28 sep; nagebootst: 13..787 over de balk).
   return (
     <div
-      className="my-2 min-h-0 flex-1 overflow-hidden rounded-[20px]"
+      className="relative isolate my-2 min-h-0 flex-1 overflow-hidden rounded-[20px]"
       style={{ border: '1px solid rgba(255,255,255,.07)', background: 'rgba(0,0,0,.18)' }}
     >
       {view === 'neural' && <NeuralBrain />}
@@ -211,8 +216,9 @@ export default function MobileSystem() {
       {/* AppShell owns the hamburger + light/dark buttons. Keeping them there
           prevents the duplicate controls/composers that caused the two
           different mobile renders. */}
+      {/* Boven elke wereld: de weg terug mag nooit onder een canvas liggen. */}
       <div
-        className="mb-2 grid w-full flex-none items-center"
+        className="relative z-[5] mb-2 grid w-full flex-none items-center"
         style={{ gridTemplateColumns: '58px minmax(0, 1fr) 58px' }}
       >
         <span aria-hidden="true" />

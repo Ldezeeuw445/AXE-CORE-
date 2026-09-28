@@ -88,6 +88,14 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).toMatch(/text-\[9px\] tracking-\[0\.12em\][\s\S]{0,260}#34d399[\s\S]{0,120}AXE CORE/);
   });
 
+  // Terrain staat absolute; zonder rand om het vak lag zijn canvas over de
+  // wereldknoppen en kon je na één keer Terrain niet meer wisselen (28 sep).
+  it('keeps every world inside its own box and the world switch above it', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    expect(mobile).toContain('className="relative isolate my-2 min-h-0 flex-1 overflow-hidden rounded-[20px]"');
+    expect(mobile).toContain('className="relative z-[5] mb-2 grid w-full flex-none items-center"');
+  });
+
   it('shows six real roster agents around the Core', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     for (const id of ['trading', 'developer', 'thinktank', 'northsea', 'wingman', 'companion']) {
