@@ -33,4 +33,15 @@ describe('mobile PWA entry', () => {
     expect(html).not.toContain('content="black-translucent"');
     expect(html).toContain('viewport-fit=cover');
   });
+
+  // iOS 26 kleurt de statusbalk naar body (theme-color negeert hij). Body is
+  // voor het Mac-glas doorzichtig, wat op de iPhone een lichtblauwe balk gaf.
+  it('paints html/body black only in the installed iPhone app, so the status bar is black', () => {
+    const html = read('index.html');
+    const css = read('src/design/axe-look.css');
+    expect(html).toContain("if (window.navigator.standalone === true) document.documentElement.dataset.iosPwa = '1';");
+    expect(css).toContain(':root[data-look][data-ios-pwa] body { background-color: #000 !important; }');
+    // Tauri blijft doorzichtig: de algemene regel staat er nog.
+    expect(css).toContain(':root[data-look] #root { background: transparent !important; }');
+  });
 });

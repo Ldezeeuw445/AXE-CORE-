@@ -18,7 +18,6 @@ import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 import { managerVan, regelVan } from '@/domain/tierRouter/agentVenster';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
-import { useVoiceStore } from '@/presentation/store/voiceStore';
 
 const LEFT: readonly AxeAgentId[] = ['trading', 'developer', 'thinktank'];
 // These are actual roster agents — no fake Analyst/Creative/Operator cards.
@@ -122,13 +121,6 @@ function AgentTile({ id }: { id: AxeAgentId }) {
 }
 
 function CoreHome() {
-  const voiceStatus = useVoiceStore(s => s.voiceStatus);
-  const stateLabel =
-    voiceStatus === 'listening' ? 'LISTENING'
-      : voiceStatus === 'processing' ? 'THINKING'
-        : voiceStatus === 'speaking' ? 'SPEAKING'
-          : 'READY';
-
   return (
     <>
       <section
@@ -152,16 +144,15 @@ function CoreHome() {
           <div className="absolute inset-x-0 top-0 bottom-8">
             <AxeCoreSphere />
           </div>
+          {/* Eén regel: bolletje + AXE CORE, op de plek en in de maat waar
+              READY stond. De grote AXE CORE-kop eronder is weg (Luka, 27 sep). */}
           <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
-            <span className="text-[14px] font-medium tracking-[0.16em]" style={{ color: 'var(--text-primary)' }}>
-              AXE CORE
-            </span>
-            <span className="mt-0.5 flex items-center gap-1.5 text-[9px] tracking-[0.12em]" style={{ color: 'var(--text-secondary)' }}>
+            <span className="flex items-center gap-1.5 text-[9px] tracking-[0.12em]" style={{ color: 'var(--text-secondary)' }}>
               <span
                 className="size-2 rounded-full"
                 style={{ background: '#34d399', boxShadow: '0 0 10px #34d399' }}
               />
-              {stateLabel}
+              AXE CORE
             </span>
           </div>
         </button>

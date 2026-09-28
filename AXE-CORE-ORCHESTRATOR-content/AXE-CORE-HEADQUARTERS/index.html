@@ -130,6 +130,13 @@
         var l = localStorage.getItem('axe_look');
         if (l === 'glass' || l === 'black') document.documentElement.dataset.look = l;
       } catch (e) { /* privémodus -- React doet het straks */ }
+      /* De iPhone-app van het beginscherm. navigator.standalone bestaat
+       * alleen in iOS-WebKit en is alleen true voor een geïnstalleerde
+       * web-app -- niet in Safari, niet in Tauri, niet op Android. axe-look.css
+       * geeft html/body daarop een zwarte achtergrond: iOS 26 kleurt de
+       * statusbalk naar de body (theme-color negeert hij), en die is voor het
+       * Mac-glas doorzichtig. Doorzichtig gaf een lichtblauwe balk. */
+      if (window.navigator.standalone === true) document.documentElement.dataset.iosPwa = '1';
     </script>
   </head>
   <body>

@@ -81,6 +81,13 @@ describe('canonical mobile Home wiring', () => {
     expect(shell).not.toContain("'calc(env(safe-area-inset-bottom, 0px) + 14px)'");
   });
 
+  it('labels the sphere with one small line: green dot + AXE CORE where READY was', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    expect(mobile).not.toContain('text-[14px] font-medium tracking-[0.16em]');
+    expect(mobile).not.toContain('stateLabel');
+    expect(mobile).toMatch(/text-\[9px\] tracking-\[0\.12em\][\s\S]{0,260}#34d399[\s\S]{0,120}AXE CORE/);
+  });
+
   it('shows six real roster agents around the Core', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     for (const id of ['trading', 'developer', 'thinktank', 'northsea', 'wingman', 'companion']) {

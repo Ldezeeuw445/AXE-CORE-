@@ -278,6 +278,14 @@
 html:root[data-look],
 :root[data-look] body,
 :root[data-look] #root { background: transparent !important; }
+/* Behalve in de iPhone-app van het beginscherm (data-ios-pwa, gezet in
+   index.html): daar is geen bureaublad om doorheen te kijken, en iOS 26 kleurt
+   de statusbalk naar de achtergrond van body. Doorzichtig werd lichtblauw
+   (#D5E6F4, gemeten op Luka's screenshot van 27 sep); zwart geeft een zwarte
+   balk met witte tijd en iconen. De plaat en de lucht liggen er vast
+   overheen, dus verder verandert er niets. Tauri zet data-ios-pwa nooit. */
+html:root[data-look][data-ios-pwa],
+:root[data-look][data-ios-pwa] body { background-color: #000 !important; }
 :root[data-look] .axe-schemer { display: none !important; }
 
 :root[data-look='black'] .axe-shell {
