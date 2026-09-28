@@ -281,6 +281,8 @@ const MAC_GIT: Snelactie[] = [
 
 /** Waar de deploy-kopie op een VPS staat. */
 const REPO_VPS = '/opt/axe-core-api';
+/** De Companion-checkout op diezelfde box. Andere repo, andere dienst. */
+const REPO_COMPANION = '/root/AXE-COMPANION-OS-';
 
 const VPS: Snelactie[] = [
   {
@@ -298,6 +300,40 @@ const VPS: Snelactie[] = [
     cmd: `cd ${REPO_VPS} && git pull && systemctl restart axe-core-api && systemctl --no-pager status axe-core-api --lines=5`,
     uitleg: 'Binnenhalen, herstarten, en meteen tonen of hij weer draait',
     groep: 'machine',
+  },
+  {
+    label: 'Companion uitrollen',
+    // De hele keten in één regel, met `&&` ertussen: mislukt de merge of de
+    // build, dan mag de herstart NIET doorgaan. Met puntkomma's herstart je de
+    // oude code en ziet het eruit alsof de deploy lukte.
+    //
+    // `--ff-only` en geen gewone merge: komt er een commit op deployed die niet
+    // op de bronbranch zit, dan hoort dit te stoppen en niet stilletzwijgend te
+    // mergen op een machine waar niemand het resultaat nakijkt.
+    //
+    // Waarom dit hier staat en niet in een document: op een telefoon typ je dit
+    // niet. Eén tik is het verschil tussen "ik kan het onderweg" en "het moet
+    // wachten tot ik thuis ben".
+    cmd: `cd ${REPO_COMPANION} && git fetch origin && git merge --ff-only origin/claude/axe-companion-audit-launch-nz58dg && npm ci && npm run build && systemctl restart axe-companion && systemctl --no-pager status axe-companion --lines=3`,
+    uitleg: 'Companion binnenhalen, bouwen en herstarten — stopt bij de eerste fout',
+    groep: 'machine',
+  },
+  {
+    label: 'Companion: geheugen vrij',
+    // Die box zat op 79% met een cap van 3G; een build wordt daar gedood.
+    // Zie docs/VPS-RUNBOOK.md — de zwaarste buur even opzij.
+    cmd: 'systemctl stop axe-browser-agent && echo "browser-agent uit — start hem na de build weer"',
+    uitleg: 'Ruimte maken als de Companion-build op geheugen sneuvelt',
+    groep: 'machine',
+  },
+  {
+    label: 'Companion: live check',
+    // Niet "is de dienst gestart" maar "serveert hij de nieuwe code". Een
+    // mislukte build laat het oude proces vrolijk doordraaien.
+    cmd: `curl -s https://www.axecompanion.com/welcome | grep -oE '/_next/static/[^"]+\\.css' | sort -u | while read c; do curl -s "https://www.axecompanion.com$c"; done | grep -c tos-chart-dock`,
+    uitleg: '0 = oude build draait nog, 1 of meer = de nieuwe staat live',
+    groep: 'machine',
+    leestAlleen: true,
   },
   {
     label: 'Diensten',

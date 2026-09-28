@@ -3746,6 +3746,32 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * onthoudbaar te zijn. Onder de 1100px worden het er twee en onder de 700 één,
  * want vier terminals van 200px naast elkaar zijn vier onleesbare terminals.
  */
+/* De machinekiezer op een telefoon.
+   Geen tabbladen-look met randen eromheen: het is dezelfde soft-UI-tegel als
+   de bottom nav, zodat het bij de schil hoort en niet als een los bedieningspaneel
+   bovenop de terminal ligt. */
+.axe-termkiezer {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--axe-barbtn, var(--bg-base));
+  box-shadow: var(--axe-tegel-op);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.axe-termkiezer[data-aan='ja'] {
+  /* Ingedrukt in plaats van opgelicht: dezelfde taal als de viewknoppen en de
+     bottom nav, waar "hier ben je" een verzonken tegel is. */
+  box-shadow: var(--axe-tegel-in);
+  color: var(--text-primary);
+}
+
 .axe-termraster {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -48,6 +48,7 @@ import {
   snelactiesVoor, actiesVanGroep, blijvendDraaiend, GROEP_LABEL,
   type Groep, type Snelactie,
 } from '@/domain/terminalSnelacties';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 import {
   beschikbaar as dienstenKunnen, dienstenStand, dienstStart, dienstStop,
@@ -55,6 +56,9 @@ import {
 } from '@/infrastructure/gateways/diensten';
 
 const GROEPEN: Groep[] = ['machine', 'agents', 'git'];
+
+/** Welke machine op een smal scherm openstaat. */
+const GEKOZEN_SLEUTEL = 'axe_terminal_gekozen';
 
 /** Twee rijen van vier. Zie de uitleg bovenaan waarom het een vast getal is. */
 const VAKKEN = 8;
@@ -73,6 +77,10 @@ export default function TerminalsPage() {
   const [eigen, setEigen] = useState<TerminalHost[]>(() => lees<TerminalHost[]>(HOSTS_SLEUTEL, []));
   const [adressen, setAdressen] = useState<Record<string, string>>(() => lees(ADRESSEN_SLEUTEL, {}));
   const [toevoegen, setToevoegen] = useState(false);
+  const smal = useIsMobile();
+  // Welke machine op een telefoon in beeld staat. Bewaard, zodat je na het
+  // wegleggen van je toestel niet opnieuw hoeft te zoeken waar je was.
+  const [gekozenId, setGekozenId] = useState<string>(() => lees(GEKOZEN_SLEUTEL, 'deze-mac'));
 
   const hosts = useMemo(
     () => alleHosts(eigen).map(h => metAdres(h, adressen)),
@@ -127,9 +135,51 @@ export default function TerminalsPage() {
 
       <DienstenStrip />
 
-      {/* Vier breed, twee rijen. Vast en niet auto-fit: zie de uitleg bovenaan.
-          Onder de 1100px worden het er twee en onder de 700 één -- vier
-          terminals van 200px naast elkaar zijn vier onleesbare terminals. */}
+      {/* ── Op een telefoon: één machine tegelijk ──────────────────────────
+          Acht vakken onder elkaar is niet "hetzelfde maar smaller". Het is
+          acht shells, acht websockets en acht GPU-contexten op een toestel dat
+          daar niet voor gebouwd is -- en een scherm waarop je eindeloos moet
+          scrollen om te zien welke machine je voor je hebt.
+
+          Dus: een rij knoppen met de namen, en daaronder de gekozen machine
+          over de volle hoogte. Alleen die ene verbindt; de rest bestaat pas
+          als je erop tikt. */}
+      {smal ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="tablist" aria-label="Machine">
+            {hosts.slice(0, VAKKEN).map(host => (
+              <button
+                key={host.id}
+                role="tab"
+                aria-selected={host.id === gekozenId}
+                onClick={() => { setGekozenId(host.id); zetJson(GEKOZEN_SLEUTEL, host.id); }}
+                className="axe-termkiezer"
+                data-aan={host.id === gekozenId ? 'ja' : undefined}
+                title={host.waarvoor}
+              >
+                <span className="axe-term-stip" data-stand={isKlaar(host) ? 'aan' : 'leeg'} aria-hidden />
+                {host.naam}
+              </button>
+            ))}
+          </div>
+          {(() => {
+            const host = hosts.find(h => h.id === gekozenId) ?? hosts[0];
+            if (!host) return null;
+            return (
+              <MachinePaneel
+                key={host.id}
+                host={host}
+                hulpStart
+                opAdres={url => bewaarAdres(host.id, url)}
+                opWeg={host.ingebouwd ? undefined : () => bewaarEigen(eigen.filter(h => h.id !== host.id))}
+              />
+            );
+          })()}
+        </div>
+      ) : (
+      /* Vier breed, twee rijen. Vast en niet auto-fit: zie de uitleg bovenaan.
+         Onder de 1100px worden het er twee -- vier terminals van 200px naast
+         elkaar zijn vier onleesbare terminals. */
       <div className="axe-termraster flex-1 min-h-0 overflow-auto p-2">
         {hosts.slice(0, VAKKEN).map(host => (
           <MachinePaneel
@@ -146,6 +196,7 @@ export default function TerminalsPage() {
           <LeegVak key={`leeg-${i}`} onKlik={() => setToevoegen(true)} />
         ))}
       </div>
+      )}
     </motion.div>
   );
 }
@@ -215,17 +266,21 @@ function DienstenStrip() {
 }
 
 function MachinePaneel({
-  host, opAdres, opWeg,
+  host, opAdres, opWeg, hulpStart = false,
 }: {
   host: TerminalHost;
   opAdres: (url: string) => void;
   opWeg?: () => void;
+  /** Op een telefoon staat de commandolijst meteen open. Daar is typen in een
+   *  terminal het lastigste wat er is; een lijst om op te tikken is het punt
+   *  van dit vak, niet een extraatje achter een handgreep. */
+  hulpStart?: boolean;
 }) {
   const termRef = useRef<XtermHandle>(null);
   const [verbonden, setVerbonden] = useState(false);
   const [groep, setGroep] = useState<Groep>('machine');
   const [getoond, setGetoond] = useState<string | null>(null);
-  const [hulpOpen, setHulpOpen] = useState(false);
+  const [hulpOpen, setHulpOpen] = useState(hulpStart);
   const [vol, setVol] = useState(false);
   const acties = useMemo(() => snelactiesVoor(host.id), [host.id]);
   const klaar = isKlaar(host);
