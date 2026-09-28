@@ -31,6 +31,10 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 
 const N = 2200;
+// Telefoon: fijnere schil, en een binnenbol met zijn eigen, ijlere verdeling.
+const TEL_BUITEN = 2600;
+const TEL_BINNEN = 900;
+const TEL_RING = 180;
 
 /* Overwegend koelwit; de hubkleuren zijn een spreiding, geen vuurwerk. Alleen
    de afwijkers gebruiken dit -- de rest volgt de hoogte (zie hieronder). */
@@ -42,9 +46,12 @@ const PALET = [
 
 interface Punt { x: number; y: number; z: number; rgb: string }
 
-function maakBol(): Punt[] {
-  return Array.from({ length: N }, (_, i) => {
-    const y = 1 - (i / (N - 1)) * 2;
+/* `stappen` > 0 zet de hoogtekleur in vaste treden. Alleen de telefoonmodus
+   doet dat: die tekent elk deeltje uit een voorgetekend lichtpuntje per kleur,
+   en 48 treden zijn niet van een vloeiend verloop te onderscheiden. */
+function maakBol(n = N, stappen = 0): Punt[] {
+  return Array.from({ length: n }, (_, i) => {
+    const y = 1 - (i / (n - 1)) * 2;
     const rad = Math.sqrt(Math.max(0, 1 - y * y));
     const th = Math.PI * (3 - Math.sqrt(5)) * i;
 
@@ -54,7 +61,7 @@ function maakBol(): Punt[] {
 
        Let op de (1 + y): in het scherm groeit y naar BENEDEN, dus p.y = +1
        komt onderaan. Met (1 - y) staat het verloop ondersteboven. */
-    const g = (1 + y) / 2;
+    const g = stappen ? Math.round(((1 + y) / 2) * stappen) / stappen : (1 + y) / 2;
     const kleur = g < 0.42
       ? [Math.round(150 - g * 90), Math.round(230 - g * 40), Math.round(120 + g * 250)]
       : [Math.round(60 - (g - 0.42) * 40), Math.round(200 - (g - 0.42) * 150), Math.round(240 - (g - 0.42) * 30)];
@@ -68,7 +75,14 @@ function maakBol(): Punt[] {
   });
 }
 
-export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
+/**
+ * @param telefoon de telefoon-Home (MobileSystem). Daar is de straal maar ~60pt
+ * en het scherm 3x: met de gewone maten overlapten de deeltjes tot een waas, en
+ * de DPR-grens van 2 liet iOS het beeld 1,5x oprekken (Luka, 28 sep: "a bit of a
+ * blur"). Zelfde bol, zelfde lagen; alleen resolutie en deeltjesmaat zijn
+ * anders. Desktop, Tauri en de zwevende bol geven hem niet mee.
+ */
+export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number; telefoon?: boolean }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const boostRef = useRef(boost);
   useEffect(() => { boostRef.current = boost; }, [boost]);
@@ -80,7 +94,10 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
     if (!x) return;
 
     const stil = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const bol = maakBol();
+    const bol = telefoon ? maakBol(TEL_BUITEN, 48) : maakBol();
+    // Eigen, ijlere binnenbol op de telefoon: dezelfde 2200 punten op 46% van
+    // de straal lagen daar op twee pixels van elkaar en werden één vlek.
+    const binnenBol = telefoon ? maakBol(TEL_BINNEN, 48) : bol;
     let w = 0, h = 0, d = 1, frame = 0, t = 0;
     let rotY = 0, rotX = 0.32, zoom = 1, auto = 0;
     let slepen = false, lastX = 0, lastY = 0;
@@ -91,7 +108,8 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
     const fit = () => {
       const r = canvas.getBoundingClientRect();
-      d = Math.min(window.devicePixelRatio || 1, 2);
+      // Telefoon op de echte 3x van het scherm; op 2 rekte iOS hem 1,5x op.
+      d = Math.min(window.devicePixelRatio || 1, telefoon ? 3 : 2);
       // Deeltjes iets groter en minder doorzichtig dan eerst.
       //
       // Op een klein formaat -- naast de band in de browser -- versmolten ze
@@ -100,6 +118,47 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       // korrel zichtbaar, ook als de bol maar honderd pixels breed is.
       w = canvas.width = Math.max(1, Math.round(r.width * d));
       h = canvas.height = Math.max(1, Math.round(r.height * d));
+      // Een nieuwe maat wist de context-stand; de lichtpuntjes worden geschaald.
+      x.imageSmoothingEnabled = true;
+      x.imageSmoothingQuality = 'high';
+    };
+
+    /* ── Telefoon: elk deeltje een lichtpuntje ──────────────────────────────
+     *
+     * Een plat rondje van 1 à 2 punt leest op een 3x-scherm als een vlekje.
+     * Een klein lichtpuntje -- witte kern, dan de kleur, dan een korte uitloop
+     * -- leest als een deeltje. Eén keer voorgetekend per kleur (de hoogte-
+     * kleur staat daarvoor in 48 treden), daarna alleen nog drawImage: goedkoper
+     * dan een arc per deeltje, en scherper. */
+    const SPRITE = 48;
+    const sprites = new Map<string, HTMLCanvasElement>();
+    const sprite = (rgb: string) => {
+      const klaar = sprites.get(rgb);
+      if (klaar) return klaar;
+      const s = document.createElement('canvas');
+      s.width = s.height = SPRITE;
+      const c = s.getContext('2d');
+      if (c) {
+        const [r, g, b] = rgb.split(',').map(Number);
+        const wit = (v: number) => Math.round(v + (255 - v) * 0.6);
+        const m = SPRITE / 2;
+        const grad = c.createRadialGradient(m, m, 0, m, m, m);
+        grad.addColorStop(0, `rgba(${wit(r)},${wit(g)},${wit(b)},1)`);
+        grad.addColorStop(0.3, `rgba(${r},${g},${b},1)`);
+        grad.addColorStop(0.5, `rgba(${r},${g},${b},0.5)`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        c.fillStyle = grad;
+        c.fillRect(0, 0, SPRITE, SPRITE);
+      }
+      sprites.set(rgb, s);
+      return s;
+    };
+    /** `straal` is de zichtbare straal in apparaatpixels; de volle kleur van
+     *  het lichtpuntje loopt tot de helft van zijn maat. */
+    const lichtpunt = (px: number, py: number, straal: number, rgb: string, alfa: number) => {
+      const s = Math.max(1, straal) * 2;
+      x.globalAlpha = alfa;
+      x.drawImage(sprite(rgb), px - s, py - s, s * 2, s * 2);
     };
 
     /* De vier sinussen en cosinussen van de stand van de bol.
@@ -230,6 +289,110 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       ringHelft(cx, cy, R, true);
     };
 
+    /* De telefoonversie van teken(): dezelfde lagen, maar de deeltjes zijn
+     * geschaald op hun ONDERLINGE AFSTAND in plaats van op vaste pixels. Op een
+     * straal van ~60pt lagen de gewone deeltjes (tot 7pt breed) op 4,5pt van
+     * elkaar en liepen ze in elkaar over. Nu heeft elk punt lucht om zich heen,
+     * hoe groot de bol ook is.
+     *
+     * En de schil in twee helften, om de kern heen: achterkant eerst, voorkant
+     * als laatste. Zo ligt de kern écht binnenin. */
+    const buitenAfstand = Math.sqrt((4 * Math.PI) / TEL_BUITEN);
+    const binnenAfstand = Math.sqrt((4 * Math.PI) / TEL_BINNEN);
+    const tekenFijn = () => {
+      if (!w) fit();
+      standBijwerken();
+      x.clearRect(0, 0, w, h);
+
+      const b = boostRef.current;
+      const spreekt = useVoiceStore.getState().voiceStatus === 'speaking';
+      const doel = spreekt ? getGlobalTtsLevel() : 0;
+      stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
+      const cx = w / 2, cy = h * 0.40;
+      const R = Math.min(w, h) * 0.34 * zoom;
+      const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
+      const groei = 0.9 + b * 0.4;
+
+      const buitenSp = R * buitenAfstand;
+      const buiten = bol.map(p => ({ q: proj(p, cx, cy, R), rgb: p.rgb }));
+      const binnenR = R * 0.46 * puls;
+      const binnenSp = binnenR * binnenAfstand;
+      const binnen = binnenBol.map(p => proj(p, cx, cy, binnenR));
+
+      const schil = (voor: boolean) => {
+        for (const { q, rgb } of buiten) {
+          if ((q.depth > 0.5) !== voor) continue;
+          lichtpunt(q.px, q.py, buitenSp * (0.14 + q.depth * 0.22) * groei, rgb, 0.28 + q.depth * 0.72);
+        }
+      };
+      const binnenHelft = (voor: boolean) => {
+        for (const q of binnen) {
+          if ((q.depth > 0.5) !== voor) continue;
+          lichtpunt(q.px, q.py, binnenSp * (0.13 + q.depth * 0.19), voor ? '160,232,255' : '130,212,246',
+            voor ? 0.4 + q.depth * 0.6 : 0.22 + q.depth * 0.5);
+        }
+      };
+      const ring = (voor: boolean) => {
+        const straal = R * 0.74;
+        const sp = (straal * 6.2832) / TEL_RING;
+        for (let i = 0; i < TEL_RING; i++) {
+          const a = (i / TEL_RING) * 6.2832;
+          const X0 = Math.cos(a), Z0 = Math.sin(a);
+          const X = X0 * cyv - Z0 * syv;
+          let Z = X0 * syv + Z0 * cyv;
+          const Y = -Z * sxv;
+          Z = Z * cxv;
+          if ((Z > 0) !== voor) continue;
+          const persp = 1.9 / (2.4 - Z);
+          const depth = (Z + 1) / 2;
+          lichtpunt(cx + X * straal * persp, cy + Y * straal * persp, sp * (0.2 + depth * 0.16),
+            voor ? '236,212,120' : '210,190,100', voor ? 0.6 + depth * 0.4 : 0.22 + depth * 0.3);
+        }
+      };
+
+      schil(false);
+      binnenHelft(false);
+      ring(false);
+
+      // De kern: een scherpe, hete kern met een korte halo, en maar een zweem
+      // wijde gloed. De grote waas was wat de bol wazig liet ogen.
+      x.globalAlpha = 1;
+      const wijdR = R * 0.5 * puls;
+      const wijd = x.createRadialGradient(cx, cy, 0, cx, cy, wijdR);
+      wijd.addColorStop(0, `rgba(110,200,240,${(0.06 + b * 0.05 + stem * 0.12).toFixed(3)})`);
+      wijd.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = wijd;
+      x.beginPath(); x.arc(cx, cy, wijdR, 0, 6.284); x.fill();
+
+      const haloR = R * 0.2 * puls * (1 + stem * 0.6);
+      const halo = x.createRadialGradient(cx, cy, 0, cx, cy, haloR);
+      halo.addColorStop(0, `rgba(150,226,252,${Math.min(0.6, 0.26 + b * 0.12 + stem * 0.25).toFixed(3)})`);
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = halo;
+      x.beginPath(); x.arc(cx, cy, haloR, 0, 6.284); x.fill();
+
+      binnenHelft(true);
+
+      // Het hete hart ná de voorkant van de binnenbol, oplichtend ('lighter'):
+      // eronder verdween hij achter de deeltjes en zag je geen kern meer.
+      // Oplichten telt licht op in plaats van te bedekken, dus de deeltjes
+      // ervoor blijven zichtbaar en de kern schijnt erdoorheen.
+      const kernR = R * 0.085 * puls * (1 + stem * 0.9);
+      const kern = x.createRadialGradient(cx, cy, 0, cx, cy, kernR);
+      kern.addColorStop(0, `rgba(255,255,255,${Math.min(1, 0.85 + b * 0.15).toFixed(3)})`);
+      kern.addColorStop(0.35, 'rgba(190,240,255,.5)');
+      kern.addColorStop(1, 'rgba(120,215,245,0)');
+      x.globalCompositeOperation = 'lighter';
+      x.fillStyle = kern;
+      x.beginPath(); x.arc(cx, cy, kernR, 0, 6.284); x.fill();
+      x.globalCompositeOperation = 'source-over';
+
+      schil(true);
+      ring(true);
+      x.globalAlpha = 1;
+    };
+    const tekenNu = telefoon ? tekenFijn : teken;
+
     /* Draait alleen als er iemand kijkt.
      *
      * De bol blijft op Home altijd gemount -- een WebGL/canvas-scene opnieuw
@@ -276,7 +439,7 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       t += 0.016 * stap;
       if (!slepen) auto += 0.0016 * stap;   // laat je los, dan draait hij rustig door
-      teken();
+      tekenNu();
     };
 
     /* Één vinger draait, twee vingers zoomen (knijpen).
@@ -336,7 +499,7 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
     canvas.addEventListener('wheel', wiel, { passive: false });
 
     fit();
-    if (stil) teken(); else frame = requestAnimationFrame(lus);
+    if (stil) tekenNu(); else frame = requestAnimationFrame(lus);
     window.addEventListener('resize', fit);
 
     /* Net als het sterrenveld: deze kan mounten voordat hij maat heeft, en dan
@@ -344,7 +507,7 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
        wél ruimte krijgt. */
     let obs: ResizeObserver | null = null;
     if ('ResizeObserver' in window) {
-      obs = new ResizeObserver(() => { fit(); if (stil) teken(); });
+      obs = new ResizeObserver(() => { fit(); if (stil) tekenNu(); });
       obs.observe(canvas);
     }
 
@@ -368,7 +531,7 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       canvas.removeEventListener('pointercancel', los);
       canvas.removeEventListener('wheel', wiel);
     };
-  }, []);
+  }, [telefoon]);
 
   return (
     <canvas

@@ -96,6 +96,20 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).toContain('className="relative z-[5] mb-2 grid w-full flex-none items-center"');
   });
 
+  // Op de telefoon was de bol een waas: DPR begrensd op 2 op een 3x-scherm, en
+  // deeltjes tot 7pt breed op 4,5pt van elkaar (28 sep). Alleen de telefoon-Home
+  // zet de fijne modus aan; desktop, Tauri en de zwevende bol niet.
+  it('draws the phone sphere at full 3x resolution with spacing-scaled particles', () => {
+    const mobile = bron('presentation/pages/MobileSystem.tsx');
+    const bol = bron('presentation/components/axe-core/sphere/AxeCoreSphere.tsx');
+    expect(mobile).toContain('<AxeCoreSphere telefoon />');
+    expect(bol).toContain('d = Math.min(window.devicePixelRatio || 1, telefoon ? 3 : 2);');
+    expect(bol).toContain('const tekenNu = telefoon ? tekenFijn : teken;');
+    for (const plek of ['pages/Home.tsx', 'pages/HomeStage.tsx', 'components/layout/zweef/ZwevendeBol.tsx', 'components/devices/TelefoonScherm.tsx']) {
+      expect(bron(`presentation/${plek}`)).not.toContain('<AxeCoreSphere telefoon');
+    }
+  });
+
   it('shows six real roster agents around the Core', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     for (const id of ['trading', 'developer', 'thinktank', 'northsea', 'wingman', 'companion']) {

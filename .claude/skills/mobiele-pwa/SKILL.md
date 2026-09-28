@@ -63,6 +63,16 @@ niet altijd). Daarom staat er in `index.html` een vaste zwarte strook
 `#axe-ios-balk` (volle breedte, 2px, bovenop alles, alleen bij `data-ios-pwa`),
 aanwezig vanaf de eerste frame, en start een verse installatie in `black`.
 
+## Canvas op de telefoon: resolutie en maat
+
+Luka's iPhone is 3x. Een canvas met `Math.min(devicePixelRatio, 2)` wordt door
+iOS 1,5x opgerekt en oogt wazig. En wat op de desktop groot genoeg is, kan op
+de telefoon over elkaar vallen: de sphere had deeltjes tot 7pt breed op 4,5pt
+van elkaar. `AxeCoreSphere telefoon` tekent daarom op 3x, schaalt de deeltjes op
+hun onderlinge afstand en tekent ze als voorgetekende lichtpuntjes. Meet een
+canvas met `canvas.width` tegen zijn CSS-maat, en vergelijk een uitsnede op
+ware pixels, vóór en na.
+
 ## Een wereld of paneel dat de balk afdekt
 
 Staat er iets `absolute` in een mobiel vak zonder `position: relative` erom,

@@ -142,7 +142,7 @@ function CoreHome() {
           aria-label="AXE Core Home"
         >
           <div className="absolute inset-x-0 top-0 bottom-8">
-            <AxeCoreSphere />
+            <AxeCoreSphere telefoon />
           </div>
           {/* Eén regel: bolletje + AXE CORE, op de plek en in de maat waar
               READY stond. De grote AXE CORE-kop eronder is weg (Luka, 27 sep). */}
