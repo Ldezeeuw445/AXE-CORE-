@@ -213,10 +213,11 @@ export async function openRealtimeVoice(
         turn_detection: {
           type: 'server_vad',
           threshold: 0.5,
-          silence_duration_ms: 500,
+          prefix_padding_ms: 250,
+          silence_duration_ms: 350,
           create_response: true,
         },
-        input_audio_transcription: { model: 'whisper-1' },
+        input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
       },
     });
     // Sent from right here, not after openRealtimeVoice() resolves — the
