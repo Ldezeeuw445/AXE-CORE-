@@ -609,6 +609,38 @@ def _server_key_for(provider: str) -> str:
     return ""
 
 
+@app.post("/realtime/client-secret", dependencies=[AUTH])
+async def realtime_client_secret():
+    """Mint one short-lived OpenAI Realtime client secret centrally.
+
+    All AXE surfaces use this same route. The long-lived OPENAI_API_KEY stays
+    on AXE Core; iPad/iPhone browsers never need or receive it. The returned
+    value is OpenAI's ephemeral Realtime credential and is only used for the
+    WebRTC handshake.
+    """
+    key = _server_key_for("openai")
+    if not key:
+        raise HTTPException(503, "OpenAI Realtime is not configured on AXE Core")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json={"session": {"type": "realtime", "model": "gpt-realtime"}},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"OpenAI Realtime is unreachable: {str(exc)[:160]}") from exc
+    if response.is_error:
+        # Never forward provider response bodies: they may contain operational
+        # details. The status is enough for the client to surface a real error.
+        raise HTTPException(502, f"OpenAI Realtime rejected AXE Core ({response.status_code})")
+    data = response.json()
+    secret = data.get("value") or (data.get("client_secret") or {}).get("value")
+    if not secret:
+        raise HTTPException(502, "OpenAI returned no Realtime client secret")
+    return {"value": secret, "model": "gpt-realtime", "source": "axe-core"}
+
+
 @app.get("/proxy/ai/providers", dependencies=[AUTH])
 async def proxy_ai_providers():
     """Welke providers deze server zelf kan bedienen.
