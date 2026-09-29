@@ -25,36 +25,48 @@ import { VPS_API_ORIGIN, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 import { webProxyStand } from '@/domain/webProxyStand';
 import { useLocation } from 'react-router';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
-import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
 import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
+import { axeCoreRuntimeStatus, axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
 import { LadeSlot } from '@/presentation/components/layout/LadeSlot';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
   const [supaOk, setSupaOk] = useState<boolean | null>(null);
-  const [llmCount, setLlmCount] = useState(0);
+  const [coreOnline, setCoreOnline] = useState<boolean | null>(null);
   const [stem, setStem] = useState<StemStand | null>(null);
   const voice = useVoiceStore();
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('axe_llm_connections');
-      if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, { key?: string }>;
-        setLlmCount(Object.values(parsed).filter(c => c?.key && c.key.length > 4).length);
-      }
-    } catch { /* ignore */ }
-
+    let live = true;
     const ping = async () => {
       try {
         const sb = getSupabase();
-        if (!sb) { setSupaOk(false); return; }
-        const { error } = await sb.auth.getSession();
-        setSupaOk(!error);
-      } catch { setSupaOk(false); }
+        if (!sb) { if (live) setSupaOk(false); }
+        else {
+          const { error } = await sb.auth.getSession();
+          if (live) setSupaOk(!error);
+        }
+      } catch { if (live) setSupaOk(false); }
+
+      try {
+        const core = await axeCoreRuntimeStatus();
+        if (live) setCoreOnline(core.online);
+      } catch { if (live) setCoreOnline(false); }
+
+      try {
+        const vh = await axeVoiceHealth();
+        if (live) setStem({
+          ok: vh.online,
+          regel: vh.online ? STEM_UI.live : STEM_UI.dood,
+          watNu: vh.online ? null : (vh.reason ?? STEM_UI.doodWatNu),
+        });
+      } catch (e) {
+        if (live) setStem({ ok: false, regel: STEM_UI.dood, watNu: e instanceof Error ? e.message : String(e) });
+      }
     };
     void ping();
-    void probeGeorgeStem().then(setStem);
+    const timer = window.setInterval(() => void ping(), 60_000);
+    return () => { live = false; window.clearInterval(timer); };
   }, []);
 
   const provider = voice.activeProvider || voice.primarySlot?.provider || '—';
@@ -64,7 +76,7 @@ function AICoreSystemLeft() {
   return (
     <div className="space-y-1.5">
       {[
-        { icon: Activity, label: 'Status', val: llmCount > 0 ? 'Online' : 'No AI', ok: llmCount > 0 },
+        { icon: Activity, label: 'Status', val: coreOnline === null ? 'Checking' : coreOnline ? 'Online' : 'Offline', ok: coreOnline === true, fout: coreOnline === false },
         { icon: Cpu, label: 'Primary', val: String(provider), ok: !!voice.activeProvider || !!voice.primarySlot },
         { icon: Mic, label: 'Voice', val: stemVal, ok: stem?.ok === true, fout: stemFout },
         { icon: Zap, label: 'Memory', val: supaOk ? `OK · ${voice.conversation.length} msgs` : supaOk === null ? '…' : 'offline', ok: supaOk === true },
