@@ -34,15 +34,14 @@ import { markBeurt } from '@/domain/beurtKlok';
 export type TtsProvider = 'kokoro' | 'fish' | 'elevenlabs' | 'openai' | 'cartesia' | 'browser';
 
 export function gekozenStemMotor(): StemMotor {
-  try {
-    return parseStemMotor(localStorage.getItem(STEM_MOTOR_SLEUTEL));
-  } catch {
-    return 'george';
-  }
+  // One AXE voice on every surface. The legacy setting is ignored so a phone,
+  // iPad and Tauri session can never silently select different identities.
+  return 'cedar';
 }
 
-export function zetStemMotor(motor: StemMotor): void {
-  try { localStorage.setItem(STEM_MOTOR_SLEUTEL, motor); } catch { /* ignore */ }
+export function zetStemMotor(_motor: StemMotor): void {
+  // Compatibility no-op. AXE's voice identity is fixed centrally.
+  try { localStorage.removeItem(STEM_MOTOR_SLEUTEL); } catch { /* ignore */ }
 }
 
 /** Gekozen motor, of George als er niets is gezet. */
@@ -113,76 +112,26 @@ export function speakGlobal(
     onStart?.();
   };
 
-  const viaCedar = (waaromNietGeorge: string) => {
-    // Cedar reports no progress, so show the whole reply while it speaks
-    // rather than leaving half a sentence frozen on screen.
-    endSpeechProgress();
-    if (!isOpenAiTtsConfigured()) {
-      onError?.(`AXE voice unavailable: George (${waaromNietGeorge}) and no OpenAI key for Cedar.`);
+  endSpeechProgress();
+  void speakWithOpenAi(
+    line,
+    klaar,
+    (reason) => {
+      onError?.(`AXE voice failed: ${reason}`);
       onDone?.();
-      return;
-    }
-    void speakWithOpenAi(
-      line,
-      onDone,
-      (reason) => {
-        onError?.(`AXE voice failed: George (${waaromNietGeorge}), Cedar (${reason}).`);
-        onDone?.();
-      },
-      AXE_OPENAI_VOICE,
-    ).then(() => hoor());
-  };
+    },
+    AXE_OPENAI_VOICE,
+  ).then(() => hoor());
 
-  const motor = gekozenStemMotor();
-  if (motor === 'george') {
-    speakWithKokoro(line, {
-      opVoortgang: setSpeechFraction,
-      opKlaar: klaar,
-      opFout: viaCedar,
-      opEersteAudio: hoor,
-    });
-    return;
-  }
-  void spreekStuk(line, hoor).then(klaar, (e) => {
-    viaCedar(e instanceof Error ? e.message : String(e));
-  });
 }
 
 /** Eén zin. `onStart` vuurt bij het eerste hoorbare sample. */
 export function spreekStuk(stuk: string, onStart?: () => void): Promise<void> {
   const line = sanitizeForSpeech(stuk);
   if (!line) { onStart?.(); return Promise.resolve(); }
-  const motor = gekozenStemMotor();
   return new Promise((resolve, reject) => {
-    if (motor === 'cedar') {
-      void speakWithOpenAi(line, resolve, (r) => reject(new Error(r)), AXE_OPENAI_VOICE)
-        .then(() => onStart?.());
-      return;
-    }
-    if (motor === 'elevenlabs-flash' || motor === 'elevenlabs-v3') {
-      void speakWithElevenLabs(
-        line,
-        resolve,
-        () => reject(new Error('elevenlabs')),
-        () => reject(new Error('elevenlabs')),
-        { model: elevenLabsModelVan(motor), onStart },
-      );
-      return;
-    }
-    if (motor === 'cartesia') {
-      void speakWithCartesia(line, resolve, (r) => reject(new Error(r)), onStart);
-      return;
-    }
-    if (motor === 'fish') {
-      void speakWithFishAudio(line, resolve, (r) => reject(new Error(r)))
-        .then(() => onStart?.());
-      return;
-    }
-    speakWithKokoro(line, {
-      opKlaar: resolve,
-      opFout: (r) => reject(new Error(r)),
-      opEersteAudio: onStart,
-    });
+    void speakWithOpenAi(line, resolve, (r) => reject(new Error(r)), AXE_OPENAI_VOICE)
+      .then(() => onStart?.());
   });
 }
 
