@@ -36,6 +36,12 @@ Environment="OLLAMA_CONTEXT_LENGTH=8192"
 # Een embedding is kort; een generatie op dezelfde kernen duurt minuten. Bij
 # gedrang gaat het korte werk voor.
 CPUWeight=200
+# Het model (~1,6 GB in het geheugen) mag niet naar swap. Op 29 sep had
+# OpenHands qwen2.5-coder:7b (4,9 GB) geladen op deze 7,8 GB-box, swap stond op
+# 4025 van 4095 MB, en bge-m3 werd telkens uit het geheugen geduwd: 50-60 s per
+# embedding in plaats van 0,5 s. Met deze ondergrens gaat de kernel eerst bij
+# de anderen halen.
+MemoryMin=1800M
 Restart=always
 RestartSec=3
 

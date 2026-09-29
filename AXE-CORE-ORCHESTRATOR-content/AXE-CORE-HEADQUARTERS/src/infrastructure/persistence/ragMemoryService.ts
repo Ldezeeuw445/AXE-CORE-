@@ -14,6 +14,7 @@ import { APP_SOURCE, AXE_USER_ID } from '@/infrastructure/persistence/chatPersis
 import {
   cosineSimilarity,
   embedText,
+  embedTextSync,
   type EmbeddingVector,
 } from '@/infrastructure/persistence/embeddingService';
 
@@ -236,6 +237,18 @@ export async function backfillRagEmbeddings(batch = 100): Promise<number> {
 /** bge-m3. A vector of any other width does not belong in the column. */
 const EMBED_DIM = 1024;
 
+/** pgvector komt via PostgREST als tekst terug ("[0.1,0.2]"), lokaal als array. */
+function leesVector(v: unknown): number[] | null {
+  if (Array.isArray(v)) return v as number[];
+  if (typeof v !== 'string' || !v.startsWith('[')) return null;
+  try {
+    const getallen = JSON.parse(v) as unknown;
+    return Array.isArray(getallen) ? (getallen as number[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function searchRagMemories(
   query: string,
   limit: number = 5
@@ -289,18 +302,22 @@ export async function searchRagMemories(
   // cosineSimilarity that silently truncated to the shorter length, so every
   // score was noise and the threshold below never passed.
   //
-  // Embedding is cached by content hash, so the first search over a fresh set
-  // pays for it once (~17ms each warm) and later searches are free.
-  const memVecs = await Promise.all(
-    all.map((mem) =>
-      mem.embedding && mem.embedding.length === qVec.length
-        ? Promise.resolve(mem.embedding)
-        : embedText(mem.content),
-    ),
-  );
+  // Maar hier nooit per herinnering het model aanroepen. De opgeslagen vector
+  // komt van PostgREST als tekst ("[0.01,...]"), dus mem.embedding.length was
+  // de lengte van die tekst en klopte nooit: elke zoekvraag die hier belandde
+  // stuurde 200 embeddings tegelijk naar Strato. Op 29 sep deed dat de box, die
+  // al swapte, 60 s per antwoord doen -- waardoor de volgende zoekvraag ook
+  // hier belandde. Nu: de opgeslagen vector, of zonder model beide kanten via
+  // de hash (synchroon, geen netwerk), of alleen de trefwoorden.
+  const memVecs = all.map((mem) => {
+    const opgeslagen = leesVector(mem.embedding);
+    if (opgeslagen && opgeslagen.length === qVec.length) return opgeslagen;
+    return qVec.length === EMBED_DIM ? null : embedTextSync(mem.content);
+  });
 
   const scored = all.map((mem, i) => {
-    let score = cosineSimilarity(qVec, memVecs[i]);
+    const vec = memVecs[i];
+    let score = vec ? cosineSimilarity(qVec, vec) : 0;
 
     const content = mem.content.toLowerCase();
     for (const kw of keywords) {

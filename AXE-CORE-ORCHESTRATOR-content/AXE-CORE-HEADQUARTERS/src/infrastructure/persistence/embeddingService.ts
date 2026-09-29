@@ -13,7 +13,7 @@
  */
 import { loadConnectionOverrides } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { isExterneOllama, ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 import { embedProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 
 /**
@@ -33,6 +33,9 @@ function configuredOllamaUrl(): string | null {
   const fromSettings = loadConnectionOverrides('ollama').baseUrl;
   const raw = fromSettings ?? (import.meta.env.VITE_OLLAMA_URL as string | undefined);
   if (!raw) return null;
+  // Hetzner (ollama.axecompanion.com) is sinds 28 sep weg; Strato deed de stap
+  // ervoor al (embedProxyUrl). Hier nog 20 s op wachten leverde alleen de hash.
+  if (isExterneOllama(raw)) return null;
   // toProxied, or in dev the browser calls the VPS directly and CORS blocks it.
   // Every other gateway routes through this; leaving it out here meant the
   // remote step could never actually run from a dev build.
@@ -234,6 +237,40 @@ async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500)
 }
 
 /**
+ * Strato ontzien: hoogstens twee tegelijk, en even niet na een mislukking.
+ *
+ * Op 29 sep kwamen er vanaf de telefoon tientallen embeddings binnen in
+ * twintig seconden, op een box die al swapte. De dienst werkt er twee tegelijk
+ * af (OLLAMA_NUM_PARALLEL=2); de rest stond in de rij tot de 60 s van nginx om
+ * waren. Meer tegelijk sturen maakt het alleen trager, en na een time-out is de
+ * volgende poging binnen een halve minuut meestal ook een time-out. Tijdens de
+ * pauze valt embedText op de hash; saveRagMemory bewaart dan zonder vector en
+ * backfillRagEmbeddings vult hem later aan.
+ */
+const STRATO_TEGELIJK = 2;
+const STRATO_PAUZE_MS = 30_000;
+let stratoBezig = 0;
+let stratoPauzeTot = 0;
+const stratoRij: Array<() => void> = [];
+
+async function viaStrato(text: string, timeoutMs: number): Promise<EmbeddingVector | null> {
+  if (Date.now() < stratoPauzeTot) return null;
+  // Een vrije plek, of wachten tot er een wordt doorgegeven.
+  if (stratoBezig < STRATO_TEGELIJK) stratoBezig++;
+  else await new Promise<void>((klaar) => stratoRij.push(klaar));
+  try {
+    if (Date.now() < stratoPauzeTot) return null;
+    const v = await ollamaEmbed(text, embedProxyUrl(), timeoutMs);
+    if (!v) stratoPauzeTot = Date.now() + STRATO_PAUZE_MS;
+    return v;
+  } finally {
+    const volgende = stratoRij.shift();
+    if (volgende) volgende();
+    else stratoBezig--;
+  }
+}
+
+/**
  * Embed text: local Ollama, then Strato, then Settings, then the hash.
  *
  * The Strato step is the one that matters. Without it the hash fallback was
@@ -281,7 +318,7 @@ export async function embedText(text: string): Promise<EmbeddingVector> {
   // in een etmaal. Zelfde model, zelfde vectoren (cosinus 1.0 gemeten), dus
   // de volgorde verandert niets aan wat er in het geheugen staat.
   if (!remote) {
-    remote = await ollamaEmbed(text, embedProxyUrl(), REMOTE_MS);
+    remote = await viaStrato(text, REMOTE_MS);
     if (remote) source = 'remote';
   }
 
