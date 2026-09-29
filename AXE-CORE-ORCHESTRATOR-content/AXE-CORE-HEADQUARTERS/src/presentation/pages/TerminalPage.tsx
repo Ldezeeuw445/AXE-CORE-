@@ -11,6 +11,7 @@ import { Terminal, Trash2, RefreshCw } from 'lucide-react';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 
 const QUICK = [
+  { label: 'Remote DC', cmd: 'npx @wonderwhy-er/desktop-commander@latest remote\n', color: 'var(--accent-cyan)', title: 'Connect this VPS terminal to Remote Desktop Commander' },
   { label: 'Jarvis',   cmd: 'jarvis\n',                                          color: '#A78BFA', title: 'Start OpenJarvis server' },
   { label: 'Ollama',   cmd: 'ollama serve\n',                                     color: 'var(--success)', title: 'Start Ollama daemon' },
   { label: 'llama3.2', cmd: 'ollama pull llama3.2\n',                             color: 'var(--success)', title: 'Download llama3.2 model' },
