@@ -21,6 +21,7 @@
  */
 
 import { normalizeForSpeech } from '@/domain/speechText';
+import { axeVoiceHealth, axeVoiceTts } from '@/infrastructure/gateways/axeCoreApiService';
 
 /** De stemmen die de API voert (gpt-4o-mini-tts). */
 export const OPENAI_STEMMEN = [
@@ -32,7 +33,7 @@ export type OpenAiStem = (typeof OPENAI_STEMMEN)[number];
 
 /** The AXE voice. cedar is OpenAI's newest, warmest natural voice — the closest
  *  a key can get to the ChatGPT "Arbor" sound. This is the one fixed AXE voice. */
-export const STANDAARD_STEM: OpenAiStem = 'cedar';
+export const STANDAARD_STEM: OpenAiStem = 'marin';
 
 const STEM_SLEUTEL = 'axe_openai_stem';
 const MODEL = 'gpt-4o-mini-tts';
@@ -71,17 +72,18 @@ export function setOpenAiStem(_stem: OpenAiStem): void {
   try { localStorage.removeItem(STEM_SLEUTEL); } catch { /* privémodus */ }
 }
 
-function sleutel(): string {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>;
-    return (conns.openai?.key ?? '').trim();
-  } catch {
-    return '';
-  }
+export function isOpenAiTtsConfigured(): boolean {
+  // Configuration is central. A browser-local key is deliberately irrelevant.
+  return true;
 }
 
-export function isOpenAiTtsConfigured(): boolean {
-  return sleutel().length > 0;
+export async function probeOpenAiTts(): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const h = await axeVoiceHealth();
+    return { ok: h.online, reason: h.reason ?? undefined };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 let huidige: HTMLAudioElement | null = null;
@@ -117,24 +119,14 @@ export async function speakWithOpenAi(
   opFout?: (reden: string) => void,
   stemOverride?: OpenAiStem,
 ): Promise<void> {
-  const key = sleutel();
-  if (!key) { opFout?.('no_openai_key'); return; }
-
   const spoken = normalizeForSpeech(tekst);
   if (!spoken) { opKlaar?.(); return; }
 
   stopOpenAiTts();
   try {
-    const res = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildOpenAiSpeechRequest(spoken, stemOverride ?? getOpenAiStem())),
-    });
-    if (!res.ok) {
-      opFout?.(`openai_tts_${res.status}: ${(await res.text()).slice(0, 200)}`);
-      return;
-    }
-    const url = URL.createObjectURL(await res.blob());
+    // Same authenticated AXE Core path on Tauri, iPad and iPhone. The
+    // long-lived OpenAI credential never exists in this browser process.
+    const url = URL.createObjectURL(await axeVoiceTts(spoken));
     const audio = new Audio(url);
     huidige = audio;
     // Route playback through one analyser so the AXE composer reacts to the
