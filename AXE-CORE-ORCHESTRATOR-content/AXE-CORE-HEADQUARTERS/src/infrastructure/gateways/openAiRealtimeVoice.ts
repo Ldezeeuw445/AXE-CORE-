@@ -8,13 +8,12 @@
  * installOpenAIRealtimeVoice.ts — this file has no opinion about jobs,
  * memory or approvals.
  *
- * The key comes from the same place whisperService reads it
- * (readConnKey('openai') / VITE_OPENAI_API_KEY) and this calls OpenAI
- * directly from the client, exactly like openAiTtsService.ts and
- * whisperService.ts already do for the OpenAI-key case — no VPS proxy hop
- * for this one, same as the rest of AXE's voice stack.
+ * The long-lived OpenAI key never lives in this client. AXE Core mints one
+ * short-lived Realtime client secret through the same authenticated backend
+ * route on Tauri, iPad and iPhone; only that ephemeral value is sent from the
+ * device to OpenAI for the WebRTC handshake.
  */
-import { readConnKey } from '@/infrastructure/gateways/whisperService';
+import { axeCoreApiExtraHeaders, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 
 /** OpenAI's current recommended realtime speech-to-speech model (GA, Aug 2025). */
 export const OPENAI_REALTIME_MODEL = 'gpt-realtime';
@@ -22,40 +21,28 @@ export const OPENAI_REALTIME_MODEL = 'gpt-realtime';
 /** OpenAI's warm, natural realtime voice — closest match to AXE's Cedar TTS identity. */
 export const OPENAI_REALTIME_VOICE = 'marin';
 
-function resolveOpenAiKey(): string {
-  return (
-    readConnKey('openai') ||
-    (typeof import.meta !== 'undefined' ? String(import.meta.env?.VITE_OPENAI_API_KEY ?? '') : '')
-  );
-}
-
 export function isOpenAiRealtimeConfigured(): boolean {
-  return resolveOpenAiKey().length > 0;
+  // Configuration is central. Every signed-in AXE surface can ask AXE Core
+  // for an ephemeral session credential; the backend reports a real error if
+  // OPENAI_API_KEY is absent instead of making each device keep its own key.
+  return true;
 }
 
-/**
- * Exchange the local OpenAI key for a short-lived client secret. The
- * standard key never leaves this device for the SDP handshake below — only
- * this ephemeral value does, and it is scoped to one realtime session.
- */
+/** Ask AXE Core for a short-lived OpenAI Realtime credential. */
 export async function createRealtimeClientSecret(): Promise<string> {
-  const key = resolveOpenAiKey();
-  if (!key) throw new Error('No OpenAI key configured for realtime voice.');
-
-  const res = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+  const base = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
+  const res = await fetch(`${base}/realtime/client-secret`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session: { type: 'realtime', model: OPENAI_REALTIME_MODEL } }),
-    signal: AbortSignal.timeout(10_000),
+    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
+    signal: AbortSignal.timeout(12_000),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`OpenAI realtime session ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
+    throw new Error(`AXE Core realtime session ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
   }
-  const data = (await res.json()) as { value?: string; client_secret?: { value?: string } };
-  const secret = data.value ?? data.client_secret?.value;
-  if (!secret) throw new Error('OpenAI returned no realtime client secret.');
-  return secret;
+  const data = (await res.json()) as { value?: string };
+  if (!data.value) throw new Error('AXE Core returned no realtime client secret.');
+  return data.value;
 }
 
 export interface RealtimeToolDef {
