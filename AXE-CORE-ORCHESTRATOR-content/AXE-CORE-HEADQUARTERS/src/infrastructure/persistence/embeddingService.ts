@@ -2,17 +2,19 @@
  * embeddingService — vector embeddings for AXE memory.
  *
  * Priority:
- *  1. A local Ollama — fastest, and the only one that reliably answers
- *  2. The Ollama in Settings (the VPS) — for devices without a local one
- *  3. Deterministic hash embedding — lexical, not semantic
+ *  1. A local Ollama — fastest, when this machine has one
+ *  2. bge-m3 on Strato (embedProxyUrl) — every device, the phone included
+ *  3. The Ollama in Settings — whatever Luka pointed it at
+ *  4. Deterministic hash embedding — lexical, not semantic
  *
  * Used by ragMemoryService so AXE retrieves meaning-similar memories rather
- * than keyword matches. Step 3 is a real loss of that capability, so it now
+ * than keyword matches. Step 4 is a real loss of that capability, so it now
  * says so in the console once per session instead of failing silently.
  */
 import { loadConnectionOverrides } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { embedProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 
 /**
  * Where Ollama actually is, according to Luka.
@@ -80,24 +82,6 @@ const OLLAMA_URL = 'http://127.0.0.1:11434';
  */
 const EMBED_MODEL =
   (import.meta.env.VITE_EMBED_MODEL as string | undefined) || 'bge-m3';
-
-/**
- * The VPS, which is the only Ollama every device can reach.
- *
- * Embedding runs in the browser, so `127.0.0.1` means "whatever machine is
- * looking at AXE right now". On the iMac that is one Ollama, on the Mac Mini
- * another, and on the phone nothing at all — so memory quality silently
- * depended on which screen Luka happened to open. On mobile it ALWAYS fell
- * through to the hash, which is lexical, not semantic: "where did I get to
- * with trading" then matches nothing about "the portfolio widget", because
- * they share no words.
- *
- * In dev this goes through the /proxy/ollama vite route (CORS); in a packaged
- * app it is called directly.
- */
-const VPS_OLLAMA_URL =
-  (import.meta.env.VITE_OLLAMA_VPS_URL as string | undefined)?.replace(/\/$/, '') ||
-  (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
 /**
  * The hash fallback's width. Deliberately unlike any real model's, so a vector
@@ -225,9 +209,11 @@ async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500)
   try {
     const ctrl = new AbortController();
     const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`${baseUrl}/api/embeddings`, {
+    const url = `${baseUrl}/api/embeddings`;
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...ollamaHeaders(baseUrl) },
+      // vpsAuthHeaders: alleen als url rechtstreeks naar Strato gaat (verpakte app).
+      headers: { 'Content-Type': 'application/json', ...ollamaHeaders(baseUrl), ...vpsAuthHeaders(url) },
       body: JSON.stringify({ model: EMBED_MODEL, prompt: text.slice(0, 8000) }),
       signal: ctrl.signal,
     });
@@ -248,9 +234,9 @@ async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500)
 }
 
 /**
- * Embed text: local Ollama, then the VPS, then the hash.
+ * Embed text: local Ollama, then Strato, then Settings, then the hash.
  *
- * The VPS step is the one that matters. Without it the hash fallback was
+ * The Strato step is the one that matters. Without it the hash fallback was
  * reached on any device without a local Ollama — every phone, always — and
  * the hash is lexical. Retrieval then quietly stops finding anything that
  * does not repeat the same words, which is what made memory feel like one
@@ -288,6 +274,16 @@ export async function embedText(text: string): Promise<EmbeddingVector> {
 
   let remote = await ollamaEmbed(text, OLLAMA_URL, LOCAL_MS);
   let source: 'local' | 'remote' | 'hash' = remote ? 'local' : 'hash';
+
+  // Strato vóór Instellingen. Instellingen wees naar Hetzner, dat sinds 28 sep
+  // niet meer antwoordt: elke embedding op de telefoon wachtte daar 20 s en
+  // viel dan op de hash, die rag_memories (vector(1024)) weigert -- 744 keer
+  // in een etmaal. Zelfde model, zelfde vectoren (cosinus 1.0 gemeten), dus
+  // de volgorde verandert niets aan wat er in het geheugen staat.
+  if (!remote) {
+    remote = await ollamaEmbed(text, embedProxyUrl(), REMOTE_MS);
+    if (remote) source = 'remote';
+  }
 
   if (!remote) {
     const configured = configuredOllamaUrl();

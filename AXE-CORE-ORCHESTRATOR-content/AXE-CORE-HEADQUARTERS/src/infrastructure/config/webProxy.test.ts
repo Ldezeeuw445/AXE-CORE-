@@ -27,16 +27,19 @@ describe('welke weg de AXE API neemt', () => {
     expect(m.axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore')).toBe(PROXY);
     expect(m.aiProxyUrl()).toBe(`${PROXY}/proxy/ai`);
     expect(m.exaProxyUrl()).toBe(`${PROXY}/proxy/exa`);
+    expect(m.embedProxyUrl()).toBe(`${PROXY}/ollama`);
   });
 
   it('Tauri blijft rechtstreeks naar de VPS gaan', async () => {
     const m = await laad({ prod: true, tauri: true });
     expect(m.axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore')).toBe('https://api.axecompanion.com');
     expect(m.aiProxyUrl()).toBe('https://api.axecompanion.com/proxy/ai');
+    expect(m.embedProxyUrl()).toBe('https://api.axecompanion.com/ollama');
   });
 
   it('dev blijft via de Vite-proxy gaan', async () => {
     const m = await laad({ prod: false });
     expect(m.axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore')).toBe('/proxy/axecore');
+    expect(m.embedProxyUrl()).toBe('/proxy/axecore/ollama');
   });
 });

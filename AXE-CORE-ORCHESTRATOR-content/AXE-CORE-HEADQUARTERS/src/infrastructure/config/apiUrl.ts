@@ -132,6 +132,21 @@ export function exaProxyUrl(): string {
   return apiUrl('/api/exa');
 }
 
+/**
+ * De Ollama van het geheugen: bge-m3 op Strato (ollama-geheugen.service,
+ * achter nginx op /ollama/api/embeddings en /ollama/api/embed, verder niets).
+ *
+ * Tot 28 sep was dat Hetzner (ollama.axecompanion.com), en daar kan niemand
+ * meer bij. Web via axe-core-proxy met Luka's sessie, de verpakte apps
+ * rechtstreeks met de sleutel (vpsAuthHeaders), dev via de Vite-proxy die de
+ * sleutel server-side zet.
+ */
+export function embedProxyUrl(): string {
+  if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/ollama`;
+  if (viaWebProxy()) return `${WEB_AXE_PROXY}/ollama`;
+  return '/proxy/axecore/ollama';
+}
+
 // axe-core-api's *privileged* surface (Supabase service_role, GitHub write,
 // n8n, /internal/exec, and the openhands/openclaw/crewai/... agent bridges)
 // needs AXE_CORE_API_KEY on every call — and since 14 sep so do /proxy/ai,

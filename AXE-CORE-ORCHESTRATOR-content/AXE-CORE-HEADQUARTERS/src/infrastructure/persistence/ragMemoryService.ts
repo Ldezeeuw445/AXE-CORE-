@@ -77,6 +77,11 @@ export async function saveRagMemory(
   memory: Omit<RagMemory, 'id' | 'created_at'>
 ): Promise<void> {
   const enriched = await withEmbedding(memory);
+  // Alleen een bge-m3-vector past in de kolom (vector(1024)). De hash (256)
+  // liet Postgres de HELE rij weigeren: op 28 sep 744 herinneringen van de
+  // telefoon weg, "expected 1024 dimensions, not 256". Zonder vector bewaard
+  // vult backfillRagEmbeddings hem later aan, zodra er een model is.
+  const vector = enriched.embedding?.length === EMBED_DIM ? enriched.embedding : null;
   const record = {
     app_source: APP_SOURCE,
     user_id: AXE_USER_ID,
@@ -91,10 +96,10 @@ export async function saveRagMemory(
     // an embedding, recorded that it had one, and threw it away; and every
     // search re-embedded everything it looked at, which is why it only dared
     // look at 200 rows out of 8,296.
-    embedding: enriched.embedding ?? null,
+    embedding: vector,
     metadata: {
       ...(enriched.metadata || {}),
-      has_embedding: !!enriched.embedding,
+      has_embedding: !!vector,
     },
   };
 

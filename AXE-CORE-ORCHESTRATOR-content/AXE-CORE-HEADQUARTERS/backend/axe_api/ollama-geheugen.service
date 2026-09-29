@@ -1,0 +1,43 @@
+# Een eigen Ollama voor het geheugen: alleen bge-m3, alleen op 127.0.0.1:11435.
+#
+# Waarom niet de gewone Ollama op 11434: die laadt één model tegelijk
+# (OLLAMA_MAX_LOADED_MODELS=1) en werkt één verzoek tegelijk af. Op 29 sep had
+# OpenHands daar qwen2.5-coder:7b geladen, en een embedding van een halve
+# seconde wachtte meer dan 60 seconden achter die generatie. Het geheugen mag
+# niet afhangen van wat een agent toevallig aan het schrijven is.
+#
+# Een eigen modelmap, zodat hier fysiek niets anders dan bge-m3 kan laden, ook
+# niet als iemand een ander model in het verzoek zet. nginx laat alleen
+# /ollama/api/embeddings en /ollama/api/embed door, met de VPS-sleutel (zie
+# nginx_api.conf). Het model laadt bij het eerste verzoek (~2,5 s) en gaat na
+# 30 minuten stilte uit het geheugen: ~1,2 GB op een box met 7,8 GB.
+#
+# Installeren:
+#   install -d -o ollama -g ollama /var/lib/ollama-geheugen
+#   cp ollama-geheugen.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now ollama-geheugen
+#   OLLAMA_HOST=127.0.0.1:11435 ollama pull bge-m3
+[Unit]
+Description=Ollama voor het AXE-geheugen (bge-m3 op 127.0.0.1:11435)
+After=network-online.target
+
+[Service]
+Type=simple
+User=ollama
+Group=ollama
+ExecStart=/usr/local/bin/ollama serve
+Environment="HOME=/var/lib/ollama-geheugen"
+Environment="OLLAMA_HOST=127.0.0.1:11435"
+Environment="OLLAMA_MODELS=/var/lib/ollama-geheugen/models"
+Environment="OLLAMA_MAX_LOADED_MODELS=1"
+Environment="OLLAMA_NUM_PARALLEL=2"
+Environment="OLLAMA_KEEP_ALIVE=30m"
+Environment="OLLAMA_CONTEXT_LENGTH=8192"
+# Een embedding is kort; een generatie op dezelfde kernen duurt minuten. Bij
+# gedrang gaat het korte werk voor.
+CPUWeight=200
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
