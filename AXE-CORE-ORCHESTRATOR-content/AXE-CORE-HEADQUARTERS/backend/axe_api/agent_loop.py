@@ -643,7 +643,14 @@ def _shell(command: str, cwd: str | None = None) -> dict[str, Any]:
         }
 
 
+def _workspace_path(path: str) -> str:
+    """Resolve relative agent file paths inside this task's private workspace."""
+    if os.path.isabs(path):
+        return path
+    return os.path.join(_HUIDIGE_WORKSPACE.get(), path)
+
 def _read(path: str, max_bytes: int = 60000) -> dict[str, Any]:
+    path = _workspace_path(path)
     try:
         with open(path, "r", errors="replace") as handle:
             data = handle.read(max_bytes + 1)
@@ -656,6 +663,7 @@ def _read(path: str, max_bytes: int = 60000) -> dict[str, Any]:
 
 
 def _write(path: str, content: str) -> dict[str, Any]:
+    path = _workspace_path(path)
     try:
         parent = os.path.dirname(path)
         if parent:
