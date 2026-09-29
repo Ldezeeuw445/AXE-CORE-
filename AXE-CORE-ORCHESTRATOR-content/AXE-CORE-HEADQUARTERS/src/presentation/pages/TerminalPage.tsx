@@ -11,7 +11,7 @@ import { Terminal, Trash2, RefreshCw } from 'lucide-react';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 
 const QUICK = [
-  { label: 'Remote DC', cmd: 'npx @wonderwhy-er/desktop-commander@latest remote\n', color: 'var(--accent-cyan)', title: 'Connect this VPS terminal to Remote Desktop Commander' },
+  { label: 'Remote DC', cmd: 'nohup npx @wonderwhy-er/desktop-commander@latest remote </dev/null >/tmp/desktop-commander-remote.log 2>&1 & echo "Remote DC starting in background"\n', color: 'var(--accent-cyan)', title: 'Keep Remote Desktop Commander running on this VPS in the background' },
   { label: 'Jarvis',   cmd: 'jarvis\n',                                          color: '#A78BFA', title: 'Start OpenJarvis server' },
   { label: 'Ollama',   cmd: 'ollama serve\n',                                     color: 'var(--success)', title: 'Start Ollama daemon' },
   { label: 'llama3.2', cmd: 'ollama pull llama3.2\n',                             color: 'var(--success)', title: 'Download llama3.2 model' },
