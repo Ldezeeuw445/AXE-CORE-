@@ -329,9 +329,14 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         return bool(laatste_check["gestopt"])
 
     try:
+        # The durable task already carries the roster owner in assignee/payload.
+        # Pass it into the loop: without this every background job used the
+        # generic AXE prompt even though Home showed Developer/NorthSea/etc.
+        agent_id = str(task.get("assignee") or (task.get("payload") or {}).get("agent") or "axe")
         output = await run_agent_loop(
             request_text, task["id"], on_event, approved,
             read_only=task.get("execution_mode") == "read",
+            agent=agent_id,
             should_stop=should_stop,
         )
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
