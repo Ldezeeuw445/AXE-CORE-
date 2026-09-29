@@ -21,7 +21,7 @@ import { useVoiceStore, writeConversationMemory } from '@/presentation/store/voi
 import { useAxeJobStore, lopendeJobs } from '@/presentation/store/axeJobStore';
 import { startAxeJobs, setRealtimeJobAnnouncer } from '@/presentation/store/installTierRouter';
 import { AXE_SYSTEM_PROMPT, REALTIME_VOICE_RULES } from '@/domain/prompts';
-import { agentById } from '@/domain/agents/roster';
+import { AXE_AGENTS, agentById, type AxeAgentId } from '@/domain/agents/roster';
 import {
   jobTitelVan,
   jobStatusTekst,
@@ -127,6 +127,11 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
       properties: {
         request: { type: 'string', description: "The task in Luka's own words — what needs to happen." },
         title: { type: 'string', description: 'A short (under 10 words) title for the task.' },
+        agent: {
+          type: 'string',
+          enum: AXE_AGENTS.filter((a) => a.id !== 'axe').map((a) => a.id),
+          description: 'The roster agent that owns this work. Pick the domain owner: developer for code/apps, trading for the Trading tab, northsea for NorthSea Desk, thinktank for ThinkTank, wingman for broad crew work, etc.',
+        },
       },
       required: ['request'],
     },
@@ -189,12 +194,16 @@ async function toolStartBackgroundTask(args: ToolArgs): Promise<string> {
   const request = argStr(args, 'request');
   if (!request) return JSON.stringify({ ok: false, message: 'No request text given.' });
   const title = argStr(args, 'title') ?? jobTitelVan(request);
+  const requestedAgent = argStr(args, 'agent');
+  const validAgent = AXE_AGENTS.some((a) => a.id === requestedAgent && a.id !== 'axe')
+    ? requestedAgent as AxeAgentId
+    : 'axe';
   const route: AxeRoute = {
     tier: 3,
     kind: 'agent',
     via: 'model',
     reason: 'realtime_voice',
-    agent: 'axe',
+    agent: validAgent,
     skill: null,
     confident: true,
   };
