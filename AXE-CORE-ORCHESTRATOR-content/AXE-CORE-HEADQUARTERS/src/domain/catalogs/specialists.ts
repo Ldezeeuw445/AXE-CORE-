@@ -47,13 +47,16 @@ export const SPECIALISTS: SpecialistDef[] = [
   },
   {
     id: 'intel',
-    name: 'Intel',
+    /* Heet 'Research' en niet 'Intel': in de roster zit AXE Intel (tier 3,
+       marktintel in Trading OS) en twee dingen met dezelfde naam liep mis in
+       gesprek. Het id blijft 'intel' -- dat staat in opgeslagen keuzes. */
+    name: 'Research',
     emoji: '',
     role: 'Research Specialist',
     focus: 'Deep web research, document analysis, competitor intelligence, knowledge synthesis.',
     capabilities: ['research', 'analysis'],
     primaryToolIds: ['search', 'fetch', 'db_read'],
-    systemPrompt: `Active specialist: Intel, AXE's research powerhouse. Lead with [SEARCH:] and [FETCH:]. Outputs are sourced and decisive — no unchecked guesses.`,
+    systemPrompt: `Active specialist: Research, AXE's research powerhouse. Lead with [SEARCH:] and [FETCH:]. Outputs are sourced and decisive — no unchecked guesses.`,
   },
   {
     id: 'sentinel',

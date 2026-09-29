@@ -742,7 +742,7 @@ const AGENTS_CFG = [
   { id: 'axe_core',      group: '__AXE__',         name: 'AXE Core',       icon: Zap, color: 'var(--accent-cyan)', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
   { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: Radar, color: 'var(--success)', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
   { id: 'forge',         group: 'Specialists',    name: 'Forge',           icon: Hammer, color: '#F97316', capability: 'infra',      detail: 'Infrastructure · CI/CD, Docker, deployments'                          },
-  { id: 'intel',         group: 'Specialists',    name: 'Intel',           icon: Search, color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
+  { id: 'intel',         group: 'Specialists',    name: 'Research',        icon: Search, color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
   { id: 'nova',          group: 'Specialists',    name: 'Nova',            icon: Sparkles, color: '#8B5CF6', capability: 'creative',   detail: 'Product Strategy · positioning, growth, competitors'                  },
   { id: 'atlas',         group: 'Specialists',    name: 'Atlas',           icon: Map, color: '#EC4899', capability: 'privacy',  detail: 'Memory & Knowledge · context, vector search'                          },
   { id: 'dollar_bill',   group: 'Specialists',    name: 'Dollar Bill',     icon: Coins, color: '#EAB308', capability: 'finance',    detail: 'Finance & Trading · markets, P&L, risk'                              },
