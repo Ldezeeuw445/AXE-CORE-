@@ -32,7 +32,6 @@ export interface ServiceState {
 
 // ── Service definitions ────────────────────────────────────────────────────
 
-const N8N_URL = import.meta.env.VITE_N8N_URL ?? '/proxy/n8n';
 const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
@@ -185,32 +184,38 @@ const SERVICES: Array<{
   {
     key: 'n8n',
     check: async () => {
-      const url  = N8N_URL;
-      const key  = import.meta.env.VITE_N8N_API_KEY ?? '';
-      if (!url || !key) return NIET_INGESTELD;
+      // n8n is an AXE Core capability, not a browser capability. Probe the
+      // privileged backend route so Tauri, iPad and iPhone measure the exact
+      // same connection and no client ever needs N8N_API_KEY.
       const t = Date.now();
       try {
-        const res = await fetch(`${url}/api/v1/workflows?limit=1`, {
-          headers: { 'X-N8N-API-KEY': key },
+        const res = await fetch(`${AXE_CORE_API_URL.replace(/\/$/, '')}/n8n/workflows`, {
+          headers: axeCoreApiExtraHeaders(),
           signal: AbortSignal.timeout(8000),
         });
-        return { ok: res.ok, latency: Date.now() - t };
+        return { ok: res.ok, latency: Date.now() - t, meta: { source: 'axe-core' } };
       } catch {
-        return { ok: false, latency: Date.now() - t };
+        return { ok: false, latency: Date.now() - t, meta: { source: 'axe-core' } };
       }
     },
   },
   {
     key: 'github',
     check: async () => {
+      // Do not test public github.com reachability here: that used to turn
+      // green even when AXE's actual GitHub credential was broken. Exercise
+      // AXE Core's authenticated GitHub capability instead. The web PWA goes
+      // through the Supabase proxy; packaged Tauri reaches the same VPS
+      // directly. Same backend, same credential, same answer on every device.
       const t = Date.now();
       try {
-        const res = await fetch('https://api.github.com/zen', {
-          signal: AbortSignal.timeout(5000),
+        const res = await fetch(`${AXE_CORE_API_URL.replace(/\/$/, '')}/github/repos`, {
+          headers: axeCoreApiExtraHeaders(),
+          signal: AbortSignal.timeout(8000),
         });
-        return { ok: res.ok, latency: Date.now() - t };
+        return { ok: res.ok, latency: Date.now() - t, meta: { source: 'axe-core' } };
       } catch {
-        return { ok: false, latency: Date.now() - t };
+        return { ok: false, latency: Date.now() - t, meta: { source: 'axe-core' } };
       }
     },
   },
