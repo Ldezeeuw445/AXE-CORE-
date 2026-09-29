@@ -7349,3 +7349,52 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     border-color: rgba(34,211,238,.22) !important;
   }
 }
+
+
+/* ── iPad PWA: dezelfde volledige shell als Tauri, maar binnen de viewport ──
+ *
+ * iPad is geen telefoon-layout. De desktop/Tauri-schil blijft intact. Op de
+ * smallere tabletbreedtes moeten de globale maten alleen kunnen krimpen; vaste
+ * 380px rails en 100vw-bandbreedtes mogen nooit de rechterrand buiten beeld
+ * duwen. De rails blijven uitschuifbaar en behouden hun inhoud.
+ */
+@media (min-width: 768px) and (max-width: 1366px) and (pointer: coarse) {
+  :root {
+    --axe-rail-breedte: clamp(280px, 32vw, 380px);
+    --axe-onder: clamp(16px, 3vw, 42px);
+    --axe-barw: calc(100vw - 2 * var(--axe-onder));
+  }
+
+  :root[data-look] .axe-shell,
+  :root[data-look] .axe-shell > *,
+  :root[data-look] .axe-shell main {
+    min-width: 0;
+    max-width: 100vw;
+  }
+
+  :root[data-look] .axe-bandbreed {
+    width: min(var(--axe-barw), calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+  }
+
+  :root[data-look] .axe-vol-breed {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  :root[data-look] .axe-shell aside {
+    left: max(8px, env(safe-area-inset-left, 0px));
+  }
+  :root[data-look] .axe-shell [data-rail='right'] {
+    left: auto;
+    right: max(8px, env(safe-area-inset-right, 0px));
+  }
+
+  .axe-railhint--l, .axe-railtoggle--l {
+    left: max(6px, env(safe-area-inset-left, 0px));
+  }
+  .axe-railhint--r, .axe-railtoggle--r {
+    right: max(6px, env(safe-area-inset-right, 0px));
+  }
+}
