@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
