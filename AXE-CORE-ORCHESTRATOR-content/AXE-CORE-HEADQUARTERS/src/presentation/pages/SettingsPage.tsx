@@ -9,7 +9,7 @@ import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
 import { speakGlobal, stopGlobalTts, gekozenStemMotor, zetStemMotor } from '@/infrastructure/gateways/globalTts';
 import { STEM_MOTOREN, type StemMotor } from '@/domain/stemMotor';
 import { getCartesiaVoiceId, isCartesiaConfigured, setCartesiaVoiceId } from '@/infrastructure/gateways/cartesiaTtsService';
-import { probeGeorgeStem } from '@/infrastructure/gateways/kokoroTtsService';
+import { probeOpenAiTts } from '@/infrastructure/gateways/openAiTtsService';
 import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
@@ -916,7 +916,7 @@ function VoiceSection() {
 
   useEffect(() => {
     let live = true;
-    void probeGeorgeStem().then((s) => { if (live) setStand(s); });
+    void probeOpenAiTts().then((s) => { if (live) setStand({ ok: s.ok, regel: s.ok ? STEM_UI.live : STEM_UI.dood, watNu: s.ok ? null : (s.reason ?? STEM_UI.doodWatNu) }); });
     return () => { live = false; };
   }, []);
 
@@ -948,7 +948,7 @@ function VoiceSection() {
     const ms = routingLog.map(ev => ev.firstAudioMs).filter((x): x is number => typeof x === 'number').slice(0, 20);
     return ms.length ? Math.round(ms.reduce((x, y) => x + y, 0) / ms.length) : null;
   })();
-  const actieveNaam = STEM_MOTOREN.find(m => m.id === motor)?.naam ?? 'George';
+  const actieveNaam = 'AXE Voice · Marin';
 
   return (
     <>
@@ -956,7 +956,7 @@ function VoiceSection() {
         naam="Voice test"
         accent="var(--accent-cyan)"
         rol={STEM_UI.uitleg}
-        stand={stand == null ? { toon: 'muted', tekst: 'Checking' } : stand.ok ? { toon: 'ok', tekst: 'George running' } : { toon: 'bad', tekst: 'George down' }}
+        stand={stand == null ? { toon: 'muted', tekst: 'Checking' } : stand.ok ? { toon: 'ok', tekst: 'Online' } : { toon: 'bad', tekst: 'Offline' }}
         keuze={
           <button type="button" onClick={listen} className="axe-agentkaart-knop">
             <Play size={12} /> {playing ? STEM_UI.speelt : `${STEM_UI.luister} · ${actieveNaam}`}
@@ -966,46 +966,11 @@ function VoiceSection() {
           { label: 'In use', waarde: actieveNaam },
           { label: 'First audio', waarde: gemeten != null ? duur(gemeten) : '—' },
           { label: 'Turns', waarde: String(routingLog.length) },
-          { label: 'Fallback', waarde: 'Cedar' },
+          { label: 'Fallback', waarde: 'Central TTS · same Marin' },
         ]}
         melding={error ?? stand?.watNu ?? undefined}
       />
-      {STEM_MOTOREN.map((m) => {
-        const aan = motorAan(m.id);
-        const actief = motor === m.id;
-        return (
-          <StatusKaart
-            key={m.id}
-            naam={m.naam}
-            accent={actief ? 'var(--accent-cyan)' : 'var(--text-muted)'}
-            rol={m.regel}
-            stand={actief ? { toon: 'ok', tekst: 'In use' } : aan ? { toon: 'info', tekst: 'Available' } : { toon: 'muted', tekst: 'Needs key' }}
-            keuze={
-              <button type="button" disabled={!aan || actief} onClick={() => kies(m.id)} className="axe-agentkaart-knop" data-axe-stem-motor={m.id} data-axe-stem-aan={aan ? '1' : '0'}>
-                {actief ? 'In use' : aan ? 'Use this voice' : `Needs key · ${m.sleutel}`}
-              </button>
-            }
-            stats={[
-              { label: actief && gemeten != null ? 'Measured' : 'Typical', waarde: actief && gemeten != null ? duur(gemeten) : m.latency.split(' ')[0] },
-              { label: 'Streaming', waarde: m.streaming ? 'Yes' : 'No' },
-              { label: 'Key', waarde: m.id === 'george' ? 'None' : aan ? 'Set' : 'Missing' },
-              { label: 'Where', waarde: m.id === 'george' ? 'This Mac' : 'Cloud' },
-            ]}
-          />
-        );
-      })}
-      <StatusKaart
-        naam="Voice IDs"
-        accent="var(--text-secondary)"
-        rol="Paste from the ElevenLabs Voice Library or Cartesia. Empty keeps the default."
-        stand={{ toon: elVoice || caVoice ? 'info' : 'muted', tekst: elVoice || caVoice ? 'Custom' : 'Default' }}
-        keuze={
-          <div className="flex flex-col gap-2">
-            <input value={elVoice} onChange={(e) => { setElVoice(e.target.value); setSelectedVoiceId(e.target.value); }} placeholder="ElevenLabs voice ID" aria-label="ElevenLabs voice ID" />
-            <input value={caVoice} onChange={(e) => { setCaVoice(e.target.value); setCartesiaVoiceId(e.target.value); }} placeholder="Cartesia voice ID" aria-label="Cartesia voice ID" />
-          </div>
-        }
-      />
+
     </>
   );
 }
