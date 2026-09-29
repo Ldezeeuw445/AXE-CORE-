@@ -7,6 +7,8 @@ import { AXE_AGENTS, agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { useVoiceStore, type ConversationMessage } from '@/presentation/store/voiceStore';
+import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 
 function clock(ts: number): string {
   try {
@@ -35,6 +37,8 @@ export function MobileChat() {
   const conversation = useVoiceStore((s) => s.conversation);
   const voiceStatus = useVoiceStore((s) => s.voiceStatus);
   const endRef = useRef<HTMLDivElement>(null);
+  const jobs = useAxeJobStore((s) => s.jobs);
+  const activeJobs = jobs.filter((j) => jobLoopt(j.state));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -47,6 +51,32 @@ export function MobileChat() {
       aria-label="AXE gesprek"
     >
       <div className="flex flex-col gap-2.5">
+        {activeJobs.length > 0 && (
+          <div
+            className="flex flex-wrap gap-1.5 px-0.5 pb-0.5"
+            aria-label="Actieve achtergrondagents"
+          >
+            {activeJobs.map((job) => {
+              const agent = agentById(job.agent);
+              return (
+                <span
+                  key={job.id}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-1 text-[9px] uppercase tracking-[0.07em]"
+                  style={{
+                    color: agent.accent,
+                    background: 'rgba(8,12,18,.76)',
+                    border: `1px solid ${agent.accent}35`,
+                  }}
+                  title={job.title}
+                >
+                  <span className="size-1.5 rounded-full" style={{ background: agent.accent, boxShadow: `0 0 8px ${agent.accent}` }} />
+                  <span className="max-w-[150px] truncate">{agent.kort ?? agent.name}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{job.state === 'waiting' ? 'waiting' : 'running'}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
         {conversation.map((message, index) => {
           const mine = message.role === 'user';
           const agent = mine ? null : delegatedAgent(message);
