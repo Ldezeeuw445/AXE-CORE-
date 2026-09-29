@@ -6,8 +6,8 @@ import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
  * audio hardware to test end to end — that stays a human pass. What IS
  * fully testable without either: the five tool handlers (they must call
  * straight into the EXISTING job/approval/memory stack, never a second one)
- * and the fallback to the proven Whisper loop when OpenAI Realtime cannot
- * even start.
+ * and the single-path contract: when Realtime cannot start, voice fails
+ * visibly instead of silently switching to a different STT/TTS stack.
  */
 
 const originalStartListening = vi.fn();
@@ -238,8 +238,8 @@ describe('search_memory', () => {
   });
 });
 
-describe('installOpenAIRealtimeVoice — Whisper fallback', () => {
-  it('falls back to the existing Whisper loop when no OpenAI key is configured on this device', async () => {
+describe('installOpenAIRealtimeVoice — realtime only', () => {
+  it('surfaces missing Realtime configuration and never invokes the legacy voice path', async () => {
     openAiRealtimeConfigured = false;
     installOpenAIRealtimeVoice();
 
@@ -247,7 +247,9 @@ describe('installOpenAIRealtimeVoice — Whisper fallback', () => {
     expect(startListening).not.toBe(originalStartListening);
     await startListening();
 
-    expect(originalStartListening).toHaveBeenCalledTimes(1);
+    expect(originalStartListening).not.toHaveBeenCalled();
     expect(voiceState.setResponseMode).toHaveBeenCalledWith('speak');
+    expect(String(voiceState.error)).toMatch(/realtime.*no fallback/i);
+    expect(voiceState.voiceStatus).toBe('idle');
   });
 });
