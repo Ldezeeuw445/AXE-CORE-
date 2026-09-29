@@ -340,11 +340,21 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         safe_task = "".join(ch for ch in str(task["id"]) if ch.isalnum() or ch in "-_")
         task_workspace = os.path.join(workspace_root, safe_agent, safe_task)
         os.makedirs(task_workspace, exist_ok=True)
+        branch_name = f"axe/{safe_agent}/{safe_task[:12]}"
         await context.event("axe.progress", f"{agent_id} workspace ready.", {
-            "agent": agent_id, "workspace": task_workspace,
+            "agent": agent_id, "workspace": task_workspace, "branch": branch_name,
         })
+        agent_request = request_text
+        if agent_id == "developer":
+            agent_request += (
+                "\n\n[AXE execution contract] You own this coding run. Work in an isolated "
+                f"checkout/worktree on branch {branch_name}. Inspect the target app/device first. "
+                "Never edit the canonical orchestrator checkout in place. Build/test before commit. "
+                "The integration target is orchestrator; push/merge remains subject to AXE approval "
+                "rules and you must not claim it is live until that integration actually succeeds."
+            )
         output = await run_agent_loop(
-            request_text, task["id"], on_event, approved,
+            agent_request, task["id"], on_event, approved,
             read_only=task.get("execution_mode") == "read",
             agent=agent_id,
             workspace=task_workspace,
