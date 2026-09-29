@@ -193,8 +193,9 @@ def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> s
 
     # Writing outside the workspace. Reading outside stays free -- the agent has
     # to be able to look at its own source in order to work on it.
-    workdir = os.path.realpath(cwd or WORKSPACE)
-    if not workdir.startswith(os.path.realpath(WORKSPACE)):
+    workspace = _HUIDIGE_WORKSPACE.get()
+    workdir = os.path.realpath(cwd or workspace)
+    if not workdir.startswith(os.path.realpath(workspace)):
         writes = ("rm ", "mv ", "cp ", "tee ", "truncate", "chmod", "chown", ">")
         if any(token in lowered for token in writes):
             return f"writes outside the workspace ({workdir})"
@@ -505,6 +506,10 @@ AGENT_BRIEFS: dict[str, str] = {
 # met twee parameters, en een derde argument zou dat stilzwijgend breken. Elke
 # asyncio-taak krijgt zijn eigen kopie van de context, dus twee worker-slots
 # naast elkaar zien elkaars brief nooit.
+_HUIDIGE_WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "axe_task_workspace", default=WORKSPACE,
+)
+
 _HUIDIGE_BRIEF: contextvars.ContextVar[str] = contextvars.ContextVar(
     "axe_agent_brief", default=""
 )
@@ -513,7 +518,9 @@ _HUIDIGE_BRIEF: contextvars.ContextVar[str] = contextvars.ContextVar(
 def systeem_prompt() -> str:
     """De system prompt zoals het model hem deze beurt krijgt: brief + basis."""
     brief = _HUIDIGE_BRIEF.get()
-    return f"{brief}\n\n{SYSTEM_PROMPT}" if brief else SYSTEM_PROMPT
+    workspace = _HUIDIGE_WORKSPACE.get()
+    basis = SYSTEM_PROMPT.replace(WORKSPACE, workspace)
+    return f"{brief}\n\n{basis}" if brief else basis
 
 
 class ProviderUitgeput(RuntimeError):
@@ -617,7 +624,7 @@ def _shell(command: str, cwd: str | None = None) -> dict[str, Any]:
     refusal = _refuse(command)
     if refusal:
         return {"exit_code": 126, "stdout": "", "stderr": refusal}
-    workdir = cwd or WORKSPACE
+    workdir = cwd or _HUIDIGE_WORKSPACE.get()
     os.makedirs(workdir, exist_ok=True)
     try:
         proc = subprocess.run(
@@ -920,6 +927,7 @@ async def run_agent_loop(
     read_only: bool = False,
     *,
     agent: str | None = None,
+    workspace: str | None = None,
     should_stop: Callable[[], Awaitable[bool]] | None = None,
 ) -> dict[str, Any]:
     """Run the request to completion.
@@ -950,6 +958,9 @@ async def run_agent_loop(
         read_only = True
 
     brief = AGENT_BRIEFS.get(agent or "", "")
+    task_workspace = workspace or WORKSPACE
+    os.makedirs(task_workspace, exist_ok=True)
+    werkplek_fiche = _HUIDIGE_WORKSPACE.set(task_workspace)
     fiche = _HUIDIGE_BRIEF.set(brief)
 
     async def stop_gevraagd() -> None:
@@ -966,6 +977,7 @@ async def run_agent_loop(
         )
     finally:
         _HUIDIGE_BRIEF.reset(fiche)
+        _HUIDIGE_WORKSPACE.reset(werkplek_fiche)
 
 
 async def _lus(
