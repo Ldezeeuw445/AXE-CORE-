@@ -57,7 +57,6 @@ try {
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { installLiveChat } from '@/presentation/store/installLiveChat'
-import { installWhisperVoice, installWhisperVoiceSendGuard } from '@/presentation/store/installWhisperVoice'
 import { installOpenAIRealtimeVoice } from '@/presentation/store/installOpenAIRealtimeVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
@@ -70,8 +69,6 @@ import { installMemoryFlushHooks } from '@/infrastructure/persistence/memoryReco
 
 // Live chat: allow send while thinking/speaking and drop superseded replies
 installLiveChat();
-// Voice conversation: Whisper STT + listen→reply→listen loop (until mic stop)
-installWhisperVoice();
 // Wis de dode TTS-picker (Fish/ElevenLabs) zodat geen statusrij hem terugleest
 installFishVoice();
 // Stable identity: korte cascade voor simpele chat; stem blijft George
@@ -83,12 +80,9 @@ installTierRouter();
 installGesprekSync();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
-// Typed send hangt een lopende Whisper-listen op (na de andere wrappers)
-installWhisperVoiceSendGuard();
-// Native realtime voice: one OpenAI Realtime speech-to-speech call — hears,
-// decides and speaks in the same connection, tools call the existing job/
-// memory/approval stack. Installed LAST over the proven Whisper loop, which
-// stays the automatic fallback when the realtime call cannot start.
+// Voice has ONE path on every surface: OpenAI Realtime speech-to-speech.
+// No Whisper/STT/TTS conversation fallback: if Realtime is unavailable AXE
+// shows the real error instead of silently degrading to a slower experience.
 installOpenAIRealtimeVoice();
 // WebXR / Maps3D entry from sphere map projection
 installSphereXR();
