@@ -37,11 +37,11 @@ export const STEM_MOTOREN: readonly StemMotorKeuze[] = [
   },
   {
     id: 'cedar',
-    naam: 'Cedar',
-    regel: 'OpenAI gpt-4o-mini-tts · cedar · NL+EN',
+    naam: 'AXE Voice · Marin',
+    regel: 'Central AXE Core voice · Marin · NL+EN · all devices',
     latency: '~0.6–1.2s per sentence if an OpenAI key is set',
     streaming: false,
-    sleutel: 'Settings → Keys → OpenAI / VITE_OPENAI_API_KEY',
+    sleutel: 'central AXE Core',
   },
   {
     id: 'elevenlabs-flash',
