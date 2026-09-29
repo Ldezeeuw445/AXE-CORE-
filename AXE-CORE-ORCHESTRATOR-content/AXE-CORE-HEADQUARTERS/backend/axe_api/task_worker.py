@@ -333,10 +333,21 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         # Pass it into the loop: without this every background job used the
         # generic AXE prompt even though Home showed Developer/NorthSea/etc.
         agent_id = str(task.get("assignee") or (task.get("payload") or {}).get("agent") or "axe")
+        # One writable sandbox per durable run. Parallel agents never share a
+        # cwd anymore; artifacts/checkouts for one job cannot trample another.
+        workspace_root = os.environ.get("AXE_TASK_WORKSPACES", "/opt/axe-task-workspaces")
+        safe_agent = "".join(ch for ch in agent_id if ch.isalnum() or ch in "-_") or "axe"
+        safe_task = "".join(ch for ch in str(task["id"]) if ch.isalnum() or ch in "-_")
+        task_workspace = os.path.join(workspace_root, safe_agent, safe_task)
+        os.makedirs(task_workspace, exist_ok=True)
+        await context.event("axe.progress", f"{agent_id} workspace ready.", {
+            "agent": agent_id, "workspace": task_workspace,
+        })
         output = await run_agent_loop(
             request_text, task["id"], on_event, approved,
             read_only=task.get("execution_mode") == "read",
             agent=agent_id,
+            workspace=task_workspace,
             should_stop=should_stop,
         )
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
