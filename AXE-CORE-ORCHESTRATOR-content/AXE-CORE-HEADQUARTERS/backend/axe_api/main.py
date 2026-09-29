@@ -641,6 +641,100 @@ async def realtime_client_secret():
     return {"value": secret, "model": "gpt-realtime", "source": "axe-core"}
 
 
+async def _probe_provider(provider: str, key: str) -> tuple[bool, str]:
+    """Authenticated, read-only provider probe. Never returns credential data."""
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            if provider == "openai":
+                r = await client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {key}"})
+            elif provider == "groq":
+                r = await client.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"})
+            elif provider in {"openrouter", "openrouter2"}:
+                r = await client.get("https://openrouter.ai/api/v1/models", headers={"Authorization": f"Bearer {key}"})
+            elif provider in {"google", "gemini"}:
+                r = await client.get("https://generativelanguage.googleapis.com/v1beta/models", params={"key": key})
+            elif provider == "anthropic":
+                r = await client.get(
+                    "https://api.anthropic.com/v1/models",
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                )
+            else:
+                return False, "no_probe"
+        return r.is_success, f"http_{r.status_code}"
+    except httpx.HTTPError as exc:
+        return False, type(exc).__name__
+
+
+@app.get("/status/axe-core", dependencies=[AUTH])
+async def axe_core_runtime_status():
+    """Truthful shared AXE status for every UI surface.
+
+    ONLINE means at least one centrally configured chat provider accepted an
+    authenticated request right now. Merely having a key, local cache or a
+    selected Primary never makes this green.
+    """
+    order = ("openai", "groq", "google", "anthropic", "openrouter")
+    results: dict[str, dict[str, Any]] = {}
+    for provider in order:
+        key = _server_key_for(provider)
+        if not key:
+            results[provider] = {"configured": False, "reachable": False}
+            continue
+        ok, detail = await _probe_provider(provider, key)
+        results[provider] = {"configured": True, "reachable": ok, "detail": detail}
+        if ok:
+            return {"online": True, "provider": provider, "providers": results, "source": "axe-core"}
+    return {"online": False, "provider": None, "providers": results, "source": "axe-core"}
+
+
+@app.get("/voice/health", dependencies=[AUTH])
+async def axe_voice_health():
+    """Real central voice check: validates the server OpenAI credential."""
+    key = _server_key_for("openai")
+    if not key:
+        return {"online": False, "voice": "marin", "reason": "not_configured", "source": "axe-core"}
+    ok, detail = await _probe_provider("openai", key)
+    return {"online": ok, "voice": "marin", "reason": None if ok else detail, "source": "axe-core"}
+
+
+class VoiceTtsRequest(BaseModel):
+    text: str
+
+
+@app.post("/voice/tts", dependencies=[AUTH])
+async def axe_voice_tts(req: VoiceTtsRequest):
+    """Canonical AXE spoken output. Same central key and Marin identity everywhere."""
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(422, "text is required")
+    key = _server_key_for("openai")
+    if not key:
+        raise HTTPException(503, "AXE voice is not configured")
+    payload = {
+        "model": "gpt-4o-mini-tts",
+        "voice": "marin",
+        "input": text[:12000],
+        "instructions": (
+            "Speak in the language of the input, calm, low, warm and natural. "
+            "Use fluent neutral Dutch for Dutch and a subtle calm British accent for English. "
+            "Avoid announcer cadence, exaggerated enthusiasm and theatrical emphasis."
+        ),
+        "response_format": "mp3",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            r = await client.post(
+                "https://api.openai.com/v1/audio/speech",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"AXE voice unreachable: {type(exc).__name__}") from exc
+    if r.is_error:
+        raise HTTPException(502, f"AXE voice provider rejected request ({r.status_code})")
+    return Response(content=r.content, media_type="audio/mpeg")
+
+
 @app.get("/proxy/ai/providers", dependencies=[AUTH])
 async def proxy_ai_providers():
     """Welke providers deze server zelf kan bedienen.
