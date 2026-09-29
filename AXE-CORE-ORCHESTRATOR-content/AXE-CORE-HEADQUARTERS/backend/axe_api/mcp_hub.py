@@ -261,32 +261,54 @@ def _sleutelnaam(v: dict, vid: str) -> Optional[str]:
     return basis if vid == v["sjabloon"] else f"{basis}__{_achtervoegsel(vid)}"
 
 
-def sleutel_voor(vid: str) -> tuple[Optional[str], str]:
-    """(waarde, bron). De waarde verlaat deze module alleen in een header of env."""
+def sleutel_kandidaten(vid: str) -> list[tuple[Optional[str], str]]:
+    """Alle bruikbare credentials, uniek en in expliciete voorkeursvolgorde.
+
+    Een aanwezige maar verlopen omgevingsvariabele mag een werkende AXE/vault/
+    gh-login niet meer permanent overschaduwen. De caller kan bij een echte
+    auth-weigering de volgende kandidaat proberen; waarden verlaten deze
+    module nooit.
+    """
     v = verbindingen()[vid]
     s = SJABLONEN[v["sjabloon"]]
     if not s["sleutels"]:
-        return None, "niet nodig"
+        return [(None, "niet nodig")]
     namen = [_sleutelnaam(v, vid)] if v["extra"] else list(s["sleutels"])
     if v["extra"] and s.get("deel_sleutel"):
         namen += s["sleutels"]
     eigen = _lees_env_bestand(SLEUTEL_BESTAND)
     vault = _lees_env_bestand(VAULT)
+    kandidaten: list[tuple[Optional[str], str]] = []
+    gezien: set[str] = set()
+
+    def voeg(waarde: Optional[str], bron: str) -> None:
+        waarde = (waarde or "").strip()
+        if waarde and waarde not in gezien:
+            gezien.add(waarde)
+            kandidaten.append((waarde, bron))
+
+    # Een sleutel die bewust in AXE is gezet is de centrale override. Daarna
+    # vault, daarna proces-env. Zo kan een stale systemd env-token niet winnen
+    # van een later gerepareerde centrale verbinding.
     for naam in namen:
-        if os.environ.get(naam):
-            return os.environ[naam], f"omgeving ({naam})"
-        if eigen.get(naam):
-            return eigen[naam], f"ingevuld in AXE ({naam})"
-        if vault.get(naam):
-            return vault[naam], f"vault ({naam})"
+        voeg(eigen.get(naam), f"ingevuld in AXE ({naam})")
+    for naam in namen:
+        voeg(vault.get(naam), f"vault ({naam})")
+    for naam in namen:
+        voeg(os.environ.get(naam), f"omgeving ({naam})")
     if s.get("gh_terugval") and not v["extra"]:
         try:
             r = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5)
-            if r.returncode == 0 and r.stdout.strip():
-                return r.stdout.strip(), "gh-login"
+            if r.returncode == 0:
+                voeg(r.stdout, "gh-login")
         except (OSError, subprocess.TimeoutExpired):
             pass
-    return None, "ontbreekt"
+    return kandidaten
+
+
+def sleutel_voor(vid: str) -> tuple[Optional[str], str]:
+    kandidaten = sleutel_kandidaten(vid)
+    return kandidaten[0] if kandidaten else (None, "ontbreekt")
 
 
 def controleer_vorm(sjabloon: str, waarde: str) -> Optional[str]:
@@ -590,23 +612,32 @@ async def test(vid: str) -> dict:
         raise KeyError(vid)
     sjabloon = alle[vid]["sjabloon"]
     try:
-        sleutel, bron = await sleutel_async(vid)
-    except McpFout as e:
-        return {"status": "offline", "fout": str(e)}
-    if bron == "ontbreekt":
+        kandidaten = await asyncio.wait_for(asyncio.to_thread(sleutel_kandidaten, vid), timeout=SLEUTEL_WACHT_S)
+    except asyncio.TimeoutError:
+        return {"status": "offline", "fout": SSD_MELDING}
+    if not kandidaten:
         return {"status": "sleutel_ontbreekt", "sleutelnaam": _sleutelnaam(alle[vid], vid)}
     start = time.monotonic()
-    try:
-        async with sessie_voor(vid, sleutel) as s:
-            info = await _open(s)
-            tools = zichtbare_tools(sjabloon, await _tools(s))
-    except (McpFout, httpx.HTTPError, asyncio.TimeoutError, OSError) as e:
-        return {"status": "offline", "fout": str(e)[:300] or type(e).__name__, "latency": int((time.monotonic() - start) * 1000)}
-    return {
-        "status": "online", "latency": int((time.monotonic() - start) * 1000),
-        "server": (info.get("serverInfo") or {}).get("name"),
-        "tools": [{"name": t.get("name"), "description": (t.get("description") or "")[:200]} for t in tools],
-    }
+    laatste_fout = ""
+    for sleutel, bron in kandidaten:
+        try:
+            async with sessie_voor(vid, sleutel) as s:
+                info = await _open(s)
+                tools = zichtbare_tools(sjabloon, await _tools(s))
+            return {
+                "status": "online", "latency": int((time.monotonic() - start) * 1000),
+                "server": (info.get("serverInfo") or {}).get("name"),
+                "sleutel": bron,
+                "tools": [{"name": t.get("name"), "description": (t.get("description") or "")[:200]} for t in tools],
+            }
+        except (McpFout, httpx.HTTPError, asyncio.TimeoutError, OSError) as e:
+            laatste_fout = str(e)[:300] or type(e).__name__
+            # Alleen een credential-weigering rechtvaardigt het proberen van
+            # een andere credential. Netwerk/protocolfouten zijn geen reden
+            # om willekeurig van identiteit te wisselen.
+            if "sleutel geweigerd (HTTP 401)" not in laatste_fout and "sleutel geweigerd (HTTP 403)" not in laatste_fout:
+                break
+    return {"status": "offline", "fout": laatste_fout, "latency": int((time.monotonic() - start) * 1000)}
 
 
 async def roep(vid: str, tool: str, argumenten: dict) -> dict:
