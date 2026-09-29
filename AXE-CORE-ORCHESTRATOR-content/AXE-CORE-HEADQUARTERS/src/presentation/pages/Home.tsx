@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
@@ -17,6 +17,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp';
 import { BezigVlag } from '@/presentation/components/layout/zweef/BezigVlag';
+import { axeCoreRuntimeStatus } from '@/infrastructure/gateways/axeCoreApiService';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
@@ -48,6 +49,22 @@ export default function Home() {
      bijhouden of het paneel open is, lopen gegarandeerd uit elkaar. */
   const showAwareness = useCoreViewStore(s => s.showAwareness);
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
+  const [coreOnline, setCoreOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const refresh = async () => {
+      try {
+        const status = await axeCoreRuntimeStatus();
+        if (live) setCoreOnline(status.online);
+      } catch {
+        if (live) setCoreOnline(false);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, []);
 
   // Any living-display project → force Core view so SphereStage is visible
   useEffect(() => {
@@ -144,9 +161,12 @@ export default function Home() {
               const statusColor: Partial<Record<CoreStatus, string>> = {
                 'awaiting-approval': 'rgb(251,146,60)', listening: 'var(--accent-cyan)', thinking: '#a78bfa', speaking: 'var(--accent-cyan)',
               };
-              const label = statusLabel[coreStatus] ?? (hasError ? 'ERROR' : hasProvider ? 'CORE ACTIVE' : 'NO AI');
-              const color = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--accent-cyan)' : 'var(--warning)');
-              const dotColor = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--success)' : 'var(--warning)');
+              const label = statusLabel[coreStatus]
+                ?? (hasError || coreOnline === false ? 'CORE OFFLINE' : coreOnline === true ? 'CORE ONLINE' : 'CHECKING');
+              const color = statusColor[coreStatus]
+                ?? (hasError || coreOnline === false ? 'var(--error)' : coreOnline === true ? 'var(--accent-cyan)' : 'var(--text-muted)');
+              const dotColor = statusColor[coreStatus]
+                ?? (hasError || coreOnline === false ? 'var(--error)' : coreOnline === true ? 'var(--success)' : 'var(--text-muted)');
               /* Het stipje zei alleen DAT er iets was; de orb zegt WAT. Zelfde
                  teken als het midden van de onderbalk, hier op 20px. */
               const orbStatus = coreStatus === 'listening' ? 'listening'
