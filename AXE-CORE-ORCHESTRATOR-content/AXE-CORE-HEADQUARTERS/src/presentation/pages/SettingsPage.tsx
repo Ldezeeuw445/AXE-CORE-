@@ -7,7 +7,6 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
 import { speakGlobal, stopGlobalTts, gekozenStemMotor, zetStemMotor } from '@/infrastructure/gateways/globalTts';
-import { STEM_MOTOREN, type StemMotor } from '@/domain/stemMotor';
 import { getCartesiaVoiceId, isCartesiaConfigured, setCartesiaVoiceId } from '@/infrastructure/gateways/cartesiaTtsService';
 import { probeOpenAiTts } from '@/infrastructure/gateways/openAiTtsService';
 import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
@@ -885,35 +884,10 @@ function ProviderKeysSection() {
  * dienst (com.axe.tts) echt draait — groen of rood, met wat je eraan doet.
  * Listen gaat door speakGlobal, dezelfde keten als elk chatantwoord.
  */
-function fishSleutelAanwezig(): boolean {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>;
-    if ((conns.fishaudio?.key ?? conns.fish?.key ?? '').trim()) return true;
-  } catch { /* ignore */ }
-  return Boolean(import.meta.env.VITE_FISH_AUDIO_API_KEY);
-}
-
-function motorAan(id: StemMotor): boolean {
-  if (id === 'george') return true;
-  if (id === 'cedar') return isOpenAiTtsConfigured();
-  if (id === 'elevenlabs-flash' || id === 'elevenlabs-v3') return isElevenLabsConfigured();
-  if (id === 'cartesia') return isCartesiaConfigured();
-  if (id === 'fish') return fishSleutelAanwezig();
-  return false;
-}
-
 function VoiceSection() {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stand, setStand] = useState<StemStand | null>(null);
-  const [motor, setMotor] = useState<StemMotor>(() => gekozenStemMotor());
-  const [elVoice, setElVoice] = useState(() => {
-    try { return getSelectedVoiceId(); } catch { return ''; }
-  });
-  const [caVoice, setCaVoice] = useState(() => {
-    try { return getCartesiaVoiceId(); } catch { return ''; }
-  });
-
   useEffect(() => {
     let live = true;
     void probeOpenAiTts().then((s) => { if (live) setStand({ ok: s.ok, regel: s.ok ? STEM_UI.live : STEM_UI.dood, watNu: s.ok ? null : (s.reason ?? STEM_UI.doodWatNu) }); });
@@ -930,16 +904,6 @@ function VoiceSection() {
       (reason) => { setPlaying(false); setError(`Could not play the voice: ${reason}`); },
     );
   };
-
-  const kies = (id: StemMotor) => {
-    if (!motorAan(id)) return;
-    zetStemMotor(id);
-    setMotor(id);
-  };
-
-  const standKleur = stand == null
-    ? 'var(--text-muted)'
-    : stand.ok ? 'var(--success)' : 'var(--error)';
 
   // Gemeten: first-audio van de laatste beurten (routeringslog) — alleen voor
   // de stem die nu spreekt. De rest toont de opgegeven typische waarde.
