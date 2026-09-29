@@ -14,9 +14,8 @@
  * cancel/approval endpoints, and ragMemoryService — the exact same things
  * typed chat and the tier router already use.
  *
- * If OpenAI Realtime cannot start, or drops mid-call, the existing Whisper
- * conversation loop remains the fallback — same pattern as the ElevenLabs
- * Scribe layer this file replaces.
+ * Realtime is the only voice path. If it cannot start or drops, AXE surfaces
+ * that failure and stops voice; it never silently degrades to batch STT/TTS.
  */
 import { useVoiceStore, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { useAxeJobStore, lopendeJobs } from '@/presentation/store/axeJobStore';
@@ -56,7 +55,6 @@ import { stopAllAudio } from '@/presentation/store/installWhisperVoice';
 let installed = false;
 let realtimeActive = false;
 let realtimeStarting = false;
-let fallbackActive = false;
 let generation = 0;
 let session: RealtimeVoiceSession | null = null;
 let micStreamForSession: MediaStream | null = null;
@@ -334,8 +332,6 @@ export function installOpenAIRealtimeVoice(): void {
   if (installed) return;
   installed = true;
 
-  const fallbackStart = useVoiceStore.getState().startListening;
-  const fallbackStop = useVoiceStore.getState().stopListening;
   const baseSendMessage = useVoiceStore.getState().sendMessage;
 
   let lastUserText = '';
@@ -367,28 +363,18 @@ export function installOpenAIRealtimeVoice(): void {
     }
   };
 
-  const startFallback = async (reason?: string) => {
-    realtimeActive = false;
-    realtimeStarting = false;
-    session = null;
-    fallbackActive = true;
-    if (reason) console.warn('[AXE realtime voice] OpenAI Realtime unavailable; Whisper fallback:', reason);
-    try {
-      await fallbackStart();
-    } finally {
-      fallbackActive = false;
-    }
-  };
-
   const startRealtime = async () => {
-    if (realtimeActive || realtimeStarting || fallbackActive) return;
+    if (realtimeActive || realtimeStarting) return;
 
     // A mic click means a spoken conversation — never leave AXE in
     // type-only response mode and mute for a voice call he just started.
     useVoiceStore.getState().setResponseMode('speak');
 
     if (!isOpenAiRealtimeConfigured()) {
-      await startFallback('no local OpenAI key on this surface');
+      useVoiceStore.setState({
+        voiceStatus: 'idle',
+        error: 'OpenAI Realtime is not configured on this device. Voice has no fallback.',
+      });
       return;
     }
 
@@ -399,7 +385,7 @@ export function installOpenAIRealtimeVoice(): void {
       const unlock = new AudioContext();
       if (unlock.state === 'suspended') await unlock.resume();
       void unlock.close();
-    } catch { /* input can still fall back to Whisper */ }
+    } catch { /* Realtime will report the actual microphone/audio failure below. */ }
 
     realtimeStarting = true;
     const myGeneration = ++generation;
@@ -503,8 +489,15 @@ export function installOpenAIRealtimeVoice(): void {
         onClosed: (reason) => {
           if (myGeneration !== generation) return;
           realtimeActive = false;
+          realtimeStarting = false;
           session = null;
-          void startFallback(`realtime connection closed: ${reason}`);
+          releaseMic();
+          micStreamForSession = null;
+          setRealtimeJobAnnouncer(null);
+          useVoiceStore.setState({
+            voiceStatus: 'idle',
+            error: `Realtime voice connection closed: ${reason}`,
+          });
         },
       });
 
@@ -545,7 +538,10 @@ export function installOpenAIRealtimeVoice(): void {
         return;
       }
 
-      await startFallback(error instanceof Error ? error.message : String(error));
+      useVoiceStore.setState({
+        voiceStatus: 'idle',
+        error: `Realtime voice failed: ${error instanceof Error ? error.message : String(error)}`,
+      });
     }
   };
 
@@ -553,11 +549,6 @@ export function installOpenAIRealtimeVoice(): void {
     startListening: startRealtime,
 
     stopListening: () => {
-      if (fallbackActive) {
-        fallbackActive = false;
-        fallbackStop();
-        return;
-      }
       void closeRealtime(true);
     },
 
