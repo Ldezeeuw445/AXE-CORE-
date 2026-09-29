@@ -7360,31 +7360,67 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  */
 @media (min-width: 768px) and (max-width: 1366px) and (pointer: coarse) {
   :root {
-    --axe-rail-breedte: clamp(280px, 32vw, 380px);
-    --axe-onder: clamp(16px, 3vw, 42px);
-    --axe-barw: calc(100vw - 2 * var(--axe-onder));
+    --axe-rail-breedte: clamp(260px, 30vw, 360px);
+    --axe-onder: clamp(12px, 2.4vw, 32px);
+    --axe-barw: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 2 * var(--axe-onder));
+  }
+
+  html:root[data-look],
+  :root[data-look] body,
+  :root[data-look] #root,
+  :root[data-look] .axe-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   :root[data-look] .axe-shell,
   :root[data-look] .axe-shell > *,
-  :root[data-look] .axe-shell main {
+  :root[data-look] .axe-shell main,
+  :root[data-look] .axe-shell main > *,
+  :root[data-look] .axe-tabruimte {
     min-width: 0;
-    max-width: 100vw;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  :root[data-look] .axe-topbar,
+  :root[data-look] .axe-bottomnav {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  :root[data-look] .axe-topbar {
+    padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+  }
+
+  :root[data-look] .axe-slot-topbalk {
+    min-width: 0;
+    max-width: 30vw;
+    overflow: hidden;
   }
 
   :root[data-look] .axe-bandbreed {
-    width: min(var(--axe-barw), calc(100vw - 16px));
-    max-width: calc(100vw - 16px);
+    width: min(var(--axe-barw), 100%);
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   :root[data-look] .axe-vol-breed {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     margin-left: 0;
     margin-right: 0;
+    box-sizing: border-box;
   }
 
   :root[data-look] .axe-shell aside {
     left: max(8px, env(safe-area-inset-left, 0px));
+    max-width: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 24px);
   }
   :root[data-look] .axe-shell [data-rail='right'] {
     left: auto;
