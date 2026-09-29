@@ -5,7 +5,6 @@ import {
 import { useEffect, useState } from 'react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
-import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import {
@@ -292,8 +291,8 @@ const TOOL_CARD_STYLE = { minHeight: 160 } as const;
 export function Sidebar() {
   const { leftDrawerOpen, setLeftDrawerOpen, leftPanelOpen, toggleLeftPanel } = useUIStore();
   const isMobile = useIsMobile();
-  const isTablet = useIsTablet();
-  const isCompact = isMobile || isTablet;
+  // iPad keeps the full Tauri shell. Only phone-width surfaces use Sheets.
+  const isCompact = isMobile;
   const opHome = useLocation().pathname === '/';
 
   const sluitPaneel = () => {
