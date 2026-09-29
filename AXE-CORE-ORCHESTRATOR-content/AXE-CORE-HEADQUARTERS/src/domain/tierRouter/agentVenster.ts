@@ -13,6 +13,12 @@ export const VENSTER_NAGLOEI_MS = 25_000;
 export const MAX_VENSTERS = 4;
 
 /**
+ * Hoeveel werkers er rechts naast de sphere passen. Vijf, net als het aantal
+ * managers links -- meer maakt er een muur van.
+ */
+export const MAX_WERKERS = 5;
+
+/**
  * Eén regel uit core_task_events in gewone taal, of null als het ruis is.
  * De agent-lus schrijft "Step 3: $ df -h /"; Luka wil lezen wat er gebeurt,
  * niet het stapnummer.
@@ -139,11 +145,20 @@ export function managerVan(agent: AxeAgentId): AxeAgentId {
  * de job die het laatst begon — twee tegelijk bij dezelfde manager is zeldzaam,
  * en dan is de nieuwste wat je wil zien.
  */
-export function managerRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
+export function managerRijen(
+  jobs: AxeJob[],
+  nu: number,
+  /**
+   * Agents die elders al zichtbaar zijn -- de werkerkolom rechts. Hun werk
+   * rolt dan NIET op naar hun manager, anders staat dezelfde zin twee keer op
+   * het scherm. Wat rechts niet past, rolt wel gewoon op: niets verdwijnt.
+   */
+  alZichtbaar: ReadonlySet<AxeAgentId> = new Set(),
+): ManagerRij[] {
   const managers = agentsByTier('tier1');
   // Bewust NIET via zichtbareVensters: die kapt af op MAX_VENSTERS, en dan valt
   // er een manager weg zodra alle vijf tegelijk lopen. Hier krijgt iedereen een rij.
-  const zichtbaar = jobs.filter((j) => levendeJob(j, nu));
+  const zichtbaar = jobs.filter((j) => levendeJob(j, nu) && !alZichtbaar.has(j.agent));
 
   const perManager = new Map<AxeAgentId, AxeJob>();
   for (const job of zichtbaar) {
@@ -156,6 +171,35 @@ export function managerRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
     const job = perManager.get(agent.id) ?? null;
     return { agent, job, regel: job ? rijRegel(job, agent) : '' };
   });
+}
+
+/**
+ * De werkers rechts naast de sphere: tier 2 en tier 3, en alleen wie op dit
+ * moment iets doet. Geen vaste lijst dus -- doet er niemand iets, dan is de
+ * kolom leeg en houdt de sphere het rijk alleen.
+ *
+ * Wie op jou wacht staat bovenaan; daarna de nieuwste. Dat is de enige
+ * volgorde die ertoe doet als er meer lopen dan er passen.
+ */
+export function werkerRijen(jobs: AxeJob[], nu: number, max = MAX_WERKERS): ManagerRij[] {
+  const werkers = new Set([
+    ...agentsByTier('tier2').map((a) => a.id),
+    ...agentsByTier('tier3').map((a) => a.id),
+  ]);
+
+  const perAgent = new Map<AxeAgentId, AxeJob>();
+  for (const job of jobs) {
+    if (!levendeJob(job, nu) || !werkers.has(job.agent)) continue;
+    const staand = perAgent.get(job.agent);
+    if (!staand || job.startedAt >= staand.startedAt) perAgent.set(job.agent, job);
+  }
+
+  return [...perAgent.entries()]
+    .map(([id, job]) => ({ agent: agentById(id), job, regel: regelVan(job) }))
+    .sort((a, b) =>
+      Number(b.job.state === 'waiting') - Number(a.job.state === 'waiting')
+      || b.job.startedAt - a.job.startedAt)
+    .slice(0, max);
 }
 
 /**

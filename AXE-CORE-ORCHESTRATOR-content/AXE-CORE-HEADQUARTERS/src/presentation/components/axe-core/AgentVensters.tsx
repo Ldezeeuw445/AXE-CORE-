@@ -23,7 +23,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
-import { managerRijen } from '@/domain/tierRouter/agentVenster';
+import { managerRijen, werkerRijen } from '@/domain/tierRouter/agentVenster';
 import type { ManagerRij } from '@/domain/tierRouter/agentVenster';
 import type { AxeAgentId } from '@/domain/agents/roster';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
@@ -99,8 +99,12 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
   );
 }
 
-function Balkje({ rij, onKies }: { rij: ManagerRij; onKies: () => void }) {
+type Kant = 'links' | 'rechts';
+
+function Balkje({ rij, onKies, kant = 'links' }:
+  { rij: ManagerRij; onKies: () => void; kant?: Kant }) {
   const { agent, job, regel } = rij;
+  const spiegel = kant === 'rechts';
 
   /* Stilstaand: geen balkje, alleen het woord. Zo blijft de rij op zijn plek
      en zie je in één blik wie er niets doet, zonder iets te dempen. */
@@ -108,7 +112,11 @@ function Balkje({ rij, onKies }: { rij: ManagerRij; onKies: () => void }) {
     return (
       <span
         className="text-[10px] tracking-[0.16em] uppercase"
-        style={{ color: 'var(--text-secondary)', textShadow: LEESBAAR }}
+        style={{
+          color: 'var(--text-secondary)',
+          textShadow: LEESBAAR,
+          textAlign: spiegel ? 'right' : 'left',
+        }}
       >
         idle
       </span>
@@ -121,8 +129,9 @@ function Balkje({ rij, onKies }: { rij: ManagerRij; onKies: () => void }) {
       type="button"
       onClick={onKies}
       aria-label={`Gesprek met ${agent.name}`}
-      className="flex items-center gap-3 w-full text-left cursor-pointer min-w-0"
-      style={BALK}
+      className="flex items-center gap-3 w-full cursor-pointer min-w-0"
+      style={{ ...BALK, flexDirection: spiegel ? 'row-reverse' : 'row',
+               textAlign: spiegel ? 'right' : 'left' }}
     >
       <span className="flex-1 min-w-0 text-[12.5px] leading-snug line-clamp-2">
         <span style={{ color: agent.accent, fontWeight: 500 }}>{agent.kort ?? agent.name}</span>
@@ -153,8 +162,14 @@ export function AgentVensters() {
     return () => clearInterval(t);
   }, [heeftKlare]);
 
-  const rijen = managerRijen(jobs, nu);
+  /* Rechts: de werkers die op dit moment iets doen, hoogstens vijf. Links:
+     de vijf managers -- maar zonder het werk dat rechts al staat, anders leest
+     dezelfde zin twee keer over het scherm. */
+  const rechts = werkerRijen(jobs, nu);
+  const links = managerRijen(jobs, nu, new Set(rechts.map((r) => r.agent.id)));
+  const rijen = [...links, ...rechts];
   const open = gekozen ? rijen.find((r) => r.agent.id === gekozen) ?? null : null;
+  const openRechts = !!open && rechts.some((r) => r.agent.id === open.agent.id);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20" data-axe-agent-vensters>
@@ -177,7 +192,7 @@ export function AgentVensters() {
           rowGap: 18,
         }}
       >
-        {rijen.map((rij) => {
+        {links.map((rij) => {
           const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
           return (
             <Fragment key={rij.agent.id}>
@@ -188,6 +203,33 @@ export function AgentVensters() {
         })}
       </div>
 
+      {/* Rechts hetzelfde, gespiegeld: balkje eerst, tegel tegen de rand.
+          Geen vaste lijst -- staat er niemand, dan staat hier niets. */}
+      {rechts.length > 0 && (
+        <div
+          className="pointer-events-auto absolute grid items-center"
+          style={{
+            right: 'clamp(24px, 3.5vw, 64px)',
+            top: '40%',
+            transform: 'translateY(-50%)',
+            width: 'min(30%, 430px)',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
+            columnGap: 16,
+            rowGap: 18,
+          }}
+        >
+          {rechts.map((rij) => {
+            const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
+            return (
+              <Fragment key={rij.agent.id}>
+                <Balkje rij={rij} onKies={kies} kant="rechts" />
+                <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
+              </Fragment>
+            );
+          })}
+        </div>
+      )}
+
       {/* Het venster komt rechts van de kolom te staan, niet eroverheen. */}
       <AnimatePresence>
         {open && (
@@ -195,9 +237,11 @@ export function AgentVensters() {
             key={open.agent.id}
             className="pointer-events-none absolute"
             style={{
-              // Net rechts van de kolom (links + breedte + lucht), en op
-              // dezelfde hoogte als de kolom en de sphere.
-              left: 'calc(clamp(24px, 3.5vw, 64px) + 74px + 16px)',
+              // Naast de kolom waar hij bij hoort, aan de kant van de sphere --
+              // dus naar binnen toe, nooit het beeld uit.
+              ...(openRechts
+                ? { right: 'calc(clamp(24px, 3.5vw, 64px) + 74px + 16px)' }
+                : { left: 'calc(clamp(24px, 3.5vw, 64px) + 74px + 16px)' }),
               top: '40%',
               transform: 'translateY(-50%)',
             }}

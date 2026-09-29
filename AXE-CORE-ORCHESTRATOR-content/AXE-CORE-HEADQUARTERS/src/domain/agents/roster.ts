@@ -165,6 +165,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'browser',
     name: 'Browser',
+    kort: 'Browser',
     role: 'Web agent',
     handles: 'Autonomous browser control — navigate, extract, and summarise pages.',
     tier: 'tier2',
@@ -177,6 +178,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'memory',
     name: 'Memory',
+    kort: 'Memory',
     role: 'Memory manager',
     handles: 'Builds and maintains the durable memory itself — consolidation, decay, the Obsidian vault.',
     tier: 'tier2',
@@ -189,6 +191,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'task',
     name: 'Task',
+    kort: 'Task',
     role: 'Task manager',
     handles: 'Picks up tasks from the Tasks tab and tracks them through to close.',
     tier: 'tier2',
@@ -201,6 +204,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'cron',
     name: 'Cron Manager',
+    kort: 'Cron',
     role: 'Scheduler',
     handles: 'Self-hosted scheduler: runs due schedules (prompt/exec/webhook/crew/flow) with nobody watching.',
     tier: 'tier2',
@@ -213,6 +217,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'finance',
     name: 'Finance',
+    kort: 'Finance',
     role: 'Money + credits manager',
     handles: 'Finance/P&L and every subscription: watches credits and routes to the cheapest capable engine.',
     tier: 'tier2',
@@ -231,6 +236,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
     // longer version of this note.
     id: 'apps',
     name: 'App Manager',
+    kort: 'Apps',
     role: 'App registry + VPS ops',
     handles: 'Health-checks and can restart the VPS services behind AXE CORE and AXE Companion.',
     tier: 'tier2',
@@ -245,6 +251,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'intel',
     name: 'AXE Intel',
+    kort: 'Intel',
     role: 'Cross-app assistant',
     handles: 'Market intelligence and signal detection, live in Trading OS, driven through AXE CORE.',
     tier: 'tier3',
@@ -257,6 +264,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'companion',
     name: 'AXE Companion',
+    kort: 'Companion',
     role: 'Cross-app assistant',
     handles: 'Lives in the other apps, driven through AXE CORE, used in the Trading tab.',
     tier: 'tier3',

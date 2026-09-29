@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  gewoneTaal, stappenUit, zichtbareVensters, managerRijen, managerVan, regelVan,
-  VENSTER_NAGLOEI_MS, MAX_VENSTERS,
+  gewoneTaal, stappenUit, zichtbareVensters, managerRijen, managerVan, werkerRijen, regelVan,
+  VENSTER_NAGLOEI_MS, MAX_VENSTERS, MAX_WERKERS,
 } from './agentVenster';
 import type { AxeJob } from './axeJobRegels';
 import type { AxeAgentId } from '@/domain/agents/roster';
@@ -162,5 +162,64 @@ describe('regelVan', () => {
 
   it('en zonder stappen gewoon waar AXE hem op zette', () => {
     expect(regelVan(basis)).toBe('Check my risk');
+  });
+});
+
+describe('werkerRijen', () => {
+  const job = (id: string, over: Partial<AxeJob> = {}): AxeJob => ({
+    id, title: id, agent: 'browser', state: 'running', startedAt: 0, sourceText: id, ...over,
+  });
+
+  it('toont alleen tier 2 en 3, en alleen wie iets doet', () => {
+    const rijen = werkerRijen([
+      job('a', { agent: 'browser' }),
+      job('b', { agent: 'intel' }),
+      job('c', { agent: 'trading' }),   // manager: hoort links, niet hier
+    ], 0);
+    expect(rijen.map((r) => r.agent.id).sort()).toEqual(['browser', 'intel']);
+  });
+
+  it('is leeg als er niemand werkt', () => {
+    expect(werkerRijen([], 0)).toEqual([]);
+  });
+
+  it('zet wie op je wacht bovenaan, daarna de nieuwste', () => {
+    const rijen = werkerRijen([
+      job('oud',   { agent: 'memory', startedAt: 10 }),
+      job('nieuw', { agent: 'cron',   startedAt: 90 }),
+      job('wacht', { agent: 'finance', startedAt: 20, state: 'waiting' }),
+    ], 0);
+    expect(rijen.map((r) => r.agent.id)).toEqual(['finance', 'cron', 'memory']);
+  });
+
+  it('kapt af op vijf, ook al lopen alle acht', () => {
+    const alle = ['browser','memory','task','cron','finance','apps','intel','companion'];
+    const rijen = werkerRijen(alle.map((a, i) => job(a, { agent: a as never, startedAt: i })), 0);
+    expect(rijen).toHaveLength(MAX_WERKERS);
+  });
+});
+
+describe('links en rechts tonen niet twee keer hetzelfde', () => {
+  const job = (id: string, over: Partial<AxeJob> = {}): AxeJob => ({
+    id, title: id, agent: 'browser', state: 'running', startedAt: 0, sourceText: id, ...over,
+  });
+
+  it('een werker die rechts staat, rolt niet ook op naar zijn manager', () => {
+    const jobs = [job('a', { agent: 'browser' })];          // browser hoort bij wingman
+    const rechts = werkerRijen(jobs, 0);
+    const links = managerRijen(jobs, 0, new Set(rechts.map((r) => r.agent.id)));
+    expect(rechts.map((r) => r.agent.id)).toEqual(['browser']);
+    expect(links.find((r) => r.agent.id === 'wingman')?.job).toBeNull();
+  });
+
+  it('maar wat rechts niet past, rolt w\u00e9l op -- niets verdwijnt', () => {
+    const alle = ['browser','memory','task','cron','finance','apps'];
+    const jobs = alle.map((a, i) => job(a, { agent: a as never, startedAt: i }));
+    const rechts = werkerRijen(jobs, 0);
+    const links = managerRijen(jobs, 0, new Set(rechts.map((r) => r.agent.id)));
+    const overgebleven = alle.filter((a) => !rechts.some((r) => r.agent.id === a));
+    expect(overgebleven).toHaveLength(1);
+    // De overgebleven werker is via zijn manager nog steeds te zien.
+    expect(links.some((r) => r.job != null)).toBe(true);
   });
 });
