@@ -93,6 +93,41 @@ export async function checkAxeApi(): Promise<{
   return call('GET', '/health');
 }
 
+export interface AxeCoreRuntimeStatus {
+  online: boolean;
+  provider: string | null;
+  source: 'axe-core';
+  providers: Record<string, { configured: boolean; reachable: boolean; detail?: string }>;
+}
+
+export function axeCoreRuntimeStatus(): Promise<AxeCoreRuntimeStatus> {
+  return call('GET', '/status/axe-core');
+}
+
+export interface AxeVoiceHealth {
+  online: boolean;
+  voice: string;
+  reason?: string | null;
+  source: 'axe-core';
+}
+
+export function axeVoiceHealth(): Promise<AxeVoiceHealth> {
+  return call('GET', '/voice/health');
+}
+
+export async function axeVoiceTts(text: string): Promise<Blob> {
+  const res = await fetch(`${BASE_URL}/voice/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(`AXE voice ${res.status}: ${err.detail ?? res.statusText}`);
+  }
+  return res.blob();
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // DURABLE TASK KERNEL
 // ══════════════════════════════════════════════════════════════════════════════
