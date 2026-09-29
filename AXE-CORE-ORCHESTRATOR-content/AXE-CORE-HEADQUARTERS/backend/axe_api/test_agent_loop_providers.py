@@ -207,3 +207,28 @@ def test_stoppen_voor_de_tooluitvoering(monkeypatch):
     with pytest.raises(agent_loop.TaskCancelled):
         asyncio.run(agent_loop.run_agent_loop("doe iets", "t9", stil, should_stop=stop))
     assert uitgevoerd == []
+
+
+def test_task_workspace_isolates_relative_shell_and_file_tools(monkeypatch, tmp_path):
+    """Two durable runs may use the same relative names without sharing files."""
+    a = tmp_path / "developer" / "task-a"
+    b = tmp_path / "developer" / "task-b"
+
+    token = agent_loop._HUIDIGE_WORKSPACE.set(str(a))
+    try:
+        assert agent_loop._write("artifact.txt", "A")["path"] == str(a / "artifact.txt")
+        assert agent_loop._read("artifact.txt")["content"] == "A"
+        assert agent_loop._shell("pwd")["stdout"].strip() == str(a)
+    finally:
+        agent_loop._HUIDIGE_WORKSPACE.reset(token)
+
+    token = agent_loop._HUIDIGE_WORKSPACE.set(str(b))
+    try:
+        assert agent_loop._write("artifact.txt", "B")["path"] == str(b / "artifact.txt")
+        assert agent_loop._read("artifact.txt")["content"] == "B"
+        assert agent_loop._shell("pwd")["stdout"].strip() == str(b)
+    finally:
+        agent_loop._HUIDIGE_WORKSPACE.reset(token)
+
+    assert (a / "artifact.txt").read_text() == "A"
+    assert (b / "artifact.txt").read_text() == "B"
