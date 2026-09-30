@@ -270,9 +270,7 @@ export function AppShell() {
               // statusbalk, onder boven de systeembalk, links/rechts een smalle
               // marge — zo zweeft hij op de achtergrond zoals in de Tauri-app.
               position: 'fixed',
-              top: location.pathname === '/mobile'
-                ? 'calc(env(safe-area-inset-top, 0px) + 2px)'
-                : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+              top: 'calc(env(safe-area-inset-top, 0px) + 2px)',
               left: 12,
               right: 12,
               // De plaat loopt door tot vlak boven de home-indicator. Die
@@ -282,9 +280,7 @@ export function AppShell() {
               // Tauri) blijft het de 14px van voorheen. Werkt alleen omdat
               // index.html de statusbalk op `black` zet -- met
               // black-translucent tekent iOS 26 de onderste 62pt niet.
-              bottom: location.pathname === '/mobile'
-                ? 'max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px))'
-                : 'calc(env(safe-area-inset-bottom, 0px) + 10px)',
+              bottom: 'max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px))',
               // Geen vaste hoogte: top en bottom bepalen hem, de composer
               // volgt via flex.
               height: 'auto',
@@ -296,14 +292,10 @@ export function AppShell() {
               // Content van de plaatrand af: de composer en de sphere raken zo
               // de ronde hoeken niet. Onder bewust krap gehouden: zo staat de hele
               // composer + chips lager en wint de sphere ruimte bovenin.
-              paddingLeft: location.pathname === '/mobile' ? 12 : 14,
-              paddingRight: location.pathname === '/mobile' ? 12 : 14,
+              paddingLeft: 12,
+              paddingRight: 12,
               paddingTop: 10,
-              paddingBottom: keyboardInset || (
-                location.pathname === '/mobile'
-                  ? 10
-                  : 7
-              ),
+              paddingBottom: keyboardInset || 10,
               transition: 'padding-bottom 0.18s ease-out',
             }
           : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }
