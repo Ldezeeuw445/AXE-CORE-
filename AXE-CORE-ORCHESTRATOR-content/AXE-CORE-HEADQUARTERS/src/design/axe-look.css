@@ -7359,7 +7359,20 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * duwen. De rails blijven uitschuifbaar en behouden hun inhoud.
  */
 @media (min-width: 768px) and (max-width: 1366px) and (pointer: coarse) {
-  :root {
+  /* `:root[data-look]` en niet `:root`, en dat is het hele verschil.
+   *
+   * De drie tokens hieronder stonden op kale `:root`, terwijl de
+   * desktopwaarden op `:root[data-look]` staan (regel ~1108). Dat is een
+   * specifiekere selector, dus die won altijd -- dit blok stond er wel, maar
+   * `--axe-onder` bleef 75px en `--axe-barw` bleef `100vw - 574px`. Op een
+   * iPad staand (768) is dat 194px inhoud voor ELKE tab: smaller dan de 332px
+   * die de iPhone krijgt, en te smal voor de meeste kopregels. Gemeten op
+   * 30 sep: agents/tasks/settings/cron allemaal 194, liggend 450.
+   *
+   * De rail-breedte wón al wel (die staat op kale :root in de basis), wat het
+   * lastig te zien maakte: de rails krompen netjes mee en alleen de
+   * inhoudskolom bleef achter. */
+  :root[data-look] {
     --axe-rail-breedte: clamp(260px, 30vw, 360px);
     --axe-onder: clamp(12px, 2.4vw, 32px);
     --axe-barw: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 2 * var(--axe-onder));
