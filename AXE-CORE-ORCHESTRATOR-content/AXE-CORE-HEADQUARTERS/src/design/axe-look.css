@@ -7403,6 +7403,56 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     box-sizing: border-box;
   }
 
+  /* Same composer geometry as Mobile Home; only the surrounding tab content
+     changes. This keeps the shell recognisable across every phone tab. */
+  :root[data-look] .axe-mobile-tab-composer .axe-composer.axe-vakcomposer {
+    margin: 0 !important;
+    gap: 6px;
+  }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-vak {
+    border-radius: 18px;
+    padding: 9px 11px 8px;
+    gap: 7px;
+    box-shadow:
+      0 16px 38px rgba(0,0,0,.34),
+      inset 0 1px 0 rgba(255,255,255,.045),
+      0 0 0 1px rgba(255,255,255,.018);
+  }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-kop {
+    min-height: 18px;
+    font-size: 11px;
+  }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-invoer {
+    font-size: 16px;
+    line-height: 1.35;
+    height: 28px;
+    min-height: 28px;
+    max-height: 74px;
+  }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-rij { gap: 8px; }
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-links,
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-rechts { gap: 5px; }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-rij button,
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-staf button {
+    width: 36px;
+    height: 36px;
+  }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-rij .axe-mobile-mic {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-rij .axe-mobile-send {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
   :root[data-look] .axe-mobile-composer-collapse,
   :root[data-look] .axe-mobile-composer-handle {
     color: rgba(238,243,250,.78);
