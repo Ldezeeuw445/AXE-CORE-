@@ -72,21 +72,36 @@ export function TabRail({ kant, children, vast }: { kant: 'links' | 'rechts'; ch
 
   const setRightPanelOpen = useUIStore(st => st.setRightPanelOpen);
   const setLeftPanelOpen = useUIStore(st => st.setLeftPanelOpen);
+  const setRightDrawerOpen = useUIStore(st => st.setRightDrawerOpen);
+  const setLeftDrawerOpen = useUIStore(st => st.setLeftDrawerOpen);
 
   useEffect(() => {
     const wortel = document.documentElement;
     const sleutel = VAST_SLEUTEL[kant];
     /* Alleen op de overgang naar `vast`, niet elke render: daarna mag je het
        paneel gewoon dichtklappen zonder dat het meteen terugkomt. */
-    if (vast) (kant === 'rechts' ? setRightPanelOpen : setLeftPanelOpen)(true);
     if (vast) {
-      wortel.dataset[sleutel] = 'aan';
-      wortel.dataset[kant === 'rechts' ? 'railR' : 'railL'] = 'open';
+      const telefoon = window.innerWidth < 768;
+      if (telefoon) {
+        // Same content, different host: on phone a selected tab detail must
+        // open the operational Sheet, not the hidden desktop panel state.
+        if (kant === 'rechts') {
+          setLeftDrawerOpen(false);
+          setRightDrawerOpen(true);
+        } else {
+          setRightDrawerOpen(false);
+          setLeftDrawerOpen(true);
+        }
+      } else {
+        (kant === 'rechts' ? setRightPanelOpen : setLeftPanelOpen)(true);
+        wortel.dataset[sleutel] = 'aan';
+        wortel.dataset[kant === 'rechts' ? 'railR' : 'railL'] = 'open';
+      }
     } else {
       delete wortel.dataset[sleutel];
     }
     return () => { delete wortel.dataset[sleutel]; };
-  }, [kant, vast, setRightPanelOpen, setLeftPanelOpen]);
+  }, [kant, vast, setRightPanelOpen, setLeftPanelOpen, setRightDrawerOpen, setLeftDrawerOpen]);
 
   /* Elke lade dezelfde vorm als de Browser-lade (UI-MAATSTAF layoutregel 5):
      binnenkaart, scrollend lijf, en links de vaste voet. Dat stond per tab
