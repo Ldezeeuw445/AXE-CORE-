@@ -7374,6 +7374,50 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 
 
+/* ── Mobile shell parity: per-tab drawers + shared composer ────────────────
+ * A TabRail on phone renders into the same left/right operational drawer that
+ * Tauri uses as a rail. When a tab supplies its own rail, hide only the generic
+ * drawer dashboard beneath it; slot-adopted world widgets remain available. */
+@media (max-width: 767px) {
+  :root[data-look] .axe-mobile-drawer-body > .axe-rail-host {
+    width: 100%;
+    min-width: 0;
+  }
+
+  :root[data-look] .axe-mobile-drawer-body:has(> .axe-rail-host:not(:empty))
+    > .axe-mobile-drawer-standard {
+    display: none;
+  }
+
+  :root[data-look] .axe-mobile-tab-composer {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  :root[data-look] .axe-mobile-tab-composer .axe-composer,
+  :root[data-look] .axe-mobile-tab-composer .axe-vak {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  :root[data-look] .axe-mobile-composer-collapse,
+  :root[data-look] .axe-mobile-composer-handle {
+    color: rgba(238,243,250,.78);
+    background: linear-gradient(180deg, rgba(20,20,24,.98), rgba(8,8,10,.99));
+    border: 1px solid rgba(255,255,255,.09);
+    box-shadow: 0 8px 22px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :root[data-look] .axe-mobile-composer-collapse:active,
+  :root[data-look] .axe-mobile-composer-handle:active {
+    transform: scale(.96);
+  }
+}
+
 /* ── iPad PWA: dezelfde volledige shell als Tauri, maar binnen de viewport ──
  *
  * iPad is geen telefoon-layout. De desktop/Tauri-schil blijft intact. Op de
@@ -7456,7 +7500,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
   :root[data-look] .axe-shell aside {
     left: max(8px, env(safe-area-inset-left, 0px));
+    width: min(var(--axe-rail-breedte), calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 24px));
     max-width: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 24px);
+    box-sizing: border-box;
   }
   :root[data-look] .axe-shell [data-rail='right'] {
     left: auto;
