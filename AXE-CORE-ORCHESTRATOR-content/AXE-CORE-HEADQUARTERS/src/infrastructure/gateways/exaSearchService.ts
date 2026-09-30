@@ -1,5 +1,6 @@
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { exaProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
+import { dienstSleutel } from '@/infrastructure/config/providerSleutels';
 
 const EXA_API_KEY_SETTING = 'axe_exa_api_key';
 
@@ -9,11 +10,8 @@ export async function getExaApiKey(): Promise<string | null> {
   // (it's where the key the user typed actually lands), then fall back to the
   // legacy dedicated setting. Without this, the key was saved but never read,
   // so search reported "not configured".
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>;
-    const k = conns?.exa?.key;
-    if (typeof k === 'string' && k.trim()) return k.trim();
-  } catch { /* fall through */ }
+  const k = dienstSleutel('exa');
+  if (k) return k;
   return loadSetting<string | null>(EXA_API_KEY_SETTING, null);
 }
 

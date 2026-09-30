@@ -15,6 +15,7 @@ import {
   shouldTranscribeUtterance,
   usableTranscript,
 } from '@/infrastructure/gateways/whisperGuard';
+import { dienstSleutel } from '@/infrastructure/config/providerSleutels';
 
 const SILENCE_RMS = 0.012;
 const SILENCE_MS = 1400;
@@ -32,18 +33,12 @@ export interface WhisperConfig {
   endpoint: string;
 }
 
-/** Shared with openAiRealtimeVoice.ts — one place reads the provider keys out
- *  of axe_llm_connections, so "no OpenAI key" always means the same thing. */
-export function readConnKey(id: string): string {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string } | undefined
-    >;
-    return conns[id]?.key?.trim() ?? '';
-  } catch {
-    return '';
-  }
+/* `readConnKey` stond hier, met de opmerking dat hij gedeeld werd met
+   openAiRealtimeVoice.ts. Dat was niet (meer) zo: niets importeerde hem, en de
+   dode-code-wacht wees hem al aan. Zijn werk doet `dienstSleutel` nu voor de
+   hele app. */
+function readConnKey(id: string): string {
+  return dienstSleutel(id);
 }
 
 /** Prefer Groq (free whisper-large-v3), then OpenAI. */

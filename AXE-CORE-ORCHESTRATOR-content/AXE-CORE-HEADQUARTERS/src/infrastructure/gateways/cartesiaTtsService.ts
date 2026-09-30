@@ -7,6 +7,7 @@
  */
 import { normalizeForSpeech } from '@/domain/speechText';
 import { getReplyLanguage } from '@/domain/replyLanguage';
+import { dienstSleutel } from '@/infrastructure/config/providerSleutels';
 
 const ENV_CARTESIA_KEY = import.meta.env.VITE_CARTESIA_API_KEY ?? '';
 const CARTESIA_URL = 'https://api.cartesia.ai/tts/bytes';
@@ -17,15 +18,7 @@ const STEM_SLEUTEL = 'axe_cartesia_voice';
 const STANDAARD_STEM = '79a125e8-cd45-4c13-8a67-188112f4dd22';
 
 function sleutel(): string {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string } | undefined
-    >;
-    return (conns.cartesia?.key ?? '').trim() || ENV_CARTESIA_KEY.trim();
-  } catch {
-    return ENV_CARTESIA_KEY.trim();
-  }
+  return dienstSleutel('cartesia') || ENV_CARTESIA_KEY.trim();
 }
 
 export function isCartesiaConfigured(): boolean {

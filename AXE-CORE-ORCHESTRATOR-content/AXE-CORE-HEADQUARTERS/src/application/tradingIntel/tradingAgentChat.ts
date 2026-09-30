@@ -18,6 +18,7 @@ import type { ThinkingTrace, AgentLearningStats } from '@/domain/tradingIntel/bo
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { getLearningStats, listThinkingTraces } from '@/infrastructure/persistence/tradingLearningService';
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
+import { getProviderKeySlot } from '@/infrastructure/config/providerSleutels';
 
 const HISTORY_KEY = 'axe_trading_agent_chat_history';
 const MAX_HISTORY = 40;
@@ -75,14 +76,10 @@ function collectConfiguredSlots(): KeySlot[] {
   push(readPrimarySlot());
   push(readStoredSlot('axe_slot_fallback1'));
   push(readStoredSlot('axe_slot_fallback2'));
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
-    for (const [id, c] of Object.entries(conns)) {
-      if (!c?.key || c.key.length < 4) continue;
-      const cfg = PROVIDERS.find(p => p.id === id);
-      push({ provider: id as KeySlot['provider'], key: c.key, model: c.model || cfg?.defaultModel, baseUrl: c.baseUrl || cfg?.baseUrl });
-    }
-  } catch { /* ignore */ }
+  // Over PROVIDERS lopen en niet over wat er toevallig in localStorage staat:
+  // zo komen ook de providers mee waarvan de sleutel uit de omgeving of van de
+  // VPS-proxy komt. Die miste deze lijst, terwijl de chat ze wel had.
+  for (const p of PROVIDERS) push(getProviderKeySlot(p.id));
   push(defaultOllamaSlot());
   return slots;
 }

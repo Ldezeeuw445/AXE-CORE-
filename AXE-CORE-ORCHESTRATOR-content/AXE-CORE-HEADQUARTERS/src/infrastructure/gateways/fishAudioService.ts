@@ -11,6 +11,7 @@ import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
 import { isTauriRuntime, VPS_API_ORIGIN, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { normalizeForSpeech } from '@/domain/speechText';
+import { dienstSleutel } from '@/infrastructure/config/providerSleutels';
 
 const ENV_FISH_KEY = import.meta.env.VITE_FISH_AUDIO_API_KEY ?? '';
 const USE_VPS_PROXY = import.meta.env.PROD && isTauriRuntime();
@@ -22,15 +23,9 @@ const FISH_VOICE_KEY = 'axe_fish_voice_id';
 export const LEWIS_VOICE_ID = 'c9c8850dc8384eb183d0e5e8b9161400';
 
 function settingsFishKey(): string {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string } | undefined
-    >;
-    return (conns.fishaudio?.key ?? conns.fish?.key ?? '').trim();
-  } catch {
-    return '';
-  }
+  // Twee namen: afhankelijk van wanneer je hem invulde staat hij als
+  // 'fishaudio' of als 'fish'.
+  return dienstSleutel('fishaudio', 'fish');
 }
 
 function resolveFishKey(): string {

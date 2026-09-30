@@ -16,6 +16,7 @@ import { VPS_API_ORIGIN, axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrast
 
 import { statusVan, NIET_INGESTELD, type ServiceStatus } from '@/domain/serviceStatus';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { getProviderKeySlot } from '@/infrastructure/config/providerSleutels';
 export type { ServiceStatus };
 
 export interface ServiceState {
@@ -103,11 +104,11 @@ export async function checkGeminiReal(opts?: { force?: boolean; key?: string }):
   if (!opts?.force && _geminiCache && Date.now() - _geminiCache.at < GEMINI_CACHE_TTL_MS) {
     return _geminiCache.result;
   }
+  // getProviderKeySlot kent de ENV-sleutel al, dus de losse VITE_-terugval die
+  // hier stond is overbodig geworden -- en hij kende alleen google.
   const key = opts?.key
-    ?? (typeof localStorage !== 'undefined'
-        ? (() => { try { return (JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>).google?.key; } catch { return undefined; } })()
-        : undefined)
-    ?? import.meta.env.VITE_GEMINI_API_KEY ?? '';
+    ?? (typeof localStorage !== 'undefined' ? getProviderKeySlot('google')?.key : undefined)
+    ?? '';
   if (!key) {
     const result = { ok: false, latency: 0 };
     _geminiCache = { at: Date.now(), result };

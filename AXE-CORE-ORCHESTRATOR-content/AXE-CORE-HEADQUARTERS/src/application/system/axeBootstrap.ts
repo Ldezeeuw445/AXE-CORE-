@@ -21,6 +21,7 @@ import { maybeTriggerCompanionCorrelation } from '@/infrastructure/gateways/comp
 import { warmLocalOllama } from '@/infrastructure/gateways/localOllama';
 import { startPlannerKoppeling } from '@/application/planner/plannerKoppeling';
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
+import { leesProviderVerbindingen, type ProviderVerbinding } from '@/infrastructure/config/providerSleutels';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -208,10 +209,7 @@ export async function warmPrimaryAtBoot(): Promise<void> {
     };
 
     const ok = await quietTest(primary);
-    let conns: Record<string, { key?: string; model?: string; baseUrl?: string; lastTest?: string }> = {};
-    try {
-      conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
-    } catch { /* */ }
+    const conns: Record<string, ProviderVerbinding | undefined> = leesProviderVerbindingen();
     conns[primary.provider] = { ...(conns[primary.provider] ?? {}), lastTest: ok ? 'ok' : 'fail' };
 
     if (fb1?.provider && fb1.provider !== primary.provider && fb1.provider !== ABONNEMENT_PROVIDER) {
@@ -262,12 +260,7 @@ export async function maybeSelfHealCheck(): Promise<void> {
   }
   if (!primary?.provider) return;
 
-  let conns: Record<string, { key?: string; model?: string; baseUrl?: string; lastTest?: string }>;
-  try {
-    conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
-  } catch {
-    return;
-  }
+  const conns: Record<string, ProviderVerbinding | undefined> = leesProviderVerbindingen();
 
   const id = primary.provider;
   const conn = conns[id] ?? {};
@@ -369,10 +362,8 @@ export async function maybeSyncObsidianVault(): Promise<void> {
 export async function warmLocalOllamaAtBoot(): Promise<void> {
   try {
     let model = PROVIDERS.find(p => p.id === 'ollama')?.defaultModel ?? 'qwen3.5:2b';
-    try {
-      const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { model?: string } | undefined>;
-      if (conns.ollama?.model) model = conns.ollama.model;
-    } catch { /* use default */ }
+    const ollamaModel = leesProviderVerbindingen().ollama?.model;
+    if (ollamaModel) model = ollamaModel;
     await warmLocalOllama(model);
   } catch { /* best-effort */ }
 }

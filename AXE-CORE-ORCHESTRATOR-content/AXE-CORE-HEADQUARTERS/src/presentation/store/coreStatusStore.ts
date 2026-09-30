@@ -56,7 +56,7 @@ export const useCoreStatusStore = create<CoreStatusShape>((set) => ({
  * niemand opnieuw, dus bleef "online" eeuwig staan. Een tik per 30 s laat de
  * stand vanzelf naar `unknown` zakken zodra de backend stilvalt.
  */
-export function useCoreStand(): ServiceStatus {
+function useCoreStand(): ServiceStatus {
   // Drie losse selectors en geen object: een selector die elke render een nieuw
   // object teruggeeft, is voor zustand elke keer een andere waarde.
   const online = useCoreStatusStore((s) => s.online);

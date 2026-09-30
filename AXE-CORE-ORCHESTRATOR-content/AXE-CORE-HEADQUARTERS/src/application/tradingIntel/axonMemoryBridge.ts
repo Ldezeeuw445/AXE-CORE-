@@ -26,6 +26,7 @@
 import { axonRemember } from '@/infrastructure/gateways/axonMemoryService';
 import { notesWorthRemembering } from '@/domain/tradingIntel/worthRemembering';
 import type { CycleRecord } from '@/domain/tradingIntel/cycleJournal';
+import { dienstSleutel } from '@/infrastructure/config/providerSleutels';
 
 const SENT_KEY = 'axe_axon_sent_keys';
 
@@ -52,10 +53,7 @@ function writeSent(keys: string[]): void {
 
 /** The AXON key from the Settings card, or empty when none is connected. */
 export function axonKey(): string {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string }>;
-    return conns.axon?.key?.trim() ?? '';
-  } catch { return ''; }
+  return dienstSleutel('axon');
 }
 
 export interface AxonPushResult {

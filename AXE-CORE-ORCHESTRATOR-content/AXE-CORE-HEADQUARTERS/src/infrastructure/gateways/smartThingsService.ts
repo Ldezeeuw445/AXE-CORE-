@@ -6,6 +6,8 @@
  *   3. VITE_SMARTTHINGS_TOKEN
  */
 
+import { dienstSleutel } from '@/infrastructure/config/providerSleutels';
+
 const API = 'https://api.smartthings.com/v1';
 const LS_TOKEN = 'axe_smartthings_token';
 
@@ -13,12 +15,9 @@ export function getSmartThingsToken(): string {
   try {
     const ls = localStorage.getItem(LS_TOKEN)?.trim();
     if (ls) return ls;
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') || '{}') as Record<
-      string,
-      { key?: string }
-    >;
-    if (conns.smartthings?.key?.trim()) return conns.smartthings.key.trim();
-  } catch { /* */ }
+  } catch { /* opslag geblokkeerd */ }
+  const uitSettings = dienstSleutel('smartthings');
+  if (uitSettings) return uitSettings;
   return (import.meta.env.VITE_SMARTTHINGS_TOKEN as string | undefined)?.trim() || '';
 }
 

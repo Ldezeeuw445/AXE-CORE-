@@ -4,68 +4,38 @@
  * Prefer Google Gemini (primary identity). Falls through OpenAI → Anthropic
  * when configured. Uses the same KeySlot model as chat routing.
  */
-import type { KeySlot } from '@/domain/providers';
-import { PROVIDERS, isKeyOptional, migrateModel } from '@/domain/providers';
+import { PROVIDERS, type KeySlot } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { aiProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
 import { proxyErrorMessage } from '@/domain/proxyError';
-import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
+import { getProviderKeySlot } from '@/infrastructure/config/providerSleutels';
 
 
-const VISION_ENV_KEYS: Partial<Record<string, string>> = {
-  google: import.meta.env.VITE_GEMINI_API_KEY ?? '',
-  openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
-  anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
-  openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
-};
+/** De providers die beeld aankunnen. Welke sleutel ze hebben en waar die
+ *  vandaan komt is niet aan deze gateway -- dat weet providerSleutels. */
+const BEELD_PROVIDERS = ['google', 'openai', 'anthropic', 'openrouter'] as const;
 
 /**
- * Resolve the currently configured vision-capable provider slots without
- * importing voiceStore. Keeping this gateway-level prevents a circular
- * voiceStore -> nativeToolLoop -> computer registry -> voiceStore dependency.
+ * De vision-slots, uit dezelfde bron als de chat.
+ *
+ * Hier stond een eigen kopie van de sleuteloplossing: een eigen ENV-lijst, een
+ * eigen localStorage-parse, en daarna nog een tweede ronde voor ENV-only
+ * providers. Die kopie miste `xai` en `groq` (niet erg -- die kunnen geen
+ * beeld) maar ook de providers die de VPS-proxy met zijn eigen sleutel
+ * bedient: had je Gemini alleen via de proxy, dan zag vision hem niet terwijl
+ * Settings "Connected" zei.
+ *
+ * De reden dat die kopie bestond -- "niet voiceStore importeren, anders een
+ * cyclus voiceStore -> nativeToolLoop -> computer registry -> voiceStore" --
+ * geldt niet meer: de oplosser woont nu in infrastructure/config en raakt
+ * voiceStore niet aan.
  */
 export function configuredVisionSlots(): KeySlot[] {
   const out: KeySlot[] = [];
-  const seen = new Set<string>();
-
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string; model?: string; baseUrl?: string } | undefined
-    >;
-    for (const id of ['google', 'openai', 'anthropic', 'openrouter'] as const) {
-      if (seen.has(id)) continue;
-      const cfg = PROVIDERS.find((p) => p.id === id);
-      if (!cfg) continue;
-      const conn = conns[id];
-      const key = conn?.key || VISION_ENV_KEYS[id] || '';
-      if (!key && !isKeyOptional(id)) continue;
-      seen.add(id);
-      out.push({
-        provider: id,
-        key,
-        model: migrateModel(id, conn?.model) || cfg.defaultModel,
-        baseUrl: normalizeProviderBaseUrl(id, conn?.baseUrl || cfg.baseUrl),
-      });
-    }
-  } catch {
-    /* malformed local settings: return any env-backed slots below */
-  }
-
-  for (const id of ['google', 'openai', 'anthropic', 'openrouter'] as const) {
-    if (seen.has(id)) continue;
-    const cfg = PROVIDERS.find((p) => p.id === id);
-    if (!cfg) continue;
-    const key = VISION_ENV_KEYS[id] || '';
-    if (!key && !isKeyOptional(id)) continue;
-    seen.add(id);
-    out.push({
-      provider: id,
-      key,
-      model: cfg.defaultModel,
-      baseUrl: normalizeProviderBaseUrl(id, cfg.baseUrl),
-    });
+  for (const id of BEELD_PROVIDERS) {
+    const slot = getProviderKeySlot(id);
+    if (slot) out.push(slot);
   }
   return out;
 }

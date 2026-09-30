@@ -19,6 +19,7 @@ import { currentHostKind } from '@/infrastructure/config/apiUrl';
 
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { leesProviderVerbindingen } from '@/infrastructure/config/providerSleutels';
 
 export const LOCAL_OLLAMA_URL = 'http://localhost:11434';
 
@@ -134,12 +135,7 @@ export async function resolveReachableOllama(): Promise<{ baseUrl: string; local
 
 /** The VPS Ollama the user configured, if any. */
 function remoteOllamaBaseUrl(): string | null {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string, { baseUrl?: string } | undefined
-    >;
-    const url = conns.ollama?.baseUrl?.trim();
-    if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) return url.replace(/\/$/, '');
-  } catch { /* ignore */ }
+  const url = leesProviderVerbindingen().ollama?.baseUrl?.trim();
+  if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) return url.replace(/\/$/, '');
   return null;
 }

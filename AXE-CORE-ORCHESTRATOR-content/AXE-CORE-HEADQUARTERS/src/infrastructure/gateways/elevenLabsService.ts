@@ -8,21 +8,14 @@ import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { getReplyLanguage } from '@/domain/replyLanguage';
 import { STEMMEN } from '@/domain/stemKeuzes';
 import { normalizeForSpeech } from '@/domain/speechText';
+import { dienstSleutel } from '@/infrastructure/config/providerSleutels';
 
 const ENV_ELEVENLABS_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
 const TTS_PROXY_URL = '/api/tts';
 
 function settingsElevenLabsKey(): string {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string } | undefined
-    >;
-    return (conns.elevenlabs?.key ?? '').trim();
-  } catch {
-    return '';
-  }
+  return dienstSleutel('elevenlabs');
 }
 
 function resolveElevenLabsKey(): string {

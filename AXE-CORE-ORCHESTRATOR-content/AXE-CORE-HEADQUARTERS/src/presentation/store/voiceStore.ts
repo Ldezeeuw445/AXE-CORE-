@@ -15,7 +15,7 @@ import { detectMacRoute, askMac } from '@/infrastructure/gateways/macRelayServic
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { create } from 'zustand';
 import {
-  PROVIDERS, isKeyOptional, classifyQuery, selectByCapability, prioritizeOllamaSlots,
+  PROVIDERS, classifyQuery, selectByCapability, prioritizeOllamaSlots,
   capabilityToSpecialists, migrateModel, isSimpleChatCapability,
   type ProviderId, type ProviderCfg, type KeySlot, type QueryCapability,
 } from '@/domain/providers';
@@ -36,10 +36,7 @@ import { isAutoApproved, recordTrustDecision, notifyAutoRun } from '@/infrastruc
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/infrastructure/persistence/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/application/workflows/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/application/system/systemService';
-import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
-import { getStoredLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
-import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, AXE_USER_UUID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
 import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand , sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
@@ -287,65 +284,14 @@ export async function writeConversationMemory(q: string, a: string, provider: st
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
-const ENV_KEYS: Partial<Record<string,string>> = {
-  google: import.meta.env.VITE_GEMINI_API_KEY ?? '',
-  xai: import.meta.env.VITE_XAI_API_KEY ?? '',
-  openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
-  openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
-  anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
-  groq: import.meta.env.VITE_GROQ_API_KEY ?? '',
-};
-
-
-/** Providers the VPS AI proxy serves with its OWN key (cached from Settings'
- *  /api/proxy/ai/providers fetch). AXE can route these through the proxy even
- *  with no local key — the VPS fills the key. Empty until Settings is opened. */
-function serverServedProviders(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem('axe_server_providers') ?? '[]') as string[]); }
-  catch { return new Set(); }
-}
-
-export function getProviderKeySlot(providerId:string):KeySlot|null {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections')??'{}') as Record<string,{key?:string;model?:string;baseUrl?:string}|undefined>;
-    const conn = conns[providerId];
-    const cfg = PROVIDERS.find(p=>p.id===providerId);
-    const key = conn?.key || (providerId!=='ollama' ? (ENV_KEYS[providerId]??'') : '');
-    const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl);
-    if (isKeyOptional(providerId) && providerId!=='ollama' && !baseUrl) return null;
-    // A provider with no local key is still usable when the VPS proxy serves it
-    // with its own key (e.g. Gemini): build a keyless slot and let callProvider's
-    // proxy path fill the key. Only truly-unavailable providers return null.
-    if (!isKeyOptional(providerId) && !key && !serverServedProviders().has(providerId)) return null;
-    // migrateModel() maps stale/deprecated model names (saved in localStorage,
-    // possibly months ago) to the current canonical one for this provider —
-    // see providers.ts's _MODEL_MIGRATIONS. Applying it here, at the one spot
-    // every non-Ollama provider slot gets read from, means a fix to that map
-    // takes effect immediately without the user re-typing anything.
-    const model = migrateModel(providerId, conn?.model) || cfg?.defaultModel;
-    return { provider:providerId as ProviderId, key, model, baseUrl };
-  } catch { return null; }
-}
-
-function getOllamaKeySlots():KeySlot[] {
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections')??'{}') as Record<string,{key?:string;model?:string;models?:string[];baseUrl?:string}|undefined>;
-    const ollama = conns['ollama'];
-    const cfg = PROVIDERS.find(p=>p.id==='ollama')!;
-    const baseUrl = normalizeProviderBaseUrl('ollama', ollama?.baseUrl||cfg.baseUrl);
-    const models:string[] = ollama?.models?.length ? ollama.models : (ollama?.model?[ollama.model]:getStoredLlmModelRegistry().map(m=>m.name).filter(Boolean)||getDefaultOllamaModelNames());
-    const sorted = sortOllamaModelsForCapability([...models.filter(m=>!m.endsWith(':cloud')),...models.filter(m=>m.endsWith(':cloud'))]);
-    // Only the top pick + one backup — not every installed model. This VPS's
-    // Ollama keeps just one model loaded at a time (OLLAMA_MAX_LOADED_MODELS=1),
-    // so falling through all 8 on a single slow/failed reply means loading
-    // and evicting up to 8 different models in sequence for one chat turn —
-    // exactly the "rommelig" cascade this was reported as. Two attempts is
-    // still a real retry; a genuine Ollama outage should fall through to an
-    // actual different provider (Groq/OpenRouter/...) quickly instead.
-    return sorted.filter(Boolean).slice(0, 2).map(model=>({provider:'ollama' as ProviderId,key:'',model,baseUrl}));
-  } catch { return []; }
-}
-
+/* ENV_KEYS, serverServedProviders, getProviderKeySlot en getOllamaKeySlots
+   stonden hier. Ze zijn verhuisd naar infrastructure/config/providerSleutels.ts,
+   zodat de gateways erbij kunnen: infrastructure/ mag niet uit presentation/
+   lezen, dus negen gateways parsten localStorage zelf en misten de ENV-sleutels,
+   de proxy-bediende providers, de base-URL-normalisatie en de modelmigratie.
+   Hier her-geexporteerd, want de bestaande aanroepers staan hierop. */
+import { getProviderKeySlot, getOllamaKeySlots } from '@/infrastructure/config/providerSleutels';
+export { getProviderKeySlot, getOllamaKeySlots };
 
 async function logRoute(message:string,metadata:Record<string,unknown>={}){
   await logMessage('info','axe-core-router',message,{route_path:'AXE CORE > Orchestrator > Capability Router',...metadata}).catch(()=>{});
