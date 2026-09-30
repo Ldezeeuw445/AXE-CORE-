@@ -18,9 +18,10 @@ import { leesModellen, zetModel } from '@/infrastructure/persistence/motorModell
 import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motorModellen';
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import {
-  claudeRepos, plannerStatus, plannerZetAan,
+  claudeRepos, plannerStatus, plannerZetAan, axeCoreRuntimeStatus,
   ledgerList,
   type PlannerStatus, type AgentSubscriptionUsage, type LedgerEntry,
+  type AxeCoreRuntimeStatus,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
@@ -46,6 +47,7 @@ export function AgentMotorenSection() {
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   const [abonnementGebruik, setAbonnementGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
   const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
+  const [coreRuntime, setCoreRuntime] = useState<AxeCoreRuntimeStatus | null>(null);
   const verbindingen = useMemo(() => leesVerbindingen(), [toewijzing, overrides]);
   const tier2Keuzes = useMemo(
     () => workerKeuzes(verbindingen, PROVIDERS.map(p => p.id)),
@@ -85,6 +87,17 @@ export function AgentMotorenSection() {
   };
   const axeHuidig = primair ? axeKeuzes.find(k => isActief(k, primair)) : undefined;
   useEffect(() => { plannerStatus().then(setPlanner).catch(() => setPlanner(null)); }, []);
+  useEffect(() => {
+    let alive = true;
+    const check = () => {
+      void axeCoreRuntimeStatus()
+        .then((s) => { if (alive) setCoreRuntime(s); })
+        .catch(() => { if (alive) setCoreRuntime({ online: false, provider: null, providers: {}, source: 'axe-core' }); });
+    };
+    check();
+    const timer = window.setInterval(check, 60_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, []);
   const zetPlanner = async (aan: boolean) => {
     try { await plannerZetAan(aan); setPlanner(await plannerStatus()); } catch { /* host onbereikbaar */ }
   };
@@ -135,12 +148,22 @@ export function AgentMotorenSection() {
   const gebruiktDoor = (motor: string) => HOOFD_AGENTS.filter(a => toewijzing[a] === motor).map(a => AGENT_LABEL[a]);
 
   const motorStatus = (motor: HoofdMotor): Stand => {
-    if (motor === 'sleutels') return { toon: 'info', tekst: 'API keys' };
-    if (aanwezig === null) return { toon: 'muted', tekst: 'Host offline' };
-    if (aanwezig[motor] === false) return { toon: 'bad', tekst: 'CLI missing' };
+    // Top-right status is capability truth only. "API keys", "CLI present" and
+    // similar implementation details belong in stats, never in the status slot.
+    if (motor === 'sleutels') {
+      if (coreRuntime == null) return { toon: 'muted', tekst: 'Checking' };
+      return coreRuntime.online
+        ? { toon: 'ok', tekst: 'Online' }
+        : { toon: 'bad', tekst: 'Offline' };
+    }
+    if (aanwezig === null || aanwezig[motor] !== true) return { toon: 'bad', tekst: 'Offline' };
     const koelt = planner?.koeling[motor];
-    if (koelt) return { toon: 'warn', tekst: `Cooling · ${new Date(koelt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` };
-    return { toon: 'ok', tekst: 'Online' };
+    // A cooled-down subscription cannot currently do work, so it is not Online.
+    if (koelt) return { toon: 'bad', tekst: 'Offline' };
+    // Current host endpoint proves only that the CLI binary exists, not that
+    // its subscription session is authenticated. Until the backend exposes a
+    // real login probe, do not paint an unverified CLI green.
+    return { toon: 'bad', tekst: 'Offline' };
   };
   const sleutelStatus = (provider?: ProviderId): Stand => {
     if (!provider) return { toon: 'muted', tekst: 'Auto' };
@@ -159,7 +182,11 @@ export function AgentMotorenSection() {
           naam="AXE Core"
           accent="var(--accent-cyan)"
           rol="The answer in the chat. Never a subscription, never Ollama."
-          stand={primair ? { toon: 'ok', tekst: 'Online' } : { toon: 'info', tekst: 'Native' }}
+          stand={coreRuntime == null
+            ? { toon: 'muted', tekst: 'Checking' }
+            : coreRuntime.online
+              ? { toon: 'ok', tekst: 'Online' }
+              : { toon: 'bad', tekst: 'Offline' }}
           keuze={
             <select value={axeHuidig ? `${axeHuidig.provider}:${axeHuidig.model}` : ''} onChange={e => kiesAxe(e.target.value)} aria-label="Model for AXE Core">
               <option value="">AXE Native (chooses itself)</option>
