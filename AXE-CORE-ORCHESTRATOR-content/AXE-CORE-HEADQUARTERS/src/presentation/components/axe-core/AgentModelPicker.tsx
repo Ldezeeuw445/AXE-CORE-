@@ -27,13 +27,11 @@ import type { ProviderId } from '@/domain/providers';
 import { PROVIDERS } from '@/domain/providers';
 import { loadAgentModelChoices, AGENT_MODELS_KEY } from '@/application/tradingIntel/deskAgentModels';
 import { saveAgentModelChoices } from '@/infrastructure/persistence/userSettingsService';
+import { leesProviderOpslag } from '@/domain/providers';
 
 /** Providers with a key saved, in the order the catalogue lists them. */
 function configuredProviders(): ProviderId[] {
-  let conns: Record<string, { key?: string }> = {};
-  try {
-    conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
-  } catch { /* nothing configured */ }
+  const conns = leesProviderOpslag();
   return PROVIDERS
     .map(p => p.id)
     .filter(id => !!conns[id]?.key || id === 'ollama');

@@ -202,14 +202,44 @@ function loadFallbackSlot(name: string): KeySlot | null {
   }
 }
 
+/** Waar Settings de ingetypte providersleutels neerzet. */
+export const VERBINDINGEN_SLEUTEL = 'axe_llm_connections';
+
+export interface ProviderVerbinding {
+  key?: string;
+  model?: string;
+  models?: string[];
+  baseUrl?: string;
+  /** Wat de laatste "Test"-knop opleverde. */
+  lastTest?: string;
+  lastTestAt?: string;
+}
+
+/**
+ * De kale lezer van `axe_llm_connections`. Kapotte opslag telt als leeg.
+ *
+ * Hier in domain/ en niet in de infrastructure-laag ernaast, want dit bestand
+ * heeft hem zelf op drie plekken nodig en domain/ mag niet uit infrastructure
+ * lezen. `chatModelKeuzes.leesVerbindingen()` en
+ * `infrastructure/config/providerSleutels.leesProviderVerbindingen()`
+ * delegeren allebei hierheen, zodat er één parse is in plaats van drie.
+ *
+ * Dit is alleen LEZEN. Wat een sleutel betekent -- ENV-terugval, de
+ * proxy-bediende providers, base-URL en modelmigratie -- staat in
+ * providerSleutels.ts, want dat heeft infrastructure nodig.
+ */
+export function leesProviderOpslag(): Record<string, ProviderVerbinding | undefined> {
+  try {
+    return JSON.parse(localStorage.getItem(VERBINDINGEN_SLEUTEL) ?? '{}') as Record<string, ProviderVerbinding | undefined>;
+  } catch {
+    return {};
+  }
+}
+
 /** Live model/key/baseUrl from the Settings card (axe_llm_connections). */
 export function loadConnectionOverrides(provider: string): Partial<KeySlot> {
   try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string; model?: string; baseUrl?: string } | undefined
-    >;
-    const c = conns[provider];
+    const c = leesProviderOpslag()[provider];
     if (!c) return {};
     return {
       ...(c.key ? { key: c.key } : {}),
@@ -269,12 +299,7 @@ export function setLocalFirstEnabled(on: boolean): void {
  *  else the provider default (qwen3.5:2b, sized for the 8GB Mac Mini). */
 export function resolveOllamaModel(): string {
   const fallback = PROVIDERS.find(p => p.id === 'ollama')?.defaultModel ?? 'qwen3.5:2b';
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { model?: string } | undefined>;
-    return conns.ollama?.model || fallback;
-  } catch {
-    return fallback;
-  }
+  return leesProviderOpslag().ollama?.model || fallback;
 }
 
 /** A ready-to-dispatch local Ollama slot (no key needed). */
@@ -542,18 +567,12 @@ export function cascadeAround(preferred?: KeySlot | null): KeySlot[] {
   push(loadFallbackSlot('axe_slot_fallback1'));
   push(loadFallbackSlot('axe_slot_fallback2'));
 
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string; model?: string; baseUrl?: string } | undefined
-    >;
-    for (const [id, c] of Object.entries(conns)) {
-      // A blank key is a provider that was added and never finished, or one
-      // whose key was cleared because it died — either way it cannot answer.
-      if (!c?.key || c.key.length < 4) continue;
-      push({ provider: id as KeySlot['provider'], key: c.key, model: c.model, baseUrl: c.baseUrl });
-    }
-  } catch { /* ignore */ }
+  for (const [id, c] of Object.entries(leesProviderOpslag())) {
+    // A blank key is a provider that was added and never finished, or one
+    // whose key was cleared because it died — either way it cannot answer.
+    if (!c?.key || c.key.length < 4) continue;
+    push({ provider: id as KeySlot['provider'], key: c.key, model: c.model, baseUrl: c.baseUrl });
+  }
 
   // Ollama last but always present: it needs no key, so it is the one provider
   // that cannot be revoked out from under the app.

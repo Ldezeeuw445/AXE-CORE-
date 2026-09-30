@@ -31,7 +31,7 @@
  */
 
 import type { ProviderId } from '@/domain/providers';
-import { resolveOllamaModel, NOOIT_AXE_BREIN } from '@/domain/providers';
+import { resolveOllamaModel, leesProviderOpslag, NOOIT_AXE_BREIN } from '@/domain/providers';
 import { catalogPairs } from '@/domain/modelCatalog';
 
 export interface ChatModelKeuze {
@@ -71,8 +71,8 @@ export interface Verbinding {
  *  Instellingen-panelen elders (Motoren per agent) kunnen tonen of een
  *  provider niet alleen een sleutel heeft maar ook echt antwoordde. */
 export function leesVerbindingen(): Record<string, Verbinding> {
-  try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); }
-  catch { return {}; }
+  // Delegeert: de kale parse staat in providers.ts, zodat er één is.
+  return leesProviderOpslag() as Record<string, Verbinding>;
 }
 
 /** De hele lijst van modellen die AXE's brein mag zijn. */

@@ -16,6 +16,7 @@ import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { standTekst, standKleur, type KaartStand } from '@/domain/providerCardStand';
 import type { ProviderConn } from '@/domain/providerConnections';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
+import { leesProviderOpslag } from '@/domain/providers';
 
 const VERVERS_MS = 60_000;
 
@@ -35,12 +36,9 @@ interface Regel {
 function leesRegels(): Regel[] {
   // Dezelfde opslag die Instellingen schrijft. Eén sleutel, één waarheid --
   // een tweede meting hier zou met die van de kaarten kunnen botsen.
-  let conns: Record<string, ProviderConn> = {};
-  try {
-    conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
-  } catch {
-    // Onleesbare opslag betekent 'niets bekend', niet 'alles stuk'.
-  }
+  // Onleesbare opslag betekent 'niets bekend', niet 'alles stuk' -- dat
+  // vangt leesProviderOpslag af.
+  const conns = leesProviderOpslag() as Record<string, ProviderConn>;
   return PROVIDER_KEY_CATALOGUE.map(p => {
     const conn = conns[p.id] ?? {};
     const ruw = conn.lastTest;

@@ -80,6 +80,7 @@ import {
   getCircuitBreakerState,
   resetCircuitBreaker,
 } from '@/infrastructure/persistence/tradingCircuitBreakerService';
+import { getProviderKeySlot } from '@/infrastructure/config/providerSleutels';
 import type { CircuitBreakerState } from '@/domain/tradingIntel/botTypes';
 import { emergencyFlattenAndStop, type KillSwitchResult } from '@/application/tradingIntel/tradingKillSwitch';
 
@@ -427,14 +428,9 @@ export function useTradingDeskState() {
     const pushSlot = (s: ProviderKeySlot | null | undefined) => {
       if (s?.provider && !allSlots.some(x => x.provider === s.provider)) allSlots.push(s);
     };
-    try {
-      const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
-      for (const [id, c] of Object.entries(conns)) {
-        if (!c?.key || c.key.length < 4) continue;
-        const cfg = PROVIDERS.find(p => p.id === id);
-        pushSlot({ provider: id as ProviderKeySlot['provider'], key: c.key, model: c.model || cfg?.defaultModel, baseUrl: c.baseUrl || cfg?.baseUrl });
-      }
-    } catch { /* ignore */ }
+    // Over PROVIDERS en niet over wat er toevallig in de opslag staat: zo
+    // komen ook de ENV- en proxy-sleutels mee, net als bij de chat.
+    for (const p of PROVIDERS) pushSlot(getProviderKeySlot(p.id));
     pushSlot(defaultOllamaSlot());
 
     let chosen: ProviderKeySlot | null = null;

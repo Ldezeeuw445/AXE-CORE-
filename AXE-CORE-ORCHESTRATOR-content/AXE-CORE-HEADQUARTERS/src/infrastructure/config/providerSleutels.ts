@@ -23,25 +23,13 @@
  * daar staan de bestaande aanroepers op.
  */
 import {
-  PROVIDERS, isKeyOptional, migrateModel,
-  type KeySlot, type ProviderId,
+  PROVIDERS, isKeyOptional, migrateModel, leesProviderOpslag,
+  type KeySlot, type ProviderId, type ProviderVerbinding,
 } from '@/domain/providers';
+export type { ProviderVerbinding };
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
-
-/** Waar Settings de ingetypte sleutels neerzet. */
-export const VERBINDINGEN_SLEUTEL = 'axe_llm_connections';
-
-export interface ProviderVerbinding {
-  key?: string;
-  model?: string;
-  models?: string[];
-  baseUrl?: string;
-  /** Wat de laatste "Test"-knop opleverde. axeBootstrap schrijft dit terug. */
-  lastTest?: string;
-  lastTestAt?: string;
-}
 
 /**
  * Sleutels uit de omgeving (`.env` / de vault), voor providers waar je er geen
@@ -62,14 +50,8 @@ export function envSleutel(providerId: string): string {
   return ENV_KEYS[providerId] ?? '';
 }
 
-/** Alles wat er in `axe_llm_connections` staat. Kapotte opslag telt als leeg. */
-export function leesProviderVerbindingen(): Record<string, ProviderVerbinding | undefined> {
-  try {
-    return JSON.parse(localStorage.getItem(VERBINDINGEN_SLEUTEL) ?? '{}') as Record<string, ProviderVerbinding | undefined>;
-  } catch {
-    return {};
-  }
-}
+/** Alles wat er in de opslag staat. Delegeert naar domain: één parse. */
+export const leesProviderVerbindingen = leesProviderOpslag;
 
 /**
  * Providers die de VPS-AI-proxy met zijn EIGEN sleutel bedient (gecached uit

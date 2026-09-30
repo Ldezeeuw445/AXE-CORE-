@@ -15,15 +15,11 @@ import { callVision } from '@/infrastructure/gateways/visionGateway';
 import { captureToMemoryOnDevice, onDeviceCameraAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { useVoiceStore, type ConversationMessage } from '@/presentation/store/voiceStore';
 import type { KeySlot } from '@/domain/providers';
-import { PROVIDERS, isKeyOptional, migrateModel } from '@/domain/providers';
-import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
+import { getProviderKeySlot } from '@/infrastructure/config/providerSleutels';
 
-const ENV_KEYS: Partial<Record<string, string>> = {
-  google: import.meta.env.VITE_GEMINI_API_KEY ?? '',
-  openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
-  anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
-  openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
-};
+/* Hier stond de derde kopie van de ENV-sleutellijst, en net als die in
+   visionGateway miste hij xai en groq. Alle drie zijn nu één lijst in
+   infrastructure/config/providerSleutels.ts. */
 
 function collectVisionSlots(
   primary: KeySlot | null,
@@ -43,23 +39,12 @@ function collectVisionSlots(
   push(fb2);
   push(fb3);
 
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string; model?: string; baseUrl?: string } | undefined
-    >;
-    for (const id of ['google', 'openai', 'anthropic', 'openrouter'] as const) {
-      if (seen.has(id)) continue;
-      const cfg = PROVIDERS.find((p) => p.id === id);
-      const conn = conns[id];
-      const key = conn?.key || ENV_KEYS[id] || '';
-      if (!key && !isKeyOptional(id)) continue;
-      const baseUrl = normalizeProviderBaseUrl(id, conn?.baseUrl || cfg?.baseUrl);
-      const model = migrateModel(id, conn?.model) || cfg?.defaultModel;
-      push({ provider: id, key, model, baseUrl });
-    }
-  } catch {
-    /* ignore */
+  // Eén oplosser voor alle vier. Hier stond een eigen kopie met een eigen
+  // ENV-lijst die xai en groq miste, en die de providers oversloeg waarvan de
+  // VPS-proxy de sleutel levert.
+  for (const id of ['google', 'openai', 'anthropic', 'openrouter'] as const) {
+    if (seen.has(id)) continue;
+    push(getProviderKeySlot(id));
   }
   return out;
 }

@@ -25,6 +25,7 @@ import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { leesProviderOpslag } from '@/domain/providers';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface EveSkill {
@@ -533,10 +534,7 @@ export default function EveFramework() {
 /* ─── Load providers from storage + LLM config ─────────────────────────── */
 function loadProviders(): EveProvider[] {
   // Load LLM connections
-  let conns: Record<string, { key?: string; baseUrl?: string; model?: string; lastTest?: 'ok' | 'fail' | 'testing' }> = {};
-  try {
-    conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
-  } catch { /* */ }
+  const conns = leesProviderOpslag();
 
   const CATALOGUE = [
     { id: 'anthropic', name: 'Anthropic', model: 'Claude' },
