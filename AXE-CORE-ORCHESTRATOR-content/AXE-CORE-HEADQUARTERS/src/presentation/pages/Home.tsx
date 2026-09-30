@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
@@ -17,7 +17,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp';
 import { BezigVlag } from '@/presentation/components/layout/zweef/BezigVlag';
-import { axeCoreRuntimeStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
@@ -49,22 +49,11 @@ export default function Home() {
      bijhouden of het paneel open is, lopen gegarandeerd uit elkaar. */
   const showAwareness = useCoreViewStore(s => s.showAwareness);
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
-  const [coreOnline, setCoreOnline] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    const refresh = async () => {
-      try {
-        const status = await axeCoreRuntimeStatus();
-        if (live) setCoreOnline(status.online);
-      } catch {
-        if (live) setCoreOnline(false);
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 60_000);
-    return () => { live = false; window.clearInterval(timer); };
-  }, []);
+  // Eén bron voor "draait de backend": installCoreStatus pollt, iedereen leest.
+  // Hier stond een eigen useEffect met een eigen interval van 60 s, net als in
+  // de zijbalk, de telefoon-Home en Settings -- vier klokken die niet gelijk
+  // liepen, dus vier antwoorden.
+  const coreOnline = useCoreOnline();
 
   // Any living-display project → force Core view so SphereStage is visible
   useEffect(() => {

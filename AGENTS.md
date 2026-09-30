@@ -103,10 +103,27 @@ niet in blijven staan.
 ```bash
 cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
 npx tsc --noEmit          # typecheck
-npx vitest run            # 733 tests, allemaal groen
-npx eslint src            # 427 fouten, 28 waarschuwingen — voeg er geen toe
+npx vitest run            # 2203 tests; 19 stonden al rood, voeg er geen bij
+npx eslint src            # 457 fouten, 34 waarschuwingen — voeg er geen toe
 python3 scripts/vps_sync.py check   # box en repo eens
 ```
+
+**Deze getallen zijn een meetlat, geen wens** (gemeten 30 sep 2026). Ze stonden
+lang op 733 en 427 terwijl het er 2203 en 457 waren, en dan is "is het nog
+groen?" niet meer te beantwoorden: je ziet rood en weet niet of jij dat deed.
+
+De negentien rode tests staan al rood op `orchestrator` (stem, OpenAI-realtime,
+een paar wiring-tests). Vergelijk daarom lijsten en geen aantallen:
+
+```bash
+npx vitest run 2>&1 | grep FAIL | sort -u > /tmp/na.txt
+git stash && npx vitest run 2>&1 | grep FAIL | sort -u > /tmp/voor.txt && git stash pop
+diff /tmp/voor.txt /tmp/na.txt     # leeg = jij brak niets
+```
+
+`robustness.test.ts > walk-forward` valt onder volle belasting soms om op de
+5 s-limiet (los duurt hij ~4 s). Dat is timing, geen breuk — draai hem apart
+voor je hem meetelt.
 
 Bouwen en installeren:
 ```bash

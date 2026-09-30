@@ -18,11 +18,11 @@ import { leesModellen, zetModel } from '@/infrastructure/persistence/motorModell
 import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motorModellen';
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import {
-  claudeRepos, plannerStatus, plannerZetAan, axeCoreRuntimeStatus,
+  claudeRepos, plannerStatus, plannerZetAan,
   ledgerList,
   type PlannerStatus, type AgentSubscriptionUsage, type LedgerEntry,
-  type AxeCoreRuntimeStatus,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
 import { isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
@@ -48,7 +48,12 @@ export function AgentMotorenSection() {
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   const [abonnementGebruik, setAbonnementGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
   const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
-  const [coreRuntime, setCoreRuntime] = useState<AxeCoreRuntimeStatus | null>(null);
+  /* De vierde en laatste plek die dit zelf vroeg. `null` betekent hier nog
+     steeds "nog niets gemeten" -- precies wat de eigen lus ook deed -- dus de
+     `== null ? 'Checking'`-regels hieronder blijven kloppen. Verschil: een
+     mislukte ronde zet dit niet meer hard op offline, want dat is geen meting.
+     Zie coreStatusStore.ts. */
+  const coreRuntime = useCoreStatusStore((st) => st.status);
   const verbindingen = useMemo(() => leesVerbindingen(), [toewijzing, overrides]);
   /* Welke motoren een agent in zijn menu krijgt, komt uit zijn `dropdownScope`
      in roster.ts -- niet uit een lijst die hier per sectie is uitgekozen.
@@ -90,17 +95,6 @@ export function AgentMotorenSection() {
   };
   const axeHuidig = primair ? axeKeuzes.find(k => isActief(k, primair)) : undefined;
   useEffect(() => { plannerStatus().then(setPlanner).catch(() => setPlanner(null)); }, []);
-  useEffect(() => {
-    let alive = true;
-    const check = () => {
-      void axeCoreRuntimeStatus()
-        .then((s) => { if (alive) setCoreRuntime(s); })
-        .catch(() => { if (alive) setCoreRuntime({ online: false, provider: null, providers: {}, source: 'axe-core' }); });
-    };
-    check();
-    const timer = window.setInterval(check, 60_000);
-    return () => { alive = false; window.clearInterval(timer); };
-  }, []);
   const zetPlanner = async (aan: boolean) => {
     try { await plannerZetAan(aan); setPlanner(await plannerStatus()); } catch { /* host onbereikbaar */ }
   };

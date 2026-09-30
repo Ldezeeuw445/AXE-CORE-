@@ -5,7 +5,7 @@
  * three Tauri world controls, six real AXE agents around the Core, one chat
  * timeline and the real AXE composer fixed at the bottom.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { BrainCircuit, Mountain, Network, Orbit } from 'lucide-react';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
@@ -20,7 +20,7 @@ import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 import { managerVan, regelVan } from '@/domain/tierRouter/agentVenster';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
-import { axeCoreRuntimeStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 
 const LEFT: readonly AxeAgentId[] = ['trading', 'developer', 'thinktank'];
 // These are actual roster agents — no fake Analyst/Creative/Operator cards.
@@ -124,21 +124,8 @@ function AgentTile({ id }: { id: AxeAgentId }) {
 }
 
 function CoreHome() {
-  const [coreOnline, setCoreOnline] = useState<boolean | null>(null);
-  useEffect(() => {
-    let live = true;
-    const refresh = async () => {
-      try {
-        const status = await axeCoreRuntimeStatus();
-        if (live) setCoreOnline(status.online);
-      } catch {
-        if (live) setCoreOnline(false);
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 60_000);
-    return () => { live = false; window.clearInterval(timer); };
-  }, []);
+  // Zelfde bron als de desktop-Home: installCoreStatus. Zie coreStatusStore.
+  const coreOnline = useCoreOnline();
 
   return (
     <>

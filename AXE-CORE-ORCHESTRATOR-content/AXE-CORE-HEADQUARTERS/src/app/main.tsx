@@ -63,6 +63,7 @@ import { installStableChat } from '@/presentation/store/installStableChat'
 import { installTierRouter } from '@/presentation/store/installTierRouter'
 import { installGesprekSync } from '@/presentation/store/installGesprekSync'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
+import { installCoreStatus } from '@/presentation/store/installCoreStatus'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 import { installContinuousMemory } from '@/infrastructure/persistence/continuousMemoryService'
 import { installMemoryFlushHooks } from '@/infrastructure/persistence/memoryRecorder'
@@ -78,6 +79,10 @@ installStableChat();
 // terug op het pad dat hierboven al staat.
 installTierRouter();
 installGesprekSync();
+// Eén poller op /status/axe-core. Vier schermen vroegen het los van elkaar,
+// elk met een eigen interval -- en dus met antwoorden die tot een minuut uit
+// de pas liepen. Nu vraagt deze het, en leest de rest de store.
+installCoreStatus();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
 // Voice has ONE path on every surface: OpenAI Realtime speech-to-speech.

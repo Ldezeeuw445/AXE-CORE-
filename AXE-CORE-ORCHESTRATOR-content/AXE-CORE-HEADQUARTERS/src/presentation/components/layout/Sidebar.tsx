@@ -26,13 +26,17 @@ import { webProxyStand } from '@/domain/webProxyStand';
 import { useLocation } from 'react-router';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
-import { axeCoreRuntimeStatus, axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
+import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
+import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 import { LadeSlot } from '@/presentation/components/layout/LadeSlot';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
   const [supaOk, setSupaOk] = useState<boolean | null>(null);
-  const [coreOnline, setCoreOnline] = useState<boolean | null>(null);
+  // De backendstand komt uit de gedeelde store (installCoreStatus), niet uit
+  // de ping hieronder: die vroeg hetzelfde als Home, op een eigen klok, en dan
+  // kan dit paneel "Offline" zeggen terwijl Home al "Online" staat.
+  const coreOnline = useCoreOnline();
   const [stem, setStem] = useState<StemStand | null>(null);
   const voice = useVoiceStore();
 
@@ -47,11 +51,6 @@ function AICoreSystemLeft() {
           if (live) setSupaOk(!error);
         }
       } catch { if (live) setSupaOk(false); }
-
-      try {
-        const core = await axeCoreRuntimeStatus();
-        if (live) setCoreOnline(core.online);
-      } catch { if (live) setCoreOnline(false); }
 
       try {
         const vh = await axeVoiceHealth();
