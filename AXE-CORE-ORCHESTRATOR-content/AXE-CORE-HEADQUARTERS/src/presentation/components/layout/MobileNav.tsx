@@ -44,6 +44,7 @@ export function MobileNav() {
   const location = useLocation();
   const items = getAllNavItems();
   const fileRef = useRef<HTMLInputElement>(null);
+  const opPlaat = !['/lock', '/maps-3d', '/browser'].includes(location.pathname);
 
   const onPickWallpaper = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -84,10 +85,10 @@ export function MobileNav() {
             // Op de glasplaat-home netjes binnen de rand, precies zoals de
             // licht/donker-knop rechtsboven (AppShell): zelfde hoogte, zelfde
             // marge. Buiten de home in de schermhoek.
-            top: (location.pathname === '/' || location.pathname === '/mobile')
+            top: opPlaat
               ? 'calc(env(safe-area-inset-top, 0px) + 12px)'
               : 'calc(env(safe-area-inset-top, 0px) + 10px)',
-            left: (location.pathname === '/' || location.pathname === '/mobile') ? 18 : 12,
+            left: opPlaat ? 18 : 12,
             background: 'linear-gradient(180deg, rgba(20,20,24,.99), rgba(8,8,10,.995))',
             border: '1px solid rgba(255,255,255,.09)',
             color: '#EEF3FA',
