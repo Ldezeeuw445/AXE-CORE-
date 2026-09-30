@@ -465,10 +465,13 @@ export function RightPanel() {
           {isCompact ? <X size={16} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
         </button>
       </div>
-      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
+      <div className="axe-mobile-drawer-body flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
+        {/* Phone TabRail host: same right-side detail rail as Tauri. */}
+        {isCompact && <div id="axe-rail-rechts" className="axe-rail-host" />}
         {/* Telefoon: de rechter widgets van de tab die open staat (Neural,
             Terrain), bovenaan deze lade -- zie ladeSloten.ts. */}
         {isMobile && <LadeSlot naam="rechts" />}
+        <div className="axe-mobile-drawer-standard space-y-3">
         <RailKamerKiezer kamer={kamer} opKamer={setKamer} />
 
         {kamer === 'status' && (
@@ -511,6 +514,7 @@ export function RightPanel() {
         )}
 
         {kamer === 'algo' && <AxeAlgoWidget />}
+        </div>
       </div>
     </div>
   );
