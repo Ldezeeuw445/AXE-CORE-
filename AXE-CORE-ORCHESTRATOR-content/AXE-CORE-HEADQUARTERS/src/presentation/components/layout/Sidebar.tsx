@@ -338,10 +338,14 @@ export function Sidebar() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 pt-2 space-y-2">
+      <div className="axe-mobile-drawer-body flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 pt-2 space-y-2">
+        {/* Phone TabRail host: the exact same per-tab rail content as Tauri,
+            only presented inside the operational Sheet. */}
+        {isCompact && <div id="axe-rail-links" className="axe-rail-host" />}
         {/* Telefoon: de linker widgets van de tab die open staat (Neural,
             Terrain), bovenaan deze lade -- zie ladeSloten.ts. */}
         {isMobile && <LadeSlot naam="links" />}
+        <div className="axe-mobile-drawer-standard space-y-2">
         <WidgetCard title="THINKTHANKS" icon={<Lightbulb size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <ThinkThanksWidget />
         </WidgetCard>
@@ -379,6 +383,7 @@ export function Sidebar() {
             <KimiToolsPanel />
           </div>
         </WidgetCard>
+        </div>
       </div>
     </div>
   );
