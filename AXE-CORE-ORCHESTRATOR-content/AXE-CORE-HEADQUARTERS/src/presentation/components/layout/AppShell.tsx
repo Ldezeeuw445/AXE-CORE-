@@ -1,5 +1,5 @@
-import { useEffect, Suspense } from 'react';
-import { Triangle } from 'lucide-react';
+import { useEffect, useState, Suspense } from 'react';
+import { ChevronDown, ChevronUp, Triangle } from 'lucide-react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { MobileGlass, LookToggle } from '@/presentation/components/layout/MobileGlass';
@@ -21,6 +21,7 @@ import { isIngebed, schilZonderChroom } from '@/presentation/components/layout/z
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
 import { MobileFab } from '@/presentation/components/layout/MobileFab';
+import { MobileComposer } from '@/presentation/components/layout/MobileComposer';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { describeFailure } from '@/domain/globalFailure';
@@ -201,6 +202,16 @@ export function AppShell() {
   const telefoonHome = opPlaatMobiel && location.pathname === '/mobile';
   const mobielWereld = telefoonHome && coreView !== 'axe';
 
+  // One phone composer belongs to the shell, just like Tauri. Mobile Home
+  // already renders that same component inside MobileSystem, so every other
+  // glass-plate tab gets it here exactly once.
+  const toonMobieleTabComposer = opPlaatMobiel
+    && location.pathname !== '/mobile'
+    && location.pathname !== '/'
+    && location.pathname !== '/lock';
+  const [mobieleComposerWeg, setMobieleComposerWeg] = useState(false);
+  useEffect(() => { setMobieleComposerWeg(false); }, [location.pathname]);
+
   // Fixed to the dynamic viewport height (not min-h) so the shell never grows
   // past the visible area and pushes the BottomNav below the fold — the reason
   // the nav "fell away" in the installed PWA. Pages scroll inside the flex-1
@@ -377,6 +388,41 @@ export function AppShell() {
             opened by the right edge swipe/chevron; desktop keeps its rail. */}
         {(!mobileCommandSurface || location.pathname !== '/lock') && <RightPanel />}
       </div>
+
+      {/* Mobile tabs use the exact same AXE composer as Mobile Home. Outside
+          Home it may slide completely out to make room; only a tiny restore
+          handle remains. Sending stays on the current tab, like Tauri. */}
+      {toonMobieleTabComposer && (
+        <div className="axe-mobile-tab-composer relative z-[55] mt-auto w-full flex-none">
+          {mobieleComposerWeg ? (
+            <div className="flex justify-center pb-0.5">
+              <button
+                type="button"
+                onClick={() => setMobieleComposerWeg(false)}
+                aria-label="Composer tonen"
+                title="Composer tonen"
+                className="axe-mobile-composer-handle flex h-7 items-center gap-1 rounded-full px-3 text-[10px] font-medium"
+              >
+                <ChevronUp size={13} />
+                AXE
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMobieleComposerWeg(true)}
+                aria-label="Composer verbergen"
+                title="Composer verbergen"
+                className="axe-mobile-composer-collapse absolute right-1 top-1 z-[4] flex size-7 items-center justify-center rounded-full"
+              >
+                <ChevronDown size={14} />
+              </button>
+              <MobileComposer navigateAfterSend={false} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* De chat met AXE: de plaat en de composer, op ELKE pagina.
           Dit stond in Home en bestond dus alleen daar; op elke andere tab viel
