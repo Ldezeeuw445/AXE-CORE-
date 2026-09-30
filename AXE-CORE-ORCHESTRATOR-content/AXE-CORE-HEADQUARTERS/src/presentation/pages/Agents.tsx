@@ -11,13 +11,17 @@ import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { agentLoopHealth } from '@/infrastructure/persistence/agentFeedbackService';
 import { loopAgentVoor } from '@/infrastructure/persistence/memoryFeedbackService';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
-import { WarRoom } from '@/presentation/components/axe-core/WarRoom';
 import { agentsByKind } from '@/domain/agents/catalog';
-import { agentPulses, type AgentFilter } from '@/domain/agents/activity';
+import { agentPulses, schedulePlans, queuesByAgent, type AgentFilter } from '@/domain/agents/activity';
 import { ActivityPlansPanel, LiveIndicator } from '@/presentation/components/agents/ActivityPlansPanel';
 import { AgentMemoryPanel } from '@/presentation/components/agents/AgentMemoryPanel';
 import { useAgentActivity, useNow } from '@/presentation/components/agents/useAgentActivity';
-import { AXE_AGENTS } from '@/domain/agents/roster';
+import { TierRooster } from '@/presentation/components/agents/TierRooster';
+import { AgentDetail, CrewDetail } from '@/presentation/components/agents/AgentDetail';
+import {
+  WEERGAVEN, aantalWerkend, type AgentsWeergave, type LadeTab,
+} from '@/domain/agents/agentsTab';
+import { AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 
@@ -171,6 +175,127 @@ export default function Agents() {
   const [filter, setFilter] = useState<AgentFilter>('all');
   const [memoryId, setMemoryId] = useState<string>('axe');
   const pulses = useMemo(() => agentPulses(activity.items, now), [activity.items, now]);
+
+  /* De vier weergaven. Ze stonden hiervoor alle vier onder elkaar op één
+     pagina: War Room, Activity & plans, Memory, en dan nog de volle roster met
+     instellingen. Dat is vier schermen scrollen voor je bij de instellingen
+     bent, en op de telefoon tien. Nu kies je er één, en staan er steeds
+     dezelfde agents onder. */
+  const [weergave, setWeergave] = useState<AgentsWeergave>('roster');
+  const [gekozenAgent, setGekozenAgent] = useState<AxeAgentId | null>(null);
+  const [gekozenCrew, setGekozenCrew] = useState<string | null>(null);
+  const [ladeTab, setLadeTab] = useState<LadeTab>('nu');
+
+  /* Is er een ECHTE rechterrail om het detail in te hangen?
+   *
+   * Drie schermen, drie antwoorden, en ze volgen niet uit de breedte:
+   * - Tauri (>1600): RightPanel rendert een <aside> met `#axe-rail-rechts`.
+   * - iPad (768-1600, coarse): RightPanel neemt de Sheet-tak en die host geen
+   *   railinhoud -- `#axe-rail-rechts` bestaat daar niet. Gemeten op 1024 en
+   *   768: de lade kwam wel binnen maar stond op 0x0.
+   * - Telefoon: geen rail, maar de plaatsloten schuiven wél in de zijlade.
+   *
+   * Dus: rail als er een rail is, en anders het detail gewoon IN de pagina,
+   * boven de kolommen. Dat is ook wat de voorbeeld-HTML onder 900px deed.
+   * Een DOM-test en geen breedtetest, want de breedte voorspelt het niet. */
+  const [heeftRail, setHeeftRail] = useState(
+    () => typeof document !== 'undefined' && !!document.getElementById('axe-rail-rechts'),
+  );
+  useEffect(() => {
+    const kijk = () => setHeeftRail(!!document.getElementById('axe-rail-rechts'));
+    const raf = requestAnimationFrame(kijk);
+    const obs = new MutationObserver(kijk);
+    obs.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', kijk);
+    return () => {
+      cancelAnimationFrame(raf);
+      obs.disconnect();
+      window.removeEventListener('resize', kijk);
+    };
+  }, []);
+
+  /* Hoeveel de rechterlade over deze weergave heen valt, in pixels. undefined
+     zolang er niets open staat, en alleen van toepassing als er een echte
+     rail is: staat het detail inline in de pagina, dan valt er niets te
+     ontwijken en zou dit alleen een lege strook naast de kaarten opleveren. */
+  const ruimteRef = useRef<HTMLDivElement | null>(null);
+  const [ladeOverlap, setLadeOverlap] = useState<number | undefined>(undefined);
+  const ladeOpen = !!gekozenAgent || !!gekozenCrew;
+  useEffect(() => {
+    // Geen setState hier in de body: of de reservering meetelt, beslist de
+    // render hieronder. Zo blijft dit effect puur "meten en melden".
+    if (!ladeOpen || !heeftRail) return;
+    const meet = () => {
+      const vak = ruimteRef.current;
+      const paneel = document.getElementById('axe-rail-rechts')?.getBoundingClientRect();
+      if (!vak || !paneel || paneel.width === 0) return;
+      // De huidige padding er weer bij optellen: de rechterrand die we meten is
+      // al naar binnen geschoven door de vorige meting, dus zonder dit zakt de
+      // waarde elke ronde verder terug naar nul.
+      const nu = parseFloat(getComputedStyle(vak).paddingRight) || 0;
+      const buitenrand = vak.getBoundingClientRect().right + nu;
+      setLadeOverlap(Math.max(0, Math.round(buitenrand - paneel.left)));
+    };
+    // Eén frame later én na de schuifanimatie: de lade staat er niet meteen.
+    const raf = requestAnimationFrame(meet);
+    const t = window.setTimeout(meet, 280);
+    window.addEventListener('resize', meet);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+      window.removeEventListener('resize', meet);
+    };
+  }, [ladeOpen, heeftRail]);
+
+  // Schedules en wachtrij: dezelfde afleiding die ActivityPlansPanel doet, maar
+  // de kaarten en de lade hebben ze ook nodig, dus hier één keer.
+  const plans = useMemo(() => schedulePlans(activity.snapshot?.schedules ?? [], now), [activity.snapshot, now]);
+  const queues = useMemo(() => queuesByAgent(activity.snapshot?.openTasks ?? []), [activity.snapshot]);
+  const episodesPerAgent = useMemo(() => {
+    const uit: Partial<Record<AxeAgentId, number>> = {};
+    for (const [naam, h] of Object.entries(loopHealthByAgent)) {
+      const agent = AXE_AGENTS.find(a => a.id === naam || a.name.toLowerCase() === naam.toLowerCase());
+      if (agent && h.opened > 0) uit[agent.id] = h.opened;
+    }
+    return uit;
+  }, [loopHealthByAgent]);
+
+  const kiesAgent = (id: AxeAgentId) => {
+    setGekozenCrew(null);
+    setGekozenAgent(prev => (prev === id ? null : id));
+    setLadeTab('nu');
+  };
+  const kiesCrew = (id: string) => {
+    setGekozenAgent(null);
+    setGekozenCrew(prev => (prev === id ? null : id));
+  };
+  const sluitLade = () => { setGekozenAgent(null); setGekozenCrew(null); };
+  const gekozenAgentObj = gekozenAgent ? AXE_AGENTS.find(a => a.id === gekozenAgent) ?? null : null;
+  const gekozenCrewObj = gekozenCrew ? agentsByKind('crew').find(c => c.id === gekozenCrew) ?? null : null;
+
+  const detail = gekozenAgentObj ? (
+    <AgentDetail
+      agent={gekozenAgentObj}
+      pulse={pulses[gekozenAgentObj.id]}
+      items={activity.items}
+      plans={plans}
+      queues={queues}
+      counts={activity.counts}
+      loopHealth={loopHealthByAgent}
+      now={now}
+      tab={ladeTab}
+      onTab={setLadeTab}
+      sluit={sluitLade}
+    />
+  ) : gekozenCrewObj ? (
+    <CrewDetail
+      naam={gekozenCrewObj.name}
+      rol={gekozenCrewObj.description}
+      namespace={gekozenCrewObj.namespace}
+      sluit={sluitLade}
+    />
+  ) : null;
+
   const chooseFilter = (f: AgentFilter) => {
     setFilter(f);
     // Wie je op de tijdlijn volgt, wil je ook in het geheugen zien.
@@ -235,7 +360,6 @@ export default function Agents() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, loading, agents]);
 
-  const active = agents.filter((a) => a.status === 'active').length;
 
   const startEdit = (a: CoreAgent) => {
     setEditingId(a.id);
@@ -297,8 +421,10 @@ export default function Agents() {
     a.tags?.find(t => t.startsWith('tab:'))?.replace('tab:', '') ||
     (a.role === 'orchestrator' ? 'home' : a.role);
 
-  const naar = (id: string) =>
-    document.getElementById(`axe-agents-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  /* "Follow agent" zet de tijdlijn op die agent EN zet de weergave op
+     Activity. Hiervoor scrolde dit naar een anker verderop de pagina; die
+     ankers zijn weg nu je één weergave tegelijk ziet. */
+  const volg = (f: AgentFilter) => { chooseFilter(f); setWeergave('activity'); };
 
   return (
     <>
@@ -306,24 +432,24 @@ export default function Agents() {
       <SchuifBalk
         groepen={[
           {
-            titel: 'Sections',
-            items: [
-              { id: 'warroom', label: 'War Room', onKies: () => naar('warroom') },
-              { id: 'activity', label: 'Activity & plans', onKies: () => naar('activity') },
-              { id: 'memory', label: 'Memory', onKies: () => naar('memory') },
-              { id: 'roster', label: 'Full roster & settings', onKies: () => naar('roster') },
-            ],
+            titel: 'View',
+            items: WEERGAVEN.map((w) => ({
+              id: w.id,
+              label: w.label,
+              actief: weergave === w.id,
+              onKies: () => setWeergave(w.id),
+            })),
           },
           {
             titel: 'Follow agent',
             items: [
-              { id: 'all', label: 'All agents', actief: filter === 'all', onKies: () => { chooseFilter('all'); naar('activity'); } },
+              { id: 'all', label: 'All agents', actief: filter === 'all', onKies: () => volg('all') },
               ...AXE_AGENTS.map((a) => ({
                 id: a.id,
                 label: a.name,
                 icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: pulses[a.id]?.working ? a.accent : 'var(--text-muted)' }} />,
                 actief: filter === a.id,
-                onKies: () => { chooseFilter(a.id); naar('activity'); },
+                onKies: () => volg(a.id),
               })),
             ],
           },
@@ -344,13 +470,21 @@ export default function Agents() {
     >
       <PageHeader
         eyebrow="Workforce"
-        title="War Room"
-        description={loading ? 'Loading agents…' : 'The six agents AXE runs — see who is doing what. The full roster and settings are below.'}
+        title="Agents"
+        description={loading
+          ? 'Loading agents…'
+          : 'AXE and the thirteen he delegates to, in the three tiers. Pick a view; click an agent for only his.'}
       />
-      <div className="flex flex-wrap gap-2 mt-3 mb-5">
-        <StatPill label="Active" value={String(active)} tone="success" />
-        <StatPill label="Total" value={String(agents.length)} tone="neutral" />
+      <div className="flex flex-wrap items-center gap-2 mt-3 mb-4">
+        <StatPill label="Working" value={String(aantalWerkend(pulses))} tone="success" />
+        <StatPill label="Agents" value={String(AXE_AGENTS.length)} tone="neutral" />
         <StatPill label="Source" value={usingFallback ? 'defaults (no db)' : 'core_agents'} tone="neutral" />
+        <LiveIndicator
+          lastOkAt={activity.lastOkAt}
+          errors={activity.snapshot?.errors ?? []}
+          loading={activity.loading}
+          now={now}
+        />
         <button
           type="button"
           onClick={addCustomAgent}
@@ -361,9 +495,56 @@ export default function Agents() {
         </button>
       </div>
 
-      <div id="axe-agents-warroom"><WarRoom pulses={pulses} now={now} /></div>
+      {/* Dezelfde tegels als de balk boven de plaat (PlaatViewSwitch): dat is de
+          vorm die deze app al heeft voor "kies er één uit een rij". */}
+      <div className="axe-viewctl axe-viewctl--inline mb-4" role="tablist" aria-label="Agents view">
+        {WEERGAVEN.map((w) => (
+          <button
+            key={w.id}
+            role="tab"
+            aria-selected={weergave === w.id}
+            className="axe-viewknop"
+            data-aan={weergave === w.id ? 'ja' : undefined}
+            onClick={() => setWeergave(w.id)}
+          >
+            <span>{w.label}</span>
+          </button>
+        ))}
+      </div>
 
-      <div id="axe-agents-activity" />
+      {/* Ruimte maken voor de lade in plaats van eronder doorlopen.
+          Gemeten op 1512px: de lade staat op 1153..1451 terwijl de tabruimte
+          tot 1225 loopt -- 112px overlap, precies over de tier-3-kolom.
+
+          Gemeten en niet geraden, want beide randen bewegen: het paneel hangt
+          aan de vensterrand, de tabruimte is gecentreerd met een maximum. Een
+          vaste 340px reserveren kostte de derde kolom (er bleef 598px over,
+          genoeg voor twee) terwijl er maar 112 nodig was. En drie tiers naast
+          elkaar is het hele punt van deze indeling. */}
+      <div
+        ref={ruimteRef}
+        style={{
+          transition: 'padding-right .2s ease',
+          paddingRight: ladeOpen && heeftRail ? ladeOverlap : undefined,
+        }}
+      >
+      {!heeftRail && detail && <div className="mb-4">{detail}</div>}
+      {weergave === 'roster' && (
+        <TierRooster
+          pulses={pulses}
+          plans={plans}
+          queues={queues}
+          counts={activity.counts}
+          episodes={episodesPerAgent}
+          now={now}
+          gekozen={gekozenAgent}
+          gekozenCrew={gekozenCrew}
+          onKies={kiesAgent}
+          onKiesCrew={kiesCrew}
+        />
+      )}
+
+      {weergave === 'activity' && (
       <ActivityPlansPanel
         snapshot={activity.snapshot}
         items={activity.items}
@@ -380,19 +561,26 @@ export default function Agents() {
           />
         }
       />
+      )}
 
-      <div id="axe-agents-memory" />
-      <AgentMemoryPanel
-        selectedId={memoryId}
-        onSelect={setMemoryId}
-        counts={activity.counts}
-        loopHealth={loopHealthByAgent}
-        stamp={activity.stamp}
-        now={now}
-      />
+      {weergave === 'memory' && (
+        <AgentMemoryPanel
+          selectedId={memoryId}
+          onSelect={setMemoryId}
+          counts={activity.counts}
+          loopHealth={loopHealthByAgent}
+          stamp={activity.stamp}
+          now={now}
+        />
+      )}
 
-      <h2 id="axe-agents-roster" className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
+      {weergave === 'settings' && (
+      <>
+      <h2 className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
         FULL ROSTER &amp; SETTINGS
+        <span className="ml-2 font-mono text-[10.5px] font-normal tracking-normal" style={{ color: 'var(--text-muted)' }}>
+          {agents.length} rows{usingFallback ? ' · defaults' : ' · core_agents'}
+        </span>
       </h2>
 
       <div className={LIST_GRID}>
@@ -516,28 +704,23 @@ export default function Agents() {
         })}
       </div>
 
-      {/* The Wingman's CrewAI specialists — the free-model crews AXE delegates
-          to. Shown here so every agent in the force is visible in one place,
-          each with the memory namespace it learns in. */}
-      <h2 className="text-small font-semibold tracking-wide mt-6 mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
-        CREW — THE WINGMAN&apos;S SPECIALISTS
-      </h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-        {agentsByKind('crew').map((a) => (
-          <div key={a.id} className="rounded-xl p-3" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: '#38BDF8' }} />
-              <span className="text-small font-medium truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</span>
-            </div>
-            <p className="text-xs-custom" style={{ color: 'var(--text-muted)', lineHeight: 1.35 }}>{a.description}</p>
-            <div className="mt-2 pt-2 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-              <span className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>memory · {a.namespace}</span>
-              <span className="text-xs-custom flex-shrink-0" style={{ color: 'var(--text-muted)' }}>via Wingman</span>
-            </div>
-          </div>
-        ))}
+      {/* De crew stond hier als tweede raster onder de roster. Hij staat nu in
+          de Roster-weergave, onder de drie kolommen, waar ook meteen te zien is
+          dat hij onder Wingman hangt en geen vierde tier is. Klikken opent zijn
+          persona in dezelfde lade als de andere agents. */}
+      </>
+      )}
       </div>
     </motion.div>
+
+    {/* Eén agent, in de rechterlade -- UI-MAATSTAF regel 5. `vast` houdt hem
+        open zolang er een keuze staat; zonder dat zou de lade dichtvallen
+        zodra je muis van de rand af is en lijkt klikken niets te doen. Op de
+        telefoon adopteert ladeSloten dezelfde inhoud in de rechterlade van de
+        plaat, dus dit werkt op alle drie de schermen zonder tweede versie. */}
+    {heeftRail && (
+      <TabRail kant="rechts" vast={!!detail}>{detail}</TabRail>
+    )}
     </>
   );
 }

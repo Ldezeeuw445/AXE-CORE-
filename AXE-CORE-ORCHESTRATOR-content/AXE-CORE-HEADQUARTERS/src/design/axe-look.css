@@ -5747,6 +5747,29 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 :root[data-look] .axe-viewknop[data-aan='ja']:hover { transform: none; }
 
+/* Dezelfde tegelrij, maar IN de pagina in plaats van op de plaat. De
+   Agents-tab kiest er zijn weergave mee (Roster / Activity & plans / Memory /
+   Settings), en de agentlade zijn onderdeel.
+
+   Twee dingen die allebei nodig zijn, en allebei gemeten:
+   - `position: static` -- zonder dit erft hij de `position: fixed` van de
+     schilbalk en landt hij bovenop de Core-schakelaar (op 1512px: allebei
+     top 12, bottom 54, en de schil ving elke klik).
+   - dit blok staat ACHTER het materiaalblok hierboven en niet ervoor, want
+     dat zet `display: flex` met dezelfde specificiteit -- stond de modifier
+     eerder, dan won `flex` en rekte de pil over de volle breedte uit.
+
+   De knoppen zelf (.axe-viewknop) dragen geen plaatsing, dus die blijven
+   onveranderd: het is dezelfde vorm, alleen op een andere plek. */
+:root[data-look] .axe-viewctl--inline {
+  position: static;
+  transform: none;
+  z-index: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
  * Hieronder: de zwarte stand uit demo/toekomst (PR #148).
  *
