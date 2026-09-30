@@ -33,7 +33,8 @@ import { TOOL_RUNTIMES } from '@/application/tools/toolRegistry';
 import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
 import { markBeurt } from '@/domain/beurtKlok';
-import { pushBeurtLatentie } from '@/presentation/store/installTierRouter';
+import { pushBeurtLatentie, voerJobsUit } from '@/presentation/store/installTierRouter';
+import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
 import {
   applyPendingCodeEdit,
   loadPendingEdit,
@@ -44,17 +45,10 @@ import {
 } from '@/application/sphere/presentOnSphere';
 import { toast } from 'sonner';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
-import {
-  createDurableTask,
-  getDurableTask,
-  type DurableTaskSnapshot,
-} from '@/infrastructure/gateways/axeCoreApiService';
 import { collectAllSlots } from '@/presentation/store/chatSlots';
 import { slotsVoorAgent } from '@/domain/agents/motorScope';
 
 let installed = false;
-const ACTIVE_TASKS_KEY = 'axe_active_durable_tasks';
-const taskMonitors = new Set<string>();
 
 function speakAxe(text: string, onDone?: () => void): void {
   try {
@@ -286,118 +280,28 @@ async function stableNativeToolSend(text: string): Promise<boolean> {
   }
 }
 
+/**
+ * Dit is werk, geen gesprek: door de tier-router als gewone achtergrondjob.
+ *
+ * Hier stond een tweede uitvoering van precies dat: een eigen
+ * `createDurableTask`, een eigen `axe_active_durable_tasks` in localStorage,
+ * een eigen poller van 4 s zonder limiet of backoff, en een eigen
+ * aankondiging. Gevolg: een taak die hier begon verscheen niet in de
+ * agents-balk, niet in de chips op de telefoon, niet in de vensters rond de
+ * bol, en er was niets tegen te zeggen -- "stop die" kende hem niet.
+ *
+ * `voerJobsUit` doet alles wat dit deed, plus het register, de besturing, en
+ * een monitor die wél een einde kent.
+ */
 async function stableAgenticSend(text: string): Promise<boolean> {
-  const slot = pickPrimarySlot();
-  if (!slot) return false;
-
-  useVoiceStore.setState({ voiceStatus: 'processing', activeProvider: slot.provider });
-
   try {
-    const idempotencyKey = `chat-${Date.now()}-${crypto.randomUUID()}`;
-    const { task } = await createDurableTask({
-      title: text.slice(0, 120),
-      goal: text,
-      requested_by: 'luka',
-      capability: 'agentic',
-      execution_mode: 'execute',
-      idempotency_key: idempotencyKey,
-      payload: { request: text, reply_language: replyLanguageInstruction() },
-      metadata: { conversation_source: 'home_chat' },
-    });
-    rememberActiveTask(task.id);
-    // Visible, because this branch is the one that actually answers and it
-    // was invisible until now: three chat implementations exist (voiceStore,
-    // this patch) and nothing said which one replied. A third,
-    // installSecureChatBoost, was removed on 31-08-2026: it duplicated the
-    // intent classification a few lines below and wrote two sessionStorage
-    // keys nothing ever read.
-    console.info(
-      `%c[AXE] route%c durable task · capability=agentic · id=${task.id.slice(0, 8)}`,
-      'color:#F59E0B;font-weight:600', 'color:inherit',
-    );
-    const answer = `I started this as a durable task. I keep going under the hood, even if the app closes. Task: ${task.id.slice(0, 8)}.`;
-    publishAxeReply(answer, slot, true, null, text);
-    void monitorDurableTask(task.id, slot, text);
-
-    pushRoute({
-      id: `re_${Date.now()}`,
-      ts: Date.now(),
-      query: text.slice(0, 60),
-      capability: 'code',
-      specialist: 'axe_core',
-      slotOrder: [slot.provider],
-      attempts: [{ provider: slot.provider, model: slot.model, outcome: 'ok' }],
-      winner: slot.provider,
-      winnerModel: slot.model,
-      via: 'fallback',
-    } as RoutingEvent);
-
-    return true;
-  } catch (e: unknown) {
-    console.warn('[AXE agentic] failed, falling back:', e);
+    return voerJobsUit(text, [{ text, route: classifyAxeTier(text) }]);
+  } catch (e) {
+    console.warn('[AXE agentic] kon geen job starten, val terug:', e);
     return false;
   }
 }
 
-function activeTaskIds(): string[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(ACTIVE_TASKS_KEY) ?? '[]');
-    return Array.isArray(value) ? value.filter(id => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function rememberActiveTask(taskId: string): void {
-  try {
-    localStorage.setItem(ACTIVE_TASKS_KEY, JSON.stringify([...new Set([...activeTaskIds(), taskId])]));
-  } catch { /* ignore */ }
-}
-
-function forgetActiveTask(taskId: string): void {
-  try {
-    localStorage.setItem(ACTIVE_TASKS_KEY, JSON.stringify(activeTaskIds().filter(id => id !== taskId)));
-  } catch { /* ignore */ }
-}
-
-function taskResultText(snapshot: DurableTaskSnapshot): string {
-  const summary = snapshot.task.result?.summary;
-  if (typeof summary === 'string' && summary.trim()) return summary.trim();
-  const lastMessage = [...snapshot.events].reverse().find(event => event.message)?.message;
-  return lastMessage || 'De taak is afgerond en geverifieerd.';
-}
-
-async function monitorDurableTask(taskId: string, slot: KeySlot, originalText = ''): Promise<void> {
-  if (taskMonitors.has(taskId)) return;
-  taskMonitors.add(taskId);
-  try {
-    while (true) {
-      const snapshot = await getDurableTask(taskId);
-      const { status } = snapshot.task;
-      if (status === 'completed' || status === 'done') {
-        const answer = taskResultText(snapshot);
-        publishAxeReply(answer, slot, true, null, originalText);
-        recordChatTurn(originalText || `durable task ${taskId}`, answer, slot.provider, 'agentic_durable');
-        forgetActiveTask(taskId);
-        return;
-      }
-      if (['failed', 'cancelled', 'rejected'].includes(status)) {
-        const message = typeof snapshot.task.error?.message === 'string'
-          ? snapshot.task.error.message
-          : `The task stopped with status ${status}.`;
-        publishAxeReply(`That did not work: ${message}`, slot, false, message, originalText);
-        forgetActiveTask(taskId);
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 4_000));
-    }
-  } catch (error) {
-    console.warn('[AXE durable task monitor]', error);
-    // Keep the task id: installStableChat resumes it after the next app start.
-  } finally {
-    taskMonitors.delete(taskId);
-  }
-}
 
 async function stableSimpleSend(text: string): Promise<boolean> {
   const cap = classifyQuery(text);
@@ -584,10 +488,8 @@ export function installStableChat(): void {
   installed = true;
 
   const original = useVoiceStore.getState().sendMessage;
-  const resumeSlot = pickPrimarySlot();
-  if (resumeSlot) {
-    for (const taskId of activeTaskIds()) void monitorDurableTask(taskId, resumeSlot);
-  }
+  // Het hervatten van lopende taken staat in installTierRouter
+  // (hervatJobMonitors): één register, één plek die het weer oppakt.
 
   useVoiceStore.setState({
     sendMessage: async (text: string) => {

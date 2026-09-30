@@ -90,6 +90,25 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(bron('presentation/components/layout/MobileChat.tsx')).toMatch(/laatsteStap\(/);
   });
 
+  /* Het tweede register. installStableChat startte zijn eigen durable tasks
+     met een eigen localStorage-sleutel en een eigen poller: wat daar begon
+     stond niet in de balk, niet op de telefoon, en was nergens mee te
+     besturen. Eén deur (`voerJobsUit`), één register (`useAxeJobStore`). */
+  it('stable chat start geen eigen durable tasks meer', () => {
+    const tekst = bron('presentation/store/installStableChat.ts');
+    expect(tekst).toMatch(/voerJobsUit\s*\(/);
+    expect(tekst).not.toMatch(/createDurableTask\s*\(/);
+    expect(tekst).not.toMatch(/monitorDurableTask/);
+    // De sleutel mag alleen nog voorkomen als uitleg, niet als opslag.
+    expect(tekst).not.toMatch(/localStorage\.(get|set)Item\(\s*ACTIVE_TASKS_KEY/);
+  });
+
+  it('het oude register wordt bij het opstarten overgenomen en opgeruimd', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/neemOudRegisterOver\(\)/);
+    expect(tekst).toMatch(/removeItem\(SLEUTEL\)/);
+  });
+
   it('onderschept sendMessage en valt terug op het oude pad', () => {
     const tekst = bron('presentation/store/installTierRouter.ts');
     expect(tekst).toMatch(/kiesAxeRoute\s*\(/);

@@ -754,6 +754,48 @@ function hervatJobMonitors(): void {
   // Wel een taskId: gewoon weer volgen. Was hij ondertussen klaar, dan komt
   // het resultaat bij de eerste poll alsnog binnen -- in de chat, niet hardop.
   for (const job of hervatbareJobs(jobs)) void monitorTier3(job, true);
+
+  neemOudRegisterOver();
+}
+
+/**
+ * Het tweede register leeghalen, één keer.
+ *
+ * `installStableChat` hield zijn eigen lopende taken bij in
+ * `axe_active_durable_tasks`, met een eigen poller. Dat is nu weg, maar wie de
+ * app bijwerkt terwijl daar nog een taak in staat zou die zien verdwijnen --
+ * hij draait door op de VPS en niemand kijkt meer. Dus adopteren we ze als
+ * gewone jobs en gooien de sleutel weg.
+ *
+ * Titel en agent kennen we niet meer; `monitorTier3` haalt de stappen en het
+ * resultaat alsnog op, en dat is wat telt.
+ */
+function neemOudRegisterOver(): void {
+  const SLEUTEL = 'axe_active_durable_tasks';
+  let ids: string[];
+  try {
+    const ruw = localStorage.getItem(SLEUTEL);
+    if (!ruw) return;
+    const waarde: unknown = JSON.parse(ruw);
+    ids = Array.isArray(waarde) ? waarde.filter((v): v is string => typeof v === 'string') : [];
+    localStorage.removeItem(SLEUTEL);
+  } catch { return; }
+
+  const bekend = new Set(useAxeJobStore.getState().jobs.map((j) => j.taskId).filter(Boolean));
+  const overgenomen: AxeJob[] = ids
+    .filter((taskId) => !bekend.has(taskId))
+    .map((taskId) => ({
+      id: `job-oud-${taskId.slice(0, 8)}`,
+      title: `Task ${taskId.slice(0, 8)}`,
+      agent: 'axe' as AxeAgentId,
+      state: 'running' as const,
+      startedAt: Date.now(),
+      taskId,
+      sourceText: '',
+    }));
+  if (!overgenomen.length) return;
+  useAxeJobStore.getState().voeg(overgenomen);
+  for (const job of overgenomen) void monitorTier3(job, true);
 }
 
 async function maakPlan(text: string): Promise<{ plan: BeurtPlan; lopend: AxeJob[] } | null> {
@@ -872,7 +914,16 @@ export function startAxeJobs(stukken: AxeBeurtStuk[]): void {
   });
 }
 
-function voerJobsUit(text: string, stukken: AxeBeurtStuk[]): boolean {
+/**
+ * Van tekst naar achtergrondwerk: zeggen dat je begint, en beginnen.
+ *
+ * Geëxporteerd omdat dit de ENIGE manier hoort te zijn waarop de app een
+ * durable task start. `installStableChat` had hier zijn eigen versie van --
+ * eigen localStorage-sleutel, eigen poller, eigen aankondiging -- en een taak
+ * die daar begon verscheen nooit in de balk, niet op de telefoon, en was
+ * nergens mee te besturen. Eén deur, één register.
+ */
+export function voerJobsUit(text: string, stukken: AxeBeurtStuk[]): boolean {
   const jobs = stukken.map((s) => ({
     text: s.text,
     agent: jobAgentVan(s.route, s.text) as AxeAgentId,

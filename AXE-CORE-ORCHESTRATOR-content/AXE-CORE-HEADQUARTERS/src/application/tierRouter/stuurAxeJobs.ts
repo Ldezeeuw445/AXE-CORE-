@@ -11,6 +11,7 @@ import {
   type AxeJobState,
 } from '@/domain/tierRouter/axeJobRegels';
 import type { AxeBeurtStuk } from '@/domain/tierRouter/splitsAxeBeurten';
+import { replyLanguageInstruction } from '@/domain/replyLanguage';
 
 interface JobStartInput {
   title: string;
@@ -68,6 +69,10 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
       route_tier: 3,
       agent: job.agent,
       skill: route.skill,
+      // In welke taal het antwoord terug moet. Stond alleen in het tweede
+      // register (installStableChat), dus een job via de router kwam altijd
+      // in de taal van het model terug. Nu overal, in plaats van nergens.
+      reply_language: replyLanguageInstruction(),
     },
     metadata: {
       conversation_source: 'axe_tier_router',
