@@ -14,7 +14,7 @@
  * Woont in presentation/store en niet in application/: hij leest `voiceStore`,
  * en application/ mag niet uit de UI-laag lezen (eslint no-restricted-imports).
  */
-import { PROVIDERS, type KeySlot } from '@/domain/providers';
+import { PROVIDERS, leesProviderOpslag, type KeySlot } from '@/domain/providers';
 import { useVoiceStore, getProviderKeySlot } from '@/presentation/store/voiceStore';
 
 /**
@@ -39,22 +39,25 @@ export function collectAllSlots(): KeySlot[] {
   push(st.fallback2Slot);
   push(st.fallback3Slot);
 
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string; model?: string; baseUrl?: string } | undefined
-    >;
-    for (const [id, c] of Object.entries(conns)) {
-      if (!c?.key || c.key.length < 4) continue;
-      if (slots.some(s => s.provider === id)) continue;
-      slots.push({
-        provider: id as KeySlot['provider'],
-        key: c.key,
-        model: c.model,
-        baseUrl: c.baseUrl,
-      });
-    }
-  } catch { /* een kapotte opgeslagen waarde mag de chat niet stilzetten */ }
+  /* Kent `providers.ts` deze id? Dan het NETTE slot, niet de rauwe velden.
+     Deze ronde staat vóór ronde 3, dus wat hier binnenkomt wint -- en met een
+     rauwe `c.model` betekende dat: de modelnaam zoals hij maanden geleden werd
+     opgeslagen, langs `migrateModel` heen. Iemand met `gemini-2.5-flash` in
+     Settings (Google zet dat model 16 okt 2026 uit) kreeg dus precies die
+     dode naam de cascade in, terwijl ronde 3 de gemigreerde had gegeven.
+     Een id die providers.ts NIET kent is iets zelf ingetypts: daarvoor is er
+     geen migratie en geen default, dus die gaat door zoals hij er staat. */
+  for (const [id, c] of Object.entries(leesProviderOpslag())) {
+    if (!c?.key || c.key.length < 4) continue;
+    if (slots.some(s => s.provider === id)) continue;
+    const net = PROVIDERS.some(p => p.id === id) ? getProviderKeySlot(id) : null;
+    push(net ?? {
+      provider: id as KeySlot['provider'],
+      key: c.key,
+      model: c.model,
+      baseUrl: c.baseUrl,
+    });
+  }
 
   for (const p of PROVIDERS) {
     push(getProviderKeySlot(p.id));
