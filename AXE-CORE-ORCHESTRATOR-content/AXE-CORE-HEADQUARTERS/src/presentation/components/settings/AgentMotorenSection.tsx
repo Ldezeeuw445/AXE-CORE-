@@ -25,8 +25,9 @@ import {
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
-import { chatModelKeuzes, workerKeuzes, paidApiKeuzes, isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
-import { agentsByTier } from '@/domain/agents/roster';
+import { isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
+import { agentsByTier, type AxeAgent } from '@/domain/agents/roster';
+import { keuzesVoorAgent } from '@/domain/agents/motorScope';
 import { leesOverrides, zetOverride, type OverrideMap } from '@/infrastructure/persistence/agentEngineOverrides';
 
 
@@ -49,12 +50,14 @@ export function AgentMotorenSection() {
   const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
   const [coreRuntime, setCoreRuntime] = useState<AxeCoreRuntimeStatus | null>(null);
   const verbindingen = useMemo(() => leesVerbindingen(), [toewijzing, overrides]);
-  const tier2Keuzes = useMemo(
-    () => workerKeuzes(verbindingen, PROVIDERS.map(p => p.id)),
-    [verbindingen],
-  );
-  const tier3Keuzes = useMemo(
-    () => paidApiKeuzes(verbindingen, PROVIDERS.map(p => p.id)),
+  /* Welke motoren een agent in zijn menu krijgt, komt uit zijn `dropdownScope`
+     in roster.ts -- niet uit een lijst die hier per sectie is uitgekozen.
+     Hiervoor stonden `workerKeuzes` en `paidApiKeuzes` hard aan de tier-2- en
+     tier-3-sectie geplakt, en dat is precies waarom een nieuwe agent in de
+     roster hier niets kreeg: de secties wisten van hem af, de lijsten niet.
+     Zie domain/agents/motorScope.ts. */
+  const keuzesVoor = useMemo(
+    () => (agent: AxeAgent) => keuzesVoorAgent(agent, verbindingen, PROVIDERS.map(p => p.id)) ?? [],
     [verbindingen],
   );
   const kiesOverride = (agentId: string, waarde: string) => {
@@ -72,7 +75,7 @@ export function AgentMotorenSection() {
   const primair = useVoiceStore(s => s.primarySlot);
   const setPrimair = useVoiceStore(s => s.setPrimarySlot);
   const axeKeuzes = useMemo(
-    () => chatModelKeuzes(leesVerbindingen(), PROVIDERS.map(p => p.id)),
+    () => keuzesVoorAgent('axe', leesVerbindingen(), PROVIDERS.map(p => p.id)) ?? [],
     // Herleest bij elke render van deze sectie (Settings blijft open terwijl je
     // sleutels invult) — een lijst van hooguit enkele tientallen regels, geen
     // kostbare berekening.
@@ -250,7 +253,7 @@ export function AgentMotorenSection() {
               keuze={
                 <select value={ov ? `${ov.provider}:${ov.model}` : ''} onChange={e => kiesOverride(agent.id, e.target.value)} aria-label={`Model for ${agent.name}`}>
                   <option value="">choose a model (min. gpt-4o-mini)</option>
-                  {tier3Keuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+                  {keuzesVoor(agent).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
                 </select>
               }
               stats={[
@@ -297,7 +300,7 @@ export function AgentMotorenSection() {
               keuze={
                 <select value={ov ? `${ov.provider}:${ov.model}` : ''} onChange={e => kiesOverride(agent.id, e.target.value)} aria-label={`Engine for ${agent.name}`}>
                   <option value="">Auto (races)</option>
-                  {tier2Keuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+                  {keuzesVoor(agent).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
                 </select>
               }
             />

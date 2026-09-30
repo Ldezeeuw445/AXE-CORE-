@@ -9,10 +9,9 @@
  * 5. Inject Architecture-assigned skills into system prompt.
  * 6. Living Display owned by installSpherePresent (no double project).
  */
-import { useVoiceStore, getProviderKeySlot, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
+import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
-  PROVIDERS,
   buildStableChatCascade,
   classifyQuery,
   isSimpleChatCapability,
@@ -50,7 +49,8 @@ import {
   getDurableTask,
   type DurableTaskSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
-import { zonderAbonnement } from '@/domain/abonnementChat';
+import { collectAllSlots } from '@/presentation/store/chatSlots';
+import { slotsVoorAgent } from '@/domain/agents/motorScope';
 
 let installed = false;
 const ACTIVE_TASKS_KEY = 'axe_active_durable_tasks';
@@ -90,45 +90,6 @@ function wantsAgenticWork(text: string): boolean {
     && t.trim().split(/\s+/).length >= 3;
 }
 
-function collectAllSlots(): KeySlot[] {
-  const st = useVoiceStore.getState();
-  const slots: KeySlot[] = [];
-  const push = (s: KeySlot | null | undefined) => {
-    if (s?.provider && !slots.some(x => x.provider === s.provider)) slots.push(s);
-  };
-  push(st.primarySlot);
-  push(st.fallback1Slot);
-  push(st.fallback2Slot);
-  push(st.fallback3Slot);
-
-  try {
-    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-      string,
-      { key?: string; model?: string; baseUrl?: string } | undefined
-    >;
-    for (const [id, c] of Object.entries(conns)) {
-      if (!c?.key || c.key.length < 4) continue;
-      if (slots.some(s => s.provider === id)) continue;
-      slots.push({
-        provider: id as KeySlot['provider'],
-        key: c.key,
-        model: c.model,
-        baseUrl: c.baseUrl,
-      });
-    }
-  } catch { /* ignore */ }
-
-  // Also include every known provider whose key comes from the vault/ENV, not
-  // only localStorage — getProviderKeySlot resolves both, exactly like Settings.
-  // Without this, a vault-keyed provider (e.g. Gemini via VITE_GEMINI_API_KEY)
-  // shows "Connected" in Settings but is invisible to AXE's chat cascade, so AXE
-  // fell back to whatever localStorage happened to hold (Ollama/OpenRouter).
-  for (const p of PROVIDERS) {
-    push(getProviderKeySlot(p.id));
-  }
-
-  return slots;
-}
 
 function pushRoute(evt: RoutingEvent): void {
   useVoiceStore.setState(s => {
@@ -158,16 +119,19 @@ function chatCascade(): KeySlot[] {
   if (all.length === 0) return [];
   const st = useVoiceStore.getState();
   // AXE's voice is a fast chat model, never a coding subscription (claude/codex/
-  // cursor). Overlaying axe-core's subscription here is what made Codex answer
-  // as AXE. Strip subscriptions from the identity cascade — the same rule the
-  // trading chat already uses — so a real chat model (your picked ★ Primary, or
-  // Gemini/etc.) answers. Subscriptions belong to the Code agent and heavy work.
-  const cascade = zonderAbonnement(buildStableChatCascade(all, {
+  // cursor) and never Ollama. Overlaying axe-core's subscription here is what
+  // made Codex answer as AXE. De regel zelf staat in roster.ts
+  // (dropdownScope: 'fast-smart') en wordt afgedwongen door motorScope.ts --
+  // hier stond `zonderAbonnement()`, en die haalt alleen het abonnement weg.
+  // Ollama bleef dus gewoon in de cascade staan terwijl het commentaar eronder
+  // zei dat AXE die nooit krijgt: de lijst in Settings sloot hem uit, de
+  // cascade niet.
+  const cascade = slotsVoorAgent('axe', buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
   }));
-  return cascade.length ? cascade : zonderAbonnement(all).slice(0, 1);
+  return cascade.length ? cascade : slotsVoorAgent('axe', all).slice(0, 1);
 }
 
 /** First choice only — for callers that need a slot to label a reply with,
@@ -451,7 +415,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   // AXE Core row, domain/chatModelKeuzes.ts) being quietly overruled the one
   // time you left AXE on auto. The toggle is for the tier-2 workers/CrewAI,
   // not for AXE's own brain -- removed here, not repurposed here.
-  const cascade = zonderAbonnement(buildStableChatCascade(all, {
+  const cascade = slotsVoorAgent('axe', buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,

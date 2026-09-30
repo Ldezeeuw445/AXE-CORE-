@@ -6,12 +6,14 @@
  * NorthSea auto-send blijft hier buiten.
  */
 import { useVoiceStore, getProviderKeySlot, writeConversationMemory, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
+import { collectAllSlots } from '@/presentation/store/chatSlots';
+import { slotsVoorAgent } from '@/domain/agents/motorScope';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { AXE_SYSTEM_PROMPT, CONVERSATION_FIRST_RULE } from '@/domain/prompts';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { zichtbareAxeAntwoord } from '@/domain/tools/toolLeak';
-import { PROVIDERS, type KeySlot } from '@/domain/providers';
+import { type KeySlot } from '@/domain/providers';
 import {
   TIER2_GROQ_MODEL,
   agendaAntwoord,
@@ -223,24 +225,39 @@ function recordBeurt(q: string, a: string, provider: string, capability: string)
   void extractMemoryFromMessage('axe', a);
 }
 
+/**
+ * Een snel model voor de klassificeerder en voor tier 2.
+ *
+ * Twee dingen die uit elkaar gehouden moeten worden, en dat ging hier mis:
+ *
+ * - SNELHEID: groq voor, dan cerebras, dan google. Dat is een voorkeur van
+ *   deze router en blijft hier staan.
+ * - SCOPE: wat AXE überhaupt mag draaien. Dat stond hier als een
+ *   hardgecodeerde `['abonnement','ollama']`, twee keer, terwijl dezelfde
+ *   regel ook in chatModelKeuzes.ts en in installStableChat.ts stond. Die
+ *   komt nu uit roster.ts via motorScope.ts, net als de lijst in Settings.
+ *
+ * Gevolg van dat verschil: de laatste terugval was `st.primarySlot` zónder
+ * controle, dus een primary op Ollama kwam er alsnog door. Nu niet meer --
+ * geen snel model is een eerlijker antwoord dan het verkeerde model.
+ */
 function snelSlot(voorkeur: 'classifier' | 'tier2'): KeySlot | null {
+  void voorkeur;
+  const mag = (s: KeySlot | null): KeySlot | null =>
+    s && slotsVoorAgent('axe', [s]).length > 0 ? s : null;
+
   const groq = getProviderKeySlot('groq');
   if (groq) return { ...groq, model: TIER2_GROQ_MODEL };
   const cerebras = getProviderKeySlot('cerebras');
   if (cerebras) return cerebras;
   const google = getProviderKeySlot('google');
   if (google) return google;
+
   const st = useVoiceStore.getState();
-  if (st.primarySlot && !['abonnement', 'ollama'].includes(st.primarySlot.provider)) {
-    return st.primarySlot;
-  }
-  for (const p of PROVIDERS) {
-    if (p.id === 'abonnement' || p.id === 'ollama') continue;
-    const s = getProviderKeySlot(p.id);
-    if (s) return s;
-  }
-  void voorkeur;
-  return st.primarySlot;
+  const primair = mag(st.primarySlot);
+  if (primair) return primair;
+
+  return slotsVoorAgent('axe', collectAllSlots())[0] ?? null;
 }
 
 async function vraagKlassificeerder(prompt: string): Promise<string> {

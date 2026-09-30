@@ -21,6 +21,9 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { LADE_TABS, namespaceVan, teltMeeOpDezeTab, type LadeTab } from '@/domain/agents/agentsTab';
+// Dezelfde regel als Settings toont: uit roster.ts via motorScope, niet een
+// tweede keer hier opgeschreven.
+import { SCOPE_TEKST } from '@/domain/agents/motorScope';
 import {
   buildTimeline, relativeTime, loopAgentFor,
   type ActivityItem, type AgentPulse, type SchedulePlan, type AgentQueue, type Tone,
@@ -39,13 +42,6 @@ const TONE_COLOR: Record<Tone, string> = {
   neutral: 'var(--text-secondary)',
 };
 
-/** Wat de motorkeuze van dit tier betekent, in één regel. Engels: staat in de UI. */
-const SCOPE_TEKST: Record<AxeAgent['dropdownScope'], string> = {
-  'fast-smart': 'Fast/smart chat models only — never a subscription, never Ollama.',
-  subscription: 'One of the six subscription CLIs, or an API key.',
-  'auto-route': 'Capable engines race by default; an optional pin overrides it.',
-  'paid-api': 'Paid OpenAI/Anthropic keys only.',
-};
 
 function Kop({ children }: { children: React.ReactNode }) {
   return (

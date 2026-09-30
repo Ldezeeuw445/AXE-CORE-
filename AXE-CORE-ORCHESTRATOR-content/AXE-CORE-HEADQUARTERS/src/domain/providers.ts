@@ -34,6 +34,21 @@ export const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
   'abonnement',
 ]);
 /**
+ * De providers die AXE's eigen brein nooit mag zijn.
+ *
+ * Het abonnement is van een tier-1 manager (agentMotoren.ts deelt ze uit, één
+ * per manager) en Ollama is lokaal -- allebei prima voor ander werk, geen van
+ * beide AXE's stem. Dat is de regel die roster.ts als `dropdownScope:
+ * 'fast-smart'` op AXE zet.
+ *
+ * Woont hier omdat provideridentiteit hier woont, en omdat zowel
+ * `chatModelKeuzes.ts` (wat je mag kiezen) als `agents/motorScope.ts` (wat er
+ * werkelijk antwoordt) hem moet lezen. Stond hij in een van die twee, dan was
+ * de import rond. Hij stond tot 30 sep in alle drie los opgeschreven.
+ */
+export const NOOIT_AXE_BREIN: readonly ProviderId[] = ['abonnement', 'ollama'] as const;
+
+/**
  * Providers die NIET over http praten maar via een agent-dienst op de VPS.
  *
  * Hermes stond hier en hoorde er niet: de opmerking bij zijn regel in PROVIDERS

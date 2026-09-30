@@ -31,7 +31,7 @@
  */
 
 import type { ProviderId } from '@/domain/providers';
-import { resolveOllamaModel } from '@/domain/providers';
+import { resolveOllamaModel, NOOIT_AXE_BREIN } from '@/domain/providers';
 import { catalogPairs } from '@/domain/modelCatalog';
 
 export interface ChatModelKeuze {
@@ -43,13 +43,6 @@ export interface ChatModelKeuze {
   toelichting: string;
 }
 
-/**
- * Providers die nooit AXE's eigen brein mogen zijn, ook niet met een sleutel:
- * de abonnementsweg (die is voor de tier-1 managers, geen model-antwoord) en
- * Ollama (lokaal, en de dode-default-valkuil hierboven). Alles daarbuiten met
- * een sleutel telt mee.
- */
-const NOOIT_AXE_BREIN = new Set<string>(['abonnement', 'ollama']);
 
 /** Welke providers een sleutel hebben en AXE's brein mogen zijn. */
 export function providersMetSleutel(
@@ -57,7 +50,7 @@ export function providersMetSleutel(
   alleProviders: readonly ProviderId[],
 ): ProviderId[] {
   const c = connecties ?? {};
-  return alleProviders.filter(id => !NOOIT_AXE_BREIN.has(id) && !!c[id]?.key);
+  return alleProviders.filter(id => !NOOIT_AXE_BREIN.includes(id) && !!c[id]?.key);
 }
 
 /** Een nette naam voor een model-id. */
