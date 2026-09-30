@@ -111,6 +111,24 @@ export function jobLoopt(state: AxeJobState): boolean {
   return state === 'queued' || state === 'running' || state === 'waiting';
 }
 
+/**
+ * Hoeveel er loopt en hoeveel er op jou wacht. Voor de bol en de kopstand.
+ *
+ * Eén telling, want er waren er al twee die het oneens waren (zie jobLoopt).
+ * Geen object per render verzinnen in een selector: zustand 5 ziet een nieuw
+ * object als een nieuwe waarde en dan hertekent het scherm zichzelf eeuwig.
+ * Roep hem aan op de jobs die je al hebt.
+ */
+export function werkStand(jobs: readonly AxeJob[]): { lopend: number; wacht: number } {
+  let lopend = 0;
+  let wacht = 0;
+  for (const j of jobs) {
+    if (j.state === 'waiting') wacht += 1;
+    if (jobLoopt(j.state)) lopend += 1;
+  }
+  return { lopend, wacht };
+}
+
 export function sessieSamenvatting(jobs: AxeJob[]): string {
   if (jobs.length === 0) return 'Nothing running this session. No finished jobs yet.';
   const lopend = jobs.filter((j) => jobLoopt(j.state));

@@ -25,12 +25,25 @@ import {
   tier3Ack,
 } from '@/domain/tierRouter/axeRoute';
 import { kiesAxeRoute, type AxeRouteKeuze } from '@/application/tierRouter/kiesAxeRoute';
+import { besturingsBeurt, controlBeurt, type BesturingsUitvoer } from '@/application/tierRouter/besturingsBeurt';
+import {
+  MONITOR_MAX_FOUTEN,
+  hervatbareJobs,
+  monitorMoetStoppen,
+  onbereikbaarTekst,
+  nooitGestartTekst,
+  tijdslimietTekst,
+  verlorenTaakTekst,
+  verweesdeJobs,
+  volgendePollMs,
+} from '@/domain/tierRouter/jobHerstel';
 import { haalTier1Kijk } from '@/application/tierRouter/haalTier1Kijk';
 import { volgendeAxeBericht } from '@/application/chat/chatStreamBeurt';
 import { streamProvider } from '@/infrastructure/gateways/llmStream';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { detectMacRoute } from '@/infrastructure/gateways/macRelayService';
 import {
+  cancelDurableTask,
   createDurableTask,
   decideDurableTaskApproval,
   getDurableTask,
@@ -45,6 +58,7 @@ import {
   bouwMultiAck,
   jobAgentVan,
   gesprokenGoedkeuringsBesluit,
+  jobLoopt,
   jobResultaatTekst,
   jobWachtTekst,
   magMetStemGoedkeuren,
@@ -56,7 +70,7 @@ import { kiesSpraakPad, stemlusVanVoice, zetSpraakSpreker } from '@/application/
 import { chatBlijftLuisteren, injecteerJobResultaat } from '@/application/tierRouter/injecteerJobResultaat';
 import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
 import { planBeurt, type PlanModel } from '@/application/tierRouter/planBeurt';
-import { PLAN_GROQ_MODEL, isKorteOpdracht, moetPlannen, type BeurtPlan } from '@/domain/tierRouter/beurtPlan';
+import { PLAN_GROQ_MODEL, isKorteOpdracht, lopendeRegels, moetPlannen, type BeurtPlan } from '@/domain/tierRouter/beurtPlan';
 import { lopendeJobs } from '@/presentation/store/axeJobStore';
 import { stappenUit } from '@/domain/tierRouter/agentVenster';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
@@ -174,6 +188,29 @@ function zetGebruiker(text: string): void {
   useVoiceStore.setState((s) => ({
     conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }],
     voiceStatus: 'processing' as const,
+    error: null,
+  }));
+}
+
+/**
+ * Een regel van AXE in het gesprek zetten zonder hem uit te spreken.
+ *
+ * Voor een resultaat dat binnenkwam terwijl de app dicht was: dat hoort er te
+ * staan als je hem opent, maar de app hoort niet ongevraagd te beginnen met
+ * praten. `publiceer` spreekt altijd (speakZonderKap), vandaar deze.
+ */
+function zetAxeStil(text: string, slot: { provider: string; model?: string }): void {
+  const zichtbaar = zichtbareAxeAntwoord(text) || text;
+  useVoiceStore.setState((s) => ({
+    conversation: [...s.conversation, {
+      role: 'axe' as const,
+      text: zichtbaar,
+      timestamp: Date.now(),
+      provider: slot.provider,
+      model: slot.model,
+      delegate: 'axe' as AxeAgentId,
+    }],
+    response: zichtbaar,
     error: null,
   }));
 }
@@ -397,22 +434,88 @@ function taakTekst(snapshot: DurableTaskSnapshot): string {
   return last || 'The task finished.';
 }
 
-function meldJobKlaar(job: AxeJob): void {
+/**
+ * Een job is klaar: zeggen, opslaan, onthouden.
+ *
+ * `hervat` is het geval waarin de app dicht was toen hij klaar werd. Luka's
+ * keuze: dat komt wél in de chat, maar niet hardop -- de app hoort niet uit
+ * zichzelf te gaan praten zodra je hem 's ochtends opent.
+ */
+function meldJobKlaar(job: AxeJob, hervat = false): void {
   const tekst = jobResultaatTekst(job);
   useAxeJobStore.getState().patch(job.id, job);
+  if (hervat) {
+    const zichtbaar = `${tekst} (finished while you were away.)`;
+    zetAxeStil(zichtbaar, { provider: 'tier3', model: job.agent });
+    recordBeurt(job.sourceText, zichtbaar, 'tier3', `tier3:${job.agent}`);
+    return;
+  }
   announceJobText(tekst, { provider: 'tier3', model: job.agent });
   recordBeurt(job.sourceText, tekst, 'tier3', `tier3:${job.agent}`);
 }
 
-async function monitorTier3(job: AxeJob): Promise<void> {
+/**
+ * Een lopende taak volgen tot hij klaar is.
+ *
+ * Dit was `while (true)` met een vaste poll van 4 s, zonder tijdslimiet en
+ * zonder backoff. Eén netwerkfout verliet de lus en liet de job voor altijd op
+ * `running` staan -- de balk bleef zeggen dat er gewerkt werd terwijl er
+ * niemand meer keek. Nu eindigt elke weg in een stand die klopt, met een regel
+ * erbij waarom.
+ *
+ * `hervat` betekent: deze monitor start na een herstart van de app. Dan mag
+ * een resultaat wél in de chat, maar niet hardop (Luka's keuze).
+ */
+async function monitorTier3(job: AxeJob, hervat = false): Promise<void> {
   const taskId = job.taskId;
   if (!taskId || taskMonitors.has(taskId)) return;
   taskMonitors.add(taskId);
   // Eén keer melden per goedkeuringsvraag; na je ok loopt de taak door.
   let gemeldeVraag: string | null = null;
+  let fouten = 0;
   try {
     while (true) {
-      const snapshot = await getDurableTask(taskId);
+      // De monitor kijkt al twee uur: ophouden, en niet doen alsof de taak
+      // mislukt is -- daar weten we niets van.
+      if (monitorMoetStoppen(job, Date.now())) {
+        useAxeJobStore.getState().patch(job.id, {
+          state: 'failed', summary: tijdslimietTekst(job), finishedAt: Date.now(),
+        });
+        publiceer(tijdslimietTekst(job), { provider: 'tier3', model: 'monitor/timeout' }, 'ack');
+        return;
+      }
+
+      // Stopte Luka hem net zelf? Dan staat de eindstand er al en hoeft de
+      // backend-bevestiging niets meer te melden -- anders zegt AXE twee keer
+      // iets over dezelfde cancel.
+      const vooraf = useAxeJobStore.getState().jobs.find((j) => j.id === job.id);
+      if (vooraf && !jobLoopt(vooraf.state)) return;
+
+      let snapshot: Awaited<ReturnType<typeof getDurableTask>>;
+      try {
+        snapshot = await getDurableTask(taskId);
+        fouten = 0;
+      } catch (e) {
+        const melding = e instanceof Error ? e.message : String(e);
+        // De server kent deze taak niet meer. Blijven pollen heeft geen zin.
+        if (/\b404\b/.test(melding)) {
+          useAxeJobStore.getState().patch(job.id, {
+            state: 'failed', summary: verlorenTaakTekst(job), finishedAt: Date.now(),
+          });
+          publiceer(verlorenTaakTekst(job), { provider: 'tier3', model: 'monitor/lost' }, 'ack');
+          return;
+        }
+        fouten += 1;
+        if (fouten >= MONITOR_MAX_FOUTEN) {
+          useAxeJobStore.getState().patch(job.id, {
+            state: 'failed', summary: onbereikbaarTekst(job), finishedAt: Date.now(),
+          });
+          publiceer(onbereikbaarTekst(job), { provider: 'tier3', model: 'monitor/unreachable' }, 'ack');
+          return;
+        }
+        await new Promise((r) => setTimeout(r, volgendePollMs(fouten)));
+        continue;
+      }
       const { status } = snapshot.task;
       // Voor het venster rond de core: wat doet de agent nu, in gewone taal.
       const stappen = stappenUit(snapshot.events.map((e) => e.message));
@@ -429,7 +532,7 @@ async function monitorTier3(job: AxeJob): Promise<void> {
           useAxeJobStore.getState().patch(job.id, wacht);
           announceJobText(jobWachtTekst(wacht, vraag), { provider: 'tier3', model: job.agent });
         }
-        await new Promise((r) => setTimeout(r, 4_000));
+        await new Promise((r) => setTimeout(r, volgendePollMs(0)));
         continue;
       }
       if (gemeldeVraag && (status === 'running' || status === 'queued')) {
@@ -442,17 +545,17 @@ async function monitorTier3(job: AxeJob): Promise<void> {
           state: 'done',
           summary: taakTekst(snapshot),
           finishedAt: Date.now(),
-        });
+        }, hervat);
         return;
       }
       if (['failed', 'cancelled', 'rejected'].includes(status)) {
         const message = typeof snapshot.task.error?.message === 'string'
           ? snapshot.task.error.message
           : `The task stopped with status ${status}.`;
-        meldJobKlaar({ ...job, state: 'failed', summary: message, finishedAt: Date.now() });
+        meldJobKlaar({ ...job, state: 'failed', summary: message, finishedAt: Date.now() }, hervat);
         return;
       }
-      await new Promise((r) => setTimeout(r, 4_000));
+      await new Promise((r) => setTimeout(r, volgendePollMs(0)));
     }
   } catch (e) {
     console.warn('[AXE] tier 3 monitor', e);
@@ -576,22 +679,114 @@ function planModellen(): PlanModel[] {
   return uit;
 }
 
-async function maakPlan(text: string): Promise<BeurtPlan | null> {
+/**
+ * Het plan opvragen, plus de lopende jobs waarop het plan mag wijzen.
+ *
+ * Die lijst komt mee terug en wordt NIET opnieuw uit de store gehaald bij het
+ * uitvoeren: tussen de aanvraag en het antwoord kan een taak klaar zijn, en
+ * dan wijst "j2" ineens naar een andere job dan het model bedoelde.
+ */
+/** De echte gateways voor de besturing. De uitvoerder kent ze niet zelf. */
+function besturingDeps() {
+  return {
+    cancel: (taskId: string, reden?: string) => cancelDurableTask(taskId, reden),
+    snapshot: (taskId: string) => getDurableTask(taskId),
+    beslis: (taskId: string, approvalId: string, akkoord: boolean, reden?: string) =>
+      decideDurableTaskApproval(taskId, approvalId, akkoord, reden),
+  };
+}
+
+/**
+ * Wat de uitvoerder besloot doorvoeren: store bijwerken, zeggen, en een
+ * eventuele herstart aanzwengelen. Eén plek, zodat het regelpad en het
+ * modelpad niet twee verschillende dingen met dezelfde uitkomst doen.
+ */
+function pasBesturingToe(uit: BesturingsUitvoer, bron: 'rules' | 'plan'): void {
+  for (const patch of uit.patches) useAxeJobStore.getState().patch(patch.id, patch.over);
+  if (uit.starts.length) startAxeJobs(uit.starts);
+  publiceer(uit.tekst, { provider: bron, model: `besturing/${uit.actie}` }, 'ack');
+}
+
+/**
+ * Gaat deze zin over werk dat al loopt?
+ *
+ * Staat bewust VOOR het plan. "hoe staat het met de trading agent en de
+ * northsea taak?" is twee stukken, gaat dus naar het plan, kost daar tot zes
+ * seconden -- en het plan mág jobs starten, dus een vraag over werk kan nieuw
+ * werk opstarten. Dat is precies wat er gemeten werd. `jobStatusTekst`
+ * beantwoordt het gratis uit de store.
+ *
+ * En bewust NA `probeerGesprokenGoedkeuring`: die kent de snapshot-controle
+ * voor een kale "ja" op een net gestelde vraag.
+ */
+async function probeerBesturing(text: string): Promise<boolean> {
+  const alle = useAxeJobStore.getState().jobs;
+  const uit = await besturingsBeurt(text, alle, besturingDeps());
+  if (!uit) return false;
+  zetGebruiker(text);
+  pushTierRoute(
+    { tier: 1, kind: 'session', via: 'rules', reason: `besturing:${uit.actie}`, agent: 'axe', skill: null, confident: true, intercept: true, latencyMs: 0 },
+    { query: text.slice(0, 60) },
+  );
+  pasBesturingToe(uit, 'rules');
+  recordBeurt(text, uit.tekst, 'rules', `besturing:${uit.actie}`);
+  return true;
+}
+
+/**
+ * Na een herstart: de draad weer oppakken.
+ *
+ * Jobs staan sinds deze ronde in localStorage, maar de pollers niet -- die
+ * leven in een module-lokale Set. Zonder dit staat er na een herlaad een
+ * balk vol "running" waar niemand meer naar kijkt.
+ */
+function hervatJobMonitors(): void {
+  const jobs = useAxeJobStore.getState().jobs;
+
+  // Nooit een taskId gekregen: het aanmaken is nooit afgerond. Die gaan
+  // nergens heen, dus ze horen niet als lopend te blijven staan.
+  for (const job of verweesdeJobs(jobs)) {
+    useAxeJobStore.getState().patch(job.id, {
+      state: 'failed', summary: nooitGestartTekst(job), finishedAt: Date.now(),
+    });
+  }
+
+  // Wel een taskId: gewoon weer volgen. Was hij ondertussen klaar, dan komt
+  // het resultaat bij de eerste poll alsnog binnen -- in de chat, niet hardop.
+  for (const job of hervatbareJobs(jobs)) void monitorTier3(job, true);
+}
+
+async function maakPlan(text: string): Promise<{ plan: BeurtPlan; lopend: AxeJob[] } | null> {
   const modellen = planModellen();
   if (!modellen.length) return null;
   const geschiedenis = useVoiceStore.getState().conversation
     .slice(-7, -1)
     .map((m) => ({ role: m.role === 'user' ? 'user' as const : 'axe' as const, text: m.text }));
-  const lopend = lopendeJobs(useAxeJobStore.getState().jobs).map((j) => j.title);
+  // Genummerd, zoals de prompt belooft. Kale titels betekenden dat het model
+  // nergens naar kon wijzen en élke control werd weggegooid.
+  const lopendJobs = lopendeJobs(useAxeJobStore.getState().jobs);
+  const lopend = lopendeRegels(lopendJobs);
   const geheugen = await geheugenVoorBeurt(text);
-  return planBeurt(text, { modellen, geschiedenis, lopend, geheugen });
+  const plan = await planBeurt(text, { modellen, geschiedenis, lopend, geheugen });
+  return plan ? { plan, lopend: lopendJobs } : null;
 }
 
 /** Het plan uitvoeren: praten, starten, onthouden, herinneren. Niets hiervan
  *  laat de chat wachten; alleen het antwoord gaat meteen de lucht in. */
-function voerPlanUit(text: string, plan: BeurtPlan): void {
+function voerPlanUit(text: string, plan: BeurtPlan, lopend: AxeJob[]): void {
   publiceer(plan.reply, { provider: 'plan', model: plan.jobs.map((j) => j.agent).join('+') || 'reply' }, 'ack');
   recordBeurt(text, plan.reply, 'plan', `plan:${plan.jobs.length}`);
+
+  // Werk dat al loopt: stoppen, bijsturen, of erover vertellen. Dit stond hier
+  // niet -- het plan parseerde `controls` netjes en niemand las ze ooit.
+  if (plan.controls.length) {
+    void (async () => {
+      const alle = useAxeJobStore.getState().jobs;
+      for (const uit of await controlBeurt(plan.controls, lopend, alle, besturingDeps())) {
+        pasBesturingToe(uit, 'plan');
+      }
+    })();
+  }
 
   if (plan.jobs.length) {
     startAxeJobs(plan.jobs.map((j) => ({
@@ -640,16 +835,17 @@ function voerPlanUit(text: string, plan: BeurtPlan): void {
 /** Probeert het plan; true als het de beurt heeft afgehandeld. */
 async function probeerPlan(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
   zetGebruiker(text);
-  const plan = await maakPlan(text);
-  if (!plan) {
+  const uitkomst = await maakPlan(text);
+  if (!uitkomst) {
     haalGebruikerWeg(text);
     return false;
   }
+  const { plan, lopend } = uitkomst;
   pushTierRoute(
     { ...keuze, tier: plan.jobs.length ? 3 : 2, kind: plan.jobs.length ? 'agent' : 'quick', intercept: true, reason: `plan:${plan.jobs.length}j/${plan.onthoud.length}m/${plan.herinneringen.length}r` },
     { query: text.slice(0, 60) },
   );
-  voerPlanUit(text, plan);
+  voerPlanUit(text, plan, lopend);
   return true;
 }
 
@@ -706,6 +902,7 @@ export function installTierRouter(): void {
   if (installed) return;
   installed = true;
   warmGeheugen();
+  hervatJobMonitors();
   zetSpraakSpreker((text) => speakZonderKap(text, 'ack'));
 
   const original = useVoiceStore.getState().sendMessage;
@@ -746,6 +943,10 @@ export function installTierRouter(): void {
         }]);
         return;
       }
+
+      // Gaat dit over werk dat al loopt? Dan hoeft er geen model aan te pas
+      // te komen, en mag het plan hier zeker geen nieuwe taak van maken.
+      if (await probeerBesturing(text)) return;
 
       const stukken = splitsAxeBeurten(text);
       const jobs = jobStukkenVan(stukken);

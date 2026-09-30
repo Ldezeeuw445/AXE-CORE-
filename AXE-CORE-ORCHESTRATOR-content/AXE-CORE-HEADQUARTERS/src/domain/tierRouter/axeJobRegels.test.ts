@@ -14,6 +14,7 @@ import {
   stemlusOvergang,
   type AxeGoedkeuring,
   type AxeJob,
+  werkStand,
 } from './axeJobRegels';
 import { classifyAxeTier } from './axeRoute';
 
@@ -291,5 +292,25 @@ describe('jobWachtTekst kiest zijn slotzin', () => {
     expect(tekst).toMatch(/sudo apt-get install jq/);
     expect(tekst).not.toMatch(/AXE wants to run/);
     expect(tekst.endsWith('This one needs a click in Approvals.')).toBe(true);
+  });
+});
+
+describe('werkStand', () => {
+  const j = (state: AxeJob['state']): AxeJob =>
+    ({ id: Math.random().toString(), title: 'x', agent: 'trading', state, startedAt: 1, sourceText: 'x' });
+
+  it('telt alles wat loopt, en apart wat op jou wacht', () => {
+    expect(werkStand([j('running'), j('queued'), j('waiting'), j('done'), j('failed')]))
+      .toEqual({ lopend: 3, wacht: 1 });
+  });
+
+  /* Eén telling, want er waren er al twee die het oneens waren over 'waiting'
+     (zie jobLoopt). Een taak die op jouw ok wacht is niet klaar. */
+  it('een wachtende taak telt als lopend', () => {
+    expect(werkStand([j('waiting')])).toEqual({ lopend: 1, wacht: 1 });
+  });
+
+  it('leeg is nul', () => {
+    expect(werkStand([])).toEqual({ lopend: 0, wacht: 0 });
   });
 });

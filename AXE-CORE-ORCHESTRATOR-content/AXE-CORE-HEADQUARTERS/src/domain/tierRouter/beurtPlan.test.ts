@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isKorteOpdracht, moetPlannen, parseBeurtPlan, planPrompt, PLAN_MAX_JOBS } from './beurtPlan';
+import { isKorteOpdracht, jobVanControl, lopendeRegels, moetPlannen, parseBeurtPlan, planPrompt, PLAN_MAX_JOBS } from './beurtPlan';
+import type { AxeJob } from './axeJobRegels';
 
 /** Zoals de lopende taken in de prompt staan; hieruit komen de control-ids. */
 const LOPEND = [
@@ -92,6 +93,60 @@ describe('parseBeurtPlan, lopend werk besturen', () => {
   });
 });
 
+/**
+ * De naad waar de hele besturing op stukliep.
+ *
+ * `planPrompt` vertelt het model letterlijk dat elke lopende taak eruitziet
+ * als `[j1] ...` en dat het met `job: "j1"` moet antwoorden. De aanroeper gaf
+ * alleen `job.title` mee -- kale titels, geen enkele `[jN]`. Het model kon dus
+ * nergens naar wijzen, `lopendeJobIds` vond niets, en élke control viel weg.
+ *
+ * Het LOPEND-constant hierboven was zelf het bewijs: de test schreef het
+ * formaat op dat de productiecode nooit produceerde.
+ */
+describe('lopendeRegels — wat de prompt belooft en wat hij krijgt', () => {
+  const job = (over: Partial<AxeJob> = {}): AxeJob => ({
+    id: 't1', title: 'Check open positions', agent: 'trading', state: 'running',
+    startedAt: 1, sourceText: 'x', ...over,
+  });
+
+  it('nummert elke lopende taak zoals de prompt hem aankondigt', () => {
+    const regels = lopendeRegels([job(), job({ id: 'n1', agent: 'northsea', title: 'Scan inbox' })]);
+    expect(regels[0]).toMatch(/^\[j1\] /);
+    expect(regels[0]).toContain('Check open positions');
+    expect(regels[1]).toMatch(/^\[j2\] /);
+  });
+
+  /* Belofte en werkelijkheid in één assertie: wat de aanroeper maakt, moet
+     letterlijk in de prompt belanden die het model leest. */
+  it('die regels komen ongewijzigd in de prompt terecht', () => {
+    const regels = lopendeRegels([job()]);
+    const prompt = planPrompt(new Date('2026-09-30T10:00:00Z'), regels);
+    expect(prompt).toContain(regels[0]);
+    expect(prompt).toContain('Already running');
+  });
+
+  it('en die prompt levert ids op die parseBeurtPlan accepteert', () => {
+    const regels = lopendeRegels([job()]);
+    const raw = '{"reply":"ok","controls":[{"action":"cancel","job":"j1"}]}';
+    expect(parseBeurtPlan(raw, regels)?.controls).toEqual([{ action: 'cancel', job: 'j1' }]);
+  });
+});
+
+describe('jobVanControl', () => {
+  const a = { id: 'a', title: 'A', agent: 'trading', state: 'running', startedAt: 1, sourceText: 'a' } as AxeJob;
+  const b = { id: 'b', title: 'B', agent: 'northsea', state: 'running', startedAt: 1, sourceText: 'b' } as AxeJob;
+
+  it('wijst j2 naar de tweede taak in dezelfde lijst', () => {
+    expect(jobVanControl({ action: 'cancel', job: 'j2' }, [a, b])).toBe(b);
+  });
+
+  it('een id buiten de lijst levert niets op -- nooit de eerste pakken', () => {
+    expect(jobVanControl({ action: 'cancel', job: 'j9' }, [a, b])).toBeNull();
+    expect(jobVanControl({ action: 'cancel', job: 'kaas' }, [a, b])).toBeNull();
+  });
+});
+
 describe('moetPlannen', () => {
   it('korte losse vraag blijft op de snelle route', () => {
     expect(moetPlannen('hoe laat is het', 1, 2)).toBe(false);
@@ -104,8 +159,11 @@ describe('moetPlannen', () => {
 });
 
 describe('planPrompt', () => {
-  it('noemt wat al loopt, zodat het niet opnieuw start', () => {
-    expect(planPrompt(new Date('2026-09-25T02:00:00Z'), ['Check VPS health'])).toMatch(/Already running.*Check VPS health/);
+  /* Elke taak op zijn eigen regel. Stond op ' | ' aan elkaar, en dan is het
+     voor het model een zin in plaats van een lijst waar het naar kan wijzen. */
+  it('noemt wat al loopt, elk op een eigen regel, zodat het niet opnieuw start', () => {
+    const prompt = planPrompt(new Date('2026-09-25T02:00:00Z'), ['[j1] Apps - "Check VPS health" - running']);
+    expect(prompt).toMatch(/Already running[^\n]*\n\[j1\] Apps - "Check VPS health" - running/);
   });
 
   it('vraagt om een machine en om greep op lopend werk, met de id tussen haken', () => {

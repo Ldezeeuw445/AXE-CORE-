@@ -5,7 +5,8 @@
 import { useState } from 'react';
 import { useAxeJobStore, lopendeJobs } from '@/presentation/store/axeJobStore';
 import { agentById } from '@/domain/agents/roster';
-import { balkLabel } from '@/domain/tierRouter/axeJobRegels';
+import { balkLabel, jobLoopt } from '@/domain/tierRouter/axeJobRegels';
+import { regelVan } from '@/domain/tierRouter/agentVenster';
 
 const STAND: Record<string, string> = {
   queued: 'queued',
@@ -54,10 +55,20 @@ export function AxeAgentsBalk() {
         {open && (
           <ul className="px-2.5 pb-1.5 space-y-0.5" style={{ borderTop: '1px solid var(--tint-line)' }}>
             {jobs.slice(-8).map((j) => (
-              <li key={j.id} className="flex items-baseline gap-2 text-[10px] leading-tight py-0.5">
+              <li key={j.id} className="text-[10px] leading-tight py-0.5">
+                <div className="flex items-baseline gap-2">
                 <span style={{ color: 'var(--text-primary)' }}>{j.title}</span>
                 <span style={{ color: 'var(--accent-cyan)' }}>{agentById(j.agent).name}</span>
                 <span style={{ color: 'var(--text-muted)' }}>{STAND[j.state] ?? j.state}</span>
+                </div>
+                {/* De laatste stap, niet alleen het statuswoord: "running" zegt
+                    niet of hij vastzit. `stappen` werd al bijgehouden en werd
+                    hier nergens getoond. */}
+                {jobLoopt(j.state) && (
+                  <div className="truncate" style={{ color: 'var(--text-muted)', opacity: 0.75 }}>
+                    {regelVan(j)}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

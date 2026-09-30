@@ -42,7 +42,11 @@ export function planInvoer(text: string, geschiedenis: PlanBeurtDeps['geschieden
  */
 export async function planBeurt(text: string, deps: PlanBeurtDeps): Promise<BeurtPlan | null> {
   if (!deps.modellen.length) return null;
-  const system = planPrompt(deps.nu ?? new Date(), deps.lopend ?? []);
+  // Eén lijst, twee keer gebruikt. Dit stond hier los: planPrompt kreeg de
+  // lopende taken wél en parseBeurtPlan niet, dus het model mocht naar [j1]
+  // wijzen maar de parser kende geen enkele id en gooide élke control weg.
+  const lopend = deps.lopend ?? [];
+  const system = planPrompt(deps.nu ?? new Date(), lopend);
   const user = planInvoer(text, deps.geschiedenis, deps.geheugen);
   const timeoutMs = deps.timeoutMs ?? PLAN_TIMEOUT_MS;
   return new Promise<BeurtPlan | null>((resolve) => {
@@ -58,7 +62,7 @@ export async function planBeurt(text: string, deps: PlanBeurtDeps): Promise<Beur
     for (const model of deps.modellen) {
       Promise.resolve()
         .then(() => model(system, user))
-        .then((raw) => einde(parseBeurtPlan(raw)))
+        .then((raw) => einde(parseBeurtPlan(raw, lopend)))
         .catch((e) => {
           console.warn('[AXE] plan model failed:', e instanceof Error ? e.message.slice(0, 120) : e);
           einde(null);

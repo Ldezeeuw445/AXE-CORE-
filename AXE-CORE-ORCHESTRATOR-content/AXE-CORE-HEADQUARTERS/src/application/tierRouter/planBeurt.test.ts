@@ -3,6 +3,29 @@ import { planBeurt, planInvoer } from './planBeurt';
 
 const GOED = '{"reply":"Doe ik.","jobs":[{"agent":"northsea","title":"Leads","request":"Count last night\'s NorthSea leads."}],"remember":[],"reminders":[]}';
 
+/**
+ * De derde naad. `parseBeurtPlan` werd hier met ÉÉN argument aangeroepen, dus
+ * `lopend` was leeg, dus `lopendeJobIds` gaf niets terug, dus élke control die
+ * het model teruggaf werd weggegooid -- ook als de prompt hem netjes had
+ * uitgenodigd om er een te geven. De hele besturing eindigde hier.
+ */
+describe('planBeurt geeft de lopende taken door aan de parser', () => {
+  const MET_CONTROL = '{"reply":"Ik zet hem stil.","jobs":[],"controls":[{"action":"cancel","job":"j1"}],"remember":[],"reminders":[]}';
+
+  it('een control op een lopende taak overleeft het parsen', async () => {
+    const plan = await planBeurt('stop die maar', {
+      modellen: [async () => MET_CONTROL],
+      lopend: ['[j1] Trading Agent - "Check open positions" - running'],
+    });
+    expect(plan?.controls).toEqual([{ action: 'cancel', job: 'j1' }]);
+  });
+
+  it('zonder lopende taken blijft een verzonnen control weg', async () => {
+    const plan = await planBeurt('stop die maar', { modellen: [async () => MET_CONTROL] });
+    expect(plan?.controls).toEqual([]);
+  });
+});
+
 describe('planBeurt', () => {
   it('valt door naar het volgende model als Groq zijn dagtegoed op heeft', async () => {
     const gevraagd: string[] = [];

@@ -18,6 +18,9 @@ import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionS
 import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp';
 import { BezigVlag } from '@/presentation/components/layout/zweef/BezigVlag';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
+import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { werkStand } from '@/domain/tierRouter/axeJobRegels';
+import { coreStandVan } from '@/presentation/pages/coreStand';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
@@ -92,15 +95,10 @@ export default function Home() {
   // Any living-display project → force Core view so SphereStage is visible
 
 
-  const coreStatus: CoreStatus = voice.pendingExec
-    ? 'awaiting-approval'
-    : voice.voiceStatus === 'listening'
-      ? 'listening'
-      : voice.voiceStatus === 'processing'
-        ? 'thinking'
-        : voice.voiceStatus === 'speaking'
-          ? 'speaking'
-          : 'idle';
+  // Twee losse selectors, nooit een object: zustand 5 ziet een vers object als
+  // een nieuwe waarde en dan hertekent dit scherm zichzelf eindeloos.
+  const jobs = useAxeJobStore((s) => s.jobs);
+  const coreStatus: CoreStatus = coreStandVan(voice.voiceStatus, !!voice.pendingExec, werkStand(jobs));
 
 
 

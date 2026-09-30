@@ -19,6 +19,77 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(guard).toBeGreaterThan(router);
   });
 
+  /* Deze ronde. Het gedrag zit in application/besturingsBeurt en wordt daar
+     echt aangeroepen getest; wat een unit-test niet kan zien is ÓF de
+     presentatielaag hem aanroept en in welke volgorde. Dat is precies wat
+     hieronder staat -- en precies wat er misging: `herkenBesturing` bestond
+     met vijftien groene tests en nul aanroepers. */
+  it('het regelpad voor lopend werk wordt aangeroepen, na de gesproken ja/nee en vóór het knippen', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    const goedkeuring = tekst.indexOf('probeerGesprokenGoedkeuring(text)');
+    const besturing = tekst.indexOf('await probeerBesturing(text)');
+    const knippen = tekst.indexOf('splitsAxeBeurten(text)');
+    expect(besturing).toBeGreaterThan(goedkeuring);
+    expect(knippen).toBeGreaterThan(besturing);
+    expect(tekst).toMatch(/besturingsBeurt\s*\(/);
+  });
+
+  it('het modelpad voert zijn controls ook echt uit', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/plan\.controls/);
+    expect(tekst).toMatch(/controlBeurt\s*\(/);
+  });
+
+  /* De kale titels waren naad 1: het model kreeg geen enkele [jN] en kon dus
+     nergens naar wijzen. Deze assertie houdt die bug weg. */
+  it('de lopende taken gaan genummerd naar het plan, niet als kale titels', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/lopendeRegels\s*\(/);
+    expect(tekst).not.toMatch(/lopendeJobs\([^)]*\)\s*\.map\(\(j\) => j\.title\)/);
+  });
+
+  it('planBeurt geeft de lopende lijst aan de parser door', () => {
+    expect(bron('application/tierRouter/planBeurt.ts')).not.toMatch(/parseBeurtPlan\(raw\)/);
+    expect(bron('application/tierRouter/planBeurt.ts')).toMatch(/parseBeurtPlan\(raw, lopend\)/);
+  });
+
+  it('jobs overleven een herstart en de monitors worden weer opgestart', () => {
+    const store = bron('presentation/store/axeJobStore.ts');
+    expect(store).toMatch(/zustand\/middleware/);
+    expect(store).toMatch(/persist\(/);
+    expect(store).toMatch(/bewaarbareJobs/);
+
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    // De AANROEP, niet de definitie: die staat hoger in het bestand.
+    const installed = tekst.indexOf('installed = true');
+    const hervat = tekst.indexOf('\n  hervatJobMonitors();');
+    expect(installed).toBeGreaterThan(0);
+    expect(hervat).toBeGreaterThan(installed);
+  });
+
+  /* De monitor was `while (true)` met een vaste poll van 4 s: geen limiet,
+     geen backoff, en een netwerkfout liet de job eeuwig op 'running' staan. */
+  it('de monitor loopt af in plaats van eeuwig door te pollen', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/volgendePollMs\(/);
+    expect(tekst).toMatch(/monitorMoetStoppen\(/);
+    expect(tekst).toMatch(/MONITOR_MAX_FOUTEN/);
+    expect(tekst).toMatch(/verlorenTaakTekst|onbereikbaarTekst/);
+    expect(tekst.match(/4_000/g) ?? []).toHaveLength(0);
+  });
+
+  it('de bol en de kopstand weten dat er gewerkt wordt', () => {
+    expect(bron('presentation/components/axe-core/sphere/AxeCoreSphere.tsx'))
+      .toMatch(/useAxeJobStore\.subscribe\(/);
+    expect(bron('presentation/components/axe-core/sphere/AxeCoreSphere.tsx')).toMatch(/werkStand\(/);
+    expect(bron('presentation/pages/Home.tsx')).toMatch(/coreStandVan\(/);
+  });
+
+  it('balk en telefoonchips tonen de laatste stap, niet alleen het statuswoord', () => {
+    expect(bron('presentation/components/layout/AxeAgentsBalk.tsx')).toMatch(/regelVan\(/);
+    expect(bron('presentation/components/layout/MobileChat.tsx')).toMatch(/laatsteStap\(/);
+  });
+
   it('onderschept sendMessage en valt terug op het oude pad', () => {
     const tekst = bron('presentation/store/installTierRouter.ts');
     expect(tekst).toMatch(/kiesAxeRoute\s*\(/);

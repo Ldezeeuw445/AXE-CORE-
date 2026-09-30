@@ -28,6 +28,8 @@
  */
 import { useEffect, useRef } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { werkStand } from '@/domain/tierRouter/axeJobRegels';
 import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 
 const N = 2200;
@@ -168,6 +170,21 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
      * vier waarden die binnen één frame niet veranderen. Nu worden ze één keer
      * per frame gezet. Zelfde beeld, een fractie van het werk. */
     let cyv = 1, syv = 0, cxv = 1, sxv = 0;
+
+    /* Loopt er werk op de achtergrond?
+     *
+     * De bol reageerde alleen op 'speaking'. Draaide er een agent, dan zag je
+     * daar niets van -- terwijl dit de bol is die op de plaat én op de telefoon
+     * staat, en `brain/product.md` zegt: in één oogopslag zie je of iets werkt.
+     *
+     * Eén langzame ademhaling, duidelijk trager dan de lettergreep-piek van de
+     * stem, zodat "hij werkt" en "hij praat" niet op elkaar lijken. Via
+     * subscribe en niet via een hook: dit mag geen re-render per frame worden. */
+    let werkt = werkStand(useAxeJobStore.getState().jobs).lopend > 0;
+    const stopWerkLet = useAxeJobStore.subscribe((st) => {
+      werkt = werkStand(st.jobs).lopend > 0;
+    });
+
     const standBijwerken = () => {
       const ry = rotY + auto;
       cyv = Math.cos(ry); syv = Math.sin(ry);
@@ -224,7 +241,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
       standBijwerken();
       x.clearRect(0, 0, w, h);
 
-      const b = boostRef.current;
+      const b = Math.min(1, boostRef.current + (werkt ? 0.14 + 0.08 * Math.sin(t * 0.8) : 0));
       const spreekt = useVoiceStore.getState().voiceStatus === 'speaking';
       const doel = spreekt ? getGlobalTtsLevel() : 0;
       // Snel omhoog, rustiger omlaag: lettergrepen zie je, geen flikkering.
@@ -304,7 +321,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
       standBijwerken();
       x.clearRect(0, 0, w, h);
 
-      const b = boostRef.current;
+      const b = Math.min(1, boostRef.current + (werkt ? 0.14 + 0.08 * Math.sin(t * 0.8) : 0));
       const spreekt = useVoiceStore.getState().voiceStatus === 'speaking';
       const doel = spreekt ? getGlobalTtsLevel() : 0;
       stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
@@ -522,6 +539,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
 
     return () => {
       cancelAnimationFrame(frame);
+      stopWerkLet();
       window.removeEventListener('resize', fit);
       obs?.disconnect();
       zicht?.disconnect();

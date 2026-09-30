@@ -13,6 +13,8 @@
  * is. Geen I/O hier; de aanroep zit in application/.
  */
 import type { AxeAgentId } from '@/domain/agents/roster';
+import { agentById } from '@/domain/agents/roster';
+import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import { splitsAxeBeurten } from '@/domain/tierRouter/splitsAxeBeurten';
 
 /** De drie computers waar werk op kan landen; null = het maakt niet uit. */
@@ -76,7 +78,7 @@ export const PLAN_TIMEOUT_MS = 6_000;
 
 export function planPrompt(nu: Date, lopend: string[]): string {
   const lopendRegel = lopend.length
-    ? `Already running (do not start these again): ${lopend.join(' | ')}`
+    ? `Already running (do not start these again):\n${lopend.join('\n')}`
     : 'Nothing is running right now.';
   return `You are AXE, Luka's assistant. Luka is talking to you out loud, often thinking as he goes.
 You remember what he told you before (see "What you remember" when present); use it like a friend would.
@@ -88,7 +90,7 @@ Read his whole message and decide what he actually wants. Reply with JSON only:
   agent: northsea (commodity desk, leads, mailbox - read only), trading (markets, positions, trading desk), developer (code, repos, builds, servers), browser (look something up on the web), intel (news, research briefs), apps (apps and VPS services), finance (money, subscriptions, credits), thinktank (work out an idea), axe (anything else).
   request: a complete instruction in English that makes sense without this conversation.
   device: which computer has to do it. Exactly one of "vps" (the always-on server), "mac-mini" or "imac" (his two Macs at home), or null. Set it as soon as he names a machine, and also when the work is clearly about the files, the apps, the screen or the repo checkout of one of the Macs. null when any machine will do, or when you are not sure -- never guess a machine.
-- controls: what to do with work that is ALREADY running, never new work. Each running task is listed below as [j1] Trading Agent - "Check open positions" - running on VPS.
+- controls: what to do with work that is ALREADY running, never new work. Each running task is listed above as [j1] Trading Agent - "Check open positions" - running.
   action: status (he asks how it is going), cancel (he wants it stopped), redirect (it must keep going but differently), approve (he says yes to what it asked), reject (he says no to it), overview (he asks what is running at all -- use the first listed id).
   job: the short id between brackets, exactly as listed, for example j1. Never invent one: if you cannot point at a listed task, leave the control out.
   instruction: only with redirect (and optionally approve/reject): what he wants instead, in English. Otherwise null.
@@ -114,6 +116,39 @@ function eersteObject(raw: string): unknown {
   } catch {
     return null;
   }
+}
+
+/**
+ * De lopende taken zoals de prompt ze belooft te zien.
+ *
+ * Dit is de naad waar de hele besturing op stukliep. `planPrompt` vertelt het
+ * model letterlijk dat elke lopende taak eruitziet als `[j1] Trading Agent -
+ * "..." - running`, en dat het met `job: "j1"` moet antwoorden. De aanroeper
+ * gaf alleen `job.title` mee -- kale titels, geen enkele `[jN]`. Het model kon
+ * dus nergens naar wijzen, en `lopendeJobIds` vond niets, en elke control viel
+ * weg. Eén functie, zodat het formaat op één plek staat en de test hem naast
+ * de prompt kan leggen.
+ *
+ * De volgorde is die van `lopend`: `jN` is de n-de taak in deze lijst. Geef
+ * dezelfde lijst door aan `parseBeurtPlan` en aan `jobVanControl`, anders
+ * wijst een id naar de verkeerde taak.
+ */
+export function lopendeRegels(jobs: readonly AxeJob[]): string[] {
+  return jobs.map((j, i) => `[j${i + 1}] ${agentById(j.agent).name} - "${j.title}" - ${j.state}`);
+}
+
+/**
+ * Welke job een control bedoelt. `lopend` moet dezelfde lijst zijn die
+ * `lopendeRegels` kreeg: "j2" is de tweede daarin.
+ *
+ * Niet opnieuw ophalen uit de store op het moment van uitvoeren -- tussen de
+ * planaanvraag en het antwoord kan een taak klaar zijn, en dan wijst j2 ineens
+ * naar iets wat Luka nooit bedoelde.
+ */
+export function jobVanControl(control: PlanControl, lopend: readonly AxeJob[]): AxeJob | null {
+  const m = /^j(\d{1,3})$/i.exec((control.job || '').trim());
+  if (!m) return null;
+  return lopend[Number(m[1]) - 1] ?? null;
 }
 
 /** De korte ids uit de lopende-lijst: "[j1] Trading Agent - ..." levert "j1". */

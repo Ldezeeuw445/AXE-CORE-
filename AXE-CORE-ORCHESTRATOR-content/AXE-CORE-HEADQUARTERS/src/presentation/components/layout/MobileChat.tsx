@@ -8,6 +8,7 @@ import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar'
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { useVoiceStore, type ConversationMessage } from '@/presentation/store/voiceStore';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { regelVan } from '@/domain/tierRouter/agentVenster';
 import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 
 function clock(ts: number): string {
@@ -31,6 +32,12 @@ function delegatedAgent(message: ConversationMessage) {
     if (known) return agentById(message.model as AxeAgentId);
   }
   return null;
+}
+
+/** De laatste stap, kort genoeg voor een chip. Leeg als er nog niets is. */
+function laatsteStap(job: { stappen?: string[] }): string {
+  const stappen = job.stappen ?? [];
+  return (stappen.length ? stappen[stappen.length - 1] : '').trim();
 }
 
 export function MobileChat() {
@@ -67,11 +74,16 @@ export function MobileChat() {
                     background: 'rgba(8,12,18,.76)',
                     border: `1px solid ${agent.accent}35`,
                   }}
-                  title={job.title}
+                  title={regelVan(job)}
                 >
                   <span className="size-1.5 rounded-full" style={{ background: agent.accent, boxShadow: `0 0 8px ${agent.accent}` }} />
                   <span className="max-w-[150px] truncate">{agent.kort ?? agent.name}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>{job.state === 'waiting' ? 'waiting' : 'running'}</span>
+                  {/* De laatste stap in plaats van alleen "running": op de
+                      telefoon is dit het enige venster op wat er gebeurt.
+                      `waiting` blijft staan, want dat vraagt iets van jou. */}
+                  <span className="max-w-[170px] truncate" style={{ color: 'var(--text-muted)' }}>
+                    {job.state === 'waiting' ? 'waiting' : (laatsteStap(job) || 'running')}
+                  </span>
                 </span>
               );
             })}
