@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
@@ -394,9 +393,10 @@ function RailKamerKiezer({ kamer, opKamer }: { kamer: RailKamer; opKamer: (k: Ra
 export function RightPanel() {
   const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen, setRightPanelOpen, setCommandPaletteOpen } = useUIStore();
   const [kamer, setKamer] = useState<RailKamer>('status');
-  const isTablet = useIsTablet();
   const isMobile = useIsMobile();
-  const isCompact = isMobile || isTablet;
+  // iPad follows the same rail contract as Tauri. Only an actual phone uses
+  // the Sheet drawer; otherwise TabRail has a real #axe-rail-rechts host.
+  const isCompact = isMobile;
   const navigate = useNavigate();
   const opHome = useLocation().pathname === '/';
   const voice = useVoiceStore();
