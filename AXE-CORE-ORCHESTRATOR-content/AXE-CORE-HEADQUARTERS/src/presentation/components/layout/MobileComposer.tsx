@@ -26,7 +26,7 @@ import {
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 
-export function MobileComposer() {
+export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend?: boolean } = {}) {
   const navigate = useNavigate();
   const voice = useVoiceStore();
   const [draft, setDraft] = useState('');
@@ -46,8 +46,8 @@ export function MobileComposer() {
     setDraft('');
     setAttachments([]);
     await voice.sendMessage(payload);
-    navigate('/mobile');
-  }, [attachments, draft, navigate, voice]);
+    if (navigateAfterSend) navigate('/mobile');
+  }, [attachments, draft, navigate, navigateAfterSend, voice]);
 
   const mic = useCallback(async () => {
     try {
