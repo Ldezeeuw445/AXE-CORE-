@@ -255,22 +255,69 @@ export function AxeShellChrome() {
        * Meten dus, en de CSS rekent het hart er zelf uit. */
       wortel.style.setProperty('--axe-viewctl-h', `${pil ? Math.ceil(pil.height) : 0}px`);
 
-      /* ── Het gat in de kopbalk, op de plek waar de pil ECHT ligt ─────────
-       * Dit was `breedte + 24`, als los blokje in de flex-rij. Maar de pil
-       * ligt `fixed` en centreert op het SCHERM, terwijl het blokje landt waar
-       * flexbox het neerzet -- tussen links en rechts. Die twee vallen alleen
-       * samen als de groepen ernaast even breed zijn, en dat zijn ze niet
-       * (311px links, 592px rechts): het gat lag 68px naast de pil.
+      /* ── Past de rechtergroep naast de pil, en binnen het scherm? ────────
+       * De pil ligt `fixed` en centreert op het SCHERM; de kopbalk weet niet
+       * dat ze bestaat. Rechts ervan blijft maar (venster - pilbreedte) / 2
+       * over, hoeveel de balk ook wil.
        *
-       * Gemeten op 1900px botste er niets, dus het bleef onopgemerkt; onder
-       * ~1750px schuift de klokgroep er wel degelijk onder. Daarom reserveren
-       * we nu tot waar de pil daadwerkelijk EINDIGT, gerekend vanaf de plek
-       * waar dit blokje in de rij begint. Eén getal, altijd kloppend, ook als
-       * het linkerslot vol loopt. */
-      const gat = document.querySelector('.axe-topbar-midden');
-      const begin = gat ? gat.getBoundingClientRect().left : 0;
-      const b = pil ? Math.max(0, Math.ceil(pil.right + 12 - begin)) : 0;
-      wortel.style.setProperty('--axe-viewctl-b', `${b}px`);
+       * Hier stond een blokje (`.axe-topbar-midden`) dat die breedte in de
+       * flex-rij reserveerde. Dat werkte niet, en het kon niet werken: de balk
+       * staat op `justify-between`, dus de rechtergroep ligt al tegen de
+       * rechterrand. Een blokje ervóór duwt haar niet verder naar rechts -- het
+       * maakt de rij alleen breder dan het venster. Zo werd een overlap een
+       * overloop. Gemeten 1 okt 2026 op /settings: 1900px paste nog (1888 van
+       * 1900, en daarom viel het nooit op), 1512 liep tot 1588 -- 76px voorbij
+       * de rand, óók in Tauri -- en een iPad in landschap (1180) tot 1440:
+       * 260px buiten beeld. Dat is wat Luka zag als "de rechterkant klopt niet
+       * en staat buiten beeld".
+       *
+       * Dus niet reserveren maar afslanken, en wel gemeten in plaats van op
+       * breekpunten (`sm:`/`lg:` kennen de vensterbreedte, en dat is de
+       * verkeerde maat -- het gaat om wat er NA de pil overblijft):
+       *
+       *   0  alles past -- niets verbergen (1900px blijft precies zoals hij was)
+       *   1  de klok eruit (251px, en puur informatie)
+       *   2  ook het spraaklabel
+       *   3  ook de profielcirkel
+       *   4  en dan de labels IN de pil, zodat alleen de iconen blijven
+       *
+       * Stap 4 is geen nieuwe vorm: zo staat de pil op de telefoon al
+       * (PlaatViewSwitch laat de spans weg op `useIsMobile`), en elke knop
+       * houdt zijn aria-label en title. Alleen een iPad in portret komt daar --
+       * 413px pil op 820px scherm. Knoppen wijken nooit: een knop buiten beeld
+       * is erger dan een klok die je niet ziet.
+       *
+       * Past het, dan ligt de rechtergroep door `justify-between` tegen de
+       * rechterrand en dus rechts van de pil: geen overlap én geen overloop,
+       * met één voorwaarde in plaats van twee mechanismen. */
+      const balk = document.querySelector('.axe-topbar');
+      const groep = balk?.lastElementChild as HTMLElement | null;
+      if (balk && groep) {
+        /* Twee voorwaarden, en allebei op POSITIE in plaats van op breedte --
+           breedtes optellen vraagt om het meerekenen van elke marge, en één
+           vergeten marge is precies hoe dit de vorige keer misging:
+             1. niets uit de groep valt buiten het venster
+             2. het eerste zichtbare ding erin begint waar de pil ophoudt
+           Voor (2) meten we de LAATSTE KNOP van de pil, niet de pildoos: die
+           heeft 5px eigen padding, en dat is waarom op 1900px de klok er al
+           jaren naast staat zonder iets te bedekken. De doos vergelijken zou de
+           klok daar weghalen voor vier pixels lucht die niemand ziet. */
+        const pilKnopRechts = () => {
+          const laatste = midden?.lastElementChild;
+          if (laatste) return laatste.getBoundingClientRect().right;
+          return midden ? midden.getBoundingClientRect().right : 0;
+        };
+        for (let stap = 0; stap <= 4; stap += 1) {
+          wortel.dataset.kopKrap = String(stap);
+          /* De pil krimpt mee bij stap 4, dus opnieuw meten per stap -- anders
+             rekent de laatste stap met de breedte van de vorige. Het lezen van
+             een rect dwingt de herschikking af, dus dit is de stand van NU. */
+          const eerste = [...groep.children].find((c) => c.getBoundingClientRect().width > 0);
+          const g = groep.getBoundingClientRect();
+          const links = eerste ? eerste.getBoundingClientRect().left : g.left;
+          if (g.right <= window.innerWidth && links >= pilKnopRechts()) break;
+        }
+      }
 
       /* Corrective round 4, Fix B: waar de balk zelf ophoudt, zodat Neural en
        * Terrain's eigen "Search memories..."-composer daar ONDER kan
@@ -279,8 +326,11 @@ export function AxeShellChrome() {
        * buitenpadding + een knop van 7px padding rond een 13px icoon = ~41px
        * vanaf top:16px, dus rond de 57px). Gemeten in plaats van geraden
        * betekent ook dat dit blijft kloppen als de balk ooit van hoogte
-       * verandert (Awareness-label weg op mobiel, een vijfde weergave, etc). */
-      const onder = pil ? Math.ceil(pil.bottom) + 8 : 64;
+       * verandert (Awareness-label weg op mobiel, een vijfde weergave, etc).
+       *
+       * Ná de stappen hierboven, want die kunnen de pil smaller maken. */
+      const pilNu = midden ? midden.getBoundingClientRect() : null;
+      const onder = pilNu ? Math.ceil(pilNu.bottom) + 8 : 64;
       wortel.style.setProperty('--axe-viewctl-onder', `${onder}px`);
     };
     meetMiddenRef.current = meetMidden;
@@ -412,9 +462,9 @@ export function AxeShellChrome() {
         wortel.style.removeProperty(naam);
       }
       domObs?.disconnect();
-      wortel.style.removeProperty('--axe-viewctl-b');
       wortel.style.removeProperty('--axe-viewctl-h');
       wortel.style.removeProperty('--axe-viewctl-onder');
+      delete wortel.dataset.kopKrap;
       delete wortel.dataset.railL;
       delete wortel.dataset.railR;
       delete wortel.dataset.railPinL;

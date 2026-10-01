@@ -149,8 +149,6 @@ export function TopNav() {
           Leeg op elke tab die niets meldt, en dan is dit nul breed. */}
       <div id="axe-slot-topbalk" className="axe-slot-topbalk flex items-center gap-2 min-w-0" />
 
-      <div className="axe-topbar-midden" aria-hidden="true" />
-
       <div className="flex items-center gap-0.5 sm:gap-1">
         {/* Tijd en datum staan in de demo rechts van de middenknoppen, naast
             elkaar in mono -- niet gestapeld in het midden. */}
@@ -218,7 +216,9 @@ export function TopNav() {
         <NotificationBell />
 
         <div
-          className="hidden lg:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold"
+          /* `axe-tr-profiel`: een haak voor de kopbalk-meting (AxeShellChrome).
+             Dit is het derde en laatste dat wijkt als de balk te krap wordt. */
+          className="axe-tr-profiel hidden lg:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold"
           style={{
             width: 32,
             height: 32,

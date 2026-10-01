@@ -26,6 +26,7 @@ const lees = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
 
 const css = lees('../../../design/axe-look.css');
 const chrome = lees('./AxeShellChrome.tsx');
+const nav = lees('./TopNav.tsx');
 
 /** Het blok dat de view-balk POSITIONEERT (niet het blok dat hem verft). */
 function positieBlok(): string {
@@ -62,10 +63,55 @@ describe('de view-balk ligt op het hart van de kopregel', () => {
     expect(chrome).toMatch(/getBoundingClientRect\(\)/);
   });
 
-  it('reserveert het gat tot waar de pil echt eindigt', () => {
-    // De oude formule was `breedte + 24` en landde 68px naast de pil, omdat de
-    // pil op het SCHERM centreert en het blokje op wat flexbox overhoudt.
-    expect(chrome).toContain('axe-topbar-midden');
-    expect(chrome).toMatch(/pil\.right/);
+  /* ── 1 okt 2026: het gat is weg, en dat is de hele correctie ───────────
+   *
+   * Hier stond: "reserveert het gat tot waar de pil echt eindigt", met een
+   * blokje `.axe-topbar-midden` zo breed als de pil. Dat kon niet werken. De
+   * kopbalk staat op `justify-between`, dus de rechtergroep ligt al tegen de
+   * rechterrand; een blokje ervóór duwt haar niet verder op, het maakt de rij
+   * alleen breder dan het venster. De overlap die het moest voorkomen werd
+   * daarmee een overloop: gemeten op /settings liep de groep op 1512px tot
+   * 1588 (76px voorbij de rand, óók in Tauri) en op een iPad in landschap tot
+   * 1440 van 1180 -- 260px buiten beeld.
+   *
+   * Daarom toetst dit nu het omgekeerde: géén gat, maar afslanken tot het past,
+   * en dat op gemeten POSITIE. */
+  it('reserveert geen gat meer -- dat blokje maakte de rij breder dan het venster', () => {
+    /* Op CODE, niet op het woord: de uitleg waaróm dit weg is mag blijven
+       staan, en moet ook -- anders bouwt de volgende sessie het terug. */
+    expect(chrome).not.toContain("querySelector('.axe-topbar-midden')");
+    expect(chrome).not.toContain("setProperty('--axe-viewctl-b'");
+    expect(nav).not.toContain('axe-topbar-midden');
+    expect(css).not.toMatch(/\.axe-topbar-midden\s*\{/);
+  });
+
+  it('slankt de kopbalk af tot de groep naast de pil past, in stappen', () => {
+    // De stand staat op de wortel, zodat de CSS kan kiezen wat wijkt.
+    expect(chrome).toContain('dataset.kopKrap');
+    // Vijf standen: 0 past alles, 4 is de pil zonder woorden.
+    expect(chrome).toMatch(/stap\s*<=\s*4/);
+    // En de CSS laat ze vallen in die orde: klok, label, profiel, pil-labels.
+    expect(css).toMatch(/\[data-kop-krap='1'\][^{]*\.axe-tr-klok/);
+    expect(css).toMatch(/\[data-kop-krap='2'\][^{]*\.axe-tl\b/);
+    expect(css).toMatch(/\[data-kop-krap='3'\][^{]*\.axe-tr-profiel/);
+    expect(css).toMatch(/\[data-kop-krap='4'\][^{]*\.axe-viewknop span/);
+  });
+
+  it('laat de klok bij elke krappere stand ook weg', () => {
+    /* Anders komt hij op stap 4 terug: de regel noemde eerst alleen 1 t/m 3,
+       en een scherm dat tot stap 4 gaat is per definitie krapper dan een dat
+       bij 1 stopt. */
+    for (const stand of ['1', '2', '3', '4']) {
+      expect(css, `klok hoort weg op stand ${stand}`)
+        .toMatch(new RegExp(`\\[data-kop-krap='${stand}'\\] \\.axe-tr-klok`));
+    }
+  });
+
+  it('toetst op positie, niet op opgetelde breedtes', () => {
+    /* Breedtes optellen vraagt om elke marge meerekenen, en één vergeten marge
+       is precies hoe de vorige poging misging. Twee voorwaarden: binnen het
+       venster, en beginnen waar de pil ophoudt. */
+    expect(chrome).toMatch(/window\.innerWidth/);
+    expect(chrome).toContain('pilKnopRechts');
   });
 });

@@ -2490,14 +2490,57 @@ html:root[data-look][data-ios-pwa],
   min-width: 0;
 }
 
-/* ── De lege plek in de kopbalk ──────────────────────────────────────────
-   Precies zo breed als de view-knoppen die er fixed overheen liggen, gemeten
-   door AxeShellChrome. Zonder dit legde de klok zich dwars over die knoppen. */
-:root[data-look] .axe-topbar-midden {
-  flex: 0 0 auto;
-  width: var(--axe-viewctl-b, 0px);
-  height: 34px;
-  pointer-events: none;
+/* ── Hier stond een lege plek in de kopbalk ──────────────────────────────
+   `.axe-topbar-midden` was precies zo breed als de pil die er fixed overheen
+   ligt, om te voorkomen dat de klok zich dwars over die knoppen legde. Dat kon
+   niet werken: de balk staat op `justify-between`, dus de rechtergroep ligt al
+   tegen de rechterrand en een blokje ervóór duwt haar niet verder op -- het
+   maakte de rij alleen breder dan het venster. De overlap werd een overloop van
+   260px op een iPad in landschap. AxeShellChrome slankt de groep nu af tot ze
+   naast de pil past (data-kop-krap, hieronder); dan is er niets te reserveren. */
+
+/* ── Wat er wijkt als de kopbalk te krap wordt ───────────────────────────
+   De pil in het midden ligt `fixed` en centreert op het scherm; rechts ervan
+   blijft maar (venster - pilbreedte) / 2 over. Op 1900px paste de rechtergroep
+   daar precies in (1888 van 1900) en viel het niemand op, maar op 1512 liep ze
+   tot 1588 en op een iPad in landschap (1180) tot 1440 -- 260px buiten beeld.
+
+   AxeShellChrome meet of ze past en zet `data-kop-krap` op 0 t/m 3. Niet een
+   breekpunt op vensterbreedte: dat is de verkeerde maat, want het hangt af van
+   wat er NA de pil overblijft, niet van hoe breed het scherm is.
+
+   De volgorde is de bedoeling: eerst de klok (251px en puur informatie), dan
+   het spraaklabel, dan de profielcirkel. Knoppen wijken nooit -- een knop
+   buiten beeld is erger dan een klok die je niet ziet. */
+/* Elke stand noemt ook alles van de standen ervóór. Niet omdat het mooi staat:
+   stond de klok alleen op 1 t/m 3, dan kwam hij op stap 4 terug -- en een
+   scherm dat tot stap 4 moet is per definitie krapper dan een dat bij 1 stopt.
+   Een test houdt dat vast (kopregelHart.test.ts). */
+:root[data-kop-krap='1'] .axe-tr-klok,
+:root[data-kop-krap='2'] .axe-tr-klok,
+:root[data-kop-krap='3'] .axe-tr-klok,
+:root[data-kop-krap='4'] .axe-tr-klok {
+  display: none !important;
+}
+:root[data-kop-krap='2'] .axe-tl,
+:root[data-kop-krap='3'] .axe-tl,
+:root[data-kop-krap='4'] .axe-tl {
+  display: none !important;
+}
+:root[data-kop-krap='3'] .axe-tr-profiel,
+:root[data-kop-krap='4'] .axe-tr-profiel {
+  display: none !important;
+}
+
+/* Stap 4: de labels in de pil zelf. Alleen een iPad in portret komt hier --
+   daar is de pil 413px van 820px en past de knoppenrij er anders niet naast.
+   Dit is dezelfde vorm die de telefoon al heeft (PlaatViewSwitch laat de spans
+   weg op `useIsMobile`), en elke knop houdt zijn aria-label en title.
+
+   `:not(.axe-viewctl--inline)`: de Agents-tab gebruikt dezelfde tegels IN de
+   pagina. Die heeft de ruimte wel en hoort haar woorden te houden. */
+:root[data-kop-krap='4'] .axe-viewctl:not(.axe-viewctl--inline) .axe-viewknop span {
+  display: none !important;
 }
 
 /* ── Een sleepstrip die pas verschijnt als je hem zoekt ──────────────────
