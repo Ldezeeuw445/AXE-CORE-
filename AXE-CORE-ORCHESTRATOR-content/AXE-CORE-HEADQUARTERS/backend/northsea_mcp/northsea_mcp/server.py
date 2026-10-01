@@ -20,6 +20,7 @@ import json
 import logging
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
@@ -612,6 +613,131 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 return JSONResponse({"error": "upstream_error"}, status_code=502)
         uit["stuck_runs_swept"] = geveegd
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
+
+    operations_lock = asyncio.Lock()
+
+    @route("/internal/operations/sweep", methods=["POST"])
+    async def operations_sweep(request: Request) -> Response:
+        """Bounded NorthSea operating loop.
+
+        Uses the existing northsea.engine service token, runs the real specialist
+        crews against canonical deal state, and never sends/approves/signs. Three
+        deals are qualified per sweep; one also gets an Operations watch pass.
+        A 12-hour audit window rotates work across the live pipeline instead of
+        repeatedly burning the same top deals.
+        """
+        auth = request.headers.get("authorization", "")
+        rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
+        if rec is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        if "northsea.engine" not in rec.scopes:
+            return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
+        dry = request.query_params.get("dry_run") in ("1", "true", "yes")
+        if operations_lock.locked():
+            return JSONResponse({"skipped": True, "reason": "an operations sweep is already running"}, status_code=409)
+
+        async with operations_lock:
+            try:
+                opportunities, audits = await asyncio.gather(
+                    repo.fetch_all("opportunities"),
+                    repo.fetch_all("northsea_audit_events"),
+                )
+            except RepositoryError:
+                return JSONResponse({"error": "upstream_error"}, status_code=502)
+
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
+            recent: set[str] = set()
+            for a in audits:
+                if a.get("action") != "crew_run" or not a.get("opportunity_id"):
+                    continue
+                try:
+                    when = datetime.fromisoformat(str(a.get("occurred_at") or "").replace("Z", "+00:00"))
+                    if when.tzinfo is None:
+                        when = when.replace(tzinfo=timezone.utc)
+                except (TypeError, ValueError):
+                    continue
+                if when >= cutoff:
+                    recent.add(str(a["opportunity_id"]))
+
+            priority_rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+            active = [
+                o for o in opportunities
+                if not o.get("is_synthetic")
+                and str(o.get("stage") or "").lower() not in {"won", "lost", "closed", "cancelled"}
+            ]
+            active.sort(key=lambda o: (
+                str(o.get("id")) in recent,
+                priority_rank.get(str(o.get("deal_priority") or "P2").upper(), 2),
+                -int(o.get("readiness_score") or 0),
+                str(o.get("updated_at") or ""),
+            ))
+            chosen = [o for o in active if str(o.get("id")) not in recent][:3]
+            if not chosen:
+                return JSONResponse({
+                    "status": "idle", "reviewed_recently": len(recent), "active_deals": len(active),
+                    "message": "all active deals received a crew pass in the last 12 hours",
+                }, headers={"Cache-Control": "no-store"})
+
+            if dry:
+                return JSONResponse({
+                    "status": "dry_run",
+                    "selected": [{"opportunity_id": o.get("id"), "priority": o.get("deal_priority"),
+                                  "readiness": o.get("readiness_score")} for o in chosen],
+                }, headers={"Cache-Control": "no-store"})
+
+            caller = Caller(
+                principal="northsea-operations-loop",
+                client_id=rec.client_id or "northsea-engine",
+                scopes=frozenset(set(rec.scopes) | {"northsea.deal.read", "northsea.research"}),
+            )
+            bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H")
+            results: list[dict[str, Any]] = []
+
+            async def run_event(o: dict[str, Any], event_type: str, suffix: str) -> None:
+                event = {
+                    "event_id": f"auto-{suffix}-{o['id']}-{bucket}",
+                    "run_id": str(uuid.uuid4()),
+                    "event_type": event_type,
+                    "source": "northsea_operations_loop",
+                    "priority": str(o.get("deal_priority") or "P2").upper()
+                                if str(o.get("deal_priority") or "P2").upper() in {"P0", "P1", "P2", "P3"} else "P2",
+                    "entity_ids": [str(o["id"])],
+                    "budget_envelope": {"research_calls": 0, "premium_calls": 0, "max_seconds": 55},
+                    "allowed_tools": ["canonical_state"],
+                    "retry_policy": {"max_attempts": 1},
+                    "approval_policy": "auto_if_safe",
+                    "requesting_principal": "northsea-operations-loop",
+                    "payload": {"opportunity_id": str(o["id"]), "automated_sweep": True},
+                }
+                try:
+                    result = await asyncio.wait_for(service.handle_event(caller, event), timeout=55)
+                    results.append({
+                        "opportunity_id": str(o["id"]), "event_type": event_type,
+                        "status": result.status, "route": result.route,
+                        "crew": result.crew.actual_crew if result.crew else None,
+                        "backend": result.crew.backend if result.crew else None,
+                        "approval_required": bool(result.gate and result.gate.approval_required),
+                    })
+                except asyncio.TimeoutError:
+                    results.append({"opportunity_id": str(o["id"]), "event_type": event_type, "status": "timeout"})
+                except Exception as exc:  # keep the rest of the desk moving
+                    log.exception("operations sweep crew pass failed")
+                    results.append({"opportunity_id": str(o["id"]), "event_type": event_type,
+                                    "status": "error", "error": type(exc).__name__})
+
+            for o in chosen:
+                await run_event(o, "opportunity_qualification", "qualify")
+            # The same Intelligence & Operations crew gets one bounded watch pass
+            # so sourcing, deal execution and operations are all genuinely alive.
+            await run_event(chosen[0], "stale_deal", "watch")
+
+            return JSONResponse({
+                "status": "ok",
+                "selected": len(chosen),
+                "results": results,
+                "sent": 0,
+                "approved": 0,
+            }, headers={"Cache-Control": "no-store"})
 
     discovery = DiscoveryService(repo, max_new_per_run=5, max_new_per_day=25, crew=crew, research=research, max_crew_calls_per_day=3)
     discovery_lock = asyncio.Lock()
