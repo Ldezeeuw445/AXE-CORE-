@@ -311,6 +311,21 @@ function recordVoiceTurn(question: string, answer: string): void {
 
 // ── ⌥Space (global) and Esc (window) — same switch as the mic button ─────
 
+/**
+ * Wat de mic-sneltoets doet. Eén plek, twee triggers.
+ *
+ * In Tauri komt de druk uit Rust (globale sneltoets, werkt ook als een andere
+ * app voorop staat); in de web-app en de PWA komt hij uit het venster
+ * (`useKeyboardShortcuts`, want daar is geen Rust). Stond de beslissing in de
+ * Tauri-tak hieronder, dan zou de web-kant zijn eigen versie krijgen -- en dan
+ * betekent dezelfde aanslag op twee plekken net iets anders.
+ */
+export function schakelStemSneltoets(): void {
+  const actief = isRealtimeVoiceActive() || useVoiceStore.getState().voiceStatus !== 'idle';
+  if (sneltoetsActie(actief) === 'stop') useVoiceStore.getState().stopListening();
+  else useVoiceStore.getState().startListening();
+}
+
 function installVoiceHotkeys(): void {
   if (hotkeysInstalled) return;
   hotkeysInstalled = true;
@@ -346,9 +361,7 @@ function installVoiceHotkeys(): void {
           useVoiceStore.setState({ voiceStatus: 'listening' });
           return;
         }
-        const active = isRealtimeVoiceActive() || useVoiceStore.getState().voiceStatus !== 'idle';
-        if (sneltoetsActie(active) === 'stop') useVoiceStore.getState().stopListening();
-        else useVoiceStore.getState().startListening();
+        schakelStemSneltoets();
       }),
     )
     .catch(() => {

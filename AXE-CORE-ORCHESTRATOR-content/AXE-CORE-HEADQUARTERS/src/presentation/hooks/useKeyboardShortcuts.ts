@@ -1,13 +1,35 @@
 /**
  * useKeyboardShortcuts.ts
  * ------------------------------------------------------------------
- * Global keyboard shortcuts for AXE CORE:
- * - Spacebar on Home = toggle microphone
- * - Cmd/Ctrl + letter = navigate to tabs
+ * De sneltoetsen van het venster:
+ * - ⌥Space = microfoon aan/uit, op ELKE tab (web en PWA)
+ * - Spatie op Home = hetzelfde, zonder modifier
+ * - Cmd/Ctrl + letter = naar een tab
+ *
+ * ## Waarom de mic-tak hier opnieuw geschreven is (1 okt 2026)
+ *
+ * In de kop stond "Spacebar on Home = toggle microphone", en dat deed hij niet.
+ * De tak hing aan een `onSpacebar`-prop, en `App.tsx` riep de hook aan als
+ * `useKeyboardShortcuts({})` -- zonder handler. Dus de enige toetsweg naar de
+ * microfoon in de web-app en de PWA was dood, op elke tab, al die tijd.
+ *
+ * En zelfs levend was hij beperkt tot Home. Bouwlijst 6.8 noemt dat ook als het
+ * laatste gat in de stem-fase: "globale hotkey om de mic van overal te openen".
+ * In Tauri bestaat die wel -- Rust registreert ⌥Space, zie src-tauri/src/lib.rs
+ * -- maar een browser kan geen toets afvangen buiten zijn eigen venster, dus
+ * daar is dit het dichtste wat bestaat: dezelfde aanslag, op elke tab, zolang
+ * het venster focus heeft.
+ *
+ * De beslissing zelf staat in `domain/voice/sneltoets.ts` en is getest, inclusief
+ * de reden dat het venster in Tauri juist NIET mag meedoen: Rust vangt dezelfde
+ * aanslag al af, en twee schakelaars op één druk is openen en meteen weer sluiten.
  */
 
 import { useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { opentMicVanuitVenster } from '@/domain/voice/sneltoets';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { schakelStemSneltoets } from '@/presentation/store/installOpenAIRealtimeVoice';
 
 /** Tab shortcuts — Cmd/Ctrl + key → route */
 const TAB_SHORTCUTS: Record<string, string> = {
@@ -34,26 +56,42 @@ const TAB_SHORTCUTS: Record<string, string> = {
 export function useKeyboardShortcuts({
   onSpacebar,
 }: {
+  /** Alleen nog voor een scherm dat de spatie zelf wil afhandelen. Blijft hij
+   *  leeg -- en dat doet App.tsx -- dan gaat de mic-tak naar de stemlus. */
   onSpacebar?: () => void;
-}) {
+} = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === '/' || location.pathname === '';
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Don't trigger when typing in inputs/textareas
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target as HTMLElement)?.isContentEditable) {
+      const doel = e.target as HTMLElement | null;
+      const tag = doel?.tagName?.toLowerCase();
+      const inVeld = tag === 'input' || tag === 'textarea' || tag === 'select'
+        || !!doel?.isContentEditable;
+
+      if (
+        opentMicVanuitVenster(
+          {
+            code: e.code,
+            alt: e.altKey,
+            ctrl: e.ctrlKey,
+            shift: e.shiftKey,
+            meta: e.metaKey,
+            inVeld,
+          },
+          { opHome: isHome, inTauri: isTauriRuntime() },
+        )
+      ) {
+        e.preventDefault();
+        if (onSpacebar) onSpacebar();
+        else schakelStemSneltoets();
         return;
       }
 
-      // Spacebar on Home = microphone toggle
-      if (e.code === 'Space' && isHome && onSpacebar) {
-        e.preventDefault();
-        onSpacebar();
-        return;
-      }
+      // Typen gaat voor bij alles hieronder.
+      if (inVeld) return;
 
       // Cmd/Ctrl + letter = tab navigation
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {

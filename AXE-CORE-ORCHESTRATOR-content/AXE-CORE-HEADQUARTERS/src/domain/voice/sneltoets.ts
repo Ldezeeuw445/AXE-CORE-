@@ -12,6 +12,11 @@
  *                         gesprek loopt. Dat is een schakelaar: loopt er iets,
  *                         dan stopt de sneltoets het; loopt er niets, dan start hij.
  *
+ *   - `opentMicVanuitVenster` zegt of een toetsaanslag IN het venster de mic
+ *                         hoort te openen. Dat is de web/PWA-kant: daar bestaat
+ *                         geen Rust om de toets af te vangen, dus daar moet het
+ *                         venster het doen.
+ *
  * Esc blijft los daarvan bestaan en blijft altijd stoppen — die zit in de
  * vensterlaag (useKeyboardShortcuts) en wordt hier niet aangeraakt.
  */
@@ -97,6 +102,19 @@ function naarCode(segment: string): string | null {
   const alias = TOETS_ALIASSEN[klein];
   if (alias) return alias;
 
+  /* De `Code`-schrijfwijze zelf, zodat deze lezer zijn eigen uitvoer terug kan
+     lezen. Dat is niet theoretisch: `accelerator` is wat we opslaan en wat Rust
+     registreert, en voor elke lettertoets is dat 'Alt+KeyM' -- die tekst gaf
+     hiervoor null, dus een sneltoets met een letter erin ging bij de eerste
+     herlezing stuk. 'Space' en de andere aliassen hierboven round-tripten wel,
+     en dat is precies waarom het niet opviel: de standaard is Alt+Space. */
+  const gecodeerd = /^(key[a-z]|digit[0-9]|f([1-9]|1[0-9]|2[0-4]))$/.exec(klein);
+  if (gecodeerd) {
+    if (klein.startsWith('key')) return `Key${klein.slice(3).toUpperCase()}`;
+    if (klein.startsWith('digit')) return `Digit${klein.slice(5)}`;
+    return `F${klein.slice(1)}`;
+  }
+
   // Eén letter → KeyA .. KeyZ
   if (/^[a-z]$/.test(klein)) return `Key${klein.toUpperCase()}`;
 
@@ -158,4 +176,59 @@ export function ontleedSneltoets(s: string): Sneltoets | null {
  */
 export function sneltoetsActie(gesprekActief: boolean): 'start' | 'stop' {
   return gesprekActief ? 'stop' : 'start';
+}
+
+/** Eén toetsaanslag, zonder DOM: alleen wat de beslissing nodig heeft. */
+export interface ToetsDruk {
+  /** `KeyboardEvent.code`, dus 'Space' en niet ' '. */
+  code: string;
+  alt: boolean;
+  ctrl: boolean;
+  shift: boolean;
+  meta: boolean;
+  /** Staat de cursor in een invoerveld? Dan is elke toets gewoon tekst. */
+  inVeld: boolean;
+}
+
+/** Draagt deze druk precies de modifiers van die sneltoets, en geen extra? */
+function modifiersKloppen(druk: ToetsDruk, toets: Sneltoets): boolean {
+  const wil = new Set(toets.modifiers);
+  return druk.alt === wil.has('alt')
+    && druk.ctrl === wil.has('control')
+    && druk.shift === wil.has('shift')
+    && druk.meta === wil.has('super');
+}
+
+/**
+ * Hoort deze toetsaanslag in het VENSTER de microfoon te openen?
+ *
+ * Twee vormen, en elk heeft zijn reden:
+ *
+ *   ⌥Space, op elke tab -- dezelfde aanslag die Rust globaal registreert
+ *     (STANDAARD_SNELTOETS). In de web-app en de PWA is er geen Rust, dus daar
+ *     is dit de enige manier om de mic te openen zonder naar Home te gaan.
+ *     In Tauri doet het venster dit NIET: daar vangt Rust de toets al af, en
+ *     twee handlers op één aanslag is twee keer schakelen, dus meteen weer dicht.
+ *
+ *   Een kale spatie, alleen op Home -- dat stond al jaren in de kop van
+ *     useKeyboardShortcuts ("Spacebar on Home = toggle microphone") maar werkte
+ *     niet: App.tsx riep de hook zonder handler aan, dus die tak was dood.
+ *     Alleen op Home, want een kale spatie is op elke andere tab de
+ *     paginascroll, en die afpakken is erger dan geen sneltoets.
+ *
+ * Typen gaat altijd voor. Een spatie in het chatvak is een spatie.
+ */
+export function opentMicVanuitVenster(
+  druk: ToetsDruk,
+  opties: { opHome: boolean; inTauri: boolean; sneltoets?: string },
+): boolean {
+  if (druk.inVeld) return false;
+
+  const toets = ontleedSneltoets(opties.sneltoets ?? STANDAARD_SNELTOETS);
+  if (toets && !opties.inTauri && druk.code === toets.code && modifiersKloppen(druk, toets)) {
+    return true;
+  }
+
+  const kaal = !druk.alt && !druk.ctrl && !druk.shift && !druk.meta;
+  return opties.opHome && kaal && druk.code === 'Space';
 }

@@ -428,7 +428,7 @@ aanroepbaar, gekoppeld aan de router.
 
 ### Fase 4 — stem-UX
 
-- [ ] **6.8** Spreken, pauze = versturen, Esc = stop, globale hotkey,
+- [x] **6.8** Spreken, pauze = versturen, Esc = stop, globale hotkey,
       een bol die altijd idle / listening / working / speaking / error
       toont.
 
@@ -436,8 +436,36 @@ aanroepbaar, gekoppeld aan de router.
 die meeloopt met die status, `statusOrb.ts` (idle/listening/thinking/
 speaking/error), #178 stilte-wacht, Esc stopt de stemlus, barge-in
 kapt TTS af, job-spraak wacht in de rij, zin-voor-zin TTS, orb op
-mic + TTS-niveau, stem-motor in Settings. **Ontbreekt:** globale
-hotkey om de mic van overal te openen.
+mic + TTS-niveau, stem-motor in Settings.
+
+**De hotkey, afgemaakt 1 okt 2026.** In Tauri bestond hij al: Rust
+registreert ⌥Space globaal (`src-tauri/src/lib.rs`), met de pure
+beslissingen in `domain/voice/sneltoets.ts`. In de web-app en de PWA was
+de enige toetsweg naar de mic een kale spatie op Home -- en zelfs die
+werkte niet: de tak hing aan een `onSpacebar`-prop en `App.tsx` riep de
+hook aan als `useKeyboardShortcuts({})`, zonder handler. De kop van dat
+bestand beschreef dus jaren gedrag dat er niet was.
+
+Nu pakt het venster ⌥Space op **elke** tab, dezelfde aanslag die Rust
+globaal registreert, met één gedeelde schakelaar
+(`schakelStemSneltoets`) zodat de toets op beide oppervlakken hetzelfde
+betekent. De kale spatie blijft bewust alleen op Home: elders is dat de
+paginascroll. In Tauri doet het venster juist NIET mee -- Rust vangt die
+aanslag al af, en twee handlers op één druk is openen en meteen weer
+sluiten. Gemeten in Chromium, vier gevallen:
+
+| | ⌥Space | kale spatie |
+|---|---|---|
+| web, Home | gepakt | gepakt |
+| web, andere tab | gepakt | doorgelaten |
+| Tauri, Home | doorgelaten (Rust) | gepakt |
+| Tauri, andere tab | doorgelaten (Rust) | doorgelaten |
+
+Typen gaat altijd voor: ⌥Space in een invoerveld wordt doorgelaten.
+
+**Blijft onmogelijk in de browser:** de toets afvangen terwijl een ándere
+app voorop staat. Dat kan alleen het besturingssysteem, dus dat blijft
+Tauri-only. Daar is het geen gat maar een grens.
 
 ### Fase 5 — OS3-gevoel: praten terwijl het werk doorloopt (25 sep)
 

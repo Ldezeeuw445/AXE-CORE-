@@ -11,7 +11,9 @@ import {
   SNELTOETS_EVENT,
   STANDAARD_SNELTOETS,
   ontleedSneltoets,
+  opentMicVanuitVenster,
   sneltoetsActie,
+  type ToetsDruk,
 } from './sneltoets';
 
 describe('ontleedSneltoets — geldige invoer', () => {
@@ -101,5 +103,81 @@ describe('contract met de Rust-kant', () => {
 
   it('de standaard is ontleedbaar', () => {
     expect(ontleedSneltoets(STANDAARD_SNELTOETS)).not.toBeNull();
+  });
+});
+
+/* ── De vensterkant van de sneltoets (1 okt 2026) ────────────────────────────
+   Toegevoegd omdat de mic in de web-app en de PWA alleen op Home te openen was,
+   en zelfs dat niet: App.tsx riep useKeyboardShortcuts zonder handler aan, dus
+   de tak die de kop van dat bestand beschrijft ("Spacebar on Home = toggle
+   microphone") was dood. */
+/* Gevonden 1 okt 2026 bij het schrijven van opentMicVanuitVenster: deze lezer
+   kon zijn eigen uitvoer niet teruglezen. `accelerator` is wat we opslaan en wat
+   Rust registreert, en voor een letter is dat 'Alt+KeyM' -- dat gaf null. Alleen
+   de standaard (Alt+Space) round-tripte, en daarom viel het niet op. */
+describe('ontleedSneltoets leest zijn eigen uitvoer terug', () => {
+  for (const tekst of ['Alt+Space', 'Alt+M', 'Control+Shift+KeyM', 'Super+Digit1', 'Alt+F5', 'Control+Alt+Shift+Super+KeyZ']) {
+    it(`round-trip: ${tekst}`, () => {
+      const eerste = ontleedSneltoets(tekst);
+      expect(eerste, tekst).not.toBeNull();
+      const tweede = ontleedSneltoets(eerste!.accelerator);
+      expect(tweede, `${tekst} -> ${eerste!.accelerator}`).toEqual(eerste);
+    });
+  }
+});
+
+describe('opentMicVanuitVenster', () => {
+  const druk = (over: Partial<ToetsDruk> = {}): ToetsDruk => ({
+    code: 'Space', alt: false, ctrl: false, shift: false, meta: false, inVeld: false, ...over,
+  });
+
+  it('⌥Space opent de mic op elke tab in de web-app', () => {
+    expect(opentMicVanuitVenster(druk({ alt: true }), { opHome: false, inTauri: false })).toBe(true);
+    expect(opentMicVanuitVenster(druk({ alt: true }), { opHome: true, inTauri: false })).toBe(true);
+  });
+
+  /* Het venster mag hem in Tauri NIET pakken: Rust registreert dezelfde
+     aanslag globaal, en twee schakelaars op één druk betekent openen en meteen
+     weer sluiten. */
+  it('⌥Space laat het venster in Tauri met rust -- Rust vangt hem al af', () => {
+    expect(opentMicVanuitVenster(druk({ alt: true }), { opHome: true, inTauri: true })).toBe(false);
+    expect(opentMicVanuitVenster(druk({ alt: true }), { opHome: false, inTauri: true })).toBe(false);
+  });
+
+  it('een kale spatie werkt alleen op Home -- elders is dat de paginascroll', () => {
+    expect(opentMicVanuitVenster(druk(), { opHome: true, inTauri: false })).toBe(true);
+    expect(opentMicVanuitVenster(druk(), { opHome: false, inTauri: false })).toBe(false);
+    // En op Home blijft hij ook in Tauri werken: Rust claimt alleen ⌥Space.
+    expect(opentMicVanuitVenster(druk(), { opHome: true, inTauri: true })).toBe(true);
+  });
+
+  it('typen gaat voor: een spatie in een veld is een spatie', () => {
+    expect(opentMicVanuitVenster(druk({ inVeld: true }), { opHome: true, inTauri: false })).toBe(false);
+    expect(opentMicVanuitVenster(druk({ alt: true, inVeld: true }), { opHome: false, inTauri: false })).toBe(false);
+  });
+
+  it('een extra modifier is een andere sneltoets', () => {
+    for (const extra of [{ ctrl: true }, { shift: true }, { meta: true }]) {
+      expect(opentMicVanuitVenster(druk({ alt: true, ...extra }), { opHome: false, inTauri: false }), JSON.stringify(extra)).toBe(false);
+    }
+  });
+
+  it('een andere toets doet niets', () => {
+    expect(opentMicVanuitVenster(druk({ code: 'KeyM', alt: true }), { opHome: true, inTauri: false })).toBe(false);
+    expect(opentMicVanuitVenster(druk({ code: 'Enter' }), { opHome: true, inTauri: false })).toBe(false);
+  });
+
+  it('volgt de ingestelde sneltoets, niet een tweede keer Alt+Space in code', () => {
+    const opties = { opHome: false, inTauri: false, sneltoets: 'Control+Shift+KeyM' };
+    expect(opentMicVanuitVenster(druk({ code: 'KeyM', ctrl: true, shift: true }), opties)).toBe(true);
+    expect(opentMicVanuitVenster(druk({ alt: true }), opties)).toBe(false);
+  });
+
+  it('een onbruikbare instelling laat de kale spatie op Home staan', () => {
+    // ontleedSneltoets wijst een kale toets af; dan is er geen modifier-vorm,
+    // maar Home mag niet stilvallen.
+    const opties = { opHome: true, inTauri: false, sneltoets: 'Space' };
+    expect(opentMicVanuitVenster(druk(), opties)).toBe(true);
+    expect(opentMicVanuitVenster(druk({ alt: true }), opties)).toBe(false);
   });
 });
