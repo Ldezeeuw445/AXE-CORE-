@@ -638,7 +638,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
 
         async with operations_lock:
             try:
-                opportunities, audits = await asyncio.gather(
+                (opportunities, _), (audits, _) = await asyncio.gather(
                     repo.fetch_all("opportunities"),
                     repo.fetch_all("northsea_audit_events"),
                 )
