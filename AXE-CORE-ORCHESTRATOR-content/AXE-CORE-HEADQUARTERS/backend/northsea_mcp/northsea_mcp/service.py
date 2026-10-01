@@ -568,10 +568,15 @@ class NorthSeaService:
                     contacts_b=contacts_b, contacts_s=contacts_s, red=red, intel=intel, gates=gates, readiness=readiness,
                     rblockers=rblockers, blockers=blockers)
 
-    async def _crew(self, action: str, depth: str, handoff: dict) -> CrewRunInfo:
+    async def _crew(self, caller: Caller, action: str, depth: str, handoff: dict) -> CrewRunInfo:
         if depth != "deep":
             return CrewRunInfo(used=False, reason="deterministic analysis was sufficient (depth=standard)")
-        return await self.crew.run(action, handoff)
+        # Deep tool calls and event-driven automation must feed the specialist
+        # crews through the same canonical boundary. Previously the direct tool
+        # path skipped canonical_handoff(), so a crew could report deal=unknown
+        # even while the service itself had the complete deal context.
+        enriched = await self.canonical_handoff(caller, action, handoff)
+        return await self.crew.run(action, enriched)
 
     def _snapshot_deal(self, ctx: dict) -> dict[str, Any]:
         """Canonical deal-state voor crews — geen bestand, alleen NorthSea-service data."""
@@ -880,7 +885,7 @@ class NorthSeaService:
             acties.append("Request evidence of seller authority (producer, refinery or mandate) and current executable allocation.")
         else:
             acties.append("Confirm the legal buying entity, authorised contact and payment instrument.")
-        crew = await self._crew("research_counterparty", depth, {
+        crew = await self._crew(caller, "research_counterparty", depth, {
             "entity_ids": {"counterparty_id": counterparty_id}, "objective": objective,
             "verified_facts": [c.model_dump() for c in claims if c.state == "verified"],
             "unverified_claims": [c.model_dump() for c in claims if c.state != "verified"],
@@ -1071,7 +1076,7 @@ class NorthSeaService:
         if wacht and now() - wacht > timedelta(hours=72):
             comm_advies.append({"template": "follow_up", "recipient": "awaited party", "approval_required": True,
                                 "reason": f"Waiting since {wacht.date().isoformat()} (>72h).", "prepare_with": "northsea_prepare_outreach"})
-        crew = await self._crew("qualify_opportunity", depth, {
+        crew = await self._crew(caller, "qualify_opportunity", depth, {
             "entity_ids": {"opportunity_id": opp["id"]}, "stage": opp.get("stage"),
             "gates": [g.model_dump() for g in ctx["gates"]], "evidence_state": evidence_state(ctx["evidence"]),
             "blockers": [b.model_dump() for b in ctx["blockers"]], "required_output": "qualification risks and missing evidence",
@@ -1128,7 +1133,7 @@ class NorthSeaService:
             run = runs[0]
         acties = [f"Review the research on '{e.field}' and record a verification check or deal evidence if it holds." for e in bewijs]
         acties += [f"{x['description']} -- {x['reason']}" for x in open_ if "evidence_index" not in x][:5]
-        crew = await self._crew("investigate_blockers", depth, {
+        crew = await self._crew(caller, "investigate_blockers", depth, {
             "entity_ids": {"opportunity_id": opp["id"]}, "blockers": [b.model_dump() for b in gekozen],
             "new_unverified_evidence": [c.model_dump() for c in bewijs], "prohibited_actions": PROHIBITED})
         if crew.analysis:
