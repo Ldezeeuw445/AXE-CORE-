@@ -74,7 +74,8 @@ describe('canonical mobile Home wiring', () => {
   it('extends the mobile glass plate down to just above the iPhone home indicator', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     expect(shell).toContain("calc(env(safe-area-inset-top, 0px) + 2px)");
-    expect(shell).toContain("bottom: location.pathname === '/mobile'");
+    // De bodem stond ooit per route anders; sinds de plaat de basis van ELKE
+    // mobiele tab is, is hij overal gelijk. Die splitsing hoort hier niet meer.
     // 34pt inset - 12 = 22pt boven de schermrand, 9pt boven de streep;
     // zonder inset (zwevende telefoon in Tauri) de oude 14px.
     expect(shell).toContain("max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px))");
@@ -85,7 +86,15 @@ describe('canonical mobile Home wiring', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     expect(mobile).not.toContain('text-[14px] font-medium tracking-[0.16em]');
     expect(mobile).not.toContain('stateLabel');
-    expect(mobile).toMatch(/text-\[9px\] tracking-\[0\.12em\][\s\S]{0,260}#34d399[\s\S]{0,120}AXE CORE/);
+    // Eén regel, klein, met een bolletje ervoor. Als losse beweringen in
+    // plaats van één venster-regex: die brak op elke regel die ertussen kwam,
+    // terwijl de bedoeling (klein, gekleurd bolletje, AXE CORE) gelijk bleef.
+    expect(mobile).toContain('text-[9px] tracking-[0.12em]');
+    expect(mobile).toContain('AXE CORE ·');
+    // Groen uit een token, niet uit een hardgecodeerde hex -- kleur hoort in
+    // een token zodat beide standen hem kunnen herzien.
+    expect(mobile).toContain('var(--success)');
+    expect(mobile).not.toContain('#34d399');
   });
 
   // Terrain staat absolute; zonder rand om het vak lag zijn canvas over de
@@ -120,7 +129,10 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).toContain("slot.dispatchEvent(new Event('wereldvrij'));");
     for (const wereld of [brein, terrein]) {
       expect(wereld).toContain('leesVrijeRuimte(');
-      expect(wereld).toContain('middenVerschuiving(');
+      // `beeldVerschuiving` telt de vrije-ruimte-centrering op bij de vaste
+      // lift, zodat de wereld ook op de plaat, de iPad en Tauri wat hoger
+      // hangt -- daar was de verschuiving altijd 0.
+      expect(wereld).toContain('beeldVerschuiving(');
       expect(wereld).toContain('pasAfstand(');
     }
     // Neural kon op de telefoon niet zoomen: alleen het scrollwiel.
@@ -152,11 +164,19 @@ describe('canonical mobile Home wiring', () => {
     const rechts = bron('presentation/components/layout/RightPanel.tsx');
     const lade = bron('presentation/components/layout/ladeSloten.ts');
     const css = bron('design/axe-look.css');
-    expect(shell).toContain("useLadeSloten(mobileCommandSurface && location.pathname !== '/lock');");
-    // Desktop-sloten en ladesloten sluiten elkaar uit.
-    expect(shell).toContain('{!mobileCommandSurface && opPlaat && <PlaatSlotHosts />}');
-    expect(links).toContain('{isMobile && <LadeSlot naam="links" />}');
-    expect(rechts).toContain('{isMobile && <LadeSlot naam="rechts" />}');
+    // `ladeOppervlak` = telefoon OF iPad. Eén vlag, want de desktop-sloten en
+    // de ladesloten vechten anders om dezelfde id's (ladeSloten.ts slaat bij
+    // botsing alleen maar over, en dan krijg je stil geen lade).
+    expect(shell).toContain("useLadeSloten(ladeOppervlak && location.pathname !== '/lock');");
+    expect(shell).toContain('const ladeOppervlak = mobileCommandSurface || isTablet;');
+    expect(shell).toContain('{!ladeOppervlak && opPlaat && <PlaatSlotHosts />}');
+    // Sidebar/RightPanel gebruiken dezelfde vlag als hun Sheet: een lade die
+    // opengaat zonder LadeSlot erin is een lege lade.
+    expect(links).toContain('{isCompact && <LadeSlot naam="links" />}');
+    expect(rechts).toContain('{isCompact && <LadeSlot naam="rechts" />}');
+    for (const bestand of [links, rechts]) {
+      expect(bestand).toContain('const isCompact = isMobile || isTablet;');
+    }
     // Geparkeerd buiten React, zodat een dichte Sheet de widgets niet meeneemt.
     expect(lade).toContain("el.className = 'axe-slot axe-slot--lade';");
     expect(lade).toContain('parkeerplaats().appendChild(gastheer);');

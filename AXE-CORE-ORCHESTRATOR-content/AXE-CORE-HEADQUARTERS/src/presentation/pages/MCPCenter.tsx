@@ -302,8 +302,11 @@ export default function MCPCenter() {
         <SectieBlok titel="MCP TOOL TESTER" extra={<Wrench size={12} style={{ color: 'var(--text-muted)' }} />}>
           <Kaart>
             <div className="space-y-2">
-              <div className="flex gap-2">
-                <select value={toolServer} onChange={e => { setToolServer(e.target.value); setToolName(''); }} className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+              {/* flex-wrap + min-w-0: een <select> is zo breed als zijn langste
+                  optie en krimpt niet uit zichzelf, dus op een telefoon duwde
+                  deze rij 37px buiten de kaart. */}
+              <div className="flex flex-wrap gap-2">
+                <select value={toolServer} onChange={e => { setToolServer(e.target.value); setToolName(''); }} className="min-w-0 max-w-full text-[11px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
                   <option value="">Select server...</option>
                   {online.map(s => <option key={s.id} value={s.id}>{s.naam}</option>)}
                 </select>

@@ -105,6 +105,16 @@ export default defineConfig(async ({ command }) => ({
       injectRegister: (isAndroidShell || isTauriBuild) ? false : 'script',
       manifest: false, // We use our own public/manifest.json
       workbox: {
+        // `registerType: 'autoUpdate'` zet deze twee NIET automatisch: de plugin
+        // doet dat alleen als `injectRegister` 'auto' of leeg is, en hierboven
+        // staat 'script'. Gevolg tot 1 okt 2026: geen skipWaiting, geen
+        // clientsClaim in de gebouwde sw.js (nagemeten), dus een nieuwe versie
+        // bleef eeuwig in `waiting` zolang er een venster openstond. Op een
+        // geïnstalleerde iOS-PWA is dat altijd -- die staat in de app-switcher.
+        // Luka's telefoon kon dagen een oude bundel tonen.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // 8 MB. The main chunk was 3.7 MB when this was set to 5, and is 5.24 MB
         // now — a limit written against a measurement ages badly, and when it
         // is crossed the build FAILS rather than warning, so the next person

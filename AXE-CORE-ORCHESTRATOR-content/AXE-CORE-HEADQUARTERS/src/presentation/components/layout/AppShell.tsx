@@ -17,6 +17,7 @@ import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { isIngebed, schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { MobileNav } from '@/presentation/components/layout/MobileNav';
@@ -168,6 +169,26 @@ export function AppShell() {
     });
   // De nav is dan altijd de lade; de horizontale onderbalk is alleen desktop.
   const mobileNav = mobileCommandSurface;
+  /**
+   * iPad: wél de laden, verder de volle schil.
+   *
+   * `use-mobile.ts` stuurt de iPad met opzet naar het desktop-pad -- dat staat
+   * er met zoveel woorden bij -- en dat blijft zo: `isMobile` aanzetten voor de
+   * iPad zou hem door het hele telefoonpad sturen (composer, bottom-nav,
+   * plaatgeometrie), en dat is niet wat er gevraagd is.
+   *
+   * Gevraagd is dit: de geheugenkolommen links en rechts gaan de uitschuiflade
+   * in, zodat Neural en Terrain het hele beeld krijgen. Daar is `useIsTablet`
+   * voor: géén Tauri (dubbel afgeschermd -- `__TAURI_INTERNALS__` én
+   * `pointer: fine` op macOS) en ≥768px met een grove aanwijzer.
+   *
+   * Eén vlag voor twee dingen die ALTIJD samen moeten omklappen: wie de
+   * slot-hosts neerzet. `PlaatSlotHosts` en `useLadeSloten` vechten anders om
+   * dezelfde id's (`#axe-slot-links`/`-rechts`), en `ladeSloten.ts` slaat bij
+   * botsing alleen maar over -- dan krijg je stil geen lade.
+   */
+  const isTablet = useIsTablet();
+  const ladeOppervlak = mobileCommandSurface || isTablet;
   // De telefoon-home is de échte Tauri-glasplaat: een paneel dat op de
   // achtergrond zweeft met een kleine kier eromheen (zie de "AXE Glass Plate"-
   // mockup). Dat is de schil zelf — vaste inset, ronde hoeken, een randje en een
@@ -194,7 +215,7 @@ export function AppShell() {
   // Telefoon: de zijsloten van een tab wonen in de laden, niet naast de plaat
   // (ladeSloten.ts). Op de desktop zet PlaatSlotHosts ze neer; die twee sluiten
   // elkaar uit via mobileCommandSurface.
-  useLadeSloten(mobileCommandSurface && location.pathname !== '/lock');
+  useLadeSloten(ladeOppervlak && location.pathname !== '/lock');
   // Telefoon-Home met Neural, Terrain of Architecture: de wereld vult de hele
   // plaat (slot 'wereld'), en het midden laat aanraking door naar die wereld --
   // alleen de wereldknoppen en de composer vangen nog tikken (MobileSystem).
@@ -320,7 +341,7 @@ export function AppShell() {
           style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 'inherit', overflow: 'hidden' }}
         />
       )}
-      {!mobileCommandSurface && opPlaat && <PlaatSlotHosts />}
+      {!ladeOppervlak && opPlaat && <PlaatSlotHosts />}
       {/* Top Navigation */}
       {!mobileCommandSurface && <TopNav />}
 
@@ -406,7 +427,18 @@ export function AppShell() {
                 onClick={() => setMobieleComposerWeg(true)}
                 aria-label="Composer verbergen"
                 title="Composer verbergen"
-                className="axe-mobile-composer-collapse absolute right-1 top-1 z-[4] flex size-7 items-center justify-center rounded-full"
+                /* Op de bovenRAND, niet erin. Op `top-1 right-1` lag deze knop
+                   van 28px over de schuifknop rechtsboven in de composer -- 20
+                   bij 22 pixels overlap, want `.axe-kop-rechts` staat op
+                   space-between en die knop is dus altijd het meest rechtse
+                   ding. Alleen omhoog was niet genoeg -- gemeten bleef er 4px
+                   overlap, want die knop begint 10px onder de rand. Dus ook
+                   naar het MIDDEN: de kop heeft een linker- en een
+                   rechtergroep en daartussen is niets, dus daar kan hij nooit
+                   botsen. -14px is de helft van 28, dus hij hangt precies
+                   midden op de rand. Niets knipt hem af: de omhullende div en
+                   `.axe-mobile-tab-composer` hebben geen overflow. */
+                className="axe-mobile-composer-collapse absolute left-1/2 -translate-x-1/2 -top-[14px] z-[6] flex size-7 items-center justify-center rounded-full"
               >
                 <ChevronDown size={14} />
               </button>

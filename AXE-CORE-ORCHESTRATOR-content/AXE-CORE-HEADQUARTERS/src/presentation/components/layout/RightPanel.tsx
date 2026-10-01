@@ -8,6 +8,7 @@ import {
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { ModelStatusWidget } from '@/presentation/components/widgets/ModelStatusWidget';
@@ -394,9 +395,20 @@ export function RightPanel() {
   const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen, setRightPanelOpen, setCommandPaletteOpen } = useUIStore();
   const [kamer, setKamer] = useState<RailKamer>('status');
   const isMobile = useIsMobile();
-  // iPad follows the same rail contract as Tauri. Only an actual phone uses
-  // the Sheet drawer; otherwise TabRail has a real #axe-rail-rechts host.
-  const isCompact = isMobile;
+  /* iPad krijgt de lade, Tauri niet.
+   *
+   * Hier stond `const isCompact = isMobile;` met de opmerking dat de iPad de
+   * volle Tauri-schil houdt. Luka, 1 okt 2026: op de iPad vielen de
+   * geheugenkolommen buiten beeld en aten ze het canvas van Neural en Terrain
+   * op -- die moeten de lade in, net als op de telefoon.
+   *
+   * `useIsTablet` en niet `isMobile`: dat laatste zou de iPad door het hele
+   * telefoonpad sturen (composer, bottom-nav, plaatgeometrie). Deze sluit
+   * Tauri dubbel uit: geen `__TAURI_INTERNALS__`, en macOS meldt
+   * `pointer: fine`. Dezelfde vlag stuurt `ladeOppervlak` in AppShell, zodat
+   * de lade-hosts en PlaatSlotHosts samen omklappen. */
+  const isTablet = useIsTablet();
+  const isCompact = isMobile || isTablet;
   const navigate = useNavigate();
   const opHome = useLocation().pathname === '/';
   const voice = useVoiceStore();
@@ -470,7 +482,7 @@ export function RightPanel() {
         {isCompact && <div id="axe-rail-rechts" className="axe-rail-host" />}
         {/* Telefoon: de rechter widgets van de tab die open staat (Neural,
             Terrain), bovenaan deze lade -- zie ladeSloten.ts. */}
-        {isMobile && <LadeSlot naam="rechts" />}
+        {isCompact && <LadeSlot naam="rechts" />}
         <div className="axe-mobile-drawer-standard space-y-3">
         <RailKamerKiezer kamer={kamer} opKamer={setKamer} />
 

@@ -14,10 +14,72 @@ import { readFileSync } from 'node:fs';
 const lees = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
 describe('uitschuifbalken hebben één breedte', () => {
-  it('het token staat precies één keer gedefinieerd', () => {
+  /** De inhoud van elk @media-blok eruit, zodat alleen de basis overblijft. */
+  const zonderMedia = (css: string): string => {
+    let uit = '';
+    let i = 0;
+    while (i < css.length) {
+      const m = css.indexOf('@media', i);
+      if (m === -1) { uit += css.slice(i); break; }
+      uit += css.slice(i, m);
+      const open = css.indexOf('{', m);
+      if (open === -1) break;
+      let diepte = 0;
+      let j = open;
+      for (; j < css.length; j++) {
+        if (css[j] === '{') diepte++;
+        else if (css[j] === '}') { diepte--; if (diepte === 0) break; }
+      }
+      i = j + 1;
+    }
+    return uit;
+  };
+
+  /* Deze test telde ÉLKE definitie en eiste er één. Dat vangt de val waar hij
+     voor gemaakt is -- dezelfde regel twee keer, duizenden regels uit elkaar,
+     waarbij de tweede de eerste stil overschrijft -- maar hij kan dat niet
+     onderscheiden van een bewuste responsive override. En die is er een: in
+     het iPad-blok staat `clamp(260px, 30vw, 360px)`, mét uitleg erboven,
+     omdat 380px daar niet naast de plaat past.
+  
+     Dus telt hij nu alleen de BASIS. Een tweede definitie op het hoogste
+     niveau is nog steeds fout; een override binnen een media-query is precies
+     waar media-queries voor zijn. */
+  it('het token staat precies één keer buiten een media-query', () => {
     const css = lees('../design/axe-look.css');
-    const keren = (css.match(/^\s*--axe-rail-breedte:/gm) || []).length;
-    expect(keren, 'twee definities betekent dat de tweede de eerste stil overschrijft').toBe(1);
+    const basis = (zonderMedia(css).match(/^\s*--axe-rail-breedte:/gm) || []).length;
+    expect(basis, 'twee definities in de basis betekent dat de tweede de eerste stil overschrijft').toBe(1);
+  });
+
+  it('elke override zit in een media-query met een echte voorwaarde', () => {
+    const css = lees('../design/axe-look.css');
+    // Elk @media-blok met zijn voorwaarde, zodat we kunnen kijken WAAR een
+    // override staat in plaats van alleen DAT er een is.
+    const blokken: Array<{ voorwaarde: string; inhoud: string }> = [];
+    let i = 0;
+    while (true) {
+      const m = css.indexOf('@media', i);
+      if (m === -1) break;
+      const open = css.indexOf('{', m);
+      if (open === -1) break;
+      let diepte = 0;
+      let j = open;
+      for (; j < css.length; j++) {
+        if (css[j] === '{') diepte++;
+        else if (css[j] === '}') { diepte--; if (diepte === 0) break; }
+      }
+      blokken.push({ voorwaarde: css.slice(m + 6, open).trim(), inhoud: css.slice(open, j) });
+      i = j + 1;
+    }
+
+    const overrides = blokken.filter((b) => /--axe-rail-breedte:/.test(b.inhoud));
+    for (const o of overrides) {
+      // Een voorwaarde die niets uitsluit is geen override maar een tweede basis.
+      expect(o.voorwaarde.length, `lege media-voorwaarde rond --axe-rail-breedte`).toBeGreaterThan(5);
+    }
+    // De iPad is de enige die hem vandaag overschrijft; verandert dat, dan
+    // hoort dat hier op te vallen in plaats van stil te gebeuren.
+    expect(overrides.map((o) => o.voorwaarde).join(' | ')).toMatch(/pointer:\s*coarse/);
   });
 
   it('geen enkele balk zet zijn breedte nog zelf', () => {

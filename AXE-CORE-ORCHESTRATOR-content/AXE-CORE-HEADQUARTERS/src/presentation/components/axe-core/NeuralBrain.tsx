@@ -14,7 +14,7 @@
  */
 import { applySceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
 import { SLOT_ID, useSlotAdoptie } from '@/presentation/components/layout/PlaatSlots';
-import { leesVrijeRuimte, middenVerschuiving, pasAfstand, WERELD_SLOT_SELECTOR, type VrijeRuimte } from '@/presentation/components/axe-core/wereldBeeld';
+import { leesVrijeRuimte, beeldVerschuiving, pasAfstand, WERELD_SLOT_SELECTOR, type VrijeRuimte } from '@/presentation/components/axe-core/wereldBeeld';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { createElement, memo, useEffect, useRef, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -431,8 +431,9 @@ export default function NeuralBrain() {
       camera.aspect = w / h;
       const vrij = leesVrijeRuimte(root);
       telefoonVrij = vrij;
-      if (vrij) camera.setViewOffset(w, h, 0, middenVerschuiving(vrij), w, h);
-      else camera.clearViewOffset();
+      // Ook zonder vrije-ruimte-meting (plaat, iPad, Tauri) een stukje omhoog:
+      // `beeldVerschuiving` telt de telefoon-centrering op bij de vaste lift.
+      camera.setViewOffset(w, h, 0, beeldVerschuiving(h, vrij), w, h);
       camera.updateProjectionMatrix();
       pasTelefoonAfstand?.(w, h, vrij);
     }

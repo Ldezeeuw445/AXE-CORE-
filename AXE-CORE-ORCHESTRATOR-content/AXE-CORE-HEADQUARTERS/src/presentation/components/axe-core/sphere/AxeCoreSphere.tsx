@@ -84,6 +84,21 @@ function maakBol(n = N, stappen = 0): Punt[] {
  * blur"). Zelfde bol, zelfde lagen; alleen resolutie en deeltjesmaat zijn
  * anders. Desktop, Tauri en de zwevende bol geven hem niet mee.
  */
+/**
+ * Hoe hoog de bol in zijn vak hangt, als fractie van de hoogte.
+ *
+ * Stond als `h * 0.40` in BEIDE tekenroutines (`teken` en `tekenFijn`, één
+ * voor desktop en één voor de telefoon). Twee keer hetzelfde getal is twee
+ * kansen om uiteen te lopen; nu staat het één keer.
+ *
+ * 0.40 was al een lift vanaf het midden, voor de composer op de telefoon.
+ * Luka, 1 okt 2026: ook op de plaat en de iPad mag hij nog een stukje hoger --
+ * bij uitzoomen kwam hij anders te dicht bij de composer. 0.36 tilt hem nog
+ * ~4% van de hoogte op (op een scherm van 812 ruim 30px) zonder hem tegen de
+ * bovenrand te duwen.
+ */
+const BOL_HOOGTE = 0.36;
+
 export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number; telefoon?: boolean }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const boostRef = useRef(boost);
@@ -246,10 +261,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
       const doel = spreekt ? getGlobalTtsLevel() : 0;
       // Snel omhoog, rustiger omlaag: lettergrepen zie je, geen flikkering.
       stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
-      // Boven het midden: op de telefoon-plaat staat de composer eronder, en dan
-      // oogt het gecentreerde midden te laag. 0.40 tilt de bol wat verder op
-      // zonder hem tegen de bovenrand te duwen.
-      const cx = w / 2, cy = h * 0.40;
+      const cx = w / 2, cy = h * BOL_HOOGTE;
       // Iets groter standaard (0.31 -> 0.34): op klein formaat lagen de deeltjes
       // te dicht op elkaar en versmolten tot één waas. Meer straal = meer lucht
       // tussen de punten, dus ook zonder inzoomen leest de korrel.
@@ -325,7 +337,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
       const spreekt = useVoiceStore.getState().voiceStatus === 'speaking';
       const doel = spreekt ? getGlobalTtsLevel() : 0;
       stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
-      const cx = w / 2, cy = h * 0.40;
+      const cx = w / 2, cy = h * BOL_HOOGTE;
       const R = Math.min(w, h) * 0.34 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
       const groei = 0.9 + b * 0.4;

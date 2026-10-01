@@ -45,6 +45,34 @@ export function middenVerschuiving(v: VrijeRuimte): number {
 }
 
 /**
+ * Hoeveel een wereld standaard omhoog hangt, als fractie van de hoogte.
+ *
+ * Luka, 1 okt 2026: de bol en het deeltjesbrein staan waarschijnlijk precies in
+ * het midden, en juist daardoor komen ze bij uitzoomen te dicht bij de
+ * composer. Dit tilt elke wereld een stukje op -- ook op de iPad en de plaat,
+ * waar er geen vrije-ruimte-meting is en de verschuiving dus altijd 0 was.
+ *
+ * Zelfde orde als `BOL_HOOGTE` in AxeCoreSphere (0.50 -> 0.36 is ~4% hoger dan
+ * 0.40), zodat de bol, het brein en het terrein samen bewegen in plaats van
+ * ieder een eigen midden te kiezen.
+ */
+export const WERELD_LIFT = 0.045;
+
+/**
+ * De verticale verschuiving voor `camera.setViewOffset(w, h, 0, dit, w, h)`.
+ * Positief = omhoog. Telt de vrije-ruimte-centrering (telefoon) op bij de
+ * vaste lift (overal).
+ *
+ * De lift zit hier en NIET in `middenVerschuiving`: daar staat een test op met
+ * exacte waarden, en die meet iets anders -- het midden van de vrije ruimte,
+ * niet de smaak.
+ */
+export function beeldVerschuiving(hoogte: number, vrij: VrijeRuimte | null): number {
+  const midden = vrij ? middenVerschuiving(vrij) : 0;
+  return midden + hoogte * WERELD_LIFT;
+}
+
+/**
  * De camera-afstand waarop een bol met `straal` in de vrije ruimte past, met
  * `marge` (0..1) van die ruimte gevuld. De kleinste van de twee kijkhoeken
  * beslist: op een staand scherm is dat bijna altijd de breedte.

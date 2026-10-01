@@ -160,33 +160,36 @@ if (inTauri && 'serviceWorker' in navigator) {
   })();
 }
 
+/**
+ * De nieuwe versie ook echt laten overnemen.
+ *
+ * Hier stond een tweede `navigator.serviceWorker.register('/sw.js')` -- de
+ * plugin zet er zelf al een in `index.html` -- plus een prompt die de update
+ * die hij aanbood niet kón toepassen: hij herlaadde wel, maar stuurde nooit
+ * `SKIP_WAITING`, dus de nieuwe worker bleef wachten en de oude bleef je
+ * bedienen. Met `skipWaiting`/`clientsClaim` in vite.config neemt de nieuwe
+ * worker vanaf nu zelf over; dit stukje zorgt alleen nog dat het VENSTER
+ * meegaat, zodat je niet met een halve oude pagina achterblijft.
+ *
+ * `controllerchange` vuurt zodra de nieuwe worker de controle heeft. Eén keer
+ * herladen, en de bewaking erop dat dat niet in een lus belandt.
+ */
 if ('serviceWorker' in navigator && !inAndroidShell && !inTauri && !isDev) {
+  let herladen = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (herladen) return;
+    herladen = true;
+    window.location.reload();
+  });
+
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('[AXE CORE] SW registered:', registration.scope);
-
-        setInterval(() => {
-          registration.update();
-        }, 5 * 60 * 1000);
-
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (!newWorker) return;
-
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[AXE CORE] New version available!');
-              if (confirm('🚀 AXE CORE Update Available!\n\nA new version is ready. Reload to update?')) {
-                window.location.reload();
-              }
-            }
-          });
-        });
-      })
-      .catch((error) => {
-        console.log('[AXE CORE] SW registration failed:', error);
-      });
+    void navigator.serviceWorker.ready.then((registration) => {
+      // Elke vijf minuten kijken of er een nieuwe build staat. Zonder dit
+      // merkt een PWA die dagenlang open blijft staan nooit iets.
+      setInterval(() => { void registration.update(); }, 5 * 60 * 1000);
+    }).catch((error) => {
+      console.warn('[AXE CORE] service worker niet gereed:', error);
+    });
   });
 }
 

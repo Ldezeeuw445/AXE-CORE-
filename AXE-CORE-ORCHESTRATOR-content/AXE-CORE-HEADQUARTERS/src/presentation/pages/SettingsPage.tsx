@@ -780,7 +780,9 @@ function ProviderKeysSection() {
             LangGraph orchestrator kiest automatisch de juiste provider per taak — test elk model individueel.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* flex-wrap: drie knoppen naast elkaar passen niet in de 338px die een
+            telefoon overhoudt, en zonder afbreken steken ze er 18px uit. */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => { void refreshUsage(); }}
             disabled={usageRefreshing}

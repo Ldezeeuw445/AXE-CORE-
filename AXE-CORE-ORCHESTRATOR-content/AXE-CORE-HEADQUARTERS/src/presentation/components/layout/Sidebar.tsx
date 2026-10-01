@@ -5,6 +5,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import {
@@ -300,8 +301,20 @@ const TOOL_CARD_STYLE = { minHeight: 160 } as const;
 export function Sidebar() {
   const { leftDrawerOpen, setLeftDrawerOpen, leftPanelOpen, toggleLeftPanel } = useUIStore();
   const isMobile = useIsMobile();
-  // iPad keeps the full Tauri shell. Only phone-width surfaces use Sheets.
-  const isCompact = isMobile;
+  /* iPad krijgt de lade, Tauri niet.
+   *
+   * Hier stond `const isCompact = isMobile;` met de opmerking dat de iPad de
+   * volle Tauri-schil houdt. Luka, 1 okt 2026: op de iPad vielen de
+   * geheugenkolommen buiten beeld en aten ze het canvas van Neural en Terrain
+   * op -- die moeten de lade in, net als op de telefoon.
+   *
+   * `useIsTablet` en niet `isMobile`: dat laatste zou de iPad door het hele
+   * telefoonpad sturen (composer, bottom-nav, plaatgeometrie). Deze sluit
+   * Tauri dubbel uit: geen `__TAURI_INTERNALS__`, en macOS meldt
+   * `pointer: fine`. Dezelfde vlag stuurt `ladeOppervlak` in AppShell, zodat
+   * de lade-hosts en PlaatSlotHosts samen omklappen. */
+  const isTablet = useIsTablet();
+  const isCompact = isMobile || isTablet;
   const opHome = useLocation().pathname === '/';
 
   const sluitPaneel = () => {
@@ -342,7 +355,7 @@ export function Sidebar() {
         {isCompact && <div id="axe-rail-links" className="axe-rail-host" />}
         {/* Telefoon: de linker widgets van de tab die open staat (Neural,
             Terrain), bovenaan deze lade -- zie ladeSloten.ts. */}
-        {isMobile && <LadeSlot naam="links" />}
+        {isCompact && <LadeSlot naam="links" />}
         <div className="axe-mobile-drawer-standard space-y-2">
         <WidgetCard title="THINKTHANKS" icon={<Lightbulb size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <ThinkThanksWidget />

@@ -22,16 +22,24 @@ const SRC = new URL('../../../', import.meta.url).pathname;
 const lees = (p: string) => readFileSync(join(SRC, p), 'utf8');
 
 describe('de rail-host is altijd te vinden', () => {
-  it('de linkerbalk zet zijn host in beide standen', () => {
+  /* Dit telde `toBe(2)`: ingeklapt en uitgeklapt, de twee standen die er waren
+     toen de test geschreven werd. Er is er een derde bij gekomen -- de lade
+     (Sheet) op telefoon en iPad -- en dan is 3 juister dan 2, niet fouter.
+     Wat de test wil bewaken is dat de host in ÉLKE stand bestaat, want
+     `useTabRail` portalt erin en een ontbrekende host is een lege rail.
+     Dus: minstens de twee asides, en aantoonbaar ook een in de lade. */
+  it('de linkerbalk zet zijn host in elke stand', () => {
     const tekst = lees('presentation/components/layout/Sidebar.tsx');
     const aantal = tekst.split('id="axe-rail-links"').length - 1;
-    expect(aantal, 'host hoort zowel ingeklapt als uitgeklapt te bestaan').toBe(2);
+    expect(aantal, 'host hoort in elke stand te bestaan: lade, ingeklapt, uitgeklapt').toBeGreaterThanOrEqual(2);
+    expect(tekst, 'de lade heeft zijn eigen host nodig').toContain('{isCompact && <div id="axe-rail-links"');
   });
 
   it('de rechterbalk ook', () => {
     const tekst = lees('presentation/components/layout/RightPanel.tsx');
     const aantal = tekst.split('id="axe-rail-rechts"').length - 1;
-    expect(aantal, 'host hoort zowel ingeklapt als uitgeklapt te bestaan').toBe(2);
+    expect(aantal, 'host hoort in elke stand te bestaan: lade, ingeklapt, uitgeklapt').toBeGreaterThanOrEqual(2);
+    expect(tekst, 'de lade heeft zijn eigen host nodig').toContain('{isCompact && <div id="axe-rail-rechts"');
   });
 
   it('TabRail blijft kijken nadat hij de host gevonden heeft', () => {

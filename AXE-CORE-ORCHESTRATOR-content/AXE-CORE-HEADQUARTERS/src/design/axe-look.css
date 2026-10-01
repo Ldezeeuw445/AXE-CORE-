@@ -2022,6 +2022,13 @@ html:root[data-look][data-ios-pwa],
   align-items: center;
   flex: 1;
   overflow-y: auto;
+  /* Expliciet, want impliciet werd dit `auto`: zet je één as op `auto` en laat
+     je de andere op `visible`, dan rekent de browser die andere óók om naar
+     `auto` (CSS overflow, spec). Daardoor werd élke kaart die iets te breed was
+     meteen zijwaarts sleepbaar op de telefoon. Een tab die écht horizontaal
+     moet schuiven -- de week in de agenda -- heeft zijn eigen
+     `overflow-x: auto` op een kind, en dat blijft gewoon werken binnenin. */
+  overflow-x: hidden;
   padding-top: 20px;
 }
 
@@ -2106,14 +2113,14 @@ html:root[data-look][data-ios-pwa],
    klappen in, restant blijft lucht. */
 :root[data-look] .axe-kaart-raster {
   display: grid;
-  grid-template-columns: repeat(auto-fit, var(--axe-kaart-kolom));
+  grid-template-columns: repeat(auto-fit, min(var(--axe-kaart-kolom), 100%));
   justify-content: center;
   gap: 12px;
   width: 100%;
 }
 
 :root[data-look] .axe-kaart-raster--ruim {
-  grid-template-columns: repeat(auto-fit, var(--axe-kaart-kolom-ruim));
+  grid-template-columns: repeat(auto-fit, min(var(--axe-kaart-kolom-ruim), 100%));
 }
 
 :root[data-look] .axe-stat-rij {
@@ -2644,6 +2651,16 @@ html:root[data-look][data-ios-pwa],
    op de telefoon óver het landschap lagen. In de lade liggen ze nergens
    overheen, dus daar horen ze weer te staan. */
 :root[data-look] .axe-slot.axe-slot--lade > .nm-sidebar {
+  display: flex !important;
+}
+
+/* Hetzelfde voor Neural, en hier bijt het harder: NeuralBrain.css verbergt
+   `.sidebar` onder 1280px, en een iPad in landschap is 1180. Zonder deze regel
+   gaat de lade op de iPad dus open met niets erin -- de kolommen zijn er wel,
+   maar `display:none`. Op de telefoon viel dat niet op omdat Terrain daar de
+   eerste was die in de lade belandde. */
+:root[data-look] .axe-slot.axe-slot--lade > .sidebar,
+:root[data-look] .axe-slot.axe-slot--lade .sidebar {
   display: flex !important;
 }
 
@@ -7060,12 +7077,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-agent-sectiekop p { font-size: 11px; color: var(--text-muted); }
 .axe-agent-raster {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(225px, 100%), 1fr));
   gap: 12px;
   align-items: stretch;
 }
-.axe-agent-raster--klein { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
-.axe-agent-raster--ruim { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.axe-agent-raster--klein { grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr)); }
+.axe-agent-raster--ruim { grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); }
 .axe-agentkaart { padding: 14px 14px 12px; gap: 10px; min-height: 0; }
 .axe-agentkaart-kop { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .axe-agentkaart-kop b { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -7200,7 +7217,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-agentkaart-knop:disabled { color: var(--text-muted); cursor: default; }
 .axe-agentkaart-keuze .flex input { width: 100%; }
 /* Settings-secties met grotere onderdelen: gelijke kolommen, uitgelijnd. */
-.axe-agent-raster--sectie { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); }
+/* `min(…, 100%)` en niet kaal `440px`: op de telefoon is dit vak 338px breed,
+   en dan blijft een kolom van 440 gewoon op 440 staan -- 102px eroverheen. Omdat
+   `.axe-inhoud` `overflow-y: auto` heeft wordt de andere as volgens de spec óók
+   `auto`, dus dat werd zijwaarts slepen op Settings. Zelfde vorm als regel 2474,
+   waar dit al een keer is uitgezocht. */
+.axe-agent-raster--sectie { grid-template-columns: repeat(auto-fill, minmax(min(440px, 100%), 1fr)); }
 .axe-agent-raster--sectie > .widget-card,
 .axe-agent-raster--sectie > .axe-kaart { height: 100%; min-height: 0; }
 

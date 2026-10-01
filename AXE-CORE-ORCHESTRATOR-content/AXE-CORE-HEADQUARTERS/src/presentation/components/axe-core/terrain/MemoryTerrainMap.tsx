@@ -29,7 +29,7 @@ import {
 import TerrainSceneMesh from './TerrainSceneMesh';
 import TerrainMarkers, { TerrainCameraRig, computeLeafRing, type LeafNodeData } from './TerrainMarkers';
 import type { BrainHub, BrainLeaf } from '../NeuralMemorySystem';
-import { leesVrijeRuimte, middenVerschuiving, pasAfstand, WERELD_SLOT_SELECTOR } from '../wereldBeeld';
+import { leesVrijeRuimte, beeldVerschuiving, pasAfstand, WERELD_SLOT_SELECTOR } from '../wereldBeeld';
 
 /* Telefoon-Home (wereldBeeld.ts). Het overzicht van TerrainCameraRig staat op
    [0, 18, 31] rond [0, 0.5, 0] -- afstand ~35,6. Op een staand scherm zie je
@@ -222,11 +222,19 @@ export default function MemoryTerrainMap({
     const meet = () => {
       const vrij = leesVrijeRuimte(el);
       const r = el.getBoundingClientRect();
-      if (!vrij || r.height <= r.width) { setTelefoon(null); return; }
-      const afstand = Math.max(OVERZICHT_AFSTAND, pasAfstand({
-        straal: TERREIN_STRAAL, vfovGraden: 48, breedte: r.width, hoogte: r.height, vrij, marge: 0.9,
-      }));
-      const dy = middenVerschuiving(vrij);
+      if (!r.height) { setTelefoon(null); return; }
+      // De afstandspassing is voor een STAAND scherm met vrije ruimte -- daar
+      // is de breedte de krappe kant. Op de iPad in landschap klopte die som
+      // niet, en daarom sloeg dit blok vroeger helemaal over: `!vrij ||
+      // r.height <= r.width` gaf dan null, en dus ook geen verschuiving. De
+      // hoogte-lift geldt nu altijd; alleen het inzoomen blijft staand werk.
+      const staand = !!vrij && r.height > r.width;
+      const afstand = staand
+        ? Math.max(OVERZICHT_AFSTAND, pasAfstand({
+            straal: TERREIN_STRAAL, vfovGraden: 48, breedte: r.width, hoogte: r.height, vrij, marge: 0.9,
+          }))
+        : OVERZICHT_AFSTAND;
+      const dy = beeldVerschuiving(r.height, vrij);
       setTelefoon((oud) => (oud && Math.abs(oud.afstand - afstand) < 0.5 && oud.dy === dy ? oud : { dy, afstand }));
     };
     meet();

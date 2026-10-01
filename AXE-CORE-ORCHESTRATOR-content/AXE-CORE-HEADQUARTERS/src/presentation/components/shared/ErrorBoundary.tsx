@@ -109,6 +109,26 @@ if (typeof window !== 'undefined') {
   };
 
   window.addEventListener('error', (event) => {
+    /* "Script error." is niet onze fout en zegt jou niets.
+     *
+     * Valt een script van een ander domein om, dan verzwijgt de browser alles:
+     * geen `error`-object, geen bestandsnaam, geen regelnummer -- alleen die
+     * ene zin. Op axeheadquarters.com laadt onze eigen bundel uitsluitend
+     * bestanden van ons eigen domein, dus wat hier valt is iets dat Cloudflare
+     * aan de rand toevoegt (de Web Analytics-beacon heeft geen
+     * `crossorigin`-attribuut en geeft precies dit beeld).
+     *
+     * Een rode balk waar niets aan te doen valt, boven het inlogscherm, is dan
+     * erger dan geen balk. De fout gaat naar de console mét wat de browser nog
+     * wél prijsgeeft, zodat hij op te sporen blijft.
+     *
+     * Nauw gehouden: alleen als er ÉCHT geen error-object is. Elke fout uit
+     * onze eigen code heeft die wel en blijft dus gewoon zichtbaar. */
+    if (!event.error && /^script error\.?$/i.test(String(event.message ?? '').trim())) {
+      console.warn('[AXE Global Error] cross-origin script, door de browser verzwegen',
+        { bestand: event.filename || '(verzwegen)', regel: event.lineno, kolom: event.colno });
+      return;
+    }
     meld(event.error ?? event.message, '[AXE Global Error]');
   });
 
