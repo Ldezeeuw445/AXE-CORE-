@@ -6,6 +6,12 @@
  * voor de stem), zodat een chatbericht met precies die tekst weet dat hij
  * het is die nu wordt uitgesproken. Elk ander bericht blijft gewoon heel.
  *
+ * Niets schrijft hier nog in. De "typt terwijl hij praat"-onthulling staat
+ * sinds 23 sep 2026 uit (`chatLatency.zichtbareChatTekst` geeft de hele tekst
+ * terug): bij fraction 0 bleef de bubbel leeg terwijl het antwoord er al was.
+ * De naad blijft staan omdat `useSpokenReveal` hem leest; `setSpeechFraction`
+ * is weg, want een schrijver zonder aanroeper is een belofte die niet geldt.
+ *
  * Geen React hier: dit leeft in de infrastructuurlaag en wordt geschreven
  * door de stem. De hook in presentation leest het met useSyncExternalStore.
  */
@@ -35,14 +41,6 @@ export function subscribeSpeechProgress(l: () => void): () => void {
 
 export function beginSpeechProgress(text: string): void {
   zet({ text, fraction: 0 });
-}
-
-/** Alleen vooruit: een late update mag getoonde woorden niet terugnemen. */
-export function setSpeechFraction(fraction: number): void {
-  if (huidig.text === null) return;
-  const f = Math.min(1, Math.max(huidig.fraction, fraction));
-  if (f === huidig.fraction) return;
-  zet({ text: huidig.text, fraction: f });
 }
 
 /** Klaar, gestopt of mislukt: de tekst staat dan altijd weer helemaal. */

@@ -37,9 +37,9 @@ vi.mock('@/presentation/store/voiceStore', () => ({
   writeConversationMemory: vi.fn(),
 }));
 
-const stopAllAudio = vi.fn();
-vi.mock('@/presentation/store/installWhisperVoice', () => ({
-  stopAllAudio: (...a: unknown[]) => stopAllAudio(...a),
+const stopGlobalTts = vi.fn();
+vi.mock('@/infrastructure/gateways/globalTts', () => ({
+  stopGlobalTts: (...a: unknown[]) => stopGlobalTts(...a),
 }));
 
 const startAxeJobs = vi.fn();
@@ -49,10 +49,13 @@ vi.mock('@/presentation/store/installTierRouter', () => ({
   setRealtimeJobAnnouncer: (...a: unknown[]) => setRealtimeJobAnnouncer(...a),
 }));
 
-let openAiRealtimeConfigured = true;
+/* `isOpenAiRealtimeConfigured` bestond, gaf onvoorwaardelijk `true` terug, en
+   bewaakte dus niets. De sleutel staat centraal; ontbreekt hij, dan werpt
+   `openRealtimeVoice` en komt de échte reden van de server naar boven. Die
+   weg is wat deze test nu volgt. */
+const openRealtimeVoice = vi.fn();
 vi.mock('@/infrastructure/gateways/openAiRealtimeVoice', () => ({
-  isOpenAiRealtimeConfigured: () => openAiRealtimeConfigured,
-  openRealtimeVoice: vi.fn(),
+  openRealtimeVoice: (...a: unknown[]) => openRealtimeVoice(...a),
   OPENAI_REALTIME_MODEL: 'gpt-realtime',
 }));
 
@@ -107,7 +110,7 @@ function seedJob(overrides: Partial<AxeJob> = {}): AxeJob {
 
 beforeEach(() => {
   useAxeJobStore.getState().leeg();
-  openAiRealtimeConfigured = true;
+  openRealtimeVoice.mockReset();
   vi.clearAllMocks();
 });
 
@@ -240,7 +243,7 @@ describe('search_memory', () => {
 
 describe('installOpenAIRealtimeVoice — realtime only', () => {
   it('surfaces missing Realtime configuration and never invokes the legacy voice path', async () => {
-    openAiRealtimeConfigured = false;
+    openRealtimeVoice.mockRejectedValueOnce(new Error('AXE Core realtime session 503: AXE voice is not configured'));
     installOpenAIRealtimeVoice();
 
     const startListening = voiceState.startListening as () => Promise<void>;
@@ -249,7 +252,7 @@ describe('installOpenAIRealtimeVoice — realtime only', () => {
 
     expect(originalStartListening).not.toHaveBeenCalled();
     expect(voiceState.setResponseMode).toHaveBeenCalledWith('speak');
-    expect(String(voiceState.error)).toMatch(/realtime.*no fallback/i);
+    expect(String(voiceState.error)).toMatch(/realtime voice failed.*not configured/i);
     expect(voiceState.voiceStatus).toBe('idle');
   });
 });

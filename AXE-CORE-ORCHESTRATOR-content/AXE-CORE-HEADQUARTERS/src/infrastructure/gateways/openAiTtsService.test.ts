@@ -12,8 +12,9 @@ vi.stubGlobal('localStorage', {
 
 const {
   OPENAI_STEMMEN, STANDAARD_STEM, AXE_SPEECH_INSTRUCTIONS,
-  buildOpenAiSpeechRequest, getOpenAiStem, isOpenAiTtsConfigured, setOpenAiStem,
+  buildOpenAiSpeechRequest, getOpenAiStem,
 } = await import('./openAiTtsService');
+const { AXE_STEM_ID } = await import('@/domain/stemIdentiteit');
 
 beforeEach(() => geheugen.clear());
 
@@ -28,12 +29,23 @@ describe('OpenAI-stemmen', () => {
     expect(OPENAI_STEMMEN).toContain('cedar');
   });
 
-  it('valt terug op OpenAI\'s eigen aanbeveling en weigert onzin', () => {
+  /* Hier stond dat `setOpenAiStem('cedar')` moest blijven plakken. Dat was
+     het oude ontwerp: een kiezer per apparaat. AXE heeft één stem, en een
+     oude opgeslagen keuze mag die nooit overrulen -- dát is wat deze test nu
+     vastlegt. De kiezer in Settings is in dezelfde ronde weggehaald, want hij
+     gooide je keuze stilletjes weg. */
+  it('houdt één stem vast en negeert een oude opgeslagen keuze', () => {
     expect(getOpenAiStem()).toBe(STANDAARD_STEM);
     localStorage.setItem('axe_openai_stem', 'arbor');
     expect(getOpenAiStem()).toBe(STANDAARD_STEM);
-    setOpenAiStem('cedar');
-    expect(getOpenAiStem()).toBe('cedar');
+    localStorage.setItem('axe_openai_stem', 'onyx');
+    expect(getOpenAiStem()).toBe(STANDAARD_STEM);
+  });
+
+  /* De naam staat op één plek. Liep dit uiteen, dan zei Settings iets anders
+     dan de backend sprak -- en dat is precies wat er gebeurde. */
+  it('spreekt met dezelfde stem die stemIdentiteit noemt', () => {
+    expect(STANDAARD_STEM).toBe(AXE_STEM_ID);
   });
 
   it('stuurt de vaste rustige AXE-cadans mee naar gpt-4o-mini-tts', () => {
@@ -50,9 +62,12 @@ describe('OpenAI-stemmen', () => {
     expect(AXE_SPEECH_INSTRUCTIONS).toContain('Avoid announcer cadence');
   });
 
-  it('zonder sleutel meldt hij dat, in plaats van stil te blijven', () => {
-    expect(isOpenAiTtsConfigured()).toBe(false);
-    localStorage.setItem('axe_llm_connections', JSON.stringify({ openai: { key: 'sk-test' } }));
-    expect(isOpenAiTtsConfigured()).toBe(true);
+  /* `isOpenAiTtsConfigured()` was een onvoorwaardelijke `return true` zonder
+     aanroepers -- de sleutel verhuisde naar de server en de functie bleef
+     liegen. Hij is weg. Wat de test wilde vastleggen (nooit stil blijven)
+     geldt nog steeds, maar via de server: `/voice/health` zegt waarom, en
+     `/voice/tts` geeft 503 met de reden. Dat pad is hierboven getest. */
+  it('bouwt elk verzoek met de vaste AXE-stem, ongeacht wat de aanroeper vraagt', () => {
+    expect(buildOpenAiSpeechRequest('x', STANDAARD_STEM).voice).toBe(AXE_STEM_ID);
   });
 });

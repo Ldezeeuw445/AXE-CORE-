@@ -38,7 +38,6 @@ import {
 } from '@/infrastructure/gateways/whisperService';
 import {
   openRealtimeVoice,
-  isOpenAiRealtimeConfigured,
   OPENAI_REALTIME_MODEL,
   type RealtimeToolDef,
   type RealtimeVoiceSession,
@@ -50,13 +49,18 @@ import {
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { searchRagMemories, extractMemoryFromMessage } from '@/infrastructure/persistence/ragMemoryService';
 import { noteRetrieval, noteOwnerOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
-import { stopAllAudio } from '@/presentation/store/installWhisperVoice';
+// stopAllAudio was stopGlobalTts() plus twee aanroepen die stopGlobalTts zelf
+// al doet. De Whisper-lus eromheen is op 29 sep uit main.tsx gehaald en nu weg.
+import { stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 
 let installed = false;
 let realtimeActive = false;
 let realtimeStarting = false;
 let generation = 0;
 let session: RealtimeVoiceSession | null = null;
+/** Praat AXE op dit moment? Staat op modulebereik omdat `installVoiceHotkeys`
+ *  buiten de installer-closure leeft en Escape dit moet kunnen zien. */
+let responseActive = false;
 let micStreamForSession: MediaStream | null = null;
 let hotkeysInstalled = false;
 
@@ -316,6 +320,17 @@ function installVoiceHotkeys(): void {
       if (e.key !== 'Escape') return;
       if (useVoiceStore.getState().voiceStatus === 'idle') return;
       e.preventDefault();
+      // Twee trappen, en dat onderscheid stond al in `stemlusOvergang`:
+      // barge-in houdt de microfoon open (`cancelListen: false`), esc niet.
+      // Praat hij? Dan val je hem in de rede en praat je gewoon door. Is hij
+      // al stil, dan is Escape pas ophangen. Tot nu toe was elke Escape
+      // ophangen -- er was geen manier om alleen "hou even op" te zeggen.
+      if (responseActive && session) {
+        session.interrupt();
+        responseActive = false;
+        useVoiceStore.setState({ voiceStatus: 'listening' });
+        return;
+      }
       useVoiceStore.getState().stopListening();
     });
   }
@@ -324,6 +339,13 @@ function installVoiceHotkeys(): void {
   void import('@tauri-apps/api/event')
     .then(({ listen }) =>
       listen(SNELTOETS_EVENT, () => {
+        // Zelfde tweetrap als Escape: eerst stil leggen, pas daarna ophangen.
+        if (responseActive && session) {
+          session.interrupt();
+          responseActive = false;
+          useVoiceStore.setState({ voiceStatus: 'listening' });
+          return;
+        }
         const active = isRealtimeVoiceActive() || useVoiceStore.getState().voiceStatus !== 'idle';
         if (sneltoetsActie(active) === 'stop') useVoiceStore.getState().stopListening();
         else useVoiceStore.getState().startListening();
@@ -344,7 +366,6 @@ export function installOpenAIRealtimeVoice(): void {
   const baseSendMessage = useVoiceStore.getState().sendMessage;
 
   let lastUserText = '';
-  let responseActive = false;
   const pendingAnnouncements: string[] = [];
 
   const flushPendingAnnouncements = () => {
@@ -364,7 +385,7 @@ export function installOpenAIRealtimeVoice(): void {
     session = null;
     const stream = micStreamForSession;
     micStreamForSession = null;
-    stopAllAudio();
+    stopGlobalTts();
     if (closing) await closing.close();
     if (stream) releaseMic();
     if (setIdle) {
@@ -379,13 +400,12 @@ export function installOpenAIRealtimeVoice(): void {
     // type-only response mode and mute for a voice call he just started.
     useVoiceStore.getState().setResponseMode('speak');
 
-    if (!isOpenAiRealtimeConfigured()) {
-      useVoiceStore.setState({
-        voiceStatus: 'idle',
-        error: 'OpenAI Realtime is not configured on this device. Voice has no fallback.',
-      });
-      return;
-    }
+    // Hier stond een controle op `isOpenAiRealtimeConfigured()`, die
+    // onvoorwaardelijk `true` teruggaf -- een wachter die nooit afgaat, met
+    // een melding ("not configured on this device") over het per-apparaat
+    // model dat op 29 sep is verlaten. De sleutel is centraal; ontbreekt hij,
+    // dan werpt `createRealtimeClientSecret` en komt de échte reden van de
+    // server in de foutafhandeling hieronder.
 
     // WKWebView locks WebAudio until it is resumed from a direct user
     // gesture — do this before any network request, same reasoning as the
@@ -404,7 +424,7 @@ export function installOpenAIRealtimeVoice(): void {
       error: null,
       isGeminiLive: false,
     });
-    stopAllAudio();
+    stopGlobalTts();
 
     try {
       const mic = await acquireMic();

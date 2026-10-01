@@ -9,14 +9,16 @@ function bron(rel: string): string {
 }
 
 describe('tier-router is aangesloten, niet alleen gebouwd', () => {
-  it('main.tsx zet de router ná stable chat en vóór de whisper-guard', () => {
+  /* De whisper-guard stond hier ook in. Die is op 29 sep 2026 uit main.tsx
+     gehaald (`ba4ac856`, "voice has ONE path on every surface") en de lus is
+     deze ronde helemaal weg. Een test die eist dat een verwijderde installer
+     er nog staat, meet niets -- hij houdt alleen de meetlat rood. */
+  it('main.tsx zet de router ná stable chat', () => {
     const tekst = bron('app/main.tsx');
     const stable = tekst.indexOf('installStableChat()');
     const router = tekst.indexOf('installTierRouter()');
-    const guard = tekst.indexOf('installWhisperVoiceSendGuard()');
     expect(stable).toBeGreaterThan(0);
     expect(router).toBeGreaterThan(stable);
-    expect(guard).toBeGreaterThan(router);
   });
 
   /* Deze ronde. Het gedrag zit in application/besturingsBeurt en wordt daar
@@ -158,14 +160,6 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(balk).toMatch(/balkLabel/);
     expect(balk).toMatch(/surface-bg/);
     expect(balk).toMatch(/tint-line/);
-  });
-
-  it('Whisper-lus: Esc stopt, job-spraak wacht tot de gebruiker klaar is', () => {
-    const tekst = bron('presentation/store/installWhisperVoice.ts');
-    expect(tekst).toMatch(/e\.key !== 'Escape'/);
-    expect(tekst).toMatch(/stopListening\(\)/);
-    expect(tekst).toMatch(/flushAxeSpraakRij/);
-    expect(tekst).toMatch(/conversationActive/);
   });
 
   it('tier 1 wacht niet op RAG of het grote model', () => {

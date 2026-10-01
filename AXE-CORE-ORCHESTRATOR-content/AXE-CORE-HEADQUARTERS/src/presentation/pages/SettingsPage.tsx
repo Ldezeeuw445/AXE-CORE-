@@ -1,4 +1,5 @@
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
+import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
 import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, isOpenAiTtsConfigured, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
 import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
@@ -6,10 +7,10 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
-import { speakGlobal, stopGlobalTts, gekozenStemMotor, zetStemMotor } from '@/infrastructure/gateways/globalTts';
+import { speakGlobal, stopGlobalTts } from '@/infrastructure/gateways/globalTts';
 import { getCartesiaVoiceId, isCartesiaConfigured, setCartesiaVoiceId } from '@/infrastructure/gateways/cartesiaTtsService';
 import { probeOpenAiTts } from '@/infrastructure/gateways/openAiTtsService';
-import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
+import { AXE_STEM_NAAM, STEM_UI, stemStandVanHealth, type StemStand } from '@/domain/stemIdentiteit';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
@@ -890,7 +891,9 @@ function VoiceSection() {
   const [stand, setStand] = useState<StemStand | null>(null);
   useEffect(() => {
     let live = true;
-    void probeOpenAiTts().then((s) => { if (live) setStand({ ok: s.ok, regel: s.ok ? STEM_UI.live : STEM_UI.dood, watNu: s.ok ? null : (s.reason ?? STEM_UI.doodWatNu) }); });
+    void axeVoiceHealth()
+      .then((h) => { if (live) setStand(stemStandVanHealth(h)); })
+      .catch((e) => { if (live) setStand(stemStandVanHealth(null, e instanceof Error ? e.message : String(e))); });
     return () => { live = false; };
   }, []);
 
@@ -912,7 +915,7 @@ function VoiceSection() {
     const ms = routingLog.map(ev => ev.firstAudioMs).filter((x): x is number => typeof x === 'number').slice(0, 20);
     return ms.length ? Math.round(ms.reduce((x, y) => x + y, 0) / ms.length) : null;
   })();
-  const actieveNaam = 'AXE Voice · Marin';
+  const actieveNaam = STEM_UI.volledigeNaam;
 
   return (
     <>
@@ -930,7 +933,7 @@ function VoiceSection() {
           { label: 'In use', waarde: actieveNaam },
           { label: 'First audio', waarde: gemeten != null ? duur(gemeten) : '—' },
           { label: 'Turns', waarde: String(routingLog.length) },
-          { label: 'Fallback', waarde: 'Central TTS · same Marin' },
+          { label: 'Voice', waarde: AXE_STEM_NAAM },
         ]}
         melding={error ?? stand?.watNu ?? undefined}
       />
@@ -1010,29 +1013,15 @@ function FishAudioSection() {
         </button>
       </div>
 
-      {/* Arbor staat hier niet tussen, en dat is geen omissie: Arbor, Breeze,
-          Juniper, Cove en Ember zijn stemmen van de ChatGPT-APP. De API voert
-          een andere vaste lijst (nagelezen in OpenAI's TTS-gids, 16 sep 2026);
-          een app-stem is niet met een sleutel op te halen. marin en cedar zijn
-          OpenAI's eigen aanbeveling en staan daarom bovenaan. */}
+      {/* Hier stond een keuzelijst over dertien OpenAI-stemmen. Die gooide je
+          keuze weg: `setOpenAiStem` is sinds 29 sep een no-op die de sleutel
+          juist VERWIJDERT, terwijl de lijst wel netjes meesprong. Je koos
+          onyx, zag onyx staan, en hoorde Marin. AXE heeft één stem; een
+          kiezer die niets doet is erger dan geen kiezer. */}
       {provider === 'openai' && (
-        <div className="mb-3">
-          <div className="flex items-center gap-2">
-            <select
-              value={openAiStem}
-              onChange={e => { const v = e.target.value as OpenAiStem; setOpenAiStem(v); setOpenAiStemState(v); }}
-              className="flex-1 rounded-lg px-2 py-1.5 text-xs-custom"
-              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-              aria-label="OpenAI-stem"
-            >
-              {OPENAI_STEMMEN.map(v => <option key={v} value={v}>{v}{v === 'marin' || v === 'cedar' ? ' — aanbevolen' : ''}</option>)}
-            </select>
-          </div>
-          <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            Arbor, Breeze, Juniper, Cove en Ember zijn alleen in de ChatGPT-app beschikbaar, niet via de API.
-            Gebruikt gpt-4o-mini-tts met je OpenAI-sleutel uit Connections.
-          </p>
-        </div>
+        <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>
+          {STEM_UI.label} Spoken replies go through AXE Core, not through a key in this browser.
+        </p>
       )}
 
       <div className="flex gap-1.5">

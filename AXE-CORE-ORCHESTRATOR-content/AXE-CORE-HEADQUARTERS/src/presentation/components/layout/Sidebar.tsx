@@ -25,7 +25,7 @@ import { VPS_API_ORIGIN, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 import { webProxyStand } from '@/domain/webProxyStand';
 import { useLocation } from 'react-router';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
-import { STEM_UI, type StemStand } from '@/domain/stemIdentiteit';
+import { STEM_UI, stemStandVanHealth, type StemStand } from '@/domain/stemIdentiteit';
 import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 import { LadeSlot } from '@/presentation/components/layout/LadeSlot';
@@ -53,14 +53,12 @@ function AICoreSystemLeft() {
       } catch { if (live) setSupaOk(false); }
 
       try {
+        // Eén omzetter, gedeeld met Settings -- inclusief de controle dat de
+        // server dezelfde stem noemt als de app.
         const vh = await axeVoiceHealth();
-        if (live) setStem({
-          ok: vh.online,
-          regel: vh.online ? STEM_UI.live : STEM_UI.dood,
-          watNu: vh.online ? null : (vh.reason ?? STEM_UI.doodWatNu),
-        });
+        if (live) setStem(stemStandVanHealth(vh));
       } catch (e) {
-        if (live) setStem({ ok: false, regel: STEM_UI.dood, watNu: e instanceof Error ? e.message : String(e) });
+        if (live) setStem(stemStandVanHealth(null, e instanceof Error ? e.message : String(e)));
       }
     };
     void ping();

@@ -21,12 +21,6 @@ export const OPENAI_REALTIME_MODEL = 'gpt-realtime';
 /** OpenAI's warm, natural realtime voice — closest match to AXE's Cedar TTS identity. */
 export const OPENAI_REALTIME_VOICE = 'marin';
 
-export function isOpenAiRealtimeConfigured(): boolean {
-  // Configuration is central. Every signed-in AXE surface can ask AXE Core
-  // for an ephemeral session credential; the backend reports a real error if
-  // OPENAI_API_KEY is absent instead of making each device keep its own key.
-  return true;
-}
 
 /** Ask AXE Core for a short-lived OpenAI Realtime credential. */
 export async function createRealtimeClientSecret(): Promise<string> {
@@ -138,6 +132,7 @@ export async function openRealtimeVoice(
   const pc = new RTCPeerConnection();
   let closing = false;
   let assistantSpeaking = false;
+  let laatsteAntwoordItem: string | null = null;
 
   micStream.getAudioTracks().forEach((track) => pc.addTrack(track, micStream));
 
@@ -238,7 +233,15 @@ export async function openRealtimeVoice(
     }
     if (type === 'response.created') {
       assistantSpeaking = false;
+      laatsteAntwoordItem = null;
       handlers.onResponseStarted?.();
+      return;
+    }
+    // Het item dat AXE nu uitspreekt. `interrupt()` kapt precies dit af, zodat
+    // het model weet tot waar jij hem gehoord hebt.
+    if (type === 'response.output_item.added') {
+      const item = msg.item as { id?: string } | undefined;
+      if (item?.id) laatsteAntwoordItem = item.id;
       return;
     }
     if (isAssistantAudioDelta(type)) {
@@ -357,8 +360,30 @@ export async function openRealtimeVoice(
     // openRealtimeVoice's own `history` option is the reliable path for
     // connect-time seeding, sent from inside channel.onopen itself.
     seedHistory: (turns) => turns.forEach(sendHistoryItem),
+    /**
+     * Nu stoppen met praten, maar de verbinding houden.
+     *
+     * Hier stond `audioEl.pause()`, en dat was eenrichtingsverkeer: `play()`
+     * wordt maar op één plek aangeroepen (`pc.ontrack`, bij verbinden), dus
+     * na één keer onderbreken bleef AXE de rest van het gesprek stil -- en
+     * `getOpenAiRealtimeLevel()` gaf 0, dus de bol-puls stierf mee. Pauzeren
+     * hoeft ook niet: WebRTC stopt de stroom zelf zodra het antwoord
+     * geannuleerd is; wat je nog hoort is de buffer, een fractie van een
+     * seconde.
+     *
+     * `truncate` erbij, want zonder dat denkt het model dat je zijn hele
+     * antwoord gehoord hebt en verwijst het daarna naar dingen die je nooit
+     * hoorde.
+     */
     interrupt: () => {
-      audioEl.pause();
+      if (laatsteAntwoordItem) {
+        send({
+          type: 'conversation.item.truncate',
+          item_id: laatsteAntwoordItem,
+          content_index: 0,
+          audio_end_ms: Math.max(0, Math.round(audioEl.currentTime * 1000)),
+        });
+      }
       send({ type: 'response.cancel' });
     },
   };

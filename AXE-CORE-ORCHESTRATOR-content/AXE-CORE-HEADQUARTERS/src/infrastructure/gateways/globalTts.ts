@@ -1,67 +1,42 @@
 /**
- * globalTts.ts — single entry for spoken output anywhere in the app.
+ * globalTts.ts — de enige ingang voor alles wat AXE hardop zegt.
  *
- * AXE's default voice is George (Kokoro `bm_george`), running free on the Mac
- * (kokoroTtsService.ts, backend/axe_tts). Luka chose it by ear on 23 Sep 2026
- * and asked that AXE "always has a good voice, so a good fallback too" --
- * so if George cannot make a sound at all, OpenAI Cedar speaks instead.
- * That is the ONLY fallback, and it only happens before anything was heard:
- * AXE never switches voices in the middle of an answer. Every surface that
- * speaks as AXE calls this module, so no caller can pick a third voice
- * unless Settings wrote `axe_stem_motor`.
+ * Eén stem, overal: Marin, via AXE Core. Geen keten van motoren, geen
+ * terugval -- die zijn op 29 sep 2026 bewust weggehaald (`393c88ce`), omdat
+ * een tweede stem die invalt betekent dat AXE middenin een antwoord van
+ * identiteit wisselt. Valt de centrale stem weg, dan hoor je de fout in
+ * plaats van iemand anders.
+ *
+ * Deze kop beschreef tot nu toe nog steeds de verwijderde George→Cedar-keten.
+ * Dat is precies de verwarring die deze ronde opruimt: de naam stond op zes
+ * manieren in de code en de uitleg beschreef code die er niet meer was.
+ *
+ * De "typt terwijl hij praat"-onthulling staat met opzet UIT (zie
+ * `domain/chatLatency.ts` en `useSpokenReveal`): bij fraction 0 bleef de
+ * bubbel leeg terwijl het antwoord er al was. De stem mag meelopen, de
+ * letters niet wachten. Daarom roept dit bestand `speechProgress` niet meer
+ * aan -- dat deed het nog wel, en het riep `endSpeechProgress()` zelfs aan
+ * vóór er geluid was.
  */
-import { stopFishAudio, speakWithFishAudio, getFishTtsLevel } from '@/infrastructure/gateways/fishAudioService';
-import { speakWithKokoro, stopKokoro, getKokoroTtsLevel } from '@/infrastructure/gateways/kokoroTtsService';
-import { beginSpeechProgress, setSpeechFraction, endSpeechProgress } from '@/infrastructure/gateways/speechProgress';
-import { stopTTS, speakWithElevenLabs, getElevenLabsTtsLevel } from '@/infrastructure/gateways/elevenLabsService';
+import { stopFishAudio, getFishTtsLevel } from '@/infrastructure/gateways/fishAudioService';
+import { stopTTS, getElevenLabsTtsLevel } from '@/infrastructure/gateways/elevenLabsService';
 import {
   speakWithOpenAi,
   stopOpenAiTts,
-  isOpenAiTtsConfigured,
   STANDAARD_STEM as AXE_OPENAI_VOICE,
   getAxeTtsLevel,
 } from '@/infrastructure/gateways/openAiTtsService';
-import {
-  speakWithCartesia,
-  stopCartesia,
-  getCartesiaTtsLevel,
-} from '@/infrastructure/gateways/cartesiaTtsService';
+import { stopCartesia, getCartesiaTtsLevel } from '@/infrastructure/gateways/cartesiaTtsService';
 import { getOpenAiRealtimeLevel } from '@/infrastructure/gateways/openAiRealtimeVoice';
 import { normalizeForSpeech } from '@/domain/speechText';
-import { elevenLabsModelVan, parseStemMotor, STEM_MOTOR_SLEUTEL, type StemMotor } from '@/domain/stemMotor';
 import { markBeurt } from '@/domain/beurtKlok';
-
-export type TtsProvider = 'kokoro' | 'fish' | 'elevenlabs' | 'openai' | 'cartesia' | 'browser';
-
-export function gekozenStemMotor(): StemMotor {
-  // One AXE voice on every surface. The legacy setting is ignored so a phone,
-  // iPad and Tauri session can never silently select different identities.
-  return 'cedar';
-}
-
-export function zetStemMotor(_motor: StemMotor): void {
-  // Compatibility no-op. AXE's voice identity is fixed centrally.
-  try { localStorage.removeItem(STEM_MOTOR_SLEUTEL); } catch { /* ignore */ }
-}
-
-/** Gekozen motor, of George als er niets is gezet. */
-export function getActiveTtsProvider(): TtsProvider {
-  const m = gekozenStemMotor();
-  if (m === 'cedar') return 'openai';
-  if (m === 'elevenlabs-flash' || m === 'elevenlabs-v3') return 'elevenlabs';
-  if (m === 'fish') return 'fish';
-  if (m === 'cartesia') return 'cartesia';
-  return 'kokoro';
-}
 
 /** Stop any in-flight TTS from any provider. */
 export function stopGlobalTts(): void {
-  stopKokoro();
   stopTTS();
   stopFishAudio();
   stopOpenAiTts();
   stopCartesia();
-  endSpeechProgress();
 }
 
 /**
@@ -103,19 +78,14 @@ export function speakGlobal(
   }
 
   stopGlobalTts();
-  // The chat reveals `text` (the original, with its formatting) as far as the
-  // voice has got -- "AXE types while it speaks".
-  beginSpeechProgress(text);
-  const klaar = () => { endSpeechProgress(); onDone?.(); };
   const hoor = () => {
     markBeurt('firstAudio');
     onStart?.();
   };
 
-  endSpeechProgress();
   void speakWithOpenAi(
     line,
-    klaar,
+    () => onDone?.(),
     (reason) => {
       onError?.(`AXE voice failed: ${reason}`);
       onDone?.();
@@ -138,7 +108,6 @@ export function spreekStuk(stuk: string, onStart?: () => void): Promise<void> {
 /** Real 0..1 playback energy of whichever AXE voice is playing right now. */
 export function getGlobalTtsLevel(): number {
   return Math.max(
-    getKokoroTtsLevel(),
     getAxeTtsLevel(),
     getFishTtsLevel(),
     getElevenLabsTtsLevel(),

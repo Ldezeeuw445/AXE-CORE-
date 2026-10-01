@@ -367,7 +367,6 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/presentation/pages/tradingIntel/AccountScorecard.tsx', 'AccountRiskCard'],
   ['src/presentation/pages/tradingIntel/PnlCalendar.tsx', 'PnlCalendar'],
   ['src/presentation/pages/tradingIntel/StatusStrip.tsx', 'StatusStrip'],
-  ['src/presentation/store/installWhisperVoice.ts', 'isVoiceConversationActive'],
   ['src/presentation/store/voiceStore.ts', 'markLoadedAsPersisted'],
 
   // Gevraagd als component om te GEBRUIKEN, nog niet geplaatst: waar hij op

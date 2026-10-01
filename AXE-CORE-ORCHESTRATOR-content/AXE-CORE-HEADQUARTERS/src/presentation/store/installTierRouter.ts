@@ -66,7 +66,7 @@ import {
   type AxeJob,
 } from '@/domain/tierRouter/axeJobRegels';
 import { jobsVanStukken, startJobsParallel } from '@/application/tierRouter/stuurAxeJobs';
-import { kiesSpraakPad, stemlusVanVoice, zetSpraakSpreker } from '@/application/tierRouter/axeSpraakRij';
+import { flushAxeSpraakRij, kiesSpraakPad, spraakRijLengte, stemlusVanVoice, zetSpraakSpreker } from '@/application/tierRouter/axeSpraakRij';
 import { chatBlijftLuisteren, injecteerJobResultaat } from '@/application/tierRouter/injecteerJobResultaat';
 import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
 import { planBeurt, type PlanModel } from '@/application/tierRouter/planBeurt';
@@ -955,6 +955,19 @@ export function installTierRouter(): void {
   warmGeheugen();
   hervatJobMonitors();
   zetSpraakSpreker((text) => speakZonderKap(text, 'ack'));
+
+  /* Een jobresultaat dat binnenkomt terwijl jij praat of AXE praat gaat in de
+     wachtrij -- `moetSpraakWachtrij`: een agent mag je niet afkappen. Maar de
+     enige plek die die rij ooit leegmaakte zat in de Whisper-lus, en die is
+     op 29 sep uit main.tsx gehaald. Sindsdien verdween gewachte job-spraak
+     stilletjes voor de rest van de sessie. Hier wordt hij alsnog uitgesproken
+     zodra het stil is. */
+  useVoiceStore.subscribe((st, vorige) => {
+    if (st.voiceStatus === vorige.voiceStatus) return;
+    if (st.voiceStatus !== 'idle') return;
+    if (spraakRijLengte() === 0) return;
+    flushAxeSpraakRij();
+  });
 
   const original = useVoiceStore.getState().sendMessage;
 

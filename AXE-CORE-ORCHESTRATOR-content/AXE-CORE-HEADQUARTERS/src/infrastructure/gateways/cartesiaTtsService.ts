@@ -99,62 +99,7 @@ export function stopCartesia(): void {
   }
 }
 
-export async function speakWithCartesia(
-  tekst: string,
-  opKlaar?: () => void,
-  opFout?: (reden: string) => void,
-  opStart?: () => void,
-): Promise<void> {
-  const key = sleutel();
-  if (!key) {
-    opFout?.('no_cartesia_key');
-    return;
-  }
-  const spoken = normalizeForSpeech(tekst);
-  if (!spoken) {
-    opKlaar?.();
-    return;
-  }
-  stopCartesia();
-  try {
-    const res = await fetch(CARTESIA_URL, {
-      method: 'POST',
-      headers: {
-        'X-API-Key': key,
-        'Cartesia-Version': CARTESIA_VERSION,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(buildCartesiaSpeechRequest(spoken)),
-    });
-    if (!res.ok) {
-      opFout?.(`cartesia_tts_${res.status}: ${(await res.text()).slice(0, 200)}`);
-      return;
-    }
-    const url = URL.createObjectURL(await res.blob());
-    const audio = new Audio(url);
-    huidige = audio;
-    ctx ??= new AudioContext();
-    void ctx.resume().catch(() => {});
-    if (!analyser) {
-      analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      niveauData = new Uint8Array(analyser.fftSize);
-      analyser.connect(ctx.destination);
-    }
-    ctx.createMediaElementSource(audio).connect(analyser);
-    audio.onended = () => {
-      URL.revokeObjectURL(url);
-      huidige = null;
-      opKlaar?.();
-    };
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      huidige = null;
-      opFout?.('audio_kon_niet_spelen');
-    };
-    await audio.play();
-    opStart?.();
-  } catch (e) {
-    opFout?.(e instanceof Error ? e.message : 'cartesia_tts_onbereikbaar');
-  }
-}
+/* `speakWithCartesia` stond hier. AXE spreekt sinds 29 sep 2026 alleen nog
+   met de centrale Marin-stem via AXE Core, dus globalTts riep hem al niet
+   meer aan en niemand anders deed dat ooit. `testCartesiaKey`, `stopCartesia`
+   en `getCartesiaTtsLevel` blijven: Settings test de sleutel nog. */

@@ -1,83 +1,85 @@
+/**
+ * Eén stem, één naam.
+ *
+ * Deze tests beschreven tot 1 okt 2026 het ontwerp van vóór 29 september:
+ * George via een lokale Kokoro-dienst, met Cedar als terugval. Dat is bewust
+ * vervangen door één centrale Marin-stem (`27d95ce1`, `393c88ce`, `01bc6eee`)
+ * en de tests zijn toen niet meegegaan -- elf rode tests die het verkeerde
+ * ontwerp bewaakten.
+ *
+ * Wat hieronder staat bewaakt wat er nu geldt, plus de twee dingen die bij
+ * die omzetting zijn kwijtgeraakt: de controle dat de server dezelfde stem
+ * noemt, en het feit dat de naam op precies één plek hoort te staan.
+ */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import {
-  AXE_STEM_FALLBACK,
-  AXE_STEM_ID,
-  AXE_STEM_NAAM,
-  STEM_UI,
-  stemStandVanHealth,
-} from '@/domain/stemIdentiteit';
+import { describe, it, expect } from 'vitest';
+import { AXE_STEM_ID, AXE_STEM_NAAM, STEM_UI, stemStandVanHealth } from './stemIdentiteit';
 
-const HQ = new URL('../..', import.meta.url).pathname;
+const ROOT = join(__dirname, '..');
+const bron = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 
-describe('stemIdentiteit', () => {
-  it('George is de enige AXE-stem; Cedar is alleen de fallback-naam', () => {
-    expect(AXE_STEM_NAAM).toBe('George');
-    expect(AXE_STEM_ID).toBe('bm_george');
-    expect(AXE_STEM_FALLBACK).toBe('Cedar');
-    expect(STEM_UI.uitleg).toMatch(/George/);
-    expect(STEM_UI.uitleg).toMatch(/Cedar is only the fallback/);
-    expect(STEM_UI.uitleg).not.toMatch(/OpenAI cedar/);
+/** Zonder commentaar: uitleggen waaróm de oude naam weg is, is geen terugval. */
+const code = (rel: string) =>
+  bron(rel).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+describe('de naam staat op één plek', () => {
+  it('Marin, en de UI-teksten bouwen zichzelf daaruit op', () => {
+    expect(AXE_STEM_NAAM).toBe('Marin');
+    expect(AXE_STEM_ID).toBe('marin');
+    expect(STEM_UI.uitleg).toContain(AXE_STEM_NAAM);
+    expect(STEM_UI.label).toContain(AXE_STEM_NAAM);
+    expect(STEM_UI.volledigeNaam).toContain(AXE_STEM_NAAM);
   });
 
-  it('zet /health om in groen of rood met wat je eraan doet', () => {
-    expect(stemStandVanHealth({ ok: true, voice: 'bm_george' })).toEqual({
-      ok: true,
-      regel: STEM_UI.live,
-      watNu: null,
-    });
-    expect(stemStandVanHealth(null).ok).toBe(false);
-    expect(stemStandVanHealth(null).regel).toBe(STEM_UI.dood);
-    expect(stemStandVanHealth(null).watNu).toContain('install.sh');
-    expect(stemStandVanHealth({ ok: true, voice: 'af_sarah' }).ok).toBe(false);
-    expect(stemStandVanHealth({ ok: true, voice: 'af_sarah' }).regel).toContain('af_sarah');
-    expect(stemStandVanHealth({ ok: false }, 'ECONNREFUSED').watNu).toContain('ECONNREFUSED');
+  /* De schermen herhaalden de naam als letterlijke tekst: Settings had
+     'AXE Voice · Marin' en 'Central TTS · same Marin' hardgecodeerd staan.
+     Verander je de stem, dan verandert het scherm niet mee. */
+  it('geen enkel scherm typt de naam zelf nog in', () => {
+    for (const bestand of [
+      'presentation/pages/SettingsPage.tsx',
+      'presentation/components/layout/Sidebar.tsx',
+    ]) {
+      expect(code(bestand), bestand).not.toMatch(/['"`][^'"`]*\bMarin\b/);
+    }
   });
 
-  it('app.py en de app noemen dezelfde stem', () => {
-    const py = readFileSync(join(HQ, 'backend/axe_tts/app.py'), 'utf8');
-    expect(py).toMatch(/DEFAULT_VOICE = "bm_george"/);
-    expect(AXE_STEM_ID).toBe('bm_george');
+  /* George en de Kokoro-dienst waren de oude stem. Zolang die namen nog in de
+     sprekende code staan, is er geen één stem maar twee. */
+  it('de oude stemnamen staan niet meer in de code die spreekt', () => {
+    for (const bestand of [
+      'infrastructure/gateways/globalTts.ts',
+      'infrastructure/gateways/openAiTtsService.ts',
+      'domain/stemIdentiteit.ts',
+    ]) {
+      expect(code(bestand), bestand).not.toMatch(/bm_george/i);
+    }
   });
 });
 
-describe('aanroepketen: schermen lezen deze identiteit, niet een dode picker', () => {
-  it('Settings VoiceSection noemt George via STEM_UI, niet OpenAI cedar', () => {
-    const src = readFileSync(join(HQ, 'src/presentation/pages/SettingsPage.tsx'), 'utf8');
-    const begin = src.indexOf('function VoiceSection');
-    const eind = src.indexOf('function FishAudioSection');
-    expect(begin).toBeGreaterThan(0);
-    expect(eind).toBeGreaterThan(begin);
-    const sectie = src.slice(begin, eind);
-    expect(sectie).toContain('STEM_UI');
-    expect(sectie).toContain('probeGeorgeStem');
-    expect(sectie).toContain('STEM_MOTOREN');
-    expect(sectie).toContain('zetStemMotor');
-    expect(sectie).toContain('ElevenLabs voice ID');
-    expect(sectie).toContain('Cartesia voice ID');
-    expect(sectie).toContain('setSelectedVoiceId');
-    expect(sectie).toContain('setCartesiaVoiceId');
-    expect(sectie).not.toMatch(/OpenAI <strong>cedar<\/strong>/);
-    expect(sectie).not.toMatch(/OpenAI cedar — warm and natural/);
+describe('stemStandVanHealth', () => {
+  it('online en de juiste stem is groen', () => {
+    expect(stemStandVanHealth({ online: true, voice: AXE_STEM_ID }))
+      .toEqual({ ok: true, regel: STEM_UI.live, watNu: null });
   });
 
-  it('Sidebar Voice-rij polst George in plaats van axe_tts_provider/Fish', () => {
-    const src = readFileSync(join(HQ, 'src/presentation/components/layout/Sidebar.tsx'), 'utf8');
-    const begin = src.indexOf('function AICoreSystemLeft');
-    const eind = src.indexOf('const OLLAMA_HEALTH_URL');
-    expect(begin).toBeGreaterThan(0);
-    expect(eind).toBeGreaterThan(begin);
-    const fn = src.slice(begin, eind);
-    expect(fn).toContain('probeGeorgeStem');
-    expect(fn).not.toContain('axe_tts_provider');
-    expect(fn).not.toContain('Fish Audio');
+  it('offline is rood, met de reden van de server erbij', () => {
+    const s = stemStandVanHealth({ online: false, reason: 'not_configured' });
+    expect(s.ok).toBe(false);
+    expect(s.watNu).toContain('not_configured');
   });
 
-  it('speakGlobal vraagt George eerst, Cedar alleen als George niets hoorbaars maakte', () => {
-    const src = readFileSync(join(HQ, 'src/infrastructure/gateways/globalTts.ts'), 'utf8');
-    expect(src).toContain('speakWithKokoro');
-    expect(src).toContain('viaCedar');
-    expect(src.indexOf('speakWithKokoro')).toBeLessThan(src.lastIndexOf('viaCedar'));
+  it('een losse fout komt er ook doorheen in plaats van stil te blijven', () => {
+    expect(stemStandVanHealth(null, 'ECONNREFUSED').watNu).toContain('ECONNREFUSED');
+  });
+
+  /* Dit is de klep die op 29 september sneuvelde: `verkeerdeStemRegel` en de
+     controle erop verdwenen samen met de oude terugval, waardoor élke stem
+     die de server noemde groen werd. AXE wisselt niet ongemerkt van stem. */
+  it('een ándere stem van de server is rood, met de naam erbij', () => {
+    const s = stemStandVanHealth({ online: true, voice: 'af_sarah' });
+    expect(s.ok).toBe(false);
+    expect(s.watNu).toContain('af_sarah');
+    expect(s.watNu).toContain(AXE_STEM_NAAM);
   });
 });
