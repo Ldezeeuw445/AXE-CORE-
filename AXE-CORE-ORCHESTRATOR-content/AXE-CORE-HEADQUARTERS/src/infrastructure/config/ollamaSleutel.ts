@@ -1,5 +1,10 @@
 /**
- * De sleutel voor de Ollama-box op Hetzner.
+ * De sleutel voor de Ollama-box (`ollama.axecompanion.com`).
+ *
+ * Die stond op Hetzner tot 1 oktober 2026 en staat sindsdien op een tweede
+ * Strato. De hostnaam is dezelfde gebleven, dus er is hier niets te wijzigen:
+ * de omschakeling is een A-record. Daarom staat die naam hieronder ook maar op
+ * één plek -- twee plekken en één verhuizing is één vergeten plek.
  *
  * Tot 13 september was `ollama.axecompanion.com` voor iedereen op internet
  * bruikbaar -- modellen draaien, en tot die dag ook downloaden en verwijderen.

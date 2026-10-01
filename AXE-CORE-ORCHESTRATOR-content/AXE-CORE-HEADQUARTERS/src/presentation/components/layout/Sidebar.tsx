@@ -160,7 +160,10 @@ function proxyAdres(basis: string): string {
 function VpsHealthWidget() {
   const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [proxy, setProxy] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
-  const [hetzner, setHetzner] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
+  // Heette `hetzner`, naar de hoster. Die is 1 okt 2026 vervangen door een
+  // tweede Strato op hetzelfde adres: de rol bleef, de hoster niet. Het label
+  // noemt daarom de rol -- dan hoeft dit nooit meer mee te verhuizen.
+  const [modelbox, setModelbox] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcp, setGcp] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcpConfigured, setGcpConfigured] = useState(false);
 
@@ -195,26 +198,26 @@ function VpsHealthWidget() {
       }
     };
 
-    const tickHetzner = async () => {
+    const tickModelbox = async () => {
       const t0 = performance.now();
       try {
         const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { headers: ollamaHeaders(OLLAMA_HEALTH_URL), signal: AbortSignal.timeout(6000) });
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
         if (!res.ok) {
-          setHetzner({ status: 'degraded', latencyMs: ms, detail: `HTTP ${res.status}` });
+          setModelbox({ status: 'degraded', latencyMs: ms, detail: `HTTP ${res.status}` });
           return;
         }
         const data = await res.json().catch(() => null);
         const modelCount = Array.isArray(data?.models) ? data.models.length : null;
-        setHetzner({
+        setModelbox({
           status: 'online',
           latencyMs: ms,
           detail: modelCount != null ? `ollama · ${modelCount} models` : 'ollama healthy',
         });
       } catch {
         if (cancelled) return;
-        setHetzner({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+        setModelbox({ status: 'offline', latencyMs: null, detail: 'unreachable' });
       }
     };
 
@@ -265,7 +268,7 @@ function VpsHealthWidget() {
       }
     };
 
-    const tick = () => { void tickStrato(); void tickProxy(); void tickHetzner(); void tickGcp(); };
+    const tick = () => { void tickStrato(); void tickProxy(); void tickModelbox(); void tickGcp(); };
     tick();
     const id = window.setInterval(tick, 30_000);
     return () => {
@@ -276,7 +279,7 @@ function VpsHealthWidget() {
 
   return (
     <div className="space-y-3">
-      <VpsRow label="Strato" origin={VPS_API_ORIGIN} state={strato} />
+      <VpsRow label="API box" origin={VPS_API_ORIGIN} state={strato} />
       {VIA_PROXY && (
         <>
           <div style={{ height: 1, background: 'var(--border-subtle)' }} />
@@ -284,7 +287,7 @@ function VpsHealthWidget() {
         </>
       )}
       <div style={{ height: 1, background: 'var(--border-subtle)' }} />
-      <VpsRow label="Hetzner" origin={OLLAMA_HEALTH_URL} state={hetzner} />
+      <VpsRow label="Ollama box" origin={OLLAMA_HEALTH_URL} state={modelbox} />
       {gcpConfigured && (
         <>
           <div style={{ height: 1, background: 'var(--border-subtle)' }} />

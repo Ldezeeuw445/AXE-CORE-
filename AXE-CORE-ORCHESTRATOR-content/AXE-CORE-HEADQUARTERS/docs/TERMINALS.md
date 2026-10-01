@@ -98,7 +98,12 @@ Daar draait alles onder **systemd**. `systemctl restart` komt terug en de dienst
 blijft daarna zelf draaien — ook als je de ssh-verbinding verbreekt. Dat is het
 hele verschil met de Mac.
 
-### Strato — `api.axecompanion.com`
+AXE staat op **twee** servers. Tot 1 oktober 2026 was dat Strato (de API) en
+Hetzner (Ollama); Hetzner doet het niet meer en wordt vervangen door een tweede
+Strato in dezelfde rol. Beide boxen zet je op met hetzelfde script, met `ROL`
+erbij: `ROL=api` of `ROL=ollama` (zie `infra/vps-bootstrap.sh`).
+
+### Strato 1 — `api.axecompanion.com`
 
 ```bash
 # Deployen na een push. De && is belangrijk: mislukt de pull, dan mag de
@@ -115,9 +120,31 @@ journalctl -u axe-terminal -n 40 --no-pager
 
 **Diensten:** `axe-core-api` · `axe-terminal` · `axe-companion` · `axe-task-worker`
 
-### Hetzner — `ollama.axecompanion.com`
+**Hier staat ook het geheugen-Ollama**: een eigen Ollama op `127.0.0.1:11435`
+met alleen `bge-m3`, dienst `ollama-geheugen` (zie
+`backend/axe_api/ollama-geheugen.service`). Die hoort hier en niet op de
+modelbox: een embedding die eerst het internet over moet, faalt zodra die andere
+server eruit ligt — en dat is precies wat er gebeurd is.
 
-Ollama met 18 modellen. Draait als dienst; geen venster nodig.
+```bash
+systemctl --no-pager status ollama-geheugen --lines=0
+curl -s 127.0.0.1:11435/api/tags            # alleen bge-m3 hoort hier te staan
+```
+
+### Strato 2 — `ollama.axecompanion.com`  (was Hetzner)
+
+Ollama met de modellen. Draait als dienst; geen venster nodig.
+
+> **1 oktober 2026:** Hetzner is dood. De rol gaat naar een tweede Strato, nu
+> met 16 GB in plaats van 8 — op 8 GB paste er één 7-8B-model in het geheugen en
+> was 14B uitgesloten. Opzetten: `ROL=ollama bash infra/vps-bootstrap.sh`.
+>
+> De omschakeling zelf is het A-record van `ollama.axecompanion.com`. Die
+> hostnaam staat in de app (`infrastructure/config/ollamaSleutel.ts`,
+> `providerConnectionDefaults.ts`, Sidebar, Settings, Infrastructure), dus zodra
+> hij naar de nieuwe box wijst werkt Ollama weer zónder één regel code of één
+> nieuwe build. Zet nginx daar wel eerst achter een Bearer-sleutel: tot 13
+> september stond deze host open voor het hele internet.
 
 **Terminal (vak 6):** `wss://ollama.axecompanion.com/terminal`. Dienst
 `axe-terminal` (systemd), code in `/opt/axe-terminal`, omgeving in
