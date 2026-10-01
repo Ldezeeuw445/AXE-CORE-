@@ -13,7 +13,7 @@ import { probeOpenAiTts } from '@/infrastructure/gateways/openAiTtsService';
 import { AXE_STEM_NAAM, STEM_UI, stemStandVanHealth, type StemStand } from '@/domain/stemIdentiteit';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
-import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
+import { RouteSection } from '@/presentation/components/settings/RouteSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
@@ -2071,8 +2071,8 @@ export default function SettingsPage() {
         {sectie === 'routing' && (
         <SectieBlok id="routing" titel="ROUTING">
           <div className="axe-agent-raster axe-agent-raster--sectie">
-          <Kaart titel="AXE BRANCHES">
-            <BranchRouterSection />
+          <Kaart titel="AXE ROUTES">
+            <RouteSection />
           </Kaart>
           <Kaart titel="CAPABILITY ROUTER">
             <CapabilityRouterSection />

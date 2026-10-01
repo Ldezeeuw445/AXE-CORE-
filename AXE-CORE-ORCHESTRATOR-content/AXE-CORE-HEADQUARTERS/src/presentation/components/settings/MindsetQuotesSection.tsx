@@ -99,9 +99,11 @@ export function MindsetQuotesSection() {
       <button
         onClick={saveAll}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+        /* Wet 10: het wóórd zegt dat het bewaard is, niet een groen vlak.
+           De vulling blijft dezelfde in beide standen. */
         style={{
-          background: saved ? 'rgba(16,185,129,0.15)' : 'var(--tint)',
-          border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'var(--tint-line)'}`,
+          background: 'var(--tint)',
+          border: `1px solid ${saved ? 'var(--success)' : 'var(--tint-line)'}`,
           color: saved ? 'var(--success)' : 'var(--accent-cyan)',
         }}
       >
