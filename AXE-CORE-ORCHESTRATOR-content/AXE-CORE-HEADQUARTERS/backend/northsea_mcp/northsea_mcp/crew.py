@@ -343,17 +343,32 @@ class CrewGateway:
 
     async def run(self, action: str, handoff: dict[str, Any]) -> CrewRunInfo:
         if action == "unroutable" or ROUTE_FOR_ACTION.get(action) == "unroutable":
+            raw_entities = handoff.get("entity_ids") or {}
+            entities_examined = raw_entities if isinstance(raw_entities, dict) else {
+                f"entity_{i + 1}": value for i, value in enumerate(raw_entities)
+            } if isinstance(raw_entities, list) else {}
             return CrewRunInfo(used=False, status="unroutable", route="unroutable",
                                reason="event is unroutable; no specialist crew executed", validation="not_validated",
-                               entities_examined=handoff.get("entity_ids") or {})
+                               entities_examined=entities_examined)
         route = ROUTE_FOR_ACTION.get(action, "deal_run")
         gevraagd = CREW_FOR_ROUTE[route]
         t0 = time.monotonic()
         deadline = t0 + self._timeout
         pogingen: list[Attempt] = []
         timings: dict[str, float] = {}
+        raw_entities = handoff.get("entity_ids") or {}
+        if isinstance(raw_entities, dict):
+            entities_examined = raw_entities
+        elif isinstance(raw_entities, list):
+            payload = handoff.get("payload") if isinstance(handoff.get("payload"), dict) else {}
+            if len(raw_entities) == 1 and payload.get("opportunity_id"):
+                entities_examined = {"opportunity_id": raw_entities[0]}
+            else:
+                entities_examined = {f"entity_{i + 1}": value for i, value in enumerate(raw_entities)}
+        else:
+            entities_examined = {}
         basis = dict(route=route, requested_crew=gevraagd, crew=SHORT_NAME[route],
-                    requested_specialists=list(ROLES_FOR_ROUTE.get(route, ())), entities_examined=handoff.get("entity_ids") or {})
+                    requested_specialists=list(ROLES_FOR_ROUTE.get(route, ())), entities_examined=entities_examined)
 
         # ── PRIMAIR: lokale specialist-crew (Studio mag down zijn) ───────────
         if getattr(self.local, "enabled", False) and self.local.configured(route):
