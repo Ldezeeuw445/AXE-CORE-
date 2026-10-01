@@ -107,11 +107,38 @@ openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
   live gemeten.
 
 
-- [ ] **2.1** **De agents-tab toont dubbelen.** 18 agents in `core_agents`,
+- [x] **2.1** **De agents-tab toont dubbelen.** 18 agents in `core_agents`,
       maar de tab telt er 29 ("defaults + core_agents"). AXE Core, AXE Intel en
       AXE Companion staan er twee keer. Eén bron kiezen.
-- [ ] **2.2** Drie agents hebben status `statue` — geen geldige waarde.
+
+      Gerepareerd in `mergeAgents` (Agents.tsx): de database is de basis zodra
+      hij rijen teruggeeft, en DEFAULT_AGENTS is dan alleen nog geschiedenis.
+      De oorzaak stond in de weg van `byId.has(a.id)`: de defaults gebruiken een
+      slug (`axe-core`) en de database een UUID, dus dedupen kon nooit werken.
+      *Dit punt stond nog open terwijl de code al klopte — afgevinkt 1 okt 2026.*
+- [x] **2.2** Drie agents hebben status `statue` — geen geldige waarde.
       Uitzoeken of dat `static` moest zijn.
+
+      Uitgezocht: het is géén typefout voor `static`. `agentRegistry.ts`
+      definieert `statue` met zoveel woorden als "de naam bestaat en er draait
+      nog geen code achter" — een beeld van een agent. Het is wél een tweede
+      woord voor een stand die `core_agents` `paused` noemt, en de agents-tab
+      zette er daarom "Unknown status: statue" bij, alsof er iets stuk was.
+      `statusNote` leest ze nu als één betekenis. De tabellen zelf houden hun
+      eigen woord: hernoemen betekent data migreren voor nul winst.
+- [x] **2.2a** **Vier spellingen voor veertien agents** (1 okt 2026). Gevonden
+      bij 2.2: `roster.ts` zegt `task`, de zaailijst `task_agent`, de
+      terugvallijst `task-manager`, en haar namespace `tasks`. Gemeten door elke
+      spelling uit alle drie de lijsten door `loopAgentVoor` te halen: 13 van de
+      42 losten niet op, waaronder zes (`task_agent`, `memory_agent`,
+      `cron_manager`, `finance_agent`, `thinktank_agent`, `app_agent_manager`)
+      waarvan de rostertegenhanger het wél deed — dezelfde agent, dus een
+      herinnering onder de ene naam telde niet mee in de lus van de andere.
+      Nu `domain/agents/agentNaam.ts`: één mechanische regel (die 29 van de 42
+      dekt) plus de echte onregelmatigheden met hun reden, en een test die élke
+      spelling uit alle drie de lijsten langsloopt. Over: vier keer `northsea`
+      (heeft nog geen echte afloop, zie 2.5 — bewust geen lus) en `eve` +
+      `infrastructure_agent` (met reden geen agent).
 - [ ] **2.3** Per agent tonen: welke skills, welke tools, welk model, en of
       zijn leerlus rondloopt (`agent_learning_episodes` per agent).
 - [ ] **2.4** RAG-bestanden per agent zichtbaar maken.

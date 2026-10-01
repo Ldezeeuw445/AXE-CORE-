@@ -39,6 +39,12 @@ const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 // it needs", EVE as "a persona framework", not an agent of its own. Found
 // live in this exact table on 23 sep 2026 (they'd survived the first pass
 // of this filter, which only checked Trading OS/Ollama).
+// NIET samenvoegen met `GEEN_ROSTERAGENT` in domain/agents/agentNaam.ts: die
+// twee lijsten lijken op elkaar en betekenen iets anders. Hier staat "mag geen
+// eigen kaart tonen"; daar staat "dit werk hoort bij niemand". 'crewai_manager'
+// en 'axe_trader' staan dus hier maar niet daar -- hun herinneringen horen bij
+// Wingman en bij Trading, en die lus moet blijven kloppen ook als de rij
+// verborgen is.
 const NON_AGENT_ROW_NAMES = new Set(['axe_trader', 'axe_ollama', 'crewai_manager', 'eve']);
 
 const ROLE_ACCENT: Record<string, string> = {
@@ -142,18 +148,30 @@ function mergeAgents(remote: CoreAgent[]): CoreAgent[] {
 // AGENTS.md: Nederlands in commits en commentaar, Engels in de UI — dus deze
 // teksten (die op de kaart verschijnen) zijn Engels, ook al is de rest van
 // dit bestand in het Nederlands becommentarieerd.
+/**
+ * Eén betekenis per stand, ook als twee tabellen hem anders spellen.
+ *
+ * `core_agents` zegt active / paused / deprecated. De zaailijst voor
+ * `public.agents` (agentRegistry.ts) zegt active / statue, waar 'statue' staat
+ * voor "de naam bestaat, er draait nog geen code achter" -- een beeld van een
+ * agent. Dat is geen typefout voor 'static': het staat zo uitgelegd in
+ * agentRegistry.ts en het betekent exact hetzelfde als 'paused' hier.
+ *
+ * Tot 1 okt 2026 viel 'statue' in de default-tak en stond er "Unknown status:
+ * statue" bij drie agents, alsof er iets stuk was. Twee woorden voor één stand,
+ * en het scherm dat daarover klaagt. Nu één betekenis, en de default-tak blijft
+ * staan voor een stand die écht niemand kent.
+ */
 function statusNote(status: string): string | null {
   switch (status) {
     case 'active':
       return null;
     case 'paused':
+    case 'statue':
       return 'Not built yet — the name exists, no code runs behind it.';
     case 'deprecated':
       return 'Deprecated.';
     default:
-      // Vangt ook een teruggekeerde 'statue' op (was geen geldige waarde
-      // voor deze tabel — zie WERKVERDELING.md) zodat het zichtbaar blijft
-      // in plaats van stil weg te vallen achter een generieke badge.
       return `Unknown status: ${status}`;
   }
 }

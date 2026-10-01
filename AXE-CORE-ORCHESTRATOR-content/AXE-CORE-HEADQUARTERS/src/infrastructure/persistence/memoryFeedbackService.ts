@@ -28,7 +28,7 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 import { type LoopAgent, isLoopAgent } from '@/domain/memory/agentLoop';
-import { AGENT_CATALOG } from '@/domain/agents/catalog';
+import { canoniekeAgent } from '@/domain/agents/agentNaam';
 
 const LS_KEY = 'axe_memory_feedback_v1';
 const MAX_TURNS = 60;
@@ -99,14 +99,29 @@ function newTurnId(): string {
 /**
  * Welke lus-agent hoort bij deze eigenaar.
  *
- * De eigenaren die de code echt gebruikt zijn 'chat', 'browser', 'code-editor',
- * 'local-code' en 'agentic'. LOOP_AGENTS kent alleen de eerste drie plus
- * 'trading' en 'research'. De vertaling staat hier en niet in agentLoop, omdat
- * dit de plek is waar de twee werelden elkaar raken -- de lus hoeft niet te
- * weten hoe deze kant zijn agents noemt.
+ * Twee vragen, en ze zijn niet dezelfde: "wélke agent is dit" en "heeft die
+ * agent een lus". De eerste staat in `domain/agents/agentNaam.ts` -- één plek
+ * voor de vier spellingen die veertien agents in deze app hebben. De tweede
+ * staat in `LOOP_AGENTS`, en die lijst is met opzet korter dan het roster: een
+ * agent komt er pas in als hij een echte, niet-verzonnen afloop heeft.
+ * NorthSea heeft die nog niet, dus die geeft hier null -- dat is geen gat om te
+ * dempen, dat is de stand.
  *
- * 'local-code' valt onder 'code-editor': het is dezelfde agent, alleen het
- * lokale model in plaats van het externe. Ze delen wat ze leren.
+ * Hier stond tot 1 okt 2026 een stapel aliassen per naam, met in het commentaar
+ * de geschiedenis van twee eerdere reparaties ('axe-core' tegen 'axe_core', en
+ * 'tasks'/'thinkthanks'). Elke reparatie liet de volgende spelling open: gemeten
+ * gaven `task_agent`, `memory_agent`, `cron_manager`, `finance_agent`,
+ * `thinktank_agent` en `app_agent_manager` nog altijd null, terwijl `task`,
+ * `memory`, `cron`, `finance`, `thinktank` en `apps` -- dezelfde agents -- het
+ * wel deden. Daarom staat de vertaling nu op één plek met een test eronder die
+ * élke spelling uit alle drie de lijsten langsloopt.
+ *
+ * Wat hier BLIJFT is wat alleen de luskant weet: namen die een lus aanduiden
+ * zonder eigen rosteragent. 'local-code' valt onder 'code-editor' (dezelfde
+ * agent, lokaal model in plaats van extern -- ze delen wat ze leren),
+ * 'research' is werk dat AXE zelf doet, en de twee `trading-desk-*` lussen zijn
+ * Trading's interne tweede mening, met opzet los van de echte AXE Intel en AXE
+ * Companion.
  *
  * Een onbekende eigenaar geeft null en dus geen episode. Dat is met opzet: een
  * episode met een verzonnen agent-naam vervuilt de tellingen, en dan lijkt er
@@ -115,37 +130,17 @@ function newTurnId(): string {
 export function loopAgentVoor(owner: string | undefined): LoopAgent | null {
   if (!owner) return null;
 
-  // Legacy names that predate the canonical roster. Keep these at the boundary
-  // rather than growing another hand-maintained agent list.
-  if (
-    owner === 'local-code' || owner === 'code-editor' || owner === 'code_agent'
-    || owner === 'axe_code' || owner === 'axe_developer'
-  ) return 'code-editor';
-  if (owner === 'chat' || owner === 'global' || owner === 'axe_core' || owner === 'axe-core') return 'chat';
+  // Lusnamen zonder eigen rosteragent -- zie de kop hierboven.
+  if (owner === 'local-code' || owner === 'code-editor') return 'code-editor';
   if (owner === 'research' || owner === 'axe_research') return 'research';
-  if (owner === 'axe_algo') return 'trading';
-  if (owner === 'browser_agent') return 'browser';
-  if (owner === 'crewai_manager') return 'wingman';
-  // defaultAgents.ts's memory_namespace strings drift from this file's/
-  // roster.ts's own naming ('tasks' vs 'task', 'thinkthanks' vs 'thinktank')
-  // -- found by hand-tracing loopAgentVoor for every DEFAULT_AGENTS row after
-  // the 22-23 sep 2026 wiring pass, the same class of false "not wired yet"
-  // that AXE Core's own 'axe-core'/'axe_core' mismatch (fixed just above)
-  // already caused once. Aliased here rather than renaming defaultAgents.ts,
-  // since that id is also the Supabase memory table prefix in places.
-  if (owner === 'tasks') return 'task';
-  if (owner === 'thinkthanks' || owner === 'thinkthanks-agent') return 'thinktank';
+  if (isLoopAgent(owner)) return owner;
 
-  // Current chat/routing code passes namespaceFor(agent), not the agent id.
-  // Resolve that namespace through the canonical catalog so adding/renaming a
-  // roster agent does not require a second status list here.
-  const catalog = AGENT_CATALOG.find(a =>
-    a.kind === 'core' && (a.id === owner || a.namespace === owner),
-  );
-  if (!catalog) return isLoopAgent(owner) ? owner : null;
-  if (catalog.id === 'axe') return 'chat';
-  if (catalog.id === 'developer') return 'code-editor';
-  return isLoopAgent(catalog.id) ? catalog.id : null;
+  const agent = canoniekeAgent(owner);
+  if (!agent) return null;
+  // AXE praat in de chatlus; de developer-agent leert in die van de code-editor.
+  if (agent === 'axe') return 'chat';
+  if (agent === 'developer') return 'code-editor';
+  return isLoopAgent(agent) ? agent : null;
 }
 
 /**
