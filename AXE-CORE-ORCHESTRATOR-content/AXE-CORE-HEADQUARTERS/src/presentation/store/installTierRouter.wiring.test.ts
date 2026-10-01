@@ -195,4 +195,29 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(tekst).toMatch(/getGlobalTtsLevel/);
     expect(tekst).not.toMatch(/getUserMedia\s*\(/);
   });
+  /* ── De vijf skills (1 okt 2026) ─────────────────────────────────────────
+     Gemeten: `probeerPlan` draait vóór de regels én nog eens binnen de
+     tier-3-tak. Een benoemde skill werd daardoor opnieuw beslist door een
+     planmodel -- tot 6 s wachten, en `route.skill` ging verloren omdat het
+     model zijn eigen request teruggeeft. Een unit-test ziet die volgorde niet;
+     dit is de enige plek waar hij staat. */
+  it('haalt een benoemde skill niet nog eens door het planmodel', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/if \(!keuze\.skill && await probeerPlan\(text, keuze\)\) return;/);
+  });
+
+  it('geeft de skill uit het plan door in plaats van hem op null te zetten', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    // Stond hier hard als `skill: null`. Geen verbod op `skill: null` in het
+    // hele bestand: de besturingsroute en de mac-route hebben er echt geen, en
+    // een test die een geldig patroon verbiedt is een val voor de volgende.
+    expect(tekst).toMatch(/skill: j\.skill \?\? null,/);
+  });
+
+  it('stuurt bij een skill de instructie uit de tabel mee, niet alleen Luka\'s zin', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/skillDef\(keuze\.skill\)/);
+    expect(tekst).toMatch(/def\.request/);
+  });
+
 });

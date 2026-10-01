@@ -15,6 +15,7 @@
  * by side instead. If you change one, the other is on the next screen.
  */
 import type { HubId } from '@/domain/memory/memoryHubs';
+import { MAPPEN, hubVoorMap, isAxeMap } from './mappen';
 
 /* ────────────────────────────────────────────────────────────────
    global_memory — the largest store, and the one that hid Trading.
@@ -62,14 +63,31 @@ export const GLOBAL_HUB_CASE = `
  * The trader joins Trading, where its global_memory rows already are, so one
  * agent is not split across two mountains. Intel and Companion are agents.
  */
-export function hubForAgentRow(agent: string | null | undefined): HubId {
+export function hubForAgentRow(
+  agent: string | null | undefined,
+  category?: string | null,
+): HubId {
+  /* De map gaat vóór de namespace (1 okt 2026). Zonder dit viel álles wat niet
+     de trader, intel of companion is in `insights`, dus de vier vaste mappen uit
+     `mappen.ts` -- inbox, projects, content, wiki -- stonden alle vier op
+     dezelfde berg: een wiki-artikel naast een inbox-item. De map zegt
+     preciezer wat iets is dan wie het opschreef. */
+  if (isAxeMap(category)) return hubVoorMap(category);
   if (agent === 'axe_trader') return 'trading';
   if (agent === 'axe_intel' || agent === 'axe_companion') return 'agents';
   return 'insights';
 }
 
+/**
+ * Dezelfde regel in SQL, en in dezelfde volgorde -- de map eerst.
+ *
+ * De WHEN-regels voor de mappen komen uit `MAPPEN`, zodat een map erbij niet
+ * betekent dat je hier iets vergeet. Dat is precies het soort tweeling dat in
+ * dit bestand al eerder uit elkaar liep.
+ */
 export const AGENT_HUB_CASE = `
   CASE
+${MAPPEN.map((m) => `    WHEN category = '${m.id}' THEN '${m.hub}'`).join('\n')}
     WHEN agent = 'axe_trader'                   THEN 'trading'
     WHEN agent IN ('axe_intel','axe_companion') THEN 'agents'
     ELSE 'insights'

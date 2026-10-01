@@ -22,7 +22,7 @@ describe('haalTier1Kijk', () => {
         return { openTasks: 9, overdueTasks: 2 };
       },
     });
-    expect(kijk).toEqual({ openTasks: 0, overdueTasks: 0, titels: [], agenda: [] });
+    expect(kijk).toEqual({ openTasks: 0, overdueTasks: 0, titels: [], agenda: [], teLaatTitels: [] });
     expect(geroepen).toBe(0);
   });
 

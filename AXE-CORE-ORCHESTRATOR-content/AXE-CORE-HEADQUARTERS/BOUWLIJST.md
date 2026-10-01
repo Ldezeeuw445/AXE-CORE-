@@ -407,24 +407,104 @@ het model-pad is begrensd op 700ms). NorthSea auto-send blijft uit.
 
 ### Fase 2 — gestructureerd geheugen
 
-- [ ] **6.6** Vaste mappen: inbox / projects / content / wiki. Dagelijks
+- [x] **6.6** Vaste mappen: inbox / projects / content / wiki. Dagelijks
       briefje met plan, top 3, agenda. Elke taak laat een rapport achter.
-      Harvest: een klaar project wordt een wiki-artikel.
+      ~~Harvest: een klaar project wordt een wiki-artikel.~~ (zie 6.6a)
 
 **Al aanwezig:** RAG (`searchRagMemories`), leerlus + episodes, namespaces
 (`axe_trader`, `global`, …), `writeConversationMemory`, Obsidian-tab,
-continuous memory. **Ontbreekt:** de vaste structuur, het dagelijkse
-briefje, rapport-per-taak, harvest.
+continuous memory.
+
+**Gedaan 1 okt 2026, drie van de vier:**
+
+- **De mappen** staan in `domain/memory/mappen.ts` en kosten nul
+  schemawijzigingen: de `memory`-tabel heeft `kind`, een vrije `category`,
+  `tags[]` en een `key` met een unieke index op `(agent, key)`. Een map is een
+  `category`, een document is `<map>/<slug>`. Geen tweede opslag, zoals
+  `AGENTS.md` eist. Luka's keuze: in het geheugen, niet als directories.
+  Eén ding dat anders stil misging: de `memory`-tabel wordt voor de Memory-tab
+  en de 3D-weergaven geclassificeerd door `hubForAgentRow`, en die keek alleen
+  naar de namespace -- dus álle vier de mappen zouden als "Insights" op één berg
+  staan. Die kijkt nu eerst naar de map, in JS én in de SQL-tak ernaast.
+- **Het briefje** had een lezer en geen schrijver. `loadTodaysBriefing()` leest
+  een `core_notifications`-rij die een VPS-cron zou schrijven, en gemeten maakt
+  géén migratie of script in deze repo die `core_schedules`-rij aan. Dus klonk
+  er elke ochtend "AXE is online" terwijl het briefje nooit bestond. De schrijver
+  staat nu in `application/system/dagBriefjeMaken.ts`, de regel puur in
+  `domain/dagBriefje.ts`, inclusief de top 3 die nergens bestond. Die sorteert op
+  wat echt te weten is: over tijd eerst (langst over tijd vooraan), daarna de
+  plannerorde. Bewust NIET op `priority` -- dat is een vrije string in
+  `core_tasks` en ik heb niet gemeten welke waarden er in staan. Luka's keuze:
+  hardop bij het eerste contact; hij gaat ook naar `inbox`, zodat AXE er later
+  naar kan terugwijzen. Schreef de VPS er wél een, dan gaat die vóór: die heeft
+  meer gezien dan de app.
+- **Rapport per taak** in `domain/tierRouter/jobRapport.ts`, weggeschreven uit
+  `meldJobKlaar` -- de ene plek waar klaar én mislukt langskomen, want een
+  mislukte taak wil je over een week ook nog kunnen opzoeken. Zelfde vorm als
+  `axe report` in de CLI al schreef (`# titel` + tekst), nu in `projects`.
+
+- [ ] **6.6a — harvest.** Een klaar project wordt een wiki-artikel: de
+      `projects/*`-rapporten van één project samengevoegd tot één
+      `wiki/<project>`. Afgesplitst omdat de drie punten hierboven af en gemeten
+      zijn en dit niet; het is ook het minst omschreven punt van 6.6. Het bouwt
+      wél op wat er nu staat: de mappen bestaan, en de rapporten die geoogst
+      moeten worden worden sinds vandaag geschreven. Kleinste eerlijke vorm: een
+      functie en een knop, geen veger die achter je rug je geheugen herschrijft.
 
 ### Fase 3 — skills als knoppen
 
-- [ ] **6.7** Plan Today, Inbox Brief, Intel Brief, Deep Research, Weekly
+- [x] **6.7** Plan Today, Inbox Brief, Intel Brief, Deep Research, Weekly
       Review: dezelfde knoppen op Home/HUD en het dashboard, elk een
       nagekeken skill, ook via stem.
 
-**Al aanwezig:** `skillRegistryService` / Architecture-skills, War Room,
-delegate-signalen. **Ontbreekt:** die vijf knoppen als één bron, stem-
-aanroepbaar, gekoppeld aan de router.
+**Gedaan 1 okt 2026.** De namen bestónden al -- `axeRoute.ts` had het type en de
+regexen, en `stuurAxeJobs` zette `skill` zelfs in de payload. Maar er gebeurde
+niets mee: de backend kent het woord `skill` niet (grep is leeg) en het planpad
+zette `skill: null` hard. Alle vijf gedroegen zich als "tier 3, doel = de
+letterlijke zin die je typte"; de agent kreeg bij "inbox brief" twee woorden en
+moest raden.
+
+- **Eén definitie** in `domain/tierRouter/axeSkills.ts`: per skill de aanroep, de
+  agent, de tier en de instructie die de agent krijgt. `axeRoute` leest zijn
+  regexen en zijn agentkeuze daaruit in plaats van uit een if-keten.
+- **`plan-today` is tier 1** geworden. Zijn inhoud staat al in `haalTier1Kijk`,
+  dus als tier 3 gaf hij "On it, I'll report back" op een vraag waarvan het
+  antwoord klaarlag. Hij is nu het dagbriefje uit 6.6 -- dezelfde tekst, of je
+  het typt, zegt of op de knop drukt.
+- **Twee schaduwen weg.** `probeerPlan` draaide vóór de regels én nog eens in de
+  tier-3-tak, dus een benoemde skill werd opnieuw beslist door een planmodel: tot
+  6 s wachten, en de naam ging verloren. Een skill slaat dat nu over. En
+  `routeFast`'s briefing-pad is niet meer een tweede weg naar hetzelfde.
+- **Lezen en voorstellen** (Luka's keuze) staat niet alleen in de instructie maar
+  in `jobModus`: een skill-job krijgt `execution_mode: 'read'`, dus het hek aan de
+  backendkant blokkeert schrijven. Een instructie is een verzoek aan een model;
+  dit is een hek.
+- **Knoppen uit die ene bron:** het commandopalet (⌘K, overal), en op de telefoon
+  een "Skills"-pil in de FAB -- want daar was het palet helemaal niet te openen:
+  ⌘K vraagt een toetsenbord en de zoekknop zit in een kopbalk die de telefoon
+  niet heeft. Een skillknop stuurt zijn eigen LABEL als bericht, en de router
+  herkent dat met dezelfde regex als wanneer je het typt. Dus geen vierde pad.
+- **Stem:** één `skill`-parameter op het bestaande `start_background_task`, geen
+  vijf nieuwe tools. Dat is met opzet: een test eist de exacte lijst van vijf
+  toolnamen en `prompts.ts` vertelt het model in proza dat het er precies vijf
+  heeft. Vijf tools erbij betekent die twee ook aanpassen; één parameter houdt
+  beide waar.
+- **Onderweg weg:** de `/research`-knop in beide composers zette een voorvoegsel
+  dat niemand leest -- geen route parseert het, en het matchte niet met de
+  deep-research-skill. Hij zet nu de echte aanroep klaar. Dat hij vóórvult en
+  niet vuurt blijft: dat was een bewuste keuze.
+
+**Niet gedaan, en met reden:** de oude `skillRegistryService` / `BUILTIN_SKILLS`
+(~45 promptfragmenten) is niet aangeraakt. Die injectie werkt trouwens niet --
+`installStableChat` haalt `skillsBlock` door `raceFirstToken` met budget
+`RAG_FIRST_TOKEN_BUDGET_MS = 0`, en bij 0 geeft die meteen de fallback, dus de
+blok is altijd leeg. Die nul staat er voor first-token-latency en blijft staan;
+omzetten herintroduceert een bug waar al voor betaald is. Deze vijf skills zijn
+daarom router-acties en geen promptttekst -- dan is die injectie ook niet nodig.
+Ook niet aangeraakt: de Architecture-skills-UI, die onbereikbaar is omdat
+`agentSaveKey` nergens geproduceerd wordt (`RuntimeInspector.tsx`). En "War Room"
+bestaat niet meer als component; het is de oude naam van de roster-weergave in de
+Agents-tab.
 
 ### Fase 4 — stem-UX
 

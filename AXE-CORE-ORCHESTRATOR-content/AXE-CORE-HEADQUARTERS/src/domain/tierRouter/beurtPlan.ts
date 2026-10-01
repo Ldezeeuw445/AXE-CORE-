@@ -13,6 +13,7 @@
  * is. Geen I/O hier; de aanroep zit in application/.
  */
 import type { AxeAgentId } from '@/domain/agents/roster';
+import { AXE_SKILLS, isAxeSkill, type AxeSkillId } from './axeSkills';
 import { agentById } from '@/domain/agents/roster';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import { splitsAxeBeurten } from '@/domain/tierRouter/splitsAxeBeurten';
@@ -29,6 +30,16 @@ export interface PlanJob {
   request: string;
   /** Waar het moet gebeuren. null als het werk overal kan draaien. */
   device?: PlanDevice | null;
+  /**
+   * Een van de vijf benoemde skills, als dit werk er een is.
+   *
+   * Hier stond niets, en dat kostte de skills hun naam: het planmodel draait
+   * vóór de regels, dus een beurt als "plan mijn dag en geef me de inbox brief"
+   * werd twee naamloze jobs. `voerPlanUit` zette daarna `skill: null` hard. De
+   * agent kreeg dan de zin zelf als opdracht in plaats van de instructie uit
+   * `axeSkills.ts`, en moest raden wat "inbox brief" betekent.
+   */
+  skill?: AxeSkillId | null;
 }
 
 /** Wat je met een taak kunt doen die al loopt. */
@@ -69,6 +80,9 @@ const JOB_AGENTS: ReadonlyArray<AxeAgentId> = [
 
 export const PLAN_MAX_JOBS = 6;
 
+/** De vijf skillnamen voor de prompt, uit de tabel -- niet nog eens getypt. */
+const SKILL_IDS = AXE_SKILLS.map((s) => `"${s.id}"`).join(', ');
+
 export const PLAN_MAX_CONTROLS = 6;
 
 /** Groq-model voor het plan: groot genoeg om te begrijpen, ~0,3s. */
@@ -83,13 +97,14 @@ export function planPrompt(nu: Date, lopend: string[]): string {
   return `You are AXE, Luka's assistant. Luka is talking to you out loud, often thinking as he goes.
 You remember what he told you before (see "What you remember" when present); use it like a friend would.
 Read his whole message and decide what he actually wants. Reply with JSON only:
-{"reply": string, "jobs": [{"agent": string, "title": string, "request": string, "device": string|null}], "controls": [{"action": string, "job": string, "instruction": string|null}], "remember": [string], "reminders": [{"title": string, "due": string|null}]}
+{"reply": string, "jobs": [{"agent": string, "title": string, "request": string, "device": string|null, "skill": string|null}], "controls": [{"action": string, "job": string, "instruction": string|null}], "remember": [string], "reminders": [{"title": string, "due": string|null}]}
 
 - reply: what you say back, spoken, in the language he used. Talk like a real person who knows him well, not like a help desk: react to what he actually said. If he is telling a story, venting or thinking out loud, engage with it -- react, give your honest take, or ask one follow-up question. Never end with filler like "how can I help you". One to three short sentences. When you start jobs, say in a few words what you set in motion. Answer small questions directly. Never say you cannot do something that a job can do.
 - jobs: ONLY things he asks to be done now. Not ideas ("we should some day..."), not thinking out loud, not stories, feelings or opinions, not questions you can answer in the reply. Most turns have no jobs. Max ${PLAN_MAX_JOBS}.
   agent: northsea (commodity desk, leads, mailbox - read only), trading (markets, positions, trading desk), developer (code, repos, builds, servers), browser (look something up on the web), intel (news, research briefs), apps (apps and VPS services), finance (money, subscriptions, credits), thinktank (work out an idea), axe (anything else).
   request: a complete instruction in English that makes sense without this conversation.
   device: which computer has to do it. Exactly one of "vps" (the always-on server), "mac-mini" or "imac" (his two Macs at home), or null. Set it as soon as he names a machine, and also when the work is clearly about the files, the apps, the screen or the repo checkout of one of the Macs. null when any machine will do, or when you are not sure -- never guess a machine.
+  skill: one of ${SKILL_IDS} when he is asking for exactly that named thing, otherwise null. These five have a fixed instruction and a fixed agent, so naming one is better than writing your own request. Never guess: null when unsure.
 - controls: what to do with work that is ALREADY running, never new work. Each running task is listed above as [j1] Trading Agent - "Check open positions" - running.
   action: status (he asks how it is going), cancel (he wants it stopped), redirect (it must keep going but differently), approve (he says yes to what it asked), reject (he says no to it), overview (he asks what is running at all -- use the first listed id).
   job: the short id between brackets, exactly as listed, for example j1. Never invent one: if you cannot point at a listed task, leave the control out.
@@ -182,7 +197,11 @@ export function parseBeurtPlan(raw: string, lopend: readonly string[] = []): Beu
     const agent = JOB_AGENTS.includes(r.agent as AxeAgentId) ? (r.agent as AxeAgentId) : 'axe';
     // Strikt: alles wat niet exact een van de drie machines is, is geen machine.
     const device = PLAN_DEVICES.includes(r.device as PlanDevice) ? (r.device as PlanDevice) : null;
-    jobs.push({ agent, title: tekst(r.title, 60) || request.slice(0, 60), request, device });
+    // Zelfde strengheid als agent en device: wat niet exact een van de vijf is,
+    // is geen skill. Een verzonnen skillnaam zou de agent een instructie geven
+    // die niet bestaat.
+    const skill = isAxeSkill(r.skill) ? r.skill : null;
+    jobs.push({ agent, title: tekst(r.title, 60) || request.slice(0, 60), request, device, skill });
     if (jobs.length >= PLAN_MAX_JOBS) break;
   }
 

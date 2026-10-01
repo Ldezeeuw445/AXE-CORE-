@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { splitsAxeBeurten, jobStukkenVan } from '@/domain/tierRouter/splitsAxeBeurten';
 import { startJobsParallel } from './stuurAxeJobs';
+import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
+import { skillDef } from '@/domain/tierRouter/axeSkills';
 
 describe('startJobsParallel', () => {
   it('zet drie jobs tegelijk uit, niet achter elkaar', async () => {
@@ -55,5 +57,46 @@ describe('startJobsParallel', () => {
     const ns = payloads.find((p) => p.assignee === 'northsea');
     expect(ns?.execution_mode).toBe('read');
     expect(JSON.stringify(ns)).not.toMatch(/auto_send_qualification|auto_reply_nonbinding|auto_send_followups/);
+  });
+});
+
+/* ── De vijf skills komen aan bij de agent (1 okt 2026) ──────────────────────
+   Gemeten vóór deze ronde: `skill` stond wél in de payload, maar de backend kent
+   het woord niet en het planpad zette hem hard op null. De agent kreeg dus de
+   zin zelf ("inbox brief", twee woorden) in plaats van de instructie uit
+   axeSkills.ts. Deze tests leggen vast dat het nu écht doorkomt, inclusief het
+   hek: alle vijf lezen alleen. */
+describe('een benoemde skill', () => {
+  const gestuurd: Array<Record<string, unknown>> = [];
+  const create = async (input: Record<string, unknown>) => {
+    gestuurd.push(input);
+    return { task: { id: `t-${gestuurd.length}` } };
+  };
+
+  beforeEach(() => { gestuurd.length = 0; });
+
+  it('draagt zijn naam, zijn agent en de leesstand mee naar de durable task', async () => {
+    const def = skillDef('deep-research')!;
+    await startJobsParallel(
+      [{ text: `${def.request}\n\nLuka said: deep research naar lithium`, titel: def.label, route: classifyAxeTier('deep research naar lithium') }],
+      { create, id: () => 'id-1' },
+    );
+    expect(gestuurd).toHaveLength(1);
+    const payload = gestuurd[0].payload as Record<string, unknown>;
+    expect(payload.skill).toBe('deep-research');
+    expect(gestuurd[0].assignee).toBe('browser');
+    // Het hek, niet alleen de instructietekst: de backend mag niets schrijven.
+    expect(gestuurd[0].execution_mode).toBe('read');
+    // En de opdracht is de volle instructie, niet de twee woorden die Luka zei.
+    expect(String(gestuurd[0].goal).length).toBeGreaterThan(100);
+  });
+
+  it('laat gewoon werk op execute staan -- de leesstand is van de skill, niet van alles', async () => {
+    await startJobsParallel(
+      [{ text: 'fix the login bug', route: classifyAxeTier('fix the login bug') }],
+      { create, id: () => 'id-2' },
+    );
+    expect(gestuurd[0].execution_mode).toBe('execute');
+    expect((gestuurd[0].payload as Record<string, unknown>).skill).toBeNull();
   });
 });

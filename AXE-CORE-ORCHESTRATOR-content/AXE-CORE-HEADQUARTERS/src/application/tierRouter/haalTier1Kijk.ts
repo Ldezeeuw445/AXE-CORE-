@@ -18,10 +18,18 @@ export interface Tier1Kijk {
   overdueTasks: number;
   titels: string[];
   agenda: string[];
+  /**
+   * Titels van de taken die over tijd zijn, langst over tijd eerst.
+   *
+   * De awareness-query las deze al en gooide ze weg; er kwam alleen een getal
+   * uit. Het dagbriefje (domain/dagBriefje.ts) heeft ze nodig voor zijn top 3:
+   * "over tijd" is de enige rangorde die uit echte data komt.
+   */
+  teLaatTitels: string[];
 }
 
 export interface HaalTier1Deps {
-  awareness?: () => Promise<{ openTasks: number; overdueTasks: number }>;
+  awareness?: () => Promise<{ openTasks: number; overdueTasks: number; overdueTitles?: string[] }>;
   taken?: () => Promise<string[]>;
   agenda?: () => Promise<string[]>;
   timeoutMs?: number;
@@ -36,7 +44,7 @@ function metTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ]);
 }
 
-const LEEG: Tier1Kijk = { openTasks: 0, overdueTasks: 0, titels: [], agenda: [] };
+const LEEG: Tier1Kijk = { openTasks: 0, overdueTasks: 0, titels: [], agenda: [], teLaatTitels: [] };
 
 export async function haalTier1Kijk(
   kind: AxeRouteKind,
@@ -47,7 +55,7 @@ export async function haalTier1Kijk(
   const timeoutMs = deps.timeoutMs ?? 600;
   const awareness = deps.awareness ?? (async () => {
     const s = await getAwarenessSnapshot();
-    return { openTasks: s.openTasks, overdueTasks: s.overdueTasks };
+    return { openTasks: s.openTasks, overdueTasks: s.overdueTasks, overdueTitles: s.overdueTitles };
   });
   const taken = deps.taken ?? (async () => {
     const { taken: lijst } = await plannerTaken(20);
@@ -66,7 +74,7 @@ export async function haalTier1Kijk(
   const wilAgenda = kind === 'calendar' || kind === 'priorities';
 
   const [stand, titels, items] = await Promise.all([
-    metTimeout(awareness(), timeoutMs, { openTasks: 0, overdueTasks: 0 }),
+    metTimeout(awareness(), timeoutMs, { openTasks: 0, overdueTasks: 0, overdueTitles: [] as string[] }),
     wilTaken ? metTimeout(taken(), timeoutMs, [] as string[]) : Promise.resolve([] as string[]),
     wilAgenda ? metTimeout(agenda(), timeoutMs, [] as string[]) : Promise.resolve([] as string[]),
   ]);
@@ -76,5 +84,6 @@ export async function haalTier1Kijk(
     overdueTasks: stand.overdueTasks,
     titels: titels.length ? titels : [],
     agenda: items,
+    teLaatTitels: stand.overdueTitles ?? [],
   };
 }

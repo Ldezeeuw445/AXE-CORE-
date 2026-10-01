@@ -65,7 +65,11 @@ const VOORBEELDEN: Array<{ text: string; tier: AxeRouteTier; note?: string }> = 
   { text: 'check the northsea deals', tier: 3 },
   { text: 'bekijk de northsea deals', tier: 3 },
   { text: 'browse https://example.com and summarise it', tier: 3 },
-  { text: 'plan today', tier: 3 },
+  /* 1 okt 2026 van 3 naar 1. 'plan today' is taken + agenda + top 3, en dat
+     staat al in haalTier1Kijk -- er is geen agent en geen model voor nodig. Als
+     tier 3 gaf hij "On it, I'll report back" op een vraag waarvan het antwoord
+     klaarlag. De andere vier blijven 3: die gaan echt iets uitzoeken. */
+  { text: 'plan today', tier: 1 },
   { text: 'inbox brief', tier: 3 },
   { text: 'intel brief', tier: 3 },
   { text: 'weekly review', tier: 3 },

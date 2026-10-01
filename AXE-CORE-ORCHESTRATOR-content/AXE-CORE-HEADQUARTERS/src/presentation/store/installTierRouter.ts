@@ -24,6 +24,10 @@ import {
   takenAntwoord,
   tier3Ack,
 } from '@/domain/tierRouter/axeRoute';
+import { skillDef, type AxeSkillId } from '@/domain/tierRouter/axeSkills';
+import { dagBriefjeTekst } from '@/domain/dagBriefje';
+import { bewaarDagBriefje } from '@/application/system/dagBriefjeMaken';
+import { bewaarJobRapport } from '@/application/tierRouter/bewaarJobRapport';
 import { kiesAxeRoute, type AxeRouteKeuze } from '@/application/tierRouter/kiesAxeRoute';
 import { besturingsBeurt, controlBeurt, type BesturingsUitvoer } from '@/application/tierRouter/besturingsBeurt';
 import {
@@ -310,7 +314,26 @@ function tier1Tekst(
   kind: AxeRouteKeuze['kind'],
   kijk: Awaited<ReturnType<typeof haalTier1Kijk>>,
   vpsOnline: boolean | null,
+  skill: AxeSkillId | null = null,
 ): string {
+  /* `plan-today` is het dagbriefje, en dat is precies wat tier 1 kan: taken,
+     agenda en een top 3 uit opgeslagen data, zonder model. Zonder deze regel gaf
+     hij het generieke prioriteiten-antwoord -- dezelfde data, maar zonder de
+     rangorde en zonder de top 3, dus het verschil tussen "je hebt 7 open taken"
+     en "er staat één taak over tijd, de top 3 is dit". */
+  if (skill === 'plan-today') {
+    const tekst = dagBriefjeTekst({
+      teLaat: kijk.teLaatTitels,
+      open: kijk.titels,
+      agenda: kijk.agenda,
+      openTaken: kijk.openTasks,
+      teLateTaken: kijk.overdueTasks,
+    });
+    if (tekst) return tekst;
+    // Leeg briefje: dan is het eerlijker om te zeggen dat er niets staat dan
+    // een lege zin voor te lezen.
+    return prioriteitenAntwoord(kijk.titels, kijk.overdueTasks, kijk.agenda);
+  }
   if (kind === 'greeting') return groetAntwoord();
   if (kind === 'session') return sessieSamenvatting(useAxeJobStore.getState().jobs);
   if (kind === 'status') {
@@ -330,9 +353,13 @@ function tier1Tekst(
 
 async function voerTier1Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
   const kijk = await haalTier1Kijk(keuze.kind);
-  const antwoord = tier1Tekst(keuze.kind, kijk, useVoiceStore.getState().vpsOnline);
-  publiceer(antwoord, { provider: 'rules', model: `tier1/${keuze.kind}` }, 'ack');
-  recordBeurt(text, antwoord, 'rules', `tier1:${keuze.kind}`);
+  const antwoord = tier1Tekst(keuze.kind, kijk, useVoiceStore.getState().vpsOnline, keuze.skill);
+  const label = keuze.skill ? `tier1/${keuze.skill}` : `tier1/${keuze.kind}`;
+  publiceer(antwoord, { provider: 'rules', model: label }, 'ack');
+  recordBeurt(text, antwoord, 'rules', keuze.skill ? `tier1:skill:${keuze.skill}` : `tier1:${keuze.kind}`);
+  // Het briefje hoort ook in de inbox te staan, net als bij de ochtendgroet:
+  // dan kan AXE er later naar terugwijzen in plaats van het opnieuw te bouwen.
+  if (keuze.skill === 'plan-today' && antwoord) void bewaarDagBriefje(antwoord);
   return true;
 }
 
@@ -444,6 +471,11 @@ function taakTekst(snapshot: DurableTaskSnapshot): string {
 function meldJobKlaar(job: AxeJob, hervat = false): void {
   const tekst = jobResultaatTekst(job);
   useAxeJobStore.getState().patch(job.id, job);
+  /* Het rapport (bouwlijst 6.6). Hier en niet in de twee aanroepers: klaar én
+     mislukt komen allebei langs deze functie, en een mislukte taak is net zo
+     goed iets om over een week nog te kunnen opzoeken. `void`, want een
+     mislukte schrijfpoging mag het vertellen nooit tegenhouden. */
+  void bewaarJobRapport(job);
   if (hervat) {
     const zichtbaar = `${tekst} (finished while you were away.)`;
     zetAxeStil(zichtbaar, { provider: 'tier3', model: job.agent });
@@ -838,9 +870,14 @@ function voerPlanUit(text: string, plan: BeurtPlan, lopend: AxeJob[]): void {
         tier: 3 as const,
         kind: 'agent' as const,
         via: 'model' as const,
-        reason: 'plan',
-        agent: j.agent,
-        skill: null,
+        reason: j.skill ? `plan:skill:${j.skill}` : 'plan',
+        agent: j.skill ? (skillDef(j.skill)?.agent ?? j.agent) : j.agent,
+        /* Stond hier hard op null, en dat was waar de vijf skills hun naam
+           verloren: het planmodel draait vóór de regels, dus bij een
+           samengestelde beurt kwam `plan today` hier langs als naamloze job.
+           De agent kreeg dan de zin zelf in plaats van de instructie uit
+           axeSkills.ts. */
+        skill: j.skill ?? null,
         confident: true,
       },
     })));
@@ -1049,14 +1086,24 @@ export function installTierRouter(): void {
           // Echt werk: het plan maakt er een opdracht van die op zichzelf
           // staat en kiest de agent. Zonder plan de oude route.
           haalGebruikerWeg(text);
-          if (await probeerPlan(text, keuze)) return;
+          /* Eén uitzondering: een benoemde skill is al een besluit. Wie hem
+             doet, op welke tier en met welke instructie staat in axeSkills.ts.
+             Hem alsnog door het planmodel halen kostte tot 6 s (PLAN_TIMEOUT_MS)
+             en gooide de naam weg -- het model geeft zijn eigen request terug,
+             en de agent moest raden wat "inbox brief" betekent. */
+          if (!keuze.skill && await probeerPlan(text, keuze)) return;
           // Zonder plan alleen een korte, duidelijke opdracht als één taak --
           // nooit geknipt. Al het andere is praten.
-          if (!isKorteOpdracht(text)) {
+          if (!keuze.skill && !isKorteOpdracht(text)) {
             if (await praatTerug(text, keuze)) return;
           } else {
             zetGebruiker(text);
-            if (voerJobsUit(text, [{ text, route: keuze }])) return;
+            // Bij een skill is de instructie die van de tabel, niet jouw zin:
+            // "deep research naar lithium" wordt de volle onderzoeksopdracht
+            // met het onderwerp eraan vast.
+            const def = keuze.skill ? skillDef(keuze.skill) : null;
+            const opdracht = def ? `${def.request}\n\nLuka said: ${text}` : text;
+            if (voerJobsUit(text, [{ text: opdracht, titel: def?.label, route: keuze }])) return;
           }
         }
       } catch (e) {

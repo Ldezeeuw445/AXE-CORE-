@@ -6,7 +6,7 @@ import { capabilityVoorAgent, type AxeRoute } from '@/domain/tierRouter/axeRoute
 import {
   jobAgentVan,
   jobTitelVan,
-  northseaJobModus,
+  jobModus,
   type AxeJob,
   type AxeJobState,
 } from '@/domain/tierRouter/axeJobRegels';
@@ -62,7 +62,7 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
     requested_by: 'luka',
     capability: capabilityVoorAgent(job.agent),
     assignee: job.agent === 'axe' ? undefined : job.agent,
-    execution_mode: northseaJobModus(job.agent),
+    execution_mode: jobModus(job.agent, route.skill),
     idempotency_key: `tier3-${job.id}`,
     payload: {
       request: job.sourceText,

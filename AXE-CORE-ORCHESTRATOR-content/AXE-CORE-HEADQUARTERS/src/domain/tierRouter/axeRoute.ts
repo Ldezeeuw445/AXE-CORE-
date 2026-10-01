@@ -11,17 +11,19 @@
  */
 import { classifyChatIntent, isSocialChatTurn } from '@/domain/chatIntent';
 import { delegateFor, type AxeAgentId } from '@/domain/agents/roster';
+import { skillDef, skillVanTekst, type AxeSkillId } from './axeSkills';
 
 export type AxeRouteTier = 1 | 2 | 3;
 
 export type AxeRouteVia = 'rules' | 'model' | 'fallback';
 
-export type AxeRouteSkill =
-  | 'plan-today'
-  | 'inbox-brief'
-  | 'intel-brief'
-  | 'deep-research'
-  | 'weekly-review';
+/**
+ * De vijf skills. Stond hier als los type met zijn regexen eronder; sinds
+ * 1 okt 2026 staat alles over een skill in `axeSkills.ts` -- ook wie hem doet en
+ * wat de agent als instructie krijgt. Hier blijft de naam staan omdat elke
+ * bestaande aanroeper hem van deze plek importeert.
+ */
+export type AxeRouteSkill = AxeSkillId;
 
 export type AxeRouteKind =
   | 'greeting'
@@ -78,14 +80,6 @@ const STATUS_RE =
 const QUICK_RE =
   /\b(samenvat|summarize|vat .* samen|leg uit|explain|tell me about|vertel (me )?(over|iets)|what is|wat is|wat betekent|what does|how does|hoe werkt|what'?s the weather|wat is het weer)\b/i;
 
-const SKILL_PATTERNS: { skill: AxeRouteSkill; re: RegExp }[] = [
-  { skill: 'plan-today', re: /^(plan today|plan mijn dag|plan de dag)\b/i },
-  { skill: 'inbox-brief', re: /^(inbox brief|inbox briefing)\b/i },
-  { skill: 'intel-brief', re: /^(intel brief|intel briefing)\b/i },
-  { skill: 'deep-research', re: /\b(deep research|diep research|diepgaand onderzoek)\b/i },
-  { skill: 'weekly-review', re: /^(weekly review|weekreview|week review)\b/i },
-];
-
 const WORK_RE =
   /\b(research|onderzoek|schrijf (een )?rapport|write (a )?report|open (a )?(long|short)|zet een (long|short)|fix|los .* op|run the (wingman )?crew|start de crew|browse|scrape|deploy|refactor|implement|commit|pr\b|pull request)\b/i;
 
@@ -93,12 +87,7 @@ function schoon(text: string): string {
   return (text || '').trim();
 }
 
-function skillVan(text: string): AxeRouteSkill | null {
-  for (const s of SKILL_PATTERNS) {
-    if (s.re.test(text)) return s.skill;
-  }
-  return null;
-}
+
 
 /**
  * Synchrone regels. Geen I/O. Dit is de goedkope weg die onder 1s blijft
@@ -118,16 +107,21 @@ export function classifyAxeTier(text: string): AxeRoute {
     };
   }
 
-  const skill = skillVan(t);
+  /* Een benoemde skill is al een besluit: wie hem doet en op welke tier staat in
+     de tabel, niet in een if-keten hier. `plan-today` is tier 1 -- zijn inhoud
+     (taken, agenda, top 3) staat al in `haalTier1Kijk`, dus daar een
+     achtergrondtaak van maken gaf "On it, I'll report back" op een vraag
+     waarvan het antwoord klaarlag. */
+  const skill = skillVanTekst(t);
   if (skill) {
-    const agent: AxeAgentId =
-      skill === 'intel-brief' ? 'intel' : skill === 'deep-research' ? 'browser' : 'axe';
+    const def = skillDef(skill);
+    const tier = def?.tier ?? 3;
     return {
-      tier: 3,
-      kind: 'agent',
+      tier,
+      kind: tier === 1 ? 'priorities' : 'agent',
       via: 'rules',
       reason: `skill:${skill}`,
-      agent,
+      agent: def?.agent ?? 'axe',
       skill,
       confident: true,
     };

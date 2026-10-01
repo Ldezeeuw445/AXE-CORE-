@@ -48,7 +48,11 @@ export type MemoryNamespace =
  */
 export const GLOBAL = 'global' as const;
 
-export type MemoryKind = 'fact' | 'lesson' | 'event' | 'doc';
+// Verhuisd naar het domein (1 okt 2026): welke soorten er bestaan is een
+// afspraak over wat AXE onthoudt, en het domein moest hem kunnen noemen.
+// Hier opnieuw geëxporteerd zodat elke bestaande importeur blijft werken.
+export type { MemoryKind } from '@/domain/memory/memoryKind';
+import type { MemoryKind } from '@/domain/memory/memoryKind';
 
 export interface MemoryRow {
   id: string;

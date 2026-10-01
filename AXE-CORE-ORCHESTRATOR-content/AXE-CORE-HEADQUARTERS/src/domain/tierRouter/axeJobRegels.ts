@@ -3,6 +3,7 @@
  * De roster-agent is wie het werk doet; de job-state is wat de balk toont.
  */
 import type { AxeAgentId } from '@/domain/agents/roster';
+import { skillDef, type AxeSkillId } from './axeSkills';
 import { agentById } from '@/domain/agents/roster';
 import type { AxeRoute } from '@/domain/tierRouter/axeRoute';
 import { TOOL_TIERS } from '@/domain/tools/riskTiers';
@@ -333,6 +334,19 @@ export function balkLabel(lopend: number): string {
   return `${lopend} agents running`;
 }
 
-export function northseaJobModus(agent: AxeAgentId): 'read' | 'execute' {
+/**
+ * Mag deze taak iets veranderen, of alleen lezen?
+ *
+ * Heette `northseaJobModus` en kende één reden om 'read' te zeggen. Er is nu een
+ * tweede: de vijf skills mogen lezen en taken VOORSTELLEN, niets zelf
+ * veranderen (Luka, 1 okt 2026). Dat staat ook in hun instructietekst, maar een
+ * instructie is een verzoek aan een model en dit is het hek: `execution_mode`
+ * blokkeert schrijven en posten aan de backendkant.
+ *
+ * Twee redenen, één functie -- anders staat er straks ergens een tweede plek die
+ * 'execute' zegt over werk dat alleen mag kijken.
+ */
+export function jobModus(agent: AxeAgentId, skill?: AxeSkillId | null): 'read' | 'execute' {
+  if (skill && skillDef(skill)?.leestAlleen) return 'read';
   return agent === 'northsea' ? 'read' : 'execute';
 }

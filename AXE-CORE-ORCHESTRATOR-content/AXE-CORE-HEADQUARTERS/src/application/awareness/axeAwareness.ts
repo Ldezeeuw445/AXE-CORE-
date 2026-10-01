@@ -1,7 +1,23 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { isOpenTask } from '@/domain/tasks/taskStatus';
 
-export type AwarenessSnapshot = { now: string; openTasks: number; overdueTasks: number; followUps: number; alerts: string[] };
+export type AwarenessSnapshot = {
+  now: string;
+  openTasks: number;
+  overdueTasks: number;
+  followUps: number;
+  alerts: string[];
+  /**
+   * De titels van de te late taken, nieuwste deadline eerst.
+   *
+   * Deze query las `title` en `due_date` al en gooide ze weg -- er kwam alleen
+   * een getal uit. Het dagbriefje (bouwlijst 6.6) heeft precies deze titels
+   * nodig voor zijn top 3: "over tijd" is de enige rangorde die uit echte data
+   * komt in plaats van uit een gok. Hoogstens tien; een briefje dat twintig
+   * dingen opsomt is geen briefje.
+   */
+  overdueTitles: string[];
+};
 
 /** Live snapshot of open work AXE is aware of — open/overdue tasks and
  *  pending follow-ups — surfaced in the Awareness Center panel on Home.
@@ -19,7 +35,7 @@ export type AwarenessSnapshot = { now: string; openTasks: number; overdueTasks: 
 export async function getAwarenessSnapshot(): Promise<AwarenessSnapshot> {
   const now = new Date();
   const sb = getSupabase();
-  if (!sb) return { now: now.toISOString(), openTasks: 0, overdueTasks: 0, followUps: 0, alerts: [] };
+  if (!sb) return { now: now.toISOString(), openTasks: 0, overdueTasks: 0, followUps: 0, alerts: [], overdueTitles: [] };
 
   const [t, f] = await Promise.allSettled([
     // Filtered here rather than in the query: `neq('status','done')` looked
@@ -35,9 +51,16 @@ export async function getAwarenessSnapshot(): Promise<AwarenessSnapshot> {
   const fs = f.status === 'fulfilled'
     ? ((f.value.data ?? []) as Array<Record<string, unknown>>).filter(x => isOpenTask(x.status))
     : [];
-  const overdue = tasks.filter(x => x.due_date && new Date(String(x.due_date)) < now).length;
+  const teLaat = tasks
+    .filter(x => x.due_date && new Date(String(x.due_date)) < now)
+    .sort((a, b) => new Date(String(b.due_date)).getTime() - new Date(String(a.due_date)).getTime());
+  const overdue = teLaat.length;
+  const overdueTitles = teLaat
+    .map(x => String(x.title ?? '').trim())
+    .filter(Boolean)
+    .slice(0, 10);
   const alerts: string[] = [];
   if (overdue) alerts.push(`${overdue} taak/taken zijn over tijd`);
   if (fs.length) alerts.push(`${fs.length} follow-up(s) wachten op aandacht`);
-  return { now: now.toISOString(), openTasks: tasks.length, overdueTasks: overdue, followUps: fs.length, alerts };
+  return { now: now.toISOString(), openTasks: tasks.length, overdueTasks: overdue, followUps: fs.length, alerts, overdueTitles };
 }

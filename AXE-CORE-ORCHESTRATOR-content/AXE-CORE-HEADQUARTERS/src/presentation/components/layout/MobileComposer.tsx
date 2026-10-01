@@ -25,6 +25,14 @@ import {
 } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { skillDef } from '@/domain/tierRouter/axeSkills';
+
+/* Zette tot 1 okt 2026 `/research` klaar. Dat voorvoegsel las niemand: geen
+   route parseert het, en het matchte ook niet met de deep-research-skill (die
+   wil "deep research"). Nu komt de aanroep uit axeSkills.ts, zodat de knop en de
+   getypte zin bij dezelfde skill uitkomen. Hij vult vóór en vuurt niet -- dat was
+   een bewuste keuze: een knop die ongevraagd onderzoek afvuurt kost tokens. */
+const DIEP_ONDERZOEK = skillDef('deep-research')!;
 
 export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend?: boolean } = {}) {
   const navigate = useNavigate();
@@ -144,8 +152,8 @@ export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend
           <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
           <button
             type="button"
-            onClick={() => setDraft(t => (t.startsWith('/research') ? t : `/research ${t}`))}
-            title="Diep onderzoek"
+            onClick={() => setDraft(t => (DIEP_ONDERZOEK.patroon.test(t) ? t : `${DIEP_ONDERZOEK.label} ${t}`))}
+            title={DIEP_ONDERZOEK.uitleg}
           >
             <Telescope size={18} />
           </button>

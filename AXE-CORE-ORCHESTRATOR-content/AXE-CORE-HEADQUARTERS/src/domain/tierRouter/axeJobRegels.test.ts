@@ -9,7 +9,7 @@ import {
   gesprokenGoedkeuringsBesluit,
   magMetStemGoedkeuren,
   moetSpraakWachtrij,
-  northseaJobModus,
+  jobModus,
   sessieSamenvatting,
   stemlusOvergang,
   type AxeGoedkeuring,
@@ -88,8 +88,11 @@ describe('sessie-samenvatting', () => {
     ])).toMatch(/2 jobs/);
     expect(balkLabel(3)).toBe('3 agents running');
     expect(jobResultaatTekst(job({ state: 'done', summary: '3 open deals' }))).toMatch(/3 open deals/);
-    expect(northseaJobModus('northsea')).toBe('read');
-    expect(northseaJobModus('trading')).toBe('execute');
+    expect(jobModus('northsea')).toBe('read');
+    expect(jobModus('trading')).toBe('execute');
+    // De vijf skills lezen alleen, ook bij een agent die normaal mag uitvoeren.
+    expect(jobModus('browser', 'deep-research')).toBe('read');
+    expect(jobModus('intel', 'intel-brief')).toBe('read');
   });
 });
 

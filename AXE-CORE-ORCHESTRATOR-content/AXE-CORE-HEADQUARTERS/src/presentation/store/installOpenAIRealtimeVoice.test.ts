@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
+import { AXE_SKILLS } from '@/domain/tierRouter/axeSkills';
+import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
+import { REALTIME_VOICE_RULES } from '@/domain/prompts';
 
 /**
  * The realtime voice call itself needs a live WebRTC connection and real
@@ -130,6 +133,27 @@ describe('REALTIME_TOOLS', () => {
   });
 });
 
+/* ── De stem kan de vijf skills aanroepen (1 okt 2026) ───────────────────────
+   Via één parameter op de bestaande tool, niet via vijf nieuwe tools: de test
+   hierboven eist de exacte lijst van vijf namen, en prompts.ts vertelt het model
+   in proza dat het er precies vijf heeft. Die twee blijven dus waar. */
+describe('de skill-parameter', () => {
+  it('staat op start_background_task, met de vijf echte namen als enum', () => {
+    const tool = REALTIME_TOOLS.find((t) => t.name === 'start_background_task')!;
+    const props = (tool.parameters as { properties: Record<string, { enum?: string[] }> }).properties;
+    expect(props.skill?.enum?.slice().sort()).toEqual(
+      AXE_SKILLS.map((s) => s.id).slice().sort(),
+    );
+  });
+
+  it('wordt in de stemregels genoemd, anders gebruikt het model hem niet', () => {
+    // Het model krijgt zijn toolkennis ook in proza; een parameter die daar niet
+    // staat wordt in de praktijk niet aangeroepen.
+    expect(REALTIME_VOICE_RULES).toContain('skill');
+    for (const s of AXE_SKILLS) expect(REALTIME_VOICE_RULES).toContain(s.id);
+  });
+});
+
 describe('start_background_task', () => {
   it('dispatches through the existing stuurAxeJobs stack — no second task queue', async () => {
     const result = JSON.parse(await handleRealtimeTool('start_background_task', {
@@ -141,6 +165,41 @@ describe('start_background_task', () => {
     const [stukken] = startAxeJobs.mock.calls[0] as [Array<{ text: string; route: { tier: number } }>];
     expect(stukken[0].text).toBe('pull the latest trades');
     expect(stukken[0].route.tier).toBe(3);
+  });
+
+  /* Knop, typen en stem moeten dezelfde skill bij dezelfde agent met dezelfde
+     instructie opleveren -- dat was de hele reden om skills één plek te geven.
+     De knop stuurt het LABEL als bericht, dus wat de router daarvan maakt is de
+     maatstaf; hier wordt gemeten dat de stem er precies hetzelfde van maakt. */
+  it('levert via de stem dezelfde route op als de knop en als typen', async () => {
+    for (const skill of AXE_SKILLS) {
+      startAxeJobs.mockClear();
+      const result = JSON.parse(await handleRealtimeTool('start_background_task', {
+        request: skill.label,
+        skill: skill.id,
+      }));
+      expect(result.ok, skill.id).toBe(true);
+      const [stukken] = startAxeJobs.mock.calls[0] as [Array<{ text: string; route: { skill: string | null; agent: string; tier: number } }>];
+
+      // Wat de router van hetzelfde label maakt (knop én typen gaan daarlangs).
+      const viaTekst = classifyAxeTier(skill.label);
+
+      expect(stukken[0].route.skill, skill.id).toBe(viaTekst.skill);
+      expect(stukken[0].route.agent, skill.id).toBe(viaTekst.agent);
+      // En de agent krijgt de instructie uit de tabel, niet de twee woorden.
+      expect(stukken[0].text, skill.id).toContain(skill.request);
+    }
+  });
+
+  it('negeert een verzonnen skillnaam in plaats van hem te volgen', async () => {
+    const result = JSON.parse(await handleRealtimeTool('start_background_task', {
+      request: 'doe iets',
+      skill: 'super-brief',
+    }));
+    expect(result.ok).toBe(true);
+    const [stukken] = startAxeJobs.mock.calls[0] as [Array<{ text: string; route: { skill: string | null } }>];
+    expect(stukken[0].route.skill).toBeNull();
+    expect(stukken[0].text).toBe('doe iets');
   });
 
   it('refuses without a request instead of starting an empty job', async () => {

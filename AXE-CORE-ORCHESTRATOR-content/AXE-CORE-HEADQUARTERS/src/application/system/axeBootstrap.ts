@@ -12,7 +12,6 @@ import { backfillRagEmbeddings } from '@/infrastructure/persistence/ragMemorySer
 import { applyAgentReinforcement } from '@/infrastructure/persistence/agentFeedbackService';
 import { applyReinforcement } from '@/infrastructure/persistence/memoryFeedbackService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { loadTodaysBriefing } from '@/application/system/dailyBriefing';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 import { ABONNEMENT_PROVIDER } from '@/domain/abonnementChat';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
@@ -22,6 +21,7 @@ import { warmLocalOllama } from '@/infrastructure/gateways/localOllama';
 import { startPlannerKoppeling } from '@/application/planner/plannerKoppeling';
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 import { leesProviderVerbindingen, type ProviderVerbinding } from '@/infrastructure/config/providerSleutels';
+import { bewaarDagBriefje, dagBriefjeVanVandaag } from './dagBriefjeMaken';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -53,8 +53,16 @@ export async function maybeDailyGreeting(): Promise<void> {
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
-  const briefing = await loadTodaysBriefing();
+  /* Tot 1 okt 2026 stond hier `loadTodaysBriefing()`, en die leest een rij die
+     niemand schrijft: geen migratie of script in de repo maakt de
+     core_schedules-rij "Daily Briefing" aan. Dus klonk hier elke dag "AXE is
+     online" terwijl het briefje zelf nooit bestond. `dagBriefjeVanVandaag`
+     gebruikt die rij nog wel als hij er is -- de VPS ziet meer dan deze app --
+     en bouwt hem anders zelf uit de taken en de agenda. */
+  const briefing = await dagBriefjeVanVandaag();
   const line = briefing ? `${part}, Luka. ${briefing}` : `${part}, Luka. AXE is online.`;
+  // In de inbox, zodat AXE later kan zeggen "dat stond vanmorgen in je briefje".
+  if (briefing) void bewaarDagBriefje(briefing);
 
   try {
     // Respect type-only mode, but never choose a second speech identity.

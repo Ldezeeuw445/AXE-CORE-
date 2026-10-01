@@ -54,6 +54,7 @@ import {
 } from '@/application/sphere/sphereDirector';
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
 import { useCodeAgentKop } from '@/presentation/store/codeAgentKopStore';
+import { skillDef } from '@/domain/tierRouter/axeSkills';
 
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
@@ -64,6 +65,13 @@ function looksLikeMapRequest(t: string): boolean {
 function looksLikeChartRequest(t: string): boolean {
   return /\b(chart|grafiek|graph|plot|trading|btc|eth|koers)\b/i.test(t);
 }
+
+/* Zette tot 1 okt 2026 `/research` klaar. Dat voorvoegsel las niemand: geen
+   route parseert het, en het matchte ook niet met de deep-research-skill (die
+   wil "deep research"). Nu komt de aanroep uit axeSkills.ts, zodat de knop en de
+   getypte zin bij dezelfde skill uitkomen. Hij vult vóór en vuurt niet -- dat was
+   een bewuste keuze: een knop die ongevraagd onderzoek afvuurt kost tokens. */
+const DIEP_ONDERZOEK = skillDef('deep-research')!;
 
 export function PlaatChat() {
   const navigate = useNavigate();
@@ -619,7 +627,7 @@ export function PlaatChat() {
             {/* Diep onderzoek: zet het voorvoegsel klaar in plaats van meteen
                 iets te starten. Een knop die ongevraagd een onderzoek afvuurt
                 kost tokens zonder dat je erom vroeg. */}
-            <button onClick={() => setChatText(t => (t.startsWith('/research') ? t : `/research ${t}`))} title="Diep onderzoek">
+            <button onClick={() => setChatText(t => (DIEP_ONDERZOEK.patroon.test(t) ? t : `${DIEP_ONDERZOEK.label} ${t}`))} title={DIEP_ONDERZOEK.uitleg}>
               <Telescope size={18} />
             </button>
             <button onClick={() => navigate('/browser')} title="Zoek op het web">

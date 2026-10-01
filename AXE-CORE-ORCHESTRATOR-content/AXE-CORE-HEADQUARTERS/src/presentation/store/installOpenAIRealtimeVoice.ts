@@ -30,6 +30,7 @@ import {
   type AxeJob,
 } from '@/domain/tierRouter/axeJobRegels';
 import type { AxeRoute } from '@/domain/tierRouter/axeRoute';
+import { AXE_SKILLS, isAxeSkill, skillDef } from '@/domain/tierRouter/axeSkills';
 import { sneltoetsActie, SNELTOETS_EVENT } from '@/domain/voice/sneltoets';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import {
@@ -136,6 +137,17 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
           enum: AXE_AGENTS.filter((a) => a.id !== 'axe').map((a) => a.id),
           description: 'The roster agent that owns this work. Pick the domain owner: developer for code/apps, trading for the Trading tab, northsea for NorthSea Desk, thinktank for ThinkTank, wingman for broad crew work, etc.',
         },
+        /* Eén parameter in plaats van vijf nieuwe tools. Dat is met opzet:
+           installOpenAIRealtimeVoice.test.ts eist de EXACTE lijst van vijf
+           toolnamen, en prompts.ts vertelt het model in proza dat het "exactly
+           five real tools" heeft. Vijf tools erbij betekent die twee ook
+           aanpassen en het model een lijst van tien geven; één parameter houdt
+           beide waar. */
+        skill: {
+          type: 'string',
+          enum: AXE_SKILLS.map((sk) => sk.id),
+          description: `One of AXE's five named skills, when Luka asks for exactly that: ${AXE_SKILLS.map((sk) => `${sk.id} (${sk.uitleg})`).join('; ')}. These have a fixed instruction and a fixed agent, so naming one beats writing your own request. Leave it out when unsure.`,
+        },
       },
       required: ['request'],
     },
@@ -197,21 +209,29 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
 async function toolStartBackgroundTask(args: ToolArgs): Promise<string> {
   const request = argStr(args, 'request');
   if (!request) return JSON.stringify({ ok: false, message: 'No request text given.' });
-  const title = argStr(args, 'title') ?? jobTitelVan(request);
   const requestedAgent = argStr(args, 'agent');
   const validAgent = AXE_AGENTS.some((a) => a.id === requestedAgent && a.id !== 'axe')
     ? requestedAgent as AxeAgentId
     : 'axe';
+
+  /* Een benoemde skill wint van wat het model er zelf bij bedacht: wie hem doet
+     en wat de opdracht is staat in de tabel. Zo krijgt de agent via de stem
+     exact dezelfde instructie als via de knop en via typen -- dat was de hele
+     reden om skills één plek te geven. */
+  const ruwSkill = argStr(args, 'skill');
+  const def = isAxeSkill(ruwSkill) ? skillDef(ruwSkill) : null;
+  const title = argStr(args, 'title') ?? (def ? def.label : jobTitelVan(request));
+  const opdracht = def ? `${def.request}\n\nLuka said: ${request}` : request;
   const route: AxeRoute = {
     tier: 3,
     kind: 'agent',
     via: 'model',
-    reason: 'realtime_voice',
-    agent: validAgent,
-    skill: null,
+    reason: def ? `realtime_voice:skill:${def.id}` : 'realtime_voice',
+    agent: def ? def.agent : validAgent,
+    skill: def ? def.id : null,
     confident: true,
   };
-  startAxeJobs([{ text: request, titel: title, route }]);
+  startAxeJobs([{ text: opdracht, titel: title, route }]);
   return JSON.stringify({ ok: true, message: `Started: ${title}. I'll tell you when it's done.` });
 }
 
