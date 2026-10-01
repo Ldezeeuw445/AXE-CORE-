@@ -3574,6 +3574,28 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                 samenvatting = {"created": data.get("created"), "considered_pairs": data.get("considered_pairs"),
                                "errors": (data.get("errors") or [])[:10], "http": r.status_code}
                 return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
+            if job == "operations_sweep":
+                # Uses the same internal engine service credential: this loop only
+                # reads canonical deal state and runs specialist crews. Sending,
+                # approval, signing, identity disclosure and banking remain gated.
+                token = os.environ.get("NORTHSEA_ENGINE_TOKEN", "").strip()
+                if not token:
+                    return {"status": "fail", "output": "northsea: NORTHSEA_ENGINE_TOKEN not set on this host"}
+                url = os.environ.get("NORTHSEA_OPERATIONS_URL", "http://127.0.0.1:8040/internal/operations/sweep")
+                params = {"dry_run": "1"} if payload.get("dry_run") else {}
+                async with httpx.AsyncClient(timeout=240) as client:
+                    r = await client.post(url, params=params, headers={"Authorization": f"Bearer {token}"})
+                try:
+                    data = r.json()
+                except ValueError:
+                    data = {"raw": r.text[:500]}
+                if r.status_code == 409:
+                    return {"status": "skipped", "output": "northsea operations: previous sweep still running"}
+                ok = r.status_code == 200 and data.get("status") not in ("error", "failed")
+                samenvatting = {"status": data.get("status"), "selected": data.get("selected"),
+                                "results": (data.get("results") or [])[:12], "sent": data.get("sent", 0),
+                                "approved": data.get("approved", 0), "http": r.status_code}
+                return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
             return {"status": "fail", "output": f"northsea: unknown job {job!r}"}
 
         if action_type in ("crew", "prompt"):
