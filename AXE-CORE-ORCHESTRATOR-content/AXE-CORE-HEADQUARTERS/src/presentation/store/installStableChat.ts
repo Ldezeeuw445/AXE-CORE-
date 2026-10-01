@@ -2,7 +2,8 @@
  * installStableChat.ts
  *
  * Boot patch for AXE identity:
- * 1. Keep one canonical AXE speech identity through globalTts (George).
+ * 1. Keep one canonical AXE speech identity through globalTts
+ *    (domain/stemIdentiteit is the one place that names it).
  * 2. Simple chat → short cascade, streamed; RAG/TTS blokkeren first-token niet.
  * 3. Action asks → agentic tool loop.
  * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.

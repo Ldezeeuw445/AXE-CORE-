@@ -72,7 +72,8 @@ import { installMemoryFlushHooks } from '@/infrastructure/persistence/memoryReco
 installLiveChat();
 // Wis de dode TTS-picker (Fish/ElevenLabs) zodat geen statusrij hem terugleest
 installFishVoice();
-// Stable identity: korte cascade voor simpele chat; stem blijft George
+// Stable identity: korte cascade voor simpele chat; de stem blijft de ene
+// centrale stem uit domain/stemIdentiteit
 installStableChat();
 // Jarvis-route: tier 1/2/3 vóór de grote cascade. Ná stable, vóór de
 // send-guard: typed send hangt Whisper nog steeds op, en fallback valt

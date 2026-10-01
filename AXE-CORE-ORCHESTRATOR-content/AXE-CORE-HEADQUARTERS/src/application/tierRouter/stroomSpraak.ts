@@ -1,7 +1,7 @@
 /**
  * Zin-voor-zin TTS terwijl de LLM nog tokens stuurt.
- * De eerste complete zin gaat naar George (of de gekozen motor) zonder
- * te wachten op de rest. Barge-in blijft stopGlobalTts.
+ * De eerste complete zin gaat naar de centrale stem zonder te wachten op de
+ * rest. Barge-in blijft stopGlobalTts.
  */
 import { nieuweSpraakStukken } from '@/domain/speechChunks';
 import { sanitizeForSpeech, spreekStuk } from '@/infrastructure/gateways/globalTts';
@@ -87,7 +87,7 @@ export function startSpraakStroom(deps: SpraakStroomDeps): SpraakStroom {
   };
 }
 
-/** Live pad: George (of de gekozen motor), type-mode slaat over. */
+/** Live pad: de centrale stem; type-mode slaat over. */
 export function startAxeSpraakStroom(opts: {
   onFirstAudio?: () => void;
   onDone?: () => void;

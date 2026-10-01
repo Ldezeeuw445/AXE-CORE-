@@ -56,8 +56,8 @@ export function installLiveChat() {
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
 
-      // Interrupt speech so the new turn feels immediate — George too, not
-      // only the dead Fish/ElevenLabs paths.
+      // Interrupt speech so the new turn feels immediate — the central AXE
+      // voice too, not only the dead Fish/ElevenLabs paths.
       stopGlobalTts();
       stopTTS();
       stopFishAudio();

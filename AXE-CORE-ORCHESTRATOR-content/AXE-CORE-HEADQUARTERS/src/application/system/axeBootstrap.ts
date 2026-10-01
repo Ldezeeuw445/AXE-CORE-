@@ -47,9 +47,9 @@ export async function maybeDailyGreeting(): Promise<void> {
     return;
   }
 
-  // Same canonical identity as every chat reply: George through globalTts
-  // (Cedar only if George cannot make a sound). A startup greeting must never
-  // resurrect a legacy Fish/browser voice from an old localStorage preference.
+  // Same canonical identity as every chat reply: the central AXE voice through
+  // globalTts. A startup greeting must never resurrect a legacy Fish/browser
+  // voice from an old localStorage preference.
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';

@@ -308,7 +308,8 @@ function getRec():SpeechRecognition|null{
 }
 
 // One AXE identity voice. Every generated reply uses the shared global TTS
-// path (George via kokoro; Cedar only if George cannot make a sound).
+// path: the single central voice from domain/stemIdentiteit, served by AXE Core.
+// No device-local voice service and no per-device fallback decide how AXE sounds.
 function speakSafely(text:string,onDone?:()=>void){
   try{if(localStorage.getItem('axe_response_mode')==='type'){onDone?.();return;}}catch{}
   speakGlobal(text,onDone);

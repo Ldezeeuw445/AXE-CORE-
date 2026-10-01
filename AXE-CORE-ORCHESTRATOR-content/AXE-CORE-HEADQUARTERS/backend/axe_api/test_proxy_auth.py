@@ -12,7 +12,12 @@ import pathlib
 import planner as p
 
 MAIN = pathlib.Path(__file__).with_name("main.py")
-BEWAAKT = {"/proxy/ai", "/proxy/ai/providers", "/proxy/exa", "/proxy/fish-tts", "/tts", "/tts/health"}
+# /tts en /tts/health stonden hier tot 1 okt 2026: de proxy naar de oude
+# Kokoro-stem, die met die stem verdwenen is. De stem die er WEL is loopt
+# over /voice/tts en /voice/health, dus die worden nu bewaakt -- anders
+# bewaakte deze test precies de route die niet meer bestaat.
+BEWAAKT = {"/proxy/ai", "/proxy/ai/providers", "/proxy/exa", "/proxy/fish-tts",
+           "/voice/tts", "/voice/health"}
 
 
 def _routes_met_auth() -> dict[str, bool]:

@@ -1,10 +1,12 @@
 /**
  * AXE spreekt zin voor zin, niet het hele antwoord in één keer.
  *
- * De lokale stem (Kokoro op de Mac mini) is maar ~1,5x sneller dan realtime:
- * een hele alinea in één keer laten maken betekent 6-9 seconden stilte vóór
- * het eerste woord. In stukken hoort Luka de eerste zin na ~2 seconden, en
- * wordt de volgende gemaakt terwijl de vorige speelt.
+ * Waarom: een TTS-motor maakt geluid ruwweg zo snel als het klinkt. Een hele
+ * alinea in één keer laten maken betekent dus 6-9 seconden stilte vóór het
+ * eerste woord. Gemeten op de toen lokale stem (Kokoro, ~1,5x realtime); de
+ * stem is sindsdien de centrale AXE-stem, en de reden verandert daar niet mee.
+ * In stukken hoort Luka de eerste zin na ~2 seconden, en wordt de volgende
+ * gemaakt terwijl de vorige speelt.
  *
  * Puur en zonder afhankelijkheden, zodat het te testen is.
  */

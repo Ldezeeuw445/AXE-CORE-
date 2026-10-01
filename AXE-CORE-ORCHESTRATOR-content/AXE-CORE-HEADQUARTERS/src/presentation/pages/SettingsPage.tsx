@@ -882,9 +882,11 @@ function ProviderKeysSection() {
 }
 
 /**
- * De stem is geen keuze meer. AXE spreekt George; Cedar alleen als George
- * niets hoorbaars kan maken. Dit blok toont die identiteit en of de lokale
- * dienst (com.axe.tts) echt draait — groen of rood, met wat je eraan doet.
+ * De stem is geen keuze meer. AXE heeft één centrale stem, en welke dat is
+ * staat op precies één plek: domain/stemIdentiteit. Dit blok toont die
+ * identiteit en of AXE Core hem kan leveren (`/voice/health`) — groen of rood,
+ * met wat je eraan doet. Er is geen lokale stemdienst meer en geen terugval
+ * per apparaat; de oude Kokoro-dienst is op 1 okt 2026 verwijderd.
  * Listen gaat door speakGlobal, dezelfde keten als elk chatantwoord.
  */
 function VoiceSection() {
