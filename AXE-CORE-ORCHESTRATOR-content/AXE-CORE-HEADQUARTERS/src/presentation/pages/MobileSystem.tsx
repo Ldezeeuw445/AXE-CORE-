@@ -7,7 +7,7 @@
  */
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { BrainCircuit, Mountain, Network, Orbit } from 'lucide-react';
-import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
+import { TelefoonSphere } from '@/presentation/components/axe-core/sphere/TelefoonSphere';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
@@ -148,7 +148,9 @@ function CoreHome() {
           aria-label="AXE Core Home"
         >
           <div className="absolute inset-x-0 top-0 bottom-8">
-            <AxeCoreSphere telefoon />
+            {/* WebGL, op de schermpixels en in het midden van dit vak (Luka, 2 okt).
+                Zonder WebGL tekent hij AxeCoreSphere telefoon. */}
+            <TelefoonSphere />
           </div>
           {/* Eén regel: bolletje + AXE CORE, op de plek en in de maat waar
               READY stond. De grote AXE CORE-kop eronder is weg (Luka, 27 sep). */}

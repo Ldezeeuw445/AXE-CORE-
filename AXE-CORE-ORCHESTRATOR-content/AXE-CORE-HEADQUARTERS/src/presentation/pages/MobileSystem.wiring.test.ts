@@ -190,11 +190,18 @@ describe('canonical mobile Home wiring', () => {
   it('draws the phone sphere at full 3x resolution with spacing-scaled particles', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     const bol = bron('presentation/components/axe-core/sphere/AxeCoreSphere.tsx');
-    expect(mobile).toContain('<AxeCoreSphere telefoon />');
+    // 2 okt: de telefoon-Home kreeg TelefoonSphere (WebGL, op de schermpixels).
+    // AxeCoreSphere telefoon blijft de terugval zonder WebGL.
+    const telefoon = bron('presentation/components/axe-core/sphere/TelefoonSphere.tsx');
+    expect(mobile).toContain('<TelefoonSphere />');
+    expect(mobile).not.toContain('<AxeCoreSphere telefoon />');
+    expect(telefoon).toContain('d = Math.min(window.devicePixelRatio || 1, 3);');
+    expect(telefoon).toContain('if (!webgl) return <AxeCoreSphere telefoon />;');
     expect(bol).toContain('d = Math.min(window.devicePixelRatio || 1, telefoon ? 3 : 2);');
     expect(bol).toContain('const tekenNu = telefoon ? tekenFijn : teken;');
     for (const plek of ['pages/Home.tsx', 'pages/HomeStage.tsx', 'components/layout/zweef/ZwevendeBol.tsx', 'components/devices/TelefoonScherm.tsx']) {
       expect(bron(`presentation/${plek}`)).not.toContain('<AxeCoreSphere telefoon');
+      expect(bron(`presentation/${plek}`)).not.toContain('<TelefoonSphere');
     }
   });
 
