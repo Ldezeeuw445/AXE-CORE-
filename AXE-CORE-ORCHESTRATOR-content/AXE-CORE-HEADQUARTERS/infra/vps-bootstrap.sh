@@ -1,6 +1,7 @@
 #!/bin/bash
 # AXE CORE — fresh VPS bootstrap
-# Run as root on a brand-new box:  ROL=ollama bash vps-bootstrap.sh
+# Run as root on a brand-new box:
+#   OLLAMA_PROXY_KEY=<sleutel> ROL=ollama bash vps-bootstrap.sh
 #
 # ── WHICH BOX IS THIS? (ROL) ────────────────────────────────────────────────
 # AXE runs on TWO servers, and this script can set up either one. Pick with ROL:
@@ -37,11 +38,24 @@
 # What this script does, in order (steps marked per role):
 #   1. System packages: nginx, certbot, python3, git          [all roles]
 #   2. Ollama + a model set, with CORS + RAM config           [ollama, alles]
+#  2b. De git-checkout in /opt/axe-core-api                   [all roles]
 #   3. axe_api (backend/axe_api/deploy.sh — handles its own
 #      nginx vhost + cert for api.axecompanion.com)           [api, alles]
-#   4. nginx + cert for ollama.axecompanion.com               [ollama, alles]
+#   4. nginx + SLOT + cert voor ollama.axecompanion.com, plus
+#      de terminalserver van deze box op /terminal            [ollama, alles]
 #   5. The CrewAI crew's isolated venv                        [api, alles]
 #   6. OpenJarvis / Hermes / OpenClaw                         [alles only]
+#
+# Vereist bij ROL=ollama|alles (stap 4 stopt zonder):
+#   OLLAMA_PROXY_KEY  de sleutel die nginx vóór Ollama accepteert. Dezelfde die
+#                     in de app bij Instellingen > Ollama staat.
+# Optioneel daarbij:
+#   API_IP            het IP van de API-box; die mag er dan ook zonder sleutel
+#                     bij (agent_loop.py stuurt er geen).
+#   MEETMODUS=0       meteen dicht in plaats van eerst een dag loggen.
+#   SUPABASE_URL / SUPABASE_ANON_KEY / AXE_TERMINAL_ALLOWED_USER_IDS
+#                     gaan in /etc/axe-terminal.env; zonder de eerste twee
+#                     weigert de terminalserver te starten.
 #
 # OpenJarvis, Hermes Agent, and OpenClaw are all real, confirmed projects
 # (verified against their actual sites/docs — not guessed) with real
@@ -174,12 +188,15 @@ echo "   Het geheugen-Ollama op 127.0.0.1:11435 is iets anders en hoort WEL hier
 echo "   zie backend/axe_api/ollama-geheugen.service voor de installatieregels."
 fi
 
-# ── 3. axe_api ──────────────────────────────────────────────── [api, alles] ──
-if [ "$doe_api" = true ]; then
-# Clone/pull happens here, not inside deploy.sh — a script that git-pulls its
-# own source file while bash is still executing it is unsafe (bash doesn't
-# re-read from the top after the file changes on disk mid-run), so deploy.sh
-# assumes $INSTALL_DIR is already current by the time it's invoked.
+# ── 2b. De checkout ─────────────────────────────────────────────── [alle] ──
+# Stond in stap 3 en dus alleen bij ROL=api. De modelbox heeft hem óók nodig:
+# daar staat terminal-server.cjs in, en zonder die map kan vak 6 van de
+# Terminals-tab nergens vandaan komen.
+#
+# Clone/pull gebeurt hier, niet in deploy.sh — een script dat zijn eigen bron
+# git-pullt terwijl bash hem nog uitvoert is onveilig (bash leest het bestand
+# niet opnieuw vanaf de top), dus deploy.sh gaat ervan uit dat $INSTALL_DIR al
+# bij is als hij wordt aangeroepen.
 echo "→ Updating /opt/axe-core-api checkout..."
 mkdir -p /opt/axe-core-api
 cd /opt/axe-core-api
@@ -188,7 +205,10 @@ if [ ! -d .git ]; then
 else
   git pull origin "$REPO_BRANCH"
 fi
+HQ_DIR="/opt/axe-core-api/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS"
 
+# ── 3. axe_api ──────────────────────────────────────────────── [api, alles] ──
+if [ "$doe_api" = true ]; then
 echo "→ Deploying axe_api (backend/axe_api/deploy.sh)..."
 bash AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/deploy.sh
 echo ""
@@ -198,14 +218,114 @@ echo "     then:  systemctl restart axe-core-api"
 
 fi  # einde stap 3 (api)
 
-# ── 4. nginx + cert voor de modelbox ───────────────────────── [ollama, alles] ──
+# ── 4. nginx, slot en cert voor de modelbox ────────────────── [ollama, alles] ──
+# Hier stond een vhost die 127.0.0.1:11434 zonder enige controle doorgaf. Tot 13
+# september kon daardoor iedereen op internet op deze box modellen draaien,
+# downloaden en verwijderen.
+#
+# De kant van de app bestaat al: src/infrastructure/config/ollamaSleutel.ts
+# stuurt `Authorization: Bearer <sleutel uit Instellingen>` mee naar
+# ollama.axecompanion.com, en zegt in zijn kop wat hier hoort te staan --
+# "nginx laat nu door: Strato (op IP) en verzoeken met deze sleutel. Eerst in
+# meet-modus (alleen gelogd), daarna dicht." Dit is dat stuk.
+#
+# Waarom meet-modus eerst: agent_loop.py op de API-box praat ook met deze
+# machine, en een crontab of een script dat ik niet ken misschien ook. Meteen
+# dichtgooien betekent dat je het merkt als een taak faalt, niet als je kijkt.
+# Een dag loggen en dan omzetten kost één commando en geen verrassing.
 if [ "$doe_ollama" = true ]; then
+
+OLLAMA_PROXY_KEY="${OLLAMA_PROXY_KEY:-}"
+API_IP="${API_IP:-}"
+MEETMODUS="${MEETMODUS:-1}"
+
+if [ -z "$OLLAMA_PROXY_KEY" ]; then
+  echo "OLLAMA_PROXY_KEY ontbreekt." >&2
+  echo "Zonder sleutel zet dit script een modelbox neer die voor het hele" >&2
+  echo "internet bruikbaar is. Dat is precies wat er op 13 september gebeurde." >&2
+  echo "" >&2
+  echo "  OLLAMA_PROXY_KEY=<sleutel uit AXE-VAULT> ROL=$ROL bash vps-bootstrap.sh" >&2
+  echo "" >&2
+  echo "Dezelfde sleutel zet je in de app bij Instellingen > Ollama, veld 'key'." >&2
+  echo "API_IP=<ip van api.axecompanion.com> mag erbij: dan mag die box er ook" >&2
+  echo "zonder sleutel bij (agent_loop.py stuurt er geen)." >&2
+  exit 2
+fi
+
+echo "→ Slot vóór Ollama (meetmodus=$MEETMODUS)..."
+# Losse regel in plaats van $(...) in de heredoc: `[ -n "$X" ] && ...` geeft 1
+# terug als X leeg is, en onder `set -e` is dat het einde van het script. Die
+# fout zat hier eerder al een keer in.
+GEO_REGEL=""
+if [ -n "$API_IP" ]; then
+  GEO_REGEL="    ${API_IP}/32 1;"
+fi
+
+# map en geo horen in de http-context, dus niet in de vhost zelf.
+cat > /etc/nginx/conf.d/axe-ollama-slot.conf <<EOF
+# Wie mag er bij ollama.axecompanion.com. Gegenereerd door vps-bootstrap.sh.
+map \$http_authorization \$axe_ollama_sleutel {
+    default 0;
+    "Bearer ${OLLAMA_PROXY_KEY}" 1;
+}
+geo \$axe_ollama_vriend {
+    default 0;
+${GEO_REGEL}
+}
+map "\$axe_ollama_sleutel\$axe_ollama_vriend" \$axe_ollama_weg {
+    "00" 1;
+    default 0;
+}
+log_format axe_ollama_weiger '\$time_iso8601 \$remote_addr "\$request" '
+                             'ua="\$http_user_agent" auth=\$http_authorization';
+EOF
+chmod 600 /etc/nginx/conf.d/axe-ollama-slot.conf
+
+# Het slot zelf staat in een los bestand, zodat omzetten één regel is en geen
+# hergeneratie van de vhost (waar certbot ook in schrijft).
+mkdir -p /etc/nginx/snippets
+if [ "$MEETMODUS" = "0" ]; then
+  echo 'if ($axe_ollama_weg) { return 401; }' > /etc/nginx/snippets/axe-ollama-dicht.conf
+else
+  : > /etc/nginx/snippets/axe-ollama-dicht.conf
+fi
+
 echo "→ Setting up nginx + cert for $DOMAIN_OLLAMA..."
 cat > /etc/nginx/sites-available/$DOMAIN_OLLAMA <<EOF
 server {
     listen 80;
     server_name $DOMAIN_OLLAMA;
+
+    # Wie geweigerd zou worden, ook in meetmodus. Dit is het logboek dat je een
+    # dag later leest voordat je MEETMODUS=0 zet.
+    access_log /var/log/nginx/ollama-geweigerd.log axe_ollama_weiger if=\$axe_ollama_weg;
+
+    # Certbot moet hier altijd bij kunnen, ook als het slot dicht staat --
+    # anders faalt de verlenging over 60 dagen en merk je dat aan een
+    # certificaatfout in de app.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+        auth_basic off;
+    }
+
+    # De terminalserver van DEZE box (vak 6 van de Terminals-tab). Zie
+    # infra/terminal/nginx-terminal-location.conf -- hij heeft zijn eigen
+    # authenticatie (Supabase-token + allowlist) en staat daarom buiten het slot.
+    location /terminal {
+        proxy_pass http://127.0.0.1:4022;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+
     location / {
+        include /etc/nginx/snippets/axe-ollama-dicht.conf;
         proxy_pass http://127.0.0.1:11434;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -217,6 +337,28 @@ ln -sf /etc/nginx/sites-available/$DOMAIN_OLLAMA /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 certbot --nginx -d "$DOMAIN_OLLAMA" --non-interactive --agree-tos -m "$CERT_EMAIL" || \
   echo "   ! certbot failed — check that $DOMAIN_OLLAMA's DNS A record already points here"
+
+# ── De terminalserver op deze box ───────────────────────────────────────────
+# ROL=ollama draaide deploy.sh niet, en daar stond de enige installatie van
+# axe-terminal. Vak 6 bleef dus dood na een geslaagde bootstrap. Deze box heeft
+# geen /opt/axe-core-api/.env (die maakt deploy.sh), dus hij krijgt een eigen
+# klein bestand met wat de server nodig heeft.
+TERM_ENV=/etc/axe-terminal.env
+if [ ! -f "$TERM_ENV" ]; then
+  umask 077
+  cat > "$TERM_ENV" <<EOF
+# De terminalserver weigert te starten zonder deze twee (terminal-server.cjs).
+# De anon key is dezelfde die in de web-app zit; dit is geen geheim bestand,
+# maar de allowlist eronder hoort wel te kloppen.
+SUPABASE_URL=${SUPABASE_URL:-}
+SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+
+# Wie hier een shell mag openen. LEEG = elk account van dit Supabase-project,
+# en dat project bedient ook Companion en Trading OS.
+AXE_TERMINAL_ALLOWED_USER_IDS=${AXE_TERMINAL_ALLOWED_USER_IDS:-}
+EOF
+fi
+bash "$HQ_DIR/infra/terminal/install-axe-terminal.sh" "$HQ_DIR" "$TERM_ENV" /opt/axe-workspace
 
 fi  # einde stap 4 (ollama)
 
@@ -308,9 +450,30 @@ if [ "$doe_ollama" = true ]; then
   echo "  curl https://$DOMAIN_OLLAMA/api/tags   (expect your pulled models listed)"
   echo "  Die URL staat in de app zelf (infrastructure/config/ollamaSleutel.ts): zodra"
   echo "  het A-record hierheen wijst, werkt Ollama weer zonder één regel code."
-  echo "  De Bearer-sleutel gaat alleen naar deze hostnaam mee; zonder nginx-auth"
-  echo "  staat je modelbox open voor het hele internet — dat is 13 sep al eens gebeurd."
   echo "  free -h na de eerste twee vragen: 2 modellen resident is de aanname, niet een meting."
+  echo ""
+  echo "CONTROLEER — twee dingen die niemand voor je doet:"
+  echo ""
+  echo "  1. Het slot staat op MEETMODUS=${MEETMODUS}."
+  if [ "${MEETMODUS:-1}" != "0" ]; then
+    echo "     Dat betekent: ALLES komt er nog door, geweigerde verzoeken worden alleen"
+    echo "     gelogd. Kijk morgen wie er langskwam en zet hem dan dicht:"
+    echo "       tail -50 /var/log/nginx/ollama-geweigerd.log"
+    echo "       echo 'if (\$axe_ollama_weg) { return 401; }' > /etc/nginx/snippets/axe-ollama-dicht.conf"
+    echo "       nginx -t && systemctl reload nginx"
+    echo "     Staat er niets in dat logboek behalve ruis van buiten? Dan kan hij meteen dicht."
+  else
+    echo "     Dicht. Terug naar meten kan met:"
+    echo "       : > /etc/nginx/snippets/axe-ollama-dicht.conf && nginx -t && systemctl reload nginx"
+  fi
+  echo "     Dezelfde sleutel hoort in de app bij Instellingen > Ollama, veld 'key'."
+  echo ""
+  echo "  2. Wie hier een shell mag: ${TERM_ENV:-/etc/axe-terminal.env}"
+  echo "     AXE_TERMINAL_ALLOWED_USER_IDS leeg = elk account van dit Supabase-project,"
+  echo "     en dat project bedient ook Companion en Trading OS. Je eigen id staat in"
+  echo "     Supabase > Authentication > Users. Daarna: systemctl restart axe-terminal"
+  echo "     Datzelfde bestand heeft SUPABASE_URL en SUPABASE_ANON_KEY nodig, anders"
+  echo "     weigert de terminalserver te starten (met opzet)."
 fi
 
 if [ "$doe_extra" = true ]; then

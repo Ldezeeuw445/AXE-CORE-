@@ -71,6 +71,21 @@ MODEL = os.environ.get("AXE_AGENT_MODEL", "gemini-pro-latest")
 # NOT on this box -- they proxy to Ollama's own service and answer 401 without
 # an account there. Of the 15 names /api/tags reports, 5 are really local.
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "https://ollama.axecompanion.com").rstrip("/")
+
+# De modelbox staat sinds 2 okt 2026 achter een slot (nginx, zie
+# infra/vps-bootstrap.sh stap 4). De API-box mag er op IP bij -- dat is de weg
+# die werkt zonder hier iets te zetten. Deze sleutel is de tweede weg, zodat een
+# IP-wissel (een nieuwe VPS, een verhuizing) de agentlus niet stilletjes op 401
+# zet. Niet gezet = geen header, precies als voorheen.
+OLLAMA_PROXY_KEY = os.environ.get("OLLAMA_PROXY_KEY", "").strip()
+
+
+def _ollama_headers() -> dict[str, str]:
+    kop = {"Content-Type": "application/json"}
+    if OLLAMA_PROXY_KEY:
+        kop["Authorization"] = f"Bearer {OLLAMA_PROXY_KEY}"
+    return kop
+
 OLLAMA_MODEL = os.environ.get("AXE_AGENT_FALLBACK_MODEL", "llama3.1:8b-32k")
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -761,7 +776,7 @@ async def _call_ollama(contents: list[dict[str, Any]]) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=300) as client:
         response = await client.post(
             f"{OLLAMA_HOST}/api/chat", json=payload,
-            headers={"Content-Type": "application/json"},
+            headers=_ollama_headers(),
         )
     if response.status_code != 200:
         raise RuntimeError(f"ollama {response.status_code}: {response.text[:300]}")

@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { Menu } from 'lucide-react';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
+import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /* ─── Project definitions ──────────────────────────────────────────── */
 const PROJECTS = [
@@ -359,7 +360,13 @@ function OllamaModelCards() {
   const loadModels = async () => {
     try {
       const baseUrl = (import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
-      const r = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
+      // De sleutel moet mee naar ollama.axecompanion.com, net als op de negen
+      // andere plekken. Deze twee stonden er niet in, en zouden dus 401 geven
+      // zodra het slot op de modelbox dichtgaat (infra/vps-bootstrap.sh stap 4).
+      const r = await fetch(`${baseUrl}/api/tags`, {
+        headers: ollamaHeaders(baseUrl),
+        signal: AbortSignal.timeout(8000),
+      });
       if (!r.ok) return;
       const data = await r.json();
       const list = (data.models ?? []).map((m: Record<string, unknown>) => ({
@@ -380,7 +387,7 @@ function OllamaModelCards() {
       const baseUrl = (import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
       const r = await fetch(`${baseUrl}/api/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...ollamaHeaders(baseUrl) },
         body: JSON.stringify({ model: name, prompt: 'Reply OK', stream: false, options: { max_tokens: 4 } }),
         signal: AbortSignal.timeout(30000),
       });
