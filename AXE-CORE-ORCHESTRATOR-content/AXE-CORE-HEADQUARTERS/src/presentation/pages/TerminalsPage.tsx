@@ -44,8 +44,10 @@ import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-c
 import {
   alleHosts, maakHost, geldigWsAdres, metAdres, isKlaar,
   HOSTS_SLEUTEL, ADRESSEN_SLEUTEL, TERMINAL_POORT,
+  hostSoort, bereikbaarHier, waaromGeenVerbinding,
   type TerminalHost,
 } from '@/domain/terminalHosts';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import {
   snelactiesVoor, actiesVanGroep, blijvendDraaiend, GROEP_LABEL,
   type Groep, type Snelactie,
@@ -56,6 +58,22 @@ import {
   beschikbaar as dienstenKunnen, dienstenStand, dienstStart, dienstStop,
   type DienstStand,
 } from '@/infrastructure/gateways/diensten';
+
+/**
+ * Of dit apparaat deze machine kan bereiken.
+ *
+ * Gemeten 2 okt 2026 op Luka's telefoon: vier van de acht vakken staan op
+ * `ws://127.0.0.1:4022`, en `127.0.0.1` is daar de TELEFOON. Ze stonden met een
+ * groen stipje in de lijst en faalden bij elke klik met `code 1006`. Een knop
+ * die er is maar nooit kan werken is erger dan geen knop: je gaat op de
+ * verkeerde machine zoeken.
+ */
+function bruikbaarHier(host: TerminalHost): boolean {
+  return bereikbaarHier(hostSoort(host.wsUrl), {
+    tauri: isTauriRuntime(),
+    paginaHost: typeof location === 'undefined' ? '' : location.hostname,
+  });
+}
 
 const GROEPEN: Groep[] = ['machine', 'agents', 'git'];
 
@@ -112,7 +130,7 @@ export default function TerminalsPage() {
               items: hosts.slice(0, VAKKEN).map((h) => ({
                 id: h.id,
                 label: h.naam,
-                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: isKlaar(h) ? 'var(--success)' : 'var(--text-muted)' }} />,
+                icoon: <span className="inline-block h-2 w-2 rounded-full" style={{ background: isKlaar(h) && bruikbaarHier(h) ? 'var(--success)' : 'var(--text-muted)' }} />,
                 onKies: () => document.getElementById(`axe-term-${h.id}`)?.firstElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
               })),
             },
@@ -130,7 +148,10 @@ export default function TerminalsPage() {
           Terminals
         </span>
         <span className="text-[9.5px]" style={{ color: 'var(--text-muted)' }}>
-          {hosts.filter(isKlaar).length} van {hosts.length} ingesteld
+          {/* Geteld op wat hier KAN, niet op wat een adres heeft: op de
+              telefoon stond er "8 van 8 ingesteld" terwijl vier vakken naar de
+              telefoon zelf wezen. */}
+          {hosts.filter(h => isKlaar(h) && bruikbaarHier(h)).length} of {hosts.length} usable here
         </span>
         {/* Wat er open MOET blijven staan, op de plek waar je het nodig hebt.
             Het stond alleen in docs/TERMINALS.md, en een document dat je moet
@@ -182,9 +203,9 @@ export default function TerminalsPage() {
                 onClick={() => { setGekozenId(host.id); zetJson(GEKOZEN_SLEUTEL, host.id); }}
                 className="axe-termkiezer"
                 data-aan={host.id === gekozenId ? 'ja' : undefined}
-                title={host.waarvoor}
+                title={bruikbaarHier(host) ? host.waarvoor : `${host.waarvoor} — ${waaromGeenVerbinding(hostSoort(host.wsUrl), false)}`}
               >
-                <span className="axe-term-stip" data-stand={isKlaar(host) ? 'aan' : 'leeg'} aria-hidden />
+                <span className="axe-term-stip" data-stand={isKlaar(host) && bruikbaarHier(host) ? 'aan' : 'leeg'} aria-hidden />
                 {host.naam}
               </button>
             ))}
@@ -312,6 +333,10 @@ function MachinePaneel({
   const [vol, setVol] = useState(false);
   const acties = useMemo(() => snelactiesVoor(host.id), [host.id]);
   const klaar = isKlaar(host);
+  /* Welke machine dit is, en of dit apparaat erbij kan. Een vak dat hier nooit
+     kan werken krijgt geen WebSocket die zeker faalt, maar de reden. */
+  const soort = hostSoort(host.wsUrl);
+  const hier = bruikbaarHier(host);
 
   // Zetten en niet versturen, behalve wat aantoonbaar niets verandert. Een knop
   // die meteen een dienst herstart is één misklik van een onderbreking af.
@@ -367,6 +392,11 @@ function MachinePaneel({
 
       {!klaar ? (
         <AdresInvullen host={host} opAdres={opAdres} />
+      ) : !hier ? (
+        /* Geen terminal en geen poging: `127.0.0.1` is op de telefoon de
+           telefoon, dus hier valt niets te verbinden. Het vak blijft staan --
+           de machine bestaat, hij is alleen hier niet te bereiken. */
+        <div className="axe-term-melding flex-1">{waaromGeenVerbinding(soort, false)}</div>
       ) : (
         <>
           <XtermTerminal
@@ -383,9 +413,10 @@ function MachinePaneel({
 
           {!verbonden && (
             <div className="axe-term-melding">
-              {host.wsUrl.includes('127.0.0.1')
-                ? <>AXE CORE start de shell-server zelf. Staat hij bovenaan op <code>uit</code>, klik dan <code>start</code> — de reden staat in <code>.axe-logs/terminal.log</code>.</>
-                : <>Geen verbinding. Draait terminal-server.cjs daar, op poort {TERMINAL_POORT}?</>}
+              {/* Per soort machine iets anders. Hier stond één regel over de
+                  VPS voor alles wat niet 127.0.0.1 was -- ook voor de iMac
+                  achter Tailscale, en dan zoek je op de verkeerde machine. */}
+              {waaromGeenVerbinding(soort, hier)}
             </div>
           )}
 

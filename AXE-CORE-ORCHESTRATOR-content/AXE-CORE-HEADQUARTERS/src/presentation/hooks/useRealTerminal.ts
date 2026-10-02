@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { buildTerminalWsUrl } from '@/infrastructure/config/terminalWsUrl';
+import { bereikbaarHier, hostSoort, waaromGeenVerbinding } from '@/domain/terminalHosts';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
 /**
  * Shared client for AXE Core's real terminal WebSocket (VPS terminal-server on
@@ -49,10 +51,19 @@ export function useRealTerminal(initialMessage = '') {
       // Only report a hard failure if we never connected — otherwise it's a
       // normal disconnect. Surface the endpoint so it's clear which host failed.
       if (!everOpen) {
+        // Wat je moet nakijken hangt af van WELKE machine dit is. Hier stond
+        // één regel over de VPS, ook voor `127.0.0.1` (dat op de telefoon de
+        // telefoon zelf is) en voor een Mac achter Tailscale -- dan zoek je op
+        // de verkeerde machine. Zie domain/terminalHosts.ts.
+        const soort = hostSoort(url);
+        const raad = waaromGeenVerbinding(
+          soort,
+          bereikbaarHier(soort, { tauri: isTauriRuntime(), paginaHost: location.hostname }),
+        );
         setOutput(
           `[Could not connect to terminal server] (code ${e.code || 1006})\r\n` +
           `Tried: ${endpoint}\r\n` +
-          `On the VPS check: systemctl status axe-terminal · ss -tlnp | grep 4022\r\n`,
+          `${raad}\r\n`,
         );
       }
     };

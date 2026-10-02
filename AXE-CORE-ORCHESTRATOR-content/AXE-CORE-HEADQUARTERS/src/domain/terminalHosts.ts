@@ -135,6 +135,94 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
  * en een rol, alleen zijn adres ontbreekt. Hem als "eigen host" laten toevoegen
  * zou een tweede regel met dezelfde naam opleveren.
  */
+/**
+ * Wat voor machine er aan dit adres hangt -- afgeleid uit het adres zelf.
+ *
+ * ## Waarom dit nodig was
+ *
+ * Gemeten 2 okt 2026 op Luka's telefoon: vak 7 (de iMac) gaf
+ * `code 1006`, en het foutbericht zei
+ * "On the VPS check: systemctl status axe-terminal". Dat adres is geen VPS maar
+ * een Mac achter Tailscale Serve, dus dat advies stuurt je naar de verkeerde
+ * machine -- en de echte reden (de telefoon zit niet op de Tailnet) stond er
+ * niet bij.
+ *
+ * En erger: vak 1 t/m 4 staan op `ws://127.0.0.1:4022`. In de Tauri-app op de
+ * Mac is dat de shell-server die AXE CORE zelf start. In de PWA op de telefoon
+ * is `127.0.0.1` de TELEFOON, en daar draait niets. Vier van de acht vakken
+ * konden daar dus nooit werken, en de UI zei niets: acht knoppen, waarvan vier
+ * altijd falen.
+ *
+ * Eén afleiding uit het adres, niet acht keer handmatig -- om dezelfde reden
+ * als de omleiding in `axeCoreApiService.basisVoor`: een negende host die er
+ * later bij komt zou de uitzondering vergeten. Zelf toegevoegde hosts krijgen
+ * hem zo ook, zonder dat er iets in te vullen valt.
+ */
+export type HostSoort =
+  /** Deze machine. Alleen echt als de app óp die machine draait. */
+  | 'lokaal'
+  /** Een server op internet: api.axecompanion.com en zijn soortgenoten. */
+  | 'vps'
+  /** Een machine achter Tailscale: alleen bereikbaar vanaf de Tailnet. */
+  | 'tailnet'
+  /** Nog geen adres ingevuld. */
+  | 'leeg';
+
+export function hostSoort(wsUrl: string): HostSoort {
+  const t = (wsUrl || '').trim();
+  if (!geldigWsAdres(t)) return 'leeg';
+  let naam: string;
+  try { naam = new URL(t).hostname.toLowerCase(); } catch { return 'leeg'; }
+  if (naam === '127.0.0.1' || naam === 'localhost' || naam === '::1' || naam === '[::1]') return 'lokaal';
+  if (naam.endsWith('.ts.net')) return 'tailnet';
+  return 'vps';
+}
+
+/**
+ * Of dit apparaat deze machine kan bereiken -- voor zover je dat kunt weten
+ * zonder het te proberen.
+ *
+ * Alleen `lokaal` is hier zeker: `127.0.0.1` is altijd het apparaat waarop de
+ * pagina draait. Dat is de Mac in de Tauri-app, en ook in `vite dev` of
+ * `tauri:dev`, want dan wordt de pagina zelf van localhost geserveerd. Komt de
+ * pagina van axeheadquarters.com, dan is het de telefoon of de iPad, en draait
+ * daar geen shell-server.
+ *
+ * Voor `tailnet` kun je het niet weten: Tailscale kán op de iPhone aanstaan.
+ * Daarom geeft dit true en zegt het foutbericht wat je moet nakijken -- een
+ * knop weghalen die het wél had kunnen doen is erger dan een mislukte poging
+ * met een goed antwoord erna.
+ */
+export function bereikbaarHier(
+  soort: HostSoort,
+  omgeving: { tauri: boolean; paginaHost: string },
+): boolean {
+  if (soort !== 'lokaal') return true;
+  if (omgeving.tauri) return true;
+  const h = (omgeving.paginaHost || '').toLowerCase();
+  return h === '127.0.0.1' || h === 'localhost' || h === '::1' || h === '[::1]';
+}
+
+/**
+ * Wat je moet nakijken als deze machine niet antwoordt. Eén regel, in gewone
+ * taal, en per soort machine iets ANDERS -- dat was het hele punt.
+ */
+export function waaromGeenVerbinding(soort: HostSoort, bereikbaar: boolean): string {
+  if (soort === 'lokaal' && !bereikbaar) {
+    return 'This shell runs on the Mac itself, so it only works in the AXE CORE Mac app.';
+  }
+  switch (soort) {
+    case 'lokaal':
+      return 'AXE CORE starts this shell server itself. If it says uit at the top, click start — the reason is in .axe-logs/terminal.log.';
+    case 'tailnet':
+      return 'This Mac sits behind Tailscale. Check that Tailscale is on, on this device and on that Mac.';
+    case 'vps':
+      return `No connection. On that server check: systemctl status axe-terminal and ss -tlnp | grep ${TERMINAL_POORT}.`;
+    case 'leeg':
+      return 'No address filled in yet.';
+  }
+}
+
 export const ADRESSEN_SLEUTEL = 'axe_terminal_adressen';
 
 /** De host met een ingevuld adres, als dat er is. */

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   alleHosts, kiesHost, maakHost, geldigWsAdres, INGEBOUWDE_HOSTS, hostVanDeEditor,
+  hostSoort, bereikbaarHier, waaromGeenVerbinding, TERMINAL_POORT,
 } from '@/domain/terminalHosts';
 import { snelactiesVoor } from '@/domain/terminalSnelacties';
 
@@ -187,5 +188,95 @@ describe('de terminal onder de code-editor', () => {
 
   it('leest een lokale API op poort als deze machine', () => {
     expect(hostVanDeEditor('http://127.0.0.1:8001').wsUrl).toContain('127.0.0.1:4022');
+  });
+});
+
+/* ── Welke machine, en of dit apparaat erbij kan (2 okt 2026) ───────────────
+   Gemeten op Luka's telefoon: vak 7 gaf code 1006 met het advies "check op de
+   VPS" voor een Mac achter Tailscale, en vak 1 t/m 4 wijzen naar 127.0.0.1 --
+   op de telefoon is dat de telefoon. Vier van de acht vakken konden daar nooit
+   werken en de UI zei niets. */
+describe('hostSoort', () => {
+  it('kent de drie soorten uit de ingebouwde lijst', () => {
+    expect(hostSoort('ws://127.0.0.1:4022/terminal')).toBe('lokaal');
+    expect(hostSoort('wss://api.axecompanion.com/terminal')).toBe('vps');
+    expect(hostSoort('wss://main-imac-luka.tail03735e.ts.net:4022/terminal')).toBe('tailnet');
+  });
+
+  it('noemt elk ingebouwd vak bij zijn soort, zonder dat daar iets in te vullen valt', () => {
+    const soorten = INGEBOUWDE_HOSTS.map(h => hostSoort(h.wsUrl));
+    // vier lokale Mac-vakken, twee VPS'en, één Tailnet-Mac, één leeg vak
+    expect(soorten.filter(s => s === 'lokaal')).toHaveLength(4);
+    expect(soorten.filter(s => s === 'vps')).toHaveLength(2);
+    expect(soorten.filter(s => s === 'tailnet')).toHaveLength(1);
+    expect(soorten.filter(s => s === 'leeg')).toHaveLength(1);
+  });
+
+  it('noemt localhost en ::1 ook deze machine', () => {
+    expect(hostSoort('ws://localhost:4022/terminal')).toBe('lokaal');
+    expect(hostSoort('ws://[::1]:4022/terminal')).toBe('lokaal');
+  });
+
+  it('zegt leeg bij een adres dat niet deugt, in plaats van te gokken', () => {
+    expect(hostSoort('')).toBe('leeg');
+    expect(hostSoort('http://127.0.0.1:4022')).toBe('leeg');
+  });
+});
+
+describe('bereikbaarHier', () => {
+  const telefoon = { tauri: false, paginaHost: 'axeheadquarters.com' };
+  const macApp = { tauri: true, paginaHost: 'tauri.localhost' };
+  const dev = { tauri: false, paginaHost: '127.0.0.1' };
+
+  it('127.0.0.1 kan niet vanaf de telefoon -- dat is de telefoon', () => {
+    expect(bereikbaarHier('lokaal', telefoon)).toBe(false);
+  });
+
+  it('en wel in de Mac-app en in dev', () => {
+    expect(bereikbaarHier('lokaal', macApp)).toBe(true);
+    expect(bereikbaarHier('lokaal', dev)).toBe(true);
+  });
+
+  it('laat een Tailnet-machine staan, want Tailscale kán op de iPhone aan', () => {
+    // Een knop weghalen die het wél had kunnen doen is erger dan een mislukte
+    // poging met een goed antwoord erna.
+    expect(bereikbaarHier('tailnet', telefoon)).toBe(true);
+  });
+
+  it('en een VPS altijd', () => {
+    expect(bereikbaarHier('vps', telefoon)).toBe(true);
+  });
+});
+
+describe('waaromGeenVerbinding', () => {
+  it('stuurt je niet naar de VPS voor een Mac achter Tailscale', () => {
+    const t = waaromGeenVerbinding('tailnet', true);
+    expect(t).toMatch(/Tailscale/);
+    expect(t).not.toMatch(/systemctl|VPS/);
+  });
+
+  it('zegt bij 127.0.0.1 op de telefoon dat het alleen in de Mac-app kan', () => {
+    expect(waaromGeenVerbinding('lokaal', false)).toMatch(/Mac app/);
+  });
+
+  it('en op de Mac zelf waar de reden staat', () => {
+    expect(waaromGeenVerbinding('lokaal', true)).toMatch(/terminal\.log/);
+  });
+
+  it('noemt voor een VPS de dienst en de poort', () => {
+    const t = waaromGeenVerbinding('vps', true);
+    expect(t).toMatch(/axe-terminal/);
+    expect(t).toMatch(String(TERMINAL_POORT));
+  });
+
+  it('geeft voor elke soort een andere regel -- anders is het geen antwoord', () => {
+    const regels = new Set([
+      waaromGeenVerbinding('lokaal', false),
+      waaromGeenVerbinding('lokaal', true),
+      waaromGeenVerbinding('tailnet', true),
+      waaromGeenVerbinding('vps', true),
+      waaromGeenVerbinding('leeg', true),
+    ]);
+    expect(regels.size).toBe(5);
   });
 });
