@@ -122,6 +122,15 @@
          altijd zwart, over de volle breedte en bovenop alles. Hij is zo hoog
          als de ruimte boven de plaat (2px), dus je ziet hem niet: hij loopt
          door in de zwarte balk. Alleen in de iPhone-app (data-ios-pwa). */
+      /* Correctie 2 okt: 2px was te dun om mee te tellen. WebKit (LocalFrameView::
+         fixedContainerEdges) zoekt het vaste element op één punt, midden
+         bovenaan en 4px onder de rand, en neemt de achtergrondkleur van een
+         element niet als het 10px of minder hoog is. Een strook van 2px werd dus
+         nooit gekozen; iOS nam de lichte plaat eronder (#D8E5F2 gemeten, ook in
+         de donkere look). Nu is het vak 12px hoog -- hoog genoeg om te tellen en
+         over dat punt heen -- maar alleen de bovenste 2px worden zwart getekend
+         (background-clip: content-box). Je ziet hetzelfde als eerst, en tikken
+         gaat erdoorheen (pointer-events: none; de meting telt dat niet). */
       #axe-ios-balk { display: none; }
       html[data-ios-pwa] #axe-ios-balk {
         display: block;
@@ -129,8 +138,12 @@
         top: 0;
         left: 0;
         right: 0;
+        box-sizing: content-box;
         height: calc(env(safe-area-inset-top, 0px) + 2px);
+        padding-bottom: 10px;
         background-color: #000;
+        background-clip: content-box;
+        pointer-events: none;
         z-index: 2147483647;
       }
     </style>

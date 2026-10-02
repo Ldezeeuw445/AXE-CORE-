@@ -237,4 +237,27 @@ describe('canonical mobile Home wiring', () => {
     expect(chat).toContain("agent?.name ?? 'AXE'");
     expect(chat).toContain('<ManagerAvatar agent={agent}');
   });
+
+  /* 2 okt: acht knoppen op vaste maat waren 345px in een rij van 328 (402) en
+     301 (375); de verzendknop stak over de rand. De maat groeit nu mee. */
+  it('sizes the phone composer buttons to the screen so send always fits', () => {
+    const css = bron('design/axe-look.css');
+    for (const vak of ['.axe-mobile-home', '.axe-mobile-tab-composer']) {
+      expect(css).toContain(`${vak} .axe-vak {\n    --axe-tel-knop: clamp(28px, calc(12.5vw - 16px), 36px);`);
+      expect(css).toMatch(new RegExp(`${vak.replace('.', '\\.')} \\.axe-vak-rij \\.axe-mobile-send \\{\\s*width: calc\\(var\\(--axe-tel-knop\\) \\+ 2px\\) !important;`));
+    }
+  });
+
+  /* 2 okt: de inklappijl stond op -translate-x-1/2 (Tailwind 3: transform) en
+     :active zette transform: scale(). Bij elke druk sprong hij 14px opzij,
+     onder je vinger vandaan, en een tik op de linkerhelft viel ernaast. */
+  it('keeps the tab composer collapse arrow under the finger while pressed', () => {
+    const shell = bron('presentation/components/layout/AppShell.tsx');
+    const css = bron('design/axe-look.css');
+    const pijl = shell.match(/className="axe-mobile-composer-collapse[^"]*"/)?.[0] ?? '';
+    expect(pijl).toContain('inset-x-0 mx-auto');
+    expect(pijl).not.toMatch(/translate/);
+    expect(css).toMatch(/\.axe-mobile-composer-handle:active \{\s*scale: \.96;/);
+    expect(css).toContain(':root[data-look] .axe-mobile-composer-collapse::before,');
+  });
 });

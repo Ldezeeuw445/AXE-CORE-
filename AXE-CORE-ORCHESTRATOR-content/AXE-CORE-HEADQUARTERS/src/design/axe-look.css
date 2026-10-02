@@ -7338,26 +7338,38 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     max-height: 74px;
   }
 
+  /* De knoppenrij past op elke iPhone-breedte (2 okt). Acht knoppen op vaste
+     maat (36, mic 46, verzend 38) plus tussenruimte waren samen 345px, en de
+     rij heeft 100vw - 74px: 328 op Luka's 402, 301 op een 375 -- de
+     verzendknop stak 5 tot 32px over de rand van het vak. Nu groeit de maat
+     mee met de breedte: 8 knoppen + 48px vast = 8k + 48 <= 100vw - 74, dus
+     k <= 12.5vw - 15.25px; 16px houdt een pixel speling. Op 430 is dat weer
+     36 (de oude maat), op 402 ruim 34, op 375 bijna 31. Rij en groepen een
+     fractie krapper. Alleen de telefoon; Tauri en desktop houden hun maten. */
+  :root[data-look] .axe-mobile-home .axe-vak {
+    --axe-tel-knop: clamp(28px, calc(12.5vw - 16px), 36px);
+  }
+
   :root[data-look] .axe-mobile-home .axe-vak-rij {
-    gap: 8px;
+    gap: 6px;
   }
 
   :root[data-look] .axe-mobile-home .axe-vak-links,
   :root[data-look] .axe-mobile-home .axe-vak-rechts {
-    gap: 5px;
+    gap: 4px;
   }
 
   :root[data-look] .axe-mobile-home .axe-vak-rij button,
   :root[data-look] .axe-mobile-home .axe-vak-staf button {
-    width: 36px;
-    height: 36px;
+    width: var(--axe-tel-knop);
+    height: var(--axe-tel-knop);
   }
 
   /* The mic is the primary phone action. This has to outrank the desktop
      generic "all composer buttons are transparent" rule above. */
   :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-mic {
-    width: 46px !important;
-    height: 46px !important;
+    width: calc(var(--axe-tel-knop) + 10px) !important;
+    height: calc(var(--axe-tel-knop) + 10px) !important;
     border-radius: 999px !important;
     color: #eefcff !important;
     background:
@@ -7376,8 +7388,8 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   }
 
   :root[data-look] .axe-mobile-home .axe-vak-rij .axe-mobile-send {
-    width: 38px !important;
-    height: 38px !important;
+    width: calc(var(--axe-tel-knop) + 2px) !important;
+    height: calc(var(--axe-tel-knop) + 2px) !important;
     border-radius: 999px !important;
   }
 
@@ -7498,24 +7510,28 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     max-height: 74px;
   }
 
-  :root[data-look] .axe-mobile-tab-composer .axe-vak-rij { gap: 8px; }
+  /* Zelfde meegroeiende knopmaat als Home (zie daar de som). */
+  :root[data-look] .axe-mobile-tab-composer .axe-vak {
+    --axe-tel-knop: clamp(28px, calc(12.5vw - 16px), 36px);
+  }
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-rij { gap: 6px; }
   :root[data-look] .axe-mobile-tab-composer .axe-vak-links,
-  :root[data-look] .axe-mobile-tab-composer .axe-vak-rechts { gap: 5px; }
+  :root[data-look] .axe-mobile-tab-composer .axe-vak-rechts { gap: 4px; }
 
   :root[data-look] .axe-mobile-tab-composer .axe-vak-rij button,
   :root[data-look] .axe-mobile-tab-composer .axe-vak-staf button {
-    width: 36px;
-    height: 36px;
+    width: var(--axe-tel-knop);
+    height: var(--axe-tel-knop);
   }
 
   :root[data-look] .axe-mobile-tab-composer .axe-vak-rij .axe-mobile-mic {
-    width: 46px !important;
-    height: 46px !important;
+    width: calc(var(--axe-tel-knop) + 10px) !important;
+    height: calc(var(--axe-tel-knop) + 10px) !important;
   }
 
   :root[data-look] .axe-mobile-tab-composer .axe-vak-rij .axe-mobile-send {
-    width: 38px !important;
-    height: 38px !important;
+    width: calc(var(--axe-tel-knop) + 2px) !important;
+    height: calc(var(--axe-tel-knop) + 2px) !important;
   }
 
   :root[data-look] .axe-mobile-composer-collapse,
@@ -7527,9 +7543,41 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* `scale`, niet `transform: scale()`: een transform overschrijft elke
+     verschuiving die de knop al heeft, en dan springt hij weg onder je vinger
+     (de pijl deed dat tot 2 okt). `scale` telt er los bij op. */
   :root[data-look] .axe-mobile-composer-collapse:active,
   :root[data-look] .axe-mobile-composer-handle:active {
-    transform: scale(.96);
+    scale: .96;
+  }
+
+  /* De pijl is 28px en de "AXE"-greep 28px hoog: te klein om blind te raken.
+     Een onzichtbare rand maakt het tikvlak 52 bij 44 (Apple's minimum) zonder
+     dat de knoppen groter ogen. Midden boven in de composer staat niets
+     (de kop heeft alleen een linker- en een rechtergroep). */
+  :root[data-look] .axe-mobile-composer-handle {
+    position: relative;
+  }
+  :root[data-look] .axe-mobile-composer-collapse::before,
+  :root[data-look] .axe-mobile-composer-handle::before {
+    content: '';
+    position: absolute;
+    inset: -8px -12px;
+  }
+
+  /* Inklappen en terugzetten als een beweging, niet als een sprong: de
+     composer en de greep schuiven kort omhoog in beeld. Geen fill-mode, dus
+     na 180ms is er geen transform meer (een blijvende transform zou elke
+     position: fixed erin aan dit vak vastmaken). */
+  :root[data-look] .axe-mobile-composer-in {
+    animation: axe-mobile-composer-in .18s cubic-bezier(.2, .8, .2, 1);
+  }
+  @keyframes axe-mobile-composer-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root[data-look] .axe-mobile-composer-in { animation: none; }
   }
 }
 

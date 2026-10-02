@@ -415,7 +415,7 @@ export function AppShell() {
               dubbel. Tot 2 okt 2026 stond hij op de telefoon helemaal nergens. */}
           <GoedkeuringBlok />
           {mobieleComposerWeg ? (
-            <div className="flex justify-center pb-0.5">
+            <div className="axe-mobile-composer-in flex justify-center pb-0.5">
               <button
                 type="button"
                 onClick={() => setMobieleComposerWeg(false)}
@@ -428,7 +428,7 @@ export function AppShell() {
               </button>
             </div>
           ) : (
-            <div className="relative">
+            <div className="axe-mobile-composer-in relative">
               <button
                 type="button"
                 onClick={() => setMobieleComposerWeg(true)}
@@ -444,8 +444,13 @@ export function AppShell() {
                    rechtergroep en daartussen is niets, dus daar kan hij nooit
                    botsen. -14px is de helft van 28, dus hij hangt precies
                    midden op de rand. Niets knipt hem af: de omhullende div en
-                   `.axe-mobile-tab-composer` hebben geen overflow. */
-                className="axe-mobile-composer-collapse absolute left-1/2 -translate-x-1/2 -top-[14px] z-[6] flex size-7 items-center justify-center rounded-full"
+                   `.axe-mobile-tab-composer` hebben geen overflow.
+                   Gecentreerd met inset-x-0 + mx-auto, NIET met
+                   -translate-x-1/2 (2 okt): Tailwind 3 zet die in `transform`,
+                   en de :active-indruk (scale) overschreef hem. Bij elke druk
+                   sprong de knop 14px naar rechts, onder je vinger vandaan --
+                   tik op de linkerhelft en iOS vond er de composer onder. */
+                className="axe-mobile-composer-collapse absolute inset-x-0 mx-auto -top-[14px] z-[6] flex size-7 items-center justify-center rounded-full"
               >
                 <ChevronDown size={14} />
               </button>

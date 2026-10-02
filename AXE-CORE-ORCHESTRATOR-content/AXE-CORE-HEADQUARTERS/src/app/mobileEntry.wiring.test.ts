@@ -53,6 +53,13 @@ describe('mobile PWA entry', () => {
     expect(html).toContain('<div id="axe-ios-balk" aria-hidden="true"></div>');
     expect(html).toContain('#axe-ios-balk { display: none; }');
     expect(html).toMatch(/html\[data-ios-pwa\] #axe-ios-balk \{[^}]*position: fixed;[^}]*top: 0;[^}]*background-color: #000;/);
+    // WebKit telt een element van 10px of lager niet mee voor de balkkleur
+    // (2 okt: 2px gaf een lichte balk). Het vak is 12px, alleen 2px zwart.
+    const balk = html.match(/html\[data-ios-pwa\] #axe-ios-balk \{([^}]*)\}/)?.[1] ?? '';
+    expect(balk).toContain('padding-bottom: 10px;');
+    expect(balk).toContain('box-sizing: content-box;');
+    expect(balk).toContain('background-clip: content-box;');
+    expect(balk).toContain('pointer-events: none;');
     // Verse installatie start donker, niet in de lichte standaardlook.
     expect(html).toMatch(/if \(!localStorage\.getItem\('axe_look'\)\) \{\s*localStorage\.setItem\('axe_look', 'black'\);/);
   });
