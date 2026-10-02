@@ -197,6 +197,9 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).not.toContain('<AxeCoreSphere telefoon />');
     expect(telefoon).toContain('d = Math.min(window.devicePixelRatio || 1, 3);');
     expect(telefoon).toContain('if (!webgl) return <AxeCoreSphere telefoon />;');
+    // Dot Wave (2 okt): kleurt mee met de look, inkt op licht en licht op donker.
+    expect(telefoon).toContain("attributeFilter: ['data-look']");
+    expect(telefoon).toContain('const inkt = DOT_INKT[plaat];');
     expect(bol).toContain('d = Math.min(window.devicePixelRatio || 1, telefoon ? 3 : 2);');
     expect(bol).toContain('const tekenNu = telefoon ? tekenFijn : teken;');
     for (const plek of ['pages/Home.tsx', 'pages/HomeStage.tsx', 'components/layout/zweef/ZwevendeBol.tsx', 'components/devices/TelefoonScherm.tsx']) {
@@ -257,7 +260,28 @@ describe('canonical mobile Home wiring', () => {
     const pijl = shell.match(/className="axe-mobile-composer-collapse[^"]*"/)?.[0] ?? '';
     expect(pijl).toContain('inset-x-0 mx-auto');
     expect(pijl).not.toMatch(/translate/);
-    expect(css).toMatch(/\.axe-mobile-composer-handle:active \{\s*scale: \.96;/);
-    expect(css).toContain(':root[data-look] .axe-mobile-composer-collapse::before,');
+    expect(css).toMatch(/\.axe-mobile-composer-collapse:active \{\s*scale: \.96;/);
+    expect(css).toContain(':root[data-look] .axe-mobile-composer-collapse::before {');
+  });
+
+  /* 2 okt, Luka koos optie B uit "Slanke Composer": de pijl maakt de composer
+     een dock in plaats van hem weg te halen. Spraak en bestanden blijven één
+     tik, en het is dezelfde component, dus tekst en bijlagen blijven staan. */
+  it('turns the tab composer into a dock with files, camera, voice and keyboard', () => {
+    const shell = bron('presentation/components/layout/AppShell.tsx');
+    const composer = bron('presentation/components/layout/MobileComposer.tsx');
+    const css = bron('design/axe-look.css');
+    expect(shell).toContain('<MobileComposer navigateAfterSend={false} dock={mobieleDock} opDock={setMobieleDock} />');
+    expect(shell).toContain('onClick={() => setMobieleDock(true)}');
+    // De oude "AXE"-greep is weg, en de stand springt niet terug bij een andere tab.
+    expect(shell).not.toContain('axe-mobile-composer-handle');
+    expect(shell).not.toMatch(/useEffect\(\(\) => \{ setMobieleDock\(false\)/);
+    const dock = composer.slice(composer.indexOf('if (opDock && dock) {'), composer.indexOf('const vak = ('));
+    for (const deel of ['<FileUploadButton', '<VisionCaptureButton compact />', '{micKnop}', '{stemKnop}', '<Keyboard']) {
+      expect(dock).toContain(deel);
+    }
+    // Het toetsenbord moet binnen het tikgebaar openen, anders doet iOS niets.
+    expect(composer).toMatch(/flushSync\(\(\) => opDock\?\.\(false\)\);\s*vakRef\.current\?\.querySelector\('textarea'\)\?\.focus\(\);/);
+    expect(css).toContain(':root[data-look] .axe-mobile-dock {');
   });
 });

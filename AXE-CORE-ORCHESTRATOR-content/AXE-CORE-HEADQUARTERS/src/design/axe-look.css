@@ -7534,8 +7534,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     height: calc(var(--axe-tel-knop) + 2px) !important;
   }
 
-  :root[data-look] .axe-mobile-composer-collapse,
-  :root[data-look] .axe-mobile-composer-handle {
+  :root[data-look] .axe-mobile-composer-collapse {
     color: rgba(238,243,250,.78);
     background: linear-gradient(180deg, rgba(20,20,24,.98), rgba(8,8,10,.99));
     border: 1px solid rgba(255,255,255,.09);
@@ -7546,23 +7545,67 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   /* `scale`, niet `transform: scale()`: een transform overschrijft elke
      verschuiving die de knop al heeft, en dan springt hij weg onder je vinger
      (de pijl deed dat tot 2 okt). `scale` telt er los bij op. */
-  :root[data-look] .axe-mobile-composer-collapse:active,
-  :root[data-look] .axe-mobile-composer-handle:active {
+  :root[data-look] .axe-mobile-composer-collapse:active {
     scale: .96;
   }
 
-  /* De pijl is 28px en de "AXE"-greep 28px hoog: te klein om blind te raken.
-     Een onzichtbare rand maakt het tikvlak 52 bij 44 (Apple's minimum) zonder
-     dat de knoppen groter ogen. Midden boven in de composer staat niets
-     (de kop heeft alleen een linker- en een rechtergroep). */
-  :root[data-look] .axe-mobile-composer-handle {
-    position: relative;
-  }
-  :root[data-look] .axe-mobile-composer-collapse::before,
-  :root[data-look] .axe-mobile-composer-handle::before {
+  /* De pijl is 28px: te klein om blind te raken. Een onzichtbare rand maakt
+     het tikvlak 52 bij 44 (Apple's minimum) zonder dat hij groter oogt.
+     Midden boven in de composer staat niets (de kop heeft alleen een linker-
+     en een rechtergroep). */
+  :root[data-look] .axe-mobile-composer-collapse::before {
     content: '';
     position: absolute;
     inset: -8px -12px;
+  }
+
+  /* De dock: de smalle stand van de composer op de andere tabs (2 okt). Een
+     eiland in het midden, met hetzelfde vlak, dezelfde rand en dezelfde
+     zweefschaduw als het volle vak, zodat hij in beide looks bij de composer
+     hoort. Knoppen 38px, spraak 44px: 56pt hoog in plaats van 140. */
+  :root[data-look] .axe-mobile-dock-rij {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 2px;
+  }
+  :root[data-look] .axe-mobile-dock {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: var(--axe-vak-vlak);
+    border: 1px solid var(--axe-vak-lijn);
+    box-shadow: var(--axe-vak-zweef);
+  }
+  :root[data-look] .axe-mobile-dock button {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 999px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* De paperclip en de camera brengen hun eigen vlakje en kleur mee (inline);
+     in de dock zijn ze kaal, zoals in de rij van het volle vak. */
+  :root[data-look] .axe-mobile-dock button:not(.axe-mobile-mic) {
+    background: none !important;
+    border: 0 !important;
+    color: var(--text-muted) !important;
+  }
+  :root[data-look] .axe-mobile-dock button:not(.axe-mobile-mic) svg {
+    width: 19px;
+    height: 19px;
+  }
+  :root[data-look] .axe-mobile-dock button:active {
+    scale: .94;
+  }
+  :root[data-look] .axe-mobile-dock-streep {
+    width: 1px;
+    height: 20px;
+    background: var(--axe-vak-lijn);
   }
 
   /* Inklappen en terugzetten als een beweging, niet als een sprong: de

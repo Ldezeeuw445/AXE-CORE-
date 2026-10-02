@@ -60,14 +60,16 @@ describe('goedkeuren kan op elk oppervlak', () => {
     expect(blok).toMatch(/resolvePendingExec\(pending\.id, false\)/);
   });
 
-  /* Op de telefoon-tabs staat hij buiten de inklap-tak van de composer: schuif
-     je die weg, dan moet de vraag blijven staan. */
-  it('blijft op de telefoon staan als de composer weggeschoven is', () => {
+  /* Op de telefoon-tabs staat hij buiten de dock-tak van de composer: maak je
+     die smal, dan moet de vraag blijven staan. */
+  it('blijft op de telefoon staan als de composer smal is', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const blok = shell.indexOf('<GoedkeuringBlok />');
-    const inklap = shell.indexOf('{mobieleComposerWeg ? (');
+    const dock = shell.indexOf('{!mobieleDock && (');
+    const composer = shell.indexOf('<MobileComposer navigateAfterSend={false} dock={mobieleDock}');
     expect(blok).toBeGreaterThan(0);
-    expect(inklap).toBeGreaterThan(blok);
+    expect(dock).toBeGreaterThan(blok);
+    expect(composer).toBeGreaterThan(blok);
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, Suspense } from 'react';
-import { ChevronDown, ChevronUp, Triangle } from 'lucide-react';
+import { ChevronDown, Triangle } from 'lucide-react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { MobileGlass, LookToggle } from '@/presentation/components/layout/MobileGlass';
@@ -231,8 +231,10 @@ export function AppShell() {
     && location.pathname !== '/mobile'
     && location.pathname !== '/'
     && location.pathname !== '/lock';
-  const [mobieleComposerWeg, setMobieleComposerWeg] = useState(false);
-  useEffect(() => { setMobieleComposerWeg(false); }, [location.pathname]);
+  /* Smal als dock (Luka, 2 okt). Blijft staan als je van tab wisselt: smal is
+     een keuze voor rust, en spraak en bestanden zitten er nog gewoon in. Tot
+     2 okt klapte hij helemaal weg en kwam hij op elke nieuwe tab terug. */
+  const [mobieleDock, setMobieleDock] = useState(false);
 
   // Fixed to the dynamic viewport height (not min-h) so the shell never grows
   // past the visible area and pushes the BottomNav below the fold — the reason
@@ -404,36 +406,23 @@ export function AppShell() {
       </div>
 
       {/* Mobile tabs use the exact same AXE composer as Mobile Home. Outside
-          Home it may slide completely out to make room; only a tiny restore
-          handle remains. Sending stays on the current tab, like Tauri. */}
+          Home the arrow turns it into the dock: an island with files, camera,
+          voice and the keyboard. Sending stays on the current tab, like Tauri. */}
       {toonMobieleTabComposer && (
         <div className="axe-mobile-tab-composer relative z-[55] mt-auto w-full flex-none">
-          {/* De goedkeuringsvraag staat BUITEN de inklap-tak: als AXE op
-              toestemming wacht is dat belangrijker dan of je de composer net
-              weggeschoven hebt. Op de telefoon-home zit hij in MobileChat;
+          {/* De goedkeuringsvraag staat BUITEN de dock-tak van de composer: als
+              AXE op toestemming wacht is dat belangrijker dan of je de composer
+              net smal gemaakt hebt. Op de telefoon-home zit hij in MobileChat;
               `toonMobieleTabComposer` sluit /mobile uit, dus hij staat nooit
               dubbel. Tot 2 okt 2026 stond hij op de telefoon helemaal nergens. */}
           <GoedkeuringBlok />
-          {mobieleComposerWeg ? (
-            <div className="axe-mobile-composer-in flex justify-center pb-0.5">
+          <div className="relative">
+            {!mobieleDock && (
               <button
                 type="button"
-                onClick={() => setMobieleComposerWeg(false)}
-                aria-label="Composer tonen"
-                title="Composer tonen"
-                className="axe-mobile-composer-handle flex h-7 items-center gap-1 rounded-full px-3 text-[10px] font-medium"
-              >
-                <ChevronUp size={13} />
-                AXE
-              </button>
-            </div>
-          ) : (
-            <div className="axe-mobile-composer-in relative">
-              <button
-                type="button"
-                onClick={() => setMobieleComposerWeg(true)}
-                aria-label="Composer verbergen"
-                title="Composer verbergen"
+                onClick={() => setMobieleDock(true)}
+                aria-label="Composer smal maken"
+                title="Smal maken"
                 /* Op de bovenRAND, niet erin. Op `top-1 right-1` lag deze knop
                    van 28px over de schuifknop rechtsboven in de composer -- 20
                    bij 22 pixels overlap, want `.axe-kop-rechts` staat op
@@ -454,9 +443,9 @@ export function AppShell() {
               >
                 <ChevronDown size={14} />
               </button>
-              <MobileComposer navigateAfterSend={false} />
-            </div>
-          )}
+            )}
+            <MobileComposer navigateAfterSend={false} dock={mobieleDock} opDock={setMobieleDock} />
+          </div>
         </div>
       )}
 

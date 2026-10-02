@@ -2,11 +2,13 @@
  * MobileComposer — the real AXE composer, wired to the same voice/task store
  * as desktop. Mobile owns its layout, not a second assistant implementation.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router';
 import {
   Clock,
   Globe,
+  Keyboard,
   Mic,
   Plus,
   RotateCcw,
@@ -37,8 +39,16 @@ import { skillDef } from '@/domain/tierRouter/axeSkills';
    een bewuste keuze: een knop die ongevraagd onderzoek afvuurt kost tokens. */
 const DIEP_ONDERZOEK = skillDef('deep-research')!;
 
-export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend?: boolean } = {}) {
+interface Props {
+  navigateAfterSend?: boolean;
+  /** Alleen de telefoon-tabs (AppShell): smal als dock in plaats van het volle vak. */
+  dock?: boolean;
+  opDock?: (dock: boolean) => void;
+}
+
+export function MobileComposer({ navigateAfterSend = true, dock = false, opDock }: Props = {}) {
   const navigate = useNavigate();
+  const vakRef = useRef<HTMLDivElement | null>(null);
   const voice = useVoiceStore();
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const [draft, setDraft] = useState('');
@@ -69,6 +79,21 @@ export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend
       // The canonical voice store already exposes the useful mic error.
     }
   }, [voice]);
+
+  /* Een bestand toevoegen vanuit de dock opent het volle vak: een bijlage
+     verstuur je met tekst erbij, en de verzendknop zit daar. */
+  const kiesBijlagen = useCallback((lijst: NormalizedAttachment[]) => {
+    setAttachments(lijst);
+    if (dock && lijst.length > attachments.length) opDock?.(false);
+  }, [attachments.length, dock, opDock]);
+
+  /* Het toetsenbord in de dock. flushSync zet het vak er in dezelfde tik neer,
+     zodat focus() nog binnen het tikgebaar valt -- anders opent iOS het
+     toetsenbord niet. */
+  const typen = () => {
+    flushSync(() => opDock?.(false));
+    vakRef.current?.querySelector('textarea')?.focus();
+  };
 
   const header = (
     <>
@@ -141,7 +166,66 @@ export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend
 
   const activeVoice = voice.voiceStatus !== 'idle';
 
-  return (
+  const stemKnop = (
+    <button
+      type="button"
+      onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
+      title={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
+      aria-label={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
+    >
+      {voice.responseMode === 'speak' ? <Volume2 size={18} /> : <VolumeX size={18} />}
+    </button>
+  );
+
+  const micKnop = (
+    <button
+      type="button"
+      className="axe-mobile-mic"
+      onClick={() => { void mic(); }}
+      title={activeVoice ? 'Stop gesprek' : 'Praat met AXE'}
+      aria-pressed={activeVoice}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 999,
+        display: 'grid',
+        placeItems: 'center',
+        color: activeVoice ? '#001018' : 'white',
+        background: activeVoice
+          ? 'var(--accent-cyan)'
+          : 'radial-gradient(circle at 40% 35%, rgba(34,211,238,.35), rgba(79,70,229,.32) 55%, rgba(9,11,13,.96) 100%)',
+        border: '1px solid rgba(103,232,249,.52)',
+        boxShadow: activeVoice
+          ? '0 0 22px rgba(34,211,238,.45)'
+          : '0 0 16px rgba(59,130,246,.22)',
+      }}
+    >
+      <Mic size={22} />
+    </button>
+  );
+
+  /* De dock (Luka, 2 okt, optie B uit de artifact "Slanke Composer"): op de
+     andere tabs klapt de composer niet meer helemaal weg maar wordt hij een
+     eiland met alleen knoppen. Spraak in het midden, één tik. Dit is dezelfde
+     component, dus een half getypt bericht en de bijlagen blijven staan. */
+  if (opDock && dock) {
+    return (
+      <div className="axe-mobile-dock-rij axe-mobile-composer-in">
+        <div className="axe-mobile-dock" role="toolbar" aria-label="AXE">
+          <FileUploadButton attachments={attachments} onAttachmentsChange={kiesBijlagen} />
+          <VisionCaptureButton compact />
+          {micKnop}
+          {stemKnop}
+          <span className="axe-mobile-dock-streep" aria-hidden="true" />
+          <button type="button" onClick={typen} title="Typen" aria-label="Typen">
+            <Keyboard size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const vak = (
     <AxeComposerVak
       waarde={draft}
       opWaarde={setDraft}
@@ -153,7 +237,7 @@ export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend
       toonAgentsBalk={false}
       links={
         <>
-          <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
+          <FileUploadButton attachments={attachments} onAttachmentsChange={kiesBijlagen} />
           <button
             type="button"
             onClick={() => setDraft(t => (DIEP_ONDERZOEK.patroon.test(t) ? t : `${DIEP_ONDERZOEK.label} ${t}`))}
@@ -186,38 +270,8 @@ export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend
               dus de telefoon kon AXE's stem nooit uitzetten -- en dat is juist het
               oppervlak waar je dat wilt kunnen (in de trein, naast iemand). Zelfde
               store-actie, zelfde titels als het bureau. */}
-          <button
-            type="button"
-            onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
-            title={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
-            aria-label={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
-          >
-            {voice.responseMode === 'speak' ? <Volume2 size={18} /> : <VolumeX size={18} />}
-          </button>
-          <button
-            type="button"
-            className="axe-mobile-mic"
-            onClick={() => { void mic(); }}
-            title={activeVoice ? 'Stop gesprek' : 'Praat met AXE'}
-            aria-pressed={activeVoice}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 999,
-              display: 'grid',
-              placeItems: 'center',
-              color: activeVoice ? '#001018' : 'white',
-              background: activeVoice
-                ? 'var(--accent-cyan)'
-                : 'radial-gradient(circle at 40% 35%, rgba(34,211,238,.35), rgba(79,70,229,.32) 55%, rgba(9,11,13,.96) 100%)',
-              border: '1px solid rgba(103,232,249,.52)',
-              boxShadow: activeVoice
-                ? '0 0 22px rgba(34,211,238,.45)'
-                : '0 0 16px rgba(59,130,246,.22)',
-            }}
-          >
-            <Mic size={22} />
-          </button>
+          {stemKnop}
+          {micKnop}
           <button
             type="button"
             className="axe-mobile-send"
@@ -240,4 +294,7 @@ export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend
       }
     />
   );
+
+  // Alleen op de tabs een omhulsel: daar zoekt `typen` het veld, en schuift het vak in.
+  return opDock ? <div ref={vakRef} className="axe-mobile-composer-in">{vak}</div> : vak;
 }

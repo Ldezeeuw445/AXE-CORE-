@@ -1,58 +1,68 @@
 import { describe, expect, it } from 'vitest';
 import {
-  STAP, TEL_KERN, TEL_RING, TEL_SCHIL, TEL_STOF,
-  bolStand, canvasMaat, deeltjesMaat, hoogteKleur, maakTelefoonBol, pixelRaster,
+  DOT_INKT, STAP,
+  bolStand, canvasMaat, dotMaat, dotRijen, maakDotWave, pixelRaster,
 } from './telefoonBol';
 
-// Luka, 2 okt: de telefoon-sphere vlijmscherp, met meer en kleinere deeltjes,
-// en in het midden van zijn vak. Goedgekeurd in de artifact "AXE Core Sphere".
-describe('de telefoon-sphere', () => {
-  it('heeft ruim twee keer zoveel deeltjes als AxeCoreSphere telefoon', () => {
-    const bol = maakTelefoonBol();
-    expect(bol.schil.length).toBe(TEL_SCHIL * STAP);
-    expect(bol.kern.length).toBe(TEL_KERN * STAP);
-    expect(bol.ring.length).toBe(TEL_RING * STAP);
-    expect(bol.stof.length).toBe(TEL_STOF * STAP);
-    expect(TEL_SCHIL + TEL_KERN + TEL_RING).toBeGreaterThan(2 * (2600 + 900 + 180));
+/** WCAG-contrast tussen twee sRGB-kleuren (0..255). */
+function contrast(a: readonly number[], b: readonly number[]) {
+  const lum = (k: readonly number[]) => {
+    const [r, g, bl] = k.map((v) => { const x = v / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+
+// Luka, 2 okt: Dot Wave op de telefoon-Home, gekozen in "AXE Sphere Studio".
+describe('de telefoon-sphere (Dot Wave)', () => {
+  it('legt een stip om de ~7 schermpixels, met een onder- en bovengrens', () => {
+    // Luka's iPhone: canvas 660 x 585 op 3x, straal 0.34 van de korte kant.
+    const { R } = bolStand(660, 585);
+    expect(dotRijen(R)).toBe(89);
+    expect(dotRijen(10)).toBe(48);
+    expect(dotRijen(5000)).toBe(160);
   });
 
-  it('ziet er bij elke start hetzelfde uit', () => {
-    expect(maakTelefoonBol().schil).toEqual(maakTelefoonBol().schil);
+  it('ligt op de eenheidsbol, in rijen, en ziet er bij elke start hetzelfde uit', () => {
+    const rijen = 89;
+    const dots = maakDotWave(rijen);
+    expect(dots).toEqual(maakDotWave(rijen));
+    const n = dots.length / STAP;
+    // Een bol van rijen: ~ (4/pi) * rijen^2 stippen.
+    expect(n).toBeGreaterThan(0.95 * (4 / Math.PI) * rijen * rijen);
+    expect(n).toBeLessThan(1.05 * (4 / Math.PI) * rijen * rijen);
+    for (let i = 0; i < n; i += 97) {
+      expect(Math.hypot(dots[i * STAP], dots[i * STAP + 1], dots[i * STAP + 2])).toBeCloseTo(1, 5);
+    }
   });
 
-  it('legt de schil dun maar met diepte net onder de eenheidsbol, en het stof erbuiten', () => {
-    const { schil, stof } = maakTelefoonBol();
-    const straal = (a: Float32Array, i: number) => Math.hypot(a[i * STAP], a[i * STAP + 1], a[i * STAP + 2]);
-    const schilStralen = Array.from({ length: TEL_SCHIL }, (_, i) => straal(schil, i));
-    expect(Math.min(...schilStralen)).toBeGreaterThanOrEqual(0.964);
-    expect(Math.max(...schilStralen)).toBeLessThanOrEqual(1.0001);
-    const stofStralen = Array.from({ length: TEL_STOF }, (_, i) => straal(stof, i));
-    expect(Math.min(...stofStralen)).toBeGreaterThan(1.04);
+  it('tekent een stip vooraan rond een punt breed op een 3x-iPhone, en op licht groter', () => {
+    const { R } = bolStand(660, 585);
+    const rijen = dotRijen(R);
+    const donker = (dotMaat(R, rijen, 'donker') * 2) / 3;
+    const licht = (dotMaat(R, rijen, 'licht') * 2) / 3;
+    expect(donker).toBeGreaterThan(0.8);
+    expect(donker).toBeLessThan(1.3);
+    expect(licht).toBeGreaterThan(donker);
+    expect(dotMaat(1, 160, 'donker')).toBe(0.75);
   });
 
-  it('houdt het kleurverloop van de huidige bol: groen boven, blauw onder', () => {
-    const [rb, gb, bb] = hoogteKleur(-1);
-    const [ro, go, bo] = hoogteKleur(1);
-    expect(gb).toBeGreaterThan(bb);
-    expect(bo).toBeGreaterThan(go);
-    expect(bo).toBeGreaterThan(ro);
-    expect(rb).toBeCloseTo(150);
+  // "Op light mode zie je hem niet zo goed" (Luka, 2 okt). De lichte plaat is
+  // #D5E6F4 (de LICHT-lucht van MobileGlass); elke inktkleur moet daar tegen
+  // afsteken, en de achterkant moet dichter zijn dan op donker.
+  it('steekt op de lichte plaat af: inkt in plaats van licht', () => {
+    const plaat = [213, 230, 244];
+    const { boven, onder, rand, top, alfa } = DOT_INKT.licht;
+    for (const k of [boven, onder, rand, top]) expect(contrast(k, plaat)).toBeGreaterThan(2.4);
+    expect(contrast(boven, plaat)).toBeGreaterThan(10);
+    expect(alfa[0]).toBeGreaterThan(DOT_INKT.donker.alfa[0]);
+    // Op donker blijft het licht: elke kleur ruim boven de zwarte plaat.
+    for (const k of [DOT_INKT.donker.boven, DOT_INKT.donker.onder]) expect(contrast(k, [0, 0, 0])).toBeGreaterThan(5);
   });
 
   it('staat in het midden van zijn vak, niet op 36% zoals op de plaat', () => {
     expect(bolStand(714, 537)).toEqual({ cx: 357, cy: 268.5, R: 537 * 0.34 });
-  });
-
-  it('tekent een deeltje vooraan als een halve punt op een 3x-iPhone, en nooit onzichtbaar klein', () => {
-    // Luka's iPhone: vak 238 x 179 pt, op 3x.
-    const { R } = bolStand(238 * 3, 179 * 3);
-    const m = deeltjesMaat(R, 1, 0.9);
-    expect(m.schil[1] * 2 / 3).toBeGreaterThan(0.9);
-    expect(m.schil[1] * 2 / 3).toBeLessThan(1.4);
-    for (const [achter, voor] of [m.schil, m.kern, m.ring, m.stof]) {
-      expect(achter).toBeGreaterThanOrEqual(0.62);
-      expect(voor).toBeGreaterThanOrEqual(achter);
-    }
   });
 
   it('geeft het canvas precies één pixel per schermpixel', () => {
