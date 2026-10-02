@@ -14,6 +14,8 @@ import {
   SlidersHorizontal,
   Sparkles,
   Telescope,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
@@ -25,6 +27,7 @@ import {
 } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { useUIStore } from '@/presentation/store/uiStore';
 import { skillDef } from '@/domain/tierRouter/axeSkills';
 
 /* Zette tot 1 okt 2026 `/research` klaar. Dat voorvoegsel las niemand: geen
@@ -37,6 +40,7 @@ const DIEP_ONDERZOEK = skillDef('deep-research')!;
 export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend?: boolean } = {}) {
   const navigate = useNavigate();
   const voice = useVoiceStore();
+  const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -160,11 +164,36 @@ export function MobileComposer({ navigateAfterSend = true }: { navigateAfterSend
           <button type="button" onClick={() => navigate('/browser')} title="Browser">
             <Globe size={18} />
           </button>
+          {/* De vijf skills. Ze stonden sinds 1 okt in het commandopalet en in een
+              pil in MobileFab -- en die FAB hangt aan `!opPlaatMobiel`, wat op de
+              telefoon waar is op élke route behalve het slotscherm. De pil was dus
+              onbereikbaar. Hier wel: deze composer staat op élke mobiele tab, en
+              het is ook de plek waar je met AXE praat, dus waar je om werk vraagt. */}
+          <button
+            type="button"
+            onClick={() => setCommandPaletteOpen(true)}
+            title="Skills — Plan Today, Inbox Brief, Intel Brief, Deep Research, Weekly Review"
+            aria-label="Skills"
+          >
+            <Sparkles size={18} />
+          </button>
         </>
       }
       rechts={
         <>
           <VisionCaptureButton compact />
+          {/* Spraak aan/uit. Stond alleen in PlaatChat achter `{!isMobile && ...}`,
+              dus de telefoon kon AXE's stem nooit uitzetten -- en dat is juist het
+              oppervlak waar je dat wilt kunnen (in de trein, naast iemand). Zelfde
+              store-actie, zelfde titels als het bureau. */}
+          <button
+            type="button"
+            onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
+            title={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
+            aria-label={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
+          >
+            {voice.responseMode === 'speak' ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          </button>
           <button
             type="button"
             className="axe-mobile-mic"

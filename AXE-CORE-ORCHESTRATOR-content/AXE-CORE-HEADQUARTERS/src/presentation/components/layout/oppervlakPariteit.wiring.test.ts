@@ -70,3 +70,33 @@ describe('goedkeuren kan op elk oppervlak', () => {
     expect(inklap).toBeGreaterThan(blok);
   });
 });
+
+/* ── De vijf skills, en spraak aan/uit (2 okt 2026) ─────────────────────────
+   Gemeten vóór deze ronde: de telefoon kon bij geen van beide. De skills stonden
+   in het commandopalet (⌘K of de zoekknop in de kopbalk -- de telefoon heeft geen
+   van beide) en in een pil in MobileFab, en die FAB hangt aan `!opPlaatMobiel`,
+   wat op de telefoon waar is op élke route behalve /lock. De pil was dus
+   onbereikbaar: een ingang op een oppervlak dat er niet is.
+
+   Beide staan nu in `MobileComposer`, die op élke mobiele tab staat. */
+describe('de telefoon komt bij wat het bureau kan', () => {
+  const composer = () => bron('presentation/components/layout/MobileComposer.tsx');
+
+  it('heeft een ingang naar de vijf skills', () => {
+    expect(composer()).toContain('setCommandPaletteOpen');
+    expect(composer()).toMatch(/aria-label="Skills"/);
+  });
+
+  it('kan AXE\'s stem uitzetten', () => {
+    // Zelfde store-actie als het bureau, niet een eigen stand ernaast.
+    expect(composer()).toContain('setResponseMode');
+    expect(composer()).toMatch(/responseMode === 'speak'/);
+  });
+
+  /* Eén ingang per handeling. De FAB had er een tweede, en die was onzichtbaar --
+     dan lijkt het geregeld terwijl het dat niet is. */
+  it('heeft die ingang maar op één plek', () => {
+    expect(bron('presentation/components/layout/MobileFab.tsx'))
+      .not.toContain('setCommandPaletteOpen');
+  });
+});

@@ -10,32 +10,30 @@
  * Hij hergebruikt de bestaande verbindingen (voiceStore, router); er wordt niets
  * nieuws gebouwd achter de knoppen.
  *
- * Sinds 1 okt 2026 staat er ook "Skills" bij. Niet de vijf skills zelf: dit is
- * met opzet een korte lijst van wat je onderweg nodig hebt, en acht pillen onder
- * je duim is geen korte lijst meer. De reden dat hij hier hoort is een gat: het
- * commandopalet -- waar de vijf skills staan -- was op de telefoon niet te
- * openen. ⌘K vraagt een toetsenbord en de zoekknop zit in de kopbalk, en die
- * bestaat op de telefoon niet. Eén pil opent het palet, en daarmee alle vijf.
+ * Hier stond op 1 okt 2026 een "Skills"-pil, omdat het commandopalet op de
+ * telefoon niet te openen was. Dat was de verkeerde plek en op 2 okt gemeten:
+ * deze FAB hangt aan `{mobileNav && !opPlaatMobiel && !volScherm}`, en
+ * `opPlaatMobiel` is op de telefoon waar op élke route behalve `/lock`. De pil
+ * was dus onbereikbaar. De ingang staat nu in `MobileComposer`, die op élke
+ * mobiele tab staat; twee ingangen naar hetzelfde waarvan één onzichtbaar is
+ * precies de verdubbeling waar deze ronde over gaat.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Plus, X, Mic, MessageSquarePlus, LineChart, Sparkles } from 'lucide-react';
+import { Plus, X, Mic, MessageSquarePlus, LineChart } from 'lucide-react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { useUIStore } from '@/presentation/store/uiStore';
 
 export function MobileFab() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const startListening = useVoiceStore((s) => s.startListening);
   const clearConversation = useVoiceStore((s) => s.clearConversation);
-  const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
 
   const act = (fn: () => void) => { fn(); setOpen(false); };
 
   const actions = [
     { icon: MessageSquarePlus, label: 'Nieuw gesprek', run: () => clearConversation() },
     { icon: Mic, label: 'Spraak', run: () => { void startListening(); } },
-    { icon: Sparkles, label: 'Skills', run: () => setCommandPaletteOpen(true) },
     { icon: LineChart, label: 'Trading', run: () => navigate('/trading-intel') },
   ];
 
