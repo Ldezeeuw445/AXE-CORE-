@@ -23,6 +23,8 @@
  * gedeelde bundel. De iMac is geen extra machine: hij heeft een vast
  * Tailscale-adres, en zonder dat in deze lijst is vak 7 na elke herstart leeg.
  */
+import { opDezeMachine, type Omgeving } from '@/domain/lokaleMachine';
+
 
 export interface TerminalHost {
   id: string;
@@ -193,14 +195,10 @@ export function hostSoort(wsUrl: string): HostSoort {
  * knop weghalen die het wél had kunnen doen is erger dan een mislukte poging
  * met een goed antwoord erna.
  */
-export function bereikbaarHier(
-  soort: HostSoort,
-  omgeving: { tauri: boolean; paginaHost: string },
-): boolean {
+export function bereikbaarHier(soort: HostSoort, omgeving: Omgeving): boolean {
   if (soort !== 'lokaal') return true;
-  if (omgeving.tauri) return true;
-  const h = (omgeving.paginaHost || '').toLowerCase();
-  return h === '127.0.0.1' || h === 'localhost' || h === '::1' || h === '[::1]';
+  // Dezelfde vraag die agentHost stelt over 127.0.0.1:8001 -- één antwoord.
+  return opDezeMachine(omgeving);
 }
 
 /**

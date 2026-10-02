@@ -30,6 +30,9 @@
  * deploy-kopie terwijl je denkt dat je in je eigen repo zit.
  */
 
+import { opDezeMachine } from '@/domain/lokaleMachine';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+
 export type AgentHostVoorkeur = 'auto' | 'lokaal' | 'vps';
 
 const SLEUTEL = 'axe_agent_host';
@@ -95,6 +98,20 @@ export function __resetAgentHost(): void {
  * uit te komen.
  */
 async function lokaalAntwoordt(): Promise<boolean> {
+  // Op de telefoon en de iPad is `127.0.0.1` het apparaat zelf, en daar draait
+  // geen run-local.sh. Vanaf een https-pagina blokkeert de browser dit verzoek
+  // ook nog als mixed content, dus het antwoord was altijd false -- maar wel
+  // elke minuut opnieuw, met een fout in de console erbij. Zie
+  // domain/lokaleMachine.ts: dezelfde vraag als de Terminal-tab stelt.
+  // Zonder `location` is er geen pagina en dus geen ander apparaat: dat is de
+  // testomgeving (vitest draait op node), en daar hoort deze poort open te
+  // blijven -- anders toetst de rest van dit bestand niets meer.
+  const inBrowser = typeof location !== 'undefined';
+  if (inBrowser && !opDezeMachine({ tauri: isTauriRuntime(), paginaHost: location.hostname })) {
+    probeUitslag = false;
+    probeOp = Date.now();
+    return false;
+  }
   if (probeUitslag !== null && Date.now() - probeOp < PROBE_TTL_MS) return probeUitslag;
   try {
     const res = await fetch(`${LOKALE_AGENT_ORIGIN}/health`, {

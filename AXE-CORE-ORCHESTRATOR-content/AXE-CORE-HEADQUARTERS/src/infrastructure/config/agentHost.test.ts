@@ -98,6 +98,30 @@ describe('waar de codeeragent draait', () => {
     expect(f).toHaveBeenCalledTimes(2);
   });
 
+  /* Gemeten 2 okt 2026 op een pagina die niet van localhost komt: twee
+     verzoeken naar http://127.0.0.1:8001/health per bezoek aan /settings. Op de
+     telefoon is dat de telefoon zelf, en op https blokkeert de browser het ook
+     nog als mixed content -- het antwoord was dus altijd false, maar wel elke
+     minuut opnieuw, met een fout in de console erbij. */
+  it('polst niet vanaf een pagina die niet van deze machine komt', async () => {
+    const f = fetchAntwoordt(true);
+    vi.stubGlobal('location', { hostname: 'axeheadquarters.com' });
+
+    expect(await agentBasis(VPS)).toBe(VPS);
+    expect(agentHostStand()).toBe('vps');
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('en wel in de verpakte app, waar 127.0.0.1 de Mac zelf is', async () => {
+    const f = fetchAntwoordt(true);
+    // De verpakte app heeft __TAURI_INTERNALS__; zonder dat is tauri.localhost
+    // alleen een naam, dus die stand hoort hier ook te polsen.
+    vi.stubGlobal('location', { hostname: 'localhost' });
+
+    expect(await agentBasis(VPS)).toBe(lokaleAgentFetchOrigin());
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
   it('valt terug op auto zonder opgeslagen keuze', () => {
     localStorage.removeItem('axe_agent_host');
     expect(agentHostVoorkeur()).toBe('auto');
