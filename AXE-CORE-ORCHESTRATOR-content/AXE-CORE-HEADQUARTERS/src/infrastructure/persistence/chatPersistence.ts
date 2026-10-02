@@ -95,6 +95,47 @@ export function chatSaveHealth(): ChatSaveHealth {
   return { ...saveHealth };
 }
 
+/**
+ * En dezelfde vraag voor de andere kant: kwam het gesprek terug?
+ *
+ * Opslaan en laden kunnen los van elkaar stuk zijn, en een leeg gesprek ziet er
+ * precies zo uit als een gesprek dat niet geladen kon worden -- `loadMessages`
+ * vangt elke fout en geeft `[]` terug. Dat was zichtbaar in exact één plek: een
+ * console-regel. Op de telefoon is het chatvak het enige venster op het gesprek,
+ * dus daar betekent dat: een zwart vlak, en geen manier om te weten of je niets
+ * gezegd hebt of dat je geschiedenis er simpelweg niet is.
+ *
+ * `geprobeerd` is het verschil tussen "nog niet geladen" en "geladen, niets
+ * gevonden". Zonder dat veld kan de UI de eerste frame niet onderscheiden van
+ * een echt leeg gesprek.
+ */
+export interface ChatLoadHealth {
+  ok: boolean;
+  /** Of er al een poging gedaan is. False betekent: nog niets te zeggen. */
+  geprobeerd: boolean;
+  lastError: string | null;
+  lastErrorAt: number | null;
+}
+
+let loadHealth: ChatLoadHealth = { ok: true, geprobeerd: false, lastError: null, lastErrorAt: null };
+
+/** Of de laatste poging om het gesprek te laden lukte. Veilig om te pollen. */
+export function chatLoadHealth(): ChatLoadHealth {
+  return { ...loadHealth };
+}
+
+function noteLoadOk(): void {
+  loadHealth = { ok: true, geprobeerd: true, lastError: null, lastErrorAt: null };
+}
+
+function noteLoadFailed(reason: string): void {
+  loadHealth = { ok: false, geprobeerd: true, lastError: reason, lastErrorAt: Date.now() };
+  console.error(
+    `%c[AXE chat]%c dit gesprek kon NIET geladen worden: ${reason}`,
+    'color:#EF4444;font-weight:700', 'color:inherit',
+  );
+}
+
 function noteSaveOk(): void {
   if (saveHealth.failures > 0) {
     console.info(
@@ -224,12 +265,17 @@ export function loadConversationLocal(conversationId: string): ConversationMessa
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The newest 500 of a conversation (oldest → newest). Returns [] on any failure.
+/** The newest 500 of a conversation (oldest → newest).
  *  user_id is the UUID column: it filtered on the suffixed AXE_USER_ID before,
- *  which matched nothing, so this fallback always came back empty. */
+ *  which matched nothing, so this fallback always came back empty.
+ *
+ *  Gooit bij een fout in plaats van `[]` terug te geven: `[]` is hier niet
+ *  "geen berichten" maar "ik weet het niet", en die twee moeten los blijven --
+ *  anders staat de telefoon stil met een leeg vak terwijl de geschiedenis
+ *  bestaat (zie ChatLoadHealth). */
 async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMessageRecord[]> {
   const sb = getSupabase();
-  if (!sb) return [];
+  if (!sb) throw new Error('geen Supabase-client');
   const { data, error } = await sb
     .from(MESSAGES_TABLE)
     .select('*')
@@ -237,7 +283,7 @@ async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMess
     .eq('user_id', AXE_USER_UUID)
     .order('created_at', { ascending: false })
     .limit(500);
-  if (error) { console.error('[chatPersistence] loadMessages error:', formatSbError(error)); return []; }
+  if (error) throw new Error(formatSbError(error));
   return (data || []).reverse();
 }
 
@@ -266,6 +312,8 @@ export async function loadMessages(conversationId: string): Promise<Conversation
       rows = await loadMessagesViaSupabase(conversationId);
     }
 
+    noteLoadOk();
+
     // 🔒 FILTER: only show messages belonging to THIS app
     return rows
       .filter(isOurApp)
@@ -283,7 +331,7 @@ export async function loadMessages(conversationId: string): Promise<Conversation
         };
       });
   } catch (err) {
-    console.error('[chatPersistence] loadMessages failed:', formatErr(err));
+    noteLoadFailed(formatErr(err));
     return [];
   }
 }

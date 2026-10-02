@@ -18,6 +18,7 @@ import { BolVlucht, type Vlucht } from '@/presentation/components/layout/zweef/B
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
+import { GesprekStand } from '@/presentation/components/shared/GesprekStand';
 
 function vindDoel(doel: string): Rechthoek | null {
   for (const el of document.querySelectorAll<HTMLElement>(`[data-axe-doel="${CSS.escape(doel)}"]`)) {
@@ -561,6 +562,12 @@ export function AxePresenceDock() {
               {liveTranscript && (
                 <ChatRegel van="luka"><span className="italic">{liveTranscript}</span></ChatRegel>
               )}
+              {/* Hier woont het gesprek op het bureau, niet in de chatplaat
+                  (`kopAlleen` daar is op desktopbreedte vrijwel altijd waar).
+                  Dus hoort hier ook de melding dat het niet bewaard of niet
+                  geladen kon worden -- smal, want een lege wolk hoort leeg te
+                  blijven. */}
+              <GesprekStand vorm="smal" />
               <GoedkeuringBlok vorm="smal" />
             </div>
           </div>

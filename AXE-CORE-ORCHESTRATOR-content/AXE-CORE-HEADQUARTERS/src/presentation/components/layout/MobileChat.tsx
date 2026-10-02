@@ -7,6 +7,7 @@ import { AXE_AGENTS, agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
+import { GesprekStand } from '@/presentation/components/shared/GesprekStand';
 import { useVoiceStore, type ConversationMessage } from '@/presentation/store/voiceStore';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { regelVan } from '@/domain/tierRouter/agentVenster';
@@ -185,6 +186,11 @@ export function MobileChat() {
             </div>
           </div>
         )}
+        {/* Wat er aan de hand is als hier niets staat: nog niets gezegd, nog
+            aan het ophalen, niet kunnen ophalen, of -- het ergste -- niet aan
+            het bewaren. Tot 2 okt 2026 zagen die vier er identiek uit: een
+            zwart vlak. Zelfde component als het bureau. */}
+        <GesprekStand />
         {/* AXE's goedkeuringsvraag. Hoorde hier vanaf het begin: tot 2 okt 2026
             stonden de Approve/Deny-knoppen alleen in PlaatChat en
             AxePresenceDock, en die bestaan op de telefoon niet -- AXE kon dus om

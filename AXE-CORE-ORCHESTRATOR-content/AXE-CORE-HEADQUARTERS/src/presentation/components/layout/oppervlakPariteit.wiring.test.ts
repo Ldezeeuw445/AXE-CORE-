@@ -71,6 +71,45 @@ describe('goedkeuren kan op elk oppervlak', () => {
   });
 });
 
+/* ── Het chatvak zegt wat het weet (2 okt 2026) ─────────────────────────────
+   Gemeten op Luka's telefoon-Home: een leeg zwart vlak. Het vak werkte -- er
+   was niets te tonen. Maar vier verschillende dingen zagen er identiek uit:
+   nog niets gezegd, nog aan het ophalen, niet kunnen ophalen, en -- het ergste
+   -- niet aan het bewaren. Dat laatste wist de app precies (`chatSaveHealth`),
+   maar de enige plek die het toonde was /status, en die staat niet in de
+   telefoonnavigatie. Op de telefoon is dit vak het enige venster op het
+   gesprek, dus daar is zwijgen het duurst. */
+describe('een leeg chatvak legt zich uit, op elk oppervlak', () => {
+  /* BUREAU is hier PlaatChat EN AxePresenceDock, en dat is geen slordigheid:
+     op desktopbreedte is `kopAlleen` in PlaatChat vrijwel altijd waar (zijn
+     eigen uitleg zegt dat), dus staat het gesprek in de wolk van de dock. Een
+     melding die alleen in de plaat staat zou dus bijna nooit te zien zijn --
+     precies de fout van de Skills-pil in de FAB, één dag eerder. */
+  it('staat op elk oppervlak waar het gesprek woont', () => {
+    for (const bestand of ['presentation/components/layout/MobileChat.tsx', ...BUREAU]) {
+      expect(bron(bestand), bestand).toContain('<GesprekStand');
+    }
+  });
+
+  /* Wanneer welke melding komt is een regel, geen opmaak: die staat in domain
+     en is daar per geval getest. Zet een oppervlak zijn eigen `if` erom, dan
+     lopen ze weer uit elkaar -- precies hoe dit gat ontstond. */
+  it('leest de stand uit de regel in domain, niet uit eigen ifs', () => {
+    const blok = bron('presentation/components/shared/GesprekStand.tsx');
+    expect(blok).toContain("from '@/domain/chat/gesprekStand'");
+    expect(blok).toContain('chatSaveHealth');
+    expect(blok).toContain('chatLoadHealth');
+  });
+
+  /* De laadfout moest ophouden stil te zijn: `loadMessages` gaf bij elke fout
+     `[]` terug, en `[]` is hier niet "geen berichten" maar "ik weet het niet". */
+  it('houdt een mislukte lading apart van een leeg gesprek', () => {
+    const bestand = readFileSync(join(ROOT, 'infrastructure/persistence/chatPersistence.ts'), 'utf8');
+    expect(bestand).toContain('export function chatLoadHealth');
+    expect(bestand).toContain('noteLoadFailed');
+  });
+});
+
 /* ── De vijf skills, en spraak aan/uit (2 okt 2026) ─────────────────────────
    Gemeten vóór deze ronde: de telefoon kon bij geen van beide. De skills stonden
    in het commandopalet (⌘K of de zoekknop in de kopbalk -- de telefoon heeft geen

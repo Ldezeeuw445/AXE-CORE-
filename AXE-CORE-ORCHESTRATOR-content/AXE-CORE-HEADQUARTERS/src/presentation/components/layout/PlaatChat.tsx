@@ -56,6 +56,7 @@ import { designAgentBridge } from '@/presentation/components/axe-core/designAgen
 import { useCodeAgentKop } from '@/presentation/store/codeAgentKopStore';
 import { skillDef } from '@/domain/tierRouter/axeSkills';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
+import { GesprekStand } from '@/presentation/components/shared/GesprekStand';
 
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
@@ -565,6 +566,10 @@ export function PlaatChat() {
                 })}
               </div>
 
+              {/* Zelfde stand als op de telefoon: een leeg vak dat niet zegt of
+                  er niets gezegd is, niets geladen kon worden of niets bewaard
+                  wordt, is op beide oppervlakken even stil. */}
+              <GesprekStand />
               <GoedkeuringBlok />
 
             </>

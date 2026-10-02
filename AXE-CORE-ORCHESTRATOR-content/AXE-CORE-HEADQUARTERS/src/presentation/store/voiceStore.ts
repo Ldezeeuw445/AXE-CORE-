@@ -377,6 +377,10 @@ interface VoiceState{
   voiceStatus:VoiceStatus;transcript:string;response:string;conversation:ConversationMessage[];sessionId:string;error:string|null;
   recognitionSupported:boolean;micPermission:'granted'|'denied'|'prompt'|'unknown';
   allConversations:ConversationSummary[];isLoadingConversations:boolean;
+  /** Of de eerste poging om dit gesprek te laden nog loopt. Het chatvak kan
+   *  hiermee "nog niets gezegd" van "ik ben aan het kijken" onderscheiden --
+   *  zonder dit veld zien die twee er identiek uit (een leeg vak). */
+  gesprekLaadt:boolean;
   apiKey:string;apiKeyValid:boolean|null;
   pendingAction:PendingChatAction|null;clearPendingAction:()=>void;
   pendingExec:PendingExec|null;resolvePendingExec:(id:string,approved:boolean)=>void;
@@ -461,10 +465,59 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
   const sessionId=(()=>{try{let id=localStorage.getItem(SESSION_KEY);if(!id||!UUID_RE.test(id)){id=createNewConversationId();localStorage.setItem(SESSION_KEY,id);wasFreshBootstrap=true;}return id;}catch{wasFreshBootstrap=true;return createNewConversationId();}})();
   const legacyKey=(()=>{try{return localStorage.getItem('axe_api_key')||'';}catch{return'';}})();
 
+  /**
+   * De laadroutine zelf. Apart van de actie `loadConversation`, zodat die er
+   * `gesprekLaadt` om kan zetten met een `finally` die ook bij een fout afgaat --
+   * een vlag die blijft hangen laat het chatvak voor altijd "aan het laden" zien,
+   * en dat is precies de stand die het moest vervangen.
+   */
+  const laadGesprek=async():Promise<void>=>{
+    const sid=get().sessionId;
+    // ① localStorage first — instant, always works
+    const local=loadConversationLocal(sid);
+    if(local.length){const mapped=local.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}
+    // ② Supabase in background — fills in if local is empty or merges newer
+    let hasHistory=local.length>0;
+    try{
+      const remote=await loadMessages(sid);
+      if(remote.length){
+        hasHistory=true;
+        const mapped=remote.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];
+        // Use remote if it has more messages than local (remote is source of truth for cross-device)
+        const cur=get().conversation;
+        if(mapped.length>=cur.length){markLoadedAsPersisted(mapped);set({conversation:mapped});saveConversationLocal(sid,mapped);}
+      }
+    }catch{/* Supabase unavailable — local is good enough */}
+    // ③ Freshly-minted session (storage wiped, e.g. iOS Safari's ~7-day
+    // purge) with genuinely no history under this id — resume the user's
+    // most recent real conversation instead of stranding them on a blank
+    // chat while their actual history sits orphaned server-side. Never
+    // runs after an explicit "+ New" click — that also produces a fresh
+    // empty session, but wasFreshBootstrap is only true at initial boot.
+    if(wasFreshBootstrap&&!hasHistory){
+      wasFreshBootstrap=false;
+      try{
+        const all=await loadAllConversations();
+        const mostRecent=all[0];
+        if(mostRecent){
+          const resumed=await loadMessages(mostRecent.id);
+          if(resumed.length){
+            const mapped=resumed.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];
+            localStorage.setItem(SESSION_KEY,mostRecent.id);
+            markLoadedAsPersisted(mapped);
+            set({sessionId:mostRecent.id,conversation:mapped});
+            saveConversationLocal(mostRecent.id,mapped);
+          }
+        }
+      }catch{/* no recovery possible — stay on the fresh empty session */}
+    }
+  };
+
   return{
     primarySlot:primary,fallback1Slot:fb1,fallback2Slot:fb2,fallback3Slot:fb3,activeProvider:primary?.provider??null,
     apiKey:primary?.key||legacyKey,apiKeyValid:null,voiceStatus:'idle',transcript:'',response:'',sessionId,
     conversation:[],allConversations:[],isLoadingConversations:false,error:null,
+    gesprekLaadt:true,
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
     routingLog:loadRoutingLog(),
     isGeminiLive:false,
@@ -557,45 +610,8 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     loadConversation:async()=>{
       // Kick off VPS health check in background (non-blocking)
       get().checkVpsStatus().catch(()=>{});
-      const sid=get().sessionId;
-      // ① localStorage first — instant, always works
-      const local=loadConversationLocal(sid);
-      if(local.length){const mapped=local.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}
-      // ② Supabase in background — fills in if local is empty or merges newer
-      let hasHistory=local.length>0;
-      try{
-        const remote=await loadMessages(sid);
-        if(remote.length){
-          hasHistory=true;
-          const mapped=remote.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];
-          // Use remote if it has more messages than local (remote is source of truth for cross-device)
-          const cur=get().conversation;
-          if(mapped.length>=cur.length){markLoadedAsPersisted(mapped);set({conversation:mapped});saveConversationLocal(sid,mapped);}
-        }
-      }catch{/* Supabase unavailable — local is good enough */}
-      // ③ Freshly-minted session (storage wiped, e.g. iOS Safari's ~7-day
-      // purge) with genuinely no history under this id — resume the user's
-      // most recent real conversation instead of stranding them on a blank
-      // chat while their actual history sits orphaned server-side. Never
-      // runs after an explicit "+ New" click — that also produces a fresh
-      // empty session, but wasFreshBootstrap is only true at initial boot.
-      if(wasFreshBootstrap&&!hasHistory){
-        wasFreshBootstrap=false;
-        try{
-          const all=await loadAllConversations();
-          const mostRecent=all[0];
-          if(mostRecent){
-            const resumed=await loadMessages(mostRecent.id);
-            if(resumed.length){
-              const mapped=resumed.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];
-              localStorage.setItem(SESSION_KEY,mostRecent.id);
-              markLoadedAsPersisted(mapped);
-              set({sessionId:mostRecent.id,conversation:mapped});
-              saveConversationLocal(mostRecent.id,mapped);
-            }
-          }
-        }catch{/* no recovery possible — stay on the fresh empty session */}
-      }
+      set({gesprekLaadt:true});
+      try{await laadGesprek();}finally{set({gesprekLaadt:false});}
     },
 
     loadAllConversations:async()=>{set({isLoadingConversations:true});try{const convs=await loadAllConversations();set({allConversations:convs,isLoadingConversations:false});}catch{set({isLoadingConversations:false});}},
