@@ -26,7 +26,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Check, Clock, Code2, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
+import { AlertTriangle, Clock, Code2, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
@@ -55,6 +55,7 @@ import {
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
 import { useCodeAgentKop } from '@/presentation/store/codeAgentKopStore';
 import { skillDef } from '@/domain/tierRouter/axeSkills';
+import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
@@ -564,25 +565,7 @@ export function PlaatChat() {
                 })}
               </div>
 
-              {voice.pendingExec && (
-                <div className="mx-2.5 mb-2 p-2.5 rounded-lg flex-shrink-0" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.3)' }}>
-                  <div className="flex items-center gap-1.5 mb-1.5" style={{ color: 'rgb(251,146,60)' }}>
-                    <Terminal size={12} />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide">{voice.pendingExec.title}</span>
-                  </div>
-                  <pre className="block text-[11px] px-2 py-1.5 rounded mb-2 whitespace-pre-wrap break-all max-h-40 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)' }}>
-                    {voice.pendingExec.detail}
-                  </pre>
-                  <div className="flex gap-1.5">
-                    <button onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md" style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
-                      <Check size={12} /> Approve
-                    </button>
-                    <button onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, false)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md" style={{ background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.25)' }}>
-                      <X size={12} /> Deny
-                    </button>
-                  </div>
-                </div>
-              )}
+              <GoedkeuringBlok />
 
             </>
           )}

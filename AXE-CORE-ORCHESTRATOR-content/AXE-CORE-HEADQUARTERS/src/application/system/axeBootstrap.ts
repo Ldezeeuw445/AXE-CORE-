@@ -3,7 +3,6 @@
  * Safe to call from App after auth; all work is fire-and-forget / non-blocking.
  */
 
-import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
@@ -36,10 +35,24 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Once per calendar day, on Tauri main window: spoken greeting — the real
- *  Daily Briefing content when one landed today, a generic line otherwise. */
+/**
+ * Eén keer per dag: het briefje, op elk oppervlak.
+ *
+ * Stond tot 2 okt 2026 achter `if (!isTauriRuntime()) return;`. Daardoor hoorde
+ * én zag Luka het briefje dat ik gisteren bouwde alleen in de Mac-app -- op zijn
+ * telefoon en iPad gebeurde er niets. Precies de "drie apps in plaats van één"
+ * waar hij over klaagde, en in dit geval door mij erin gezet.
+ *
+ * Waarom die poort er redelijkerwijs stond: een browser blokkeert geluid vóór de
+ * eerste aanraking, dus hardop praten bij het openen van een PWA lukt vaak niet.
+ * Dat is een echte grens, maar hij geldt alleen voor het PRATEN. Het briefje
+ * bestaat op elk oppervlak, dus het hoort ook overal te verschijnen.
+ *
+ * Daarom nu: altijd bouwen, altijd in de inbox, altijd in het gesprek (via
+ * `axe-dagbriefje`, dezelfde manier waarop de rest van de app over de lagen
+ * praat), en hardop waar dat mag. Mislukt het praten, dan staat het er nog.
+ */
 export async function maybeDailyGreeting(): Promise<void> {
-  if (!isTauriRuntime()) return;
   try {
     if (localStorage.getItem(LS_GREETED) === todayKey()) return;
     localStorage.setItem(LS_GREETED, todayKey());
@@ -63,6 +76,14 @@ export async function maybeDailyGreeting(): Promise<void> {
   const line = briefing ? `${part}, Luka. ${briefing}` : `${part}, Luka. AXE is online.`;
   // In de inbox, zodat AXE later kan zeggen "dat stond vanmorgen in je briefje".
   if (briefing) void bewaarDagBriefje(briefing);
+
+  /* In het gesprek, op elk oppervlak. Dit is wat het briefje op de telefoon en de
+     iPad zichtbaar maakt: daar wordt het praten vaak geblokkeerd omdat er nog
+     geen aanraking was, en dan is dit de enige manier waarop je het ziet. In
+     Tauri staat het er ook -- daar was het eerder gesproken en daarna weg. */
+  try {
+    window.dispatchEvent(new CustomEvent('axe-dagbriefje', { detail: { tekst: line } }));
+  } catch { /* geen window: niets te melden */ }
 
   try {
     // Respect type-only mode, but never choose a second speech identity.

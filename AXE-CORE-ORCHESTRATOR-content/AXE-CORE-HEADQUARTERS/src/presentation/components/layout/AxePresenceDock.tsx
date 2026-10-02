@@ -10,7 +10,6 @@
  * AXE overlay of their own.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, X } from 'lucide-react';
 import { AxeStatusOrb } from '@/presentation/components/layout/AxeStatusOrb';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { ACTIVITEIT_GEBEURTENIS, type AxeActiviteit } from '@/shared/axeActiviteit';
@@ -18,6 +17,7 @@ import { kiesDoel, type Rechthoek } from '@/domain/bolVlucht';
 import { BolVlucht, type Vlucht } from '@/presentation/components/layout/zweef/BolVlucht';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
+import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 
 function vindDoel(doel: string): Rechthoek | null {
   for (const el of document.querySelectorAll<HTMLElement>(`[data-axe-doel="${CSS.escape(doel)}"]`)) {
@@ -561,17 +561,7 @@ export function AxePresenceDock() {
               {liveTranscript && (
                 <ChatRegel van="luka"><span className="italic">{liveTranscript}</span></ChatRegel>
               )}
-              {pending && (
-                <div className="ml-3.5 flex max-w-full items-center gap-2 self-start rounded-lg px-2 py-1" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
-                  <span className="truncate" title={pending.detail}>{pending.title}</span>
-                  <button type="button" title="Approve" onClick={() => voice.resolvePendingExec(pending.id, true)}>
-                    <Check size={13} />
-                  </button>
-                  <button type="button" title="Deny" onClick={() => voice.resolvePendingExec(pending.id, false)}>
-                    <X size={13} />
-                  </button>
-                </div>
-              )}
+              <GoedkeuringBlok vorm="smal" />
             </div>
           </div>
         </div>

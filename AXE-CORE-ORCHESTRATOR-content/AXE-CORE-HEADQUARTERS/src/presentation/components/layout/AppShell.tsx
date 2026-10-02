@@ -36,6 +36,7 @@ import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTele
 import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDock';
 import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
 import { openPageOnMonitor, openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
+import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -407,6 +408,12 @@ export function AppShell() {
           handle remains. Sending stays on the current tab, like Tauri. */}
       {toonMobieleTabComposer && (
         <div className="axe-mobile-tab-composer relative z-[55] mt-auto w-full flex-none">
+          {/* De goedkeuringsvraag staat BUITEN de inklap-tak: als AXE op
+              toestemming wacht is dat belangrijker dan of je de composer net
+              weggeschoven hebt. Op de telefoon-home zit hij in MobileChat;
+              `toonMobieleTabComposer` sluit /mobile uit, dus hij staat nooit
+              dubbel. Tot 2 okt 2026 stond hij op de telefoon helemaal nergens. */}
+          <GoedkeuringBlok />
           {mobieleComposerWeg ? (
             <div className="flex justify-center pb-0.5">
               <button

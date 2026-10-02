@@ -993,6 +993,24 @@ export function installTierRouter(): void {
   hervatJobMonitors();
   zetSpraakSpreker((text) => speakZonderKap(text, 'ack'));
 
+  /* Het dagbriefje in het gesprek zetten.
+     De luisteraar staat hier omdat `zetAxeStil` hier staat -- dat is de enige
+     plek die weet hoe je AXE's woorden in de chat zet zonder ze te laten
+     uitspreken, en daar een tweede copy van maken is precies het soort
+     verdubbeling waar deze ronde over gaat. `axeBootstrap` (application) mag de
+     store niet aanraken, dus hij stuurt een event; dat is hoe de rest van de app
+     ook over de laaggrens praat (axe-focus-composer, axe-agents-changed, ...).
+     Waarom het nodig is: op de telefoon en de iPad blokkeert de browser geluid
+     vóór de eerste aanraking, dus hardop lukt daar vaak niet -- en dan is dit de
+     enige manier waarop je het briefje ziet. */
+  if (typeof window !== 'undefined') {
+    window.addEventListener('axe-dagbriefje', (e: Event) => {
+      const tekst = (e as CustomEvent<{ tekst?: string }>).detail?.tekst?.trim();
+      if (!tekst) return;
+      zetAxeStil(tekst, { provider: 'rules', model: 'dagbriefje' });
+    });
+  }
+
   /* Een jobresultaat dat binnenkomt terwijl jij praat of AXE praat gaat in de
      wachtrij -- `moetSpraakWachtrij`: een agent mag je niet afkappen. Maar de
      enige plek die die rij ooit leegmaakte zat in de Whisper-lus, en die is

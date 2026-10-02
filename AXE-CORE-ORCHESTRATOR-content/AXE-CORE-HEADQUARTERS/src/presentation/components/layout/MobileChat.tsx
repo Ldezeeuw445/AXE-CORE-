@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import { AXE_AGENTS, agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
+import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 import { useVoiceStore, type ConversationMessage } from '@/presentation/store/voiceStore';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { regelVan } from '@/domain/tierRouter/agentVenster';
@@ -184,6 +185,12 @@ export function MobileChat() {
             </div>
           </div>
         )}
+        {/* AXE's goedkeuringsvraag. Hoorde hier vanaf het begin: tot 2 okt 2026
+            stonden de Approve/Deny-knoppen alleen in PlaatChat en
+            AxePresenceDock, en die bestaan op de telefoon niet -- AXE kon dus om
+            toestemming vragen zonder dat er ergens een knop was om die te geven.
+            Zelfde component als het bureau, dus ze kunnen niet uit elkaar lopen. */}
+        <GoedkeuringBlok />
         <div ref={endRef} />
       </div>
     </div>
