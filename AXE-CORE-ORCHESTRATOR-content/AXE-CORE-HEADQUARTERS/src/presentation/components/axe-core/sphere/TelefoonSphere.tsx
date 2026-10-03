@@ -114,11 +114,12 @@ const L_GOUD_ACHTER = inkt(LICHT_INKT.goudAchter), L_GOUD_VOOR = inkt(LICHT_INKT
  * op beide platen dezelfde (Luka, 3 okt). Op donker het witte hart in elke stip
  * en de koelwitte binnenbol van altijd; op licht effen inkt.
  */
-const STIJL: Record<Plaat, { wit: { schil: number; kern: number; ring: number }; schilAlfa: Bereik; kernTint: readonly [Kleur, Kleur]; ringTint: readonly [Kleur, Kleur] }> = {
+const STIJL: Record<Plaat, { wit: { schil: number; kern: number; ring: number }; schilAlfa: Bereik; stip: number; kernTint: readonly [Kleur, Kleur]; ringTint: readonly [Kleur, Kleur] }> = {
   // De achterkant zacht (0,12-0,14): door de voorkant heen gezien liepen de
   // rijen van beide kanten in elkaar tot een waas.
-  donker: { wit: { schil: 0.55, kern: 0.4, ring: 0.35 }, schilAlfa: [0.12, 1.0], kernTint: [KERN_ACHTER, KERN_VOOR], ringTint: [GOUD_ACHTER, GOUD_VOOR] },
-  licht: { wit: { schil: 0, kern: 0, ring: 0 }, schilAlfa: [0.14, 1.0], kernTint: [L_CYAAN_ACHTER, L_CYAAN], ringTint: [L_GOUD_ACHTER, L_GOUD_VOOR] },
+  donker: { wit: { schil: 0.55, kern: 0.4, ring: 0.35 }, schilAlfa: [0.12, 1.0], stip: 1, kernTint: [KERN_ACHTER, KERN_VOOR], ringTint: [GOUD_ACHTER, GOUD_VOOR] },
+  // Op licht dikkere stippen (Luka, 3 okt): inkt van 2px viel weg in de lucht.
+  licht: { wit: { schil: 0, kern: 0, ring: 0 }, schilAlfa: [0.14, 1.0], stip: 1.35, kernTint: [L_CYAAN_ACHTER, L_CYAAN], ringTint: [L_GOUD_ACHTER, L_GOUD_VOOR] },
 };
 
 /** De plaat volgt de look: `glass` is licht, al het andere donker. */
@@ -314,9 +315,11 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
       const { cx, cy, R } = bolStand(W, H, zoom);
       const puls = 1 + (stil ? 0 : Math.sin(t * 1.6) * 0.03) + b * 0.08;
       const lagen = legBol(R, R * 0.46 * puls);
-      const rs = stipMaat(R, lagen.schil.rijen) * (1 + b * 0.3);
-      const rk = stipMaat(R * 0.46 * puls, lagen.kern.rijen) * 0.9;
-      const rm = ringMaat(R);
+      const rs = stipMaat(R, lagen.schil.rijen) * st.stip * (1 + b * 0.3);
+      const rk = stipMaat(R * 0.46 * puls, lagen.kern.rijen) * 0.9 * st.stip;
+      const ringStip = 1 + (st.stip - 1) * 0.6;
+      const rm0 = ringMaat(R);
+      const rm: Bereik = [rm0[0] * ringStip, rm0[1] * ringStip];
 
       const schil = (kant: number) => laag(lagen.schil, {
         kant, schaal: 1, grootte: [rs * 0.55, rs], alfa: st.schilAlfa, fonkel: kant ? 0.1 : 0.05, wit: st.wit.schil,

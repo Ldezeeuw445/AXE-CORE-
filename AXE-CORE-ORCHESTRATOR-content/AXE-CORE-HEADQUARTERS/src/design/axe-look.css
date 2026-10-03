@@ -1585,7 +1585,20 @@ html:root[data-look][data-ios-pwa],
     /* Op de telefoon is er geen kopregel om op te liggen: daar hangt hij onder
        de statusbalk, binnen de glasplaat-rand. Vier pixels lager dan de
        desktop-hartlijn, want daar staat geen balk omheen. */
-    top: calc(env(safe-area-inset-top, 0px) + 20px);
+    top: calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 18px);
+  }
+}
+
+/* Hoe ver de glasplaat onder de statusbalk begint (AppShell), en daarmee de
+   knoppen die erop liggen: hamburger, wereldschakelaar, licht/donker. Op donker
+   2px: de plaat tekent zich af tegen de bijna zwarte grond. Op licht 8px (Luka,
+   3 okt): daar plakte hij tegen de zwarte balk en leek hij eronder door te
+   lopen; met een strookje lichte lucht ertussen zweeft hij, zoals op donker.
+   Alleen op telefoonbreedte -- de zwevende telefoon in Tauri doet mee, het
+   hoofdvenster niet. De statusbalk blijft zwart: #axe-ios-balk is 12px hoog. */
+@media (max-width: 640px) {
+  :root[data-look='glass'] {
+    --axe-plaat-boven: 8px;
   }
 }
 

@@ -277,7 +277,8 @@ export function AppShell() {
         <div
           className="axe-mobile-look-toggle fixed z-[70]"
           style={{
-            top: opPlaatMobiel ? 'calc(env(safe-area-inset-top, 0px) + 12px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            // 10px binnen de bovenrand van de plaat, wat die rand ook is (--axe-plaat-boven).
+            top: opPlaatMobiel ? 'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 10px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
             right: opPlaatMobiel ? 18 : 12,
           }}
         >
@@ -294,7 +295,8 @@ export function AppShell() {
               // statusbalk, onder boven de systeembalk, links/rechts een smalle
               // marge — zo zweeft hij op de achtergrond zoals in de Tauri-app.
               position: 'fixed',
-              top: 'calc(env(safe-area-inset-top, 0px) + 2px)',
+              // --axe-plaat-boven: 2px, op de lichte telefoon 8px (axe-look.css).
+              top: 'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px))',
               left: 12,
               right: 12,
               // De plaat loopt door tot vlak boven de home-indicator. Die

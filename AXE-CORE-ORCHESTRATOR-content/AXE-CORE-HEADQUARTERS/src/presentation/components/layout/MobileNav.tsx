@@ -86,7 +86,7 @@ export function MobileNav() {
             // licht/donker-knop rechtsboven (AppShell): zelfde hoogte, zelfde
             // marge. Buiten de home in de schermhoek.
             top: opPlaat
-              ? 'calc(env(safe-area-inset-top, 0px) + 12px)'
+              ? 'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 10px)'
               : 'calc(env(safe-area-inset-top, 0px) + 10px)',
             left: opPlaat ? 18 : 12,
             background: 'linear-gradient(180deg, rgba(20,20,24,.99), rgba(8,8,10,.995))',
