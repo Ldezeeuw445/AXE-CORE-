@@ -90,11 +90,20 @@ export function lichtKleur(y: number): [number, number, number] {
 }
 
 /**
- * Hoeveel rijen bij een straal van R schermpixels: een stip om de ~7 pixels
- * langs een meridiaan, wat de maat ook is (zoals Dot Wave).
+ * Afstand tussen twee stippen langs een meridiaan, in schermpixels. Was 7
+ * (Dot Wave): op de telefoon las de bol dan als een waas, de rijen van voor- en
+ * achterkant liepen in elkaar (Luka, 3 okt: "meer ruimte, zodat het echt een
+ * bol van particles is"). Op 11 heeft elke stip lucht om zich heen.
+ */
+export const STIP_AFSTAND = 11;
+
+/**
+ * Hoeveel rijen bij een straal van R schermpixels: een stip om de
+ * STIP_AFSTAND pixels, wat de maat ook is. De ondergrens is laag genoeg dat ook
+ * de binnenbol (0,46 van de straal) die lucht krijgt.
  */
 export function dotRijen(R: number): number {
-  return Math.round(Math.min(160, Math.max(48, (Math.PI * R) / 7)));
+  return Math.round(Math.min(160, Math.max(24, (Math.PI * R) / STIP_AFSTAND)));
 }
 
 /**
@@ -156,9 +165,13 @@ export function maakRing(): Float32Array {
   return ring;
 }
 
-/** Straal van een stip vooraan, in schermpixels: 0,29 van de rijafstand, nooit onzichtbaar. */
+/**
+ * Straal van een stip vooraan, in schermpixels: 0,19 van de rijafstand, nooit
+ * onzichtbaar. Op 11 pixels afstand is dat ~2 pixels, net als eerst: de stip
+ * blijft even groot, alleen de ruimte eromheen groeit.
+ */
 export function stipMaat(R: number, rijen: number): number {
-  return Math.max(0.75, ((Math.PI * R) / rijen) * 0.29);
+  return Math.max(0.75, ((Math.PI * R) / rijen) * 0.19);
 }
 
 /** Straal van een ringstip achteraan en vooraan, op de onderlinge afstand geschaald. */

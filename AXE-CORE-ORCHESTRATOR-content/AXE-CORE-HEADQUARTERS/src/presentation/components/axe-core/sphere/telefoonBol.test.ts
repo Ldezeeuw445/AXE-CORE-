@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LICHT_INKT, STAP, TEL_RING,
+  LICHT_INKT, STAP, STIP_AFSTAND, TEL_RING,
   bolStand, canvasMaat, dotRijen, hoogteKleur, lichtKleur, maakBinnenbol, maakRijenBol,
   maakRing, maakSchil, pixelRaster, ringMaat, stipMaat,
 } from './telefoonBol';
@@ -21,15 +21,22 @@ const straal = (a: Float32Array, i: number) => Math.hypot(a[i * STAP], a[i * STA
 // 3 okt: op beide platen dezelfde bol, strak rond, in rijen zoals Dot Wave;
 // donker in de kleuren van altijd, licht in goud.
 describe('de telefoon-sphere', () => {
-  it('legt een stip om de ~7 schermpixels, met een onder- en bovengrens', () => {
+  // 3 okt: "meer ruimte, zodat het niet een waas is maar echt een bol van
+  // particles". Op Luka's iPhone ~4.100 stippen in de schil in plaats van ~10.000.
+  it('legt een stip om de 11 schermpixels, met een onder- en bovengrens', () => {
     const { R } = bolStand(660, 585); // Luka's iPhone, canvas op 3x
-    expect(dotRijen(R)).toBe(89);
-    expect(dotRijen(10)).toBe(48);
+    expect(STIP_AFSTAND).toBe(11);
+    expect(dotRijen(R)).toBe(57);
+    expect((Math.PI * R) / dotRijen(R)).toBeGreaterThan(10.5);
+    // De binnenbol krijgt dezelfde lucht: geen ondergrens die hem weer dicht maakt.
+    const kernR = R * 0.46;
+    expect((Math.PI * kernR) / dotRijen(kernR)).toBeGreaterThan(10.5);
+    expect(dotRijen(10)).toBe(24);
     expect(dotRijen(5000)).toBe(160);
   });
 
   it('legt schil en binnenbol strak op de eenheidsbol, in rijen, op beide platen even veel', () => {
-    const rijen = 89;
+    const rijen = 57;
     for (const plaat of ['donker', 'licht'] as const) {
       const schil = maakSchil(rijen, plaat);
       expect(schil).toEqual(maakSchil(rijen, plaat));
@@ -53,7 +60,7 @@ describe('de telefoon-sphere', () => {
     expect(bo).toBeGreaterThan(ro);
     expect(rb).toBeCloseTo(150);
     // En de schil gebruikt het ook: de bovenste rij groener dan blauw.
-    const schil = maakSchil(89, 'donker');
+    const schil = maakSchil(57, 'donker');
     const boven = Array.from({ length: 40 }, (_, i) => i * STAP);
     const groen = boven.filter((o) => schil[o + 4] > schil[o + 5]).length;
     expect(groen).toBeGreaterThan(30);
@@ -85,11 +92,14 @@ describe('de telefoon-sphere', () => {
     }
   });
 
-  it('tekent een stip vooraan rond een punt breed op een 3x-iPhone, nooit onzichtbaar klein', () => {
+  it('tekent een stip vooraan rond een punt breed op een 3x-iPhone, met ruimte eromheen', () => {
     const { R } = bolStand(660, 585);
-    const voor = (stipMaat(R, dotRijen(R)) * 2) / 3; // in punten
+    const rijen = dotRijen(R);
+    const voor = (stipMaat(R, rijen) * 2) / 3; // in punten
     expect(voor).toBeGreaterThan(1.1);
     expect(voor).toBeLessThan(1.8);
+    // Een stip beslaat hooguit 40% van de afstand tot de volgende: er is lucht.
+    expect((stipMaat(R, rijen) * 2) / ((Math.PI * R) / rijen)).toBeLessThan(0.4);
     expect(stipMaat(1, 160)).toBe(0.75);
     const [achter, voorRing] = ringMaat(R);
     expect(achter).toBeGreaterThanOrEqual(0.8);

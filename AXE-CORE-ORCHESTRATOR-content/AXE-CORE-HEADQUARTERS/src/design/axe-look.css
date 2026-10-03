@@ -621,7 +621,21 @@ html:root[data-look][data-ios-pwa],
      light-glas-effect. */
   backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
   -webkit-backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
-  border: 1px solid rgba(255, 255, 255, 0.38) !important;
+  /* De rand zichtbaar, zoals op donker (Luka, 3 okt: "het is net alsof hij
+     onder het iPhone-gedeelte valt"). Gemeten op zijn screenshot: de lucht
+     naast de bovenhoeken (179,195,210) en de plaat (219,233,246) schelen
+     bijna niets, en een witte rand op een lichte plaat ziet niemand -- op
+     donker staat er (79,80,85) tegen (53,55,67) en (13,12,17) eromheen. Dus
+     hier: een helder glasrandje, een donkere haarlijn erbuiten die de plaat
+     van de lucht losmaakt, en een lichtvang bovenaan. De inline-schaduw van
+     AppShell is voor donker; deze wint alleen op licht. */
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  box-shadow:
+    0 0 0 1px rgba(20, 42, 74, 0.26),
+    0 10px 28px rgba(14, 30, 56, 0.2),
+    0 24px 64px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 2px 12px rgba(255, 255, 255, 0.35) !important;
 }
 :root[data-look='black'] .axe-shell.axe-plaat-mobiel {
   background:

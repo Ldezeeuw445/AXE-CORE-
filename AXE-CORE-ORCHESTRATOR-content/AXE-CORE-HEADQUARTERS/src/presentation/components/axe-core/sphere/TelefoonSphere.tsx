@@ -115,8 +115,10 @@ const L_GOUD_ACHTER = inkt(LICHT_INKT.goudAchter), L_GOUD_VOOR = inkt(LICHT_INKT
  * en de koelwitte binnenbol van altijd; op licht effen inkt.
  */
 const STIJL: Record<Plaat, { wit: { schil: number; kern: number; ring: number }; schilAlfa: Bereik; kernTint: readonly [Kleur, Kleur]; ringTint: readonly [Kleur, Kleur] }> = {
-  donker: { wit: { schil: 0.55, kern: 0.4, ring: 0.35 }, schilAlfa: [0.2, 1.0], kernTint: [KERN_ACHTER, KERN_VOOR], ringTint: [GOUD_ACHTER, GOUD_VOOR] },
-  licht: { wit: { schil: 0, kern: 0, ring: 0 }, schilAlfa: [0.24, 1.0], kernTint: [L_CYAAN_ACHTER, L_CYAAN], ringTint: [L_GOUD_ACHTER, L_GOUD_VOOR] },
+  // De achterkant zacht (0,12-0,14): door de voorkant heen gezien liepen de
+  // rijen van beide kanten in elkaar tot een waas.
+  donker: { wit: { schil: 0.55, kern: 0.4, ring: 0.35 }, schilAlfa: [0.12, 1.0], kernTint: [KERN_ACHTER, KERN_VOOR], ringTint: [GOUD_ACHTER, GOUD_VOOR] },
+  licht: { wit: { schil: 0, kern: 0, ring: 0 }, schilAlfa: [0.14, 1.0], kernTint: [L_CYAAN_ACHTER, L_CYAAN], ringTint: [L_GOUD_ACHTER, L_GOUD_VOOR] },
 };
 
 /** De plaat volgt de look: `glass` is licht, al het andere donker. */
@@ -353,6 +355,13 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
         gl.blendFunc(gl.ONE, gl.ONE);
         gloed(cx, cy, R * 0.085 * puls * (1 + stem * 0.9), kleur(255, 255, 255), Math.min(1, 0.85 + b * 0.15), kleur(190, 240, 255), 0.5, 0.35, kleur(120, 215, 245));
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      } else {
+        // Licht: hetzelfde hete hart, maar in inkt (Luka, 3 okt: "de light
+        // versie mist de inner core die je bij dark wel ziet"). Wit licht dat
+        // optelt verdwijnt op de lichte plaat; een dichte cyaan kern met een
+        // wit hooglicht erin leest daar als dezelfde gloeiende kern.
+        gloed(cx, cy, R * 0.13 * puls * (1 + stem * 0.9), L_CYAAN, Math.min(0.95, 0.85 + b * 0.1), L_CYAAN_ACHTER, 0.45, 0.4, L_CYAAN_ACHTER);
+        gloed(cx, cy, R * 0.05 * puls * (1 + stem * 0.6), kleur(255, 255, 255), 0.95, kleur(220, 248, 255), 0.5, 0.45, kleur(150, 225, 245));
       }
 
       deeltjes(cx, cy, R);
