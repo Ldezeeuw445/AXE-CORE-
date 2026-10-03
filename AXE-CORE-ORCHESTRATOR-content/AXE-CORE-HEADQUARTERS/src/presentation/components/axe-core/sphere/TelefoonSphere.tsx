@@ -1,32 +1,31 @@
 /**
  * De AXE Core sphere op de telefoon-Home, in WebGL.
  *
- * Zelfde bol als AxeCoreSphere -- schil met hoogteverloop, binnenbol, gouden
- * ring, hete kern, dezelfde draaiing en kanteling -- maar getekend door de GPU
- * op de volle 3x van het scherm. Elk deeltje is een exact rondje met een rand
- * dunner dan een pixel, en het canvas ligt één op één op de schermpixels.
- * Luka (2 okt): "vlijmscherp", kleinere en meer deeltjes. Uitgewerkt in de
- * artifact "AXE Core Sphere" en daar goedgekeurd.
+ * Schil met hoogteverloop, binnenbol, gouden ring en een hart, dezelfde
+ * draaiing en kanteling als AxeCoreSphere, getekend door de GPU op de volle 3x
+ * van het scherm. Elk deeltje is een exact rondje met een rand dunner dan een
+ * pixel, en het canvas ligt één op één op de schermpixels (Luka, 2 okt:
+ * "vlijmscherp").
+ *
+ * Schil en binnenbol liggen in rijen stippen, zoals Dot Wave: strak rond, op
+ * beide platen dezelfde bol (Luka, 3 okt). Alleen de kleur verschilt:
+ *
+ *   donker  de kleuren van altijd -- groen, cyaan, blauw, een koelwitte
+ *           binnenbol, gouden ring, wit heet hart dat licht optelt
+ *   licht   inkt -- bijna zwart naar goud, cyaan binnenbol, gouden ring, een
+ *           cyaan hart; licht dat optelt zag je op de lichte plaat niet
+ *
+ * De look wisselen kleurt hem meteen om.
  *
  * Alleen MobileSystem gebruikt hem. Desktop, iPad, Tauri en de zwevende bol
  * houden AxeCoreSphere, en zonder WebGL valt deze daar ook op terug.
  *
  * ## De volgorde doet het werk (zoals in AxeCoreSphere)
  *
- *   stof, achterkant schil, achterkant binnenbol, achterkant ring,
- *   gloed + halo, voorkant binnenbol, hete kern (oplichtend),
- *   voorkant schil, voorkant ring
+ *   (gloed), achterkant schil, achterkant binnenbol, achterkant ring,
+ *   hart, voorkant binnenbol, (heet hart), voorkant schil, voorkant ring
  *
  * Zo loopt de ring er echt omhéén en ligt de kern binnenin.
- *
- * ## Op de lichte plaat (3 okt)
- *
- * Licht dat optelt verdwijnt in een lichte plaat. Daar is het dezelfde bol --
- * schil, binnenbol, ring, dezelfde draaiing en ademhaling -- maar in de stippen
- * en kleuren van Dot Wave, die Luka op light wel goed zag: rijen stippen in
- * inkt, van bijna zwart naar goud, een cyaan binnenbol en een gouden ring, en
- * geen gloed. Op donker is hij precies de bol hierboven (Luka: "zoals hij
- * echt is"). De look wisselen kleurt hem meteen om.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -35,9 +34,8 @@ import { werkStand } from '@/domain/tierRouter/axeJobRegels';
 import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
 import {
-  LICHT_INKT, STAP, TEL_KERN, TEL_RING, TEL_SCHIL, TEL_STOF,
-  bolStand, canvasMaat, deeltjesMaat, dotRijen, lichtMaat, maakLichteSchil, maakRijenBol,
-  maakTelefoonBol, pixelRaster,
+  LICHT_INKT, STAP, TEL_RING,
+  bolStand, canvasMaat, dotRijen, maakBinnenbol, maakRing, maakSchil, pixelRaster, ringMaat, stipMaat,
   type Bereik, type Plaat,
 } from '@/presentation/components/axe-core/sphere/telefoonBol';
 
@@ -111,6 +109,16 @@ const inkt = (k: readonly [number, number, number]): Kleur => kleur(k[0], k[1], 
 const L_CYAAN_ACHTER = inkt(LICHT_INKT.cyaanAchter), L_CYAAN = inkt(LICHT_INKT.cyaan);
 const L_GOUD_ACHTER = inkt(LICHT_INKT.goudAchter), L_GOUD_VOOR = inkt(LICHT_INKT.goudVoor);
 
+/**
+ * Wat per plaat verschilt: alleen de kleur. Schil, binnenbol, ring en hart zijn
+ * op beide platen dezelfde (Luka, 3 okt). Op donker het witte hart in elke stip
+ * en de koelwitte binnenbol van altijd; op licht effen inkt.
+ */
+const STIJL: Record<Plaat, { wit: { schil: number; kern: number; ring: number }; schilAlfa: Bereik; kernTint: readonly [Kleur, Kleur]; ringTint: readonly [Kleur, Kleur] }> = {
+  donker: { wit: { schil: 0.55, kern: 0.4, ring: 0.35 }, schilAlfa: [0.2, 1.0], kernTint: [KERN_ACHTER, KERN_VOOR], ringTint: [GOUD_ACHTER, GOUD_VOOR] },
+  licht: { wit: { schil: 0, kern: 0, ring: 0 }, schilAlfa: [0.24, 1.0], kernTint: [L_CYAAN_ACHTER, L_CYAAN], ringTint: [L_GOUD_ACHTER, L_GOUD_VOOR] },
+};
+
 /** De plaat volgt de look: `glass` is licht, al het andere donker. */
 const leesPlaat = (): Plaat => (document.documentElement.dataset.look === 'glass' ? 'licht' : 'donker');
 
@@ -169,7 +177,7 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
     if (!gl) return;
 
     const stil = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const data = maakTelefoonBol();
+    const ringData = maakRing();
     let W = 1, H = 1, d = 1, frame = 0, t = 0, beeld = 0;
     let rotY = 0, rotX = 0.32, zoom = 1, auto = 0, snelY = 0, snelX = 0;
     let slepen = false, lastX = 0, lastY = 0, lastT = 0;
@@ -177,9 +185,14 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
     let kwijt = false;
     let plaat = leesPlaat();
 
+    type Laag = { b: WebGLBuffer; n: number };
+    type Rijen = Laag & { rijen: number };
     let P: Programma, G: Programma;
-    let lagen: Record<'schil' | 'kern' | 'ring' | 'stof', { b: WebGLBuffer; n: number }>;
+    let ring: Laag;
     let vierkant: WebGLBuffer;
+    /* Schil en binnenbol liggen in rijen, een stip om de ~7 schermpixels. Na
+       een andere maat (lade, knijpen) of een andere plaat opnieuw gelegd. */
+    let bol: { schil: Rijen; kern: Rijen; plaat: Plaat } | null = null;
     const opbouwen = () => {
       P = maakProgramma(gl, VS_DEELTJES, FS_DEELTJES, ['aPos', 'aKleur', 'aZaad']);
       G = maakProgramma(gl, VS_GLOED, FS_GLOED, ['aQ']);
@@ -190,34 +203,29 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
         gl.bufferData(gl.ARRAY_BUFFER, inhoud, gl.STATIC_DRAW);
         return buf;
       };
-      lagen = {
-        schil: { b: buffer(data.schil), n: TEL_SCHIL },
-        kern: { b: buffer(data.kern), n: TEL_KERN },
-        ring: { b: buffer(data.ring), n: TEL_RING },
-        stof: { b: buffer(data.stof), n: TEL_STOF },
-      };
+      ring = { b: buffer(ringData), n: TEL_RING };
       vierkant = buffer(new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
-      licht = null;
+      bol = null;
     };
-
-    /* De lichte schil en binnenbol liggen in rijen, een stip om de ~7
-       schermpixels; na een andere maat (lade, knijpen) opnieuw gelegd. */
-    let licht: { schil: { b: WebGLBuffer; n: number; rijen: number }; kern: { b: WebGLBuffer; n: number; rijen: number } } | null = null;
-    const legLicht = (R: number, kernR: number) => {
+    const legBol = (R: number, kernR: number) => {
       const rs = dotRijen(R), rk = dotRijen(kernR);
-      if (licht && Math.abs(licht.schil.rijen - rs) <= 3 && Math.abs(licht.kern.rijen - rk) <= 3) return licht;
-      const vul = (oud: WebGLBuffer | undefined, data: Float32Array, rijen: number) => {
-        const buf = oud ?? gl.createBuffer();
-        if (!buf) throw new Error('geen buffer');
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-        return { b: buf, n: data.length / STAP, rijen };
+      const oud = bol;
+      const vul = (buf: WebGLBuffer | undefined, inhoud: Float32Array, rijen: number): Rijen => {
+        const b2 = buf ?? gl.createBuffer();
+        if (!b2) throw new Error('geen buffer');
+        gl.bindBuffer(gl.ARRAY_BUFFER, b2);
+        gl.bufferData(gl.ARRAY_BUFFER, inhoud, gl.STATIC_DRAW);
+        return { b: b2, n: inhoud.length / STAP, rijen };
       };
-      licht = {
-        schil: vul(licht?.schil.b, maakLichteSchil(rs), rs),
-        kern: vul(licht?.kern.b, maakRijenBol(rk, () => [255, 255, 255]), rk),
+      const schilGoed = oud && oud.plaat === plaat && Math.abs(oud.schil.rijen - rs) <= 3;
+      const kernGoed = oud && Math.abs(oud.kern.rijen - rk) <= 3;
+      if (oud && schilGoed && kernGoed) return oud;
+      bol = {
+        schil: oud && schilGoed ? oud.schil : vul(oud?.schil.b, maakSchil(rs, plaat), rs),
+        kern: oud && kernGoed ? oud.kern : vul(oud?.kern.b, maakBinnenbol(rk), rk),
+        plaat,
       };
-      return licht;
+      return bol;
     };
     try {
       opbouwen();
@@ -291,44 +299,6 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
       wit = -1;
     };
 
-    /* De lichte plaat: inkt over de plaat, geen licht dat optelt en geen gloed
-       behalve een zacht cyaan hart. Zelfde volgorde als de donkere bol. */
-    const tekenLicht = () => {
-      const { cx, cy, R } = bolStand(W, H, zoom);
-      const puls = 1 + (stil ? 0 : Math.sin(t * 1.6) * 0.03) + b * 0.08;
-      const lagenL = legLicht(R, R * 0.46 * puls);
-      const rs = lichtMaat(R, lagenL.schil.rijen);
-      const rk = lichtMaat(R * 0.46 * puls, lagenL.kern.rijen) * 0.9;
-      const m = deeltjesMaat(R, puls, 0.9 + b * 0.4);
-      const ringMaat: Bereik = [m.ring[0] * 1.3, m.ring[1] * 1.3];
-
-      const schil = (kant: number) => laag(lagenL.schil, {
-        kant, schaal: 1, grootte: [rs * 0.55, rs], alfa: LICHT_INKT.alfa, fonkel: kant ? 0.1 : 0.05, wit: 0,
-      });
-      const kern = (kant: number) => laag(lagenL.kern, {
-        kant, schaal: 0.46 * puls, grootte: [rk * 0.55, rk], alfa: kant ? [0.35, 1.0] : [0.2, 0.6], fonkel: 0.08, wit: 0,
-        tint: [L_CYAAN_ACHTER, L_CYAAN],
-      });
-      const ring = (kant: number) => laag(lagen.ring, {
-        kant, schaal: 0.74, grootte: ringMaat, alfa: kant ? [0.7, 1.0] : [0.3, 0.65], fonkel: 0.2, wit: 0,
-        tint: [L_GOUD_ACHTER, L_GOUD_VOOR],
-      });
-
-      deeltjes(cx, cy, R);
-      schil(0);
-      kern(0);
-      ring(0);
-
-      // Het hart: cyaan inkt die meeademt en meespreekt, in plaats van wit licht.
-      gloed(cx, cy, R * 0.2 * puls * (1 + stem * 0.6), L_CYAAN, Math.min(0.5, 0.14 + b * 0.08 + stem * 0.25), L_CYAAN_ACHTER, 0.04, 0.45, L_CYAAN_ACHTER);
-
-      deeltjes(cx, cy, R);
-      kern(1);
-      deeltjes(cx, cy, R);
-      schil(1);
-      ring(1);
-    };
-
     const teken = () => {
       if (kwijt) return;
       gl.viewport(0, 0, W, H);
@@ -336,49 +306,58 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-      if (plaat === 'licht') { tekenLicht(); return; }
 
+      const donker = plaat === 'donker';
+      const st = STIJL[plaat];
       const { cx, cy, R } = bolStand(W, H, zoom);
       const puls = 1 + (stil ? 0 : Math.sin(t * 1.6) * 0.03) + b * 0.08;
-      const groei = 0.9 + b * 0.4;
-      const m = deeltjesMaat(R, puls, groei);
+      const lagen = legBol(R, R * 0.46 * puls);
+      const rs = stipMaat(R, lagen.schil.rijen) * (1 + b * 0.3);
+      const rk = stipMaat(R * 0.46 * puls, lagen.kern.rijen) * 0.9;
+      const rm = ringMaat(R);
 
       const schil = (kant: number) => laag(lagen.schil, {
-        kant, schaal: 1, grootte: m.schil, alfa: [0.2, 1.0], fonkel: kant ? 0.22 : 0.12, wit: 0.55,
+        kant, schaal: 1, grootte: [rs * 0.55, rs], alfa: st.schilAlfa, fonkel: kant ? 0.1 : 0.05, wit: st.wit.schil,
       });
       const kern = (kant: number) => laag(lagen.kern, {
-        kant, schaal: 0.46 * puls, grootte: m.kern, alfa: kant ? [0.42, 1.0] : [0.2, 0.7], fonkel: 0.14, wit: 0.4,
-        tint: [KERN_ACHTER, KERN_VOOR],
+        kant, schaal: 0.46 * puls, grootte: [rk * 0.55, rk], alfa: kant ? [0.35, 1.0] : [0.2, 0.6], fonkel: 0.08, wit: st.wit.kern,
+        tint: st.kernTint,
       });
-      const ring = (kant: number) => laag(lagen.ring, {
-        kant, schaal: 0.74, grootte: m.ring, alfa: kant ? [0.65, 1.0] : [0.25, 0.6], fonkel: 0.3, wit: 0.35,
-        tint: [GOUD_ACHTER, GOUD_VOOR],
+      const ringL = (kant: number) => laag(ring, {
+        kant, schaal: 0.74, grootte: rm, alfa: kant ? [0.7, 1.0] : [0.3, 0.65], fonkel: 0.2, wit: st.wit.ring,
+        tint: st.ringTint,
       });
 
-      // Een vage atmosfeer met een lichtere rand: de schil leest als bol en
-      // niet als losse spikkels. Laag gehouden; de korrel moet winnen.
-      gloed(cx, cy, R * 0.84, kleur(50, 140, 215), 0.028 + b * 0.02, kleur(70, 175, 240), 0.08 + b * 0.03, 0.9, kleur(70, 175, 240));
+      // Donker: een vage atmosfeer met een lichtere rand, zodat de schil als bol
+      // leest. Laag gehouden; de stippen moeten winnen.
+      if (donker) gloed(cx, cy, R * 0.84, kleur(50, 140, 215), 0.028 + b * 0.02, kleur(70, 175, 240), 0.08 + b * 0.03, 0.9, kleur(70, 175, 240));
 
       deeltjes(cx, cy, R);
-      laag(lagen.stof, { kant: 2, schaal: 1, grootte: m.stof, alfa: [0.05, 0.3], fonkel: 0.7, wit: 0.3 });
       schil(0);
       kern(0);
-      ring(0);
+      ringL(0);
 
-      gloed(cx, cy, R * 0.5 * puls, kleur(110, 200, 240), 0.05 + b * 0.05 + stem * 0.12, kleur(80, 160, 220), 0.012, 0.5, kleur(40, 110, 180));
-      gloed(cx, cy, R * 0.2 * puls * (1 + stem * 0.6), kleur(150, 226, 252), Math.min(0.6, 0.24 + b * 0.12 + stem * 0.25), kleur(130, 215, 248), 0.08, 0.45, kleur(110, 200, 240));
+      if (donker) {
+        gloed(cx, cy, R * 0.5 * puls, kleur(110, 200, 240), 0.05 + b * 0.05 + stem * 0.12, kleur(80, 160, 220), 0.012, 0.5, kleur(40, 110, 180));
+        gloed(cx, cy, R * 0.2 * puls * (1 + stem * 0.6), kleur(150, 226, 252), Math.min(0.6, 0.24 + b * 0.12 + stem * 0.25), kleur(130, 215, 248), 0.08, 0.45, kleur(110, 200, 240));
+      } else {
+        // Licht: het hart is cyaan inkt die meeademt en meespreekt, geen wit licht.
+        gloed(cx, cy, R * 0.2 * puls * (1 + stem * 0.6), L_CYAAN, Math.min(0.5, 0.14 + b * 0.08 + stem * 0.25), L_CYAAN_ACHTER, 0.04, 0.45, L_CYAAN_ACHTER);
+      }
 
       deeltjes(cx, cy, R);
       kern(1);
 
-      // Het hete hart telt licht op, zodat de deeltjes ervoor zichtbaar blijven.
-      gl.blendFunc(gl.ONE, gl.ONE);
-      gloed(cx, cy, R * 0.085 * puls * (1 + stem * 0.9), kleur(255, 255, 255), Math.min(1, 0.85 + b * 0.15), kleur(190, 240, 255), 0.5, 0.35, kleur(120, 215, 245));
-      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      if (donker) {
+        // Het hete hart telt licht op, zodat de stippen ervoor zichtbaar blijven.
+        gl.blendFunc(gl.ONE, gl.ONE);
+        gloed(cx, cy, R * 0.085 * puls * (1 + stem * 0.9), kleur(255, 255, 255), Math.min(1, 0.85 + b * 0.15), kleur(190, 240, 255), 0.5, 0.35, kleur(120, 215, 245));
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      }
 
       deeltjes(cx, cy, R);
       schil(1);
-      ring(1);
+      ringL(1);
     };
 
     /* Loopt er werk op de achtergrond? Eén langzame ademhaling, net als in
