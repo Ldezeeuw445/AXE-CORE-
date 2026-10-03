@@ -1,18 +1,31 @@
 /**
- * De rekenkant van de telefoon-sphere: stippen, kleuren, maten, pixelraster.
+ * De rekenkant van de telefoon-sphere: punten, kleuren, maten, pixelraster.
  *
  * Los van TelefoonSphere.tsx, omdat dit is wat je wilt kunnen nameten zonder
- * WebGL: hoeveel stippen, hoe groot op een 3x-scherm, welke kleur op welke
- * plaat, waar het midden zit, en of het canvas op het pixelraster valt.
+ * WebGL: hoeveel deeltjes, hoe groot op een 3x-scherm, waar het midden zit, en
+ * of het canvas op het pixelraster van het scherm valt.
  *
- * Dot Wave (Luka, 2 okt, gekozen in de artifact "AXE Sphere Studio"): rijen
- * piepkleine stippen die golven als een vloeibaar vel. Waar het vel plooit
- * schuiven de rijen in elkaar, zodat de toppen vanzelf oplichten. Daarvoor
- * stond hier een deeltjesbol met binnenbol, ring en stof.
+ * Waarom een nieuwe bol en niet AxeCoreSphere telefoon: die tekent elk deeltje
+ * als een voorgetekend plaatje dat de browser opschaalt, en het canvas werd op
+ * 100% van zijn vak uitgerekt. Allebei maken ze de korrel zacht. Luka (2 okt):
+ * "vlijmscherp", kleinere en meer deeltjes, zelfde idee en kleuren. Uitgewerkt
+ * en goedgekeurd in de artifact "AXE Core Sphere".
+
+ *
+ * Op de lichte plaat (3 okt) is het dezelfde bol, maar in de stippen en
+ * kleuren van Dot Wave: rijen stippen in inkt -- bijna zwart, goud, een beetje
+ * cyaan -- in plaats van licht dat optelt. Licht op een lichte plaat zag je
+ * niet; Dot Wave in licht wel (Luka, 2 en 3 okt). Zie LICHT_INKT.
  */
 
-/** Per stip: x y z op de eenheidsbol, en een zaadje (0..1). */
-export const STAP = 4;
+/** Ruim twee tot drie keer zoveel als AxeCoreSphere telefoon (2600/900/180). */
+export const TEL_SCHIL = 7200;
+export const TEL_KERN = 2400;
+export const TEL_RING = 480;
+export const TEL_STOF = 300;
+
+/** Per punt: x y z, r g b (0..1), zaadje (0..1). */
+export const STAP = 7;
 
 /** Vaste reeks, zodat de bol er bij elke start hetzelfde uitziet. */
 function zaadReeks(zaad = 0x5eed1234): () => number {
@@ -25,74 +38,108 @@ function zaadReeks(zaad = 0x5eed1234): () => number {
   };
 }
 
-/**
- * Hoeveel rijen bij een straal van R schermpixels: een stip om de ~7 pixels
- * langs een meridiaan, wat de maat ook is. Zo blijft de korrel hetzelfde als
- * je inzoomt, en kost een kleine bol ook weinig.
- */
-export function dotRijen(R: number): number {
-  return Math.round(Math.min(160, Math.max(48, (Math.PI * R) / 7)));
-}
+/** Dezelfde afwijkers als AxeCoreSphere: vooral koelwit, een vleug kleur. */
+const PALET: ReadonlyArray<readonly [number, number, number]> = [
+  ...Array<[number, number, number]>(64).fill([214, 228, 255]),
+  ...Array<[number, number, number]>(12).fill([34, 211, 238]),
+  ...Array<[number, number, number]>(5).fill([59, 130, 246]),
+  ...Array<[number, number, number]>(4).fill([167, 139, 250]),
+  ...Array<[number, number, number]>(3).fill([20, 184, 166]),
+  ...Array<[number, number, number]>(2).fill([245, 159, 36]),
+];
 
 /**
- * Rijen op breedtegraden, om en om een halve stap verschoven: dat geeft het
- * rasterbeeld van een dot-matrix in plaats van een spiraal.
+ * Het hoogteverloop van AxeCoreSphere: groen boven, cyaan midden, blauw onder.
+ * y groeit naar beneden (schermrichting), dus y = +1 is de onderkant.
  */
-export function maakDotWave(rijen: number, zaad?: number): Float32Array {
-  const rnd = zaadReeks(zaad);
-  const uit: number[] = [];
-  for (let i = 0; i < rijen; i++) {
-    const lat = -Math.PI / 2 + (Math.PI * (i + 0.5)) / rijen;
-    const c = Math.cos(lat);
-    const y = Math.sin(lat);
-    const n = Math.max(3, Math.round(2 * rijen * c));
-    const verschuif = ((i % 2) * Math.PI) / n;
-    for (let k = 0; k < n; k++) {
-      const a = verschuif + (k * 2 * Math.PI) / n;
-      uit.push(c * Math.cos(a), y, c * Math.sin(a), rnd());
-    }
+export function hoogteKleur(y: number): [number, number, number] {
+  const g = (1 + y) / 2;
+  return g < 0.42
+    ? [150 - g * 90, 230 - g * 40, 120 + g * 250]
+    : [60 - (g - 0.42) * 40, 200 - (g - 0.42) * 150, 240 - (g - 0.42) * 30];
+}
+
+const GULDEN = Math.PI * (3 - Math.sqrt(5));
+
+/**
+ * Een fibonacci-bol met dikte. `schud` haalt de spiraal een fractie uit het
+ * lijnenpatroon -- op deze maat geeft een perfecte spiraal moiré -- en
+ * `binnenste` laat punten iets onder de schil liggen, zodat hij volume heeft.
+ */
+function bol(
+  n: number,
+  rnd: () => number,
+  schud: number,
+  binnenste: number,
+  kleur: (y: number) => readonly [number, number, number],
+): Float32Array {
+  const uit = new Float32Array(n * STAP);
+  const afstand = Math.sqrt((4 * Math.PI) / n);
+  for (let i = 0; i < n; i++) {
+    const y0 = 1 - ((i + 0.5) / n) * 2;
+    const rad = Math.sqrt(Math.max(0, 1 - y0 * y0));
+    let x = Math.cos(GULDEN * i) * rad;
+    let y = y0;
+    let z = Math.sin(GULDEN * i) * rad;
+    x += (rnd() - 0.5) * afstand * schud;
+    y += (rnd() - 0.5) * afstand * schud;
+    z += (rnd() - 0.5) * afstand * schud;
+    const lengte = Math.hypot(x, y, z) || 1;
+    const r = binnenste + (1 - binnenste) * rnd();
+    x = (x / lengte) * r; y = (y / lengte) * r; z = (z / lengte) * r;
+    const c = kleur(y / r);
+    const o = i * STAP;
+    uit[o] = x; uit[o + 1] = y; uit[o + 2] = z;
+    uit[o + 3] = c[0] / 255; uit[o + 4] = c[1] / 255; uit[o + 5] = c[2] / 255;
+    uit[o + 6] = rnd();
   }
-  return new Float32Array(uit);
+  return uit;
 }
 
-export type Plaat = 'donker' | 'licht';
-
-export interface DotInkt {
-  /** boven, onderste helft, onderrand, golftoppen (0..255) */
-  boven: readonly [number, number, number];
-  onder: readonly [number, number, number];
-  rand: readonly [number, number, number];
-  top: readonly [number, number, number];
-  /** dekking achteraan en vooraan */
-  alfa: readonly [number, number];
-  /** straal van een stip als deel van de rijafstand */
-  maat: number;
-  /** hoeveel van de topkleur een golftop krijgt (0..1) */
-  topMix: number;
+export interface TelefoonBolData {
+  schil: Float32Array;
+  kern: Float32Array;
+  ring: Float32Array;
+  stof: Float32Array;
 }
 
-/**
- * Donker: de kleuren uit Luka's voorbeeld, blauw dat naar violet smelt, licht
- * dat optelt. Licht: dat werkt niet -- licht dat optelt verdwijnt in een
- * lichte plaat, en blauw op lichtblauw zie je nauwelijks (Luka, 2 okt: "op
- * light mode zie je hem niet zo goed"). Daar dus inkt: bijna zwart met goud
- * en een beetje cyaan, zoals hij voor light mode vroeg, grotere stippen en een
- * dichtere achterkant.
- */
-export const DOT_INKT: Record<Plaat, DotInkt> = {
-  donker: {
-    boven: [88, 180, 255], onder: [139, 108, 255], rand: [226, 140, 255], top: [191, 234, 255],
-    alfa: [0.16, 0.95], maat: 0.22, topMix: 0.5,
-  },
-  licht: {
-    boven: [22, 34, 54], onder: [161, 98, 7], rand: [194, 136, 15], top: [8, 145, 178],
-    alfa: [0.24, 1], maat: 0.29, topMix: 0.8,
-  },
-};
+export function maakTelefoonBol(zaad?: number): TelefoonBolData {
+  const rnd = zaadReeks(zaad);
 
-/** Straal van een stip vooraan, in schermpixels. Nooit kleiner dan zichtbaar. */
-export function dotMaat(R: number, rijen: number, plaat: Plaat): number {
-  return Math.max(0.75, ((Math.PI * R) / rijen) * DOT_INKT[plaat].maat);
+  const schil = bol(TEL_SCHIL, rnd, 0.42, 0.965, (y) => {
+    if (rnd() < 0.06) return PALET[Math.floor(rnd() * PALET.length)];
+    const c = hoogteKleur(y);
+    const k = 0.93 + rnd() * 0.14;
+    return [Math.min(255, c[0] * k), Math.min(255, c[1] * k), Math.min(255, c[2] * k)];
+  });
+  // De kern krijgt zijn kleur in de shader (achter- en voorkleur); wit hier.
+  const kern = bol(TEL_KERN, rnd, 0.5, 0.88, () => [255, 255, 255]);
+
+  // Een fijne ketting: om de evenaar, met een smalle band in breedte en hoogte.
+  const ring = new Float32Array(TEL_RING * STAP);
+  for (let i = 0; i < TEL_RING; i++) {
+    const a = (i / TEL_RING) * Math.PI * 2 + (rnd() - 0.5) * 0.006;
+    const rr = 1 + (rnd() - 0.5) * 0.035;
+    const o = i * STAP;
+    ring[o] = Math.cos(a) * rr; ring[o + 1] = (rnd() - 0.5) * 0.02; ring[o + 2] = Math.sin(a) * rr;
+    ring[o + 3] = 1; ring[o + 4] = 1; ring[o + 5] = 1; ring[o + 6] = rnd();
+  }
+
+  // Een ijl laagje stof net buiten de schil.
+  const stof = new Float32Array(TEL_STOF * STAP);
+  for (let i = 0; i < TEL_STOF; i++) {
+    const u = rnd() * 2 - 1;
+    const th = rnd() * Math.PI * 2;
+    const s = Math.sqrt(1 - u * u);
+    const r = 1.05 + rnd() * 0.11;
+    const c = rnd() < 0.7 ? [214, 228, 255] : [34, 211, 238];
+    const o = i * STAP;
+    stof[o] = Math.cos(th) * s * r; stof[o + 1] = u * r; stof[o + 2] = Math.sin(th) * s * r;
+    stof[o + 3] = c[0] / 255; stof[o + 4] = c[1] / 255; stof[o + 5] = c[2] / 255;
+    stof[o + 6] = rnd();
+  }
+
+  return { schil, kern, ring, stof };
 }
 
 /**
@@ -105,6 +152,33 @@ export function dotMaat(R: number, rijen: number, plaat: Plaat): number {
  */
 export function bolStand(w: number, h: number, zoom = 1): { cx: number; cy: number; R: number } {
   return { cx: w / 2, cy: h / 2, R: Math.min(w, h) * 0.34 * zoom };
+}
+
+export type Bereik = readonly [number, number];
+
+/**
+ * De straal van een deeltje (canvaspixels) achteraan en vooraan.
+ *
+ * Geschaald op de onderlinge afstand van de punten, zodat de korrel hetzelfde
+ * oogt hoe groot het vak ook is -- maar nooit kleiner dan een zichtbaar
+ * stipje. Op een 3x-iPhone met een straal van 61pt is een deeltje vooraan
+ * ~1,7 pixel breed: een halve punt.
+ */
+export function deeltjesMaat(R: number, puls: number, groei: number) {
+  const ondergrens = 0.62;
+  const maat = (afstand: number, achter: number, voor: number, g = 1): Bereik => [
+    Math.max(ondergrens, afstand * achter * g),
+    Math.max(ondergrens * 1.2, afstand * voor * g),
+  ];
+  const schilAfstand = R * Math.sqrt((4 * Math.PI) / TEL_SCHIL);
+  const kernAfstand = R * 0.46 * puls * Math.sqrt((4 * Math.PI) / TEL_KERN);
+  const ringAfstand = (R * 0.74 * Math.PI * 2) / TEL_RING;
+  return {
+    schil: maat(schilAfstand, 0.095, 0.24, groei),
+    kern: maat(kernAfstand, 0.1, 0.21),
+    ring: maat(ringAfstand, 0.42, 0.64),
+    stof: [ondergrens, Math.max(ondergrens, schilAfstand * 0.13)] as Bereik,
+  };
 }
 
 /**
@@ -129,4 +203,86 @@ export function pixelRaster(links: number, boven: number, dpr: number): { x: num
   const fx = links * dpr - Math.floor(links * dpr);
   const fy = boven * dpr - Math.floor(boven * dpr);
   return { x: fx > 1e-6 ? -fx / dpr : 0, y: fy > 1e-6 ? -fy / dpr : 0 };
+}
+
+/* ── De lichte plaat: dezelfde bol in de stippen van Dot Wave ─────────────── */
+
+export type Plaat = 'donker' | 'licht';
+
+type Rgb = readonly [number, number, number];
+
+/**
+ * Inkt op de lichte plaat, uit Dot Wave light (2 okt), waar Luka hem goed zag:
+ * de schil van bijna zwart bovenaan naar goud en geel onderaan, de binnenbol
+ * cyaan, de ring goud. Achter- en voorkleur per laag, zoals de tint van de
+ * donkere bol.
+ */
+export const LICHT_INKT = {
+  boven: [22, 34, 54] as Rgb,
+  onder: [161, 98, 7] as Rgb,
+  rand: [194, 136, 15] as Rgb,
+  cyaan: [8, 145, 178] as Rgb,
+  cyaanAchter: [14, 116, 144] as Rgb,
+  goudAchter: [161, 98, 7] as Rgb,
+  goudVoor: [194, 136, 15] as Rgb,
+  /** dekking van de schil achteraan en vooraan */
+  alfa: [0.24, 1] as const,
+  /** straal van een stip als deel van de rijafstand */
+  maat: 0.29,
+};
+
+const glad = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+const meng = (a: Rgb, b: Rgb, t: number): [number, number, number] =>
+  [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+/** Het verloop van Dot Wave light. y groeit naar beneden: +1 is de onderkant. */
+export function lichtKleur(y: number): [number, number, number] {
+  const g = (1 + y) / 2;
+  const c = meng(LICHT_INKT.boven, LICHT_INKT.onder, glad(0.3, 0.78, g));
+  return meng(c, LICHT_INKT.rand, glad(0.74, 1, g) * 0.85);
+}
+
+/**
+ * Hoeveel rijen bij een straal van R schermpixels: een stip om de ~7 pixels
+ * langs een meridiaan, wat de maat ook is (zoals Dot Wave).
+ */
+export function dotRijen(R: number): number {
+  return Math.round(Math.min(160, Math.max(48, (Math.PI * R) / 7)));
+}
+
+/**
+ * Een bol van rijen stippen op breedtegraden, om en om een halve stap
+ * verschoven: het rasterbeeld van Dot Wave. In hetzelfde formaat als
+ * maakTelefoonBol (STAP), zodat dezelfde shader hem tekent.
+ */
+export function maakRijenBol(rijen: number, kleur: (y: number) => Rgb, zaad?: number): Float32Array {
+  const rnd = zaadReeks(zaad);
+  const uit: number[] = [];
+  for (let i = 0; i < rijen; i++) {
+    const lat = -Math.PI / 2 + (Math.PI * (i + 0.5)) / rijen;
+    const c = Math.cos(lat);
+    const y = Math.sin(lat);
+    const n = Math.max(3, Math.round(2 * rijen * c));
+    const verschuif = ((i % 2) * Math.PI) / n;
+    for (let k = 0; k < n; k++) {
+      const a = verschuif + (k * 2 * Math.PI) / n;
+      const [r, g, b] = kleur(y);
+      uit.push(c * Math.cos(a), y, c * Math.sin(a), r / 255, g / 255, b / 255, rnd());
+    }
+  }
+  return new Float32Array(uit);
+}
+
+/** De lichte schil: het Dot Wave-verloop, met een vleug cyaan (5%) erdoorheen. */
+export function maakLichteSchil(rijen: number): Float32Array {
+  const rnd = zaadReeks(0x11c47);
+  return maakRijenBol(rijen, (y) => (rnd() < 0.05 ? LICHT_INKT.cyaan : lichtKleur(y)));
+}
+
+/** Straal van een stip vooraan, in schermpixels. Nooit kleiner dan zichtbaar. */
+export function lichtMaat(R: number, rijen: number): number {
+  return Math.max(0.75, ((Math.PI * R) / rijen) * LICHT_INKT.maat);
 }

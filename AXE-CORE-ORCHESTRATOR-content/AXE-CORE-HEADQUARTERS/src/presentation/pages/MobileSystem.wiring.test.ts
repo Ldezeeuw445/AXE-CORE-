@@ -197,9 +197,10 @@ describe('canonical mobile Home wiring', () => {
     expect(mobile).not.toContain('<AxeCoreSphere telefoon />');
     expect(telefoon).toContain('d = Math.min(window.devicePixelRatio || 1, 3);');
     expect(telefoon).toContain('if (!webgl) return <AxeCoreSphere telefoon />;');
-    // Dot Wave (2 okt): kleurt mee met de look, inkt op licht en licht op donker.
+    // 3 okt: op donker de AXE-sphere zoals hij is, op licht dezelfde bol in de
+    // stippen en inkt van Dot Wave. Kleurt mee met de look.
     expect(telefoon).toContain("attributeFilter: ['data-look']");
-    expect(telefoon).toContain('const inkt = DOT_INKT[plaat];');
+    expect(telefoon).toContain("if (plaat === 'licht') { tekenLicht(); return; }");
     expect(bol).toContain('d = Math.min(window.devicePixelRatio || 1, telefoon ? 3 : 2);');
     expect(bol).toContain('const tekenNu = telefoon ? tekenFijn : teken;');
     for (const plek of ['pages/Home.tsx', 'pages/HomeStage.tsx', 'components/layout/zweef/ZwevendeBol.tsx', 'components/devices/TelefoonScherm.tsx']) {
