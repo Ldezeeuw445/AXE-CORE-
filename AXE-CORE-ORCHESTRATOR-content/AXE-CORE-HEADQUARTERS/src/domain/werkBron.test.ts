@@ -6,6 +6,8 @@ import {
   voegWerkSamen,
   volgendeStapMagDoor,
   werkOorsprongVan,
+  werkSleutel,
+  zelfdeWerk,
 } from './werkBron';
 
 describe('één waarheid voor werk', () => {
@@ -39,6 +41,8 @@ describe('één waarheid voor werk', () => {
       requested_by: 'luka',
       metadata: { agent: 'northsea' },
     });
+    expect(zelfdeWerk(planner, durable)).toBe(true);
+    expect(werkSleutel(planner)).toBe(werkSleutel(durable));
     const samen = voegWerkSamen([planner, durable]);
     expect(samen).toHaveLength(1);
     expect(samen[0].oorsprong).toBe('planner');

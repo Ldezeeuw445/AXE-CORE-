@@ -51,12 +51,14 @@ export function kluisGrafiekVan(
   notes: Array<{ path: string; title: string; content: string }>,
 ): KluisGrafiek {
   const kaarten = architectuurKaarten(notes);
-  const knopen: KluisKnoop[] = kaarten.map((k) => ({
-    id: k.path,
-    path: k.path,
-    label: k.title || k.groep,
-    soort: SOORT[k.tak],
-  }));
+  const knopen: KluisKnoop[] = kaarten
+    .filter((k): k is KluisKaart & { tak: keyof typeof SOORT } => k.tak !== 'memory')
+    .map((k) => ({
+      id: k.path,
+      path: k.path,
+      label: k.title || k.groep,
+      soort: SOORT[k.tak],
+    }));
   const paden = new Set(knopen.map((k) => k.path));
   const lijnen: KluisLijn[] = [];
 

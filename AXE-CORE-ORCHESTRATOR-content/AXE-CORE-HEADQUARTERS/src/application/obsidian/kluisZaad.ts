@@ -63,12 +63,7 @@ async function schrijfZaad(n: ZaadNotitie): Promise<ObsidianNote> {
 
 /** Open en Sync now: zaai wat ontbreekt, lees, voeg catalogus bij zodat memory-notes de boom niet verdringen. */
 export async function zaaiEnLeesKluis(): Promise<ObsidianNote[]> {
-  let bestaande: ObsidianNote[] = [];
-  try {
-    bestaande = await listRecentObsidianNotes(400);
-  } catch {
-    bestaande = [];
-  }
+  const bestaande = await listRecentObsidianNotes(400).catch(() => [] as ObsidianNote[]);
   const paden = new Set([
     ...bestaande.map((n) => n.path),
     ...gelezenZaadPaden(),
@@ -80,12 +75,7 @@ export async function zaaiEnLeesKluis(): Promise<ObsidianNote[]> {
   }
   if (geschreven.length) onthoudZaadPaden(geschreven.map((n) => n.path));
 
-  let na: ObsidianNote[] = bestaande;
-  try {
-    na = await listRecentObsidianNotes(400);
-  } catch {
-    na = bestaande;
-  }
+  const na = await listRecentObsidianNotes(400).catch(() => bestaande);
   return voegKluisNotitiesSamen(na, geschreven, kluisZaadNotities().map(alsNote));
 }
 
