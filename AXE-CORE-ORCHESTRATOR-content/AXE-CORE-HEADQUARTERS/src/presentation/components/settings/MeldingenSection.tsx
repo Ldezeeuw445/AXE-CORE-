@@ -11,31 +11,58 @@
  * buiten een gebaar gebeurt, en dan "doet de knop niets".
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Bell, BellOff } from 'lucide-react';
-import { meldingStand, isAangemeld, meldAan, meldAf } from '@/infrastructure/persistence/pushAanmelding';
+import { Bell, BellOff, EyeOff } from 'lucide-react';
+import {
+  meldingStand, isAangemeld, meldAan, meldAf, leesVerbergInhoud, zetVerbergInhoud,
+} from '@/infrastructure/persistence/pushAanmelding';
 
 export function MeldingenSection() {
   const [stand] = useState(() => meldingStand());
   const [aan, setAan] = useState(false);
+  // Per apparaat: dit toestel toont op een vergrendeld scherm alleen "AXE has something".
+  const [verberg, setVerberg] = useState(false);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
 
-  useEffect(() => { void isAangemeld().then(setAan); }, []);
+  useEffect(() => {
+    void (async () => {
+      const nu = await isAangemeld();
+      setAan(nu);
+      if (nu) setVerberg(await leesVerbergInhoud());
+    })();
+  }, []);
 
   const wissel = useCallback(() => {
     setFout(null);
     setBezig(true);
     void (async () => {
       try {
-        if (aan) { await meldAf(); setAan(false); return; }
+        if (aan) { await meldAf(); setAan(false); setVerberg(false); return; }
         const uit = await meldAan();
-        if (uit.ok) setAan(true);
+        // Een nieuwe aanmelding is een nieuwe rij, en die begint op "tonen".
+        if (uit.ok) { setAan(true); setVerberg(false); }
         else setFout(uit.reden);
       } finally {
         setBezig(false);
       }
     })();
   }, [aan]);
+
+  const wisselVerberg = useCallback(() => {
+    setFout(null);
+    setBezig(true);
+    void (async () => {
+      try {
+        const nieuw = !verberg;
+        // Pas omzetten als het opgeslagen is: een schakelaar die "aan" zegt terwijl
+        // de zender er niets van weet toont gewoon de volledige melding.
+        if (await zetVerbergInhoud(nieuw)) setVerberg(nieuw);
+        else setFout('Could not save this for this device. Try turning notifications off and on again.');
+      } finally {
+        setBezig(false);
+      }
+    })();
+  }, [verberg]);
 
   return (
     <div className="widget-card" style={{ borderRadius: 'var(--radius)', padding: 16 }}>
@@ -74,6 +101,29 @@ export function MeldingenSection() {
         >
           {stand.reden}
         </p>
+      )}
+
+      {stand.kan && aan && (
+        <>
+          <button
+            onClick={wisselVerberg}
+            disabled={bezig}
+            aria-pressed={verberg}
+            className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium"
+            style={{
+              background: verberg ? 'var(--bg-active)' : 'var(--bg-surface)',
+              border: `1px solid ${verberg ? 'var(--border-active)' : 'var(--border-subtle)'}`,
+              color: verberg ? 'var(--accent-cyan)' : 'var(--text-primary)',
+              opacity: bezig ? 0.6 : 1,
+            }}
+          >
+            <EyeOff size={14} />
+            {verberg ? 'Lock screen shows only "AXE has something"' : 'Hide content on the lock screen'}
+          </button>
+          <p className="mt-1 text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            Per device. The text stays hidden until you open the app.
+          </p>
+        </>
       )}
 
       {fout && (

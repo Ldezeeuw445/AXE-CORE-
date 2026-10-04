@@ -6,7 +6,13 @@ melding in TypeScript, de zender hier in Python. Lopen ze uit elkaar, dan ziet
 je slotscherm iets anders dan de bel in de app. Daarom staan hier letterlijk
 dezelfde gevallen: wijzig je er één, dan wordt de ander rood.
 """
-from push_meldingen import push_bericht_van, tag_van, titel_en_detail
+import asyncio
+import json
+import sys
+import types
+from datetime import datetime, timezone
+
+from push_meldingen import push_bericht_van, stuur_meldingen, tag_van, titel_en_detail, verborgen
 
 
 def rij(message, **over):
@@ -68,3 +74,112 @@ def test_een_lange_eerste_regel_is_geen_onderwerp():
 
 def test_tag_zonder_bruikbare_letters():
     assert tag_van("123 !!!") == "axe-melding"
+
+
+# --- Privacy per apparaat: zelfde gevallen als pushBericht.test.ts ----------------
+
+
+def test_verborgen_toont_geen_inhoud():
+    p = verborgen(push_bericht_van(rij("OpenAI is niet meer bereikbaar: AXE valt terug op Groq.")))
+    assert p["titel"] == "AXE has something"
+    assert p["body"] == ""
+    # Niets van het origineel mag nog in de tekst staan.
+    assert "OpenAI" not in json.dumps(p)
+
+
+def test_verborgen_meldingen_vervangen_elkaar():
+    a = verborgen(push_bericht_van(rij("Provider weggevallen: iets")))
+    b = verborgen(push_bericht_van(rij("Taak klaar: iets anders")))
+    assert a["tag"] == b["tag"]
+
+
+def test_verborgen_houdt_de_route_zodat_een_tik_nog_ergens_heen_gaat():
+    assert verborgen(push_bericht_van(rij("Agent gestopt: de crew gaf een fout")))["url"] == "/agents"
+
+
+class _Q:
+    """Net genoeg Supabase om stuur_meldingen te laten lopen."""
+
+    def __init__(self, db, naam):
+        self.db, self.naam, self.actie = db, naam, "select"
+
+    def select(self, *_a):
+        return self
+
+    def is_(self, *_a):
+        return self
+
+    def gte(self, *_a):
+        return self
+
+    def order(self, *_a, **_k):
+        return self
+
+    def limit(self, *_a):
+        return self
+
+    def update(self, waarden):
+        self.actie, self.waarden = "update", waarden
+        return self
+
+    def delete(self):
+        self.actie = "delete"
+        return self
+
+    def eq(self, kolom, waarde):
+        self.filter = (kolom, waarde)
+        return self
+
+    def execute(self):
+        if self.actie == "update":
+            self.db.updates.append((self.naam, self.filter, self.waarden))
+        elif self.actie == "delete":
+            self.db.deletes.append((self.naam, self.filter))
+        else:
+            return type("R", (), {"data": self.db.tabellen[self.naam]})()
+        return type("R", (), {"data": []})()
+
+
+class _Db:
+    def __init__(self, meldingen, abonnementen):
+        self.tabellen = {"core_notifications": meldingen, "core_push_subscriptions": abonnementen}
+        self.updates, self.deletes = [], []
+
+    def table(self, naam):
+        return _Q(self, naam)
+
+
+def test_het_ene_apparaat_krijgt_de_inhoud_en_het_andere_niet(monkeypatch):
+    verstuurd = {}
+
+    def nep_webpush(subscription_info, data, **_k):
+        verstuurd[subscription_info["endpoint"]] = json.loads(data)
+
+    # Een nep-module in plaats van de echte: pywebpush staat niet in elke venv
+    # (de lokale heeft hem niet), en deze test gaat over wie wat krijgt, niet over
+    # het versleutelen.
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = type("WebPushException", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+    db = _Db(
+        [{"id": "n1", "type": "warning", "message": "Provider weggevallen: Groq antwoordt niet",
+          "created_at": "2026-10-04T12:00:00+00:00"}],
+        [
+            {"endpoint": "https://push/iphone", "p256dh": "x", "auth": "y", "verberg_inhoud": True},
+            {"endpoint": "https://push/mac", "p256dh": "x", "auth": "y", "verberg_inhoud": False},
+            # Kolom leeg (rij van vóór de migratie, of None): gedrag van vroeger.
+            {"endpoint": "https://push/oud", "p256dh": "x", "auth": "y", "verberg_inhoud": None},
+        ],
+    )
+
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 4, 12, 0, 30, tzinfo=timezone.utc)))
+
+    assert uit["verstuurd"] == 3
+    assert verstuurd["https://push/iphone"]["titel"] == "AXE has something"
+    assert "Groq" not in json.dumps(verstuurd["https://push/iphone"])
+    assert verstuurd["https://push/mac"]["titel"] == "Provider weggevallen"
+    assert verstuurd["https://push/oud"]["body"] == "Groq antwoordt niet"
+    # En de rij is gemarkeerd, anders gaat hij elke minuut opnieuw.
+    assert db.updates and db.updates[0][0] == "core_notifications"

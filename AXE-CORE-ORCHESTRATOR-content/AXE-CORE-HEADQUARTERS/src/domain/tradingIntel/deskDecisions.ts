@@ -94,7 +94,8 @@ export interface DeskDecision {
 }
 
 export function newDecisionId(at = new Date()): string {
-  return `dd-${at.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`;
+  // Digits only. Do not write this as a bracketed class of punctuation and letters: Tailwind scans all source text, comments included, and reads that as a CSS property.
+  return `dd-${at.toISOString().replace(/\D/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 /**

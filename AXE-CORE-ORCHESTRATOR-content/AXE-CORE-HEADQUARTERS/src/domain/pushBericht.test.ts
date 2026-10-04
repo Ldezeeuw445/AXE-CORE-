@@ -6,7 +6,7 @@
  * tik die je nergens brengt (geen url), en trillen voor een leeg bericht.
  */
 import { describe, it, expect } from 'vitest';
-import { pushBerichtVan } from './pushBericht';
+import { pushBerichtVan, verbergInhoud } from './pushBericht';
 
 const rij = (message: string, over = {}) => ({ id: 'n1', type: 'warning', message, ...over });
 
@@ -58,5 +58,26 @@ describe('pushBerichtVan', () => {
     const p = pushBerichtVan(rij('x'.repeat(200)))!;
     expect(p.tag.length).toBeLessThanOrEqual(45);
     expect(p.tag.startsWith('axe-')).toBe(true);
+  });
+});
+
+describe('verbergInhoud', () => {
+  // Zelfde gevallen als test_push_meldingen.py.
+  it('toont geen inhoud', () => {
+    const p = verbergInhoud(pushBerichtVan(rij('OpenAI is niet meer bereikbaar: AXE valt terug op Groq.'))!);
+    expect(p.titel).toBe('AXE has something');
+    expect(p.body).toBe('');
+    // Niets van het origineel mag nog in de tekst staan.
+    expect(JSON.stringify(p)).not.toContain('OpenAI');
+  });
+
+  it('laat verborgen meldingen elkaar vervangen', () => {
+    const a = verbergInhoud(pushBerichtVan(rij('Provider weggevallen: iets'))!);
+    const b = verbergInhoud(pushBerichtVan(rij('Taak klaar: iets anders'))!);
+    expect(a.tag).toBe(b.tag);
+  });
+
+  it('houdt de route, zodat een tik nog ergens heen gaat', () => {
+    expect(verbergInhoud(pushBerichtVan(rij('Agent gestopt: de crew gaf een fout'))!).url).toBe('/agents');
   });
 });

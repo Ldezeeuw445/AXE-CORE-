@@ -154,3 +154,36 @@ export async function meldAf(): Promise<void> {
     console.warn('[push] afmelden ging niet helemaal goed:', e);
   }
 }
+
+/** Het endpoint van dit apparaat, of null als het niet aangemeld is. */
+async function eigenEndpoint(): Promise<string | null> {
+  if (!meldingStand().kan) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    return (await reg.pushManager.getSubscription())?.endpoint ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Verbergt dit apparaat de inhoud van meldingen op het slotscherm? Staat per
+ *  apparaat op de abonnementsrij (zie migratie 003): de iPhone in je zak wil dat
+ *  anders dan de Mac op je bureau. Zonder rij is het antwoord: nee. */
+export async function leesVerbergInhoud(): Promise<boolean> {
+  const endpoint = await eigenEndpoint();
+  const sb = getSupabase();
+  if (!endpoint || !sb) return false;
+  const { data } = await sb.from(TABEL).select('verberg_inhoud').eq('endpoint', endpoint).maybeSingle();
+  return data?.verberg_inhoud === true;
+}
+
+/** Zet het voor dit apparaat. Geeft false als er geen rij was om te wijzigen --
+ *  dan is er niets opgeslagen en moet de schakelaar dat ook zeggen, in plaats van
+ *  te doen alsof het gelukt is. */
+export async function zetVerbergInhoud(waarde: boolean): Promise<boolean> {
+  const endpoint = await eigenEndpoint();
+  const sb = getSupabase();
+  if (!endpoint || !sb) return false;
+  const { data, error } = await sb.from(TABEL).update({ verberg_inhoud: waarde }).eq('endpoint', endpoint).select('id');
+  return !error && (data?.length ?? 0) > 0;
+}

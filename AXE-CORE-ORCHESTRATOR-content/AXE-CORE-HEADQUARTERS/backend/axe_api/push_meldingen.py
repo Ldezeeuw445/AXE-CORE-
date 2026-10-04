@@ -89,6 +89,20 @@ def route_van(titel: str) -> str:
     return "/"
 
 
+# Wat een apparaat met `verberg_inhoud` aan op zijn slotscherm krijgt. Zelfde
+# tekst als VERBORGEN_TITEL in src/domain/pushBericht.ts: wijzig je er één, dan
+# de ander (test_push_meldingen.py en pushBericht.test.ts bewaken dat samen).
+VERBORGEN_TITEL = "AXE has something"
+
+
+def verborgen(payload: dict[str, str]) -> dict[str, str]:
+    """Dezelfde melding zonder inhoud, voor een apparaat dat die niet op een
+    vergrendeld scherm wil. Eén vaste tag: een bui verborgen meldingen vervangt
+    zichzelf, in plaats van "AXE has something" twintig keer te stapelen. De route
+    blijft, want die is pas zichtbaar als je erop tikt en de app al open is."""
+    return {"titel": VERBORGEN_TITEL, "body": "", "tag": "axe-melding", "url": payload["url"]}
+
+
 def push_bericht_van(rij: dict[str, Any]) -> dict[str, str] | None:
     """De melding voor deze rij, of None als er niets te melden valt."""
     bericht = (rij.get("message") or "").strip()
@@ -139,7 +153,11 @@ async def stuur_meldingen(sb_factory, nu: datetime | None = None) -> dict[str, i
         return {"verstuurd": 0, "opgeruimd": 0}
 
     abonnementen = (
-        sb.table("core_push_subscriptions").select("endpoint,p256dh,auth").execute().data or []
+        sb.table("core_push_subscriptions")
+        .select("endpoint,p256dh,auth,verberg_inhoud")
+        .execute()
+        .data
+        or []
     )
 
     for rij in rijen:
@@ -154,7 +172,9 @@ async def stuur_meldingen(sb_factory, nu: datetime | None = None) -> dict[str, i
                             "endpoint": ab["endpoint"],
                             "keys": {"p256dh": ab["p256dh"], "auth": ab["auth"]},
                         },
-                        data=json.dumps(payload),
+                        # Per apparaat: wat de één op een slotscherm mag zien wil
+                        # de ander niet. Niet-True (ook None) = gewoon tonen.
+                        data=json.dumps(verborgen(payload) if ab.get("verberg_inhoud") is True else payload),
                         vapid_private_key=prive,
                         vapid_claims={"sub": contact},
                     )
