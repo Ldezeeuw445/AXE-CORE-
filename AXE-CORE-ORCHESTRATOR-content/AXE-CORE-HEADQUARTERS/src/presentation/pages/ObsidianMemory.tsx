@@ -53,29 +53,21 @@ function NoteLijf({ content }: { content: string }) {
 
 export default function ObsidianMemory() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const noteFromUrl = searchParams.get('note');
+  const selectedPath = searchParams.get('note');
   const [notes, setNotes] = useState<ObsidianNote[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(noteFromUrl);
-
-  useEffect(() => {
-    if (noteFromUrl) setSelectedPath(noteFromUrl);
-  }, [noteFromUrl]);
 
   const selectPath = useCallback((path: string | null) => {
-    setSelectedPath(path);
     if (path) setSearchParams({ note: path }, { replace: true });
     else setSearchParams({}, { replace: true });
   }, [setSearchParams]);
 
-  const reload = useCallback(async () => {
-    await maybeSeedKluisBoom();
-    const data = await listRecentObsidianNotes(400);
-    setNotes(data);
-  }, []);
-
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let levend = true;
+    void maybeSeedKluisBoom()
+      .then(() => listRecentObsidianNotes(400))
+      .then((data) => { if (levend) setNotes(data); });
+    return () => { levend = false; };
+  }, []);
 
   const kaarten = useMemo(() => kluisKaartenVan(notes), [notes]);
   const selected = notes.find((n) => n.path === selectedPath) ?? null;
