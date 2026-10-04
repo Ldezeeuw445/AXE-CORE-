@@ -345,6 +345,8 @@ export interface NorthseaTaak {
   created_at?: Tijd;
   deal_code?: Tekst;
   deal_id?: Tekst;
+  eigenaar?: Tekst;
+  oorsprong?: Tekst;
 }
 
 /** Iets van de desk dat op een moment staat: een volgende actie of een campagne. */
