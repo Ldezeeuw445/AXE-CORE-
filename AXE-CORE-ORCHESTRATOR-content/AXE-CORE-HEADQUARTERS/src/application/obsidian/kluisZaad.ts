@@ -10,13 +10,13 @@ import { kluisPadVoorAgent, kluisPadVoorTab } from '@/domain/obsidian/kluisBoom'
 const TABS = ['home', 'browser', 'agents', 'obsidian', 'tasks', 'memory'] as const;
 
 export async function maybeSeedKluisBoom(): Promise<void> {
-  let bestaande: string[] = [];
+  let paden: string[];
   try {
-    bestaande = (await listRecentObsidianNotes(200)).map((n) => n.path);
+    paden = (await listRecentObsidianNotes(200)).map((n) => n.path);
   } catch {
     return;
   }
-  const heeft = new Set(bestaande);
+  const heeft = new Set(paden);
 
   for (const tab of TABS) {
     const path = kluisPadVoorTab(tab);

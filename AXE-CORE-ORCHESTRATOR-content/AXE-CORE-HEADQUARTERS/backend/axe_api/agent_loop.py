@@ -952,7 +952,10 @@ async def run_agent_loop(
     agent_ws = laad_workspace(agent) if agent else None
     brief = (agent_ws or {}).get("system_prompt") or AGENT_BRIEFS.get(agent or "", "")
     task_workspace = workspace or WORKSPACE
-    os.makedirs(task_workspace, exist_ok=True)
+    try:
+        os.makedirs(task_workspace, exist_ok=True)
+    except OSError:
+        pass
     pinned = device or ((agent_ws or {}).get("preferred_device") if agent_ws else None)
     werkplek_fiche = _HUIDIGE_WORKSPACE.set(task_workspace)
     fiche = _HUIDIGE_BRIEF.set(brief)

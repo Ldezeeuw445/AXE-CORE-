@@ -14,7 +14,7 @@ export const KLUIS_TAKKEN: readonly KluisTak[] = [
   'workplaces', 'agents', 'tasks', 'memory',
 ];
 
-export function slugVoorKluis(raw: string): string {
+function slugVoorKluis(raw: string): string {
   const s = (raw || '')
     .trim()
     .toLowerCase()

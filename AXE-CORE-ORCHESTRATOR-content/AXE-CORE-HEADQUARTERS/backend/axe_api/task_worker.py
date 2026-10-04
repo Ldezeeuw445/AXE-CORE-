@@ -357,7 +357,10 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         safe_agent = "".join(ch for ch in agent_id if ch.isalnum() or ch in "-_") or "axe"
         safe_task = "".join(ch for ch in str(task["id"]) if ch.isalnum() or ch in "-_")
         task_workspace = os.path.join(workspace_root, safe_agent, safe_task)
-        os.makedirs(task_workspace, exist_ok=True)
+        try:
+            os.makedirs(task_workspace, exist_ok=True)
+        except OSError:
+            pass
         branch_name = f"axe/{safe_agent}/{safe_task[:12]}"
         await context.event("axe.progress", f"{agent_id} workspace ready.", {
             "agent": agent_id, "workspace": task_workspace, "branch": branch_name,

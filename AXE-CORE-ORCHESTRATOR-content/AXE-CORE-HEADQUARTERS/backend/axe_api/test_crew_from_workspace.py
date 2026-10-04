@@ -4,8 +4,10 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import sys
+from types import ModuleType
+
 import agent_loop
-import crew_runner
 import task_worker as tw
 from test_task_concurrency import NepRepo, LEASE
 
@@ -24,13 +26,16 @@ def test_wingman_roept_crew_aan_voor_de_lus(monkeypatch, tmp_path):
         gezien["device"] = kw.get("device")
         return {"summary": "klaar", "steps_used": 1}
 
-    monkeypatch.setattr(crew_runner, "run_crew", nep_crew)
+    stub = ModuleType("crew_runner")
+    stub.run_crew = nep_crew
+    monkeypatch.setitem(sys.modules, "crew_runner", stub)
     monkeypatch.setattr(agent_loop, "run_agent_loop", nep_loop)
 
     taak = {
         "id": "taak-crew",
         "capability": "agentic",
         "lease_token": LEASE,
+        "worker_id": "test:slot-0",
         "assignee": "wingman",
         "payload": {"request": "schrijf een plan", "agent": "wingman", "device": "vps"},
         "goal": "schrijf een plan",
