@@ -350,8 +350,10 @@ export default function ObsidianMemoryPanel({
               onClick={() => { setTakFilter(tak === 'all' ? 'all' : tak); setFolderFilter('all'); }}
               className="text-[9px] px-2 py-0.5 rounded font-mono"
               style={{
-                background: takFilter === tak ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)',
+                // Selectie = kleur én gewicht, geen gekleurd vlak (law 10).
+                background: 'rgba(255,255,255,0.04)',
                 color: takFilter === tak ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                fontWeight: takFilter === tak ? 700 : 400,
               }}
             >
               {tak === 'all' ? 'all' : kluisTakLabel(tak)}
