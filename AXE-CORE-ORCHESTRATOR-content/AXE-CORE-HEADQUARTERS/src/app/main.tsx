@@ -62,6 +62,7 @@ import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
 import { installTierRouter } from '@/presentation/store/installTierRouter'
 import { installGesprekSync } from '@/presentation/store/installGesprekSync'
+import { installVoorkeurSync } from '@/presentation/store/installVoorkeurSync'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installCoreStatus } from '@/presentation/store/installCoreStatus'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
@@ -80,6 +81,7 @@ installStableChat();
 // terug op het pad dat hierboven al staat.
 installTierRouter();
 installGesprekSync();
+installVoorkeurSync();
 // Eén poller op /status/axe-core. Vier schermen vroegen het los van elkaar,
 // elk met een eigen interval -- en dus met antwoorden die tot een minuut uit
 // de pas liepen. Nu vraagt deze het, en leest de rest de store.

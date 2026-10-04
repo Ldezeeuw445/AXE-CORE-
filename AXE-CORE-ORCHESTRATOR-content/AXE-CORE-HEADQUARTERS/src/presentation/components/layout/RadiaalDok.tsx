@@ -26,11 +26,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useOpenPagina } from '@/presentation/hooks/useOpenPagina';
 import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
 import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
-import { openPageOnMonitor, openStandaloneBrowser, openStandaloneNorthsea } from '@/infrastructure/gateways/windowManagerService';
 import { openRegisteredProductShell } from '@/infrastructure/gateways/productWindowService';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
@@ -84,6 +84,7 @@ interface Props {
 
 export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, opHoek }: Props) {
   const navigate = useNavigate();
+  const openPagina = useOpenPagina();
   const telefoonAan = useTelefoonZichtbaar();
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
   const [open, setOpen] = useState(false);
@@ -138,8 +139,13 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
   const linkerTabs: DokTab[] = [
     { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },
     { id: 'notities', label: 'Quick Note', teken: <StickyNote size={18} />, doe: () => window.dispatchEvent(new CustomEvent('axe-toggle-quick-note')) },
-    { id: 'northsea', label: 'NorthSea shell', teken: <span className="axe-dok-n">N</span>, doe: () => { void openStandaloneNorthsea(); } },
-    { id: 'browser', label: 'Browser shell', teken: <PanelRightOpen size={18} />, doe: () => { void openStandaloneBrowser(); } },
+    /* Deze drie openden een eigen venster via openPageOnMonitor, met `void`
+       ervoor. Buiten Tauri gooit die, dus op de iPad deed de knop niets --
+       geen venster, geen melding. useOpenPagina doet daar hetzelfde wat de
+       Mac doet, op de manier die er is: ernaartoe navigeren.
+       Zelfde pagina's als openStandaloneNorthsea/Browser gebruikten. */
+    { id: 'northsea', label: 'NorthSea shell', teken: <span className="axe-dok-n">N</span>, doe: () => openPagina('maps-3d') },
+    { id: 'browser', label: 'Browser shell', teken: <PanelRightOpen size={18} />, doe: () => openPagina('browser') },
     { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
   ];
   const openProduct = (name: string) => {
@@ -149,7 +155,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
     });
   };
   const rechterTabs: DokTab[] = [
-    { id: 'code', label: 'Code Studio window', teken: <Code2 size={18} />, doe: () => { void openPageOnMonitor('code-editor', 0); } },
+    { id: 'code', label: 'Code Studio window', teken: <Code2 size={18} />, doe: () => openPagina('code-editor') },
     { id: 'axon', label: 'AXON Memory', teken: <BrainCircuit size={18} />, doe: () => openProduct('AXON Memory') },
     { id: 'companion', label: 'AXE Companion', teken: <Bot size={18} />, doe: () => openProduct('AXE Companion') },
     { id: 'trading-os', label: 'Trading OS', teken: <span className="axe-dok-n">T</span>, doe: () => openProduct('Trading OS') },

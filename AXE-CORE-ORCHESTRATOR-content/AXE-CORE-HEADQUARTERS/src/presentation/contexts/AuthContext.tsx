@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
+import { INSTELLINGEN_BINNEN } from '@/presentation/store/installVoorkeurSync';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { hydrateSettingsFromSupabase } from '@/infrastructure/persistence/userSettingsService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -105,6 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const hydrateAccountState = async () => {
       await hydrateSettingsFromSupabase().catch(() => {});
       if (!alive) return;
+      // user_settings staat nu in localStorage. installVoorkeurSync neemt
+      // daaruit over wat per apparaat uit elkaar kan lopen (de spraakstand);
+      // een eigen ophaalronde daar zou hetzelfde nog eens halen en een tweede
+      // antwoord kunnen geven.
+      try { window.dispatchEvent(new CustomEvent(INSTELLINGEN_BINNEN)); } catch { /* geen window */ }
       await useVoiceStore.getState().refreshConfiguration().catch(() => {});
     };
 

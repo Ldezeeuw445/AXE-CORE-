@@ -40,7 +40,11 @@ const TAB_SHORTCUTS: Record<string, string> = {
   p: '/mcp',
   i: '/infrastructure',
   c: '/control-plane',
-  t: '/command',
+  // Was '/command': die route bestaat niet meer, dus `t` navigeerde naar
+  // niets -- je drukt, er gebeurt niks, en er is geen fout om op te zoeken.
+  // `t` van terminals, de route die er wél is. navBereikbaar.test.ts houdt
+  // nu elke sneltoets tegen de routes van App.tsx aan.
+  t: '/terminals',
   d: '/developer',
   s: '/settings',
   g: '/crewai',

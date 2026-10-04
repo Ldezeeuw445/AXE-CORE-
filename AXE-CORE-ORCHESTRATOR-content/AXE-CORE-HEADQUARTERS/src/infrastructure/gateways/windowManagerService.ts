@@ -8,6 +8,7 @@
  * See NEXT_LEVEL_PLAN.md section 7 for the design this implements.
  */
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { routeVanPagina } from '@/domain/navRegistry';
 
 export interface MonitorInfo {
   index: number;
@@ -59,7 +60,10 @@ export async function listMonitors(): Promise<MonitorInfo[]> {
  *  name fails loudly instead of opening a blank or wrong window. */
 export const OPENABLE_PAGES = [
   'home', 'ai-core', 'apps', 'agents', 'tasks', 'calendar', 'memory', 'obsidian', 'knowledge',
-  'trading', 'trading-intel', 'finance', 'mcp', 'infrastructure', 'command', 'terminal', 'settings',
+  // 'command' stond hier en is weg: die route bestaat niet meer, dus
+  // openPageOnMonitor('command') opende een VENSTER op een lege pagina --
+  // erger dan niets, want het ziet eruit alsof het werkte.
+  'trading', 'trading-intel', 'finance', 'mcp', 'infrastructure', 'terminal', 'settings',
   'table-editor', 'cron-manager', 'control-plane', 'maps-3d', 'crewai', 'developer',
   'code-editor', 'eve', 'browser', 'browser-desktop', 'organization',
 ] as const;
@@ -93,8 +97,11 @@ export async function openPageOnMonitor(page: string, monitorIndex: number): Pro
   }
 
   // HashRouter (see src/app/main.tsx) — routes live at #/page, not /page.
+  // De afbeelding pagina -> route staat in domain/navRegistry (routeVanPagina),
+  // zodat een knop die buiten Tauri naar diezelfde pagina navigeert niet zijn
+  // eigen kopie van die regel hoeft te maken.
   const win = new WebviewWindow(label, {
-    url: `index.html#/${page === 'home' ? '' : page}`,
+    url: `index.html#${routeVanPagina(page)}`,
     title: `AXE CORE — ${page}`,
     x: raw.position.x / scale,
     y: raw.position.y / scale,

@@ -14,6 +14,8 @@ import { readFileSync } from 'node:fs';
 
 const ROUTER = 'src/app/App.tsx';
 const NAV = 'src/presentation/components/layout/BottomNav.tsx';
+const SNELTOETSEN = 'src/presentation/hooks/useKeyboardShortcuts.ts';
+const VENSTERS = 'src/infrastructure/gateways/windowManagerService.ts';
 
 /**
  * Routes die met opzet niet in de balk staan.
@@ -92,5 +94,61 @@ describe('elke route heeft een deur', () => {
   it('/terminals is bereikbaar', () => {
     // De aanleiding, expliciet vastgelegd.
     expect(navPaden()).toContain('/terminals');
+  });
+});
+
+/* ── De andere twee lijsten met routes (4 okt 2026) ─────────────────────────
+   De balk was niet de enige handgemaakte kopie. Er zijn er nog twee, en in
+   allebei stond `/command` -- een route die niet meer bestaat:
+
+     * TAB_SHORTCUTS: de sneltoets `t` navigeerde naar niets. Je drukt, er
+       gebeurt niks, en er is geen fout om op te zoeken.
+     * OPENABLE_PAGES: `openPageOnMonitor('command', ...)` opende een VENSTER
+       op een lege pagina. Erger dan niets, want het ziet eruit alsof het werkte.
+
+   Allebei met dezelfde `routes()`-lezer hierboven: één bron voor wat een route
+   is, drie lijsten die zich eraan moeten houden. */
+/** Commentaar eruit: een uitleg die het oude pad noemt ("was '/command'") is
+ *  geen regel in de lijst, en een lezer die dat niet ziet meldt een fout die
+ *  er niet is -- en dan zet je de test uit in plaats van hem te lezen. */
+function zonderCommentaar(bron: string): string {
+  return bron
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter(r => !/^\s*(\/\/|\*)/.test(r))
+    .join('\n');
+}
+
+function sneltoetsPaden(): string[] {
+  const s = zonderCommentaar(readFileSync(SNELTOETSEN, 'utf8'));
+  const blok = /const TAB_SHORTCUTS[^=]*=\s*\{([\s\S]*?)\n\};/.exec(s);
+  if (!blok) throw new Error('TAB_SHORTCUTS niet gevonden — is hij hernoemd?');
+  return [...blok[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+}
+
+function vensterPaginas(): string[] {
+  const s = zonderCommentaar(readFileSync(VENSTERS, 'utf8'));
+  const blok = /export const OPENABLE_PAGES\s*=\s*\[([\s\S]*?)\]\s*as const;/.exec(s);
+  if (!blok) throw new Error('OPENABLE_PAGES niet gevonden — is hij hernoemd?');
+  return [...blok[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+}
+
+describe('de andere lijsten wijzen ook naar bestaande routes', () => {
+  it('elke sneltoets gaat ergens heen', () => {
+    const bestaat = new Set(routes());
+    const dood = sneltoetsPaden().filter(p => !bestaat.has(p));
+    expect(dood, `Deze sneltoetsen navigeren naar een route die niet bestaat: ${dood.join(', ')}`)
+      .toEqual([]);
+  });
+
+  it('elke pagina die in een eigen venster kan, bestaat', () => {
+    // OPENABLE_PAGES noemt pagina's zonder schuine streep ('ai-core'), en
+    // `home` is de wortel -- zie de URL die openPageOnMonitor zelf bouwt.
+    const bestaat = new Set(routes());
+    const dood = vensterPaginas()
+      .map(p => (p === 'home' ? '/' : `/${p}`))
+      .filter(p => !bestaat.has(p));
+    expect(dood, `Deze vensters openen op een route die niet bestaat: ${dood.join(', ')}`)
+      .toEqual([]);
   });
 });

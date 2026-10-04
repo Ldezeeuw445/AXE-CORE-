@@ -1,32 +1,24 @@
+/*
+ * `tabs.ts` stond hier ook in, en is op 4 okt 2026 weggehaald.
+ *
+ * Het was een VIJFDE lijst van alle tabs, naast navRegistry, BottomNav,
+ * OPENABLE_PAGES en TAB_SHORTCUTS -- en de enige die nergens gerenderd werd:
+ * `DEVICE_TABS` had buiten dit bestand geen enkele aanroeper. De echte
+ * /device-pagina (pages/DeviceManager.tsx) gaat over de Android-brug en raakte
+ * hem niet aan.
+ *
+ * Zijn kop zei: "Een tab toevoegen aan BottomNav zonder hem hier te zetten laat
+ * de test falen." Dat was niet waar. De test hieronder vergeleek DEVICE_TABS met
+ * een hardgecodeerde kopie van de onderbalk IN DE TEST ZELF, dus hij faalde pas
+ * als je tabs.ts wijzigde -- precies andersom. Een bron van waarheid die niemand
+ * leest en een test die zichzelf bevestigt.
+ *
+ * Wat de routes echt bewaakt staat in navBereikbaar.test.ts: die leest App.tsx
+ * en houdt de balk, de sneltoetsen en de vensterlijst daar tegenaan.
+ */
 import { describe, it, expect } from 'vitest';
-import { DEVICE_TAB_PADEN, DEVICE_TABS, groepeerTabs, zoekTabs } from './tabs';
 import { macKijk, macOpdracht, macVraagtToestemming, machineNaam } from './gebruik';
 import { schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
-
-describe('de tabs van de device manager', () => {
-  it('heeft elke tab die de onderbalk kent, één keer', () => {
-    const onderbalk = [
-      '/', '/thinkthanks', '/apps', '/ai-core', '/memory', '/obsidian',
-      '/knowledge', '/mcp', '/infrastructure', '/control-plane', '/table-editor',
-      '/cron-manager', '/browser', '/agents', '/crewai', '/calendar', '/tasks',
-      '/finance', '/trading-intel', '/maps-3d', '/code-editor', '/terminals',
-      '/eve', '/settings',
-    ];
-    expect([...DEVICE_TAB_PADEN].sort()).toEqual([...onderbalk].sort());
-    expect(new Set(DEVICE_TABS.map((t) => t.path)).size).toBe(DEVICE_TABS.length);
-  });
-
-  it('elke tab zit in een groep, en groepeeren verliest er geen', () => {
-    const groepen = groepeerTabs();
-    expect(groepen.every((g) => g.tabs.length > 0)).toBe(true);
-    expect(groepen.flatMap((g) => g.tabs).length).toBe(DEVICE_TABS.length);
-  });
-
-  it('zoeken op browser vindt de browser-tab', () => {
-    expect(zoekTabs('browser').map((t) => t.path)).toEqual(['/browser']);
-    expect(zoekTabs('').length).toBe(DEVICE_TABS.length);
-  });
-});
 
 describe('wat de telefoon naar de Mac stuurt', () => {
   it('een lege host toont de device-id, geen komma-rij', () => {

@@ -10,6 +10,7 @@ import { useLadeSloten } from '@/presentation/components/layout/ladeSloten';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
 import { TaskCompletionToasts } from '@/presentation/components/layout/TaskCompletionToasts';
 import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
+import { useOpenPagina } from '@/presentation/hooks/useOpenPagina';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -35,7 +36,7 @@ import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
 import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
 import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDock';
 import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
-import { openPageOnMonitor, openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
+import { openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
@@ -109,6 +110,7 @@ function PageError({ fout }: { fout: string }) {
 }
 
 export function AppShell() {
+  const openPagina = useOpenPagina();
   const location = useLocation();
 
   /**
@@ -489,7 +491,9 @@ export function AppShell() {
           kant="rechts"
           hoek={<Triangle size={28} fill="none" strokeWidth={1.7} style={{ color: 'var(--accent-cyan)' }} />}
           hoekLabel="Trading — open in separate window"
-          opHoek={() => { void openPageOnMonitor('trading', 0); }}
+          /* Was `void openPageOnMonitor(...)`: buiten Tauri gooide dat en
+             gebeurde er niets, ook op de iPad waar dit dok wél staat. */
+          opHoek={() => openPagina('trading')}
         />
       )}
 

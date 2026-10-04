@@ -107,6 +107,22 @@ export function registerDynamicNavItem(item: NavItem): void {
   }
 }
 
+/**
+ * De route die bij een paginanaam hoort.
+ *
+ * `windowManagerService.OPENABLE_PAGES` noemt pagina's zonder schuine streep
+ * ("ai-core", "home"), omdat een los venster een label en een URL nodig heeft.
+ * Die afbeelding stond maar op één plek: in de URL die `openPageOnMonitor` zelf
+ * bouwt. Zodra iets anders ook moest weten waar `code-editor` heen gaat -- een
+ * knop die buiten Tauri gewoon naar die pagina navigeert in plaats van niets te
+ * doen -- werd het een tweede kopie van dezelfde regel.
+ *
+ * Dus hier, één keer, en `openPageOnMonitor` gebruikt hem ook voor zijn URL.
+ */
+export function routeVanPagina(pagina: string): string {
+  return pagina === 'home' ? '/' : `/${pagina}`;
+}
+
 /** Static + THINKTHANKS/runtime-registered nav entries. */
 export function getAllNavItems(): NavItem[] {
   const dyn = loadDynamicNavItems();
