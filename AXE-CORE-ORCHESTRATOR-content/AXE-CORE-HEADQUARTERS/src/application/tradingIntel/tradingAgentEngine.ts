@@ -188,6 +188,90 @@ function step(
   };
 }
 
+/**
+ * Eén beslissing als het account niet bevestigd is: HOLD, wel in het
+ * journaal, géén order.
+ *
+ * De cyclus stopte hier eerder vóór runTradingAgent (geen brokerprijs) of
+ * gooide in de motor (snapshot verplicht). Van buiten leek dat op "er gebeurt
+ * niets" — geen spoor, geen les, terwijl de lease wél doortikte. Dit is het
+ * pad dat de repo al had voor een onleesbaar account; het is nu ook het pad
+ * voor een ontbrekende brokerprijs.
+ */
+export async function recordUnconfirmedDecision(input: {
+  symbol: string;
+  reason: string;
+  account?: MetaApiConfig;
+  strategy?: string;
+  timeframe?: string;
+  autoExecute?: boolean;
+  upstream?: {
+    intel?: string | null;
+    companion?: string | null;
+    deskFeiten?: string | null;
+  };
+  extraSteps?: DecisionStep[];
+}): Promise<AgentRunResult> {
+  const symbol = input.symbol.trim().toUpperCase();
+  const reason = input.reason.trim() || 'Account not confirmed';
+  const steps: DecisionStep[] = [
+    ...(input.extraSteps ?? []),
+    step(
+      'risk',
+      'Account not confirmed',
+      `${reason} — no order sized or placed this cycle.`,
+      0,
+    ),
+  ];
+  const decision: TradingAgentDecision = {
+    id: crypto.randomUUID?.() ?? `dec-${Date.now()}`,
+    symbol,
+    action: 'hold',
+    confidence: 0,
+    rationale: reason,
+    inputs: { memoryKeys: ['risk'] },
+    createdAt: new Date().toISOString(),
+  };
+  const trace: ThinkingTrace = {
+    decisionId: decision.id,
+    symbol,
+    steps,
+    finalAction: 'hold',
+    confidence: 0,
+    blockedByRisk: reason,
+    createdAt: new Date().toISOString(),
+    strategy: input.strategy,
+    timeframe: input.timeframe,
+    verdict: buildDecisionVerdict({
+      symbol, action: 'hold', confidence: 0,
+      strategy: input.strategy, timeframe: input.timeframe,
+      intelText: input.upstream?.intel, companionText: input.upstream?.companion,
+      account: { id: input.account?.accountId ?? null, environment: null, live: false },
+      blockReason: reason, autoExecute: Boolean(input.autoExecute),
+    }),
+  };
+  await rememberTradeDecision(decision).catch(() => undefined);
+  await recordTrade({
+    id: decision.id,
+    symbol,
+    action: 'hold',
+    confidence: 0,
+    rationale: reason,
+    context: { lastPrice: undefined, indicators: { blockedByRisk: reason }, intelIds: [] },
+    createdAt: decision.createdAt,
+  }).catch(() => undefined);
+  await saveThinkingTrace(trace);
+  return {
+    decision,
+    trace,
+    tradeId: undefined,
+    error: undefined,
+    accountCash: 0,
+    blockedByRisk: reason,
+    message: `HOLD ${symbol} — ${reason}`,
+  };
+}
+
 export async function runTradingAgent(input: {
   symbol: string;
   autoExecute?: boolean;
@@ -273,11 +357,10 @@ export async function runTradingAgent(input: {
   // every pair died: on 2026-08-18 that was MetaAPI answering "The quota has
   // been exceeded" to ten symbols in a row, and the agent recorded nothing at
   // all — no decision, no trace, nothing to learn from. A cycle that loses its
-  // intel or its memory should still think and still write down what it saw;
-  // only the market snapshot is genuinely load-bearing. It walks MetaAPI →
-  // Binance → Stooq internally, but it no longer invents a price when all
-  // three fail — fetchTradeableSnapshot rejects instead, and the loop below
-  // turns that into a stopped cycle rather than a decision about a fiction.
+  // intel or its memory should still think and still write down what it saw.
+  // The snapshot is load-bearing for a fill, not for a recorded HOLD: without
+  // a broker price the account is unconfirmed, we log the decision, and we
+  // send nothing.
   const settled = await Promise.allSettled([
     fetchTradeableSnapshot(symbol, input.timeframe ?? 'h1'),
     listIntelReports(),
@@ -323,22 +406,37 @@ export async function runTradingAgent(input: {
     return fallback;
   };
 
-  // Three things a decision genuinely cannot be invented without. Each of them
-  // already has internal fallbacks (the snapshot walks MetaAPI → Binance → …;
-  // the other two read local settings), so a rejection here is a real fault and
-  // still stops the cycle.
-  for (const [index, label] of [[0, 'market snapshot'], [3, 'paper mirror'], [5, 'risk profile']] as const) {
+  // Snapshot is load-bearing for a FILL, not for a recorded HOLD.
+  //
+  // Gemeten 4 okt 2026: de lease tikte elk uur, elk paar stopte op
+  // "no broker price", en er landde geen enkel besluitspoor. Gooien hier
+  // maakte hetzelfde gat: de cyclus stierf voordat het journaal een HOLD
+  // zag. Zonder bevestigde brokerprijs beslissen we HOLD en sturen we niets.
+  const snapOutcome = settled[0];
+  if (snapOutcome.status === 'rejected') {
+    const detail = snapOutcome.reason instanceof Error
+      ? snapOutcome.reason.message
+      : String(snapOutcome.reason);
+    return recordUnconfirmedDecision({
+      symbol,
+      reason: `market snapshot: ${detail}`,
+      account: input.account,
+      strategy: input.strategyName ?? input.strategy,
+      timeframe: input.timeframe,
+      autoExecute: input.autoExecute,
+      upstream: input.upstream,
+    });
+  }
+
+  for (const [index, label] of [[3, 'paper mirror'], [5, 'risk profile']] as const) {
     const outcome = settled[index];
     if (outcome.status === 'rejected') {
-      // Name which precondition failed. The label was already being computed
-      // and then dropped, so each of these arrived as a bare message and the
-      // cycle error never said which of the three actually caused it.
       const cause = outcome.reason;
       const detail = cause instanceof Error ? cause.message : String(cause);
       throw new Error(`${label}: ${detail}`, { cause });
     }
   }
-  const snap = (settled[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof fetchTradeableSnapshot>>>).value;
+  const snap = snapOutcome.value;
   const account = (settled[3] as PromiseFulfilledResult<Awaited<ReturnType<typeof getDemoAccount>>>).value;
   const risk = (settled[5] as PromiseFulfilledResult<Awaited<ReturnType<typeof getRiskProfile>>>).value;
 
@@ -386,54 +484,20 @@ export async function runTradingAgent(input: {
     ));
   }
 
-  // No real account, no cycle. Checked before the circuit breaker so an
+  // No confirmed account, no fill. Checked before the circuit breaker so an
   // unreadable balance can never move the breaker's peak-equity high-water
   // mark, and before any sizing math runs at all.
   if (!effective.available) {
-    steps.push(step(
-      'risk',
-      'Live account unavailable',
-      `${effective.unavailableReason ?? 'No live account'} — no order sized or placed this cycle.`,
-      0,
-    ));
-    const reason = effective.unavailableReason ?? 'Live account unavailable';
-    const blockedDecision: TradingAgentDecision = {
-      id: crypto.randomUUID?.() ?? `dec-${Date.now()}`,
+    return recordUnconfirmedDecision({
       symbol,
-      action: 'hold',
-      confidence: 0,
-      rationale: reason,
-      inputs: { memoryKeys: ['risk'] },
-      createdAt: new Date().toISOString(),
-    };
-    const blockedTrace: ThinkingTrace = {
-      decisionId: blockedDecision.id,
-      symbol,
-      steps,
-      finalAction: 'hold',
-      confidence: 0,
-      blockedByRisk: reason,
-      createdAt: new Date().toISOString(),
+      reason: effective.unavailableReason ?? 'Live account unavailable',
+      account: input.account,
       strategy: input.strategyName ?? input.strategy,
       timeframe: input.timeframe,
-      verdict: buildDecisionVerdict({
-        symbol, action: 'hold', confidence: 0,
-        strategy: input.strategyName ?? input.strategy, timeframe: input.timeframe,
-        intelText: input.upstream?.intel, companionText: input.upstream?.companion,
-        account: { id: input.account?.accountId ?? null, environment: null, live: false },
-        blockReason: reason, autoExecute: Boolean(input.autoExecute),
-      }),
-    };
-    await saveThinkingTrace(blockedTrace);
-    return {
-      decision: blockedDecision,
-      trace: blockedTrace,
-      tradeId: undefined,
-      error: undefined,
-      accountCash: 0,
-      blockedByRisk: reason,
-      message: `HOLD ${symbol} — ${reason}`,
-    };
+      autoExecute: input.autoExecute,
+      upstream: input.upstream,
+      extraSteps: steps,
+    });
   }
 
   steps.push(step(
