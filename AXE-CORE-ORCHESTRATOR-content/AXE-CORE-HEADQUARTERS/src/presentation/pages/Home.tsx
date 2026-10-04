@@ -10,7 +10,6 @@ import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop'
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
-import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -50,8 +49,6 @@ export default function Home() {
   const opPlaat = useHeeftPlaat();
   /* De knop staat in de schil, dus de stand ook. Twee plekken die allebei
      bijhouden of het paneel open is, lopen gegarandeerd uit elkaar. */
-  const showAwareness = useCoreViewStore(s => s.showAwareness);
-  const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
   // Eén bron voor "draait de backend": installCoreStatus pollt, iedereen leest.
   // Hier stond een eigen useEffect met een eigen interval van 60 s, net als in
   // de zijbalk, de telefoon-Home en Settings -- vier klokken die niet gelijk
@@ -206,16 +203,6 @@ export default function Home() {
             >
               {bouwRegel}
             </div>
-          )}
-
-          {showAwareness && (
-            <AwarenessCenter
-              onClose={() => setShowAwareness(false)}
-              onApprove={(proposal) => {
-                void voice.sendMessage(`${proposal.title}: ${proposal.context}`);
-                setShowAwareness(false);
-              }}
-            />
           )}
 
           {/* SphereStage ALWAYS mounted on Home — never unmount on view switch

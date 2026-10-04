@@ -1,5 +1,14 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { isOpenTask } from '@/domain/tasks/taskStatus';
+import { goedkeuringVoorActie } from '@/domain/taakGoedkeuring';
+
+export type AwarenessGoedkeuring = {
+  id: string;
+  tekst: string;
+  wat: string;
+  waarom: string;
+  ja: string;
+};
 
 export type AwarenessSnapshot = {
   now: string;
@@ -17,6 +26,8 @@ export type AwarenessSnapshot = {
    * dingen opsomt is geen briefje.
    */
   overdueTitles: string[];
+  /** Alleen acties die het staande plan verlaten. */
+  goedkeuringen: AwarenessGoedkeuring[];
 };
 
 /** Live snapshot of open work AXE is aware of — open/overdue tasks and
@@ -35,13 +46,13 @@ export type AwarenessSnapshot = {
 export async function getAwarenessSnapshot(): Promise<AwarenessSnapshot> {
   const now = new Date();
   const sb = getSupabase();
-  if (!sb) return { now: now.toISOString(), openTasks: 0, overdueTasks: 0, followUps: 0, alerts: [], overdueTitles: [] };
+  if (!sb) return { now: now.toISOString(), openTasks: 0, overdueTasks: 0, followUps: 0, alerts: [], overdueTitles: [], goedkeuringen: [] };
 
   const [t, f] = await Promise.allSettled([
     // Filtered here rather than in the query: `neq('status','done')` looked
     // like it excluded finished work and excluded nothing, because the
     // worker writes `completed`, never `done`. See domain/tasks/taskStatus.
-    sb.from('core_tasks').select('id,status,due_date,title').limit(200),
+    sb.from('core_tasks').select('id,status,due_date,title,goal,metadata,assignee,capability').limit(200),
     sb.from('core_follow_ups').select('id,status,title,due_date').limit(200),
   ]);
 
@@ -62,5 +73,19 @@ export async function getAwarenessSnapshot(): Promise<AwarenessSnapshot> {
   const alerts: string[] = [];
   if (overdue) alerts.push(`${overdue} taak/taken zijn over tijd`);
   if (fs.length) alerts.push(`${fs.length} follow-up(s) wachten op aandacht`);
-  return { now: now.toISOString(), openTasks: tasks.length, overdueTasks: overdue, followUps: fs.length, alerts, overdueTitles };
+  const goedkeuringen: AwarenessGoedkeuring[] = [];
+  for (const t of tasks) {
+    const status = String(t.status ?? '');
+    const meta = (t.metadata && typeof t.metadata === 'object') ? t.metadata as Record<string, unknown> : null;
+    const wacht = status === 'waiting_approval' || (status === 'pending' && meta?.goedkeuring === 'nodig');
+    if (!wacht) continue;
+    const vraag = goedkeuringVoorActie({
+      title: typeof t.title === 'string' ? t.title : '',
+      goal: typeof t.goal === 'string' ? t.goal : null,
+      metadata: meta,
+    });
+    if (!vraag || !t.id) continue;
+    goedkeuringen.push({ id: String(t.id), tekst: vraag.tekst, wat: vraag.wat, waarom: vraag.waarom, ja: vraag.ja });
+  }
+  return { now: now.toISOString(), openTasks: tasks.length, overdueTasks: overdue, followUps: fs.length, alerts, overdueTitles, goedkeuringen };
 }

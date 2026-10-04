@@ -26,8 +26,12 @@
  * één uit een rij"; er hoefde er geen tweede bij verzonnen te worden.
  */
 import { BrainCircuit, Eye, Mountain, Network, Sparkles } from 'lucide-react';
+import { goedkeuringVanActie, openGoedkeuringen } from '@/domain/agentBewustzijn';
+import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
 
 const SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCircuit }> = [
   { id: 'axe', label: 'Core', icon: Sparkles },
@@ -42,23 +46,37 @@ export function PlaatViewSwitch() {
   const setCoreView = useCoreViewStore(s => s.setCoreView);
   const showAwareness = useCoreViewStore(s => s.showAwareness);
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
+  const jobs = useAxeJobStore(s => s.jobs);
+  const pendingExec = useVoiceStore(s => s.pendingExec);
+  const wacht = openGoedkeuringen(jobs).length
+    + (pendingExec && goedkeuringVanActie({ title: pendingExec.title, detail: pendingExec.detail }) ? 1 : 0);
 
   return (
     <div className="axe-viewctl over-canvas-group" role="tablist" aria-label="Core view">
       {/* Awareness staat apart van de vier: hij zet iets OPEN en de rest kiest
           wat er in het midden staat. Zelfde tegel, eigen groepje, met een
           streepje ertussen -- zoals de `+` in de composer. */}
-      <button
-        className="axe-viewknop"
-        data-aan={showAwareness ? 'ja' : undefined}
-        onClick={() => setShowAwareness(!showAwareness)}
-        aria-pressed={showAwareness}
-        aria-label="Awareness"
-        title="Awareness"
-      >
-        <Eye size={13} />
-        {!isMobile && <span>Awareness</span>}
-      </button>
+      <span className="relative">
+        <button
+          className="axe-viewknop"
+          data-aan={showAwareness ? 'ja' : undefined}
+          onClick={() => setShowAwareness(!showAwareness)}
+          aria-pressed={showAwareness}
+          aria-label={wacht ? `Awareness, ${wacht} waiting` : 'Awareness'}
+          title={wacht ? `${wacht} waiting` : 'Awareness'}
+        >
+          <Eye size={13} />
+          {!isMobile && <span>Awareness</span>}
+          {wacht > 0 && (
+            <i
+              aria-hidden="true"
+              className="absolute right-1 top-1 size-1.5 rounded-full"
+              style={{ background: 'var(--warning)' }}
+            />
+          )}
+        </button>
+        {showAwareness && <AwarenessCenter onClose={() => setShowAwareness(false)} />}
+      </span>
 
       <span className="axe-viewstreep" aria-hidden="true" />
 

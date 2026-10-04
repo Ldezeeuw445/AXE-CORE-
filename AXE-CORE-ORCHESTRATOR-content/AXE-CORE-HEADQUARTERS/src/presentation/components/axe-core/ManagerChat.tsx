@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
+import { goedkeuringVanJob } from '@/domain/agentBewustzijn';
 import { draadVoorAgent, type DraadBericht } from '@/domain/tierRouter/agentDraad';
 import type { AxeAgent } from '@/domain/agents/roster';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
@@ -73,8 +74,9 @@ export function ManagerChat({
     if (el) el.scrollTop = el.scrollHeight;
   }, [berichten.length, job?.summary, job?.approvalVraag]);
 
-  const stand = job ? STAND[job.state] : null;
-  const wacht = job?.state === 'waiting' && !!job.approvalId;
+  const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
+  const stand = job ? (vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state]) : null;
+  const wacht = !!vraag;
 
   const stuur = () => {
     const t = opvolging.trim();
@@ -152,12 +154,13 @@ export function ManagerChat({
           )}
         </div>
 
-        {wacht && onGoedkeuring && (
+        {wacht && onGoedkeuring && vraag && (
           <div className="flex gap-1.5 mt-2">
             <button
               type="button"
               onClick={() => onGoedkeuring(true)}
               className="text-[10px] px-2 py-1 rounded-lg"
+              title={vraag.ja}
               style={{ background: 'var(--tint)', color: 'var(--ok)' }}
             >
               Approve

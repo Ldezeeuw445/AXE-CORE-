@@ -1,9 +1,11 @@
 /**
  * Wat er in de kluis HOORT te staan: echte tabs, echte roster-agents,
- * echte repos. Geen I/O, geen verzonnen agents.
+ * echte repos, en het staande plan per bestaande app. Geen I/O, geen
+ * verzonnen agents.
  */
 import { AXE_AGENTS } from '@/domain/agents/roster';
 import { workspaceVoor } from '@/domain/agents/workspace';
+import { appPlanTekst, staandeAppPlannen } from '@/domain/appPlan';
 import { NAV_ITEMS } from '@/domain/navRegistry';
 import {
   kluisPadVoorAgent,
@@ -77,6 +79,15 @@ export function kluisZaadNotities(): ZaadNotitie[] {
         ws.systemPrompt,
         '',
       ].join('\n'),
+    });
+  }
+
+  for (const plan of staandeAppPlannen()) {
+    uit.push({
+      path: plan.pad,
+      title: `${plan.label} plan`,
+      tags: ['plan', plan.app],
+      content: appPlanTekst(plan),
     });
   }
 

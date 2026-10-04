@@ -23,6 +23,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { agentRegel, goedkeuringVanJob } from '@/domain/agentBewustzijn';
 import { managerRijen, werkerRijen } from '@/domain/tierRouter/agentVenster';
 import type { ManagerRij } from '@/domain/tierRouter/agentVenster';
 import type { AxeAgentId } from '@/domain/agents/roster';
@@ -106,8 +107,10 @@ type Kant = 'links' | 'rechts';
 
 function Balkje({ rij, onKies, kant = 'links' }:
   { rij: ManagerRij; onKies: () => void; kant?: Kant }) {
-  const { agent, job, regel } = rij;
+  const { agent, job } = rij;
   const spiegel = kant === 'rechts';
+  const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
+  const regel = job ? agentRegel(job) : rij.regel;
 
   /* Stilstaand: geen balkje, alleen het woord. Zo blijft de rij op zijn plek
      en zie je in één blik wie er niets doet, zonder iets te dempen. */
@@ -126,7 +129,7 @@ function Balkje({ rij, onKies, kant = 'links' }:
     );
   }
 
-  const stand = STAND[job.state];
+  const stand = vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state];
   return (
     <button
       type="button"

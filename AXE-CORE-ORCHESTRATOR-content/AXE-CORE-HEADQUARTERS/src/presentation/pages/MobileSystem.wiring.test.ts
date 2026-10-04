@@ -52,6 +52,8 @@ describe('canonical mobile Home wiring', () => {
     expect(shell).toContain("paddingTop: 10");
     expect(mobile).toContain('size={23}');
     expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
+    expect(mobile).toContain('agentRegel');
+    expect(mobile).toContain('goedkeuringVanJob');
   });
 
 

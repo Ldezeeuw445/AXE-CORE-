@@ -12,6 +12,8 @@ describe('Home-agentvenster is een live draad', () => {
     expect(vensters).toMatch(/jobs=\{jobs\.filter/);
     expect(vensters).toMatch(/onOpvolging/);
     expect(vensters).toMatch(/bron: 'followup'/);
+    expect(vensters).toMatch(/agentRegel/);
+    expect(vensters).toMatch(/goedkeuringVanJob/);
   });
 
   it('het bestaande kaartvenster toont opdracht, goedkeuring en opvolging', () => {

@@ -95,6 +95,8 @@ describe('één waarheid voor werk', () => {
 
   it('stopt een volgende stap die zou mailen of auto_send aanzetten', () => {
     expect(volgendeStapMagDoor('send the offer to the buyer').door).toBe(false);
+    expect(volgendeStapMagDoor('send the offer to the buyer').vraag).toMatch(/Dit is/);
+    expect(volgendeStapMagDoor('send the offer to the buyer').vraag).toMatch(/Waarom/);
     expect(volgendeStapMagDoor('turn on auto_send_followups').door).toBe(false);
     expect(volgendeStapMagDoor('review the NorthSea desk queue').door).toBe(true);
   });

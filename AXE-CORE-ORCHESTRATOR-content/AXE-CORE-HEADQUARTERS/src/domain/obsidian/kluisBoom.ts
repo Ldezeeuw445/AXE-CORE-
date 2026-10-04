@@ -49,6 +49,11 @@ export function kluisPadVoorRepo(repoId: string): string {
   return `AXE/Repos/${repoNaamVoorKluis(repoId)}/workspace.md`;
 }
 
+/** Staand plan van een bestaande app, één keer in dezelfde kluisboom. */
+export function kluisPadVoorAppPlan(mapNaam: string): string {
+  return `AXE/Workplaces/${kluisMapNaam(mapNaam)}/plan.md`;
+}
+
 /** Taak onder de agent die hem doet. Zonder agent blijft hij in de oude bak. */
 export function kluisPadVoorTaak(taskId: string, agent?: AxeAgentId | string): string {
   const id = slugVoorKluis(taskId);
