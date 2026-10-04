@@ -64,6 +64,7 @@ const VOORBEELDEN: Array<{ text: string; tier: AxeRouteTier; note?: string }> = 
   { text: 'start de crew', tier: 3 },
   { text: 'check the northsea deals', tier: 3 },
   { text: 'bekijk de northsea deals', tier: 3 },
+  { text: 'doe dit aan Northsea Desk', tier: 3 },
   { text: 'browse https://example.com and summarise it', tier: 3 },
   /* 1 okt 2026 van 3 naar 1. 'plan today' is taken + agenda + top 3, en dat
      staat al in haalTier1Kijk -- er is geen agent en geen model voor nodig. Als
@@ -87,6 +88,7 @@ describe('classifyAxeTier', () => {
   it('kiest de juiste agent bij een duidelijk domein', () => {
     expect(classifyAxeTier('open a long on XAUUSD').agent).toBe('trading');
     expect(classifyAxeTier('check the northsea deals').agent).toBe('northsea');
+    expect(classifyAxeTier('doe dit aan Northsea Desk').agent).toBe('northsea');
     expect(classifyAxeTier('fix the login bug').agent).toBe('developer');
     expect(classifyAxeTier('run the wingman crew').agent).toBe('wingman');
     expect(classifyAxeTier('intel brief').agent).toBe('intel');

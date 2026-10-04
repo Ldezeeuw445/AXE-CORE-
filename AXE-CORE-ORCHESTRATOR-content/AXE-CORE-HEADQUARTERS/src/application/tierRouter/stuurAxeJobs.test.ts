@@ -139,13 +139,42 @@ describe('een benoemde skill', () => {
           return { task: { id: 'task-mac-mini-1' } };
         },
         kluis: async (in_) => {
-          mappen.push(`AXE/Tasks/${in_.taskId}/task.md`);
-          return `AXE/Tasks/${in_.taskId}/task.md`;
+          const pad = `AXE/Agents/NorthSea Desk Manager/Tasks/${in_.taskId}/task.md`;
+          mappen.push(pad);
+          return pad;
         },
         id: () => 'id-kluis',
       },
     );
-    expect(mappen).toEqual(['AXE/Tasks/task-mac-mini-1/task.md']);
+    expect(mappen).toEqual(['AXE/Agents/NorthSea Desk Manager/Tasks/task-mac-mini-1/task.md']);
+  });
+
+  it('een NorthSea-opdracht zonder agent-id schrijft de taak onder die agent', async () => {
+    const mappen: string[] = [];
+    await startJobsParallel(
+      [{
+        text: 'doe dit aan Northsea Desk',
+        device: 'mac-mini',
+        tab: 'home',
+        route: classifyAxeTier('doe dit aan Northsea Desk'),
+      }],
+      {
+        create: async (input) => {
+          gestuurd.push(input);
+          return { task: { id: 'task-desk-1' } };
+        },
+        kluis: async (in_) => {
+          expect(in_.agent).toBe('northsea');
+          expect(in_.device).toBe('mac-mini');
+          const pad = `AXE/Agents/NorthSea Desk Manager/Tasks/${in_.taskId}/task.md`;
+          mappen.push(pad);
+          return pad;
+        },
+        id: () => 'id-desk',
+      },
+    );
+    expect(gestuurd[0].assignee).toBe('northsea');
+    expect(mappen).toEqual(['AXE/Agents/NorthSea Desk Manager/Tasks/task-desk-1/task.md']);
   });
 
   it('laat gewoon werk op execute staan -- de leesstand is van de skill, niet van alles', async () => {

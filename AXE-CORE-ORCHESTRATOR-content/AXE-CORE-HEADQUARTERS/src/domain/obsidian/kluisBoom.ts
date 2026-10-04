@@ -1,17 +1,23 @@
 /**
- * De echte kluisboom: workplaces, agentmappen, taakmappen.
+ * De echte kluisboom: workplaces, agentmappen, taakmappen, repo-workspaces.
  *
- * Eén blob voor alles was hoe tabs elkaars notities overschreven. Elke tab
- * heeft zijn eigen workplace, elke agent zijn map, elke taak een eigen map
- * onder AXE/ in de Obsidian-kluis. Geen I/O hier.
+ * Mappen hebben de naam die een mens leest — NorthSea Desk Manager, niet
+ * `northsea`. Een taak woont onder zijn agent. Geen I/O hier.
  */
 import type { AxeAgentId } from '@/domain/agents/roster';
 import type { PlanDevice } from '@/domain/tierRouter/beurtPlan';
+import {
+  WIE_WERKT,
+  agentNaamVoorKluis,
+  kluisMapNaam,
+  repoNaamVoorKluis,
+  tabLabelVoorKluis,
+} from '@/domain/obsidian/werkplek';
 
-export type KluisTak = 'workplaces' | 'agents' | 'tasks' | 'memory';
+export type KluisTak = 'workplaces' | 'agents' | 'tasks' | 'repos' | 'memory';
 
 export const KLUIS_TAKKEN: readonly KluisTak[] = [
-  'workplaces', 'agents', 'tasks', 'memory',
+  'workplaces', 'agents', 'tasks', 'repos', 'memory',
 ];
 
 function slugVoorKluis(raw: string): string {
@@ -32,22 +38,30 @@ export function tabVanPad(pathname: string): string {
 }
 
 export function kluisPadVoorTab(tab: string): string {
-  return `AXE/Workplaces/${slugVoorKluis(tab)}/context.md`;
+  return `AXE/Workplaces/${kluisMapNaam(tabLabelVoorKluis(tab))}/context.md`;
 }
 
 export function kluisPadVoorAgent(agent: AxeAgentId | string): string {
-  return `AXE/Agents/${slugVoorKluis(String(agent))}/workspace.md`;
+  return `AXE/Agents/${agentNaamVoorKluis(agent)}/workspace.md`;
 }
 
-export function kluisPadVoorTaak(taskId: string): string {
-  return `AXE/Tasks/${slugVoorKluis(taskId)}/task.md`;
+export function kluisPadVoorRepo(repoId: string): string {
+  return `AXE/Repos/${repoNaamVoorKluis(repoId)}/workspace.md`;
+}
+
+/** Taak onder de agent die hem doet. Zonder agent blijft hij in de oude bak. */
+export function kluisPadVoorTaak(taskId: string, agent?: AxeAgentId | string): string {
+  const id = slugVoorKluis(taskId);
+  if (!agent) return `AXE/Tasks/${id}/task.md`;
+  return `AXE/Agents/${agentNaamVoorKluis(agent)}/Tasks/${id}/task.md`;
 }
 
 export function kluisTakVan(path: string): KluisTak {
   const p = (path || '').replace(/^\/+/, '');
+  if (p.includes('/Tasks/') || p.startsWith('AXE/Tasks/')) return 'tasks';
   if (p.startsWith('AXE/Workplaces/')) return 'workplaces';
+  if (p.startsWith('AXE/Repos/')) return 'repos';
   if (p.startsWith('AXE/Agents/')) return 'agents';
-  if (p.startsWith('AXE/Tasks/')) return 'tasks';
   return 'memory';
 }
 
@@ -56,8 +70,17 @@ export function kluisTakLabel(tak: KluisTak): string {
     case 'workplaces': return 'Workplaces';
     case 'agents': return 'Agents';
     case 'tasks': return 'Tasks';
+    case 'repos': return 'Repos';
     default: return 'Memory';
   }
+}
+
+/** De map onder de tak: welke tab, welke agent, welke repo. */
+export function kluisGroepVan(path: string): string {
+  const delen = (path || '').replace(/^\/+/, '').replace(/^AXE\//, '').split('/').filter(Boolean);
+  if (delen[0] === 'Agents' && delen[2] === 'Tasks') return delen[1] || 'Agents';
+  if (delen.length >= 2) return delen[1];
+  return delen[0] || 'AXE';
 }
 
 export interface TaakKluisInhoud {
@@ -67,16 +90,25 @@ export interface TaakKluisInhoud {
   agent: string;
   device?: PlanDevice | null;
   tab?: string;
+  repo?: string | null;
+  who?: string;
 }
 
 export function taakKluisTekst(in_: TaakKluisInhoud): string {
+  const agentNaam = agentNaamVoorKluis(in_.agent);
+  const tabNaam = tabLabelVoorKluis(in_.tab ?? 'home');
+  const repoNaam = in_.repo ? repoNaamVoorKluis(in_.repo) : 'none';
+  const who = in_.who?.trim() || WIE_WERKT;
   const regels = [
     `# ${in_.title}`,
     '',
+    `- kind: task`,
+    `- tab: ${tabNaam}`,
+    `- agent: ${agentNaam}`,
     `- task: ${in_.taskId}`,
-    `- agent: ${in_.agent}`,
+    `- repo: ${repoNaam}`,
+    `- who: ${who}`,
     `- device: ${in_.device ?? 'any'}`,
-    `- tab: ${in_.tab ?? 'home'}`,
     '',
     '## Instruction',
     '',
@@ -88,6 +120,37 @@ export function taakKluisTekst(in_: TaakKluisInhoud): string {
     '',
   ];
   return regels.join('\n');
+}
+
+export interface KluisKaart {
+  path: string;
+  title: string;
+  tak: KluisTak;
+  groep: string;
+  samenvatting: string;
+}
+
+export function kluisKaartenVan(
+  notes: Array<{ path: string; title: string; content: string }>,
+): Record<KluisTak, KluisKaart[]> {
+  const leeg: Record<KluisTak, KluisKaart[]> = {
+    workplaces: [],
+    agents: [],
+    tasks: [],
+    repos: [],
+    memory: [],
+  };
+  for (const n of notes) {
+    const tak = kluisTakVan(n.path);
+    leeg[tak].push({
+      path: n.path,
+      title: n.title,
+      tak,
+      groep: kluisGroepVan(n.path),
+      samenvatting: (n.content || '').replace(/^#.*$/m, '').replace(/\s+/g, ' ').trim().slice(0, 140),
+    });
+  }
+  return leeg;
 }
 
 /** Tabs mogen elkaars map niet delen. */

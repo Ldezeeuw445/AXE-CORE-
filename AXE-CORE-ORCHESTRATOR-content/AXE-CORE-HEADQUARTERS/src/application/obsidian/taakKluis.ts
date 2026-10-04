@@ -9,20 +9,25 @@ import {
   taakKluisTekst,
   type TaakKluisInhoud,
 } from '@/domain/obsidian/kluisBoom';
+import { WIE_WERKT, tabLabelVoorKluis } from '@/domain/obsidian/werkplek';
 
 export async function schrijfTaakKluis(in_: TaakKluisInhoud): Promise<string> {
-  const path = kluisPadVoorTaak(in_.taskId);
+  const path = kluisPadVoorTaak(in_.taskId, in_.agent);
+  const who = in_.who?.trim() || WIE_WERKT;
+  const tab = tabLabelVoorKluis(in_.tab ?? 'home');
   await writeObsidianNote({
     path,
     title: in_.title,
-    content: taakKluisTekst(in_),
-    tags: ['task', in_.agent, in_.tab ?? 'home'].filter(Boolean),
+    content: taakKluisTekst({ ...in_, who, tab }),
+    tags: ['task', in_.agent, tab, in_.repo ?? ''].filter(Boolean),
     source: 'axe',
     metadata: {
       taskId: in_.taskId,
       agent: in_.agent,
       device: in_.device ?? null,
-      tab: in_.tab ?? 'home',
+      tab,
+      repo: in_.repo ?? null,
+      who,
     },
   });
   return path;
