@@ -47,6 +47,7 @@ const FOLDER_COLORS: Record<string, string> = {
   Workplaces: 'var(--accent-cyan)',
   Agents: '#38BDF8',
   Tasks: 'var(--warning)',
+  Repos: '#34D399',
   Memory: '#A78BFA',
 };
 
@@ -339,7 +340,7 @@ export default function ObsidianMemoryPanel({
         </div>
 
         <div className="px-3 py-2 flex flex-wrap gap-1" style={{ borderBottom: '1px solid var(--border-subtle)' }} data-axe-kluis-takken>
-          {(['all', 'workplaces', 'agents', 'tasks', 'memory'] as const).map((tak) => (
+          {(['all', 'workplaces', 'agents', 'tasks', 'repos', 'memory'] as const).map((tak) => (
             <button
               key={tak}
               onClick={() => { setTakFilter(tak === 'all' ? 'all' : tak); setFolderFilter('all'); }}

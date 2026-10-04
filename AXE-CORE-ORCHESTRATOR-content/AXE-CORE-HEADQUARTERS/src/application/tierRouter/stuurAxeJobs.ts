@@ -14,6 +14,7 @@ import type { AxeBeurtStuk } from '@/domain/tierRouter/splitsAxeBeurten';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { workspaceVoor } from '@/domain/agents/workspace';
 import { kluisPadVoorTaak } from '@/domain/obsidian/kluisBoom';
+import { WIE_WERKT, werkplekVanTekst } from '@/domain/obsidian/werkplek';
 import type { PlanDevice } from '@/domain/tierRouter/beurtPlan';
 import type { TaakKluisInhoud } from '@/domain/obsidian/kluisBoom';
 
@@ -50,6 +51,7 @@ interface GestarteJob {
 export function jobsVanStukken(stukken: AxeBeurtStuk[], nu = Date.now(), id = () => `job-${Math.random().toString(36).slice(2, 8)}`): AxeJob[] {
   return stukken.map((s) => {
     const agent = jobAgentVan(s.route, s.text);
+    const plek = werkplekVanTekst(s.text);
     return {
       id: id(),
       title: jobTitelVan(s.titel ?? s.text),
@@ -58,7 +60,8 @@ export function jobsVanStukken(stukken: AxeBeurtStuk[], nu = Date.now(), id = ()
       startedAt: nu,
       sourceText: s.text,
       device: s.device ?? null,
-      tab: s.tab,
+      tab: plek.opdracht && plek.tab ? plek.tab : s.tab,
+      repo: plek.repo ?? null,
       bron: s.bron,
     };
   });
@@ -73,6 +76,7 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
   const device = deviceOpPayload(job.device);
   const ws = workspaceVoor(job.agent);
   const tab = job.tab || 'home';
+  const repo = job.repo ?? null;
   return {
     title: job.title,
     goal: job.sourceText,
@@ -88,6 +92,7 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
       skill: route.skill,
       device,
       tab,
+      repo,
       workspace: {
         role: ws.role,
         tools: [...ws.tools],
@@ -95,7 +100,7 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
         memory_scope: ws.memoryScope,
         crew: [...ws.crew],
       },
-      vault_folder: kluisPadVoorTaak(job.taskId || job.id),
+      vault_folder: kluisPadVoorTaak(job.taskId || job.id, job.agent),
       // In welke taal het antwoord terug moet. Stond alleen in het tweede
       // register (installStableChat), dus een job via de router kwam altijd
       // in de taal van het model terug. Nu overal, in plaats van nergens.
@@ -107,6 +112,8 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
       agent: job.agent,
       device,
       tab,
+      repo,
+      who: WIE_WERKT,
       // Geen auto_send_*: NorthSea blijft read-only vanaf deze ingang.
       northsea_read_only: job.agent === 'northsea',
     },
@@ -133,6 +140,8 @@ export async function startJobsParallel(
           agent: job.agent,
           device: job.device,
           tab: job.tab,
+          repo: job.repo,
+          who: WIE_WERKT,
         }).catch(() => undefined);
       }
       return { job: gestart, ok: true };
