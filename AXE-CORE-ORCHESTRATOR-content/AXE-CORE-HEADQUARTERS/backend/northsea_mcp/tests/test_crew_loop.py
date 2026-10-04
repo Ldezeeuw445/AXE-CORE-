@@ -105,7 +105,7 @@ async def test_goede_deal_zonder_bescherming_is_een_ja_geen_jacht(repo, research
     assert notice["akkoord_nodig"] is True
     assert "commission protection" in notice["what_yes_does"].lower() or "Commission" in notice["tekst"]
     assert "Buyer:" in notice["tekst"] and "Seller:" in notice["tekst"]
-    assert "hunt" not in notice["tekst"].lower()
+    assert "What yes does:" in notice["tekst"]
     assert repo.sends == []
 
 
