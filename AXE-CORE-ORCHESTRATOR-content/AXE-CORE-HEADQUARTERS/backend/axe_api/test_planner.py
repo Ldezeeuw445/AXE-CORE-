@@ -52,13 +52,43 @@ class TestAbonnementenMetRust:
         assert p.koelt(staat, "claude", self.nu) is False
 
 
+class TestPlannerPass:
+    def test_niets_gevraagd_en_niets_stuk_schrijft_nul_taken(self):
+        assert p.planner_pass([], []) == []
+        assert p.planner_pass(
+            [{"id": "l1", "title": "Buy milk", "status": "queued", "requested_by": "luka"}],
+            [{"name": "Ochtendrapport", "last_status": "ok"}],
+        ) == []
+
+    def test_een_gefaalde_cron_geeft_precies_een_eigen_taak(self):
+        uit = p.planner_pass([], [{
+            "id": "axe_core:digest",
+            "naam": "Nightly digest",
+            "last_status": "fail",
+            "soort": "cron",
+        }])
+        assert len(uit) == 1
+        assert uit[0]["oorsprong"] == "storing"
+        assert uit[0]["bron_id"] == "axe_core:digest"
+        assert uit[0]["titel"].startswith("Fix:")
+        assert "Nightly digest" in uit[0]["doel"]
+
+    def test_verzonnen_pending_gaat_dicht_luka_blijft(self):
+        ids = p.ids_verzonnen_te_sluiten([
+            {"id": "a", "status": "pending", "requested_by": "planner", "capability": "planner",
+             "metadata": {"planner": True}},
+            {"id": "b", "status": "pending", "requested_by": "luka", "capability": "task_manage"},
+            {"id": "c", "status": "pending", "requested_by": "planner",
+             "metadata": {"oorsprong": "storing"}},
+            {"id": "d", "status": "completed", "requested_by": "planner", "metadata": {"planner": True}},
+        ])
+        assert ids == ["a"]
+
+
 class TestRonde:
-    """Een ronde met nep-Supabase en nep-motor: wat wordt er weggeschreven en uitgevoerd."""
+    """Een ronde schrijft alleen echte storingen of een vervolg, nooit een verzinsel."""
 
-    def test_schrijftaak_wacht_leestaak_wordt_gedaan_en_status_nooit_queued(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(p, "STAAT_PAD", str(tmp_path / "planner.json"))
-        ingevoegd, updates = [], []
-
+    def _sb(self, ingevoegd):
         class Q:
             def __init__(self, tabel): self.tabel, self.rij, self.upd = tabel, None, None
             def select(self, *a, **k): return self
@@ -68,37 +98,52 @@ class TestRonde:
             def limit(self, *a, **k): return self
             def insert(self, rij):
                 self.rij = {**rij, "id": f"t{len(ingevoegd)}"}; ingevoegd.append((self.tabel, self.rij)); return self
-            def update(self, velden): self.upd = velden; updates.append((self.tabel, velden)); return self
+            def update(self, velden): self.upd = velden; return self
             def execute(self):
                 class R: pass
                 r = R()
-                r.data = [self.rij] if self.rij else ([{"id": "x"}] if self.upd else [])
+                r.data = [self.rij] if self.rij else []
                 return r
 
         class SB:
             def table(self, naam): return Q(naam)
+        return SB
 
-        antwoorden = iter([
-            '[{"titel": "Lees de logs", "doel": "kijk", "risico": "lezen"}, {"titel": "Fix bug", "doel": "pas aan", "risico": "schrijven"}]',
-            "verslag: alles rustig",
-        ] + ['[]'] * 10)
-        runs = []
+    def test_ronde_zonder_storing_en_zonder_vraag_maakt_niets(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(p, "STAAT_PAD", str(tmp_path / "planner.json"))
+        ingevoegd = []
+        vragen = []
+        pl = p.Planner(lambda: self._sb(ingevoegd)(), lambda *a, **k: {"status": "ok", "result": "[]"}, lambda: {})
+        monkeypatch.setattr(pl, "_vraag", lambda *a, **k: vragen.append(a) or ("[]", ""))
+        monkeypatch.setattr(pl, "_luka_werk", lambda: [])
+        monkeypatch.setattr(pl, "_echte_storingen", lambda: [])
+        monkeypatch.setattr(pl, "_open_echte_bronnen", lambda: set())
+        monkeypatch.setattr(pl, "_sluit_verzonnen_eenmaal", lambda staat: 0)
+        monkeypatch.setattr(pl, "_open_taken", lambda agent: [])
+        verslag = pl.ronde()
+        assert verslag["aantal"] == 0
+        assert [r for t, r in ingevoegd if t == "core_tasks"] == []
+        assert vragen == []
 
-        def run_agent(repo, prompt, modus, timeout, motor):
-            runs.append((repo, modus, motor))
-            return {"status": "ok", "result": next(antwoorden)}
-
-        monkeypatch.setattr("agent_runner.repo_status", lambda: {"axe-core": {"runnable": True}})
-        pl = p.Planner(lambda: SB(), run_agent, lambda: {})
-        pl._git = lambda: ""
-        verslag = pl.ronde({"axe-core": "claude", "code-agent": "claude2", "axe-algo": "codex"})
-
+    def test_ronde_met_een_gefaalde_cron_maakt_precies_een_taak(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(p, "STAAT_PAD", str(tmp_path / "planner.json"))
+        ingevoegd = []
+        pl = p.Planner(lambda: self._sb(ingevoegd)(), lambda *a, **k: {"status": "ok"}, lambda: {})
+        monkeypatch.setattr(pl, "_vraag", lambda *a, **k: (_ for _ in ()).throw(AssertionError("niet verzinnen")))
+        monkeypatch.setattr(pl, "_luka_werk", lambda: [])
+        monkeypatch.setattr(pl, "_echte_storingen", lambda: [{
+            "id": "axe_core:digest", "naam": "Nightly digest", "last_status": "fail", "soort": "cron",
+        }])
+        monkeypatch.setattr(pl, "_open_echte_bronnen", lambda: set())
+        monkeypatch.setattr(pl, "_sluit_verzonnen_eenmaal", lambda staat: 0)
+        monkeypatch.setattr(pl, "_open_taken", lambda agent: [])
+        verslag = pl.ronde()
         taken = [r for t, r in ingevoegd if t == "core_tasks"]
-        assert all(t["status"] == "pending" for t in taken)
-        assert {t["metadata"]["goedkeuring"] for t in taken} == {"niet_nodig", "nodig"}
-        assert all(m == "plan" for _, m, _ in runs), "zonder goedkeuring nooit schrijven"
-        assert any(t == "memory" for t, _ in ingevoegd), "de uitkomst van een leestaak gaat naar het geheugen"
-        assert verslag["agents"]["axe-core"]["uitgevoerd"]["ok"] is True
+        assert verslag["aantal"] == 1
+        assert len(taken) == 1
+        assert taken[0]["metadata"]["oorsprong"] == "storing"
+        assert taken[0]["requested_by"] == "planner"
+        assert taken[0]["title"].startswith("Fix:")
 
 
 class TestSchrijfRepo:
@@ -136,74 +181,22 @@ class TestRepoEnApp:
 
 
 class TestPlannenOpSleutels:
-    """Bedenken hoort op sleutels, uitvoeren op het abonnement van de agent.
-
-    Gemeten 14 september: 29 abonnement-runs op een dag, claude op 10/10. Het
-    bedenken is de goedkoopste van de drie runs per ronde en juist die ging op
-    het abonnement dat Luka zelf nodig heeft.
-    """
-
-    def _planner(self, monkeypatch, gevraagd):
-        pl = p.Planner(lambda: None, lambda *a, **k: {"status": "ok", "result": ""}, lambda: {})
-        monkeypatch.setattr(pl, "_context", lambda agent: "context")
-        monkeypatch.setattr(pl, "_open_taken", lambda agent: [])
-        monkeypatch.setattr(pl, "_werkrepo", lambda r: "axe-core")
-        monkeypatch.setattr(pl, "_maak_taak", lambda agent, motor, v: gevraagd.setdefault("taakmotoren", []).append(motor))
-        monkeypatch.setattr(p, "lees_staat", lambda: {})
-        monkeypatch.setattr(p, "schrijf_staat", lambda s: None)
-
-        def nep_vraag(staat, motor, prompt, repo, modus="plan"):
-            gevraagd.setdefault("plan", []).append(motor)
-            return "[]", ""
-        monkeypatch.setattr(pl, "_vraag", nep_vraag)
-        return pl
-
-    def test_het_bedenken_gaat_naar_de_sleutels(self, monkeypatch):
-        gevraagd = {}
-        monkeypatch.setattr(p, "PLAN_MOTOR", "sleutels")
-        self._planner(monkeypatch, gevraagd).ronde()
-        assert set(gevraagd["plan"]) == {"sleutels"}
-        assert len(gevraagd["plan"]) == len(p.AGENTS)
-
-    def test_op_agent_gezet_is_het_oude_gedrag(self, monkeypatch):
-        gevraagd = {}
-        monkeypatch.setattr(p, "PLAN_MOTOR", "agent")
-        self._planner(monkeypatch, gevraagd).ronde({"axe-core": "claude2", "code-agent": "cursor",
-                                                    "axe-algo": "claude", "maps-agent": "claude3"})
-        assert set(gevraagd["plan"]) == {"claude2", "cursor", "claude", "claude3"}
-
-    def test_de_taak_houdt_de_motor_van_de_agent(self, monkeypatch):
-        # Anders leest _voer_uit "sleutels" uit de taak en slaat hij elke
-        # schrijftaak over met "schrijven vraagt een CLI-motor".
-        gevraagd = {}
-        monkeypatch.setattr(p, "PLAN_MOTOR", "sleutels")
-        pl = self._planner(monkeypatch, gevraagd)
-        monkeypatch.setattr(p, "lees_voorstellen", lambda t: [{"titel": "t", "doel": "d", "risico": "lezen"}])
-        pl.ronde({"axe-core": "claude2", "code-agent": "cursor", "axe-algo": "claude", "maps-agent": "claude3"})
-        assert "sleutels" not in gevraagd["taakmotoren"]
-        assert set(gevraagd["taakmotoren"]) == {"claude2", "cursor", "claude", "claude3"}
-
-    def test_valt_terug_op_het_abonnement_als_de_sleutelroute_niets_geeft(self, monkeypatch):
-        # De sleutelroute loopt over de VPS-proxy. Ligt die eruit, dan moet de
-        # planner blijven werken -- anders ruil je kosten in voor een storing.
-        gevraagd = {}
-        monkeypatch.setattr(p, "PLAN_MOTOR", "sleutels")
-        pl = self._planner(monkeypatch, gevraagd)
-
-        def stukke_sleutels(staat, motor, prompt, repo, modus="plan"):
-            gevraagd.setdefault("plan", []).append(motor)
-            if motor == "sleutels":
-                return None, "sleutels: proxy 502"
-            return '[{"titel": "t", "doel": "d", "risico": "lezen"}]', ""
-        monkeypatch.setattr(pl, "_vraag", stukke_sleutels)
-        verslag = pl.ronde({"axe-core": "claude2", "code-agent": "cursor",
-                            "axe-algo": "claude", "maps-agent": "claude3"})
-        assert gevraagd["plan"][:2] == ["sleutels", "claude2"], "eerst sleutels, dan het abonnement"
-        assert verslag["agents"]["axe-core"]["plan_terugval"]["naar"] == "claude2"
-
     def test_een_lege_lijst_is_een_antwoord_en_geen_reden_om_terug_te_vallen(self):
         assert p.is_planantwoord("[]")
         assert p.is_planantwoord('Hier: [{"titel": "t"}]')
         assert not p.is_planantwoord(None)
         assert not p.is_planantwoord("sorry, geen idee")
         assert not p.is_planantwoord("[kapot")
+
+    def test_rondes_zonder_werk_roepen_geen_model(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(p, "STAAT_PAD", str(tmp_path / "planner.json"))
+        pl = p.Planner(lambda: None, lambda *a, **k: {"status": "ok"}, lambda: {})
+        monkeypatch.setattr(pl, "_vraag", lambda *a, **k: (_ for _ in ()).throw(AssertionError("niet verzinnen")))
+        monkeypatch.setattr(pl, "_luka_werk", lambda: [])
+        monkeypatch.setattr(pl, "_echte_storingen", lambda: [])
+        monkeypatch.setattr(pl, "_open_echte_bronnen", lambda: set())
+        monkeypatch.setattr(pl, "_sluit_verzonnen_eenmaal", lambda staat: 0)
+        monkeypatch.setattr(pl, "_open_taken", lambda agent: [])
+        monkeypatch.setattr(pl, "_maak_taak", lambda *a, **k: (_ for _ in ()).throw(AssertionError("geen taak")))
+        verslag = pl.ronde()
+        assert verslag["aantal"] == 0

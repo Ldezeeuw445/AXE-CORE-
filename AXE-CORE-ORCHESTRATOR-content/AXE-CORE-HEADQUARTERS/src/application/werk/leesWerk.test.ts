@@ -13,7 +13,7 @@ describe('leesWerk — dezelfde bronnen, geen tweede planner', () => {
       status: 'pending',
       priority: 'medium',
       assignee: 'maps-agent',
-      metadata: { agent: 'maps-agent', planner: true },
+      metadata: { agent: 'maps-agent', planner: true, oorsprong: 'vervolg' },
       result: null,
       error: null,
       created_at: '2026-10-01T08:00:00Z',
