@@ -24,8 +24,22 @@ import { pushStand, type PushStand } from '@/domain/pushMogelijk';
 
 const TABEL = 'core_push_subscriptions';
 
-/** De publieke helft van het VAPID-paar. Hoort in de bundel: daar is hij voor. */
-const VAPID_PUBLIEK = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '';
+/**
+ * De publieke helft van het VAPID-paar. Hoort in de bundel: daar is hij voor.
+ *
+ * De standaard staat hier en niet alleen in de bouwomgeving omdat de website
+ * door Cloudflare gebouwd wordt, en een VITE_-variabele die daar vergeten wordt
+ * een bundel zonder sleutel geeft zonder dat iets faalt: de knop werkt, de rij
+ * wordt opgeslagen, en er komt nooit een melding. `VITE_VAPID_PUBLIC_KEY` wint
+ * als hij gezet is.
+ *
+ * Moet exact de helft zijn van /etc/axe-vapid/private_key.pem op de API-VPS
+ * (4 okt 2026). Wordt dat paar vervangen, dan hier ook -- een publieke sleutel
+ * van het ene paar met een privésleutel van het andere weigert de pushdienst
+ * stil.
+ */
+const VAPID_PUBLIEK_STANDAARD = 'BKAmZjoRcfSq_hbOIy_WrrVAhm10eOkvg0jOPfL84y7boU65aB1q0ufm6_dYthNDn87SWnAUjWBw-Jj4KZ3R3ww';
+const VAPID_PUBLIEK = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || VAPID_PUBLIEK_STANDAARD;
 
 /**
  * iOS geeft Web Push alleen aan een PWA op het beginscherm.
