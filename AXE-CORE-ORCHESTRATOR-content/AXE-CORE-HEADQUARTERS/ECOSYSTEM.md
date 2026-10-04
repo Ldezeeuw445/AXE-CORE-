@@ -103,17 +103,26 @@ other eleven and the browser tab failed 92% of the time.
 
 ### The Android app
 
-Separate repo at `~/Downloads/AxeCore`, **no git remote** — it exists on this
-Mac only. It is a Kotlin/Compose shell that embeds the *same* web bundle as the
-desktop app, so feature parity is automatic. It is also the **device manager**
-for the Samsung.
+Own **private** repo: `Ldezeeuw445/axe-core-android` (since 4 Oct 2026; before
+that it existed on one disk only, with no remote -- the old copy at
+`~/AxeCore` still holds the original history, see below). It is a
+Kotlin/Compose shell that embeds the *same* web bundle as the desktop app, so
+feature parity is automatic. It is also the **device manager** for the Samsung.
 
 ```bash
-cd ~/Downloads/AxeCore
-./build-web.sh                       # builds the worktree, copies into assets
+git clone https://github.com/Ldezeeuw445/axe-core-android.git ~/axe-core-android
+cd ~/axe-core-android
+cp local.properties.example local.properties   # Supabase URL + anon key; never committed
+./build-web.sh                       # builds the web app from ~/AXE-CORE-/... (orchestrator) into assets
 ./gradlew assembleDebug
 ~/Library/Android/sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+The web bundle (`app/src/main/assets/web/`) is build output and is **not in
+git**: old bundles in the history carried a baked-in Google API key, because
+Vite bakes every `VITE_` variable it finds in a `.env` into the JavaScript.
+`/Users/luka/AxeCore` is the original working copy with that old history; work
+in a clone of the repo above.
 
 `build-web.sh` sets flags that are not optional; building by hand ships a
 service worker that cannot register on the WebView origin. Do not run the Vite
