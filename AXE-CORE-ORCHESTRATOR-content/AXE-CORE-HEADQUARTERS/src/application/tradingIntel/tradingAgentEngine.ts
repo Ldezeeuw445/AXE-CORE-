@@ -250,16 +250,16 @@ export async function recordUnconfirmedDecision(input: {
       blockReason: reason, autoExecute: Boolean(input.autoExecute),
     }),
   };
-  await rememberTradeDecision(decision).catch(() => undefined);
-  await recordTrade({
+  await Promise.resolve(rememberTradeDecision(decision)).catch(() => undefined);
+  await Promise.resolve(recordTrade({
     id: decision.id,
     symbol,
     action: 'hold',
     confidence: 0,
     rationale: reason,
-    context: { lastPrice: undefined, indicators: { blockedByRisk: reason }, intelIds: [] },
+    context: { indicators: { blockedByRisk: reason }, intelIds: [] },
     createdAt: decision.createdAt,
-  }).catch(() => undefined);
+  })).catch(() => undefined);
   await saveThinkingTrace(trace);
   return {
     decision,

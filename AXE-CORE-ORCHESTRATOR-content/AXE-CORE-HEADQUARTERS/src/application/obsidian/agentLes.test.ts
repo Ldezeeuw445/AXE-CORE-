@@ -25,8 +25,8 @@ describe('AXE Algo volgende-dag les', () => {
       'ETHUSD: HOLD ETHUSD — no broker price for ETHUSD',
     ]);
     expect(tekst).toMatch(/sent no order/);
-    expect(tekst).not.toMatch(/auto_send|mailto|raise risk/i);
-    expect(tekst).toMatch(/same account|same decision log|risk limits/i);
+    expect(tekst).not.toMatch(/auto_send|mailto/i);
+    expect(tekst).toMatch(/do not raise risk limits/);
   });
 
   it('schrijft die les in de Trading-werkplek, niet in Home', async () => {
