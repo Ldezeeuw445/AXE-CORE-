@@ -29,7 +29,8 @@ import { runDeskIntel, runDeskCompanion, type UpstreamContext } from '@/applicat
 import { leesDeskFeiten, deskFeitenBlok } from '@/infrastructure/persistence/deskFeitenService';
 import { DESK_AGENT_MODELS, slotsPreferring } from '@/application/tradingIntel/deskAgentModels';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
-import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
+import { runTradingAgent, recordUnconfirmedDecision, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
+import { schrijfAlgoVolgendeDag } from '@/application/obsidian/agentLes';
 import { fetchTradeableSnapshot, probeerBrokerPrijs } from '@/infrastructure/gateways/marketDataService';
 import { magDureCyclus } from '@/domain/tradingIntel/brokerPricedCycle';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
@@ -1019,7 +1020,30 @@ async function runOneSymbol(gevraagd: string, only?: MetaApiConfig): Promise<str
       const waarom = `no broker price for ${symbol}`;
       await note('funnel', 'empty', waarom,
         'Cycle stopped before research — no connected account could broker-price this symbol.');
-      return `${symbol}: ${waarom}`;
+      // Research blijft uit (geen LSE/Binance-fill). Het besluit wél: HOLD,
+      // in het ene journaal, zonder order. Anders tikt de lease en blijft
+      // DecisionLog leeg — gemeten 4 okt, vijf paren, nul sporen.
+      const recorded = await recordUnconfirmedDecision({
+        symbol,
+        reason: waarom,
+        account: only,
+        autoExecute: false,
+      });
+      journal = {
+        ...journal,
+        accounts: [{
+          accountId: only?.accountId ?? 'unconfirmed',
+          label: only ? await accountLabel(only.accountId).catch(() => only.accountId.slice(0, 8)) : 'Unconfirmed account',
+          action: recorded.decision.action,
+          confidence: recorded.decision.confidence ?? null,
+          orderId: recorded.tradeId ?? null,
+          refusedBecause: recorded.blockedByRisk ?? waarom,
+        }],
+        endedAt: new Date().toISOString(),
+      };
+      await note('execution', 'empty', recorded.message || waarom,
+        'Account not confirmed — decision recorded, no order sent.');
+      return `${symbol}: ${recorded.message || waarom}`;
     }
   }
 
@@ -1577,6 +1601,7 @@ async function runAutopilotCycle(): Promise<void> {
     // is indistinguishable from an idle desk, which is the exact confusion this
     // whole investigation kept paying for.
     const text = (summaries.join(' · ') || 'cycle produced no result').slice(0, 2000);
+    await schrijfAlgoVolgendeDag(summaries).catch(() => undefined);
     const timedOut = Symbol('timeout');
     const outcome = await Promise.race([
       saveSetting(KEY_LAST_RESULT, text).then(() => 'ok' as const),

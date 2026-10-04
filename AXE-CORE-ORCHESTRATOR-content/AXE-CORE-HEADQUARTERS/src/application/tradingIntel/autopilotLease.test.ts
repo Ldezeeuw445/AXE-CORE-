@@ -19,7 +19,20 @@ vi.mock('@/application/tradingIntel/runDecisionFunnel');
 vi.mock('@/application/tradingIntel/runTradingResearch');
 vi.mock('@/application/tradingIntel/strategySignals');
 vi.mock('@/application/tradingIntel/tradingAgentChat');
-vi.mock('@/application/tradingIntel/tradingAgentEngine');
+vi.mock('@/application/tradingIntel/tradingAgentEngine', () => ({
+  runTradingAgent: vi.fn(),
+  buildStrategySeries: vi.fn(),
+  recordUnconfirmedDecision: vi.fn(async ({ symbol, reason }: { symbol: string; reason: string }) => ({
+    decision: { action: 'hold', confidence: 0 },
+    trace: { steps: [] },
+    blockedByRisk: reason,
+    message: `HOLD ${symbol} — ${reason}`,
+  })),
+}));
+vi.mock('@/application/obsidian/agentLes', () => ({
+  schrijfAlgoVolgendeDag: vi.fn(async () => undefined),
+  schrijfInAgentWerkplek: vi.fn(async () => undefined),
+}));
 vi.mock('@/infrastructure/gateways/axeCoreApiService');
 vi.mock('@/infrastructure/gateways/llmGateway');
 vi.mock('@/infrastructure/gateways/marketDataService');

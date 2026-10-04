@@ -91,7 +91,8 @@ vi.mock('@/infrastructure/persistence/tradingAccountsService', () => ({
 }));
 vi.mock('@/infrastructure/gateways/researchSources', () => ({ fetchEconomicReleases: vi.fn(async () => []) }));
 
-import { runTradingAgent } from './tradingAgentEngine';
+import { runTradingAgent, recordUnconfirmedDecision } from './tradingAgentEngine';
+import { saveThinkingTrace } from '@/infrastructure/persistence/tradingLearningService';
 import { saveRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import { __resetPlacedToday } from '@/infrastructure/gateways/brokerConnector';
 import * as meta from '@/infrastructure/gateways/metaApiService';
@@ -125,11 +126,33 @@ describe('runTradingAgent — geen fill op een plaatsvervanger', () => {
         'A trade is priced by the account that fills it — refusing to decide on a substitute feed.',
       ),
     );
-    await expect(runTradingAgent({
+    const res = await runTradingAgent({
       symbol: 'US30', autoExecute: true, account: ACCOUNT, run: 'run-1',
       strategySignalOverride: 'buy', strategyName: 'vbt:macd', timeframe: 'h1',
-    })).rejects.toThrow(/broker price/);
+    });
+    expect(res.decision.action).toBe('hold');
+    expect(res.tradeId).toBeUndefined();
+    expect(res.blockedByRisk).toMatch(/broker price|US30/);
     expect(meta.metaApiMarketOrder).not.toHaveBeenCalled();
+    expect(saveThinkingTrace).toHaveBeenCalledTimes(1);
+    const trace = vi.mocked(saveThinkingTrace).mock.calls[0][0];
+    expect(trace.finalAction).toBe('hold');
+    expect(trace.verdict?.state).not.toBe('PASS');
+  });
+
+  it('recordUnconfirmedDecision is één HOLD in het journaal, nooit een order', async () => {
+    const res = await recordUnconfirmedDecision({
+      symbol: 'XAUUSD',
+      reason: 'no broker price for XAUUSD',
+      account: ACCOUNT,
+      autoExecute: true,
+    });
+    expect(res.decision.action).toBe('hold');
+    expect(res.decision.rationale).toMatch(/no broker price/);
+    expect(res.tradeId).toBeUndefined();
+    expect(res.blockedByRisk).toMatch(/no broker price/);
+    expect(meta.metaApiMarketOrder).not.toHaveBeenCalled();
+    expect(saveThinkingTrace).toHaveBeenCalled();
   });
 });
 
