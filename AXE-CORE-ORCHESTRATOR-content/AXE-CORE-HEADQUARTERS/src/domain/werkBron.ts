@@ -49,19 +49,26 @@ export function werkOorsprongVan(in_: WerkBronIn): { oorsprong: WerkOorsprong; e
   const agentId = String(meta.agent ?? in_.assignee ?? '').trim();
   const agentNaam = agentNaamVan(agentId);
 
-  if (in_.cron || meta.bron === 'schedule' || meta.bron === 'pg_cron') {
-    return { oorsprong: 'cron', eigenaar: agentNaam || 'Cron', tekst: `Cron · ${in_.cronNaam || in_.title}` };
-  }
-  if (in_.planner || meta.planner === true || in_.capability === 'planner') {
-    return { oorsprong: 'planner', eigenaar: agentNaam || 'Planner', tekst: `${agentNaam || 'Planner'} · planner` };
-  }
-  if (meta.oorsprong === 'nightly' || meta.source === 'nightly') {
-    return { oorsprong: 'nightly', eigenaar: agentNaam || 'AXE', tekst: `${agentNaam || 'AXE'} · nightly pass` };
-  }
   const gevraagd = String(in_.requested_by ?? meta.requested_by ?? '').toLowerCase();
   const routed = String(meta.routedBy ?? meta.conversation_source ?? '');
   if (gevraagd === 'luka' || routed === 'user' || routed === 'axe_tier_router' || routed === 'axe-core') {
     return { oorsprong: 'luka', eigenaar: agentNaam || 'AXE Core', tekst: `${agentNaam || 'AXE Core'} · spoken request` };
+  }
+  if (in_.cron || meta.bron === 'schedule' || meta.bron === 'pg_cron') {
+    return { oorsprong: 'cron', eigenaar: agentNaam || 'Cron', tekst: `Cron · ${in_.cronNaam || in_.title}` };
+  }
+  const plannerOorsprong = String(meta.oorsprong ?? '');
+  if (plannerOorsprong === 'vervolg') {
+    return { oorsprong: 'planner', eigenaar: agentNaam || 'Planner', tekst: `${agentNaam || 'Planner'} · continuation` };
+  }
+  if (plannerOorsprong === 'storing') {
+    return { oorsprong: 'planner', eigenaar: agentNaam || 'Planner', tekst: `${agentNaam || 'Planner'} · real failure` };
+  }
+  if (in_.planner || meta.planner === true || in_.capability === 'planner' || gevraagd === 'planner') {
+    return { oorsprong: 'onbekend', eigenaar: '', tekst: 'invented' };
+  }
+  if (meta.oorsprong === 'nightly' || meta.source === 'nightly') {
+    return { oorsprong: 'nightly', eigenaar: agentNaam || 'AXE', tekst: `${agentNaam || 'AXE'} · nightly pass` };
   }
   if (agentNaam && agentId && !GEEN_EIGENAAR.has(agentId.toLowerCase())) {
     return { oorsprong: 'agent', eigenaar: agentNaam, tekst: `${agentNaam} · agent` };

@@ -24,14 +24,50 @@ describe('één waarheid voor werk', () => {
     expect(voegWerkSamen([wees])).toEqual([]);
   });
 
-  it('klapt dezelfde opdracht van planner en takenlijst tot één', () => {
+  it('verbergt verzonnen planner-rijen, en toont alleen vervolg of storing', () => {
+    const verzonnen = taakAlsBron({
+      id: 'p1',
+      title: 'Invent a new desk',
+      status: 'pending',
+      assignee: 'northsea',
+      requested_by: 'planner',
+      planner: true,
+      metadata: { agent: 'northsea', planner: true },
+    });
+    expect(heeftEchteEigenaar(verzonnen)).toBe(false);
+    expect(voegWerkSamen([verzonnen])).toEqual([]);
+
+    const storing = taakAlsBron({
+      id: 'p2',
+      title: 'Fix: Nightly digest',
+      status: 'pending',
+      assignee: 'axe-core',
+      requested_by: 'planner',
+      planner: true,
+      metadata: { agent: 'axe-core', planner: true, oorsprong: 'storing' },
+    });
+    expect(voegWerkSamen([storing])[0].oorsprongTekst).toMatch(/real failure/);
+
+    const vervolg = taakAlsBron({
+      id: 'p3',
+      title: 'Continue: Check deals',
+      status: 'pending',
+      assignee: 'northsea',
+      requested_by: 'planner',
+      planner: true,
+      metadata: { agent: 'northsea', planner: true, oorsprong: 'vervolg' },
+    });
+    expect(voegWerkSamen([vervolg])[0].oorsprongTekst).toMatch(/continuation/);
+  });
+
+  it('klapt dezelfde opdracht van vervolg en takenlijst tot één', () => {
     const planner = taakAlsBron({
       id: 'p1',
       title: 'Check NorthSea deals',
       status: 'pending',
       assignee: 'northsea',
       planner: true,
-      metadata: { agent: 'northsea', planner: true },
+      metadata: { agent: 'northsea', planner: true, oorsprong: 'vervolg' },
     });
     const durable = taakAlsBron({
       id: 'd1',
@@ -45,8 +81,6 @@ describe('één waarheid voor werk', () => {
     expect(werkSleutel(planner)).toBe(werkSleutel(durable));
     const samen = voegWerkSamen([planner, durable]);
     expect(samen).toHaveLength(1);
-    expect(samen[0].oorsprong).toBe('planner');
-    expect(samen[0].oorsprongTekst).toMatch(/planner/);
     expect(samen[0].eigenaar).toMatch(/NorthSea/);
   });
 

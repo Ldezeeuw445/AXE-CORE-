@@ -119,11 +119,10 @@ export function PlannerTaken() {
             style={{ background: 'var(--tint)', border: '1px solid var(--tint-line)' }}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              <span style={{ color: 'var(--accent-cyan)' }}>AUTONOME PLANNER</span>
+              <span style={{ color: 'var(--accent-cyan)' }}>PLANNER</span>
               <span>{intervalLabel(status?.interval_s)}</span>
-              <span>max 3 voorstellen per agent</span>
-              <span>lezen = mag direct</span>
-              <span>schrijven = eerst jouw akkoord</span>
+              <span>only continues work you asked for, or a real failure</span>
+              <span>invented rows stay hidden</span>
             </div>
             <div className="mt-2 grid gap-1.5 md:grid-cols-2 xl:grid-cols-4">
               {Object.entries(status?.laatste_ronde?.agents ?? {}).map(([agentId, a]) => (

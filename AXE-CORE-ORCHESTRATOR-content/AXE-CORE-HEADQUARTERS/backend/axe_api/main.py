@@ -4425,7 +4425,7 @@ async def _planner_start():
                         "action_type": "planner", "action_payload": {}, "cron_expr": "10 */3 * * *", "timezone": "Europe/Amsterdam",
                         "enabled": True, "max_runtime_s": 1800, "metadata": {"app": "axe_core"},
                         "next_run_at": _planning.volgende("10 */3 * * *", "Europe/Amsterdam").isoformat(),
-                        "description": "AXE Core, Code Agent, AXE Algo en de Northsea Desk bedenken elk ≤3 taken (planner.py).",
+                        "description": "Alleen een vervolg op wat Luka vroeg, of één echte storing. Verzint geen projecten (planner.py).",
                     }).execute()
             except Exception as e:  # noqa: BLE001
                 log.warning("[planner] schema registreren faalde: %s", e)

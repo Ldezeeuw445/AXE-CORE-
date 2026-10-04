@@ -6,7 +6,7 @@ describe('werkAgenda', () => {
   it('zet elk soort werk op zijn moment, in de kleur van zijn app, met zichtbare oorsprong', () => {
     const items = werkAgenda(
       [
-        { id: 'a', title: 'Deal-kaart', status: 'pending', created_at: '2026-09-14T09:00:00', metadata: { planner: true, app: 'northsea', agent: 'northsea' }, planner: true },
+        { id: 'a', title: 'Deal-kaart', status: 'pending', created_at: '2026-09-14T09:00:00', metadata: { planner: true, app: 'northsea', agent: 'northsea', oorsprong: 'vervolg' }, planner: true },
         { id: 'b', title: 'Factuur', status: 'queued', created_at: '2026-09-01T09:00:00', requested_by: 'luka', metadata: { dueAt: '2026-09-15T14:30:00', app: 'axe_companion', requested_by: 'luka' } },
         { id: 'c', title: 'Zonder deadline', status: 'queued', created_at: '2026-09-01T09:00:00', metadata: {} },
       ],
@@ -20,13 +20,13 @@ describe('werkAgenda', () => {
       ['Ochtendrapport', '2026-09-15', '07:00', appMeta('trading_os').kleur],
       ['Factuur', '2026-09-15', '14:30', appMeta('axe_companion').kleur],
     ]);
-    expect(items[0].soort).toMatch(/planner/i);
+    expect(items[0].soort).toMatch(/continuation/i);
     expect(items[1].soort).toMatch(/Cron/);
     expect(items[2].soort).toMatch(/spoken request/);
   });
 
   it('een afgeronde planner-taak staat op zijn afronding, en dubbelen tellen één keer', () => {
-    const t = { id: 'p', title: 'Onderzoek', status: 'completed', created_at: '2026-09-13T01:00:00', completed_at: '2026-09-13T01:40:00', planner: true };
+    const t = { id: 'p', title: 'Onderzoek', status: 'completed', created_at: '2026-09-13T01:00:00', completed_at: '2026-09-13T01:40:00', planner: true, metadata: { oorsprong: 'vervolg' } };
     const items = werkAgenda([t, t], []);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ titel: '✓ Onderzoek', tijd: '01:40', kleur: appMeta('axe_core').kleur });
