@@ -16,6 +16,7 @@ import { CapabilityRouterSection } from '@/presentation/components/settings/Capa
 import { RouteSection } from '@/presentation/components/settings/RouteSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LookSection } from '@/presentation/components/settings/LookSection';
+import { MeldingenSection } from '@/presentation/components/settings/MeldingenSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import {
@@ -2055,6 +2056,9 @@ export default function SettingsPage() {
             }
           />
           <VoiceSection />
+          {/* Meldingen staan bij stem: allebei gaan ze over hoe AXE je bereikt
+              als je niet naar het scherm kijkt. */}
+          <MeldingenSection />
           </div>
         </SectieBlok>
         )}

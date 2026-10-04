@@ -3398,6 +3398,7 @@ except Exception:  # pragma: no cover
     ZoneInfo = None  # type: ignore
 
 import planning as _planning  # noqa: E402 — één planner + grootboek, zie planning.py
+import push_meldingen as _push  # noqa: E402 — meldingen naar de slotschermen
 
 CRON_ACTIONS = _planning.ALLE_SOORTEN
 
@@ -4268,7 +4269,15 @@ async def cron_tick(
                 print(f"[cron_tick] episode write failed for {r['id']}: {ep_err}", flush=True)
         await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
         await run_always_awake_jobs()
-        return {"ran": len(ran), "at": now.isoformat(), "details": ran}
+        # Meldingen naar de slotschermen. Eigen try/except: een pushronde die
+        # misgaat (verlopen abonnement, pushdienst traag) mag de cron-tik niet
+        # omver halen -- die draait ook de planner en het grootboek.
+        meldingen = {"verstuurd": 0, "opgeruimd": 0}
+        try:
+            meldingen = await _push.stuur_meldingen(sb, now)
+        except Exception as push_err:
+            print(f"[cron_tick] push failed: {push_err}", flush=True)
+        return {"ran": len(ran), "at": now.isoformat(), "details": ran, "push": meldingen}
     except Exception as e:
         # Logged and returned as a normal (non-500) response on purpose: the
         # only caller is a crontab curl piped to /dev/null, so a 500 here

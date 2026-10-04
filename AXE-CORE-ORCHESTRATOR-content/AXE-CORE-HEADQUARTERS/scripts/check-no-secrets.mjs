@@ -31,6 +31,11 @@ const dir = process.argv[2] ?? 'dist/public';
  *   VITE_AXE_BRIDGE_TOKEN           bridge luistert alleen op 127.0.0.1
  *   VITE_AXE_COMPANION_TOOLS_SECRET sidecar luistert alleen op 127.0.0.1
  *   VITE_GOOGLE_MAPS_API_KEY        hoort vastgezet op het domein
+ *   VITE_VAPID_PUBLIC_KEY           de PUBLIEKE helft van het pushpaar; die
+ *                                   hoort in de bundel, want de browser heeft
+ *                                   hem nodig om zich aan te melden. De privé
+ *                                   helft staat op de VPS (VAPID_PRIVATE_KEY)
+ *                                   en heeft met opzet geen VITE_-voorvoegsel.
  *
  * Een lijst die alles verbiedt wordt genegeerd. Deze verbiedt wat schaadt.
  */

@@ -105,6 +105,13 @@ export default defineConfig(async ({ command }) => ({
       injectRegister: (isAndroidShell || isTauriBuild) ? false : 'script',
       manifest: false, // We use our own public/manifest.json
       workbox: {
+        // De meldingenkant van de worker. `generateSW` schrijft de worker zelf,
+        // dus eigen code kan er alleen via importScripts in -- en dat is genoeg
+        // voor twee handlers. Overstappen op injectManifest zou betekenen dat
+        // wij de hele cache-strategie gaan onderhouden, en juist die worker
+        // heeft hier al een geschiedenis (zie skipWaiting hieronder).
+        // Het bestand staat in public/ en wordt dus ongewijzigd meegekopieerd.
+        importScripts: ['/axe-push-sw.js'],
         // `registerType: 'autoUpdate'` zet deze twee NIET automatisch: de plugin
         // doet dat alleen als `injectRegister` 'auto' of leeg is, en hierboven
         // staat 'script'. Gevolg tot 1 okt 2026: geen skipWaiting, geen
