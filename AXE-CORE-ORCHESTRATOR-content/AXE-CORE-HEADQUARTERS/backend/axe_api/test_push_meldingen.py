@@ -37,6 +37,14 @@ def test_een_bui_krijgt_een_tag():
     assert a["tag"] == b["tag"]
 
 
+def test_ook_als_de_cijfers_in_het_onderwerp_zelf_staan():
+    # De bui hierboven heeft zijn cijfers in het DETAIL, dat nooit in de tag komt;
+    # hier staan ze in het onderwerp dat de tag wordt.
+    a = push_bericht_van(rij("3 van de 5 modellen antwoorden niet"))
+    b = push_bericht_van(rij("4 van de 5 modellen antwoorden niet"))
+    assert a["tag"] == b["tag"]
+
+
 def test_ander_onderwerp_andere_tag():
     a = push_bericht_van(rij("Provider weggevallen: iets"))
     b = push_bericht_van(rij("Taak klaar: iets anders"))

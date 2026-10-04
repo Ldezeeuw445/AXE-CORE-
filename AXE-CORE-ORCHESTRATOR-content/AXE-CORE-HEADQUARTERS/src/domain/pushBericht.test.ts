@@ -32,6 +32,14 @@ describe('pushBerichtVan', () => {
     expect(a.tag).toBe(b.tag);
   });
 
+  it('ook als de cijfers in het onderwerp zelf staan', () => {
+    // De bui hierboven heeft zijn cijfers in het DETAIL, dat nooit in de tag komt;
+    // hier staan ze in het onderwerp dat de tag wordt.
+    const a = pushBerichtVan(rij('3 van de 5 modellen antwoorden niet'))!;
+    const b = pushBerichtVan(rij('4 van de 5 modellen antwoorden niet'))!;
+    expect(a.tag).toBe(b.tag);
+  });
+
   it('maar een ander onderwerp krijgt een andere tag', () => {
     const a = pushBerichtVan(rij('Provider weggevallen: iets'))!;
     const b = pushBerichtVan(rij('Taak klaar: iets anders'))!;
