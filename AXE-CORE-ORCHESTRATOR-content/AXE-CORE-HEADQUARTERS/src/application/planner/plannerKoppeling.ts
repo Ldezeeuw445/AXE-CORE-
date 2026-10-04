@@ -82,6 +82,17 @@ function naarGeheugen(taken: PlannerTaak[]): void {
       content: `[planner · ${agent}] ${t.title}\n→ ${String(t.result?.output).slice(0, 1500)}`,
       metadata: { source: 'planner', taakId: t.id, app: (t.metadata as Record<string, unknown> | null)?.app },
     }).catch(() => { /* volgende ronde opnieuw */ });
+    // Volgende stap in de bestaande werkplek. Geen createDurableTask, geen mail.
+    const agentId = t.metadata?.agent ?? t.assignee ?? 'axe';
+    const hint = `Continue from “${t.title}”: ${String(t.result?.output).slice(0, 400)}`;
+    void import('@/application/obsidian/agentLes')
+      .then(({ schrijfInAgentWerkplek }) => schrijfInAgentWerkplek(
+        agentId,
+        `Next step · ${t.id}`,
+        hint,
+        'planner',
+      ))
+      .catch(() => { /* kluis is best-effort */ });
     gedaan.push(t.id);
   }
   if (nieuw.length) {

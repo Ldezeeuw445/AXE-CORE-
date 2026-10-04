@@ -13,6 +13,7 @@ import {
   plannerBesluit, plannerRonde, plannerStatus, plannerTaken,
   type PlannerStatus, type PlannerTaak,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { heeftEchteEigenaar, taakAlsBron, werkOorsprongVan } from '@/domain/werkBron';
 
 const AGENT: Record<string, string> = {
   'axe-core': 'AXE Core',
@@ -154,16 +155,28 @@ export function PlannerTaken() {
           </div>
         )}
         <div className="flex flex-col gap-1.5 max-h-[440px] overflow-y-auto">
-          {(taken ?? []).map(t => {
+          {(taken ?? []).filter((t) => heeftEchteEigenaar(taakAlsBron({
+            id: t.id, title: t.title, status: t.status, assignee: t.assignee,
+            capability: 'planner', created_at: t.created_at, completed_at: t.completed_at,
+            metadata: { ...(t.metadata ?? {}), planner: true }, planner: true,
+          }))).map(t => {
             const s = stand(t);
             const uitkomst = t.result?.output ?? t.error?.message ?? null;
             const agentId = t.metadata?.agent ?? t.assignee ?? 'axe-core';
             const schrijft = t.metadata?.risico === 'schrijven';
+            const oorsprong = werkOorsprongVan(taakAlsBron({
+              id: t.id, title: t.title, status: t.status, assignee: t.assignee,
+              capability: 'planner', created_at: t.created_at, completed_at: t.completed_at,
+              metadata: { ...(t.metadata ?? {}), planner: true }, planner: true,
+            }));
             return (
               <div key={t.id} className="rounded-lg px-3 py-2" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] uppercase tracking-wide shrink-0" style={{ color: 'var(--text-muted)' }}>
                     {AGENT[agentId] ?? agentId}
+                  </span>
+                  <span className="text-[9px] shrink-0 font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {oorsprong.tekst}
                   </span>
                   <span className="text-[9px] shrink-0" style={{ color: schrijft ? 'var(--warning)' : 'var(--accent-cyan)' }}>
                     {schrijft ? 'SCHRIJFT' : 'LEEST'}
