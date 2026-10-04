@@ -16,8 +16,9 @@ blijft; hij verzint geen projecten meer.
 
 Anders schrijft hij niets. Geen nieuwe ideeën, geen mail, geen auto_send.
 
-Taken binnen het staande plan voert hij zelf uit. Alleen versturen, geld
-uitgeven of een deal verzetten wacht op Luka; daarna draait de Code Agent ze
+Taken binnen het staande plan voert hij zelf uit. Northsea-mails die dat
+plan al toestaat horen daarbij. Alleen een send die het plan niet toestaat,
+geld, of een dealverzet wacht op Luka; daarna draait de Code Agent ze
 met acceptEdits in de repo en laat hij de wijzigingen ongecommit staan.
 
 ## Drie dingen die hier met opzet zo zijn
@@ -316,22 +317,41 @@ def is_echte_storing(rij: dict) -> bool:
     return bool(status) and status not in OK_STATUS
 
 
-# Alleen deze drie verlaten het staande plan. De rest vraagt geen akkoord.
-_VERLAAT_PLAN = (
-    re.compile(r"\b(send|email|mail|imessage|whatsapp|verstuur|stuur een)\b|auto_send|auto_reply", re.I),
-    re.compile(r"\b(spend|betaal|betalen|payment|invoice|live order|market order|place (an? )?order|plaats (een )?order|wire money|transfer money)\b", re.I),
-    re.compile(r"\b(move (the |a )?deal|verplaats (de |een )?deal|deal naar|close (the |a )?deal|sluit (de |een )?deal|change deal|update deal (stage|status)|deal stage)\b", re.I),
+# Versturen, geld of een deal verlaten het plan. Northsea-mails die dat plan
+# al toestaat (kwalificatie, follow-up, niet-bindend) horen erin.
+_VERSTUURT = re.compile(r"\b(send|email|mail|imessage|whatsapp|verstuur|stuur een)\b|auto_send|auto_reply", re.I)
+_GELD = re.compile(r"\b(spend|betaal|betalen|payment|invoice|live order|market order|place (an? )?order|plaats (een )?order|wire money|transfer money)\b", re.I)
+_DEAL = re.compile(r"\b(move (the |a )?deal|verplaats (de |een )?deal|deal naar|close (the |a )?deal|sluit (de |een )?deal|change deal|update deal (stage|status)|deal stage)\b", re.I)
+_NORTHSEA_TOEGESTAAN = re.compile(r"\bqualif|\bfollow[- ]?up|\bfollowup|\bnon[- ]?binding", re.I)
+_NORTHSEA_NIET = re.compile(
+    r"\b(introduc|identity disclos|buyer identity|seller identity|counterparty identity|"
+    r"bank account|banking|swift|iban|commission|imfpa|ncnnda|ncnda|binding|"
+    r"contract execution|we accept|accept (price|offer)|sign(ature)?|whatsapp|imessage)\b",
+    re.I,
 )
 
 
-def verlaat_app_plan(tekst: str) -> bool:
-    """True als de actie mailt, geld kost, of een deal verzet."""
+def northsea_send_binnen_plan(tekst: str) -> bool:
     bron = tekst or ""
-    return any(p.search(bron) for p in _VERLAAT_PLAN)
+    if not _NORTHSEA_TOEGESTAAN.search(bron):
+        return False
+    rest = _NORTHSEA_TOEGESTAAN.sub(" ", bron)
+    return _NORTHSEA_NIET.search(rest) is None
 
 
-def goedkeuring_voor_taak(titel: str, doel: str = "") -> str:
-    return "nodig" if verlaat_app_plan(f"{titel} {doel}") else "niet_nodig"
+def verlaat_app_plan(tekst: str, app: str | None = None) -> bool:
+    """True als de actie het staande plan verlaat. Northsea-send die het plan
+    al toestaat telt niet."""
+    bron = tekst or ""
+    if _VERSTUURT.search(bron):
+        if app == "northsea" and northsea_send_binnen_plan(bron):
+            return False
+        return True
+    return bool(_GELD.search(bron) or _DEAL.search(bron))
+
+
+def goedkeuring_voor_taak(titel: str, doel: str = "", app: str | None = None) -> str:
+    return "nodig" if verlaat_app_plan(f"{titel} {doel}", app) else "niet_nodig"
 
 
 def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
@@ -551,6 +571,7 @@ class Planner:
         oorsprong = v.get("oorsprong") if v.get("oorsprong") in ECHTE_OORSPRONG else None
         if not oorsprong:
             return None
+        app = app_voor_repo(repo, agent, f"{v['titel']} {v['doel']}")
         row = {
             "title": v["titel"],
             "goal": v["doel"],
@@ -565,8 +586,8 @@ class Planner:
             "payload": {"repo": repo, "bron_id": v.get("bron_id")},
             "metadata": {
                 "planner": True, "agent": agent, "motor": motor, "risico": v["risico"],
-                "goedkeuring": goedkeuring_voor_taak(v["titel"], v.get("doel") or ""),
-                "uiStatus": "todo", "app": app_voor_repo(repo, agent, f"{v['titel']} {v['doel']}"),
+                "goedkeuring": goedkeuring_voor_taak(v["titel"], v.get("doel") or "", app),
+                "uiStatus": "todo", "app": app,
                 "oorsprong": oorsprong, "bron_id": v.get("bron_id"),
             },
         }

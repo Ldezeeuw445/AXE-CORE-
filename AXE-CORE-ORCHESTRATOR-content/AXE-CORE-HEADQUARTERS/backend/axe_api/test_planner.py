@@ -185,6 +185,11 @@ class TestGoedkeuringBinnenPlan:
         assert p.goedkeuring_voor_taak("Fix AXE Core build", "repair the stamp") == "niet_nodig"
         assert p.goedkeuring_voor_taak("Keep the NorthSea desk running") == "niet_nodig"
         assert p.goedkeuring_voor_taak("Analyse EURUSD on demo") == "niet_nodig"
+        assert not p.verlaat_app_plan("Send the qualification email to the seller", "northsea")
+        assert p.goedkeuring_voor_taak("Send the qualification email to the seller", app="northsea") == "niet_nodig"
+        assert not p.verlaat_app_plan("Send a non-binding reply to the buyer", "northsea")
+        assert p.verlaat_app_plan("Send the offer to the buyer", "northsea")
+        assert p.goedkeuring_voor_taak("Send the offer to the buyer", app="northsea") == "nodig"
         assert p.verlaat_app_plan("Send the offer to the buyer")
         assert p.goedkeuring_voor_taak("Send the offer to the buyer") == "nodig"
 

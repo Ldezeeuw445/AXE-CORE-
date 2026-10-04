@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { appPlanVan, staandeAppPlannen } from './appPlan';
 import {
   goedkeuringVoorActie,
+  northseaSendBinnenPlan,
   taakBinnenPlan,
   verlaatAppPlan,
 } from './taakGoedkeuring';
@@ -16,11 +17,11 @@ describe('staande appplannen', () => {
       'AXE/Workplaces/Northsea Desk/plan.md',
       'AXE/Workplaces/Trading/plan.md',
     ]);
-    for (const p of plannen) {
-      expect(p.is.length).toBeGreaterThan(10);
-      expect(p.wordt.length).toBeGreaterThan(10);
-      expect(p.magNiet).toMatch(/mail|live order|auto_send/i);
-    }
+    const ns = appPlanVan('northsea');
+    expect(ns.magNiet).not.toMatch(/geen mail, geen auto_send/i);
+    expect(ns.is + ns.wordt).toMatch(/automatisch|toestaat/i);
+    expect(appPlanVan('trading_os').magNiet).toMatch(/live order/i);
+    expect(appPlanVan('axe_core').magNiet).toMatch(/mail/i);
   });
 });
 
@@ -34,32 +35,45 @@ describe('goedkeuring alleen buiten het plan', () => {
     ];
     for (const t of binnen) {
       expect(taakBinnenPlan(t), t.title).toBe(true);
-      expect(verlaatAppPlan(`${t.title} ${t.goal ?? ''}`)).toBeNull();
+      expect(verlaatAppPlan(`${t.title} ${t.goal ?? ''}`, t.app)).toBeNull();
       expect(goedkeuringVoorActie(t), t.title).toBeNull();
     }
   });
 
-  it('vraagt bij versturen, in het Nederlands wat en waarom', () => {
+  it('een Northsea-send die het plan al toestaat vraagt geen extra akkoord', () => {
+    const mag = { title: 'Send the qualification email to the seller', app: 'northsea' as const };
+    expect(northseaSendBinnenPlan(mag.title)).toBe(true);
+    expect(taakBinnenPlan(mag)).toBe(true);
+    expect(goedkeuringVoorActie(mag)).toBeNull();
+    expect(goedkeuringVoorActie({ title: 'Follow-up on open qualification points', app: 'northsea' })).toBeNull();
+    expect(goedkeuringVoorActie({ title: 'Send a non-binding reply to the buyer', app: 'northsea' })).toBeNull();
+    expect(goedkeuringVoorActie({ title: 'Send the qualification email to the seller', app: 'axe_core' })).not.toBeNull();
+    expect(goedkeuringVoorActie({ title: 'Send an email to the buyer', app: 'northsea' })).not.toBeNull();
+  });
+
+  it('een send die het Northsea-plan niet toestaat vraagt, met wat, aan wie en waarom', () => {
     const vraag = goedkeuringVoorActie({
       title: 'Send the offer to the buyer',
       app: 'northsea',
     });
+    expect(northseaSendBinnenPlan('Send the offer to the buyer')).toBe(false);
     expect(taakBinnenPlan({ title: 'Send the offer to the buyer', app: 'northsea' })).toBe(false);
     expect(vraag).not.toBeNull();
     expect(vraag?.wat).toMatch(/Dit is/);
+    expect(vraag?.aan).toMatch(/buyer/i);
     expect(vraag?.waarom).toMatch(/Waarom/);
-    expect(vraag?.ja).toMatch(/Ja betekent/);
     expect(vraag?.tekst).toMatch(/Dit is/);
+    expect(vraag?.tekst).toMatch(/Aan wie/);
     expect(vraag?.tekst).toMatch(/Waarom/);
-    expect(vraag?.tekst).toMatch(/bericht/);
   });
 
-  it('vraagt ook bij geld, een deal, of auto_send', () => {
+  it('vraagt bij geld of een deal, en bij een send zonder Northsea-plan', () => {
     const geld = goedkeuringVoorActie({ title: 'Place a live order on gold', app: 'trading_os' });
     expect(geld?.tekst).toMatch(/Dit is/);
     expect(geld?.tekst).toMatch(/Waarom/);
     const deal = goedkeuringVoorActie({ title: 'Move the deal to closed won', app: 'northsea' });
     expect(deal?.tekst).toMatch(/deal/);
-    expect(goedkeuringVoorActie({ title: 'turn on auto_send_followups', app: 'northsea' })?.tekst).toMatch(/bericht/);
+    expect(goedkeuringVoorActie({ title: 'Pay the invoice to the seller', app: 'northsea' })?.tekst).toMatch(/Waarom/);
+    expect(goedkeuringVoorActie({ title: 'Introduce us to the buyer', app: 'northsea' })?.tekst).toMatch(/Waarom/);
   });
 });

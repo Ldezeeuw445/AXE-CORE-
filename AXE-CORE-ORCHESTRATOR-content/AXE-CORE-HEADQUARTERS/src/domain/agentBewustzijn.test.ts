@@ -27,6 +27,17 @@ describe('agentBewustzijn', () => {
     expect(openGoedkeuringen([binnen])).toEqual([]);
   });
 
+  it('een Northsea-send die het plan al toestaat is geen extra goedkeuring', () => {
+    const mag = job({
+      agent: 'northsea',
+      title: 'Send the qualification email to the seller',
+      sourceText: 'send the qualification email to the seller',
+      state: 'waiting',
+    });
+    expect(goedkeuringVanJob(mag)).toBeNull();
+    expect(openGoedkeuringen([mag])).toEqual([]);
+  });
+
   it('zet een send als goedkeuring met wat, waarom en wat ja doet', () => {
     const send = job({
       agent: 'northsea',

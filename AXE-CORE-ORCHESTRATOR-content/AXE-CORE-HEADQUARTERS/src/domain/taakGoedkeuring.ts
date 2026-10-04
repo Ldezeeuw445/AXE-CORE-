@@ -1,9 +1,9 @@
 /**
  * Vraag Luka alleen als een actie het staande plan verlaat.
  *
- * Binnen het plan (AXE Core maken, Northsea laten draaien, trading analyseren)
- * geen akkoord. Wel bij versturen, geld uitgeven, of een deal verzetten.
- * De vraag zegt in het Nederlands wat het is, waarom, en wat ja doet.
+ * Northsea: crews mailen al wat dat plan toestaat (kwalificatie, follow-up,
+ * niet-bindend antwoord). Alleen een mail die het plan niet toestaat, een
+ * betaling of een dealverzet vraagt. De vraag zegt wat, aan wie, en waarom.
  */
 import { appVan, isAppId, type AppId } from '@/domain/apps';
 import { APPS_MET_PLAN, type AppMetPlan } from '@/domain/appPlan';
@@ -15,6 +15,7 @@ export interface GoedkeuringsVraag {
   waarom: string;
   ja: string;
   tekst: string;
+  aan?: string;
 }
 
 export interface ActieVoorGoedkeuring {
@@ -29,6 +30,11 @@ const VERSTUURT = /\b(send|email|mail|imessage|whatsapp|verstuur|stuur een)\b|au
 const GELD = /\b(spend|betaal|betalen|payment|invoice|live order|market order|place (an? )?order|plaats (een )?order|wire money|transfer money)\b/i;
 const DEAL = /\b(move (the |a )?deal|verplaats (de |een )?deal|deal naar|close (the |a )?deal|sluit (de |een )?deal|change deal|update deal (stage|status)|deal stage)\b/i;
 
+/** Mails die deal_automation_policy / de crews al mogen. */
+const NORTHSEA_TOEGESTAAN = /\bqualif|\bfollow[- ]?up|\bfollowup|\bnon[- ]?binding/i;
+/** Waar het bestaande Northsea-plan al om ja vraagt — zelfde grens als policy.py. */
+const NORTHSEA_NIET = /\b(introduc|identity disclos|buyer identity|seller identity|counterparty identity|bank account|banking|swift|iban|commission|imfpa|ncnnda|ncnda|binding|contract execution|we accept|accept (price|offer)|sign(ature)?|whatsapp|imessage)\b/i;
+
 function actieTekstVan(in_: ActieVoorGoedkeuring): string {
   return [in_.title, in_.goal, in_.detail].filter(Boolean).join('\n');
 }
@@ -38,8 +44,17 @@ function appVoorActie(in_: ActieVoorGoedkeuring): AppId {
   return appVan(in_.metadata);
 }
 
-export function verlaatAppPlan(tekst: string): PlanVerlating | null {
-  if (VERSTUURT.test(tekst)) return 'send';
+export function northseaSendBinnenPlan(tekst: string): boolean {
+  if (!NORTHSEA_TOEGESTAAN.test(tekst)) return false;
+  const rest = tekst.replace(NORTHSEA_TOEGESTAAN, ' ');
+  return !NORTHSEA_NIET.test(rest);
+}
+
+export function verlaatAppPlan(tekst: string, app?: AppId | null): PlanVerlating | null {
+  if (VERSTUURT.test(tekst)) {
+    if (app === 'northsea' && northseaSendBinnenPlan(tekst)) return null;
+    return 'send';
+  }
   if (GELD.test(tekst)) return 'spend';
   if (DEAL.test(tekst)) return 'deal';
   return null;
@@ -47,8 +62,8 @@ export function verlaatAppPlan(tekst: string): PlanVerlating | null {
 
 export function taakBinnenPlan(in_: ActieVoorGoedkeuring): boolean {
   const app = appVoorActie(in_);
-  if (!APPS_MET_PLAN.includes(app as AppMetPlan)) return verlaatAppPlan(actieTekstVan(in_)) === null;
-  return verlaatAppPlan(actieTekstVan(in_)) === null;
+  if (!APPS_MET_PLAN.includes(app as AppMetPlan)) return verlaatAppPlan(actieTekstVan(in_), app) === null;
+  return verlaatAppPlan(actieTekstVan(in_), app) === null;
 }
 
 function korte(in_: ActieVoorGoedkeuring): string {
@@ -60,16 +75,29 @@ function vraag(wat: string, waarom: string, ja: string): GoedkeuringsVraag {
   return { wat, waarom, ja, tekst: `${wat}\n${waarom}\n${ja}` };
 }
 
+function aanWie(in_: ActieVoorGoedkeuring): string {
+  const t = actieTekstVan(in_);
+  const m = /\b(?:to|aan)\s+(?:the\s+)?([^\n.,]+)/i.exec(t);
+  const wie = m?.[1]?.replace(/\s+/g, ' ').trim();
+  return wie || 'onbekend';
+}
+
 export function goedkeuringVoorActie(in_: ActieVoorGoedkeuring): GoedkeuringsVraag | null {
-  const soort = verlaatAppPlan(actieTekstVan(in_));
+  const app = appVoorActie(in_);
+  const soort = verlaatAppPlan(actieTekstVan(in_), app);
   if (!soort) return null;
   const naam = korte(in_);
   if (soort === 'send') {
-    return vraag(
-      `Dit is: een bericht versturen (${naam}).`,
-      'Waarom: dit valt buiten het staande plan. Berichten gaan niet vanzelf de deur uit.',
-      'Ja betekent: dit bericht mag nu weg.',
-    );
+    const aan = aanWie(in_);
+    return {
+      ...vraag(
+        `Dit is: een bericht versturen (${naam}).`,
+        'Waarom: dit valt buiten het staande plan.',
+        'Ja betekent: dit bericht mag nu weg.',
+      ),
+      aan,
+      tekst: `Dit is: een bericht versturen (${naam}).\nAan wie: ${aan}.\nWaarom: dit valt buiten het staande plan.\nJa betekent: dit bericht mag nu weg.`,
+    };
   }
   if (soort === 'spend') {
     return vraag(

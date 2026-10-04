@@ -33,9 +33,9 @@ const PLANNEN: Record<AppMetPlan, Omit<AppPlan, 'pad'>> = {
     app: 'northsea',
     label: 'Northsea Desk',
     mapNaam: 'Northsea Desk',
-    is: 'De commodity-desk: deals, contacten, de kaart. Blijft draaien.',
-    wordt: 'Een desk die laat zien wat Luka moet zien. Geen zender.',
-    magNiet: 'Geen mail, geen auto_send, geen auto_reply, geen deal verzetten zonder ja.',
+    is: 'De commodity-desk: deals, contacten, de kaart. Crews doen bijna alles automatisch, inclusief de mails die het plan al toestaat.',
+    wordt: 'De desk blijft draaien. Goedkeuring alleen waar dat plan al vraagt, van Luka of de Northsea Desk Manager.',
+    magNiet: 'Geen mail die het plan niet toestaat, geen betaling, geen deal verzetten zonder ja. De vraag zegt wat, aan wie, en waarom.',
   },
   trading_os: {
     app: 'trading_os',

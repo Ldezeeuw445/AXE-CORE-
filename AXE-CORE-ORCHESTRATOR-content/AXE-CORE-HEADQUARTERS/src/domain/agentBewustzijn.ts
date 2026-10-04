@@ -2,7 +2,8 @@
  * Wat een agent nu doet of zegt, en of hij écht op Luka wacht.
  *
  * Zelfde regel op Tauri-Home, de telefoon-tegel en Awareness: binnen het
- * staande plan geen goedkeuring, wel bij versturen, geld of een deal.
+ * staande plan geen goedkeuring. Northsea-mail die dat plan al toestaat
+ * telt niet; wel bij een send die het plan niet toestaat, geld of een deal.
  */
 import type { AxeAgentId } from '@/domain/agents/roster';
 import {
@@ -25,10 +26,12 @@ export function goedkeuringVanActie(in_: ActieVoorGoedkeuring): GoedkeuringsVraa
   return goedkeuringVoorActie(in_);
 }
 
-export function goedkeuringVanJob(job: Pick<AxeJob, 'title' | 'sourceText' | 'approvalVraag'>): GoedkeuringsVraag | null {
+export function goedkeuringVanJob(job: Pick<AxeJob, 'title' | 'sourceText' | 'approvalVraag' | 'agent'>): GoedkeuringsVraag | null {
+  const app = job.agent === 'northsea' ? 'northsea' : job.agent === 'trading' ? 'trading_os' : 'axe_core';
   return goedkeuringVoorActie({
     title: job.title,
     detail: job.approvalVraag || job.sourceText,
+    app,
   });
 }
 
