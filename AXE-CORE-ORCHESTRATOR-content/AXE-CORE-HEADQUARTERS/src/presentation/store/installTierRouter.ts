@@ -70,6 +70,8 @@ import {
   type AxeJob,
 } from '@/domain/tierRouter/axeJobRegels';
 import { jobsVanStukken, startJobsParallel } from '@/application/tierRouter/stuurAxeJobs';
+import { schrijfTaakKluis } from '@/application/obsidian/taakKluis';
+import { tabVanPad } from '@/domain/obsidian/kluisBoom';
 import { flushAxeSpraakRij, kiesSpraakPad, spraakRijLengte, stemlusVanVoice, zetSpraakSpreker } from '@/application/tierRouter/axeSpraakRij';
 import { chatBlijftLuisteren, injecteerJobResultaat } from '@/application/tierRouter/injecteerJobResultaat';
 import { startAxeSpraakStroom } from '@/application/tierRouter/stroomSpraak';
@@ -560,7 +562,12 @@ async function monitorTier3(job: AxeJob, hervat = false): Promise<void> {
         const sleutel = vraag?.id ?? 'onbekend';
         if (gemeldeVraag !== sleutel) {
           gemeldeVraag = sleutel;
-          const wacht = { ...job, state: 'waiting' as const };
+          const wacht = {
+            ...job,
+            state: 'waiting' as const,
+            approvalId: vraag?.id,
+            approvalVraag: vraag?.title || vraag?.detail || 'Waiting for your approval.',
+          };
           useAxeJobStore.getState().patch(job.id, wacht);
           announceJobText(jobWachtTekst(wacht, vraag), { provider: 'tier3', model: job.agent });
         }
@@ -863,9 +870,13 @@ function voerPlanUit(text: string, plan: BeurtPlan, lopend: AxeJob[]): void {
   }
 
   if (plan.jobs.length) {
+    const tab = tabVanPad(typeof location !== 'undefined' ? location.pathname : '/');
     startAxeJobs(plan.jobs.map((j) => ({
       text: j.request,
       titel: j.title,
+      device: j.device ?? null,
+      tab,
+      bron: 'plan' as const,
       route: {
         tier: 3 as const,
         kind: 'agent' as const,
@@ -932,14 +943,17 @@ async function probeerPlan(text: string, keuze: AxeRouteKeuze): Promise<boolean>
  *  realtime-voice-tool `start_background_task` — zelfde dispatch, zelfde
  *  monitor, geen tweede takenrij. */
 export function startAxeJobs(stukken: AxeBeurtStuk[]): void {
-  const ids = stukken.map((_, i) => `job-${Date.now()}-${i}`);
+  const tab = tabVanPad(typeof location !== 'undefined' ? location.pathname : '/');
+  const metContext = stukken.map((s) => ({ ...s, tab: s.tab ?? tab }));
+  const ids = metContext.map((_, i) => `job-${Date.now()}-${i}`);
   let n = 0;
-  const queued = jobsVanStukken(stukken, Date.now(), () => ids[n++]);
+  const queued = jobsVanStukken(metContext, Date.now(), () => ids[n++]);
   useAxeJobStore.getState().voeg(queued);
   n = 0;
-  void startJobsParallel(stukken, {
+  void startJobsParallel(metContext, {
     create: createDurableTask,
     id: () => queued[n++]?.id ?? `job-x-${n}`,
+    kluis: schrijfTaakKluis,
   }).then((gestart) => {
     for (const g of gestart) {
       useAxeJobStore.getState().patch(g.job.id, g.job);

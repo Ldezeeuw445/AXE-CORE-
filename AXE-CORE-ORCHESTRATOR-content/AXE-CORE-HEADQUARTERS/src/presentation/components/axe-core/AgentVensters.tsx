@@ -29,6 +29,9 @@ import type { AxeAgentId } from '@/domain/agents/roster';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
+import { startAxeJobs } from '@/presentation/store/installTierRouter';
+import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
+import { decideDurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
 
 /** Hoe vaak de kolom zichzelf opnieuw beoordeelt, zodat nagloei echt afloopt. */
 const TIK_MS = 1_000;
@@ -246,7 +249,36 @@ export function AgentVensters() {
               transform: 'translateY(-50%)',
             }}
           >
-            <ManagerChat agent={open.agent} job={open.job} onSluit={() => setGekozen(null)} />
+            <ManagerChat
+              agent={open.agent}
+              job={open.job}
+              jobs={jobs.filter((j) => j.agent === open.agent.id)}
+              onSluit={() => setGekozen(null)}
+              onOpvolging={(tekst) => {
+                startAxeJobs([{
+                  text: tekst,
+                  titel: tekst.slice(0, 60),
+                  device: open.job?.device ?? null,
+                  tab: open.job?.tab,
+                  bron: 'followup',
+                  route: {
+                    ...classifyAxeTier(tekst),
+                    tier: 3,
+                    kind: 'agent',
+                    agent: open.agent.id,
+                    skill: null,
+                    confident: true,
+                    reason: 'home:followup',
+                  },
+                }]);
+              }}
+              onGoedkeuring={(akkoord) => {
+                const j = open.job;
+                if (!j?.taskId || !j.approvalId) return;
+                void decideDurableTaskApproval(j.taskId, j.approvalId, akkoord, akkoord ? 'Approved in Home window.' : 'Rejected in Home window.')
+                  .then(() => useAxeJobStore.getState().patch(j.id, { state: akkoord ? 'running' : 'failed' }));
+              }}
+            />
           </div>
         )}
       </AnimatePresence>

@@ -190,6 +190,8 @@ async function voerBesturingUit(
       starts: [{
         text: instructie,
         titel: instructie.slice(0, 60),
+        device: job.device ?? null,
+        tab: job.tab,
         route: {
           tier: 3 as const,
           kind: 'agent' as const,

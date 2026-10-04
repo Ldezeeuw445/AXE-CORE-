@@ -22,6 +22,15 @@ export interface AxeJob {
   sourceText: string;
   /** Wat de agent nu doet, in gewone taal (uit core_task_events). */
   stappen?: string[];
+  /** Welke computer het plan noemde. Mag niet verdwijnen vóór dispatch. */
+  device?: 'vps' | 'mac-mini' | 'imac' | null;
+  /** Tab waar de opdracht vandaan kwam — niet de gedeelde bak. */
+  tab?: string;
+  /** Opvolging uit het Home-venster, of een verse plan-job. */
+  bron?: 'plan' | 'followup';
+  /** Open goedkeuring, zodat het venster meer toont dan "waiting". */
+  approvalId?: string;
+  approvalVraag?: string;
 }
 
 export type StemlusStand = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';

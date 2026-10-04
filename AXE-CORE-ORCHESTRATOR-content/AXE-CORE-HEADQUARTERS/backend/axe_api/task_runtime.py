@@ -158,6 +158,7 @@ class TaskRepository:
             "source_app": payload.get("source_app", "axe_core"),
             "requested_by": requester,
             "capability": payload.get("capability"),
+            "assignee": payload.get("assignee"),
             "execution_mode": payload.get("execution_mode", "execute"),
             "idempotency_key": idem,
             "parent_task_id": payload.get("parent_task_id"),

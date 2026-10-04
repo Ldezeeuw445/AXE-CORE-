@@ -28,6 +28,17 @@ except ImportError:  # pragma: no cover
 
 log = logging.getLogger("axe_task_worker")
 
+DEFAULT_CONCURRENCY = 10
+CONCURRENCY_MAX = 10
+
+
+def concurrency_count(gevraagd: int | None = None, env: str | None = None) -> int:
+    """Aantal slots: default 10, nooit boven CONCURRENCY_MAX, nooit onder 1."""
+    raw = gevraagd if gevraagd is not None else int(
+        env if env is not None else os.environ.get("AXE_TASK_CONCURRENCY", str(DEFAULT_CONCURRENCY))
+    )
+    return max(1, min(int(raw), CONCURRENCY_MAX))
+
 TaskHandler = Callable[[dict[str, Any], "TaskContext"], Awaitable[dict[str, Any]]]
 
 # Hetzelfde geval, alleen gezien via de repo: iemand heeft de taak op
@@ -333,6 +344,13 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         # Pass it into the loop: without this every background job used the
         # generic AXE prompt even though Home showed Developer/NorthSea/etc.
         agent_id = str(task.get("assignee") or (task.get("payload") or {}).get("agent") or "axe")
+        from agent_workspace import WorkspaceOntbreekt, crew_voor, laad_workspace
+        try:
+            agent_ws = laad_workspace(agent_id)
+        except WorkspaceOntbreekt:
+            raise
+        payload = task.get("payload") or {}
+        pinned_device = payload.get("device") or agent_ws.get("preferred_device")
         # One writable sandbox per durable run. Parallel agents never share a
         # cwd anymore; artifacts/checkouts for one job cannot trample another.
         workspace_root = os.environ.get("AXE_TASK_WORKSPACES", "/opt/axe-task-workspaces")
@@ -353,11 +371,30 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
                 "The integration target is orchestrator; push/merge remains subject to AXE approval "
                 "rules and you must not claim it is live until that integration actually succeeds."
             )
+        crew_ids = crew_voor(agent_ws)
+        if crew_ids:
+            from crew_runner import run_crew
+            await context.event("axe.progress", "CrewAI running from this agent's workspace.", {
+                "agent": agent_id, "specialists": crew_ids,
+            })
+            crew_out = await asyncio.to_thread(run_crew, agent_request, None, None, crew_ids)
+            status = crew_out.get("status")
+            stuk = crew_out.get("result") or crew_out.get("error") or json.dumps(crew_out)[:4000]
+            await context.event(
+                "axe.progress",
+                f"CrewAI {status}: {str(stuk)[:160]}",
+                {"status": status, "specialists": crew_ids},
+            )
+            agent_request += (
+                "\n\n[CrewAI workspace result]\n"
+                f"status={status}\n{stuk}"
+            )
         output = await run_agent_loop(
             agent_request, task["id"], on_event, approved,
             read_only=task.get("execution_mode") == "read",
             agent=agent_id,
             workspace=task_workspace,
+            device=str(pinned_device) if pinned_device else None,
             should_stop=should_stop,
         )
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
@@ -593,8 +630,7 @@ async def run_slots(
     worker_id ("<host>:slot-N"), zodat lease en heartbeat per taak blijven
     kloppen.
     """
-    count = concurrency if concurrency is not None else int(os.environ.get("AXE_TASK_CONCURRENCY", "3"))
-    count = max(1, count)
+    count = concurrency_count(concurrency)
     host = socket.gethostname()
     signal = WorkSignal(count)
     workers = [

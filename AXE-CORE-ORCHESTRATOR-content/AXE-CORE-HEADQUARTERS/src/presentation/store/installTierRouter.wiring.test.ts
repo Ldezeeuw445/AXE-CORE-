@@ -209,6 +209,19 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(tekst).toMatch(/if \(!keuze\.skill && await probeerPlan\(text, keuze\)\) return;/);
   });
 
+  it('schrijft de taakmap in de kluis bij dispatch', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/kluis: schrijfTaakKluis/);
+    expect(bron('application/tierRouter/stuurAxeJobs.ts')).toMatch(/deps\.kluis/);
+  });
+
+  it('geeft device uit het plan door, in plaats van hem te laten vallen', () => {
+    const tekst = bron('presentation/store/installTierRouter.ts');
+    expect(tekst).toMatch(/device: j\.device \?\? null,/);
+    expect(bron('application/tierRouter/stuurAxeJobs.ts')).toMatch(/device: s\.device \?\? null/);
+    expect(bron('application/tierRouter/stuurAxeJobs.ts')).toMatch(/device,/);
+  });
+
   it('geeft de skill uit het plan door in plaats van hem op null te zetten', () => {
     const tekst = bron('presentation/store/installTierRouter.ts');
     // Stond hier hard als `skill: null`. Geen verbod op `skill: null` in het

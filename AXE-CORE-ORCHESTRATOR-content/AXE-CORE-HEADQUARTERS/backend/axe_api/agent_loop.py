@@ -39,6 +39,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 import device_actions
+from agent_workspace import (
+    AGENT_BRIEFS,
+    crew_voor,
+    laad_workspace,
+    tools_voor,
+)
 
 # Budget. The old loop allowed 10 steps and 2 minutes, which is not enough to
 # do anything real -- a single "read the file, change it, check it built" cycle
@@ -335,6 +341,26 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "run_crew",
+        "description": (
+            "Run this agent's CrewAI crew as the execution layer. Use when the "
+            "workspace has a crew configured. Do not send Luka to the CrewAI "
+            "gallery page — this is how the crew actually runs."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "What the crew must do."},
+                "specialists": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional specialist ids. Defaults to the workspace crew.",
+                },
+            },
+            "required": ["task"],
+        },
+    },
+    {
         "name": "finish",
         "description": (
             "Call this ONLY when the work is actually done and you can prove it. "
@@ -415,105 +441,8 @@ do not claim a feature is live until the canonical update has actually landed.
 You have {MAX_STEPS} steps. Use them."""
 
 
-# Eén lus, dertien rollen. Tot nu toe was SYSTEM_PROMPT het enige dat het model
-# te horen kreeg, dus "NorthSea Desk Manager" en "Trading Agent" waren etiketten
-# op precies dezelfde agent: dezelfde toon, dezelfde aannames, dezelfde scope.
-# Dit is wat een agent tot díe agent maakt -- zijn rol, wat hij bezit en waar
-# hij van afblijft. Overgenomen uit src/domain/agents/roster.ts (AXE_AGENTS);
-# elke id daar hoort hier een brief te hebben, en test_agent_briefs.py houdt de
-# twee lijsten gelijk.
-#
-# De brief gaat VOOR de system prompt, niet erna: het eerste wat het model
-# leest is wie het is, daarna pas hoe het werkt.
-AGENT_BRIEFS: dict[str, str] = {
-    "axe": (
-        "You are AXE, the orchestrator. You talk to Luka, work out what he "
-        "actually wants, and either answer it yourself or hand it to the "
-        "manager who owns that domain. You hold ambiguous work rather than "
-        "mis-routing it."
-    ),
-    # ── tier 1 — het managerteam ────────────────────────────────────────────
-    "wingman": (
-        "You are the Wingman, AXE's right hand, working for AXE. You run the "
-        "CrewAI crews on the VPS on AXE's behalf and help out anywhere else. "
-        "You prepare and propose; AXE and Luka decide."
-    ),
-    "northsea": (
-        "You are the NorthSea Desk Manager, working for AXE: the commodity "
-        "desk. You research counterparties, cargoes, offers and prices, and "
-        "you report what you found.\n"
-        "HARD LIMIT: this desk is READ-ONLY. You never send an email, a "
-        "message or an offer, never write to the NorthSea database, and never "
-        "switch on any automatic sending. Nothing leaves the desk without "
-        "Luka. If a job needs something sent, say exactly what you would send "
-        "and to whom, and stop there."
-    ),
-    "trading": (
-        "You are the Trading Agent, working for AXE: the AXE Algo trading "
-        "desk. Market analysis, positions, risk and the final trade decision "
-        "are yours, and you own the trading research crew.\n"
-        "HARD LIMIT: money never moves unattended. Placing, modifying, "
-        "closing or cancelling an order — through the broker API, the "
-        "/trading/order endpoint or any script — always needs Luka's "
-        "approval first. Analysing, sizing and proposing a trade is your "
-        "work; executing it is his call."
-    ),
-    "developer": (
-        "You are AXE Developer, working for AXE: the code manager. You read, "
-        "write, build and ship the codebase. Look at the real file before you "
-        "change it, keep the change small, and prove it with a test or a "
-        "build — not with a description of what you did."
-    ),
-    "thinktank": (
-        "You are ThinkTank, working for AXE: the ideas manager. You score and "
-        "rank ideas, turn the survivors into a build plan, and hand that plan "
-        "on. Be concrete: an idea without a next step is not an idea yet."
-    ),
-    # ── tier 2 — de werkers ─────────────────────────────────────────────────
-    "browser": (
-        "You are the Browser agent, working for AXE. You navigate, extract "
-        "and summarise web pages. Report what the page actually said, with "
-        "the URL; never fill in what you did not see."
-    ),
-    "memory": (
-        "You are the Memory manager, working for AXE. You build and maintain "
-        "the durable memory itself: consolidation, decay and the Obsidian "
-        "vault. Only store what was explicitly worth remembering."
-    ),
-    "task": (
-        "You are the Task manager, working for AXE. You pick up tasks from "
-        "the Tasks tab and track them to close. A task is closed when there "
-        "is proof it is done, not when someone said so."
-    ),
-    "cron": (
-        "You are the Cron manager, working for AXE: the self-hosted "
-        "scheduler. You run due schedules with nobody watching, so be "
-        "conservative — a job that should not run twice must not run twice."
-    ),
-    "finance": (
-        "You are the Finance agent, working for AXE: money, credits and every "
-        "subscription. You watch what is left, warn before something runs "
-        "out, and route work to the cheapest engine that can still do it. You "
-        "report numbers; you never buy, top up or cancel anything yourself."
-    ),
-    "apps": (
-        "You are the App manager, working for AXE: the app registry and VPS "
-        "ops. You health-check the services behind AXE CORE and AXE "
-        "Companion, and you can restart them — with approval, and after you "
-        "have said what is actually wrong."
-    ),
-    # ── tier 3 — cross-app assistenten ──────────────────────────────────────
-    "intel": (
-        "You are AXE Intel, working for AXE: market intelligence and signal "
-        "detection inside Trading OS. You surface signals with their source "
-        "and time; you do not trade on them."
-    ),
-    "companion": (
-        "You are AXE Companion, working for AXE: the assistant that lives in "
-        "the other apps and is driven through AXE CORE. Do the work in the "
-        "app you are in, and report back plainly."
-    ),
-}
+# Brieven en werkplekken staan in agent_workspace.py. AGENT_BRIEFS blijft
+# hier een naam zodat bestaande tests (test_agent_briefs) hem blijven zien.
 
 
 # De brief van de agent die déze beurt draait. Een ContextVar en geen extra
@@ -529,13 +458,52 @@ _HUIDIGE_BRIEF: contextvars.ContextVar[str] = contextvars.ContextVar(
     "axe_agent_brief", default=""
 )
 
+_HUIDIGE_AGENT_WS: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "axe_agent_workspace", default=None,
+)
+
+_HUIDIGE_DEVICE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "axe_pinned_device", default=None,
+)
+
+
+def _tool_decls() -> list[dict[str, Any]]:
+    """Alleen de tools van déze werkplek. Zonder filter ziet iedereen run_crew."""
+    ws = _HUIDIGE_AGENT_WS.get()
+    toegestaan = set(tools_voor(ws)) if ws else {d["name"] for d in TOOL_DECLARATIONS}
+    return [d for d in TOOL_DECLARATIONS if d["name"] in toegestaan]
+
 
 def systeem_prompt() -> str:
     """De system prompt zoals het model hem deze beurt krijgt: brief + basis."""
     brief = _HUIDIGE_BRIEF.get()
     workspace = _HUIDIGE_WORKSPACE.get()
     basis = SYSTEM_PROMPT.replace(WORKSPACE, workspace)
-    return f"{brief}\n\n{basis}" if brief else basis
+    extra: list[str] = []
+    ws = _HUIDIGE_AGENT_WS.get()
+    if ws:
+        extra.append(f"Workspace role: {ws.get('role')}.")
+        extra.append(f"Memory scope: {ws.get('memory_scope')}.")
+        crew = crew_voor(ws)
+        if crew:
+            extra.append(
+                "CrewAI is the execution layer for this agent. Call run_crew "
+                f"with specialists {', '.join(crew)} — do not send Luka to the CrewAI gallery."
+            )
+        if ws.get("preferred_device"):
+            extra.append(f"Preferred device: {ws['preferred_device']}.")
+    pinned = _HUIDIGE_DEVICE.get()
+    if pinned == "vps":
+        extra.append("Luka pinned this job to the VPS. Use run_shell, not a Mac.")
+    elif pinned:
+        extra.append(
+            f"Luka pinned this job to {pinned}. Use run_on_device with that "
+            "device. Do not switch machine."
+        )
+    kop = brief
+    if extra:
+        kop = f"{brief}\n\n" + "\n".join(extra) if brief else "\n".join(extra)
+    return f"{kop}\n\n{basis}" if kop else basis
 
 
 class ProviderUitgeput(RuntimeError):
@@ -695,7 +663,7 @@ async def _call_gemini(contents: list[dict[str, Any]], api_key: str) -> dict[str
 
     payload = {
         "contents": contents,
-        "tools": [{"functionDeclarations": TOOL_DECLARATIONS}],
+        "tools": [{"functionDeclarations": _tool_decls()}],
         "systemInstruction": {"parts": [{"text": systeem_prompt()}]},
         "generationConfig": {"temperature": 0.2},
     }
@@ -769,7 +737,7 @@ async def _call_ollama(contents: list[dict[str, Any]]) -> dict[str, Any]:
                 "description": t["description"],
                 "parameters": t["parameters"],
             }}
-            for t in TOOL_DECLARATIONS
+            for t in _tool_decls()
         ],
         "options": {"temperature": 0.2},
     }
@@ -861,7 +829,7 @@ async def _call_openai_compat(
                 "description": t["description"],
                 "parameters": t["parameters"],
             }}
-            for t in TOOL_DECLARATIONS
+            for t in _tool_decls()
         ],
         "temperature": 0.2,
     }
@@ -951,6 +919,7 @@ async def run_agent_loop(
     *,
     agent: str | None = None,
     workspace: str | None = None,
+    device: str | None = None,
     should_stop: Callable[[], Awaitable[bool]] | None = None,
 ) -> dict[str, Any]:
     """Run the request to completion.
@@ -980,11 +949,15 @@ async def run_agent_loop(
     if agent == "northsea":
         read_only = True
 
-    brief = AGENT_BRIEFS.get(agent or "", "")
+    agent_ws = laad_workspace(agent) if agent else None
+    brief = (agent_ws or {}).get("system_prompt") or AGENT_BRIEFS.get(agent or "", "")
     task_workspace = workspace or WORKSPACE
     os.makedirs(task_workspace, exist_ok=True)
+    pinned = device or ((agent_ws or {}).get("preferred_device") if agent_ws else None)
     werkplek_fiche = _HUIDIGE_WORKSPACE.set(task_workspace)
     fiche = _HUIDIGE_BRIEF.set(brief)
+    ws_fiche = _HUIDIGE_AGENT_WS.set(agent_ws)
+    device_fiche = _HUIDIGE_DEVICE.set(pinned if pinned in ("vps", "mac-mini", "imac") else None)
 
     async def stop_gevraagd() -> None:
         """Werp TaskCancelled als de taak intussen geannuleerd is."""
@@ -1001,6 +974,8 @@ async def run_agent_loop(
     finally:
         _HUIDIGE_BRIEF.reset(fiche)
         _HUIDIGE_WORKSPACE.reset(werkplek_fiche)
+        _HUIDIGE_AGENT_WS.reset(ws_fiche)
+        _HUIDIGE_DEVICE.reset(device_fiche)
 
 
 async def _lus(
@@ -1180,8 +1155,22 @@ async def _lus(
                 await on_event("axe.progress", f"Step {step}: checking which Macs are online", {})
                 result = {"devices": await asyncio.to_thread(device_actions.list_devices)}
                 transcript.append({"step": step, "tool": "list_devices"})
+            elif name == "run_crew":
+                ws = _HUIDIGE_AGENT_WS.get() or {}
+                specialists = args.get("specialists") if isinstance(args.get("specialists"), list) else crew_voor(ws)
+                crew_task = str(args.get("task") or request_text)
+                await on_event("axe.progress", f"Step {step}: CrewAI from this agent's workspace.", {
+                    "specialists": specialists,
+                })
+                from crew_runner import run_crew
+                result = await asyncio.to_thread(run_crew, crew_task, None, None, specialists)
+                transcript.append({
+                    "step": step, "tool": "run_crew",
+                    "specialists": specialists, "status": result.get("status"),
+                })
             elif name == "run_on_device":
-                device = str(args.get("device") or "")
+                pinned = _HUIDIGE_DEVICE.get()
+                device = str(pinned if pinned and pinned != "vps" else (args.get("device") or ""))
                 tool = str(args.get("tool") or "")
                 dargs = args.get("args") if isinstance(args.get("args"), dict) else {}
                 key = None if read_only else device_actions.approval_key(device, tool, dargs)

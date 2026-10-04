@@ -1,8 +1,21 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { splitsAxeBeurten, jobStukkenVan } from '@/domain/tierRouter/splitsAxeBeurten';
-import { startJobsParallel } from './stuurAxeJobs';
+import { jobsVanStukken, startJobsParallel } from './stuurAxeJobs';
 import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
 import { skillDef } from '@/domain/tierRouter/axeSkills';
+
+describe('jobsVanStukken houdt device vast', () => {
+  it('zet device=mac-mini op de job, niet weg', () => {
+    const jobs = jobsVanStukken([{
+      text: 'check northsea deals on the Mac mini',
+      device: 'mac-mini',
+      tab: 'home',
+      route: classifyAxeTier('check northsea deals on the Mac mini'),
+    }]);
+    expect(jobs[0].device).toBe('mac-mini');
+    expect(jobs[0].tab).toBe('home');
+  });
+});
 
 describe('startJobsParallel', () => {
   it('zet drie jobs tegelijk uit, niet achter elkaar', async () => {
@@ -89,6 +102,50 @@ describe('een benoemde skill', () => {
     expect(gestuurd[0].execution_mode).toBe('read');
     // En de opdracht is de volle instructie, niet de twee woorden die Luka zei.
     expect(String(gestuurd[0].goal).length).toBeGreaterThan(100);
+  });
+
+  it('houdt device=mac-mini vast tot de durable task — niet droppen in payloadVoor', async () => {
+    await startJobsParallel(
+      [{
+        text: 'check northsea deals on the Mac mini',
+        titel: 'Check NorthSea deals',
+        device: 'mac-mini',
+        tab: 'home',
+        route: classifyAxeTier('check northsea deals on the Mac mini'),
+      }],
+      { create, id: () => 'id-device' },
+    );
+    expect(gestuurd).toHaveLength(1);
+    const payload = gestuurd[0].payload as Record<string, unknown>;
+    const meta = gestuurd[0].metadata as Record<string, unknown>;
+    expect(payload.device).toBe('mac-mini');
+    expect(meta.device).toBe('mac-mini');
+    expect(payload.tab).toBe('home');
+    expect((payload.workspace as { role?: string })?.role).toMatch(/commodity/i);
+  });
+
+  it('schrijft de taakmap in de kluis, anders ziet de Obsidian-tab hem niet', async () => {
+    const mappen: string[] = [];
+    await startJobsParallel(
+      [{
+        text: 'check northsea deals on the Mac mini',
+        device: 'mac-mini',
+        tab: 'home',
+        route: classifyAxeTier('check northsea deals on the Mac mini'),
+      }],
+      {
+        create: async (input) => {
+          gestuurd.push(input);
+          return { task: { id: 'task-mac-mini-1' } };
+        },
+        kluis: async (in_) => {
+          mappen.push(`AXE/Tasks/${in_.taskId}/task.md`);
+          return `AXE/Tasks/${in_.taskId}/task.md`;
+        },
+        id: () => 'id-kluis',
+      },
+    );
+    expect(mappen).toEqual(['AXE/Tasks/task-mac-mini-1/task.md']);
   });
 
   it('laat gewoon werk op execute staan -- de leesstand is van de skill, niet van alles', async () => {
