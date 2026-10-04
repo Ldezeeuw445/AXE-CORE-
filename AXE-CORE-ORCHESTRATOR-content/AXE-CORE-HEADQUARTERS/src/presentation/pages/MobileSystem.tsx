@@ -17,7 +17,8 @@ import { MobileChat } from '@/presentation/components/layout/MobileChat';
 import { PlaatSlot, SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 import { AXE_AGENTS, agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
 import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
-import { managerVan, regelVan } from '@/domain/tierRouter/agentVenster';
+import { agentRegel, goedkeuringVanJob } from '@/domain/agentBewustzijn';
+import { managerVan } from '@/domain/tierRouter/agentVenster';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
@@ -91,12 +92,13 @@ function useAgentJob(agent: AxeAgent) {
 function AgentTile({ id }: { id: AxeAgentId }) {
   const agent = agentById(id);
   const job = useAgentJob(agent);
-  const state = job?.state === 'waiting'
+  const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
+  const state = vraag
     ? 'WAITING'
     : job
       ? 'WORKING'
       : 'IDLE';
-  const detail = job ? regelVan(job) : agent.handles;
+  const detail = job ? agentRegel(job) : agent.handles;
   const compactLabel = agent.id === 'companion' ? 'Companion' : (agent.kort ?? agent.name);
 
   return (
@@ -109,8 +111,8 @@ function AgentTile({ id }: { id: AxeAgentId }) {
         borderTopColor: 'var(--axe-kaart-lijn-boven)',
         boxShadow: 'var(--axe-kaart-schaduw)',
       }}
-      title={detail}
-      aria-label={`${agent.name}: ${state}`}
+      title={vraag ? vraag.tekst : detail}
+      aria-label={`${agent.name}: ${state}${job ? ` · ${detail}` : ''}`}
     >
       <ManagerAvatar agent={agent} size={23} />
       <span
@@ -119,6 +121,14 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       >
         {compactLabel}
       </span>
+      {job && (
+        <span
+          className="mt-0.5 max-w-full truncate px-0.5 text-[7px] leading-tight"
+          style={{ color: vraag ? 'var(--warning)' : 'var(--text-secondary)' }}
+        >
+          {detail}
+        </span>
+      )}
     </button>
   );
 }

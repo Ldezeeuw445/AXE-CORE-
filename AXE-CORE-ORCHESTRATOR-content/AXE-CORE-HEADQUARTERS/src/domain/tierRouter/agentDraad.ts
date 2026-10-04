@@ -5,6 +5,7 @@
  */
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import type { AxeAgentId } from '@/domain/agents/roster';
+import { goedkeuringVanJob } from '@/domain/agentBewustzijn';
 import { stappenUit } from '@/domain/tierRouter/agentVenster';
 
 export type DraadRol = 'axe' | 'luka' | 'agent';
@@ -35,8 +36,9 @@ export function draadVanJob(job: AxeJob): DraadBericht[] {
   for (const stap of stappenUit(job.stappen ?? [], 8)) {
     uit.push({ rol: 'agent', soort: 'step', tekst: stap });
   }
-  if (job.state === 'waiting' && job.approvalVraag) {
-    uit.push({ rol: 'agent', soort: 'approval', tekst: kort(job.approvalVraag) });
+  const vraag = job.state === 'waiting' ? goedkeuringVanJob(job) : null;
+  if (vraag) {
+    uit.push({ rol: 'agent', soort: 'approval', tekst: kort(vraag.tekst, 600) });
   }
   if (job.summary) {
     uit.push({ rol: 'agent', soort: 'result', tekst: kort(job.summary) });

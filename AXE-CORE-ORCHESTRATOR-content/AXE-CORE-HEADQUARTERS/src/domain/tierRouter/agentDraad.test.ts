@@ -15,15 +15,22 @@ function job(over: Partial<AxeJob> = {}): AxeJob {
 }
 
 describe('agentDraad', () => {
-  it('is een live draad: opdracht, stappen, goedkeuring — niet alleen status', () => {
-    const berichten = draadVanJob(job({
+  it('is een live draad: opdracht, stappen — goedkeuring alleen buiten het plan', () => {
+    const binnen = draadVanJob(job({
       state: 'waiting',
       stappen: ['AXE started working directly, with a budget of 40 steps.', 'Step 1: $ ls'],
       approvalVraag: 'May I run systemctl restart axe-core-api?',
     }));
-    expect(berichten.map((b) => b.soort)).toEqual(['instruction', 'step', 'step', 'approval']);
-    expect(berichten[0].tekst).toMatch(/mac mini/i);
-    expect(berichten.some((b) => b.soort === 'approval')).toBe(true);
+    expect(binnen.map((b) => b.soort)).toEqual(['instruction', 'step', 'step']);
+    expect(binnen.some((b) => b.soort === 'approval')).toBe(false);
+
+    const send = draadVanJob(job({
+      title: 'Send the offer to the buyer',
+      sourceText: 'send the offer to the buyer',
+      state: 'waiting',
+      approvalVraag: 'send the offer',
+    }));
+    expect(send.some((b) => b.soort === 'approval' && /Dit is/.test(b.tekst) && /Waarom/.test(b.tekst))).toBe(true);
   });
 
   it('plakt opvolging van dezelfde agent aan dezelfde draad', () => {

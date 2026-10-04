@@ -146,7 +146,8 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
     expect(tekst).toMatch(/gesprokenGoedkeuringsBesluit/);
     expect(tekst).toMatch(/magMetStemGoedkeuren/);
     expect(tekst).toMatch(/decideDurableTaskApproval/);
-    expect(tekst).toMatch(/jobWachtTekst\(wacht, vraag\)/);
+    expect(tekst).toMatch(/goedkeuringVoorActie/);
+    expect(tekst).toMatch(/jobWachtTekst\(wacht, gk\.tekst\)/);
   });
 
   it('expliciete Mac-opdrachten omzeilen de kernel niet meer', () => {

@@ -7,6 +7,7 @@
  * rijen voor hetzelfde werk worden één.
  */
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
+import { goedkeuringVoorActie } from '@/domain/taakGoedkeuring';
 
 export type WerkOorsprong = 'luka' | 'planner' | 'cron' | 'nightly' | 'agent' | 'onbekend';
 
@@ -42,7 +43,6 @@ export interface WerkItem {
 /** AXE Core als assignee zonder verzoek is de dump, geen echte eigenaar. */
 const GEEN_EIGENAAR = new Set(['', 'axe', 'axe-core', 'axe core', 'axecore']);
 
-const VERSTUURT = /\b(send|email|mail|imessage|whatsapp|verstuur|stuur een)\b/i;
 
 export function werkOorsprongVan(in_: WerkBronIn): { oorsprong: WerkOorsprong; eigenaar: string; tekst: string } {
   const meta = in_.metadata ?? {};
@@ -141,14 +141,10 @@ export function voegWerkSamen(rijen: readonly WerkBronIn[]): WerkItem[] {
   return uit;
 }
 
-/** Een volgende stap die zou versturen, stopt. Geen mail, geen auto_send. */
+/** Een volgende stap die het plan verlaat, stopt en vraagt. Geen mail, geen auto_send. */
 export function volgendeStapMagDoor(tekst: string): { door: boolean; vraag?: string } {
-  if (VERSTUURT.test(tekst)) {
-    return { door: false, vraag: 'This would send a message. It stops here until you say so.' };
-  }
-  if (/auto_send|auto_reply/i.test(tekst)) {
-    return { door: false, vraag: 'NorthSea sending stays off.' };
-  }
+  const vraag = goedkeuringVoorActie({ title: tekst, detail: tekst });
+  if (vraag) return { door: false, vraag: vraag.tekst };
   return { door: true };
 }
 

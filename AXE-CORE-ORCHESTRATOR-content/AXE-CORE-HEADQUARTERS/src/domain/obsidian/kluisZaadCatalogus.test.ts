@@ -7,7 +7,11 @@ import { kluisZaadNotities, ontbrekendeZaadNotities } from './kluisZaadCatalogus
 describe('kluiszaad uit het echte rooster', () => {
   it('zaait workplaces, agents en repos één keer, niet twee keer', () => {
     const eerste = kluisZaadNotities();
-    expect(eerste.filter((n) => n.path.startsWith('AXE/Workplaces/'))).toHaveLength(NAV_ITEMS.length);
+    expect(eerste.filter((n) => n.path.startsWith('AXE/Workplaces/') && n.path.endsWith('/context.md'))).toHaveLength(NAV_ITEMS.length);
+    expect(eerste.filter((n) => n.tags.includes('plan'))).toHaveLength(3);
+    expect(eerste.some((n) => n.path === 'AXE/Workplaces/AXE Core/plan.md')).toBe(true);
+    expect(eerste.some((n) => n.path === 'AXE/Workplaces/Northsea Desk/plan.md' && /Desk Manager/.test(n.content) && !/geen mail, geen auto_send/i.test(n.content))).toBe(true);
+    expect(eerste.some((n) => n.path === 'AXE/Workplaces/Trading/plan.md' && /live order/.test(n.content))).toBe(true);
     expect(eerste.filter((n) => n.tags.includes('agent'))).toHaveLength(AXE_AGENTS.length);
     expect(eerste.filter((n) => n.path.startsWith('AXE/Repos/'))).toHaveLength(REPO_WERKPLEKKEN.length);
     expect(eerste.some((n) => n.path.includes('Northsea Desk'))).toBe(true);

@@ -1,9 +1,8 @@
 /**
  * Wat de drie hoofdagents zelf gepland hebben (backend/axe_api/planner.py).
  *
- * Leestaken doet de planner zelf; die staan hier met hun uitkomst. Schrijftaken
- * wachten op jou: Goedkeuren laat de Code Agent ze in de volgende ronde
- * uitvoeren (ongecommit, jij bekijkt de diff), Afwijzen legt ze weg.
+ * Werk binnen het staande plan loopt door. Alleen versturen, geld of een deal
+ * vraagt jou. Ja laat de Code Agent hem in de volgende ronde uitvoeren.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Check, RefreshCw, Sparkles, X } from 'lucide-react';
@@ -13,6 +12,7 @@ import {
   plannerBesluit, plannerRonde, plannerStatus, plannerTaken,
   type PlannerStatus, type PlannerTaak,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { goedkeuringVoorActie } from '@/domain/taakGoedkeuring';
 import { heeftEchteEigenaar, taakAlsBron, werkOorsprongVan } from '@/domain/werkBron';
 
 const AGENT: Record<string, string> = {
@@ -43,13 +43,21 @@ function datumTijd(iso?: string | null): string {
   return d.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+function vraagVoor(t: PlannerTaak) {
+  return goedkeuringVoorActie({
+    title: t.title,
+    goal: t.goal,
+    metadata: t.metadata as Record<string, unknown> | null,
+  });
+}
+
 function stand(t: PlannerTaak): { tekst: string; kleur: string } {
   const g = t.metadata?.goedkeuring;
   if (t.status === 'completed') return { tekst: 'klaar', kleur: 'var(--success)' };
   if (t.status === 'running') return { tekst: 'bezig', kleur: 'var(--accent-cyan)' };
   if (t.status === 'failed') return { tekst: 'mislukt', kleur: 'var(--error)' };
   if (t.status === 'cancelled') return { tekst: 'afgewezen', kleur: 'var(--text-muted)' };
-  if (g === 'nodig') return { tekst: 'wacht op jou', kleur: 'var(--warning)' };
+  if (g === 'nodig' && vraagVoor(t)) return { tekst: 'wacht op jou', kleur: 'var(--warning)' };
   if (g === 'ja') return { tekst: 'goedgekeurd', kleur: 'var(--success)' };
   return { tekst: 'gepland', kleur: 'var(--text-secondary)' };
 }
@@ -91,7 +99,11 @@ export function PlannerTaken() {
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
   };
 
-  const wacht = (taken ?? []).filter(t => t.metadata?.goedkeuring === 'nodig' && t.status === 'pending').length;
+  const wacht = (taken ?? []).filter(t => (
+    t.metadata?.goedkeuring === 'nodig'
+    && t.status === 'pending'
+    && vraagVoor(t)
+  )).length;
   const laatste = status?.laatste_ronde?.klaar ? new Date(status.laatste_ronde.klaar) : null;
 
   return (
@@ -163,6 +175,7 @@ export function PlannerTaken() {
             const uitkomst = t.result?.output ?? t.error?.message ?? null;
             const agentId = t.metadata?.agent ?? t.assignee ?? 'axe-core';
             const schrijft = t.metadata?.risico === 'schrijven';
+            const vraag = vraagVoor(t);
             const oorsprong = werkOorsprongVan(taakAlsBron({
               id: t.id, title: t.title, status: t.status, assignee: t.assignee,
               capability: 'planner', created_at: t.created_at, completed_at: t.completed_at,
@@ -191,7 +204,7 @@ export function PlannerTaken() {
                     {datumTijd(t.created_at)}
                   </span>
                   <span className="text-[10px] shrink-0" style={{ color: s.kleur }}>{s.tekst}</span>
-                  {t.metadata?.goedkeuring === 'nodig' && t.status === 'pending' && (
+                  {t.metadata?.goedkeuring === 'nodig' && t.status === 'pending' && vraag && (
                     <>
                       <button type="button" title="Goedkeuren" onClick={() => { void besluit(t, true); }} style={{ color: 'var(--success)' }}><Check size={14} /></button>
                       <button type="button" title="Afwijzen" onClick={() => { void besluit(t, false); }} style={{ color: 'var(--text-muted)' }}><X size={14} /></button>
@@ -206,7 +219,7 @@ export function PlannerTaken() {
                     </div>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Waarom gepland</div>
-                      <div className="whitespace-pre-wrap">{t.description || 'Het model gaf geen aparte waarom-regel terug.'}</div>
+                      <div className="whitespace-pre-wrap">{vraag?.tekst || t.description || 'Het model gaf geen aparte waarom-regel terug.'}</div>
                     </div>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Waar kwam dit vandaan?</div>

@@ -1,103 +1,145 @@
+/**
+ * Wat Awareness écht weet: wie iets doet, en welke actie het plan verlaat.
+ * Geen tweede layout — dezelfde kaart als de agentvensters. Stil als er niets is.
+ */
 import { useEffect, useState } from 'react';
-import { Activity, AlertTriangle, Clock3, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { getAwarenessSnapshot, type AwarenessSnapshot } from '@/application/awareness/axeAwareness';
+import { Eye } from 'lucide-react';
+import {
+  bewustzijnVanJobs,
+  goedkeuringVanActie,
+  openGoedkeuringen,
+} from '@/domain/agentBewustzijn';
+import { getAwarenessSnapshot, type AwarenessGoedkeuring } from '@/application/awareness/axeAwareness';
+import { decideDurableTaskApproval, plannerBesluit } from '@/infrastructure/gateways/axeCoreApiService';
+import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
 
-type Proposal = { title: string; priority: 'high' | 'normal'; context: string };
+export function AwarenessCenter({ onClose }: { onClose: () => void }) {
+  const jobs = useAxeJobStore((s) => s.jobs);
+  const pendingExec = useVoiceStore((s) => s.pendingExec);
+  const resolvePendingExec = useVoiceStore((s) => s.resolvePendingExec);
+  const [extra, setExtra] = useState<AwarenessGoedkeuring[]>([]);
 
-/** Read-only live snapshot of open tasks/follow-ups AXE is tracking, with an
- *  "pick this up" affordance that hands a proposal to the caller — approval
- *  happens in the caller (Home routes it through the normal chat pipeline,
- *  so it stays subject to the same approval gates as any other AXE action). */
-export function AwarenessCenter({ onClose, onApprove }: { onClose: () => void; onApprove: (proposal: Proposal) => void }) {
-  const [data, setData] = useState<AwarenessSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [proposal, setProposal] = useState<Proposal | null>(null);
-
-  const refresh = async () => { setLoading(true); setData(await getAwarenessSnapshot()); setLoading(false); };
   useEffect(() => {
-    void refresh();
-    const id = window.setInterval(() => void refresh(), 60000);
-    return () => window.clearInterval(id);
+    let alive = true;
+    const laad = () => {
+      void getAwarenessSnapshot()
+        .then((s) => { if (alive) setExtra(s.goedkeuringen); })
+        .catch(() => { if (alive) setExtra([]); });
+    };
+    laad();
+    const id = window.setInterval(laad, 30_000);
+    return () => { alive = false; window.clearInterval(id); };
   }, []);
+
+  const agenten = bewustzijnVanJobs(jobs).filter((a) => a.regel || a.goedkeuring);
+  const uitJobs = openGoedkeuringen(jobs);
+  const execVraag = pendingExec
+    ? goedkeuringVanActie({ title: pendingExec.title, detail: pendingExec.detail })
+    : null;
+  const gezien = new Set(uitJobs.map((g) => g.goedkeuring.tekst));
+  if (execVraag) gezien.add(execVraag.tekst);
+  const uitTaken = extra.filter((g) => !gezien.has(g.tekst));
+
+  const stil = agenten.length === 0 && !execVraag && uitJobs.length === 0 && uitTaken.length === 0;
 
   return (
     <div
-      className="absolute top-14 right-4 z-30 w-[min(360px,calc(100%-2rem))] rounded-2xl p-4 shadow-2xl"
-      style={{ background: 'rgba(8,10,18,.96)', border: '1px solid rgba(34,211,238,.28)', backdropFilter: 'blur(18px)' }}
+      className="absolute top-full left-1/2 z-40 mt-2 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl p-3 shadow-2xl"
+      style={{
+        background: 'var(--axe-kaart-vlak)',
+        border: '1px solid var(--axe-kaart-lijn)',
+        borderTopColor: 'var(--axe-kaart-lijn-boven)',
+        boxShadow: 'var(--axe-kaart-schaduw)',
+      }}
+      data-axe-awareness
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Activity size={15} style={{ color: 'var(--accent-cyan)' }} />
-          <span className="text-sm font-semibold text-white">Awareness Center</span>
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+          <Eye size={13} />
+          <span className="text-[11px] font-semibold uppercase tracking-wide">Awareness</span>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => void refresh()} aria-label="Refresh" className="text-gray-400 hover:text-white">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-lg leading-none">×</button>
-        </div>
+        <button type="button" onClick={onClose} className="text-sm leading-none" style={{ color: 'var(--text-muted)' }} aria-label="Close">×</button>
       </div>
 
-      {loading && !data ? (
-        <div className="text-xs text-gray-400 py-5 text-center">Live context ophalen…</div>
-      ) : data && (
-        <>
-          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mb-4">
-            {([['Open', data.openTasks], ['Overdue', data.overdueTasks], ['Follow-ups', data.followUps]] as const).map(([label, value]) => (
-              <div key={label} className="rounded-xl p-2" style={{ background: 'rgba(255,255,255,.05)' }}>
-                <div className="text-lg font-mono text-white">{value}</div>
-                <div className="text-[10px] text-gray-400">{label}</div>
-              </div>
-            ))}
-          </div>
-          <div className="text-[10px] text-gray-500 mb-2 flex items-center gap-1">
-            <Clock3 size={11} /> {new Date(data.now).toLocaleString()}
-          </div>
-          {data.alerts.length ? (
-            <div className="space-y-2">
-              {data.alerts.map((a, i) => (
-                <div key={i} className="rounded-lg p-2" style={{ background: 'rgba(251,146,60,.1)', color: '#fdba74' }}>
-                  <div className="flex gap-2 items-start">
-                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                    <span className="text-xs">{a}</span>
-                  </div>
-                  <button
-                    onClick={() => setProposal({ title: 'Signaal oppakken', priority: data.overdueTasks ? 'high' : 'normal', context: a })}
-                    className="mt-2 rounded-md px-2 py-1 text-[10px] text-cyan-200 border border-cyan-400/30 hover:bg-cyan-400/10"
-                  >
-                    Pak dit op
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex gap-2 items-center text-xs" style={{ color: '#86efac' }}>
-              <CheckCircle2 size={14} /> Geen urgente signalen
-            </div>
-          )}
-          {proposal && (
-            <div className="mt-3 rounded-xl p-3 border border-cyan-400/30" style={{ background: 'var(--tint-line)' }}>
-              <div className="text-xs font-semibold text-cyan-200">
-                Proposal created · {proposal.priority === 'high' ? 'High' : 'Normal'} priority
-              </div>
-              <div className="text-xs text-gray-300 mt-1">{proposal.context}</div>
-              <div className="text-[10px] text-gray-500 mt-2">This is only a proposal. Confirm explicitly before AXE runs anything.</div>
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={() => { onApprove(proposal); setProposal(null); }}
-                  className="rounded-md px-2 py-1 text-[10px] text-emerald-200 border border-emerald-400/30 hover:bg-emerald-400/10"
-                >
-                  Approve
-                </button>
-                <button onClick={() => setProposal(null)} className="rounded-md px-2 py-1 text-[10px] text-gray-400 border border-white/10 hover:text-white">
-                  Reject
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="mt-4 pt-3 border-t border-white/10 text-[10px] text-gray-500">Read-only · AXE does nothing without your approval</div>
-        </>
+      {stil && (
+        <p className="py-3 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+          Alles stil. Geen goedkeuring, geen lopend werk.
+        </p>
       )}
+
+      {agenten.length > 0 && (
+        <div className="mb-2 flex flex-col gap-1.5">
+          {agenten.map((a) => (
+            <div key={a.agentId} className="rounded-xl px-2.5 py-1.5" style={{ background: 'var(--bg-base)' }}>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{a.naam}</div>
+              <div className="text-[12px] leading-snug" style={{ color: 'var(--text-primary)' }}>{a.regel}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {uitJobs.map((g) => (
+        <GoedkeuringRij
+          key={`job-${g.job?.id ?? g.agentId}`}
+          tekst={g.goedkeuring.tekst}
+          ja={g.goedkeuring.ja}
+          onJa={() => {
+            const j = g.job;
+            if (!j?.taskId || !j.approvalId) return;
+            void decideDurableTaskApproval(j.taskId, j.approvalId, true, g.goedkeuring.ja)
+              .then(() => useAxeJobStore.getState().patch(j.id, { state: 'running' }));
+          }}
+          onNee={() => {
+            const j = g.job;
+            if (!j?.taskId || !j.approvalId) return;
+            void decideDurableTaskApproval(j.taskId, j.approvalId, false, 'geweigerd')
+              .then(() => useAxeJobStore.getState().patch(j.id, { state: 'failed' }));
+          }}
+        />
+      ))}
+
+      {execVraag && pendingExec && (
+        <GoedkeuringRij
+          tekst={execVraag.tekst}
+          ja={execVraag.ja}
+          onJa={() => resolvePendingExec(pendingExec.id, true)}
+          onNee={() => resolvePendingExec(pendingExec.id, false)}
+        />
+      )}
+
+      {uitTaken.map((g) => (
+        <GoedkeuringRij
+          key={`taak-${g.id}`}
+          tekst={g.tekst}
+          ja={g.ja}
+          onJa={() => { void plannerBesluit(g.id, true); }}
+          onNee={() => { void plannerBesluit(g.id, false); }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function GoedkeuringRij({
+  tekst, ja, onJa, onNee,
+}: {
+  tekst: string;
+  ja: string;
+  onJa: () => void;
+  onNee: () => void;
+}) {
+  return (
+    <div className="mb-2 rounded-xl px-2.5 py-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--axe-kaart-lijn)' }}>
+      <p className="mb-2 whitespace-pre-wrap text-[12px] leading-snug" style={{ color: 'var(--text-primary)' }}>{tekst}</p>
+      <div className="flex gap-1.5">
+        <button type="button" onClick={onJa} title={ja} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--ok)', background: 'var(--tint)' }}>
+          Approve
+        </button>
+        <button type="button" onClick={onNee} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+          Reject
+        </button>
+      </div>
     </div>
   );
 }

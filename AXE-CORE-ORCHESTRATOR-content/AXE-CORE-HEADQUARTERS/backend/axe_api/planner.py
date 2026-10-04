@@ -16,9 +16,10 @@ blijft; hij verzint geen projecten meer.
 
 Anders schrijft hij niets. Geen nieuwe ideeën, geen mail, geen auto_send.
 
-SCHRIJF-taken voert hij nooit zelf uit. Die staan als voorstel in Taken tot
-Luka ze goedkeurt; daarna draait de Code Agent ze met acceptEdits in de repo en
-laat hij de wijzigingen ongecommit staan.
+Taken binnen het staande plan voert hij zelf uit. Northsea-mails die dat
+plan al toestaat horen daarbij. Alleen een send die het plan niet toestaat,
+geld, of een dealverzet wacht op Luka; daarna draait de Code Agent ze
+met acceptEdits in de repo en laat hij de wijzigingen ongecommit staan.
 
 ## Drie dingen die hier met opzet zo zijn
 
@@ -316,6 +317,43 @@ def is_echte_storing(rij: dict) -> bool:
     return bool(status) and status not in OK_STATUS
 
 
+# Versturen, geld of een deal verlaten het plan. Northsea-mails die dat plan
+# al toestaat (kwalificatie, follow-up, niet-bindend) horen erin.
+_VERSTUURT = re.compile(r"\b(send|email|mail|imessage|whatsapp|verstuur|stuur een)\b|auto_send|auto_reply", re.I)
+_GELD = re.compile(r"\b(spend|betaal|betalen|payment|invoice|live order|market order|place (an? )?order|plaats (een )?order|wire money|transfer money)\b", re.I)
+_DEAL = re.compile(r"\b(move (the |a )?deal|verplaats (de |een )?deal|deal naar|close (the |a )?deal|sluit (de |een )?deal|change deal|update deal (stage|status)|deal stage)\b", re.I)
+_NORTHSEA_TOEGESTAAN = re.compile(r"\bqualif|\bfollow[- ]?up|\bfollowup|\bnon[- ]?binding", re.I)
+_NORTHSEA_NIET = re.compile(
+    r"\b(introduc|identity disclos|buyer identity|seller identity|counterparty identity|"
+    r"bank account|banking|swift|iban|commission|imfpa|ncnnda|ncnda|binding|"
+    r"contract execution|we accept|accept (price|offer)|sign(ature)?|whatsapp|imessage)\b",
+    re.I,
+)
+
+
+def northsea_send_binnen_plan(tekst: str) -> bool:
+    bron = tekst or ""
+    if not _NORTHSEA_TOEGESTAAN.search(bron):
+        return False
+    rest = _NORTHSEA_TOEGESTAAN.sub(" ", bron)
+    return _NORTHSEA_NIET.search(rest) is None
+
+
+def verlaat_app_plan(tekst: str, app: str | None = None) -> bool:
+    """True als de actie het staande plan verlaat. Northsea-send die het plan
+    al toestaat telt niet."""
+    bron = tekst or ""
+    if _VERSTUURT.search(bron):
+        if app == "northsea" and northsea_send_binnen_plan(bron):
+            return False
+        return True
+    return bool(_GELD.search(bron) or _DEAL.search(bron))
+
+
+def goedkeuring_voor_taak(titel: str, doel: str = "", app: str | None = None) -> str:
+    return "nodig" if verlaat_app_plan(f"{titel} {doel}", app) else "niet_nodig"
+
+
 def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
     """Wat deze ronde mag landen. Leeg als er niets te vervolgen is en niets stuk is."""
     uit: list[dict] = []
@@ -533,6 +571,7 @@ class Planner:
         oorsprong = v.get("oorsprong") if v.get("oorsprong") in ECHTE_OORSPRONG else None
         if not oorsprong:
             return None
+        app = app_voor_repo(repo, agent, f"{v['titel']} {v['doel']}")
         row = {
             "title": v["titel"],
             "goal": v["doel"],
@@ -547,8 +586,8 @@ class Planner:
             "payload": {"repo": repo, "bron_id": v.get("bron_id")},
             "metadata": {
                 "planner": True, "agent": agent, "motor": motor, "risico": v["risico"],
-                "goedkeuring": "niet_nodig" if v["risico"] == "lezen" else "nodig",
-                "uiStatus": "todo", "app": app_voor_repo(repo, agent, f"{v['titel']} {v['doel']}"),
+                "goedkeuring": goedkeuring_voor_taak(v["titel"], v.get("doel") or "", app),
+                "uiStatus": "todo", "app": app,
                 "oorsprong": oorsprong, "bron_id": v.get("bron_id"),
             },
         }
@@ -747,11 +786,6 @@ class Planner:
                 bron = str(v.get("bron_id") or "")
                 if bron and bron in al_open:
                     continue
-                doel = f"{v.get('titel')} {v.get('doel')}"
-                if re.search(r"\b(send|email|mail|imessage|whatsapp|verstuur|stuur een)\b", doel, re.I):
-                    continue
-                if re.search(r"auto_send|auto_reply", doel, re.I):
-                    continue
                 agent = v.get("agent") if v.get("agent") in AGENTS else "axe-core"
                 motor = motoren.get(agent, STANDAARD_MOTOREN[agent])
                 taak = self._maak_taak(agent, motor, v)
@@ -761,15 +795,16 @@ class Planner:
                         al_open.add(bron)
             verslag["gemaakt"] = [t.get("title") for t in gemaakt]
             verslag["aantal"] = len(gemaakt)
-            # Geen model om taken te verzinnen. Alleen een schrijftaak die Luka
-            # zelf vroeg én goedkeurde mag nog lopen.
+            # Geen model om taken te verzinnen. Binnen het plan mag hij door;
+            # een actie die het plan verlaat alleen na ja.
             for agent in AGENTS:
                 motor = motoren.get(agent, STANDAARD_MOTOREN[agent])
                 a: dict[str, Any] = {"motor": motor, "voorstellen": []}
                 goed = next((t for t in self._open_taken(agent)
-                             if (t.get("metadata") or {}).get("goedkeuring") == "ja"
-                             and t.get("status") == "pending"
-                             and is_luka_vraag(t)), None)
+                             if t.get("status") == "pending"
+                             and (is_luka_vraag(t) or (t.get("metadata") or {}).get("oorsprong") in ECHTE_OORSPRONG)
+                             and ((t.get("metadata") or {}).get("goedkeuring") == "ja"
+                                  or (t.get("metadata") or {}).get("goedkeuring") == "niet_nodig")), None)
                 if goed:
                     a["goedgekeurd_uitgevoerd"] = self._voer_uit(staat, goed)
                 verslag["agents"][agent] = a

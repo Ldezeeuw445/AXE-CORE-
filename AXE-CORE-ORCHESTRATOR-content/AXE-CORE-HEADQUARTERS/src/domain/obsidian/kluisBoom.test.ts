@@ -3,6 +3,7 @@ import {
   kluisGroepVan,
   kluisKaartenVan,
   kluisPadVoorAgent,
+  kluisPadVoorAppPlan,
   kluisPadVoorRepo,
   kluisPadVoorTaak,
   kluisPadVoorTab,
@@ -20,6 +21,9 @@ describe('kluisboom', () => {
     expect(kluisPadVoorTab('home')).toBe('AXE/Workplaces/Home/context.md');
     expect(kluisPadVoorTab('browser')).toBe('AXE/Workplaces/Browser/context.md');
     expect(kluisPadVoorTab('maps-3d')).toBe('AXE/Workplaces/Northsea Desk/context.md');
+    expect(kluisPadVoorAppPlan('AXE Core')).toBe('AXE/Workplaces/AXE Core/plan.md');
+    expect(kluisPadVoorAppPlan('Northsea Desk')).toBe('AXE/Workplaces/Northsea Desk/plan.md');
+    expect(kluisTakVan(kluisPadVoorAppPlan('Trading'))).toBe('workplaces');
     expect(tabsDelenMap('home', 'browser')).toBe(false);
     expect(tabsDelenMap('maps-3d', 'Northsea Desk')).toBe(true);
   });
