@@ -148,9 +148,15 @@ else
 fi
 echo "→ Configuring Ollama (CORS, ${MAX_LOADED} model(s) resident, keep-alive ${KEEP_ALIVE})..."
 mkdir -p /etc/systemd/system/ollama.service.d
+# Alleen op loopback. Hier stond 0.0.0.0:11434, en omdat nginx op dezelfde box
+# draait en doorgeeft aan 127.0.0.1 had niets die poort van buiten nodig -- maar
+# met 0.0.0.0 en een firewall die uit staat (ufw is standaard inactive op deze
+# Strato-images) was `http://<ip>:11434` een deur om het hele slot heen, precies
+# de open modelbox van 13 september. Het slot in nginx is alleen een slot als het
+# de enige deur is.
 cat > /etc/systemd/system/ollama.service.d/override.conf <<EOF
 [Service]
-Environment="OLLAMA_HOST=0.0.0.0:11434"
+Environment="OLLAMA_HOST=127.0.0.1:11434"
 Environment="OLLAMA_ORIGINS=*"
 Environment="OLLAMA_MAX_LOADED_MODELS=${MAX_LOADED}"
 Environment="OLLAMA_KEEP_ALIVE=${KEEP_ALIVE}"
