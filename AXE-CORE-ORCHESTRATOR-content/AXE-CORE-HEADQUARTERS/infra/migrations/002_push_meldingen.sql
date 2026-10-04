@@ -2,9 +2,12 @@
 --
 -- ## Waarom een eigen tabel en niet `push_subscriptions`
 --
--- Op dit Supabase-project staat al een `public.push_subscriptions` met 8 rijen.
--- Die komt in deze repo nergens voor: hij is van AXE Companion, dat hetzelfde
--- project deelt. In andermans tabel schrijven is precies de fout die hier eerder
+-- Op dit Supabase-project staat al een `public.push_subscriptions`, in gebruik en
+-- met rijen erin. Die komt in deze repo nergens voor: hij is van AXE Companion,
+-- dat hetzelfde project deelt. (Tel hem met `count(*)` als je het getal nodig
+-- hebt; de rijtelling in de Supabase-tabeloverzichten is een schatting uit
+-- `pg_class.reltuples` en stond hier op 8 terwijl het 34 was.)
+-- In andermans tabel schrijven is precies de fout die hier eerder
 -- maanden kostte -- zie de kop van `src/infrastructure/persistence/chatPersistence.ts`
 -- over `public.messages`, waar AXE Core's berichten tegen constraints liepen die
 -- voor een ander product geschreven waren, en elke insert stil verloren ging.
@@ -65,3 +68,18 @@ alter table public.core_notifications
 create index if not exists core_notifications_ongepusht_idx
   on public.core_notifications (created_at)
   where pushed_at is null;
+
+-- ## Toegepast 4 okt 2026 -- en hoe, want dat kostte drie pogingen
+--
+-- Dit script in één keer door de Supabase-MCP duwen loopt na 60 seconden in een
+-- timeout en past dan NIETS toe (nagekeken met `list_tables`: de tabel stond er
+-- niet). Dat gold voor `apply_migration` met de hele file, en ook voor
+-- `execute_sql` met twee opdrachten in één aanroep.
+--
+-- Wat wel werkt: **één opdracht per aanroep**, dan gaat het direct. Vandaar dat
+-- `drop policy if exists` + `create policy` hierboven bij elkaar staan maar
+-- afzonderlijk zijn uitgevoerd. Draai je dit in de SQL-editor, dan is dat geen
+-- probleem -- daar kan de hele file in één keer.
+--
+-- In `supabase_migrations.schema_migrations` staat het als twee regels:
+-- 20261004141257 (de tabel) en 20261004143000 (policy, indexen, pushed_at).
