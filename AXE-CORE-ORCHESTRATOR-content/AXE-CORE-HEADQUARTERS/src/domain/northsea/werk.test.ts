@@ -31,6 +31,15 @@ describe('northseaTaken', () => {
     expect(b.stand).toBe('in-progress');
   });
 
+  it('toont eigenaar en oorsprong bij het werk van de desk', () => {
+    const [a] = northseaTaken([
+      { id: '9', bron: 'deal_task', titel: 'Yes needed', status: 'waiting', prioriteit: 90,
+        deal_code: 'DEAL-001', eigenaar: 'luka', oorsprong: 'northsea-crew-loop' },
+    ]);
+    expect(a.van).toMatch(/luka|northsea-crew-loop/);
+    expect(a.van).toContain('DEAL-001');
+  });
+
   it('merkt zijn eigen rijen zodat de takenlijst ze niet probeert te beheren', () => {
     expect(isNorthseaWerk('ns:1')).toBe(true);
     expect(isNorthseaWerk('abc')).toBe(false);

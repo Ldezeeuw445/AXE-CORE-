@@ -350,6 +350,7 @@ class EngineService:
                                             "auto_send_followups is not used by the engine in P1"], "engine_version": rules.ENGINE_VERSION}})
                     await self.repo.engine_patch("northsea_followups", {"id": f"eq.{fu_id}"}, {"status": "draft_created", "draft_id": dr[0]["id"], "updated_at": nu.isoformat()})
                     item["result"] = "draft_created"
+                    item["draft_id"] = dr[0]["id"]
                 except RepositoryError as e:
                     reden = str(e)
                     await self.repo.engine_patch("northsea_followups", {"id": f"eq.{fu_id}"}, {"status": "blocked", "reason": reden[-200:], "updated_at": nu.isoformat()})

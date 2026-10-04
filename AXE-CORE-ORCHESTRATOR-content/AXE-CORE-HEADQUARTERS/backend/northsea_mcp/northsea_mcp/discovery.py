@@ -338,6 +338,7 @@ class DiscoveryService:
             "candidates": kandidaten_gevonden, "rejected": afgewezen,
             "candidate_count": len(kandidaten_gevonden), "rejected_count": len(afgewezen),
             "search_only": search_only, "outreach": False,
+            "owner": "axe", "origin": "northsea-discovery",
         }
         if extractie:
             metadata["candidate_extract_warning"] = extractie

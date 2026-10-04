@@ -354,13 +354,16 @@ select json_build_object(
   'taken', (select coalesce(json_agg(r order by r.prioriteit desc nulls last, r.due_at nulls last), '[]'::json) from (
      select dt.id::text as id, 'deal_task' as bron, dt.title as titel, dt.status, dt.priority as prioriteit,
             dt.due_at, dt.requires_approval as akkoord_nodig, dt.created_at,
-            o.deal_priority as deal_code, o.id::text as deal_id
+            o.deal_priority as deal_code, o.id::text as deal_id,
+            dt.owner as eigenaar, coalesce(dt.result->>'oorsprong', dt.result->>'origin') as oorsprong
      from deal_tasks dt left join opportunities o on o.id = dt.opportunity_id
      where dt.status in ('open','in_progress','waiting')
      union all
      select aq.id::text, 'action_queue', aq.title, aq.status, aq.priority,
             aq.due_at, aq.requires_approval, aq.created_at,
-            o2.deal_priority, o2.id::text
+            o2.deal_priority, o2.id::text,
+            coalesce(aq.metadata->>'owner', aq.metadata->>'eigenaar') as eigenaar,
+            coalesce(aq.metadata->>'origin', aq.metadata->>'oorsprong') as oorsprong
      from action_queue aq left join opportunities o2 on o2.id = aq.opportunity_id
      where aq.status in ('open','in_progress','waiting')
      limit 400) r),
