@@ -274,6 +274,7 @@ class TaskCreateRequest(BaseModel):
     requested_by: str = "luka"
     source_app: str = "axe_core"
     capability: Optional[str] = None
+    assignee: Optional[str] = None
     execution_mode: str = "execute"
     idempotency_key: Optional[str] = None
     parent_task_id: Optional[str] = None
