@@ -74,6 +74,6 @@ describe('goedkeuring alleen buiten het plan', () => {
     const deal = goedkeuringVoorActie({ title: 'Move the deal to closed won', app: 'northsea' });
     expect(deal?.tekst).toMatch(/deal/);
     expect(goedkeuringVoorActie({ title: 'Pay the invoice to the seller', app: 'northsea' })?.tekst).toMatch(/Waarom/);
-    expect(goedkeuringVoorActie({ title: 'Introduce us to the buyer', app: 'northsea' })?.tekst).toMatch(/Waarom/);
+    expect(goedkeuringVoorActie({ title: 'Send an introduction to the buyer', app: 'northsea' })?.tekst).toMatch(/Waarom/);
   });
 });
