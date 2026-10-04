@@ -1,112 +1,84 @@
 /**
  * Zet de kluisboom klaar: workplace per tab, werkplek per roster-agent,
- * workspace per repo. Bestaande notities blijven staan.
+ * workspace per repo. Bestaande notities blijven staan. Schrijffouten
+ * breken de zaai niet: de catalogus blijft zichtbaar.
  */
-import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
-import { AXE_AGENTS } from '@/domain/agents/roster';
-import { workspaceVoor } from '@/domain/agents/workspace';
-import { NAV_ITEMS } from '@/domain/navRegistry';
 import {
-  kluisPadVoorAgent,
-  kluisPadVoorRepo,
-  kluisPadVoorTab,
-} from '@/domain/obsidian/kluisBoom';
+  listRecentObsidianNotes,
+  writeObsidianNote,
+  type ObsidianNote,
+} from '@/infrastructure/persistence/obsidianMemoryService';
 import {
-  REPO_WERKPLEKKEN,
-  WIE_WERKT,
-  agentNaamVoorKluis,
-  agentVoorTab,
-  tabLabelVoorKluis,
-} from '@/domain/obsidian/werkplek';
+  kluisZaadNotities,
+  ontbrekendeZaadNotities,
+  type ZaadNotitie,
+} from '@/domain/obsidian/kluisZaadCatalogus';
+import { voegKluisNotitiesSamen } from '@/domain/obsidian/kluisNotities';
 
-export async function maybeSeedKluisBoom(): Promise<void> {
-  let paden: string[];
+const ZAAD_SLEUTEL = 'axe_kluis_zaad_paden_v1';
+
+function gelezenZaadPaden(): Set<string> {
   try {
-    paden = (await listRecentObsidianNotes(400)).map((n) => n.path);
+    const raw = JSON.parse(localStorage.getItem(ZAAD_SLEUTEL) || '[]');
+    return new Set(Array.isArray(raw) ? raw.filter((p): p is string => typeof p === 'string') : []);
   } catch {
-    return;
+    return new Set();
   }
-  const heeft = new Set(paden);
+}
 
-  for (const item of NAV_ITEMS) {
-    const tab = tabLabelVoorKluis(item.label);
-    const path = kluisPadVoorTab(item.label);
-    if (heeft.has(path)) continue;
-    const agent = agentVoorTab(item.label);
-    const agentNaam = agent ? agentNaamVoorKluis(agent) : 'none';
+function onthoudZaadPaden(paden: Iterable<string>): void {
+  const s = gelezenZaadPaden();
+  for (const p of paden) s.add(p);
+  try {
+    localStorage.setItem(ZAAD_SLEUTEL, JSON.stringify([...s]));
+  } catch { /* quota */ }
+}
+
+function alsNote(z: ZaadNotitie): ObsidianNote {
+  return {
+    path: z.path,
+    title: z.title,
+    content: z.content,
+    tags: z.tags,
+    wikilinks: [],
+    source: 'system',
+  };
+}
+
+async function schrijfZaad(n: ZaadNotitie): Promise<ObsidianNote> {
+  const note = alsNote(n);
+  try {
     await writeObsidianNote({
-      path,
-      title: `${tab} workplace`,
-      content: [
-        `# ${tab}`,
-        '',
-        `- kind: tab`,
-        `- tab: ${tab}`,
-        `- agent: ${agentNaam}`,
-        `- repo: none`,
-        `- who: ${WIE_WERKT} · whoever is working this tab`,
-        '',
-        `Context for the ${tab} tab. Other tabs do not share this folder.`,
-        '',
-      ].join('\n'),
-      tags: ['workplace', tab],
+      path: n.path,
+      title: n.title,
+      content: n.content,
+      tags: n.tags,
       source: 'system',
     });
+  } catch {
+    /* lokale cache heeft hem al; toon hem toch */
   }
+  return note;
+}
 
-  for (const agent of AXE_AGENTS) {
-    const path = kluisPadVoorAgent(agent.id);
-    if (heeft.has(path)) continue;
-    const ws = workspaceVoor(agent.id);
-    const tab = agent.route ? tabLabelVoorKluis(agent.route) : 'Home';
-    await writeObsidianNote({
-      path,
-      title: `${agent.name} workspace`,
-      content: [
-        `# ${agent.name}`,
-        '',
-        `- kind: agent`,
-        `- tab: ${tab}`,
-        `- agent: ${agent.name}`,
-        `- repo: none`,
-        `- who: ${agent.name}`,
-        `- role: ${ws.role}`,
-        `- preferred device: ${ws.preferredDevice ?? 'any'}`,
-        `- memory: ${ws.memoryScope}`,
-        `- tools: ${ws.tools.join(', ')}`,
-        `- crew: ${ws.crew.length ? ws.crew.join(', ') : 'none'}`,
-        '',
-        '## System prompt',
-        '',
-        ws.systemPrompt,
-        '',
-      ].join('\n'),
-      tags: ['agent', agent.id],
-      source: 'system',
-    });
+/** Open en Sync now: zaai wat ontbreekt, lees, voeg catalogus bij zodat memory-notes de boom niet verdringen. */
+export async function zaaiEnLeesKluis(): Promise<ObsidianNote[]> {
+  const bestaande = await listRecentObsidianNotes(400).catch(() => [] as ObsidianNote[]);
+  const paden = new Set([
+    ...bestaande.map((n) => n.path),
+    ...gelezenZaadPaden(),
+  ]);
+  const ontbrekend = ontbrekendeZaadNotities(paden);
+  const geschreven: ObsidianNote[] = [];
+  for (const n of ontbrekend) {
+    geschreven.push(await schrijfZaad(n));
   }
+  if (geschreven.length) onthoudZaadPaden(geschreven.map((n) => n.path));
 
-  for (const repo of REPO_WERKPLEKKEN) {
-    const path = kluisPadVoorRepo(repo.id);
-    if (heeft.has(path)) continue;
-    await writeObsidianNote({
-      path,
-      title: `${repo.label} workspace`,
-      content: [
-        `# ${repo.label}`,
-        '',
-        `- kind: repo`,
-        `- tab: Code Editor`,
-        `- agent: AXE Developer`,
-        `- repo: ${repo.owner}/${repo.repo}`,
-        `- branch: ${repo.branch}`,
-        `- who: ${WIE_WERKT} · AXE Developer`,
-        '',
-        `Code and project work for ${repo.label}. Agents that touch this repo write here.`,
-        '',
-      ].join('\n'),
-      tags: ['repo', repo.id],
-      source: 'system',
-    });
-  }
+  const na = await listRecentObsidianNotes(400).catch(() => bestaande);
+  return voegKluisNotitiesSamen(na, geschreven, kluisZaadNotities().map(alsNote));
+}
+
+export async function maybeSeedKluisBoom(): Promise<ObsidianNote[]> {
+  return zaaiEnLeesKluis();
 }

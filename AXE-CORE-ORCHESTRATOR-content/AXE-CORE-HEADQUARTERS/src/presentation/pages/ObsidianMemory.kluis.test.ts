@@ -13,6 +13,10 @@ describe('Obsidian-tab is de kluis, geen radar', () => {
     expect(bron).toMatch(/Kaart/);
     expect(bron).toMatch(/SectieBlok/);
     expect(bron).toMatch(/kluisKaartenVan/);
+    expect(bron).toMatch(/kluisGrafiekVan/);
+    expect(bron).toMatch(/data-axe-kluis-grafiek/);
+    expect(bron).toMatch(/zaaiEnLeesKluis/);
+    expect(bron).toMatch(/leesWerkWaarheid/);
   });
 
   it('toont de echte takken als openbare notities', () => {

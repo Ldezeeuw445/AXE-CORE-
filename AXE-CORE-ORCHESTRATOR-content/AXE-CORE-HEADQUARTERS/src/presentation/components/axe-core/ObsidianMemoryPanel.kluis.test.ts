@@ -16,6 +16,7 @@ describe('Obsidian-tab toont de kluisboom', () => {
     expect(bron).toMatch(/Agents/);
     expect(bron).toMatch(/Tasks/);
     expect(bron).toMatch(/repos/);
+    expect(bron).toMatch(/zaaiEnLeesKluis/);
   });
 
   it('faalt als een taakmap niet als tasks in de view landt', () => {

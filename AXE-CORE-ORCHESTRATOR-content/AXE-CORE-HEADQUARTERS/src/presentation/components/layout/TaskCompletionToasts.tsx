@@ -26,13 +26,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { TERMINAL_TASK_STATUSES } from '@/domain/tasks/taskStatus';
+import { taakMeldingVan } from '@/domain/taken/taakMelding';
 
 interface TaakRij { id: string; title: string; status: string }
 interface Melding { id: string; titel: string; mislukt: boolean }
-
-const AFGEROND = new Set<string>(TERMINAL_TASK_STATUSES as readonly string[]);
-const MISLUKT = new Set(['failed', 'cancelled', 'rejected']);
 
 export function TaskCompletionToasts() {
   const [meldingen, setMeldingen] = useState<Melding[]>([]);
@@ -60,17 +57,23 @@ export function TaskCompletionToasts() {
       }
 
       for (const rij of rijen) {
-        const vorige = bekend.current.get(rij.id);
-        const wasOpen = vorige !== undefined && !AFGEROND.has(vorige);
-        const nuAf = AFGEROND.has(rij.status);
-        if (wasOpen && nuAf) {
-          const melding: Melding = { id: `${rij.id}:${rij.status}:${Date.now()}`, titel: rij.title, mislukt: MISLUKT.has(rij.status) };
+        const vorigeStand = bekend.current.get(rij.id);
+        const m = taakMeldingVan(
+          rij,
+          vorigeStand !== undefined ? { id: rij.id, title: rij.title, status: vorigeStand } : null,
+        );
+        if (m && !m.stuurde) {
+          const melding: Melding = { id: `${rij.id}:${rij.status}:${Date.now()}`, titel: m.titel, mislukt: m.mislukt };
           setMeldingen(prev => [melding, ...prev].slice(0, 4));
           const t = window.setTimeout(() => {
-            setMeldingen(prev => prev.filter(m => m.id !== melding.id));
+            setMeldingen(prev => prev.filter(x => x.id !== melding.id));
             timers.current.delete(melding.id);
           }, 6500);
           timers.current.set(melding.id, t);
+          void sb.from('core_notifications').insert({
+            type: m.mislukt ? 'warning' : 'success',
+            message: `${m.tekst}: ${rij.title}`,
+          });
         }
         bekend.current.set(rij.id, rij.status);
       }

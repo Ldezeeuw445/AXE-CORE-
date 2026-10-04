@@ -26,6 +26,7 @@
  */
 import { appMeta, appVan } from './apps';
 import { datumSleutel, type RoosterItem } from './weekRooster';
+import { cronAlsBron, taakAlsBron, voegWerkSamen } from './werkBron';
 
 export interface AgendaTaak {
   id: string;
@@ -34,6 +35,9 @@ export interface AgendaTaak {
   created_at: string;
   completed_at?: string | null;
   metadata?: Record<string, unknown> | null;
+  assignee?: string | null;
+  requested_by?: string | null;
+  capability?: string | null;
   /** Kwam hij van de planner (capability 'planner')? */
   planner?: boolean;
 }
@@ -60,26 +64,36 @@ function item(id: string, titel: string, wanneer: string | null | undefined, duu
 }
 
 export function werkAgenda(taken: readonly AgendaTaak[], crons: readonly AgendaCron[]): RoosterItem[] {
+  const samen = voegWerkSamen([
+    ...taken.map((t) => taakAlsBron(t)),
+    ...crons.map((c) => cronAlsBron(c)),
+  ]);
+  const mag = new Set(samen.map((w) => w.id));
+  const oorsprong = new Map(samen.map((w) => [w.id, w]));
   const uit: RoosterItem[] = [];
   const gezien = new Set<string>();
   for (const t of taken) {
-    if (gezien.has(t.id)) continue;
+    if (!mag.has(t.id) || gezien.has(t.id)) continue;
     gezien.add(t.id);
     const meta = t.metadata ?? {};
+    const wie = oorsprong.get(t.id);
+    const soort = wie?.oorsprongTekst || (t.planner || meta.planner === true ? 'planner' : 'taak');
     if (t.planner || meta.planner === true) {
       const klaar = t.status === 'completed' && t.completed_at;
-      const i = item(`planner:${t.id}`, `${klaar ? '✓ ' : ''}Planner · ${t.title}`,
-        klaar ? t.completed_at : t.created_at, 30, 'planner', meta);
+      const i = item(`planner:${t.id}`, `${klaar ? '✓ ' : ''}${t.title}`,
+        klaar ? t.completed_at : t.created_at, 30, soort, meta);
       if (i) uit.push(i);
       continue;
     }
     const due = typeof meta.dueAt === 'string' ? meta.dueAt : null;
-    const i = item(`taak:${t.id}`, `${t.status === 'completed' ? '✓ ' : ''}${t.title}`, due, 30, 'taak', meta);
+    const i = item(`taak:${t.id}`, `${t.status === 'completed' ? '✓ ' : ''}${t.title}`, due, 30, soort, meta);
     if (i) uit.push(i);
   }
   for (const c of crons) {
-    if (!c.enabled) continue;
-    const i = item(`cron:${c.id}`, `Cron · ${c.name}`, c.next_run_at, 15, 'cronjob', c.metadata);
+    if (!c.enabled || !mag.has(c.id) || gezien.has(c.id)) continue;
+    gezien.add(c.id);
+    const wie = oorsprong.get(c.id);
+    const i = item(`cron:${c.id}`, c.name, c.next_run_at, 15, wie?.oorsprongTekst || 'cronjob', c.metadata);
     if (i) uit.push(i);
   }
   return uit.sort((a, b) => (a.datum + a.tijd).localeCompare(b.datum + b.tijd));

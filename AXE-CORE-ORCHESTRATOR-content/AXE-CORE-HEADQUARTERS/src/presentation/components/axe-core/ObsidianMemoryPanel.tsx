@@ -36,6 +36,7 @@ import {
   vaultSyncAvailable,
 } from '@/infrastructure/persistence/obsidianVaultSyncService';
 import { kluisTakLabel, kluisTakVan, type KluisTak } from '@/domain/obsidian/kluisBoom';
+import { zaaiEnLeesKluis } from '@/application/obsidian/kluisZaad';
 
 const FOLDER_COLORS: Record<string, string> = {
   Reflections: '#A78BFA',
@@ -248,6 +249,9 @@ export default function ObsidianMemoryPanel({
     setSyncBusy(true);
     setStatus(null);
     try {
+      const gezaaid = await zaaiEnLeesKluis();
+      setNotes(gezaaid);
+      onNotesChanged?.(gezaaid);
       setVaultPath(vaultPath.trim() || null);
       const { push, pull } = await syncVaultBidirectional(200);
       setStatus(

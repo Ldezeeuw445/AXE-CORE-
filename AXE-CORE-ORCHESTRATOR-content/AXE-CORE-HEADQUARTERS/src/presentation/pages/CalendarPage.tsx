@@ -48,7 +48,10 @@ async function laadWerk(): Promise<{ taken: AgendaTaak[]; crons: AgendaCron[] }>
     for (const t of planner.value.taken) uit.push({ ...t, metadata: t.metadata as Record<string, unknown> | null, planner: true });
   }
   if (taken.status === 'fulfilled') {
-    for (const t of taken.value.tasks) uit.push({ ...t, completed_at: null, planner: t.capability === 'planner' });
+    for (const t of taken.value.tasks) {
+      if (t.capability === 'planner') continue;
+      uit.push({ ...t, completed_at: null, planner: false });
+    }
   }
   return { taken: uit, crons: [] };
 }

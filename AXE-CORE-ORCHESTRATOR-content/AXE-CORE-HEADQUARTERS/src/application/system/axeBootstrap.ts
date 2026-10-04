@@ -124,6 +124,18 @@ export async function maybeNightlyReview(): Promise<void> {
   } catch (err) {
     console.warn('[axeBootstrap] nightly review skipped:', err);
   }
+
+  try {
+    const { schrijfInAgentWerkplek } = await import('@/application/obsidian/agentLes');
+    await schrijfInAgentWerkplek(
+      'axe',
+      `Nightly pass ${todayKey()}`,
+      'One improvement written here. Next NorthSea, apps or Macs step stays in this workspace — no mail, no auto_send.',
+      'nightly',
+    );
+  } catch (err) {
+    console.warn('[axeBootstrap] nightly workspace note skipped:', err);
+  }
 }
 
 /** Seed a single welcome note the first time the Obsidian store is empty. */
