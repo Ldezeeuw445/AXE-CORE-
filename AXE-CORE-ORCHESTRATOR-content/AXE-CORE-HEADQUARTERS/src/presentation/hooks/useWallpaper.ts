@@ -1,45 +1,114 @@
 /**
- * useWallpaper — de foto achter het glas op de telefoon, instelbaar.
+ * useWallpaper — the picture behind the glass, and how it shows through.
  *
- * Op de Mac toont het native glas je bureaubladwallpaper; een telefoon heeft dat
- * niet. Hier kies je zelf een afbeelding: die wordt als data-URL in localStorage
- * bewaard (per toestel) en meteen de plaat. Niets gekozen → de gebundelde
- * standaard (`/mobile-wallpaper.jpg`), en faalt die ook, dan valt MobileGlass
- * terug op de kleur-gradiënt. Zo is er altijd iets, en kun je het altijd wisselen.
+ * On the Mac the plate is native glass over *your* desktop picture. A phone has no
+ * desktop to look through, so you choose one here: a preset, or a photo from the
+ * library (downscaled, see `fitWithin`). Stored per device in localStorage; the look
+ * (dark/light) is the thing that syncs between devices, a photo is too big for that.
+ *
+ * Nothing chosen is a valid, designed state: the plain plate that was there before.
  */
 import { useEffect, useState } from 'react';
+import {
+  type Wallpaper, type GlassTuning, parseWallpaper,
+  parseTuning, fitWithin, WALLPAPER_PRESETS, PRESET_PREFIX,
+} from '@/domain/wallpaper';
 
 const KEY = 'axe_mobile_wallpaper';
+const KEY_DIM = 'axe_wp_dim';
+const KEY_BLUR = 'axe_wp_blur';
 const EVT = 'axe-wallpaper-changed';
 
-/** Gebundelde standaard. Zet je eigen foto op deze plek in `public/` voor een
- *  vaste default; anders kiest de gebruiker er zelf een in de app. */
-const DEFAULT_WALLPAPER = '/mobile-wallpaper.jpg';
-
-function read(): string {
-  try {
-    return localStorage.getItem(KEY) || DEFAULT_WALLPAPER;
-  } catch {
-    return DEFAULT_WALLPAPER;
-  }
+function get(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
 }
 
-export function useWallpaper(): string {
-  const [wp, setWp] = useState<string>(read);
+function set(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* private mode / quota: keep what is on screen */ }
+}
+
+function notify() {
+  try { window.dispatchEvent(new CustomEvent(EVT)); } catch { /* */ }
+}
+
+function readWallpaper(): Wallpaper { return parseWallpaper(get(KEY)); }
+function readTuning(): GlassTuning { return parseTuning(get(KEY_DIM), get(KEY_BLUR)); }
+
+function useStored<T>(read: () => T): T {
+  const [v, setV] = useState<T>(read);
   useEffect(() => {
-    const on = () => setWp(read());
+    const on = () => setV(read());
     window.addEventListener(EVT, on);
     window.addEventListener('storage', on);
     return () => {
       window.removeEventListener(EVT, on);
       window.removeEventListener('storage', on);
     };
+    // `read` is a module-level function: stable by construction.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return wp;
+  return v;
 }
 
-/** Zet een gekozen afbeelding (data-URL) als wallpaper en laat iedereen bijwerken. */
-export function setMobileWallpaper(dataUrl: string): void {
-  try { localStorage.setItem(KEY, dataUrl); } catch { /* private mode */ }
-  try { window.dispatchEvent(new CustomEvent(EVT)); } catch { /* */ }
+export function useWallpaper(): Wallpaper { return useStored(readWallpaper); }
+export function useGlassTuning(): GlassTuning { return useStored(readTuning); }
+
+export function clearWallpaper(): void { set(KEY, ''); notify(); }
+
+export function setWallpaperPreset(id: string): void {
+  if (!WALLPAPER_PRESETS.some(p => p.id === id)) return;
+  set(KEY, PRESET_PREFIX + id);
+  notify();
+}
+
+export function setGlassTuning(t: Partial<GlassTuning>): void {
+  const cur = readTuning();
+  const next = parseTuning(String(t.dim ?? cur.dim), String(t.blur ?? cur.blur));
+  set(KEY_DIM, String(next.dim));
+  set(KEY_BLUR, String(next.blur));
+  notify();
+}
+
+/**
+ * A photo from the library -> stored wallpaper.
+ *
+ * Re-encoded as JPEG at screen size first: an original is several MB and would either
+ * throw on save or push the rest of the origin's localStorage out. Rejects with a
+ * readable message instead of leaving the old wallpaper silently in place.
+ */
+export async function setWallpaperFromFile(file: File): Promise<void> {
+  if (!file.type.startsWith('image/')) throw new Error('That file is not an image.');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('The photo could not be read.'));
+      i.src = url;
+    });
+    const { width, height } = fitWithin(img.naturalWidth, img.naturalHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not prepare the photo.');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Step the quality down until it fits comfortably: a stored wallpaper has to leave
+    // room for everything else the app keeps in localStorage.
+    let out = '';
+    for (const q of [0.82, 0.7, 0.55, 0.4]) {
+      out = canvas.toDataURL('image/jpeg', q);
+      if (out.length < 1_800_000) break;
+    }
+    if (out.length >= 1_800_000) throw new Error('That photo is too detailed to store; pick a simpler one.');
+    try {
+      localStorage.setItem(KEY, out);
+    } catch {
+      throw new Error('There is not enough room on this device to keep that photo.');
+    }
+    notify();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }

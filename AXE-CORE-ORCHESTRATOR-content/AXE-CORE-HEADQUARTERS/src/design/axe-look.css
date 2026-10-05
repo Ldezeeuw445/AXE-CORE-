@@ -619,8 +619,8 @@ html:root[data-look][data-ios-pwa],
   /* FROST helemaal vol (à la liquid-glass): een zware blur vervaagt de kleur-
      grond tot een zacht melkig matglas met kleurzweempjes — dát is het Tauri-
      light-glas-effect. */
-  backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
-  -webkit-backdrop-filter: blur(64px) saturate(165%) brightness(1.04) !important;
+  backdrop-filter: blur(var(--axe-glass-blur, 64px)) saturate(165%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(var(--axe-glass-blur, 64px)) saturate(165%) brightness(1.04) !important;
   /* De rand zichtbaar, zoals op donker (Luka, 3 okt: "het is net alsof hij
      onder het iPhone-gedeelte valt"). Gemeten op zijn screenshot: de lucht
      naast de bovenhoeken (179,195,210) en de plaat (219,233,246) schelen

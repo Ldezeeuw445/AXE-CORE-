@@ -12,10 +12,13 @@
  * chat en composer erbovenop houden hun donkere materiaal en lichte inkt. Zo
  * ziet de telefoon er in beide standen uit als de Tauri-app.
  */
+import { useEffect } from 'react';
 import { useLook } from '@/presentation/hooks/useLook';
 import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 import { hasNativeGlass } from '@/infrastructure/config/apiUrl';
 import { Sun, Moon } from 'lucide-react';
+import { useWallpaper, useGlassTuning } from '@/presentation/hooks/useWallpaper';
+import { wallpaperCss } from '@/domain/wallpaper';
 
 /*
  * De achtergrond van de Tauri-home ("AXE Glass Plate"), voor de telefoon.
@@ -65,15 +68,70 @@ const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")";
 
 /** Volvlakse achtergrond-plaat achter de mobiele surfaces (gradiënt + korrel). */
+/**
+ * De omtrek van de glasplaat, als clip-path. Dezelfde getallen als de inline stijl van
+ * de schil in AppShell (top/left/right/bottom/borderRadius): de vervaagde kopie van de
+ * wallpaper moet er exact in passen, anders zie je een rand of een gat.
+ */
+const PLAAT_CLIP =
+  'inset(calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px)) 12px ' +
+  'max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px)) 12px round 28px)';
+
+/** Volvlakse achtergrond-plaat achter de mobiele surfaces (gradiënt + korrel). */
 export function MobileGlass() {
   const look = useLookValue();
+  const wallpaper = useWallpaper();
+  const { dim, blur } = useGlassTuning();
+  // In de lichte stand blurt de plaat zelf (backdrop-filter, zie axe-look.css); de
+  // schuif voor "vervaging" stuurt dan die waarde. 36 (standaard) komt zo op ~61px,
+  // dicht bij de 64 die er altijd stond.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--axe-glass-blur', `${Math.round(blur * 1.7)}px`);
+  }, [blur]);
   if (hasNativeGlass()) return null; // alleen op de macOS-desktop doet het native glas dit al
   const glass = look === 'glass';
+  const foto = wallpaperCss(wallpaper);
   return (
     <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
       {/* De grond: licht-blauw→grijs in de lichte stand, puur mat zwart met een
           subtiele schuine lichtstreep in de donkere. */}
       <div style={{ position: 'absolute', inset: 0, background: glass ? LICHT : ZWART }} />
+
+      {foto && (
+        <>
+          {/* De gekozen wallpaper, scherp: dit zie je langs de rand van de plaat,
+              zoals je op de Mac je bureaublad naast het venster ziet. */}
+          <div style={{ position: 'absolute', inset: 0, background: foto }} />
+          {/* Dezelfde wallpaper, vervaagd, alleen BINNEN de omtrek van de plaat: het
+              doorzichtige glas van de Tauri-app. Geen backdrop-filter op de plaat
+              zelf (die zou de matglas-lagen van chat en composer platslaan, zie
+              axe-look.css); de vervaging zit in de afbeelding. In de lichte stand
+              doet de plaat al een backdrop-blur, daar is dit dezelfde richting. */}
+          {!glass && (
+            <div
+              style={{
+                position: 'absolute', inset: 0, clipPath: PLAAT_CLIP, WebkitClipPath: PLAAT_CLIP,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute', inset: -90, background: foto,
+                  filter: `blur(${blur}px) saturate(1.25)`,
+                }}
+              />
+            </div>
+          )}
+          {/* De sluier: in donker zwart (leesbaarheid), in licht een tikje wit. */}
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              background: glass ? `rgba(255,255,255,${(dim * 0.25).toFixed(3)})` : `rgba(0,0,0,${dim})`,
+            }}
+          />
+        </>
+      )}
+
       {/* Fijne korrel, zodat het glas niet als plat karton leest. Op de lichte
           grond met 'multiply' zodat de korrel juist donkert i.p.v. oplicht. */}
       <div

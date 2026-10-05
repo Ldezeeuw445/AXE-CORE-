@@ -1,29 +1,36 @@
 /**
- * MobileNav — de navigatie voor de telefoon, als lade van links.
+ * MobileNav — the phone's command menu, as a drawer from the left.
  *
- * Op de Samsung nam de vaste onderbalk hoogte in en toonde dezelfde tabs die
- * ook al in de app-grid stonden: dubbel, en het kostte ruimte die de composer
- * en de inhoud beter kunnen gebruiken. Dit vervangt die balk door één lade die
- * van links over de volle hoogte inschuift — dicht als je hem niet nodig hebt,
- * open uitsluitend met de hamburgerknop. Edge-swipes horen bij de twee
- * operationele AXE-zijlades, niet bij navigatie.
+ * Open only with the hamburger: edge swipes belong to the two operational AXE side
+ * drawers (Tools left, Status right), so one gesture never opens two drawers.
  *
- * De lade zelf is donker glas (net als de Sidebar op de desktop): in beide
- * standen hetzelfde materiaal, lichte inkt. Alleen de plaat eronder wisselt.
+ * What is in it, top to bottom: a search box (matches the words the nav registry knows
+ * for each tab), your pinned favourites in the order you set, every tab grouped by what
+ * it is for, and below, the two things you can actually change about this phone:
+ * Appearance (dark/light, wallpaper, glass) and Phone (what the lock screen shows).
+ * Grouping, search and pinning are rules in `domain/mobileMenu.ts`, tested there.
+ *
+ * The drawer itself is dark glass in both modes, like the desktop Sidebar; only the
+ * plate underneath changes.
  */
-import { useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router';
 import {
   Home, Lightbulb, Brain, Database, Share2, BookMarked, Cable, Network,
   Workflow, Table2, Clock, Bot, Megaphone, CalendarDays, ListTodo, Wallet,
   LineChart, Globe, FileCode, Sparkles, Compass, Users, Terminal, Settings,
-  Smartphone, Lock, LayoutGrid, TrendingUp, Menu, X, type LucideIcon,
+  Smartphone, Lock, LayoutGrid, TrendingUp, Menu, X, Search, Star, ChevronUp, ChevronDown,
+  Palette, MonitorSmartphone, BookOpenCheck, type LucideIcon,
 } from 'lucide-react';
 import { getAllNavItems } from '@/domain/navRegistry';
-import { setMobileWallpaper } from '@/presentation/hooks/useWallpaper';
 import { useUIStore } from '@/presentation/store/uiStore';
-import { Image as ImageIcon } from 'lucide-react';
+import {
+  groupMenu, searchMenu, menuTarget, toggleFavourite, moveFavourite, parseFavourites,
+  type MenuItem,
+} from '@/domain/mobileMenu';
+import { AppearanceSheet, PhoneSheet } from './MobileMenuSheets';
+import { phoneSettingsAvailable } from '@/infrastructure/gateways/androidPhoneBridge';
 
 const ROUTE_ICON: Record<string, LucideIcon> = {
   '/': Home, '/thinkthanks': Lightbulb, '/ai-core': Brain, '/memory': Database,
@@ -33,48 +40,121 @@ const ROUTE_ICON: Record<string, LucideIcon> = {
   '/crewai': Megaphone, '/calendar': CalendarDays, '/tasks': ListTodo,
   '/finance': Wallet, '/trading': LineChart, '/trading-intel': LineChart,
   '/maps-3d': Globe, '/code-editor': FileCode, '/eve': Sparkles,
-  '/browser': Compass, '/organization': Users, '/terminal': Terminal,
+  '/browser': Compass, '/organization': Users, '/terminal': Terminal, '/terminals': Terminal,
   '/developer': Terminal, '/settings': Settings, '/device': Smartphone, '/lock': Lock,
+  '/ledger': BookOpenCheck,
 };
+
+const FAV_KEY = 'axe_menu_favourites';
+
+function readFavs(): string[] {
+  try { return parseFavourites(localStorage.getItem(FAV_KEY)); } catch { return parseFavourites(null); }
+}
+function writeFavs(f: string[]) {
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(f)); } catch { /* private mode: lives for this session */ }
+}
+
+interface RowProps {
+  item: MenuItem;
+  fav?: boolean;
+  favs: string[];
+  editing: boolean;
+  active: boolean;
+  onGo: (path: string) => void;
+  onFavs: (next: string[]) => void;
+}
+
+function MenuRow({ item, fav, favs, editing, active, onGo, onFavs }: RowProps) {
+  const Icon = ROUTE_ICON[item.path] ?? LayoutGrid;
+  const pinned = favs.includes(item.path);
+  const index = favs.indexOf(item.path);
+  return (
+    <div className="flex items-center">
+      <button
+        type="button"
+        onClick={() => onGo(item.path)}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-[12px] px-2.5 py-2 text-left text-[13px] font-medium active:opacity-70"
+        style={{ color: active ? '#67E8F9' : '#E5E7EB', fontWeight: active ? 650 : 500, background: active ? 'rgba(255,255,255,.07)' : undefined }}
+      >
+        <span
+          className="flex size-[30px] flex-none items-center justify-center rounded-[9px]"
+          style={{ background: active ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.06)' }}
+        >
+          <Icon size={16} />
+        </span>
+        <span className="truncate">{item.label}</span>
+      </button>
+      {fav && editing ? (
+        <span className="flex flex-none items-center">
+          <button type="button" aria-label={`Move ${item.label} up`} disabled={index <= 0}
+            onClick={() => onFavs(moveFavourite(favs, item.path, -1))} className="p-2 disabled:opacity-25" style={{ color: '#9CA3AF' }}>
+            <ChevronUp size={16} />
+          </button>
+          <button type="button" aria-label={`Move ${item.label} down`} disabled={index >= favs.length - 1}
+            onClick={() => onFavs(moveFavourite(favs, item.path, +1))} className="p-2 disabled:opacity-25" style={{ color: '#9CA3AF' }}>
+            <ChevronDown size={16} />
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
+          aria-pressed={pinned}
+          onClick={() => onFavs(toggleFavourite(favs, item.path))}
+          className="flex-none p-2.5"
+          style={{ color: pinned ? '#FBBF24' : '#4B5563' }}
+        >
+          <Star size={14} fill={pinned ? 'currentColor' : 'none'} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function GroupTitle({ children, action }: { children: string; action?: React.ReactNode }) {
+  return (
+    <div className="mb-1 mt-4 flex items-center justify-between px-2.5">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: '#6B7280' }}>{children}</span>
+      {action}
+    </div>
+  );
+}
 
 export function MobileNav() {
   const open = useUIStore(s => s.mobileNavOpen);
   const setOpen = useUIStore(s => s.setMobileNavOpen);
   const navigate = useNavigate();
   const location = useLocation();
-  const items = getAllNavItems();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const items: MenuItem[] = getAllNavItems();
   const opPlaat = !['/lock', '/maps-3d', '/browser'].includes(location.pathname);
 
-  const onPickWallpaper = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => { if (typeof r.result === 'string') setMobileWallpaper(r.result); };
-    r.readAsDataURL(f);
-    e.target.value = '';
-  };
+  const [query, setQuery] = useState('');
+  const [favs, setFavs] = useState<string[]>(readFavs);
+  const [editing, setEditing] = useState(false);
+  const [sheet, setSheet] = useState<null | 'appearance' | 'phone'>(null);
 
-  // Navigatie opent bewust ALLEEN via de hamburger. Edge-swipes zijn gereserveerd
-  // voor de twee AXE-zijlades (Tools links, Status rechts), zodat één gebaar
-  // nooit twee verschillende drawers tegelijk opent.
+  const updateFavs = (next: string[]) => { setFavs(next); writeFavs(next); };
 
-  // Home (`/`) is op de telefoon leeg — de mobiele home is `/mobile`. Stuur de
-  // "Home"-regel daarheen, zodat de lade nooit op een leeg scherm uitkomt.
-  const go = (path: string) => { navigate(path === '/' ? '/mobile' : path); setOpen(false); };
+  // Home (`/`) is empty on a phone: the real home is `/mobile`.
+  const go = (path: string) => { navigate(menuTarget(path)); setOpen(false); setQuery(''); };
   const isActive = (path: string) => {
     const here = location.pathname;
     if (path === '/') return here === '/mobile' || here === '/';
-    return here === path || here.startsWith(path);
+    return here === path || here.startsWith(path + '/') || here === path;
   };
 
+  const searching = query.trim().length > 0;
+  const results = useMemo(() => searchMenu(items, query), [items, query]);
+  const grouped = useMemo(() => groupMenu(items, favs), [items, favs]);
+
   if (typeof document === 'undefined') return null;
-  // Portal naar body: buiten .axe-shell, dus de shell-regel die elke directe
-  // div op transparant zet (panelen laten zweven op de plaat) raakt de lade en
-  // de verduistering niet. Een overlay hoort sowieso in een portal.
+
+  const rowProps = (i: MenuItem) => ({
+    favs, editing, active: isActive(i.path), onGo: go, onFavs: updateFavs,
+  });
+
   return createPortal(
     <>
-      {/* Openknop — klein, linksboven, met veilige marge. Verborgen als open. */}
       {!open && (
         <button
           type="button"
@@ -82,9 +162,6 @@ export function MobileNav() {
           aria-label="Menu openen"
           className="axe-mobile-nav-trigger fixed z-[70] flex size-9 items-center justify-center rounded-full active:scale-95"
           style={{
-            // Op de glasplaat-home netjes binnen de rand, precies zoals de
-            // licht/donker-knop rechtsboven (AppShell): zelfde hoogte, zelfde
-            // marge. Buiten de home in de schermhoek.
             top: opPlaat
               ? 'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 10px)'
               : 'calc(env(safe-area-inset-top, 0px) + 10px)',
@@ -99,75 +176,123 @@ export function MobileNav() {
         </button>
       )}
 
-      {/* Verduistering achter de lade */}
       <div
         onClick={() => setOpen(false)}
         aria-hidden
         className="fixed inset-0 z-[80] transition-opacity duration-200"
-        style={{
-          background: 'rgba(0,0,0,0.5)',
-          opacity: open ? 1 : 0,
-          pointerEvents: open ? 'auto' : 'none',
-        }}
+        style={{ background: 'rgba(0,0,0,0.5)', opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none' }}
       />
 
-      {/* De lade zelf. Bewust een <div role="navigation"> en geen <nav>: de
-          shell-stijl (axe-look.css) dwingt `:root[data-look] .axe-shell nav`
-          op transparant met !important — bedoeld voor de desktop-balken — en
-          dat zou de inhoud er weer doorheen laten schemeren. */}
+      {/* A <div role="navigation">, not a <nav>: the shell stylesheet forces every `nav`
+          inside .axe-shell transparent with !important, which would let the content show
+          through the drawer. `inset-y-0` and not a `100dvh` height: this WebView once
+          resolved every viewport-height unit to 0 and the drawer opened empty. */}
       <div
         role="navigation"
         aria-label="AXE navigatie"
-        className="fixed left-0 top-0 z-[90] flex h-[100dvh] w-[82%] max-w-[320px] flex-col transition-transform duration-200 ease-out"
+        className="fixed inset-y-0 left-0 z-[90] flex w-[84%] max-w-[330px] flex-col transition-transform duration-200 ease-out"
         style={{
           transform: open ? 'translateX(0)' : 'translateX(-100%)',
-          // Dekkend, niet de translucente --surface-bg: een lade waar de inhoud
-          // doorheen schemert is onleesbaar. Donker in beide standen, zoals de
-          // Sidebar op de desktop — alleen de plaat eronder wisselt van kleur.
-          background: '#0c0f15',
-          borderRight: '1px solid var(--border-subtle)',
+          background: 'linear-gradient(180deg, #11131a 0%, #0a0c11 100%)',
+          borderRight: '1px solid rgba(255,255,255,.08)',
           boxShadow: '2px 0 24px rgba(0,0,0,0.45)',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
         <div className="flex flex-none items-center justify-between px-4 pb-2 pt-4">
-          <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>AXE CORE</span>
-          <button type="button" onClick={() => setOpen(false)} aria-label="Menu sluiten" className="flex size-8 items-center justify-center rounded-full" style={{ color: 'var(--text-muted)' }}>
-            <X size={18} />
+          <span className="text-[15px] font-semibold tracking-tight" style={{ color: '#EEF3FA' }}>AXE CORE</span>
+          <button type="button" onClick={() => setOpen(false)} aria-label="Menu sluiten" className="flex size-8 items-center justify-center rounded-full" style={{ color: '#9CA3AF', background: 'rgba(255,255,255,.06)' }}>
+            <X size={17} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-          {items.map((item) => {
-            const Icon = ROUTE_ICON[item.path] ?? LayoutGrid;
-            const active = isActive(item.path);
-            return (
-              <button
-                key={item.path}
-                type="button"
-                onClick={() => go(item.path)}
-                className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[13px] font-medium active:opacity-70"
-                style={{ color: active ? 'var(--accent, #38bdf8)' : 'var(--text-primary)' }}
-              >
-                <Icon size={17} className="flex-none" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-        {/* Voettekst: wallpaper kiezen. Op de telefoon opent dit je fotobibliotheek. */}
-        <div className="flex-none border-t px-2 py-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickWallpaper} />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[13px] font-medium active:opacity-70"
-            style={{ color: 'var(--text-primary)' }}
+
+        <div className="flex-none px-3 pb-1">
+          <label
+            className="flex items-center gap-2 rounded-[13px] px-3 py-2"
+            style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.07)' }}
           >
-            <ImageIcon size={17} className="flex-none" />
-            <span>Change wallpaper</span>
-          </button>
+            <Search size={15} style={{ color: '#6B7280' }} />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search tabs…"
+              aria-label="Search tabs"
+              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
+              style={{ color: '#EEF3FA' }}
+            />
+            {searching && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" style={{ color: '#6B7280' }}><X size={14} /></button>
+            )}
+          </label>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+          {searching ? (
+            <>
+              <GroupTitle>{`${results.length} found`}</GroupTitle>
+              {results.map(i => <MenuRow key={i.path} item={i} {...rowProps(i)} />)}
+              {results.length === 0 && (
+                <div className="px-3 py-6 text-center text-[12px]" style={{ color: '#6B7280' }}>Nothing matches “{query}”.</div>
+              )}
+            </>
+          ) : (
+            <>
+              {grouped.favourites.length > 0 && (
+                <>
+                  <GroupTitle
+                    action={
+                      <button type="button" onClick={() => setEditing(e => !e)} className="text-[11px] font-medium" style={{ color: '#22D3EE' }}>
+                        {editing ? 'Done' : 'Reorder'}
+                      </button>
+                    }
+                  >Favourites</GroupTitle>
+                  {grouped.favourites.map(i => <MenuRow key={`f${i.path}`} item={i} fav {...rowProps(i)} />)}
+                </>
+              )}
+              {grouped.groups.map(g => (
+                <div key={g.id}>
+                  <GroupTitle>{g.title}</GroupTitle>
+                  {g.items.map(i => <MenuRow key={i.path} item={i} {...rowProps(i)} />)}
+                </div>
+              ))}
+              {grouped.favourites.length === 0 && (
+                <div className="mt-4 px-3 text-[11px] leading-snug" style={{ color: '#6B7280' }}>
+                  Tap the star next to a tab to keep it at the top.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex-none border-t px-3 py-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+          <div className={`grid gap-2 ${phoneSettingsAvailable() ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <button
+              type="button" onClick={() => { setSheet('appearance'); setOpen(false); }}
+              className="flex items-center justify-center gap-2 rounded-[13px] py-2.5 text-[13px] font-medium active:opacity-70"
+              style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.08)', color: '#EEF3FA' }}
+            >
+              <Palette size={15} /> Appearance
+            </button>
+            {phoneSettingsAvailable() && (
+              <button
+                type="button" onClick={() => { setSheet('phone'); setOpen(false); }}
+                className="flex items-center justify-center gap-2 rounded-[13px] py-2.5 text-[13px] font-medium active:opacity-70"
+                style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.08)', color: '#EEF3FA' }}
+              >
+                <MonitorSmartphone size={15} /> Phone
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {sheet === 'appearance' && <AppearanceSheet onClose={() => setSheet(null)} />}
+      {sheet === 'phone' && (
+        <PhoneSheet
+          onClose={() => setSheet(null)}
+          onOpenDevice={() => { navigate('/device'); setOpen(false); }}
+        />
+      )}
     </>,
     document.body,
   );
