@@ -491,7 +491,9 @@ class Planner:
 
     def _open_taken(self, agent: str) -> list[dict]:
         try:
-            return (self.sb().table("core_tasks").select("id,title,status,metadata,created_at")
+            return (self.sb().table("core_tasks").select(
+                        "id,title,goal,status,assignee,requested_by,capability,execution_mode,"
+                        "payload,metadata,created_at,updated_at")
                     .eq("capability", "planner").eq("assignee", agent)
                     .in_("status", ["pending", "running"])
                     .order("created_at", desc=True).limit(20).execute().data) or []

@@ -147,6 +147,28 @@ class TestRonde:
 
 
 class TestSchrijfRepo:
+    def test_open_taken_leest_alle_velden_die_de_uitvoerder_nodig_heeft(self):
+        gekozen = []
+
+        class Q:
+            def select(self, velden): gekozen.append(velden); return self
+            def eq(self, *a): return self
+            def in_(self, *a): return self
+            def order(self, *a, **k): return self
+            def limit(self, *a): return self
+            def execute(self):
+                return type("R", (), {"data": []})()
+
+        class SB:
+            def table(self, naam):
+                assert naam == "core_tasks"
+                return Q()
+
+        pln = p.Planner(lambda: SB(), lambda *a: {}, lambda: {})
+        assert pln._open_taken("code-agent") == []
+        for veld in ("goal", "assignee", "payload", "execution_mode"):
+            assert veld in gekozen[0]
+
     def test_schrijftaak_valt_niet_terug_op_een_andere_repo(self, monkeypatch):
         monkeypatch.setattr("agent_runner.repo_status", lambda: {
             "axe-core": {"runnable": True}, "axon-memory": {"runnable": False}})
