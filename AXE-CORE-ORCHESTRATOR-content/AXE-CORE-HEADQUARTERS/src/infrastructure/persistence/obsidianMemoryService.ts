@@ -228,7 +228,12 @@ export async function listKluisNotities(): Promise<ObsidianNote[]> {
   return uit;
 }
 
-export async function listObsidianNotesByPrefix(prefix: string, limit = 200): Promise<ObsidianNote[]> {
+// Niet geëxporteerd: de enige aanroeper staat hierboven in dit bestand. Zo
+// geëxporteerd liet hij de dode-code-wacht omvallen, en dan staat orchestrator
+// rood om een reden die niets met je eigen wijziging te maken heeft. Heb je hem
+// elders nodig, zet `export` er dan terug -- met die aanroeper erbij is de wacht
+// weer tevreden.
+async function listObsidianNotesByPrefix(prefix: string, limit = 200): Promise<ObsidianNote[]> {
   const lim = Math.min(Math.max(limit, 1), 400);
   try {
     const sb = getSupabase();
