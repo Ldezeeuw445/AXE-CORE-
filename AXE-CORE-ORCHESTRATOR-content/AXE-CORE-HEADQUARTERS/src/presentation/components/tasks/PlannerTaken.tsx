@@ -112,12 +112,12 @@ export function PlannerTaken() {
         title={`Planner${wacht ? ` · ${wacht} wacht op jou` : ''}`}
         icon={<Sparkles size={14} />}
         headerAction={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end min-w-0">
             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
               {status?.bezig ? 'ronde loopt…' : laatste ? `laatste ronde ${laatste.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : status?.host_kan ? 'nog geen ronde' : 'staat uit op deze host'}
             </span>
             <button type="button" onClick={() => { void nuPlannen(); }} disabled={!status?.host_kan || status?.bezig}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md"
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md whitespace-nowrap"
               style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)', opacity: !status?.host_kan || status?.bezig ? 0.5 : 1 }}>
               <RefreshCw size={11} /> Nu plannen
             </button>
