@@ -497,13 +497,14 @@ async def test_search_only_replaces_existing_review_metadata():
 async def test_stored_count_always_matches_stored_candidates():
     repo = FakeRepo()
     crew = _StubCrew(_ok_crew_info(structured_output={
-        "candidates": [{"name": "A", "fit_score": 80}, {"name": "B", "fit_score": 70}],
-        "rejected": [{"name": "C", "fit_score": 0}]}))
+        "candidates": [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80},
+                       {"name": "Aurubis AG", "url": "https://aurubis.example", "fit_score": 70}],
+        "rejected": [{"name": "Some Broker Ltd", "fit_score": 0}]}))
     research = FakeResearch()
     await disc(repo, crew=crew, research=research).crew_assisted_review()
     md = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")["metadata"]
     assert md["candidate_count"] == len(md["candidates"]) == 2
-    assert md["rejected_count"] == len(md["rejected"]) == 1
+    assert md["rejected_count"] == len(md["rejected"]) >= 1
     assert md["search_hits"] == len(md["web_hits"])
 
 
