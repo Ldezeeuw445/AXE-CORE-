@@ -51,6 +51,8 @@ USAGE
     python3 scripts/vps_sync.py deploy
     python3 scripts/vps_sync.py deploy --only nautilus_backtest.py
 """
+from __future__ import annotations
+
 import argparse
 import hashlib
 import os
@@ -103,6 +105,30 @@ MANIFEST = {
     # AXE's stem als terugval (George/Kokoro, lazy). Venv + model: install_vps.sh.
     "/opt/axe-tts/app.py": ("backend/axe_tts/app.py", "axe-tts"),
     "/etc/systemd/system/axe-tts.service": ("backend/axe_tts/axe-tts.service", "axe-tts"),
+    # main.py importeert deze bij cron/tick, /approvals en NorthSea-zicht.
+    # Zonder deze regels bleef #199 deels op de Mac: de box had de nieuwe
+    # modules nooit.
+    "/opt/axe-core-api/goedkeuring_melding.py": ("backend/axe_api/goedkeuring_melding.py", "axe-core-api"),
+    "/opt/axe-core-api/push_meldingen.py": ("backend/axe_api/push_meldingen.py", "axe-core-api"),
+    "/opt/axe-core-api/northsea_crew_zichtbaar.py": ("backend/axe_api/northsea_crew_zichtbaar.py", "axe-core-api"),
+    # agent_loop importeert deze twee. task_worker importeert agent_loop.
+    # Zonder hen in het manifest ship je de worker niet compleet.
+    "/opt/axe-core-api/agent_workspace.py": ("backend/axe_api/agent_workspace.py", "axe-task-worker"),
+    "/opt/axe-core-api/device_actions.py": ("backend/axe_api/device_actions.py", "axe-task-worker"),
+}
+
+# MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).
+# `deploy` slaat ze over tenzij je ze met --only bij naam noemt.
+OPTIONAL_WHEN_MISSING = {
+    "/opt/axe-tts/app.py",
+    "/etc/systemd/system/axe-tts.service",
+    "/opt/axe-core-api/cli_laag.py",
+}
+
+# Wie wie nodig heeft. Ship je de één zonder de ander, dan start de worker niet.
+WORKER_IMPORTS = {
+    "task_worker.py": ("agent_loop.py", "task_runtime.py"),
+    "agent_loop.py": ("device_actions.py", "agent_workspace.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"
@@ -230,6 +256,75 @@ def cmd_capture(args) -> int:
     return 0
 
 
+def naam_van(remote: str) -> str:
+    return remote.rsplit("/", 1)[-1]
+
+
+def deploy_kandidaten(
+    rows: list,
+    *,
+    only: list[str] | None = None,
+    allow_drift: bool = False,
+    geinstalleerd: set[str] | None = None,
+) -> tuple[list, list]:
+    """Welke rijen shippen, en welke MISSING we expres overslaan."""
+    only_set = set(only) if only else None
+    todo, overgeslagen = [], []
+    for remote, rel, unit, state in rows:
+        name = naam_van(remote)
+        if only_set is not None and name not in only_set:
+            continue
+        if state not in (REPO_AHEAD, MISSING) and not (allow_drift and state == BOX_DRIFT):
+            continue
+        if state == MISSING and only_set is None:
+            if remote in OPTIONAL_WHEN_MISSING:
+                overgeslagen.append((remote, "optional-missing"))
+                continue
+            if unit and geinstalleerd is not None and unit not in geinstalleerd:
+                overgeslagen.append((remote, "unit-not-installed"))
+                continue
+        todo.append((remote, rel, unit, state))
+    return todo, overgeslagen
+
+
+def aanwezig_namen(rows: list, extra: set[str] | None = None) -> set[str]:
+    """Bestanden die op de box staan of in deze ronde meegaan."""
+    namen = set(extra or ())
+    for remote, _rel, _unit, state in rows:
+        if state != MISSING:
+            namen.add(naam_van(remote))
+    return namen
+
+
+def ontbrekende_worker_imports(todo_namen: set[str], aanwezig: set[str]) -> list[str]:
+    """Ship je agent_loop/task_worker, dan moeten hun imports er óók zijn."""
+    nodig: set[str] = set()
+    stack = [n for n in todo_namen if n in WORKER_IMPORTS]
+    while stack:
+        naam = stack.pop()
+        for dep in WORKER_IMPORTS.get(naam, ()):
+            if dep in nodig:
+                continue
+            nodig.add(dep)
+            if dep in WORKER_IMPORTS:
+                stack.append(dep)
+    gezien = set(aanwezig) | set(todo_namen)
+    return sorted(dep for dep in nodig if dep not in gezien)
+
+
+def geinstalleerde_eenheden() -> set[str]:
+    """Unit-namen (zonder .service) die systemd op de box kent."""
+    out = ssh("systemctl list-unit-files --type=service --no-legend --no-pager")
+    namen: set[str] = set()
+    for regel in out.splitlines():
+        stuk = (regel.split() or [""])[0]
+        if stuk.endswith(".service"):
+            namen.add(stuk[: -len(".service")])
+        elif stuk:
+            namen.add(stuk)
+    return namen
+
+
 def cmd_deploy(args) -> int:
     rows = survey()
     drift = [r for r in rows if r[3] == BOX_DRIFT]
@@ -250,13 +345,31 @@ def cmd_deploy(args) -> int:
     # already matches the repo" and shipped nothing. Adding the Kronos engine
     # hit it immediately: the guard reported MISSING in `check` and then
     # refused to act on its own finding.
-    todo = [r for r in rows
-            if r[3] in (REPO_AHEAD, MISSING) or (args.allow_drift and r[3] == BOX_DRIFT)]
-    if args.only:
-        todo = [r for r in todo if r[0].rsplit("/", 1)[-1] in set(args.only)]
+    #
+    # Uitzondering: optionele diensten die op deze box nooit geïnstalleerd zijn
+    # (axe-tts, cli_laag). Die MISSING-rijen overslaan, tenzij --only ze noemt.
+    geinstalleerd = geinstalleerde_eenheden()
+    todo, overgeslagen = deploy_kandidaten(
+        rows,
+        only=args.only,
+        allow_drift=args.allow_drift,
+        geinstalleerd=geinstalleerd,
+    )
+    for remote, reden in overgeslagen:
+        print(f"  skip {naam_van(remote)}  ({reden})")
     if not todo:
         print("✓ nothing to deploy — every managed file already matches the repo")
         return 0
+
+    worker_mist = ontbrekende_worker_imports(
+        {naam_van(r[0]) for r in todo},
+        aanwezig_namen(rows, {naam_van(r[0]) for r in todo}),
+    )
+    if worker_mist:
+        print("✗ refusing to ship agent_loop/task_worker without their imports:")
+        for regel in worker_mist:
+            print(f"    {regel}")
+        return 1
 
     for remote, rel, _unit, _s in todo:
         if rel.endswith(".py"):
