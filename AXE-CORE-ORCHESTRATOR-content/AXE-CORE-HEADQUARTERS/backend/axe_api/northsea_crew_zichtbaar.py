@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 AGENT = "northsea"
 DESK = "northsea-desk-manager"
@@ -137,8 +138,19 @@ def schrijf_zichtbaar(db: Any, job: str, data: dict[str, Any] | None) -> dict[st
     geheugen = 0
     for b in berichten:
         try:
-            db.table("core_tasks").insert(core_task_rij(b)).execute()
+            rij = core_task_rij(b)
+            rij.setdefault("id", str(uuid4()))
+            gemaakt = db.table("core_tasks").insert(rij).execute().data[0]
             taken += 1
+            if b.get("akkoord_nodig") and gemaakt.get("id"):
+                from goedkeuring_melding import vraag_luka
+                vraag_luka(
+                    db, gemaakt["id"],
+                    titel=b["titel"],
+                    detail=b.get("tekst") or "",
+                    kind="northsea_notice",
+                    requested_by="northsea-desk",
+                )
         except Exception:
             pass
     try:

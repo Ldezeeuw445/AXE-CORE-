@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import {
-  listRecentObsidianNotes,
+  listKluisNotities,
   searchObsidianNotes,
   writeObsidianNote,
   type ObsidianNote,
@@ -160,7 +160,7 @@ export default function ObsidianMemoryPanel({
     try {
       const data = query.trim().length >= 2
         ? await searchObsidianNotes(query.trim(), 80)
-        : await listRecentObsidianNotes(80);
+        : await listKluisNotities();
       setNotes(data);
       onNotesChanged?.(data);
       if (!selectedPath && data[0]) select(data[0].path);
@@ -250,9 +250,13 @@ export default function ObsidianMemoryPanel({
     setStatus(null);
     try {
       const gezaaid = await zaaiEnLeesKluis();
-      setNotes(gezaaid);
-      onNotesChanged?.(gezaaid);
+      setNotes(gezaaid.notes);
+      onNotesChanged?.(gezaaid.notes);
       setVaultPath(vaultPath.trim() || null);
+      if (gezaaid.fout) {
+        setStatus(gezaaid.fout);
+        return;
+      }
       const { push, pull } = await syncVaultBidirectional(200);
       setStatus(
         push.errors[0] && push.written === 0 && pull.pulled === 0

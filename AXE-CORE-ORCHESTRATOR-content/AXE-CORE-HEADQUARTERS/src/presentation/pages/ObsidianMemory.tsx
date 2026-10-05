@@ -62,6 +62,7 @@ export default function ObsidianMemory() {
   const selectedPath = searchParams.get('note');
   const [notes, setNotes] = useState<ObsidianNote[]>([]);
   const [werk, setWerk] = useState<WerkItem[]>([]);
+  const [zaadFout, setZaadFout] = useState<string | null>(null);
 
   const selectPath = useCallback((path: string | null) => {
     if (path) setSearchParams({ note: path }, { replace: true });
@@ -71,7 +72,9 @@ export default function ObsidianMemory() {
   useEffect(() => {
     let levend = true;
     void zaaiEnLeesKluis().then((data) => {
-      if (levend) setNotes((prev) => voegKluisNotitiesSamen(data, prev));
+      if (!levend) return;
+      setNotes((prev) => voegKluisNotitiesSamen(data.notes, prev));
+      setZaadFout(data.fout);
     });
     void leesWerkWaarheid().then((w) => { if (levend) setWerk(w); });
     return () => { levend = false; };
@@ -111,6 +114,15 @@ export default function ObsidianMemory() {
               ? `AXE vault · ${bordNotes.length} notes`
               : 'Seeding the AXE vault…'}
           </div>
+          {zaadFout && (
+            <div
+              className="mb-3 text-[12px] leading-relaxed"
+              data-axe-kluis-zaad-fout
+              style={{ color: 'var(--error)' }}
+            >
+              {zaadFout}
+            </div>
+          )}
 
           {meldingen.length > 0 && (
             <SectieBlok id="alerts" titel="TASK NOTICES">

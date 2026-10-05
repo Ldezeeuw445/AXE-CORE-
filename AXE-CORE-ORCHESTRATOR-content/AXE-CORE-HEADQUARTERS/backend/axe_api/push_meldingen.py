@@ -103,6 +103,51 @@ def verborgen(payload: dict[str, str]) -> dict[str, str]:
     return {"titel": VERBORGEN_TITEL, "body": "", "tag": "axe-melding", "url": payload["url"]}
 
 
+def _abonnement_uit(rij: dict[str, Any], bron: str) -> dict[str, Any] | None:
+    endpoint = (rij.get("endpoint") or "").strip()
+    p256dh = (rij.get("p256dh") or "").strip()
+    auth = (rij.get("auth") or "").strip()
+    if not endpoint or not p256dh or not auth:
+        return None
+    return {
+        "endpoint": endpoint,
+        "p256dh": p256dh,
+        "auth": auth,
+        "verberg_inhoud": rij.get("verberg_inhoud") is True,
+        "bron": bron,
+    }
+
+
+def lees_abonnementen(sb) -> list[dict[str, Any]]:
+    """Live endpoints uit core_ én de oude push_subscriptions, één keer per URL."""
+    gezien: dict[str, dict[str, Any]] = {}
+    for tabel in ("core_push_subscriptions", "push_subscriptions"):
+        try:
+            rijen = sb.table(tabel).select("endpoint,p256dh,auth,verberg_inhoud").execute().data or []
+        except Exception:
+            try:
+                rijen = sb.table(tabel).select("endpoint,p256dh,auth").execute().data or []
+            except Exception:
+                rijen = []
+        for rij in rijen:
+            ab = _abonnement_uit(rij, tabel)
+            if ab and ab["endpoint"] not in gezien:
+                gezien[ab["endpoint"]] = ab
+    return list(gezien.values())
+
+
+def schrap_dood_abonnement(sb, endpoint: str) -> int:
+    """404/410: weg uit beide tabellen, anders blijft de zender hem proberen."""
+    n = 0
+    for tabel in ("core_push_subscriptions", "push_subscriptions"):
+        try:
+            sb.table(tabel).delete().eq("endpoint", endpoint).execute()
+            n += 1
+        except Exception:
+            pass
+    return n
+
+
 def push_bericht_van(rij: dict[str, Any]) -> dict[str, str] | None:
     """De melding voor deze rij, of None als er niets te melden valt."""
     bericht = (rij.get("message") or "").strip()
@@ -137,6 +182,11 @@ async def stuur_meldingen(sb_factory, nu: datetime | None = None) -> dict[str, i
         return {"verstuurd": 0, "opgeruimd": 0}
 
     sb = sb_factory()
+    try:
+        from goedkeuring_melding import verval_oude_shell_vragen
+        verval_oude_shell_vragen(sb, nu)
+    except Exception:
+        pass
     grens = (nu - MAX_LEEFTIJD).isoformat()
     rijen = (
         sb.table("core_notifications")
@@ -152,13 +202,7 @@ async def stuur_meldingen(sb_factory, nu: datetime | None = None) -> dict[str, i
     if not rijen:
         return {"verstuurd": 0, "opgeruimd": 0}
 
-    abonnementen = (
-        sb.table("core_push_subscriptions")
-        .select("endpoint,p256dh,auth,verberg_inhoud")
-        .execute()
-        .data
-        or []
-    )
+    abonnementen = lees_abonnementen(sb)
 
     for rij in rijen:
         payload = push_bericht_van(rij)
@@ -184,9 +228,7 @@ async def stuur_meldingen(sb_factory, nu: datetime | None = None) -> dict[str, i
                     # 404/410: het abonnement bestaat niet meer. Blijven proberen
                     # levert elke minuut dezelfde fout op, dus die rij gaat weg.
                     if status in (404, 410):
-                        sb.table("core_push_subscriptions").delete().eq(
-                            "endpoint", ab["endpoint"]
-                        ).execute()
+                        schrap_dood_abonnement(sb, ab["endpoint"])
                         opgeruimd += 1
                     else:
                         print(f"[push] mislukt ({status}): {e}", flush=True)

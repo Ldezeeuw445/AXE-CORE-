@@ -592,10 +592,23 @@ class Planner:
             },
         }
         try:
-            return self.sb().table("core_tasks").insert(row).execute().data[0]
+            gemaakt = self.sb().table("core_tasks").insert(row).execute().data[0]
         except Exception as e:  # noqa: BLE001
             log.warning("planner: taak wegschrijven faalde: %s", e)
             return None
+        if gemaakt and row["metadata"].get("goedkeuring") == "nodig":
+            try:
+                from goedkeuring_melding import vraag_luka
+                vraag_luka(
+                    self.sb(), gemaakt["id"],
+                    titel=v["titel"],
+                    detail=v.get("doel") or v.get("waarom") or "",
+                    kind="leave_plan",
+                    requested_by="planner",
+                )
+            except Exception as e:  # noqa: BLE001
+                log.warning("planner: goedkeuring-rij schrijven faalde: %s", e)
+        return gemaakt
 
     def _claim(self, taak_id: str) -> bool:
         rijen = (self.sb().table("core_tasks")
