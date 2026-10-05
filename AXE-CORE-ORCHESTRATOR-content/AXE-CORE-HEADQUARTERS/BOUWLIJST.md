@@ -650,7 +650,7 @@ Status is gemeten aan **aanroepers**, niet aan definities (val 2).
 | Computer-use worker | **bestaat** | `infra/computer-worker/worker.mjs` ← Computer Use-tab, `toolRegistry.computer.ts`, launchd `com.axe.computer-worker` | `core_computer_workers`, `core_tasks` (`computer_use`, `target_device`), `core_task_events`, `core_trust_levels` | Geen tweede daemon, geen `core_nodes` |
 | Claude-local / Mac-relay | **deels** | `infra/claude-local-worker/worker.mjs` ← `macRelayService.ts`, `[MAC:]`, voice; **geen launchd** | `core_tasks` (`claude_local`) | Geen `target_device`; niet vervangen door `axe node run` |
 | Durable task kernel | **bestaat** | `task_runtime.py` / `task_worker.py` ← `/tasks*`, CLI `agent run`, ControlPlane, planner | `core_tasks`, `core_task_steps`, `core_approvals`, `core_task_events` | Geen parallelle job-queue |
-| Device Manager (PR #149) | **deels** | `MobileSystem.tsx`, `device-manager/*`; native Android buiten repo | via `core_tasks` + loopback ADB `:4599` | Geen Samsung-side worker in deze repo |
+| Device Manager (PR #149) | **deels** | `MobileSystem.tsx`, `device-manager/*`; native Android in eigen privé-repo `Ldezeeuw445/axe-core-android` (sinds 4 okt) | via `core_tasks` + loopback ADB `:4599` | Geen Samsung-side worker in deze repo |
 | Browser-agent | **bestaat** | `browser_agent_app.py`, `com.axe.browser-agent` | — (in-process) | Niet via `core_tasks` |
 | Terminal / mac-tunnel | **deels** | `terminal-server.cjs` (lokaal), `infra/axe-mac-tunnel` (handmatig) | — | Tunnel is outbound WebSocket, geen node-agent |
 | LiveKit `core_devices` | **deels** | `livekitService.ts` | `core_devices`, `core_voice_*` | **Andere tabel** dan workers; niet hergebruiken voor executie |

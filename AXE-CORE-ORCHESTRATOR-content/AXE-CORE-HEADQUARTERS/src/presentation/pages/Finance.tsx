@@ -3,6 +3,7 @@
  * Manual log only; AXE can later read this for "what did I earn?" answers.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import WebsiteReviewDesk from '@/presentation/components/finance/WebsiteReviewDesk';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { TabRuimte, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { motion } from 'framer-motion';
@@ -41,6 +42,7 @@ function fmt(n: number, currency = 'EUR') {
 }
 
 export default function Finance() {
+  const [view, setView] = useState<'ledger' | 'review-desk'>('ledger');
   const [entries, setEntries] = useState<IncomeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<IncomeSource>('prime_opinion');
@@ -139,6 +141,12 @@ export default function Finance() {
         />
       </TabRail>
       <TabRuimte>
+      <nav aria-label="Finance views" className="flex flex-wrap gap-4 mb-4 text-sm">
+        <button type="button" aria-pressed={view === 'ledger'} onClick={() => setView('ledger')} style={{ color: view === 'ledger' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>Income ledger</button>
+        <button type="button" aria-pressed={view === 'review-desk'} onClick={() => setView('review-desk')} style={{ color: view === 'review-desk' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>Website Review Desk</button>
+      </nav>
+      {view === 'review-desk' ? <WebsiteReviewDesk /> : <>
+
       <div className="flex items-center justify-between mb-6">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -417,6 +425,7 @@ export default function Finance() {
           </div>
         )}
       </WidgetCard>
+      </>}
       </TabRuimte>
     </motion.div>
   );

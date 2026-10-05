@@ -23,12 +23,16 @@
 import { Fragment, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { agentRegel, goedkeuringVanJob } from '@/domain/agentBewustzijn';
 import { managerRijen, werkerRijen } from '@/domain/tierRouter/agentVenster';
 import type { ManagerRij } from '@/domain/tierRouter/agentVenster';
 import type { AxeAgentId } from '@/domain/agents/roster';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
+import { startAxeJobs } from '@/presentation/store/installTierRouter';
+import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
+import { decideDurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
 
 /** Hoe vaak de kolom zichzelf opnieuw beoordeelt, zodat nagloei echt afloopt. */
 const TIK_MS = 1_000;
@@ -103,8 +107,10 @@ type Kant = 'links' | 'rechts';
 
 function Balkje({ rij, onKies, kant = 'links' }:
   { rij: ManagerRij; onKies: () => void; kant?: Kant }) {
-  const { agent, job, regel } = rij;
+  const { agent, job } = rij;
   const spiegel = kant === 'rechts';
+  const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
+  const regel = job ? agentRegel(job) : rij.regel;
 
   /* Stilstaand: geen balkje, alleen het woord. Zo blijft de rij op zijn plek
      en zie je in één blik wie er niets doet, zonder iets te dempen. */
@@ -123,7 +129,7 @@ function Balkje({ rij, onKies, kant = 'links' }:
     );
   }
 
-  const stand = STAND[job.state];
+  const stand = vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state];
   return (
     <button
       type="button"
@@ -246,7 +252,36 @@ export function AgentVensters() {
               transform: 'translateY(-50%)',
             }}
           >
-            <ManagerChat agent={open.agent} job={open.job} onSluit={() => setGekozen(null)} />
+            <ManagerChat
+              agent={open.agent}
+              job={open.job}
+              jobs={jobs.filter((j) => j.agent === open.agent.id)}
+              onSluit={() => setGekozen(null)}
+              onOpvolging={(tekst) => {
+                startAxeJobs([{
+                  text: tekst,
+                  titel: tekst.slice(0, 60),
+                  device: open.job?.device ?? null,
+                  tab: open.job?.tab,
+                  bron: 'followup',
+                  route: {
+                    ...classifyAxeTier(tekst),
+                    tier: 3,
+                    kind: 'agent',
+                    agent: open.agent.id,
+                    skill: null,
+                    confident: true,
+                    reason: 'home:followup',
+                  },
+                }]);
+              }}
+              onGoedkeuring={(akkoord) => {
+                const j = open.job;
+                if (!j?.taskId || !j.approvalId) return;
+                void decideDurableTaskApproval(j.taskId, j.approvalId, akkoord, akkoord ? 'Approved in Home window.' : 'Rejected in Home window.')
+                  .then(() => useAxeJobStore.getState().patch(j.id, { state: akkoord ? 'running' : 'failed' }));
+              }}
+            />
           </div>
         )}
       </AnimatePresence>

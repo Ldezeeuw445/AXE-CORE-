@@ -78,3 +78,19 @@ export function pushBerichtVan(rij: MeldingRij): PushBericht | null {
     url: doel?.route ?? '/',
   };
 }
+
+/** Wat een apparaat met "verberg inhoud" aan op zijn slotscherm krijgt. Zelfde
+ *  tekst als VERBORGEN_TITEL in backend/axe_api/push_meldingen.py -- wijzig je
+ *  er één, dan de ander; de tests aan beide kanten gebruiken dezelfde gevallen. */
+export const VERBORGEN_TITEL = 'AXE has something';
+
+/**
+ * Dezelfde melding zonder inhoud, voor wie die niet op een vergrendeld scherm wil.
+ *
+ * Eén vaste tag: een bui verborgen meldingen vervangt zichzelf in plaats van
+ * "AXE has something" twintig keer te stapelen. De route blijft staan, want die
+ * is pas zichtbaar als je erop tikt en de app al open is.
+ */
+export function verbergInhoud(bericht: PushBericht): PushBericht {
+  return { titel: VERBORGEN_TITEL, body: '', tag: 'axe-melding', url: bericht.url };
+}

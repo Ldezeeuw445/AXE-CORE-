@@ -1,6 +1,8 @@
 """De zoekketen Tavily → Zenserp → Perplexity, met de echte antwoordvormen (gemeten 15 sep 2026)."""
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -28,9 +30,17 @@ def gateway(routes: dict, *, tavily="t", zenserp="z", api_key="k") -> ResearchGa
 
 
 async def test_tavily_first_when_it_works():
-    g = gateway({"api.tavily.com": httpx.Response(200, json={"results": [{"title": "A", "url": "https://a.example", "content": "x"}]})})
+    gezien = {}
+
+    def tavily(req: httpx.Request) -> httpx.Response:
+        gezien["body"] = json.loads(req.content)
+        return httpx.Response(200, json={"results": [{"title": "A", "url": "https://a.example", "content": "x"}]})
+
+    g = gateway({"api.tavily.com": tavily})
     r = await g.search("copper cathode producer", max_results=5)
     assert r.provider == "tavily" and r.fallbacks == [] and r.hits[0].url == "https://a.example"
+    assert "yahoo.com" in gezien["body"]["exclude_domains"]
+    assert "tradeimex.in" in gezien["body"]["exclude_domains"]
 
 
 async def test_tavily_quota_falls_back_to_zenserp_with_real_domain():

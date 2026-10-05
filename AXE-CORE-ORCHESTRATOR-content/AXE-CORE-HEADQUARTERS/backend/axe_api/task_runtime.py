@@ -158,6 +158,7 @@ class TaskRepository:
             "source_app": payload.get("source_app", "axe_core"),
             "requested_by": requester,
             "capability": payload.get("capability"),
+            "assignee": payload.get("assignee"),
             "execution_mode": payload.get("execution_mode", "execute"),
             "idempotency_key": idem,
             "parent_task_id": payload.get("parent_task_id"),
@@ -401,6 +402,11 @@ class TaskRepository:
             "metadata": payload.get("metadata") or {},
         }
         approval = self._db().table("core_approvals").insert(row).execute().data[0]
+        try:
+            from goedkeuring_melding import schrijf_goedkeuring_melding
+            schrijf_goedkeuring_melding(self._db(), payload["title"], payload.get("detail") or "")
+        except Exception:
+            pass
         self._db().table("core_tasks").update({
             "status": "waiting_approval",
             "worker_id": None, "lease_token": None, "lease_expires_at": None,
@@ -436,6 +442,19 @@ class TaskRepository:
             "status": "queued" if approved else "rejected",
             "next_attempt_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", task_id).eq("status", "waiting_approval").execute()
+        try:
+            taak = self.get(task_id)
+            meta = dict((taak or {}).get("metadata") or {})
+            if meta.get("goedkeuring") == "nodig":
+                meta["goedkeuring"] = "ja" if approved else "afgewezen"
+                meta["uiStatus"] = "todo" if approved else "blocked"
+                velden = {"metadata": meta}
+                if not approved:
+                    velden["status"] = "cancelled"
+                    velden["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+                self._db().table("core_tasks").update(velden).eq("id", task_id).execute()
+        except Exception:
+            pass
         self.append_event(
             task_id, f"approval.{status}", actor_type="user", actor_id=decided_by,
             data={"approval_id": approval_id},

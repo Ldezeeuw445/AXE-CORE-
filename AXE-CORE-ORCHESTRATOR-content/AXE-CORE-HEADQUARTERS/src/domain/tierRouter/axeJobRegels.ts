@@ -6,6 +6,7 @@ import type { AxeAgentId } from '@/domain/agents/roster';
 import { skillDef, type AxeSkillId } from './axeSkills';
 import { agentById } from '@/domain/agents/roster';
 import type { AxeRoute } from '@/domain/tierRouter/axeRoute';
+import { werkplekVanTekst } from '@/domain/obsidian/werkplek';
 import { TOOL_TIERS } from '@/domain/tools/riskTiers';
 
 export type AxeJobState = 'queued' | 'running' | 'waiting' | 'done' | 'failed';
@@ -22,6 +23,17 @@ export interface AxeJob {
   sourceText: string;
   /** Wat de agent nu doet, in gewone taal (uit core_task_events). */
   stappen?: string[];
+  /** Welke computer het plan noemde. Mag niet verdwijnen vóór dispatch. */
+  device?: 'vps' | 'mac-mini' | 'imac' | null;
+  /** Tab waar de opdracht vandaan kwam — niet de gedeelde bak. */
+  tab?: string;
+  /** Repo die de opdracht raakt, als die er is. */
+  repo?: string | null;
+  /** Opvolging uit het Home-venster, of een verse plan-job. */
+  bron?: 'plan' | 'followup';
+  /** Open goedkeuring, zodat het venster meer toont dan "waiting". */
+  approvalId?: string;
+  approvalVraag?: string;
 }
 
 export type StemlusStand = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
@@ -79,6 +91,8 @@ export function stemlusOvergang(stand: StemlusStand, event: StemlusEvent): Steml
 }
 
 export function jobAgentVan(route: AxeRoute, text: string): AxeAgentId {
+  const desk = werkplekVanTekst(text);
+  if (desk.opdracht && desk.agent && desk.agent !== 'axe') return desk.agent;
   if (route.agent !== 'axe') return route.agent;
   if (/\b(northsea|north sea)\b/i.test(text)) return 'northsea';
   if (/\b(news|nieuws|intel)\b/i.test(text)) return 'intel';

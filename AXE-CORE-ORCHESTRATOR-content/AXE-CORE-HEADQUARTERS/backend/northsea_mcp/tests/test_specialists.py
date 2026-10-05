@@ -60,3 +60,24 @@ def test_a_failed_search_chain_reports_the_warning_never_fake_candidates():
     out = run_counterparty_sourcing(handoff)
     assert out["candidates"] == [] and out["rejected"] == []
     assert "Search chain exhausted" in out["analysis"]
+
+
+def test_news_and_finance_pages_are_rejected_not_ranked_as_suppliers():
+    handoff = {"payload": {"direction": "find_supplier", "commodity": "Copper Cathode",
+                           "web_hits": [
+                               {"title": "Mopani Copper Mines", "url": "https://www.mopani.com/products",
+                                "content": "Copper cathode producer. Contact sales@mopani.com"},
+                               {"title": "MOGLF Stock Price", "url": "https://finance.yahoo.com/quote/MOGLF/"},
+                               {"title": "Copper Cathode Exporters | TradeImeX",
+                                "url": "https://www.tradeimex.in/blogs/copper-cathode"},
+                               {"title": "Investing News Network",
+                                "url": "https://investingnews.com/daily/resource-investing/copper/"},
+                           ],
+                           "web_hits_provider": "tavily"}}
+    out = run_counterparty_sourcing(handoff)
+    namen = [c["name"] for c in out["candidates"]]
+    urls = " ".join(c.get("url") or "" for c in out["candidates"])
+    assert namen == ["Mopani Copper Mines"]
+    assert "yahoo" not in urls and "tradeimex" not in urls and "investingnews" not in urls
+    assert any("yahoo" in (r.get("url") or "") for r in out["rejected"])
+    assert any("tradeimex" in (r.get("url") or "") for r in out["rejected"])

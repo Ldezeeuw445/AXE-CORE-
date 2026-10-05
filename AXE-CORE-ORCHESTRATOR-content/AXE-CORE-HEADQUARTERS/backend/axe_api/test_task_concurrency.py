@@ -115,6 +115,16 @@ class NepKlok:
         await asyncio.sleep(0)
 
 
+class TestCap:
+    def test_standaard_is_tien_en_99_wordt_afgekapt(self):
+        assert tw.DEFAULT_CONCURRENCY == 10
+        assert tw.CONCURRENCY_MAX == 10
+        assert tw.concurrency_count(None, env="3") == 3
+        assert tw.concurrency_count(None, env="10") == 10
+        assert tw.concurrency_count(99) == 10
+        assert tw.concurrency_count(0) == 1
+
+
 class TestParallel:
     def test_drie_taken_overlappen_en_worden_elk_een_keer_geclaimd(self):
         repo = NepRepo([maak_taak(n) for n in range(3)])

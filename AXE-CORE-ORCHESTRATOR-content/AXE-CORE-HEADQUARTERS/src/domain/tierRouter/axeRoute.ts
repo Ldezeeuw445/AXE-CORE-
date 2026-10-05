@@ -11,6 +11,7 @@
  */
 import { classifyChatIntent, isSocialChatTurn } from '@/domain/chatIntent';
 import { delegateFor, type AxeAgentId } from '@/domain/agents/roster';
+import { werkplekVanTekst } from '@/domain/obsidian/werkplek';
 import { skillDef, skillVanTekst, type AxeSkillId } from './axeSkills';
 
 export type AxeRouteTier = 1 | 2 | 3;
@@ -194,6 +195,21 @@ export function classifyAxeTier(text: string): AxeRoute {
       via: 'rules',
       reason: 'tasks lookup',
       agent: 'axe',
+      skill: null,
+      confident: true,
+    };
+  }
+
+  /* Desk of tab noemen is genoeg — hij hoeft de agent-id of de map niet
+     te zeggen. "doe dit aan Northsea Desk" landt op de NorthSea-agent. */
+  const desk = werkplekVanTekst(t);
+  if (desk.opdracht && desk.agent && desk.agent !== 'axe') {
+    return {
+      tier: 3,
+      kind: 'agent',
+      via: 'rules',
+      reason: `desk:${desk.bron}`,
+      agent: desk.agent,
       skill: null,
       confident: true,
     };

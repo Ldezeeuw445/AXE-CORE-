@@ -42,6 +42,13 @@ def test_overzicht_chase_heeft_deal_id():
     assert "d.id as deal_id" in n.OVERZICHT_SQL
 
 
+def test_werk_query_heeft_eigenaar_en_oorsprong():
+    sql = n.TAB_SQL["werk"]
+    assert "dt.owner as eigenaar" in sql
+    assert "oorsprong" in sql
+    assert "aq.metadata" in sql
+
+
 def test_deals_query_heeft_engine_velden():
     sql = n.TAB_SQL["deals"]
     assert "engine_next_action" in sql

@@ -63,7 +63,21 @@ function leesEnv() {
 }
 
 const env = leesEnv();
-const ontbrekendVerplicht = VERPLICHT.filter(v => !(env.get(v.naam) ?? '').trim());
+// Vite geeft variabelen uit de procesomgeving voorrang boven .env-bestanden, en
+// build-web.sh van de Android-schil geeft de Supabase-gegevens op die manier mee,
+// vanuit een schone kopie zonder .env. Alleen bestanden lezen weigerde die build
+// terwijl Vite alles had gekregen wat het nodig heeft.
+for (const [naam, waarde] of Object.entries(process.env)) {
+  if (naam.startsWith('VITE_') && waarde) env.set(naam, waarde);
+}
+// De Android-schil mag VITE_AXE_CORE_API_KEY juist NIET in de bundel hebben: de
+// telefoon haalt hem na inloggen en biometrie op (AxeSecrets.kt), want een telefoon
+// raakt zoek en die sleutel geeft Supabase service_role, GitHub-schrijfrechten en
+// /internal/exec. De desktop-build houdt de eis (die draait alleen op een machine
+// die al root-SSH naar dezelfde VPS heeft).
+const android = process.env.ANDROID_SHELL === '1';
+const verplichtVoorDezeBuild = android ? VERPLICHT.filter(v => v.naam !== 'VITE_AXE_CORE_API_KEY') : VERPLICHT;
+const ontbrekendVerplicht = verplichtVoorDezeBuild.filter(v => !(env.get(v.naam) ?? '').trim());
 const ontbrekendOptioneel = OPTIONEEL.filter(v => !(env.get(v.naam) ?? '').trim());
 
 if (ontbrekendOptioneel.length > 0) {

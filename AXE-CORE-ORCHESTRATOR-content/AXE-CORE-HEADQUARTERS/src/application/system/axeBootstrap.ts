@@ -21,6 +21,7 @@ import { startPlannerKoppeling } from '@/application/planner/plannerKoppeling';
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 import { leesProviderVerbindingen, type ProviderVerbinding } from '@/infrastructure/config/providerSleutels';
 import { bewaarDagBriefje, dagBriefjeVanVandaag } from './dagBriefjeMaken';
+import { maybeSeedKluisBoom } from '@/application/obsidian/kluisZaad';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -122,6 +123,18 @@ export async function maybeNightlyReview(): Promise<void> {
     await runConversationReview(6);
   } catch (err) {
     console.warn('[axeBootstrap] nightly review skipped:', err);
+  }
+
+  try {
+    const { schrijfInAgentWerkplek } = await import('@/application/obsidian/agentLes');
+    await schrijfInAgentWerkplek(
+      'axe',
+      `Nightly pass ${todayKey()}`,
+      'One improvement written here. Next NorthSea, apps or Macs step stays in this workspace — no mail, no auto_send.',
+      'nightly',
+    );
+  } catch (err) {
+    console.warn('[axeBootstrap] nightly workspace note skipped:', err);
   }
 }
 
@@ -400,6 +413,7 @@ export async function warmLocalOllamaAtBoot(): Promise<void> {
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
+  void maybeSeedKluisBoom();
   // Niet meer opwarmen bij het opstarten: dat laadde 2,4 GB in op een Mac met
   // 8 GB, ook als je niets lokaal vroeg. De eerste lokale beurt laadt hem zelf.
   void maybeNightlyReview();

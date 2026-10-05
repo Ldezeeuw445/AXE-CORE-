@@ -243,7 +243,8 @@ class ResearchGateway:
         antwoord = await self.ask(
             f"List up to {max_results} real companies with their official websites that match this search: {query}.",
             instructions="Only include companies you can cite with [web:N]. One line per company: name - official website. "
-                         "No marketplaces, directories or broker listings. Never invent companies.",
+                         "No marketplaces, directories, broker listings, news sites, finance quote pages, blogs or stats portals. "
+                         "Never invent companies.",
             priority=priority)
         bronnen = [s for s in antwoord.sources if s.cited] or antwoord.sources
         return [SearchHit(title=s.title or (domain_of(s.url) or s.url), url=s.url, content="", score=0.5) for s in bronnen[:max_results]]
@@ -252,9 +253,11 @@ class ResearchGateway:
         if not self._tavily:
             raise ResearchError("not_configured", "Web search (Tavily) is not configured on this server.")
         try:
+            from .sourcing_quality import TAVILY_EXCLUDE_DOMAINS
             r = await self._client.post("https://api.tavily.com/search", json={
                 "api_key": self._tavily, "query": query[:400], "max_results": max(1, min(max_results, 10)),
                 "search_depth": "basic", "include_answer": False,
+                "exclude_domains": list(TAVILY_EXCLUDE_DOMAINS),
             }, timeout=40)
         except httpx.HTTPError as e:
             raise ResearchError("provider_error", f"Web search unreachable ({type(e).__name__}).") from e

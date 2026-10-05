@@ -261,14 +261,9 @@ export function AppShell() {
           Timeline/Active Tasks. Op elke tab, ook mobiel: dit is precies het
           moment dat je niet wil missen omdat het paneel toevallig dicht was. */}
       <TaskCompletionToasts />
-      {/* De wereldschakelaar, midden boven op de plaat. Staat op ELKE tab:
-          het is de snelste weg tussen Core, Neural, Terrain en Architecture,
-          en hij ligt op de plaat in plaats van in een balk, dus hij zit
-          niets in de weg. */}
-      {/* De wereldschakelaar hoort óók op de telefoon-home: hij is de 1-op-1
-          Tauri-manier tussen Core/Neural/Terrain/Architecture. Alleen de
-          desktop-balken (TopNav/Sidebar) blijven op mobiel weg. */}
-      {!mobileCommandSurface && opPlaat && !volScherm && <PlaatViewSwitch />}
+      {/* De wereldschakelaar hoort op Home, niet op Obsidian: die tab is de
+          kluis als dashboard, geen radar. Desktop-Home blijft ongewijzigd. */}
+      {!mobileCommandSurface && opPlaat && !volScherm && location.pathname !== '/obsidian' && <PlaatViewSwitch />}
 
       {/* Licht/donker-knop rechtsboven op de telefoon. BUITEN de schil, want de
           schil krijgt in de lichte stand een backdrop-filter (frosted glas) en

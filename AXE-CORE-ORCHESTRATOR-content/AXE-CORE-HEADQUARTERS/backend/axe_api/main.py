@@ -274,6 +274,7 @@ class TaskCreateRequest(BaseModel):
     requested_by: str = "luka"
     source_app: str = "axe_core"
     capability: Optional[str] = None
+    assignee: Optional[str] = None
     execution_mode: str = "execute"
     idempotency_key: Optional[str] = None
     parent_task_id: Optional[str] = None
@@ -483,6 +484,8 @@ async def list_approvals(status: str = "pending", limit: int = 20):
     worse than one that errors, because the task stays parked and nobody knows.
     """
     try:
+        from goedkeuring_melding import verval_oude_shell_vragen
+        verval_oude_shell_vragen(sb())
         return {"approvals": task_repo().list_approvals(status, min(limit, 100))}
     except Exception as exc:
         raise HTTPException(503, f"Could not read approvals: {exc}") from exc
@@ -3507,9 +3510,17 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
             return {"status": "ok" if ok else "fail", "output": f"{r.status_code} {r.text[:1000]}"}
 
         if action_type == "northsea":
-            # De NorthSea Communication Engine en de Discovery-sweep draaien in de NorthSea-MCP op dezelfde
-            # box. De sleutels staan in de omgeving van deze API (nooit in core_schedules). Geen van beide
-            # verstuurt ooit; discovery maakt alleen interne opportunities uit bestaande rijen (zie discovery.py).
+            # De NorthSea Communication Engine, Deal & Operations en Discovery-sweep
+            # draaien in de NorthSea-MCP op dezelfde box. De sleutels staan in de
+            # omgeving van deze API (nooit in core_schedules). Verzenden alleen via
+            # het bestaande approve+send-pad, nooit door auto_send_* om te zetten.
+            def _zichtbaar(job_naam: str, antwoord: dict) -> None:
+                try:
+                    from northsea_crew_zichtbaar import schrijf_zichtbaar
+                    schrijf_zichtbaar(sb(), job_naam, antwoord)
+                except Exception:
+                    pass
+
             job = (payload.get("job") or "engine_tick").strip()
             if job == "engine_tick":
                 token = os.environ.get("NORTHSEA_ENGINE_TOKEN", "").strip()
@@ -3526,7 +3537,11 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                 if r.status_code == 409:
                     return {"status": "skipped", "output": "northsea engine: previous tick still running"}
                 ok = r.status_code == 200 and not data.get("errors")
-                samenvatting = {"summary": data.get("summary"), "errors": (data.get("errors") or [])[:10], "sent": data.get("sent"), "http": r.status_code}
+                samenvatting = {"summary": data.get("summary"), "errors": (data.get("errors") or [])[:10],
+                                "sent": data.get("sent"), "notices": (data.get("notices") or [])[:8],
+                                "http": r.status_code}
+                if ok:
+                    _zichtbaar(job, data)
                 return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
             if job == "discovery_sweep":
                 token = os.environ.get("NORTHSEA_DISCOVERY_TOKEN", "").strip()
@@ -3544,12 +3559,14 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                     return {"status": "skipped", "output": "northsea discovery: previous sweep still running"}
                 ok = r.status_code == 200 and not data.get("errors")
                 samenvatting = {"created": data.get("created"), "considered_pairs": data.get("considered_pairs"),
-                               "errors": (data.get("errors") or [])[:10], "http": r.status_code}
+                               "errors": (data.get("errors") or [])[:10],
+                               "notices": (data.get("notices") or [])[:8], "http": r.status_code}
+                if ok:
+                    _zichtbaar(job, data)
                 return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
             if job == "operations_sweep":
-                # Uses the same internal engine service credential: this loop only
-                # reads canonical deal state and runs specialist crews. Sending,
-                # approval, signing, identity disclosure and banking remain gated.
+                # Zelfde engine-token. Crews doen jacht/kwalificatie/benadering;
+                # een ja gaat naar Luka of de Desk Manager. auto_send_* blijft.
                 token = os.environ.get("NORTHSEA_ENGINE_TOKEN", "").strip()
                 if not token:
                     return {"status": "fail", "output": "northsea: NORTHSEA_ENGINE_TOKEN not set on this host"}
@@ -3566,7 +3583,10 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                 ok = r.status_code == 200 and data.get("status") not in ("error", "failed")
                 samenvatting = {"status": data.get("status"), "selected": data.get("selected"),
                                 "results": (data.get("results") or [])[:12], "sent": data.get("sent", 0),
-                                "approved": data.get("approved", 0), "http": r.status_code}
+                                "approved": data.get("approved", 0),
+                                "notices": (data.get("notices") or [])[:8], "http": r.status_code}
+                if ok:
+                    _zichtbaar(job, data)
                 return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
             return {"status": "fail", "output": f"northsea: unknown job {job!r}"}
 
@@ -4424,7 +4444,7 @@ async def _planner_start():
                         "action_type": "planner", "action_payload": {}, "cron_expr": "10 */3 * * *", "timezone": "Europe/Amsterdam",
                         "enabled": True, "max_runtime_s": 1800, "metadata": {"app": "axe_core"},
                         "next_run_at": _planning.volgende("10 */3 * * *", "Europe/Amsterdam").isoformat(),
-                        "description": "AXE Core, Code Agent, AXE Algo en de Northsea Desk bedenken elk ≤3 taken (planner.py).",
+                        "description": "Alleen een vervolg op wat Luka vroeg, of één echte storing. Verzint geen projecten (planner.py).",
                     }).execute()
             except Exception as e:  # noqa: BLE001
                 log.warning("[planner] schema registreren faalde: %s", e)
@@ -4523,6 +4543,15 @@ async def planner_besluit(taak_id: str, body: PlannerBesluit):
         velden["status"] = "cancelled"
         velden["cancelled_at"] = datetime.now(timezone.utc).isoformat()
     sb().table("core_tasks").update(velden).eq("id", taak_id).execute()
+    try:
+        open_vragen = (sb().table("core_approvals").select("id")
+                       .eq("task_id", taak_id).eq("status", "pending").execute().data) or []
+        for vraag in open_vragen:
+            task_repo().decide_approval(
+                taak_id, vraag["id"], body.goedkeuren, "luka", "planner besluit",
+            )
+    except Exception:
+        pass
     return {"id": taak_id, "goedkeuring": meta["goedkeuring"]}
 
 

@@ -130,7 +130,7 @@ export function agendaVanJobs(items: readonly AgendaJob[]): RoosterItem[] {
     const herhaling = i.herhaling ? ` · ${i.herhaling} (${i.aantal}×)` : '';
     uit.push({
       id: `job:${i.key}`,
-      titel: `${i.naam}${herhaling}`,
+      titel: `Cron · ${i.naam}${herhaling}`,
       datum: datumSleutel(d),
       tijd: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
       duurMin: 15,

@@ -126,7 +126,23 @@ echo "╚═══════════════════════�
 # ── 1. System packages ──────────────────────────────────────────────────────
 echo "→ Installing system packages..."
 apt-get update -qq
-apt-get install -y -qq nginx certbot python3-certbot-nginx python3 python3-venv python3-pip git curl >/dev/null
+apt-get install -y -qq nginx certbot python3-certbot-nginx python3 python3-venv python3-pip git curl xz-utils >/dev/null
+
+# Node: terminal-server.cjs heeft het nodig, en een kale Ubuntu-image heeft het
+# niet -- install-axe-terminal.sh sloeg de terminalserver dan stil over ("node niet
+# gevonden") terwijl dit script "Done" zei. Zelfde versie als de API-box, uit de
+# officiele tarball en met controle van de checksum.
+NODE_VERSIE="v22.23.1"
+if ! command -v node >/dev/null; then
+  echo "→ Installing Node ${NODE_VERSIE}..."
+  ( cd /tmp \
+    && curl -fsSLO "https://nodejs.org/dist/${NODE_VERSIE}/node-${NODE_VERSIE}-linux-x64.tar.xz" \
+    && curl -fsSLO "https://nodejs.org/dist/${NODE_VERSIE}/SHASUMS256.txt" \
+    && grep " node-${NODE_VERSIE}-linux-x64.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
+    && tar -xJf "node-${NODE_VERSIE}-linux-x64.tar.xz" -C /usr/local --strip-components=1 --no-same-owner \
+    && rm -f "node-${NODE_VERSIE}-linux-x64.tar.xz" SHASUMS256.txt )
+  command -v node >/dev/null || echo "   ! node installeren mislukt -- de terminalserver wordt overgeslagen"
+fi
 
 # ── 2. Ollama ───────────────────────────────────────────── [ollama, alles] ──
 if [ "$doe_ollama" = true ]; then
@@ -148,9 +164,15 @@ else
 fi
 echo "→ Configuring Ollama (CORS, ${MAX_LOADED} model(s) resident, keep-alive ${KEEP_ALIVE})..."
 mkdir -p /etc/systemd/system/ollama.service.d
+# Alleen op loopback. Hier stond 0.0.0.0:11434, en omdat nginx op dezelfde box
+# draait en doorgeeft aan 127.0.0.1 had niets die poort van buiten nodig -- maar
+# met 0.0.0.0 en een firewall die uit staat (ufw is standaard inactive op deze
+# Strato-images) was `http://<ip>:11434` een deur om het hele slot heen, precies
+# de open modelbox van 13 september. Het slot in nginx is alleen een slot als het
+# de enige deur is.
 cat > /etc/systemd/system/ollama.service.d/override.conf <<EOF
 [Service]
-Environment="OLLAMA_HOST=0.0.0.0:11434"
+Environment="OLLAMA_HOST=127.0.0.1:11434"
 Environment="OLLAMA_ORIGINS=*"
 Environment="OLLAMA_MAX_LOADED_MODELS=${MAX_LOADED}"
 Environment="OLLAMA_KEEP_ALIVE=${KEEP_ALIVE}"
@@ -264,6 +286,11 @@ fi
 # map en geo horen in de http-context, dus niet in de vhost zelf.
 cat > /etc/nginx/conf.d/axe-ollama-slot.conf <<EOF
 # Wie mag er bij ollama.axecompanion.com. Gegenereerd door vps-bootstrap.sh.
+# "Bearer " plus een 48-tekens sleutel past niet in de standaard bucket van 64:
+# nginx -t faalt dan met "could not build map_hash", het script (set -e slikt een
+# mislukte \`nginx -t && reload\` in een &&-lijst) ging door, en certbot's nginx-plugin
+# faalde daarna op dezelfde fout zonder dat het slot ooit geladen was (4 okt 2026).
+map_hash_bucket_size 128;
 map \$http_authorization \$axe_ollama_sleutel {
     default 0;
     "Bearer ${OLLAMA_PROXY_KEY}" 1;
@@ -327,7 +354,10 @@ server {
     location / {
         include /etc/nginx/snippets/axe-ollama-dicht.conf;
         proxy_pass http://127.0.0.1:11434;
-        proxy_set_header Host \$host;
+        # Ollama 0.35+ geeft 403 op elke Host die niet lokaal is zodra hij op loopback
+        # luistert -- de beveiliging die we met 127.0.0.1 juist willen. nginx geeft
+        # dus een lokale Host door.
+        proxy_set_header Host localhost:11434;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_read_timeout 300s;
     }

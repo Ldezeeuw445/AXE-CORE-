@@ -19,6 +19,7 @@
  * importeert ze.
  */
 import { isAppId, type AppId } from './apps';
+import { goedkeuringVoorActie } from './taakGoedkeuring';
 
 // ── Draadtypes (wat de VPS-API teruggeeft) ────────────────────────────────────
 
@@ -272,8 +273,21 @@ export const OPEN_TASK_STATUSES = [...new Set([...ACTIEF, ...ANNULEERBAAR])];
 
 export type TaskGroup = 'needs_you' | 'active' | 'waiting' | 'failed';
 
+function actieVanTaak(t: TaskLike) {
+  return {
+    title: t.title,
+    goal: typeof t.metadata?.goal === 'string' ? t.metadata.goal : null,
+    detail: typeof t.metadata?.doel === 'string' ? t.metadata.doel : null,
+    metadata: t.metadata,
+  };
+}
+
+/** Alleen een actie die het staande plan verlaat vraagt Luka. */
 function wachtOpPlannerAkkoord(t: TaskLike): boolean {
-  return t.status === 'pending' && t.capability === 'planner' && t.metadata?.goedkeuring === 'nodig';
+  if (t.status !== 'pending' || t.capability !== 'planner' || t.metadata?.goedkeuring !== 'nodig') {
+    return false;
+  }
+  return goedkeuringVoorActie(actieVanTaak(t)) !== null;
 }
 
 export function taskGroup(t: TaskLike): TaskGroup | null {
@@ -295,11 +309,14 @@ export interface TaskActions {
 }
 
 export function taskActions(t: TaskLike, pendingApprovalId: string | null): TaskActions {
-  if (wachtOpPlannerAkkoord(t)) return { actions: ['approve', 'reject'], via: 'planner', note: null };
+  const vraag = goedkeuringVoorActie(actieVanTaak(t));
+  if (wachtOpPlannerAkkoord(t)) {
+    return { actions: ['approve', 'reject'], via: 'planner', note: vraag?.tekst ?? null };
+  }
   if (t.status === 'waiting_approval') {
     return pendingApprovalId
-      ? { actions: ['approve', 'reject', 'cancel'], via: 'approval', note: null }
-      : { actions: ['cancel'], via: null, note: 'No pending approval row for this task.' };
+      ? { actions: ['approve', 'reject', 'cancel'], via: 'approval', note: vraag?.tekst ?? null }
+      : { actions: ['cancel'], via: null, note: vraag?.tekst ?? 'No pending approval row for this task.' };
   }
   if (ACTIEF.has(t.status)) {
     return { actions: [], via: null, note: `Held by ${t.worker_id || 'a worker'}. Only its lease can move it.` };

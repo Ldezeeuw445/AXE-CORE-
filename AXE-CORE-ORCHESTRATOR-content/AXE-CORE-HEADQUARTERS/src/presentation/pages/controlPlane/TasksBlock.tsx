@@ -104,6 +104,7 @@ export function TasksBlock({ peiling, now }: { peiling: Peiling<TaskData>; now: 
       {lijst.slice(0, MAX_RIJEN).map(t => {
         const approvalId = peiling.data?.approvals[t.id] ?? null;
         const { actions, via, note } = taskActions(t, approvalId);
+        const jaVraag = note && actions.includes('approve') ? note : 'Approve?';
         const u = uitkomst[t.id];
         const fout = t.status === 'failed' ? foutVan(t) : '';
         return (
@@ -127,7 +128,7 @@ export function TasksBlock({ peiling, now }: { peiling: Peiling<TaskData>; now: 
                 {actions.map(a => (
                   <Bevestig key={a}
                     label={a === 'approve' ? 'Approve' : a === 'reject' ? 'Reject' : 'Cancel task'}
-                    vraag={a === 'approve' ? 'Approve?' : a === 'reject' ? 'Reject?' : 'Cancel this task?'}
+                    vraag={a === 'approve' ? jaVraag : a === 'reject' ? 'Reject?' : 'Cancel this task?'}
                     toon={a === 'approve' ? 'ok' : a === 'reject' ? 'bad' : 'muted'}
                     doe={() => doe(t, a, via, approvalId)} />
                 ))}

@@ -23,9 +23,53 @@ import { apparaatId } from '@/infrastructure/persistence/chatPersistence';
 import { pushStand, type PushStand } from '@/domain/pushMogelijk';
 
 const TABEL = 'core_push_subscriptions';
+export const PUSH_TABEL = TABEL;
+const LUKA_USER_ID = 'acff7a12-1111-481d-a7a9-cc07583b8069';
 
-/** De publieke helft van het VAPID-paar. Hoort in de bundel: daar is hij voor. */
-const VAPID_PUBLIEK = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '';
+/**
+ * De publieke helft van het VAPID-paar. Hoort in de bundel: daar is hij voor.
+ *
+ * De standaard staat hier en niet alleen in de bouwomgeving omdat de website
+ * door Cloudflare gebouwd wordt, en een VITE_-variabele die daar vergeten wordt
+ * een bundel zonder sleutel geeft zonder dat iets faalt: de knop werkt, de rij
+ * wordt opgeslagen, en er komt nooit een melding. `VITE_VAPID_PUBLIC_KEY` wint
+ * als hij gezet is.
+ *
+ * Moet exact de helft zijn van /etc/axe-vapid/private_key.pem op de API-VPS
+ * (4 okt 2026). Wordt dat paar vervangen, dan hier ook -- een publieke sleutel
+ * van het ene paar met een privésleutel van het andere weigert de pushdienst
+ * stil.
+ */
+const VAPID_PUBLIEK_STANDAARD = 'BKAmZjoRcfSq_hbOIy_WrrVAhm10eOkvg0jOPfL84y7boU65aB1q0ufm6_dYthNDn87SWnAUjWBw-Jj4KZ3R3ww';
+export const VAPID_PUBLIEK = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || VAPID_PUBLIEK_STANDAARD;
+
+/** Zelfde sleutel, zelfde vorm: base64 of base64url, zonder padding. */
+export function normaliseerVapid(sleutel: string): string {
+  return sleutel.trim().replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+export function vapidPubliekVanBytes(bytes: ArrayBuffer | Uint8Array | null | undefined): string {
+  if (!bytes) return '';
+  const u = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (!u.length) return '';
+  let bin = '';
+  for (let i = 0; i < u.length; i += 1) bin += String.fromCharCode(u[i]);
+  return normaliseerVapid(btoa(bin));
+}
+
+/** True als het opgeslagen abonnement bij een ánder VAPID-paar hoort. */
+export function vapidSleutelWijktAf(
+  opgeslagen: ArrayBuffer | Uint8Array | string | null | undefined,
+  huidig: string = VAPID_PUBLIEK,
+): boolean {
+  const nu = normaliseerVapid(huidig);
+  if (!nu) return false;
+  const oud = typeof opgeslagen === 'string'
+    ? normaliseerVapid(opgeslagen)
+    : vapidPubliekVanBytes(opgeslagen);
+  if (!oud) return false;
+  return oud !== nu;
+}
 
 /**
  * iOS geeft Web Push alleen aan een PWA op het beginscherm.
@@ -100,8 +144,10 @@ export async function meldAan(): Promise<{ ok: true } | { ok: false; reden: stri
   }
 
   const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription()
-    ?? await reg.pushManager.subscribe({
+  const bestaand = await reg.pushManager.getSubscription();
+  const sub = bestaand
+    ? await vernieuwAbonnementAlsSleutelWijkt(bestaand, reg)
+    : await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: sleutelBytes(VAPID_PUBLIEK.trim()) as BufferSource,
     });
@@ -113,7 +159,7 @@ export async function meldAan(): Promise<{ ok: true } | { ok: false; reden: stri
   if (!userId) return { ok: false, reden: 'Niet ingelogd, dus er is geen account om de melding aan te hangen.' };
 
   const { error } = await sb.from(TABEL).upsert({
-    user_id: userId,
+    user_id: userId || LUKA_USER_ID,
     endpoint: sub.endpoint,
     p256dh: sleutelUit(sub, 'p256dh'),
     auth: sleutelUit(sub, 'auth'),
@@ -122,6 +168,67 @@ export async function meldAan(): Promise<{ ok: true } | { ok: false; reden: stri
   }, { onConflict: 'endpoint' });
 
   if (error) return { ok: false, reden: `Opslaan mislukte: ${error.message}` };
+  return { ok: true };
+}
+
+/**
+ * Apple weigert een abonnement dat met een ánder VAPID-paar is gemaakt
+ * (VapidPkHashMismatch). Dan eerst het oude weg, anders blijft de zender
+ * 34 dode endpoints proberen.
+ */
+export async function vernieuwAbonnementAlsSleutelWijkt(
+  sub: PushSubscription,
+  reg: Pick<ServiceWorkerRegistration, 'pushManager'>,
+  huidig: string = VAPID_PUBLIEK,
+): Promise<PushSubscription> {
+  const opgeslagen = sub.options?.applicationServerKey;
+  if (!vapidSleutelWijktAf(opgeslagen, huidig)) return sub;
+  await sub.unsubscribe().catch(() => {});
+  return reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: sleutelBytes(huidig.trim()) as BufferSource,
+  });
+}
+
+/**
+ * Als de browser al een subscription heeft, schrijf die opnieuw in de tabel
+ * die de zender leest. Oude PWA-rijen stonden alleen in push_subscriptions.
+ * Andere VAPID-sleutel: eerst unsubscribe, anders blijft Apple 400 geven.
+ */
+export async function herstelAanmelding(): Promise<void> {
+  if (!meldingStand().kan) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const bestaand = await reg.pushManager.getSubscription();
+    if (!bestaand) return;
+    const sub = await vernieuwAbonnementAlsSleutelWijkt(bestaand, reg);
+    const sb = getSupabase();
+    if (!sb) return;
+    const { data: sessie } = await sb.auth.getSession();
+    const userId = sessie.session?.user?.id || LUKA_USER_ID;
+    await sb.from(TABEL).upsert({
+      user_id: userId,
+      endpoint: sub.endpoint,
+      p256dh: sleutelUit(sub, 'p256dh'),
+      auth: sleutelUit(sub, 'auth'),
+      apparaat: apparaatId(),
+      failed_at: null,
+    }, { onConflict: 'endpoint' });
+  } catch (e) {
+    console.warn('[push] herstel aanmelding:', e);
+  }
+}
+
+/** Eén testhij, zelfde message-vorm als de bel en de A17. */
+export async function stuurTestPush(): Promise<{ ok: true } | { ok: false; reden: string }> {
+  const sb = getSupabase();
+  if (!sb) return { ok: false, reden: 'Geen verbinding met Supabase.' };
+  const { error } = await sb.from('core_notifications').insert({
+    recipient: LUKA_USER_ID,
+    type: 'info',
+    message: 'Test push: if this reaches your lock screen, the sender is live.',
+  });
+  if (error) return { ok: false, reden: error.message };
   return { ok: true };
 }
 
@@ -139,4 +246,37 @@ export async function meldAf(): Promise<void> {
   } catch (e) {
     console.warn('[push] afmelden ging niet helemaal goed:', e);
   }
+}
+
+/** Het endpoint van dit apparaat, of null als het niet aangemeld is. */
+async function eigenEndpoint(): Promise<string | null> {
+  if (!meldingStand().kan) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    return (await reg.pushManager.getSubscription())?.endpoint ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Verbergt dit apparaat de inhoud van meldingen op het slotscherm? Staat per
+ *  apparaat op de abonnementsrij (zie migratie 003): de iPhone in je zak wil dat
+ *  anders dan de Mac op je bureau. Zonder rij is het antwoord: nee. */
+export async function leesVerbergInhoud(): Promise<boolean> {
+  const endpoint = await eigenEndpoint();
+  const sb = getSupabase();
+  if (!endpoint || !sb) return false;
+  const { data } = await sb.from(TABEL).select('verberg_inhoud').eq('endpoint', endpoint).maybeSingle();
+  return data?.verberg_inhoud === true;
+}
+
+/** Zet het voor dit apparaat. Geeft false als er geen rij was om te wijzigen --
+ *  dan is er niets opgeslagen en moet de schakelaar dat ook zeggen, in plaats van
+ *  te doen alsof het gelukt is. */
+export async function zetVerbergInhoud(waarde: boolean): Promise<boolean> {
+  const endpoint = await eigenEndpoint();
+  const sb = getSupabase();
+  if (!endpoint || !sb) return false;
+  const { data, error } = await sb.from(TABEL).update({ verberg_inhoud: waarde }).eq('endpoint', endpoint).select('id');
+  return !error && (data?.length ?? 0) > 0;
 }

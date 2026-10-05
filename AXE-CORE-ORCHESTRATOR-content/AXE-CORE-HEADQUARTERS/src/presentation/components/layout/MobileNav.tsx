@@ -164,7 +164,7 @@ export function MobileNav() {
             style={{ color: 'var(--text-primary)' }}
           >
             <ImageIcon size={17} className="flex-none" />
-            <span>Wallpaper wijzigen</span>
+            <span>Change wallpaper</span>
           </button>
         </div>
       </div>

@@ -14,6 +14,7 @@ import {
 import { isNorthseaWerk, northseaTaken, type WerkTaak } from '@/domain/northsea/werk';
 import { PlannerTaken } from '@/presentation/components/tasks/PlannerTaken';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
+import { taakAlsBron, voegWerkSamen } from '@/domain/werkBron';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -154,8 +155,24 @@ export default function Tasks() {
       setNsTaken(desk.status === 'fulfilled' ? northseaTaken(desk.value.taken) : []);
       const rows = lijst.status === 'fulfilled' ? lijst.value.tasks : [];
       const plannerRows = planner.status === 'fulfilled' ? planner.value.taken.map(plannerAlsRij) : [];
-      // Planner-rijen alleen uit de planner zelf: die heeft de actuele status.
-      setTasks(normalizeRows([...rows.filter(r => r.capability !== 'planner'), ...plannerRows]));
+      const alle = [...rows.filter(r => r.capability !== 'planner'), ...plannerRows];
+      const waarheid = voegWerkSamen(alle.map((r) => taakAlsBron({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        assignee: r.assignee,
+        requested_by: r.requested_by,
+        capability: r.capability,
+        created_at: r.created_at,
+        metadata: r.metadata,
+        planner: r.capability === 'planner' || r.metadata?.planner === true,
+      })));
+      const mag = new Set(waarheid.map((w) => w.id));
+      const oorsprong = new Map(waarheid.map((w) => [w.id, w.oorsprongTekst]));
+      setTasks(normalizeRows(alle.filter((r) => mag.has(r.id))).map((t) => ({
+        ...t,
+        assignee: oorsprong.get(t.id) || t.assignee,
+      })));
       if (lijst.status === 'rejected' && planner.status === 'rejected') throw lijst.reason;
     } catch (e) {
       // Leave whatever was last loaded rather than blanking the board, but

@@ -1,26 +1,25 @@
 """
-planner.py — de drie hoofdagents bedenken zelf wat er moet gebeuren.
+planner.py — alleen doorgaan met wat Luka vroeg, of een echte storing.
 
 ## Waarom dit bestaat
 
-Geheugen, RAG en de leerlus maken een agent slimmer als je iets vraagt. Ze laten
-hem niet uit zichzelf beginnen. De takenkernel (core_tasks) bestond al en werd
-nauwelijks gebruikt: op 14 september stond er één agent-taak die sinds 10
-september op goedkeuring wachtte. Wat ontbrak was iets dat taken bedenkt.
+De cron "Planner: agents plannen hun werk" (elke 3 uur) liet vier agents tot
+drie taken verzinnen. Dat werd een stapel die niemand had gevraagd. De cron
+blijft; hij verzint geen projecten meer.
 
-## Wat hij doet, per ronde (standaard elke 3 uur)
+## Wat hij mag, per ronde
 
-Per hoofdagent (AXE Core, Code Agent, AXE Algo):
-1. context verzamelen: recente herinneringen, de git-stand van de repo's (Code
-   Agent) of de trading-lessen (AXE Algo), en zijn eigen open taken;
-2. zijn eigen abonnement (of de sleutels) vragen om hooguit drie taken, als JSON;
-3. die als core_tasks wegschrijven;
-4. hooguit één LEES-taak meteen uitvoeren, alleen-lezen, en de uitkomst in het
-   geheugen zetten, zodat de leerlus hem meeneemt.
+1. Een taak die Luka zelf vroeg (requested_by luka, of een gesproken verzoek)
+   voortzetten als er een echte volgende stap is (vastgelopen, wacht op akkoord).
+2. Eén bestaande storing oppakken: een cron met last_status die niet ok is, een
+   NorthSea-item dat al op zijn akkoord wacht, of een check die faalde.
 
-SCHRIJF-taken voert hij nooit zelf uit. Die staan als voorstel in Taken tot
-Luka ze goedkeurt; daarna draait de Code Agent ze met acceptEdits in de repo en
-laat hij de wijzigingen ongecommit staan.
+Anders schrijft hij niets. Geen nieuwe ideeën, geen mail, geen auto_send.
+
+Taken binnen het staande plan voert hij zelf uit. Northsea-mails die dat
+plan al toestaat horen daarbij. Alleen een send die het plan niet toestaat,
+geld, of een dealverzet wacht op Luka; daarna draait de Code Agent ze
+met acceptEdits in de repo en laat hij de wijzigingen ongecommit staan.
 
 ## Drie dingen die hier met opzet zo zijn
 
@@ -255,6 +254,7 @@ def koelt(staat: dict, motor: str, nu: datetime) -> bool:
 
 
 def planprompt(agent: str, context: str, open_taken: list[str]) -> str:
+    """Niet meer gebruikt om te verzinnen. Blijft staan zodat oude tests de vorm kennen."""
     rol = {
         "axe-core": "de hoofdassistent van Luka: overzicht, geheugen, afspraken, wat er blijft liggen",
         "code-agent": "de Code Agent: de repo's van AXE (bugs, tests, opruimen, kleine verbeteringen)",
@@ -277,6 +277,144 @@ def planprompt(agent: str, context: str, open_taken: list[str]) -> str:
         '[{"titel": "...", "doel": "wat er precies moet gebeuren", "waarom": "...", '
         '"risico": "lezen" | "schrijven", "prioriteit": "low" | "medium" | "high", "repo": "naam of null"}]'
     )
+
+
+# ── Wat hij nog mag schrijven (geen verzinsels) ──────────────────────────────
+
+LUKA_BRONNEN = ("luka",)
+LUKA_ROUTES = ("user", "axe_tier_router", "axe-core")
+ECHTE_OORSPRONG = ("vervolg", "storing")
+VOLGENDE_STAP = ("blocked", "failed", "waiting_approval", "retrying")
+OK_STATUS = ("ok", "success", "succeeded")
+
+
+def is_luka_vraag(rij: dict) -> bool:
+    meta = rij.get("metadata") or {}
+    gevraagd = str(rij.get("requested_by") or meta.get("requested_by") or "").strip().lower()
+    routed = str(meta.get("routedBy") or meta.get("conversation_source") or "").strip()
+    return gevraagd in LUKA_BRONNEN or routed in LUKA_ROUTES
+
+
+def is_verzonnen_planner(rij: dict) -> bool:
+    """De stapel die niemand vroeg: requested_by planner, geen vervolg/storing."""
+    meta = rij.get("metadata") or {}
+    if meta.get("oorsprong") in ECHTE_OORSPRONG:
+        return False
+    if is_luka_vraag(rij):
+        return False
+    gevraagd = str(rij.get("requested_by") or "").strip().lower()
+    return gevraagd == "planner" or bool(meta.get("planner")) or rij.get("capability") == "planner"
+
+
+def heeft_echte_volgende_stap(rij: dict) -> bool:
+    if not is_luka_vraag(rij):
+        return False
+    return str(rij.get("status") or "").strip().lower() in VOLGENDE_STAP
+
+
+def is_echte_storing(rij: dict) -> bool:
+    status = str(rij.get("last_status") or rij.get("status") or "").strip().lower()
+    return bool(status) and status not in OK_STATUS
+
+
+# Versturen, geld of een deal verlaten het plan. Northsea-mails die dat plan
+# al toestaat (kwalificatie, follow-up, niet-bindend) horen erin.
+_VERSTUURT = re.compile(r"\b(send|email|mail|imessage|whatsapp|verstuur|stuur een)\b|auto_send|auto_reply", re.I)
+_GELD = re.compile(r"\b(spend|betaal|betalen|payment|invoice|live order|market order|place (an? )?order|plaats (een )?order|wire money|transfer money)\b", re.I)
+_DEAL = re.compile(r"\b(move (the |a )?deal|verplaats (de |een )?deal|deal naar|close (the |a )?deal|sluit (de |een )?deal|change deal|update deal (stage|status)|deal stage)\b", re.I)
+_NORTHSEA_TOEGESTAAN = re.compile(r"\bqualif|\bfollow[- ]?up|\bfollowup|\bnon[- ]?binding", re.I)
+_NORTHSEA_NIET = re.compile(
+    r"\b(introduc|identity disclos|buyer identity|seller identity|counterparty identity|"
+    r"bank account|banking|swift|iban|commission|imfpa|ncnnda|ncnda|binding|"
+    r"contract execution|we accept|accept (price|offer)|sign(ature)?|whatsapp|imessage)\b",
+    re.I,
+)
+
+
+def northsea_send_binnen_plan(tekst: str) -> bool:
+    bron = tekst or ""
+    if not _NORTHSEA_TOEGESTAAN.search(bron):
+        return False
+    rest = _NORTHSEA_TOEGESTAAN.sub(" ", bron)
+    return _NORTHSEA_NIET.search(rest) is None
+
+
+def verlaat_app_plan(tekst: str, app: str | None = None) -> bool:
+    """True als de actie het staande plan verlaat. Northsea-send die het plan
+    al toestaat telt niet."""
+    bron = tekst or ""
+    if _VERSTUURT.search(bron):
+        if app == "northsea" and northsea_send_binnen_plan(bron):
+            return False
+        return True
+    return bool(_GELD.search(bron) or _DEAL.search(bron))
+
+
+def goedkeuring_voor_taak(titel: str, doel: str = "", app: str | None = None) -> str:
+    return "nodig" if verlaat_app_plan(f"{titel} {doel}", app) else "niet_nodig"
+
+
+def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
+    """Wat deze ronde mag landen. Leeg als er niets te vervolgen is en niets stuk is."""
+    uit: list[dict] = []
+    gezien: set[str] = set()
+    for t in gevraagd:
+        if not heeft_echte_volgende_stap(t):
+            continue
+        sleutel = f"vervolg:{t.get('id') or t.get('title')}"
+        if sleutel in gezien:
+            continue
+        gezien.add(sleutel)
+        titel = str(t.get("title") or "asked work").strip()
+        uit.append({
+            "titel": f"Continue: {titel}"[:120],
+            "doel": f"Continue the work Luka asked for: {titel}"[:1200],
+            "waarom": "continuation of a spoken or requested task",
+            "risico": "lezen",
+            "prioriteit": "high",
+            "repo": None,
+            "oorsprong": "vervolg",
+            "bron_id": t.get("id"),
+            "agent": (t.get("metadata") or {}).get("agent") or t.get("assignee") or "axe-core",
+        })
+    for p in kapot:
+        if not is_echte_storing(p):
+            continue
+        bron = str(p.get("id") or p.get("job_key") or p.get("naam") or p.get("name") or "")
+        sleutel = f"storing:{bron}"
+        if sleutel in gezien:
+            continue
+        gezien.add(sleutel)
+        naam = str(p.get("naam") or p.get("name") or bron or "failed check").strip()
+        status = str(p.get("last_status") or p.get("status") or "fail")
+        uit.append({
+            "titel": f"Fix: {naam}"[:120],
+            "doel": f"Real failure: {naam} last_status={status}"[:1200],
+            "waarom": "existing cron, approval or check is not ok",
+            "risico": "lezen",
+            "prioriteit": "high",
+            "repo": None,
+            "oorsprong": "storing",
+            "bron_id": bron,
+            "agent": p.get("agent") or "axe-core",
+            "soort": p.get("soort") or "cron",
+        })
+    return uit
+
+
+def ids_verzonnen_te_sluiten(rijen: list[dict]) -> list[str]:
+    """Pending verzinsels, één keer dicht. Luka's eigen taken blijven."""
+    uit = []
+    for r in rijen:
+        if not is_verzonnen_planner(r):
+            continue
+        if str(r.get("status") or "") != "pending":
+            continue
+        if (r.get("metadata") or {}).get("goedkeuring") == "ja":
+            continue
+        if r.get("id"):
+            uit.append(str(r["id"]))
+    return uit
 
 
 # ── Staat op schijf ──────────────────────────────────────────────────────────
@@ -430,6 +568,10 @@ class Planner:
     def _maak_taak(self, agent: str, motor: str, v: dict) -> Optional[dict]:
         repo = v.get("repo")
         repo = REPO_ALIAS.get(repo or "", repo) or repo_uit_tekst(f"{v['titel']} {v['doel']}")
+        oorsprong = v.get("oorsprong") if v.get("oorsprong") in ECHTE_OORSPRONG else None
+        if not oorsprong:
+            return None
+        app = app_voor_repo(repo, agent, f"{v['titel']} {v['doel']}")
         row = {
             "title": v["titel"],
             "goal": v["doel"],
@@ -441,18 +583,32 @@ class Planner:
             "execution_mode": "read" if v["risico"] == "lezen" else "patch",
             "source_app": "axe_core",
             "requested_by": "planner",
-            "payload": {"repo": repo},
+            "payload": {"repo": repo, "bron_id": v.get("bron_id")},
             "metadata": {
                 "planner": True, "agent": agent, "motor": motor, "risico": v["risico"],
-                "goedkeuring": "niet_nodig" if v["risico"] == "lezen" else "nodig",
-                "uiStatus": "todo", "app": app_voor_repo(repo, agent, f"{v['titel']} {v['doel']}"),
+                "goedkeuring": goedkeuring_voor_taak(v["titel"], v.get("doel") or "", app),
+                "uiStatus": "todo", "app": app,
+                "oorsprong": oorsprong, "bron_id": v.get("bron_id"),
             },
         }
         try:
-            return self.sb().table("core_tasks").insert(row).execute().data[0]
+            gemaakt = self.sb().table("core_tasks").insert(row).execute().data[0]
         except Exception as e:  # noqa: BLE001
             log.warning("planner: taak wegschrijven faalde: %s", e)
             return None
+        if gemaakt and row["metadata"].get("goedkeuring") == "nodig":
+            try:
+                from goedkeuring_melding import vraag_luka
+                vraag_luka(
+                    self.sb(), gemaakt["id"],
+                    titel=v["titel"],
+                    detail=v.get("doel") or v.get("waarom") or "",
+                    kind="leave_plan",
+                    requested_by="planner",
+                )
+            except Exception as e:  # noqa: BLE001
+                log.warning("planner: goedkeuring-rij schrijven faalde: %s", e)
+        return gemaakt
 
     def _claim(self, taak_id: str) -> bool:
         rijen = (self.sb().table("core_tasks")
@@ -528,6 +684,104 @@ class Planner:
         self._sluit(taak, tekst, fout)
         return {"taak": taak["id"], "ok": bool(tekst), "fout": fout or None}
 
+    def _luka_werk(self) -> list[dict]:
+        try:
+            rijen = (self.sb().table("core_tasks")
+                     .select("id,title,status,assignee,requested_by,capability,metadata")
+                     .in_("status", list(VOLGENDE_STAP))
+                     .order("updated_at", desc=True).limit(40).execute().data) or []
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: luka-werk lezen faalde: %s", e)
+            return []
+        return [r for r in rijen if is_luka_vraag(r)]
+
+    def _echte_storingen(self) -> list[dict]:
+        kapot: list[dict] = []
+        try:
+            crons = (self.sb().table("core_schedules")
+                     .select("id,name,job_key,last_status,enabled,metadata")
+                     .eq("enabled", True).limit(80).execute().data) or []
+            for c in crons:
+                if not is_echte_storing(c):
+                    continue
+                kapot.append({
+                    "id": c.get("job_key") or c.get("id"),
+                    "naam": c.get("name"),
+                    "last_status": c.get("last_status"),
+                    "soort": "cron",
+                    "agent": "axe-core",
+                })
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: crons lezen faalde: %s", e)
+        try:
+            wacht = (self.sb().table("core_tasks")
+                     .select("id,title,status,assignee,metadata")
+                     .eq("status", "waiting_approval").limit(40).execute().data) or []
+            for t in wacht:
+                meta = t.get("metadata") or {}
+                app = str(meta.get("app") or "")
+                if app != "northsea" and "northsea" not in str(t.get("title") or "").lower():
+                    continue
+                kapot.append({
+                    "id": t.get("id"),
+                    "naam": t.get("title") or "NorthSea approval",
+                    "last_status": "waiting_approval",
+                    "soort": "northsea",
+                    "agent": meta.get("agent") or t.get("assignee") or "maps-agent",
+                })
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: northsea-wacht lezen faalde: %s", e)
+        return kapot
+
+    def _open_echte_bronnen(self) -> set[str]:
+        gezien: set[str] = set()
+        try:
+            rijen = (self.sb().table("core_tasks")
+                     .select("id,status,metadata,payload")
+                     .eq("capability", "planner")
+                     .in_("status", ["pending", "running"])
+                     .limit(80).execute().data) or []
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: open echte rijen lezen faalde: %s", e)
+            return gezien
+        for r in rijen:
+            meta = r.get("metadata") or {}
+            bron = meta.get("bron_id") or (r.get("payload") or {}).get("bron_id")
+            if bron:
+                gezien.add(str(bron))
+        return gezien
+
+    def _sluit_verzonnen_eenmaal(self, staat: dict) -> int:
+        if staat.get("verzonnen_gesloten"):
+            return 0
+        try:
+            rijen = (self.sb().table("core_tasks")
+                     .select("id,status,requested_by,capability,metadata")
+                     .eq("capability", "planner").eq("status", "pending")
+                     .limit(500).execute().data) or []
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: verzonnen rijen lezen faalde: %s", e)
+            return 0
+        ids = ids_verzonnen_te_sluiten(rijen)
+        nu = datetime.now(timezone.utc).isoformat()
+        for tid in ids:
+            try:
+                rij = next((r for r in rijen if str(r.get("id")) == tid), {})
+                meta = dict(rij.get("metadata") or {})
+                meta["invented"] = True
+                meta["uiStatus"] = "blocked"
+                self.sb().table("core_tasks").update({
+                    "status": "cancelled",
+                    "cancelled_at": nu,
+                    "updated_at": nu,
+                    "metadata": meta,
+                    "error": {"message": "invented by planner; not asked"},
+                }).eq("id", tid).eq("status", "pending").eq("capability", "planner").execute()
+            except Exception as e:  # noqa: BLE001
+                log.warning("planner: verzonnen sluiten faalde voor %s: %s", tid, e)
+        staat["verzonnen_gesloten"] = True
+        return len(ids)
+
     # ronde -----------------------------------------------------------------
     def ronde(self, motoren: Optional[dict] = None) -> dict:
         if self.bezig:
@@ -535,43 +789,35 @@ class Planner:
         self.bezig = True
         staat = lees_staat()
         motoren = {**STANDAARD_MOTOREN, **(motoren or staat.get("motoren") or {})}
-        verslag: dict[str, Any] = {"begon": datetime.now(timezone.utc).isoformat(), "agents": {}}
+        verslag: dict[str, Any] = {"begon": datetime.now(timezone.utc).isoformat(), "agents": {}, "gemaakt": []}
         try:
+            verslag["verzonnen_gesloten"] = self._sluit_verzonnen_eenmaal(staat)
+            voorstellen = planner_pass(self._luka_werk(), self._echte_storingen())
+            al_open = self._open_echte_bronnen()
+            gemaakt: list[dict] = []
+            for v in voorstellen:
+                bron = str(v.get("bron_id") or "")
+                if bron and bron in al_open:
+                    continue
+                agent = v.get("agent") if v.get("agent") in AGENTS else "axe-core"
+                motor = motoren.get(agent, STANDAARD_MOTOREN[agent])
+                taak = self._maak_taak(agent, motor, v)
+                if taak:
+                    gemaakt.append(taak)
+                    if bron:
+                        al_open.add(bron)
+            verslag["gemaakt"] = [t.get("title") for t in gemaakt]
+            verslag["aantal"] = len(gemaakt)
+            # Geen model om taken te verzinnen. Binnen het plan mag hij door;
+            # een actie die het plan verlaat alleen na ja.
             for agent in AGENTS:
                 motor = motoren.get(agent, STANDAARD_MOTOREN[agent])
-                a: dict[str, Any] = {"motor": motor}
-                open_rijen = self._open_taken(agent)
-                repo = self._werkrepo(None)
-                if not repo:
-                    a["fout"] = "geen bruikbare repo om vanuit te plannen"
-                    verslag["agents"][agent] = a
-                    continue
-                prompt = planprompt(agent, self._context(agent), [r["title"] for r in open_rijen])
-                plan_motor = plan_motor_voor(motor)
-                a["plan_motor"] = plan_motor
-                tekst, fout = self._vraag(staat, plan_motor, prompt, repo)
-                # Terugvallen op het abonnement als de sleutelroute niets geeft.
-                # Die loopt over de VPS-proxy; ligt de VPS eruit, dan zou de
-                # planner helemaal niets meer bedenken -- goedkoper, maar stuk.
-                # Kosten alleen als het misgaat, en het verslag zegt dat het
-                # gebeurde, zodat een stille terugval niet als normaal leest.
-                if plan_motor != motor and not is_planantwoord(tekst):
-                    a["plan_terugval"] = {"van": plan_motor, "naar": motor, "reden": fout or "geen bruikbaar antwoord"}
-                    tekst, fout = self._vraag(staat, motor, prompt, repo)
-                voorstellen = lees_voorstellen(tekst or "")
-                a["voorstellen"] = [v["titel"] for v in voorstellen]
-                if fout:
-                    a["fout"] = fout
-                gemaakt = [t for t in (self._maak_taak(agent, motor, v) for v in voorstellen) if t]
-                # Hooguit één leestaak per agent per ronde meteen doen.
-                lees = next((t for t in gemaakt + open_rijen
-                             if (t.get("metadata") or {}).get("goedkeuring") == "niet_nodig"
-                             and t.get("status", "pending") == "pending"), None)
-                if lees:
-                    a["uitgevoerd"] = self._voer_uit(staat, lees)
-                # En hooguit één goedgekeurde schrijftaak.
-                goed = next((t for t in open_rijen
-                             if (t.get("metadata") or {}).get("goedkeuring") == "ja" and t.get("status") == "pending"), None)
+                a: dict[str, Any] = {"motor": motor, "voorstellen": []}
+                goed = next((t for t in self._open_taken(agent)
+                             if t.get("status") == "pending"
+                             and (is_luka_vraag(t) or (t.get("metadata") or {}).get("oorsprong") in ECHTE_OORSPRONG)
+                             and ((t.get("metadata") or {}).get("goedkeuring") == "ja"
+                                  or (t.get("metadata") or {}).get("goedkeuring") == "niet_nodig")), None)
                 if goed:
                     a["goedgekeurd_uitgevoerd"] = self._voer_uit(staat, goed)
                 verslag["agents"][agent] = a

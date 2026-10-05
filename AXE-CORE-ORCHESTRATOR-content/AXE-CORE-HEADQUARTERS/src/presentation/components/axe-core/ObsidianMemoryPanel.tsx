@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import {
-  listRecentObsidianNotes,
+  listKluisNotities,
   searchObsidianNotes,
   writeObsidianNote,
   type ObsidianNote,
@@ -35,6 +35,8 @@ import {
   syncVaultBidirectional,
   vaultSyncAvailable,
 } from '@/infrastructure/persistence/obsidianVaultSyncService';
+import { kluisTakLabel, kluisTakVan, type KluisTak } from '@/domain/obsidian/kluisBoom';
+import { zaaiEnLeesKluis } from '@/application/obsidian/kluisZaad';
 
 const FOLDER_COLORS: Record<string, string> = {
   Reflections: '#A78BFA',
@@ -43,9 +45,16 @@ const FOLDER_COLORS: Record<string, string> = {
   Projects: 'var(--warning)',
   System: '#94A3B8',
   AXE: 'var(--accent-cyan)',
+  Workplaces: 'var(--accent-cyan)',
+  Agents: '#38BDF8',
+  Tasks: 'var(--warning)',
+  Repos: '#34D399',
+  Memory: '#A78BFA',
 };
 
 function folderOf(path: string): string {
+  const tak = kluisTakVan(path);
+  if (tak !== 'memory') return kluisTakLabel(tak);
   const parts = path.replace(/^AXE\//, '').split('/');
   return parts.length > 1 ? parts[0] : 'AXE';
 }
@@ -122,6 +131,7 @@ export default function ObsidianMemoryPanel({
   const [query, setQuery] = useState('');
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [folderFilter, setFolderFilter] = useState<string | 'all'>('all');
+  const [takFilter, setTakFilter] = useState<KluisTak | 'all'>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -150,7 +160,7 @@ export default function ObsidianMemoryPanel({
     try {
       const data = query.trim().length >= 2
         ? await searchObsidianNotes(query.trim(), 80)
-        : await listRecentObsidianNotes(80);
+        : await listKluisNotities();
       setNotes(data);
       onNotesChanged?.(data);
       if (!selectedPath && data[0]) select(data[0].path);
@@ -176,9 +186,12 @@ export default function ObsidianMemoryPanel({
   }, [notes]);
 
   const filtered = useMemo(() => {
-    if (folderFilter === 'all') return notes;
-    return notes.filter(n => folderOf(n.path) === folderFilter);
-  }, [notes, folderFilter]);
+    return notes.filter((n) => {
+      if (takFilter !== 'all' && kluisTakVan(n.path) !== takFilter) return false;
+      if (folderFilter !== 'all' && folderOf(n.path) !== folderFilter) return false;
+      return true;
+    });
+  }, [notes, folderFilter, takFilter]);
 
   const selected = notes.find(n => n.path === selectedPath) ?? filtered[0] ?? null;
 
@@ -236,7 +249,14 @@ export default function ObsidianMemoryPanel({
     setSyncBusy(true);
     setStatus(null);
     try {
+      const gezaaid = await zaaiEnLeesKluis();
+      setNotes(gezaaid.notes);
+      onNotesChanged?.(gezaaid.notes);
       setVaultPath(vaultPath.trim() || null);
+      if (gezaaid.fout) {
+        setStatus(gezaaid.fout);
+        return;
+      }
       const { push, pull } = await syncVaultBidirectional(200);
       setStatus(
         push.errors[0] && push.written === 0 && pull.pulled === 0
@@ -327,6 +347,23 @@ export default function ObsidianMemoryPanel({
           </div>
         </div>
 
+        <div className="px-3 py-2 flex flex-wrap gap-1" style={{ borderBottom: '1px solid var(--border-subtle)' }} data-axe-kluis-takken>
+          {(['all', 'workplaces', 'agents', 'tasks', 'repos', 'memory'] as const).map((tak) => (
+            <button
+              key={tak}
+              onClick={() => { setTakFilter(tak === 'all' ? 'all' : tak); setFolderFilter('all'); }}
+              className="text-[9px] px-2 py-0.5 rounded font-mono"
+              style={{
+                // Selectie = kleur én gewicht, geen gekleurd vlak (law 10).
+                background: 'rgba(255,255,255,0.04)',
+                color: takFilter === tak ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                fontWeight: takFilter === tak ? 700 : 400,
+              }}
+            >
+              {tak === 'all' ? 'all' : kluisTakLabel(tak)}
+            </button>
+          ))}
+        </div>
         <div className="px-3 py-2 flex flex-wrap gap-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <button
             onClick={() => setFolderFilter('all')}
@@ -372,6 +409,8 @@ export default function ObsidianMemoryPanel({
               <button
                 key={n.path}
                 onClick={() => select(n.path)}
+                data-axe-kluis-tak={kluisTakVan(n.path)}
+                data-axe-kluis-pad={n.path}
                 className="w-full text-left rounded-lg px-3 py-2 transition-colors"
                 style={{
                   background: active ? 'var(--tint)' : 'transparent',

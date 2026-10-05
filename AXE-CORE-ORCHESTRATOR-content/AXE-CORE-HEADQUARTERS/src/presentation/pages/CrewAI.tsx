@@ -15,8 +15,9 @@ import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFee
  *
  * The roster below is the canonical 9-specialist catalog
  * (domain/catalogs/specialists.ts), the same ids the VPS crew runner
- * (axe_api /crew/run -> run_crew_kickoff) selects agents by. This page is the
- * only place the crew is invoked — chat never calls it implicitly.
+ * (axe_api /crew/run -> run_crew_kickoff) selects agents by. Agents with a
+ * crew on their workspace now invoke this same runner from the agent loop;
+ * this page stays a manual gallery, not the only door.
  *
  * Honesty contract: the result box shows exactly what /crew/run returned.
  * Until the CrewAI venv is deployed on the VPS, that is a clean error saying

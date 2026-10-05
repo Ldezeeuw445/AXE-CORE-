@@ -8,7 +8,7 @@ const bron = (rel: string) => readFileSync(path.join(ROOT, rel), 'utf8');
 describe('canonical mobile Home wiring', () => {
   it('owns one phone Home instead of stacking desktop plate controls on top', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
-    expect(shell).toContain('!mobileCommandSurface && opPlaat && !volScherm && <PlaatViewSwitch />');
+    expect(shell).toContain("!mobileCommandSurface && opPlaat && !volScherm && location.pathname !== '/obsidian' && <PlaatViewSwitch />");
     expect(shell).toContain('!mobileCommandSurface && opPlaat && !volScherm && <PlaatChat />');
   });
 
@@ -52,6 +52,8 @@ describe('canonical mobile Home wiring', () => {
     expect(shell).toContain("paddingTop: 10");
     expect(mobile).toContain('size={23}');
     expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
+    expect(mobile).toContain('agentRegel');
+    expect(mobile).toContain('goedkeuringVanJob');
   });
 
 

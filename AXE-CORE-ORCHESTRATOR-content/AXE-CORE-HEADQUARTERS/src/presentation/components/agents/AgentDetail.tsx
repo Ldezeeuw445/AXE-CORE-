@@ -29,6 +29,7 @@ import {
   type ActivityItem, type AgentPulse, type SchedulePlan, type AgentQueue, type Tone,
 } from '@/domain/agents/activity';
 import type { AxeAgent } from '@/domain/agents/roster';
+import { workspaceVoor } from '@/domain/agents/workspace';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
 import type { NamespaceCount } from '@/infrastructure/persistence/agentActivityService';
 
@@ -167,6 +168,20 @@ export function AgentDetail(p: AgentDetailProps) {
         <>
           <Vak titel="What he does">
             <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{agent.handles}</p>
+          </Vak>
+          <Vak titel="Workspace">
+            {(() => {
+              const ws = workspaceVoor(agent.id);
+              return (
+                <div data-axe-agent-workspace={agent.id}>
+                  <Feit l="Role" r={ws.role} />
+                  <Feit l="Device" r={ws.preferredDevice ?? 'any'} />
+                  <Feit l="Memory" r={ws.memoryScope} />
+                  <Feit l="Tools" r={ws.tools.join(', ')} />
+                  <Feit l="Crew" r={ws.crew.length ? ws.crew.join(', ') : 'none'} />
+                </div>
+              );
+            })()}
           </Vak>
           <Vak titel="Right now">
             {p.pulse ? (

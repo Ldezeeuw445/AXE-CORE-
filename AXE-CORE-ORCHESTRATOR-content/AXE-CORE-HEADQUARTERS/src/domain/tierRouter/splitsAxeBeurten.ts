@@ -3,6 +3,7 @@
  * dit knipt alleen de stukken zodat elk een eigen job krijgt.
  */
 import { classifyAxeTier, type AxeRoute } from '@/domain/tierRouter/axeRoute';
+import type { PlanDevice } from '@/domain/tierRouter/beurtPlan';
 
 const SPLIT_RE = /\s*(?:,\s*(?:en|and|plus)\s+|;\s+|\s+en\s+|\s+and\s+|\s+plus\s+|,\s+)\s*/i;
 
@@ -11,6 +12,11 @@ export interface AxeBeurtStuk {
   route: AxeRoute;
   /** Korte titel voor de balk; zonder titel wordt het de tekst zelf. */
   titel?: string;
+  /** Machine die het plan noemde. Blijft op het stuk tot payloadVoor. */
+  device?: PlanDevice | null;
+  /** Tab-context, zodat Home en Browser geen map delen. */
+  tab?: string;
+  bron?: 'plan' | 'followup';
 }
 
 function isJob(route: AxeRoute): boolean {

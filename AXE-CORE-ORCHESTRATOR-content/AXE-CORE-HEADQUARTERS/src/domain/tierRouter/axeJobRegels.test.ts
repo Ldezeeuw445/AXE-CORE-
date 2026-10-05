@@ -102,6 +102,11 @@ describe('jobAgentVan', () => {
     expect(jobAgentVan(classifyAxeTier('vat het AI-nieuws samen'), 'vat het AI-nieuws samen')).toBe('intel');
     expect(jobAgentVan(classifyAxeTier('zet een taak voor morgen'), 'zet een taak voor morgen')).toBe('task');
   });
+
+  it('doe dit aan Northsea Desk — zonder de agent te noemen', () => {
+    const tekst = 'doe dit aan Northsea Desk';
+    expect(jobAgentVan(classifyAxeTier(tekst), tekst)).toBe('northsea');
+  });
 });
 
 describe('jobWachtTekst', () => {

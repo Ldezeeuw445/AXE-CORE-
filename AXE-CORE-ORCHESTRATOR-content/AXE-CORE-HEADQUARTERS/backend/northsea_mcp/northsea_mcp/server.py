@@ -56,6 +56,7 @@ from .research import ResearchError, ResearchGateway
 from .service import Caller, NorthSeaService, NotFound, ServiceError
 from .server_read import register_read_tools
 from .store import Store
+from .crew_loop import finish_after_event, finish_discovery, finish_engine_tick, finish_idle_operations
 
 log = logging.getLogger("northsea_mcp")
 
@@ -612,6 +613,14 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             except RepositoryError:
                 return JSONResponse({"error": "upstream_error"}, status_code=502)
         uit["stuck_runs_swept"] = geveegd
+        if not dry:
+            try:
+                lus = await finish_engine_tick(service, uit)
+                uit["sent"] = lus.get("sent", 0)
+                uit["approved"] = lus.get("approved", 0)
+                uit["notices"] = [lus["notice"]] if lus.get("notice") else []
+            except Exception:
+                log.exception("engine tick desk loop failed")
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
 
     operations_lock = asyncio.Lock()
@@ -620,11 +629,13 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
     async def operations_sweep(request: Request) -> Response:
         """Bounded NorthSea operating loop.
 
-        Uses the existing northsea.engine service token, runs the real specialist
-        crews against canonical deal state, and never sends/approves/signs. Three
-        deals are qualified per sweep; one also gets an Operations watch pass.
-        A 12-hour audit window rotates work across the live pipeline instead of
-        repeatedly burning the same top deals.
+        Uses the existing northsea.engine service token and runs the real
+        specialist crews against canonical deal state. After each pass the
+        existing evaluate_deal step runs: axe-owned qualify/reply/follow-up
+        may go out via the Desk Manager on the existing approve+send path;
+        Luka-owned steps become one yes-notice. Three deals per sweep; one
+        also gets an Operations watch pass. A 12-hour audit window rotates
+        work. auto_send_* flags stay as they are.
         """
         auth = request.headers.get("authorization", "")
         rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
@@ -673,9 +684,14 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             ))
             chosen = [o for o in active if str(o.get("id")) not in recent][:3]
             if not chosen:
+                leeg = None
+                if not dry:
+                    leeg = await finish_idle_operations(repo, active=len(active), recent=len(recent))
                 return JSONResponse({
                     "status": "idle", "reviewed_recently": len(recent), "active_deals": len(active),
                     "message": "all active deals received a crew pass in the last 12 hours",
+                    "sent": 0, "approved": 0,
+                    "notices": [leeg["notice"]] if leeg and leeg.get("notice") else [],
                 }, headers={"Cache-Control": "no-store"})
 
             if dry:
@@ -693,7 +709,12 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H")
             results: list[dict[str, Any]] = []
 
+            sent = 0
+            approved = 0
+            notices: list[dict[str, Any]] = []
+
             async def run_event(o: dict[str, Any], event_type: str, suffix: str) -> None:
+                nonlocal sent, approved
                 event = {
                     "event_id": f"auto-{suffix}-{o['id']}-{bucket}",
                     "run_id": str(uuid.uuid4()),
@@ -711,12 +732,20 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 }
                 try:
                     result = await asyncio.wait_for(service.handle_event(caller, event), timeout=55)
+                    lus = await finish_after_event(service, event, result)
+                    sent += int(lus.get("sent") or 0)
+                    approved += int(lus.get("approved") or 0)
+                    if lus.get("notice"):
+                        notices.append(lus["notice"])
                     results.append({
                         "opportunity_id": str(o["id"]), "event_type": event_type,
                         "status": result.status, "route": result.route,
                         "crew": result.crew.actual_crew if result.crew else None,
                         "backend": result.crew.backend if result.crew else None,
                         "approval_required": bool(result.gate and result.gate.approval_required),
+                        "sent": lus.get("sent", 0),
+                        "owner": lus.get("owner"),
+                        "missing": lus.get("missing"),
                     })
                 except asyncio.TimeoutError:
                     results.append({"opportunity_id": str(o["id"]), "event_type": event_type, "status": "timeout"})
@@ -735,8 +764,9 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 "status": "ok",
                 "selected": len(chosen),
                 "results": results,
-                "sent": 0,
-                "approved": 0,
+                "sent": sent,
+                "approved": approved,
+                "notices": notices,
             }, headers={"Cache-Control": "no-store"})
 
     discovery = DiscoveryService(repo, max_new_per_run=5, max_new_per_day=25, crew=crew, research=research, max_crew_calls_per_day=3)
@@ -771,6 +801,10 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 uit = await asyncio.wait_for(discovery.sweep(dry_run=dry, max_new_override=override), timeout=100)
                 if not skip_crew:
                     uit["crew_review"] = await asyncio.wait_for(discovery.crew_assisted_review(dry_run=dry), timeout=20)
+                if not dry:
+                    lus = await finish_discovery(repo, uit)
+                    uit["sent"] = 0
+                    uit["notices"] = [lus["notice"]] if lus.get("notice") else []
             except asyncio.TimeoutError:
                 return JSONResponse({"error": "timeout"}, status_code=504)
             except RepositoryError:

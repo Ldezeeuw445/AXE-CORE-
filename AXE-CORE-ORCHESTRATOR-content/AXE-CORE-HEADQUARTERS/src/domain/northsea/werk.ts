@@ -76,10 +76,11 @@ const tijdVan = (iso: unknown): number | undefined => {
 export function northseaTaken(taken: readonly NorthseaTaak[]): WerkTaak[] {
   return taken.map(t => {
     const bron = BRON_LABEL[String(t.bron)] ?? 'NorthSea';
+    const wie = [bron, t.deal_code, t.eigenaar || t.oorsprong].filter(Boolean).join(' · ');
     return {
       id: `${NS_PREFIX}${t.id}`,
       titel: (t.titel ?? '').trim() || 'Untitled task',
-      van: t.deal_code ? `${bron} · ${t.deal_code}` : bron,
+      van: wie,
       prioriteit: prioriteitVan(t.prioriteit),
       deadline: tijdVan(t.due_at),
       voortgang: 0,

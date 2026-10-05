@@ -28,3 +28,19 @@ def test_haken_in_de_waarschuwingstekst_breken_niets():
 def test_onzin_is_een_fout_en_geen_lege_desk():
     with pytest.raises(n.NorthseaFout):
         n.lees_rijen("<untrusted-data-z>\n[kapot\n</untrusted-data-z>")
+
+
+def test_een_ontbrekende_hub_verbinding_is_een_leesbare_fout_en_geen_kale_keyerror(monkeypatch):
+    # Op de VPS bestaat 'supabase-axe-commodities' niet (hij staat op de agent-host).
+    # mcp_hub.roep gooit dan een KeyError; die kwam als 500 zonder CORS-koppen uit de
+    # route, waardoor de telefoon alleen "Failed to fetch" kon melden.
+    import asyncio
+
+    async def roep(*_a, **_k):
+        raise KeyError(n.VERBINDING)
+
+    monkeypatch.setattr(n.mcp_hub, "roep", roep)
+    with pytest.raises(n.NorthseaFout) as e:
+        asyncio.run(n._vraag("select 1"))
+    assert n.VERBINDING in str(e.value)
+    assert "Mac mini" in str(e.value)

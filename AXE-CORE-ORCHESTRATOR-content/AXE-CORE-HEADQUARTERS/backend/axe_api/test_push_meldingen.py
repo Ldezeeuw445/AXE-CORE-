@@ -6,7 +6,22 @@ melding in TypeScript, de zender hier in Python. Lopen ze uit elkaar, dan ziet
 je slotscherm iets anders dan de bel in de app. Daarom staan hier letterlijk
 dezelfde gevallen: wijzig je er één, dan wordt de ander rood.
 """
-from push_meldingen import push_bericht_van, tag_van, titel_en_detail
+import asyncio
+import json
+import sys
+import types
+from datetime import datetime, timezone
+
+from goedkeuring_melding import vraag_luka
+from push_meldingen import (
+    is_dood_abonnement,
+    lees_abonnementen,
+    push_bericht_van,
+    stuur_meldingen,
+    tag_van,
+    titel_en_detail,
+    verborgen,
+)
 
 
 def rij(message, **over):
@@ -28,6 +43,14 @@ def test_herhaalt_de_titel_niet_als_body():
 def test_een_bui_krijgt_een_tag():
     a = push_bericht_van(rij("Provider weggevallen: 3 van de 5 modellen antwoorden niet"))
     b = push_bericht_van(rij("Provider weggevallen: 4 van de 5 modellen antwoorden niet"))
+    assert a["tag"] == b["tag"]
+
+
+def test_ook_als_de_cijfers_in_het_onderwerp_zelf_staan():
+    # De bui hierboven heeft zijn cijfers in het DETAIL, dat nooit in de tag komt;
+    # hier staan ze in het onderwerp dat de tag wordt.
+    a = push_bericht_van(rij("3 van de 5 modellen antwoorden niet"))
+    b = push_bericht_van(rij("4 van de 5 modellen antwoorden niet"))
     assert a["tag"] == b["tag"]
 
 
@@ -68,3 +91,246 @@ def test_een_lange_eerste_regel_is_geen_onderwerp():
 
 def test_tag_zonder_bruikbare_letters():
     assert tag_van("123 !!!") == "axe-melding"
+
+
+# --- Privacy per apparaat: zelfde gevallen als pushBericht.test.ts ----------------
+
+
+def test_verborgen_toont_geen_inhoud():
+    p = verborgen(push_bericht_van(rij("OpenAI is niet meer bereikbaar: AXE valt terug op Groq.")))
+    assert p["titel"] == "AXE has something"
+    assert p["body"] == ""
+    # Niets van het origineel mag nog in de tekst staan.
+    assert "OpenAI" not in json.dumps(p)
+
+
+def test_verborgen_meldingen_vervangen_elkaar():
+    a = verborgen(push_bericht_van(rij("Provider weggevallen: iets")))
+    b = verborgen(push_bericht_van(rij("Taak klaar: iets anders")))
+    assert a["tag"] == b["tag"]
+
+
+def test_verborgen_houdt_de_route_zodat_een_tik_nog_ergens_heen_gaat():
+    assert verborgen(push_bericht_van(rij("Agent gestopt: de crew gaf een fout")))["url"] == "/agents"
+
+
+class _Q:
+    """Net genoeg Supabase om stuur_meldingen te laten lopen."""
+
+    def __init__(self, db, naam):
+        self.db, self.naam, self.actie = db, naam, "select"
+
+    def select(self, *_a):
+        return self
+
+    def insert(self, rij):
+        self.actie, self.rij = "insert", dict(rij)
+        return self
+
+    def is_(self, *_a):
+        return self
+
+    def gte(self, *_a):
+        return self
+
+    def order(self, *_a, **_k):
+        return self
+
+    def limit(self, *_a):
+        return self
+
+    def update(self, waarden):
+        self.actie, self.waarden = "update", waarden
+        return self
+
+    def delete(self):
+        self.actie = "delete"
+        return self
+
+    def eq(self, kolom, waarde):
+        self.filter = (kolom, waarde)
+        return self
+
+    def execute(self):
+        if self.actie == "insert":
+            rij = getattr(self, "rij", {})
+            if "id" not in rij:
+                rij["id"] = f"{self.naam}-{len(self.db.tabellen[self.naam]) + 1}"
+            self.db.tabellen[self.naam].append(rij)
+            return type("R", (), {"data": [rij]})()
+        if self.actie == "update":
+            self.db.updates.append((self.naam, getattr(self, "filter", None), self.waarden))
+            if self.naam == "core_notifications" and getattr(self, "filter", None):
+                kolom, waarde = self.filter
+                for rij in self.db.tabellen[self.naam]:
+                    if str(rij.get(kolom)) == str(waarde):
+                        rij.update(self.waarden)
+        elif self.actie == "delete":
+            self.db.deletes.append((self.naam, getattr(self, "filter", None)))
+        else:
+            return type("R", (), {"data": self.db.tabellen[self.naam]})()
+        return type("R", (), {"data": []})()
+
+
+class _Db:
+    def __init__(self, meldingen, abonnementen, legacy=None):
+        self.tabellen = {
+            "core_notifications": meldingen,
+            "core_push_subscriptions": abonnementen,
+            "push_subscriptions": legacy or [],
+            "core_approvals": [],
+        }
+        self.updates, self.deletes = [], []
+
+    def table(self, naam):
+        if naam not in self.tabellen:
+            self.tabellen[naam] = []
+        return _Q(self, naam)
+
+
+def test_het_ene_apparaat_krijgt_de_inhoud_en_het_andere_niet(monkeypatch):
+    verstuurd = {}
+
+    def nep_webpush(subscription_info, data, **_k):
+        verstuurd[subscription_info["endpoint"]] = json.loads(data)
+
+    # Een nep-module in plaats van de echte: pywebpush staat niet in elke venv
+    # (de lokale heeft hem niet), en deze test gaat over wie wat krijgt, niet over
+    # het versleutelen.
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = type("WebPushException", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+    db = _Db(
+        [{"id": "n1", "type": "warning", "message": "Provider weggevallen: Groq antwoordt niet",
+          "created_at": "2026-10-04T12:00:00+00:00"}],
+        [
+            {"endpoint": "https://push/iphone", "p256dh": "x", "auth": "y", "verberg_inhoud": True},
+            {"endpoint": "https://push/mac", "p256dh": "x", "auth": "y", "verberg_inhoud": False},
+            # Kolom leeg (rij van vóór de migratie, of None): gedrag van vroeger.
+            {"endpoint": "https://push/oud", "p256dh": "x", "auth": "y", "verberg_inhoud": None},
+        ],
+    )
+
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 4, 12, 0, 30, tzinfo=timezone.utc)))
+
+    assert uit["verstuurd"] == 3
+    assert verstuurd["https://push/iphone"]["titel"] == "AXE has something"
+    assert "Groq" not in json.dumps(verstuurd["https://push/iphone"])
+    assert verstuurd["https://push/mac"]["titel"] == "Provider weggevallen"
+    assert verstuurd["https://push/oud"]["body"] == "Groq antwoordt niet"
+    # En de rij is gemarkeerd, anders gaat hij elke minuut opnieuw.
+    assert db.updates and db.updates[0][0] == "core_notifications"
+
+
+def test_leest_beide_tabellen_en_dedupliceert_op_endpoint():
+    db = _Db(
+        [],
+        [{"endpoint": "https://push/iphone", "p256dh": "x", "auth": "y", "verberg_inhoud": True}],
+        legacy=[
+            {"endpoint": "https://push/iphone", "p256dh": "x", "auth": "y"},
+            {"endpoint": "https://push/safari", "p256dh": "a", "auth": "b"},
+        ],
+    )
+    abs_ = lees_abonnementen(db)
+    assert {a["endpoint"] for a in abs_} == {"https://push/iphone", "https://push/safari"}
+
+
+def test_nieuwe_pending_approval_duwt_een_keer_per_live_abonnement(monkeypatch):
+    verstuurd = []
+
+    def nep_webpush(subscription_info, data, **_k):
+        verstuurd.append(subscription_info["endpoint"])
+
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = type("WebPushException", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+
+    db = _Db(
+        [],
+        [{"endpoint": "https://push/core", "p256dh": "x", "auth": "y", "verberg_inhoud": False}],
+        legacy=[{"endpoint": "https://push/legacy", "p256dh": "x", "auth": "y"}],
+    )
+    vraag_luka(db, "taak-offer", titel="Dit is: een bericht versturen (offer).", detail="Aan wie: the buyer.", kind="leave_plan")
+    assert len(db.tabellen["core_notifications"]) == 1
+    db.tabellen["core_notifications"][0].update({
+        "id": "n-approval",
+        "created_at": "2026-10-05T06:00:00+00:00",
+        "type": "warning",
+    })
+
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 6, 0, 30, tzinfo=timezone.utc)))
+    assert uit["verstuurd"] == 2
+    assert set(verstuurd) == {"https://push/core", "https://push/legacy"}
+    assert db.tabellen["core_notifications"][0].get("pushed_at") or any(
+        u[0] == "core_notifications" for u in db.updates
+    )
+
+
+class _PushFout(Exception):
+    def __init__(self, status, body=""):
+        self.response = type("R", (), {"status_code": status, "text": body, "json": lambda self=None: json.loads(body) if body else {}})()
+        super().__init__(body)
+
+
+def test_vapid_mismatch_en_bad_jwt_zijn_dode_abonnementen():
+    assert is_dood_abonnement(_PushFout(400, '{"reason":"VapidPkHashMismatch"}'))
+    assert is_dood_abonnement(_PushFout(403, '{"reason":"BadJwtToken"}'))
+    assert is_dood_abonnement(_PushFout(404, ""))
+    assert is_dood_abonnement(_PushFout(410, "Gone"))
+    assert not is_dood_abonnement(_PushFout(400, '{"reason":"PayloadTooLarge"}'))
+    assert not is_dood_abonnement(_PushFout(500, "upstream"))
+
+
+def test_vapid_mismatch_schrapt_en_zet_pushed_at_niet(monkeypatch):
+    def nep_webpush(subscription_info, data, **_k):
+        raise _PushFout(400, '{"reason":"VapidPkHashMismatch"}')
+
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = _PushFout
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+
+    db = _Db(
+        [{"id": "n-vapid", "type": "warning", "message": "Test push: lock screen.",
+          "created_at": "2026-10-05T06:30:00+00:00"}],
+        [],
+        legacy=[
+            {"endpoint": "https://push/legacy-1", "p256dh": "x", "auth": "y"},
+            {"endpoint": "https://push/legacy-2", "p256dh": "a", "auth": "b"},
+        ],
+    )
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 6, 30, 30, tzinfo=timezone.utc)))
+    assert uit["verstuurd"] == 0
+    assert uit["opgeruimd"] == 2
+    assert db.tabellen["core_notifications"][0].get("pushed_at") is None
+    assert not any(u[0] == "core_notifications" and "pushed_at" in (u[2] or {}) for u in db.updates)
+    geschrapt = {d[1][1] for d in db.deletes if d[1]}
+    assert geschrapt == {"https://push/legacy-1", "https://push/legacy-2"}
+
+
+def test_een_goede_en_een_dode_zet_wel_pushed_at(monkeypatch):
+    def nep_webpush(subscription_info, data, **_k):
+        if "dood" in subscription_info["endpoint"]:
+            raise _PushFout(403, '{"reason":"BadJwtToken"}')
+
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = _PushFout
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+
+    db = _Db(
+        [{"id": "n-mix", "type": "info", "message": "Test push: lock screen.",
+          "created_at": "2026-10-05T06:31:00+00:00"}],
+        [{"endpoint": "https://push/live", "p256dh": "x", "auth": "y"}],
+        legacy=[{"endpoint": "https://push/dood", "p256dh": "a", "auth": "b"}],
+    )
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 6, 31, 10, tzinfo=timezone.utc)))
+    assert uit["verstuurd"] == 1
+    assert uit["opgeruimd"] == 1
+    assert db.tabellen["core_notifications"][0].get("pushed_at")
