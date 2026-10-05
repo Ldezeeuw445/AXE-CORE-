@@ -31,9 +31,9 @@ const PLANNER_INPUT: Record<string, string> = {
 
 function intervalLabel(seconds?: number): string {
   if (!seconds) return 'onbekende cadans';
-  if (seconds % 3600 === 0) return `elke ${seconds / 3600} uur`;
-  if (seconds % 60 === 0) return `elke ${seconds / 60} min`;
-  return `elke ${seconds}s`;
+  if (seconds % 3600 === 0) return `every ${seconds / 3600} h`;
+  if (seconds % 60 === 0) return `every ${seconds / 60} min`;
+  return `every ${seconds}s`;
 }
 
 function datumTijd(iso?: string | null): string {
@@ -57,7 +57,7 @@ function stand(t: PlannerTaak): { tekst: string; kleur: string } {
   if (t.status === 'running') return { tekst: 'bezig', kleur: 'var(--accent-cyan)' };
   if (t.status === 'failed') return { tekst: 'mislukt', kleur: 'var(--error)' };
   if (t.status === 'cancelled') return { tekst: 'afgewezen', kleur: 'var(--text-muted)' };
-  if (g === 'nodig' && vraagVoor(t)) return { tekst: 'wacht op jou', kleur: 'var(--warning)' };
+  if (g === 'nodig' && vraagVoor(t)) return { tekst: 'waiting for you', kleur: 'var(--warning)' };
   if (g === 'ja') return { tekst: 'goedgekeurd', kleur: 'var(--success)' };
   return { tekst: 'gepland', kleur: 'var(--text-secondary)' };
 }
@@ -86,7 +86,7 @@ export function PlannerTaken() {
   const besluit = async (t: PlannerTaak, goed: boolean) => {
     try {
       await plannerBesluit(t.id, goed);
-      toast.success(goed ? 'Goedgekeurd — de volgende ronde voert hem uit' : 'Afgewezen');
+      toast.success(goed ? 'Approved — the next round runs it' : 'Afgewezen');
       void laad();
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
   };
@@ -94,7 +94,7 @@ export function PlannerTaken() {
   const nuPlannen = async () => {
     try {
       const r = await plannerRonde();
-      toast.success(r.gestart ? 'Ronde gestart — dit duurt een paar minuten' : (r.reden ?? 'Niet gestart'));
+      toast.success(r.gestart ? 'Round started — this takes a few minutes' : (r.reden ?? 'Not started'));
       setTimeout(() => { void laad(); }, 4000);
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
   };
@@ -109,17 +109,17 @@ export function PlannerTaken() {
   return (
     <div data-axe-doel="planner" className="mb-4 flex-none">
       <WidgetCard
-        title={`Planner${wacht ? ` · ${wacht} wacht op jou` : ''}`}
+        title={`Planner${wacht ? ` · ${wacht} waiting for you` : ''}`}
         icon={<Sparkles size={14} />}
         headerAction={
           <div className="flex items-center gap-2 flex-wrap justify-end min-w-0">
             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {status?.bezig ? 'ronde loopt…' : laatste ? `laatste ronde ${laatste.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : status?.host_kan ? 'nog geen ronde' : 'staat uit op deze host'}
+              {status?.bezig ? 'round running…' : laatste ? `last round ${laatste.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : status?.host_kan ? 'no round yet' : 'staat uit op deze host'}
             </span>
             <button type="button" onClick={() => { void nuPlannen(); }} disabled={!status?.host_kan || status?.bezig}
               className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md whitespace-nowrap"
               style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)', opacity: !status?.host_kan || status?.bezig ? 0.5 : 1 }}>
-              <RefreshCw size={11} /> Nu plannen
+              <RefreshCw size={11} /> Plan now
             </button>
           </div>
         }
@@ -148,7 +148,7 @@ export function PlannerTaken() {
                   <div className="mt-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
                     {a.voorstellen?.length
                       ? `${a.voorstellen.length} voorstel${a.voorstellen.length === 1 ? '' : 'len'}: ${a.voorstellen.join(' · ')}`
-                      : a.fout ? `geen voorstel · ${a.fout}` : 'geen nieuw voorstel'}
+                      : a.fout ? `no proposal · ${a.fout}` : 'no new proposal'}
                   </div>
                   {a.plan_terugval && (
                     <div className="mt-1 text-[9px]" style={{ color: 'var(--warning)' }}>
@@ -215,11 +215,11 @@ export function PlannerTaken() {
                   <div className="mt-2 grid gap-2 text-[11px] md:grid-cols-2" style={{ color: 'var(--text-secondary)' }}>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Doel</div>
-                      <div className="whitespace-pre-wrap">{t.goal || 'Geen doeltekst opgeslagen.'}</div>
+                      <div className="whitespace-pre-wrap">{t.goal || 'No goal text saved.'}</div>
                     </div>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Waarom gepland</div>
-                      <div className="whitespace-pre-wrap">{vraag?.tekst || t.description || 'Het model gaf geen aparte waarom-regel terug.'}</div>
+                      <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Why planned</div>
+                      <div className="whitespace-pre-wrap">{vraag?.tekst || t.description || 'The model returned no separate reason.'}</div>
                     </div>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Waar kwam dit vandaan?</div>
@@ -239,7 +239,7 @@ export function PlannerTaken() {
                     {uitkomst && (
                       <div className="md:col-span-2 rounded-md p-2 whitespace-pre-wrap" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                         <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: t.error?.message ? 'var(--error)' : 'var(--success)' }}>
-                          {t.error?.message ? 'Fout / blokkade' : 'Uitkomst'}
+                          {t.error?.message ? 'Error / blocker' : 'Uitkomst'}
                         </div>
                         {uitkomst}
                       </div>

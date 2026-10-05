@@ -25,7 +25,7 @@ function dagKop(sleutel: string, nu: Date): { kop: string; onder: string } {
   const morgenDatum = new Date(nu);
   morgenDatum.setDate(morgenDatum.getDate() + 1);
   const vol = d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
-  if (sleutel === vandaag) return { kop: 'Vandaag', onder: vol };
+  if (sleutel === vandaag) return { kop: 'Today', onder: vol };
   if (sleutel === datumSleutel(morgenDatum)) return { kop: 'Morgen', onder: vol };
   return { kop: d.toLocaleDateString('nl-NL', { weekday: 'long' }), onder: vol };
 }

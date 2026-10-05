@@ -229,8 +229,8 @@ export default function CalendarPage() {
           opKies={item => { setSelectedDate(item.datum); }}
           leegTekst={
             weergave === 'maand'
-              ? 'Niets op deze dag.'
-              : 'Niets gepland: geen taken met een deadline, planner-werk of cronjobs deze week.'
+              ? 'Nothing on this day.'
+              : 'Nothing scheduled: no tasks with a deadline, planner work or cron jobs this week.'
           }
         />
       </TabRail>

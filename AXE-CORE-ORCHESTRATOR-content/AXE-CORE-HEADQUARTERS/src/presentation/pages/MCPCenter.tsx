@@ -68,7 +68,7 @@ export default function MCPCenter() {
       // Wat een sleutel heeft meteen testen: zo zie je bij openen wat werkt.
       for (const s of lijst) if (s.klaar) void testServer(s.id);
     } catch (e) {
-      setLaadFout(e instanceof Error ? e.message : 'Agent-host niet bereikbaar');
+      setLaadFout(e instanceof Error ? e.message : 'Agent host not reachable');
     }
   };
 
@@ -163,7 +163,7 @@ export default function MCPCenter() {
       <TabRuimte>
         <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
           <button onClick={() => { void laad(); }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]" style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
-            <RefreshCw size={10} /> Opnieuw testen
+            <RefreshCw size={10} /> Test again
           </button>
           {sjablonen.map(sj => (
             <button key={sj.id}
@@ -176,11 +176,11 @@ export default function MCPCenter() {
           <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs-custom" style={{ color: 'var(--accent-cyan)' }}>
             Docs <ExternalLink size={11} />
           </a>
-          {laadFout && <span className="text-[10px]" style={{ color: 'var(--error)' }}>Agent-host niet bereikbaar: {laadFout}</span>}
+          {laadFout && <span className="text-[10px]" style={{ color: 'var(--error)' }}>Agent host not reachable: {laadFout}</span>}
         </div>
 
         {nieuw && (
-          <Kaart titel={`NIEUWE ${sjablonen.find(sj => sj.id === nieuw.sjabloon)?.naam.toUpperCase() ?? ''}-VERBINDING`}>
+          <Kaart titel={`NEW ${sjablonen.find(sj => sj.id === nieuw.sjabloon)?.naam.toUpperCase() ?? ''}-CONNECTION`}>
             <div className="flex flex-wrap items-center gap-1.5">
               <input autoFocus value={nieuw.label} onChange={e => setNieuw({ ...nieuw, label: e.target.value })}
                 placeholder="Naam (bijv. Companion, Axon, account 2)"

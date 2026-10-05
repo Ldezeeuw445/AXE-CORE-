@@ -489,10 +489,10 @@ export function PlaatChat() {
           </button>
         ))}
       </span>
-      <button onClick={() => voice.loadAllConversations()} title="Verversen" className="axe-kop-mini">
+      <button onClick={() => voice.loadAllConversations()} title="Refresh" className="axe-kop-mini">
         <RotateCcw size={12} />
       </button>
-      <button onClick={() => voice.startNewConversation()} title="Nieuw gesprek" className="axe-kop-mini">
+      <button onClick={() => voice.startNewConversation()} title="New chat" className="axe-kop-mini">
         <Plus size={12} />
       </button>
     </div>

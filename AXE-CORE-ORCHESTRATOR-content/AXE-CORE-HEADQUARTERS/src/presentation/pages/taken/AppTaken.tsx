@@ -24,7 +24,7 @@ export interface AppTaak {
   /** Aan wie hij hangt. Staat onder de titel, zoals het project in het voorbeeld. */
   van: string;
   prioriteit: 'low' | 'medium' | 'high' | 'critical';
-  /** ms sinds epoch, of undefined als er geen datum op staat. */
+  /** ms sinds epoch, of undefined als er no date op staat. */
   deadline?: number;
   /** 0-100. */
   voortgang: number;
@@ -55,10 +55,10 @@ const PRIO_KLEUR: Record<AppTaak['prioriteit'], string> = {
  */
 export function AppCijfers({ taken, label }: { taken: AppTaak[]; label: string }) {
   const rijen = [
-    ['Totaal', taken.length, 'var(--text-primary)'],
-    ['Te doen', taken.filter(t => t.stand === 'todo').length, 'var(--text-muted)'],
-    ['Bezig', taken.filter(t => t.stand === 'in-progress').length, 'var(--m-structure)'],
-    ['Klaar', taken.filter(t => t.stand === 'done').length, 'var(--m-happened)'],
+    ['Total', taken.length, 'var(--text-primary)'],
+    ['To do', taken.filter(t => t.stand === 'todo').length, 'var(--text-muted)'],
+    ['In progress', taken.filter(t => t.stand === 'in-progress').length, 'var(--m-structure)'],
+    ['Done', taken.filter(t => t.stand === 'done').length, 'var(--m-happened)'],
   ] as const;
 
   return (
@@ -106,14 +106,14 @@ export function AppTaken({
               <TriangleAlert size={11} />{telaat.length} te laat
             </span>
           )}
-          <button onClick={opNieuw} title={`Nieuwe taak voor ${label}`}>+</button>
+          <button onClick={opNieuw} title={`New task for ${label}`}>+</button>
         </div>
       </header>
 
 
       <div className="axe-app-rol">
         {open.length === 0 ? (
-          <div className="axe-app-leeg">Niets open. Klik op + voor een taak.</div>
+          <div className="axe-app-leeg">Nothing open. Tap + to add a task.</div>
         ) : (
           <ul className="axe-app-lijst">
             {open.map(t => {
@@ -134,7 +134,7 @@ export function AppTaken({
                       )}
                     </span>
                     <span className="axe-app-wanneer" style={{ color: w?.telaat ? 'var(--m-broken)' : undefined }}>
-                      {w?.tekst ?? 'geen datum'}
+                      {w?.tekst ?? 'no date'}
                     </span>
                   </button>
                   {/* Afvinken en weghalen, naast de rij en niet erin: een knop
@@ -159,7 +159,7 @@ export function AppTaken({
           verzinnen. */}
       <div className="axe-app-dagen">
         {metDatum.length === 0 ? (
-          <div className="axe-app-leeg">Nog niets met een datum.</div>
+          <div className="axe-app-leeg">Nothing with a date yet.</div>
         ) : (
           groepeerPerDag(metDatum).map(([dag, lijst]) => (
             <div key={dag} className="axe-app-dag">

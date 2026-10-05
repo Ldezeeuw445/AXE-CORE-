@@ -153,7 +153,7 @@ export default function CronManager() {
 
   const withBusy = async (id: string, fn: () => Promise<void>) => {
     setBusy(s => new Set(s).add(id));
-    try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Actie mislukt'); }
+    try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Action failed'); }
     finally { setBusy(s => { const n = new Set(s); n.delete(id); return n; }); }
   };
 
@@ -172,8 +172,8 @@ export default function CronManager() {
      * druk je op Nu en gebeurt er zichtbaar niets. Dus een melding, met de
      * naam erbij zodat je bij vijf tabellen weet welke job het was. */
     const kort = result.output.slice(0, 300);
-    if (result.status === 'ok') toast.success(`${s.name} — gelukt`, { description: kort });
-    else toast.error(`${s.name} — mislukt`, { description: kort });
+    if (result.status === 'ok') toast.success(`${s.name} — done`, { description: kort });
+    else toast.error(`${s.name} — failed`, { description: kort });
     await load();
   });
 
@@ -267,7 +267,7 @@ export default function CronManager() {
           topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
       <TopbalkSlot>
         <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-          {loading ? 'Laden…' : `${activeCount} actief · ${schedules.length} schema’s`}
+          {loading ? 'Laden…' : `${activeCount} active · ${schedules.length} schedules`}
         </span>
       </TopbalkSlot>
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
@@ -276,7 +276,7 @@ export default function CronManager() {
           <button onClick={openNew}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium"
             style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-            <Plus size={14} /> Nieuw
+            <Plus size={14} /> New
           </button>
           <button onClick={load} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
@@ -325,7 +325,7 @@ export default function CronManager() {
                 </div>
                 <input
                   value={draft.cron_expr} onChange={e => setDraft(d => ({ ...d, cron_expr: e.target.value }))}
-                  placeholder="min uur dag maand weekdag (bijv. 0 8 * * *)"
+                  placeholder="min hour day month weekday (e.g. 0 8 * * *)"
                   className="w-full text-xs-custom font-mono px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }}
                 />

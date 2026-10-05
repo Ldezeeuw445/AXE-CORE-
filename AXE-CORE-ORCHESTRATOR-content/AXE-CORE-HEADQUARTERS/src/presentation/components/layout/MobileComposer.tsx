@@ -169,7 +169,7 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
       </span>
       <button
         onClick={() => voice.loadAllConversations()}
-        title="Verversen"
+        title="Refresh"
         className="axe-kop-mini"
       >
         <RotateCcw size={12} />
@@ -179,7 +179,7 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
           voice.startNewConversation();
           setHistoryOpen(false);
         }}
-        title="Nieuw gesprek"
+        title="New chat"
         className="axe-kop-mini"
       >
         <Plus size={12} />

@@ -83,7 +83,7 @@ export default function Grootboek() {
     <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <TopbalkSlot>
         <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-          {bezig && regels.length === 0 ? 'Laden…' : `${zichtbaar.length} regels · ${mislukt} mislukt · laatste ${VENSTERS.find(v => v.uren === uren)?.label}`}
+          {bezig && regels.length === 0 ? 'Laden…' : `${zichtbaar.length} rows · ${mislukt} failed · latest ${VENSTERS.find(v => v.uren === uren)?.label}`}
         </span>
       </TopbalkSlot>
 
@@ -117,7 +117,7 @@ export default function Grootboek() {
             <h2 className="flex-1 text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>Jobs</h2>
           </div>
           {zichtbareJobs.length === 0 ? (
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Geen jobs voor deze app.</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No jobs for this app.</p>
           ) : (
             <ul className="space-y-2">
               {zichtbareJobs.map(j => (
@@ -146,7 +146,7 @@ export default function Grootboek() {
           </button>
         ))}
         <button onClick={() => { void haal(); }} disabled={bezig} className="ml-auto flex items-center gap-1.5 px-2 py-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-          <RefreshCw size={12} className={bezig ? 'animate-spin' : ''} /> Verversen
+          <RefreshCw size={12} className={bezig ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
 
@@ -162,7 +162,7 @@ export default function Grootboek() {
                 <header className="axe-cron-kop">
                   <div className="min-w-0">
                     <div className="axe-cron-titel" style={{ color: m.kleur }}>{m.label}</div>
-                    <div className="axe-cron-onder">{s.totaal === 0 ? 'Niets in dit venster.' : `${s.totaal} regels`}</div>
+                    <div className="axe-cron-onder">{s.totaal === 0 ? 'Niets in dit venster.' : `${s.totaal} rows`}</div>
                   </div>
                   <div className="axe-cron-tellers">
                     {s.goed > 0 && <span className="axe-cron-stand" data-stand="goed"><i className="axe-cron-stip" />{s.goed} gelukt</span>}
@@ -203,7 +203,7 @@ export default function Grootboek() {
                 })}
               </tbody>
             </table>
-            {zichtbaar.length === 0 && !bezig && <div className="axe-cron-leeg">Niets in dit venster voor deze keuze.</div>}
+            {zichtbaar.length === 0 && !bezig && <div className="axe-cron-leeg">Nothing in this window for this choice.</div>}
           </div>
         </section>
       </div>

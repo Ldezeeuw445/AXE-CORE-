@@ -74,12 +74,12 @@ export function CronTabel({
               <i className="axe-cron-stip" style={{ background: 'var(--m-broken)' }} />{stuk} mislukt
             </span>
           )}
-          <button onClick={opNieuw} title={`Nieuw schema voor ${titel}`}>+</button>
+          <button onClick={opNieuw} title={`New schedule for ${titel}`}>+</button>
         </div>
       </header>
 
       {schemas.length === 0 ? (
-        <div className="axe-cron-leeg">Nog geen schema’s. Klik op + om er een te maken.</div>
+        <div className="axe-cron-leeg">No schedules yet. Tap + to create one.</div>
       ) : (
         <div className="axe-cron-rol">
           <table className="axe-cron-tabel">
@@ -88,7 +88,7 @@ export function CronTabel({
                 <th>Job</th>
                 <th>Schema</th>
                 {!compact && <th className="axe-cron-r">Laatste</th>}
-                <th className="axe-cron-r">Volgende</th>
+                <th className="axe-cron-r">Next</th>
                 <th>Status</th>
                 {!compact && <th>Soort</th>}
                 <th />
@@ -115,7 +115,7 @@ export function CronTabel({
                       title={s.enabled ? 'Uitzetten' : 'Aanzetten'}>
                       <Power size={12} />
                     </button>
-                    <button onClick={() => acties.runNow(s)} disabled={acties.bezig(s.id)} title="Nu uitvoeren">
+                    <button onClick={() => acties.runNow(s)} disabled={acties.bezig(s.id)} title="Run now">
                       {acties.bezig(s.id) ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />}
                     </button>
                     <button onClick={() => acties.remove(s)} disabled={acties.bezig(s.id)} title="Weghalen">

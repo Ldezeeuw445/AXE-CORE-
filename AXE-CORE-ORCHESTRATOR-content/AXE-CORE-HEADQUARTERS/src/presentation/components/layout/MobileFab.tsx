@@ -32,7 +32,7 @@ export function MobileFab() {
   const act = (fn: () => void) => { fn(); setOpen(false); };
 
   const actions = [
-    { icon: MessageSquarePlus, label: 'Nieuw gesprek', run: () => clearConversation() },
+    { icon: MessageSquarePlus, label: 'New chat', run: () => clearConversation() },
     { icon: Mic, label: 'Spraak', run: () => { void startListening(); } },
     { icon: LineChart, label: 'Trading', run: () => navigate('/trading-intel') },
   ];
@@ -56,7 +56,7 @@ export function MobileFab() {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        aria-label={open ? 'Sluiten' : 'Snelacties'}
+        aria-label={open ? 'Close' : 'Quick actions'}
         className="flex size-13 items-center justify-center rounded-full shadow-lg transition-transform active:scale-95"
         style={{ width: 52, height: 52, background: 'var(--accent, #38bdf8)', color: '#001018' }}
       >

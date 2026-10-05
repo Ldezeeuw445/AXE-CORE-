@@ -409,7 +409,7 @@ export default function Tasks() {
       <PlannerTaken />
 
       {/* De cijferrij die hier stond telde ALLE apps bij elkaar op. Dat getal
-          beantwoordt geen vraag die je hebt: "twaalf te doen" zegt niets als je
+          beantwoordt geen vraag die je hebt: "twelve to do" zegt niets als je
           wil weten of Companion achterloopt. Hij staat nu per kaart, op dezelfde
           plek in alle vijf. */}
 
@@ -518,11 +518,11 @@ export default function Tasks() {
               taken={takenVan(a.id)}
               opNieuw={() => nieuwVoor(a.id)}
               opKlaar={t => {
-                if (isNorthseaWerk(t.id)) { toast.info('Deze taak staat op de NorthSea-desk. Afvinken doe je daar, bij de deal.'); return; }
+                if (isNorthseaWerk(t.id)) { toast.info('This task lives on the NorthSea desk. Tick it off there, at the deal.'); return; }
                 void updateStatus(t.id, 'done');
               }}
               opWeg={t => {
-                if (isNorthseaWerk(t.id)) { toast.info('Deze taak komt uit AXE Commodities en wordt daar beheerd.'); return; }
+                if (isNorthseaWerk(t.id)) { toast.info('This task comes from AXE Commodities and is managed there.'); return; }
                 void removeTask(t.id);
               }}
             />
