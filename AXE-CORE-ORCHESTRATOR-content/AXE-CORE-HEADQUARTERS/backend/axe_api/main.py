@@ -147,6 +147,15 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# NorthSea en de MCP-hub lezen via verbindingen die alleen op de Mac mini staan. Is er een
+# omgekeerde tunnel naar die Mac (AXE_AGENT_TUNNEL_URL, bv. http://127.0.0.1:18001), dan
+# gaat dat verkeer erdoorheen; zonder de variabele, of met een dode tunnel, verandert er
+# niets. Moet VÓÓR CORSMiddleware staan: zie agent_tunnel.py.
+AGENT_TUNNEL = None
+if os.environ.get("AXE_AGENT_TUNNEL_URL"):
+    from agent_tunnel import install as _installeer_agent_tunnel
+    AGENT_TUNNEL = _installeer_agent_tunnel(app, os.environ["AXE_AGENT_TUNNEL_URL"], AXE_API_KEY)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -166,6 +175,14 @@ def require_auth(
     return credentials.credentials
 
 AUTH = Depends(require_auth)
+
+
+@app.get("/agent-tunnel/status", dependencies=[AUTH])
+async def agent_tunnel_status():
+    """Is de Mac mini nu bereikbaar via de tunnel? Voor een statusregel, niet voor beslissingen."""
+    if AGENT_TUNNEL is None:
+        return {"configured": False, "up": False}
+    return {"configured": True, "up": await AGENT_TUNNEL.bereikbaar()}
 
 # Browser AI providers share the AXE API auth wall.  The router existed for
 # DeepSeek, Browser Use and Camofox but was never mounted, so the three Browser
