@@ -469,7 +469,18 @@ def lees_rijen(tekst: str) -> list[dict]:
 
 async def _vraag(sql: str) -> dict:
     """Eén query via de alleen-lezen verbinding; het `data`-object uit de enige rij."""
-    uit = await mcp_hub.roep(VERBINDING, "execute_sql", {"query": sql})
+    try:
+        uit = await mcp_hub.roep(VERBINDING, "execute_sql", {"query": sql})
+    except KeyError as e:
+        # De verbinding staat in ~/.axe/mcp-verbindingen.json op de agent-host (de Mac
+        # mini), met de token in ~/.axe/mcp-sleutels.env. Op een andere host -- de VPS,
+        # waar de telefoon mee praat -- bestaat hij niet, en mcp_hub.roep gooit dan een
+        # kale KeyError. Die kwam als 500 uit de route: zonder CORS-koppen, dus de A17
+        # meldde "Failed to fetch" in plaats van wat er aan de hand was.
+        raise NorthseaFout(
+            f"AXE Commodities is niet gekoppeld op deze host (verbinding {VERBINDING}); "
+            "NorthSea draait op de Mac mini."
+        ) from e
     if uit.get("status") != "ok":
         raise NorthseaFout(uit.get("error") or "Supabase gaf geen antwoord")
     tekst = " ".join(c.get("text", "") for c in (uit.get("result") or {}).get("content", []) if isinstance(c, dict))
