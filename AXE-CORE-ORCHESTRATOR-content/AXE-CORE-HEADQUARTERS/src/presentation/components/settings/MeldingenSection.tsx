@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Bell, BellOff, EyeOff } from 'lucide-react';
 import {
   meldingStand, isAangemeld, meldAan, meldAf, leesVerbergInhoud, zetVerbergInhoud,
+  herstelAanmelding, stuurTestPush,
 } from '@/infrastructure/persistence/pushAanmelding';
 
 export function MeldingenSection() {
@@ -26,6 +27,7 @@ export function MeldingenSection() {
 
   useEffect(() => {
     void (async () => {
+      await herstelAanmelding();
       const nu = await isAangemeld();
       setAan(nu);
       if (nu) setVerberg(await leesVerbergInhoud());
@@ -124,6 +126,29 @@ export function MeldingenSection() {
             Per device. The text stays hidden until you open the app.
           </p>
         </>
+      )}
+
+      {stand.kan && aan && (
+        <button
+          onClick={() => {
+            setFout(null);
+            setBezig(true);
+            void stuurTestPush().then((uit) => {
+              if (!uit.ok) setFout(uit.reden);
+              setBezig(false);
+            });
+          }}
+          disabled={bezig}
+          className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-primary)',
+            opacity: bezig ? 0.6 : 1,
+          }}
+        >
+          Send a test notification
+        </button>
       )}
 
       {fout && (

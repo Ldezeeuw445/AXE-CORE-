@@ -17,13 +17,32 @@ class _Tabel:
     def __init__(self, naam, db):
         self.naam = naam
         self.db = db
+        self.actie = "select"
+        self.filters = []
+
+    def select(self, *_a):
+        self.actie = "select"
+        return self
+
+    def eq(self, kolom, waarde):
+        self.filters.append((kolom, waarde))
+        return self
+
+    def limit(self, *_a):
+        return self
 
     def insert(self, rij):
-        self.db.setdefault(self.naam, []).append(rij)
+        self.actie = "insert"
+        self.rij = dict(rij)
         return self
 
     def execute(self):
-        return type("R", (), {"data": [self.db[self.naam][-1]]})()
+        rijen = self.db.setdefault(self.naam, [])
+        if self.actie == "insert":
+            rijen.append(self.rij)
+            return type("R", (), {"data": [self.rij]})()
+        uit = [r for r in rijen if all(str(r.get(k)) == str(v) for k, v in self.filters)]
+        return type("R", (), {"data": uit})()
 
 
 class _Db:
@@ -86,3 +105,35 @@ def test_schrijf_zichtbaar_zet_taken_en_geheugen():
     assert db.rijen["core_tasks"][0]["assignee"] == "northsea"
     assert db.rijen["rag_memories"][0]["category"] == "northsea_desk"
     assert "auto_send" not in str(db.rijen).lower()
+    assert "core_approvals" not in db.rijen
+
+
+def test_ja_notice_schrijft_pending_approval_en_een_notification():
+    """A17 + PWA lezen dezelfde rij: /approvals (select *) en core_notifications."""
+    from goedkeuring_melding import LUKA_USER_ID, heeft_a17_velden
+
+    db = _Db()
+    data = {
+        "notices": [{
+            "soort": "ja",
+            "titel": "Yes needed: DEAL-001 — Copper Cathode",
+            "tekst": "Buyer: Qinzhou\nWhat yes does: start commission protection.",
+            "akkoord_nodig": True,
+            "deal_code": "DEAL-001",
+        }],
+        "sent": 0,
+    }
+    uit = schrijf_zichtbaar(db, "operations_sweep", data)
+    assert uit["taken"] == 1
+    taak = db.rijen["core_tasks"][0]
+    approvals = db.rijen["core_approvals"]
+    meldingen = db.rijen["core_notifications"]
+    assert len(approvals) == 1
+    assert len(meldingen) == 1
+    vraag = approvals[0]
+    assert vraag["task_id"] == taak["id"]
+    assert vraag["kind"] == "northsea_notice"
+    assert vraag["status"] == "pending"
+    assert heeft_a17_velden(vraag)
+    assert meldingen[0]["recipient"] == LUKA_USER_ID
+    assert "Copper Cathode" in meldingen[0]["message"]

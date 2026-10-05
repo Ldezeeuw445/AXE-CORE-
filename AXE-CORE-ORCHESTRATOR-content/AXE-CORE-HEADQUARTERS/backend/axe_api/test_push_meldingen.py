@@ -12,7 +12,15 @@ import sys
 import types
 from datetime import datetime, timezone
 
-from push_meldingen import push_bericht_van, stuur_meldingen, tag_van, titel_en_detail, verborgen
+from goedkeuring_melding import vraag_luka
+from push_meldingen import (
+    lees_abonnementen,
+    push_bericht_van,
+    stuur_meldingen,
+    tag_van,
+    titel_en_detail,
+    verborgen,
+)
 
 
 def rij(message, **over):
@@ -114,6 +122,10 @@ class _Q:
     def select(self, *_a):
         return self
 
+    def insert(self, rij):
+        self.actie, self.rij = "insert", dict(rij)
+        return self
+
     def is_(self, *_a):
         return self
 
@@ -139,21 +151,39 @@ class _Q:
         return self
 
     def execute(self):
+        if self.actie == "insert":
+            rij = getattr(self, "rij", {})
+            if "id" not in rij:
+                rij["id"] = f"{self.naam}-{len(self.db.tabellen[self.naam]) + 1}"
+            self.db.tabellen[self.naam].append(rij)
+            return type("R", (), {"data": [rij]})()
         if self.actie == "update":
-            self.db.updates.append((self.naam, self.filter, self.waarden))
+            self.db.updates.append((self.naam, getattr(self, "filter", None), self.waarden))
+            if self.naam == "core_notifications" and getattr(self, "filter", None):
+                kolom, waarde = self.filter
+                for rij in self.db.tabellen[self.naam]:
+                    if str(rij.get(kolom)) == str(waarde):
+                        rij.update(self.waarden)
         elif self.actie == "delete":
-            self.db.deletes.append((self.naam, self.filter))
+            self.db.deletes.append((self.naam, getattr(self, "filter", None)))
         else:
             return type("R", (), {"data": self.db.tabellen[self.naam]})()
         return type("R", (), {"data": []})()
 
 
 class _Db:
-    def __init__(self, meldingen, abonnementen):
-        self.tabellen = {"core_notifications": meldingen, "core_push_subscriptions": abonnementen}
+    def __init__(self, meldingen, abonnementen, legacy=None):
+        self.tabellen = {
+            "core_notifications": meldingen,
+            "core_push_subscriptions": abonnementen,
+            "push_subscriptions": legacy or [],
+            "core_approvals": [],
+        }
         self.updates, self.deletes = [], []
 
     def table(self, naam):
+        if naam not in self.tabellen:
+            self.tabellen[naam] = []
         return _Q(self, naam)
 
 
@@ -191,3 +221,49 @@ def test_het_ene_apparaat_krijgt_de_inhoud_en_het_andere_niet(monkeypatch):
     assert verstuurd["https://push/oud"]["body"] == "Groq antwoordt niet"
     # En de rij is gemarkeerd, anders gaat hij elke minuut opnieuw.
     assert db.updates and db.updates[0][0] == "core_notifications"
+
+
+def test_leest_beide_tabellen_en_dedupliceert_op_endpoint():
+    db = _Db(
+        [],
+        [{"endpoint": "https://push/iphone", "p256dh": "x", "auth": "y", "verberg_inhoud": True}],
+        legacy=[
+            {"endpoint": "https://push/iphone", "p256dh": "x", "auth": "y"},
+            {"endpoint": "https://push/safari", "p256dh": "a", "auth": "b"},
+        ],
+    )
+    abs_ = lees_abonnementen(db)
+    assert {a["endpoint"] for a in abs_} == {"https://push/iphone", "https://push/safari"}
+
+
+def test_nieuwe_pending_approval_duwt_een_keer_per_live_abonnement(monkeypatch):
+    verstuurd = []
+
+    def nep_webpush(subscription_info, data, **_k):
+        verstuurd.append(subscription_info["endpoint"])
+
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = type("WebPushException", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+
+    db = _Db(
+        [],
+        [{"endpoint": "https://push/core", "p256dh": "x", "auth": "y", "verberg_inhoud": False}],
+        legacy=[{"endpoint": "https://push/legacy", "p256dh": "x", "auth": "y"}],
+    )
+    vraag_luka(db, "taak-offer", titel="Dit is: een bericht versturen (offer).", detail="Aan wie: the buyer.", kind="leave_plan")
+    assert len(db.tabellen["core_notifications"]) == 1
+    db.tabellen["core_notifications"][0].update({
+        "id": "n-approval",
+        "created_at": "2026-10-05T06:00:00+00:00",
+        "type": "warning",
+    })
+
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 6, 0, 30, tzinfo=timezone.utc)))
+    assert uit["verstuurd"] == 2
+    assert set(verstuurd) == {"https://push/core", "https://push/legacy"}
+    assert db.tabellen["core_notifications"][0].get("pushed_at") or any(
+        u[0] == "core_notifications" for u in db.updates
+    )

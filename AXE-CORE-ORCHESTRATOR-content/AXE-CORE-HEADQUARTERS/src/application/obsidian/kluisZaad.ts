@@ -1,10 +1,12 @@
 /**
  * Zet de kluisboom klaar: workplace per tab, werkplek per roster-agent,
- * workspace per repo. Bestaande notities blijven staan. Schrijffouten
- * breken de zaai niet: de catalogus blijft zichtbaar.
+ * workspace per repo. Alleen een pad dat écht in Supabase staat telt.
+ * Een mislukte write wordt niet onthouden, en de catalogus is geen
+ * vervanger voor een rij.
  */
 import {
-  listRecentObsidianNotes,
+  getObsidianNoteByPath,
+  listKluisNotities,
   writeObsidianNote,
   type ObsidianNote,
 } from '@/infrastructure/persistence/obsidianMemoryService';
@@ -15,7 +17,14 @@ import {
 } from '@/domain/obsidian/kluisZaadCatalogus';
 import { voegKluisNotitiesSamen } from '@/domain/obsidian/kluisNotities';
 
-const ZAAD_SLEUTEL = 'axe_kluis_zaad_paden_v1';
+const ZAAD_SLEUTEL = 'axe_kluis_zaad_paden_v2';
+const OUD_SLEUTEL = 'axe_kluis_zaad_paden_v1';
+
+function wisVerouderdZaad(): void {
+  try {
+    if (localStorage.getItem(OUD_SLEUTEL) != null) localStorage.removeItem(OUD_SLEUTEL);
+  } catch { /* quota / private */ }
+}
 
 function gelezenZaadPaden(): Set<string> {
   try {
@@ -34,51 +43,51 @@ function onthoudZaadPaden(paden: Iterable<string>): void {
   } catch { /* quota */ }
 }
 
-function alsNote(z: ZaadNotitie): ObsidianNote {
-  return {
-    path: z.path,
-    title: z.title,
-    content: z.content,
-    tags: z.tags,
-    wikilinks: [],
-    source: 'system',
-  };
+export interface KluisZaadUit {
+  notes: ObsidianNote[];
+  fout: string | null;
+  geschreven: number;
 }
 
 async function schrijfZaad(n: ZaadNotitie): Promise<ObsidianNote> {
-  const note = alsNote(n);
-  try {
-    await writeObsidianNote({
-      path: n.path,
-      title: n.title,
-      content: n.content,
-      tags: n.tags,
-      source: 'system',
-    });
-  } catch {
-    /* lokale cache heeft hem al; toon hem toch */
-  }
-  return note;
+  await writeObsidianNote({
+    path: n.path,
+    title: n.title,
+    content: n.content,
+    tags: n.tags,
+    source: 'system',
+  });
+  const rij = await getObsidianNoteByPath(n.path);
+  if (!rij) throw new Error(`Seed write not confirmed in Supabase: ${n.path}`);
+  return rij;
 }
 
-/** Open en Sync now: zaai wat ontbreekt, lees, voeg catalogus bij zodat memory-notes de boom niet verdringen. */
-export async function zaaiEnLeesKluis(): Promise<ObsidianNote[]> {
-  const bestaande = await listRecentObsidianNotes(400).catch(() => [] as ObsidianNote[]);
-  const paden = new Set([
-    ...bestaande.map((n) => n.path),
-    ...gelezenZaadPaden(),
-  ]);
-  const ontbrekend = ontbrekendeZaadNotities(paden);
+/** Open en Sync now: zaai wat in Supabase ontbreekt. Catalogus vult de grafiek niet. */
+export async function zaaiEnLeesKluis(): Promise<KluisZaadUit> {
+  wisVerouderdZaad();
+  const bestaande = await listKluisNotities().catch(() => [] as ObsidianNote[]);
+  const inDb = new Set(bestaande.map((n) => n.path));
+  const ontbrekend = ontbrekendeZaadNotities(inDb);
   const geschreven: ObsidianNote[] = [];
+  const fouten: string[] = [];
   for (const n of ontbrekend) {
-    geschreven.push(await schrijfZaad(n));
+    try {
+      const rij = await schrijfZaad(n);
+      geschreven.push(rij);
+      onthoudZaadPaden([rij.path]);
+    } catch (err) {
+      fouten.push(err instanceof Error ? err.message : String(err));
+    }
   }
-  if (geschreven.length) onthoudZaadPaden(geschreven.map((n) => n.path));
 
-  const na = await listRecentObsidianNotes(400).catch(() => bestaande);
-  return voegKluisNotitiesSamen(na, geschreven, kluisZaadNotities().map(alsNote));
+  const na = await listKluisNotities().catch(() => bestaande);
+  const notes = voegKluisNotitiesSamen(na, geschreven);
+  const fout = fouten.length
+    ? `Vault seed failed for ${fouten.length} note${fouten.length === 1 ? '' : 's'}: ${fouten[0]}`
+    : null;
+  return { notes, fout, geschreven: geschreven.length };
 }
 
 export async function maybeSeedKluisBoom(): Promise<ObsidianNote[]> {
-  return zaaiEnLeesKluis();
+  return (await zaaiEnLeesKluis()).notes;
 }

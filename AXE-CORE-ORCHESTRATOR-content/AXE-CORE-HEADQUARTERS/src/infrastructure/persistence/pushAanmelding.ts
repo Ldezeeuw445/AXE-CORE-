@@ -23,6 +23,8 @@ import { apparaatId } from '@/infrastructure/persistence/chatPersistence';
 import { pushStand, type PushStand } from '@/domain/pushMogelijk';
 
 const TABEL = 'core_push_subscriptions';
+export const PUSH_TABEL = TABEL;
+const LUKA_USER_ID = 'acff7a12-1111-481d-a7a9-cc07583b8069';
 
 /**
  * De publieke helft van het VAPID-paar. Hoort in de bundel: daar is hij voor.
@@ -127,7 +129,7 @@ export async function meldAan(): Promise<{ ok: true } | { ok: false; reden: stri
   if (!userId) return { ok: false, reden: 'Niet ingelogd, dus er is geen account om de melding aan te hangen.' };
 
   const { error } = await sb.from(TABEL).upsert({
-    user_id: userId,
+    user_id: userId || LUKA_USER_ID,
     endpoint: sub.endpoint,
     p256dh: sleutelUit(sub, 'p256dh'),
     auth: sleutelUit(sub, 'auth'),
@@ -136,6 +138,46 @@ export async function meldAan(): Promise<{ ok: true } | { ok: false; reden: stri
   }, { onConflict: 'endpoint' });
 
   if (error) return { ok: false, reden: `Opslaan mislukte: ${error.message}` };
+  return { ok: true };
+}
+
+/**
+ * Als de browser al een subscription heeft, schrijf die opnieuw in de tabel
+ * die de zender leest. Oude PWA-rijen stonden alleen in push_subscriptions.
+ */
+export async function herstelAanmelding(): Promise<void> {
+  if (!meldingStand().kan) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    const sb = getSupabase();
+    if (!sb) return;
+    const { data: sessie } = await sb.auth.getSession();
+    const userId = sessie.session?.user?.id || LUKA_USER_ID;
+    await sb.from(TABEL).upsert({
+      user_id: userId,
+      endpoint: sub.endpoint,
+      p256dh: sleutelUit(sub, 'p256dh'),
+      auth: sleutelUit(sub, 'auth'),
+      apparaat: apparaatId(),
+      failed_at: null,
+    }, { onConflict: 'endpoint' });
+  } catch (e) {
+    console.warn('[push] herstel aanmelding:', e);
+  }
+}
+
+/** Eén testhij, zelfde message-vorm als de bel en de A17. */
+export async function stuurTestPush(): Promise<{ ok: true } | { ok: false; reden: string }> {
+  const sb = getSupabase();
+  if (!sb) return { ok: false, reden: 'Geen verbinding met Supabase.' };
+  const { error } = await sb.from('core_notifications').insert({
+    recipient: LUKA_USER_ID,
+    type: 'info',
+    message: 'Test push: if this reaches your lock screen, the sender is live.',
+  });
+  if (error) return { ok: false, reden: error.message };
   return { ok: true };
 }
 

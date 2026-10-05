@@ -93,6 +93,22 @@ export async function writeObsidianNote(input: {
   };
 
   try {
+    // Desktop had isAxeApiConfigured=true en ging altijd via exec_sql. Die
+    // interpolatie knapt op lange system-prompts (seed-notes). De rijen die
+    // wél landen (AXE/System) komen van een table-upsert. Zelfde pad hier.
+    const sb = getSupabase();
+    if (sb) {
+      const { data, error } = await sb
+        .from(TABLE)
+        .upsert(row, { onConflict: 'path' })
+        .select('id, path')
+        .maybeSingle();
+      if (error) throw error;
+      void mirrorToVault(path, String(row.title), String(row.content), tags, source);
+      indexIntoGlobalBrain(noteForBrain);
+      return { path: data?.path ?? path, id: data?.id };
+    }
+
     if (isAxeApiConfigured) {
       await sbRunSql(`
         insert into core_obsidian_notes (path, title, content, tags, wikilinks, source, metadata, updated_at)
@@ -121,17 +137,7 @@ export async function writeObsidianNote(input: {
       return { path };
     }
 
-    const sb = getSupabase();
-    if (!sb) throw new Error('No Supabase client');
-    const { data, error } = await sb
-      .from(TABLE)
-      .upsert(row, { onConflict: 'path' })
-      .select('id, path')
-      .maybeSingle();
-    if (error) throw error;
-    void mirrorToVault(path, String(row.title), String(row.content), tags, source);
-    indexIntoGlobalBrain(noteForBrain);
-    return { path: data?.path ?? path, id: data?.id };
+    throw new Error('No Supabase client');
   } catch (err) {
     console.error('[obsidianMemory] writeObsidianNote failed:', err);
     try {
@@ -205,21 +211,71 @@ export async function searchObsidianNotes(query: string, limit = 20): Promise<Ob
   }
 }
 
+/** Recente notes én de kluisboom, zodat seed-paden niet achter 80 reflections verdwijnen. */
+export async function listKluisNotities(): Promise<ObsidianNote[]> {
+  const recent = await listRecentObsidianNotes(500);
+  const extra: ObsidianNote[] = [];
+  for (const prefix of ['AXE/Workplaces/', 'AXE/Agents/', 'AXE/Repos/'] as const) {
+    extra.push(...await listObsidianNotesByPrefix(prefix));
+  }
+  const gezien = new Set<string>();
+  const uit: ObsidianNote[] = [];
+  for (const n of [...extra, ...recent]) {
+    if (!n.path || gezien.has(n.path)) continue;
+    gezien.add(n.path);
+    uit.push(n);
+  }
+  return uit;
+}
+
+export async function listObsidianNotesByPrefix(prefix: string, limit = 200): Promise<ObsidianNote[]> {
+  const lim = Math.min(Math.max(limit, 1), 400);
+  try {
+    const sb = getSupabase();
+    if (sb) {
+      const { data, error } = await sb
+        .from(TABLE)
+        .select('*')
+        .like('path', `${prefix}%`)
+        .order('updated_at', { ascending: false })
+        .limit(lim);
+      if (error) throw error;
+      return (data || []) as ObsidianNote[];
+    }
+    if (isAxeApiConfigured) {
+      const rows = await sbRunSql(`
+        select id, path, title, content, tags, wikilinks, source, metadata, created_at, updated_at
+        from core_obsidian_notes
+        where path like ${sqlLit(`${prefix}%`)}
+        order by updated_at desc
+        limit ${lim};
+      `);
+      return (Array.isArray(rows) ? rows : []) as ObsidianNote[];
+    }
+    return loadLocalCache().filter((n) => n.path.startsWith(prefix)).slice(0, lim);
+  } catch (err) {
+    console.error('[obsidianMemory] listObsidianNotesByPrefix failed:', err);
+    return loadLocalCache().filter((n) => n.path.startsWith(prefix)).slice(0, lim);
+  }
+}
+
 export async function listRecentObsidianNotes(limit = 30): Promise<ObsidianNote[]> {
   try {
+    const sb = getSupabase();
+    if (sb) {
+      const { data, error } = await sb
+        .from(TABLE)
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data || []) as ObsidianNote[];
+    }
     if (isAxeApiConfigured) {
       const rows = await sbGetRows(TABLE, { limit, orderBy: 'updated_at', orderDir: 'desc' });
       return rows as unknown as ObsidianNote[];
     }
-    const sb = getSupabase();
-    if (!sb) return loadLocalCache().slice(0, limit);
-    const { data, error } = await sb
-      .from(TABLE)
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(limit);
-    if (error) throw error;
-    return (data || []) as ObsidianNote[];
+    return loadLocalCache().slice(0, limit);
   } catch (err) {
     console.error('[obsidianMemory] listRecentObsidianNotes failed:', err);
     return loadLocalCache().slice(0, limit);
@@ -228,6 +284,12 @@ export async function listRecentObsidianNotes(limit = 30): Promise<ObsidianNote[
 
 export async function getObsidianNoteByPath(path: string): Promise<ObsidianNote | null> {
   try {
+    const sb = getSupabase();
+    if (sb) {
+      const { data, error } = await sb.from(TABLE).select('*').eq('path', path).maybeSingle();
+      if (error) throw error;
+      return (data as ObsidianNote) ?? null;
+    }
     if (isAxeApiConfigured) {
       const rows = await sbRunSql(`
         select * from core_obsidian_notes where path = ${sqlLit(path)} limit 1;
@@ -235,10 +297,7 @@ export async function getObsidianNoteByPath(path: string): Promise<ObsidianNote 
       const list = Array.isArray(rows) ? rows : [];
       return (list[0] as ObsidianNote) ?? null;
     }
-    const sb = getSupabase();
-    if (!sb) return loadLocalCache().find(n => n.path === path) ?? null;
-    const { data } = await sb.from(TABLE).select('*').eq('path', path).maybeSingle();
-    return (data as ObsidianNote) ?? null;
+    return loadLocalCache().find(n => n.path === path) ?? null;
   } catch {
     return loadLocalCache().find(n => n.path === path) ?? null;
   }

@@ -484,6 +484,8 @@ async def list_approvals(status: str = "pending", limit: int = 20):
     worse than one that errors, because the task stays parked and nobody knows.
     """
     try:
+        from goedkeuring_melding import verval_oude_shell_vragen
+        verval_oude_shell_vragen(sb())
         return {"approvals": task_repo().list_approvals(status, min(limit, 100))}
     except Exception as exc:
         raise HTTPException(503, f"Could not read approvals: {exc}") from exc
@@ -4541,6 +4543,15 @@ async def planner_besluit(taak_id: str, body: PlannerBesluit):
         velden["status"] = "cancelled"
         velden["cancelled_at"] = datetime.now(timezone.utc).isoformat()
     sb().table("core_tasks").update(velden).eq("id", taak_id).execute()
+    try:
+        open_vragen = (sb().table("core_approvals").select("id")
+                       .eq("task_id", taak_id).eq("status", "pending").execute().data) or []
+        for vraag in open_vragen:
+            task_repo().decide_approval(
+                taak_id, vraag["id"], body.goedkeuren, "luka", "planner besluit",
+            )
+    except Exception:
+        pass
     return {"id": taak_id, "goedkeuring": meta["goedkeuring"]}
 
 

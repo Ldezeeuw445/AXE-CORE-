@@ -16,6 +16,7 @@ describe('Obsidian-tab is de kluis, geen radar', () => {
     expect(bron).toMatch(/kluisGrafiekVan/);
     expect(bron).toMatch(/data-axe-kluis-grafiek/);
     expect(bron).toMatch(/zaaiEnLeesKluis/);
+    expect(bron).toMatch(/data-axe-kluis-zaad-fout/);
     expect(bron).toMatch(/leesWerkWaarheid/);
   });
 
