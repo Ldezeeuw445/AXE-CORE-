@@ -17,7 +17,7 @@ from fakes import OFFER, OTHER_OFFER, OTHER_SELLER_CO, REQ, FakeCrew, FakeRepo, 
 from northsea_mcp.crew import CrewGateway
 from northsea_mcp.discovery import DiscoveryService, slate_from_structured
 from northsea_mcp.models import CrewRunInfo
-from northsea_mcp.research import ResearchError
+from northsea_mcp.research import ResearchError, SearchHit, SearchResult
 
 NU = datetime(2026, 9, 19, 18, 0, tzinfo=timezone.utc)
 
@@ -213,7 +213,10 @@ def _ok_crew_info(**overrides):
     velden = dict(used=True, status="ok", route="discovery_run", backend="northsea_local", execution_mode="deterministic",
                  analysis="Found 2 plausible producers via public registry search; neither confirmed as authorised seller.",
                  requested_specialists=["Sourcing Analyst"], actual_specialists=["Sourcing Analyst"],
-                 fallback_used=False, validation="valid", audit_references=["run-1"])
+                 fallback_used=False, validation="valid", audit_references=["run-1"],
+                 structured_output={
+                     "candidates": [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}],
+                     "rejected": []})
     velden.update(overrides)
     return CrewRunInfo(**velden)
 
@@ -233,7 +236,8 @@ async def test_crew_review_persists_the_actual_candidates_not_just_a_count():
         "rejected": [{"name": "Some Broker Ltd", "fit_score": 0}]}))
     await disc(repo, crew=crew).crew_assisted_review()
     rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
-    assert rij["metadata"]["candidates"] == [{"name": "Mopani Copper Mines", "url": "https://www.mopani.com", "fit_score": 80}]
+    assert rij["metadata"]["candidates"][0]["name"] == "Mopani Copper Mines"
+    assert rij["metadata"]["candidates"][0]["url"] == "https://www.mopani.com"
     assert rij["metadata"]["rejected"] == [{"name": "Some Broker Ltd", "fit_score": 0}]
 
 
@@ -354,14 +358,20 @@ async def test_crew_review_excludes_testcase_requirements():
 
 def test_slate_from_structured_reads_typed_result_and_falls_back_to_web_hits():
     ranked, afgewezen, waarschuwing = slate_from_structured(
-        {"typed_result": {"candidates": [{"name": "Aurubis", "fit_score": 80}],
+        {"typed_result": {"candidates": [{"name": "Aurubis AG", "url": "https://aurubis.example", "fit_score": 80}],
                           "rejected": [{"name": "Broker Co", "fit_score": 0}]}},
         [{"title": "ignored", "url": "https://x.example"}])
-    assert ranked == [{"name": "Aurubis", "fit_score": 80}] and afgewezen[0]["name"] == "Broker Co"
+    assert ranked[0]["name"] == "Aurubis AG" and afgewezen[0]["name"] == "Broker Co"
     assert waarschuwing is None
-    fallback, leeg, warn = slate_from_structured({}, [{"title": "Raw Hit", "url": "https://raw.example"}])
-    assert fallback[0]["name"] == "Raw Hit" and fallback[0]["source"] == "web_hit_unranked" and leeg == []
-    assert warn and "unranked" in warn
+    fallback, junk, warn = slate_from_structured({}, [
+        {"title": "Mopani Copper Mines", "url": "https://www.mopani.com/products"},
+        {"title": "MOGLF Stock Price", "url": "https://finance.yahoo.com/quote/MOGLF/"},
+        {"title": "Copper Cathode Exporters | TradeImeX", "url": "https://www.tradeimex.in/blogs/copper"},
+    ])
+    assert fallback[0]["name"] == "Mopani Copper Mines" and fallback[0]["source"] == "web_hit_unranked"
+    assert any("yahoo" in (r.get("url") or "") for r in junk)
+    assert any("tradeimex" in (r.get("url") or "") for r in junk)
+    assert warn and "quality-filtered" in warn
     leeg_k, leeg_a, leeg_w = slate_from_structured({"candidates": [], "rejected": []}, [])
     assert leeg_k == [] and leeg_a == [] and leeg_w is None
 
@@ -391,17 +401,24 @@ async def test_crew_review_persists_ranked_candidates_from_the_local_runtime():
         await crew.aclose()
 
 
-async def test_crew_review_empty_search_persists_empty_slate_and_opens_review():
+async def test_crew_review_empty_search_does_not_open_a_review():
+    """Lege of mislukte zoekslag mag geen open Chase-item maken. De overnight-cron
+    kreeg anders elke twee uur een review zonder leveranciers. De completed-sentinel
+    op dezelfde dedupe_key voorkomt dat dezelfde requirement opnieuw wordt gezocht."""
     repo = FakeRepo()
     crew = _StubCrew(_ok_crew_info(structured_output={"candidates": [], "rejected": []}))
     research = FakeResearch(search_fail=ResearchError("budget_exhausted", "daily search budget used"))
     uit = await disc(repo, crew=crew, research=research).crew_assisted_review()
-    assert uit["created_review"] is True and uit["search_status"] == "failed:budget_exhausted"
-    rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
-    md = rij["metadata"]
-    assert md["candidates"] == [] and md["rejected"] == []
-    assert md["candidate_count"] == 0 and md["search_hits"] == 0
-    assert "candidates" in md and "rejected" in md
+    assert uit["created_review"] is False and uit["reason"] == "no_quality_candidates"
+    assert uit["search_status"] == "failed:budget_exhausted"
+    open_reviews = [q for q in repo.t["action_queue"]
+                    if q["action_type"] == "crew_candidate_review" and q["status"] == "open"]
+    assert open_reviews == []
+    sentinel = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
+    assert sentinel["status"] == "completed" and sentinel["requires_approval"] is False
+    assert any(e["action"] == "crew_candidate_review_skipped" for e in repo.t["northsea_audit_events"])
+    tweede = await disc(repo, crew=crew, research=research).crew_assisted_review()
+    assert tweede["skipped"] is True and len(crew.calls) == 1  # sentinel houdt de cron tegen
 
 
 async def test_crew_review_persist_failure_does_not_open_review():
@@ -460,7 +477,7 @@ async def test_search_only_dry_run_returns_slate_and_writes_nothing():
 
 async def test_search_only_replaces_existing_review_metadata():
     repo = FakeRepo()
-    crew = _StubCrew(_ok_crew_info(structured_output={"candidates": [], "rejected": []}))
+    crew = _StubCrew(_ok_crew_info())
     eerste = await disc(repo, crew=crew).crew_assisted_review()
     assert eerste["created_review"] is True
     crew2 = _StubCrew(_ok_crew_info(structured_output={
@@ -547,3 +564,49 @@ async def test_search_only_endpoint_never_sends_and_persists_slate(client, store
     rij = next(q for q in repo.t["action_queue"] if q["action_type"] == "crew_candidate_review")
     assert rij["metadata"]["candidates"] and rij["metadata"]["candidate_count"] == len(rij["metadata"]["candidates"])
     assert rij["metadata"]["outreach"] is False
+
+
+class _JunkResearch(FakeResearch):
+    """De SERP die live overnight binnenkwam: alleen nieuws/koers/blog, geen bedrijf."""
+
+    async def search(self, query, *, max_results, priority="P2"):
+        self.searches.append(query)
+        return SearchResult(provider="tavily", hits=[
+            SearchHit("MOGLF Stock Price", "https://finance.yahoo.com/quote/MOGLF/", "Mongolia Growth Group quote", 0.9),
+            SearchHit("Copper Cathode Exporters 2024 | TradeImeX", "https://www.tradeimex.in/blogs/copper-cathode",
+                      "import export data and trade statistics", 0.8),
+            SearchHit("Copper mining stocks", "https://investingnews.com/daily/resource-investing/copper/",
+                      "Investing News Network", 0.7),
+        ][:max_results])
+
+
+async def test_junk_only_search_does_not_open_a_review():
+    repo = FakeRepo()
+    crew = CrewGateway(axe_api_url="http://x", axe_api_key="", crew_venv_py="", local_enabled=True, timeout=5)
+    try:
+        uit = await disc(repo, crew=crew, research=_JunkResearch()).crew_assisted_review()
+        assert uit["created_review"] is False and uit["reason"] == "no_quality_candidates"
+        open_reviews = [q for q in repo.t["action_queue"]
+                        if q["action_type"] == "crew_candidate_review" and q["status"] == "open"]
+        assert open_reviews == []
+        assert any(e["action"] == "crew_candidate_review_skipped" for e in repo.t["northsea_audit_events"])
+        assert repo.sends == []
+    finally:
+        await crew.aclose()
+
+
+async def test_search_only_dry_run_copper_cathode_rejects_news_pages():
+    repo = FakeRepo()
+    crew = CrewGateway(axe_api_url="http://x", axe_api_key="", crew_venv_py="", local_enabled=True, timeout=5)
+    try:
+        uit = await disc(repo, crew=crew, research=_JunkResearch()).search_only_rerun(REQ, dry_run=True)
+        assert uit["dry_run"] is True and uit["created_review"] is False
+        assert uit["candidate_count"] == 0
+        urls = " ".join((c.get("url") or "") for c in uit["would_persist"]["candidates"])
+        assert "yahoo" not in urls and "tradeimex" not in urls and "investingnews" not in urls
+        rejected_urls = " ".join((c.get("url") or "") for c in uit["would_persist"]["rejected"])
+        assert "yahoo.com" in rejected_urls and "tradeimex" in rejected_urls
+        assert not any(q["action_type"] == "crew_candidate_review" for q in repo.t["action_queue"])
+        assert repo.sends == []
+    finally:
+        await crew.aclose()

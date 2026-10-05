@@ -338,9 +338,10 @@ class FakeRepo:
         rows = self._find("action_queue", dedupe_key=dedupe_key)
         return {"id": rows[0]["id"], "status": rows[0]["status"]} if rows else None
 
-    async def count_action_queue_since(self, *, action_type, since):
+    async def count_action_queue_since(self, *, action_type, since, status=None):
         return sum(1 for q in self.t["action_queue"] if q.get("action_type") == action_type
-                  and str(q.get("created_at") or "") >= since)
+                  and str(q.get("created_at") or "") >= since
+                  and (status is None or q.get("status") == status))
 
     async def delete_opportunity(self, opportunity_id):
         oid = uid(opportunity_id)

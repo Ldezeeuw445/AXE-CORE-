@@ -337,9 +337,12 @@ class SupabaseRepository:
     async def get_action_queue_by_dedupe_key(self, dedupe_key: str) -> dict | None:
         return await self._one("action_queue", {"dedupe_key": f"eq.{dedupe_key}", "select": "id,status"})
 
-    async def count_action_queue_since(self, *, action_type: str, since: str) -> int:
-        rows = await self._get("action_queue", {"action_type": f"eq.{action_type}", "created_at": f"gte.{since}",
-                                                "select": "id", "limit": "1000"})
+    async def count_action_queue_since(self, *, action_type: str, since: str, status: str | None = None) -> int:
+        params: dict[str, str] = {"action_type": f"eq.{action_type}", "created_at": f"gte.{since}",
+                                  "select": "id", "limit": "1000"}
+        if status:
+            params["status"] = f"eq.{status}"
+        rows = await self._get("action_queue", params)
         return len(rows)
 
     async def delete_opportunity(self, opportunity_id: str) -> None:
