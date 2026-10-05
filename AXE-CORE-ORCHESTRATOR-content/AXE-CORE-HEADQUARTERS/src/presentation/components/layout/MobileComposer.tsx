@@ -29,6 +29,7 @@ import {
 } from '@/presentation/components/axe-core/FileUploadButton';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { neemDeelTekst, DEEL_GEBEURTENIS } from '@/presentation/store/installDeelDoel';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { skillDef } from '@/domain/tierRouter/axeSkills';
 
@@ -58,6 +59,28 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
   useEffect(() => {
     void voice.loadAllConversations();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Gedeeld vanuit een andere app? Dan staat het hier klaar.
+  //
+  // Twee wegen, want een deling kan vóór of ná deze composer binnenkomen:
+  // bij het openen parkeert installDeelDoel de tekst (React bestaat dan nog
+  // niet), en staat de app al open, dan komt hij als gebeurtenis binnen.
+  // Aanvullen in plaats van overschrijven: wat je al aan het typen was is van
+  // jou.
+  useEffect(() => {
+    const zet = (tekst: string) => {
+      setDraft((d) => (d.trim() ? `${d.trimEnd()}\n\n${tekst}` : tekst));
+    };
+    const geparkeerd = neemDeelTekst();
+    if (geparkeerd) zet(geparkeerd);
+
+    const op = (e: Event) => {
+      const tekst = (e as CustomEvent<string>).detail;
+      if (typeof tekst === 'string' && tekst.trim()) zet(tekst);
+    };
+    window.addEventListener(DEEL_GEBEURTENIS, op);
+    return () => window.removeEventListener(DEEL_GEBEURTENIS, op);
+  }, []);
 
   const send = useCallback(async () => {
     const text = draft.trim();

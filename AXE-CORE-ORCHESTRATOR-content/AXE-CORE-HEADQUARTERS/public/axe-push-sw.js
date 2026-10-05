@@ -44,7 +44,21 @@ self.addEventListener('push', (event) => {
     data: { url: data.url || '/' },
   };
 
-  event.waitUntil(self.registration.showNotification(titel, opties));
+  // Het stipje op het app-icoon erbij.
+  //
+  // Zonder getal, met opzet: de worker weet niet hoeveel ongelezen meldingen er
+  // in totaal zijn -- daarvoor zou hij de database moeten bevragen, met een
+  // sleutel die hier niet hoort. `setAppBadge()` zonder argument toont een
+  // neutraal merkteken ("er is iets"), en zodra je de app opent zet
+  // NotificationContext het echte aantal erop of wist hem.
+  const badge = (async () => {
+    try { await self.navigator?.setAppBadge?.(); } catch { /* geen badge, geen ramp */ }
+  })();
+
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(titel, opties),
+    badge,
+  ]));
 });
 
 self.addEventListener('notificationclick', (event) => {

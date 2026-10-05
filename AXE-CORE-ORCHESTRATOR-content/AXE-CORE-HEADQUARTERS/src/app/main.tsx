@@ -63,6 +63,7 @@ import { installStableChat } from '@/presentation/store/installStableChat'
 import { installTierRouter } from '@/presentation/store/installTierRouter'
 import { installGesprekSync } from '@/presentation/store/installGesprekSync'
 import { installVoorkeurSync } from '@/presentation/store/installVoorkeurSync'
+import { installDeelDoel } from '@/presentation/store/installDeelDoel'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installCoreStatus } from '@/presentation/store/installCoreStatus'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
@@ -82,6 +83,9 @@ installStableChat();
 installTierRouter();
 installGesprekSync();
 installVoorkeurSync();
+// Delen vanuit elke andere app komt binnen in de composer. Moet vóór de eerste
+// render draaien: dit leest de zoekreeks en haalt hem daarna uit de adresbalk.
+installDeelDoel();
 // Eén poller op /status/axe-core. Vier schermen vroegen het los van elkaar,
 // elk met een eigen interval -- en dus met antwoorden die tot een minuut uit
 // de pas liepen. Nu vraagt deze het, en leest de rest de store.

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { notificationText, collapseRepeats } from '@/domain/notification';
+import { pasBadgeToe } from '@/infrastructure/pwa/appBadge';
 
 export interface NotificationItem {
   id: string;
@@ -173,6 +174,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     read: rows.filter(r => notificationText(r.message).title === item.title).every(r => r.read),
   }));
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Het cijfertje op het app-icoon gelijk houden met wat hier staat.
+  //
+  // De service worker zet bij een push een neutraal stipje, want die kent het
+  // totaal niet. Zodra de app open is weten we het wél, dus dan komt het echte
+  // aantal erop -- en verdwijnt de badge zodra je alles gelezen hebt. Zonder
+  // dit blijft het stipje staan tot je het toestel herstart.
+  useEffect(() => { pasBadgeToe(unreadCount); }, [unreadCount]);
 
   return (
     <NotificationContext.Provider
