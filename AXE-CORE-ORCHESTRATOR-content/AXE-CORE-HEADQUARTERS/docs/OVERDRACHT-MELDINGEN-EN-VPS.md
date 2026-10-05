@@ -9,6 +9,33 @@ blokkeert alle hosts behalve een vaste lijst. Vandaar deze overdracht.
 
 ---
 
+## STAND 5 okt 2026 — lees dit eerst
+
+Tussen het schrijven van dit document en nu hebben andere sessies doorgewerkt.
+Drie van de vijf taken hieronder zijn daardoor geheel of deels achterhaald.
+Nagemeten op 5 okt:
+
+| taak | stand |
+|---|---|
+| 1. VAPID op de API-VPS | **nog te doen.** `core_push_subscriptions` heeft 0 rijen: er is nog geen enkel apparaat aangemeld. De val uit taak 1 is inmiddels wél in code afgevangen (commit `90aa75d5`, #200), maar het sleutelpaar moet nog gemaakt. |
+| 2. Cloudflare `VITE_VAPID_PUBLIC_KEY` | **nog te doen**, volgt op taak 1. |
+| 2b. `deploy.sh` | **nog te doen**, de waarschuwing over stap 6 geldt onverkort. |
+| 3. Nieuwe VPS als modelbox | **grotendeels gedaan.** De bootstrap is echt gedraaid; `e41e96b6` en `d141409d` repareren drie fouten die daarbij bovenkwamen. Controleer alleen nog de twee CONTROLEER-punten (MEETMODUS, en wie er een shell mag). |
+| 4. iMac-build | **nog te doen.** |
+| 5. Android-schil in git | **gedaan** — hij heeft een eigen repo, zie `ECOSYSTEM.md` (`850ff481`). |
+
+Twee dingen die daarbij opvielen en die niemand heeft gevraagd:
+
+- **Twee meldingen zijn stilletjes opgegeten.** `core_notifications` heeft 2
+  rijen met `pushed_at` gezet terwijl er nul apparaten aangemeld zijn. Dat was
+  het oude gedrag; #200 zet `pushed_at` nu alleen nog bij een geaccepteerde
+  push. Terugzetten heeft geen zin -- ze zijn ouder dan het uur dat de zender
+  terugkijkt. Het is alleen een bevestiging dat die fix nodig was.
+- **`core_notifications` staat nu dicht voor anon** (`6cdac2f4`, migratie 004,
+  toegepast). Die tabel voedt je slotscherm en stond open.
+
+---
+
 Je draait lokaal op Luka's Mac met volledige toegang tot de machine, het netwerk
 en de repo. Er ligt afgerond werk dat alleen nog **aangezet** moet worden op
 machines waar de vorige sessie niet bij kon.
