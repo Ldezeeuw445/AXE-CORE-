@@ -36,8 +36,11 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
         ...style,
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* flex-wrap: on a 384px phone a long title and an action button no longer fit on
+          one line, and "PLANNER · elke 3 uur" was cut to "PLANN…". Wrapping puts the
+          action on its own row under the title instead of eating the title's room. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+        <div className="flex min-w-0 max-w-full items-center gap-2">
           {icon}
           {/* The title is a section label, not a heading: 11px, uppercase,
            * wide tracking, muted. A card title competing with the numbers
