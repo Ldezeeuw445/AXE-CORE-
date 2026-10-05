@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from goedkeuring_melding import vraag_luka
 from push_meldingen import (
+    is_dood_abonnement,
     lees_abonnementen,
     push_bericht_van,
     stuur_meldingen,
@@ -267,3 +268,69 @@ def test_nieuwe_pending_approval_duwt_een_keer_per_live_abonnement(monkeypatch):
     assert db.tabellen["core_notifications"][0].get("pushed_at") or any(
         u[0] == "core_notifications" for u in db.updates
     )
+
+
+class _PushFout(Exception):
+    def __init__(self, status, body=""):
+        self.response = type("R", (), {"status_code": status, "text": body, "json": lambda self=None: json.loads(body) if body else {}})()
+        super().__init__(body)
+
+
+def test_vapid_mismatch_en_bad_jwt_zijn_dode_abonnementen():
+    assert is_dood_abonnement(_PushFout(400, '{"reason":"VapidPkHashMismatch"}'))
+    assert is_dood_abonnement(_PushFout(403, '{"reason":"BadJwtToken"}'))
+    assert is_dood_abonnement(_PushFout(404, ""))
+    assert is_dood_abonnement(_PushFout(410, "Gone"))
+    assert not is_dood_abonnement(_PushFout(400, '{"reason":"PayloadTooLarge"}'))
+    assert not is_dood_abonnement(_PushFout(500, "upstream"))
+
+
+def test_vapid_mismatch_schrapt_en_zet_pushed_at_niet(monkeypatch):
+    def nep_webpush(subscription_info, data, **_k):
+        raise _PushFout(400, '{"reason":"VapidPkHashMismatch"}')
+
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = _PushFout
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+
+    db = _Db(
+        [{"id": "n-vapid", "type": "warning", "message": "Test push: lock screen.",
+          "created_at": "2026-10-05T06:30:00+00:00"}],
+        [],
+        legacy=[
+            {"endpoint": "https://push/legacy-1", "p256dh": "x", "auth": "y"},
+            {"endpoint": "https://push/legacy-2", "p256dh": "a", "auth": "b"},
+        ],
+    )
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 6, 30, 30, tzinfo=timezone.utc)))
+    assert uit["verstuurd"] == 0
+    assert uit["opgeruimd"] == 2
+    assert db.tabellen["core_notifications"][0].get("pushed_at") is None
+    assert not any(u[0] == "core_notifications" and "pushed_at" in (u[2] or {}) for u in db.updates)
+    geschrapt = {d[1][1] for d in db.deletes if d[1]}
+    assert geschrapt == {"https://push/legacy-1", "https://push/legacy-2"}
+
+
+def test_een_goede_en_een_dode_zet_wel_pushed_at(monkeypatch):
+    def nep_webpush(subscription_info, data, **_k):
+        if "dood" in subscription_info["endpoint"]:
+            raise _PushFout(403, '{"reason":"BadJwtToken"}')
+
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = _PushFout
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+
+    db = _Db(
+        [{"id": "n-mix", "type": "info", "message": "Test push: lock screen.",
+          "created_at": "2026-10-05T06:31:00+00:00"}],
+        [{"endpoint": "https://push/live", "p256dh": "x", "auth": "y"}],
+        legacy=[{"endpoint": "https://push/dood", "p256dh": "a", "auth": "b"}],
+    )
+    uit = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 6, 31, 10, tzinfo=timezone.utc)))
+    assert uit["verstuurd"] == 1
+    assert uit["opgeruimd"] == 1
+    assert db.tabellen["core_notifications"][0].get("pushed_at")

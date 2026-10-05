@@ -41,7 +41,35 @@ const LUKA_USER_ID = 'acff7a12-1111-481d-a7a9-cc07583b8069';
  * stil.
  */
 const VAPID_PUBLIEK_STANDAARD = 'BKAmZjoRcfSq_hbOIy_WrrVAhm10eOkvg0jOPfL84y7boU65aB1q0ufm6_dYthNDn87SWnAUjWBw-Jj4KZ3R3ww';
-const VAPID_PUBLIEK = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || VAPID_PUBLIEK_STANDAARD;
+export const VAPID_PUBLIEK = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || VAPID_PUBLIEK_STANDAARD;
+
+/** Zelfde sleutel, zelfde vorm: base64 of base64url, zonder padding. */
+export function normaliseerVapid(sleutel: string): string {
+  return sleutel.trim().replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+export function vapidPubliekVanBytes(bytes: ArrayBuffer | Uint8Array | null | undefined): string {
+  if (!bytes) return '';
+  const u = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (!u.length) return '';
+  let bin = '';
+  for (let i = 0; i < u.length; i += 1) bin += String.fromCharCode(u[i]);
+  return normaliseerVapid(btoa(bin));
+}
+
+/** True als het opgeslagen abonnement bij een ánder VAPID-paar hoort. */
+export function vapidSleutelWijktAf(
+  opgeslagen: ArrayBuffer | Uint8Array | string | null | undefined,
+  huidig: string = VAPID_PUBLIEK,
+): boolean {
+  const nu = normaliseerVapid(huidig);
+  if (!nu) return false;
+  const oud = typeof opgeslagen === 'string'
+    ? normaliseerVapid(opgeslagen)
+    : vapidPubliekVanBytes(opgeslagen);
+  if (!oud) return false;
+  return oud !== nu;
+}
 
 /**
  * iOS geeft Web Push alleen aan een PWA op het beginscherm.
@@ -116,8 +144,10 @@ export async function meldAan(): Promise<{ ok: true } | { ok: false; reden: stri
   }
 
   const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription()
-    ?? await reg.pushManager.subscribe({
+  const bestaand = await reg.pushManager.getSubscription();
+  const sub = bestaand
+    ? await vernieuwAbonnementAlsSleutelWijkt(bestaand, reg)
+    : await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: sleutelBytes(VAPID_PUBLIEK.trim()) as BufferSource,
     });
@@ -142,15 +172,36 @@ export async function meldAan(): Promise<{ ok: true } | { ok: false; reden: stri
 }
 
 /**
+ * Apple weigert een abonnement dat met een ánder VAPID-paar is gemaakt
+ * (VapidPkHashMismatch). Dan eerst het oude weg, anders blijft de zender
+ * 34 dode endpoints proberen.
+ */
+export async function vernieuwAbonnementAlsSleutelWijkt(
+  sub: PushSubscription,
+  reg: Pick<ServiceWorkerRegistration, 'pushManager'>,
+  huidig: string = VAPID_PUBLIEK,
+): Promise<PushSubscription> {
+  const opgeslagen = sub.options?.applicationServerKey;
+  if (!vapidSleutelWijktAf(opgeslagen, huidig)) return sub;
+  await sub.unsubscribe().catch(() => {});
+  return reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: sleutelBytes(huidig.trim()) as BufferSource,
+  });
+}
+
+/**
  * Als de browser al een subscription heeft, schrijf die opnieuw in de tabel
  * die de zender leest. Oude PWA-rijen stonden alleen in push_subscriptions.
+ * Andere VAPID-sleutel: eerst unsubscribe, anders blijft Apple 400 geven.
  */
 export async function herstelAanmelding(): Promise<void> {
   if (!meldingStand().kan) return;
   try {
     const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (!sub) return;
+    const bestaand = await reg.pushManager.getSubscription();
+    if (!bestaand) return;
+    const sub = await vernieuwAbonnementAlsSleutelWijkt(bestaand, reg);
     const sb = getSupabase();
     if (!sb) return;
     const { data: sessie } = await sb.auth.getSession();
