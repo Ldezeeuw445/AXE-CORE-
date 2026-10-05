@@ -18,6 +18,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import engine_rules as rules
+from .desk_select import (
+    companies_of_opportunity,
+    desk_run_dedupe_key,
+    engaged_opportunity_ids,
+    parked_opportunity_ids,
+    skip_desk_run,
+)
 from .policy import PolicyDenied
 from .service import (
     Caller,
@@ -239,6 +246,20 @@ async def evaluate_live(service: Any, opp_id: str) -> tuple[dict[str, Any] | Non
     return opp, ev
 
 
+async def desk_run_skip_for_opportunity(service: Any, opp: dict[str, Any]) -> str | None:
+    """Tweede hek: ook als de selectie een paper-match doorliet, geen taken/notes."""
+    taken = await service.repo.list_deal_tasks(opp["id"])
+    queue = await service.repo.list_action_queue(opp["id"])
+    parked_ids = parked_opportunity_ids(taken, queue)
+    comms = await service.repo.list_communications(opportunity_id=opp["id"], limit=50)
+    return skip_desk_run(
+        opp,
+        parked_ids=parked_ids,
+        companies=companies_of_opportunity(opp),
+        engaged_ids=engaged_opportunity_ids(comms),
+    )
+
+
 async def _schrijf_taak(service: Any, *, opportunity_id: str, title: str, description: str,
                         owner: str, requires_approval: bool, task_type: str,
                         priority: int = 70) -> dict[str, Any] | None:
@@ -260,6 +281,16 @@ async def _schrijf_chase(repo: Any, *, dedupe_key: str, title: str, description:
     insert = getattr(repo, "engine_insert", None)
     if not insert:
         return
+    # Unique index dekt alleen open/waiting/in_progress. Een geannuleerde note
+    # met dezelfde sleutel (36d3cb25, 5 okt) liet de volgende tick opnieuw
+    # inserten. Bestaande rij — elke status — is dezelfde conditie: niet nog eens.
+    lookup = getattr(repo, "get_action_queue_by_dedupe_key", None)
+    if lookup:
+        try:
+            if await lookup(dedupe_key):
+                return
+        except Exception:
+            pass
     meta = {"source": OORSPRONG, "owner": owner, "origin": OORSPRONG, "execute": False}
     if extra:
         meta.update(extra)
@@ -277,9 +308,11 @@ async def _schrijf_chase(repo: Any, *, dedupe_key: str, title: str, description:
 async def _lege_run(repo: Any, *, kind: str, title: str, description: str,
                     extra: dict[str, Any] | None = None) -> dict[str, Any]:
     dag = _now().date().isoformat()
+    extra = extra or {}
+    oid = extra.get("deal_id")
     await _schrijf_chase(
-        repo, dedupe_key=f"desk-run:{kind}:{dag}", title=title, description=description,
-        opportunity_id=None, owner="axe", requires_approval=False,
+        repo, dedupe_key=desk_run_dedupe_key(kind, dag), title=title, description=description,
+        opportunity_id=str(oid) if oid else None, owner="axe", requires_approval=False,
         action_type="desk_run_note", extra=extra,
     )
     return {
@@ -461,6 +494,12 @@ async def finish_after_event(service: Any, event: dict[str, Any], result: Any) -
         )
         leeg["flags"] = flags
         return leeg
+    reden = await desk_run_skip_for_opportunity(service, opp)
+    if reden:
+        return {
+            "skipped": True, "reason": reden, "sent": 0, "approved": 0,
+            "flags": flags, "deal_id": opp["id"],
+        }
     if ev.owner == "none" or ev.next_action_code in ("none", "wait"):
         kaart = deal_card(opp)
         tekst = notice_body(
@@ -470,7 +509,7 @@ async def finish_after_event(service: Any, event: dict[str, Any], result: Any) -
         leeg = await _lege_run(
             service.repo, kind=f"wait:{opp['id']}:{ev.blocker_code}",
             title=f"Desk run: nothing to decide — {kaart.get('deal_code')}",
-            description=tekst, extra={"blocker": ev.blocker_code, "flags": flags},
+            description=tekst, extra={"blocker": ev.blocker_code, "flags": flags, "deal_id": opp["id"]},
         )
         leeg["flags"] = flags
         leeg["blocker"] = ev.blocker_code

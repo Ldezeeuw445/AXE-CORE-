@@ -20,7 +20,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
@@ -57,6 +57,7 @@ from .service import Caller, NorthSeaService, NotFound, ServiceError
 from .server_read import register_read_tools
 from .store import Store
 from .crew_loop import finish_after_event, finish_discovery, finish_engine_tick, finish_idle_operations
+from .desk_select import select_operations_deals
 
 log = logging.getLogger("northsea_mcp")
 
@@ -634,8 +635,10 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         existing evaluate_deal step runs: axe-owned qualify/reply/follow-up
         may go out via the Desk Manager on the existing approve+send path;
         Luka-owned steps become one yes-notice. Three deals per sweep; one
-        also gets an Operations watch pass. A 12-hour audit window rotates
-        work. auto_send_* flags stay as they are.
+        also gets an Operations watch pass. Parked tasks/AQ (parked_reason)
+        and stale marketplace paper matches (identified, never engaged) are
+        skipped so the 12-hour audit window rotates live work, not the
+        September paper-match backlog. auto_send_* flags stay as they are.
         """
         auth = request.headers.get("authorization", "")
         rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
@@ -649,47 +652,40 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
 
         async with operations_lock:
             try:
-                (opportunities, _), (audits, _) = await asyncio.gather(
-                    repo.fetch_all("opportunities"),
-                    repo.fetch_all("northsea_audit_events"),
+                (opportunities, _), (audits, _), (tasks, _), (queue, _), (comms, _), (companies, _), (reqs, _), (offers, _) = (
+                    await asyncio.gather(
+                        repo.fetch_all("opportunities"),
+                        repo.fetch_all("northsea_audit_events"),
+                        repo.fetch_all("deal_tasks"),
+                        repo.fetch_all("action_queue"),
+                        repo.fetch_all("communications"),
+                        repo.fetch_all("companies"),
+                        repo.fetch_all("buyer_requirements"),
+                        repo.fetch_all("supplier_offers"),
+                    )
                 )
             except RepositoryError:
                 return JSONResponse({"error": "upstream_error"}, status_code=502)
 
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
-            recent: set[str] = set()
-            for a in audits:
-                if a.get("action") != "crew_run" or not a.get("opportunity_id"):
-                    continue
-                try:
-                    when = datetime.fromisoformat(str(a.get("occurred_at") or "").replace("Z", "+00:00"))
-                    if when.tzinfo is None:
-                        when = when.replace(tzinfo=timezone.utc)
-                except (TypeError, ValueError):
-                    continue
-                if when >= cutoff:
-                    recent.add(str(a["opportunity_id"]))
-
-            priority_rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
-            active = [
-                o for o in opportunities
-                if not o.get("is_synthetic")
-                and str(o.get("stage") or "").lower() not in {"won", "lost", "closed", "cancelled"}
-            ]
-            active.sort(key=lambda o: (
-                str(o.get("id")) in recent,
-                priority_rank.get(str(o.get("deal_priority") or "P2").upper(), 2),
-                -int(o.get("readiness_score") or 0),
-                str(o.get("updated_at") or ""),
-            ))
-            chosen = [o for o in active if str(o.get("id")) not in recent][:3]
+            selectie = select_operations_deals(
+                opportunities,
+                audits=audits, tasks=tasks, queue=queue, communications=comms,
+                companies=companies, requirements=reqs, offers=offers,
+                now=datetime.now(timezone.utc),
+            )
+            chosen = selectie["chosen"]
+            active = selectie["active"]
+            recent = selectie["recent"]
+            skipped = selectie["skipped"]
             if not chosen:
                 leeg = None
                 if not dry:
                     leeg = await finish_idle_operations(repo, active=len(active), recent=len(recent))
                 return JSONResponse({
                     "status": "idle", "reviewed_recently": len(recent), "active_deals": len(active),
-                    "message": "all active deals received a crew pass in the last 12 hours",
+                    "eligible": len(selectie["eligible"]),
+                    "skipped": skipped,
+                    "message": "all eligible deals received a crew pass in the last 12 hours, or remaining deals are parked/stale marketplace paper",
                     "sent": 0, "approved": 0,
                     "notices": [leeg["notice"]] if leeg and leeg.get("notice") else [],
                 }, headers={"Cache-Control": "no-store"})
@@ -699,6 +695,10 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                     "status": "dry_run",
                     "selected": [{"opportunity_id": o.get("id"), "priority": o.get("deal_priority"),
                                   "readiness": o.get("readiness_score")} for o in chosen],
+                    "eligible": len(selectie["eligible"]),
+                    "skipped": skipped,
+                    "reviewed_recently": len(recent),
+                    "active_deals": len(active),
                 }, headers={"Cache-Control": "no-store"})
 
             caller = Caller(
@@ -763,6 +763,8 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             return JSONResponse({
                 "status": "ok",
                 "selected": len(chosen),
+                "skipped": skipped,
+                "eligible": len(selectie["eligible"]),
                 "results": results,
                 "sent": sent,
                 "approved": approved,
