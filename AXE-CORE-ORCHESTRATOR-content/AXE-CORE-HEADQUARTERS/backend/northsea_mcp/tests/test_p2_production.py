@@ -30,8 +30,8 @@ ALL = frozenset({
 READ = frozenset({"northsea.read", "northsea.deal.read", "northsea.research"})
 
 
-def test_p2_mcp_version_is_1_4_0():
-    assert __version__ == "1.4.0"
+def test_p2_mcp_version_is_1_4_1():
+    assert __version__ == "1.4.1"
 
 
 def test_handle_event_tool_requires_research_not_read_only():

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..sourcing_quality import extract_emails, extract_phones, qualify_candidate
 from .tools import CanonicalStateTool, MockExaTool, MockMarketTool, MockScrapeTool
 
 COMMERCIAL_DIMS = (
@@ -468,10 +469,15 @@ def run_counterparty_sourcing(
     def enrich(h: dict[str, Any], role: str) -> dict[str, Any]:
         name = h.get("name") or h.get("title") or "UNKNOWN"
         url = h.get("url")
+        snippet = h.get("content") or h.get("snippet") or ""
         page = scrape.read(url) if url else {"text": "", "status": "unavailable"}
+        page_text = str(page.get("text") or "")
+        brontekst = " ".join(x for x in (name, url, snippet, page_text, str(h.get("email") or "")) if x)
         level = _classify_fact(h)
-        # never fabricate email
-        email = h.get("email") if h.get("email") and "@" in str(h.get("email")) else None
+        # nooit een e-mail verzinnen: alleen wat in de hit of de (mock) scrape staat
+        gevonden = extract_emails(brontekst)
+        email = h.get("email") if h.get("email") and "@" in str(h.get("email")) else (gevonden[0] if gevonden else None)
+        phones = extract_phones(brontekst)
         lc = h.get("lc_acceptance")
         if lc is None:
             lc = "UNKNOWN"
@@ -480,6 +486,8 @@ def run_counterparty_sourcing(
             "role": role,
             "url": url,
             "email": email,
+            "phone": phones[0] if phones else h.get("phone"),
+            "content": snippet,
             "lc_acceptance": lc,
             "facts": [
                 {"field": "identity", "value": name, "level": level if url else "UNKNOWN", "source": url},
@@ -493,17 +501,23 @@ def run_counterparty_sourcing(
     verified = [v for v in verified if not v["protected"]]
 
     def fit(v: dict[str, Any]) -> dict[str, Any]:
+        kept, afgewezen = qualify_candidate(v)
+        if afgewezen is not None:
+            return {**v, **afgewezen, "fit_score": 0, "priority": "C"}
         score = 50
         if any(f["level"] == "VERIFIED" for f in v["facts"]):
             score += 20
         if v.get("url"):
             score += 10
+        if kept and kept.get("email"):
+            score += 15
         if v["lc_acceptance"] == "UNKNOWN":
             score -= 10  # partial only
         if "broker" in (v.get("name") or "").lower() or "marketplace" in (v.get("name") or "").lower():
             score = 0  # critical incompatibility
         score = max(0, min(100, score))
-        return {**v, "fit_score": score, "priority": "A" if score >= 75 else "B" if score >= 50 else "C"}
+        extra = dict(kept or {})
+        return {**v, **extra, "fit_score": score, "priority": "A" if score >= 75 else "B" if score >= 50 else "C"}
 
     scored = [fit(v) for v in verified]
     rejected = [s for s in scored if s["fit_score"] == 0 or s["name"].lower() in exclusions]

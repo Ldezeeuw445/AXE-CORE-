@@ -48,6 +48,7 @@ from typing import Any
 from . import canon, matching
 from .repository import InvalidId, RepositoryError, uid
 from .research import ResearchError
+from .sourcing_quality import split_quality, supplier_search_query
 
 log = logging.getLogger("northsea_mcp.discovery")
 
@@ -60,10 +61,12 @@ def slate_from_structured(structured: dict[str, Any] | None, web_hits: list[dict
     9f753dbe schreef `metadata.candidates` uit `structured_output['candidates']`.
     De lokale runtime (northsea_local) nest die lijst onder `typed_result`, dus
     een run met `search_hits: 6` kon `candidates: []` of helemaal geen sleutel
-    krijgen -- Copper Cathode CIF Germany, action 90e282a5. Als de crew-slate
-    ontbreekt terwijl er wél hits zijn, blijven de ruwe hits bewaard als
-    unranked candidates: liever een herstelbare slate dan een geopende review
-    zonder namen."""
+    krijgen -- Copper Cathode CIF Germany, action 90e282a5.
+
+    Het vangnet van 182 (ruwe web_hits als unranked candidates) opende overnight
+    Chase-items vol Yahoo/TradeImeX/INN-pagina's. Ruwe hits gaan nog wél mee,
+    maar alleen ná het kwaliteitshek: nieuws/koers/blog zonder contactpad wordt
+    rejected, niet als leverancier getoond."""
     extra = dict(structured or {})
     typed = extra.get("typed_result") if isinstance(extra.get("typed_result"), dict) else {}
     kandidaten = extra.get("candidates")
@@ -78,15 +81,19 @@ def slate_from_structured(structured: dict[str, Any] | None, web_hits: list[dict
         afgewezen = []
     waarschuwing = None
     if not kandidaten and not afgewezen and web_hits:
-        waarschuwing = "crew structured_output had no candidates/rejected; persisted raw web_hits unranked"
+        waarschuwing = "crew structured_output had no candidates/rejected; quality-filtered web_hits used instead"
         kandidaten = [{
             "name": h.get("title") or h.get("name") or "UNKNOWN",
             "url": h.get("url"),
+            "email": h.get("email"),
+            "content": h.get("content"),
             "fit_score": None,
             "ranked": False,
             "source": "web_hit_unranked",
         } for h in web_hits]
-    return kandidaten[:10], afgewezen[:10], waarschuwing
+    gehouden, extra_afgewezen = split_quality([k for k in kandidaten if isinstance(k, dict)])
+    afgewezen = [a for a in afgewezen if isinstance(a, dict)] + extra_afgewezen
+    return gehouden[:10], afgewezen[:20], waarschuwing
 
 
 def _now() -> datetime:
@@ -122,6 +129,46 @@ class DiscoveryService:
                     raise
                 await self._sleep(0.25 * (2 ** (poging - 1)))
         raise laatste  # type: ignore[misc]
+
+    async def _skip_empty_slate(self, *, kandidaat: dict, dedupe_key: str, metadata: dict[str, Any],
+                                zoek_status: str, search_only: bool, replace_existing: bool) -> dict[str, Any]:
+        """Geen open Chase-item bij junk/lege slate; wel een completed-sentinel op de dedupe_key.
+
+        Zonder die sentinel pakt de overnight-cron dezelfde requirement elke twee uur opnieuw.
+        Chase toont alleen open/waiting/in_progress, dus dit is geen nieuwe taak voor Luka."""
+        metadata = {**metadata, "skip_reason": "no_quality_candidates", "candidates": [],
+                    "candidate_count": 0, "requires_human_review": False}
+        titel = f"Discovery skipped: no company candidates ({kandidaat.get('product') or kandidaat.get('commodity')})"[:200]
+        beschrijving = (
+            "Search and crew returned no copper/commodity company with a verifiable identity "
+            "and a usable contact path. News, finance quote, blog and stats pages were rejected. "
+            "No outreach."
+        )[:2000]
+        bestaand = await self.repo.get_action_queue_by_dedupe_key(dedupe_key)
+        try:
+            if bestaand and replace_existing:
+                await self._resilient(lambda: self.repo.engine_patch(
+                    "action_queue", {"id": f"eq.{bestaand['id']}"},
+                    {"title": titel, "description": beschrijving, "status": "completed",
+                     "requires_approval": False, "metadata": metadata}))
+            elif not bestaand:
+                await self._resilient(lambda: self.repo.engine_insert("action_queue", {
+                    "dedupe_key": dedupe_key, "action_type": "crew_candidate_review",
+                    "opportunity_id": None, "company_id": None, "priority": 20, "title": titel,
+                    "description": beschrijving, "status": "completed", "requires_approval": False,
+                    "metadata": metadata}, ignore_duplicates=True))
+        except RepositoryError as e:
+            log.warning("discovery skip-sentinel persist failed: %s", e)
+        await self._resilient(lambda: self.repo.engine_insert("northsea_audit_events", {
+            "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_skipped",
+            "details": {"buyer_requirement_id": kandidaat["id"], "reason": "no_quality_candidates",
+                       "search_status": zoek_status, "search_hits": metadata.get("search_hits"),
+                       "rejected_count": metadata.get("rejected_count"), "search_only": search_only}}))
+        return {"created_review": False, "buyer_requirement_id": kandidaat["id"],
+                "reason": "no_quality_candidates", "search_status": zoek_status,
+                "search_hits": metadata.get("search_hits"), "candidate_count": 0,
+                "rejected_count": metadata.get("rejected_count"), "search_only": search_only,
+                "outreach": False}
 
     async def sweep(self, *, dry_run: bool = False, max_new_override: int | None = None) -> dict[str, Any]:
         """Two phases, deliberately never interleaved:
@@ -246,13 +293,17 @@ class DiscoveryService:
         crew-reviewed twice -- unless `replace_existing` (search-only recovery) updates the row.
 
         Ranked candidates + rejected + raw web_hits worden in metadata gezet VOORDAT de review
-        als geopend geldt. Als die schrijfactie faalt, blijft er geen review open en gaat er
-        een auditregel `crew_candidate_review_persist_failed` in. Nooit e-mail of outreach."""
+        als geopend geldt. Zonder kwaliteitskandidaten (alleen nieuws/koers/blog, of lege zoekslag)
+        gaat er GEEN open Chase-item in: wel een `completed`-sentinel op dezelfde dedupe_key zodat
+        de overnight-cron dezelfde requirement niet elke twee uur opnieuw vol stort, plus audit
+        `crew_candidate_review_skipped`. Als die schrijfactie faalt, blijft er geen review open
+        en gaat er een auditregel `crew_candidate_review_persist_failed` in. Nooit e-mail of outreach."""
         if self.crew is None:
             return {"skipped": True, "reason": "no crew gateway configured for this process"}
         nu = self.now()
         vandaag = nu.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-        al_vandaag = await self.repo.count_action_queue_since(action_type="crew_candidate_review", since=vandaag)
+        al_vandaag = await self.repo.count_action_queue_since(
+            action_type="crew_candidate_review", since=vandaag, status="open")
         if not ignore_daily_cap and al_vandaag >= self.max_crew_calls_per_day:
             return {"skipped": True, "reason": "daily crew-review budget already used", "used_today": al_vandaag,
                     "max_crew_calls_per_day": self.max_crew_calls_per_day}
@@ -293,9 +344,9 @@ class DiscoveryService:
         zoek_status = "no_research_service"
         if self.research is not None:
             try:
-                resultaat = await self.research.search(f"{commodity} exporter producer supplier {geografie}".strip(),
+                resultaat = await self.research.search(supplier_search_query(str(commodity), str(geografie)),
                                                         max_results=6, priority="P2")
-                payload["web_hits"] = [{"title": h.title, "url": h.url} for h in resultaat.hits]
+                payload["web_hits"] = [{"title": h.title, "url": h.url, "content": h.content} for h in resultaat.hits]
                 payload["web_hits_provider"] = resultaat.provider
                 zoek_status = f"ok:{resultaat.provider}"
             except ResearchError as e:
@@ -351,7 +402,7 @@ class DiscoveryService:
                     "would_persist": {"candidates": metadata["candidates"], "rejected": metadata["rejected"],
                                      "web_hits": metadata["web_hits"], "search_provider": metadata.get("search_provider"),
                                      "candidate_extract_warning": extractie},
-                    "outreach": False}
+                    "outreach": False, "reason": None if kandidaten_gevonden else "no_quality_candidates"}
         if metadata["candidate_count"] != len(metadata["candidates"]) or metadata["rejected_count"] != len(metadata["rejected"]):
             await self._resilient(lambda: self.repo.engine_insert("northsea_audit_events", {
                 "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_persist_failed",
@@ -360,6 +411,11 @@ class DiscoveryService:
             return {"created_review": False, "buyer_requirement_id": kandidaat["id"],
                     "reason": "stored count does not match stored slate", "search_status": zoek_status,
                     "search_only": search_only}
+
+        if not kandidaten_gevonden:
+            return await self._skip_empty_slate(
+                kandidaat=kandidaat, dedupe_key=dedupe_key, metadata=metadata,
+                zoek_status=zoek_status, search_only=search_only, replace_existing=replace_existing)
 
         titel = f"Crew-assisted candidate review: {kandidaat.get('product') or kandidaat.get('commodity')}"[:200]
         beschrijving = (info.analysis or "No analysis text returned.")[:2000]

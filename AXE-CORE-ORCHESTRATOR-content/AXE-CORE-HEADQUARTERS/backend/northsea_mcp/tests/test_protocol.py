@@ -148,7 +148,7 @@ async def test_public_health_exposes_no_internals(app):
     async with _http(app) as h:
         health = (await h.get("/health")).json()
         ready = await h.get("/ready")
-    assert health == {"status": "ok", "version": "1.4.0"}
+    assert health == {"status": "ok", "version": "1.4.1"}
     assert health["version"] == __version__
     assert set(ready.json()) == {"ready"}
 
