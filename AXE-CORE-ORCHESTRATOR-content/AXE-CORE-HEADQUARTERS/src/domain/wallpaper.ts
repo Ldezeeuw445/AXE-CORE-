@@ -116,21 +116,16 @@ export type Wallpaper =
 
 export const PRESET_PREFIX = 'preset:';
 
-/** What a phone that never chose shows: the night peaks, like the desktop. */
-export const DEFAULT_WALLPAPER_ID = 'peaks';
-
 /**
  * What is stored -> what is shown. Anything unrecognised is "none", never a broken image.
  *
- * Never chosen (null/undefined) is NOT the same as chosen "plain" (''): the first gets the
- * default scene, the second respects that you asked for none.
+ * Never chosen (null/undefined) and "plain" ('') are both the plain AXE CORE plate: the matte
+ * dark look (or the blue-grey glass in light mode) that the app has always had. A wallpaper is
+ * something you choose; it is never the default. (For one afternoon the night peaks WERE the
+ * default and the app stopped looking like AXE CORE.)
  */
 export function parseWallpaper(raw: string | null | undefined): Wallpaper {
-  if (raw == null) {
-    const preset = WALLPAPER_PRESETS.find(p => p.id === DEFAULT_WALLPAPER_ID);
-    return preset ? { kind: 'preset', preset } : { kind: 'none' };
-  }
-  if (raw === '') return { kind: 'none' };
+  if (!raw) return { kind: 'none' };
   if (raw.startsWith(PRESET_PREFIX)) {
     const preset = WALLPAPER_PRESETS.find(p => p.id === raw.slice(PRESET_PREFIX.length));
     return preset ? { kind: 'preset', preset } : { kind: 'none' };

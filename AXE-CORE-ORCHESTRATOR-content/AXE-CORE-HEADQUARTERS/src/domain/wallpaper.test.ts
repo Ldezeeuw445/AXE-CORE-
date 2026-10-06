@@ -5,11 +5,9 @@ import {
 } from './wallpaper';
 
 describe('parseWallpaper', () => {
-  it('never chosen gets the night peaks, an explicit plain stays plain', () => {
-    const fresh = parseWallpaper(null);
-    expect(fresh.kind).toBe('preset');
-    if (fresh.kind === 'preset') expect(fresh.preset.id).toBe('peaks');
-    expect(parseWallpaper(undefined).kind).toBe('preset');
+  it('never chosen is the plain AXE CORE plate; a wallpaper is never the default', () => {
+    expect(parseWallpaper(null)).toEqual({ kind: 'none' });
+    expect(parseWallpaper(undefined)).toEqual({ kind: 'none' });
     expect(parseWallpaper('')).toEqual({ kind: 'none' });
   });
 
