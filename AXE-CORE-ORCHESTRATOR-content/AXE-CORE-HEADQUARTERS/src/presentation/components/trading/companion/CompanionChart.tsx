@@ -561,7 +561,11 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
               </>
             ) : null}
           </div>
-          <span className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
+          {/* min-w-0 + max-w-full + a title: this line holds raw provider errors ("MetaAPI quota was exceeded
+              ... nothing cached for this call yet"), and as a bare truncate it ignored its parent's
+              width and ran over the symbol name on a phone. Now it shrinks, and the whole text is
+              one tap away as the tooltip. */}
+          <span className="min-w-0 max-w-full text-[10px] truncate" title={loadStatus} style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
         </div>
       </div>
 

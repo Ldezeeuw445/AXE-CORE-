@@ -51,10 +51,10 @@ export default function AddressBar({ url, onNavigate, onFocusChange }: AddressBa
       onSubmit={handleSubmit}
       className={`
         flex items-center gap-2 px-4 h-8 rounded-2xl
-        transition-all duration-300 flex-1 max-w-xl
+        transition-all duration-300 flex-1 min-w-0 max-w-xl
         ${isFocused
-          ? 'bg-white/10 border border-cyan-400/50 shadow-[0_0_15px_rgba(0,255,255,0.2)] w-[640px]'
-          : 'bg-white/5 border border-transparent hover:bg-white/8 w-[540px]'
+          ? 'bg-white/10 border border-cyan-400/50 shadow-[0_0_15px_rgba(0,255,255,0.2)] w-full md:w-[640px]'
+          : 'bg-white/5 border border-transparent hover:bg-white/8 w-full md:w-[540px]'
         }
       `}
     >

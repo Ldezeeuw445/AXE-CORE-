@@ -7798,3 +7798,48 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   .axe-shell .axe-chip { min-height: 32px; }
   .axe-shell .axe-app-dagrij { min-height: 36px; }
 }
+
+/* ── De tabzuil in de telefoonlade: een lijst met namen ────────────────────────────
+ * Op de desktop zijn de tab-iconen een rij die zijn naam pas toont als je er met de muis
+ * overheen gaat, op 28% dekking. Een telefoon heeft geen muis: de lade toonde elf anonieme
+ * iconen van 26px (gezien op de A17, NorthSea Desk). Hier dezelfde knoppen, als lijst met het
+ * label dat al in aria-label staat (::after leest het uit), vol zichtbaar, 44px hoog. */
+:root[data-look] .axe-mobile-drawer-body .axe-tabzuil {
+  height: auto; align-items: stretch; justify-content: flex-start; padding: 0 0 10px;
+}
+:root[data-look] .axe-mobile-drawer-body .axe-tabzuil-rooster {
+  display: flex; flex-direction: column; gap: 2px; grid-template-rows: none; justify-content: flex-start;
+}
+:root[data-look] .axe-mobile-drawer-body .axe-tabzuil-knop {
+  width: 100%; height: auto; min-height: 44px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+  padding: 0 12px; border-radius: 12px; font-size: 14px; font-weight: 500;
+  opacity: 0.85; color: var(--text-secondary);
+}
+:root[data-look] .axe-mobile-drawer-body .axe-tabzuil-knop::after { content: attr(aria-label); }
+:root[data-look] .axe-mobile-drawer-body .axe-tabzuil-knop[data-aan='ja'] {
+  opacity: 1; background: rgba(255, 255, 255, 0.07); font-weight: 650;
+}
+:root[data-look] .axe-mobile-drawer-body .axe-tabzuil-knop[data-uit='ja'] { opacity: 0.3; }
+:root[data-look] .axe-mobile-drawer-body .axe-tabzuil-naam { display: none; }
+@media (max-width: 767px) and (pointer: coarse) {
+  .axe-mobile-drawer-body :is(button, [role='button']) { min-height: 34px; min-width: 34px; }
+}
+
+/* ── Code-studio op een telefoon: de vakken onder elkaar ───────────────────────────
+ * Drie kolommen van samen 520px+ (boom 220, editor, toestel 280) op een scherm van 384px:
+ * het raster liep zijwaarts weg, met de preview half buiten beeld (gezien op de A17, CODE-tab).
+ * Op een smal scherm krijgt elk vak de volle breedte en een eigen hoogte, en scrolt de pagina
+ * verticaal. De weergave-keuze (Files / Terminal / Code / Preview) blijft in de lade; hier is
+ * alleen de indeling anders. */
+@media (max-width: 767px) {
+  :root[data-look] .axe-studio[data-stand='code'] .axe-studio-kolommen {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-rows: minmax(58vh, auto);
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  :root[data-look] .axe-studio[data-stand='code'] .axe-studio-kolommen > section { min-height: 58vh; }
+  :root[data-look] .axe-studio-balk { max-width: 100%; }
+}

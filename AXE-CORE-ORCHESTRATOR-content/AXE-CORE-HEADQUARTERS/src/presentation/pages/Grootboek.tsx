@@ -24,15 +24,15 @@ import {
 import { calendarJobs, ledgerList, type CalendarJob, type LedgerEntry } from '@/infrastructure/gateways/axeCoreApiService';
 
 const BRONNEN: ZuilItem[] = [
-  { id: 'alle', label: 'Alles', kleur: 'var(--text-primary)', icoon: <Layers size={17} /> },
-  { id: 'schedule', label: 'Jobs (VPS en Mac)', kleur: '#22D3EE', icoon: <CalendarClock size={17} /> },
-  { id: 'pg_cron', label: 'Supabase-cron', kleur: '#A78BFA', icoon: <Database size={17} /> },
-  { id: 'task', label: 'Taken', kleur: '#34D399', icoon: <ListTodo size={17} /> },
-  { id: 'launchd', label: 'Mac-onderhoud', kleur: '#F5A524', icoon: <HardDrive size={17} /> },
+  { id: 'alle', label: 'All', kleur: 'var(--text-primary)', icoon: <Layers size={17} /> },
+  { id: 'schedule', label: 'Jobs (VPS and Mac)', kleur: '#22D3EE', icoon: <CalendarClock size={17} /> },
+  { id: 'pg_cron', label: 'Supabase cron', kleur: '#A78BFA', icoon: <Database size={17} /> },
+  { id: 'task', label: 'Tasks', kleur: '#34D399', icoon: <ListTodo size={17} /> },
+  { id: 'launchd', label: 'Mac maintenance', kleur: '#F5A524', icoon: <HardDrive size={17} /> },
   { id: 'planner', label: 'Planner', kleur: '#F472B6', icoon: <Bot size={17} /> },
 ];
 
-const VENSTERS = [{ uren: 24, label: '24 uur' }, { uren: 168, label: '7 dagen' }, { uren: 720, label: '30 dagen' }];
+const VENSTERS = [{ uren: 24, label: '24 hours' }, { uren: 168, label: '7 days' }, { uren: 720, label: '30 days' }];
 
 const STAND: Record<string, string> = { goed: 'goed', fout: 'stuk', bezig: 'nieuw', open: 'uit' };
 
@@ -172,7 +172,7 @@ export default function Grootboek() {
                 </header>
                 {s.laatsteFout && (
                   <div className="axe-cron-leeg truncate" style={{ color: 'var(--m-broken)' }} title={s.laatsteFout.detail}>
-                    Laatste fout: {s.laatsteFout.name} · {tijd(s.laatsteFout.at)}
+                    Last error: {s.laatsteFout.name} · {tijd(s.laatsteFout.at)}
                   </div>
                 )}
               </button>

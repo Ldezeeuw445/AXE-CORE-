@@ -246,7 +246,7 @@ export default function MCPCenter() {
                         <StatusBadge variant={statusVan(server.id)} size="sm" />
                         {server.sleutelnaam && (
                           <button onClick={() => { setConfiguring(server.id); setEnvInput(''); }} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>
-                            {server.klaar ? 'Sleutel' : 'Connect'}
+                            {server.klaar ? 'Key' : 'Connect'}
                           </button>
                         )}
                         <button onClick={() => { void testServer(server.id); }} disabled={stand?.bezig} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
@@ -266,7 +266,7 @@ export default function MCPCenter() {
                     </p>
                     {server.sleutelnaam && (
                       <p className="mt-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        sleutel: {server.klaar ? server.sleutel : <span style={{ color: 'var(--warning)' }}>ontbreekt ({server.sleutelnaam})</span>}
+                        key: {server.klaar ? server.sleutel : <span style={{ color: 'var(--warning)' }}>missing ({server.sleutelnaam})</span>}
                       </p>
                     )}
                     {t?.fout && <div className="mt-1 text-[10px]" style={{ color: 'var(--error)' }}>{t.fout}</div>}
