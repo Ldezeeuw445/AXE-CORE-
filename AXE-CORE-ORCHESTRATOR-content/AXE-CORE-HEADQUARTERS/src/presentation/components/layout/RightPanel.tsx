@@ -366,7 +366,7 @@ function ActiveTasksWidget() {
 type RailKamer = 'status' | 'activiteit' | 'algo';
 const RAIL_KAMERS: Array<{ id: RailKamer; label: string }> = [
   { id: 'status', label: 'Status' },
-  { id: 'activiteit', label: 'Activiteit' },
+  { id: 'activiteit', label: 'Activity' },
   { id: 'algo', label: 'AXE Algo' },
 ];
 
