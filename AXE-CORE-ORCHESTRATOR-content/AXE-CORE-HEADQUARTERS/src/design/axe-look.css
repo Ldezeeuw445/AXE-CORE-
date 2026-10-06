@@ -7771,3 +7771,30 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     right: max(6px, env(safe-area-inset-right, 0px));
   }
 }
+
+/* ── De ondergrens van de telefoon: leesbaar en aan te tikken ─────────────────────
+ * Gemeten op de A17 (4-5 okt 2026): op 384px stonden er per tab tientallen knoppen onder de
+ * 30px en honderden tekstjes van 9-10px. Dat is geen smaak maar een meetbare fout: een duim is
+ * ~44px, en 9px tekst is op die dichtheid niet te lezen.
+ *
+ * Eén regel op de plek waar de Tailwind-klassen en de paginaklassen samenkomen, in plaats van
+ * dertig pagina's elk op hun eigen manier: tekst nooit onder 11px, en een knop is minstens 34px
+ * hoog en breed. Alleen op een telefoon (smal scherm); desktop houdt zijn dichte indeling.
+ * Het maandraster van de agenda en het weekrooster blijven uitgezonderd: daar IS de dichtheid
+ * het product, en het raster is zelf een tikdoel.
+ */
+@media (max-width: 767px) {
+  .text-\[9px\], .text-\[9\.5px\], .text-\[10px\], .\!text-\[10px\],
+  .axe-app-taakvan, .axe-app-dagtijd, .axe-app-cijfernaam, .axe-app-dagkop, .axe-agentkaart-stand {
+    font-size: 11px !important;
+  }
+  .text-\[10\.5px\] { font-size: 11.5px !important; }
+}
+@media (max-width: 767px) and (pointer: coarse) {
+  .axe-shell :is(button, [role='button']):not(.axe-minimaand-raster *):not(.axe-week *) {
+    min-height: 34px;
+    min-width: 34px;
+  }
+  .axe-shell .axe-chip { min-height: 32px; }
+  .axe-shell .axe-app-dagrij { min-height: 36px; }
+}

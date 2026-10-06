@@ -578,7 +578,7 @@ export function AxeShellChrome() {
       <button
         type="button"
         className="axe-railtoggle axe-railtoggle--l"
-        aria-label="Linkerlade openen of sluiten"
+        aria-label="Toggle left panel"
         title="Linkerlade"
         onClick={() => toggleRail('L')}
       >
@@ -587,7 +587,7 @@ export function AxeShellChrome() {
       <button
         type="button"
         className="axe-railtoggle axe-railtoggle--r"
-        aria-label="Rechterlade openen of sluiten"
+        aria-label="Toggle right panel"
         title="Rechterlade"
         onClick={() => toggleRail('R')}
       >

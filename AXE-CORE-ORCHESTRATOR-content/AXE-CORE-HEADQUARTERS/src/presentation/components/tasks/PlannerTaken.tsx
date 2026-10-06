@@ -183,7 +183,10 @@ export function PlannerTaken() {
             }));
             return (
               <div key={t.id} className="rounded-lg px-3 py-2" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)' }}>
-                <div className="flex items-center gap-2">
+                {/* flex-wrap, and the title takes a whole line on a phone: every part of this row is
+                    shrink-0, so on 384px the title was pushed past the card edge and clipped
+                    ("continuatic…"). On md+ it is still one row. */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-[10px] uppercase tracking-wide shrink-0" style={{ color: 'var(--text-muted)' }}>
                     {AGENT[agentId] ?? agentId}
                   </span>
@@ -197,7 +200,7 @@ export function PlannerTaken() {
                     {t.metadata?.motor ?? 'motor ?'} · {t.priority}
                   </span>
                   <button type="button" onClick={() => setOpen(o => (o === t.id ? null : t.id))}
-                    className="text-left text-[12px] font-medium truncate flex-1 min-w-0" style={{ color: 'var(--text-primary)' }}>
+                    className="order-last basis-full text-left text-[12px] font-medium md:order-none md:basis-0 md:flex-1 md:truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
                     {t.title}
                   </button>
                   <span className="text-[9px] shrink-0 font-mono" style={{ color: 'var(--text-muted)' }}>
