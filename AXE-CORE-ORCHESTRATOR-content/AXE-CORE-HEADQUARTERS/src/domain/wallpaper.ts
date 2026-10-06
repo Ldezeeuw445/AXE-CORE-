@@ -25,7 +25,17 @@ export interface WallpaperPreset {
   label: string;
   /** A CSS `background` value. */
   css: string;
+  /**
+   * The picture file under `public/wallpapers/`, for photo presets. The Android lock screen
+   * cannot render CSS, so it reads this same file out of the bundled web assets: one picture,
+   * one place, on both sides.
+   */
+  file?: string;
 }
+
+/** Where the bundled photos live, relative to the app's base (the APK serves it under /web/). */
+const BASE = (typeof import.meta !== 'undefined' && (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL) || '/';
+const photo = (file: string) => `url("${BASE}wallpapers/${file}") center / cover no-repeat`;
 
 
 /**
@@ -72,6 +82,12 @@ export function nightPeaksCss(): string {
 }
 
 export const WALLPAPER_PRESETS: readonly WallpaperPreset[] = [
+  // The desktop's own pictures, at phone size. Moraine Lake is the one the Tauri shell shows
+  // through its frosted plate, and is therefore what a phone that never chose shows too.
+  { id: 'moraine', label: 'Moraine Lake', css: photo('moraine.jpg'), file: 'moraine.jpg' },
+  { id: 'valley', label: 'Valley of Fire', css: photo('valley.jpg'), file: 'valley.jpg' },
+  { id: 'yosemite', label: 'Yosemite', css: photo('yosemite.jpg'), file: 'yosemite.jpg' },
+  { id: 'sunrise', label: 'Sunrise', css: photo('sunrise.jpg'), file: 'sunrise.jpg' },
   { id: 'peaks', label: 'Night peaks', css: nightPeaksCss() },
   {
     id: 'aurora', label: 'Aurora',
@@ -116,16 +132,23 @@ export type Wallpaper =
 
 export const PRESET_PREFIX = 'preset:';
 
+/** What a phone that never chose shows: the desktop's picture, behind the frosted plate. */
+export const DEFAULT_WALLPAPER_ID = 'moraine';
+
 /**
  * What is stored -> what is shown. Anything unrecognised is "none", never a broken image.
  *
- * Never chosen (null/undefined) and "plain" ('') are both the plain AXE CORE plate: the matte
- * dark look (or the blue-grey glass in light mode) that the app has always had. A wallpaper is
- * something you choose; it is never the default. (For one afternoon the night peaks WERE the
- * default and the app stopped looking like AXE CORE.)
+ * Never chosen (null/undefined) is NOT the same as chosen "plain" (''): the first gets the
+ * desktop's picture, the second respects that you asked for none. (For one afternoon the
+ * default was a drawn night scene and the app stopped looking like the Tauri shell; the
+ * default is now the very picture that shell shows.)
  */
 export function parseWallpaper(raw: string | null | undefined): Wallpaper {
-  if (!raw) return { kind: 'none' };
+  if (raw == null) {
+    const preset = WALLPAPER_PRESETS.find(p => p.id === DEFAULT_WALLPAPER_ID);
+    return preset ? { kind: 'preset', preset } : { kind: 'none' };
+  }
+  if (raw === '') return { kind: 'none' };
   if (raw.startsWith(PRESET_PREFIX)) {
     const preset = WALLPAPER_PRESETS.find(p => p.id === raw.slice(PRESET_PREFIX.length));
     return preset ? { kind: 'preset', preset } : { kind: 'none' };
@@ -159,7 +182,11 @@ export interface GlassTuning {
   blur: number;
 }
 
-export const DEFAULT_TUNING: GlassTuning = { dim: 0.35, blur: 36 };
+/**
+ * The Tauri dark plate: the picture blurred hard and darkened to about 70%. Measured on the
+ * desktop shell over Moraine Lake: the bright sky comes out around #3c3c3c, the shadows near black.
+ */
+export const DEFAULT_TUNING: GlassTuning = { dim: 0.72, blur: 44 };
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 

@@ -5,9 +5,11 @@ import {
 } from './wallpaper';
 
 describe('parseWallpaper', () => {
-  it('never chosen is the plain AXE CORE plate; a wallpaper is never the default', () => {
-    expect(parseWallpaper(null)).toEqual({ kind: 'none' });
-    expect(parseWallpaper(undefined)).toEqual({ kind: 'none' });
+  it('never chosen gets the desktop picture, an explicit plain stays plain', () => {
+    const fresh = parseWallpaper(null);
+    expect(fresh.kind).toBe('preset');
+    if (fresh.kind === 'preset') expect(fresh.preset.id).toBe('moraine');
+    expect(parseWallpaper(undefined).kind).toBe('preset');
     expect(parseWallpaper('')).toEqual({ kind: 'none' });
   });
 
@@ -65,6 +67,19 @@ describe('wallpaperCss', () => {
   });
   it('the night peaks are identical on every call (seeded sky)', () => {
     expect(nightPeaksCss()).toBe(nightPeaksCss());
+  });
+  it('the photo presets point at files that exist in public/wallpapers', async () => {
+    const { existsSync } = await import('node:fs');
+    const photos = WALLPAPER_PRESETS.filter(p => p.file);
+    expect(photos.map(p => p.id)).toEqual(['moraine', 'valley', 'yosemite', 'sunrise']);
+    for (const p of photos) {
+      expect(existsSync(`public/wallpapers/${p.file}`), p.file).toBe(true);
+      expect(p.css).toContain(`wallpapers/${p.file}`);
+    }
+  });
+  it('the default tuning is the Tauri dark plate: heavy blur, strong dimming', () => {
+    expect(DEFAULT_TUNING.dim).toBeGreaterThanOrEqual(0.6);
+    expect(DEFAULT_TUNING.blur).toBeGreaterThanOrEqual(36);
   });
   it('every preset has a css value', () => {
     for (const p of WALLPAPER_PRESETS) expect(p.css.length).toBeGreaterThan(20);

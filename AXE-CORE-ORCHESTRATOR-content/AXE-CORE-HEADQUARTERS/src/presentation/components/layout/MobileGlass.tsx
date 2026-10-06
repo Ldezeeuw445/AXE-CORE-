@@ -19,6 +19,7 @@ import { hasNativeGlass } from '@/infrastructure/config/apiUrl';
 import { Sun, Moon } from 'lucide-react';
 import { useWallpaper, useGlassTuning } from '@/presentation/hooks/useWallpaper';
 import { wallpaperCss } from '@/domain/wallpaper';
+import { syncLockWallpaper } from '@/infrastructure/gateways/androidPhoneBridge';
 
 /*
  * De achtergrond van de Tauri-home ("AXE Glass Plate"), voor de telefoon.
@@ -88,6 +89,15 @@ export function MobileGlass() {
   useEffect(() => {
     document.documentElement.style.setProperty('--axe-glass-blur', `${Math.round(blur * 1.7)}px`);
   }, [blur]);
+  // The Android lock screen is native and cannot read this app's storage: push the choice over, on
+  // every change and once at start (a phone that never chose still has to tell it "Moraine Lake").
+  useEffect(() => {
+    syncLockWallpaper(
+      wallpaper.kind,
+      wallpaper.kind === 'preset' ? wallpaper.preset.id : wallpaper.kind === 'photo' ? wallpaper.dataUrl : '',
+      dim, blur,
+    );
+  }, [wallpaper, dim, blur]);
   if (hasNativeGlass()) return null; // alleen op de macOS-desktop doet het native glas dit al
   const glass = look === 'glass';
   const foto = wallpaperCss(wallpaper);
@@ -101,7 +111,9 @@ export function MobileGlass() {
         <>
           {/* De gekozen wallpaper, scherp: dit zie je langs de rand van de plaat,
               zoals je op de Mac je bureaublad naast het venster ziet. */}
-          <div style={{ position: 'absolute', inset: 0, background: foto }} />
+          {/* Donker: bijna grijs, zoals de Tauri-plaat (saturate 0 trekt de kleur uit het glas, zie axe-look.css);
+              licht houdt de foto levendig. */}
+          <div style={{ position: 'absolute', inset: 0, background: foto, filter: glass ? undefined : 'saturate(0.22)' }} />
           {/* Dezelfde wallpaper, vervaagd, alleen BINNEN de omtrek van de plaat: het
               doorzichtige glas van de Tauri-app. Geen backdrop-filter op de plaat
               zelf (die zou de matglas-lagen van chat en composer platslaan, zie
@@ -117,7 +129,7 @@ export function MobileGlass() {
               <div
                 style={{
                   position: 'absolute', inset: -90, background: foto,
-                  filter: `blur(${blur}px) saturate(1.25)`,
+                  filter: `blur(${blur}px) saturate(0.2)`,
                 }}
               />
             </div>
@@ -126,7 +138,9 @@ export function MobileGlass() {
           <div
             style={{
               position: 'absolute', inset: 0,
-              background: glass ? `rgba(255,255,255,${(dim * 0.25).toFixed(3)})` : `rgba(0,0,0,${dim})`,
+              // Dark: the Tauri dark plate (the picture darkened to ~30%). Light: the Tauri light plate keeps
+              // the picture bright and saturated, with only a trace of milk over it.
+              background: glass ? `rgba(255,255,255,${(dim * 0.1).toFixed(3)})` : `rgba(0,0,0,${dim})`,
             }}
           />
         </>

@@ -18,6 +18,7 @@ interface Shape {
   setLockCard?: (id: string, on: boolean) => void;
   isDeviceOwner?: () => boolean;
   openHomeScreen?: () => boolean;
+  setLockWallpaper?: (kind: string, value: string, dim: number, blur: number) => void;
 }
 
 function bridge(): Shape | null {
@@ -54,4 +55,15 @@ export function readDeviceOwner(): boolean {
 
 export function openPhoneHome(): boolean {
   try { return bridge()?.openHomeScreen?.() ?? false; } catch { return false; }
+}
+
+/**
+ * Tell the shell which wallpaper the lock screen should show, so it matches the app.
+ *
+ * The lock screen is native and cannot read the web app's localStorage, so every change (and the
+ * first start) is pushed over. `kind` is "none", "preset" (value = preset id) or "photo"
+ * (value = the data-URL the user picked); dim and blur are the Appearance sliders.
+ */
+export function syncLockWallpaper(kind: 'none' | 'preset' | 'photo', value: string, dim: number, blur: number): void {
+  try { bridge()?.setLockWallpaper?.(kind, value, dim, blur); } catch { /* the lock screen keeps its last look */ }
 }
