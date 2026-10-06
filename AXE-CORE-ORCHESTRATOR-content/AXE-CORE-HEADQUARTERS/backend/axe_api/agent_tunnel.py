@@ -108,6 +108,20 @@ class AgentTunnel:
         except httpx.HTTPError:
             return False
 
+    async def get_json(self, path: str, params: Optional[dict] = None, timeout: float = 8.0):
+        """Een GET naar de Mac mini voor de VPS zelf (niet voor de browser): het antwoord als JSON, of
+        None als de Mac niet antwoordt, een fout geeft of geen JSON stuurt. Nooit een uitzondering:
+        de aanroeper wil weten "is het er", niet waarom niet."""
+        try:
+            r = await self._client.get(
+                f"{self.basis}{path}", params=params,
+                headers={"Authorization": f"Bearer {self._sleutel}"},
+                timeout=httpx.Timeout(timeout, connect=2.0),
+            )
+            return r.json() if r.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return None
+
     # -- auth ------------------------------------------------------------------
 
     def _toegestaan(self, request: Request) -> bool:

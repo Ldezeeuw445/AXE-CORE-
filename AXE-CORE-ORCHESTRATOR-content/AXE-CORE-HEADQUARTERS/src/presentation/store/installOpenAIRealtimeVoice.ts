@@ -346,11 +346,33 @@ export function schakelStemSneltoets(): void {
   else useVoiceStore.getState().startListening();
 }
 
+/**
+ * Één aanslag van de stem-sneltoets, waar hij ook vandaan komt.
+ * Zelfde tweetrap als Escape: eerst stil leggen, pas daarna ophangen.
+ */
+function sneltoetsAanslag(): void {
+  if (responseActive && session) {
+    session.interrupt();
+    responseActive = false;
+    useVoiceStore.setState({ voiceStatus: 'listening' });
+    return;
+  }
+  schakelStemSneltoets();
+}
+
+/**
+ * Het DOM-event waarmee een schil zonder Rust (de Android-app) het gesprek start of stopt.
+ * In Tauri komt dezelfde aanslag als `axe://sneltoets-mic` binnen; op de telefoon is er geen
+ * globale sneltoets, dus de pil op het slotscherm en de assistent-knop sturen dit event.
+ */
+const STEM_TOGGLE_EVENT = 'axe-voice-toggle';
+
 function installVoiceHotkeys(): void {
   if (hotkeysInstalled) return;
   hotkeysInstalled = true;
 
   if (typeof window !== 'undefined') {
+    window.addEventListener(STEM_TOGGLE_EVENT, sneltoetsAanslag);
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (useVoiceStore.getState().voiceStatus === 'idle') return;
@@ -373,16 +395,7 @@ function installVoiceHotkeys(): void {
   if (!isTauriRuntime()) return;
   void import('@tauri-apps/api/event')
     .then(({ listen }) =>
-      listen(SNELTOETS_EVENT, () => {
-        // Zelfde tweetrap als Escape: eerst stil leggen, pas daarna ophangen.
-        if (responseActive && session) {
-          session.interrupt();
-          responseActive = false;
-          useVoiceStore.setState({ voiceStatus: 'listening' });
-          return;
-        }
-        schakelStemSneltoets();
-      }),
+      listen(SNELTOETS_EVENT, sneltoetsAanslag),
     )
     .catch(() => {
       // No global-shortcut plugin on this surface (web build) — the mic

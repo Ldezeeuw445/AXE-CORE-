@@ -4900,6 +4900,139 @@ async def vps_status():
     }
 
 
+# ── Slotscherm van de telefoon ──────────────────────────────────────────────────────
+# Zie lockscreen.py voor wat hier echt is en wat bewust ontbreekt.
+import lockscreen as _lockscreen
+
+_LS_CACHE = _lockscreen.TTLCache()
+IMAC_SSH = os.environ.get("AXE_IMAC_SSH", "lukadezeeuw@100.65.216.90")
+
+
+@app.get("/host/metrics", dependencies=[AUTH])
+async def host_metrics(target: str = "self"):
+    """CPU, geheugen en schijf van deze machine (of, vanaf de Mac mini, van de iMac), in procenten."""
+    try:
+        if target == "self":
+            metrics = await _lockscreen.run_blocking(_lockscreen.local_metrics)
+        elif target == "imac":
+            metrics = await _lockscreen.run_blocking(_lockscreen.imac_metrics, IMAC_SSH)
+        else:
+            raise HTTPException(400, "target must be 'self' or 'imac'")
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 - ssh uit, time-out, parse: allemaal "niet bereikt"
+        raise HTTPException(502, f"{target} niet bereikt: {str(exc)[:120]}") from exc
+    return {"host": "main-imac-luka" if target == "imac" else _platform.node(),
+            "os": "Darwin" if target == "imac" else _platform.system(), **metrics}
+
+
+async def _ls_markets() -> list[dict]:
+    symbols = _lockscreen.parse_symbols(os.environ.get("LOCKSCREEN_SYMBOLS"))
+
+    async def one(symbol: str, label: str) -> dict:
+        try:
+            r = await _fetch_twelvedata_history(symbol, "1h", 30)
+            summary = _lockscreen.candle_summary(r.get("candles") or []) if r.get("ok") else None
+        except httpx.HTTPError:
+            summary = None
+        return {"symbol": symbol, "label": label, **(summary or {"price": None, "spark": [], "chg": {}})}
+
+    return list(await asyncio.gather(*[one(s, l) for s, l in symbols]))
+
+
+async def _ls_systems() -> list[dict]:
+    async def vps() -> dict:
+        return _lockscreen.machine_row("vps", "VPS", await _lockscreen.run_blocking(_lockscreen.local_metrics))
+
+    async def remote(machine_id: str, name: str, params: dict | None) -> dict:
+        data = await AGENT_TUNNEL.get_json("/host/metrics", params, timeout=25.0) if AGENT_TUNNEL else None
+        return _lockscreen.machine_row(machine_id, name, data)
+
+    rows = await asyncio.gather(
+        remote("macmini", "Mac mini", None), remote("imac", "iMac", {"target": "imac"}), vps(),
+    )
+    return list(rows)
+
+
+async def _ls_services() -> list[dict]:
+    async def database() -> dict:
+        try:
+            await _lockscreen.run_blocking(lambda: sb().table("core_schedules").select("id").limit(1).execute())
+            return _lockscreen.service_row("database", "Database", True)
+        except Exception as exc:  # noqa: BLE001
+            return _lockscreen.service_row("database", "Database", False, str(exc)[:80])
+
+    async def models() -> dict:
+        try:
+            async with httpx.AsyncClient(timeout=4) as c:
+                ok = (await c.get("https://ollama.axecompanion.com/")).status_code == 200
+            return _lockscreen.service_row("models", "Models", ok)
+        except httpx.HTTPError as exc:
+            return _lockscreen.service_row("models", "Models", False, exc.__class__.__name__)
+
+    async def workers() -> dict:
+        bin_ = _shutil.which("systemctl")
+        if not bin_:
+            return _lockscreen.service_row("workers", "Workers", None, "no systemctl")
+        st = await _systemctl_is_active(bin_, "axe-task-worker")
+        return _lockscreen.service_row("workers", "Workers", bool(st.get("active")))
+
+    async def northsea() -> dict:
+        if not AGENT_TUNNEL:
+            return _lockscreen.service_row("northsea", "NorthSea", None, "no tunnel")
+        data = await _LS_CACHE.get("ls-northsea", 120, lambda: AGENT_TUNNEL.get_json("/northsea/system-health", timeout=20.0))
+        ok = bool(data and (data.get("database") or {}).get("reachable"))
+        return _lockscreen.service_row("northsea", "NorthSea", ok)
+
+    async def mcp() -> dict:
+        if not AGENT_TUNNEL:
+            return _lockscreen.service_row("mcp", "MCP", None, "no tunnel")
+        data = await _LS_CACHE.get("ls-mcp", 120, lambda: AGENT_TUNNEL.get_json("/mcp/hub", timeout=15.0))
+        return _lockscreen.service_row("mcp", "MCP", bool(data and data.get("servers")))
+
+    rest = await asyncio.gather(database(), models(), workers(), northsea(), mcp())
+    return [_lockscreen.service_row("api", "AXE API", True), *rest]
+
+
+async def _ls_attention(now: datetime) -> list[dict]:
+    def read():
+        approvals = task_repo().list_approvals("pending", 30)
+        since = (now.timestamp() - 24 * 3600)
+        schedules = sb().table("core_schedules").select("name,job_key,last_status,consecutive_failures,last_run_at").limit(200).execute().data or []
+        failed = []
+        for s in schedules:
+            when = _lockscreen._parse_ts(s.get("last_run_at"))
+            if (s.get("consecutive_failures") or 0) > 0 and (s.get("last_status") or "ok") not in ("ok", "success", "skipped") \
+                    and when and when.timestamp() >= since:
+                failed.append(s)
+        cutoff = datetime.fromtimestamp(since, timezone.utc).isoformat()
+        notes = sb().table("core_notifications").select("type,message,created_at").gte("created_at", cutoff) \
+            .order("created_at", desc=True).limit(20).execute().data or []
+        return approvals, failed, notes
+
+    try:
+        approvals, failed, notes = await _lockscreen.run_blocking(read)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("lockscreen attention: %s", exc)
+        return []
+    return _lockscreen.attention_items(approvals, failed, notes, now)
+
+
+@app.get("/lockscreen/snapshot", dependencies=[AUTH])
+async def lockscreen_snapshot():
+    """Eén antwoord voor het slotscherm. 20 s gecachet: een telefoon die vijf keer wakker wordt in een
+    minuut mag de bronnen niet vijf keer raken. Koersen hebben een eigen, langere cache (credits)."""
+    async def build():
+        now = datetime.now(timezone.utc)
+        markets_f = _LS_CACHE.get("ls-markets", 300, _ls_markets)
+        markets, systems, services, attention = await asyncio.gather(
+            markets_f, _ls_systems(), _ls_services(), _ls_attention(now),
+        )
+        return _lockscreen.assemble(markets, systems, services, attention, now)
+
+    return await _LS_CACHE.get("ls-snapshot", 20, build)
+
+
 @app.get("/build/status", dependencies=[AUTH])
 async def build_status():
     """Mirrors what the `axe_build` MCP tool reports — git branch, last

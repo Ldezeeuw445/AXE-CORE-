@@ -180,3 +180,22 @@ def test_bereikbaar_meet_de_health_van_de_mac():
     _, dood = maak(mac_dood)
     assert asyncio.run(goed.bereikbaar()) is True
     assert asyncio.run(dood.bereikbaar()) is False
+
+
+def test_get_json_geeft_json_bij_200_en_none_bij_alles_anders():
+    def mac(req):
+        if req.url.path == "/ok":
+            assert req.headers["authorization"] == f"Bearer {KEY}"
+            assert req.url.params["target"] == "imac"
+            return httpx.Response(200, json={"cpu": 12.0})
+        if req.url.path == "/stuk":
+            return httpx.Response(500, json={"detail": "x"})
+        if req.url.path == "/tekst":
+            return httpx.Response(200, content=b"geen json")
+        raise httpx.ConnectError("dood")
+
+    _, tunnel = maak(mac)
+    assert asyncio.run(tunnel.get_json("/ok", {"target": "imac"})) == {"cpu": 12.0}
+    assert asyncio.run(tunnel.get_json("/stuk")) is None
+    assert asyncio.run(tunnel.get_json("/tekst")) is None
+    assert asyncio.run(tunnel.get_json("/weg")) is None
