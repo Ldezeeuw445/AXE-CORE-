@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
-  WALLPAPER_PRESETS, parseWallpaper, serializeWallpaper, wallpaperCss,
+  WALLPAPER_PRESETS, nightPeaksCss, parseWallpaper, serializeWallpaper, wallpaperCss,
   parseTuning, DEFAULT_TUNING, fitWithin,
 } from './wallpaper';
 
 describe('parseWallpaper', () => {
-  it('treats nothing as nothing', () => {
-    expect(parseWallpaper(null)).toEqual({ kind: 'none' });
+  it('never chosen gets the night peaks, an explicit plain stays plain', () => {
+    const fresh = parseWallpaper(null);
+    expect(fresh.kind).toBe('preset');
+    if (fresh.kind === 'preset') expect(fresh.preset.id).toBe('peaks');
+    expect(parseWallpaper(undefined).kind).toBe('preset');
     expect(parseWallpaper('')).toEqual({ kind: 'none' });
-    expect(parseWallpaper(undefined)).toEqual({ kind: 'none' });
   });
 
   it('finds a preset by id', () => {
@@ -54,6 +56,17 @@ describe('wallpaperCss', () => {
     const css = wallpaperCss({ kind: 'photo', dataUrl: 'data:image/png;base64,AA' });
     expect(css).toContain('url("data:image/png;base64,AA")');
     expect(css).toContain('cover');
+  });
+  it('the night peaks is a real picture: svg data, stars and three ridges', () => {
+    const p = WALLPAPER_PRESETS.find(x => x.id === 'peaks')!;
+    const svg = decodeURIComponent(p.css.match(/data:image\/svg\+xml,([^"]+)/)![1]);
+    expect(svg).toContain('<svg');
+    expect((svg.match(/<circle/g) ?? []).length).toBe(90);
+    expect((svg.match(/<polygon/g) ?? []).length).toBe(3);
+    expect(p.css).toContain('cover');
+  });
+  it('the night peaks are identical on every call (seeded sky)', () => {
+    expect(nightPeaksCss()).toBe(nightPeaksCss());
   });
   it('every preset has a css value', () => {
     for (const p of WALLPAPER_PRESETS) expect(p.css.length).toBeGreaterThan(20);

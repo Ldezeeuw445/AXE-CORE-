@@ -27,7 +27,52 @@ export interface WallpaperPreset {
   css: string;
 }
 
+
+/**
+ * The dark mountain scene of the desktop, as a vector picture.
+ *
+ * Generated rather than shipped: no photo of it exists in the repo, an SVG is sharp on any
+ * screen and weighs a few KB, and the same ridge formula is used by the Android lock screen
+ * (NightPeaks.kt), so the lock screen and the app behind it are one scene. Stars come from a
+ * fixed seed so the sky is the same on every launch.
+ */
+export function nightPeaksCss(): string {
+  const W = 400, H = 800;
+  const ridge = (seed: number, base: number, amp: number) => {
+    const pts: string[] = [];
+    for (let i = 0; i <= 64; i++) {
+      const t = i / 64;
+      const y = base - amp * (0.55 * Math.sin(t * 6.3 + seed) + 0.3 * Math.sin(t * 13.1 + seed * 1.7) + 0.15 * Math.sin(t * 27.5 + seed * 0.6));
+      pts.push(`${(W * t).toFixed(1)},${y.toFixed(1)}`);
+    }
+    return pts;
+  };
+  let r = 42;
+  const rnd = () => { r = (r * 1664525 + 1013904223) % 4294967296; return r / 4294967296; };
+  const stars = Array.from({ length: 90 }, () =>
+    `<circle cx="${(rnd() * W).toFixed(1)}" cy="${(rnd() * H * 0.46).toFixed(1)}" r="${(0.35 + rnd() * 0.8).toFixed(2)}" fill="#fff" opacity="${(0.12 + rnd() * 0.5).toFixed(2)}"/>`,
+  ).join('');
+  const layers = [
+    { seed: 1.1, base: H * 0.4, amp: H * 0.075, fill: '#0D1B2E', rim: 'rgba(111,182,232,.3)' },
+    { seed: 3.4, base: H * 0.46, amp: H * 0.085, fill: '#08121F', rim: 'rgba(111,182,232,.2)' },
+    { seed: 5.9, base: H * 0.54, amp: H * 0.07, fill: '#050B14', rim: '' },
+  ].map(l => {
+    const pts = ridge(l.seed, l.base, l.amp);
+    const fill = `<polygon points="0,${H} ${pts.join(' ')} ${W},${H}" fill="${l.fill}"/>`;
+    const rim = l.rim ? `<polyline points="${pts.join(' ')}" fill="none" stroke="${l.rim}" stroke-width="0.8"/>` : '';
+    return fill + rim;
+  }).join('');
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05080F"/><stop offset=".38" stop-color="#0A1424"/>` +
+    `<stop offset=".62" stop-color="#0B1A2E"/><stop offset="1" stop-color="#03060B"/></linearGradient>` +
+    `<radialGradient id="m" cx=".55" cy=".3" r=".9"><stop offset="0" stop-color="#20486E" stop-opacity=".2"/><stop offset="1" stop-color="#20486E" stop-opacity="0"/></radialGradient></defs>` +
+    `<rect width="${W}" height="${H}" fill="url(#g)"/><rect width="${W}" height="${H}" fill="url(#m)"/>${stars}${layers}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") center / cover no-repeat`;
+}
+
 export const WALLPAPER_PRESETS: readonly WallpaperPreset[] = [
+  { id: 'peaks', label: 'Night peaks', css: nightPeaksCss() },
   {
     id: 'aurora', label: 'Aurora',
     css: 'radial-gradient(90% 60% at 20% 15%, rgba(52,211,153,.75), transparent 60%),' +
@@ -71,9 +116,21 @@ export type Wallpaper =
 
 export const PRESET_PREFIX = 'preset:';
 
-/** What is stored -> what is shown. Anything unrecognised is "none", never a broken image. */
+/** What a phone that never chose shows: the night peaks, like the desktop. */
+export const DEFAULT_WALLPAPER_ID = 'peaks';
+
+/**
+ * What is stored -> what is shown. Anything unrecognised is "none", never a broken image.
+ *
+ * Never chosen (null/undefined) is NOT the same as chosen "plain" (''): the first gets the
+ * default scene, the second respects that you asked for none.
+ */
 export function parseWallpaper(raw: string | null | undefined): Wallpaper {
-  if (!raw) return { kind: 'none' };
+  if (raw == null) {
+    const preset = WALLPAPER_PRESETS.find(p => p.id === DEFAULT_WALLPAPER_ID);
+    return preset ? { kind: 'preset', preset } : { kind: 'none' };
+  }
+  if (raw === '') return { kind: 'none' };
   if (raw.startsWith(PRESET_PREFIX)) {
     const preset = WALLPAPER_PRESETS.find(p => p.id === raw.slice(PRESET_PREFIX.length));
     return preset ? { kind: 'preset', preset } : { kind: 'none' };

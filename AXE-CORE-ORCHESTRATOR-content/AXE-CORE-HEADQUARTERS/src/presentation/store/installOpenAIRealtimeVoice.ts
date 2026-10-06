@@ -373,6 +373,9 @@ function installVoiceHotkeys(): void {
 
   if (typeof window !== 'undefined') {
     window.addEventListener(STEM_TOGGLE_EVENT, sneltoetsAanslag);
+    // De Android-schil wacht hierop voordat hij het gesprek start: een event dat vóór de
+    // listener is verstuurd, is verloren, en de pagina is na het ontgrendelen nog aan het laden.
+    (window as unknown as Record<string, unknown>).__axeVoiceReady = true;
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (useVoiceStore.getState().voiceStatus === 'idle') return;

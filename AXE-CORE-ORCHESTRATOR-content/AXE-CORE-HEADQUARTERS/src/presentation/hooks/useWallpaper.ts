@@ -31,6 +31,7 @@ function notify() {
   try { window.dispatchEvent(new CustomEvent(EVT)); } catch { /* */ }
 }
 
+// null = never chosen -> the default scene; '' = chose "plain".
 function readWallpaper(): Wallpaper { return parseWallpaper(get(KEY)); }
 function readTuning(): GlassTuning { return parseTuning(get(KEY_DIM), get(KEY_BLUR)); }
 
