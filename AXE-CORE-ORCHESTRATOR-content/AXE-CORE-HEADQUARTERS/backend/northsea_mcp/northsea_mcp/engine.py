@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from . import engine_rules as rules
@@ -401,7 +401,7 @@ class EngineService:
             # Vóór de veranderd-check: een Chase-goedkeuring kan zijn afgerond zonder dat
             # de blokkade zelf deze tick verandert, en dat moet dan alsnog opgepakt worden.
             gate = rules.research_gate(uitkomst.blocker_code, opportunity_id=opp["id"], policy_allows=onderzoek_beleid,
-                                       existing_chase=chase_by_key.get(rules.research_gate_dedupe_key(opp["id"], uitkomst.blocker_code)))
+                                       existing_chase=chase_by_key.get(rules.research_gate_dedupe_key(opp["id"], uitkomst.blocker_code)), now=nu)
             plan["research_gate"].append({"opportunity_id": opp["id"], "blocker_code": uitkomst.blocker_code, "state": gate.state})
             if not dry_run and gate.dedupe_key:
                 bestaand = chase_by_key.get(gate.dedupe_key)
@@ -485,7 +485,9 @@ class EngineService:
                                 # Goedkeuring alleen (beleid of een mens) mag een geconfigureerd hard
                                 # kostenplafond nooit omzeilen: wachten tot het dagbudget weer ruimte heeft.
                                 stempel = {"blocker_code": uitkomst.blocker_code, "kind": "research_approval", "approved_via": goedgekeurd_via,
-                                          "execution_result": "budget_exhausted_today", "call_log": call_log, "checked_at": nu.isoformat()}
+                                          "execution_result": "budget_exhausted_today", "call_log": call_log, "checked_at": nu.isoformat(),
+                                          "not_before": (nu.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                                                         + timedelta(days=1)).isoformat()}
                                 if bestaand is None:
                                     await self._resilient(lambda opp=opp, uitkomst=uitkomst, gate=gate, stempel=stempel: self.repo.engine_insert(
                                         "action_queue", {"dedupe_key": gate.dedupe_key, "action_type": "research_approval",

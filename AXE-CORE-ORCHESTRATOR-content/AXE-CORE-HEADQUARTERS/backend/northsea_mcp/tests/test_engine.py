@@ -484,6 +484,35 @@ async def test_daily_budget_is_shared_across_deals_within_a_single_tick():
     assert len(uitgevoerd) == 1 and len(wachtend) == 1
 
 
+async def test_budgetuitputting_wacht_zonder_schrijflus_en_hervat_na_reset():
+    repo = FakeRepo()
+    _kaal_voor_onderzoekbare_blokkade(repo)
+    _beleid_aan_met_budget(repo, max_per_dag=1)
+    repo.t["action_queue"].append({"id": str(uuid.uuid4()), "opportunity_id": "other", "action_type": "research_approval",
+                                   "dedupe_key": "research_approval:other:buyer_unqualified", "status": "completed",
+                                   "metadata": {"call_log": [iso(0)], "execution_result": "completed"}})
+    research = FakeResearch()
+    await eng(repo, research=research).tick()
+    voor = len(repo.engine_writes)
+    tweede = await eng(repo, research=research).tick()
+    assert research.asks == []
+    assert tweede["plan"]["research_gate"][0]["state"] == "deferred_until_reset"
+    assert not [w for w in repo.engine_writes[voor:] if w[0] in ("action_queue", "deal_events")]
+    assert len([e for e in repo.t["deal_events"] if e["event_type"] == "research_budget_exhausted_today"]) == 1
+    reset = NU.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    await EngineService(repo, now=lambda: reset, research=research).tick()
+    assert len(research.asks) == 1
+
+
+def test_oude_budgetrij_zonder_not_before_wacht_ook_tot_reset():
+    rij = {"status": "completed", "metadata": {"execution_result": "budget_exhausted_today", "checked_at": NU.isoformat()}}
+    assert rules.research_gate("buyer_unqualified", opportunity_id=OPP, policy_allows=True,
+                               existing_chase=rij, now=NU).state == "deferred_until_reset"
+    reset = NU.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    assert rules.research_gate("buyer_unqualified", opportunity_id=OPP, policy_allows=True,
+                               existing_chase=rij, now=reset).state == "approved_ready_to_execute"
+
+
 async def test_a_missing_configured_daily_budget_is_not_permission_to_spend():
     repo = FakeRepo()
     _kaal_voor_onderzoekbare_blokkade(repo)

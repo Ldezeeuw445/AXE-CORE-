@@ -38,6 +38,7 @@ JUNK_HOST_SUFFIXES = (
     "crunchbase.com",
     "google.com", "bing.com",
     "mining.com",  # nieuws, geen producent
+    "coppermark.org",  # keurmerk/directorie, geen verkopende partij
     "newsweek.com", "forbes.com", "businessinsider.com",
     "prnewswire.com", "globenewswire.com", "businesswire.com",
 )
@@ -137,6 +138,8 @@ def junk_reason(url: str | None, title: str | None = None, content: str | None =
     path = _path_of(url)
     titel = title or ""
     tekst = f"{titel} {content or ''}"
+    if host and (host.endswith(".gov") or ".gov." in host):
+        return "government information page, not a commercial counterparty"
     if is_junk_host(host):
         return f"content/finance/news host: {host}"
     if any(m in path for m in JUNK_PATH_MARKERS):

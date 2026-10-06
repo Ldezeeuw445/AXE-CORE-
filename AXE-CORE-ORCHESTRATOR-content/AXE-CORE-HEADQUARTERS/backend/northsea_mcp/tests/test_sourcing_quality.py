@@ -16,6 +16,12 @@ from northsea_mcp.sourcing_quality import (
 
 
 PRODUCTIE_JUNK = [
+    {"title": "Chile - Mining", "url": "https://www.trade.gov/country-commercial-guides/chile-mining",
+     "content": "Country commercial guide copper producers"},
+    {"title": "Participating Sites - The Copper Mark", "url": "https://coppermark.org/participants-home/participants",
+     "content": "Copper smelting and refining participants directory"},
+    {"title": "Kennecott Copper Mine", "url": "https://magna.utah.gov/250/Kennecott-Copper-Mine",
+     "content": "Municipal visitors information about a copper mine"},
     {"title": "MOGLF Stock Price", "url": "https://finance.yahoo.com/quote/MOGLF/",
      "content": "Mongolia Growth Group Ltd quote"},
     {"title": "Copper Cathode Exporters 2024 | TradeImeX",

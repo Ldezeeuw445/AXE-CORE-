@@ -109,17 +109,18 @@ async def test_goede_deal_zonder_bescherming_is_een_ja_geen_jacht(repo, research
     assert repo.sends == []
 
 
-async def test_zonder_inbound_draad_verdwijnt_de_eerste_mail_niet(repo, research, crew):
+async def test_eerste_kwalificatie_loopt_door_de_bestaande_desk_manager_zonder_nep_inbound(repo, research, crew):
     for d in repo.t["reply_drafts"]:
         if d["approval_status"] == "pending":
             d["approval_status"] = "rejected"
     repo.t["communications"].clear()
     service = NorthSeaService(repo, research, crew)
     uit = await finish_after_event(service, _event(), _ok())
-    assert uit["sent"] == 0
-    assert uit.get("missing") == "inbound_email_thread"
-    assert uit.get("draft_body")
-    assert repo.sends == []
+    assert uit["sent"] == 1 and uit["approved"] == 1
+    draft = next(d for d in repo.t["reply_drafts"] if d["id"] == uit["draft_id"])
+    assert draft["communication_id"] is None and draft["approval_status"] == "approved"
+    assert draft["approved_by"] == "northsea-desk-manager"
+    assert len(repo.sends) == 1
     assert _flags(repo) == (False, False, False)
 
 

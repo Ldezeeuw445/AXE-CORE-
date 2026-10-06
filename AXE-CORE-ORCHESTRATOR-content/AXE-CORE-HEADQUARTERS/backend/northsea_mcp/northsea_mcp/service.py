@@ -620,9 +620,13 @@ class NorthSeaService:
     async def canonical_handoff(self, caller: Caller, action: str, handoff: dict[str, Any]) -> dict[str, Any]:
         """Zet canonieke deal/ops-state op de MCP-grens. Crews lezen geen files."""
         payload = dict(handoff.get("payload") or {})
-        entity_ids = list(handoff.get("entity_ids") or [])
+        entity_ids = handoff.get("entity_ids") or []
         opp_id = payload.get("opportunity_id") or payload.get("deal_id")
-        if not opp_id:
+        if not opp_id and isinstance(entity_ids, dict):
+            # Een counterparty_id of requirement_id is geen deal-id. list(dict)
+            # gaf hier de veldnaam door als UUID en brak counterparty-research.
+            opp_id = entity_ids.get("opportunity_id") or entity_ids.get("deal_id")
+        elif not opp_id and isinstance(entity_ids, list):
             for e in entity_ids:
                 if e:
                     opp_id = e
@@ -1312,27 +1316,33 @@ class NorthSeaService:
                 raise ServiceError("unsupported", "Only email drafts can be saved; other channels are returned as text.")
             if not primair:
                 raise ServiceError("no_recipient", "No contact with an email address on record for this counterparty; draft not saved.")
-            # reply_drafts.communication_id is NOT NULL in AXE Commodities: een Deal
-            # Desk-draft is altijd een antwoord op een bestaande e-mail (en
-            # send-approved-reply threadt daarop). Zonder zo'n e-mail van DEZE
-            # tegenpartij geen opslag -- de tekst komt wel terug.
+            # Een eerste kwalificatiebrief heeft geen inkomend bericht als anker.
+            # De database laat alleen veilige, volledige first-touch-concepten toe;
+            # opslaan blijft pending en verandert niets aan goedkeuring/verzending.
             draden = await self.repo.list_communications(opportunity_id=opp["id"], limit=20) if opp else []
             if company and not any(c.get("company_id") == company["id"] for c in draden):
                 draden = await self.repo.list_communications(company_id=company["id"], limit=20)
             draad = next((c for c in draden if c.get("channel") == "email" and c.get("direction") == "inbound"
                           and company and c.get("company_id") == company["id"]), None)
-            if not draad:
+            if not draad and template == "follow_up":
+                draad = next((c for c in draden if c.get("channel") == "email" and c.get("direction") == "outbound"
+                              and company and c.get("company_id") == company["id"]), None)
+            eerste_contact = not draad and not gevoelig and template in {"buyer_qualification", "supplier_qualification", "document_request"}
+            if not draad and not eerste_contact:
                 saved_status = "not_saved_no_email_thread"
                 notes.append("Not saved: Deal Desk drafts reply to an existing inbound email from this counterparty, and there is none yet. "
                              "Use the text above for a first message from the NorthSea mailbox.")
             else:
+                if eerste_contact:
+                    onderwerp = onderwerp.removeprefix("Re: ")
                 rij = await self.repo.insert_reply_draft({
-                    "communication_id": draad["id"], "company_id": company["id"], "contact_id": primair.get("id"),
+                    "communication_id": draad["id"] if draad else None, "company_id": company["id"], "contact_id": primair.get("id"),
                     "opportunity_id": (opp or {}).get("id"), "to_email": primair["email"], "subject": onderwerp[:300],
                     "body": tekst[:10000], "purpose": f"NorthSea MCP outreach: {template}", "approval_status": "pending",
                     "sensitive_action": gevoelig, "generated_by": "northsea-mcp"})
                 saved_id, saved_status = rij.get("id"), rij.get("approval_status")
-                notes.append("Saved as a pending draft in the Deal Desk, as a reply to the latest inbound email.")
+                notes.append("Saved as a pending first-contact draft in the Deal Desk." if eerste_contact
+                             else "Saved as a pending draft in the Deal Desk, anchored to an existing email.")
         return OutreachDraft(objective=objective, channel=channel if channel in ("email", "phone", "linkedin", "whatsapp") else "email",
                              template=template, recipient=party_view(company, kant, caller, contacts),
                              to_email=primair.get("email") if (primair and caller.identity) else None,

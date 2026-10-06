@@ -45,7 +45,9 @@ Deno.serve(async (req) => {
       if (!o || o.commission_agreement_status !== "signed") return json({ ok: false, error: "commission_protection_required" }, 409);
     }
 
-    const { data: inb } = await sb.from("communications").select("external_message_id,rfc_message_id").eq("id", d.communication_id).maybeSingle();
+    const { data: inb } = d.communication_id
+      ? await sb.from("communications").select("external_message_id,rfc_message_id").eq("id", d.communication_id).maybeSingle()
+      : { data: null };
     let mid: string | null = inb?.rfc_message_id ? `<${inb.rfc_message_id}>` : null;
     if (!mid && inb?.external_message_id) {
       try {

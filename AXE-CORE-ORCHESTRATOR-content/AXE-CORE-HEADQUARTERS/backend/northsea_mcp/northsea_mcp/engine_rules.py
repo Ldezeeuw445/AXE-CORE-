@@ -502,7 +502,8 @@ class ResearchGate:
     dedupe_key: Optional[str] = None
 
 
-def research_gate(blocker_code: str, *, opportunity_id: str, policy_allows: bool, existing_chase: Optional[dict]) -> ResearchGate:
+def research_gate(blocker_code: str, *, opportunity_id: str, policy_allows: bool, existing_chase: Optional[dict],
+                  now: Optional[datetime] = None) -> ResearchGate:
     """Bepaalt of, en hoe, een onderzoekbare blokkade extern (betaald) onderzocht mag
     worden. Puur: leest alleen zijn argumenten, doet geen enkele aanroep of schrijfactie
     zelf -- de aanroeper (engine.py) voert de beslissing uit en bepaalt 'existing_chase'
@@ -513,6 +514,19 @@ def research_gate(blocker_code: str, *, opportunity_id: str, policy_allows: bool
     sleutel = research_gate_dedupe_key(opportunity_id, blocker_code)
     if existing_chase is not None and (existing_chase.get("metadata") or {}).get("executed_at"):
         return ResearchGate("already_executed", "research already ran once for this opportunity+blocker; never repeated automatically", dedupe_key=sleutel)
+    meta = (existing_chase or {}).get("metadata") or {}
+    nu = now or datetime.now(timezone.utc)
+    hervatten = _ts(meta.get("not_before"))
+    if hervatten is not None and hervatten.tzinfo is None:
+        hervatten = hervatten.replace(tzinfo=timezone.utc)
+    # Oude workers zetten alleen checked_at. Ook die rijen wachten tot de UTC-reset,
+    # zodat een uitrol de duizenden bestaande budgetmeldingen meteen stilzet.
+    if hervatten is None and meta.get("execution_result") == "budget_exhausted_today":
+        gecontroleerd = _ts(meta.get("checked_at"))
+        if gecontroleerd is not None:
+            hervatten = gecontroleerd.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    if hervatten is not None and nu < hervatten:
+        return ResearchGate("deferred_until_reset", "research waits until the daily budget resets", dedupe_key=sleutel)
     if policy_allows:
         return ResearchGate("approved_ready_to_execute", "deal_automation_policy.auto_investigate_blockers explicitly allows it", dedupe_key=sleutel)
     if existing_chase is None:

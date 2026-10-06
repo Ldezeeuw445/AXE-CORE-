@@ -169,13 +169,22 @@ async def test_prepare_outreach_can_save_pending_draft_only(service, repo):
     assert saved["communication_id"] == COMM          # antwoord op de bestaande e-mail van de verkoper
 
 
-async def test_outreach_without_inbound_email_is_returned_but_not_saved(service, repo):
-    # De koper heeft een contact met e-mail, maar nooit zelf gemaild: geen draad om op te antwoorden.
+async def test_eerste_kwalificatie_wordt_pending_opgeslagen_zonder_inkomend_bericht(service, repo):
+    # Kwalificeren moet kunnen vóór de koper heeft geantwoord; geen nep-inbound.
     d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="buyer_qualification",
                                        objective="qualify the buyer requirement", save_as_pending_draft=True)
-    assert d.saved_draft_id is None and d.saved_status == "not_saved_no_email_thread"
-    assert d.body and any("Not saved" in n for n in d.notes)
-    assert len(repo.t["reply_drafts"]) == 3
+    assert d.saved_draft_id and d.saved_status == "pending"
+    saved = next(x for x in repo.t["reply_drafts"] if x["id"] == d.saved_draft_id)
+    assert saved["communication_id"] is None and saved["approval_status"] == "pending"
+    assert saved["company_id"] and saved["contact_id"]
+    assert not d.subject.startswith("Re: ") and repo.sends == []
+
+
+async def test_gevoelig_eerste_contact_krijgt_geen_ankerloos_concept(service, repo):
+    d = await service.prepare_outreach(caller(ALL), opportunity_id=OPP, template="buyer_qualification",
+                                       objective="introduce us to the buyer and agree commission", save_as_pending_draft=True)
+    assert d.sensitive and d.saved_draft_id is None
+    assert repo.sends == []
 
 
 async def test_prepare_outreach_flags_sensitive_objective(service):

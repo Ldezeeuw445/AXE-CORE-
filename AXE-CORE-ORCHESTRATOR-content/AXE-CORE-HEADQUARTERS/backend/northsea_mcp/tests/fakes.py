@@ -292,9 +292,13 @@ class FakeRepo:
 
     async def insert_reply_draft(self, row):
         if not row.get("communication_id"):
-            # Zoals de echte tabel: reply_drafts.communication_id is NOT NULL.
-            from northsea_mcp.repository import RepositoryError
-            raise RepositoryError("database write failed for reply_drafts (400)")
+            volledig = all(row.get(k) for k in ("company_id", "contact_id", "to_email", "subject", "body"))
+            veilig = row.get("sensitive_action") is False and row.get("generated_by") == "northsea-mcp"
+            sjabloon = row.get("purpose") in {f"NorthSea MCP outreach: {t}" for t in (
+                "buyer_qualification", "supplier_qualification", "document_request")}
+            if not (volledig and veilig and sjabloon):
+                from northsea_mcp.repository import RepositoryError
+                raise RepositoryError("database write failed for reply_drafts (400)")
         r = {"id": str(uuid.uuid4()), "created_at": ts(), "updated_at": ts(), "sent_at": None, "resend_email_id": None, **row}
         self.t["reply_drafts"].append(r)
         return copy.deepcopy(r)
