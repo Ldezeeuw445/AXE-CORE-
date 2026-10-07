@@ -43,6 +43,37 @@ MAC_PROBE = (
 )
 
 
+#: Hetzelfde voor een Linux-box (de modelbox), via SSH vanaf de Mac mini. Twee metingen van /proc/stat
+#: een halve seconde uit elkaar: procent in gebruik is 1 - (idle-verschil / totaal-verschil).
+LINUX_PROBE = (
+    "p() { awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat; }; "
+    "a=$(p); sleep 0.5; b=$(p); echo \"CPU $a $b\"; "
+    "awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{print \"MEM\", t, a}' /proc/meminfo; "
+    "df -P / | awk 'NR==2{print \"DISK\", $5}'"
+)
+
+
+def parse_linux_probe(output: str) -> dict[str, Optional[float]]:
+    """De uitvoer van LINUX_PROBE -> {cpu, mem, disk}. Elk veld apart None als zijn regel ontbreekt of rommel is."""
+    out: dict[str, Optional[float]] = {"cpu": None, "mem": None, "disk": None}
+    for line in (output or "").splitlines():
+        f = line.split()
+        try:
+            if f[0] == "CPU" and len(f) == 5:
+                t1, i1, t2, i2 = (float(x) for x in f[1:])
+                if t2 > t1:
+                    out["cpu"] = round(max(0.0, min(100.0, (1 - (i2 - i1) / (t2 - t1)) * 100)), 1)
+            elif f[0] == "MEM" and len(f) == 3:
+                total, avail = float(f[1]), float(f[2])
+                if total > 0:
+                    out["mem"] = round(max(0.0, min(100.0, (total - avail) / total * 100)), 1)
+            elif f[0] == "DISK" and len(f) == 2:
+                out["disk"] = round(float(f[1].rstrip("%")), 1)
+        except (ValueError, IndexError):
+            continue
+    return out
+
+
 def parse_top_cpu(text: str) -> Optional[float]:
     """'CPU usage: 8.33% user, 12.5% sys, 79.16% idle' -> 20.8 (procent in gebruik)."""
     m = re.search(r"([\d.]+)%\s*idle", text or "")
@@ -160,6 +191,17 @@ def imac_metrics(target: str, timeout: float = 20.0) -> dict[str, Optional[float
     if out.returncode != 0:
         raise RuntimeError(f"ssh {out.returncode}")
     return parse_mac_probe(out.stdout)
+
+
+def linux_ssh_metrics(target: str, key: Optional[str] = None, timeout: float = 20.0) -> dict[str, Optional[float]]:
+    """Dezelfde meting op een Linux-box, via SSH. Blokkerend; draai in een thread."""
+    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=yes"]
+    if key:
+        cmd += ["-i", key, "-o", "IdentitiesOnly=yes"]
+    out = subprocess.run(cmd + [target, LINUX_PROBE], capture_output=True, text=True, timeout=timeout)
+    if out.returncode != 0:
+        raise RuntimeError(f"ssh {out.returncode}")
+    return parse_linux_probe(out.stdout)
 
 
 # ── Koersen ──────────────────────────────────────────────────────────────────────

@@ -4913,6 +4913,10 @@ import lockscreen as _lockscreen
 
 _LS_CACHE = _lockscreen.TTLCache()
 IMAC_SSH = os.environ.get("AXE_IMAC_SSH", "lukadezeeuw@100.65.216.90")
+# De modelbox (Strato, ollama.axecompanion.com): de Mac mini meet hem via SSH met de axe-core-vps-sleutel.
+MODELBOX_SSH = os.environ.get("AXE_MODELBOX_SSH", "root@217.160.135.111")
+MODELBOX_KEY = os.environ.get("AXE_MODELBOX_KEY", os.path.expanduser("~/.ssh/axe-core-vps"))
+MODELBOX_URL = os.environ.get("AXE_MODELBOX_URL", "https://ollama.axecompanion.com/api/tags")
 
 
 @app.get("/host/metrics", dependencies=[AUTH])
@@ -4923,14 +4927,16 @@ async def host_metrics(target: str = "self"):
             metrics = await _lockscreen.run_blocking(_lockscreen.local_metrics)
         elif target == "imac":
             metrics = await _lockscreen.run_blocking(_lockscreen.imac_metrics, IMAC_SSH)
+        elif target == "modelbox":
+            metrics = await _lockscreen.run_blocking(_lockscreen.linux_ssh_metrics, MODELBOX_SSH, MODELBOX_KEY)
         else:
-            raise HTTPException(400, "target must be 'self' or 'imac'")
+            raise HTTPException(400, "target must be 'self', 'imac' or 'modelbox'")
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 - ssh uit, time-out, parse: allemaal "niet bereikt"
         raise HTTPException(502, f"{target} niet bereikt: {str(exc)[:120]}") from exc
-    return {"host": "main-imac-luka" if target == "imac" else _platform.node(),
-            "os": "Darwin" if target == "imac" else _platform.system(), **metrics}
+    return {"host": "main-imac-luka" if target == "imac" else "modelbox" if target == "modelbox" else _platform.node(),
+            "os": "Darwin" if target == "imac" else "Linux" if target == "modelbox" else _platform.system(), **metrics}
 
 
 async def _ls_markets() -> list[dict]:
@@ -4949,14 +4955,32 @@ async def _ls_markets() -> list[dict]:
 
 async def _ls_systems() -> list[dict]:
     async def vps() -> dict:
-        return _lockscreen.machine_row("vps", "VPS", await _lockscreen.run_blocking(_lockscreen.local_metrics))
+        return _lockscreen.machine_row("vps", "VPS API", await _lockscreen.run_blocking(_lockscreen.local_metrics))
+
+    async def modelbox() -> dict:
+        """De tweede VPS. Online = de box antwoordt over HTTPS (dat meet deze VPS zelf, dus het klopt ook als de
+        Mac mini uit staat); de cijfers komen via de Mac mini en blijven dan leeg ("—") in plaats van te liegen."""
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as c:
+                up = (await c.get(MODELBOX_URL)).status_code < 500
+        except httpx.HTTPError:
+            up = False
+        if not up:
+            return _lockscreen.machine_row("modelbox", "VPS Models", None)
+        data = None
+        if AGENT_TUNNEL:
+            try:
+                data = await AGENT_TUNNEL.get_json("/host/metrics", {"target": "modelbox"}, timeout=25.0)
+            except Exception:  # noqa: BLE001 - geen cijfers is geen reden om hem offline te noemen
+                data = None
+        return _lockscreen.machine_row("modelbox", "VPS Models", data or {"cpu": None, "mem": None, "disk": None})
 
     async def remote(machine_id: str, name: str, params: dict | None) -> dict:
         data = await AGENT_TUNNEL.get_json("/host/metrics", params, timeout=25.0) if AGENT_TUNNEL else None
         return _lockscreen.machine_row(machine_id, name, data)
 
     rows = await asyncio.gather(
-        remote("macmini", "Mac mini", None), remote("imac", "iMac", {"target": "imac"}), vps(),
+        remote("macmini", "Mac mini", None), remote("imac", "iMac", {"target": "imac"}), vps(), modelbox(),
     )
     return list(rows)
 

@@ -185,3 +185,19 @@ def test_notification_type_sets_severity():
          {"message": "geen type", "created_at": "2026-10-06T11:00:00+00:00"}]
     sev = {i["title"]: i["severity"] for i in ls.attention_items([], [], n, NOW)}
     assert sev == {"kapot": "critical", "pas op": "warning", "fyi": "info", "geen type": "info"}
+
+
+def test_parse_linux_probe_reads_cpu_mem_and_disk():
+    # 1000 -> 2000 ticks in totaal, 900 -> 1500 idle: 40% in gebruik. 16 GB totaal, 6 GB beschikbaar: 62,5%.
+    out = "CPU 1000 900 2000 1500\nMEM 16000000 6000000\nDISK 13%\n"
+    assert ls.parse_linux_probe(out) == {"cpu": 40.0, "mem": 62.5, "disk": 13.0}
+
+
+def test_parse_linux_probe_survives_garbage_per_field():
+    got = ls.parse_linux_probe("CPU x y\nMEM 0 0\nDISK 57%\nrommel")
+    assert got == {"cpu": None, "mem": None, "disk": 57.0}
+    assert ls.parse_linux_probe("") == {"cpu": None, "mem": None, "disk": None}
+
+
+def test_parse_linux_probe_idle_box_never_goes_below_zero():
+    assert ls.parse_linux_probe("CPU 1000 1000 2000 2000\n")["cpu"] == 0.0
