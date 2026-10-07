@@ -101,9 +101,13 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
     ingebouwd: true,
   },
   {
+    // Id blijft 'vps-hetzner' (bewaarde keuzes en snelacties hangen eraan),
+    // maar de machine is sinds okt 2026 de STRATO-VPS van 16 GB:
+    // ollama.axecompanion.com -> 217.160.135.111. Ollama, en de DAX-computers
+    // van de agents (infra/dax, docs/MISSIES-EN-DAX.md).
     id: 'vps-hetzner',
-    naam: 'VPS Hetzner',
-    waarvoor: 'Ollama en de modellen — de tweede server',
+    naam: 'VPS Strato 16GB',
+    waarvoor: 'Ollama en de DAX-computers van de agents',
     // Gemeten 13 september: tot die dag stond hier een Docker-container van
     // 10 juli op publieke poort 4022 die elk token accepteerde. Nu draait de
     // huidige terminal-server als systemd-dienst op 127.0.0.1, met Supabase-

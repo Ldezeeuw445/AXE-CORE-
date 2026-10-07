@@ -66,7 +66,7 @@ copies**. Editing those changes nothing anyone will ever see.
 | Host | Domain | Runs | Notes |
 |---|---|---|---|
 | **212.227.91.79** | `api.axecompanion.com` | The real `axe-core-api` (12 uvicorn workers), the task worker, the browser agent, all four trading engines | This is production |
-| **89.167.78.6** | `ollama.axecompanion.com` | Ollama, 16 models | Its stale July copy of `axe-core-api` was stopped and disabled 2026-08-20 — do not revive it |
+| **217.160.135.111** | `ollama.axecompanion.com` | STRATO, 8 vCPU / 16 GB / 464 GB: Ollama, the terminal server, and the **DAX computers** (Docker, `infra/dax`) | Since Oct 2026. Terminal tab: "VPS Strato 16GB". SSH: `ssh -i ~/.ssh/axe-core-vps root@217.160.135.111`. The control plane reaches its Docker as `ssh://strato-dax` (user `axe-dax`, dial-stdio only). The old Hetzner box 89.167.78.6 no longer answers on SSH |
 
 SSH goes through the config entry, not the bare IP (the IP has no
 `IdentityFile` and will fail with `Permission denied (publickey)`):
