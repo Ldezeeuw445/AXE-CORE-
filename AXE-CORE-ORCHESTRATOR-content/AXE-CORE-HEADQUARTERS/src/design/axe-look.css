@@ -7843,3 +7843,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   :root[data-look] .axe-studio[data-stand='code'] .axe-studio-kolommen > section { min-height: 58vh; }
   :root[data-look] .axe-studio-balk { max-width: 100%; }
 }
+
+/* ── Met een wallpaper erachter: de plaat is doorzichtig glas, geen eigen tint ────────
+ * De donkere plaat heeft een blauwgrijze sluier (15% licht bovenaan) die voor de EFFEN plaat is
+ * bedacht. Over een foto maakte die er een vlakke grijze mist van, waarin de bergen niet meer te
+ * herkennen waren (gezien op de A17, eerste versie). Zoals de Tauri-schil: de foto is vervaagd en
+ * donker, en de plaat zelf voegt er bijna niets aan toe. */
+:root[data-look='black'][data-wp] .axe-shell.axe-plaat-mobiel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%) !important;
+}

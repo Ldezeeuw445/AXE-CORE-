@@ -183,10 +183,11 @@ export interface GlassTuning {
 }
 
 /**
- * The Tauri dark plate: the picture blurred hard and darkened to about 70%. Measured on the
- * desktop shell over Moraine Lake: the bright sky comes out around #3c3c3c, the shadows near black.
+ * The Tauri dark plate: the picture blurred and darkened to about two thirds, so the mountains stay
+ * recognisable (first try: blur 44 / dim .72 and on the phone it came out as a flat grey haze).
+ * The desktop shell over Moraine Lake: bright sky around #3c3c3c, shadows near black.
  */
-export const DEFAULT_TUNING: GlassTuning = { dim: 0.72, blur: 44 };
+export const DEFAULT_TUNING: GlassTuning = { dim: 0.66, blur: 30 };
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 

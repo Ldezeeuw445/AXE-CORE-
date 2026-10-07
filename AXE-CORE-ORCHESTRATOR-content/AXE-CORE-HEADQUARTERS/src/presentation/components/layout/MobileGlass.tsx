@@ -91,6 +91,12 @@ export function MobileGlass() {
   }, [blur]);
   // The Android lock screen is native and cannot read this app's storage: push the choice over, on
   // every change and once at start (a phone that never chose still has to tell it "Moraine Lake").
+  // CSS needs to know a picture is behind the plate: the plate's own blue-grey tint (made for the
+  // plain plate) then turns the picture into a flat haze (axe-look.css, [data-wp]).
+  const heeftFoto = wallpaperCss(wallpaper) !== null;
+  useEffect(() => {
+    if (heeftFoto) document.documentElement.dataset.wp = '1'; else delete document.documentElement.dataset.wp;
+  }, [heeftFoto]);
   useEffect(() => {
     syncLockWallpaper(
       wallpaper.kind,

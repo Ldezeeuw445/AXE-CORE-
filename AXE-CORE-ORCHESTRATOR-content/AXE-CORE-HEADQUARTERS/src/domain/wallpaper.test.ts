@@ -77,9 +77,12 @@ describe('wallpaperCss', () => {
       expect(p.css).toContain(`wallpapers/${p.file}`);
     }
   });
-  it('the default tuning is the Tauri dark plate: heavy blur, strong dimming', () => {
+  it('the default tuning is the Tauri dark plate: clearly dimmed, blurred but still recognisable', () => {
     expect(DEFAULT_TUNING.dim).toBeGreaterThanOrEqual(0.6);
-    expect(DEFAULT_TUNING.blur).toBeGreaterThanOrEqual(36);
+    expect(DEFAULT_TUNING.dim).toBeLessThanOrEqual(0.8);
+    // Above ~40px the picture turned into a flat grey haze on the phone; below ~20 it is not frosted.
+    expect(DEFAULT_TUNING.blur).toBeGreaterThanOrEqual(24);
+    expect(DEFAULT_TUNING.blur).toBeLessThanOrEqual(40);
   });
   it('every preset has a css value', () => {
     for (const p of WALLPAPER_PRESETS) expect(p.css.length).toBeGreaterThan(20);
