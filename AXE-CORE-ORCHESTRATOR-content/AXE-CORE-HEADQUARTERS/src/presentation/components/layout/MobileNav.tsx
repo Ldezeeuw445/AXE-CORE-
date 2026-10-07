@@ -13,7 +13,7 @@
  * The drawer itself is dark glass in both modes, like the desktop Sidebar; only the
  * plate underneath changes.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router';
 import {
@@ -136,6 +136,15 @@ export function MobileNav() {
   const [sheet, setSheet] = useState<null | 'appearance' | 'phone'>(null);
 
   const updateFavs = (next: string[]) => { setFavs(next); writeFavs(next); };
+
+  // The Android shell's Apps surface is native and has no menu of its own: its hamburger opens
+  // Home and asks this one to open (event `axe-open-menu`, sent once `__axeMenuReady` is true).
+  useEffect(() => {
+    const openIt = () => setOpen(true);
+    window.addEventListener('axe-open-menu', openIt);
+    (window as unknown as { __axeMenuReady?: boolean }).__axeMenuReady = true;
+    return () => window.removeEventListener('axe-open-menu', openIt);
+  }, [setOpen]);
 
   // Home (`/`) is empty on a phone: the real home is `/mobile`.
   const go = (path: string) => { navigate(menuTarget(path)); setOpen(false); setQuery(''); };
