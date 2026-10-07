@@ -100,7 +100,7 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       ? 'WORKING'
       : 'IDLE';
   const detail = job ? agentRegel(job) : agent.handles;
-  const compactLabel = agent.id === 'companion' ? 'Companion' : (agent.kort ?? agent.name);
+  const compactLabel = TEGEL_NAAM[agent.id] ?? (agent.kort ?? agent.name);
 
   return (
     <button
@@ -117,7 +117,7 @@ function AgentTile({ id }: { id: AxeAgentId }) {
     >
       <ManagerAvatar agent={agent} size={20} />
       <span
-        className="mt-0.5 max-w-full truncate px-0.5 text-[7px] font-semibold uppercase tracking-[0.02em]"
+        className="mt-0.5 max-w-full truncate text-[7px] font-semibold uppercase tracking-[0.02em]"
         style={{ color: 'var(--text-primary)' }}
       >
         {compactLabel}
@@ -136,6 +136,9 @@ function AgentTile({ id }: { id: AxeAgentId }) {
 
 /** Drie tegels van vaste hoogte, boven en onder tegen de rand van het vak, de bol in het midden. */
 const AGENT_KOLOM = { gridTemplateRows: 'repeat(3, minmax(0, 58px))', alignContent: 'space-between' } as const;
+
+/** The tiles are ~50px wide; these three names do not fit at 8px and used to end in "…". */
+const TEGEL_NAAM: Partial<Record<AxeAgentId, string>> = { developer: 'Dev', thinktank: 'Think', companion: 'Comp' };
 
 const CHAT_KEY = 'axe_mobile_chat_open';
 
