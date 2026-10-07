@@ -189,8 +189,18 @@ export function ringMaat(R: number): Bereik {
  * is voor de plaat en de iPad, waar de composer dichtbij komt.
  */
 export function bolStand(w: number, h: number, zoom = 1): { cx: number; cy: number; R: number } {
-  return { cx: w / 2, cy: h / 2, R: Math.min(w, h) * 0.34 * zoom };
+  return { cx: w / 2, cy: h / 2, R: Math.min(w, h) * BOL_VULLING * zoom };
 }
+
+/**
+ * Hoeveel van het vak de bol vult (Luka, 7 okt: "zo groot mogelijk, dat hij nog net helemaal te zien is").
+ *
+ * Het perspectief (zie persp in de shader: 1,9 / (2,4 - Z)) trekt de bol aan de voorkant groter,
+ * zodat de uiterste rand op Z ~ 0,4 ligt, op 0,872 van de straal -- wat de bol ook draait. Dat gaat
+ * precies in de halve korte zijde van het vak: 0,5 / 0,872 = 0,573, met 5% lucht voor de stippen en
+ * de gloed aan de rand: 0,545. Een knijp-zoom boven 1 mag er nog overheen, dat is de keuze van de hand.
+ */
+export const BOL_VULLING = 0.545;
 
 export type Bereik = readonly [number, number];
 

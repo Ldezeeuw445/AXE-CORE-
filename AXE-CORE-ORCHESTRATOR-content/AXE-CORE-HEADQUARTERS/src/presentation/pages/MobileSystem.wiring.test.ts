@@ -50,8 +50,8 @@ describe('canonical mobile Home wiring', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     expect(shell).toContain("paddingTop: 10");
-    expect(mobile).toContain('size={23}');
-    expect(mobile).toContain("gridTemplateColumns: 'clamp(52px, 15.2vw, 58px)");
+    expect(mobile).toContain('size={20}');
+    expect(mobile).toContain("gridTemplateColumns: 'clamp(46px, 13.6vw, 52px)");
     expect(mobile).toContain('agentRegel');
     expect(mobile).toContain('goedkeuringVanJob');
   });
@@ -61,7 +61,7 @@ describe('canonical mobile Home wiring', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     const chat = bron('presentation/components/layout/MobileChat.tsx');
     expect(mobile).toContain('<span className="sr-only">{label}</span>');
-    expect(mobile).toContain('size={23}');
+    expect(mobile).toContain('size={20}');
     expect(chat).toContain('size={20}');
     expect(mobile).toContain('axe-mobile-worldbar');
   });

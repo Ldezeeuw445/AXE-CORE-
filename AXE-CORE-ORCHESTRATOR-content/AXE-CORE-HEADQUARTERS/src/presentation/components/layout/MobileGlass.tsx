@@ -143,12 +143,13 @@ export function MobileGlass() {
               <div
                 style={{
                   position: 'absolute', inset: -90, background: foto,
-                  filter: `blur(${blur}px) saturate(0.2)`,
+                  filter: `blur(${Math.round(blur * 1.7)}px) saturate(0.55)`,
                 }}
               />
-              {/* De donkere plaat: het schilderij van de Tauri-shell (de foto op ~30%). Alleen
-                  binnen de omtrek; daarbuiten blijft de wallpaper zoals hij is. */}
-              <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${dim})` }} />
+              {/* De donkere plaat: even doorzichtig als de lichte (zelfde vervaging), met een donkere
+                  tint in plaats van een witte. Alleen binnen de omtrek; daarbuiten blijft de
+                  wallpaper zoals hij is. */}
+              <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${(dim * 0.5).toFixed(3)})` }} />
             </div>
           )}
           {/* Achter de statusbalk (alleen in de Android-schil, waar --axe-sat gevuld is): een

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   LICHT_INKT, STAP, STIP_AFSTAND, TEL_RING,
-  bolStand, canvasMaat, dotRijen, hoogteKleur, lichtKleur, maakBinnenbol, maakRijenBol,
+  BOL_VULLING, bolStand, canvasMaat, dotRijen, hoogteKleur, lichtKleur, maakBinnenbol, maakRijenBol,
   maakRing, maakSchil, pixelRaster, ringMaat, stipMaat,
 } from './telefoonBol';
 
@@ -26,7 +26,7 @@ describe('de telefoon-sphere', () => {
   it('legt een stip om de 11 schermpixels, met een onder- en bovengrens', () => {
     const { R } = bolStand(660, 585); // Luka's iPhone, canvas op 3x
     expect(STIP_AFSTAND).toBe(11);
-    expect(dotRijen(R)).toBe(57);
+    expect(dotRijen(R)).toBe(91);
     expect((Math.PI * R) / dotRijen(R)).toBeGreaterThan(10.5);
     // De binnenbol krijgt dezelfde lucht: geen ondergrens die hem weer dicht maakt.
     const kernR = R * 0.46;
@@ -107,7 +107,18 @@ describe('de telefoon-sphere', () => {
   });
 
   it('staat in het midden van zijn vak, niet op 36% zoals op de plaat', () => {
-    expect(bolStand(714, 537)).toEqual({ cx: 357, cy: 268.5, R: 537 * 0.34 });
+    expect(bolStand(714, 537)).toEqual({ cx: 357, cy: 268.5, R: 537 * BOL_VULLING });
+  });
+
+  // Luka, 7 okt: zo groot mogelijk, maar nog net helemaal te zien. De uiterste rand van de bol na het
+  // perspectief (persp = 1,9 / (2,4 - Z), zoals in de shader) moet binnen de halve korte zijde blijven
+  // en hem bijna vullen -- wat de bol ook doet.
+  it('vult het vak bijna helemaal, zonder de rand te raken', () => {
+    const { R } = bolStand(714, 537);
+    let ver = 0;
+    for (let z = -1; z <= 1; z += 0.001) ver = Math.max(ver, Math.sqrt(1 - z * z) * (1.9 / (2.4 - z)) * R);
+    expect(ver).toBeLessThan(537 / 2);
+    expect(ver).toBeGreaterThan((537 / 2) * 0.93);
   });
 
   it('geeft het canvas precies één pixel per schermpixel', () => {

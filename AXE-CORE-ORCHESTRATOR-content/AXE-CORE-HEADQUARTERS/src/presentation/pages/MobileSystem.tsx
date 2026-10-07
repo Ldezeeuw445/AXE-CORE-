@@ -5,8 +5,8 @@
  * three Tauri world controls, six real AXE agents around the Core, one chat
  * timeline and the real AXE composer fixed at the bottom.
  */
-import { useLayoutEffect, useRef, type RefObject } from 'react';
-import { BrainCircuit, Mountain, Network, Orbit } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { BrainCircuit, ChevronDown, ChevronUp, Mountain, Network, Orbit } from 'lucide-react';
 import { TelefoonSphere } from '@/presentation/components/axe-core/sphere/TelefoonSphere';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
@@ -22,6 +22,7 @@ import { managerVan } from '@/domain/tierRouter/agentVenster';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
 
 const LEFT: readonly AxeAgentId[] = ['trading', 'developer', 'thinktank'];
 // These are actual roster agents — no fake Analyst/Creative/Operator cards.
@@ -114,9 +115,9 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       title={vraag ? vraag.tekst : detail}
       aria-label={`${agent.name}: ${state}${job ? ` · ${detail}` : ''}`}
     >
-      <ManagerAvatar agent={agent} size={23} />
+      <ManagerAvatar agent={agent} size={20} />
       <span
-        className="mt-0.5 max-w-full truncate px-0.5 text-[7.5px] font-semibold uppercase tracking-[0.025em]"
+        className="mt-0.5 max-w-full truncate px-0.5 text-[7px] font-semibold uppercase tracking-[0.02em]"
         style={{ color: 'var(--text-primary)' }}
       >
         {compactLabel}
@@ -133,7 +134,26 @@ function AgentTile({ id }: { id: AxeAgentId }) {
   );
 }
 
+/** Drie tegels van vaste hoogte, boven en onder tegen de rand van het vak, de bol in het midden. */
+const AGENT_KOLOM = { gridTemplateRows: 'repeat(3, minmax(0, 58px))', alignContent: 'space-between' } as const;
+
+const CHAT_KEY = 'axe_mobile_chat_open';
+
+/** Staat het gesprek open? Onthouden per apparaat; standaard open. */
+function useChatOpen(): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem(CHAT_KEY) !== '0'; } catch { return true; }
+  });
+  const zet = (v: boolean) => {
+    setOpen(v);
+    try { localStorage.setItem(CHAT_KEY, v ? '1' : '0'); } catch { /* alleen niet onthouden */ }
+  };
+  return [open, zet];
+}
+
 function CoreHome() {
+  const [chatOpen, setChatOpen] = useChatOpen();
+  const laatste = useVoiceStore(s => s.conversation[s.conversation.length - 1]);
   // Zelfde bron als de desktop-Home: installCoreStatus. Zie coreStatusStore.
   const coreOnline = useCoreOnline();
 
@@ -143,11 +163,11 @@ function CoreHome() {
         className="axe-mobile-edge grid w-full flex-none gap-2"
         style={{
           height: 'clamp(188px, 26dvh, 238px)',
-          gridTemplateColumns: 'clamp(52px, 15.2vw, 58px) minmax(0, 1fr) clamp(52px, 15.2vw, 58px)',
+          gridTemplateColumns: 'clamp(46px, 13.6vw, 52px) minmax(0, 1fr) clamp(46px, 13.6vw, 52px)',
         }}
         aria-label="AXE Core en agents"
       >
-        <div className="grid min-h-0 grid-rows-3 justify-items-start gap-2 py-1">
+        <div className="grid min-h-0 justify-items-start gap-2 py-1" style={AGENT_KOLOM}>
           {LEFT.map(id => <AgentTile key={id} id={id} />)}
         </div>
 
@@ -178,21 +198,55 @@ function CoreHome() {
           </div>
         </button>
 
-        <div className="grid min-h-0 grid-rows-3 justify-items-end gap-2 py-1">
+        <div className="grid min-h-0 justify-items-end gap-2 py-1" style={AGENT_KOLOM}>
           {RIGHT.map(id => <AgentTile key={id} id={id} />)}
         </div>
       </section>
 
-      <div
-        className="axe-mobile-edge my-1.5 flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-[20px]"
-        style={{
-          background: 'rgba(5,8,13,.30)',
-          border: '1px solid rgba(255,255,255,.045)',
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        <MobileChat />
-      </div>
+      {/* De bol en de agents staan vast bovenin (de sectie hierboven heeft een eigen hoogte); alleen dit
+          vak gaat open of dicht. Dicht blijft er een smalle balk boven de composer, met de laatste
+          regel, en de ruimte erboven blijft leeg voor de wallpaper. */}
+      {chatOpen ? (
+        <div
+          className="axe-mobile-edge my-1.5 flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-[20px]"
+          style={{
+            background: 'rgba(5,8,13,.30)',
+            border: '1px solid rgba(255,255,255,.045)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setChatOpen(false)}
+            aria-label="Collapse chat"
+            className="flex h-6 w-full flex-none items-center justify-center active:opacity-60"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <ChevronDown size={16} />
+          </button>
+          <MobileChat />
+        </div>
+      ) : (
+        <>
+          <div className="min-h-0 flex-1" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={() => setChatOpen(true)}
+            aria-label="Expand chat"
+            className="axe-mobile-edge my-1.5 flex h-9 w-full flex-none items-center gap-2 rounded-[16px] px-3 text-left active:opacity-70"
+            style={{
+              background: 'rgba(5,8,13,.30)',
+              border: '1px solid rgba(255,255,255,.045)',
+              backdropFilter: 'blur(8px)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Chat</span>
+            <span className="min-w-0 flex-1 truncate text-[12px]">{laatste?.text?.replace(/\s+/g, ' ').trim() ?? ''}</span>
+            <ChevronUp size={16} className="flex-none" style={{ color: 'var(--text-muted)' }} />
+          </button>
+        </>
+      )}
     </>
   );
 }
