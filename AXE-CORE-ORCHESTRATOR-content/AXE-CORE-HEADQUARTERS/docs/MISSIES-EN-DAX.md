@@ -146,10 +146,11 @@ python3 -m pytest integratie/test_bewijs.py -v
 
 ## Bekende beperkingen
 
-- Het DAX-image (`infra/dax/Dockerfile`) is niet in deze sessie gebouwd: Docker
-  Hub en MCR waren daar niet bereikbaar. De tests draaien op een kaal image met
-  de host-userland gemount (zelfde Chromium/Playwright); op STRATO bouwt
-  `setup-strato.sh` het echte image.
+- Live sinds 7 okt 2026: STRATO = 217.160.135.111 (ollama.axecompanion.com,
+  terminal "VPS Strato 16GB"), image `axe-dax-base:latest` gebouwd, control plane
+  `ssh://strato-dax` (user `axe-dax`, alleen `docker system dial-stdio`),
+  `AXE_DAX_ENABLED=1`. Bewezen met missie "DAX proef Browser": beide stappen op
+  `dax-browser-01`, inclusief `dax-browser open https://example.com`.
 - `npm install`/`pip install` zijn binnen een DAX vrij (eigen container);
   `git push`, `ssh`, `systemctl`, `docker`, mail en orders blijven goedkeuring vragen.
 - Overnemen van de DAX-browser (VNC/CDP) is voorbereid (profiel is een map,
