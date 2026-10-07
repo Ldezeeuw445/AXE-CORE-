@@ -118,7 +118,10 @@ export function AxeComposerVak({
     : null;
   const stopListening = useVoiceStore(s => s.stopListening);
   const [micStream, setMicStream] = useState<MediaStream | null>(() => getActiveMicStream());
-  const isListening = status === 'listening';
+  /* Een realtime gesprek is één open lijn: ook terwijl AXE denkt of praat
+     blijft het vak in luisterstand, met wat je zegt erin. */
+  const liveCall = useVoiceStore(s => s.liveCall);
+  const isListening = status === 'listening' || liveCall;
   const isProcessing = status === 'processing';
   const presence = useAudioActivity(
     status === 'listening' ? micStream : null,
@@ -229,7 +232,9 @@ export function AxeComposerVak({
             onKeyDown={opToets}
             onPaste={opPlak}
             readOnly={isListening}
-            placeholder={isListening ? 'Listening…' : plaatshouder}
+            placeholder={liveCall
+              ? (status === 'speaking' ? 'AXE is speaking — just talk to interrupt · Esc to end' : 'Live with AXE — just talk · Esc to end')
+              : isListening ? 'Listening…' : plaatshouder}
             rows={2}
             spellCheck={false}
             className="axe-vak-invoer"

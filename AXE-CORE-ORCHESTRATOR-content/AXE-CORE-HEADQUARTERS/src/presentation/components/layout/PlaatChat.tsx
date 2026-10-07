@@ -27,7 +27,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { motion } from 'framer-motion';
 import { isHoofdgesprek } from '@/domain/chat/hoofdgesprek';
-import { AlertTriangle, Clock, Code2, Globe, MapPin, Mic, CornerUpLeft, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
+import { zonderDubbeleGroeten } from '@/domain/chat/huidigGesprek';
+import { Activity, AlertTriangle, Code2, Globe, MapPin, Mic, CornerUpLeft, Send, SlidersHorizontal, Sparkles, Telescope, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
@@ -428,8 +429,8 @@ export function PlaatChat() {
       </span>
 
       <span className="axe-kop-rechts">
-        <button onClick={() => setPaneelOpen(v => !v)} title="Gesprekken en status" aria-expanded={paneelOpen}>
-          <Clock size={15} />
+        <button onClick={() => setPaneelOpen(v => !v)} title="Status" aria-expanded={paneelOpen}>
+          <Activity size={15} />
         </button>
         <button onClick={() => navigate('/settings')} title="Instellingen">
           <SlidersHorizontal size={15} />
@@ -478,22 +479,8 @@ export function PlaatChat() {
           </span>
         )}
       </span>
-      <span className="axe-convs">
-        {voice.allConversations.slice(0, 6).map(conv => (
-          <button
-            key={conv.id}
-            onClick={() => voice.switchConversation(conv.id)}
-            className="axe-conv"
-            data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}
-          >
-            {conv.title}
-          </button>
-        ))}
-      </span>
-      <button onClick={() => voice.loadAllConversations()} title="Refresh" className="axe-kop-mini">
-        <RotateCcw size={12} />
-      </button>
-      {/* Geen "nieuw gesprek" meer: AXE is één doorlopende draad. Kijk je in
+      {/* Geen gesprekkenlijst meer (Luka, 7 okt: "het is één gesprek met AXE").
+          Terugkijken doe je in de wolk naast de composer ("Earlier"). Geen "nieuw gesprek" meer: AXE is één doorlopende draad. Kijk je in
           een oud gesprek uit het archief, dan brengt dit je terug. */}
       {!isHoofdgesprek(voice.sessionId) && (
         <button onClick={() => voice.startNewConversation()} title="Back to AXE" className="axe-kop-mini">
@@ -532,7 +519,8 @@ export function PlaatChat() {
           {!kopAlleen && (
             <>
               <div ref={chatScrollRef} className="axe-chatrol overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
-                {voice.conversation.map((m, i) => {
+                {/* Herhaalde begroetingen (één per app-start) tellen één keer. */}
+                {zonderDubbeleGroeten(voice.conversation).map((m, i) => {
                   const isUser = m.role === 'user';
                   const displayText = isUser && (m.text.includes('## Attached files') || m.text.includes('LAUNCH CREWAI'))
                     ? (m.text.includes('LAUNCH CREWAI') ? 'Launch CrewAI · attached brief' : m.text.split('## Attached files')[0].trim() || 'Attached file(s)')
@@ -631,7 +619,14 @@ export function PlaatChat() {
         rechts={
           <>
             <VisionCaptureButton compact />
-            <button onClick={handleChatMic} title="Spreek" style={chatIsListening ? { color: 'var(--accent-cyan)' } : undefined}>
+            <button
+              onClick={handleChatMic}
+              title={voice.liveCall ? 'End live conversation (Esc)' : 'Start live conversation'}
+              aria-pressed={voice.liveCall}
+              data-axe-live={voice.liveCall ? 'ja' : 'nee'}
+              style={voice.liveCall || chatIsListening ? { color: 'var(--accent-cyan)' } : undefined}
+            >
+              {voice.liveCall && <span className="axe-live-dot" aria-hidden="true" style={{ marginRight: 6 }} />}
               <Mic size={18} />
             </button>
             <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} title="Versturen">

@@ -52,6 +52,8 @@ export interface RealtimeVoiceHandlers {
   onUserSpeechStopped?: () => void;
   /** Final transcript of what Luka said. */
   onUserTranscript?: (text: string) => void;
+  /** Wat Luka tot nu toe zegt, terwijl hij nog praat (opgebouwd uit delta's). */
+  onUserTranscriptDelta?: (soFar: string) => void;
   /** First audible sample of AXE's reply for this turn. */
   onAssistantSpeakingStarted?: () => void;
   /** Final transcript of what AXE said, once the turn is fully spoken. */
@@ -98,6 +100,43 @@ export function getOpenAiRealtimeLevel(): number {
   return Math.min(1, Math.sqrt(sum / levelData.length) * 3.2);
 }
 
+/**
+ * De session.update in het GA-formaat. Het oude (beta) formaat met `voice`,
+ * `turn_detection` en `input_audio_transcription` op het hoogste niveau wordt
+ * door `gpt-realtime` geweigerd ("Missing required parameter: 'session.type'")
+ * -- en dan draait het gesprek zonder instructies, tools en transcriptie: AXE
+ * hoort je wel, maar je ziet niet wat je zei en hij kan niets starten.
+ */
+export function realtimeSessionUpdate(opts: {
+  instructions: string;
+  tools: RealtimeToolDef[];
+  voice?: string;
+}): Record<string, unknown> {
+  return {
+    type: 'session.update',
+    session: {
+      type: 'realtime',
+      instructions: opts.instructions,
+      tools: opts.tools.map((t) => ({ type: 'function', ...t })),
+      tool_choice: 'auto',
+      audio: {
+        input: {
+          transcription: { model: 'gpt-4o-mini-transcribe' },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 250,
+            silence_duration_ms: 550,
+            create_response: true,
+            interrupt_response: true,
+          },
+        },
+        output: { voice: opts.voice ?? OPENAI_REALTIME_VOICE },
+      },
+    },
+  };
+}
+
 function isAssistantAudioDelta(type: string): boolean {
   return /^response\.(audio_transcript|output_audio_transcript)\.delta$/.test(type);
 }
@@ -133,6 +172,8 @@ export async function openRealtimeVoice(
   let closing = false;
   let assistantSpeaking = false;
   let laatsteAntwoordItem: string | null = null;
+  let liveItem = '';
+  let liveTekst = '';
 
   micStream.getAudioTracks().forEach((track) => pc.addTrack(track, micStream));
 
@@ -179,29 +220,14 @@ export async function openRealtimeVoice(
       item: {
         type: 'message',
         role: turn.role,
-        content: [{ type: turn.role === 'user' ? 'input_text' : 'text', text: turn.text }],
+        // GA-schema: assistent-geschiedenis is `output_text`; `text` wordt geweigerd.
+        content: [{ type: turn.role === 'user' ? 'input_text' : 'output_text', text: turn.text }],
       },
     });
   };
 
   channel.onopen = () => {
-    send({
-      type: 'session.update',
-      session: {
-        instructions: opts.instructions,
-        voice: opts.voice ?? OPENAI_REALTIME_VOICE,
-        tools: opts.tools.map((t) => ({ type: 'function', ...t })),
-        tool_choice: 'auto',
-        turn_detection: {
-          type: 'server_vad',
-          threshold: 0.5,
-          prefix_padding_ms: 250,
-          silence_duration_ms: 350,
-          create_response: true,
-        },
-        input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
-      },
-    });
+    send(realtimeSessionUpdate(opts));
     // Sent from right here, not after openRealtimeVoice() resolves — the
     // channel is open NOW, by definition, so this can never race a data
     // channel that silently drops sends before it reaches 'open'.
@@ -226,7 +252,19 @@ export async function openRealtimeVoice(
       handlers.onUserSpeechStopped?.();
       return;
     }
+    if (type === 'conversation.item.input_audio_transcription.delta') {
+      const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+      if (itemId !== liveItem) {
+        liveItem = itemId;
+        liveTekst = '';
+      }
+      liveTekst += typeof msg.delta === 'string' ? msg.delta : '';
+      if (liveTekst.trim()) handlers.onUserTranscriptDelta?.(liveTekst.trim());
+      return;
+    }
     if (type === 'conversation.item.input_audio_transcription.completed') {
+      liveItem = '';
+      liveTekst = '';
       const text = typeof msg.transcript === 'string' ? msg.transcript : '';
       if (text.trim()) handlers.onUserTranscript?.(text.trim());
       return;
@@ -311,9 +349,9 @@ export async function openRealtimeVoice(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  const sdpResponse = await fetch(
-    `https://api.openai.com/v1/realtime?model=${encodeURIComponent(OPENAI_REALTIME_MODEL)}`,
-    {
+  // GA-endpoint eerst; het oude adres alleen als dat er (nog) niet is.
+  const postSdp = (url: string) =>
+    fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${clientSecret}`,
@@ -321,8 +359,13 @@ export async function openRealtimeVoice(
       },
       body: offer.sdp,
       signal: AbortSignal.timeout(15_000),
-    },
-  );
+    });
+  let sdpResponse = await postSdp('https://api.openai.com/v1/realtime/calls');
+  if (sdpResponse.status === 404) {
+    sdpResponse = await postSdp(
+      `https://api.openai.com/v1/realtime?model=${encodeURIComponent(OPENAI_REALTIME_MODEL)}`,
+    );
+  }
   if (!sdpResponse.ok) {
     const body = await sdpResponse.text().catch(() => '');
     cleanup();

@@ -19,6 +19,7 @@ import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 import { GesprekStand } from '@/presentation/components/shared/GesprekStand';
+import { huidigGesprek, zonderDubbeleGroeten } from '@/domain/chat/huidigGesprek';
 
 function vindDoel(doel: string): Rechthoek | null {
   for (const el of document.querySelectorAll<HTMLElement>(`[data-axe-doel="${CSS.escape(doel)}"]`)) {
@@ -335,6 +336,18 @@ function ChatRegel({ van, children }: { van: keyof typeof DOT_KLEUR; children: R
   );
 }
 
+/** Zichtbaar dat de lijn open staat -- zoals OS3: je weet altijd of AXE luistert. */
+function LiveRegel({ status }: { status: string }) {
+  const tekst = status === 'speaking' ? 'AXE is speaking' : status === 'processing' ? 'AXE is thinking' : 'Listening';
+  return (
+    <div className="mt-1 flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em]" style={{ color: '#22d3ee' }}>
+      <span className="axe-live-dot" aria-hidden="true" />
+      <span>Live · {tekst}</span>
+      <span style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>Esc to end</span>
+    </div>
+  );
+}
+
 export function AxePresenceDock() {
   const voice = useVoiceStore();
   const orbRef = useRef<HTMLDivElement | null>(null);
@@ -399,10 +412,26 @@ export function AxePresenceDock() {
         content, an open radial ring or a pinned rail -- no card, no 2-line
         clamp. On Home the full chat plate is open (`data-chat='open'`, set by
         PlaatChat), so the cloud stays away there instead of showing it twice. */
-  const liveTranscript = voice.voiceStatus === 'listening' ? voice.transcript.trim() : '';
+  /* Wat Luka zegt staat er live, zolang de lijn open is -- ook in de korte
+     'processing'-fase, want de transcriptie komt pas na het einde van de zin. */
+  const liveTranscript = voice.liveCall || voice.voiceStatus === 'listening' ? voice.transcript.trim() : '';
+  /* Alleen het gesprek van nu (huidigGesprek.ts). Terugkijken kan: "Earlier"
+     klapt de rest van het ene eeuwige gesprek open. */
+  const [nu, setNu] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNu(Date.now()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  const [terug, setTerug] = useState(false);
+  const nuZichtbaar = useMemo(
+    // `nu` tikt elke minuut; een nieuw bericht is nooit "ouder dan de pauze".
+    () => huidigGesprek(voice.conversation, nu),
+    [voice.conversation, nu],
+  );
+  const eerder = Math.max(0, voice.conversation.filter(m => m.text?.trim()).length - nuZichtbaar.length);
   const berichten = useMemo(
-    () => voice.conversation.filter(m => m.text?.trim()).slice(-24),
-    [voice.conversation],
+    () => (terug ? zonderDubbeleGroeten(voice.conversation.filter(m => m.text?.trim())).slice(-200) : nuZichtbaar.slice(-40)),
+    [terug, voice.conversation, nuZichtbaar],
   );
 
   const [anker, setAnker] = useState<{ x: number; y: number } | null>(null);
@@ -472,6 +501,7 @@ export function AxePresenceDock() {
   // minimum width rather than disappearing. Plain conversation just waits for room.
   const genoegRuimte = ruimte.breedte >= MIN_WOLK;
   const toonWolk = wolkGewenst && (genoegRuimte || Boolean(pending));
+  const live = voice.liveCall;
   const breedte = genoegRuimte ? ruimte.breedte : MIN_WOLK;
 
   /* Newest at the bottom, like any chat. Stick to the bottom while the reply
@@ -554,14 +584,25 @@ export function AxePresenceDock() {
             }}
           >
             <div ref={inhoudRef} className="flex min-h-full flex-col justify-end gap-1.5 px-1 pb-1 pt-6 text-[12.5px] leading-snug">
+              {(eerder > 0 || terug) && (
+                <button
+                  type="button"
+                  onClick={() => setTerug(v => !v)}
+                  className="self-start rounded-full px-2 py-0.5 text-[10.5px] uppercase tracking-[0.12em] transition-opacity hover:opacity-100"
+                  style={{ color: 'var(--text-tertiary, var(--text-secondary))', opacity: 0.7, border: '1px solid var(--line, rgba(255,255,255,0.12))' }}
+                >
+                  {terug ? 'Only now' : `Earlier · ${eerder}`}
+                </button>
+              )}
               {berichten.map((m, i) => (
                 <ChatRegel key={`${m.timestamp}-${i}`} van={m.role === 'user' ? 'luka' : 'axe'}>
                   {m.role === 'user' ? m.text : <MarkdownMessage text={m.text} />}
                 </ChatRegel>
               ))}
               {liveTranscript && (
-                <ChatRegel van="luka"><span className="italic">{liveTranscript}</span></ChatRegel>
+                <ChatRegel van="luka"><span className="italic">{liveTranscript}</span><span className="axe-live-caret" aria-hidden="true" /></ChatRegel>
               )}
+              {live && <LiveRegel status={voice.voiceStatus} />}
               {/* Hier woont het gesprek op het bureau, niet in de chatplaat
                   (`kopAlleen` daar is op desktopbreedte vrijwel altijd waar).
                   Dus hoort hier ook de melding dat het niet bewaard of niet

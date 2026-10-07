@@ -7852,3 +7852,24 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 :root[data-look='black'][data-wp] .axe-shell.axe-plaat-mobiel {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%) !important;
 }
+
+/* Realtime gesprek (7 okt 2026): een ademende stip zolang de lijn open is,
+   en een knipperende cursor achter wat Luka op dit moment zegt. */
+.axe-live-dot {
+  width: 7px; height: 7px; border-radius: 9999px; background: #22d3ee;
+  box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.55);
+  animation: axe-live-adem 1.6s ease-out infinite;
+}
+@keyframes axe-live-adem {
+  0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(34, 211, 238, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+}
+.axe-live-caret {
+  display: inline-block; width: 1px; height: 1em; margin-left: 2px; vertical-align: -2px;
+  background: currentColor; animation: axe-live-caret 1s steps(1) infinite;
+}
+@keyframes axe-live-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .axe-live-dot, .axe-live-caret { animation: none; }
+}

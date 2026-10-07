@@ -12,15 +12,34 @@ import { tavilySearch, type TavilyResult } from '@/infrastructure/gateways/tavil
 const SHOW_RE =
   /\b(laat(\s+\S+){0,8}\s+zien|toon|show(\s+me)?|display|projecteer|bekijk)\b/i;
 const NEWS_RE = /\b(nieuws|news|artikel|article|headline|koppen|bericht|berichten)\b/i;
+/** "open google en zoek X op", "google X", "look up X", "search for X" —
+ *  opzoeken is ook laten zien: het resultaat hoort op de bol, niet alleen in tekst. */
+const NIET_WEB_RE = /\b(mail|e-?mail|inbox|bestand\w*|files?|map(je)?\s+op|geheugen|memory|repo|code|agent|taak|task)\b/i;
+const SEARCH_RE =
+  /\b(zoek(\s+\S+){0,10}\s+op|opzoeken|googl\w*|look\s+up|search(\s+for)?|zoek\s+naar)\b/i;
 
 export function wantsShownContent(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
-  return SHOW_RE.test(t) || NEWS_RE.test(t);
+  // Zoeken in eigen spullen (mail, bestanden, geheugen) is geen webzoekopdracht.
+  const zoektWeb = SEARCH_RE.test(t) && !NIET_WEB_RE.test(t);
+  return SHOW_RE.test(t) || NEWS_RE.test(t) || zoektWeb;
+}
+
+function subjectOfSearch(text: string): string | null {
+  const t = text.replace(/\b(kan|kun|wil)\s+je\b|\b(can|could|would)\s+you\b|\b(hey|hoi|yo)\s+axe\b|\balsjeblieft|\bplease\b/gi, ' ');
+  return t.match(/(?:opzoeken|googlen|look\s+up)\s*[:,-]\s*(.+)/i)?.[1]
+    ?? t.match(/zoek\s+(?:eens\s+|even\s+)?(.+?)\s+op\b/i)?.[1]
+    ?? t.match(/zoek\s+naar\s+(.+)/i)?.[1]
+    ?? t.match(/(?:look\s+up|search(?:\s+for)?|googl\w*(?:\s+(?:naar|for))?)\s+(?!en\b|and\b)(.+)/i)?.[1]
+    ?? t.match(/(.+?)\s+(?:opzoeken|googlen)\b/i)?.[1]
+    ?? null;
 }
 
 /** Haal het onderwerp uit "laat X zien" / "show me X". */
 export function subjectOfShow(text: string): string {
+  const zoek = subjectOfSearch(text);
+  if (zoek) return zoek.replace(/^(open\s+)?google\s+(en|and)\s+/i, '').replace(/^(me|mij|even|de|het|een|the|a|an)\s+/i, '').replace(/[.!?]+$/g, '').trim();
   const laat = text.match(/laat\s+(.+?)\s+zien/i);
   const raw = laat?.[1]
     ?? text.match(/(?:toon|show(?:\s+me)?|display|projecteer|bekijk)\s+(.+)/i)?.[1]

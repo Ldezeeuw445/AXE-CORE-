@@ -58,3 +58,27 @@ describe('getOpenAiRealtimeLevel', () => {
     expect(getOpenAiRealtimeLevel()).toBe(0);
   });
 });
+
+/* OpenAI weigerde het oude beta-formaat met "Missing required parameter:
+   'session.type'" (bewezen met een websocket-probe vanaf de VPS, 7 okt). Dan
+   draait het gesprek zonder instructies, tools en transcriptie: je ziet niet
+   wat je zegt en AXE kan niets starten. */
+describe('realtimeSessionUpdate (GA-formaat)', () => {
+  it('zet type, audio.input en audio.output zoals gpt-realtime ze eist', async () => {
+    const { realtimeSessionUpdate } = await import('@/infrastructure/gateways/openAiRealtimeVoice');
+    const u = realtimeSessionUpdate({
+      instructions: 'x',
+      tools: [{ name: 't', description: 'd', parameters: {} }],
+    }) as { type: string; session: Record<string, any> };
+    expect(u.type).toBe('session.update');
+    expect(u.session.type).toBe('realtime');
+    expect(u.session.audio.input.transcription.model).toBe('gpt-4o-mini-transcribe');
+    expect(u.session.audio.input.turn_detection).toMatchObject({ type: 'server_vad', create_response: true, interrupt_response: true });
+    expect(u.session.audio.output.voice).toBe('marin');
+    expect(u.session.tools[0]).toMatchObject({ type: 'function', name: 't' });
+    // De beta-velden mogen er niet meer staan: die laten de hele update falen.
+    expect(u.session.voice).toBeUndefined();
+    expect(u.session.turn_detection).toBeUndefined();
+    expect(u.session.input_audio_transcription).toBeUndefined();
+  });
+});

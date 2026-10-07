@@ -94,9 +94,12 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
     ingebouwd: true,
   },
   {
+    // Id blijft 'vps-strato' (bewaarde keuzes en snelacties hangen eraan).
+    // Dit is de API-server, 212.227.91.79 / api.axecompanion.com -- niet de
+    // STRATO-machine van 16 GB; die heet hieronder 'VPS Strato 16GB'.
     id: 'vps-strato',
-    naam: 'VPS Strato',
-    waarvoor: 'axe-core-api, de terminal-server, de cron — de hoofdserver',
+    naam: 'VPS API',
+    waarvoor: 'axe-core-api, de task-worker, de missielus, de cron — de hoofdserver',
     wsUrl: 'wss://api.axecompanion.com/terminal',
     ingebouwd: true,
   },

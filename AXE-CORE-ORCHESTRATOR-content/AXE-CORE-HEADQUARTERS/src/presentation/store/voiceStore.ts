@@ -387,6 +387,8 @@ interface VoiceState{
   pendingExec:PendingExec|null;resolvePendingExec:(id:string,approved:boolean)=>void;
   routingLog:RoutingEvent[];
   isGeminiLive:boolean;
+  /** Er loopt nu een realtime gesprek (open lijn, AXE blijft luisteren tot Esc/mic). */
+  liveCall:boolean;
   responseMode:'speak'|'type';
   vpsOnline:boolean|null; // null=unknown, true=reachable, false=offline
   setResponseMode:(mode:'speak'|'type')=>void;
@@ -497,6 +499,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
     routingLog:loadRoutingLog(),
     isGeminiLive:false,
+    liveCall:false,
     responseMode:loadResponseMode(),
     vpsOnline:null,
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),

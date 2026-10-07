@@ -120,7 +120,7 @@ function candidateList(jobs: AxeJob[]): string {
   return jobs.map((j) => `${agentById(j.agent).name} (${j.title})`).join(', ');
 }
 
-// ── The five real tools ──────────────────────────────────────────────────
+// ── The real tools ───────────────────────────────────────────────────────
 
 export const REALTIME_TOOLS: RealtimeToolDef[] = [
   {
@@ -140,7 +140,7 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
         /* Eén parameter in plaats van vijf nieuwe tools. Dat is met opzet:
            installOpenAIRealtimeVoice.test.ts eist de EXACTE lijst van vijf
            toolnamen, en prompts.ts vertelt het model in proza dat het "exactly
-           five real tools" heeft. Vijf tools erbij betekent die twee ook
+           seven real tools" heeft (5 + show_on_home/use_computer sinds 7 okt). Tools erbij betekent die twee ook
            aanpassen en het model een lijst van tien geven; één parameter houdt
            beide waar. */
         skill: {
@@ -202,6 +202,32 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
         query: { type: 'string', description: 'What to search for.' },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'show_on_home',
+    description:
+      "Show something on AXE's Home screen — the sphere turns into it. Use this whenever Luka asks to see, look up, google or open something: a web search, a news topic, a place on a map, a market chart. Returns what is shown so you can talk about it.",
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to show — search terms, a place, or a ticker.' },
+        kind: { type: 'string', enum: ['web', 'map', 'chart'], description: 'web (default) for search/news/topics, map for a place, chart for a market.' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'use_computer',
+    description:
+      "Act on Luka's own Mac — the same computer use the typed chat has. Open or focus an app (app.open with {app:'Safari'}), list running apps (app.list), look at the screen (screen.observe), list personal files (personal.files.list with {path}), read a file in a workspace (files.read with {path, workspace}; it is also shown on Home), click or type (pointer.click, keyboard.type). Anything that changes something shows Luka an approval card first; you never choose the risk level.",
+    parameters: {
+      type: 'object',
+      properties: {
+        tool: { type: 'string', description: 'The computer tool id, e.g. app.open, screen.observe, files.read.' },
+        args: { type: 'object', description: 'Arguments for that tool, e.g. {"app":"Safari"}.' },
+      },
+      required: ['tool'],
     },
   },
 ];
@@ -311,6 +337,8 @@ export async function handleRealtimeTool(name: string, rawArgs: unknown): Promis
       case 'cancel_task': return await toolCancelTask(args);
       case 'answer_pending_approval': return await toolAnswerApproval(args);
       case 'search_memory': return await toolSearchMemory(args);
+      case 'show_on_home': return await (await import('./realtimeHomeTools')).toolShowOnHome(args);
+      case 'use_computer': return await (await import('./realtimeHomeTools')).toolUseComputer(args);
       default: return JSON.stringify({ ok: false, message: `Unknown tool: ${name}` });
     }
   } catch (error) {
@@ -426,6 +454,7 @@ export function installOpenAIRealtimeVoice(): void {
 
   const closeRealtime = async (setIdle = true) => {
     realtimeActive = false;
+    useVoiceStore.setState({ liveCall: false });
     realtimeStarting = false;
     responseActive = false;
     generation += 1;
@@ -506,6 +535,12 @@ export function installOpenAIRealtimeVoice(): void {
           useVoiceStore.setState((s) => (s.voiceStatus === 'listening' ? { voiceStatus: 'processing' } : {}));
         },
 
+        // Live meeschrijven terwijl Luka praat -- zoals OS3: je ziet wat AXE hoort.
+        onUserTranscriptDelta: (soFar) => {
+          if (myGeneration !== generation) return;
+          useVoiceStore.setState({ transcript: soFar });
+        },
+
         onUserTranscript: (text) => {
           if (myGeneration !== generation) return;
           lastUserText = text;
@@ -567,6 +602,7 @@ export function installOpenAIRealtimeVoice(): void {
         onClosed: (reason) => {
           if (myGeneration !== generation) return;
           realtimeActive = false;
+          useVoiceStore.setState({ liveCall: false });
           realtimeStarting = false;
           session = null;
           releaseMic();
@@ -587,6 +623,7 @@ export function installOpenAIRealtimeVoice(): void {
       session = opened;
       realtimeStarting = false;
       realtimeActive = true;
+      useVoiceStore.setState({ liveCall: true });
       setRealtimeJobAnnouncer((text) => {
         pendingAnnouncements.push(text);
         flushPendingAnnouncements();
@@ -601,6 +638,7 @@ export function installOpenAIRealtimeVoice(): void {
       if (myGeneration !== generation) return;
       realtimeStarting = false;
       realtimeActive = false;
+      useVoiceStore.setState({ liveCall: false });
       session = null;
       if (micStreamForSession) {
         releaseMic();

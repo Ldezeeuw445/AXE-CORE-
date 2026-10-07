@@ -162,6 +162,9 @@ function Balkje({ rij, onKies, kant = 'links', server }:
     );
   }
 
+  // De opdracht in Luka's woorden: de eerste regel, zonder de vaste skill-instructie ervoor.
+  const opdracht = (/Luka said:\s*([\s\S]+)$/.exec(job.sourceText)?.[1] ?? job.sourceText ?? '')
+    .split('\n').map((r) => r.trim()).find(Boolean)?.slice(0, 140) ?? '';
   const stand = vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state];
   return (
     <button
@@ -172,10 +175,20 @@ function Balkje({ rij, onKies, kant = 'links', server }:
       style={{ ...BALK, flexDirection: spiegel ? 'row-reverse' : 'row',
                textAlign: spiegel ? 'right' : 'left' }}
     >
-      <span className="flex-1 min-w-0 text-[12.5px] leading-snug line-clamp-2">
-        <span style={{ color: agent.accent, fontWeight: 500 }}>{agent.kort ?? agent.name}</span>
-        {' '}
-        <span style={{ color: 'var(--text-secondary)' }}>{regel}</span>
+      <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <span className="text-[12.5px] leading-snug line-clamp-2">
+          <span style={{ color: agent.accent, fontWeight: 500 }}>{agent.kort ?? agent.name}</span>
+          {' '}
+          <span style={{ color: 'var(--text-secondary)' }}>{regel}</span>
+        </span>
+        {/* Wat AXE hem opdroeg (Luka, 7 okt: "waar ik kan zien wat axe tegen
+            de agents zegt als hij hem aanstuurt"). Eén regel; het hele
+            gesprek staat in het venster dat opent als je klikt. */}
+        {opdracht && (
+          <span className="text-[10.5px] leading-snug line-clamp-1" style={{ color: 'var(--text-muted)' }}>
+            <span style={{ color: '#22d3ee' }}>AXE</span> → {opdracht}
+          </span>
+        )}
       </span>
       <span
         className="text-[9.5px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0"
