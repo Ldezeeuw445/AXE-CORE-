@@ -6,22 +6,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router';
 import {
-  Clock,
+  Activity,
   Globe,
   Keyboard,
+  MapPin,
   Mic,
   CornerUpLeft,
-  RotateCcw,
   Send,
   SlidersHorizontal,
   Sparkles,
   Telescope,
   Volume2,
   VolumeX,
+  Wifi,
 } from 'lucide-react';
 import { isHoofdgesprek } from '@/domain/chat/hoofdgesprek';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
+import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { VermogensKnop } from '@/presentation/components/layout/VermogensKnop';
 import {
   FileUploadButton,
@@ -56,10 +58,6 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
-
-  useEffect(() => {
-    void voice.loadAllConversations();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Gedeeld vanuit een andere app? Dan staat het hier klaar.
   //
@@ -97,7 +95,7 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
 
   const mic = useCallback(async () => {
     try {
-      if (voice.voiceStatus !== 'idle') voice.stopListening();
+      if (voice.liveCall || voice.voiceStatus !== 'idle') voice.stopListening();
       else await voice.startListening();
     } catch {
       // The canonical voice store already exposes the useful mic error.
@@ -134,10 +132,11 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
         <button
           type="button"
           onClick={() => setHistoryOpen(v => !v)}
-          title="Gespreksgeschiedenis"
+          title="Status"
+          aria-label="Status"
           className="axe-kop-mini"
         >
-          <Clock size={14} />
+          <Activity size={14} />
         </button>
         <button
           type="button"
@@ -151,30 +150,21 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
     </>
   );
 
+  /* Achter het hartslag-icoon: de status (zelfde paneel als op het bureau, PlaatChat). Geen
+     gesprekkenlijst meer -- het is één gesprek met AXE; terugkijken kan in de chat ("Earlier"). */
   const history = historyOpen ? (
     <div className="axe-kop-paneel">
-      <span className="axe-convs">
-        {voice.allConversations.slice(0, 6).map(conv => (
-          <button
-            key={conv.id}
-            onClick={() => {
-              void voice.switchConversation(conv.id);
-              setHistoryOpen(false);
-            }}
-            className="axe-conv"
-            data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}
-          >
-            {conv.title}
-          </button>
-        ))}
+      <span className="axe-cpills"><MissionControlStrip /></span>
+      <span className="axe-cstat">
+        <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
+        <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}><Wifi size={10} />Online</span>
+        {voice.apiKeyValid === true && <span style={{ color: 'var(--success)' }}>API OK</span>}
+        {attachments.length > 0 && (
+          <span style={{ color: 'var(--accent-cyan)' }}>
+            {attachments.length} file{attachments.length > 1 ? 's' : ''}
+          </span>
+        )}
       </span>
-      <button
-        onClick={() => voice.loadAllConversations()}
-        title="Refresh"
-        className="axe-kop-mini"
-      >
-        <RotateCcw size={12} />
-      </button>
       {/* Eén doorlopend gesprek: alleen terug-knop vanuit het archief. */}
       {!isHoofdgesprek(voice.sessionId) && (
         <button
@@ -191,7 +181,7 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
     </div>
   ) : null;
 
-  const activeVoice = voice.voiceStatus !== 'idle';
+  const activeVoice = voice.voiceStatus !== 'idle' || voice.liveCall;
 
   const stemKnop = (
     <button
@@ -209,8 +199,9 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
       type="button"
       className="axe-mobile-mic"
       onClick={() => { void mic(); }}
-      title={activeVoice ? 'Stop gesprek' : 'Praat met AXE'}
-      aria-pressed={activeVoice}
+      title={voice.liveCall ? 'End live conversation' : activeVoice ? 'Stop gesprek' : 'Start live conversation'}
+      aria-pressed={activeVoice || voice.liveCall}
+      data-axe-live={voice.liveCall ? 'ja' : 'nee'}
       style={{
         width: 44,
         height: 44,

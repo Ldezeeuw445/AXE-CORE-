@@ -2,7 +2,7 @@
  * MobileChat — one readable timeline for Boss, AXE and the agents AXE delegates
  * to. Same canonical conversation store as desktop; this file is presentation.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AXE_AGENTS, agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
@@ -12,6 +12,7 @@ import { useVoiceStore, type ConversationMessage } from '@/presentation/store/vo
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { regelVan } from '@/domain/tierRouter/agentVenster';
 import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
+import { huidigGesprek, zonderDubbeleGroeten } from '@/domain/chat/huidigGesprek';
 
 function clock(ts: number): string {
   try {
@@ -43,15 +44,33 @@ function laatsteStap(job: { stappen?: string[] }): string {
 }
 
 export function MobileChat() {
-  const conversation = useVoiceStore((s) => s.conversation);
+  const allMessages = useVoiceStore((s) => s.conversation);
   const voiceStatus = useVoiceStore((s) => s.voiceStatus);
+  const liveCall = useVoiceStore((s) => s.liveCall);
+  const transcript = useVoiceStore((s) => s.transcript);
+
+  // One conversation with AXE, like on the desktop: only the one going on now (after a 45 min pause it
+  // starts fresh), one greeting, and "Earlier" to read back.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  const [lookBack, setLookBack] = useState(false);
+  const current = useMemo(() => huidigGesprek(allMessages, now), [allMessages, now]);
+  const earlier = Math.max(0, allMessages.filter((m) => m.text?.trim()).length - current.length);
+  const conversation = useMemo(
+    () => (lookBack ? zonderDubbeleGroeten(allMessages.filter((m) => m.text?.trim())).slice(-200) : current.slice(-60)),
+    [lookBack, allMessages, current],
+  );
+  const liveTranscript = liveCall || voiceStatus === 'listening' ? transcript.trim() : '';
   const endRef = useRef<HTMLDivElement>(null);
   const jobs = useAxeJobStore((s) => s.jobs);
   const activeJobs = jobs.filter((j) => jobLoopt(j.state));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [conversation.length, voiceStatus]);
+  }, [conversation.length, voiceStatus, liveTranscript]);
 
   return (
     <div
@@ -90,6 +109,16 @@ export function MobileChat() {
               );
             })}
           </div>
+        )}
+        {(earlier > 0 || lookBack) && (
+          <button
+            type="button"
+            onClick={() => setLookBack((v) => !v)}
+            className="self-start rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] active:opacity-70"
+            style={{ color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,.14)' }}
+          >
+            {lookBack ? 'Only now' : `Earlier · ${earlier}`}
+          </button>
         )}
         {conversation.map((message, index) => {
           const mine = message.role === 'user';
@@ -163,6 +192,26 @@ export function MobileChat() {
           );
         })}
 
+        {liveTranscript && (
+          <div className="flex items-start gap-2">
+            <div className="mt-3 flex size-7 flex-none items-center justify-center">
+              <span className="block size-2.5 rounded-full" style={{ background: '#22d3ee', boxShadow: '0 0 12px #22d3ee' }} />
+            </div>
+            <div
+              className="min-w-0 flex-1 rounded-[16px] px-3.5 py-2.5 text-[13px] italic leading-[1.48]"
+              style={{ background: 'rgba(8,12,18,.70)', border: '1px solid rgba(34,211,238,.32)', color: 'var(--text-primary)' }}
+            >
+              {liveTranscript}
+            </div>
+          </div>
+        )}
+        {liveCall && (
+          <div className="flex items-center gap-2 px-1 text-[10px] uppercase tracking-[0.14em]" style={{ color: '#22d3ee' }}>
+            <span className="axe-live-dot" aria-hidden="true" />
+            <span>Live · {voiceStatus === 'speaking' ? 'AXE is speaking' : voiceStatus === 'processing' ? 'AXE is thinking' : 'Listening'}</span>
+            <span style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>tap the mic to end</span>
+          </div>
+        )}
         {voiceStatus === 'processing' && (
           <div className="flex items-start gap-2">
             <div className="mt-3 flex size-7 flex-none items-center justify-center">
