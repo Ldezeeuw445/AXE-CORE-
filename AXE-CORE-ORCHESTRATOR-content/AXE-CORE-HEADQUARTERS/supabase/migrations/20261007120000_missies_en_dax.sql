@@ -378,7 +378,7 @@ on conflict (id) do nothing;
 -- ── 3. Eén tijdlijn per agent ───────────────────────────────────────────────
 -- Alleen wat echt gebeurde: task-events van taken die aan de agent hangen, en
 -- missie-events met die agent. Niets wordt hier verzonnen of afgeleid.
-create or replace view public.core_agent_events as
+create or replace view public.core_agent_events with (security_invoker = on) as
   select
     'task'::text as source,
     e.sequence,
