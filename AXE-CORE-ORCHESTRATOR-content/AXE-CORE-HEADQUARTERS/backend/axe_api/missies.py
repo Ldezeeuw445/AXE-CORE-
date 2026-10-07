@@ -85,7 +85,13 @@ def lees_rapport(samenvatting: str | None) -> tuple[str, str | None]:
     treffers = list(_RAPPORT.finditer(tekst))
     if not treffers:
         return "done", None
-    laatste = treffers[-1]
+    # Gezien op de VPS (7 okt): een echt model schrijft soms twee regels,
+    # "MILESTONE: done" en daarna "MILESTONE: continue NEXT_ACTION: proceed to
+    # the next milestone". De laatste nemen hield de missie vijf rondes in
+    # dezelfde mijlpaal. Dus: wie de stop vraagt wint (human > blocked), en een
+    # bewezen "done" gaat voor "continue".
+    rang = {"human": 0, "blocked": 1, "done": 2, "continue": 3}
+    laatste = min(reversed(treffers), key=lambda t: rang[t.group(1).lower()])
     oordeel = laatste.group(1).lower()
     rest = laatste.group(2).strip()
     rest = re.sub(r"^(NEXT_ACTION|REASON)\s*:\s*", "", rest, flags=re.IGNORECASE)
@@ -184,7 +190,9 @@ def bouw_verzoek(missie: dict[str, Any], mijlpalen: list[dict[str, Any]], index:
         "Execution contract:",
         "- Do the work. A plan is input to execution, not the result.",
         "- Finish only with a verify_command that proves the result exists.",
-        "- End your finish summary with exactly one line:",
+        "- End your finish summary with exactly ONE of these lines (never two).",
+        "  Use 'continue' only if THIS milestone still needs more work; when this",
+        "  milestone is achieved, write 'done' -- AXE starts the next milestone itself.",
         "  MILESTONE: done",
         "  MILESTONE: continue NEXT_ACTION: <the next concrete step for this milestone>",
         "  MILESTONE: blocked REASON: <what blocks you and what would unblock it>",

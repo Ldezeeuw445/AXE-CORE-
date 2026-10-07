@@ -38,6 +38,9 @@ def test_rapport_lezen():
     assert lees_rapport("x\nMILESTONE: continue NEXT_ACTION: run the tests") == ("continue", "run the tests")
     assert lees_rapport("MILESTONE: blocked REASON: no SSH key") == ("blocked", "no SSH key")
     assert lees_rapport("MILESTONE: continue\nMILESTONE: done")[0] == "done"
+    # Echt model op de VPS: done én continue → done.
+    assert lees_rapport("ok\nMILESTONE: done\nMILESTONE: continue NEXT_ACTION: Proceed to the next milestone")[0] == "done"
+    assert lees_rapport("MILESTONE: done\nMILESTONE: blocked REASON: geen sleutel") == ("blocked", "geen sleutel")
 
 
 def test_eerste_stap_start_zonder_luka():
