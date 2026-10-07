@@ -83,12 +83,14 @@ export function MobileGlass() {
   const look = useLookValue();
   const wallpaper = useWallpaper();
   const { dim, blur } = useGlassTuning();
-  // In de lichte stand blurt de plaat zelf (backdrop-filter, zie axe-look.css); de
-  // schuif voor "vervaging" stuurt dan die waarde. 36 (standaard) komt zo op ~61px,
-  // dicht bij de 64 die er altijd stond.
+  // In de lichte stand blurt de plaat zelf (backdrop-filter, zie axe-look.css): de
+  // schuif "Frosting" stuurt die waarde, en "Opacity" de melkwitte sluier van de plaat.
+  // Elke stand heeft zijn eigen waarden (useGlassTuning leest die van de huidige stand).
   useEffect(() => {
-    document.documentElement.style.setProperty('--axe-glass-blur', `${Math.round(blur * 1.7)}px`);
-  }, [blur]);
+    const st = document.documentElement.style;
+    st.setProperty('--axe-glass-blur', `${Math.round(blur * 1.7)}px`);
+    st.setProperty('--axe-glass-sluier', (dim * 0.75).toFixed(3));
+  }, [blur, dim]);
   // The Android lock screen is native and cannot read this app's storage: push the choice over, on
   // every change and once at start (a phone that never chose still has to tell it "Moraine Lake").
   // CSS needs to know a picture is behind the plate: the plate's own blue-grey tint (made for the
@@ -130,6 +132,8 @@ export function MobileGlass() {
             <div
               style={{
                 position: 'absolute', inset: 0, clipPath: PLAAT_CLIP, WebkitClipPath: PLAAT_CLIP,
+                // De sluier zelf zit op de plaat (--axe-glass-sluier in axe-look.css),
+                // zodat hij ook zonder foto werkt; dit is alleen een zweem eronder.
                 background: `rgba(255,255,255,${(dim * 0.1).toFixed(3)})`,
               }}
             />
@@ -146,10 +150,10 @@ export function MobileGlass() {
                   filter: `blur(${Math.round(blur * 1.7)}px) saturate(0.55)`,
                 }}
               />
-              {/* De donkere plaat: even doorzichtig als de lichte (zelfde vervaging), met een donkere
-                  tint in plaats van een witte. Alleen binnen de omtrek; daarbuiten blijft de
-                  wallpaper zoals hij is. */}
-              <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${(dim * 0.5).toFixed(3)})` }} />
+              {/* De donkere plaat: de schuif "Opacity" is hier letterlijk hoe zwart hij is --
+                  0 is helder glas, 95% is mat zwart zoals Tauri. Alleen binnen de omtrek;
+                  daarbuiten blijft de wallpaper zoals hij is. */}
+              <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${dim.toFixed(3)})` }} />
             </div>
           )}
           {/* Achter de statusbalk (alleen in de Android-schil, waar --axe-sat gevuld is): een

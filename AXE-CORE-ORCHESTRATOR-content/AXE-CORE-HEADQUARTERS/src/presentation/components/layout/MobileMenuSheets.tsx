@@ -12,7 +12,7 @@ import {
   useWallpaper, useGlassTuning, setWallpaperPreset, clearWallpaper, setGlassTuning,
   setWallpaperFromFile,
 } from '@/presentation/hooks/useWallpaper';
-import { WALLPAPER_PRESETS, DEFAULT_TUNING } from '@/domain/wallpaper';
+import { WALLPAPER_PRESETS, DEFAULT_TUNINGS, MAX_DIM } from '@/domain/wallpaper';
 import {
   readLockCards, writeLockCard, readDeviceOwner, openPhoneHome,
   type LockCardSetting,
@@ -77,6 +77,7 @@ export function AppearanceSheet({ onClose }: { onClose: () => void }) {
   const [look, setLook] = useLook();
   const wallpaper = useWallpaper();
   const tuning = useGlassTuning();
+  const stand = look === 'glass' ? 'glass' : 'black';
   const file = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -147,23 +148,26 @@ export function AppearanceSheet({ onClose }: { onClose: () => void }) {
       <input ref={file} type="file" accept="image/*" hidden onChange={pick} />
       {error && <div className="mt-2 text-[12px]" style={{ color: '#F59E0B' }}>{error}</div>}
 
-      <Label>Glass</Label>
+      {/* Elke stand zijn eigen glas, apart bewaard: wat je hier schuift geldt
+          alleen voor de stand die nu aan staat (Luka, 7 okt). */}
+      <Label>{look === 'glass' ? 'Light glass' : 'Dark glass'}</Label>
       <Slider
         label="Frosting" value={tuning.blur} min={0} max={80} step={1} format={v => `${v}`}
-        onChange={v => setGlassTuning({ blur: v })}
+        onChange={v => setGlassTuning(stand, { blur: v })}
       />
       <Slider
-        label="Dimming" value={tuning.dim} min={0} max={0.85} step={0.01} format={v => `${Math.round(v * 100)}%`}
-        onChange={v => setGlassTuning({ dim: v })}
+        label={look === 'glass' ? 'Milkiness' : 'Darkness'} value={tuning.dim} min={0} max={MAX_DIM} step={0.01}
+        format={v => `${Math.round(v * 100)}%`}
+        onChange={v => setGlassTuning(stand, { dim: v })}
       />
       <button
-        type="button" onClick={() => { clearWallpaper(); setGlassTuning(DEFAULT_TUNING); }}
+        type="button" onClick={() => { clearWallpaper(); setGlassTuning('black', DEFAULT_TUNINGS.black); setGlassTuning('glass', DEFAULT_TUNINGS.glass); }}
         className="mb-2 mt-1 flex items-center gap-2 text-[12px]" style={{ color: '#9CA3AF' }}
       >
         <RotateCcw size={13} /> Reset appearance
       </button>
       <div className="pb-2 text-[11px] leading-snug" style={{ color: '#6B7280' }}>
-        Dark and Light are the same glass as the desktop app. The wallpaper stays on this phone.
+        Dark and Light each keep their own glass. 0 is clear, high is solid. Saved on this phone.
       </div>
     </Sheet>
   );

@@ -174,30 +174,45 @@ export function wallpaperCss(w: Wallpaper): string | null {
   }
 }
 
-/** How the picture is dimmed and how much the plate blurs it. */
+/** How see-through the plate is, and how much it frosts the picture behind it. */
 export interface GlassTuning {
-  /** 0..0.85: darkness laid over the picture, outside and inside the plate. */
+  /** 0..0.95: how solid the plate's own tint is -- black on Dark, milky white on Light. 0 = clear glass. */
   dim: number;
-  /** 0..80px: blur of the picture seen through the plate. */
+  /** 0..80: frost of the picture seen through the plate. 0 = sharp. */
   blur: number;
 }
 
+/** Dark and Light each keep their own glass (Luka, 7 okt 2026: "apart van elkaar"). */
+export type PlaatLook = 'black' | 'glass';
+
 /**
- * The Tauri dark plate: the picture blurred and darkened to about two thirds, so the mountains stay
- * recognisable (first try: blur 44 / dim .72 and on the phone it came out as a flat grey haze).
- * The desktop shell over Moraine Lake: bright sky around #3c3c3c, shadows near black.
+ * Dark: close to the Tauri plate -- matte black with the picture only faintly through it
+ * (Luka, 7 okt: "meer mat zwart zoals tauri"). Light: milky frosted glass, ~32px of blur
+ * on the phone, which is what the stylesheet hard-coded before it followed the slider.
  */
-export const DEFAULT_TUNING: GlassTuning = { dim: 0.66, blur: 30 };
+export const DEFAULT_TUNINGS: Record<PlaatLook, GlassTuning> = {
+  black: { dim: 0.82, blur: 30 },
+  glass: { dim: 0.35, blur: 19 },
+};
+
+/** The Dark default; kept as its own name because older code and tests read it. */
+export const DEFAULT_TUNING: GlassTuning = DEFAULT_TUNINGS.black;
+
+export const MAX_DIM = 0.95;
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 /** Stored values are strings from localStorage; garbage falls back to the default, not to 0. */
-export function parseTuning(dim: string | null | undefined, blur: string | null | undefined): GlassTuning {
+export function parseTuning(
+  dim: string | null | undefined,
+  blur: string | null | undefined,
+  fallback: GlassTuning = DEFAULT_TUNING,
+): GlassTuning {
   const d = dim == null || dim === '' ? NaN : Number(dim);
   const b = blur == null || blur === '' ? NaN : Number(blur);
   return {
-    dim: Number.isFinite(d) ? clamp(d, 0, 0.85) : DEFAULT_TUNING.dim,
-    blur: Number.isFinite(b) ? clamp(b, 0, 80) : DEFAULT_TUNING.blur,
+    dim: Number.isFinite(d) ? clamp(d, 0, MAX_DIM) : fallback.dim,
+    blur: Number.isFinite(b) ? clamp(b, 0, 80) : fallback.blur,
   };
 }
 

@@ -10,13 +10,19 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  type Wallpaper, type GlassTuning, parseWallpaper,
-  parseTuning, fitWithin, WALLPAPER_PRESETS, PRESET_PREFIX,
+  type Wallpaper, type GlassTuning, type PlaatLook, parseWallpaper,
+  parseTuning, fitWithin, WALLPAPER_PRESETS, PRESET_PREFIX, DEFAULT_TUNINGS,
 } from '@/domain/wallpaper';
+import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 
 const KEY = 'axe_mobile_wallpaper';
-const KEY_DIM = 'axe_wp_dim';
-const KEY_BLUR = 'axe_wp_blur';
+/* Per look apart (7 okt 2026). De oude gedeelde sleutels (`axe_wp_dim`/`axe_wp_blur`)
+   waren in de praktijk de donkere stand -- licht deed er niets mee -- dus die zijn de
+   startwaarde voor donker, niet voor licht. */
+const OUD_DIM = 'axe_wp_dim';
+const OUD_BLUR = 'axe_wp_blur';
+const keyDim = (l: PlaatLook) => `axe_wp_dim_${l}`;
+const keyBlur = (l: PlaatLook) => `axe_wp_blur_${l}`;
 const EVT = 'axe-wallpaper-changed';
 
 function get(key: string): string | null {
@@ -32,7 +38,18 @@ function notify() {
 }
 
 function readWallpaper(): Wallpaper { return parseWallpaper(get(KEY)); }
-function readTuning(): GlassTuning { return parseTuning(get(KEY_DIM), get(KEY_BLUR)); }
+function readTuningFor(look: PlaatLook): GlassTuning {
+  const dim = get(keyDim(look));
+  const blur = get(keyBlur(look));
+  // Donker zonder eigen waarde: neem wat er vóór de splitsing stond -- behalve de oude
+  // standaard (0.66/30), want die was te grijs; dan geldt de nieuwe matte standaard.
+  if (look === 'black' && dim == null && blur == null) {
+    const oudDim = get(OUD_DIM);
+    if (oudDim != null && oudDim !== '0.66') return parseTuning(oudDim, get(OUD_BLUR), DEFAULT_TUNINGS.black);
+  }
+  return parseTuning(dim, blur, DEFAULT_TUNINGS[look]);
+}
+const readTunings = (): Record<PlaatLook, GlassTuning> => ({ black: readTuningFor('black'), glass: readTuningFor('glass') });
 
 function useStored<T>(read: () => T): T {
   const [v, setV] = useState<T>(read);
@@ -51,7 +68,12 @@ function useStored<T>(read: () => T): T {
 }
 
 export function useWallpaper(): Wallpaper { return useStored(readWallpaper); }
-export function useGlassTuning(): GlassTuning { return useStored(readTuning); }
+/** De glas-instelling van de stand die nu aan staat. */
+export function useGlassTuning(): GlassTuning {
+  const look = useLookValue() === 'glass' ? 'glass' : 'black';
+  const alle = useStored(readTunings);
+  return alle[look];
+}
 
 export function clearWallpaper(): void { set(KEY, ''); notify(); }
 
@@ -61,11 +83,12 @@ export function setWallpaperPreset(id: string): void {
   notify();
 }
 
-export function setGlassTuning(t: Partial<GlassTuning>): void {
-  const cur = readTuning();
-  const next = parseTuning(String(t.dim ?? cur.dim), String(t.blur ?? cur.blur));
-  set(KEY_DIM, String(next.dim));
-  set(KEY_BLUR, String(next.blur));
+/** Alleen de glas-instelling van `look`; de andere stand blijft zoals hij was. */
+export function setGlassTuning(look: PlaatLook, t: Partial<GlassTuning>): void {
+  const cur = readTuningFor(look);
+  const next = parseTuning(String(t.dim ?? cur.dim), String(t.blur ?? cur.blur), DEFAULT_TUNINGS[look]);
+  set(keyDim(look), String(next.dim));
+  set(keyBlur(look), String(next.blur));
   notify();
 }
 

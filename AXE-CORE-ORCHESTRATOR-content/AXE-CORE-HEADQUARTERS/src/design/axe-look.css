@@ -613,9 +613,12 @@ html:root[data-look][data-ios-pwa],
    De licht/donker-knop staat buiten de schil (AppShell), dus deze backdrop-filter
    verschuift hem niet meer. */
 :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
+  /* De melkwitte vulling volgt de schuif "Milkiness" van de lichte stand
+     (--axe-glass-sluier, gezet door MobileGlass; 7 okt 2026). 0 = helder glas, dan
+     blijft alleen de lichtvang en de rand. Zonder de variabele geldt de oude vulling. */
   background:
-    radial-gradient(130% 80% at 50% -14%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 60%),
-    linear-gradient(180deg, rgba(248, 250, 253, 0.24) 0%, rgba(240, 245, 250, 0.15) 100%) !important;
+    radial-gradient(130% 80% at 50% -14%, rgba(255, 255, 255, calc(0.30 * min(1, var(--axe-glass-sluier, 0.26) * 4))), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, rgba(248, 250, 253, var(--axe-glass-sluier, 0.24)) 0%, rgba(240, 245, 250, calc(var(--axe-glass-sluier, 0.24) * 0.62)) 100%) !important;
   /* FROST helemaal vol (à la liquid-glass): een zware blur vervaagt de kleur-
      grond tot een zacht melkig matglas met kleurzweempjes — dát is het Tauri-
      light-glas-effect. */
@@ -7444,9 +7447,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
   /* The light glass remains visibly Tauri-like, but 64px fullscreen blur is
      needless GPU work on a phone and makes scroll/keyboard animation feel webby. */
+  /* Volgt de schuif "Frosting" van de lichte stand (MobileGlass zet --axe-glass-blur,
+     standaard 32px). Stond hier vast op 32px, waardoor de schuif op licht niets deed. */
   :root[data-look='glass'] .axe-shell.axe-plaat-mobiel {
-    backdrop-filter: blur(32px) saturate(155%) brightness(1.03) !important;
-    -webkit-backdrop-filter: blur(32px) saturate(155%) brightness(1.03) !important;
+    backdrop-filter: blur(var(--axe-glass-blur, 32px)) saturate(155%) brightness(1.03) !important;
+    -webkit-backdrop-filter: blur(var(--axe-glass-blur, 32px)) saturate(155%) brightness(1.03) !important;
   }
 }
 

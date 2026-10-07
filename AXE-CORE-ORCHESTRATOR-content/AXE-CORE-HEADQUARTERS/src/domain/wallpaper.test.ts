@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   WALLPAPER_PRESETS, nightPeaksCss, parseWallpaper, serializeWallpaper, wallpaperCss,
-  parseTuning, DEFAULT_TUNING, fitWithin,
+  parseTuning, DEFAULT_TUNING, DEFAULT_TUNINGS, fitWithin,
 } from './wallpaper';
 
 describe('parseWallpaper', () => {
@@ -78,8 +78,9 @@ describe('wallpaperCss', () => {
     }
   });
   it('the default tuning is the Tauri dark plate: clearly dimmed, blurred but still recognisable', () => {
-    expect(DEFAULT_TUNING.dim).toBeGreaterThanOrEqual(0.6);
-    expect(DEFAULT_TUNING.dim).toBeLessThanOrEqual(0.8);
+    // Dark is close to the Tauri plate: mostly matte black, the picture only faintly through.
+    expect(DEFAULT_TUNING.dim).toBeGreaterThanOrEqual(0.7);
+    expect(DEFAULT_TUNING.dim).toBeLessThanOrEqual(0.9);
     // Above ~40px the picture turned into a flat grey haze on the phone; below ~20 it is not frosted.
     expect(DEFAULT_TUNING.blur).toBeGreaterThanOrEqual(24);
     expect(DEFAULT_TUNING.blur).toBeLessThanOrEqual(40);
@@ -93,6 +94,10 @@ describe('wallpaperCss', () => {
 });
 
 describe('parseTuning', () => {
+  it('falls back to the default of the look it is read for', () => {
+    expect(parseTuning(null, null, DEFAULT_TUNINGS.glass)).toEqual(DEFAULT_TUNINGS.glass);
+    expect(DEFAULT_TUNINGS.glass).not.toEqual(DEFAULT_TUNINGS.black);
+  });
   it('falls back to the default for nothing and for garbage', () => {
     expect(parseTuning(null, null)).toEqual(DEFAULT_TUNING);
     expect(parseTuning('abc', '')).toEqual(DEFAULT_TUNING);
@@ -101,7 +106,7 @@ describe('parseTuning', () => {
     expect(parseTuning('0', '0')).toEqual({ dim: 0, blur: 0 });
   });
   it('clamps both ends', () => {
-    expect(parseTuning('5', '500')).toEqual({ dim: 0.85, blur: 80 });
+    expect(parseTuning('5', '500')).toEqual({ dim: 0.95, blur: 80 });
     expect(parseTuning('-1', '-9')).toEqual({ dim: 0, blur: 0 });
   });
 });
