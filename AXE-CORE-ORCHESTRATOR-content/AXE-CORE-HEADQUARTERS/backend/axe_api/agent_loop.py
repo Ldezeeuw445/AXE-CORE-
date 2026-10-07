@@ -138,6 +138,9 @@ _NEEDS_APPROVAL = (
     "certbot", "psql", "supabase",
 )
 
+# Binnen een DAX-container vrij (zie approval_reason).
+_DAX_VRIJ = ("pip install", "npm install", "yarn add")
+
 # Mail en berichten gaan nooit zonder Luka's ok de deur uit, welke taak het
 # ook is (25 sep). Taken uit het gesprek komen nu echt hier aan, en een shell
 # op de box waar NorthSea en de mailbox draaien kan anders met één curl mailen.
@@ -191,9 +194,14 @@ def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> s
     *outside* the workspace, or touching the machine itself.
     """
     lowered = " ".join(command.lower().split())
+    # Op een eigen DAX-computer is pakketten installeren werk in de eigen
+    # werkplek: de container is van deze agent, niet van de VPS. Alles wat de
+    # buitenwereld raakt (git push, ssh, systemctl, docker, mail, orders) blijft
+    # gewoon om Luka vragen.
+    vrij = _DAX_VRIJ if _HUIDIGE_DAX.get() is not None else ()
 
     for pattern in _NEEDS_APPROVAL:
-        if pattern in lowered:
+        if pattern in lowered and pattern not in vrij:
             return f"touches the system ({pattern.strip()})"
 
     for pattern in _OUTBOUND_NEEDS_APPROVAL:
@@ -466,6 +474,14 @@ _HUIDIGE_DEVICE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "axe_pinned_device", default=None,
 )
 
+# De DAX-computer waarop deze beurt uitvoert (dax.DaxUitvoerder), of None.
+# Gezet = run_shell/read_file/write_file gaan naar die persistente computer in
+# plaats van naar de VPS zelf. De weigerlijst en de approval-regels blijven
+# precies dezelfde: alleen de plek van uitvoeren verandert, niet wat mag.
+_HUIDIGE_DAX: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "axe_dax_executor", default=None,
+)
+
 
 def _tool_decls() -> list[dict[str, Any]]:
     """Alleen de tools van déze werkplek. Zonder filter ziet iedereen run_crew."""
@@ -492,6 +508,14 @@ def systeem_prompt() -> str:
             )
         if ws.get("preferred_device"):
             extra.append(f"Preferred device: {ws['preferred_device']}.")
+    dax = _HUIDIGE_DAX.get()
+    if dax is not None:
+        extra.append(
+            f"You execute on your own persistent DAX computer {dax.computer.id}. run_shell, "
+            "read_file and write_file run there, not on the VPS. /dax/workspace survives "
+            "restarts (your task folder is the cwd); /dax/artifacts is for results; the "
+            "persistent browser profile is used by `dax-browser` (cookies and logins stay)."
+        )
     pinned = _HUIDIGE_DEVICE.get()
     if pinned == "vps":
         extra.append("Luka pinned this job to the VPS. Use run_shell, not a Mac.")
@@ -607,6 +631,9 @@ def _shell(command: str, cwd: str | None = None) -> dict[str, Any]:
     refusal = _refuse(command)
     if refusal:
         return {"exit_code": 126, "stdout": "", "stderr": refusal}
+    dax = _HUIDIGE_DAX.get()
+    if dax is not None:
+        return dax.shell(command, cwd)
     workdir = cwd or _HUIDIGE_WORKSPACE.get()
     os.makedirs(workdir, exist_ok=True)
     try:
@@ -633,6 +660,9 @@ def _workspace_path(path: str) -> str:
     return os.path.join(_HUIDIGE_WORKSPACE.get(), path)
 
 def _read(path: str, max_bytes: int = 60000) -> dict[str, Any]:
+    dax = _HUIDIGE_DAX.get()
+    if dax is not None:
+        return dax.lees(path, max_bytes)
     path = _workspace_path(path)
     try:
         with open(path, "r", errors="replace") as handle:
@@ -646,6 +676,9 @@ def _read(path: str, max_bytes: int = 60000) -> dict[str, Any]:
 
 
 def _write(path: str, content: str) -> dict[str, Any]:
+    dax = _HUIDIGE_DAX.get()
+    if dax is not None:
+        return dax.schrijf(path, content)
     path = _workspace_path(path)
     try:
         parent = os.path.dirname(path)
@@ -921,6 +954,7 @@ async def run_agent_loop(
     workspace: str | None = None,
     device: str | None = None,
     should_stop: Callable[[], Awaitable[bool]] | None = None,
+    dax: Any = None,
 ) -> dict[str, Any]:
     """Run the request to completion.
 
@@ -951,16 +985,18 @@ async def run_agent_loop(
 
     agent_ws = laad_workspace(agent) if agent else None
     brief = (agent_ws or {}).get("system_prompt") or AGENT_BRIEFS.get(agent or "", "")
-    task_workspace = workspace or WORKSPACE
-    try:
-        os.makedirs(task_workspace, exist_ok=True)
-    except OSError:
-        pass
+    task_workspace = (dax.werkmap if dax is not None else None) or workspace or WORKSPACE
+    if dax is None:
+        try:
+            os.makedirs(task_workspace, exist_ok=True)
+        except OSError:
+            pass
     pinned = device or ((agent_ws or {}).get("preferred_device") if agent_ws else None)
     werkplek_fiche = _HUIDIGE_WORKSPACE.set(task_workspace)
     fiche = _HUIDIGE_BRIEF.set(brief)
     ws_fiche = _HUIDIGE_AGENT_WS.set(agent_ws)
     device_fiche = _HUIDIGE_DEVICE.set(pinned if pinned in ("vps", "mac-mini", "imac") else None)
+    dax_fiche = _HUIDIGE_DAX.set(dax)
 
     async def stop_gevraagd() -> None:
         """Werp TaskCancelled als de taak intussen geannuleerd is."""
@@ -979,6 +1015,7 @@ async def run_agent_loop(
         _HUIDIGE_WORKSPACE.reset(werkplek_fiche)
         _HUIDIGE_AGENT_WS.reset(ws_fiche)
         _HUIDIGE_DEVICE.reset(device_fiche)
+        _HUIDIGE_DAX.reset(dax_fiche)
 
 
 async def _lus(

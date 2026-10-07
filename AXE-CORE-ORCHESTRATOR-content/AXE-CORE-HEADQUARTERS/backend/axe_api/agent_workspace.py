@@ -115,26 +115,31 @@ AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
         "role": "Commodity desk manager", "system_prompt": _BRIEVEN["northsea"],
         "tools": _LEES, "preferred_device": None, "memory_scope": "agent",
         "crew": [],
+        "dax_computer": "dax-northsea-01", "computer_mode": "persistent",
     },
     "trading": {
         "role": "AXE Algo · trading desk", "system_prompt": _BRIEVEN["trading"],
         "tools": _CREW, "preferred_device": None, "memory_scope": "agent",
         "crew": ["dollar_bill", "intel"],
+        "dax_computer": "dax-trading-01", "computer_mode": "persistent",
     },
     "developer": {
         "role": "Code manager", "system_prompt": _BRIEVEN["developer"],
         "tools": _CREW, "preferred_device": "mac-mini", "memory_scope": "task",
         "crew": ["wags", "forge"],
+        "dax_computer": "dax-developer-01", "computer_mode": "persistent",
     },
     "thinktank": {
         "role": "Ideas manager", "system_prompt": _BRIEVEN["thinktank"],
         "tools": _CREW, "preferred_device": None, "memory_scope": "agent",
         "crew": ["nova", "atlas"],
+        "dax_computer": "dax-thinktank-01", "computer_mode": "persistent",
     },
     "browser": {
         "role": "Web agent", "system_prompt": _BRIEVEN["browser"],
         "tools": _VOL, "preferred_device": None, "memory_scope": "task",
         "crew": [],
+        "dax_computer": "dax-browser-01", "computer_mode": "persistent",
     },
     "memory": {
         "role": "Memory manager", "system_prompt": _BRIEVEN["memory"],
@@ -196,6 +201,18 @@ def laad_workspace(agent: str | None) -> dict[str, Any]:
 def tools_voor(workspace: dict[str, Any]) -> tuple[str, ...]:
     raw = workspace.get("tools") or ()
     return tuple(str(t) for t in raw)
+
+
+def dax_voor(workspace: dict[str, Any]) -> str | None:
+    """Het DAX-id waar deze agent uitvoert, of None (dan: VPS/Mac zoals altijd).
+
+    Agent Workspace = wie de agent is. DAX = waar hij uitvoert. Crew-leden
+    zonder eigen DAX werken via de computer van hun manager (zie
+    core_dax_computers.members); een specialist kan later een eigen DAX krijgen
+    door hier een id te zetten.
+    """
+    raw = workspace.get("dax_computer")
+    return str(raw) if raw else None
 
 
 def crew_voor(workspace: dict[str, Any]) -> list[str]:

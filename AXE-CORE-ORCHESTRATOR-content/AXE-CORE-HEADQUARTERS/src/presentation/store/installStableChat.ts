@@ -10,6 +10,7 @@
  * 5. Inject Architecture-assigned skills into system prompt.
  * 6. Living Display owned by installSpherePresent (no double project).
  */
+import { terugkomstContext } from '@/application/axe/terugkomst';
 import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
@@ -346,6 +347,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     AXE_SYSTEM_PROMPT +
     (skillsBlock ? `\n\n${skillsBlock}` : '') +
     (memoryBlock ? `\n\n${memoryBlock}` : '') +
+    terugkomstContext() +
     replyLanguageInstruction() +
     `\n\n${CONVERSATION_FIRST_RULE}` +
     (isSocialChatTurn(text)

@@ -34,6 +34,17 @@ class TestLaag(unittest.TestCase):
         self.assertEqual(parse_argv(["agents", "run", "trading", "scan"])["path"], "agent run")
         self.assertEqual(parse_argv(["node", "list"])["path"], "node list")
 
+    def test_missies_en_dax(self):
+        d = parse_argv(["missions", "create", "--title", "AXON", "--goal", "ship", "--agent", "developer",
+                        "--steps", "schema; api; ui"])
+        self.assertEqual(d["path"], "missions create")
+        self.assertEqual(decide_guard(d["path"], d["raw"], False)["kind"], "need_write")
+        self.assertEqual(decide_guard(d["path"], d["raw"], True)["kind"], "allow")
+        self.assertEqual(parse_argv(["missions", "resume", "id", "--note", "go"])["path"], "missions resume")
+        self.assertEqual(parse_argv(["agents", "activity"])["path"], "agents activity")
+        self.assertEqual(parse_argv(["observe"])["path"], "observe")
+        self.assertIn("missions create", help_text())
+
     def test_blokkades_niet_te_omzeilen(self):
         gevallen = (
             ("agent run northsea verstuur het concept", "email"),

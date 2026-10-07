@@ -9,6 +9,7 @@
 import { useVoiceStore, markLoadedAsPersisted, type ConversationMessage } from '@/presentation/store/voiceStore';
 import { apparaatId, berichtenSinds } from '@/infrastructure/persistence/chatPersistence';
 import { verwerkExterneRijen } from '@/domain/chat/gesprekSync';
+import { haalTerugkomst, markeerGezien } from '@/application/axe/terugkomst';
 
 const ELKE_MS = 4_000;
 let installed = false;
@@ -54,5 +55,16 @@ export function installGesprekSync(): void {
   if (installed || typeof window === 'undefined') return;
   installed = true;
   window.setInterval(() => { void tik(); }, ELKE_MS);
-  document.addEventListener('visibilitychange', () => { void tik(); });
+  document.addEventListener('visibilitychange', () => {
+    void tik();
+    // Terug van weg: wat deden de agents intussen? Weg: de klok loopt vanaf nu.
+    if (document.visibilityState === 'visible') void haalTerugkomst();
+    else markeerGezien();
+  });
+  void haalTerugkomst();
+  // Elk bericht van Luka is "hij was er": de volgende terugkomst telt vanaf daar.
+  useVoiceStore.subscribe((st, vorige) => {
+    if (st.conversation.length === vorige.conversation.length) return;
+    if (st.conversation[st.conversation.length - 1]?.role === 'user') markeerGezien();
+  });
 }

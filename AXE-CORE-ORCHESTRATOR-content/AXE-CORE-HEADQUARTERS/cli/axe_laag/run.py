@@ -421,6 +421,36 @@ def _run(path: str, parsed: dict[str, Any], client: Client, cfg: dict[str, Any])
                     {"device_id": cfg["node_vps"], "name": cfg["node_vps"], "os": None, "online": False, "source": "config"},
                 ],
             })
+    if path == "missions list":
+        q = {"status": _flag(parsed, "status")} if _flag(parsed, "status") else None
+        return envelope(path, "ok", client.get("/missions", q))
+    if path == "missions create":
+        title, goal, agent = _flag(parsed, "title"), _flag(parsed, "goal"), _flag(parsed, "agent")
+        steps = [s.strip() for s in (_flag(parsed, "steps") or "").split(";") if s.strip()]
+        if not (title and goal and agent and steps):
+            raise UsageError('missions create needs --title, --goal, --agent and --steps "a; b; c"')
+        body: dict[str, Any] = {"title": title, "goal": goal, "owner_agent": agent, "milestones": steps,
+                                "priority": _flag(parsed, "priority") or "medium", "requested_by": actor}
+        if _flag(parsed, "every"):
+            body["recurring_interval_seconds"] = int(_flag(parsed, "every"))
+        if _flag(parsed, "until"):
+            body["continue_until"] = _flag(parsed, "until")
+        return envelope(path, "ok", client.post("/missions", body))
+    if path in ("missions show", "missions pause", "missions resume"):
+        if not p:
+            raise UsageError(f"{path} needs an id")
+        if path == "missions show":
+            return envelope(path, "ok", client.get(f"/missions/{p[0]}"))
+        actie = path.split()[1]
+        return envelope(path, "ok", client.post(f"/missions/{p[0]}/{actie}", {
+            "by": actor, "note": _flag(parsed, "note"), "reason": _flag(parsed, "reason"),
+        }))
+    if path == "agents activity":
+        return envelope(path, "ok", client.get("/agents/activity"))
+    if path == "dax list":
+        return envelope(path, "ok", client.get("/dax"))
+    if path == "observe":
+        return envelope(path, "ok", client.get("/observability"))
     raise UsageError(f"unknown command '{path}'")
 
 

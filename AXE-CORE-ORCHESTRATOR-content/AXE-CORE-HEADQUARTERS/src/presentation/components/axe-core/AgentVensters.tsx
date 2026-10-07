@@ -32,7 +32,9 @@ import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
 import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
-import { decideDurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
+import { decideDurableTaskApproval, pauseMission, resumeMission } from '@/infrastructure/gateways/axeCoreApiService';
+import { serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
+import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 
 /** Hoe vaak de kolom zichzelf opnieuw beoordeelt, zodat nagloei echt afloopt. */
 const TIK_MS = 1_000;
@@ -105,15 +107,46 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
 
 type Kant = 'links' | 'rechts';
 
-function Balkje({ rij, onKies, kant = 'links' }:
-  { rij: ManagerRij; onKies: () => void; kant?: Kant }) {
+function Balkje({ rij, onKies, kant = 'links', server }:
+  { rij: ManagerRij; onKies: () => void; kant?: Kant; server?: ServerAgent }) {
   const { agent, job } = rij;
   const spiegel = kant === 'rechts';
   const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
   const regel = job ? agentRegel(job) : rij.regel;
 
+  /* Geen job in déze app, maar de server ziet wél werk (een missie die op de
+     VPS doorloopt terwijl de app dicht was): dat tonen, met de echte status.
+     WORKING staat hier alleen bij een levende lease -- zie agent_activiteit.py. */
+  const serverStand = !job && server ? bepaalServerStand(server) : null;
+  if (serverStand && !serverStand.stil) {
+    return (
+      <button
+        type="button"
+        onClick={onKies}
+        aria-label={`Gesprek met ${agent.name}`}
+        className="flex items-center gap-3 w-full cursor-pointer min-w-0"
+        style={{ ...BALK, flexDirection: spiegel ? 'row-reverse' : 'row',
+                 textAlign: spiegel ? 'right' : 'left' }}
+        data-axe-server-status={server?.status}
+      >
+        <span className="flex-1 min-w-0 text-[12.5px] leading-snug line-clamp-2">
+          <span style={{ color: agent.accent, fontWeight: 500 }}>{agent.kort ?? agent.name}</span>
+          {' '}
+          <span style={{ color: 'var(--text-secondary)' }}>{serverStand.regel}</span>
+        </span>
+        <span
+          className="text-[9.5px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0"
+          style={{ color: serverStand.kleur }}
+        >
+          {serverStand.label}
+        </span>
+      </button>
+    );
+  }
+
   /* Stilstaand: geen balkje, alleen het woord. Zo blijft de rij op zijn plek
-     en zie je in één blik wie er niets doet, zonder iets te dempen. */
+     en zie je in één blik wie er niets doet, zonder iets te dempen. "sleeping"
+     als de server dat bevestigt; "idle" alleen als de server niet antwoordt. */
   if (!job) {
     return (
       <span
@@ -124,7 +157,7 @@ function Balkje({ rij, onKies, kant = 'links' }:
           textAlign: spiegel ? 'right' : 'left',
         }}
       >
-        idle
+        {serverStand ? serverStand.label : 'idle'}
       </span>
     );
   }
@@ -156,6 +189,7 @@ function Balkje({ rij, onKies, kant = 'links' }:
 
 export function AgentVensters() {
   const jobs = useAxeJobStore((s) => s.jobs);
+  const server = useServerAgents();
   const [gekozen, setGekozen] = useState<AxeAgentId | null>(null);
 
   // Eén tik per seconde, zodat een net-klare job na de nagloei echt terugvalt
@@ -203,7 +237,7 @@ export function AgentVensters() {
           return (
             <Fragment key={rij.agent.id}>
               <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
-              <Balkje rij={rij} onKies={kies} />
+              <Balkje rij={rij} onKies={kies} server={server.agents[rij.agent.id]} />
             </Fragment>
           );
         })}
@@ -228,7 +262,7 @@ export function AgentVensters() {
             const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
             return (
               <Fragment key={rij.agent.id}>
-                <Balkje rij={rij} onKies={kies} kant="rechts" />
+                <Balkje rij={rij} onKies={kies} kant="rechts" server={server.agents[rij.agent.id]} />
                 <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
               </Fragment>
             );
@@ -256,6 +290,10 @@ export function AgentVensters() {
               agent={open.agent}
               job={open.job}
               jobs={jobs.filter((j) => j.agent === open.agent.id)}
+              server={server.agents[open.agent.id]}
+              onMissie={(id, actie) => {
+                void (actie === 'pause' ? pauseMission(id) : resumeMission(id)).then(verversServerAgents);
+              }}
               onSluit={() => setGekozen(null)}
               onOpvolging={(tekst) => {
                 startAxeJobs([{

@@ -73,6 +73,12 @@ MANIFEST = {
     "/opt/axe-core-api/task_runtime.py": ("backend/axe_api/task_runtime.py", "axe-core-api"),
     "/opt/axe-core-api/task_worker.py": ("backend/axe_api/task_worker.py", "axe-task-worker"),
     "/opt/axe-core-api/agent_loop.py": ("backend/axe_api/agent_loop.py", "axe-task-worker"),
+    # Missies + DAX (7 okt). De missielus draait in de worker; de API leest mee.
+    "/opt/axe-core-api/missies.py": ("backend/axe_api/missies.py", "axe-task-worker"),
+    "/opt/axe-core-api/mission_engine.py": ("backend/axe_api/mission_engine.py", "axe-task-worker"),
+    "/opt/axe-core-api/dax.py": ("backend/axe_api/dax.py", "axe-task-worker"),
+    "/opt/axe-core-api/agent_activiteit.py": ("backend/axe_api/agent_activiteit.py", "axe-core-api"),
+    "/opt/axe-core-api/missie_api.py": ("backend/axe_api/missie_api.py", "axe-core-api"),
     "/opt/axe-core-api/browser_agent.py": ("backend/axe_api/browser_agent.py", "axe-core-api"),
     "/opt/axe-core-api/crew_runner.py": ("backend/axe_api/crew_runner.py", "axe-core-api"),
     # main.py importeert dit bij het opstarten. Zonder deze regel ship je
@@ -127,8 +133,9 @@ OPTIONAL_WHEN_MISSING = {
 
 # Wie wie nodig heeft. Ship je de één zonder de ander, dan start de worker niet.
 WORKER_IMPORTS = {
-    "task_worker.py": ("agent_loop.py", "task_runtime.py"),
+    "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

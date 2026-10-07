@@ -29,6 +29,8 @@ except ImportError:  # pragma: no cover
 log = logging.getLogger("axe_task_worker")
 
 DEFAULT_CONCURRENCY = 10
+# Hoe lang een zware taak wacht als alle DAX-slots bezet zijn.
+DAX_DEFER_SECONDS = int(os.environ.get("AXE_DAX_DEFER_SECONDS", "20"))
 CONCURRENCY_MAX = 10
 
 
@@ -137,16 +139,57 @@ class TaskWorker:
         *,
         worker_id: str | None = None,
         lease_seconds: int = 60,
+        dax: Any = None,
     ):
         self.repo = repo
         self.handlers = handlers
         self.worker_id = worker_id or f"{socket.gethostname()}:{id(self):x}"
         self.lease_seconds = lease_seconds
+        # dax.DaxRegister, of None. Gezet = zware taken vragen eerst een slot.
+        self.dax = dax
+        # Het slot leeft net iets langer dan de lease en wordt met de heartbeat
+        # verlengd. Crasht de worker, dan komt de capaciteit binnen ~2 leases vrij.
+        self.slot_seconden = max(30, lease_seconds * 2)
+
+    async def _dax_slot(self, task: dict[str, Any]) -> tuple[bool, bool]:
+        """(mag draaien, heeft een slot). Geen DAX of geen zware taak = altijd door."""
+        if self.dax is None:
+            return True, False
+        from dax import zwaar
+        if not zwaar(task):
+            return True, False
+        agent = str(task.get("assignee") or (task.get("payload") or {}).get("agent") or "axe")
+        try:
+            from agent_workspace import dax_voor, laad_workspace
+            dax_id = dax_voor(laad_workspace(agent))
+        except Exception:
+            dax_id = None
+        gekregen = await asyncio.to_thread(
+            self.dax.slot, task["id"], dax_id, self.worker_id, lease_seconds=self.slot_seconden,
+        )
+        return gekregen, gekregen
 
     async def run_once(self) -> bool:
         task = await asyncio.to_thread(self.repo.claim, self.worker_id, self.lease_seconds)
         if not task:
             return False
+        mag, heeft_slot = await self._dax_slot(task)
+        if not mag:
+            # Vol. Terug in de rij zonder dat het een poging kost; zodra er een
+            # slot vrijkomt pakt een volgende claim hem op. Geen werk gedaan,
+            # dus False: dit slot zakt in zijn gewone wachttempo.
+            await asyncio.to_thread(
+                self.repo.defer, task["id"], self.worker_id, task["lease_token"], DAX_DEFER_SECONDS,
+            )
+            return False
+        try:
+            return await self._draai(task, heeft_slot)
+        finally:
+            if heeft_slot:
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(self.dax.geef_vrij, task["id"])
+
+    async def _draai(self, task: dict[str, Any], heeft_slot: bool = False) -> bool:
         handler = self.handlers.get(task.get("capability") or "general")
         if not handler:
             await asyncio.to_thread(
@@ -160,7 +203,7 @@ class TaskWorker:
             return True
 
         context = TaskContext(self.repo, task, self.lease_seconds)
-        heartbeat = asyncio.create_task(self._keep_lease(context))
+        heartbeat = asyncio.create_task(self._keep_lease(context, heeft_slot))
         try:
             result = await handler(task, context)
             verifying = await asyncio.to_thread(
@@ -232,9 +275,16 @@ class TaskWorker:
                 await heartbeat
         return True
 
-    async def _keep_lease(self, context: TaskContext) -> None:
+    async def _keep_lease(self, context: TaskContext, heeft_slot: bool = False) -> None:
         while True:
             await asyncio.sleep(max(5, self.lease_seconds // 3))
+            if heeft_slot and self.dax is not None:
+                # Het DAX-slot verloopt net als de lease; zolang de taak leeft, verlengen.
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(
+                        self.dax.slot, context.task["id"], None, self.worker_id,
+                        lease_seconds=self.slot_seconden,
+                    )
             try:
                 await context.checkpoint(context.task.get("checkpoint") or {})
             except Exception as exc:
@@ -362,8 +412,12 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         except OSError:
             pass
         branch_name = f"axe/{safe_agent}/{safe_task[:12]}"
+        uitvoerder = await _dax_uitvoerder(agent_ws, safe_task, context)
+        if uitvoerder is not None:
+            task_workspace = uitvoerder.werkmap
         await context.event("axe.progress", f"{agent_id} workspace ready.", {
             "agent": agent_id, "workspace": task_workspace, "branch": branch_name,
+            "dax": uitvoerder.computer.id if uitvoerder is not None else None,
         })
         agent_request = request_text
         if agent_id == "developer":
@@ -399,6 +453,7 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             workspace=task_workspace,
             device=str(pinned_device) if pinned_device else None,
             should_stop=should_stop,
+            dax=uitvoerder,
         )
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})
@@ -445,6 +500,36 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             error={"message": str(exc)[:1000]},
         )
         raise
+
+
+async def _dax_uitvoerder(agent_ws: dict[str, Any], safe_task: str, context: TaskContext) -> Any:
+    """Zet de DAX-computer van deze agent klaar, of None (dan: VPS zoals altijd).
+
+    Alleen met AXE_DAX_ENABLED=1. Lukt het starten niet, dan faalt de taak --
+    stilletjes terugvallen op de VPS zou betekenen dat werk op de verkeerde
+    computer gebeurt terwijl Home iets anders laat zien.
+    """
+    from agent_workspace import dax_voor
+    from dax import DAX_WORKSPACE, DaxRegister, DaxUitvoerder, dax_aan, runtime_voor
+    dax_id = dax_voor(agent_ws)
+    if not dax_id or not dax_aan():
+        return None
+    register = DaxRegister(context.repo._client_factory)
+    computer = await asyncio.to_thread(register.haal, dax_id)
+    if computer is None:
+        raise RuntimeError(f"DAX {dax_id} is not registered (core_dax_computers)")
+    runtime = runtime_voor(computer)
+    try:
+        start = await asyncio.to_thread(runtime.ensure_running, computer)
+        await asyncio.to_thread(register.meld, dax_id, status="running")
+    except Exception as exc:
+        await asyncio.to_thread(register.meld, dax_id, status="error", fout=str(exc))
+        raise
+    werkmap = f"{DAX_WORKSPACE}/tasks/{safe_task}"
+    await context.event("dax.ready", f"{dax_id} {start.get('action')}; working in {werkmap}", {
+        "dax": dax_id, "action": start.get("action"), "workspace": werkmap,
+    })
+    return DaxUitvoerder(computer, runtime, werkmap)
 
 
 AXE_CORE_DEFAULT_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
@@ -623,6 +708,7 @@ async def run_slots(
     lease_seconds: int = 90,
     stop: Callable[[], bool] | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    dax: Any = None,
 ) -> None:
     """K onafhankelijke claim-lussen in één proces.
 
@@ -637,7 +723,7 @@ async def run_slots(
     host = socket.gethostname()
     signal = WorkSignal(count)
     workers = [
-        TaskWorker(repo, handlers, worker_id=f"{host}:slot-{n}", lease_seconds=lease_seconds)
+        TaskWorker(repo, handlers, worker_id=f"{host}:slot-{n}", lease_seconds=lease_seconds, dax=dax)
         for n in range(count)
     ]
     await asyncio.gather(*[
@@ -659,11 +745,43 @@ async def run_forever() -> None:
         client.options.postgrest_client_timeout = 15
         return client
 
-    await run_slots(
-        TaskRepository(db),
+    repo = TaskRepository(db)
+    from dax import DaxRegister, dax_aan
+    slots = run_slots(
+        repo,
         {"agentic": agentic_handler, "task_manage": task_manage_handler},
         lease_seconds=int(os.environ.get("TASK_LEASE_SECONDS", "90")),
+        dax=DaxRegister(db) if dax_aan() else None,
     )
+    from mission_engine import MissieMotor, missies_aan, run_mission_engine
+    if not missies_aan():
+        await (asyncio.gather(slots, _dax_slaapronde(DaxRegister(db))) if dax_aan() else slots)
+        return
+    from goedkeuring_melding import schrijf_goedkeuring_melding
+    from missies import MissieRepository
+    motor = MissieMotor(
+        MissieRepository(db), repo,
+        melden=lambda titel, detail: schrijf_goedkeuring_melding(db(), titel, detail),
+    )
+    # De missielus naast de slots, in hetzelfde proces onder systemd: geen app,
+    # geen browser, geen open websocket nodig om door te werken.
+    lussen = [slots, run_mission_engine(motor)]
+    if dax_aan():
+        lussen.append(_dax_slaapronde(DaxRegister(db)))
+    await asyncio.gather(*lussen)
+
+
+async def _dax_slaapronde(register: Any, elke: int = 300) -> None:
+    """Elke 5 minuten: DAX-containers die niets doen gaan slapen (volumes blijven)."""
+    from dax import slaap_inactieven
+    while True:
+        await asyncio.sleep(elke)
+        try:
+            gestopt = await asyncio.to_thread(slaap_inactieven, register)
+            if gestopt:
+                log.info("[dax] asleep: %s", ", ".join(gestopt))
+        except Exception as exc:  # noqa: BLE001 -- slapen is zuinigheid, geen kernwerk
+            log.warning("[dax] sleep round failed: %s", exc)
 
 
 if __name__ == "__main__":

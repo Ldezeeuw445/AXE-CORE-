@@ -10,7 +10,7 @@ import {
   Globe,
   Keyboard,
   Mic,
-  Plus,
+  CornerUpLeft,
   RotateCcw,
   Send,
   SlidersHorizontal,
@@ -19,6 +19,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { isHoofdgesprek } from '@/domain/chat/hoofdgesprek';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { VermogensKnop } from '@/presentation/components/layout/VermogensKnop';
@@ -174,16 +175,19 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
       >
         <RotateCcw size={12} />
       </button>
-      <button
-        onClick={() => {
-          voice.startNewConversation();
-          setHistoryOpen(false);
-        }}
-        title="New chat"
-        className="axe-kop-mini"
-      >
-        <Plus size={12} />
-      </button>
+      {/* Eén doorlopend gesprek: alleen terug-knop vanuit het archief. */}
+      {!isHoofdgesprek(voice.sessionId) && (
+        <button
+          onClick={() => {
+            voice.startNewConversation();
+            setHistoryOpen(false);
+          }}
+          title="Back to AXE"
+          className="axe-kop-mini"
+        >
+          <CornerUpLeft size={12} />
+        </button>
+      )}
     </div>
   ) : null;
 

@@ -26,7 +26,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Clock, Code2, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
+import { isHoofdgesprek } from '@/domain/chat/hoofdgesprek';
+import { AlertTriangle, Clock, Code2, Globe, MapPin, Mic, CornerUpLeft, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
@@ -492,9 +493,13 @@ export function PlaatChat() {
       <button onClick={() => voice.loadAllConversations()} title="Refresh" className="axe-kop-mini">
         <RotateCcw size={12} />
       </button>
-      <button onClick={() => voice.startNewConversation()} title="New chat" className="axe-kop-mini">
-        <Plus size={12} />
-      </button>
+      {/* Geen "nieuw gesprek" meer: AXE is één doorlopende draad. Kijk je in
+          een oud gesprek uit het archief, dan brengt dit je terug. */}
+      {!isHoofdgesprek(voice.sessionId) && (
+        <button onClick={() => voice.startNewConversation()} title="Back to AXE" className="axe-kop-mini">
+          <CornerUpLeft size={12} />
+        </button>
+      )}
     </div>
   );
 

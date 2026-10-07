@@ -26,6 +26,8 @@ import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
 // same-origin proxy path as before, which attaches the key server-side.
 const BASE_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 import { browserBasis } from '@/infrastructure/persistence/browserHostService';
+import type { ServerAgent } from '@/domain/agents/serverStatus';
+import type { SindsSamenvatting } from '@/domain/chat/hoofdgesprek';
 
 // The proxy path always exists in this app; whether the *server* actually
 // has AXE_CORE_API_KEY configured is a runtime fact, not something the
@@ -1824,4 +1826,26 @@ export function plannerZetAan(aan: boolean): Promise<{ aan: boolean; host_kan: b
 export function plannerRonde(): Promise<{ gestart: boolean; reden?: string }> { return call('POST', '/planner/ronde'); }
 export function plannerBesluit(id: string, goedkeuren: boolean): Promise<{ id: string; goedkeuring: string }> {
   return call('POST', `/planner/taken/${encodeURIComponent(id)}/besluit`, { goedkeuren });
+}
+
+// ── Missies, agent-activiteit, DAX (missie_api.py op de VPS) ─────────────────
+// Alles hier komt uit de server-kant: wat de worker en de missielus echt doen,
+// ook als deze app dicht was. Zie backend/axe_api/missie_api.py. Missies
+// aanmaken en /observability lezen gaat (nog) via de API zelf of de axe-CLI;
+// hier staat alleen wat de app echt aanroept.
+
+export function getAgentActivity(events = 8): Promise<{ agents: ServerAgent[]; at: string }> {
+  return call('GET', `/agents/activity?events=${events}`);
+}
+
+export function getAxeSince(sinceIso: string): Promise<SindsSamenvatting & { since: string }> {
+  return call('GET', `/axe/since?since=${encodeURIComponent(sinceIso)}`);
+}
+
+export function pauseMission(id: string, reason?: string): Promise<{ mission: Record<string, unknown> }> {
+  return call('POST', `/missions/${encodeURIComponent(id)}/pause`, { by: 'luka', reason });
+}
+
+export function resumeMission(id: string, note?: string): Promise<{ mission: Record<string, unknown> }> {
+  return call('POST', `/missions/${encodeURIComponent(id)}/resume`, { by: 'luka', note });
 }

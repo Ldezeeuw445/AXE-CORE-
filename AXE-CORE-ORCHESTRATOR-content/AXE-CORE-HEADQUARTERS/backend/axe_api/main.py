@@ -541,6 +541,13 @@ async def decide_task_approval(
     return {"approval": approval}
 
 # ══════════════════════════════════════════════════════════════════════════════
+# MISSIES, AGENT-ACTIVITEIT, DAX, OBSERVABILITY — zie missie_api.py
+# ══════════════════════════════════════════════════════════════════════════════
+from missie_api import maak_router as _missie_router  # noqa: E402
+
+app.include_router(_missie_router(sb), dependencies=[AUTH], tags=["missions"])
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PROXIES — LLM providers, Exa search, Fish TTS
 # ══════════════════════════════════════════════════════════════════════════════
 # Deze routes stonden open, met als redenering: de client stuurt zijn eigen

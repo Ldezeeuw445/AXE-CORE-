@@ -165,6 +165,10 @@ class TaskRepository:
             "payload": payload.get("payload") or {},
             "metadata": payload.get("metadata") or {},
         }
+        # Alleen meesturen als hij er is: een database zonder de missie-migratie
+        # kent de kolom niet, en gewone taken hebben hem niet nodig.
+        if payload.get("mission_id"):
+            row["mission_id"] = payload["mission_id"]
         task = self._db().table("core_tasks").insert(row).execute().data[0]
         self.append_event(
             task["id"], "task.queued", actor_type="user", actor_id=requester,
@@ -218,6 +222,21 @@ class TaskRepository:
             "p_lease_token": lease_token,
             "p_lease_seconds": lease_seconds,
             "p_checkpoint": checkpoint,
+        }).execute().data
+
+    def defer(
+        self, task_id: str, worker_id: str, lease_token: str,
+        delay_seconds: int = 20, reason: str = "capacity",
+    ) -> dict[str, Any]:
+        """Geclaimd maar geen capaciteit: terug in de rij, zonder pogingverlies.
+
+        Een gewone transition kan dit niet (running → queued is geen legale
+        overgang, en een retry kost een poging). defer_core_task doet het
+        atomair, alleen met de eigen lease, en schrijft task.deferred.
+        """
+        return self._db().rpc("defer_core_task", {
+            "p_task_id": task_id, "p_worker_id": worker_id, "p_lease_token": lease_token,
+            "p_delay_seconds": delay_seconds, "p_reason": reason,
         }).execute().data
 
     def transition(

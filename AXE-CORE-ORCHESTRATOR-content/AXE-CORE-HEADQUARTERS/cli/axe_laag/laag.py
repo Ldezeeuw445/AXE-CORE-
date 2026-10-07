@@ -17,6 +17,7 @@ EXIT = {
 
 WRITE_PATHS = {
     "tasks create", "tasks update", "agent run", "memory add", "notify", "report",
+    "missions create", "missions pause", "missions resume",
 }
 
 COMMANDS = [
@@ -41,6 +42,15 @@ COMMANDS = [
     ("report", "axe report \"<title>\" --file <pad>", "Store a task report in memory and notify"),
     ("approvals list", "axe approvals list", "Pending approvals visible in AXE"),
     ("node list", "axe node list", "Existing computer-workers (name, last-seen, online)"),
+    ("missions list", "axe missions list [--status <s>]", "Missions and their progress"),
+    ("missions create", "axe missions create --title <t> --goal <g> --agent <id> --steps \"a; b; c\" [--every <sec>]",
+     "Start a mission; the agent keeps going until done, blocked or a decision is needed"),
+    ("missions show", "axe missions show <id>", "One mission with its tasks and timeline"),
+    ("missions pause", "axe missions pause <id>", "Pause a mission"),
+    ("missions resume", "axe missions resume <id> [--note <answer>]", "Resume (with Luka's answer if it was blocked)"),
+    ("agents activity", "axe agents activity", "What every agent is really doing (server-side status)"),
+    ("dax list", "axe dax list", "DAX computers, slots in use"),
+    ("observe", "axe observe", "Missions, tasks, DAX, approvals at a glance"),
 ]
 
 TWO_WORD = {
@@ -51,6 +61,8 @@ TWO_WORD = {
     "northsea status", "northsea deals", "northsea journal",
     "trading status", "cron list", "mcp list", "approvals list",
     "node list",
+    "missions list", "missions create", "missions show", "missions pause", "missions resume",
+    "agents activity", "dax list",
 }
 
 BLOCKED_FLAGS = (
@@ -107,7 +119,7 @@ def _resolve(words: list[str]) -> tuple[str, list[str]]:
         return path, words[2:]
     if words[0] in ("help", "--help", "-h"):
         return "help", words[1:]
-    if words[0] in ("notify", "report", "status", "help"):
+    if words[0] in ("notify", "report", "status", "help", "observe"):
         return words[0], words[1:]
     raise UsageError(f"unknown or incomplete command '{' '.join(words)}'. See axe help")
 

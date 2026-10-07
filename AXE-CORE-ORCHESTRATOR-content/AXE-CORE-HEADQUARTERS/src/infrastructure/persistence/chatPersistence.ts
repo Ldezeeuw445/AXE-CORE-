@@ -8,6 +8,10 @@
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { isAxeApiConfigured, sbGetRows, sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
+import { isHoofdgesprek } from '@/domain/chat/hoofdgesprek';
+
+/** Het hoofdgesprek haalt ruimer op: na isOurApp blijven er hoogstens 500 over. */
+const HOOFDGESPREK_OPHALEN = 1000;
 
 export type ChatRole = 'user' | 'axe' | 'system';
 
@@ -276,13 +280,15 @@ export function loadConversationLocal(conversationId: string): ConversationMessa
 async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMessageRecord[]> {
   const sb = getSupabase();
   if (!sb) throw new Error('geen Supabase-client');
-  const { data, error } = await sb
-    .from(MESSAGES_TABLE)
-    .select('*')
-    .eq('conversation_id', conversationId)
-    .eq('user_id', AXE_USER_UUID)
+  // Het hoofdgesprek is de hele draad: alle AXE-berichten van Luka, over elk
+  // oud gesprek-id heen. Ruimer ophalen, want andere apps schrijven onder
+  // dezelfde user_id en vallen er pas bij isOurApp uit.
+  const eeuwig = isHoofdgesprek(conversationId);
+  let q = sb.from(MESSAGES_TABLE).select('*').eq('user_id', AXE_USER_UUID);
+  if (!eeuwig) q = q.eq('conversation_id', conversationId);
+  const { data, error } = await q
     .order('created_at', { ascending: false })
-    .limit(500);
+    .limit(eeuwig ? HOOFDGESPREK_OPHALEN : 500);
   if (error) throw new Error(formatSbError(error));
   return (data || []).reverse();
 }
@@ -295,12 +301,13 @@ export async function loadMessages(conversationId: string): Promise<Conversation
       try {
         // De NIEUWSTE 500, oud → nieuw. Met één doorlopend gesprek over alle
         // apparaten toonde 'asc + limit' anders voor altijd de oudste 500.
+        const eeuwig = isHoofdgesprek(conversationId);
         rows = ((await sbGetRows(MESSAGES_TABLE, {
-          limit: 500,
+          limit: eeuwig ? HOOFDGESPREK_OPHALEN : 500,
           orderBy: 'created_at',
           orderDir: 'desc',
-          filterCol: 'conversation_id',
-          filterVal: conversationId,
+          filterCol: eeuwig ? 'user_id' : 'conversation_id',
+          filterVal: eeuwig ? AXE_USER_UUID : conversationId,
         })) as unknown as ChatMessageRecord[]).reverse();
       } catch (apiErr) {
         // The AXE Core VPS bridge may be unreachable — fall back to talking
@@ -317,6 +324,7 @@ export async function loadMessages(conversationId: string): Promise<Conversation
     // 🔒 FILTER: only show messages belonging to THIS app
     return rows
       .filter(isOurApp)
+      .slice(-500)
       .map((r) => {
         // Fall back to metadata if the dedicated columns are absent (schema not yet migrated)
         const meta = r.metadata as Record<string, unknown> | null | undefined;
@@ -464,7 +472,7 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
  * Per-app isolation is handled separately via `app_source` in metadata
  * and the per-app `user_id`, so the id itself doesn't need an app prefix.
  */
-export function createNewConversationId(): string {
+function createNewConversationId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }

@@ -208,6 +208,7 @@ spoor. Alleen stijl en indeling; geen data, hooks, stores of API.
 | `WERKVERDELING.md` | wie waaraan werkt, en welke bestanden van wie zijn |
 | `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
 | `os3/` | Skill AXE + SETUP. CLI + hek bovenop bestaande workers. OS3 optioneel. |
+| `…/docs/MISSIES-EN-DAX.md` | missies (agents werken door zonder "ga door"), DAX-computers op STRATO, eeuwig AXE-gesprek, echte agentstatus |
 
 ## Architectuur: CLI bovenop wat er al is
 

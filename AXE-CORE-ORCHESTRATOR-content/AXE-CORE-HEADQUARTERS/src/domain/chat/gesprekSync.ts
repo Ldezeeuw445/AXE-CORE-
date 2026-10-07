@@ -6,6 +6,7 @@
  * toevoegen aan het gesprek dat open staat, of overstappen naar het gesprek
  * waar Luka op dat andere apparaat mee verder ging. Geen I/O hier.
  */
+import { isHoofdgesprek } from './hoofdgesprek';
 
 export interface ExterneRij {
   conversationId: string;
@@ -44,6 +45,16 @@ export function verwerkExterneRijen(
 ): SyncActie {
   const vreemd = rijen.filter((r) => r.device !== ditApparaat && r.text.trim());
   if (!vreemd.length) return { actie: 'niets' };
+
+  // In het hoofdgesprek hoort ALLES erbij, ook rijen die een oude app nog onder
+  // een eigen gesprek-id schrijft. Wegspringen uit het hoofdgesprek gebeurt nooit.
+  if (isHoofdgesprek(huidigGesprek)) {
+    const nieuw = vreemd
+      .filter((r) => !alBekend(gesprek, r))
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(({ role, text, timestamp }) => ({ role, text, timestamp }));
+    return nieuw.length ? { actie: 'toevoegen', berichten: nieuw } : { actie: 'niets' };
+  }
 
   // Luka ging op een ander apparaat verder in een ander gesprek: volg hem.
   const laatsteHier = gesprek.length ? gesprek[gesprek.length - 1].timestamp : 0;

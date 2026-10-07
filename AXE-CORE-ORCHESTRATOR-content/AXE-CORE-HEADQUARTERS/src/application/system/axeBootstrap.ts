@@ -22,6 +22,9 @@ import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 import { leesProviderVerbindingen, type ProviderVerbinding } from '@/infrastructure/config/providerSleutels';
 import { bewaarDagBriefje, dagBriefjeVanVandaag } from './dagBriefjeMaken';
 import { maybeSeedKluisBoom } from '@/application/obsidian/kluisZaad';
+import { berichtenSinds } from '@/infrastructure/persistence/chatPersistence';
+import { begroeting, magBegroeten, DOORLOPEND_MS } from '@/domain/chat/hoofdgesprek';
+import { haalTerugkomst, laatstGezien } from '@/application/axe/terugkomst';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -64,9 +67,17 @@ export async function maybeDailyGreeting(): Promise<void> {
   // Same canonical identity as every chat reply: the central AXE voice through
   // globalTts. A startup greeting must never resurrect a legacy Fish/browser
   // voice from an old localStorage preference.
+  /* Eén eeuwig gesprek (7 okt): de app openen is geen gesprek-gebeurtenis.
+     Begroet alleen als dat op GEEN apparaat al gebeurde vandaag en het gesprek
+     niet nog loopt. De draad staat op de server, dus kijk daar -- de
+     localStorage-vlag hierboven ziet alleen dit apparaat. */
+  const nu = Date.now();
+  try {
+    const begin = Math.min(new Date(new Date().setHours(0, 0, 0, 0)).getTime(), nu - DOORLOPEND_MS);
+    const vandaag = await berichtenSinds(new Date(begin).toISOString(), 200);
+    if (!magBegroeten(vandaag, nu)) return;
+  } catch { /* server onbereikbaar: liever één begroeting te veel dan een kapotte start */ }
   const hour = new Date().getHours();
-  const part =
-    hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
   /* Tot 1 okt 2026 stond hier `loadTodaysBriefing()`, en die leest een rij die
      niemand schrijft: geen migratie of script in de repo maakt de
      core_schedules-rij "Daily Briefing" aan. Dus klonk hier elke dag "AXE is
@@ -74,7 +85,11 @@ export async function maybeDailyGreeting(): Promise<void> {
      gebruikt die rij nog wel als hij er is -- de VPS ziet meer dan deze app --
      en bouwt hem anders zelf uit de taken en de agenda. */
   const briefing = await dagBriefjeVanVandaag();
-  const line = briefing ? `${part}, Luka. ${briefing}` : `${part}, Luka. AXE is online.`;
+  // Wat er echt gebeurde terwijl Luka weg was gaat voor; zonder nieuws en
+  // zonder briefje zegt AXE niets (geen "AXE is online" meer bij elke start).
+  const sinds = await haalTerugkomst(laatstGezien(nu));
+  const line = begroeting(hour, briefing, sinds);
+  if (!line) return;
   // In de inbox, zodat AXE later kan zeggen "dat stond vanmorgen in je briefje".
   if (briefing) void bewaarDagBriefje(briefing);
 

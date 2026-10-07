@@ -14,6 +14,7 @@ import { draadVoorAgent, type DraadBericht } from '@/domain/tierRouter/agentDraa
 import type { AxeAgent } from '@/domain/agents/roster';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
+import { eventTijd, missieVoortgang, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
 
 function wieEnWat(agent: AxeAgent, job: AxeJob | null): string {
   if (!job) return `AXE has nothing running with ${agent.name} right now.`;
@@ -48,6 +49,8 @@ export function ManagerChat({
   onSluit,
   onOpvolging,
   onGoedkeuring,
+  server,
+  onMissie,
 }: {
   agent: AxeAgent;
   job: AxeJob | null;
@@ -55,6 +58,9 @@ export function ManagerChat({
   onSluit: () => void;
   onOpvolging?: (tekst: string) => void;
   onGoedkeuring?: (akkoord: boolean) => void;
+  /** Wat de server over deze agent weet: missie, DAX, echte tijdlijn. */
+  server?: ServerAgent;
+  onMissie?: (missieId: string, actie: 'pause' | 'resume') => void;
 }) {
   const sluitRef = useRef<HTMLButtonElement>(null);
   const draadRef = useRef<HTMLDivElement>(null);
@@ -75,7 +81,12 @@ export function ManagerChat({
   }, [berichten.length, job?.summary, job?.approvalVraag]);
 
   const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
-  const stand = job ? (vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state]) : null;
+  const lokaal = job ? (vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state]) : null;
+  const serverStand = server ? bepaalServerStand(server) : null;
+  const stand = lokaal ?? (serverStand ? { label: serverStand.label, kleur: serverStand.kleur } : null);
+  const missie = server?.mission ?? null;
+  const pauzeerbaar = !!missie && ['active', 'monitoring', 'waiting_agent', 'waiting_approval'].includes(missie.status);
+  const hervatbaar = !!missie && ['paused', 'blocked', 'human_decision_required'].includes(missie.status);
   const wacht = !!vraag;
 
   const stuur = () => {
@@ -126,8 +137,52 @@ export function ManagerChat({
         }
       >
         <p className="text-[11px] mb-2" style={{ color: 'var(--text-secondary)' }}>
-          {wieEnWat(agent, job)}
+          {!job && server && server.status !== 'SLEEPING' ? server.reason : wieEnWat(agent, job)}
         </p>
+
+        {server && (missie || server.dax_computer || server.events.length > 0) && (
+          <div className="mb-2 text-[10.5px] leading-snug" data-axe-server-agent={server.agent}>
+            {missie && (
+              <p style={{ color: 'var(--text-primary)' }}>
+                <span className="text-[9px] tracking-widest uppercase mr-1" style={{ color: 'var(--accent-cyan)' }}>Mission</span>
+                {missie.title}
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {missieVoortgang(missie) ? ` · ${missieVoortgang(missie)}` : ''}
+                  {missie.current_milestone ? ` · ${missie.current_milestone}` : ''}
+                </span>
+              </p>
+            )}
+            {(server.dax_computer || server.task?.engine || server.task?.model) && (
+              <p style={{ color: 'var(--text-muted)' }}>
+                {server.dax_computer ? `Computer ${server.dax_computer}` : ''}
+                {server.task?.engine ? ` · ${server.task.engine}` : ''}
+                {server.task?.model ? ` · ${server.task.model}` : ''}
+              </p>
+            )}
+            {server.events.length > 0 && (
+              <ul className="mt-1 flex flex-col gap-0.5 overflow-y-auto" style={{ maxHeight: 96 }}>
+                {server.events.slice(0, 6).map((e, i) => (
+                  <li key={`${e.at}-${i}`} className="truncate" style={{ color: 'var(--text-secondary)' }} title={e.message ?? ''}>
+                    <span style={{ color: 'var(--text-muted)' }}>{eventTijd(e.at)} </span>
+                    {e.message || e.event_type}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {missie && onMissie && (pauzeerbaar || hervatbaar) && (
+              <div className="flex gap-1.5 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => onMissie(missie.id, pauzeerbaar ? 'pause' : 'resume')}
+                  className="text-[10px] px-2 py-1 rounded-lg"
+                  style={{ background: 'var(--tint)', color: pauzeerbaar ? 'var(--text-secondary)' : 'var(--ok)' }}
+                >
+                  {pauzeerbaar ? 'Pause' : 'Resume'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div
           ref={draadRef}
