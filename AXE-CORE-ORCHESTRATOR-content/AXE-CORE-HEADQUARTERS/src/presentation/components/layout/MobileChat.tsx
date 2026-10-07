@@ -195,11 +195,11 @@ export function MobileChat() {
         {liveTranscript && (
           <div className="flex items-start gap-2">
             <div className="mt-3 flex size-7 flex-none items-center justify-center">
-              <span className="block size-2.5 rounded-full" style={{ background: '#22d3ee', boxShadow: '0 0 12px #22d3ee' }} />
+              <span className="axe-live-dot" aria-hidden="true" />
             </div>
             <div
               className="min-w-0 flex-1 rounded-[16px] px-3.5 py-2.5 text-[13px] italic leading-[1.48]"
-              style={{ background: 'rgba(8,12,18,.70)', border: '1px solid rgba(34,211,238,.32)', color: 'var(--text-primary)' }}
+              style={{ background: 'rgba(0,0,0,.45)', border: '1px solid rgba(255,255,255,.14)', color: 'var(--text-primary)' }}
             >
               {liveTranscript}
             </div>
