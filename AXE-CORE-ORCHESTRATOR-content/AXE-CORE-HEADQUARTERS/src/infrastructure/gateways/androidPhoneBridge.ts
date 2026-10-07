@@ -20,6 +20,7 @@ interface Shape {
   openHomeScreen?: () => boolean;
   setLockWallpaper?: (kind: string, value: string, dim: number, blur: number) => void;
   selectTab?: (name: string) => void;
+  setLockLook?: (look: string) => void;
 }
 
 function bridge(): Shape | null {
@@ -86,4 +87,9 @@ export function nativeTabsAvailable(): boolean {
 
 export function selectNativeTab(id: string): void {
   try { bridge()?.selectTab?.(id); } catch { /* the menu stays open, so a miss is visible */ }
+}
+
+/** The app's dark ("black") or light ("glass") mode, so the lock screen's plate is the same one. */
+export function syncLockLook(look: 'black' | 'glass'): void {
+  try { bridge()?.setLockLook?.(look); } catch { /* the lock screen keeps its last look */ }
 }

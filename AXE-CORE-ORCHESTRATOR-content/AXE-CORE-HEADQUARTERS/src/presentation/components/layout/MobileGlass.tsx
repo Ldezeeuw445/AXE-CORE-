@@ -19,7 +19,7 @@ import { hasNativeGlass } from '@/infrastructure/config/apiUrl';
 import { Sun, Moon } from 'lucide-react';
 import { useWallpaper, useGlassTuning } from '@/presentation/hooks/useWallpaper';
 import { wallpaperCss } from '@/domain/wallpaper';
-import { syncLockWallpaper } from '@/infrastructure/gateways/androidPhoneBridge';
+import { syncLockWallpaper, syncLockLook } from '@/infrastructure/gateways/androidPhoneBridge';
 
 /*
  * De achtergrond van de Tauri-home ("AXE Glass Plate"), voor de telefoon.
@@ -97,6 +97,7 @@ export function MobileGlass() {
   useEffect(() => {
     if (heeftFoto) document.documentElement.dataset.wp = '1'; else delete document.documentElement.dataset.wp;
   }, [heeftFoto]);
+  useEffect(() => { syncLockLook(look === 'glass' ? 'glass' : 'black'); }, [look]);
   useEffect(() => {
     syncLockWallpaper(
       wallpaper.kind,
