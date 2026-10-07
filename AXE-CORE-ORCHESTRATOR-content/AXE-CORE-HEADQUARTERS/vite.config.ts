@@ -77,6 +77,9 @@ const isTauriBuild =
 const BUILD_STAMP = {
   at: new Date().toISOString(),
   commit: (() => {
+    // A caller that builds from a copy without .git (the Android build uses `git archive`) passes
+    // the commit it archived. Otherwise the stamp read "unknown" on every phone build.
+    if (process.env.AXE_BUILD_COMMIT) return process.env.AXE_BUILD_COMMIT;
     try {
       return execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     } catch {
