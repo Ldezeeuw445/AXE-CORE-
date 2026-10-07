@@ -57,6 +57,15 @@
          Using fixed height + overflow:hidden (not min-height) is what keeps the
          bottom nav pinned on iPad/mobile PWA; min-height let the page grow past
          the screen and the nav "scrolled away". */
+      /* The four safe-area insets, as variables. Safari/the PWA fill them from env(); the Android
+         shell cannot rely on a WebView resolving env(), so it sets --axe-sat / --axe-sab on <html>
+         itself (AxeWebView.kt) and every layout rule reads these instead of env() directly. */
+      :root {
+        --axe-sat: env(safe-area-inset-top, 0px);
+        --axe-sab: env(safe-area-inset-bottom, 0px);
+        --axe-sal: env(safe-area-inset-left, 0px);
+        --axe-sar: env(safe-area-inset-right, 0px);
+      }
       html {
         height: 100vh;
         height: 100dvh;
@@ -87,8 +96,8 @@
          viewport, which is exactly what pushed the bottom nav off-screen. */
       @supports (padding: max(0px)) {
         body {
-          padding-left: env(safe-area-inset-left);
-          padding-right: env(safe-area-inset-right);
+          padding-left: var(--axe-sal);
+          padding-right: var(--axe-sar);
         }
       }
       /* iOS PWA: standalone app feel */
@@ -139,7 +148,7 @@
         left: 0;
         right: 0;
         box-sizing: content-box;
-        height: calc(env(safe-area-inset-top, 0px) + 2px);
+        height: calc(var(--axe-sat) + 2px);
         padding-bottom: 10px;
         background-color: #000;
         background-clip: content-box;

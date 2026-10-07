@@ -75,8 +75,8 @@ const GRAIN =
  * wallpaper moet er exact in passen, anders zie je een rand of een gat.
  */
 const PLAAT_CLIP =
-  'inset(calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px)) 12px ' +
-  'max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px)) 12px round 28px)';
+  'inset(calc(var(--axe-sat) + var(--axe-plaat-boven, 2px)) 12px ' +
+  'max(14px, calc(var(--axe-sab) - 12px)) 12px round 28px)';
 
 /** Volvlakse achtergrond-plaat achter de mobiele surfaces (gradiënt + korrel). */
 export function MobileGlass() {
@@ -115,17 +115,24 @@ export function MobileGlass() {
 
       {foto && (
         <>
-          {/* De gekozen wallpaper, scherp: dit zie je langs de rand van de plaat,
-              zoals je op de Mac je bureaublad naast het venster ziet. */}
-          {/* Donker: bijna grijs, zoals de Tauri-plaat (saturate 0 trekt de kleur uit het glas, zie axe-look.css);
-              licht houdt de foto levendig. */}
-          <div style={{ position: 'absolute', inset: 0, background: foto, filter: glass ? undefined : 'saturate(0.22)' }} />
+          {/* De gekozen wallpaper, scherp en in volle kleur -- in licht én donker, zoals het
+              bureaublad op de Mac niet grijs wordt omdat de plaat donker is. Hij loopt
+              van de bovenrand tot de onderrand van het scherm, ook achter de klok. Alleen
+              de PLAAT erbovenop is donker of licht. */}
+          <div style={{ position: 'absolute', inset: 0, background: foto }} />
           {/* Dezelfde wallpaper, vervaagd, alleen BINNEN de omtrek van de plaat: het
               doorzichtige glas van de Tauri-app. Geen backdrop-filter op de plaat
               zelf (die zou de matglas-lagen van chat en composer platslaan, zie
               axe-look.css); de vervaging zit in de afbeelding. In de lichte stand
-              doet de plaat al een backdrop-blur, daar is dit dezelfde richting. */}
-          {!glass && (
+              doet de plaat al een backdrop-blur en een lichte sluier. */}
+          {glass ? (
+            <div
+              style={{
+                position: 'absolute', inset: 0, clipPath: PLAAT_CLIP, WebkitClipPath: PLAAT_CLIP,
+                background: `rgba(255,255,255,${(dim * 0.1).toFixed(3)})`,
+              }}
+            />
+          ) : (
             <div
               style={{
                 position: 'absolute', inset: 0, clipPath: PLAAT_CLIP, WebkitClipPath: PLAAT_CLIP,
@@ -138,15 +145,17 @@ export function MobileGlass() {
                   filter: `blur(${blur}px) saturate(0.2)`,
                 }}
               />
+              {/* De donkere plaat: het schilderij van de Tauri-shell (de foto op ~30%). Alleen
+                  binnen de omtrek; daarbuiten blijft de wallpaper zoals hij is. */}
+              <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${dim})` }} />
             </div>
           )}
-          {/* De sluier: in donker zwart (leesbaarheid), in licht een tikje wit. */}
+          {/* Achter de statusbalk (alleen in de Android-schil, waar --axe-sat gevuld is): een
+              zachte donkere sluier, zodat de klok leesbaar blijft op een lichte lucht. */}
           <div
             style={{
-              position: 'absolute', inset: 0,
-              // Dark: the Tauri dark plate (the picture darkened to ~30%). Light: the Tauri light plate keeps
-              // the picture bright and saturated, with only a trace of milk over it.
-              background: glass ? `rgba(255,255,255,${(dim * 0.1).toFixed(3)})` : `rgba(0,0,0,${dim})`,
+              position: 'absolute', top: 0, left: 0, right: 0, height: 'calc(var(--axe-sat) * 1.6)',
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.42), rgba(0,0,0,0))',
             }}
           />
         </>

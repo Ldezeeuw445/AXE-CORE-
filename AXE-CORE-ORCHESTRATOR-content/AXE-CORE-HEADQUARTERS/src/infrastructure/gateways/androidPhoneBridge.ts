@@ -19,6 +19,7 @@ interface Shape {
   isDeviceOwner?: () => boolean;
   openHomeScreen?: () => boolean;
   setLockWallpaper?: (kind: string, value: string, dim: number, blur: number) => void;
+  selectTab?: (name: string) => void;
 }
 
 function bridge(): Shape | null {
@@ -66,4 +67,23 @@ export function openPhoneHome(): boolean {
  */
 export function syncLockWallpaper(kind: 'none' | 'preset' | 'photo', value: string, dim: number, blur: number): void {
   try { bridge()?.setLockWallpaper?.(kind, value, dim, blur); } catch { /* the lock screen keeps its last look */ }
+}
+
+/** The native tabs of the Android shell, in the order they are offered. */
+export const NATIVE_TABS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'CORE', label: 'AXE' },
+  { id: 'CHART', label: 'Chart' },
+  { id: 'ALGO', label: 'Algo' },
+  { id: 'WEB', label: 'Web' },
+  { id: 'CODE', label: 'Code' },
+  { id: 'APPS', label: 'Apps' },
+];
+
+/** True inside the Android shell, which has no bottom bar: its tabs are switched from the menu. */
+export function nativeTabsAvailable(): boolean {
+  return typeof bridge()?.selectTab === 'function';
+}
+
+export function selectNativeTab(id: string): void {
+  try { bridge()?.selectTab?.(id); } catch { /* the menu stays open, so a miss is visible */ }
 }

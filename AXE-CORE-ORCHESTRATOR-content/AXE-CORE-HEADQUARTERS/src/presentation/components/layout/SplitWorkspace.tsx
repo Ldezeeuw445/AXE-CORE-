@@ -24,7 +24,7 @@ export function SplitWorkspace() {
       {open && (
         <motion.div
           className="fixed inset-0 z-[80] flex flex-col"
-          style={{ background: '#000', paddingTop: 'env(safe-area-inset-top)' }}
+          style={{ background: '#000', paddingTop: 'var(--axe-sat)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

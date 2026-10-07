@@ -94,7 +94,7 @@ export function TaskCompletionToasts() {
   return (
     <div
       className="fixed z-[108] flex flex-col gap-2 items-end pointer-events-none"
-      style={{ top: 'calc(66px + env(safe-area-inset-top) + 12px)', right: 16, maxWidth: 320 }}
+      style={{ top: 'calc(66px + var(--axe-sat) + 12px)', right: 16, maxWidth: 320 }}
       aria-live="polite"
     >
       {meldingen.map(m => (

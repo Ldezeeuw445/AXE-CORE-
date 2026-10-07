@@ -275,7 +275,7 @@ export function AppShell() {
           className="axe-mobile-look-toggle fixed z-[70]"
           style={{
             // 10px binnen de bovenrand van de plaat, wat die rand ook is (--axe-plaat-boven).
-            top: opPlaatMobiel ? 'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 10px)' : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            top: opPlaatMobiel ? 'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)' : 'calc(var(--axe-sat) + 10px)',
             right: opPlaatMobiel ? 18 : 12,
           }}
         >
@@ -293,7 +293,7 @@ export function AppShell() {
               // marge — zo zweeft hij op de achtergrond zoals in de Tauri-app.
               position: 'fixed',
               // --axe-plaat-boven: 2px, op de lichte telefoon 8px (axe-look.css).
-              top: 'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px))',
+              top: 'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px))',
               left: 12,
               right: 12,
               // De plaat loopt door tot vlak boven de home-indicator. Die
@@ -303,7 +303,7 @@ export function AppShell() {
               // Tauri) blijft het de 14px van voorheen. Werkt alleen omdat
               // index.html de statusbalk op `black` zet -- met
               // black-translucent tekent iOS 26 de onderste 62pt niet.
-              bottom: 'max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px))',
+              bottom: 'max(14px, calc(var(--axe-sab) - 12px))',
               // Geen vaste hoogte: top en bottom bepalen hem, de composer
               // volgt via flex.
               height: 'auto',
@@ -389,7 +389,7 @@ export function AppShell() {
                   mobileCommandSurface && location.pathname !== '/mobile' && location.pathname !== '/lock'
                     // Net genoeg om onder de zwevende top-bar (view-switcher) en de
                     // hamburger te blijven; de 52 gaf een grote lege plek bovenin.
-                    ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 30px)' }
+                    ? { paddingTop: 'calc(var(--axe-sat) + 30px)' }
                     : undefined
                 }
               >

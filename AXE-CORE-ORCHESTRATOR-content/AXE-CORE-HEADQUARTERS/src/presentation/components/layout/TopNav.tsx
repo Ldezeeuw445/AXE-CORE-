@@ -62,11 +62,11 @@ export function TopNav() {
       data-tauri-drag-region
       className="axe-topbar flex-shrink-0 w-full z-fixed flex items-center justify-between px-3 md:px-4"
       style={{
-        height: 'calc(48px + env(safe-area-inset-top))',
-        minHeight: 'calc(48px + env(safe-area-inset-top))',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingLeft: 'calc(12px + env(safe-area-inset-left))',
-        paddingRight: 'calc(12px + env(safe-area-inset-right))',
+        height: 'calc(48px + var(--axe-sat))',
+        minHeight: 'calc(48px + var(--axe-sat))',
+        paddingTop: 'var(--axe-sat)',
+        paddingLeft: 'calc(12px + var(--axe-sal))',
+        paddingRight: 'calc(12px + var(--axe-sar))',
         /* Geen eigen achtergrond en geen lijn eronder.
          *
          * Die stonden hier wel, en axe-look.css haalde ze er met !important

@@ -40,7 +40,7 @@ export function MobileStatsRow() {
     // Zwevend, midden onder de sphere en net boven de ingeklapte composer.
     <div
       className="fixed left-1/2 z-[60] -translate-x-1/2 pointer-events-none"
-      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}
+      style={{ bottom: 'calc(var(--axe-sab) + 120px)' }}
     >
       <div
         className="flex items-stretch rounded-2xl px-1 py-2"

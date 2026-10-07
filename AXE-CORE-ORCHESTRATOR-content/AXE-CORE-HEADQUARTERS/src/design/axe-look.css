@@ -699,7 +699,7 @@ html:root[data-look][data-ios-pwa],
      Hij stond op 54px terwijl de balk 66px hoog is (plus de veilige zone
      bovenaan, die in de Tauri-app niet nul is). De widget schoof dus deels
      achter de balk uit -- wat je zag. Nu de echte hoogte plus lucht. */
-  top: calc(66px + env(safe-area-inset-top) + 10px);
+  top: calc(66px + var(--axe-sat) + 10px);
   /* Tot de BOVENKANT van de chatplaat, niet tot de voet.
      Ze liepen door tot achter de onderste band, dus een uitgeschoven rail lag
      over de tab-panelen en de chat heen. Nu houdt hij op waar de band begint --
@@ -1294,8 +1294,8 @@ html:root[data-look][data-ios-pwa],
   background: none !important;
   background-color: transparent !important;
   border-bottom: 0 !important;
-  height: calc(var(--axe-kop-h) + env(safe-area-inset-top)) !important;
-  min-height: calc(var(--axe-kop-h) + env(safe-area-inset-top)) !important;
+  height: calc(var(--axe-kop-h) + var(--axe-sat)) !important;
+  min-height: calc(var(--axe-kop-h) + var(--axe-sat)) !important;
 }
 
 /* De hoogte van de kopregel staat op EEN plek.
@@ -1561,7 +1561,7 @@ html:root[data-look][data-ios-pwa],
    * varieert: op mobiel vallen de labels weg en de knoppen clampen mee met de
    * vensterbreedte. De 44px-terugval is alleen voor het ene frame voor de
    * eerste meting. */
-  top: calc(env(safe-area-inset-top, 0px) + (var(--axe-kop-h, 66px) - var(--axe-viewctl-h, 44px)) / 2);
+  top: calc(var(--axe-sat) + (var(--axe-kop-h, 66px) - var(--axe-viewctl-h, 44px)) / 2);
   left: 50%;
   right: auto;
   transform: translateX(-50%);
@@ -1585,7 +1585,7 @@ html:root[data-look][data-ios-pwa],
     /* Op de telefoon is er geen kopregel om op te liggen: daar hangt hij onder
        de statusbalk, binnen de glasplaat-rand. Vier pixels lager dan de
        desktop-hartlijn, want daar staat geen balk omheen. */
-    top: calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 18px);
+    top: calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 18px);
   }
 }
 
@@ -2937,7 +2937,7 @@ html:root[data-look][data-ios-pwa],
  * rail zou het dok wel ontwijken en de kolom ernaast niet. */
 :root[data-look] .axe-slot--hoog.axe-slot--links,
 :root[data-look] .axe-slot--hoog.axe-slot--rechts {
-  top: calc(66px + env(safe-area-inset-top) + 10px);
+  top: calc(66px + var(--axe-sat) + 10px);
   bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px + var(--axe-dock-hoog, 0px));
   width: var(--axe-rail-breedte);
 }
@@ -7697,7 +7697,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   :root[data-look] {
     --axe-rail-breedte: clamp(260px, 30vw, 360px);
     --axe-onder: clamp(12px, 2.4vw, 32px);
-    --axe-barw: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 2 * var(--axe-onder));
+    --axe-barw: calc(100vw - var(--axe-sal) - var(--axe-sar) - 2 * var(--axe-onder));
   }
 
   html:root[data-look],
@@ -7727,8 +7727,8 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   }
 
   :root[data-look] .axe-topbar {
-    padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
-    padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+    padding-left: max(12px, var(--axe-sal)) !important;
+    padding-right: max(12px, var(--axe-sar)) !important;
   }
 
   :root[data-look] .axe-slot-topbalk {
@@ -7754,21 +7754,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   }
 
   :root[data-look] .axe-shell aside {
-    left: max(8px, env(safe-area-inset-left, 0px));
-    width: min(var(--axe-rail-breedte), calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 24px));
-    max-width: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 24px);
+    left: max(8px, var(--axe-sal));
+    width: min(var(--axe-rail-breedte), calc(100vw - var(--axe-sal) - var(--axe-sar) - 24px));
+    max-width: calc(100vw - var(--axe-sal) - var(--axe-sar) - 24px);
     box-sizing: border-box;
   }
   :root[data-look] .axe-shell [data-rail='right'] {
     left: auto;
-    right: max(8px, env(safe-area-inset-right, 0px));
+    right: max(8px, var(--axe-sar));
   }
 
   .axe-railhint--l, .axe-railtoggle--l {
-    left: max(6px, env(safe-area-inset-left, 0px));
+    left: max(6px, var(--axe-sal));
   }
   .axe-railhint--r, .axe-railtoggle--r {
-    right: max(6px, env(safe-area-inset-right, 0px));
+    right: max(6px, var(--axe-sar));
   }
 }
 

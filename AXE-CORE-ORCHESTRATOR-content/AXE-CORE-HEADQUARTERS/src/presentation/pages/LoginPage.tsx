@@ -56,8 +56,8 @@ export default function LoginPage() {
           'radial-gradient(120% 80% at 50% -10%, rgba(34,211,238,.07), transparent 60%),' +
           'radial-gradient(90% 60% at 85% 110%, rgba(59,130,246,.06), transparent 60%),' +
           'var(--bg-base)',
-        paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+        paddingTop: 'max(1.5rem, var(--axe-sat))',
+        paddingBottom: 'max(1.5rem, var(--axe-sab))',
       }}
     >
       {/* The grid. Masked, or it tiles edge to edge and the page reads as

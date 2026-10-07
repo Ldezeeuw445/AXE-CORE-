@@ -326,10 +326,10 @@ export function BottomNav() {
         // modals like ChartOrderConfirm (z-120), which should cover the nav.
         position: 'relative',
         zIndex: 100,
-        height: 'calc(76px + env(safe-area-inset-bottom, 0px))',
+        height: 'calc(76px + var(--axe-sab))',
         backgroundColor: 'var(--bg-base)',
         borderTop: '1px solid rgba(255,255,255,0.06)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        paddingBottom: 'var(--axe-sab)',
         boxSizing: 'border-box',
       }}
     >

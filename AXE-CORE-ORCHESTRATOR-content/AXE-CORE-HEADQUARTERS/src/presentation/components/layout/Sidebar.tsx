@@ -410,8 +410,8 @@ export function Sidebar() {
           className="text-white border-r border-white/5 w-[300px] max-w-[86vw] p-0"
           style={{
             background: 'linear-gradient(180deg, rgba(20,20,24,0.985) 0%, rgba(12,12,15,0.995) 100%)',
-            top: isMobile ? 'env(safe-area-inset-top, 0px)' : undefined,
-            height: isMobile ? 'calc(100dvh - env(safe-area-inset-top, 0px))' : undefined,
+            top: isMobile ? 'var(--axe-sat)' : undefined,
+            height: isMobile ? 'calc(100dvh - var(--axe-sat))' : undefined,
           }}
         >
           <SheetHeader className="sr-only">

@@ -34,7 +34,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
           borderTop: '1px solid rgba(255,255,255,.12)',
           borderRadius: '24px 24px 0 0',
           boxShadow: '0 -18px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08)',
-          paddingBottom: 'max(14px, env(safe-area-inset-bottom, 0px))',
+          paddingBottom: 'max(14px, var(--axe-sab))',
         }}
       >
         <div className="flex flex-none items-center justify-between px-5 pb-1 pt-4">

@@ -30,7 +30,9 @@ import {
   type MenuItem,
 } from '@/domain/mobileMenu';
 import { AppearanceSheet, PhoneSheet } from './MobileMenuSheets';
-import { phoneSettingsAvailable } from '@/infrastructure/gateways/androidPhoneBridge';
+import {
+  phoneSettingsAvailable, nativeTabsAvailable, selectNativeTab, NATIVE_TABS,
+} from '@/infrastructure/gateways/androidPhoneBridge';
 
 const ROUTE_ICON: Record<string, LucideIcon> = {
   '/': Home, '/thinkthanks': Lightbulb, '/ai-core': Brain, '/memory': Database,
@@ -163,8 +165,8 @@ export function MobileNav() {
           className="axe-mobile-nav-trigger fixed z-[70] flex size-9 items-center justify-center rounded-full active:scale-95"
           style={{
             top: opPlaat
-              ? 'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 10px)'
-              : 'calc(env(safe-area-inset-top, 0px) + 10px)',
+              ? 'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)'
+              : 'calc(var(--axe-sat) + 10px)',
             left: opPlaat ? 18 : 12,
             background: 'linear-gradient(180deg, rgba(20,20,24,.99), rgba(8,8,10,.995))',
             border: '1px solid rgba(255,255,255,.09)',
@@ -196,7 +198,7 @@ export function MobileNav() {
           background: 'linear-gradient(180deg, #11131a 0%, #0a0c11 100%)',
           borderRight: '1px solid rgba(255,255,255,.08)',
           boxShadow: '2px 0 24px rgba(0,0,0,0.45)',
-          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingTop: 'var(--axe-sat)',
         }}
       >
         <div className="flex flex-none items-center justify-between px-4 pb-2 pt-4">
@@ -225,6 +227,22 @@ export function MobileNav() {
             )}
           </label>
         </div>
+
+        {/* The Android shell has no bottom bar any more: the tabs it used to hold are here. */}
+        {nativeTabsAvailable() && !searching && (
+          <div className="flex flex-none flex-wrap gap-1.5 px-3 pb-2 pt-1" role="group" aria-label="Phone tabs">
+            {NATIVE_TABS.map(t => (
+              <button
+                key={t.id} type="button"
+                onClick={() => { selectNativeTab(t.id); setOpen(false); }}
+                className="rounded-[11px] px-3 py-1.5 text-[12px] font-medium active:opacity-70"
+                style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.08)', color: '#EEF3FA' }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
           {searching ? (

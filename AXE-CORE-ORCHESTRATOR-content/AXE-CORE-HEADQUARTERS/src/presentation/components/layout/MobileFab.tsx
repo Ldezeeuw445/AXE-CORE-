@@ -40,7 +40,7 @@ export function MobileFab() {
   return (
     // Boven de composer, rechts — buiten de composer-hoogte zodat hij de
     // verzendknop niet raakt.
-    <div className="fixed right-3 z-[75] flex flex-col items-end gap-2" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)' }}>
+    <div className="fixed right-3 z-[75] flex flex-col items-end gap-2" style={{ bottom: 'calc(var(--axe-sab) + 92px)' }}>
       {open && actions.map((a) => (
         <button
           key={a.label}

@@ -75,20 +75,20 @@ describe('canonical mobile Home wiring', () => {
 
   it('extends the mobile glass plate down to just above the iPhone home indicator', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
-    expect(shell).toContain("calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px))");
+    expect(shell).toContain("calc(var(--axe-sat) + var(--axe-plaat-boven, 2px))");
     // 3 okt: op de lichte telefoon 8px onder de statusbalk, en de knoppen op de
     // plaat zakken even ver mee (hamburger, licht/donker, wereldschakelaar).
     const css = bron('design/axe-look.css');
     expect(css).toMatch(/@media \(max-width: 640px\) \{\s*:root\[data-look='glass'\] \{\s*--axe-plaat-boven: 8px;/);
-    expect(css).toContain('top: calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 18px);');
-    expect(shell).toContain("'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 10px)'");
-    expect(bron('presentation/components/layout/MobileNav.tsx')).toContain("'calc(env(safe-area-inset-top, 0px) + var(--axe-plaat-boven, 2px) + 10px)'");
+    expect(css).toContain('top: calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 18px);');
+    expect(shell).toContain("'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)'");
+    expect(bron('presentation/components/layout/MobileNav.tsx')).toContain("'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)'");
     // De bodem stond ooit per route anders; sinds de plaat de basis van ELKE
     // mobiele tab is, is hij overal gelijk. Die splitsing hoort hier niet meer.
     // 34pt inset - 12 = 22pt boven de schermrand, 9pt boven de streep;
     // zonder inset (zwevende telefoon in Tauri) de oude 14px.
-    expect(shell).toContain("max(14px, calc(env(safe-area-inset-bottom, 0px) - 12px))");
-    expect(shell).not.toContain("'calc(env(safe-area-inset-bottom, 0px) + 14px)'");
+    expect(shell).toContain("max(14px, calc(var(--axe-sab) - 12px))");
+    expect(shell).not.toContain("'calc(var(--axe-sab) + 14px)'");
   });
 
   it('labels the sphere with one small line: green dot + AXE CORE where READY was', () => {
