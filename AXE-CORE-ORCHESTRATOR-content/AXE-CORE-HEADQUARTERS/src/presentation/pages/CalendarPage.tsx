@@ -17,6 +17,8 @@ import { APPS } from '@/domain/apps';
 import { werkAgenda, type AgendaTaak, type AgendaCron } from '@/domain/werkAgenda';
 import { calendarJobs, listDurableTasks, northseaTab, plannerTaken, type CalendarJobItem } from '@/infrastructure/gateways/axeCoreApiService';
 import { agendaVanJobs, filterAgenda, type AppFilter } from '@/domain/grootboek';
+import { naarRoosterItem, type Afspraak } from '@/domain/agenda/afspraken';
+import { AFSPRAKEN_EVENT, laadAfspraken } from '@/infrastructure/persistence/afsprakenService';
 import { AppZuil, appGroep } from '@/presentation/components/layout/AppZuil';
 import { northseaAgenda } from '@/domain/northsea/werk';
 import type { NorthseaAgendaItem } from '@/domain/northsea/tabs/typen';
@@ -179,6 +181,17 @@ export default function CalendarPage() {
     return () => { weg = true; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vensterSleutel, weergave]);
+  /* Luka's eigen afspraken: wat AXE voor hem inplant ("boek een tafel voor vrijdag") en wat hij zelf zegt.
+     Ze staan in user_settings; de agenda ververst zodra er een bijkomt of verandert. */
+  const [afspraken, setAfspraken] = useState<Afspraak[]>([]);
+  useEffect(() => {
+    let weg = false;
+    const haal = () => { void laadAfspraken().then(l => { if (!weg) setAfspraken(l); }).catch(() => { /* blijft zoals het was */ }); };
+    haal();
+    window.addEventListener(AFSPRAKEN_EVENT, haal);
+    window.addEventListener('focus', haal);
+    return () => { weg = true; window.removeEventListener(AFSPRAKEN_EVENT, haal); window.removeEventListener('focus', haal); };
+  }, []);
   useEffect(() => {
     let weg = false;
     const haal = () => { void laadWerk().then(w => { if (!weg) setWerk(w); }); };
@@ -195,13 +208,15 @@ export default function CalendarPage() {
           id: e.id, titel: e.title, datum: e.date, tijd: e.time,
           duurMin: duurInMinuten(e.duration), kleur: e.color, soort: e.type,
         })),
+      /* Eigen afspraken horen bij geen app; onder een app-filter blijven ze dus weg. */
+      ...(app === 'alle' ? afspraken.filter(a => a.status !== 'geannuleerd').map(naarRoosterItem) : []),
       ...filterAgenda([
         ...werkAgenda(werk.taken, werk.crons),
         ...northseaAgenda(deskAgenda),
         ...agendaVanJobs(jobItems),
       ], app),
     ],
-    [werk, deskAgenda, jobItems, app],
+    [werk, deskAgenda, jobItems, app, afspraken],
   );
 
 

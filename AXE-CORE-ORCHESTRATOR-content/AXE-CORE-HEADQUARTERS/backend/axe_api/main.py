@@ -18,7 +18,10 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import math
 import os
+import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -4905,6 +4908,146 @@ async def vps_status():
         "memory": _memory_usage_summary(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Plaatsen in de buurt (OpenStreetMap) ───────────────────────────────────────────
+# De app zoekt "de dichtstbijzijnde elektronicawinkel" via Overpass en Nominatim. Beide weigeren een
+# verzoek zonder herkenbare User-Agent (Overpass geeft 406 op een browser-UA), en een webview kan die
+# header niet zetten. Dus gaat het via deze twee routes, met een eigen UA. Alleen-lezen en begrensd.
+PLACES_UA = "AXE-CORE/1.0 (https://axeheadquarters.com; support@axeheadquarters.com)"
+OVERPASS_MIRRORS = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+)
+# Zoekopdrachten van de laatste tien minuten: dezelfde vraag ("restaurant bij de Dam") twee keer stellen
+# hoeft de gedeelde, vaak drukke publieke servers niet twee keer te belasten.
+_PLACES_CACHE: dict[str, tuple[float, dict]] = {}
+_PLACES_CACHE_TTL_S = 600
+_PLACES_CACHE_MAX = 64
+
+
+class PlacesOverpassBody(BaseModel):
+    query: str
+
+
+def _overpass_antwoord_ok(data: object) -> bool:
+    """Een 200 is niet genoeg: Overpass antwoordt ook 200 met 'Query timed out' en nul elementen."""
+    if not isinstance(data, dict) or "elements" not in data:
+        return False
+    remark = str(data.get("remark", ""))
+    return not (not data["elements"] and ("timed out" in remark or "runtime error" in remark))
+
+
+@app.post("/places/overpass", dependencies=[AUTH])
+async def places_overpass(body: PlacesOverpassBody):
+    q = body.query.strip()
+    if not q.startswith("[out:json]") or len(q) > 3000:
+        raise HTTPException(400, "Only [out:json] Overpass queries up to 3000 characters.")
+    nu = time.time()
+    hit = _PLACES_CACHE.get(q)
+    if hit and nu - hit[0] < _PLACES_CACHE_TTL_S:
+        return hit[1]
+    fouten: list[str] = []
+    # Elke spiegel hooguit 14 s: de gedeelde servers zijn vaak druk, en wie langer wacht heeft er niets
+    # aan. /places/nearby (Nominatim) is de snelle weg; dit is de terugval met de volledigere lijst.
+    async with httpx.AsyncClient(timeout=14.0, headers={"User-Agent": PLACES_UA}) as c:
+        for url in OVERPASS_MIRRORS:
+            try:
+                res = await c.post(url, data={"data": q})
+                if res.status_code == 200:
+                    data = res.json()
+                    if _overpass_antwoord_ok(data):
+                        if len(_PLACES_CACHE) >= _PLACES_CACHE_MAX:
+                            _PLACES_CACHE.pop(next(iter(_PLACES_CACHE)))
+                        _PLACES_CACHE[q] = (nu, data)
+                        return data
+                    fouten.append(f"{url.split('/')[2]} timed out")
+                    continue
+                fouten.append(f"{url.split('/')[2]} {res.status_code}")
+                # Een kapotte zoekopdracht (400) wordt door een andere spiegel niet beter.
+                if res.status_code == 400:
+                    break
+            except (httpx.HTTPError, ValueError) as exc:
+                fouten.append(f"{url.split('/')[2]} {exc.__class__.__name__}")
+    raise HTTPException(502, "Map service busy: " + "; ".join(fouten or ["no mirror answered"]))
+
+
+_NEARBY_FILTER_RE = re.compile(r"^[a-z_]{2,30}=[a-z_]{2,40}$")
+
+
+@app.get("/places/nearby", dependencies=[AUTH])
+async def places_nearby(filters: str, lat: float, lng: float, r: int = 3000):
+    """Zaken van een soort binnen een straal, via Nominatim (snel, en met uren en telefoon uit extratags).
+
+    Het antwoord heeft de vorm van Overpass (`elements` met `tags`), zodat de app één parser heeft voor
+    beide bronnen. `filters` is "shop=electronics,shop=computer". Nominatim vraagt maximaal één
+    verzoek per seconde; meerdere filters gaan dus met een pauze achter elkaar."""
+    lijst = [f for f in filters.split(",") if f]
+    if not lijst or len(lijst) > 4 or not all(_NEARBY_FILTER_RE.match(f) for f in lijst):
+        raise HTTPException(400, "filters must be 1-4 comma-separated key=value pairs.")
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180 and 200 <= r <= 20000):
+        raise HTTPException(400, "lat/lng out of range, or r not between 200 and 20000 metres.")
+    sleutel = f"nearby|{','.join(sorted(lijst))}|{lat:.3f}|{lng:.3f}|{r}"
+    nu = time.time()
+    hit = _PLACES_CACHE.get(sleutel)
+    if hit and nu - hit[0] < _PLACES_CACHE_TTL_S:
+        return hit[1]
+    dlat = r / 111320.0
+    dlng = r / (111320.0 * max(0.05, math.cos(math.radians(lat))))
+    viewbox = f"{lng - dlng:.5f},{lat + dlat:.5f},{lng + dlng:.5f},{lat - dlat:.5f}"
+    elementen: list[dict] = []
+    gezien: set[tuple[str, int]] = set()
+    async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": PLACES_UA}) as c:
+        for i, f in enumerate(lijst):
+            if i:
+                await asyncio.sleep(1.1)
+            k, v = f.split("=")
+            try:
+                res = await c.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"q": f"[{k}={v}]", "viewbox": viewbox, "bounded": 1, "format": "jsonv2",
+                            "extratags": 1, "addressdetails": 1, "limit": 40},
+                )
+            except httpx.HTTPError as exc:
+                raise HTTPException(502, f"Geocoder unavailable: {exc.__class__.__name__}") from exc
+            if res.status_code != 200:
+                raise HTTPException(502, f"Geocoder answered {res.status_code}")
+            for x in res.json():
+                naam = (x.get("name") or "").strip()
+                sl = (x.get("osm_type", ""), int(x.get("osm_id", 0)))
+                if not naam or sl in gezien:
+                    continue
+                gezien.add(sl)
+                a = x.get("address") or {}
+                tags = {**(x.get("extratags") or {}), "name": naam, k: v}
+                for tagnaam, bron in (("addr:street", "road"), ("addr:housenumber", "house_number"), ("addr:postcode", "postcode")):
+                    if a.get(bron):
+                        tags[tagnaam] = a[bron]
+                stad = a.get("city") or a.get("town") or a.get("village") or a.get("suburb")
+                if stad:
+                    tags["addr:city"] = stad
+                elementen.append({"type": sl[0] or "node", "id": sl[1], "lat": float(x["lat"]), "lon": float(x["lon"]), "tags": tags})
+    uit = {"source": "nominatim", "elements": elementen}
+    if len(_PLACES_CACHE) >= _PLACES_CACHE_MAX:
+        _PLACES_CACHE.pop(next(iter(_PLACES_CACHE)))
+    _PLACES_CACHE[sleutel] = (nu, uit)
+    return uit
+
+
+@app.get("/places/geocode", dependencies=[AUTH])
+async def places_geocode(q: str):
+    q = q.strip()
+    if not q or len(q) > 200:
+        raise HTTPException(400, "q must be 1-200 characters.")
+    async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": PLACES_UA}) as c:
+        try:
+            res = await c.get("https://nominatim.openstreetmap.org/search", params={"format": "json", "limit": 1, "q": q})
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, f"Geocoder unavailable: {exc.__class__.__name__}") from exc
+    if res.status_code != 200:
+        raise HTTPException(502, f"Geocoder answered {res.status_code}")
+    return res.json()
 
 
 # ── Slotscherm van de telefoon ──────────────────────────────────────────────────────

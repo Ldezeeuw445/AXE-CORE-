@@ -6,7 +6,9 @@
  * timeline and the real AXE composer fixed at the bottom.
  */
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { BrainCircuit, ChevronDown, ChevronUp, Mountain, Network, Orbit } from 'lucide-react';
+import { BrainCircuit, ChevronDown, ChevronUp, Mountain, Network, Orbit, X } from 'lucide-react';
+import { ProjectionBody } from '@/presentation/components/axe-core/sphere/ProjectionBody';
+import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { TelefoonSphere } from '@/presentation/components/axe-core/sphere/TelefoonSphere';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
@@ -154,8 +156,47 @@ function useChatOpen(): [boolean, (open: boolean) => void] {
   return [open, zet];
 }
 
+/**
+ * Wat AXE op Home zet (een kaart met plaatsen, een document, een grafiek) neemt op de telefoon de plek van
+ * het gesprek in, met een kruisje terug. De bol en de agents blijven staan. Tot 9 okt rendeerde de
+ * telefoon-Home geen projecties: AXE zei "ik laat het zien" en er verscheen niets.
+ */
+function MobileProjection() {
+  const payload = useSphereProjectionStore(s => s.payload);
+  const dismissAll = useSphereProjectionStore(s => s.dismissAll);
+  if (!payload) return null;
+  return (
+    <div
+      className="axe-mobile-edge axe-mobile-projectie my-1.5 flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-[20px]"
+      style={{ background: 'rgba(5,8,13,.92)', border: '1px solid rgba(255,255,255,.1)' }}
+      role="region"
+      aria-label={`On Home: ${payload.title}`}
+    >
+      <div className="flex h-11 flex-none items-center gap-2 px-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{payload.title}</div>
+          {payload.subtitle && <div className="truncate text-[11px]" style={{ color: 'var(--text-secondary)' }}>{payload.subtitle}</div>}
+        </div>
+        <button
+          type="button"
+          onClick={() => dismissAll()}
+          aria-label="Close and go back to the chat"
+          className="flex size-9 flex-none items-center justify-center rounded-full active:opacity-60"
+          style={{ border: '1px solid rgba(255,255,255,.14)', color: 'var(--text-primary)' }}
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <div className="relative min-h-0 flex-1">
+        <ProjectionBody payload={payload} />
+      </div>
+    </div>
+  );
+}
+
 function CoreHome() {
   const [chatOpen, setChatOpen] = useChatOpen();
+  const projecteert = useSphereProjectionStore(s => s.payload !== null);
   const laatste = useVoiceStore(s => s.conversation[s.conversation.length - 1]);
   // Zelfde bron als de desktop-Home: installCoreStatus. Zie coreStatusStore.
   const coreOnline = useCoreOnline();
@@ -212,7 +253,9 @@ function CoreHome() {
       {/* De bol en de agents staan vast bovenin (de sectie hierboven heeft een eigen hoogte); alleen dit
           vak gaat open of dicht. Dicht blijft er een smalle balk boven de composer, met de laatste
           regel, en de ruimte erboven blijft leeg voor de wallpaper. */}
-      {chatOpen ? (
+      {projecteert ? (
+        <MobileProjection />
+      ) : chatOpen ? (
         <div
           className="axe-mobile-edge my-1.5 flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-[20px]"
           style={{

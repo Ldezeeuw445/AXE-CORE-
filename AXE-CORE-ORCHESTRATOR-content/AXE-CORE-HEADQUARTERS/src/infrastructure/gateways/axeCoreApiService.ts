@@ -1328,6 +1328,16 @@ export async function northseaCommunicationsMetrics(weeks = 12): Promise<Northse
   return call('GET', `/northsea/communications-metrics?weeks=${weeks}`);
 }
 
+/** Plaatsen in de buurt: Overpass en Nominatim via de VPS (die zetten de User-Agent die ze eisen). */
+export function placesOverpass(query: string): Promise<unknown> { return call('POST', '/places/overpass', { query }); }
+/** Zaken van een soort rond een punt via Nominatim (snel, met uren en telefoon): Overpass-vormig antwoord. */
+export function placesNearby(filters: readonly string[], lat: number, lng: number, straalM: number): Promise<unknown> {
+  return call('GET', `/places/nearby?filters=${encodeURIComponent(filters.join(','))}&lat=${lat}&lng=${lng}&r=${Math.round(straalM)}`);
+}
+export function placesGeocode(q: string): Promise<Array<{ lat: string; lon: string; display_name?: string }>> {
+  return call('GET', `/places/geocode?q=${encodeURIComponent(q)}`);
+}
+
 /** Het slotscherm-overzicht van de VPS: koersen, machines, diensten en wat aandacht vraagt. Ook voor de stem. */
 export interface LockscreenSnapshot {
   markets: { symbol: string; label: string; price: number | null }[];

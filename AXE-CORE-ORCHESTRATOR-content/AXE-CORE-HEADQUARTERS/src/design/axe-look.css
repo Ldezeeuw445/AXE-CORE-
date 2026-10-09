@@ -7952,3 +7952,37 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-dag-tijden i { font: 500 12px/1 var(--font-mono, ui-monospace, monospace); font-style: normal; padding: 5px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.07); color: var(--text-primary); }
 .axe-dag-bron { display: inline-flex; align-items: center; gap: 6px; }
 .axe-dag-bron i { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+
+
+/* ── Plaatsen op Home: de kaarten onder de kaart ──────────────────────────────────────
+ * Zie sphere/projections/PlacesPanel.tsx. Mat zwart zoals de andere kaarten, op elke plaat; de gekozen
+ * kaart krijgt een lichte rand en zwaardere titel, geen kleurvlak (kleurregel). */
+.axe-plaatsen {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 12;
+  display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0));
+}
+.axe-plaats {
+  flex: none; width: min(264px, 78vw); scroll-snap-align: center; cursor: pointer;
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(9, 11, 15, 0.92); color: var(--text-primary);
+}
+.axe-plaats[data-aan='ja'] { border-color: rgba(255, 255, 255, 0.5); }
+.axe-plaats[data-aan='ja'] b { font-weight: 700; }
+.axe-plaats header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.axe-plaats header b { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axe-plaats header i { flex: none; font-style: normal; font-size: 12px; color: var(--text-secondary); }
+.axe-plaats-nr {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  font: 600 12px/1 var(--font-mono, ui-monospace, monospace); border: 1px solid rgba(255, 255, 255, 0.35); color: var(--text-primary);
+}
+.axe-plaats p { margin: 0; font-size: 12px; line-height: 1.35; color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.axe-plaats p.axe-plaats-uren { color: var(--text-muted); }
+.axe-plaats footer { display: flex; gap: 6px; margin-top: 2px; }
+.axe-plaats footer a {
+  min-height: 36px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14); font-size: 12px; font-weight: 600; color: var(--text-primary); text-decoration: none;
+}
+/* Op de telefoon staat de titel al in de kaart van de projectie zelf; de kop in de kaart is dan dubbel. */
+.axe-mobile-projectie .axe-kaartkop { display: none; }

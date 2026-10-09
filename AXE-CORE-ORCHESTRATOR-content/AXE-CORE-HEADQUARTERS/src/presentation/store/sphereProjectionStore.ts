@@ -8,6 +8,8 @@
 import { create } from 'zustand';
 import type { ProjectionPayload, SpherePhase } from '@/domain/sphere/projectionTypes';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
+import { setProjectionSink } from '@/application/sphere/projectionPort';
+import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 
 const MAX_QUEUE = 3;
 const DEDUPE_MS = 4000;
@@ -127,3 +129,9 @@ export const useSphereProjectionStore = create<SphereProjectionState>((set, get)
   markProjecting: () => set({ phase: 'projecting' }),
   markIdle: () => set({ phase: 'idle', payload: null }),
 }));
+
+// Tools (application) zetten iets op Home via de poort; hier komt het aan, en Home gaat naar de bol.
+setProjectionSink(p => {
+  useCoreViewStore.getState().setCoreView('axe');
+  useSphereProjectionStore.getState().project(p);
+});

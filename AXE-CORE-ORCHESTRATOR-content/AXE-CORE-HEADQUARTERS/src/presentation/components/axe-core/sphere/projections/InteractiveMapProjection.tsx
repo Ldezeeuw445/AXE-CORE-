@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { APIProvider, Map as GoogleMap, AdvancedMarker } from '@vis.gl/react-google-maps';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
+import { BASEMAP_ATTRIBUTION, BASEMAP_DARK_LABELS, BASEMAP_DARK_TILES, BASEMAP_MAX_ZOOM } from '@/domain/maps/basemap';
+import { PlacesPanel, plaatsenUitData, type PlaatsKaart } from './PlacesPanel';
 
 const GOOGLE_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim() ?? '';
 const GOOGLE_MAP_ID = (import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined)?.trim() ?? '';
@@ -24,10 +26,14 @@ export function InteractiveMapProjection({ payload }: { payload: ProjectionPaylo
   const label = String(payload.data?.label ?? payload.title ?? 'Location');
   const title = String(payload.title ?? 'Map');
 
-  if (hasGoogleJs) {
+  const plaatsen = plaatsenUitData(payload.data);
+
+  // Met gezochte plaatsen altijd MapLibre: daar staan de genummerde pins en de kaarten onder hoeven niet
+  // te wachten op een Google-kaart-ID.
+  if (hasGoogleJs && plaatsen.length === 0) {
     return <GoogleFlatMap key={`${lat},${lng}`} lat={lat} lng={lng} title={title} label={label} />;
   }
-  return <MapLibreFlatMap key={`${lat},${lng}`} lat={lat} lng={lng} title={title} label={label} />;
+  return <MapLibreFlatMap key={`${lat},${lng},${plaatsen.length}`} lat={lat} lng={lng} title={title} label={label} plaatsen={plaatsen} />;
 }
 
 function GoogleFlatMap({
@@ -67,10 +73,11 @@ function GoogleFlatMap({
 }
 
 function MapLibreFlatMap({
-  lat, lng, title, label,
-}: { lat: number; lng: number; title: string; label: string }) {
+  lat, lng, title, label, plaatsen = [],
+}: { lat: number; lng: number; title: string; label: string; plaatsen?: PlaatsKaart[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const [gekozen, setGekozen] = useState<string | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -86,19 +93,12 @@ function MapLibreFlatMap({
       style: {
         version: 8,
         sources: {
-          basemap: {
-            type: 'raster',
-            tiles: [
-              'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-              'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-              'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-            ],
-            tileSize: 256,
-            attribution: '© OpenStreetMap · © CARTO',
-          },
+          basemap: { type: 'raster', tiles: BASEMAP_DARK_TILES, tileSize: 256, maxzoom: BASEMAP_MAX_ZOOM, attribution: BASEMAP_ATTRIBUTION },
+          namen: { type: 'raster', tiles: BASEMAP_DARK_LABELS, tileSize: 256, maxzoom: BASEMAP_MAX_ZOOM },
         },
         layers: [
-          { id: 'basemap-layer', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 },
+          { id: 'basemap-layer', type: 'raster', source: 'basemap', minzoom: 0 },
+          { id: 'namen-layer', type: 'raster', source: 'namen', minzoom: 0 },
         ],
       },
       center: [lng, lat],
@@ -123,11 +123,12 @@ function MapLibreFlatMap({
       map.scrollZoom.setZoomRate(1 / 60);
     } catch { /* ignore */ }
 
+    // Onderin staan de kaarten van de gevonden plaatsen; de knoppen gaan dan naar boven.
     map.addControl(
       new maplibregl.NavigationControl({ visualizePitch: false, showCompass: true }),
-      'bottom-right',
+      plaatsen.length ? 'top-right' : 'bottom-right',
     );
-    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    if (!plaatsen.length) map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
     const markerEl = document.createElement('div');
     markerEl.innerHTML =
@@ -135,6 +136,23 @@ function MapLibreFlatMap({
     new maplibregl.Marker({ element: markerEl, anchor: 'center' })
       .setLngLat([lng, lat])
       .addTo(map);
+
+    // De gevonden plaatsen: genummerd zoals de kaarten eronder, een tik kiest de kaart.
+    plaatsen.forEach((p, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.setAttribute('aria-label', `${i + 1}. ${p.naam}`);
+      el.textContent = String(i + 1);
+      el.dataset.plaats = p.id;
+      el.style.cssText = 'width:26px;height:26px;border-radius:50%;border:2px solid #fff;background:#0b0d12;color:#fff;font:600 12px ui-monospace,monospace;display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.6);';
+      el.addEventListener('click', ev => { ev.stopPropagation(); setGekozen(p.id); });
+      new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(map);
+    });
+    if (plaatsen.length > 0) {
+      const grens = new maplibregl.LngLatBounds([lng, lat], [lng, lat]);
+      plaatsen.forEach(p => grens.extend([p.lng, p.lat]));
+      map.fitBounds(grens, { padding: { top: 70, bottom: 190, left: 40, right: 40 }, maxZoom: 16, duration: 0 });
+    }
 
     const resize = () => {
       try { map.resize(); } catch { /* ignore */ }
@@ -162,7 +180,22 @@ function MapLibreFlatMap({
       try { map.remove(); } catch { /* ignore */ }
       mapRef.current = null;
     };
-  }, [lat, lng]);
+  }, [lat, lng, plaatsen]);
+
+  // Een gekozen kaart zet de kaart op die plek; de pin van de gekozen plaats is wit gevuld.
+  useEffect(() => {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!map || !container) return;
+    container.querySelectorAll<HTMLElement>('[data-plaats]').forEach(el => {
+      const aan = el.dataset.plaats === gekozen;
+      el.style.background = aan ? '#fff' : '#0b0d12';
+      el.style.color = aan ? '#0b0d12' : '#fff';
+      el.style.zIndex = aan ? '5' : '';
+    });
+    const p = plaatsen.find(x => x.id === gekozen);
+    if (p) map.easeTo({ center: [p.lng, p.lat], duration: 350 });
+  }, [gekozen, plaatsen]);
 
   return (
     <div
@@ -176,6 +209,7 @@ function MapLibreFlatMap({
         style={{ width: '100%', height: '100%', minHeight: 320, cursor: 'grab' }}
       />
       <MapChrome title={title} label={label} engine="MapLibre" />
+      {plaatsen.length > 0 && <PlacesPanel plaatsen={plaatsen} gekozen={gekozen} opKies={setGekozen} />}
     </div>
   );
 }
@@ -187,7 +221,7 @@ function MapChrome({
 }: { title: string; label: string; engine: string }) {
   return (
     <div
-      className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between gap-2 px-3 py-2 pointer-events-none"
+      className="axe-kaartkop absolute top-0 left-0 right-0 z-10 flex items-center justify-between gap-2 px-3 py-2 pointer-events-none"
       style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.82), transparent)' }}
     >
       <div className="min-w-0">

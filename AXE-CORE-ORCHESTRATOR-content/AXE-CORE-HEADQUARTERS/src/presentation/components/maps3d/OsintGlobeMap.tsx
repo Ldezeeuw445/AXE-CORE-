@@ -20,6 +20,7 @@ import {
   type MapPoint, type JetPoint, type VesselPoint,
 } from '@/infrastructure/gateways/intelProxyGateway';
 import { NUCLEAR_SITES } from '@/domain/maps/nuclearSites';
+import { BASEMAP_ATTRIBUTION, BASEMAP_DARK_TILES } from '@/domain/maps/basemap';
 import { CHOKEPOINTS } from '@/domain/maps/chokepoints';
 import { SUBMARINE_CABLES } from '@/domain/maps/submarineCables';
 import { nightHemisphereRing } from '@/domain/maps/dayNightTerminator';
@@ -27,7 +28,7 @@ import {
   Layers, Globe2, Mountain, Sun, RotateCw, Compass, Satellite,
 } from 'lucide-react';
 
-const TILE_DARK = ['a', 'b', 'c', 'd'].map(s => `https://${s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png`);
+const TILE_DARK = BASEMAP_DARK_TILES;
 const TILE_SAT = ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'];
 const TERRAIN_DEM_TILES = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'];
 
@@ -41,7 +42,7 @@ function buildStyle(basemap: 'dark' | 'satellite'): maplibregl.StyleSpecificatio
         tileSize: 256,
         attribution: basemap === 'satellite'
           ? 'Tiles &copy; Esri — Esri, Maxar, Earthstar Geographics'
-          : '&copy; OpenStreetMap &copy; CARTO',
+          : BASEMAP_ATTRIBUTION,
       },
       'terrain-dem': {
         type: 'raster-dem',

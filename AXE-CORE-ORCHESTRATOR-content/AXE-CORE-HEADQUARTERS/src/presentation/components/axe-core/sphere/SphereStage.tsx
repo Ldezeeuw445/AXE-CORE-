@@ -7,11 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
-import { DocumentProjection } from '@/presentation/components/axe-core/sphere/projections/DocumentProjection';
-import { ImageProjection } from '@/presentation/components/axe-core/sphere/projections/ImageProjection';
-import { ChartProjection } from '@/presentation/components/axe-core/sphere/projections/ChartProjection';
-import { InteractiveMapProjection } from '@/presentation/components/axe-core/sphere/projections/InteractiveMapProjection';
-import { CodeProjection } from '@/presentation/components/axe-core/sphere/projections/CodeProjection';
+import { ProjectionBody } from '@/presentation/components/axe-core/sphere/ProjectionBody';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { moodForMode, type ProjectionMode, type ProjectionPayload } from '@/domain/sphere/projectionTypes';
 
@@ -242,17 +238,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                     height: mode === 'map' ? '100%' : undefined,
                   }}
                 >
-                  {payload.mode === 'document' && <DocumentProjection payload={payload} />}
-                  {payload.mode === 'code' && <CodeProjection payload={payload} />}
-                  {payload.mode === 'image' && <ImageProjection payload={payload} />}
-                  {payload.mode === 'media' && <ImageProjection payload={payload} />}
-                  {payload.mode === 'chart' && <ChartProjection payload={payload} />}
-                  {payload.mode === 'map' && <InteractiveMapProjection payload={payload} />}
-                  {!['document', 'code', 'image', 'media', 'chart', 'map'].includes(payload.mode) && (
-                    <div className="h-full flex items-center justify-center text-[12px]" style={{ color: '#a5f3fc' }}>
-                      {payload.title}
-                    </div>
-                  )}
+                  <ProjectionBody payload={payload} />
                 </div>
               </div>
 

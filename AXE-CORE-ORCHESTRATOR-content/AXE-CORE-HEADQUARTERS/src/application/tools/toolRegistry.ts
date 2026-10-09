@@ -20,6 +20,7 @@ import '@/domain/tools/registerMacCatalog';
 import '@/domain/tools/registerComputerCatalog';
 import '@/domain/tools/registerAirtopCatalog';
 import '@/domain/tools/registerPerplexityCatalog';
+import '@/domain/tools/registerAgendaCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 import {
@@ -52,6 +53,7 @@ import { MAC_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.mac';
 import { COMPUTER_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.computer';
 import { AIRTOP_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.airtop';
 import { PERPLEXITY_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.perplexity';
+import { AGENDA_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.agenda';
 import {
   isLocalBridgeConfigured, localRead, localWrite, localRun, type BridgeCommand,
 } from '@/infrastructure/gateways/localBridgeService';
@@ -413,6 +415,7 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   ...PHONE_TOOL_RUNTIMES as ToolRuntime[],
   ...AIRTOP_TOOL_RUNTIMES as ToolRuntime[],
   ...PERPLEXITY_TOOL_RUNTIMES as ToolRuntime[],
+  ...AGENDA_TOOL_RUNTIMES as ToolRuntime[],
   /* De Mac en de computer-relay. Deze twee stonden hierboven wél geimporteerd
      (MAC) of helemaal niet (COMPUTER), en werden nergens uitgerold -- terwijl
      registerMacCatalog en registerComputerCatalog hun gereedschappen wél
