@@ -123,7 +123,12 @@ const STIJL: Record<Plaat, { wit: { schil: number; kern: number; ring: number };
 };
 
 /** De plaat volgt de look: `glass` is licht, al het andere donker. */
-const leesPlaat = (): Plaat => (document.documentElement.dataset.look === 'glass' ? 'licht' : 'donker');
+/* Luka, 9 okt: op de lichte plaat weer dezelfde AXE-sphere als in de Tauri-app (groen, cyaan, blauw, gouden
+   ring), niet de inkt-variant van 2 okt. Zodat hij niet in de wallpaper wegvalt ligt er in de lichte stand
+   een zachte donkere lens achter (`.axe-bol-lens`, axe-look.css). De inkt-kleuren blijven in telefoonBol.ts
+   staan; zet dit op true om ze terug te halen. */
+const LICHTE_BOL_IN_INKT = false;
+const leesPlaat = (): Plaat => (LICHTE_BOL_IN_INKT && document.documentElement.dataset.look === 'glass' ? 'licht' : 'donker');
 
 /** Kan dit toestel WebGL? Eén keer gevraagd, en de proefcontext meteen weer vrij. */
 function heeftWebGl(): boolean {

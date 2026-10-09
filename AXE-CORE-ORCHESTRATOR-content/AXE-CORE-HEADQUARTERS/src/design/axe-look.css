@@ -7878,3 +7878,17 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .axe-live-dot, .axe-live-caret { animation: none; }
 }
+
+
+/* ── De bol op de lichte telefoonplaat ───────────────────────────────────
+ * De AXE-sphere heeft bleke deeltjes (zoals in Tauri, waar de plaat een middentint is). Op een lichte
+ * wallpaper vallen die weg; deze lens legt er een zachte donkere schijf achter, ronder en kleiner dan
+ * het vak, zonder rand. In de donkere stand doet hij niets. */
+.axe-bol-lens { display: none; pointer-events: none; }
+:root[data-look='glass'] .axe-mobile-home .axe-bol-lens {
+  display: block;
+  margin: 3% 6%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(7, 12, 24, 0.86) 0%, rgba(7, 12, 24, 0.7) 60%, rgba(7, 12, 24, 0) 100%);
+  filter: blur(3px);
+}

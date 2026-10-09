@@ -180,6 +180,9 @@ function CoreHome() {
           className="relative min-h-0 overflow-hidden rounded-[22px]"
           aria-label="AXE Core Home"
         >
+          {/* Alleen in de lichte stand zichtbaar (axe-look.css): een zachte donkere lens, zodat de
+              AXE-sphere niet in een lichte wallpaper wegvalt. */}
+          <div className="axe-bol-lens absolute inset-x-0 top-0 bottom-8" aria-hidden="true" />
           <div className="absolute inset-x-0 top-0 bottom-8">
             {/* WebGL, op de schermpixels en in het midden van dit vak (Luka, 2 okt).
                 Zonder WebGL tekent hij AxeCoreSphere telefoon. */}
