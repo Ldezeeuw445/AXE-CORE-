@@ -7796,12 +7796,17 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   .text-\[10\.5px\] { font-size: 11.5px !important; }
 }
 @media (max-width: 767px) and (pointer: coarse) {
-  .axe-shell :is(button, [role='button']):not(.axe-minimaand-raster *):not(.axe-week *) {
+  .axe-shell :is(button, [role='button']):not(.axe-minimaand-raster *):not(.axe-week *):not(.axe-term-lamp) {
     min-height: 34px;
     min-width: 34px;
   }
   .axe-shell .axe-chip { min-height: 32px; }
   .axe-shell .axe-app-dagrij { min-height: 36px; }
+  /* De drie stoplichten van een terminal zijn bolletjes van 12px, geen knoppen van 34px (Luka, 9 okt:
+     "echt enorm"). Het vlak waar je op kunt tikken is groter dan wat je ziet, via ::after. */
+  .axe-term-lamp { position: relative; width: 12px; height: 12px; min-width: 0; min-height: 0; }
+  .axe-term-lamp::after { content: ''; position: absolute; inset: -11px -5px; }
+  .axe-term-lampen { gap: 12px; }
 }
 
 /* ── De tabzuil in de telefoonlade: een lijst met namen ────────────────────────────
@@ -7902,3 +7907,48 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   margin-left: 0;
   margin-right: 0;
 }
+
+/* ── De dag op een telefoon: kaarten met een leesbare titel ───────────────────────────
+ * Zie pages/agenda/DagLijst.tsx. Mat zwart, ook op een lichte plaat; de kleur van de afspraak staat
+ * als balkje links, niet als vlak (kleurregel). */
+.axe-dag { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+.axe-dag-kop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.axe-dag-kop > div { text-align: center; display: flex; flex-direction: column; min-width: 0; }
+.axe-dag-kop b { font-size: 17px; font-weight: 650; color: var(--text-primary); }
+.axe-dag-kop span { font-size: 12px; color: var(--text-secondary); }
+.axe-dag-kop button {
+  width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(9, 11, 15, 0.9); color: var(--text-primary);
+}
+.axe-dag-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.axe-dag-strip button {
+  min-height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(9, 11, 15, 0.82); color: var(--text-secondary);
+}
+.axe-dag-strip span { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+.axe-dag-strip b { font-size: 16px; font-weight: 650; color: var(--text-primary); }
+.axe-dag-strip i { font-style: normal; font-size: 10px; height: 12px; color: var(--text-muted); }
+.axe-dag-strip button[data-vandaag='ja'] b { color: var(--accent-cyan); }
+.axe-dag-strip button[data-aan='ja'] { border-color: var(--tint-line, rgba(34, 211, 238, 0.45)); background: rgba(30, 36, 46, 0.95); }
+.axe-dag-lijst { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; }
+.axe-dag-leeg { margin: 24px 0; text-align: center; font-size: 13px; color: var(--text-secondary); }
+.axe-dag-kaart {
+  position: relative; width: 100%; display: flex; align-items: flex-start; gap: 10px; text-align: left;
+  min-height: 56px; padding: 10px 12px 10px 14px; border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(9, 11, 15, 0.9); color: var(--text-primary);
+}
+.axe-dag-kaart::before {
+  content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 4px 4px 0; background: var(--blok, #888);
+}
+.axe-dag-kaart[data-volgende='ja'] { border-color: var(--tint-line, rgba(34, 211, 238, 0.45)); }
+.axe-dag-tijd { flex: none; width: 46px; font: 600 13px/1.3 var(--font-mono, ui-monospace, monospace); color: var(--text-secondary); padding-top: 1px; }
+.axe-dag-inhoud { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.axe-dag-inhoud > b { font-size: 14.5px; line-height: 1.3; font-weight: 600; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.axe-dag-kaart[data-open='ja'] .axe-dag-inhoud > b { -webkit-line-clamp: unset; }
+.axe-dag-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--text-secondary); }
+.axe-dag-meta i { font-style: normal; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.12); font-size: 11px; text-transform: lowercase; }
+.axe-dag-detail { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.axe-dag-tijden { display: flex; flex-wrap: wrap; gap: 4px; }
+.axe-dag-tijden i { font: 500 12px/1 var(--font-mono, ui-monospace, monospace); font-style: normal; padding: 5px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.07); color: var(--text-primary); }
+.axe-dag-bron { display: inline-flex; align-items: center; gap: 6px; }
+.axe-dag-bron i { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }

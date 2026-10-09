@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
 import { IcoonZuil, type ZuilItem } from '@/presentation/components/layout/IcoonZuil';
 import { WeekRooster } from './agenda/WeekRooster';
+import { DagLijst } from './agenda/DagLijst';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { MiniMaand } from './agenda/MiniMaand';
 import { MaandRooster } from './agenda/MaandRooster';
 import { AgendaLijst } from './agenda/AgendaLijst';
@@ -130,6 +132,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(
     formatDateKey(now.getFullYear(), now.getMonth(), now.getDate())
   );
+  const isMobile = useIsMobile();
   const [weergave, setWeergave] = useState<Weergave>('week');
   /* De week die je bekijkt. Apart van de maand: bladeren door weken hoort de
      maandweergave niet te verzetten en andersom. */
@@ -245,7 +248,7 @@ export default function CalendarPage() {
               titel: 'View',
               items: [
                 { id: 'maand', label: 'Month', actief: weergave === 'maand', onKies: () => setWeergave('maand') },
-                { id: 'week', label: 'Week', actief: weergave === 'week', onKies: () => setWeergave('week') },
+                { id: 'week', label: isMobile ? 'Day' : 'Week', actief: weergave === 'week', onKies: () => setWeergave('week') },
               ],
             },
             appGroep(app, setApp),
@@ -270,13 +273,20 @@ export default function CalendarPage() {
       <TabRuimte vullen>
       {/* Links de mini-maand + vandaag, rechts het rooster (Luka's voorbeeld). */}
       <div className="axe-kalender">
-      <MiniMaand
-        anker={weekAnker}
-        items={roosterItems}
-        opKies={d => { setWeekAnker(d); setSelectedDate(datumSleutel(d)); setWeergave('week'); }}
-      />
+      {/* Op een telefoon is de mini-maand dubbel werk: de dagweergave heeft zijn eigen weekstrip. */}
+      {!isMobile && (
+        <MiniMaand
+          anker={weekAnker}
+          items={roosterItems}
+          opKies={d => { setWeekAnker(d); setSelectedDate(datumSleutel(d)); setWeergave('week'); }}
+        />
+      )}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {weergave === 'week' ? (
+        {weergave === 'week' && isMobile ? (
+          /* Een telefoon heeft hoogte, geen breedte: zeven kolommen van 40px laten geen titel zien.
+             Eén dag tegelijk, elke afspraak een kaart (Luka, 9 okt). */
+          <DagLijst anker={weekAnker} items={roosterItems} opAnker={setWeekAnker} soorten={SOORTEN} />
+        ) : weergave === 'week' ? (
           <WeekRooster
             anker={weekAnker}
             items={roosterItems}
