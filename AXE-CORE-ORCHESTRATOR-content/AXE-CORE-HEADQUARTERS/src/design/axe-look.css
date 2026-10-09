@@ -7892,3 +7892,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   background: radial-gradient(closest-side, rgba(7, 12, 24, 0.86) 0%, rgba(7, 12, 24, 0.7) 60%, rgba(7, 12, 24, 0) 100%);
   filter: blur(3px);
 }
+
+/* Op de telefoonplaat is de ouder smaller dan het venster (marge, rand, padding). De band rekent op
+ * het venster (100vw - 16px) en liep daardoor rechts over de plaat heen -- de browser-startpagina,
+ * sinds die op de plaat ligt (9 okt). Op de plaat is de band gewoon de breedte van zijn ouder. */
+:root[data-look] .axe-plaat-mobiel .axe-bandbreed {
+  width: 100% !important;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
