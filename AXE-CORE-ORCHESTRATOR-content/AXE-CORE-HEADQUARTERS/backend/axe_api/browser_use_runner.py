@@ -10,15 +10,16 @@ import time
 import uuid
 from typing import Any
 
+import llm_cascade
 from browser_task_store import get_task, list_tasks, patch_task, put_task
 
 
 def _browser_use_llm():
-    """Cloud-sleutel als die er is, anders het OpenAI-model dat de VPS al heeft.
+    """Cloud-sleutel als die er is, anders de eerste aanbieder uit de keten die nu echt antwoordt.
 
-    ChatBrowserUse() negeert OPENAI_API_KEY en eist BROWSER_USE_API_KEY.
-    Die staat niet op de box, dus de agent stopte vóór de Playwright-terugval
-    (de fout is geen RuntimeError).
+    ChatBrowserUse() negeert OPENAI_API_KEY en eist BROWSER_USE_API_KEY. Die staat niet op de box.
+    Sinds 9 okt kiest dit ook niet blind OpenAI meer: dat tegoed was op, en de agent stopte bij elke
+    taak. Een aanbieder die in de keten rust (llm_cascade) wordt overgeslagen.
     """
     try:
         from browser_use import Agent, ChatBrowserUse  # type: ignore
@@ -29,12 +30,19 @@ def _browser_use_llm():
     if cloud:
         return Agent, ChatBrowserUse(api_key=cloud)
 
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        raise RuntimeError("Set BROWSER_USE_API_KEY or OPENAI_API_KEY for Browser Use")
-    from browser_use.llm.openai.chat import ChatOpenAI  # type: ignore
-    model = os.getenv("BROWSER_USE_MODEL", "gpt-4o-mini")
-    return Agent, ChatOpenAI(model=model, api_key=openai_key)
+    kandidaten = llm_cascade.volgorde()
+    if not kandidaten:
+        raise RuntimeError("Geen LLM-sleutel voor Browser Use (OPENAI_API_KEY, GEMINI_API_KEY of GROQ_API_KEY)")
+    a = kandidaten[0]
+    model = a.gekozen_model()
+    if a.naam == "openai":
+        from browser_use.llm.openai.chat import ChatOpenAI  # type: ignore
+        return Agent, ChatOpenAI(model=model, api_key=a.sleutel())
+    if a.naam == "gemini":
+        from browser_use.llm.google.chat import ChatGoogle  # type: ignore
+        return Agent, ChatGoogle(model=model, api_key=a.sleutel())
+    from browser_use.llm.groq.chat import ChatGroq  # type: ignore
+    return Agent, ChatGroq(model=model, api_key=a.sleutel())
 
 
 def _chromium_executable() -> str | None:
@@ -87,9 +95,6 @@ async def _decide_playwright(task: str, page: dict, elements: list, history: lis
 
     import httpx
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY ontbreekt, de browser-agent kan niet beslissen")
     system = (
         "You control a browser. Reply ONLY with JSON: "
         '{"message":"user-facing update","action":{"type":"navigate"|"click"|"type"|"done",'
@@ -108,15 +113,7 @@ async def _decide_playwright(task: str, page: dict, elements: list, history: lis
         {"role": "user", "content": f"Task: {task}\n\nPage:\n{_json.dumps(brief, ensure_ascii=False)[:6000]}"},
         *history[-4:],
     ]
-    async with httpx.AsyncClient(timeout=60) as client:
-        res = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": os.getenv("BROWSER_USE_MODEL", "gpt-4o-mini"), "messages": messages, "max_tokens": 500},
-        )
-    if res.status_code != 200:
-        raise RuntimeError(f"LLM error: {res.text[:200]}")
-    raw = res.json()["choices"][0]["message"]["content"]
+    raw, _wie = await llm_cascade.chat(messages, max_tokens=900)
     cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
     return _json.loads(cleaned)
 

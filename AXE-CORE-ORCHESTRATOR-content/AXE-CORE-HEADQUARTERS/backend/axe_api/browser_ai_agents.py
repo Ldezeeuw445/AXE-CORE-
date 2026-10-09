@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 
 import httpx
+import llm_cascade
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -26,15 +27,64 @@ class AgentTaskBody(BaseModel):
     mode: str = "automate"
 
 
+#: Zonder DeepSeek-sleutel antwoordt DeepSeek Coder V2 op AXE's eigen modelbox (Strato). Het IP met de
+#: servernaam als SNI/Host, zodat het certificaat klopt zonder dat de VPS die naam naar zichzelf hoeft te laten wijzen.
+MODELBOX_IP = os.getenv("DEEPSEEK_FALLBACK_IP", "217.160.135.111")
+MODELBOX_NAAM = os.getenv("DEEPSEEK_FALLBACK_HOST", "ollama.axecompanion.com")
+MODELBOX_MODEL = os.getenv("DEEPSEEK_FALLBACK_MODEL", "deepseek-coder-v2:16b")
+_modelbox_cache: dict = {"t": 0.0, "ok": False}
+
+
+async def _modelbox_chat(messages: list[dict], timeout: float = 120.0) -> str:
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        res = await client.post(
+            f"https://{MODELBOX_IP}/api/chat",
+            headers={"Host": MODELBOX_NAAM},
+            extensions={"sni_hostname": MODELBOX_NAAM},
+            json={"model": MODELBOX_MODEL, "stream": False, "keep_alive": "30m", "messages": messages},
+        )
+    if res.status_code != 200:
+        raise HTTPException(res.status_code, f"Model box error: {res.text[:200]}")
+    return ((res.json().get("message") or {}).get("content") or "").strip()
+
+
+async def _modelbox_bereikbaar() -> bool:
+    """Is DeepSeek Coder V2 er? Eén lijstverzoek (geen model laden), een minuut onthouden."""
+    import time
+    if time.monotonic() - _modelbox_cache["t"] < 60:
+        return bool(_modelbox_cache["ok"])
+    ok = False
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            res = await client.get(f"https://{MODELBOX_IP}/api/tags", headers={"Host": MODELBOX_NAAM},
+                                   extensions={"sni_hostname": MODELBOX_NAAM})
+        ok = res.status_code == 200 and any(m.get("name", "").startswith("deepseek") for m in res.json().get("models", []))
+    except (httpx.HTTPError, ValueError):
+        ok = False
+    _modelbox_cache.update(t=time.monotonic(), ok=ok)
+    return ok
+
+
 @router.post("/deepseek")
 async def deepseek_chat(body: DeepSeekBody):
-    """Chat with DeepSeek."""
+    """Chat with DeepSeek -- the cloud API when there is a key, otherwise DeepSeek Coder V2 on AXE's own server."""
     api_key = body.api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
-        raise HTTPException(
-            503,
-            "DeepSeek API key not configured. Set DEEPSEEK_API_KEY on the VPS or pass api_key.",
-        )
+        if not await _modelbox_bereikbaar():
+            raise HTTPException(
+                503,
+                "DeepSeek is not available: no DEEPSEEK_API_KEY on the VPS and the model box does not answer.",
+            )
+        persoon = "You are DeepSeek, a helpful AI assistant integrated into AXE Browser. Reply concisely in the user's language."
+        tekst = await _modelbox_chat([
+            {"role": "system", "content": persoon},
+            {"role": "user", "content": body.message},
+        ])
+        diep = " DeepThink needs a DeepSeek API key, so this is the standard model." if body.mode == "deepthink" else ""
+        return {
+            "message": f"{tekst}\n\n— DeepSeek Coder V2, running on AXE's own server (no DeepSeek API key set).{diep}",
+            "status": "ok",
+        }
 
     model = "deepseek-reasoner" if body.mode == "deepthink" else "deepseek-chat"
     system = (
@@ -108,31 +158,52 @@ async def list_recent_tasks():
     return {"tasks": list_tasks()}
 
 
+_health_cache: dict = {"t": 0.0, "llm": None}
+
+
 @router.get("/health")
 async def browser_ai_health():
-    """Health check for all browser AI providers."""
+    """Health check for all browser AI providers -- measured, not assumed.
+
+    Browser Use and Camofox are "ready" only when at least one LLM behind them answers right now
+    (llm_cascade.status): the lamp used to stay green with an empty OpenAI account while every task failed.
+    """
+    import time
     from camofox_client import camofox_health, CAMOFOX_BASE
 
-    status: dict = {"deepseek": bool(os.getenv("DEEPSEEK_API_KEY")), "browser_use": False, "camofox": False}
-    if not status["deepseek"]:
-        status["deepseek_note"] = "DEEPSEEK_API_KEY is not set on the VPS"
+    status: dict = {"deepseek": False, "browser_use": False, "camofox": False}
+    if os.getenv("DEEPSEEK_API_KEY"):
+        status["deepseek"] = True
+        status["deepseek_note"] = "DeepSeek cloud"
+    elif await _modelbox_bereikbaar():
+        status["deepseek"] = True
+        status["deepseek_note"] = "DeepSeek Coder V2 on AXE's own server (add DEEPSEEK_API_KEY for DeepThink)"
+    else:
+        status["deepseek_note"] = "DEEPSEEK_API_KEY is not set on the VPS and the model box does not answer"
+
+    if time.monotonic() - _health_cache["t"] > 120 or _health_cache["llm"] is None:
+        _health_cache.update(t=time.monotonic(), llm=await llm_cascade.status())
+    llm = _health_cache["llm"]
+    status["llm"] = llm["providers"]
+
     try:
         import browser_use  # noqa: F401
-        status["browser_use"] = True
+        status["browser_use"] = bool(llm["ok"])
         if os.getenv("BROWSER_USE_API_KEY"):
             status["browser_use_note"] = "browser-use cloud"
-        elif os.getenv("OPENAI_API_KEY"):
-            status["browser_use_note"] = "browser-use via OpenAI"
+        elif llm["ok"]:
+            status["browser_use_note"] = f"browser-use via {llm['using']}"
         else:
-            status["browser_use"] = False
-            status["browser_use_note"] = "browser-use installed, no BROWSER_USE_API_KEY or OPENAI_API_KEY"
+            status["browser_use_note"] = "no LLM answers right now: " + ", ".join(f"{k} {v}" for k, v in llm["providers"].items())
     except ImportError:
         status["browser_use_note"] = "browser-use not installed — using Playwright fallback"
 
     try:
         await camofox_health()
-        status["camofox"] = True
         status["camofox_url"] = CAMOFOX_BASE
+        status["camofox"] = bool(llm["ok"])
+        if not llm["ok"]:
+            status["camofox_note"] = "Camofox is up, but no LLM answers right now: " + ", ".join(f"{k} {v}" for k, v in llm["providers"].items())
     except Exception as e:
         status["camofox_note"] = str(e)[:200]
 

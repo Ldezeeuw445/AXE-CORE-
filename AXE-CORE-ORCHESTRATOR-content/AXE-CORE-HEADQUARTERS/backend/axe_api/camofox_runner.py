@@ -11,6 +11,8 @@ import uuid
 from typing import Any
 
 import httpx
+
+import llm_cascade
 from fastapi import HTTPException
 
 from camofox_client import (
@@ -34,17 +36,14 @@ def get_camofox_task(task_id: str) -> dict[str, Any] | None:
 
 
 async def _llm_decide(task: str, snapshot_text: str, history: list[dict]) -> dict:
-    """Ask LLM what action to take next on the Camofox page."""
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("BROWSER_USE_API_KEY")
-    if not api_key:
-        raise RuntimeError("No LLM API key for Camofox agent (OPENAI_API_KEY, DEEPSEEK_API_KEY, or BROWSER_USE_API_KEY)")
+    """Ask LLM what action to take next on the Camofox page.
 
-    model = os.getenv("CAMOFOX_LLM_MODEL", "gpt-4o-mini")
-    endpoint = os.getenv("CAMOFOX_LLM_ENDPOINT", "https://api.openai.com/v1/chat/completions")
-
+    Door de gedeelde keten (llm_cascade): een aanbieder zonder tegoed haalt de agent niet meer neer.
+    """
     system = """You control a stealth browser (Camofox). Reply ONLY with JSON:
 {"reasoning":"brief","message":"user-facing update","action":{"type":"navigate"|"click"|"type"|"done","url":"...","ref":"e1","text":"...","submit":false}}
-Use element refs (e1, e2...) from the snapshot. One action per turn."""
+Use element refs (e1, e2...) from the snapshot. One action per turn.
+When the task is complete, use type "done" and put the FINAL ANSWER the user asked for in "message" (the actual title, text or result) -- never a status line like "fetching" or "done"."""
 
     messages = [
         {"role": "system", "content": system},
@@ -53,15 +52,7 @@ Use element refs (e1, e2...) from the snapshot. One action per turn."""
     for h in history[-4:]:
         messages.append(h)
 
-    async with httpx.AsyncClient(timeout=60) as client:
-        res = await client.post(
-            endpoint,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": messages, "max_tokens": 1024},
-        )
-    if res.status_code != 200:
-        raise RuntimeError(f"LLM error: {res.text[:200]}")
-    raw = res.json()["choices"][0]["message"]["content"]
+    raw, _wie = await llm_cascade.chat(messages, max_tokens=1024)
     cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(cleaned)
 
