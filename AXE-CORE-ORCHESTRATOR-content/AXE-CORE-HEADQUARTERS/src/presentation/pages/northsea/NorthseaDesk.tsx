@@ -205,6 +205,21 @@ export default function NorthseaDesk() {
         <IcoonZuil items={menu} actief={tab} kies={id => setTab(id as Tab)} rijen={3} />
       </PlaatSlot>
 
+      {/* Op een telefoon staan alle tabbladen van de desk zichtbaar bovenin, niet alleen in de lade: wie
+          alleen AXE Chase zag wist niet dat er nog tien zijn (Luka, 9 okt). */}
+      {compact && (
+        <nav className="axe-desk-tabs" role="tablist" aria-label="NorthSea Desk">
+          {menu.map(i => (
+            <button
+              key={i.id} type="button" role="tab" aria-selected={i.id === tab}
+              data-aan={i.id === tab ? 'ja' : undefined} onClick={() => setTab(i.id as Tab)}
+            >
+              <span style={{ color: i.kleur }} aria-hidden="true">{i.icoon}</span>{i.label}
+            </button>
+          ))}
+        </nav>
+      )}
+
       {tab === 'live' && (
         <PlaatSlot slot="rechts">
           <IcoonZuil
@@ -238,7 +253,7 @@ export default function NorthseaDesk() {
             vrijVan="[data-axe-doel=northsea-deals]" />
         </div>
       ) : tab === 'chase' ? (
-        <div className="flex min-h-0 flex-1 px-3 pb-3 pt-2">
+        <div className="flex min-h-0 flex-1 px-1 pb-2 pt-1">
           <ChasePaneel
             tellers={tellers} filter={filter} setFilter={setFilter} bezig={bezig} haal={haal}
             fout={fout} data={data} gefilterd={gefilterd} zichtbaar={zichtbaar} alles={alles}
@@ -299,7 +314,7 @@ function ChasePaneel({
   vol?: boolean;
 }) {
   return (
-    <div className={`axe-paneel ${vol ? 'flex-1' : ''}`} data-axe-doel="axe-chase">
+    <div className={`axe-paneel ${vol ? 'flex-1' : ''}`} data-axe-doel="axe-chase" data-plat={vol ? 'ja' : undefined}>
       <div className="flex items-center gap-2 mb-3">
         <Crosshair size={15} style={{ color: 'var(--accent-cyan)' }} />
         <h2 className="flex-1 text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>AXE Chase</h2>

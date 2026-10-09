@@ -7887,14 +7887,15 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 /* ── De bol op de lichte telefoonplaat ───────────────────────────────────
  * De AXE-sphere heeft bleke deeltjes (zoals in Tauri, waar de plaat een middentint is). Op een lichte
- * wallpaper vallen die weg; deze lens legt er een zachte donkere schijf achter, ronder en kleiner dan
- * het vak, zonder rand. In de donkere stand doet hij niets. */
+ * wallpaper vallen die weg; deze lens legt er een zachte donkere RING achter, ronder en kleiner dan
+ * het vak, zonder rand. Het midden blijft licht (9 okt: een volle donkere schijf maakte de binnenkant
+ * van de bol donker, terwijl de kern in Tauri juist helder is). In de donkere stand doet hij niets. */
 .axe-bol-lens { display: none; pointer-events: none; }
 :root[data-look='glass'] .axe-mobile-home .axe-bol-lens {
   display: block;
   margin: 3% 6%;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(7, 12, 24, 0.86) 0%, rgba(7, 12, 24, 0.7) 60%, rgba(7, 12, 24, 0) 100%);
+  background: radial-gradient(closest-side, rgba(7, 12, 24, 0.10) 0%, rgba(7, 12, 24, 0.22) 38%, rgba(7, 12, 24, 0.58) 72%, rgba(7, 12, 24, 0.36) 88%, rgba(7, 12, 24, 0) 100%);
   filter: blur(3px);
 }
 
@@ -7986,3 +7987,23 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 /* Op de telefoon staat de titel al in de kaart van de projectie zelf; de kop in de kaart is dan dubbel. */
 .axe-mobile-projectie .axe-kaartkop { display: none; }
+
+
+/* ── NorthSea Desk op een telefoon ────────────────────────────────────────────────────
+ * Alle tabbladen zichtbaar in een rij die zijwaarts schuift (de lade ernaast blijft), en AXE Chase als
+ * hele tab ligt direct op de plaat: een kaart in een plaat zag eruit als een dubbele plaat. */
+.axe-desk-tabs {
+  flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 56px 12px 8px; scrollbar-width: none;
+  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+}
+.axe-desk-tabs::-webkit-scrollbar { display: none; }
+.axe-desk-tabs button {
+  flex: none; min-height: 40px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px;
+  border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(9, 11, 15, 0.9);
+  color: var(--text-secondary); font-size: 12.5px; font-weight: 500; white-space: nowrap;
+}
+.axe-desk-tabs button[data-aan='ja'] { border-color: rgba(255, 255, 255, 0.45); color: var(--text-primary); font-weight: 650; }
+:root[data-look] .axe-paneel[data-plat='ja'] {
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 0 !important;
+}
