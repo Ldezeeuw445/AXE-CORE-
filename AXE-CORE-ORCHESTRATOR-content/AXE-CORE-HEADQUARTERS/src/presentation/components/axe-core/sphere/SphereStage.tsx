@@ -2,7 +2,7 @@
  * SphereStage — Living Display on Home.
  * Maps: large square interactive portal (Google 2D or MapLibre).
  */
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
@@ -112,11 +112,38 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
 
   const showPortal = !!payload && (phase === 'opening' || phase === 'projecting' || phase === 'closing');
 
-  // XL square — fills most of the viewport so drag/scroll feel natural
-  const mapSide = 'min(94vmin, 920px)';
+  /* Hoeveel ruimte er BOVEN de composer is. Het podium loopt op de plaat door tot
+     onder de composer (Home geeft het de hele hoogte als --axe-bol-vak nog niet
+     gemeten is), dus een kaart van 94vmin viel er half onder (Luka, 9 okt: "de
+     map valt onder de composer door"). Gemeten tegen --axe-chat-top, de
+     bovenkant van de composer die AxeShellChrome bijhoudt. */
+  const podium = useRef<HTMLDivElement | null>(null);
+  const [vrij, setVrij] = useState<{ hoog: number; top: number } | null>(null);
+  useEffect(() => {
+    const meet = () => {
+      const el = podium.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const chatTop = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--axe-chat-top'));
+      const onder = Number.isFinite(chatTop) && chatTop > r.top ? Math.min(r.bottom, chatTop - 14) : r.bottom;
+      // Boven: vrij van de kopbalk (tabs en knoppen, ~64px).
+      const boven = Math.max(r.top, 64);
+      setVrij({ hoog: Math.max(220, Math.round(onder - boven)), top: Math.round(boven - r.top) });
+    };
+    meet();
+    window.addEventListener('resize', meet);
+    const t = window.setInterval(meet, 1500); // composer groeit mee met tekst
+    return () => { window.removeEventListener('resize', meet); window.clearInterval(t); };
+  }, [showPortal]);
+
+  // Ruimte voor het onderschrift onder de kaart (~34px).
+  const ONDERSCHRIFT = 34;
+  const mapSide = vrij
+    ? `min(${vrij.hoog - ONDERSCHRIFT}px, 94vw, 920px)`
+    : 'min(94vmin, 920px)';
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div ref={podium} className="absolute inset-0 overflow-hidden">
       <motion.div
         className="absolute inset-0"
         animate={{
@@ -156,42 +183,12 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
         )}
       </AnimatePresence>
 
-      {queue.length > 1 && showPortal && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 pointer-events-auto">
-          {queue.map(q => {
-            const active = q.id === payload?.id;
-            return (
-              <button
-                key={q.id}
-                type="button"
-                onClick={() => focus(q.id)}
-                className="rounded-full px-2.5 py-1 text-[9px] font-medium truncate max-w-[110px]"
-                style={{
-                  background: active ? 'var(--tint-hi)' : 'rgba(0,0,0,0.6)',
-                  border: `1px solid ${active ? MODE_BORDER[q.mode] : 'rgba(255,255,255,0.12)'}`,
-                  color: active ? '#a5f3fc' : 'rgba(255,255,255,0.45)',
-                }}
-              >
-                {q.mode} · {q.title}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => dismissAll()}
-            className="rounded-full px-2 py-1 text-[9px]"
-            style={{ color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.1)' }}
-          >
-            clear
-          </button>
-        </div>
-      )}
-
       <AnimatePresence mode="sync">
         {showPortal && payload && (
           <motion.div
             key={payload.id}
-            className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
+            className="absolute left-0 right-0 z-20 flex items-center justify-center pointer-events-none"
+            style={vrij ? { top: vrij.top, height: vrij.hoog } : { top: 0, bottom: 0 }}
             initial={{ opacity: 0, scale: 0.55 }}
             animate={{ opacity: phase === 'closing' ? 0 : 1, scale: phase === 'closing' ? 0.55 : 1 }}
             exit={{ opacity: 0, scale: 0.5 }}
@@ -212,8 +209,8 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
                   // Ensure browser doesn't steal touch/scroll for page
                   touchAction: 'none',
                 } : {
-                  width: 'min(72vmin, 560px)',
-                  height: 'min(72vmin, 560px)',
+                  width: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 72vmin, 560px)` : 'min(72vmin, 560px)',
+                  height: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 72vmin, 560px)` : 'min(72vmin, 560px)',
                   borderRadius: '50%',
                   background: 'rgba(5,5,12,0.92)',
                   border: `2px solid ${MODE_BORDER[mode]}`,
@@ -248,8 +245,13 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
                 </div>
               </div>
 
+              {/* Onderschrift en, als er meer dan één ding op Home staat, de andere
+                  als kleine knoppen ernaast. Die stonden bovenaan (top-12), onder de
+                  kopbalk en achter de kaart: het "blauwe knopje dat je niet kon lezen"
+                  (Luka, 9 okt). */}
+              <div className="mt-2.5 flex max-w-full flex-wrap items-center justify-center gap-1.5">
               <div
-                className="mt-2.5 px-4 py-1.5 rounded-full text-[10px] font-medium tracking-wide"
+                className="px-4 py-1.5 rounded-full text-[10px] font-medium tracking-wide"
                 style={{
                   color: '#e9d5ff',
                   background: 'rgba(0,0,0,0.8)',
@@ -259,6 +261,29 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
                 {payload.mode === 'map'
                   ? `MAP · ${payload.title} · sleep · scroll zoom · Esc`
                   : `${payload.mode.toUpperCase()} · ${payload.title}`}
+              </div>
+                {queue.length > 1 && queue.filter(q => q.id !== payload.id).map(q => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => focus(q.id)}
+                    className="rounded-full px-2.5 py-1 text-[10px] font-medium truncate max-w-[140px]"
+                    style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.7)' }}
+                    title={`${q.mode} · ${q.title}`}
+                  >
+                    {q.mode} · {q.title}
+                  </button>
+                ))}
+                {queue.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => dismissAll()}
+                    className="rounded-full px-2 py-1 text-[10px]"
+                    style={{ background: 'rgba(0,0,0,0.6)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    clear
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>
