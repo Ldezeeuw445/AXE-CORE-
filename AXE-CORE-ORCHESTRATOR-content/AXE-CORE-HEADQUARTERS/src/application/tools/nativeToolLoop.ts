@@ -88,7 +88,7 @@ function summarise(call: ToolCall): string {
   return parts.slice(0, 600);
 }
 
-async function runOne(
+export async function runToolCall(
   call: ToolCall,
   deps: NativeLoopDeps,
 ): Promise<{ id: string; name: string; output: string; ok: boolean }> {
@@ -160,7 +160,7 @@ export async function runNativeToolLoop(
 
     // All of them, together. Approvals still serialise where a card appears,
     // but two read-only calls have no reason to wait for each other.
-    const results = await Promise.all(turn.toolCalls.map(c => runOne(c, deps)));
+    const results = await Promise.all(turn.toolCalls.map(c => runToolCall(c, deps)));
 
     for (const r of results) {
       if (r.ok) ranTools.push(r.name);

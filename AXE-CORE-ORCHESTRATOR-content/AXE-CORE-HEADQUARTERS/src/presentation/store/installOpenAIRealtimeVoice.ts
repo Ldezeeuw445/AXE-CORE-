@@ -230,6 +230,27 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
       required: ['tool'],
     },
   },
+  {
+    name: 'get_overview',
+    description:
+      "How things stand right now: what needs Luka's attention (approvals, failed jobs, news), whether the Mac mini, iMac and both VPSes are up with their load, the core services, and the market prices. Call this whenever he asks how it is going, what is waiting, whether everything is online, or what you would do next — instead of guessing.",
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'use_connected_service',
+    description:
+      "Use the services connected to AXE (Supabase, Cloudflare, GitHub, mail and more, plus NorthSea). Step 1: action 'list' shows what is connected. Step 2: action 'tools' with a service lists what it can do. Step 3: action 'call' with service, tool and args does it. Reading runs at once; anything that changes or sends something shows Luka an approval card first.",
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'tools', 'call'], description: 'list, tools or call.' },
+        service: { type: 'string', description: 'The service id from the list.' },
+        tool: { type: 'string', description: "For 'call': the tool name from 'tools'." },
+        args: { type: 'object', description: "For 'call': the arguments for that tool." },
+      },
+      required: ['action'],
+    },
+  },
 ];
 
 async function toolStartBackgroundTask(args: ToolArgs): Promise<string> {
@@ -339,7 +360,15 @@ export async function handleRealtimeTool(name: string, rawArgs: unknown): Promis
       case 'search_memory': return await toolSearchMemory(args);
       case 'show_on_home': return await (await import('./realtimeHomeTools')).toolShowOnHome(args);
       case 'use_computer': return await (await import('./realtimeHomeTools')).toolUseComputer(args);
-      default: return JSON.stringify({ ok: false, message: `Unknown tool: ${name}` });
+      case 'get_overview': return await (await import('./realtimePartnerTools')).toolGetOverview();
+      case 'use_connected_service': return await (await import('./realtimePartnerTools')).toolConnectedService(args);
+      default: {
+        // The rest of the registry (search, fetch, git, database, phone, home, Obsidian, browser...):
+        // the same executor and the same approval card the typed chat uses.
+        const partner = await import('./realtimePartnerTools');
+        if (partner.isRegisterTool(name)) return await partner.runRegisterTool(name, args);
+        return JSON.stringify({ ok: false, message: `Unknown tool: ${name}` });
+      }
     }
   } catch (error) {
     return JSON.stringify({ ok: false, message: error instanceof Error ? error.message : String(error) });
@@ -509,12 +538,27 @@ export function installOpenAIRealtimeVoice(): void {
       if (myGeneration !== generation || !realtimeStarting) return;
       micStreamForSession = mic;
 
-      const instructions = `${AXE_SYSTEM_PROMPT}\n\n\n${REALTIME_VOICE_RULES}`;
+      // The whole registry, not just the base tools: what is switched on right now, and (so AXE can say
+      // exactly why instead of "I can't") what is switched off. If the registry cannot load for any
+      // reason the call still opens with the base tools -- a voice with fewer hands beats no voice.
+      let sessionTools: RealtimeToolDef[] = REALTIME_TOOLS;
+      let uitgezet = '';
+      try {
+        const partner = await import('./realtimePartnerTools');
+        sessionTools = [...REALTIME_TOOLS, ...partner.registerStemTools()];
+        const uit = partner.uitgezetteTools();
+        if (uit.length) {
+          uitgezet = `\n\nSwitched off right now (not set up, or its backend is down): ${uit.join(', ')}. If Luka needs one of these, say it is off and what turns it on — never just "I can't".`;
+        }
+      } catch (error) {
+        console.warn('[AXE voice] registry tools unavailable, using the base tools:', error);
+      }
+      const instructions = `${AXE_SYSTEM_PROMPT}\n\n\n${REALTIME_VOICE_RULES}${uitgezet}`;
       const recentHistory = useVoiceStore.getState().conversation
         .slice(-8)
         .map((m) => ({ role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', text: m.text }));
 
-      const opened = await openRealtimeVoice(mic, { instructions, tools: REALTIME_TOOLS, history: recentHistory }, {
+      const opened = await openRealtimeVoice(mic, { instructions, tools: sessionTools, history: recentHistory }, {
         onSessionReady: () => {
           if (myGeneration !== generation) return;
           useVoiceStore.setState({

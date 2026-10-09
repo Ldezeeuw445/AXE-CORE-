@@ -122,15 +122,17 @@ afterEach(() => {
 });
 
 describe('REALTIME_TOOLS', () => {
-  it('declares exactly the seven real tools this voice call has', () => {
+  it('declares exactly the nine base tools this voice call has (the registry tools are added per session)', () => {
     expect(REALTIME_TOOLS.map((t) => t.name).sort()).toEqual([
       'answer_pending_approval',
       'cancel_task',
+      'get_overview',
       'get_task_status',
       'search_memory',
       'show_on_home',
       'start_background_task',
       'use_computer',
+      'use_connected_service',
     ]);
   });
 });

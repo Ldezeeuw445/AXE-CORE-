@@ -1328,6 +1328,16 @@ export async function northseaCommunicationsMetrics(weeks = 12): Promise<Northse
   return call('GET', `/northsea/communications-metrics?weeks=${weeks}`);
 }
 
+/** Het slotscherm-overzicht van de VPS: koersen, machines, diensten en wat aandacht vraagt. Ook voor de stem. */
+export interface LockscreenSnapshot {
+  markets: { symbol: string; label: string; price: number | null }[];
+  systems: { id: string; name: string; online: boolean; cpu: number | null; mem: number | null; disk: number | null }[];
+  services: { id: string; name: string; ok: boolean | null; detail?: string }[];
+  attention: { severity: string; title: string; count: number; ago_s: number | null; route: string }[];
+  attention_total: number;
+}
+export function lockscreenSnapshot(): Promise<LockscreenSnapshot> { return call('GET', '/lockscreen/snapshot'); }
+
 export interface McpHubSjabloon { id: string; naam: string; velden: { id: string; label: string; standaard?: string }[] }
 export function mcpHubLijst(): Promise<{ servers: McpHubServer[]; sjablonen: McpHubSjabloon[] }> { return call('GET', '/mcp/hub'); }
 export function mcpHubVoegToe(sjabloon: string, label: string, velden: Record<string, string>): Promise<McpHubServer> {
