@@ -469,25 +469,27 @@ function run(cmd, args, cwd) {
 }
 const git = (root, ...a) => run('git', a, root);
 const startBuild = git(REPO, 'rev-parse', '--short', 'HEAD').then(s => s.trim()).catch(() => '');
+/** Moet gelijk zijn aan COMPUTER_PROTOCOL in src/domain/tools/computerProtocol.ts (een test houdt ze gelijk). */
+const WORKER_PROTOCOL = 1;
 
 /* ── the tools ──────────────────────────────────────────────────────────── */
 async function execute(payload) {
   const { tool, workspace, args = {} } = payload;
 
-  // A packaged AXE CORE and its local launchd worker are one runtime. Refuse a
-  // mixed-generation local pair instead of letting an old UI talk confidently
-  // to a newer worker (or vice versa). Remote phone/web clients are allowed to
-  // differ because they intentionally control this Mac across deployments.
+  // A packaged AXE CORE and its local launchd worker must speak the same PROTOCOL. Refuse a mixed pair
+  // instead of letting an old UI talk confidently to a newer worker (or vice versa). Remote phone/web
+  // clients are allowed to differ because they intentionally control this Mac across deployments.
+  //
+  // The gate is the protocol number, NOT the git commit (9 okt 2026). The commit of the app and the commit
+  // this worker started from change independently -- autosync pulls minutes before it rebuilds, and any
+  // worker restart in that gap picks the newest commit -- so comparing them refused every computer
+  // action whenever work had just been pushed, although the two understood each other perfectly.
   if (payload.client_runtime === 'tauri' && tool !== 'system.info') {
-    const appBuild = String(payload.client_build ?? '').trim();
-    // The build this process was STARTED from, not today's HEAD: autosync
-    // pulls new commits minutes before it rebuilds the app (it waits until the
-    // Mac is idle), and axe-bijwerken restarts this worker together with the
-    // app. Live HEAD therefore refused every action in that window.
-    const workerBuild = await startBuild;
-    if (appBuild && appBuild !== 'unknown' && workerBuild && appBuild !== workerBuild) {
+    const appProtocol = Number(payload.client_protocol);
+    if (Number.isFinite(appProtocol) && appProtocol !== WORKER_PROTOCOL) {
+      const appBuild = String(payload.client_build ?? '').trim() || 'unknown';
       throw new Error(
-        `AXE native runtime mismatch: app=${appBuild}, computer-worker=${workerBuild}. Run 'npm run bijwerken' from orchestrator; no computer action was executed.`,
+        `AXE native protocol mismatch: app speaks v${appProtocol}, computer-worker speaks v${WORKER_PROTOCOL} (app build ${appBuild}, worker build ${await startBuild}). Run 'npm run bijwerken' from orchestrator; no computer action was executed.`,
       );
     }
   }

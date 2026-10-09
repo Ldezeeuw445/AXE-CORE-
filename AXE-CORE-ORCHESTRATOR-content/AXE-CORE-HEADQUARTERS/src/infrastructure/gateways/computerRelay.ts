@@ -19,6 +19,7 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { beschikbaar as tauriBeschikbaar, workerDienstStand, workerDienstHerstart } from '@/infrastructure/gateways/launchdWorkers';
 import { buildStamp } from '@/domain/buildStamp';
+import { COMPUTER_PROTOCOL } from '@/domain/tools/computerProtocol';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
 /**
@@ -265,10 +266,12 @@ export async function dispatchComputerTask(call: ComputerCall): Promise<Computer
         workspace: call.workspace,
         args: call.args,
         // A local packaged AXE app and its local launchd worker are one native
-        // runtime contract. The worker fail-closes when these commits differ.
+        // runtime contract. The worker fail-closes when their PROTOCOL differs (not their commit).
         // Remote web/phone clients deliberately do not require equality.
         client_runtime: isTauriRuntime() ? 'tauri' : 'remote',
         client_build: buildStamp()?.commit ?? null,
+        // Wat de worker toetst (computerProtocol.ts). De commit hierboven is alleen informatie.
+        client_protocol: COMPUTER_PROTOCOL,
       },
     })
     .select('id')
