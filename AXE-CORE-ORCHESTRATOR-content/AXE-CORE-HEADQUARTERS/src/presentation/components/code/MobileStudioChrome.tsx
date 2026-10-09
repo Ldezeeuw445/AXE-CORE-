@@ -58,21 +58,40 @@ export function MobileStudioBar({
   draait: boolean; opRun: () => void; opNieuw: () => void;
 }) {
   return (
-    <div className="axe-mstudio-bar" role="toolbar" aria-label="Studio">
+    <div className="axe-mstudio-top">
+      <div className="axe-mstudio-bar" role="toolbar" aria-label="Studio">
+        <button type="button" onClick={opslaan} aria-label="Save" data-aan={ongeslagen ? 'ja' : undefined} className="axe-mstudio-knop">
+          {bezigMetOpslaan ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          <span>Save</span>
+        </button>
+        <button type="button" onClick={opRun} aria-label="Run preview" data-aan={draait ? 'ja' : undefined} className="axe-mstudio-knop axe-mstudio-run">
+          <Play size={16} /> <span>Run</span>
+        </button>
+        <button type="button" onClick={opNieuw} aria-label="New" className="axe-mstudio-knop">
+          <Layers size={16} /> <span>Build</span>
+        </button>
+      </div>
       <span className="axe-mstudio-repo" title={repo}>
         <GitBranch size={13} />
         <b>{repo || 'workspace'}</b>
         {branch && <i>{branch}</i>}
       </span>
-      <button type="button" onClick={opslaan} aria-label="Save" data-aan={ongeslagen ? 'ja' : undefined} className="axe-mstudio-knop">
-        {bezigMetOpslaan ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-      </button>
-      <button type="button" onClick={opRun} aria-label="Run preview" data-aan={draait ? 'ja' : undefined} className="axe-mstudio-knop axe-mstudio-run">
-        <Play size={16} /> <span>Run</span>
-      </button>
-      <button type="button" onClick={opNieuw} aria-label="New" className="axe-mstudio-knop">
-        <Layers size={16} />
-      </button>
+    </div>
+  );
+}
+
+/** Wat je ziet zolang er geen bestand open is: waar je heen kunt, in plaats van "sleep een bestand". */
+export function MobileLegeEditor({ opFiles, opAgent, opNieuw }: { opFiles: () => void; opAgent: () => void; opNieuw: () => void }) {
+  return (
+    <div className="axe-mstudio-leeg">
+      <Code2 size={30} />
+      <b>No file open</b>
+      <p>Pick a file, or tell the agent what to build.</p>
+      <div>
+        <button type="button" onClick={opFiles}><FolderOpen size={16} /> Browse files</button>
+        <button type="button" onClick={opAgent}><Bot size={16} /> Ask the agent</button>
+        <button type="button" onClick={opNieuw}><FilePlus size={16} /> New file</button>
+      </div>
     </div>
   );
 }

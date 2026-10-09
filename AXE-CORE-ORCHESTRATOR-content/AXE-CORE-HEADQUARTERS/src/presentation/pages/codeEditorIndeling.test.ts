@@ -28,8 +28,10 @@ describe('de indeling van de Code Editor', () => {
     const pagina = lees('./CodeEditorPage.tsx');
     expect(pagina).toMatch(/<PlaatSlot slot="links">\s*<IcoonZuil items=\{weergaveItems\}/);
     expect(pagina).toMatch(/<PlaatSlot slot="rechts">\s*<IcoonZuil items=\{motorItems\}/);
-    // De balk bestaat alleen nog op mobiel, voor de bestanden-lade.
-    expect(pagina).toMatch(/\{isMobile && \(\s*<div className="axe-studio-balk">/);
+    // De balk bestaat alleen nog op mobiel, voor de bestanden-lade -- behalve in de telefoon-studio
+    // (Replit-stijl, 9 okt), die zijn eigen werkbalk en onderbalk heeft.
+    expect(pagina).toMatch(/\{isMobile && !mobielStudio && \(\s*<div className="axe-studio-balk">/);
+    expect(pagina).toMatch(/\{mobielStudio && \(\s*<MobileStudioBar/);
   });
 
   it('laat het Canvas de toestellen op het raster zetten', () => {

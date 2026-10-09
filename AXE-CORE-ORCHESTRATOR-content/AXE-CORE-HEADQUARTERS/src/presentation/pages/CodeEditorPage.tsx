@@ -16,7 +16,7 @@ import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
-  MobileStudioBar, MobileStudioNav, MobileKeyBar, MobileAgentInput, MobileNewSheet, type EditorHandvat,
+  MobileStudioBar, MobileStudioNav, MobileKeyBar, MobileAgentInput, MobileNewSheet, MobileLegeEditor, type EditorHandvat,
 } from '@/presentation/components/code/MobileStudioChrome';
 import { PANEEL_KEY, leesPaneel, type MobielPaneel } from '@/domain/codeStudio/mobileStudio';
 import { previewStart } from '@/infrastructure/gateways/axeCoreApiService';
@@ -404,7 +404,7 @@ function SleepVlak({ onBestand }: { onBestand: (e: React.DragEvent) => void }) {
 }
 
 function EditorPane({
-  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus, onBestand, onSluit, registerEditor,
+  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus, onBestand, onSluit, registerEditor, leegMobiel,
 }: {
   tab: OpenTab | null;
   activePendingPatch: { msgIdx: number; patch: PatchWithState } | null;
@@ -420,6 +420,8 @@ function EditorPane({
   onSluit: () => void;
   /** De telefoon-toetsenbalk heeft de editor nodig om tekens in te voegen. */
   registerEditor?: (ed: EditorHandvat | null) => void;
+  /** Telefoon-studio: wat er staat zolang er geen bestand open is (in plaats van het sleepvlak). */
+  leegMobiel?: React.ReactNode;
 }) {
   const opPlaat = useHeeftPlaat();
   const kruis = (
@@ -428,6 +430,7 @@ function EditorPane({
       <X size={12} />
     </button>
   );
+  if (!tab && leegMobiel) return <div className="flex-1 flex min-h-0">{leegMobiel}</div>;
   if (!tab) {
     return (
       <div className="flex-1 flex min-h-0 relative" onClick={onFocus}>
@@ -1703,6 +1706,7 @@ export default function CodeEditorPage() {
                           focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')}
                           onBestand={neemBestandAan}
                           registerEditor={setEditorHandvat}
+                          leegMobiel={mobielStudio ? <MobileLegeEditor opFiles={() => setMPaneel('files')} opAgent={() => setMPaneel('agent')} opNieuw={() => { setMPaneel('files'); void addFile(); }} /> : undefined}
                           onSluit={() => kiesIndeling('uit')} />
                       </div>
                       {gesplitst && (

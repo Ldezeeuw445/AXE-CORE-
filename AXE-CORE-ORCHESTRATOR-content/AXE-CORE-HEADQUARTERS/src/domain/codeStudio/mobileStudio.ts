@@ -105,20 +105,20 @@ export const APP_SJABLONEN: readonly Bouwsteen[] = [
     opdracht: 'Build a dashboard app in apps/<name>: KPI cards, two charts, a sortable table, a date filter, mock data behind a data layer I can swap for a real API. Start the dev server.' + AFSLUITING,
   },
   {
-    id: 'bot', titel: 'Bot of script', uitleg: 'Een taak die op een schema draait',
+    id: 'bot', titel: 'Bot or script', uitleg: 'A task that runs on a schedule',
     opdracht: 'Create a small Python script in apps/<name> that runs on a schedule, logs what it does, reads its settings from a .env file and has a --dry-run flag. Add a README with how to run it.' + AFSLUITING,
   },
 ];
 
 export const FEATURE_IDEEEN: readonly Bouwsteen[] = [
-  { id: 'login', titel: 'Login', uitleg: 'Aanmelden met Supabase', opdracht: 'Add sign-in and sign-up to the current app with Supabase auth: a login page, a protected route and a sign-out button. Show a clear error when it fails.' + AFSLUITING },
-  { id: 'database', titel: 'Database', uitleg: 'Tabel en lijst met toevoegen/wijzigen', opdracht: 'Add a database-backed list to the current app: a table with a migration, create / edit / delete from the UI, and loading and empty states.' + AFSLUITING },
-  { id: 'api', titel: 'API-route', uitleg: 'Een endpoint met validatie', opdracht: 'Add an API route to the current app with input validation, a typed response, error handling and a test.' + AFSLUITING },
-  { id: 'dark', titel: 'Donker/licht', uitleg: 'Thema-wissel die onthouden wordt', opdracht: 'Add a dark / light theme switch to the current app that follows the system by default and remembers the choice.' + AFSLUITING },
-  { id: 'upload', titel: 'Uploaden', uitleg: 'Bestanden kiezen en bewaren', opdracht: 'Add file upload to the current app: pick a file, show progress, store it, list uploaded files with a delete button.' + AFSLUITING },
-  { id: 'payments', titel: 'Betalen', uitleg: 'Stripe checkout (testmodus)', opdracht: 'Add a Stripe checkout flow in test mode to the current app: a pricing page, a checkout session, a success and a cancel page. Use test keys only.' + AFSLUITING },
-  { id: 'realtime', titel: 'Realtime', uitleg: 'Live bijwerken zonder verversen', opdracht: 'Make the main list in the current app update live (realtime subscription or polling fallback) without a page refresh.' + AFSLUITING },
-  { id: 'deploy', titel: 'Online zetten', uitleg: 'Naar Cloudflare Pages', opdracht: 'Prepare the current app for deployment on Cloudflare Pages: build settings, environment variable list, and the exact steps. Do not deploy; tell me when it is ready for my approval.' + AFSLUITING },
-  { id: 'fix', titel: 'Fouten opsporen', uitleg: 'Draai alles en repareer wat stuk is', opdracht: 'Run the type check, the linter and the tests on the current project, fix every failure you can, and report what is left.' },
-  { id: 'review', titel: 'Code nakijken', uitleg: 'Wat kan beter en wat is risicovol', opdracht: 'Review the current project: list the three riskiest things, the three biggest simplifications and what has no test. Do not change anything yet.' },
+  { id: 'login', titel: 'Login', uitleg: 'Sign in with Supabase', opdracht: 'Add sign-in and sign-up to the current app with Supabase auth: a login page, a protected route and a sign-out button. Show a clear error when it fails.' + AFSLUITING },
+  { id: 'database', titel: 'Database', uitleg: 'A table with add, edit and delete', opdracht: 'Add a database-backed list to the current app: a table with a migration, create / edit / delete from the UI, and loading and empty states.' + AFSLUITING },
+  { id: 'api', titel: 'API route', uitleg: 'An endpoint with validation', opdracht: 'Add an API route to the current app with input validation, a typed response, error handling and a test.' + AFSLUITING },
+  { id: 'dark', titel: 'Dark / light', uitleg: 'A theme switch that is remembered', opdracht: 'Add a dark / light theme switch to the current app that follows the system by default and remembers the choice.' + AFSLUITING },
+  { id: 'upload', titel: 'Uploads', uitleg: 'Pick, store and list files', opdracht: 'Add file upload to the current app: pick a file, show progress, store it, list uploaded files with a delete button.' + AFSLUITING },
+  { id: 'payments', titel: 'Payments', uitleg: 'Stripe checkout, test mode', opdracht: 'Add a Stripe checkout flow in test mode to the current app: a pricing page, a checkout session, a success and a cancel page. Use test keys only.' + AFSLUITING },
+  { id: 'realtime', titel: 'Realtime', uitleg: 'Updates live, no refresh', opdracht: 'Make the main list in the current app update live (realtime subscription or polling fallback) without a page refresh.' + AFSLUITING },
+  { id: 'deploy', titel: 'Deploy', uitleg: 'Ready for Cloudflare Pages', opdracht: 'Prepare the current app for deployment on Cloudflare Pages: build settings, environment variable list, and the exact steps. Do not deploy; tell me when it is ready for my approval.' + AFSLUITING },
+  { id: 'fix', titel: 'Fix errors', uitleg: 'Run everything, repair what breaks', opdracht: 'Run the type check, the linter and the tests on the current project, fix every failure you can, and report what is left.' },
+  { id: 'review', titel: 'Review code', uitleg: 'What is risky, what can be simpler', opdracht: 'Review the current project: list the three riskiest things, the three biggest simplifications and what has no test. Do not change anything yet.' },
 ];
