@@ -37,6 +37,8 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/apps': 'Staat er wel, maar met een eigen label',
   '/trading': 'Sneltoets r, en de ThinkThanks-router linkt ernaartoe',
   '/memory/explore': 'Vanuit Terrain — NeuralMemorySystem linkt de hubs ernaartoe',
+  '/float/notes': 'Eigen venster boven het bureaublad (zwevendeVensters.ts), geopend vanuit het radiaal dok en de Quick Note',
+  '/float/phone': 'Eigen venster boven het bureaublad (zwevendeVensters.ts), geopend vanuit het radiaal dok',
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
   '/dev-strategy-lab-preview': 'Ontwikkelvoorbeeld, alleen in npm run dev (Strategy Lab buiten de login)',
   '/dev-browser-preview': 'Ontwikkelvoorbeeld',

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
-import { Bold, Check, GripHorizontal, Italic, StickyNote, Underline, X } from 'lucide-react';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { AppWindow, Bold, Check, GripHorizontal, Italic, StickyNote, Underline, X } from 'lucide-react';
+import { maakNotitie } from '@/infrastructure/persistence/notitiesService';
+import { openZwevend } from '@/infrastructure/gateways/zwevendeVensters';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { APPS } from '@/domain/apps';
+import { saneerNotitieHtml, platTekst } from '@/domain/notities/saneer';
 
 /**
  * Text colours for the note toolbar: the five existing app-identity colours
@@ -14,44 +17,6 @@ const NOTE_COLORS: ReadonlyArray<{ naam: string; kleur: string }> = [
   ...APPS.map(a => ({ naam: a.label, kleur: a.kleur })),
   { naam: 'Yellow', kleur: '#FFCC66' },
 ];
-
-const TOEGESTANE_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'BR', 'DIV']);
-
-/**
- * Strip everything execCommand's output (or a paste from elsewhere) could
- * carry beyond bold/italic/underline/colour -- no scripts, no attributes
- * beyond a colour on SPAN, no links or images. This is a simple note, not a
- * document editor, and this HTML is stored durably in Supabase.
- */
-function saneerNotitieHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const opschonen = (el: Element) => {
-    for (const kind of [...el.children]) {
-      if (!TOEGESTANE_TAGS.has(kind.tagName)) {
-        while (kind.firstChild) el.insertBefore(kind.firstChild, kind);
-        el.removeChild(kind);
-      } else {
-        const kleur = kind.tagName === 'SPAN' ? (kind as HTMLElement).style.color : '';
-        for (const attr of [...kind.attributes]) kind.removeAttribute(attr.name);
-        if (kind.tagName === 'SPAN' && kleur) (kind as HTMLElement).style.color = kleur;
-      }
-    }
-    // Unwrapping a disallowed tag can reveal new disallowed grandchildren as
-    // direct children; a plain note nests at most a couple of levels deep, so
-    // re-running until nothing changes is simpler and safer than getting the
-    // single-pass recursion order exactly right.
-    if ([...el.children].some(c => !TOEGESTANE_TAGS.has(c.tagName))) opschonen(el);
-    else for (const kind of [...el.children]) opschonen(kind);
-  };
-  opschonen(doc.body);
-  return doc.body.innerHTML;
-}
-
-/** Plain preview text, for the "first line becomes the title" logic below --
- *  identical to what the old plain-textarea version did with text.split. */
-function platTekst(html: string): string {
-  return new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
-}
 
 function vindDoel(doel: string): DOMRect | null {
   for (const el of document.querySelectorAll<HTMLElement>(`[data-axe-doel="${CSS.escape(doel)}"]`)) {
@@ -172,29 +137,33 @@ export function QuickNoteDock() {
     setLeeg(!area.current || area.current.textContent?.trim() === '');
   }
 
-  async function save(e?: FormEvent) {
-    e?.preventDefault();
+  /** Wat er in het veld staat als notitie bewaren: eerst lokaal, dan in de cloud (notitiesService). */
+  async function bewaarVeld(): Promise<boolean> {
     const el = area.current;
     const platteInhoud = el ? platTekst(el.innerHTML).trim() : '';
-    if (!platteInhoud || saving || !el) return;
-    const sb = getSupabase();
-    if (!sb) return;
-    setSaving(true);
-    const first = platteInhoud.split(/\n/).map(s => s.trim()).find(Boolean) ?? 'Quick note';
-    const title = first.length > 56 ? first.slice(0, 53) + '…' : first;
-    const { error } = await sb.from('core_kb_documents').insert({
-      title,
-      content: saneerNotitieHtml(el.innerHTML),
-      category: 'Quick Notes',
-      ai: 'axe-core',
-      source: 'user',
-    });
-    setSaving(false);
-    if (error) return;
+    if (!el || !platteInhoud) return false;
+    await maakNotitie(saneerNotitieHtml(el.innerHTML));
     el.innerHTML = '';
     setLeeg(true);
+    return true;
+  }
+
+  async function save(e?: FormEvent) {
+    e?.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    const gelukt = await bewaarVeld();
+    setSaving(false);
+    if (!gelukt) return;
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1400);
+  }
+
+  /** Naar een eigen venster boven het hele bureaublad. Wat je al getypt had gaat mee als notitie. */
+  async function popUit() {
+    await bewaarVeld();
+    setOpen(false);
+    void openZwevend('notes');
   }
 
   if (!open || !positie) return null;
@@ -211,7 +180,12 @@ export function QuickNoteDock() {
 
       <div className="axe-quick-note__head">
         <span><StickyNote size={14} /> Quick Note</span>
-        <button type="button" onClick={() => setOpen(false)} aria-label="Close note"><X size={14} /></button>
+        <span className="axe-quick-note__acties">
+          {isTauriRuntime() && (
+            <button type="button" onClick={() => void popUit()} aria-label="Open in its own window" title="Open in its own window — move it anywhere on your desktop"><AppWindow size={14} /></button>
+          )}
+          <button type="button" onClick={() => setOpen(false)} aria-label="Close note"><X size={14} /></button>
+        </span>
       </div>
 
       <div className="axe-quick-note__toolbar" onMouseDown={behoudSelectie}>
@@ -240,7 +214,7 @@ export function QuickNoteDock() {
       />
 
       <div className="axe-quick-note__foot">
-        <span>{saved ? 'Saved to Knowledge' : 'AXE Core · Knowledge'}</span>
+        <span>{saved ? 'Saved — also in Knowledge' : 'AXE Core · Knowledge'}</span>
         <button type="submit" disabled={leeg || saving}>
           {saved ? <Check size={13} /> : null}{saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
         </button>

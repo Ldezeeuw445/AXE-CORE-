@@ -35,7 +35,7 @@ const COMMANDO: Record<string, string> = {
   ongedaan: 'undo', opnieuw: 'redo', inspringen: 'tab', uitspringen: 'outdent', commentaar: 'editor.action.commentLine',
 };
 
-export function voerToetsUit(ed: EditorHandvat, t: Toets): void {
+function voerToetsUit(ed: EditorHandvat, t: Toets): void {
   if (t.commando) {
     ed.trigger('toets', COMMANDO[t.commando], null);
   } else {

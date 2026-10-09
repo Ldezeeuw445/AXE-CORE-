@@ -50,6 +50,8 @@ const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
 const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
 const ComputerUse = lazy(() => import('@/presentation/pages/ComputerUse'));
 const ComputerUseOverlay = lazy(() => import('@/presentation/pages/ComputerUseOverlay'));
+const FloatNotes = lazy(() => import('@/presentation/pages/FloatNotes'));
+const FloatPhone = lazy(() => import('@/presentation/pages/FloatPhone'));
 const StandaloneNorthseaPage = lazy(() => import('@/presentation/pages/StandaloneNorthseaPage'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
@@ -202,6 +204,9 @@ export default function App() {
           <Route path="/dev-browser-standalone" element={<StandaloneBrowserPage />} />
           <Route path="/browser-desktop" element={<RequireAuth><StandaloneBrowserPage /></RequireAuth>} />
           <Route path="/computer-use-overlay" element={<RequireAuth><ComputerUseOverlay /></RequireAuth>} />
+          {/* Eigen vensters boven het hele bureaublad: notities en telefoon (zwevendeVensters.ts). */}
+          <Route path="/float/notes" element={<RequireAuth><FloatNotes /></RequireAuth>} />
+          <Route path="/float/phone" element={<RequireAuth><FloatPhone /></RequireAuth>} />
           <Route path="/northsea-desktop" element={<RequireAuth><StandaloneNorthseaPage /></RequireAuth>} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<HomeEntry />} />

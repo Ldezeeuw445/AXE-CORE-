@@ -27,11 +27,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useOpenPagina } from '@/presentation/hooks/useOpenPagina';
-import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, PanelRightOpen, Smartphone, StickyNote, X } from 'lucide-react';
+import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, NotebookPen, PanelRightOpen, Smartphone, SmartphoneNfc, StickyNote, X } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
 import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { openRegisteredProductShell } from '@/infrastructure/gateways/productWindowService';
+import { wisselZwevend } from '@/infrastructure/gateways/zwevendeVensters';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
 
 /** Afstand van het midden tot een tab. */
@@ -139,6 +141,11 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
   const linkerTabs: DokTab[] = [
     { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => wisselTelefoon(), aan: telefoonAan },
     { id: 'notities', label: 'Quick Note', teken: <StickyNote size={18} />, doe: () => window.dispatchEvent(new CustomEvent('axe-toggle-quick-note')) },
+    /* Buiten de app: eigen vensters boven het hele bureaublad, over elk scherm te slepen (alleen Tauri). */
+    ...(isTauriRuntime() ? [
+      { id: 'notities-venster', label: 'Notes window', teken: <NotebookPen size={18} />, doe: () => { void wisselZwevend('notes'); } },
+      { id: 'telefoon-venster', label: 'Phone window', teken: <SmartphoneNfc size={18} />, doe: () => { void wisselZwevend('phone'); } },
+    ] : []),
     /* Deze drie openden een eigen venster via openPageOnMonitor, met `void`
        ervoor. Buiten Tauri gooit die, dus op de iPad deed de knop niets --
        geen venster, geen melding. useOpenPagina doet daar hetzelfde wat de
