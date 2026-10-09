@@ -86,9 +86,10 @@ export async function presentAssistantReplyOnSphere(
       console.info('[sphere] projected chart from OPEN_WINDOW', p.title);
       return true;
     }
-    if (/\[PROJECT:\s*\{/i.test(r)) {
-      const { parseProjectMarker } = await import('@/application/sphere/sphereDirector');
-      const marked = parseProjectMarker(r);
+    // [PROJECT:] (ook met "query" om op te zoeken) en een ```html-voorbeeld: één weg.
+    if (/\[PROJECT:\s*\{/i.test(r) || /```(html|svg)\s*\n/i.test(r)) {
+      const { directFromAssistantMessageAsync } = await import('@/application/sphere/sphereDirector');
+      const marked = await directFromAssistantMessageAsync(r);
       if (marked) {
         forceProject(marked);
         return true;

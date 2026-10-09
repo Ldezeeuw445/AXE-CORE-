@@ -207,14 +207,15 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
   {
     name: 'show_on_home',
     description:
-      "Show something on AXE's Home screen — the sphere turns into it. Use this whenever Luka asks to see, look up, google or open something: a web search, a news topic, a place on a map, a market chart. Returns what is shown so you can talk about it.",
+      "Show something on AXE's Home screen — the sphere turns into it. Use it whenever Luka asks to see, look up, google or open something, AND on your own when something you are discussing is easier to see than to hear: a summary of what you two just talked about, a comparison, a plan, a checklist (kind document, markdown in content), an example or mockup of something (kind html, a self-contained HTML page in content), a picture of a thing or place (kind image), a place (map), a market (chart), a web search or news (web). Returns what is shown so you can talk about it.",
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'What to show — search terms, a place, or a ticker.' },
-        kind: { type: 'string', enum: ['web', 'map', 'chart'], description: 'web (default) for search/news/topics, map for a place, chart for a market.' },
+        kind: { type: 'string', enum: ['web', 'map', 'chart', 'image', 'document', 'html'], description: 'web (default), map, chart, image need a query; document and html need content.' },
+        query: { type: 'string', description: 'For web/map/chart/image: search terms, a place, a ticker or a subject.' },
+        title: { type: 'string', description: 'Short title shown above it.' },
+        content: { type: 'string', description: 'For document: markdown. For html: a complete self-contained HTML page (inline CSS/JS, dark background).' },
       },
-      required: ['query'],
     },
   },
   {

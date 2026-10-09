@@ -19,6 +19,7 @@ const MODE_BORDER: Record<ProjectionMode, string> = {
   media: 'rgba(165,243,252,0.5)',
   chart: 'rgba(212,252,52,0.55)',
   map: 'rgba(167,139,250,0.65)',
+  html: 'rgba(34,211,238,0.55)',
 };
 
 const MODE_GLOW: Record<ProjectionMode, string> = {
@@ -29,6 +30,7 @@ const MODE_GLOW: Record<ProjectionMode, string> = {
   media: 'rgba(165,243,252,0.2)',
   chart: 'rgba(212,252,52,0.25)',
   map: 'rgba(167,139,250,0.3)',
+  html: 'rgba(34,211,238,0.25)',
 };
 
 const MODE_MORPH: Record<ProjectionMode, string> = {
@@ -39,6 +41,7 @@ const MODE_MORPH: Record<ProjectionMode, string> = {
   media: 'scatter',
   chart: 'scatter',
   map: 'scatter',
+  html: 'scatter',
 };
 
 const EASE_EMERGE = [0.16, 1, 0.3, 1] as const;
@@ -136,6 +139,8 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
     return () => { window.removeEventListener('resize', meet); window.clearInterval(t); };
   }, [showPortal]);
 
+  // Document, voorbeeld, code en grafiek: een leesvlak in plaats van een cirkel.
+  const breed = mode === 'document' || mode === 'html' || mode === 'code' || mode === 'chart';
   // Ruimte voor het onderschrift onder de kaart (~34px).
   const ONDERSCHRIFT = 34;
   const mapSide = vrij
@@ -208,6 +213,16 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
                   boxShadow: `0 0 0 4px rgba(0,0,0,0.4), 0 0 50px ${MODE_GLOW[mode]}`,
                   // Ensure browser doesn't steal touch/scroll for page
                   touchAction: 'none',
+                } : breed ? {
+                  /* Lezen en kijken: een liggend vlak, zo hoog als er boven de composer
+                     ruimte is. Een document of voorbeeld in een cirkel van 560px was
+                     onleesbaar (10px mono, de hoeken weg). */
+                  width: 'min(920px, 72vw)',
+                  height: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 720px)` : 'min(72vh, 720px)',
+                  borderRadius: 18,
+                  background: 'rgba(8,10,16,0.94)',
+                  border: `1.5px solid ${MODE_BORDER[mode]}`,
+                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 50px ${MODE_GLOW[mode]}`,
                 } : {
                   width: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 72vmin, 560px)` : 'min(72vmin, 560px)',
                   height: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 72vmin, 560px)` : 'min(72vmin, 560px)',
@@ -217,7 +232,7 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
                   boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}`,
                 }}
                 onWheel={(e) => {
-                  if (mode === 'map') e.stopPropagation();
+                  if (mode === 'map' || breed) e.stopPropagation();
                 }}
               >
                 <button
@@ -238,7 +253,7 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
                   className="relative flex-1 min-h-0 z-[1]"
                   style={{
                     minHeight: mode === 'map' ? 320 : undefined,
-                    height: mode === 'map' ? '100%' : undefined,
+                    height: mode === 'map' || breed ? '100%' : undefined,
                   }}
                 >
                   <ProjectionBody payload={payload} />

@@ -132,3 +132,29 @@ export async function resolveShownContent(
     source: 'director',
   });
 }
+
+/**
+ * Een plaatje van iets ("laat een foto van de Eiffeltoren zien", of AXE die een
+ * voorbeeld wil tonen): de hoofdafbeelding van het Wikipedia-artikel. Geen
+ * zoekmachine voor plaatjes nodig, en de bron staat erbij.
+ */
+export async function resolveImage(query: string, title?: string): Promise<ProjectionPayload> {
+  const onderwerp = query.trim();
+  for (const host of ['en.wikipedia.org', 'nl.wikipedia.org']) {
+    try {
+      const res = await fetch(`https://${host}/api/rest_v1/page/summary/${encodeURIComponent(onderwerp.slice(0, 180))}`, {
+        headers: { Accept: 'application/json', 'User-Agent': 'AXE-CORE/1.0 (home-sphere)' },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json() as { title?: string; originalimage?: { source?: string }; thumbnail?: { source?: string } };
+      const src = data.originalimage?.source || data.thumbnail?.source;
+      if (!src) continue;
+      return pack({ mode: 'image', title: title || data.title || onderwerp, subtitle: 'Wikipedia', mediaUrl: src, source: 'director' });
+    } catch {
+      /* volgende taal */
+    }
+  }
+  // Geen plaatje: dan wat er over te lezen is, zodat Home niet leeg blijft.
+  return resolveShownContent(`show ${onderwerp}`);
+}

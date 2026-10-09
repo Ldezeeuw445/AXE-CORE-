@@ -16,7 +16,9 @@ export type ProjectionMode =
   | 'chart'
   | 'map'
   | 'code'
-  | 'media';
+  | 'media'
+  /** Een live voorbeeld dat AXE zelf maakt: HTML/SVG in een afgeschermd frame. */
+  | 'html';
 
 export type ProjectionSource = 'chat' | 'drop' | 'tool' | 'user' | 'director';
 
@@ -56,6 +58,8 @@ export function moodForMode(mode: ProjectionMode): SphereMood {
       return { accent: 'gold', energy: 'pulse' };
     case 'map':
       return { accent: 'violet', energy: 'focus' };
+    case 'html':
+      return { accent: 'cyan', energy: 'focus' };
     default:
       return { accent: 'default', energy: 'idle' };
   }

@@ -10,6 +10,7 @@ import { ImageProjection } from '@/presentation/components/axe-core/sphere/proje
 import { ChartProjection } from '@/presentation/components/axe-core/sphere/projections/ChartProjection';
 import { InteractiveMapProjection } from '@/presentation/components/axe-core/sphere/projections/InteractiveMapProjection';
 import { CodeProjection } from '@/presentation/components/axe-core/sphere/projections/CodeProjection';
+import { HtmlProjection } from '@/presentation/components/axe-core/sphere/projections/HtmlProjection';
 
 export function ProjectionBody({ payload }: { payload: ProjectionPayload }) {
   switch (payload.mode) {
@@ -19,6 +20,7 @@ export function ProjectionBody({ payload }: { payload: ProjectionPayload }) {
     case 'media': return <ImageProjection payload={payload} />;
     case 'chart': return <ChartProjection payload={payload} />;
     case 'map': return <InteractiveMapProjection payload={payload} />;
+    case 'html': return <HtmlProjection payload={payload} />;
     default:
       return (
         <div className="h-full flex items-center justify-center text-[12px]" style={{ color: '#a5f3fc' }}>

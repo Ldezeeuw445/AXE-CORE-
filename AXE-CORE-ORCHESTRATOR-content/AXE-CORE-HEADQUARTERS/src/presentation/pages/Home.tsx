@@ -164,20 +164,9 @@ export default function Home() {
             })()}
           </div>
 
-          {/* Home-level proof that store has payload — cannot be missed */}
-          {spherePayload && spherePhase !== 'idle' && (
-            <div
-              className="absolute top-12 left-1/2 -translate-x-1/2 z-50 rounded-full px-3 py-1 text-[10px] font-medium pointer-events-none"
-              style={{
-                background: 'rgba(167,139,250,0.25)',
-                border: '1px solid rgba(167,139,250,0.7)',
-                color: '#e9d5ff',
-                boxShadow: '0 0 24px rgba(167,139,250,0.35)',
-              }}
-            >
-              {spherePayload.mode} · {spherePayload.title}
-            </div>
-          )}
+          {/* Hier stond een debug-pil ("map · New York") op top-12, achter de
+              kopbalk: het blauwe knopje dat Luka zag maar niet kon lezen (9 okt).
+              Wat er op Home staat zegt het onderschrift onder de projectie. */}
 
 
           {/* Welke bouw hier draait.

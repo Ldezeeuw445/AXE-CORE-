@@ -327,11 +327,18 @@ Example: "Ik zet de crew erop, dit duurt even. [CREW: {"task":"Launchplan Tradin
     gate: 'auto',
     pattern: /\[PROJECT:\s*(\{[\s\S]*?\})\s*\]/,
     stripPattern: /\[PROJECT:\s*\{[\s\S]*?\}\s*\]/g,
-    promptDoc: `🌐 **Project something onto the Home sphere portal** (desktop app, no approval needed — it only displays, never touches data):
-\`[PROJECT: {"mode":"map"|"document"|"code"|"image"|"chart","title":"...","text":"...","data":{...}}]\`
-This is what actually shows something in-place on Home — a map, a document, a code snippet, a chart. For "mode":"map", set "data":{"lat":..,"lng":..,"label":"..."} with the real coordinates of the place (you may not know exact coordinates — a well-known city/landmark name in "label" is fine, the resolver geocodes it). You do NOT need this marker for most map/document requests — just answering naturally ("Ik laat je nu New York zien!") already gets picked up and projected automatically. Only reach for the explicit marker when you have real data to hand it (e.g. exact coordinates from a tool result, or code/text content you already have) that the automatic detection wouldn't otherwise have.
-Never use [OPEN_WINDOW:] for this — that opens a whole separate native window, which is not what "show me X" means.
-Example: "Ik laat New York zien. [PROJECT: {"mode":"map","title":"New York City","data":{"lat":40.7128,"lng":-74.006,"label":"New York City"}}]"`,
+    promptDoc: `🌐 **Show something on Home** -- the sphere turns into it (desktop and phone, no approval: it only displays):
+\`[PROJECT: {"mode":"document","title":"...","text":"markdown"}]\`
+Home is your face, and showing beats telling. Use this on your own initiative whenever something is easier to SEE than to read in the chat -- not only when Luka asks:
+- what you two are talking about, made concrete: a short summary of the conversation, a comparison table, a plan with steps, pros and cons, a checklist -> "mode":"document" with markdown in "text"
+- an example of something (a layout, a landing page, a component, a diagram, a slide, a small interactive demo) -> write it as a \`\`\`html block (or \`\`\`svg) in your reply and add \`[PROJECT: {"mode":"html","title":"..."}]\` -- the block runs live on Home in a sandboxed frame (self-contained HTML/CSS/JS, no external files, a dark background looks best)
+- a place -> \`{"mode":"map","query":"Shibuya, Tokyo"}\`; a picture of a thing, person or landmark -> \`{"mode":"image","query":"Eiffel Tower"}\`; something to look up on the web -> \`{"mode":"web","query":"..."}\`; a market -> \`{"mode":"chart","query":"BTC"}\`
+- code you just wrote -> \`{"mode":"code","title":"..."}\` (takes the code block from your reply)
+One projection per reply, the one that helps most. Keep the chat text short when the substance is on Home ("Staat op Home: de vergelijking."). Never say you cannot show something on Home.
+Never use [OPEN_WINDOW:] for this -- that opens a separate native window.
+Examples:
+"Hier naast elkaar. [PROJECT: {"mode":"document","title":"Hetzner vs Strato","text":"| | Hetzner | Strato |\\n|---|---|---|\\n| RAM | 16 GB | 16 GB |"}]"
+"Zo zou de kaart eruit kunnen zien:\n\`\`\`html\n<div style=\\"...\\">...</div>\n\`\`\`\n[PROJECT: {"mode":"html","title":"Pricing card"}]"`,
   },
   {
     id: 'open_window',

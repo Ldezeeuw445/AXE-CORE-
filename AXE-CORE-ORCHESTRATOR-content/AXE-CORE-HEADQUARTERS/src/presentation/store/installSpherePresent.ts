@@ -25,7 +25,11 @@ function stripDisplayedMarkers(): void {
   const conv = store.conversation;
   for (let i = conv.length - 1; i >= 0; i--) {
     if (conv[i].role !== 'axe') continue;
-    const clean = stripToolMarkers(conv[i].text).trim();
+    /* Een voorbeeld (```html/```svg) staat al live op Home; in de chat zou het een
+       muur code zijn. Wie de code wil, vraagt erom. */
+    const clean = stripToolMarkers(conv[i].text)
+      .replace(/```(html|svg)\s*\n[\s\S]{20,}?```/gi, '_(Preview on Home)_')
+      .trim();
     if (clean !== conv[i].text) {
       const next = [...conv];
       next[i] = { ...next[i], text: clean };

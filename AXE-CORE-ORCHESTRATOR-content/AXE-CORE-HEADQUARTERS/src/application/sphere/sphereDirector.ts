@@ -5,7 +5,7 @@
 import type { NormalizedAttachment } from '@/application/attachments/attachmentService';
 import type { ProjectionPayload, ProjectionMode, ProjectionSource } from '@/domain/sphere/projectionTypes';
 import { resolveChart } from '@/application/sphere/projectionResolvers/chartResolver';
-import { resolveShownContent, wantsShownContent } from '@/application/sphere/projectionResolvers/contentResolver';
+import { resolveImage, resolveShownContent, wantsShownContent } from '@/application/sphere/projectionResolvers/contentResolver';
 import { resolveMap } from '@/application/sphere/projectionResolvers/mapResolver';
 
 function id(): string {
@@ -100,18 +100,42 @@ export function parseProjectMarker(text: string): ProjectionPayload | null {
   try {
     const raw = JSON.parse(m[1]) as Record<string, unknown>;
     const mode = String(raw.mode || 'document') as ProjectionMode;
-    const allowed: ProjectionMode[] = ['document', 'image', 'chart', 'map', 'code', 'media'];
+    const allowed: ProjectionMode[] = ['document', 'image', 'chart', 'map', 'code', 'media', 'html'];
     if (!allowed.includes(mode)) return null;
+    // Een voorbeeld zonder eigen tekst: de eerste ```html-blok in hetzelfde antwoord.
+    const tekst = raw.text != null
+      ? String(raw.text)
+      : mode === 'html' ? htmlFence(text)?.body : mode === 'code' ? extractCodeFence(text)?.body : undefined;
     return base({
       mode,
       title: String(raw.title || 'Projection'),
       subtitle: raw.subtitle != null ? String(raw.subtitle) : undefined,
-      text: raw.text != null ? String(raw.text) : undefined,
+      text: tekst,
       mediaUrl: raw.mediaUrl != null ? String(raw.mediaUrl) : undefined,
       mime: raw.mime != null ? String(raw.mime) : undefined,
       data: typeof raw.data === 'object' && raw.data ? (raw.data as Record<string, unknown>) : undefined,
       source: 'tool',
     });
+  } catch {
+    return null;
+  }
+}
+
+/** Een ```html / ```svg-blok: een voorbeeld om te bekijken, niet om te lezen als code. */
+function htmlFence(text: string): { body: string } | null {
+  const m = text.match(/```(html|svg)\s*\n([\s\S]{20,}?)```/i);
+  return m ? { body: m[2].trim() } : null;
+}
+
+/** De ruwe JSON uit [PROJECT: {...}] als die om iets vraagt dat nog opgezocht moet worden. */
+function projectVraag(text: string): { mode: string; query: string; title?: string } | null {
+  const m = text.match(/\[PROJECT:\s*(\{[\s\S]*?\})\s*\]/i);
+  if (!m) return null;
+  try {
+    const raw = JSON.parse(m[1]) as Record<string, unknown>;
+    const query = typeof raw.query === 'string' ? raw.query.trim() : '';
+    if (!query) return null;
+    return { mode: String(raw.mode || 'web'), query, title: typeof raw.title === 'string' ? raw.title : undefined };
   } catch {
     return null;
   }
@@ -286,8 +310,17 @@ export function shouldDismissProjection(text: string): boolean {
 export function directFromAssistantMessage(text: string): ProjectionPayload | null {
   if (!text || text.length < 12) return null;
 
-  const marked = parseProjectMarker(text);
-  if (marked) return marked;
+  // Een marker die om opzoeken vraagt ({"query": ...}) gaat via de async-weg.
+  if (!projectVraag(text)) {
+    const marked = parseProjectMarker(text);
+    if (marked) return marked;
+  }
+
+  // Een voorbeeld dat AXE schreef (```html of ```svg) staat live op Home.
+  const html = htmlFence(text);
+  if (html) {
+    return base({ mode: 'html', title: 'Preview', subtitle: 'made by AXE', text: html.body, source: 'tool' });
+  }
 
   const fence = extractCodeFence(text);
   if (fence) {
@@ -360,6 +393,16 @@ export function directFromAssistantMessage(text: string): ProjectionPayload | nu
 export async function directFromAssistantMessageAsync(
   text: string,
 ): Promise<ProjectionPayload | null> {
+  /* AXE vraagt zelf iets op Home te zetten dat nog opgezocht moet worden:
+     [PROJECT: {"mode":"map"|"web"|"image"|"chart","query":"..."}]. */
+  const vraag = projectVraag(text);
+  if (vraag) {
+    if (vraag.mode === 'map') return resolveMap(vraag.query);
+    if (vraag.mode === 'chart') return resolveChart(vraag.query);
+    if (vraag.mode === 'image') return resolveImage(vraag.query, vraag.title);
+    return resolveShownContent(`show ${vraag.query}`);
+  }
+
   const sync = directFromAssistantMessage(text);
   if (sync) return sync;
 

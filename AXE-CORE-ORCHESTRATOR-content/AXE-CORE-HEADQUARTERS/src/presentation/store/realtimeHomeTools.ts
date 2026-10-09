@@ -21,7 +21,7 @@ import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { tierFor, UnknownToolError } from '@/domain/tools/riskTiers';
 import { resolveMap } from '@/application/sphere/projectionResolvers/mapResolver';
 import { resolveChart } from '@/application/sphere/projectionResolvers/chartResolver';
-import { resolveShownContent } from '@/application/sphere/projectionResolvers/contentResolver';
+import { resolveImage, resolveShownContent } from '@/application/sphere/projectionResolvers/contentResolver';
 import { COMPUTER_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.computer';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
@@ -41,13 +41,28 @@ function opDeBol(proj: ProjectionPayload): void {
 
 export async function toolShowOnHome(args: Args): Promise<string> {
   const query = str(args, 'query');
-  if (!query) return JSON.stringify({ ok: false, message: 'Nothing to show — give a query.' });
   const kind = str(args, 'kind') || 'web';
+  const content = str(args, 'content');
+  const title = str(args, 'title') || query || 'AXE';
+  /* Wat AXE zelf maakt (een samenvatting, een vergelijking, een voorbeeld) heeft
+     geen zoekopdracht nodig: de inhoud komt mee. */
+  if ((kind === 'document' || kind === 'html') && content) {
+    const proj: ProjectionPayload = {
+      mode: kind, title: title.slice(0, 64), subtitle: kind === 'html' ? 'made by AXE' : undefined,
+      text: content.slice(0, 40_000), source: 'tool',
+      id: `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`, createdAt: Date.now(),
+    };
+    opDeBol(proj);
+    return JSON.stringify({ ok: true, message: `It is on Home now: ${proj.title}.` });
+  }
+  if (!query) return JSON.stringify({ ok: false, message: 'Nothing to show — give a query, or content for a document/html.' });
   const proj = kind === 'map'
     ? await resolveMap(query)
     : kind === 'chart'
       ? await resolveChart(query)
-      : await resolveShownContent(`show ${query}`);
+      : kind === 'image'
+        ? await resolveImage(query, str(args, 'title') || undefined)
+        : await resolveShownContent(`show ${query}`);
   if (!proj) return JSON.stringify({ ok: false, message: `Could not find anything to show for "${query}".` });
   opDeBol(proj);
   return JSON.stringify({
