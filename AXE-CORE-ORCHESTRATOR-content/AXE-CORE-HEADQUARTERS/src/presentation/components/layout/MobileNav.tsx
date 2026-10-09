@@ -128,7 +128,7 @@ export function MobileNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const items: MenuItem[] = getAllNavItems();
-  const opPlaat = !['/lock', '/maps-3d', '/browser'].includes(location.pathname);
+  const opPlaat = !['/lock', '/maps-3d'].includes(location.pathname);
 
   const [query, setQuery] = useState('');
   const [favs, setFavs] = useState<string[]>(readFavs);

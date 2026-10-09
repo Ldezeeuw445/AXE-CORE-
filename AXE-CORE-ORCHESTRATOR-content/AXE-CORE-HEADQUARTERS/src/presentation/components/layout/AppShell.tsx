@@ -206,8 +206,9 @@ export function AppShell() {
   // Zware, volscherm-ervaringen (3D-kaart, browser) vullen het scherm.
   // /mobile is juist de canonical telefoon-home en gebruikt DEZELFDE zwevende
   // glasplaat als de andere mobiele tabs; alleen /lock blijft erbuiten.
-  const volScherm = mobileNav
-    && (location.pathname === '/maps-3d' || location.pathname === '/browser');
+  // Alleen de 3D-kaart vult nog het hele scherm. De browser ligt op de plaat (Luka, 9 okt): dezelfde
+  // composer als op elke tab, geen eigen chatvak onder de pagina.
+  const volScherm = mobileNav && location.pathname === '/maps-3d';
   const opPlaatMobiel = mobileNav
     && location.pathname !== '/lock'
     && !volScherm;

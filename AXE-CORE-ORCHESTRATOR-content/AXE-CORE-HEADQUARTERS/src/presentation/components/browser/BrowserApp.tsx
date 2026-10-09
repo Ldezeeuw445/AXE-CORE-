@@ -12,7 +12,6 @@ import { BrowserStartPage } from '@/presentation/components/browser/BrowserStart
 import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
 import { BrowserUnifiedSidebar } from '@/presentation/components/browser/BrowserUnifiedSidebar';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
-import { MobileBrowserChat } from '@/presentation/components/browser/MobileBrowserChat';
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
 import { useAIConfig } from '@/presentation/hooks/useAIConfig';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -597,13 +596,6 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
 
           </div>
 
-          {isMobile && (
-            <MobileBrowserChat
-              messages={aiMessages}
-              onSend={sendAIMessage}
-              containerHeight={contentHeight}
-            />
-          )}
         </div>
       </div>
 
