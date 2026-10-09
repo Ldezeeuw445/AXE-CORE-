@@ -15,6 +15,11 @@ import { Bot, Braces, Check, ChevronRight, Code2, Columns2, Command, Cpu, Hand, 
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import {
+  MobileStudioBar, MobileStudioNav, MobileKeyBar, MobileAgentInput, MobileNewSheet, type EditorHandvat,
+} from '@/presentation/components/code/MobileStudioChrome';
+import { PANEEL_KEY, leesPaneel, type MobielPaneel } from '@/domain/codeStudio/mobileStudio';
+import { previewStart } from '@/infrastructure/gateways/axeCoreApiService';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import { hostVanDeEditor, type TerminalHost } from '@/domain/terminalHosts';
 import { AGENT_LABEL, HOOFD_AGENTS, type MotorToewijzing } from '@/domain/agentMotoren';
@@ -399,7 +404,7 @@ function SleepVlak({ onBestand }: { onBestand: (e: React.DragEvent) => void }) {
 }
 
 function EditorPane({
-  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus, onBestand, onSluit,
+  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus, onBestand, onSluit, registerEditor,
 }: {
   tab: OpenTab | null;
   activePendingPatch: { msgIdx: number; patch: PatchWithState } | null;
@@ -413,6 +418,8 @@ function EditorPane({
   /** De plaat wegdoen. Links boven in, want daar zit hij op elke plaat -- ook
    *  als er geen bestand open is en er dus geen kopregel met een naam staat. */
   onSluit: () => void;
+  /** De telefoon-toetsenbalk heeft de editor nodig om tekens in te voegen. */
+  registerEditor?: (ed: EditorHandvat | null) => void;
 }) {
   const opPlaat = useHeeftPlaat();
   const kruis = (
@@ -475,6 +482,7 @@ function EditorPane({
       ) : (
         <div className="flex-1 min-h-0">
           <Editor key={tab.path} language={tab.language} theme={opPlaat ? PLAAT_THEMA : "vs-dark"} beforeMount={definieerPlaatThema} value={tab.content}
+            onMount={ed => registerEditor?.(ed as unknown as EditorHandvat)}
             onChange={v => onChange(tab.path, v ?? '')}
             options={{
               minimap: { enabled: !isMobile }, fontSize: 13, lineNumbers: 'on', wordWrap: 'off',
@@ -674,7 +682,24 @@ export default function CodeEditorPage() {
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
+  /* De telefoon-studio (Replit-stijl): één paneel tegelijk. */
+  const [mPaneel, setMPaneelRaw] = useState<MobielPaneel>(() => { try { return leesPaneel(localStorage.getItem(PANEEL_KEY)); } catch { return 'code'; } });
+  const setMPaneel = (p: MobielPaneel) => { setMPaneelRaw(p); try { localStorage.setItem(PANEEL_KEY, p); } catch { /* alleen niet onthouden */ } };
+  const [editorHandvat, setEditorHandvat] = useState<EditorHandvat | null>(null);
+  const [nieuwOpen, setNieuwOpen] = useState(false);
+  const [previewDraait, setPreviewDraait] = useState(false);
   const isMobile = useIsMobile();
+  /* Op een telefoon is de code-stand een Replit-achtige studio: één paneel tegelijk. */
+  const mobielStudio = isMobile && studioStand === 'code';
+  useEffect(() => {
+    if (!mobielStudio) return;
+    // Alle panelen moeten bestaan; de CSS laat er één zien (axe-look.css, [data-mobiel]).
+    setShowAgent(true); setShowTerminal(true); setShowPreview(true); setShowFiles(true);
+  }, [mobielStudio]);
+  // Een bestand kiezen in Files brengt je naar de editor.
+  useEffect(() => {
+    if (mobielStudio && mPaneel === 'files' && activeTabPath) setMPaneelRaw('code');
+  }, [activeTabPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reloadTree = useCallback(async () => {
     zetEditorRepo(claudeRepo);
@@ -1462,6 +1487,7 @@ export default function CodeEditorPage() {
         data-preview={showPreview ? 'aan' : 'uit'}
         data-term={showTerminal ? 'aan' : 'uit'}
         data-ontwerp={designMode ? 'aan' : 'uit'}
+        data-mobiel={mobielStudio ? mPaneel : undefined}
       >
         {!isMobile && (
           <>
@@ -1473,7 +1499,7 @@ export default function CodeEditorPage() {
             </PlaatSlot>
           </>
         )}
-        {isMobile && (
+        {isMobile && !mobielStudio && (
           <div className="axe-studio-balk">
             <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
               <SheetTrigger asChild>
@@ -1487,6 +1513,21 @@ export default function CodeEditorPage() {
               </SheetContent>
             </Sheet>
           </div>
+        )}
+        {mobielStudio && (
+          <MobileStudioBar
+            repo={claudeRepo}
+            branch={claudeRepoInfo?.branch ?? undefined}
+            ongeslagen={openTabs.some(t => t.content !== t.savedContent)}
+            opslaan={() => void saveActiveFile()}
+            bezigMetOpslaan={saving}
+            draait={previewDraait}
+            opRun={() => {
+              setMPaneel('preview');
+              previewStart().then(() => setPreviewDraait(true)).catch(e => toast.error(`Could not start the preview: ${e instanceof Error ? e.message : String(e)}`));
+            }}
+            opNieuw={() => setNieuwOpen(true)}
+          />
         )}
 
         {studioStand === 'code' && (
@@ -1661,6 +1702,7 @@ export default function CodeEditorPage() {
                           onRejectPatch={rejectPatch}
                           focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')}
                           onBestand={neemBestandAan}
+                          registerEditor={setEditorHandvat}
                           onSluit={() => kiesIndeling('uit')} />
                       </div>
                       {gesplitst && (
@@ -1838,7 +1880,7 @@ export default function CodeEditorPage() {
             </section>
 
             {showPreview && (
-              <section className="axe-studio-kaart">
+              <section className="axe-studio-kaart axe-studio-previewkaart">
                 <div className="axe-studio-kop">
                   <span>Preview</span>
                   <span className="rechts">
@@ -1861,6 +1903,32 @@ export default function CodeEditorPage() {
               </section>
             )}
           </div>
+        )}
+
+        {mobielStudio && (
+          <>
+            {mPaneel === 'code' && <MobileKeyBar editor={editorHandvat} />}
+            {mPaneel === 'agent' && (
+              <MobileAgentInput
+                waarde={agentInput}
+                opWaarde={setAgentInput}
+                opVerstuur={() => void handleAgentSubmit()}
+                bezig={agentBusy}
+              />
+            )}
+            <MobileStudioNav
+              paneel={mPaneel}
+              opKies={setMPaneel}
+              agentBezig={agentBusy}
+              ongeslagen={openTabs.filter(t => t.content !== t.savedContent).length}
+            />
+            <MobileNewSheet
+              open={nieuwOpen}
+              opSluit={() => setNieuwOpen(false)}
+              opBestand={() => { setMPaneel('files'); void addFile(); }}
+              opKies={b => { setAgentInput(b.opdracht); setMPaneel('agent'); }}
+            />
+          </>
         )}
 
         {studioStand === 'canvas' && (

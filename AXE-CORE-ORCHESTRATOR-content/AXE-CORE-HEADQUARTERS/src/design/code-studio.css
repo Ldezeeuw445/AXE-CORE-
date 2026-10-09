@@ -545,3 +545,203 @@
   border-left: 0 !important;
 }
 :root[data-look] .axe-studio .axe-preview-greep { display: none; }
+
+
+/* ═══ De studio op een telefoon (Replit / Emergent-stijl) ════════════════════════════════════
+ * Eén paneel tegelijk, met een werkbalk bovenin en een onderbalk om te wisselen. De panelen zijn
+ * dezelfde als op de desktop (ze blijven allemaal gemonteerd, anders sterft de terminal-websocket
+ * en raakt Monaco zijn stand kwijt); alleen het actieve is zichtbaar. Gezet door CodeEditorPage:
+ * data-mobiel="agent | files | code | term | preview". Alle aanraakdoelen zijn minstens 44px.
+ * Geen gekleurde vlakken: actief = lichte tint + cyaan inkt. */
+:root[data-look] .axe-studio[data-mobiel] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 4px 2px;
+}
+
+/* — werkbalk: tussen de twee ronde knoppen van de schil (menu links, licht/donker rechts) — */
+.axe-mstudio-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 4px;
+  /* Ruimte voor de vaste knoppen van de schil boven in de hoeken. */
+  margin: 0 46px;
+}
+.axe-mstudio-repo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  overflow: hidden;
+}
+.axe-mstudio-repo b { color: var(--text-primary); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-mstudio-repo i { font-style: normal; font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-mstudio-knop {
+  flex: none;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.axe-mstudio-knop[data-aan='ja'] { color: var(--accent-cyan); border-color: var(--tint-line, rgba(34, 211, 238, 0.4)); }
+.axe-mstudio-knop:active { background: rgba(255, 255, 255, 0.12); }
+
+/* — welk paneel zichtbaar is — */
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-kolommen {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  gap: 0;
+}
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-kolommen > section,
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-kolommen > .axe-studio-editor { min-height: 0; flex: 1; display: none; }
+:root[data-look] .axe-studio[data-mobiel='files'] .axe-studio-kolommen > .axe-studio-bestanden { display: flex; flex-direction: column; }
+:root[data-look] .axe-studio[data-mobiel='code'] .axe-studio-kolommen > .axe-studio-editor,
+:root[data-look] .axe-studio[data-mobiel='agent'] .axe-studio-kolommen > .axe-studio-editor,
+:root[data-look] .axe-studio[data-mobiel='term'] .axe-studio-kolommen > .axe-studio-editor { display: flex; flex-direction: column; }
+:root[data-look] .axe-studio[data-mobiel='preview'] .axe-studio-kolommen > .axe-studio-previewkaart { display: flex; flex-direction: column; }
+
+/* In het editorvak: Code = tabs + bron; Agent = alleen de agent; Terminal = alleen de terminal. */
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-kruimel { display: none; }
+:root[data-look] .axe-studio[data-mobiel='code'] .axe-studio-agent,
+:root[data-look] .axe-studio[data-mobiel='code'] .axe-studio-term { display: none; }
+:root[data-look] .axe-studio[data-mobiel='agent'] :is(.axe-studio-tabs, .axe-studio-bron, .axe-studio-term) { display: none; }
+:root[data-look] .axe-studio[data-mobiel='term'] :is(.axe-studio-tabs, .axe-studio-lijf) { display: none; }
+:root[data-look] .axe-studio[data-mobiel='agent'] .axe-studio-lijf,
+:root[data-look] .axe-studio[data-mobiel='code'] .axe-studio-lijf { flex: 1; min-height: 0; }
+:root[data-look] .axe-studio[data-mobiel='agent'] .axe-studio-agent { flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: none; }
+:root[data-look] .axe-studio[data-mobiel='agent'] .axe-studio-agent .axe-studio-kop button[title='Hide'] { display: none; }
+:root[data-look] .axe-studio[data-mobiel='term'] .axe-studio-term { flex: 1; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) 44px; }
+:root[data-look] .axe-studio[data-mobiel='term'] .axe-studio-termkop .rechts { display: none; }
+:root[data-look] .axe-studio[data-mobiel='term'] .axe-studio-termregel input { font-size: 14px; }
+:root[data-look] .axe-studio[data-mobiel='term'] .axe-studio-termregel button { width: 40px; height: 40px; }
+
+/* Bestandstabs: een rij die zijwaarts scrolt, met een groot genoeg doel per tab. */
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-tabs { overflow-x: auto; overflow-y: hidden; flex: none; min-height: 40px; scrollbar-width: none; }
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-tabs .bestandtab { min-height: 36px; padding: 0 10px; white-space: nowrap; }
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-tabs .axe-studio-groei,
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-tabs > button[title='Split'],
+:root[data-look] .axe-studio[data-mobiel] .axe-studio-tabs > button[title='Save'] { display: none; }
+
+/* Bestanden: grotere rijen, een vinger breed. */
+:root[data-look] .axe-studio[data-mobiel='files'] .axe-studio-boom { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+:root[data-look] .axe-studio[data-mobiel='files'] .axe-studio-boom [role='button'],
+:root[data-look] .axe-studio[data-mobiel='files'] .axe-studio-boom button { min-height: 40px; font-size: 13px; }
+
+/* — toetsenbalk (Code) — */
+.axe-mstudio-toetsen {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 4px;
+  scrollbar-width: none;
+}
+.axe-mstudio-toetsen button {
+  flex: none;
+  min-width: 42px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font: 500 14px/1 var(--font-mono, ui-monospace, monospace);
+}
+.axe-mstudio-toetsen button:active { background: rgba(255, 255, 255, 0.14); }
+.axe-mstudio-toetsen button:disabled { opacity: 0.35; }
+
+/* — agent-invoer — */
+.axe-mstudio-agent { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 0 2px 2px; }
+.axe-mstudio-snel { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.axe-mstudio-snel button {
+  flex: none; height: 34px; padding: 0 12px; border-radius: 999px; font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.05); color: var(--text-secondary);
+}
+.axe-mstudio-invoer { display: flex; align-items: flex-end; gap: 8px; }
+.axe-mstudio-invoer textarea {
+  flex: 1; min-width: 0; resize: none; max-height: 120px;
+  padding: 10px 12px; border-radius: 16px; font-size: 14px; line-height: 1.35;
+  border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.45); color: var(--text-primary); outline: none;
+}
+.axe-mstudio-invoer button {
+  flex: none; width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center;
+  border: 1px solid var(--tint-line, rgba(34, 211, 238, 0.4)); background: rgba(255, 255, 255, 0.06); color: var(--accent-cyan);
+}
+.axe-mstudio-invoer button:disabled { opacity: 0.35; }
+
+/* — onderbalk — */
+.axe-mstudio-nav {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  padding: 4px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.axe-mstudio-nav button {
+  min-height: 50px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border-radius: 16px; border: 0; background: none;
+  color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em;
+}
+.axe-mstudio-nav button[data-aan='ja'] { color: var(--accent-cyan); background: rgba(255, 255, 255, 0.08); }
+.axe-mstudio-icoon { position: relative; display: grid; place-items: center; }
+.axe-mstudio-stip {
+  position: absolute; top: -2px; right: -5px; width: 7px; height: 7px; border-radius: 999px;
+  background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+/* — blad: een hele app of een feature beginnen — */
+.axe-mstudio-blad-wrap { position: fixed; inset: 0; z-index: 95; display: flex; align-items: flex-end; background: rgba(0, 0, 0, 0.55); }
+.axe-mstudio-blad {
+  width: 100%; max-height: 82%; overflow-y: auto; overscroll-behavior: contain;
+  padding: 14px 14px max(16px, var(--axe-sab));
+  border-radius: 24px 24px 0 0; background: #0b0c10; border: 1px solid rgba(255, 255, 255, 0.08); border-bottom: 0;
+  color: var(--text-primary);
+}
+.axe-mstudio-blad-kop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 16px; }
+.axe-mstudio-blad-kop button { width: 40px; height: 40px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, 0.07); color: var(--text-secondary); display: grid; place-items: center; }
+.axe-mstudio-rij {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; min-height: 56px; padding: 0 14px;
+  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.05); color: var(--text-primary);
+}
+.axe-mstudio-rij span, .axe-mstudio-kaart { display: flex; flex-direction: column; }
+.axe-mstudio-rij b, .axe-mstudio-kaart b { font-size: 14px; font-weight: 600; }
+.axe-mstudio-rij i, .axe-mstudio-kaart i { font-style: normal; font-size: 11.5px; color: var(--text-muted); }
+.axe-mstudio-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 14px 0 10px; }
+.axe-mstudio-tabs button { height: 42px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08); background: none; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+.axe-mstudio-tabs button[data-aan='ja'] { color: var(--accent-cyan); background: rgba(255, 255, 255, 0.07); }
+.axe-mstudio-raster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.axe-mstudio-kaart {
+  gap: 4px; align-items: flex-start; text-align: left; min-height: 92px; padding: 12px;
+  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.05); color: var(--text-primary);
+}
+.axe-mstudio-kaart svg { color: var(--accent-cyan); }
+.axe-mstudio-kaart:active { background: rgba(255, 255, 255, 0.1); }
+.axe-mstudio-noot { margin: 12px 2px 0; font-size: 11.5px; color: var(--text-muted); }
