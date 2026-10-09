@@ -227,7 +227,10 @@ export default function Home() {
                   Die stapelt bloom en additief gemengde halo's: dat werkt op
                   zwart, maar slaat dicht op een lichte plaat en dan verdwijnt
                   de vorm in de gloed. Beide blijven bestaan. */}
-              {opPlaat ? <AxeCoreSphere /> : <SphereStage status={coreStatus} />}
+              {/* Altijd het podium, zodat alles wat AXE laat zien (kaart, web,
+                  bestand, grafiek) ook op de plaat verschijnt; alleen de bol
+                  eronder verschilt. */}
+              <SphereStage status={coreStatus} bol={opPlaat ? <AxeCoreSphere /> : undefined} />
               {/* Wie AXE nu aan het werk heeft, in gewone taal, rond de core. */}
               <AgentVensters />
             </div>

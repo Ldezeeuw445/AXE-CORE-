@@ -2,7 +2,7 @@
  * SphereStage — Living Display on Home.
  * Maps: large square interactive portal (Google 2D or MapLibre).
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
@@ -43,7 +43,13 @@ const MODE_MORPH: Record<ProjectionMode, string> = {
 
 const EASE_EMERGE = [0.16, 1, 0.3, 1] as const;
 
-export function SphereStage({ status }: { status: CoreStatus }) {
+/**
+ * `bol`: welke sphere er onder de projectie staat. Op de plaat (Tauri-glas) is dat
+ * AxeCoreSphere, daarbuiten de Three-versie. Tot 9 okt 2026 tekende Home op de
+ * plaat alleen AxeCoreSphere, en dan was dit hele podium er niet: "laat New York
+ * zien" maakte een projectie die nergens werd getoond, op de Mac mini en de iMac.
+ */
+export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNode }) {
   const phase = useSphereProjectionStore(s => s.phase);
   const payload = useSphereProjectionStore(s => s.payload);
   const queue = useSphereProjectionStore(s => s.queue);
@@ -123,7 +129,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
         }}
         transition={{ duration: 0.45, ease: EASE_EMERGE }}
       >
-        <HolographicSphere status={status} />
+        {bol ?? <HolographicSphere status={status} />}
       </motion.div>
 
       <AnimatePresence>
