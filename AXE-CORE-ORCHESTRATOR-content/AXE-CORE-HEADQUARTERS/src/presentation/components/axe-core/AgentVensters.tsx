@@ -174,6 +174,8 @@ function Balkje({ rij, onKies, kant = 'links', server }:
         }}
       >
         {serverStand ? serverStand.label : 'idle'}
+        {/* Ook als hij slaapt: of zijn eigen computer wakker is (10 okt: "ik zie geen puntje"). */}
+        <span className="ml-1.5 inline-flex align-middle"><DaxStip server={server} /></span>
       </span>
     );
   }

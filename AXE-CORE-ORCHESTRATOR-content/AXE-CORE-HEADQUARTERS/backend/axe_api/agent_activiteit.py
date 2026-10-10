@@ -58,7 +58,16 @@ def _klok(waarde: Any) -> str:
 
 
 def routine_samenvatting(r: dict[str, Any]) -> str:
-    """Wat de laatste run van een rooster opleverde, in één regel."""
+    """Wat de laatste run van een rooster opleverde, in één regel. Breekt nooit:
+    een onverwachte vorm in last_result legde op 10 okt heel /agents/activity
+    plat (alle agents "idle" op Home)."""
+    try:
+        return _routine_samenvatting(r)
+    except Exception:  # noqa: BLE001
+        return re.sub(r"\s+", " ", str(r.get("last_result") or "")).strip()[:110]
+
+
+def _routine_samenvatting(r: dict[str, Any]) -> str:
     tekst = str(r.get("last_result") or "")
     try:
         import json as _json
@@ -69,7 +78,9 @@ def routine_samenvatting(r: dict[str, Any]) -> str:
         if "created" in d and "considered_pairs" in d:
             return f"{d.get('created') or 0} new matches from {d.get('considered_pairs')} pairs"
         if "selected" in d and isinstance(d.get("results"), list):
-            return f"reviewed {len(d.get('selected') or [])} deals, {d.get('approved', 0)} approved, {d.get('sent', 0)} sent"
+            sel = d.get("selected")
+            n = sel if isinstance(sel, int) else len(sel or []) if isinstance(sel, list) else len(d["results"])
+            return f"reviewed {n} deals, {d.get('approved', 0)} approved, {d.get('sent', 0)} sent"
         if "summary" in d and isinstance(d.get("summary"), dict):
             s = d["summary"]
             delen = [f"{k} {v}" for k, v in s.items() if isinstance(v, (int, float)) and v][:3]

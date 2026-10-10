@@ -216,3 +216,10 @@ def test_lopend_rooster_is_working():
     r = {"name": "NorthSea Communication Engine", "app": "northsea", "enabled": True, "metadata": {},
          "lease_until": (NU + timedelta(seconds=60)).isoformat()}
     assert agent_status("northsea", [], [], None, NU, routines=[r])["status"] == "WORKING"
+
+
+def test_samenvatting_breekt_niet_op_een_getal():
+    from agent_activiteit import routine_samenvatting
+    r = {"last_result": '{"status": "ok", "selected": 3, "results": [{}], "sent": 0, "approved": 0}'}
+    assert routine_samenvatting(r) == "reviewed 3 deals, 0 approved, 0 sent"
+    assert routine_samenvatting({"last_result": '{"selected": {"x": 1}, "results": []}'})
