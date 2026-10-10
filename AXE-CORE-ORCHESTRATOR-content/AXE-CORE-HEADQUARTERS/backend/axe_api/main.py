@@ -3550,6 +3550,11 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                     data = r.json()
                 except ValueError:
                     data = {"raw": r.text[:500]}
+                if r.status_code == 504:
+                    # Zijn eigen tijdbudget op (bv. een achterstand onderzoek na een storing).
+                    # Wat klaar was is per stuk opgeslagen; de volgende run gaat verder.
+                    # Geen fout: anders gaat een inhalende job na 5 keer in rust (10 okt).
+                    return {"status": "skipped", "output": f"northsea {job}: hit its time budget; progress is saved and the next run continues"}
                 if r.status_code == 409:
                     return {"status": "skipped", "output": "northsea engine: previous tick still running"}
                 ok = r.status_code == 200 and not data.get("errors")
@@ -3571,6 +3576,11 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                     data = r.json()
                 except ValueError:
                     data = {"raw": r.text[:500]}
+                if r.status_code == 504:
+                    # Zijn eigen tijdbudget op (bv. een achterstand onderzoek na een storing).
+                    # Wat klaar was is per stuk opgeslagen; de volgende run gaat verder.
+                    # Geen fout: anders gaat een inhalende job na 5 keer in rust (10 okt).
+                    return {"status": "skipped", "output": f"northsea {job}: hit its time budget; progress is saved and the next run continues"}
                 if r.status_code == 409:
                     return {"status": "skipped", "output": "northsea discovery: previous sweep still running"}
                 ok = r.status_code == 200 and not data.get("errors")
@@ -3594,6 +3604,11 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                     data = r.json()
                 except ValueError:
                     data = {"raw": r.text[:500]}
+                if r.status_code == 504:
+                    # Zijn eigen tijdbudget op (bv. een achterstand onderzoek na een storing).
+                    # Wat klaar was is per stuk opgeslagen; de volgende run gaat verder.
+                    # Geen fout: anders gaat een inhalende job na 5 keer in rust (10 okt).
+                    return {"status": "skipped", "output": f"northsea {job}: hit its time budget; progress is saved and the next run continues"}
                 if r.status_code == 409:
                     return {"status": "skipped", "output": "northsea operations: previous sweep still running"}
                 ok = r.status_code == 200 and data.get("status") not in ("error", "failed")
