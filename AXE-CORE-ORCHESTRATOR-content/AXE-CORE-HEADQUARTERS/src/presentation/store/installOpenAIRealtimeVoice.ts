@@ -483,6 +483,7 @@ export function installOpenAIRealtimeVoice(): void {
   };
 
   const closeRealtime = async (setIdle = true) => {
+    pendingAnnouncements.length = 0;
     realtimeActive = false;
     useVoiceStore.setState({ liveCall: false });
     realtimeStarting = false;
@@ -646,6 +647,8 @@ export function installOpenAIRealtimeVoice(): void {
 
         onClosed: (reason) => {
           if (myGeneration !== generation) return;
+          pendingAnnouncements.length = 0;
+          responseActive = false;
           realtimeActive = false;
           useVoiceStore.setState({ liveCall: false });
           realtimeStarting = false;
@@ -664,6 +667,7 @@ export function installOpenAIRealtimeVoice(): void {
         await opened.close();
         return;
       }
+      if (!opened.isOpen()) throw new Error('Voice session closed while connecting. Tap the mic to retry.');
 
       session = opened;
       realtimeStarting = false;

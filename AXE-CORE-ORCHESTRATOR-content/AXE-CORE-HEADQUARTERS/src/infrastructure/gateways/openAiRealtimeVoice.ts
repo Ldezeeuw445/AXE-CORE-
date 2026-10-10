@@ -14,6 +14,7 @@
  * device to OpenAI for the WebRTC handshake.
  */
 import { axeCoreApiExtraHeaders, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
+import { createRealtimeUsageGuard, REALTIME_IDLE_MS, REALTIME_MAX_SESSION_MS } from './realtimeUsageGuard';
 
 /** OpenAI's current recommended realtime speech-to-speech model (GA, Aug 2025). */
 export const OPENAI_REALTIME_MODEL = 'gpt-realtime';
@@ -119,6 +120,8 @@ export function realtimeSessionUpdate(opts: {
       instructions: opts.instructions,
       tools: opts.tools.map((t) => ({ type: 'function', ...t })),
       tool_choice: 'auto',
+      max_output_tokens: 512,
+      truncation: { type: 'retention_ratio', retention_ratio: 0.8, token_limits: { post_instructions: 8000 } },
       audio: {
         input: {
           transcription: { model: 'gpt-4o-mini-transcribe' },
@@ -166,6 +169,9 @@ export async function openRealtimeVoice(
   },
   handlers: RealtimeVoiceHandlers = {},
 ): Promise<RealtimeVoiceSession> {
+  // Zonder betrouwbare lokale telling geen nieuwe betaalde sessie beginnen.
+  const usageGuard = createRealtimeUsageGuard(localStorage);
+  usageGuard.assertAvailable();
   const clientSecret = await createRealtimeClientSecret();
 
   const pc = new RTCPeerConnection();
@@ -174,6 +180,21 @@ export async function openRealtimeVoice(
   let laatsteAntwoordItem: string | null = null;
   let liveItem = '';
   let liveTekst = '';
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let sessionTimer: ReturnType<typeof setTimeout> | undefined;
+  let levelContext: AudioContext | null = null;
+  let responseCount = 0;
+
+  const stopForLimit = (reason: string) => {
+    if (closing) return;
+    closing = true;
+    cleanup();
+    handlers.onClosed?.(reason);
+  };
+  const renewIdle = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => stopForLimit('Voice paused after 90 seconds without new speech. Tap the mic to resume.'), REALTIME_IDLE_MS);
+  };
 
   micStream.getAudioTracks().forEach((track) => pc.addTrack(track, micStream));
 
@@ -181,6 +202,7 @@ export async function openRealtimeVoice(
   audioEl.autoplay = true;
 
   pc.ontrack = (event) => {
+    if (closing) return;
     const [remote] = event.streams;
     if (!remote) return;
     audioEl.srcObject = remote;
@@ -188,6 +210,7 @@ export async function openRealtimeVoice(
 
     try {
       const ctx = new AudioContext();
+      levelContext = ctx;
       void ctx.resume().catch(() => {});
       const source = ctx.createMediaStreamSource(remote);
       const analyser = ctx.createAnalyser();
@@ -204,9 +227,10 @@ export async function openRealtimeVoice(
   };
 
   const channel = pc.createDataChannel('oai-events');
+  channel.onclose = () => stopForLimit('Voice data connection closed. Tap the mic to resume.');
 
   const send = (payload: Record<string, unknown>): void => {
-    if (channel.readyState !== 'open') return;
+    if (closing || channel.readyState !== 'open') return;
     try {
       channel.send(JSON.stringify(payload));
     } catch (error) {
@@ -227,7 +251,10 @@ export async function openRealtimeVoice(
   };
 
   channel.onopen = () => {
+    if (closing) return;
     send(realtimeSessionUpdate(opts));
+    renewIdle();
+    sessionTimer = setTimeout(() => stopForLimit('Voice paused at the 10-minute session limit. Tap the mic to resume.'), REALTIME_MAX_SESSION_MS);
     // Sent from right here, not after openRealtimeVoice() resolves — the
     // channel is open NOW, by definition, so this can never race a data
     // channel that silently drops sends before it reaches 'open'.
@@ -236,6 +263,7 @@ export async function openRealtimeVoice(
   };
 
   channel.onmessage = (event: MessageEvent<string>) => {
+    if (closing) return;
     let msg: { type?: string; [key: string]: unknown };
     try {
       msg = JSON.parse(event.data);
@@ -245,10 +273,12 @@ export async function openRealtimeVoice(
     const type = msg.type ?? '';
 
     if (type === 'input_audio_buffer.speech_started') {
+      renewIdle();
       handlers.onUserSpeechStarted?.();
       return;
     }
     if (type === 'input_audio_buffer.speech_stopped') {
+      renewIdle();
       handlers.onUserSpeechStopped?.();
       return;
     }
@@ -270,6 +300,11 @@ export async function openRealtimeVoice(
       return;
     }
     if (type === 'response.created') {
+      responseCount += 1;
+      if (responseCount > 30) {
+        stopForLimit('Voice response limit reached. Tap the mic to start a new conversation.');
+        return;
+      }
       assistantSpeaking = false;
       laatsteAntwoordItem = null;
       handlers.onResponseStarted?.();
@@ -310,16 +345,31 @@ export async function openRealtimeVoice(
     }
     if (type === 'response.done') {
       assistantSpeaking = false;
+      try {
+        usageGuard.record(msg.response);
+      } catch (error) {
+        stopForLimit(error instanceof Error ? error.message : 'Voice usage could not be recorded.');
+        return;
+      }
       handlers.onResponseDone?.();
       return;
     }
     if (type === 'error') {
       const err = msg.error as { message?: string } | undefined;
       handlers.onError?.(err?.message || 'OpenAI realtime error');
+      stopForLimit(err?.message || 'OpenAI realtime error');
     }
   };
 
   const cleanup = () => {
+    clearTimeout(idleTimer);
+    clearTimeout(sessionTimer);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('storage', onStorageChange);
+    // Eerst geen audio meer versturen; de eigenaar geeft de microfoon daarna vrij.
+    pc.getSenders().forEach((sender) => { if (sender.track) sender.track.enabled = false; });
+    if (levelContext) void levelContext.close().catch(() => {});
+    levelContext = null;
     levelAnalyser = null;
     levelData = null;
     levelAudioEl = null;
@@ -337,6 +387,14 @@ export async function openRealtimeVoice(
     }
   };
 
+  const onPageHide = () => stopForLimit('Voice closed when leaving the page.');
+  const onStorageChange = () => {
+    try { usageGuard.assertAvailable(); }
+    catch (error) { stopForLimit(error instanceof Error ? error.message : 'Voice usage unavailable.'); }
+  };
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('storage', onStorageChange);
+
   pc.onconnectionstatechange = () => {
     if (closing) return;
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
@@ -346,6 +404,7 @@ export async function openRealtimeVoice(
     }
   };
 
+  try {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
@@ -373,6 +432,11 @@ export async function openRealtimeVoice(
   }
   const answerSdp = await sdpResponse.text();
   await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+  } catch (error) {
+    closing = true;
+    cleanup();
+    throw error;
+  }
 
   return {
     isOpen: () => !closing && pc.connectionState !== 'failed' && pc.connectionState !== 'closed',
