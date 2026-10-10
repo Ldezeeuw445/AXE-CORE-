@@ -109,11 +109,16 @@ def vergeet_alles() -> None:
     _laatste_goed = None
 
 
-async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60.0) -> tuple[str, str]:
-    """Antwoord + welke aanbieder het gaf. Gooit RuntimeError als er geen enkele werkt."""
+async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60.0, alleen: Optional[tuple[str, ...]] = None) -> tuple[str, str]:
+    """Antwoord + welke aanbieder het gaf. Gooit RuntimeError als er geen enkele werkt.
+
+    `alleen` beperkt de keten tot die aanbieders (bijvoorbeeld de gratis: Groq en de eigen modelbox), voor werk dat
+    nooit een betaalde aanroep mag kosten."""
     global _laatste_goed
     fouten: list[str] = []
     for a in volgorde():
+        if alleen is not None and a.naam not in alleen:
+            continue
         body: dict[str, Any] = {"model": a.gekozen_model(), "messages": messages, "max_tokens": max_tokens, **a.extra}
         try:
             async with httpx.AsyncClient(timeout=max(timeout, a.min_timeout)) as client:

@@ -41,10 +41,11 @@ APPS = ("axe_core", "axe_companion", "trading_os", "axon_memory", "northsea")
 EXECUTORS = ("vps", "mac", "supabase")
 # Wat de tick kan uitvoeren, per uitvoerder. 'observed' draait elders en meldt zijn runs.
 UITVOERBAAR = {
-    "vps": ("prompt", "exec", "webhook", "crew", "northsea"),
-    "mac": ("exec", "webhook", "planner"),
+    "vps": ("prompt", "exec", "webhook", "crew", "northsea", "review_desk"),
+    # review_desk: de bronworker van Website Review Desk; zijn sleutels staan in de kluis op de Mac.
+    "mac": ("exec", "webhook", "planner", "review_desk"),
 }
-ALLE_SOORTEN = ("prompt", "exec", "webhook", "crew", "observed", "planner", "northsea")
+ALLE_SOORTEN = ("prompt", "exec", "webhook", "crew", "observed", "planner", "northsea", "review_desk")
 MAX_FAILS = 5
 RUST_MAX_MIN = 360
 

@@ -3482,6 +3482,64 @@ def _compute_next_run(cron_expr: str, tz_name: str = "UTC") -> str:
     return nxt.astimezone(timezone.utc).isoformat()
 
 
+# ── Website Review Desk: de eigen bronworker (review_desk_bron.py) ──────────────────────────────────────
+# Draait op de bestaande scheduler (core_schedules, action_type "review_desk", executor 'mac': de sleutels staan in
+# de kluis op de Mac, niet op de VPS). Lege controles kosten geen AI; zie de docstring van de module.
+
+def _review_desk_opslag(http):
+    import review_desk_bron as rd
+    url, sleutel = os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_SERVICE_ROLE", "")
+    if not url or not sleutel:
+        raise RuntimeError("review_desk: SUPABASE_URL / SUPABASE_SERVICE_ROLE ontbreken op deze host")
+    return rd.SupabaseOpslag(url, sleutel, http)
+
+
+def _review_desk_gratis_model(berichten: list[dict]) -> str:
+    """Eén antwoord van een GRATIS aanbieder (Groq of de eigen modelbox); nooit OpenAI of Gemini."""
+    import llm_cascade
+    tekst, _wie = asyncio.run(llm_cascade.chat(berichten, max_tokens=500, timeout=90.0, alleen=("groq", "ollama")))
+    return tekst
+
+
+def _review_desk_run_sync(trigger: str) -> dict:
+    import review_desk_bron as rd
+    sleutels = rd.laad_sleutels()
+    with httpx.Client(timeout=30) as http:
+        opslag = _review_desk_opslag(http)
+        concept = None
+        if os.environ.get("REVIEW_DESK_CONCEPTEN") == "1" and not rd.ontbrekende_autorisatie(sleutels).get("gmail"):
+            concept = rd.concept_fabriek(http, sleutels, _review_desk_gratis_model)
+        uit = rd.run_bronrun(opslag, http, sleutels, trigger=trigger, concept_maker=concept)
+    return {"status": uit["status"], "output": uit["output"]}
+
+
+def _review_desk_limieten_sync() -> dict:
+    import review_desk_bron as rd
+    with httpx.Client(timeout=20) as http:
+        opslag = _review_desk_opslag(http)
+        rij = opslag.lees(rd.RAPPORT_SLEUTEL)
+        staat_rij = opslag.lees(rd.STAAT_SLEUTEL, rij.user_id) if rij else None
+        staat = staat_rij.value if staat_rij and isinstance(staat_rij.value, dict) else rd.lege_staat()
+        if not staat_rij and rij:
+            staat["proposals"] = rd._seed_uit_rapport(rij.value)
+    return {**rd.acquisitie_ruimte(staat, datetime.now(timezone.utc)), "overname": rd.overname_status(staat)}
+
+
+@app.get("/review-desk/limits", dependencies=[AUTH])
+async def review_desk_limits():
+    """De centrale acquisitieruimte (max 2 per Amsterdamse dag, 20 totaal, 08:00-20:00) voor elke uitvoerder."""
+    try:
+        return await asyncio.to_thread(_review_desk_limieten_sync)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(503, f"Review Desk limits unavailable: {exc.__class__.__name__}") from exc
+
+
+@app.post("/review-desk/run", dependencies=[AUTH])
+async def review_desk_run():
+    """Eén handmatige bronrun. Telt niet mee voor de overname: alleen geplande runs doen dat."""
+    return await asyncio.to_thread(_review_desk_run_sync, "manual")
+
+
 async def _run_schedule_action(action_type: str, payload: dict) -> dict:
     """Execute one schedule's action. Returns {status, output}. Never raises —
     a failing job records last_status='fail' and keeps the scheduler alive."""
@@ -3620,6 +3678,9 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                     _zichtbaar(job, data)
                 return {"status": "ok" if ok else "fail", "output": json.dumps(samenvatting, default=str)[:4000]}
             return {"status": "fail", "output": f"northsea: unknown job {job!r}"}
+
+        if action_type == "review_desk":
+            return await asyncio.to_thread(_review_desk_run_sync, "scheduled")
 
         if action_type in ("crew", "prompt"):
             task = (payload.get("task") or payload.get("prompt") or "").strip()
