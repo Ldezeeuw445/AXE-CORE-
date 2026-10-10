@@ -242,6 +242,11 @@ def agent_status(
         t = rij[0]
         reden = "Queued; a worker will pick it up." if t.get("status") in WACHTRIJ else \
             "Its worker stopped; the task will be recovered by the next claim."
+        # De planner-backlog wacht niet op een worker maar op de planner op de Mac
+        # (elke 3 u, met een dagbudget): zeg dat, in plaats van "a worker will pick it up".
+        if t.get("capability") == "planner" and t.get("status") == "pending":
+            n = sum(1 for x in rij if x.get("capability") == "planner")
+            reden = f"{n} planned task(s) in its backlog; the planner on the Mac picks them up every 3 hours."
         if laatste_event and laatste_event.get("task_id") == t.get("id") and soort_van(laatste_event) == "waiting_capacity":
             reden = "Waiting for DAX capacity."
         return resultaat("QUEUED", reden, t, missie_van(t))
@@ -314,7 +319,7 @@ class Activiteit:
     def _taken(self, limit: int = 300) -> list[dict[str, Any]]:
         return (self._db().table("core_tasks")
                 .select("id,title,status,assignee,mission_id,worker_id,lease_token,lease_expires_at,"
-                        "heartbeat_at,attempt,error,payload,result,metadata,created_at,updated_at,completed_at")
+                        "heartbeat_at,attempt,error,payload,result,metadata,capability,created_at,updated_at,completed_at")
                 .order("updated_at", desc=True).limit(limit).execute().data or [])
 
     def _routines(self) -> list[dict[str, Any]]:
