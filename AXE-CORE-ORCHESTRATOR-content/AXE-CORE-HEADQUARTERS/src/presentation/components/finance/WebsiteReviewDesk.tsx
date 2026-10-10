@@ -13,6 +13,8 @@ export default function WebsiteReviewDesk() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const generation = useRef(0);
+  const pilot = report?.sections.find(section => section.title === 'Eerste betaalde pilot — weekdoel');
+  const takeover = report?.sections.find(section => section.title === 'Native overname — actuele bouwstatus');
   const invalidate = useCallback(() => { ++generation.current; }, []);
   const refresh = useCallback(async () => {
     const ticket = ++generation.current;
@@ -56,6 +58,13 @@ export default function WebsiteReviewDesk() {
     {report && <>
       <p className="text-xs">Report updated {stamp(report.updatedAt)}. Each observation below has its own date.</p>
       <p className="text-sm whitespace-pre-wrap break-words">{report.summary}</p>
+      <KaartRaster>
+        {pilot && <Kaart titel="FIRST PAID PILOT"><p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{pilot.body}</p><p className="text-xs mt-3">Checked {stamp(pilot.asOf)}</p></Kaart>}
+        <Kaart titel="NEXT SALES & DELIVERY ACTIONS">
+          <ol className="list-decimal pl-5 space-y-3 text-sm">{report.actions.map((action, i) => <li key={i} className="break-words">{action}</li>)}</ol>
+        </Kaart>
+      </KaartRaster>
+      {takeover && <Kaart titel="AUTOMATION — VERIFIED PROGRESS"><p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{takeover.body}</p><p className="text-xs mt-3">Checked {stamp(takeover.asOf)}</p></Kaart>}
       <StatRij>{report.metrics.map(metric => <Kaart key={metric.label} compact titel={metric.label}>
         <p className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>{metric.value === null ? 'Unknown' : metric.unit === 'EUR' ? new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(metric.value) : `${metric.value}${metric.unit === 'percent' ? '%' : ''}`}</p>
         <p className="text-[10px] mt-2">{stamp(metric.asOf)} · {observationAge(metric.asOf)}</p>
@@ -73,11 +82,13 @@ export default function WebsiteReviewDesk() {
           {lead.sourceUrl && <a className="text-xs underline" href={lead.sourceUrl} target="_blank" rel="noopener noreferrer">Invitation source</a>}
         </article>)}</div>
       </Kaart></SectieBlok>
-      <SectieBlok titel="FULL ANALYSIS"><div className="space-y-3">{report.sections.map(section => <Kaart key={section.title} titel={section.title}>
-        <p className="text-[10px] mb-2">As of {stamp(section.asOf)}</p>
-        <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">{section.body}</div>
-      </Kaart>)}</div></SectieBlok>
-      <SectieBlok titel="NEXT ACTIONS"><Kaart><ol className="list-decimal pl-5 space-y-2 text-sm">{report.actions.map((action, i) => <li key={i} className="break-words">{action}</li>)}</ol></Kaart></SectieBlok>
+      <SectieBlok titel="SOURCE CHECKS & FULL HISTORY"><div className="space-y-3">{[...report.sections]
+        .filter(section => section !== pilot && section !== takeover)
+        .sort((a, b) => Date.parse(b.asOf) - Date.parse(a.asOf))
+        .map(section => <details key={`${section.title}-${section.asOf}`} className="border-b pb-3" style={{ borderColor: 'var(--border-subtle)' }}>
+          <summary className="cursor-pointer text-sm py-2" style={{ color: 'var(--text-primary)' }}>{section.title} · {stamp(section.asOf)}</summary>
+          <div className="text-sm whitespace-pre-wrap break-words leading-relaxed pt-2">{section.body}</div>
+        </details>)}</div></SectieBlok>
       <nav aria-label="Business resources" className="flex flex-wrap gap-4 text-xs">{report.links.map(link => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" className="underline">{link.label}</a>)}</nav>
     </>}
   </div>;

@@ -42,7 +42,7 @@ function fmt(n: number, currency = 'EUR') {
 }
 
 export default function Finance() {
-  const [view, setView] = useState<'ledger' | 'review-desk'>('ledger');
+  const [view, setView] = useState<'ledger' | 'review-desk'>('review-desk');
   const [entries, setEntries] = useState<IncomeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<IncomeSource>('prime_opinion');
@@ -77,8 +77,10 @@ export default function Finance() {
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (view !== 'ledger') return;
+    const start = setTimeout(() => void reload().catch(err => console.warn('[Finance] ledger load failed:', err)), 0);
+    return () => clearTimeout(start);
+  }, [reload, view]);
 
   const filtered = useMemo(
     () => (filter === 'all' ? entries : entries.filter(e => e.source === filter)),
@@ -122,7 +124,7 @@ export default function Finance() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
-      <TabRail kant="links">
+      {view === 'ledger' && <TabRail kant="links">
         <SchuifBalk
           groepen={[{
             titel: 'Source',
@@ -139,11 +141,11 @@ export default function Finance() {
             ],
           }]}
         />
-      </TabRail>
+      </TabRail>}
       <TabRuimte>
       <nav aria-label="Finance views" className="flex flex-wrap gap-4 mb-4 text-sm">
-        <button type="button" aria-pressed={view === 'ledger'} onClick={() => setView('ledger')} style={{ color: view === 'ledger' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>Income ledger</button>
         <button type="button" aria-pressed={view === 'review-desk'} onClick={() => setView('review-desk')} style={{ color: view === 'review-desk' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>Website Review Desk</button>
+        <button type="button" aria-pressed={view === 'ledger'} onClick={() => setView('ledger')} style={{ color: view === 'ledger' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>Income ledger</button>
       </nav>
       {view === 'review-desk' ? <WebsiteReviewDesk /> : <>
 
