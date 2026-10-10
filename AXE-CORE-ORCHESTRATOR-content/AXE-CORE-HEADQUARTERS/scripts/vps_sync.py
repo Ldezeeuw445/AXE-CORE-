@@ -121,6 +121,11 @@ MANIFEST = {
     # Zonder hen in het manifest ship je de worker niet compleet.
     "/opt/axe-core-api/agent_workspace.py": ("backend/axe_api/agent_workspace.py", "axe-task-worker"),
     "/opt/axe-core-api/device_actions.py": ("backend/axe_api/device_actions.py", "axe-task-worker"),
+    # main.py importeert deze drie lazy. Ze stonden niet in het manifest: een fix eraan kon nooit worden uitgerold of
+    # op drift gecontroleerd (10 okt 2026: de bronworker van Website Review Desk, de LLM-keten en de statusprobe).
+    "/opt/axe-core-api/review_desk_bron.py": ("backend/axe_api/review_desk_bron.py", "axe-core-api"),
+    "/opt/axe-core-api/llm_cascade.py": ("backend/axe_api/llm_cascade.py", "axe-core-api"),
+    "/opt/axe-core-api/provider_probe.py": ("backend/axe_api/provider_probe.py", "axe-core-api"),
 }
 
 # MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).
