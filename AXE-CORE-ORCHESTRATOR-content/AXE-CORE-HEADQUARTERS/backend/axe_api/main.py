@@ -671,28 +671,7 @@ async def realtime_client_secret():
     return {"value": secret, "model": "gpt-realtime", "source": "axe-core"}
 
 
-async def _probe_provider(provider: str, key: str) -> tuple[bool, str]:
-    """Authenticated, read-only provider probe. Never returns credential data."""
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            if provider == "openai":
-                r = await client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {key}"})
-            elif provider == "groq":
-                r = await client.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"})
-            elif provider in {"openrouter", "openrouter2"}:
-                r = await client.get("https://openrouter.ai/api/v1/models", headers={"Authorization": f"Bearer {key}"})
-            elif provider in {"google", "gemini"}:
-                r = await client.get("https://generativelanguage.googleapis.com/v1beta/models", params={"key": key})
-            elif provider == "anthropic":
-                r = await client.get(
-                    "https://api.anthropic.com/v1/models",
-                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-                )
-            else:
-                return False, "no_probe"
-        return r.is_success, f"http_{r.status_code}"
-    except httpx.HTTPError as exc:
-        return False, type(exc).__name__
+from provider_probe import probe_provider as _probe_provider  # noqa: E402
 
 
 @app.get("/status/axe-core", dependencies=[AUTH])
@@ -714,6 +693,16 @@ async def axe_core_runtime_status():
         results[provider] = {"configured": True, "reachable": ok, "detail": detail}
         if ok:
             return {"online": True, "provider": provider, "providers": results, "source": "axe-core"}
+    # De eigen modelbox heeft geen sleutel en geen tegoed: antwoordt hij, dan is AXE online.
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            r = await client.get(os.environ.get("OLLAMA_HOST", "https://ollama.axecompanion.com").rstrip("/") + "/api/tags")
+        ok_modelbox = r.status_code == 200 and bool(r.json().get("models"))
+    except (httpx.HTTPError, ValueError):
+        ok_modelbox = False
+    results["ollama"] = {"configured": True, "reachable": ok_modelbox, "detail": "modelbox"}
+    if ok_modelbox:
+        return {"online": True, "provider": "ollama", "providers": results, "source": "axe-core"}
     return {"online": False, "provider": None, "providers": results, "source": "axe-core"}
 
 
