@@ -44,6 +44,20 @@ export interface ServerAgent {
   mission?: ServerMissie | null;
   events: ServerEvent[];
   last_event_at?: string | null;
+  /** De eigen computer (DAX) van deze agent: running, sleeping, provisioned. */
+  dax_status?: string | null;
+  /** Roosters die voor deze agent draaien, met wat de laatste run vond. */
+  routines?: ServerRoutine[];
+}
+
+export interface ServerRoutine {
+  name: string;
+  last_run_at: string | null;
+  last_status: string | null;
+  next_run_at: string | null;
+  running: boolean;
+  failures: number;
+  summary: string;
 }
 
 export interface ServerStand {

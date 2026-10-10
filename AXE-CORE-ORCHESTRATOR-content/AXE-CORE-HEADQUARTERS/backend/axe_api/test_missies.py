@@ -188,3 +188,31 @@ def test_event_soorten_uit_echte_berichten():
     assert soort_van({"event_type": "axe.progress", "message": "Step 3: $ npm test"}) == "shell"
     assert soort_van({"event_type": "axe.progress", "message": "Step 2: writing a.py"}) == "file"
     assert soort_van({"event_type": "milestone.completed"}) == "milestone_completed"
+
+
+# ── 10 okt: waarom bijna alles op SLEEPING stond ────────────────────────────
+
+def test_planner_namen_tellen_voor_de_roster_agent():
+    t = {"id": "t", "assignee": "code-agent", "status": "queued"}
+    assert agent_status("developer", [t], [], None, NU)["status"] == "QUEUED"
+
+
+def test_desk_notitie_is_geen_werk():
+    notitie = {"id": "n", "assignee": "northsea", "status": "pending", "metadata": {"source": "cron"}}
+    assert agent_status("northsea", [notitie], [], None, NU)["status"] == "SLEEPING"
+
+
+def test_rooster_maakt_monitoring_met_wat_het_vond():
+    r = {"name": "NorthSea Discovery & Sourcing Sweep", "app": "northsea", "enabled": True,
+         "metadata": {"owner": "northsea"}, "last_run_at": "2026-10-07T10:00:00+00:00", "last_status": "ok",
+         "last_result": '{"created": 5, "considered_pairs": 1409}', "next_run_at": "2026-10-07T12:00:00+00:00"}
+    s = agent_status("northsea", [], [], None, NU, routines=[r])
+    assert s["status"] == "MONITORING"
+    assert "5 new matches" in s["reason"] and "next 14:00" in s["reason"]
+    assert s["routines"][0]["summary"].startswith("5 new matches")
+
+
+def test_lopend_rooster_is_working():
+    r = {"name": "NorthSea Communication Engine", "app": "northsea", "enabled": True, "metadata": {},
+         "lease_until": (NU + timedelta(seconds=60)).isoformat()}
+    assert agent_status("northsea", [], [], None, NU, routines=[r])["status"] == "WORKING"

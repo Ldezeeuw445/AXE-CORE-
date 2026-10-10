@@ -24,6 +24,88 @@ STATUSSEN = (
 BEZIG = {"running", "in_progress", "planning"}
 WACHTRIJ = {"queued", "retrying", "pending", "approved"}
 RECENT_FOUT = timedelta(hours=6)
+
+# De planner en oudere paden schrijven taken op hun eigen namen. Zonder deze
+# vertaling zag Home nooit werk van de Code Agent bij "developer" of van AXE Algo
+# bij "trading" -- die stonden dus altijd op SLEEPING (10 okt).
+ALIAS = {
+    "axe-core": "axe", "code-agent": "developer", "axe-algo": "trading",
+    "maps-agent": "northsea", "northsea-desk-manager": "northsea",
+}
+
+
+def roster_agent(naam: str | None) -> str:
+    n = (naam or "axe").strip()
+    return ALIAS.get(n, n)
+
+
+def is_notitie(taak: dict[str, Any]) -> bool:
+    """Een bericht van een rooster (NorthSea-desk) in de takenlijst, geen werk voor een worker."""
+    meta = taak.get("metadata") or {}
+    return isinstance(meta, dict) and meta.get("source") == "cron" and not meta.get("goedkeuring") == "nodig"
+
+
+def _klok(waarde: Any) -> str:
+    t = _tijd(waarde)
+    if not t:
+        return "?"
+    try:
+        from zoneinfo import ZoneInfo
+        t = t.astimezone(ZoneInfo("Europe/Amsterdam"))
+    except Exception:  # noqa: BLE001
+        pass
+    return t.strftime("%H:%M")
+
+
+def routine_samenvatting(r: dict[str, Any]) -> str:
+    """Wat de laatste run van een rooster opleverde, in één regel."""
+    tekst = str(r.get("last_result") or "")
+    try:
+        import json as _json
+        d = _json.loads(tekst)
+    except Exception:  # noqa: BLE001
+        d = None
+    if isinstance(d, dict):
+        if "created" in d and "considered_pairs" in d:
+            return f"{d.get('created') or 0} new matches from {d.get('considered_pairs')} pairs"
+        if "selected" in d and isinstance(d.get("results"), list):
+            return f"reviewed {len(d.get('selected') or [])} deals, {d.get('approved', 0)} approved, {d.get('sent', 0)} sent"
+        if "summary" in d and isinstance(d.get("summary"), dict):
+            s = d["summary"]
+            delen = [f"{k} {v}" for k, v in s.items() if isinstance(v, (int, float)) and v][:3]
+            return ", ".join(delen) or "nothing to do"
+        if "gemaakt" in d:
+            return f"planned {len(d.get('gemaakt') or [])} tasks"
+    tekst = re.sub(r"\s+", " ", tekst).strip()
+    return tekst[:110]
+
+
+def routine_agent(r: dict[str, Any]) -> str:
+    meta = r.get("metadata") or {}
+    for k in ("agent", "owner"):
+        if isinstance(meta, dict) and meta.get(k):
+            return roster_agent(str(meta[k]))
+    key = str(r.get("job_key") or "")
+    if key.endswith(":planner"):
+        return "axe"
+    app = str(r.get("app") or "")
+    return {"northsea": "northsea", "trading_os": "trading", "axe_companion": "companion",
+            "axon_memory": "memory"}.get(app, "apps")
+
+
+def routines_voor(agent: str, routines: list[dict[str, Any]], moment: datetime) -> list[dict[str, Any]]:
+    uit = []
+    for r in routines:
+        if routine_agent(r) != agent or not r.get("enabled"):
+            continue
+        lease = _tijd(r.get("lease_until"))
+        uit.append({
+            "name": r.get("name"), "last_run_at": r.get("last_run_at"), "last_status": r.get("last_status"),
+            "next_run_at": r.get("next_run_at"), "running": bool(lease and lease > moment),
+            "failures": int(r.get("consecutive_failures") or 0), "summary": routine_samenvatting(r),
+        })
+    uit.sort(key=lambda x: str(x.get("last_run_at") or ""), reverse=True)
+    return uit
 RECENT_KLAAR = timedelta(hours=24)
 
 
@@ -99,23 +181,31 @@ def agent_status(
     missies: list[dict[str, Any]],
     laatste_event: dict[str, Any] | None = None,
     moment: datetime | None = None,
+    routines: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Status + waarom, uit de taken/missies van deze agent. Puur."""
+    """Status + waarom, uit de taken/missies/roosters van deze agent. Puur."""
     moment = moment or datetime.now(timezone.utc)
-    mijn_taken = [t for t in taken if (t.get("assignee") or "axe") == agent]
+    mijn_taken = [t for t in taken if roster_agent(t.get("assignee")) == agent and not is_notitie(t)]
+    mijn_routines = routines_voor(agent, routines or [], moment)
     mijn_missies = [m for m in missies if m.get("owner_agent") == agent]
 
     def resultaat(status: str, reden: str, taak: dict[str, Any] | None = None,
                   missie: dict[str, Any] | None = None) -> dict[str, Any]:
         return {"agent": agent, "status": status, "reason": reden,
-                "task": _taak_kort(taak), "mission": _missie_kort(missie)}
+                "task": _taak_kort(taak), "mission": _missie_kort(missie), "routines": mijn_routines}
 
     def missie_van(taak: dict[str, Any] | None) -> dict[str, Any] | None:
         if not taak or not taak.get("mission_id"):
             return None
         return next((m for m in missies if m.get("id") == taak["mission_id"]), None)
 
+    bezig_rooster = [r for r in mijn_routines if r["running"]]
     levend = [t for t in mijn_taken if t.get("status") in BEZIG and _lease_leeft(t, moment)]
+    if bezig_rooster and not levend:
+        r = bezig_rooster[0]
+        uit = resultaat("WORKING", f"Running its routine: {r['name']}.")
+        uit["current_action"] = f"Running: {r['name']}"
+        return uit
     if levend:
         t = max(levend, key=lambda x: str(x.get("heartbeat_at") or ""))
         uit = resultaat("WORKING", f"Running task with a live lease (worker {t.get('worker_id')}).", t, missie_van(t))
@@ -178,6 +268,16 @@ def agent_status(
     if klaar:
         return resultaat("MISSION_COMPLETE", f"Completed: {klaar[0].get('title')}", None, klaar[0])
 
+    # Geen taak, geen missie -- maar wel een rooster dat voor hem draait: dan is
+    # hij niet aan het slapen, hij houdt iets in de gaten. Met wat de laatste run
+    # vond en wanneer de volgende is.
+    if mijn_routines:
+        r = mijn_routines[0]
+        if r["failures"] and r["last_status"] not in ("ok", "skipped"):
+            return resultaat("ERROR", f"{r['name']} failed {r['failures']}x; retrying itself (last {_klok(r['last_run_at'])}).")
+        volgende = f"; next {_klok(r['next_run_at'])}" if r.get("next_run_at") else ""
+        return resultaat("MONITORING", f"{r['name']} {_klok(r['last_run_at'])}: {r['summary']}{volgende}")
+
     return resultaat("SLEEPING", "Nothing runnable for this agent.")
 
 
@@ -214,8 +314,25 @@ class Activiteit:
     def _taken(self, limit: int = 300) -> list[dict[str, Any]]:
         return (self._db().table("core_tasks")
                 .select("id,title,status,assignee,mission_id,worker_id,lease_token,lease_expires_at,"
-                        "heartbeat_at,attempt,error,payload,result,created_at,updated_at,completed_at")
+                        "heartbeat_at,attempt,error,payload,result,metadata,created_at,updated_at,completed_at")
                 .order("updated_at", desc=True).limit(limit).execute().data or [])
+
+    def _routines(self) -> list[dict[str, Any]]:
+        try:
+            return (self._db().table("core_schedules")
+                    .select("name,job_key,app,metadata,enabled,last_run_at,last_status,last_result,"
+                            "next_run_at,lease_until,consecutive_failures")
+                    .eq("enabled", True).limit(200).execute().data or [])
+        except Exception:  # noqa: BLE001 — Home mag niet leeg worden om een rooster
+            return []
+
+    def _dax(self) -> dict[str, dict[str, Any]]:
+        try:
+            rijen = (self._db().table("core_dax_computers").select("id,owner_agent,status,updated_at")
+                     .limit(50).execute().data or [])
+        except Exception:  # noqa: BLE001
+            return {}
+        return {str(r.get("id")): r for r in rijen}
 
     def _missies(self) -> list[dict[str, Any]]:
         return (self._db().table("core_missions").select("*")
@@ -231,15 +348,19 @@ class Activiteit:
 
     def overzicht(self, agents: Iterable[str], events_per_agent: int = 8) -> list[dict[str, Any]]:
         from agent_workspace import laad_workspace
-        taken = self._taken()
+        taken = self._taken(600)
         missies = self._missies()
+        routines = self._routines()
+        dax = self._dax()
         uit = []
         for agent in agents:
             recent = self.events(agent, events_per_agent)
-            status = agent_status(agent, taken, missies, recent[0] if recent else None)
+            status = agent_status(agent, taken, missies, recent[0] if recent else None, routines=routines)
             ws = laad_workspace(agent)
+            computer = dax.get(str(ws.get("dax_computer") or ""))
             status.update({
                 "role": ws.get("role"), "dax_computer": ws.get("dax_computer"),
+                "dax_status": (computer or {}).get("status"),
                 "crew": ws.get("crew") or [], "events": tijdlijn(recent),
                 "last_event_at": recent[0].get("created_at") if recent else None,
             })

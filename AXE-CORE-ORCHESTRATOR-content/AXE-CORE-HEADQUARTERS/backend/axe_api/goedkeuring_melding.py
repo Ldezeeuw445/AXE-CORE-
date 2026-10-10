@@ -26,7 +26,21 @@ def melding_voor_goedkeuring(titel: str, detail: str = "") -> str:
 
 
 def schrijf_goedkeuring_melding(db: Any, titel: str, detail: str = "") -> dict[str, Any] | None:
-    """Eén warning-rij. Fout slikken: de approval-rij is de bron."""
+    """Eén warning-rij. Fout slikken: de approval-rij is de bron.
+
+    Staat dezelfde vraag (zelfde kop) er nog ongelezen van de afgelopen 24 uur,
+    dan geen tweede: DEAL-002 stond er 8 keer, en een bel vol herhalingen is een
+    bel die je negeert (10 okt)."""
+    kop = (titel or "Goedkeuring nodig").strip() or "Goedkeuring nodig"
+    try:
+        from datetime import timedelta, timezone as _tz
+        sinds = (datetime.now(_tz.utc) - timedelta(hours=24)).isoformat()
+        er = (db.table("core_notifications").select("id").eq("read", False)
+              .like("message", f"{kop}%").gt("created_at", sinds).limit(1).execute().data) or []
+        if er:
+            return er[0]
+    except Exception:
+        pass
     try:
         uit = db.table("core_notifications").insert({
             "recipient": LUKA_USER_ID,

@@ -11,6 +11,8 @@ function speakWithBrowser(text: string, onDone?: () => void) {
   speakWithBrowserVoice(text, onDone);
 }
 
+import { meldActiviteit } from '@/shared/axeActiviteit';
+import { doelVoorTool } from '@/domain/agents/activiteitUitServer';
 import { detectMacRoute, askMac } from '@/infrastructure/gateways/macRelayService';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { create } from 'zustand';
@@ -179,6 +181,8 @@ async function resolveModelToolCalls(
     try{
       resultBlock=await matched.run(raw,{requestApproval:requestActionApproval});
       ranAnyTool=true;
+      // Laat zien wat AXE net deed: een vlucht van de bol naar die tab (10 okt).
+      {const doelen=doelVoorTool(matched.id);if(doelen.length)meldActiviteit({doelen,label:`${matched.shortForm??matched.id} · ${raw.replace(/\s+/g,' ').slice(0,80)}`,kleur:'rgba(165,243,252,0.7)'});}
       // Every tool run is remembered, successes included: knowing which tools
       // actually work, how long they take and what they were asked for is what
       // lets AXE choose between them later instead of guessing each time.

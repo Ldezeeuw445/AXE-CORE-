@@ -98,11 +98,12 @@ def test_lege_discovery_verdwijnt_niet_en_vraagt_geen_jacht():
     assert rij["status"] != "waiting_approval"
 
 
-def test_schrijf_zichtbaar_zet_taken_en_geheugen():
+def test_lege_run_alleen_in_geheugen_niet_als_taak():
+    """10 okt: elk kwartier een pending-rij "found nothing" (383 stuks) verdrong het echte werk."""
     db = _Db()
     uit = schrijf_zichtbaar(db, "engine_tick", {"plan": {"followups": []}, "sent": 0})
-    assert uit["taken"] >= 1 and uit["geheugen"] == 1
-    assert db.rijen["core_tasks"][0]["assignee"] == "northsea"
+    assert uit["taken"] == 0 and uit["geheugen"] == 1
+    assert not db.rijen.get("core_tasks")
     assert db.rijen["rag_memories"][0]["category"] == "northsea_desk"
     assert "auto_send" not in str(db.rijen).lower()
     assert "core_approvals" not in db.rijen

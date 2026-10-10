@@ -184,7 +184,8 @@ def test_timeout_is_recorded():
     assert uit_run[0]["status"] == "timeout" and sb.db["core_job_runs"][0]["status"] == "timeout"
 
 
-def test_job_disables_itself_after_max_failures():
+def test_job_rests_after_max_failures_instead_of_switching_off():
+    """10 okt: een storing van een uur legde de NorthSea-crews drie dagen stil."""
     sb = FakeSb([sched(consecutive_failures=p.MAX_FAILS - 1)])
     meldingen = []
 
@@ -193,8 +194,16 @@ def test_job_disables_itself_after_max_failures():
 
     uit = run(p.Uitvoerder(lambda: sb, "vps", "vps:test", actie, meld=lambda n, pl, r: meldingen.append(r), nu=lambda: NU).tick())
     s = sb.db["core_schedules"][0]
-    assert uit[0]["uitgezet"] and s["enabled"] is False and s["next_run_at"] is None
+    assert uit[0]["uitgezet"] and s.get("enabled", True) is not False
+    assert s["next_run_at"] >= (NU + p.timedelta(minutes=30)).isoformat()
     assert meldingen and meldingen[0]["uitgezet"] is True
+
+
+def test_rust_groeit_en_heeft_een_plafond():
+    assert p.rust_minuten(p.MAX_FAILS - 1) == 0
+    assert p.rust_minuten(p.MAX_FAILS) == 30
+    assert p.rust_minuten(p.MAX_FAILS + 1) == 60
+    assert p.rust_minuten(p.MAX_FAILS + 10) == p.RUST_MAX_MIN
 
 
 def test_success_resets_failure_counter():

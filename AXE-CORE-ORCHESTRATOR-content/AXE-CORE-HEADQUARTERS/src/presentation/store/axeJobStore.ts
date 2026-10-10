@@ -15,6 +15,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { jobLoopt, type AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import { bewaarbareJobs } from '@/domain/tierRouter/jobHerstel';
+import { managerVan } from '@/domain/tierRouter/agentVenster';
+import { meldActiviteit } from '@/shared/axeActiviteit';
 
 interface AxeJobStateShape {
   jobs: AxeJob[];
@@ -29,7 +31,13 @@ export const useAxeJobStore = create<AxeJobStateShape>()(
     (set) => ({
       jobs: [],
       zet: (jobs) => set({ jobs }),
-      voeg: (jobs) => set((s) => ({ jobs: [...s.jobs, ...jobs] })),
+      voeg: (jobs) => {
+        set((s) => ({ jobs: [...s.jobs, ...jobs] }));
+        // Wat AXE een agent opdraagt, als vlucht naar die agent op Home (10 okt).
+        for (const j of jobs.slice(0, 3)) {
+          meldActiviteit({ doelen: [`agent:${j.agent}`, `agent:${managerVan(j.agent)}`, '/agents'], label: `→ ${j.agent}: ${j.title}`, kleur: 'rgba(165,243,252,0.7)' });
+        }
+      },
       patch: (id, over) => set((s) => ({
         jobs: s.jobs.map((j) => (j.id === id ? { ...j, ...over } : j)),
       })),

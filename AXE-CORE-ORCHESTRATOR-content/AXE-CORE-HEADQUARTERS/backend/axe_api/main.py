@@ -3760,11 +3760,12 @@ def _deze_uitvoerder() -> str:
 
 def _meld_run(naam: str, payload: dict, resultaat: dict) -> None:
     _notify_if_requested(naam, payload, {"status": resultaat["status"], "output": resultaat.get("output") or ""})
+    # Eén melding bij het ingaan van de rust, niet bij elke volgende mislukte poging.
     if resultaat.get("uitgezet"):
         try:
             sb().table("core_notifications").insert({
                 "type": "error",
-                "message": f"{naam}: uitgezet na {_planning.MAX_FAILS} mislukte runs op rij. Laatste fout: {(resultaat.get('output') or '')[:1500]}",
+                "message": f"{naam}: {_planning.MAX_FAILS} mislukte runs op rij — in rust, probeert het straks zelf opnieuw (wacht oplopend tot 6 u). Laatste fout: {(resultaat.get('output') or '')[:1500]}",
             }).execute()
         except Exception as e:  # noqa: BLE001
             log.warning(f"disable notify failed: {e}")

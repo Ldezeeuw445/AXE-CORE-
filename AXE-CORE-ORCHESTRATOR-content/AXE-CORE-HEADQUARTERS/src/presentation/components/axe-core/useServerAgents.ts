@@ -9,6 +9,8 @@
 import { useEffect, useState } from 'react';
 import { getAgentActivity } from '@/infrastructure/gateways/axeCoreApiService';
 import type { ServerAgent } from '@/domain/agents/serverStatus';
+import { meldActiviteit } from '@/shared/axeActiviteit';
+import { activiteitUitServer } from '@/domain/agents/activiteitUitServer';
 
 const POLL_MS = 15_000;
 
@@ -26,6 +28,12 @@ async function poll(): Promise<void> {
     const uit = await getAgentActivity(10);
     const agents: Record<string, ServerAgent> = {};
     for (const a of uit.agents) agents[a.agent] = a;
+    /* Wat er sinds de vorige poll echt gebeurde, als vlucht van de bol naar die
+       agent (10 okt: "voorheen zag je particles met wat hij deed"). Niet bij de
+       eerste poll: dan is alles "nieuw" en vliegt er een zwerm. */
+    if (stand.ok) {
+      for (const a of activiteitUitServer(stand.agents, agents)) meldActiviteit(a);
+    }
     stand = { agents, ok: true, at: Date.now() };
   } catch {
     stand = { ...stand, ok: false };

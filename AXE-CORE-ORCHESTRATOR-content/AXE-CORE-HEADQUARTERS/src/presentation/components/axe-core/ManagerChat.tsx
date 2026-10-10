@@ -140,7 +140,7 @@ export function ManagerChat({
           {!job && server && server.status !== 'SLEEPING' ? server.reason : wieEnWat(agent, job)}
         </p>
 
-        {server && (missie || server.dax_computer || server.events.length > 0) && (
+        {server && (missie || server.dax_computer || server.events.length > 0 || (server.routines?.length ?? 0) > 0) && (
           <div className="mb-2 text-[10.5px] leading-snug" data-axe-server-agent={server.agent}>
             {missie && (
               <p style={{ color: 'var(--text-primary)' }}>
@@ -152,9 +152,20 @@ export function ManagerChat({
                 </span>
               </p>
             )}
+            {/* Wat er voor deze agent op een rooster draait, ook als er nu geen taak loopt
+                (10 okt: de NorthSea-crews draaiden, maar Home zei "sleeping"). */}
+            {(server.routines ?? []).slice(0, 4).map((r) => (
+              <p key={r.name} className="truncate" style={{ color: 'var(--text-secondary)' }} title={r.summary}>
+                <span className="text-[9px] tracking-widest uppercase mr-1" style={{ color: r.running ? 'var(--accent-cyan)' : r.failures ? 'var(--err)' : 'var(--text-muted)' }}>
+                  {r.running ? 'Running' : r.failures ? 'Retrying' : eventTijd(r.last_run_at)}
+                </span>
+                {r.name}: {r.summary}
+                {r.next_run_at && !r.running ? <span style={{ color: 'var(--text-muted)' }}> · next {eventTijd(r.next_run_at)}</span> : null}
+              </p>
+            ))}
             {(server.dax_computer || server.task?.engine || server.task?.model) && (
               <p style={{ color: 'var(--text-muted)' }}>
-                {server.dax_computer ? `Computer ${server.dax_computer}` : ''}
+                {server.dax_computer ? `Computer ${server.dax_computer}${server.dax_status ? ` (${server.dax_status === 'running' ? 'awake' : server.dax_status})` : ''}` : ''}
                 {server.task?.engine ? ` · ${server.task.engine}` : ''}
                 {server.task?.model ? ` · ${server.task.model}` : ''}
               </p>

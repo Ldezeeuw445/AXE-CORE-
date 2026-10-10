@@ -82,6 +82,20 @@ const BALK: React.CSSProperties = {
   padding: '9px 13px',
 };
 
+/** De eigen computer (DAX) van de agent: een stip, cyaan als hij wakker is. */
+function DaxStip({ server }: { server?: ServerAgent }) {
+  if (!server?.dax_computer) return null;
+  const wakker = server.dax_status === 'running';
+  return (
+    <span
+      title={`Own computer ${server.dax_computer}: ${wakker ? 'awake' : server.dax_status || 'unknown'}`}
+      aria-label={`DAX ${wakker ? 'awake' : 'asleep'}`}
+      className="inline-block size-1.5 rounded-full"
+      style={{ background: wakker ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)', boxShadow: wakker ? '0 0 6px var(--accent-cyan)' : 'none' }}
+    />
+  );
+}
+
 function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: () => void }) {
   const { agent } = rij;
   return (
@@ -90,6 +104,7 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
       onClick={onKies}
       aria-expanded={open}
       aria-label={`Gesprek met ${agent.name}`}
+      data-axe-doel={`agent:${agent.id}`}
       className="flex flex-col items-center gap-1.5 cursor-pointer"
       style={{ ...TEGEL, textShadow: LEESBAAR }}
     >
@@ -135,10 +150,11 @@ function Balkje({ rij, onKies, kant = 'links', server }:
           <span style={{ color: 'var(--text-secondary)' }}>{serverStand.regel}</span>
         </span>
         <span
-          className="text-[9.5px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0"
+          className="text-[9.5px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0 flex items-center gap-1.5"
           style={{ color: serverStand.kleur }}
         >
           {serverStand.label}
+          <DaxStip server={server} />
         </span>
       </button>
     );

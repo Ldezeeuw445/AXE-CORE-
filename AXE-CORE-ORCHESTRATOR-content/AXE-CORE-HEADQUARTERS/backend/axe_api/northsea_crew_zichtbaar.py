@@ -63,6 +63,7 @@ def berichten_uit_cron(job: str, data: dict[str, Any] | None) -> list[dict[str, 
         if ja and "What yes does:" not in tekst:
             tekst = (tekst + "\nWhat yes does: " + str(n.get("what_yes_does") or "Review this deal.")).strip()
         uit.append({
+            "leeg": n.get("soort") == "leeg",
             "titel": titel[:200],
             "tekst": tekst[:4000],
             "eigenaar": "luka" if ja else (n.get("eigenaar") or "axe"),
@@ -137,6 +138,11 @@ def schrijf_zichtbaar(db: Any, job: str, data: dict[str, Any] | None) -> dict[st
     taken = 0
     geheugen = 0
     for b in berichten:
+        # Een lege run ("found nothing new") is geen taak: hij landde elk kwartier als
+        # pending-rij (383 stuks op 10 okt) en verdrong het echte werk. Hij staat in het
+        # geheugen en in de laatste run van het rooster; dat is genoeg.
+        if b.get("leeg"):
+            continue
         try:
             rij = core_task_rij(b)
             rij.setdefault("id", str(uuid4()))

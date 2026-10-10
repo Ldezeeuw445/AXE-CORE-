@@ -357,6 +357,12 @@ export async function maybeSelfHealCheck(): Promise<void> {
     return;
   }
 
+  /* Was hij al kapot, dan is er niets nieuws te melden. Hier stond geen check:
+     de herstelpoging hierboven faalde bij elke start opnieuw en schreef elke keer
+     dezelfde waarschuwing -- 50 keer "Groq is niet meer bereikbaar" in een week,
+     waardoor de meldingen die WEL iets van Luka vroegen erin verdronken (10 okt). */
+  if (conn.lastTest === 'fail') return;
+
   // Primary went down
   conns[id] = { ...conn, lastTest: 'fail' };
   try { localStorage.setItem('axe_llm_connections', JSON.stringify(conns)); } catch { /* */ }

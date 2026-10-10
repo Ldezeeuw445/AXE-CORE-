@@ -14,8 +14,10 @@ Nu:
     claimt 'vps', de Mac 'mac'. Twee workers pakken nooit dezelfde job;
   - elke run staat in `core_job_runs` (uniek per job + gepland moment, dus een
     herhaalde tick maakt geen tweede run);
-  - na MAX_FAILS mislukkingen op rij zet de job zichzelf uit en meldt dat, in plaats
-    van elke minuut dezelfde fout;
+  - na MAX_FAILS mislukkingen op rij gaat de job in RUST: hij blijft aan, maar wacht
+    langer tussen pogingen (30 min, 1 u, 2 u, ... tot 6 u) en meldt dat één keer.
+    Tot 10 okt zette hij zichzelf voorgoed uit -- en zo lagen de NorthSea Engine en
+    Operations-crews drie dagen stil na een storing van een uur in de NorthSea-DB;
   - de agenda rekent vooruit voor alle jobs, ook pg_cron, per app.
 
 Deze module is puur (behalve `Uitvoerder`, die een Supabase-client krijgt) zodat
@@ -44,6 +46,14 @@ UITVOERBAAR = {
 }
 ALLE_SOORTEN = ("prompt", "exec", "webhook", "crew", "observed", "planner", "northsea")
 MAX_FAILS = 5
+RUST_MAX_MIN = 360
+
+
+def rust_minuten(fouten_op_rij: int, max_fails: int = MAX_FAILS) -> int:
+    """Hoe lang een job na een reeks mislukkingen wacht. 0 = gewoon volgens rooster."""
+    if fouten_op_rij < max_fails:
+        return 0
+    return min(RUST_MAX_MIN, 30 * 2 ** (fouten_op_rij - max_fails))
 # Jobs die elk uur of vaker draaien krijgen in de agenda één regel per dag, niet honderd.
 SAMENVOEG_TOT_MIN = 60
 
@@ -154,13 +164,15 @@ HANG_MARGE_S = 120
 
 
 def na_run(status: str, fouten_op_rij: int, max_fails: int = MAX_FAILS) -> tuple[int, bool]:
-    """(nieuwe teller, uitzetten?) na een run. Alleen een geslaagde run zet de teller terug."""
+    """(nieuwe teller, gaat nu in rust?) na een run. Alleen een geslaagde run zet de
+    teller terug. Het tweede deel is alleen waar op het moment dat de rust begint, zodat
+    er één melding komt en niet één per mislukte poging."""
     if status == "ok":
         return 0, False
     if status == "skipped":
         return fouten_op_rij, False
     teller = fouten_op_rij + 1
-    return teller, teller >= max_fails
+    return teller, teller == max_fails
 
 
 def _is_dubbel(fout: Exception) -> bool:
@@ -284,8 +296,11 @@ class Uitvoerder:
                 patch["next_run_at"] = volgende(s["cron_expr"], s.get("timezone") or "UTC", einde).isoformat()
             except (ValueError, KeyError):
                 patch["enabled"], patch["next_run_at"] = False, None
-        if uit:
-            patch["enabled"], patch["next_run_at"] = False, None
+        rust = rust_minuten(teller) if status != "ok" else 0
+        if rust and trigger == "cron" and patch.get("next_run_at"):
+            later = einde + timedelta(minutes=rust)
+            if datetime.fromisoformat(patch["next_run_at"]) < later:
+                patch["next_run_at"] = later.isoformat()
         self.sb().table("core_schedules").update(patch).eq("id", s["id"]).execute()
         if self.meld:
             try:
