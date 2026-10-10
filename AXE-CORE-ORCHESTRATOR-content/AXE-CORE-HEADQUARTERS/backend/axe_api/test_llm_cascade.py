@@ -8,26 +8,37 @@ def setup_function():
     lc.vergeet_alles()
 
 
-def test_zonder_sleutels_is_er_geen_aanbieder(monkeypatch):
+def test_zonder_sleutels_blijft_alleen_de_eigen_modelbox_over_en_de_keten_is_nooit_leeg(monkeypatch):
     for a in lc.AANBIEDERS:
         monkeypatch.delenv(a.sleutel_env, raising=False)
-    assert lc.volgorde() == []
+    assert [a.naam for a in lc.volgorde()] == ["ollama"]
 
 
-def test_volgorde_is_openai_gemini_groq_en_slaat_aanbieders_zonder_sleutel_over(monkeypatch):
+def test_de_modelbox_staat_laatst_en_gebruikt_zijn_eigen_adres_en_geen_tegoed(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("GROQ_API_KEY", "y")
+    monkeypatch.setenv("OLLAMA_HOST", "https://modelbox.example/")
+    namen = [a.naam for a in lc.volgorde()]
+    assert namen[-1] == "ollama"
+    ollama = lc.volgorde()[-1]
+    assert ollama.endpoint() == "https://modelbox.example/v1/chat/completions"
+    assert ollama.min_timeout >= 120   # een koude 8B op CPU is geen 60 seconden werk
+
+
+def test_volgorde_is_openai_gemini_groq_ollama_en_slaat_aanbieders_zonder_sleutel_over(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "x")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setenv("GROQ_API_KEY", "y")
-    assert [a.naam for a in lc.volgorde()] == ["openai", "groq"]
+    assert [a.naam for a in lc.volgorde()] == ["openai", "groq", "ollama"]
 
 
 def test_een_aanbieder_zonder_tegoed_rust_en_de_volgende_komt_aan_de_beurt(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "x")
     monkeypatch.setenv("GROQ_API_KEY", "y")
     lc.laat_rusten("openai", nu=100.0)
-    assert [a.naam for a in lc.volgorde(nu=101.0)] == ["groq"]
+    assert [a.naam for a in lc.volgorde(nu=101.0)] == ["groq", "ollama"]
     # Na de rusttijd mag hij weer.
-    assert [a.naam for a in lc.volgorde(nu=100.0 + lc.RUST_S + 1)] == ["openai", "groq"]
+    assert [a.naam for a in lc.volgorde(nu=100.0 + lc.RUST_S + 1)] == ["openai", "groq", "ollama"]
 
 
 def test_tegoed_op_sleutel_fout_en_limiet_zijn_aanbiedersfouten_een_slecht_verzoek_niet():
@@ -66,7 +77,7 @@ def test_chat_valt_door_naar_de_aanbieder_die_wel_antwoordt(monkeypatch):
     tekst, wie = asyncio.run(lc.chat([{"role": "user", "content": "hoi"}]))
     assert (tekst, wie) == ("klaar", "groq")
     # OpenAI rust nu; Groq is onthouden als de laatste die werkte.
-    assert [a.naam for a in lc.volgorde()] == ["groq"]
+    assert [a.naam for a in lc.volgorde()] == ["groq", "ollama"]
 
 
 def test_chat_meldt_eerlijk_dat_niets_werkt(monkeypatch):
@@ -89,3 +100,33 @@ def test_chat_meldt_eerlijk_dat_niets_werkt(monkeypatch):
         raise AssertionError("had moeten falen")
     except RuntimeError as e:
         assert "openai" in str(e) and "402" in str(e)
+
+
+def test_zijn_alle_betaalde_aanbieders_leeg_dan_antwoordt_de_modelbox(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("GEMINI_API_KEY", "g")
+    monkeypatch.setenv("GROQ_API_KEY", "y")
+    monkeypatch.setenv("OLLAMA_HOST", "https://modelbox.example")
+
+    class Res:
+        def __init__(self, code, tekst, js=None):
+            self.status_code, self.text, self._js = code, tekst, js
+
+        def json(self):
+            return self._js
+
+    antwoorden = {
+        "https://api.openai.com/v1/chat/completions": Res(429, "You have no credits remaining"),
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions": Res(402, "credits are depleted"),
+        "https://api.groq.com/openai/v1/chat/completions": Res(429, "rate limit"),
+        "https://modelbox.example/v1/chat/completions": Res(200, "", {"choices": [{"message": {"content": "van de eigen box"}}]}),
+    }
+
+    class Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, **k): return antwoorden[url]
+
+    monkeypatch.setattr(lc.httpx, "AsyncClient", Client)
+    assert asyncio.run(lc.chat([{"role": "user", "content": "hoi"}])) == ("van de eigen box", "ollama")

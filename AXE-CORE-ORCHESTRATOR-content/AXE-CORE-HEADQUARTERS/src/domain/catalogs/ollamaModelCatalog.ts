@@ -6,61 +6,95 @@ export interface OllamaModelCatalogEntry {
   priority: number;
 }
 
-// These names match the models actually pulled on the Ollama host
-// (`ollama list` on the Hetzner VPS — see infra/README or ARCHITECTURE.md),
-// so the capability router below reaches the right one by exact name. If you
-// pull a new model, add it here with its exact `ollama list` NAME (tag
-// included).
+// These names match the models actually pulled on the Ollama host: the modelbox (Strato, 8 cores, 16 GB,
+// ollama.axecompanion.com), live since 4 Oct 2026. Run `ollama list` there and use the exact NAME, tag
+// included, so the capability router below reaches the right one.
 //
-// Both gemma4 (~7.2GB smallest tag) and llama3.1:8b — with or without a
-// capped context (tried both, live, 2026-08-18) — OOM-kill on this box's
-// 7.7GB RAM; confirmed via dmesg, the ~6.5GB resident cost is the 8B-class
-// model weights themselves, not KV cache. Nothing at the 8B tier stays up
-// here right now. gemma3:4b (3.3GB) is the largest model that reliably does,
-// so it now covers both "fast" and "general reasoning" duty below.
+// Until 10 Oct this list described the old 7.7 GB Hetzner box ("no 8B model stays up", gemma3:4b first).
+// gemma3:4b does not exist on the modelbox, so the default registry offered a model that answers 404.
+// The old names stay at the tail: the Mac mini's own Ollama still has some of them.
 export const OLLAMA_MODEL_CATALOG: OllamaModelCatalogEntry[] = [
   {
-    name: 'gemma3:4b',
-    displayName: 'Gemma 3 4B',
+    name: 'llama3.1:8b',
+    displayName: 'Llama 3.1 8B',
     category: 'general',
-    description: 'Snel, gratis, lokaal — vervangt Gemini voor snelle antwoorden',
+    description: 'Algemeen model voor crews, analyse en gesprek; het model dat de crews standaard krijgen',
     priority: 1,
   },
   {
-    name: 'deepseek-coder:6.7b',
-    displayName: 'DeepSeek-Coder 6.7B',
+    name: 'qwen2.5-coder:7b',
+    displayName: 'Qwen2.5-Coder 7B',
     category: 'code',
-    description: 'Code schrijven, refactors, debugging (primair)',
+    description: 'Code schrijven en repareren, snel (primair voor code)',
     priority: 2,
   },
   {
-    name: 'llama3:latest',
-    displayName: 'Llama 3',
+    name: 'hermes3:8b',
+    displayName: 'Hermes 3 8B',
     category: 'general',
-    description: 'Algemene assistentie',
+    description: 'Gesprek, rollen en agent-achtig werk; Nederlands werkt goed',
     priority: 3,
+  },
+  {
+    name: 'deepseek-coder-v2:16b',
+    displayName: 'DeepSeek-Coder V2 16B',
+    category: 'code',
+    description: 'Zwaardere code en reviews; trager, gebruik het voor de lastige gevallen',
+    priority: 4,
+  },
+  {
+    name: 'qwen2.5-coder:14b',
+    displayName: 'Qwen2.5-Coder 14B',
+    category: 'code',
+    description: 'Code met meer redeneerruimte dan de 7B',
+    priority: 5,
+  },
+  {
+    name: 'llama3.2:3b',
+    displayName: 'Llama 3.2 3B',
+    category: 'lightweight',
+    description: 'Snelle korte antwoorden',
+    priority: 6,
   },
   {
     name: 'mistral:latest',
     displayName: 'Mistral',
     category: 'lightweight',
-    description: 'Lichtgewicht lokale agent',
-    priority: 4,
+    description: 'Lichtgewicht algemeen model',
+    priority: 7,
+  },
+  {
+    name: 'llama3:latest',
+    displayName: 'Llama 3',
+    category: 'general',
+    description: 'Algemene assistentie (ouder dan 3.1)',
+    priority: 8,
+  },
+  {
+    name: 'deepseek-coder:6.7b',
+    displayName: 'DeepSeek-Coder 6.7B',
+    category: 'code',
+    description: 'Code, lichter dan de V2',
+    priority: 9,
+  },
+  {
+    name: 'gemma3:4b',
+    displayName: 'Gemma 3 4B',
+    category: 'general',
+    description: 'Snel en klein; staat op de Mac mini, niet op de modelbox',
+    priority: 10,
   },
 ];
 
 // Per-capability preference order, using the exact pulled model names.
-// The coder leads code; Gemma leads everything else (fast + general
-// reasoning/analysis/privacy, now that no 8B model stays up on this box).
-// Any installed model not named here falls through in place, so this only
-// sharpens routing, never blocks it.
+// Any installed model not named here falls through in place, so this only sharpens routing, never blocks it.
 const OLLAMA_CAPABILITY_PRIORITIES: Record<string, string[]> = {
-  code:      ['deepseek-coder:6.7b', 'gemma3:4b', 'llama3:latest', 'mistral:latest'],
-  analysis:  ['gemma3:4b', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b'],
-  reasoning: ['gemma3:4b', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b'],
-  creative:  ['llama3:latest', 'gemma3:4b', 'mistral:latest', 'deepseek-coder:6.7b'],
-  fast:      ['gemma3:4b', 'mistral:latest', 'llama3:latest', 'deepseek-coder:6.7b'],
-  privacy:   ['gemma3:4b', 'mistral:latest', 'llama3:latest', 'deepseek-coder:6.7b'],
+  code:      ['qwen2.5-coder:7b', 'deepseek-coder-v2:16b', 'qwen2.5-coder:14b', 'deepseek-coder:6.7b', 'llama3.1:8b'],
+  analysis:  ['llama3.1:8b', 'hermes3:8b', 'qwen2.5-coder:14b', 'mistral:latest', 'llama3:latest', 'gemma3:4b'],
+  reasoning: ['llama3.1:8b', 'deepseek-coder-v2:16b', 'hermes3:8b', 'mistral:latest', 'llama3:latest', 'gemma3:4b'],
+  creative:  ['hermes3:8b', 'llama3.1:8b', 'mistral:latest', 'llama3:latest', 'gemma3:4b'],
+  fast:      ['llama3.2:3b', 'gemma3:4b', 'llama3.1:8b', 'mistral:latest', 'llama3:latest'],
+  privacy:   ['llama3.1:8b', 'hermes3:8b', 'llama3.2:3b', 'gemma3:4b', 'mistral:latest'],
 };
 
 export function getDefaultOllamaModelNames(): string[] {

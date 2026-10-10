@@ -5,7 +5,9 @@ Tot 9 okt hadden die drie elk hun eigen "OPENAI_API_KEY of niets". Toen het Open
 van Google ook) bleef `/browser/ai/health` "ready" melden terwijl elke taak meteen met "You have no
 credits remaining" stopte -- een lampje dat groen was voor iets wat niet werkte.
 
-Deze keten probeert de aanbieders in volgorde (OpenAI, Gemini, Groq). Een aanbieder die op tegoed,
+Deze keten probeert de aanbieders in volgorde (OpenAI, Gemini, Groq, en als laatste de eigen modelbox:
+Ollama op Strato). Die laatste heeft geen tegoed dat kan opraken, dus de keten is nooit leeg: een agent
+heeft altijd een model (10 okt, toen OpenAI en Google leeg waren). Een aanbieder die op tegoed,
 sleutel, onbekend model of een limiet struikelt krijgt tien minuten rust en de volgende komt aan de
 beurt; de eerste die antwoordt wordt onthouden. `status()` meet echt (een antwoord van één woord),
 en is wat de gezondheidscontrole laat zien.
@@ -40,9 +42,19 @@ class Aanbieder:
     model_env: str
     model: str
     extra: dict[str, Any] = field(default_factory=dict)
+    #: Een aanbieder zonder abonnement: de modelbox. Hij is er altijd; de sleutel (OLLAMA_PROXY_KEY) is
+    #: optioneel en wordt meegestuurd zodra het slot op de box dicht gaat.
+    keyloos: bool = False
+    #: Een koude 8B op CPU heeft meer dan de gebruikelijke 60 s nodig.
+    min_timeout: float = 0.0
 
     def sleutel(self) -> Optional[str]:
-        return os.getenv(self.sleutel_env) or None
+        return os.getenv(self.sleutel_env) or ("-" if self.keyloos else None)
+
+    def endpoint(self) -> str:
+        if self.keyloos:
+            return os.getenv("OLLAMA_HOST", "https://ollama.axecompanion.com").rstrip("/") + "/v1/chat/completions"
+        return self.url
 
     def gekozen_model(self) -> str:
         return os.getenv(self.model_env, self.model)
@@ -55,6 +67,10 @@ AANBIEDERS: tuple[Aanbieder, ...] = (
     # gpt-oss denkt eerst; zonder "low" gaat de hele tokenbudget op aan redeneren en blijft het antwoord leeg.
     Aanbieder("groq", "https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY", "BROWSER_LLM_GROQ_MODEL",
               "openai/gpt-oss-120b", {"reasoning_effort": "low"}),
+    # De eigen modelbox: geen tegoed om op te raken. Hetzelfde model als de agent-loop en de crews, zodat
+    # er maar één algemeen model in het geheugen staat.
+    Aanbieder("ollama", "", "OLLAMA_PROXY_KEY", "BROWSER_LLM_OLLAMA_MODEL", "llama3.1:8b-16k", {},
+              keyloos=True, min_timeout=180.0),
 )
 
 _rust_tot: dict[str, float] = {}
@@ -100,8 +116,8 @@ async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60
     for a in volgorde():
         body: dict[str, Any] = {"model": a.gekozen_model(), "messages": messages, "max_tokens": max_tokens, **a.extra}
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                res = await client.post(a.url, headers={"Authorization": f"Bearer {a.sleutel()}"}, json=body)
+            async with httpx.AsyncClient(timeout=max(timeout, a.min_timeout)) as client:
+                res = await client.post(a.endpoint(), headers={"Authorization": f"Bearer {a.sleutel()}"}, json=body)
         except httpx.HTTPError as e:
             laat_rusten(a.naam)
             fouten.append(f"{a.naam}: {e.__class__.__name__}")
@@ -129,9 +145,9 @@ async def status() -> dict[str, Any]:
             uit["providers"][a.naam] = "no key"
             continue
         try:
-            async with httpx.AsyncClient(timeout=20) as client:
+            async with httpx.AsyncClient(timeout=max(20.0, min(a.min_timeout, 90.0))) as client:
                 res = await client.post(
-                    a.url, headers={"Authorization": f"Bearer {a.sleutel()}"},
+                    a.endpoint(), headers={"Authorization": f"Bearer {a.sleutel()}"},
                     json={"model": a.gekozen_model(), "max_tokens": 64, "messages": [{"role": "user", "content": "Say ok"}], **a.extra},
                 )
             if res.status_code == 200 and ((res.json().get("choices") or [{}])[0].get("message") or {}).get("content", "").strip():
