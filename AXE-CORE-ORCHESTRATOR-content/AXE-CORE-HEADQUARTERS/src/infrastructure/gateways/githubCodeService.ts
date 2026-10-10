@@ -323,6 +323,22 @@ export async function mergePullRequest(
   };
 }
 
+/** State of one pull request, for the GIT_PR_STATUS tool. */
+export async function getPullRequest(
+  prNumber: number,
+  repo?: RepoConfig,
+): Promise<{ number: number; state: string; merged: boolean; mergeable: boolean | null; title: string; htmlUrl: string }> {
+  const r = requireRepo(repo);
+  const res = await fetch(`https://api.github.com/repos/${r.owner}/${r.repo}/pulls/${prNumber}`, { headers: ghHeaders(r.token) });
+  if (!res.ok) throw new Error(`GitHub PR read failed (${res.status}): ${await res.text()}`);
+  const d = await res.json();
+  return {
+    number: d.number as number, state: String(d.state), merged: !!d.merged,
+    mergeable: typeof d.mergeable === 'boolean' ? d.mergeable : null,
+    title: String(d.title ?? ''), htmlUrl: String(d.html_url ?? ''),
+  };
+}
+
 /** Check whether a branch exists on the remote. */
 export async function branchExists(branch: string, repo?: RepoConfig): Promise<boolean> {
   const r = requireRepo(repo);

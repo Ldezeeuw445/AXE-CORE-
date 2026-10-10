@@ -30,6 +30,12 @@ import {
   osintAll, osintLayer, crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { repoMetToken } from '@/application/tools/gitViaInstellingen';
+import {
+  readFile as ghDirectRead, writeFile as ghDirectWrite, createBranch as ghDirectBranch,
+  createPullRequest as ghDirectPr, mergePullRequest as ghDirectMerge, getPullRequest as ghDirectPrStatus,
+  isGitHubConfigured,
+} from '@/infrastructure/gateways/githubCodeService';
 import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
 import { writeReflection } from '@/infrastructure/persistence/reflectionService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
@@ -169,11 +175,14 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   },
   {
     ...catalogEntry('git_read'),
-    available: () => isAxeApiConfigured,
+    available: () => isAxeApiConfigured || isGitHubConfigured(),
     run: async (raw) => {
       const args = parseJsonArgs<GitReadArgs>(raw, ['repo', 'path']);
       if (!args) return 'GIT_READ failed: malformed arguments.';
-      const file = await ghGetFile(args.repo, args.path, args.branch || 'orchestrator');
+      const cfg = repoMetToken(args.repo);
+      const file = cfg
+        ? await ghDirectRead(args.path, cfg, args.branch || 'orchestrator')
+        : await ghGetFile(args.repo, args.path, args.branch || 'orchestrator');
       return `GIT_READ ${args.repo}/${args.path}:\n${file.content}`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
@@ -234,7 +243,7 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   },
   {
     ...catalogEntry('git_write'),
-    available: () => isAxeApiConfigured,
+    available: () => isAxeApiConfigured || isGitHubConfigured(),
     run: async (raw, ctx) => {
       const args = parseJsonArgs<GitWriteArgs>(raw, ['repo', 'path', 'content', 'message']);
       if (!args) return 'GIT_WRITE failed: malformed arguments.';
@@ -244,6 +253,13 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       }
       const approved = await ctx.requestApproval('git_write', `AXE wants to commit to ${args.repo}`, `${args.path}\n${args.message}`);
       if (!approved) return NOT_APPROVED(`GIT_WRITE to "${args.path}"`, 'commit');
+      const cfg = repoMetToken(args.repo);
+      if (cfg) {
+        // Een bestaand bestand heeft zijn huidige sha nodig, een nieuw bestand niet.
+        const bestaand = await ghDirectRead(args.path, cfg, branch).then(f => f.sha, () => '');
+        const r = await ghDirectWrite(args.path, args.content, bestaand, args.message, cfg, branch);
+        return `GIT_WRITE committed -> ${args.repo}/${args.path} (${(r.commitSha ?? '').slice(0, 7) || 'ok'}) on ${branch}`;
+      }
       const r = await ghUpdateFile(args.repo, args.path, args.content, args.message, branch);
       return `GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0, 7)}) on ${branch}`;
     },
@@ -251,10 +267,15 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   },
   {
     ...catalogEntry('git_branch'),
-    available: () => isAxeApiConfigured,
+    available: () => isAxeApiConfigured || isGitHubConfigured(),
     run: async (raw) => {
       const args = parseJsonArgs<GitBranchArgs>(raw, ['repo', 'branch']);
       if (!args) return 'GIT_BRANCH failed.';
+      const cfg = repoMetToken(args.repo);
+      if (cfg) {
+        await ghDirectBranch(args.branch, { ...cfg, branch: args.from || 'orchestrator' });
+        return `GIT_BRANCH created -> ${args.repo}@${args.branch}`;
+      }
       const r = await ghCreateBranch(args.repo, args.branch, args.from || 'orchestrator');
       return `GIT_BRANCH created -> ${args.repo}@${r.branch}`;
     },
@@ -262,10 +283,15 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   },
   {
     ...catalogEntry('git_pr'),
-    available: () => isAxeApiConfigured,
+    available: () => isAxeApiConfigured || isGitHubConfigured(),
     run: async (raw) => {
       const args = parseJsonArgs<GitPrArgs>(raw, ['repo', 'title', 'head']);
       if (!args) return 'GIT_PR failed.';
+      const cfg = repoMetToken(args.repo);
+      if (cfg) {
+        const r = await ghDirectPr(args.title, args.body || '', args.head, cfg, args.base || 'orchestrator', false);
+        return `GIT_PR opened -> #${r.number} ${r.htmlUrl}`;
+      }
       const r = await ghCreatePr(args.repo, args.title, args.body || '', args.head, args.base || 'orchestrator');
       return `GIT_PR opened -> #${r.number} ${r.pr_url}`;
     },
@@ -273,25 +299,27 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   },
   {
     ...catalogEntry('git_pr_status'),
-    available: () => isAxeApiConfigured,
+    available: () => isAxeApiConfigured || isGitHubConfigured(),
     run: async (raw) => {
       const ref = parsePrRef(raw);
       if (!ref) return 'GIT_PR_STATUS failed.';
-      const pr = await ghGetPr(ref.repo, ref.number);
+      const cfg = repoMetToken(ref.repo);
+      const pr = cfg ? await ghDirectPrStatus(ref.number, cfg) : await ghGetPr(ref.repo, ref.number);
       return `GIT_PR_STATUS #${pr.number} state:${pr.state} merged:${pr.merged}`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
   },
   {
     ...catalogEntry('git_pr_merge'),
-    available: () => isAxeApiConfigured,
+    available: () => isAxeApiConfigured || isGitHubConfigured(),
     run: async (raw, ctx) => {
       const ref = parsePrRef(raw);
       if (!ref) return 'GIT_PR_MERGE failed.';
       const method = 'merge' as const;
       const approved = await ctx.requestApproval('git_pr_merge', `Merge PR #${ref.number}`, ref.repo);
       if (!approved) return NOT_APPROVED(`GIT_PR_MERGE of #${ref.number}`, 'merge');
-      const r = await ghMergePr(ref.repo, ref.number, method);
+      const cfg = repoMetToken(ref.repo);
+      const r = cfg ? await ghDirectMerge(ref.number, cfg, method) : await ghMergePr(ref.repo, ref.number, method);
       return r.merged ? `GIT_PR_MERGE succeeded` : `GIT_PR_MERGE did not merge`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
