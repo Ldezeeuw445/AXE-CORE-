@@ -45,6 +45,15 @@ def is_notitie(taak: dict[str, Any]) -> bool:
     return isinstance(meta, dict) and meta.get("source") == "cron" and not meta.get("goedkeuring") == "nodig"
 
 
+def _planner_draait(taak: dict[str, Any], moment: datetime) -> bool:
+    """De planner op de Mac claimt zonder lease: 'running' door planner-mac, recent
+    bijgewerkt, telt als werkend (een abonnement-run duurt hooguit ~10 min)."""
+    if taak.get("worker_id") != "planner-mac":
+        return False
+    t = _tijd(taak.get("updated_at")) or _tijd(taak.get("created_at"))
+    return bool(t and moment - t < timedelta(minutes=20))
+
+
 def _klok(waarde: Any) -> str:
     t = _tijd(waarde)
     if not t:
@@ -211,7 +220,8 @@ def agent_status(
         return next((m for m in missies if m.get("id") == taak["mission_id"]), None)
 
     bezig_rooster = [r for r in mijn_routines if r["running"]]
-    levend = [t for t in mijn_taken if t.get("status") in BEZIG and _lease_leeft(t, moment)]
+    levend = [t for t in mijn_taken if t.get("status") in BEZIG
+              and (_lease_leeft(t, moment) or _planner_draait(t, moment))]
     if bezig_rooster and not levend:
         r = bezig_rooster[0]
         uit = resultaat("WORKING", f"Running its routine: {r['name']}.")

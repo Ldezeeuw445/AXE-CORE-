@@ -223,3 +223,9 @@ def test_samenvatting_breekt_niet_op_een_getal():
     r = {"last_result": '{"status": "ok", "selected": 3, "results": [{}], "sent": 0, "approved": 0}'}
     assert routine_samenvatting(r) == "reviewed 3 deals, 0 approved, 0 sent"
     assert routine_samenvatting({"last_result": '{"selected": {"x": 1}, "results": []}'})
+
+
+def test_planner_run_op_de_mac_is_working():
+    t = {"id": "p", "assignee": "code-agent", "status": "running", "worker_id": "planner-mac",
+         "updated_at": (NU - timedelta(minutes=3)).isoformat(), "title": "Build next step: Trading OS"}
+    assert agent_status("developer", [t], [], None, NU)["status"] == "WORKING"
