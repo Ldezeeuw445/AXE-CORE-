@@ -31,6 +31,7 @@ import {
   type SearchResult,
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
+import { motorNaam as motorMetAccount } from '@/domain/motorNaam';
 import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
 import { openLeerbeurt, metGeheugen, sluitLeerbeurt } from '@/application/agents/abonnementLeerlus';
 import { classifyCodeTaskComplexity } from '@/domain/codeTaskComplexity';
@@ -615,7 +616,7 @@ export default function CodeEditorPage() {
   // op een heenreis naar de host, en kreeg pas dán te horen dat hij niet
   // geïnstalleerd is. Aanwezigheid is hier bekend vóór je klikt, dus hoort het
   // op de knop te staan.
-  const [motoren, setMotoren] = useState<Record<string, { label: string; aanwezig: boolean; login: string }> | null>(null);
+  const [motoren, setMotoren] = useState<Record<string, { label: string; aanwezig: boolean; login: string; ingelogd?: boolean | null; account?: string | null }> | null>(null);
   const [claudeRepo, setClaudeRepo] = useState<string>(() => localStorage.getItem('axe_code_claude_repo') ?? '');
   // Stijgt na elke geslaagde CLI-run, zodat de commitbalk zichzelf ververst.
   // Handmatig moeten verversen om te zien of de agent iets deed, leest als
@@ -1309,14 +1310,14 @@ export default function CodeEditorPage() {
     const ontbreekt = cli && m ? !m.aanwezig : false;
     return {
       id,
-      label: id === 'native' ? 'AXE Native' : id === 'openhands' ? 'OpenHands' : MOTOR_LABEL[id],
+      label: id === 'native' ? 'AXE Native' : id === 'openhands' ? 'OpenHands' : motorMetAccount(MOTOR_LABEL[id], m),
       icoon: MOTOR_ICOON[id],
       kleur: MOTOR_KLEUR[id],
       uit: Boolean(eigenaar),
       uitleg: eigenaar
-        ? `${MOTOR_LABEL[id]} — hoort bij ${eigenaar}. Verdeel het anders in Instellingen → Motoren per agent.`
+        ? `${motorMetAccount(MOTOR_LABEL[id], m)} — hoort bij ${eigenaar}. Verdeel het anders in Instellingen → Motoren per agent.`
         : ontbreekt
-          ? `${MOTOR_LABEL[id]} staat niet op deze host — installeer en log in met \`${m?.login ?? ''}\`.`
+          ? `${motorMetAccount(MOTOR_LABEL[id], m)} staat niet op deze host — installeer en log in met \`${m?.login ?? ''}\`.`
           : cli?.uitleg ?? (id === 'native' ? 'AXE Native — de lus in de app, op je API-sleutels' : 'OpenHands — de agent in zijn sandbox op de VPS'),
     };
   });

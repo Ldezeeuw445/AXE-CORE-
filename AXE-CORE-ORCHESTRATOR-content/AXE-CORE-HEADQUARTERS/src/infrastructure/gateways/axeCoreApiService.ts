@@ -1025,7 +1025,7 @@ export async function claudeRepos(): Promise<{
   repos: Record<string, ClaudeRepoInfo>;
   permission_modes: ClaudePermissionMode[];
   /** Welke CLI's op de host staan. Aanwezigheid, niet of je ingelogd bent. */
-  engines?: Record<string, { label: string; aanwezig: boolean; login: string; alleen_lezen?: boolean }>;
+  engines?: Record<string, { label: string; aanwezig: boolean; login: string; alleen_lezen?: boolean; ingelogd?: boolean | null; account?: string | null }>;
   usage?: Record<string, AgentSubscriptionUsage>;
 }> {
   return call('GET', '/claude/repos');

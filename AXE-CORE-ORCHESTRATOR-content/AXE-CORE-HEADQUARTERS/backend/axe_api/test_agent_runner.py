@@ -273,3 +273,57 @@ class TestModelVlag:
         assert motor["cmd"] is a.ENGINES["codex"]["cmd"]
         assert motor["extra_env"]["CODEX_HOME"].endswith(".codex-derde")
         assert motor["bin_default"] == "codex"
+
+
+# ── Welk account hoort bij welke motor (10 okt) ─────────────────────────────────────────────────────────
+import base64 as _b64
+import json as _json
+
+
+def _jwt(claims: dict) -> str:
+    kop = _b64.urlsafe_b64encode(b'{"alg":"none"}').decode().rstrip("=")
+    lading = _b64.urlsafe_b64encode(_json.dumps(claims).encode()).decode().rstrip("=")
+    return f"{kop}.{lading}.x"
+
+
+def test_codex_account_komt_uit_het_id_token_en_nooit_het_token_zelf(tmp_path):
+    import agent_runner as ar
+    (tmp_path / "auth.json").write_text(_json.dumps({"tokens": {"id_token": _jwt({"email": "a@b.nl"}), "access_token": "geheim"}}))
+    uit = ar._codex_account({"extra_env": {"CODEX_HOME": str(tmp_path)}})
+    assert uit == {"ingelogd": True, "account": "a@b.nl"}
+    assert "geheim" not in str(uit)
+
+
+def test_codex_zonder_auth_json_is_niet_ingelogd(tmp_path):
+    import agent_runner as ar
+    assert ar._codex_account({"extra_env": {"CODEX_HOME": str(tmp_path)}}) == {"ingelogd": False, "account": None}
+
+
+def test_label_noemt_het_account_in_plaats_van_een_volgnummer():
+    import agent_runner as ar
+    m = ar.ENGINES["claude2"]
+    assert ar._motor_label(m, {"ingelogd": True, "account": "luka@x.nl"}, True) == "Claude · luka@x.nl"
+    assert ar._motor_label(m, {"ingelogd": False, "account": None}, True) == "Claude Code 2 (not logged in)"
+    assert ar._motor_label(m, {"ingelogd": None, "account": None}, False) == "Claude Code 2"
+
+
+def test_claude_account_uit_auth_status_en_een_minuut_onthouden(monkeypatch):
+    import agent_runner as ar
+    ar.vergeet_accounts()
+    aanroepen = []
+
+    def nep(cmd, motor, timeout=15.0):
+        aanroepen.append(cmd)
+        return 'tekst voor {"loggedIn": true, "authMethod": "claude.ai", "email": "me@x.nl"} tekst na'
+    monkeypatch.setattr(ar, "_draai_status", nep)
+    m = ar.ENGINES["claude"]
+    assert ar._account_van("claude", m, "/usr/bin/claude") == {"ingelogd": True, "account": "me@x.nl"}
+    ar._account_van("claude", m, "/usr/bin/claude")
+    assert len(aanroepen) == 1 and aanroepen[0][1:] == ["auth", "status"]
+    ar.vergeet_accounts()
+
+
+def test_zonder_binary_is_niets_vast_te_stellen():
+    import agent_runner as ar
+    ar.vergeet_accounts()
+    assert ar._account_van("codex", ar.ENGINES["codex"], None) == {"ingelogd": None, "account": None}

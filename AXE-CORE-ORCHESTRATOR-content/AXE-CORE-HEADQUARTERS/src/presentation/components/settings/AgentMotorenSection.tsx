@@ -22,6 +22,7 @@ import {
   ledgerList,
   type PlannerStatus, type AgentSubscriptionUsage, type LedgerEntry,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { motorNaam, type MotorStatus } from '@/domain/motorNaam';
 import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
@@ -44,6 +45,7 @@ const WAARVOOR: Record<HoofdAgent, string> = {
 export function AgentMotorenSection() {
   const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
   const [aanwezig, setAanwezig] = useState<Record<string, boolean> | null>(null);
+  const [motorAccounts, setMotorAccounts] = useState<Record<string, MotorStatus>>({});
   const [modellen, setModellen] = useState<MotorModellen>(() => leesModellen());
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   const [abonnementGebruik, setAbonnementGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
@@ -110,6 +112,7 @@ export function AgentMotorenSection() {
         .then(r => {
           if (!alive) return;
           setAanwezig(Object.fromEntries(Object.entries(r.engines ?? {}).map(([k, v]) => [k, v.aanwezig])));
+          setMotorAccounts(Object.fromEntries(Object.entries(r.engines ?? {}).map(([k, v]) => [k, { account: v.account, ingelogd: v.ingelogd }])));
           setAbonnementGebruik(r.usage ?? {});
         })
         .catch(() => { if (alive) setAanwezig(null); });
@@ -213,7 +216,7 @@ export function AgentMotorenSection() {
               stand={motorStatus(motor)}
               keuze={
                 <select value={motor} onChange={e => kies(agent, e.target.value as HoofdMotor)} aria-label={`Engine for ${AGENT_LABEL[agent]}`}>
-                  {opties.map(m => <option key={m} value={m}>{MOTOR_LABEL[m]}</option>)}
+                  {opties.map(m => <option key={m} value={m}>{motorNaam(MOTOR_LABEL[m], motorAccounts[m])}</option>)}
                 </select>
               }
               stats={[
@@ -312,7 +315,7 @@ export function AgentMotorenSection() {
           return (
             <StatusKaart
               key={motor}
-              naam={MOTOR_LABEL[motor]}
+              naam={motorNaam(MOTOR_LABEL[motor], motorAccounts[motor])}
               accent="var(--text-secondary)"
               rol={door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}
               stand={motorStatus(motor)}

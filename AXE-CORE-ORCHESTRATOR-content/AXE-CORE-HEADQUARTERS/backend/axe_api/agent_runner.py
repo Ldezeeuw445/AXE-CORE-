@@ -45,6 +45,7 @@ in. Net als `bypassPermissions` bij Claude: een onbewaakte run die mag bewerken
 die iemand in een verzoek kan zetten.
 """
 from __future__ import annotations
+import base64
 import json
 import logging
 import os
@@ -874,18 +875,100 @@ def repo_status() -> dict:
     return out
 
 
-def engine_status() -> dict:
-    """Welke motoren op deze host werkelijk aanwezig zijn.
+# Op welk account is een motor ingelogd? Het scherm noemde ze "Claude 2", "Claude 3": drie abonnementen die je
+# alleen uit elkaar houdt door je te herinneren in welke map welke login zat. Nu staat het e-mailadres erbij.
+# Lokaal uitgelezen (een `auth status`, geen modelaanroep, dus geen sessie van je abonnement), vijf minuten onthouden.
+_ACCOUNT_TTL_S = 300.0
+_ACCOUNT_CACHE: dict[str, tuple[float, dict]] = {}
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 
-    Alleen of het commando bestaat — niet of je ingelogd bent. Dat laatste kost
-    een echte aanroep, en een statuspaneel hoort geen sessie te verbruiken.
+
+def _draai_status(cmd: list[str], motor: dict, timeout: float = 15.0) -> str:
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                           env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")))
+        return (r.stdout or "") + (r.stderr or "")
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _codex_account(motor: dict) -> dict:
+    """De e-mail uit het id_token in auth.json (alleen de claim, nooit het token zelf)."""
+    thuis = (motor.get("extra_env") or {}).get("CODEX_HOME") or os.path.expanduser("~/.codex")
+    try:
+        with open(os.path.join(thuis, "auth.json")) as f:
+            tokens = (json.load(f).get("tokens") or {})
+        jwt = tokens.get("id_token") or ""
+        if not tokens.get("access_token") and not jwt:
+            return {"ingelogd": False, "account": None}
+        deel = jwt.split(".")[1] if jwt.count(".") >= 2 else ""
+        claims = json.loads(base64.urlsafe_b64decode(deel + "=" * (-len(deel) % 4))) if deel else {}
+        return {"ingelogd": True, "account": claims.get("email") or None}
+    except (OSError, ValueError, IndexError):
+        return {"ingelogd": False, "account": None}
+
+
+def _account_van(naam: str, motor: dict, binary: str | None) -> dict:
+    """{"ingelogd": bool | None, "account": e-mail | None}; None = niet vast te stellen."""
+    if not binary:
+        return {"ingelogd": None, "account": None}
+    nu = time.monotonic()
+    hit = _ACCOUNT_CACHE.get(naam)
+    if hit and nu - hit[0] < _ACCOUNT_TTL_S:
+        return hit[1]
+    if naam.startswith("claude"):
+        tekst = _draai_status([binary, "auth", "status"], motor)
+        try:
+            d = json.loads(tekst[tekst.index("{"):tekst.rindex("}") + 1])
+            uit = {"ingelogd": bool(d.get("loggedIn")), "account": d.get("email") or None}
+        except ValueError:
+            uit = {"ingelogd": None, "account": None}
+    elif naam.startswith("codex"):
+        uit = _codex_account(motor)
+    else:  # cursor
+        tekst = _draai_status([binary, "status"], motor)
+        mail = _EMAIL_RE.search(tekst)
+        uit = {"ingelogd": bool(mail) or ("logged in" in tekst.lower() and "not logged in" not in tekst.lower()),
+               "account": mail.group(0) if mail else None}
+        if not tekst.strip():
+            uit = {"ingelogd": None, "account": None}
+    _ACCOUNT_CACHE[naam] = (nu, uit)
+    return uit
+
+
+def vergeet_accounts() -> None:
+    """Na een nieuwe login, en voor tests."""
+    _ACCOUNT_CACHE.clear()
+
+
+def _motor_label(m: dict, account: dict, aanwezig: bool) -> str:
+    """"Claude · naam@mail.nl" zodra bekend; zonder login zegt het dat, met de vaste naam erbij."""
+    familie = m["label"].split(" ")[0]
+    if account.get("account"):
+        return f"{familie} · {account['account']}"
+    if aanwezig and account.get("ingelogd") is False:
+        return f"{m['label']} (not logged in)"
+    return m["label"]
+
+
+def engine_status() -> dict:
+    """Welke motoren er zijn, en op welk account ze ingelogd zijn.
+
+    Aanwezigheid is of het commando bestaat. De login komt uit `auth status` (Claude), `auth.json` (Codex) of
+    `status` (Cursor): lokaal, zonder modelaanroep, dus zonder sessie van je abonnement te verbruiken.
     """
-    return {
-        naam: {"label": m["label"], "aanwezig": _binary(m) is not None, "login": m["login"],
-               # Zodat het scherm kan zeggen waarom een motor niet in de chat kan.
-               "alleen_lezen": m.get("alleen_lezen", False)}
-        for naam, m in ENGINES.items()
-    }
+    uit = {}
+    for naam, m in ENGINES.items():
+        binary = _binary(m)
+        account = _account_van(naam, m, binary)
+        uit[naam] = {
+            "label": _motor_label(m, account, binary is not None),
+            "aanwezig": binary is not None, "login": m["login"],
+            "ingelogd": account["ingelogd"], "account": account["account"],
+            # Zodat het scherm kan zeggen waarom een motor niet in de chat kan.
+            "alleen_lezen": m.get("alleen_lezen", False),
+        }
+    return uit
 
 
 def cli_available(engine: str = DEFAULT_ENGINE) -> bool:
