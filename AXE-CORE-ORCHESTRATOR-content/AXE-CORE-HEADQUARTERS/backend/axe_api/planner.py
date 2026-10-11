@@ -106,6 +106,83 @@ def is_planantwoord(tekst: Optional[str]) -> bool:
         return False
 
 
+# ── Uitvoeren alleen op een CLI die echt ingelogd is ────────────────────────
+#
+# Gemeten 11 oktober: de Code Agent stond in de planner-staat op "sleutels", een
+# chatmodel zonder repo of gereedschap. Elke "Continue: Build next step" kwam
+# terug als een keurig verslag over code die het model nooit zag -- en werd als
+# 'completed' weggeschreven. Tegelijk faalde de echte bouwtaak op Cursor (een
+# onbetaalde factuur) en AXE Core op Claude (OAuth verlopen), terwijl claude2-4
+# en codex op dezelfde Mac gewoon ingelogd waren.
+#
+# Dus: een taak voert alleen uit op een abonnement-CLI. Kan de eigen motor niet,
+# dan eerst een ander account van dezelfde familie, dan een abonnement dat bij
+# geen andere agent hoort (één abonnement per agent, Luka 13 sep). AXE Algo valt
+# nooit terug op een abonnement: trading gaat nooit via subscriptions. En een
+# account dat stuk is, is geen taak maar één melding aan Luka.
+ACCOUNT_RUST_S = int(os.environ.get("AXE_PLANNER_ACCOUNT_RUST_S", str(6 * 3600)))
+ZONDER_TERUGVAL = ("axe-algo",)
+_ACCOUNTFOUT = (
+    (re.compile(r"unpaid invoice|payment required|billing|insufficient (credits|balance)", re.I),
+     "betaling nodig (onbetaalde factuur of geen tegoed)"),
+    (re.compile(r"oauth session expired|could not be refreshed|not logged in|please (log|sign) in|"
+                r"login required|failed to authenticate|authentication (failed|required)|invalid_grant", re.I),
+     "login verlopen"),
+)
+
+
+def account_fout(tekst: Optional[str]) -> Optional[str]:
+    """De reden als deze fout over het ACCOUNT gaat (niet over de taak), anders None."""
+    for patroon, reden in _ACCOUNTFOUT:
+        if patroon.search(tekst or ""):
+            return reden
+    return None
+
+
+def familie(motor: str) -> str:
+    return re.sub(r"\d+$", "", motor)
+
+
+def motor_reden(staat: dict, motor: str, engines: dict, nu: datetime) -> Optional[str]:
+    """None als deze motor nu een taak mag draaien, anders waarom niet."""
+    if motor not in ABONNEMENTEN:
+        return "geen CLI: een chatmodel ziet de repo niet"
+    e = engines.get(motor) or {}
+    if not e.get("aanwezig"):
+        return "niet geïnstalleerd"
+    if e.get("ingelogd") is False:
+        return "niet ingelogd"
+    kapot = (staat.get("account_kapot") or {}).get(motor)
+    if kapot:
+        try:
+            if nu < datetime.fromisoformat(kapot["tot"]):
+                return kapot.get("reden") or "account werkt niet"
+        except (KeyError, ValueError):
+            pass
+    if koelt(staat, motor, nu):
+        return f"limiet tot {staat['koeling'][motor]}"
+    if budget_over(staat, motor, nu.strftime("%Y-%m-%d")) <= 0:
+        return f"dagbudget van {DAGBUDGET} runs op"
+    return None
+
+
+def kies_motor(staat: dict, agent: str, gewenst: str, motoren: dict, engines: dict,
+               nu: datetime) -> tuple[Optional[str], dict]:
+    """(motor, {motor: reden} van wat afviel). None = geen enkele bruikbare CLI."""
+    bezet = {m for a, m in motoren.items() if a != agent}
+    kandidaten = [gewenst]
+    if agent not in ZONDER_TERUGVAL:
+        kandidaten += [m for m in ABONNEMENTEN if familie(m) == familie(gewenst) and m != gewenst and m not in bezet]
+        kandidaten += [m for m in ABONNEMENTEN if m not in kandidaten and m not in bezet]
+    redenen: dict[str, str] = {}
+    for m in kandidaten:
+        reden = motor_reden(staat, m, engines, nu)
+        if reden is None:
+            return m, redenen
+        redenen[m] = reden
+    return None, redenen
+
+
 def plan_motor_voor(motor: str) -> str:
     """Welke motor het BEDENKEN doet voor een agent die op `motor` draait."""
     return motor if PLAN_MOTOR == "agent" else PLAN_MOTOR
@@ -361,11 +438,21 @@ def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
     for t in gevraagd:
         if not heeft_echte_volgende_stap(t):
             continue
-        sleutel = f"vervolg:{t.get('id') or t.get('title')}"
-        if sleutel in gezien:
+        meta = t.get("metadata") or {}
+        # De bouwlus zet zelf de volgende stap klaar; een "Continue" ernaast
+        # werd een tweede, lege taak voor hetzelfde werk.
+        if meta.get("oorsprong_bouw") == "ja":
+            continue
+        # Faalde hij op het account (login, factuur), dan lost een vervolgtaak
+        # niets op: dat wordt één melding (zie Planner._meld_accounts).
+        if account_fout(str((t.get("error") or {}).get("message") or "")):
+            continue
+        titel = str(t.get("title") or "asked work").strip()
+        sleutel = f"vervolg:{t.get('id') or titel}"
+        if sleutel in gezien or f"titel:{titel.lower()}" in gezien:
             continue
         gezien.add(sleutel)
-        titel = str(t.get("title") or "asked work").strip()
+        gezien.add(f"titel:{titel.lower()}")
         uit.append({
             "titel": f"Continue: {titel}"[:120],
             "doel": f"Continue the work Luka asked for: {titel}"[:1200],
@@ -559,12 +646,66 @@ class Planner:
         tel_gebruik(staat, motor, vandaag)
         uit = self.run_agent(repo, prompt, modus, PLANNER_RUN_S, motor)
         if uit.get("status") == "ok":
+            (staat.get("account_kapot") or {}).pop(motor, None)
             return str(uit.get("result") or ""), ""
         fout = str(uit.get("error") or uit.get("result") or "onbekende fout")
         tot = limiet_tot(fout, nu)
         if tot:
             staat.setdefault("koeling", {})[motor] = tot.isoformat()
+        reden = account_fout(fout)
+        if reden:
+            vorig = (staat.get("account_kapot") or {}).get(motor) or {}
+            staat.setdefault("account_kapot", {})[motor] = {
+                "reden": reden, "fout": fout[-300:],
+                "tot": (nu + timedelta(seconds=ACCOUNT_RUST_S)).isoformat(),
+                # Eén melding per kapotte periode, niet één per ronde.
+                "gemeld": bool(vorig.get("gemeld")) and vorig.get("reden") == reden,
+            }
         return None, fout[-400:]
+
+    def _engines(self) -> dict:
+        try:
+            from agent_runner import engine_status
+            return engine_status()
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: motorstatus lezen faalde: %s", e)
+            return {}
+
+    def _meld_accounts(self, staat: dict, engines: dict) -> list[str]:
+        """Eén core_notifications-rij per account dat net stuk ging. Geeft de meldingen terug."""
+        gemeld = []
+        for motor, k in (staat.get("account_kapot") or {}).items():
+            if k.get("gemeld"):
+                continue
+            e = engines.get(motor) or {}
+            wie = e.get("label") or motor
+            actie = ("pay the open invoice with the provider" if k.get("reden", "").startswith("betaling")
+                     else f"log in again on the Mac mini: {e.get('login') or motor + ' login'}")
+            reden = "payment needed" if k.get("reden", "").startswith("betaling") else "login expired"
+            tekst = (f"{wie} stopped working for the agents ({reden}). They switch to another logged-in "
+                     f"account where allowed. Fix: {actie}.")
+            try:
+                self.sb().table("core_notifications").insert({"type": "error", "message": tekst[:1900]}).execute()
+                k["gemeld"] = True
+                gemeld.append(tekst)
+            except Exception as e2:  # noqa: BLE001
+                log.warning("planner: accountmelding faalde: %s", e2)
+        return gemeld
+
+    def _bewijs(self, repo: str) -> dict:
+        """Wat er in de repo echt veranderde: de diff, niet het verhaal van het model."""
+        pad = (self.repos() or {}).get(repo)
+        if not pad:
+            return {"repo": repo, "leesbaar": False}
+        try:
+            stat = subprocess.run(["git", "-C", pad, "diff", "--stat", "HEAD"],
+                                  capture_output=True, text=True, timeout=20).stdout.strip()
+            nieuw = subprocess.run(["git", "-C", pad, "ls-files", "--others", "--exclude-standard"],
+                                   capture_output=True, text=True, timeout=20).stdout.split()
+        except Exception as e:  # noqa: BLE001
+            return {"repo": repo, "leesbaar": False, "fout": str(e)[:200]}
+        return {"repo": repo, "leesbaar": True, "diffstat": stat[-1500:], "nieuwe_bestanden": nieuw[:50],
+                "veranderd": bool(stat or nieuw)}
 
     # schrijven -------------------------------------------------------------
     def _maak_taak(self, agent: str, motor: str, v: dict) -> Optional[dict]:
@@ -615,13 +756,29 @@ class Planner:
     def _claim(self, taak_id: str) -> bool:
         rijen = (self.sb().table("core_tasks")
                  .update({"status": "running", "worker_id": "planner-mac",
-                          "started_at": datetime.now(timezone.utc).isoformat()})
+                          "started_at": datetime.now(timezone.utc).isoformat(),
+                          # Zonder lease ziet claim_next_core_task een 'running'-taak als
+                          # verweesd: de VPS-worker pakte hem binnen een minuut over en
+                          # zette er "No handler for planner" op (10-11 okt). Drie runs
+                          # (de accountterugval) plus marge.
+                          "lease_expires_at": (datetime.now(timezone.utc)
+                                               + timedelta(seconds=3 * PLANNER_RUN_S + 300)).isoformat()})
                  .eq("id", taak_id).eq("status", "pending").eq("capability", "planner")
                  .execute().data)
         return bool(rijen)
 
-    def _sluit(self, taak: dict, tekst: Optional[str], fout: str) -> None:
+    def _sluit(self, taak: dict, tekst: Optional[str], fout: str,
+               motor: Optional[str] = None, bewijs: Optional[dict] = None) -> None:
         meta = dict(taak.get("metadata") or {})
+        if motor:
+            meta["motor_gebruikt"] = motor
+        if bewijs is not None:
+            meta["bewijs"] = bewijs
+            if bewijs.get("leesbaar") and not bewijs.get("veranderd"):
+                # Eerlijk in de lijst: het model zegt misschien dat het bouwde,
+                # de repo zegt van niet.
+                meta["geen_wijziging"] = True
+                tekst = f"[No changes in the repo after this run]\n\n{tekst}" if tekst else tekst
         meta["uiStatus"] = "done" if tekst else "blocked"
         meta["pogingen"] = int(meta.get("pogingen") or 0) + (0 if tekst else 1)
         # Niet eindeloos opnieuw: dat kost elke ronde budget voor niets.
@@ -629,12 +786,15 @@ class Planner:
         velden = {
             "status": "completed" if tekst else ("failed" if opgegeven else "pending"),
             "worker_id": None,
+            "lease_expires_at": None,
             "metadata": meta,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         if tekst:
-            velden["result"] = {"output": tekst[:8000]}
+            velden["result"] = {"output": tekst[:8000], **({"bewijs": bewijs} if bewijs else {})}
             velden["completed_at"] = datetime.now(timezone.utc).isoformat()
+            # Een oude fout (no_handler, verlopen login) hoort niet bij een geslaagde run.
+            velden["error"] = None
         else:
             velden["error"] = {"message": fout[:1000]}
         self.sb().table("core_tasks").update(velden).eq("id", taak["id"]).execute()
@@ -654,15 +814,17 @@ class Planner:
             except Exception as e:  # noqa: BLE001
                 log.warning("planner: uitkomst naar geheugen faalde: %s", e)
 
-    def _voer_uit(self, staat: dict, taak: dict) -> dict:
+    def _voer_uit(self, staat: dict, taak: dict, motoren: Optional[dict] = None,
+                  engines: Optional[dict] = None) -> dict:
         meta = taak.get("metadata") or {}
         agent = meta.get("agent") or taak.get("assignee") or "axe-core"
-        motor = meta.get("motor") or STANDAARD_MOTOREN[agent]
+        if agent not in AGENTS:
+            agent = "axe-core"
+        motoren = motoren or STANDAARD_MOTOREN
+        gewenst = meta.get("motor") or motoren.get(agent) or STANDAARD_MOTOREN[agent]
         schrijven = meta.get("risico") == "schrijven"
         if schrijven and agent not in ("code-agent", "maps-agent"):
             return {"taak": taak["id"], "overgeslagen": "alleen de Code Agent en de Northsea Desk voeren schrijftaken uit"}
-        if schrijven and motor not in ABONNEMENTEN:
-            return {"taak": taak["id"], "overgeslagen": "schrijven vraagt een CLI-motor"}
         gevraagd = (REPO_ALIAS.get((taak.get("payload") or {}).get("repo") or "")
                     or (taak.get("payload") or {}).get("repo")
                     or repo_uit_tekst(f"{taak.get('title') or ''} {taak.get('goal') or ''}"))
@@ -674,6 +836,10 @@ class Planner:
             return {"taak": taak["id"], "overgeslagen":
                     f"repo {gevraagd} mag niet (beschermde branch of niet op de whitelist)" if gevraagd
                     else "geen bruikbare repo (alle op main/master of weg)"}
+        engines = engines if engines is not None else self._engines()
+        motor, afgevallen = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now())
+        if not motor:
+            return self._blokkeer(taak, afgevallen)
         if not self._claim(taak["id"]):
             return {"taak": taak["id"], "overgeslagen": "al opgepakt"}
         prompt = (
@@ -682,14 +848,44 @@ class Planner:
                if schrijven else "Alleen lezen: verander niets. Geef een beknopt, concreet verslag.\n")
             + "Zet je volledige verslag in je antwoord zelf. Schrijf geen plan- of verslagbestand.\n"
         )
-        tekst, fout = self._vraag(staat, motor, prompt, repo, "acceptEdits" if schrijven else "plan")
-        self._sluit(taak, tekst, fout)
-        return {"taak": taak["id"], "ok": bool(tekst), "fout": fout or None}
+        # Faalt de motor op zijn ACCOUNT, dan meteen het volgende account: de
+        # taak kan er niets aan doen. Hooguit drie, zodat een kapotte dag geen
+        # abonnementen opbrandt.
+        tekst, fout, geprobeerd = None, "", []
+        for _ in range(3):
+            geprobeerd.append(motor)
+            tekst, fout = self._vraag(staat, motor, prompt, repo, "acceptEdits" if schrijven else "plan")
+            if tekst or not account_fout(fout):
+                break
+            afgevallen[motor] = account_fout(fout) or "account werkt niet"
+            motor, meer = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now())
+            afgevallen.update(meer)
+            if not motor:
+                break
+        bewijs = self._bewijs(repo) if schrijven and tekst else None
+        self._sluit(taak, tekst, fout, geprobeerd[-1], bewijs)
+        return {"taak": taak["id"], "ok": bool(tekst), "fout": fout or None, "motoren": geprobeerd,
+                **({"bewijs": bewijs} if bewijs else {})}
+
+    def _blokkeer(self, taak: dict, afgevallen: dict) -> dict:
+        """Geen enkele motor kan: zichtbaar geblokkeerd, en het kost geen poging."""
+        reden = "no logged-in CLI engine: " + "; ".join(f"{m}: {r}" for m, r in afgevallen.items())
+        meta = dict(taak.get("metadata") or {})
+        meta["uiStatus"] = "blocked"
+        meta["geblokkeerd"] = reden[:600]
+        try:
+            self.sb().table("core_tasks").update({
+                "metadata": meta, "error": {"message": reden[:1000]},
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", taak["id"]).eq("status", "pending").execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: blokkeren faalde: %s", e)
+        return {"taak": taak["id"], "geblokkeerd": reden}
 
     def _luka_werk(self) -> list[dict]:
         try:
             rijen = (self.sb().table("core_tasks")
-                     .select("id,title,status,assignee,requested_by,capability,metadata")
+                     .select("id,title,status,assignee,requested_by,capability,metadata,error")
                      .in_("status", list(VOLGENDE_STAP))
                      .order("updated_at", desc=True).limit(40).execute().data) or []
         except Exception as e:  # noqa: BLE001
@@ -812,6 +1008,10 @@ class Planner:
             verslag["aantal"] = len(gemaakt)
             # Geen model om taken te verzinnen. Binnen het plan mag hij door;
             # een actie die het plan verlaat alleen na ja.
+            # Motorstatus pas lezen als er iets uit te voeren is: het zijn
+            # subprocessen (auth status), en een rustige ronde hoeft ze niet.
+            engines: Optional[dict] = None
+            fouten: list[str] = []
             for agent in AGENTS:
                 motor = motoren.get(agent, STANDAARD_MOTOREN[agent])
                 a: dict[str, Any] = {"motor": motor, "voorstellen": []}
@@ -821,8 +1021,19 @@ class Planner:
                              and ((t.get("metadata") or {}).get("goedkeuring") == "ja"
                                   or (t.get("metadata") or {}).get("goedkeuring") == "niet_nodig")), None)
                 if goed:
-                    a["goedgekeurd_uitgevoerd"] = self._voer_uit(staat, goed)
+                    if engines is None:
+                        engines = self._engines()
+                    uit = self._voer_uit(staat, goed, motoren, engines)
+                    a["goedgekeurd_uitgevoerd"] = uit
+                    if uit.get("geblokkeerd"):
+                        fouten.append(f"{AGENT_LABEL[agent]}: {uit['geblokkeerd']}")
+                    elif uit.get("ok") is False:
+                        fouten.append(f"{AGENT_LABEL[agent]}: {uit.get('fout') or 'run failed'}")
                 verslag["agents"][agent] = a
+            verslag["accountmeldingen"] = self._meld_accounts(staat, engines or {})
+            # Het grootboek moet zien dat een agent faalde: een ronde met een
+            # mislukte of geblokkeerde taak is geen 'ok' (_mac_actie leest dit).
+            verslag["fouten"] = fouten
         finally:
             verslag["klaar"] = datetime.now(timezone.utc).isoformat()
             staat["laatste_ronde"] = verslag

@@ -236,3 +236,113 @@ class TestPlannenOpSleutels:
         monkeypatch.setattr(pl, "_maak_taak", lambda *a, **k: (_ for _ in ()).throw(AssertionError("geen taak")))
         verslag = pl.ronde()
         assert verslag["aantal"] == 0
+
+
+# ── 11 oktober: nooit meer een verslag zonder repo, nooit een kapot account als taak ──
+
+ALLES_INGELOGD = {m: {"aanwezig": True, "ingelogd": True, "label": m, "login": f"{m} login"}
+                  for m in p.ABONNEMENTEN}
+MOTOREN_11OKT = {"axe-core": "claude", "code-agent": "sleutels", "axe-algo": "sleutels", "maps-agent": "sleutels"}
+NU = datetime(2026, 10, 11, 12, 0)
+
+
+class TestAccountfout:
+    def test_herkent_login_en_factuur_maar_niet_een_gewone_fout(self):
+        assert p.account_fout("Failed to authenticate: OAuth session expired and could not be refreshed") == "login verlopen"
+        assert p.account_fout("ActionRequiredError: You have an unpaid invoice").startswith("betaling")
+        assert p.account_fout("TypeError: x is undefined") is None
+        assert p.account_fout(None) is None
+
+
+class TestKiesMotor:
+    def test_sleutels_voert_nooit_uit_maar_een_vrij_abonnement_wel(self):
+        motor, afgevallen = p.kies_motor({}, "code-agent", "sleutels", MOTOREN_11OKT, ALLES_INGELOGD, NU)
+        assert motor in p.ABONNEMENTEN and motor != "claude"  # claude hoort bij AXE Core
+        assert "sleutels" in afgevallen
+
+    def test_eerst_hetzelfde_merk_bij_een_kapot_account(self):
+        staat = {"account_kapot": {"claude": {"reden": "login verlopen", "tot": "2026-10-11T18:00:00"}}}
+        motor, afgevallen = p.kies_motor(staat, "axe-core", "claude", MOTOREN_11OKT, ALLES_INGELOGD, NU)
+        assert motor == "claude2" and afgevallen == {"claude": "login verlopen"}
+
+    def test_kapot_account_krijgt_na_de_rust_weer_een_kans(self):
+        staat = {"account_kapot": {"claude": {"reden": "login verlopen", "tot": "2026-10-11T11:00:00"}}}
+        assert p.kies_motor(staat, "axe-core", "claude", MOTOREN_11OKT, ALLES_INGELOGD, NU)[0] == "claude"
+
+    def test_axe_algo_valt_nooit_terug_op_een_abonnement(self):
+        motor, afgevallen = p.kies_motor({}, "axe-algo", "sleutels", MOTOREN_11OKT, ALLES_INGELOGD, NU)
+        assert motor is None and list(afgevallen) == ["sleutels"]
+
+    def test_niet_ingelogd_en_een_abonnement_van_een_ander_vallen_af(self):
+        engines = {**ALLES_INGELOGD, "cursor": {"aanwezig": True, "ingelogd": False}}
+        motoren = {"axe-core": "claude", "code-agent": "cursor", "axe-algo": "codex", "maps-agent": "claude2"}
+        motor, afgevallen = p.kies_motor({}, "code-agent", "cursor", motoren, engines, NU)
+        assert afgevallen["cursor"] == "niet ingelogd"
+        assert motor not in ("claude", "codex", "claude2")
+
+
+class TestGeenVervolgOpAccountOfBouwlus:
+    def test_gefaalde_bouwtaak_en_accountfout_geven_geen_continue(self):
+        uit = p.planner_pass([
+            {"id": "b", "title": "Build next step: AXE Companion", "status": "failed", "requested_by": "luka",
+             "metadata": {"oorsprong_bouw": "ja"}},
+            {"id": "c", "title": "Check deals", "status": "failed", "requested_by": "luka",
+             "error": {"message": "Failed to authenticate: OAuth session expired"}},
+            {"id": "d", "title": "DEAL-002", "status": "blocked", "requested_by": "luka"},
+            {"id": "e", "title": "DEAL-002", "status": "blocked", "requested_by": "luka"},
+        ], [])
+        assert [v["titel"] for v in uit] == ["Continue: DEAL-002"]
+
+
+class TestVoerUitEerlijk:
+    def _pl(self, monkeypatch, run):
+        sb_rijen = []
+
+        class Q:
+            def __init__(s, t): s.t = t
+            def __getattr__(s, naam): return lambda *a, **k: s
+            def update(s, v): sb_rijen.append((s.t, "update", v)); return s
+            def insert(s, v): sb_rijen.append((s.t, "insert", v)); return s
+            def execute(s):
+                class R: data = [{"id": "x"}]
+                return R()
+
+        class SB:
+            def table(s, t): return Q(t)
+        pl = p.Planner(lambda: SB(), run, lambda: {})
+        monkeypatch.setattr(pl, "_werkrepo", lambda gevraagd, streng=False: "axe-core")
+        return pl, sb_rijen
+
+    def test_accountfout_springt_door_naar_het_volgende_account_en_meldt_een_keer(self, monkeypatch):
+        gedraaid = []
+
+        def run(repo, prompt, modus, t, motor):
+            gedraaid.append(motor)
+            if motor == "claude":
+                return {"status": "error", "error": "Failed to authenticate: OAuth session expired and could not be refreshed"}
+            return {"status": "ok", "result": "Echt verslag"}
+        pl, rijen = self._pl(monkeypatch, run)
+        staat = {}
+        taak = {"id": "t1", "title": "Fix: X", "goal": "kijk", "metadata": {"agent": "axe-core", "motor": "claude", "risico": "lezen"}}
+        uit = pl._voer_uit(staat, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert uit["ok"] and gedraaid == ["claude", "claude2"]
+        assert staat["account_kapot"]["claude"]["reden"] == "login verlopen"
+        assert len(pl._meld_accounts(staat, ALLES_INGELOGD)) == 1
+        assert pl._meld_accounts(staat, ALLES_INGELOGD) == []  # niet elke ronde opnieuw
+
+    def test_zonder_bruikbare_motor_geblokkeerd_zonder_run(self, monkeypatch):
+        pl, rijen = self._pl(monkeypatch, lambda *a: (_ for _ in ()).throw(AssertionError("geen run")))
+        taak = {"id": "t2", "title": "Kijk", "goal": "g", "metadata": {"agent": "axe-algo", "motor": "sleutels", "risico": "lezen"}}
+        uit = pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert "sleutels" in uit["geblokkeerd"]
+        assert any(t == "core_tasks" and v.get("metadata", {}).get("uiStatus") == "blocked" for t, _, v in rijen)
+
+    def test_schrijftaak_zonder_diff_heet_geen_wijziging(self, monkeypatch):
+        pl, rijen = self._pl(monkeypatch, lambda *a: {"status": "ok", "result": "Ik heb alles gebouwd!"})
+        monkeypatch.setattr(pl, "_bewijs", lambda repo: {"repo": repo, "leesbaar": True, "veranderd": False, "diffstat": ""})
+        taak = {"id": "t3", "title": "Build", "goal": "g", "payload": {"repo": "axe-core"},
+                "metadata": {"agent": "code-agent", "motor": "cursor", "risico": "schrijven"}}
+        pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        klaar = [v for t, s, v in rijen if t == "core_tasks" and v.get("status") == "completed"][0]
+        assert klaar["metadata"]["geen_wijziging"] is True
+        assert klaar["result"]["output"].startswith("[No changes in the repo")

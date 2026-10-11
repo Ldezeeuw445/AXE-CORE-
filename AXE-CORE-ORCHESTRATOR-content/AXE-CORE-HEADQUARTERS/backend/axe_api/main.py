@@ -3841,7 +3841,9 @@ async def _mac_actie(soort: str, payload: dict) -> dict:
         if _planner is None:
             return {"status": "fail", "output": "planner niet ingeladen op deze host"}
         uit = await asyncio.to_thread(_planner.ronde)
-        return {"status": "ok", "output": json.dumps(uit, default=str)[:4000]}
+        # Een ronde waarin een agent faalde of geen motor had, is geen groene run.
+        status = "fail" if uit.get("fouten") else ("skipped" if uit.get("overgeslagen") else "ok")
+        return {"status": status, "output": json.dumps(uit, default=str)[:4000]}
     return await _run_schedule_action(soort, payload)
 
 
