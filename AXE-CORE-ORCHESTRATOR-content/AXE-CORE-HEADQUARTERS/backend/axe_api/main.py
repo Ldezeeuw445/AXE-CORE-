@@ -2871,7 +2871,9 @@ async def _check_vps_services() -> dict:
     the actual check logic behind /status/vps-agents, pulled out so the
     self-heal background job (below) can reuse it without an HTTP round-trip
     to itself."""
-    async def check(name: str, url: str) -> dict:
+    from service_probes import http_health, runtime_health
+
+    async def check(name: str, url: str, key: str) -> dict:
         if not url:
             return {"configured": False, "reachable": False}
         health_url = _HEALTH_OVERRIDE.get(name)
@@ -2882,22 +2884,23 @@ async def _check_vps_services() -> dict:
                 health_url = f"{p.scheme}://{p.netloc}/health"
             except Exception:
                 return {"configured": True, "reachable": False, "error": "could not derive health URL"}
-        t0 = asyncio.get_event_loop().time()
-        try:
-            async with httpx.AsyncClient(timeout=4) as client:
-                r = await client.get(health_url)
-            return {"configured": True, "reachable": r.status_code < 500, "latency_ms": round((asyncio.get_event_loop().time() - t0) * 1000)}
-        except Exception as e:
-            return {"configured": True, "reachable": False, "error": str(e)[:150]}
+        async with httpx.AsyncClient(timeout=4) as client:
+            return await http_health(client, health_url, key)
 
-    results = {}
-    for tool, (url, _key) in AGENT_SERVICES.items():
-        results[tool] = await check(tool, url)
-    # CrewAI isn't a URL-based bridge (see AGENT_SERVICES) — it shells out to
-    # an isolated venv (crew_runner.py). "Reachable" here means the venv's
-    # python actually exists, not a network probe.
+    names = list(AGENT_SERVICES)
+    # CrewAI heeft geen HTTP-bridge. De probe importeert de geïsoleerde runtime
+    # en leest zijn versie; dat bewijst nog niet dat een crew-taak slaagt.
     crew_venv = os.environ.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3")
-    results["crewai"] = {"configured": True, "reachable": os.path.exists(crew_venv), "note": f"isolated venv at {crew_venv}, not a network service"}
+    async def ollama_health():
+        async with httpx.AsyncClient(timeout=4) as client:
+            return await http_health(client, "http://127.0.0.1:11434/api/tags", models=True)
+
+    checked, runtimes, ollama = await asyncio.gather(
+        asyncio.gather(*(check(tool, *AGENT_SERVICES[tool]) for tool in names)),
+        runtime_health(GITHUB_TOKEN, crew_venv),
+        ollama_health(),
+    )
+    results = {**dict(zip(names, checked)), **runtimes, "ollama": ollama}
     # Branch C. Counts only — this endpoint is open (no AXE_API_KEY), so repo
     # paths and branch names stay behind /claude/repos, which is authed.
     try:
@@ -2919,14 +2922,6 @@ async def _check_vps_services() -> dict:
     # wired as an AXE agent (see toolCatalog.ts's [AGENT:] promptDoc).
     if "openclaw" in results:
         results["openclaw"]["note"] = "messaging gateway (Telegram/WhatsApp/...), not wired as an AXE agent yet"
-    try:
-        async with httpx.AsyncClient(timeout=4) as client:
-            t0 = asyncio.get_event_loop().time()
-            r = await client.get("http://127.0.0.1:11434/api/tags")
-            results["ollama"] = {"configured": True, "reachable": r.status_code < 500, "latency_ms": round((asyncio.get_event_loop().time() - t0) * 1000)}
-    except Exception as e:
-        results["ollama"] = {"configured": True, "reachable": False, "error": str(e)[:150]}
-
     # Branch C. Alleen aantallen — dit endpoint is open (geen AXE_API_KEY), dus
     # repo-paden en branchnamen blijven achter /claude/repos, dat wél authed is.
     try:
@@ -4389,7 +4384,8 @@ async def cron_tick(
         # omver halen -- die draait ook de planner en het grootboek.
         meldingen = {"verstuurd": 0, "opgeruimd": 0}
         try:
-            meldingen = await _push.stuur_meldingen(sb, now)
+            if os.environ.get("AXE_PUSH_OWNER", "vps") != "observer":
+                meldingen = await _push.stuur_meldingen(sb, now)
         except Exception as push_err:
             print(f"[cron_tick] push failed: {push_err}", flush=True)
         return {"ran": len(ran), "at": now.isoformat(), "details": ran, "push": meldingen}

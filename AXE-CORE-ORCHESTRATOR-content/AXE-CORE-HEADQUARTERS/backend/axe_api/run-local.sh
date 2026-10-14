@@ -115,6 +115,12 @@ if [[ "$SETUP_ONLY" == "1" ]]; then
   exit 0
 fi
 
+# Buiten uvicorn: ook de uitval van deze API en de VPS moet gemeld kunnen worden.
+# Installatie is idempotent; op de iMac draait geen tweede lokale API/bewaker.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  bash ../../scripts/install-service-monitor-launchd.sh || echo "Service monitor kon niet worden gestart; zie ~/Library/Logs/axe-service-monitor.log" >&2
+fi
+
 echo
 echo "axe_api on http://$HOST:$PORT"
 # Dezelfde terugval als agent_runner._repos() gebruikt. Alleen de

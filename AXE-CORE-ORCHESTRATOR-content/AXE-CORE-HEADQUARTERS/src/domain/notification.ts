@@ -130,6 +130,7 @@ export function collapseRepeats<T extends { message: string; timestamp: number }
  * Returning null is a perfectly good answer and the default.
  */
 const TARGETS: Array<{ test: RegExp; route: string; why: string }> = [
+  { test: /^AXE (?:service (?:outage|recovered)|dependency)/i, route: '/status', why: 'service status and first mitigation step' },
   // "OpenAI (Primair) is niet meer bereikbaar" -- 173 of the stored rows. The
   // key lives in Settings and that is where the fix is made.
   { test: /niet meer bereikbaar|provider|api[- ]?key|quota|rate.?limit/i, route: '/settings', why: 'de key of de limiet' },

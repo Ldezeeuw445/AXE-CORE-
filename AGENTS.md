@@ -197,6 +197,18 @@ spoor. Alleen stijl en indeling; geen data, hooks, stores of API.
 
 ## Waar de rest staat
 
+### Supabase — nieuwe tabellen vanaf 14 oktober 2026
+
+Maak migraties met `supabase migration new`. Elke nieuwe tabel in `public`
+moet in dezelfde migratie RLS inschakelen én expliciete, minimale `GRANT`-rechten
+voor de bedoelde rollen krijgen. Server-only betekent alleen `service_role`;
+geef niet automatisch `anon` toegang. Clienttoegang vereist passende policies.
+Bij sequences ook de benodigde sequence-rechten opnemen. Test de echte rollen
+na toepassing. `supabaseMigrationAccess.test.ts` bewaakt nieuwe tabelmigraties
+statisch; dat is geen volledige SQL-parser of bewijs van veilige policies.
+Supabase stopt op 30 oktober met impliciete rechten voor nieuwe public-tabellen.
+Bestaande rechten niet massaal wijzigen; bestaande tabellen behouden hun grants.
+
 | Bestand | Waarvoor |
 |---|---|
 | `brain/` | wat AXE Core is, en wat waar blijft |

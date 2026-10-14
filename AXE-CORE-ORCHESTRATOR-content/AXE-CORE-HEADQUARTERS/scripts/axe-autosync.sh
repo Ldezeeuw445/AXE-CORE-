@@ -54,6 +54,13 @@ if [[ "$(git rev-list --count origin/orchestrator..HEAD)" != "0" ]]; then
 fi
 
 git merge -q --ff-only origin/orchestrator 2>/dev/null
+# De onafhankelijke bewaker bijwerken, ook als de API al luistert of de app
+# deze ronde niet gebouwd wordt. De installer weigert een niet-agent-host.
+if [[ -x "$HIER/backend/axe_api/.venv-local/bin/python" && -f "$HIER/backend/axe_api/.env.local" ]]; then
+  if ! ENV_FILE="$HIER/backend/axe_api/.env.local" bash "$HIER/scripts/install-service-monitor-launchd.sh"; then
+    log "service-bewaker kon niet worden bijgewerkt — zie ~/Library/Logs/axe-service-monitor.log"
+  fi
+fi
 DOEL="$(git rev-parse --short HEAD)"
 GEBOUWD="$(cat "$APP_STEMPEL" 2>/dev/null || true)"
 [[ "$GEBOUWD" == "$DOEL" ]] && exit 0

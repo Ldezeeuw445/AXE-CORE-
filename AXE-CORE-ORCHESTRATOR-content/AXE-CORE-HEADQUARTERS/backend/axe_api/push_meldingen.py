@@ -48,6 +48,7 @@ MAX_TITEL = 80
 # gematcht en niet op de hele tekst -- een detailalinea noemt het halve systeem
 # en zou je naar de verkeerde tab sturen.
 DOELEN: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"^AXE (?:service (?:outage|recovered)|dependency)", re.I), "/status"),
     (re.compile(r"provider|model|api[- ]?key|sleutel", re.I), "/settings"),
     (re.compile(r"taak|task|todo", re.I), "/tasks"),
     (re.compile(r"geheugen|memory", re.I), "/memory"),

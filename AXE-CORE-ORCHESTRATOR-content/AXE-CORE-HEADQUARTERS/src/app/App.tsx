@@ -191,7 +191,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <NotificationProvider>
+      <NotificationProvider key={user?.id ?? 'signed-out'}>
         <Routes>
           {/* Once there is a session — live or restored — the login form is the one
               page that must not stay on screen. Without this, anything that had

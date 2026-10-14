@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { notificationText, collapseRepeats } from '@/domain/notification';
 import { pasBadgeToe } from '@/infrastructure/pwa/appBadge';
+import { startNotificationFeed } from '@/application/system/notificationFeed';
+import { useAuth } from '@/presentation/contexts/AuthContext';
 
 export interface NotificationItem {
   id: string;
@@ -91,39 +93,41 @@ function fromRow(row: NotificationRow): NotificationItem {
  * scheduler shows up without a refresh), and every action here persists.
  */
 export function NotificationProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [rows, setRows] = useState<NotificationItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userId) return;
     const sb = getSupabase();
-    if (!sb) return;
-
-    sb.from('core_notifications')
-      .select(SELECT_COLUMNS)
-      .order('created_at', { ascending: false })
-      // 400 rather than 100: with repeats collapsed, a hundred rows was a
-      // handful of distinct subjects, and the older ones were simply invisible.
-      .limit(400)
-      .then(({ data, error }) => {
-        // Checked, and kept. Silence was the entire bug.
-        if (error) { setLoadError(error.message); return; }
-        setLoadError(null);
-        if (data) setRows((data as NotificationRow[]).map(fromRow));
-      });
+    const feed = startNotificationFeed<NotificationItem>({
+      load: async signal => {
+        if (!sb) throw new Error('Supabase is not configured');
+        const { data, error } = await sb.from('core_notifications')
+          .select(SELECT_COLUMNS).order('created_at', { ascending: false })
+          .limit(400).abortSignal(signal);
+        if (error) throw new Error(error.message);
+        return (data as NotificationRow[] ?? []).map(fromRow);
+      },
+      changed: setRows,
+      failed: setLoadError,
+    });
 
     const channel = sb
+      ? sb
       .channel('core_notifications_live')
       .on(
         'postgres_changes' as never,
-        { event: 'INSERT', schema: 'public', table: 'core_notifications' },
-        (payload: { new: NotificationRow }) => {
-          setRows(prev => [fromRow(payload.new), ...prev].slice(0, 400));
-        },
+        { event: '*', schema: 'public', table: 'core_notifications' },
+        // UPDATE/DELETE horen erbij: gelezen op Samsung moet ook op de Mac
+        // gelezen zijn. REST-polling blijft doorlopen bij een kapotte stream.
+        () => feed.refresh(),
       )
-      .subscribe();
+      .subscribe() : null;
 
-    return () => { sb.removeChannel(channel); };
-  }, []);
+    return () => { feed.stop(); if (sb && channel) void sb.removeChannel(channel); };
+  }, [userId]);
 
   const addNotification = useCallback((notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => {
     const sb = getSupabase();

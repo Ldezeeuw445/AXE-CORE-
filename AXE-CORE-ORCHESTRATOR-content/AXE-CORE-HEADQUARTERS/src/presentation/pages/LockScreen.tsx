@@ -31,6 +31,7 @@ import { useAxeAlgoAccountSnapshot } from '@/presentation/hooks/useAxeAlgoAccoun
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { MobileGlass, LookToggle } from '@/presentation/components/layout/MobileGlass';
 import { usePlaatInk } from '@/presentation/hooks/usePlaatInk';
+import { ServiceMonitoringGlance } from '@/presentation/components/axe-core/ServiceMonitoringGlance';
 
 /** Tikkende klok. Eén interval, opgeruimd bij unmount. */
 function useClock(): Date {
@@ -138,6 +139,8 @@ export function LockScreenContent({ compact = false, children }: { compact?: boo
             </div>
           )}
         </div>
+
+        <Card><ServiceMonitoringGlance /></Card>
 
         {/* Wat wacht */}
         <Card>

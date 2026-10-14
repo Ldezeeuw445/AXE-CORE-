@@ -21,6 +21,7 @@ import { getSystemState, checkAllServices, type ServiceState } from '@/applicati
 import { FEATURES, STATE_META, countByState, type Feature, type FeatureState } from '@/domain/system/featureRegistry';
 import { chatSaveHealth, type ChatSaveHealth } from '@/infrastructure/persistence/chatPersistence';
 import { feedbackHealth } from '@/infrastructure/persistence/memoryFeedbackService';
+import { ServiceMonitoringGlance } from '@/presentation/components/axe-core/ServiceMonitoringGlance';
 
 const TONE_COLOR = {
   ok: 'var(--success)',
@@ -157,6 +158,7 @@ export default function StatusPage() {
         </button>
       }
     >
+      <Block title="Continuous monitoring"><ServiceMonitoringGlance /></Block>
       <Grid rowHeight={132} min={168} className="mb-3">
         <Block title="Works"><Stat value={counts.works} tone="ok" label="tabs" /></Block>
         <Block title="Partial"><Stat value={counts.partial} tone="warn" label="thin or unfinished" /></Block>
