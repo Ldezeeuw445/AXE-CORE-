@@ -212,3 +212,31 @@ def test_northsea_db_counts_only_a_real_row_read():
     assert asyncio.run(run(httpx.ReadTimeout("timeout"))) == "offline"
     assert seen[0].url.path == "/rest/v1/deal_automation_policy"
     assert seen[0].headers["apikey"] == "test-secret"
+
+
+def test_northsea_db_falls_back_to_the_engine_tick_without_its_own_key():
+    """Op de Mac mini staat geen AXE Commodities-sleutel. De engine-tick in het gedeelde
+    project leest die database wel echt: 22 keer fail op rij was de uitval van 11 okt."""
+    from datetime import datetime, timezone
+    from service_monitor_worker import engine_tick_probe
+    now = datetime(2026, 10, 15, 21, 45, tzinfo=timezone.utc)
+
+    def run(rows, status=200):
+        async def go():
+            def handler(request):
+                assert request.url.path == "/rest/v1/core_schedules"
+                assert request.url.params["job_key"] == "eq.northsea:engine"
+                return httpx.Response(status, json=rows)
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                return await engine_tick_probe(client, "https://project.supabase.co", "test-secret", now)
+        return asyncio.run(go())
+
+    ok = {"enabled": True, "last_status": "ok", "last_run_at": "2026-10-15T21:30:31.461343+00:00"}
+    assert run([ok]) == "online"
+    assert run([{**ok, "last_status": "fail"}]) == "offline"
+    # Een tick van drie uur geleden zegt niets over nu: onbekend, geen verzonnen uitval.
+    assert run([{**ok, "last_run_at": "2026-10-15T18:30:00+00:00"}]) == "unknown"
+    # Bewust gepauzeerd is geen storing.
+    assert run([{**ok, "enabled": False, "last_status": "fail"}]) == "unknown"
+    assert run([]) == "unknown"
+    assert run({"message": "error"}, status=500) == "unknown"

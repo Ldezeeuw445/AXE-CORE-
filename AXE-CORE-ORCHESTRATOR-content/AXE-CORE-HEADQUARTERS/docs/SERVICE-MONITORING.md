@@ -49,8 +49,11 @@ Naast de AXE-diensten meet dezelfde bewaker de vijf producten uit
 | `northsea_db` | één gelezen rij uit `deal_automation_policy` in AXE Commodities |
 
 `northsea_db` gebruikt `NORTHSEA_SUPABASE_URL` en `NORTHSEA_SUPABASE_SERVICE_ROLE`
-uit dezelfde `.env.local` (namen gelijk aan `backend/northsea_mcp`). Zonder die
-twee staat hij eerlijk op niet ingesteld. Hij bestaat omdat AXE Commodities op
+uit dezelfde `.env.local` (namen gelijk aan `backend/northsea_mcp`) als die er
+staan. Zonder die twee leest hij de laatste `northsea:engine`-tick in het gedeelde
+project, met de Supabase-gegevens die de bewaker al heeft: `fail` is offline, `ok`
+van hooguit 45 minuten oud is online, gepauzeerd of verouderd is onbekend. Op de
+Mac mini hoeft dus niets bij. Hij bestaat omdat AXE Commodities op
 11 oktober drie dagen stillag terwijl het platform `ACTIVE_HEALTHY` meldde
 (`docs/programma/incidenten/2026-10-11-northsea-db.md`).
 

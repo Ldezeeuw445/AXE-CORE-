@@ -11,6 +11,7 @@ import fcntl
 import logging
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -54,7 +55,38 @@ async def page_probe(client, url: str) -> str:
         return "offline"
 
 
-async def product_probes(client, env=os.environ) -> dict[str, str]:
+ENGINE_TICK_MAX_AGE = timedelta(minutes=45)  # elke 15 min een tick; drie gemist is geen ruis meer
+
+
+async def engine_tick_probe(client, supabase_url: str, key: str, now: datetime | None = None) -> str:
+    """Zonder eigen sleutel voor AXE Commodities: de laatste engine-tick in het gedeelde
+    project. Die tick leest en schrijft de NorthSea-database echt; op 11 okt stond hij
+    22 keer achter elkaar op fail (502) terwijl het platform ACTIVE_HEALTHY meldde.
+    Gepauzeerd, verouderd of onleesbaar is onbekend, geen uitval."""
+    if not supabase_url or not key:
+        return "unconfigured"
+    try:
+        response = await client.get(supabase_url + "/rest/v1/core_schedules",
+                                    headers={"apikey": key, "Authorization": f"Bearer {key}"},
+                                    params={"select": "enabled,last_status,last_run_at", "job_key": "eq.northsea:engine"})
+        rows = response.json() if response.is_success else None
+    except (httpx.HTTPError, ValueError):
+        return "unknown"
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict) or rows[0].get("enabled") is False:
+        return "unknown"
+    row = rows[0]
+    if row.get("last_status") == "fail":
+        return "offline"
+    try:
+        ran = datetime.fromisoformat(str(row.get("last_run_at")))
+    except ValueError:
+        return "unknown"
+    fresh = (now or datetime.now(timezone.utc)) - ran <= ENGINE_TICK_MAX_AGE
+    return "online" if row.get("last_status") == "ok" and fresh else "unknown"
+
+
+async def product_probes(client, env=os.environ, *, supabase_url: str = "", key: str = "",
+                         now: datetime | None = None) -> dict[str, str]:
     """De hartslag per product. AXE Commodities stond op 11 okt drie dagen stil
     terwijl het platform ACTIVE_HEALTHY meldde: alleen een gelezen rij telt."""
     names = list(PRODUCT_PAGES)
@@ -68,7 +100,7 @@ async def product_probes(client, env=os.environ) -> dict[str, str]:
             client, ns_url + "/rest/v1/deal_automation_policy", rows=True,
             headers={"apikey": ns_key, "Authorization": f"Bearer {ns_key}"}, params={"select": "id", "limit": "1"}))[0]
     else:
-        results["northsea_db"] = "unconfigured"
+        results["northsea_db"] = await engine_tick_probe(client, supabase_url, key, now)
     return results
 
 
@@ -92,7 +124,7 @@ async def probes(client, api_url: str, local_url: str, supabase_url: str, key: s
             results[component] = "unconfigured"
         else:
             results[component] = "online" if entry.get("reachable") is True else "offline"
-    results.update(await product_probes(client))
+    results.update(await product_probes(client, supabase_url=supabase_url, key=key))
     return results
 
 

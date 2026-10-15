@@ -1,7 +1,29 @@
-# Incident — NorthSea-database staat stil sinds 11 oktober
+# Incident — NorthSea-database stond stil van 11 tot 15 oktober
 
-Vastgesteld 14 oktober 2026, 18:00 UTC. Status: **open**. Ernst: hoog. NorthSea
-doet al meer dan drie dagen niets, en niemand kreeg een melding.
+Vastgesteld 14 oktober 2026, 18:00 UTC. Status: **database terug, oorzaak niet weg**.
+Ernst: hoog. NorthSea deed ruim vier dagen niets, en niemand kreeg een melding.
+
+## Stand 15 oktober, 21:45 UTC (gemeten)
+
+- Postgres is op **15 okt 10:33:54 UTC herstart** (`pg_postmaster_start_time`). Door wie
+  staat nergens; niet vanuit deze sessie. Sindsdien antwoorden REST en SQL weer.
+- Alle drie de NorthSea-jobs staan weer op `ok`, 0 fouten op rij.
+- **De lus is terug.** Edge-logs per uur sinds 17:00: 331–451 `PATCH action_queue` en
+  326–472 `POST deal_events`, ~900 schrijfacties per uur. Hetzelfde patroon als vóór
+  11 okt. De fix van 6 okt staat dus nog steeds niet op de box.
+- Een pauze van `northsea:engine` is op 15 okt aangeboden en door Luka geweigerd.
+  Het rapport hieronder blijft daarom open tot de uitrol.
+
+### Correctie op de oorzaak
+
+De database is klein: 35 MB, 22.037 rijen in `deal_events`, 520 in `action_queue`.
+Een volledige scan daarvan kost weinig; "een tabel die elke dag groter werd" was
+dus overdreven. De rem van 6 okt onderdrukt de dubbele inserts juist (daarom zo
+weinig rijen). Wat wél vaststaat: een constante stroom van ~1.000 schrijfacties per
+uur, statement-timeouts vanaf 11 okt 02:00, en een instantie die daarna niet meer
+antwoordde. Of de compute-instantie zijn IO- of geheugenbudget opmaakte of dat er
+aan de kant van het platform iets misging, is uit de logs niet te bewijzen. De lus
+weghalen blijft de enige oorzaak die binnen onze macht ligt.
 
 ## Wat je ziet
 

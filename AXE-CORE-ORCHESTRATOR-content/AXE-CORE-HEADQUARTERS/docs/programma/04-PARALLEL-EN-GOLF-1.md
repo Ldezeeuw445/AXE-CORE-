@@ -48,16 +48,25 @@ In volgorde van wat het meeste schade voorkomt. Status staat in `programma.json`
    online. Wacht op de Mac mini (autosync + twee sleutelnamen) en op een
    push-abonnement (CORE-ALERT-1). Daarna **CORE-REG-1**: het productregister.
 
-## Acties voor Luka (wat alleen jij kunt)
+## De acht acties — stand 15 oktober, 21:45 UTC
 
-| # | wat | waarom jij |
-|---|---|---|
-| 1 | `update public.core_schedules set enabled = false where job_key = 'northsea:engine';` | schrijven via de koppeling vanuit de cloud liep vast |
-| 2 | AXE Commodities herstarten (Dashboard → Project Settings → General → Restart) | kan niet via de API van deze sessie |
-| 3 | Op de iMac: `bash backend/northsea_mcp/deploy/deploy.sh check`, dan `deploy` | de VPS-sleutel staat alleen op de Mac |
-| 4 | tradingosapp.com: Vercel betalen of naar Cloudflare Pages | billingbesluit (niveau C) |
-| 5 | AXON-project toegankelijk maken voor deze Supabase-koppeling, of de AXON-migraties zelf toepassen | ander account |
-| 6 | In AXE Core op je telefoon meldingen toestaan, en bevestigen dat de proefmelding aankomt | 0 abonnementen: anders hoort de telefoon niets |
-| 8 | Nieuwe Unusual Whales-sleutel als `UNUSUAL_WHALES_TOKEN` (Supabase Edge-geheim) en `UNUSUAL_WHALES_API_KEY` (VPS) | alleen jij hebt het account |
-| 9 | Zeggen of `ai-proxy` en `ai-proxy-v2` echt weg mogen (verwijderen is onomkeerbaar) | nu staan ze als 410-stub |
-| 7 | Op de Mac mini in `backend/axe_api/.env.local`: `NORTHSEA_SUPABASE_URL` en `NORTHSEA_SUPABASE_SERVICE_ROLE` (dezelfde waarden als op de VPS) | zonder die twee meet de bewaker de NorthSea-database niet |
+| # | actie | stand | wat er nog moet |
+|---|---|---|---|
+| 1 | `northsea:engine` pauzeren | **door Luka geweigerd** (15 okt) | niets, zolang 3 snel komt; zonder pauze schrijft de oude engine ~900 rijen per uur |
+| 2 | AXE Commodities herstarten | **gebeurd**: Postgres herstart 15 okt 10:33 UTC, alle NorthSea-jobs weer `ok` | niets |
+| 3 | northsea-mcp met de fix van 6 okt uitrollen | **open, de belangrijkste** | iMac: `bash backend/northsea_mcp/deploy/deploy.sh check`, dan `deploy`. Vanuit de cloud weigert de veiligheidscontrole het gebruik van de AXE API-sleutel voor `/internal/exec` |
+| 4 | Unusual Whales-sleutel vernieuwen | open | alleen met Luka's account; daarna `UNUSUAL_WHALES_TOKEN` (Supabase) en `UNUSUAL_WHALES_API_KEY` (VPS) |
+| 5 | Meldingen op de telefoon toestaan | open | kan alleen op het toestel zelf |
+| 6 | NorthSea-sleutels op de Mac mini | **niet meer nodig**: `northsea_db` leest nu de engine-tick in het gedeelde project | niets; met de twee sleutels wordt de meting directer |
+| 7a | tradingosapp.com | **besloten: Cloudflare Pages**, geen Vercel-betaling. Zelfde host als AXE Core en AXON, geen nieuw platform (regel 3) | Pages-project aan `the-one` koppelen en de DNS van het domein omzetten; dat vraagt het Cloudflare-dashboard |
+| 7b | `ai-proxy`, `ai-proxy-v2` | **besloten: stubs blijven staan**. Ze doen niets meer (410, JWT verplicht) en kosten niets; verwijderen voegt geen veiligheid toe en is onomkeerbaar | na 30 dagen zonder aanroep mogen ze weg |
+| 8 | AXON-migratie toepassen | open | het AXON-project hangt niet aan deze Supabase-koppeling; op de iMac via de Supabase MCP, PR Ldezeeuw445/axon-memory-app#2 |
+
+### Sleutel die door deze sessie ging
+
+Op 15 okt is de waarde van `axe_core_api_key` (gedeeld project, `public.app_secrets`)
+uitgelezen om de uitrol vanuit de cloud te doen. De veiligheidscontrole hield het
+gebruik tegen; er is niets mee uitgevoerd en niets op schijf gezet. De waarde staat
+wel in het sessieverslag. Roteren (VPS `AXE_API_KEY`, `app_secrets`, de apparaten
+die hem gebruiken) is een niveau-C-beslissing voor Luka, omdat het de app kan
+onderbreken tot alle plekken de nieuwe waarde hebben.
