@@ -321,9 +321,9 @@
     {
       "id": "TOS-SEC-1",
       "product": "trading_os",
-      "objective": "engine-proxy alleen voor ingelogde gebruikers: JWT verplicht, CORS naar eigen domeinen",
+      "objective": "engine-proxy: live code (v202) eerst in git, dan publieke acties achter login of een snelheidslimiet; CORS naar eigen domeinen",
       "phase": "T10",
-      "priority": "P0",
+      "priority": "P2",
       "status": "queued",
       "owner_agent": "claude",
       "approval_level": "B",
@@ -344,7 +344,7 @@
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
-      "blocker": null,
+      "blocker": "live heeft al een allowlist (13 publieke marktdata-acties, rest vraagt token + eigen userId); 0 aanroepen in 24 uur; live code wijkt af van git",
       "next_action": null,
       "rollback_reference": "vorige versie van engine-proxy terug uitrollen"
     },
@@ -354,7 +354,7 @@
       "objective": "Gebruikers kunnen geen financiële rijen schrijven (accounts, positions, broker_trades); alleen server/service",
       "phase": "T10",
       "priority": "P0",
-      "status": "queued",
+      "status": "waiting_external",
       "owner_agent": "claude",
       "approval_level": "B",
       "dependencies": [],
@@ -373,8 +373,8 @@
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
-      "blocker": null,
-      "next_action": null,
+      "blocker": "Companion schrijft broker_trades en user_broker_accounts met de sessie van de gebruiker (src/app/actions/mt5Cloud.ts -> runCloudMt5Sync); rechten intrekken breekt de Sync-knop",
+      "next_action": "Companion-sessie: die schrijfacties naar een service-role-client verplaatsen, daarna pas de policies",
       "rollback_reference": "terugdraaimigratie herstelt de oude policies letterlijk"
     },
     {
@@ -492,7 +492,7 @@
       "objective": "api_keys: gebruikers kunnen zelf geen sleutel invoegen; alleen via de server met plancontrole",
       "phase": "A5",
       "priority": "P0",
-      "status": "queued",
+      "status": "verifying",
       "owner_agent": "claude",
       "approval_level": "B",
       "dependencies": [],
@@ -501,17 +501,73 @@
         "sleutel aanmaken via de app werkt"
       ],
       "files_or_services_touched": [
-        "axon-memory-app: supabase/migrations"
+        "axon-memory-app: supabase/migrations/20261015100000_a_key_is_made_by_the_server.sql"
+      ],
+      "started_at": "2026-10-15T15:00:00Z",
+      "last_progress_at": "2026-10-15T15:00:00Z",
+      "attempts": 0,
+      "tests_run": [
+        "wegwerp-Postgres 16 met Supabase-rollen: voor = eigen sleutel invoegen lukte; na = insert/hash/delete/terughalen geweigerd (42501), anon geweigerd, eigen hernoemen en intrekken werkt, service role werkt"
+      ],
+      "build_result": "n.v.t. (alleen SQL)",
+      "deployment_result": "niet toegepast: geen toegang tot het AXON-project",
+      "verification_result": null,
+      "blocker": "AXON-project niet bereikbaar vanuit deze sessie",
+      "next_action": "Luka/iMac: migratie toepassen via Supabase MCP, bestandsnaam gelijk aan ledger-versie maken; PR Ldezeeuw445/axon-memory-app#2 mergen",
+      "rollback_reference": "terugdraai-SQL onderaan de migratie"
+    },
+    {
+      "id": "SEC-RELAY-1",
+      "product": "axe_core",
+      "objective": "Open AI-doorgeefluiken ai-proxy en ai-proxy-v2 op het gedeelde project dicht",
+      "phase": "fundament",
+      "priority": "P0",
+      "status": "verifying",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "beide functies verify_jwt=true en 410",
+        "originelen in docs/programma/teruggezet"
+      ],
+      "files_or_services_touched": [
+        "edge functions ai-proxy (v48), ai-proxy-v2 (v47)"
       ],
       "started_at": "2026-10-15T15:00:00Z",
       "last_progress_at": "2026-10-15T15:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
+      "deployment_result": "15 okt: ai-proxy v48 en ai-proxy-v2 v47, verify_jwt=true (gemeld door de uitrol-API)",
+      "verification_result": null,
+      "blocker": null,
+      "next_action": "live aanroep zonder token moet 401 geven, met anon-JWT 410; Luka beslist over definitief verwijderen (niveau C)",
+      "rollback_reference": "docs/programma/teruggezet/README.md"
+    },
+    {
+      "id": "INTEL-UW-1",
+      "product": "axe_companion",
+      "objective": "Unusual Whales-sleutel vernieuwen: intel-proxy faalt 73% (367x 500 in 24 uur)",
+      "phase": "C5",
+      "priority": "P0",
+      "status": "waiting_approval",
+      "owner_agent": "luka",
+      "approval_level": "C",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [
+        "Supabase Edge-geheim UNUSUAL_WHALES_TOKEN",
+        "VPS UNUSUAL_WHALES_API_KEY"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
       "deployment_result": null,
       "verification_result": null,
-      "blocker": "AXON-project niet bereikbaar vanuit deze sessie: migratie in de repo, toepassen door Luka of een sessie met toegang",
-      "next_action": null,
+      "blocker": "sleutel is ingetrokken bij Unusual Whales; alleen Luka heeft het account",
+      "next_action": "zie docs/programma/incidenten/2026-10-15-intel-proxy-unusual-whales.md",
       "rollback_reference": null
     },
     {
