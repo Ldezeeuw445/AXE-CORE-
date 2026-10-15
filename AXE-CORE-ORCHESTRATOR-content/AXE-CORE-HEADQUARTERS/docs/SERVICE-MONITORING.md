@@ -34,6 +34,29 @@ en `service_probes.py` naar de VPS. Ze staan beide in het driftbewuste
 de bewaker eerlijk als onbekend. `service_probes.py` mag niet zonder `main.py`
 of andersom worden uitgerold.
 
+## Eén hartslag per product (15 oktober)
+
+Naast de AXE-diensten meet dezelfde bewaker de vijf producten uit
+`docs/programma/`. Geen tweede bewaker, geen tweede meldingenlijst.
+
+| component | wat telt als online |
+|---|---|
+| `axe_core_web` | `https://axeheadquarters.com/` geeft 2xx |
+| `companion_web` | `https://www.axecompanion.com/robots.txt` geeft 2xx |
+| `trading_os_web` | `https://tradingosapp.com/` geeft 2xx (op 14 okt: 402, dus uitval) |
+| `axon_web` | `https://app.axon-memory.com/` geeft 2xx |
+| `northsea_mcp` | `https://mcp.northseacommodity.com/health` geeft `status: ok` |
+| `northsea_db` | één gelezen rij uit `deal_automation_policy` in AXE Commodities |
+
+`northsea_db` gebruikt `NORTHSEA_SUPABASE_URL` en `NORTHSEA_SUPABASE_SERVICE_ROLE`
+uit dezelfde `.env.local` (namen gelijk aan `backend/northsea_mcp`). Zonder die
+twee staat hij eerlijk op niet ingesteld. Hij bestaat omdat AXE Commodities op
+11 oktober drie dagen stillag terwijl het platform `ACTIVE_HEALTHY` meldde
+(`docs/programma/incidenten/2026-10-11-northsea-db.md`).
+
+Live gemeten vanuit een cloudsessie op 15 okt: vier voordeuren online, Trading OS
+offline, NorthSea MCP online, NorthSea-database niet ingesteld (geen sleutel daar).
+
 ## Meldingen
 
 De externe Dependency Watch schrijft materiële, brongeverifieerde wijzigingen

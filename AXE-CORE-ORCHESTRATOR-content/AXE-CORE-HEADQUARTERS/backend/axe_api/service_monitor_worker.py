@@ -35,6 +35,43 @@ async def http_probe(client, url: str, *, headers=None, params=None, rows: bool 
         return "offline", None
 
 
+# Publieke voordeuren van de producten. Alleen de statuscode telt: een 402 van de
+# host (Trading OS, 14 okt) of een 5xx is uitval, een redirect naar de app niet.
+PRODUCT_PAGES = {
+    "axe_core_web": "https://axeheadquarters.com/",
+    "companion_web": "https://www.axecompanion.com/robots.txt",
+    "trading_os_web": "https://tradingosapp.com/",
+    "axon_web": "https://app.axon-memory.com/",
+}
+NORTHSEA_MCP_HEALTH = "https://mcp.northseacommodity.com/health"
+
+
+async def page_probe(client, url: str) -> str:
+    try:
+        response = await client.get(url, follow_redirects=True)
+        return "online" if response.is_success else "offline"
+    except httpx.HTTPError:
+        return "offline"
+
+
+async def product_probes(client, env=os.environ) -> dict[str, str]:
+    """De hartslag per product. AXE Commodities stond op 11 okt drie dagen stil
+    terwijl het platform ACTIVE_HEALTHY meldde: alleen een gelezen rij telt."""
+    names = list(PRODUCT_PAGES)
+    pages = await asyncio.gather(*(page_probe(client, PRODUCT_PAGES[n]) for n in names))
+    results = dict(zip(names, pages))
+    results["northsea_mcp"] = (await http_probe(client, NORTHSEA_MCP_HEALTH))[0]
+    ns_url = (env.get("NORTHSEA_SUPABASE_URL") or "").strip().rstrip("/")
+    ns_key = (env.get("NORTHSEA_SUPABASE_SERVICE_ROLE") or "").strip()
+    if ns_url and ns_key:
+        results["northsea_db"] = (await http_probe(
+            client, ns_url + "/rest/v1/deal_automation_policy", rows=True,
+            headers={"apikey": ns_key, "Authorization": f"Bearer {ns_key}"}, params={"select": "id", "limit": "1"}))[0]
+    else:
+        results["northsea_db"] = "unconfigured"
+    return results
+
+
 async def probes(client, api_url: str, local_url: str, supabase_url: str, key: str) -> dict[str, str]:
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     api, db, agents = await asyncio.gather(
@@ -55,6 +92,7 @@ async def probes(client, api_url: str, local_url: str, supabase_url: str, key: s
             results[component] = "unconfigured"
         else:
             results[component] = "online" if entry.get("reachable") is True else "offline"
+    results.update(await product_probes(client))
     return results
 
 

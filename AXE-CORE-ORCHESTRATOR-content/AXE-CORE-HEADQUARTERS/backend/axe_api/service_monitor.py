@@ -24,6 +24,14 @@ COMPONENTS = {
     "docker": ("Docker", "Agent sandboxes and container workloads", "Check the Docker daemon and available disk space."),
     "openhands": ("OpenHands", "Coding-agent execution", "Check the OpenHands health endpoint and container logs."),
     "crewai": ("CrewAI", "Crew execution", "Check the isolated CrewAI environment and package import."),
+    # Eén hartslag per product (docs/programma). Een bereikbare pagina is nog geen
+    # werkend product; northsea_db leest daarom een echte rij in AXE Commodities.
+    "axe_core_web": ("AXE Core web", "axeheadquarters.com on phone and iPad", "Check the Cloudflare Pages build of the orchestrator branch."),
+    "companion_web": ("AXE Companion", "axecompanion.com for every subscriber", "Check axe-companion.service and nginx on the VPS."),
+    "trading_os_web": ("Trading OS", "tradingosapp.com for every subscriber", "Check the hosting account of tradingosapp.com and its last deployment."),
+    "axon_web": ("AXON Memory", "app.axon-memory.com and the memory MCP", "Check the Cloudflare Pages project of AXON and its last upload."),
+    "northsea_mcp": ("NorthSea MCP", "Engine ticks, desk, crews and the ChatGPT connector", "Check northsea-mcp on the VPS and its health on port 8040."),
+    "northsea_db": ("NorthSea database", "Every deal, contact and message of NorthSea", "Check AXE Commodities in Supabase; restart only after pausing northsea:engine."),
 }
 
 

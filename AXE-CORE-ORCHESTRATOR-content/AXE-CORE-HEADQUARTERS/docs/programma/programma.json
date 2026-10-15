@@ -1,0 +1,805 @@
+{
+  "versie": 1,
+  "bijgewerkt": "2026-10-15T15:00:00Z",
+  "canon": "docs/programma/canon/",
+  "statussen": [
+    "queued",
+    "running",
+    "waiting_external",
+    "waiting_approval",
+    "failed_retryable",
+    "failed_blocked",
+    "verifying",
+    "done"
+  ],
+  "goedkeuringsniveaus": {
+    "A": "autonoom: code, tests, docs, alleen-lezen",
+    "B": "autonoom met terugdraaipad en bewijs: uitrol, additieve migratie, RLS strakker",
+    "C": "eigenaar beslist: billing, beveiligingsgrens verruimen, geld, handelsrechten, sleutelrotatie, gevoelige data publiceren, onomkeerbaar verwijderen"
+  },
+  "taken": [
+    {
+      "id": "NS-INC-1",
+      "product": "northsea",
+      "objective": "AXE Commodities-database weer gezond en de schrijflus gestopt",
+      "phase": "N0",
+      "priority": "P0",
+      "status": "waiting_approval",
+      "owner_agent": "luka",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "northsea:engine enabled=false tot de fix live staat",
+        "project herstart; /rest/v1/ antwoordt binnen 2 s",
+        "postgres_logs schrijven weer"
+      ],
+      "files_or_services_touched": [
+        "public.core_schedules (gedeeld)",
+        "Supabase-project kbimnuepbecbyezedvih"
+      ],
+      "started_at": "2026-10-15T15:00:00Z",
+      "last_progress_at": "2026-10-15T15:00:00Z",
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": "schrijven via de Supabase-koppeling liep vast op 60 s; herstart kan alleen in het dashboard",
+      "next_action": "Luka: SQL uit incidenten/2026-10-11-northsea-db.md stap 1, dan Restart project",
+      "rollback_reference": "update public.core_schedules set enabled = true where job_key = 'northsea:engine';"
+    },
+    {
+      "id": "NS-INC-2",
+      "product": "northsea",
+      "objective": "Index onder de budget-rem zodat elke insert niet meer scant",
+      "phase": "N0",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [
+        "NS-INC-1"
+      ],
+      "acceptance_criteria": [
+        "index deal_events_engine_dedupe_idx bestaat",
+        "explain van de rem-query toont Index Scan"
+      ],
+      "files_or_services_touched": [
+        "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": "na herstart los uitvoeren (concurrently, buiten transactie)",
+      "rollback_reference": "drop index concurrently if exists public.deal_events_engine_dedupe_idx;"
+    },
+    {
+      "id": "NS-INC-3",
+      "product": "northsea",
+      "objective": "northsea-mcp met deferred_until_reset (1c25cf93) live op de VPS",
+      "phase": "N0",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "mac-uitvoerder",
+      "approval_level": "B",
+      "dependencies": [
+        "NS-INC-1"
+      ],
+      "acceptance_criteria": [
+        "deploy.sh check toont alleen de verwachte bestanden",
+        "tweede engine-tick schrijft geen research_budget_exhausted_today",
+        "deal_events-inserts per uur < 20"
+      ],
+      "files_or_services_touched": [
+        "backend/northsea_mcp",
+        "VPS /opt/northsea-mcp"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": "cloudsessies hebben geen VPS-sleutel",
+      "next_action": "op de iMac: bash backend/northsea_mcp/deploy/deploy.sh check && ... deploy",
+      "rollback_reference": "bash backend/northsea_mcp/deploy/deploy.sh rollback"
+    },
+    {
+      "id": "CORE-REG-1",
+      "product": "axe_core",
+      "objective": "Eén productregister: registered_apps uitgebreid met repo per oppervlak, tak, werkmap, commando's, uitroldoel, health-URL, runbook, geheimnamen, cron-sleutels",
+      "phase": "fundament",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "migratie legt ook de vier live-only kolommen vast",
+        "5 producten geregistreerd, NorthSea erbij, Axon naar axon-memory-app",
+        "geen geheime waarden, alleen namen"
+      ],
+      "files_or_services_touched": [
+        "supabase/migrations",
+        "public.registered_apps",
+        "docs/programma/register.json"
+      ],
+      "started_at": "2026-10-15T15:00:00Z",
+      "last_progress_at": "2026-10-15T15:00:00Z",
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": "migratie schrijven; toepassen zodra schrijven via de koppeling werkt of via Luka",
+      "rollback_reference": "kolommen zijn additief; drop column per kolom in de terugdraaimigratie"
+    },
+    {
+      "id": "CORE-HB-1",
+      "product": "axe_core",
+      "objective": "Eén hartslag per product in de bestaande servicebewaker (Mac mini, elke minuut), geen tweede bewakingssysteem",
+      "phase": "fundament",
+      "priority": "P0",
+      "status": "verifying",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "zes productcomponenten in de bewaker: axe_core_web, companion_web, trading_os_web, axon_web, northsea_mcp, northsea_db",
+        "een 402/5xx of een onleesbare DB geeft offline, niet online",
+        "statusovergang schrijft één core_notifications-rij, herstel ook"
+      ],
+      "files_or_services_touched": [
+        "backend/axe_api/service_monitor.py",
+        "backend/axe_api/service_monitor_worker.py",
+        "docs/SERVICE-MONITORING.md"
+      ],
+      "started_at": "2026-10-15T15:00:00Z",
+      "last_progress_at": "2026-10-15T15:00:00Z",
+      "attempts": 0,
+      "tests_run": [
+        "backend/axe_api/test_service_monitor.py: 15 geslaagd (2 nieuw)"
+      ],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": "live vanuit de cloud 15 okt: axe_core_web online, companion_web online, trading_os_web offline (402), axon_web online, northsea_mcp online, northsea_db niet ingesteld",
+      "blocker": null,
+      "next_action": "Mac mini: autosync haalt de code op; NORTHSEA_SUPABASE_URL en NORTHSEA_SUPABASE_SERVICE_ROLE in .env.local; launchctl print gui/$(id -u)/com.axe.service-monitor",
+      "rollback_reference": "git revert van de commit; de bewaker valt terug op de AXE-diensten"
+    },
+    {
+      "id": "CORE-ALERT-1",
+      "product": "axe_core",
+      "objective": "Meldingen die aankomen op de telefoon: Web Push-abonnement van Luka geregistreerd, of ntfy (Vault axe_uptime_webhook) als tweede kanaal voor statusovergangen",
+      "phase": "fundament",
+      "priority": "P0",
+      "status": "waiting_approval",
+      "owner_agent": "luka",
+      "approval_level": "B",
+      "dependencies": [
+        "CORE-HB-1"
+      ],
+      "acceptance_criteria": [
+        "proefmelding komt aan op Luka's telefoon",
+        "geen melding bij elke tick, alleen bij overgang"
+      ],
+      "files_or_services_touched": [
+        "backend/axe_api/push_meldingen.py",
+        "Vault-naam axe_uptime_webhook"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": "0 push-abonnementen: de bel vult zich, de telefoon hoort niets",
+      "next_action": "Luka: op de telefoon in AXE Core meldingen toestaan (registreert het abonnement)",
+      "rollback_reference": null
+    },
+    {
+      "id": "CORE-HEALTH-1",
+      "product": "axe_core",
+      "objective": "/health van de AXE Core API controleert afhankelijkheden: Supabase, lease-versheid task worker, laatste tick, northsea-mcp",
+      "phase": "fundament",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "/health geeft 503 als een afhankelijkheid faalt",
+        "vps_sync check groen na uitrol"
+      ],
+      "files_or_services_touched": [
+        "backend/axe_api/main.py"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "CORE-SYNC-1",
+      "product": "axe_core",
+      "objective": "vps_sync-manifest compleet: de ~11 modules die main.py importeert, en actiontype dax terug in git",
+      "phase": "fundament",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "mac-uitvoerder",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "vps_sync check toont geen MISSING voor geïmporteerde modules",
+        "dax in planning.py"
+      ],
+      "files_or_services_touched": [
+        "scripts/vps_sync.py",
+        "backend/axe_api/planning.py"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "CORE-SEC-1",
+      "product": "axe_core",
+      "objective": "/internal/exec beperkt tot een allowlist per repo, of alleen via DAX",
+      "phase": "fundament",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "C",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "willekeurig commando geweigerd",
+        "git-paneel werkt in de gekozen repo"
+      ],
+      "files_or_services_touched": [
+        "backend/axe_api/main.py",
+        "src/presentation/components/axe-core/CodeStudioExtras.tsx"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": "beveiligingsgrens: ontwerp eerst aan Luka voorleggen",
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "CORE-CI-1",
+      "product": "axe_core",
+      "objective": "CI draait typecheck, vitest (lijstvergelijking) en eslint-baseline",
+      "phase": "fundament",
+      "priority": "P2",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "workflow faalt op een nieuwe test-FAIL, niet op de bekende 19"
+      ],
+      "files_or_services_touched": [
+        ".github/workflows"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "TOS-SEC-1",
+      "product": "trading_os",
+      "objective": "engine-proxy alleen voor ingelogde gebruikers: JWT verplicht, CORS naar eigen domeinen",
+      "phase": "T10",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "zonder token 401",
+        "met geldig token 200",
+        "geen providerlijst zonder token"
+      ],
+      "files_or_services_touched": [
+        "the-one: supabase/functions/engine-proxy",
+        "edge function engine-proxy (gedeeld project)"
+      ],
+      "started_at": "2026-10-15T15:00:00Z",
+      "last_progress_at": "2026-10-15T15:00:00Z",
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": "vorige versie van engine-proxy terug uitrollen"
+    },
+    {
+      "id": "TOS-SEC-2",
+      "product": "trading_os",
+      "objective": "Gebruikers kunnen geen financiële rijen schrijven (accounts, positions, broker_trades); alleen server/service",
+      "phase": "T10",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "insert/update als authenticated geweigerd",
+        "lezen eigen rijen blijft werken",
+        "Companion-sync (service role) blijft werken"
+      ],
+      "files_or_services_touched": [
+        "RLS op public.accounts, public.positions, public.broker_trades (gedeeld)"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": "terugdraaimigratie herstelt de oude policies letterlijk"
+    },
+    {
+      "id": "TOS-SEC-3",
+      "product": "trading_os",
+      "objective": "Live-engine WS /ws alleen met token",
+      "phase": "T10",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "verbinding zonder token geweigerd"
+      ],
+      "files_or_services_touched": [
+        "the-one: trading-os-live-engine"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "TOS-SEC-4",
+      "product": "trading_os",
+      "objective": "Geen VITE_-providersleutels in de bundle; nep-data niet meer als live labelen",
+      "phase": "T10",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "build bevat geen sleutelpatronen",
+        "terugvaldata zegt 'voorbeeld'"
+      ],
+      "files_or_services_touched": [
+        "the-one: src"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "TOS-HOST-1",
+      "product": "trading_os",
+      "objective": "tradingosapp.com weer online",
+      "phase": "T10",
+      "priority": "P0",
+      "status": "waiting_approval",
+      "owner_agent": "luka",
+      "approval_level": "C",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": "Vercel 402: betaling of andere host is een billingbesluit",
+      "next_action": "Luka kiest: Vercel betalen, of Cloudflare Pages zoals AXE Core",
+      "rollback_reference": null
+    },
+    {
+      "id": "TOS-T1",
+      "product": "trading_os",
+      "objective": "Trading Platform Core: één pakket voor instrumenten, symbolen, candles, indicatoren, MetaAPI-modellen, gedeeld door Trading OS en Companion",
+      "phase": "T1",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [
+        "CORE-REG-1"
+      ],
+      "acceptance_criteria": [
+        "beide apps importeren dezelfde module",
+        "intel-proxy heeft één eigenaar"
+      ],
+      "files_or_services_touched": [
+        "the-one",
+        "AXE-COMPANION-OS-"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "AXON-SEC-1",
+      "product": "axon_memory",
+      "objective": "api_keys: gebruikers kunnen zelf geen sleutel invoegen; alleen via de server met plancontrole",
+      "phase": "A5",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "insert als authenticated geweigerd",
+        "sleutel aanmaken via de app werkt"
+      ],
+      "files_or_services_touched": [
+        "axon-memory-app: supabase/migrations"
+      ],
+      "started_at": "2026-10-15T15:00:00Z",
+      "last_progress_at": "2026-10-15T15:00:00Z",
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": "AXON-project niet bereikbaar vanuit deze sessie: migratie in de repo, toepassen door Luka of een sessie met toegang",
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "AXON-SEC-2",
+      "product": "axon_memory",
+      "objective": "OAuth: PKCE alleen S256, tokens met verloop, scopes afgedwongen, toestemmingsscherm toont de geregistreerde client",
+      "phase": "A6",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [
+        "axon-memory-app: MCP/OAuth"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "AXON-A3-1",
+      "product": "axon_memory",
+      "objective": "Recall levert bron-id's en notities komen weer in het pakket (kolomfout memory-core.ts:146)",
+      "phase": "A3",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "test: notitie verschijnt in pakket",
+        "elk item heeft id + bron"
+      ],
+      "files_or_services_touched": [
+        "axon-memory-app"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "AXON-REL-1",
+      "product": "axon_memory",
+      "objective": "Productie draait axon-memory-app main, niet de oude fork",
+      "phase": "A12",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "mac-uitvoerder",
+      "approval_level": "B",
+      "dependencies": [
+        "AXON-SEC-1",
+        "AXON-SEC-2"
+      ],
+      "acceptance_criteria": [
+        "bundle-hash op beide domeinen = build van main"
+      ],
+      "files_or_services_touched": [
+        "Cloudflare Pages axon"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "COMP-C0",
+      "product": "axe_companion",
+      "objective": "Volledige Companion-audit tegen de canon",
+      "phase": "C0",
+      "priority": "P1",
+      "status": "waiting_external",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": "andere sessie werkt op de integratietak; niet tegelijk schrijven",
+      "next_action": "alleen-lezen audit; schrijven na afstemming",
+      "rollback_reference": null
+    },
+    {
+      "id": "COMP-INTEL-1",
+      "product": "axe_companion",
+      "objective": "intel-proxy één eigenaar en één code (botst nu met Trading OS)",
+      "phase": "C1",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [
+        "TOS-T1"
+      ],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "CODE-X2",
+      "product": "axe_code",
+      "objective": "Projectsysteem leest het productregister: repo kiezen, recent, clone",
+      "phase": "X2",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [
+        "CORE-REG-1"
+      ],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [
+        "src/infrastructure/config/editorRepo.ts",
+        "CodeEditorPage.tsx"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "CODE-X6",
+      "product": "axe_code",
+      "objective": "Preview per project met eigen poort en state buiten het workerproces",
+      "phase": "X6",
+      "priority": "P2",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [
+        "backend/axe_api/main.py /preview/*"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "NS-N0-1",
+      "product": "northsea",
+      "objective": "RLS op AXE Commodities live bewijzen (anon en authenticated lezen niets)",
+      "phase": "N0",
+      "priority": "P0",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [
+        "NS-INC-1"
+      ],
+      "acceptance_criteria": [
+        "anon-select op elke tabel geeft 0 rijen of 401"
+      ],
+      "files_or_services_touched": [],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "NS-N0-2",
+      "product": "northsea",
+      "objective": "Verlopen tender RFT 367144 (gesloten 9 okt) gesloten met reden; geen opvolging meer",
+      "phase": "N0",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [
+        "NS-INC-1"
+      ],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "NS-N0-3",
+      "product": "northsea",
+      "objective": "Twee open cursor-takken beoordelen en mergen of sluiten",
+      "phase": "N0",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [
+        "origin/cursor/desk-run-skip-parked-marketplace-7b5c",
+        "origin/cursor/northsea-discovery-quality-06db"
+      ],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    },
+    {
+      "id": "NS-N4-1",
+      "product": "northsea",
+      "objective": "Discovery schrijft naar sourcing_candidates, niet alleen naar action_queue.metadata",
+      "phase": "N4",
+      "priority": "P1",
+      "status": "queued",
+      "owner_agent": "claude",
+      "approval_level": "A",
+      "dependencies": [
+        "NS-INC-3"
+      ],
+      "acceptance_criteria": [],
+      "files_or_services_touched": [],
+      "started_at": null,
+      "last_progress_at": null,
+      "attempts": 0,
+      "tests_run": [],
+      "build_result": null,
+      "deployment_result": null,
+      "verification_result": null,
+      "blocker": null,
+      "next_action": null,
+      "rollback_reference": null
+    }
+  ]
+}

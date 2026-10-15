@@ -158,3 +158,57 @@ def test_ollama_needs_a_real_models_response():
             async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body))) as client:
                 assert (await http_health(client, "http://ollama/api/tags", models=True))["reachable"] == expected
     asyncio.run(run())
+
+
+def test_every_product_has_its_own_heartbeat():
+    """Docs/programma: vijf producten, elk een eigen meting. Trading OS gaf op 14 okt
+    een 402 van de host; dat is uitval, ook al antwoordt de server."""
+    from service_monitor import COMPONENTS
+    from service_monitor_worker import product_probes
+
+    def handler(request):
+        if request.url.host == "tradingosapp.com":
+            return httpx.Response(402, text="DEPLOYMENT_DISABLED")
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "version": "1.4.1"})
+        return httpx.Response(200, text="<html></html>")
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await product_probes(client, env={})
+    results = asyncio.run(run())
+    assert set(results) == {"axe_core_web", "companion_web", "trading_os_web", "axon_web", "northsea_mcp", "northsea_db"}
+    assert set(results) <= set(COMPONENTS)
+    assert results["trading_os_web"] == "offline"
+    assert results["axon_web"] == "online" and results["northsea_mcp"] == "online"
+    # Zonder sleutel geen verzonnen uitval: eerlijk niet ingesteld.
+    assert results["northsea_db"] == "unconfigured"
+
+
+def test_northsea_db_counts_only_a_real_row_read():
+    """Op 11 okt gaf AXE Commodities 522 aan de rand terwijl het platform gezond meldde."""
+    from service_monitor_worker import product_probes
+    env = {"NORTHSEA_SUPABASE_URL": "https://northsea.supabase.co", "NORTHSEA_SUPABASE_SERVICE_ROLE": "test-secret"}
+    seen = []
+
+    def make(db_response):
+        def handler(request):
+            if request.url.host == "northsea.supabase.co":
+                seen.append(request)
+                if isinstance(db_response, Exception):
+                    raise db_response
+                return db_response
+            return httpx.Response(200, json={"status": "ok"})
+        return handler
+
+    async def run(db_response):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(make(db_response))) as client:
+            return (await product_probes(client, env=env))["northsea_db"]
+
+    assert asyncio.run(run(httpx.Response(200, json=[{"id": 1}]))) == "online"
+    assert asyncio.run(run(httpx.Response(200, json=[]))) == "online"
+    assert asyncio.run(run(httpx.Response(522, text="origin timeout"))) == "offline"
+    assert asyncio.run(run(httpx.Response(200, json={"message": "not a list"}))) == "offline"
+    assert asyncio.run(run(httpx.ReadTimeout("timeout"))) == "offline"
+    assert seen[0].url.path == "/rest/v1/deal_automation_policy"
+    assert seen[0].headers["apikey"] == "test-secret"

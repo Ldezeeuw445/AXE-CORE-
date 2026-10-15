@@ -221,6 +221,7 @@ Bestaande rechten niet massaal wijzigen; bestaande tabellen behouden hun grants.
 | `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
 | `os3/` | Skill AXE + SETUP. CLI + hek bovenop bestaande workers. OS3 optioneel. |
 | `…/docs/MISSIES-EN-DAX.md` | missies (agents werken door zonder "ga door"), DAX-computers op STRATO, eeuwig AXE-gesprek, echte agentstatus |
+| `…/docs/programma/` | het productprogramma: de vijf masterspecs als canon, wat er echt draait, gapmatrix, taken (`programma.json`), incidenten. Lees dit vóór je aan een van de vijf producten begint |
 
 ## Architectuur: CLI bovenop wat er al is
 

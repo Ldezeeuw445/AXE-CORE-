@@ -1,0 +1,88 @@
+# Incident — NorthSea-database staat stil sinds 11 oktober
+
+Vastgesteld 14 oktober 2026, 18:00 UTC. Status: **open**. Ernst: hoog. NorthSea
+doet al meer dan drie dagen niets, en niemand kreeg een melding.
+
+## Wat je ziet
+
+- Elke aanroep op AXE Commodities (`kbimnuepbecbyezedvih`) eindigt in **HTTP 522**:
+  REST, Auth (`/auth/v1/health` na 20 s) en SQL via de Management API
+  ("Connection terminated due to connection timeout"). Alleen Storage antwoordt.
+- De Management API meldt het project tegelijk als `ACTIVE_HEALTHY`. Die status
+  zegt dus niets over de database zelf.
+- `core_schedules` op het gedeelde project: `northsea:engine` 22× mis,
+  `northsea:operations` 21×, `northsea:discovery` 20×. Elke keer HTTP 502 van de
+  MCP op `127.0.0.1:8040`, die zelf wel `{"status":"ok","version":"1.4.1"}` geeft.
+- Er is geen push-abonnement (0 rijen), dus de backoff-meldingen bereikten niemand.
+
+## Tijdlijn (uit de Supabase-logs, UTC)
+
+| moment | wat de logs zeggen |
+|---|---|
+| 10 okt, de hele dag | Steeds ~1.000 schrijfacties per uur van `python-httpx/0.28.1`: per uur ~350 `POST /deal_events` en ~340 `PATCH /action_queue`, plus volledige tabelleesrondes |
+| 11 okt 02:00 | Eerste `canceling statement due to statement timeout` — 30 in dat uur |
+| 11 okt 03:44 | Zelfs `SELECT … FROM pg_settings` duurt 17 s |
+| 11 okt 03:56:48 | Laatste regel in `postgres_logs`. Daarna niets meer |
+| 11 okt 03:57 | PostgREST: `PGRST002 Could not query the database for the schema cache`; alle reads 503 |
+| 11 okt 07:27 → nu | Alleen nog 522 aan de rand |
+
+## Oorzaak
+
+**De oude engine draait nog op de VPS.** Commit `1c25cf93` (6 okt, "stop budgetlus")
+laat een uitgeput onderzoeksbudget wachten tot de UTC-dagreset
+(`deferred_until_reset`). `docs/northsea/HERSTEL_20261006.md` zegt het zelf: die
+Python-wijziging is **niet uitgerold**, omdat de sessie geen VPS-sleutel had.
+Op de box schrijft de engine daarom elke tick, voor elke deal met een
+goedgekeurde maar onbetaalde onderzoeksblokkade, één `PATCH action_queue` en één
+`POST deal_events` (`research_budget_exhausted_today`). Dat is vier keer per uur
+× ~85 deals. Dat het meetbare patroon (constant ~1.000 schrijfacties per uur)
+precies daar uitkomt, is het bewijs.
+
+**De rem in de database maakte het erger.** Migratie
+`northsea_research_event_storm_guard` remt die events met een `BEFORE INSERT`-trigger
+die per insert een `exists (select … from deal_events where event_type = … and
+created_at …)` doet, onder een advisory lock. Er staat geen index op
+`(event_type, actor, opportunity_id, created_at)`: elke van die ~350 inserts per
+uur scant een tabel die door dezelfde lus elke dag groter werd.
+
+Daarbovenop pagineren `fetch_all` (engine, operations-sweep, leeslaag) met
+`offset` over volledige tabellen. Op een kleine compute-instantie is dat
+genoeg om de IO op te maken. Daarna antwoordt Postgres niet meer.
+
+## Wat er al gedaan is (14–15 okt)
+
+- Oorzaak vastgesteld uit logs en code; niets weggegooid, geen data aangeraakt.
+- Index-migratie geschreven (zie hieronder), **nog niet toegepast**: de DB is onbereikbaar.
+- `northsea:engine` pauzeren in `core_schedules` geprobeerd. De schrijfactie via de
+  Supabase-koppeling liep tweemaal vast op de 60 s-limiet (lezen werkte wel):
+  **niet gelukt**, daarom bij de acties voor Luka.
+
+## Herstel — in deze volgorde
+
+Draai je de volgorde om, dan valt de database binnen dagen opnieuw om.
+
+1. **Luka — de engine stilzetten** (anders begint de lus meteen weer):
+   ```sql
+   update public.core_schedules set enabled = false where job_key = 'northsea:engine';
+   ```
+   (gedeelde project `pqnngpcgbdwxavbatbia`). Terugdraaien: `enabled = true`.
+2. **Luka — AXE Commodities herstarten**: Supabase Dashboard → AXE Commodities →
+   Project Settings → General → *Restart project*. Overweeg één compute-stap
+   hoger zolang de achterstand wordt weggewerkt.
+3. **Na de herstart — index** (migratie
+   `supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql`)
+   met `create index concurrently`, zodat de rem niet meer scant.
+4. **Mac — northsea-mcp uitrollen** met de fix van 6 okt:
+   `bash backend/northsea_mcp/deploy/deploy.sh check`, dan `deploy` (backup, health,
+   rollback zitten erin). Bewijs per `HERSTEL_20261006.md` stap 5: één tick, en de
+   tweede tick schrijft geen nieuw budgetevent.
+5. **Pas dan** `northsea:engine` weer aanzetten en een uur meten: schrijfacties
+   per uur op `deal_events` moeten dalen van ~350 naar ongeveer nul.
+6. **Melding die aankomt**: zie `PROGRAMMA-HEARTBEAT` in `programma.json`. Dit
+   incident duurde drie dagen omdat een falende job niemand bereikte.
+
+## Wat dit incident leert (voor het programma)
+
+- Een fix die niet live staat is geen fix. Uitrolbewijs hoort bij "klaar" (regel 6 en 7).
+- `ACTIVE_HEALTHY` van een platform is geen heartbeat. Een heartbeat leest een rij.
+- Elke lus die per tick schrijft heeft een plafond per uur nodig, in code en in de DB.
