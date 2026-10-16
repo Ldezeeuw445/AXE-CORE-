@@ -50,8 +50,15 @@ belangrijkste tab), dan MCP (het tegenvoorbeeld), dan de rest.
       TASKS/CRON JOBS als `SectieBlok`. Geen `LIST_GRID` meer op Cron.
 - [ ] **1.0d** Resterende tabs dezelfde primitieven. Gedaan: Finance
       (`StatRij` + Source-schuifbalk), Control Plane + CrewAI (`StatRij`,
-      geen `STAT_ROW`), Organization (`TabRuimte vullen`). Nog open:
-      Agents, Apps, Knowledge, Terminal, Obsidian, Maps, EVE,
+      geen `STAT_ROW`), Organization (`TabRuimte vullen`), Agents
+      (16 okt 2026: had al `.axe-tabruimte`/`TabRail`/`.axe-kaart` --
+      de twee resterende overtredingen waren de roster-grid op `LIST_GRID`
+      [`auto-fill, minmax(320px,1fr)`, het tegenvoorbeeld uit regel 2] en
+      `<StatusBadge>` als gevulde pil op de kaart [regel 5]. Nu `KaartRaster`
+      + `SectieBlok`, status als platte gekleurde tekst. Geverifieerd:
+      tsc schoon, vitest 2723/2725 groen, de 2 falende los van deze wijziging).
+      Nog open:
+      Apps, Knowledge, Terminal, Obsidian, Maps, EVE,
       Table editor, Command, Developer, Infrastructure, Memory,
       Home (alleen wat geen composer/AICore is).
 - [ ] **1.1** Per tab langs `UI-MAATSTAF.md` — volgt uit 1.0c/1.0d.
