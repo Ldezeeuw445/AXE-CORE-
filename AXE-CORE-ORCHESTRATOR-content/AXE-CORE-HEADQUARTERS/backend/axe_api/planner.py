@@ -125,6 +125,8 @@ ZONDER_TERUGVAL = ("axe-algo",)
 _ACCOUNTFOUT = (
     (re.compile(r"unpaid invoice|payment required|billing|insufficient (credits|balance)", re.I),
      "betaling nodig (onbetaalde factuur of geen tegoed)"),
+    (re.compile(r"disabled claude subscription access|not allowed for this organization", re.I),
+     "door de organisatie geblokkeerd"),
     (re.compile(r"oauth session expired|could not be refreshed|not logged in|please (log|sign) in|"
                 r"login required|failed to authenticate|authentication (failed|required)|invalid_grant", re.I),
      "login verlopen"),
@@ -679,9 +681,14 @@ class Planner:
                 continue
             e = engines.get(motor) or {}
             wie = e.get("label") or motor
-            actie = ("pay the open invoice with the provider" if k.get("reden", "").startswith("betaling")
-                     else f"log in again on the Mac mini: {e.get('login') or motor + ' login'}")
-            reden = "payment needed" if k.get("reden", "").startswith("betaling") else "login expired"
+            r = str(k.get("reden", ""))
+            if r.startswith("betaling"):
+                actie, reden = "pay the open invoice with the provider", "payment needed"
+            elif r.startswith("door de organisatie"):
+                actie, reden = ("turn subscription access for Claude Code back on in that organisation's "
+                                "settings, or log this slot in with another account"), "blocked by its organisation"
+            else:
+                actie, reden = f"log in again on the Mac mini: {e.get('login') or motor + ' login'}", "login expired"
             tekst = (f"{wie} stopped working for the agents ({reden}). They switch to another logged-in "
                      f"account where allowed. Fix: {actie}.")
             try:
