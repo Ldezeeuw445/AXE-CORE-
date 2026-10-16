@@ -14,6 +14,27 @@ Ernst: hoog. NorthSea deed ruim vier dagen niets, en niemand kreeg een melding.
 - Een pauze van `northsea:engine` is op 15 okt aangeboden en door Luka geweigerd.
   Het rapport hieronder blijft daarom open tot de uitrol.
 
+### Driftcontrole van de box (15 okt, 23:58 UTC, alleen lezen)
+
+Via een eenmalige `exec`-job van de VPS-planner (`northsea:uitrol-inventaris`,
+goedgekeurd door Luka) zijn de sha256's van alle 34 `.py`-bestanden in
+`/opt/northsea-mcp/app/northsea_mcp` gelezen en vergeleken met git:
+
+- 30 bestanden zijn gelijk aan `orchestrator`.
+- Precies 4 wijken af: `engine.py`, `engine_rules.py`, `service.py`,
+  `sourcing_quality.py`. Alle vier zijn byte-gelijk aan `1c25cf93^`, de versie van
+  vóór de fix. Na `1c25cf93` heeft geen commit `northsea_mcp/` meer aangeraakt.
+- Laatste backup op de box: `20261005-152131`. De laatste uitrol was dus vóór de fix.
+- **Geen onbekend werk op de box.** Uitrollen vervangt alleen die vier bestanden door
+  hun versie uit `1c25cf93`; `deploy.sh check` zal precies die vier noemen.
+- Git-checkouts op de VPS (`/root/AXE-CORE-` op `0be1b9b`, `/opt/axe-workspace/AXE-CORE-`
+  op `9a84889`) zijn van juli/augustus en bevatten de fix niet.
+- Schijf: 157 GB vrij. Dienst `northsea-mcp` actief, versie 1.4.1.
+
+De job zelf staat nog in `core_schedules` met als volgende moment 1 januari 2027;
+hij leest alleen. Uitzetten: `update public.core_schedules set enabled = false
+where job_key = 'northsea:uitrol-inventaris';`
+
 ### Correctie op de oorzaak
 
 De database is klein: 35 MB, 22.037 rijen in `deal_events`, 520 in `action_queue`.
