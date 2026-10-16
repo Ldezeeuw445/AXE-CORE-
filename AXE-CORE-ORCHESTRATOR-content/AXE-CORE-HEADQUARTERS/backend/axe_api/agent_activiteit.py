@@ -330,6 +330,27 @@ def _missie_kort(m: dict[str, Any] | None) -> dict[str, Any] | None:
 
 # ── Alles bij elkaar, uit de database ────────────────────────────────────────
 
+def dax_velden(computer: dict[str, Any] | None) -> dict[str, Any]:
+    """Wat Home over de eigen computer laat zien: heartbeat, wat hij niet kan, wat hij doet.
+
+    Alleen uit de meting van dax_wacht (stats) -- niets afgeleid.
+    """
+    if not computer:
+        return {}
+    stats = computer.get("stats") or {}
+    engines = stats.get("engines") or {}
+    return {
+        "dax_heartbeat_at": computer.get("last_heartbeat_at"),
+        "dax_blockers": list(stats.get("blockers") or []),
+        "dax_error": computer.get("last_error") if computer.get("status") == "error" else None,
+        "dax_routine": stats.get("routine_title"),
+        "dax_always_on": stats.get("always_on"),
+        "dax_mem_mb": stats.get("container_mem_mb"),
+        "dax_engines": {k: bool(v) for k, v in engines.items() if k.endswith("_logged_in")},
+        "dax_notes": list(stats.get("notes") or []),
+    }
+
+
 class Activiteit:
     def __init__(self, client_factory: Callable[[], Any]):
         self._client_factory = client_factory
@@ -354,7 +375,8 @@ class Activiteit:
 
     def _dax(self) -> dict[str, dict[str, Any]]:
         try:
-            rijen = (self._db().table("core_dax_computers").select("id,owner_agent,status,updated_at")
+            rijen = (self._db().table("core_dax_computers")
+                     .select("id,owner_agent,status,updated_at,last_heartbeat_at,last_error,stats")
                      .limit(50).execute().data or [])
         except Exception:  # noqa: BLE001
             return {}
@@ -387,6 +409,7 @@ class Activiteit:
             status.update({
                 "role": ws.get("role"), "dax_computer": ws.get("dax_computer"),
                 "dax_status": (computer or {}).get("status"),
+                **dax_velden(computer),
                 "crew": ws.get("crew") or [], "events": tijdlijn(recent),
                 "last_event_at": recent[0].get("created_at") if recent else None,
             })

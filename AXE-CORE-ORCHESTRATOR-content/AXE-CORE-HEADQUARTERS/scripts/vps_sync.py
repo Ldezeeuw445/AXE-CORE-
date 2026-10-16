@@ -126,6 +126,10 @@ MANIFEST = {
     "/opt/axe-core-api/review_desk_bron.py": ("backend/axe_api/review_desk_bron.py", "axe-core-api"),
     "/opt/axe-core-api/llm_cascade.py": ("backend/axe_api/llm_cascade.py", "axe-core-api"),
     "/opt/axe-core-api/provider_probe.py": ("backend/axe_api/provider_probe.py", "axe-core-api"),
+    # DAX-bots always-on (11 okt 2026): main.py importeert dax_wacht bij de job axe_core:dax-wacht, en
+    # dax_wacht leest dax_routine.py als tekst om het in elke DAX-container te zetten.
+    "/opt/axe-core-api/dax_wacht.py": ("backend/axe_api/dax_wacht.py", "axe-core-api"),
+    "/opt/axe-core-api/dax_routine.py": ("backend/axe_api/dax_routine.py", "axe-core-api"),
 }
 
 # MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).
@@ -140,7 +144,7 @@ OPTIONAL_WHEN_MISSING = {
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "dax_wacht.py", "dax_routine.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

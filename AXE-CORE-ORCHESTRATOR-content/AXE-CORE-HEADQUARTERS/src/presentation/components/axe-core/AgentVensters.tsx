@@ -33,7 +33,7 @@ import { STAND } from '@/presentation/components/axe-core/managerStand';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
 import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
 import { decideDurableTaskApproval, pauseMission, resumeMission } from '@/infrastructure/gateways/axeCoreApiService';
-import { serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
+import { daxRegel, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 
 /** Hoe vaak de kolom zichzelf opnieuw beoordeelt, zodat nagloei echt afloopt. */
@@ -84,11 +84,13 @@ const BALK: React.CSSProperties = {
 
 /** De eigen computer (DAX) van de agent: een stip, cyaan als hij wakker is. */
 function DaxStip({ server }: { server?: ServerAgent }) {
-  if (!server?.dax_computer) return null;
-  const wakker = server.dax_status === 'running';
+  const regel = server ? daxRegel(server) : null;
+  if (!server?.dax_computer || !regel) return null;
+  // Cyaan alleen met een verse heartbeat: "running" in het register zonder meting telt niet.
+  const wakker = regel.wakker;
   return (
     <span
-      title={`Own computer ${server.dax_computer}: ${wakker ? 'awake' : server.dax_status || 'unknown'}`}
+      title={regel.blokkade ? `${regel.tekst} · can't: ${regel.blokkade}` : regel.tekst}
       aria-label={`DAX ${wakker ? 'awake' : 'asleep'}`}
       className="inline-block size-1.5 rounded-full"
       style={{ background: wakker ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)', boxShadow: wakker ? '0 0 6px var(--accent-cyan)' : 'none' }}

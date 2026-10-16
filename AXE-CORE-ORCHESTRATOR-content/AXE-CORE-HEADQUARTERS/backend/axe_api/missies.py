@@ -328,8 +328,34 @@ def beslis(missie: dict[str, Any], taak: dict[str, Any] | None, moment: datetime
             wacht_seconden=WACHT_GOEDKEURING,
         )
 
+    # Een bewezen stap waarin de agent zelf zegt dat hij vastzit, staat sinds
+    # 11 okt als 'blocked' (niet 'completed') met de reden in error.
+    fout_code = (taak.get("error") or {}).get("code") if isinstance(taak.get("error"), dict) else None
+    if ts == "blocked" and fout_code in ("agent_blocked", "needs_human"):
+        reden = str((taak.get("error") or {}).get("message") or "Agent reported it is blocked.")[:1000]
+        m["status"] = "blocked" if fout_code == "agent_blocked" else m.get("status", "working")
+        m["last_error"] = reden
+        bewijs = _bewijs(taak)
+        if bewijs:
+            m["evidence"] = bewijs
+        if fout_code == "needs_human":
+            return Besluit(
+                status="human_decision_required",
+                velden={"milestones": mijlpalen, "blocked_reason": reden, "last_stop_reason": "human_decision",
+                        "next_action": None},
+                events=[("mission.needs_human", reden, {"milestone": m["key"], "task_id": taak.get("id")})],
+                melding=(f"Decision needed: {missie['title']}", reden),
+            )
+        return Besluit(
+            status="blocked",
+            velden={"milestones": mijlpalen, "blocked_reason": reden, "last_stop_reason": "agent_blocked",
+                    "next_action": None},
+            events=[("mission.blocked", reden, {"milestone": m["key"], "task_id": taak.get("id")})],
+            melding=(f"Mission blocked: {missie['title']}", reden),
+        )
+
     if ts in TAAK_BEZIG:
-        doel = "waiting_agent" if (taak.get("assignee") and taak.get("assignee") != missie.get("owner_agent")) else "active"
+        doel ="waiting_agent" if (taak.get("assignee") and taak.get("assignee") != missie.get("owner_agent")) else "active"
         events = []
         if status == "waiting_approval":
             events.append(("mission.resumed", "Approval decided; the step continues.", {"task_id": taak.get("id")}))
@@ -565,7 +591,7 @@ class MissieRepository:
                 lopend = self.taak(m.get("task_id"))
                 # Ook een afgeronde taak: na "blocked"/"human" van de agent moet de
                 # mijlpaal opnieuw, met Luka's antwoord, niet hetzelfde oordeel herlezen.
-                if lopend is None or lopend.get("status") in {"failed", "cancelled", "rejected", "completed", "done"}:
+                if lopend is None or lopend.get("status") in {"failed", "cancelled", "rejected", "completed", "done", "blocked"}:
                     m.update(task_id=None, attempts=0, status="pending")
                 if notitie:
                     m["next_action"] = notitie
