@@ -1,6 +1,6 @@
 {
   "versie": 1,
-  "bijgewerkt": "2026-10-15T15:00:00Z",
+  "bijgewerkt": "2026-10-16T07:30:00Z",
   "canon": "docs/programma/canon/",
   "statussen": [
     "queued",
@@ -24,7 +24,7 @@
       "objective": "AXE Commodities-database weer gezond en de schrijflus gestopt",
       "phase": "N0",
       "priority": "P0",
-      "status": "waiting_approval",
+      "status": "done",
       "owner_agent": "luka",
       "approval_level": "B",
       "dependencies": [],
@@ -37,15 +37,15 @@
         "public.core_schedules (gedeeld)",
         "Supabase-project kbimnuepbecbyezedvih"
       ],
-      "started_at": "2026-10-15T15:00:00Z",
-      "last_progress_at": "2026-10-15T15:00:00Z",
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
-      "verification_result": null,
-      "blocker": "schrijven via de Supabase-koppeling liep vast op 60 s; herstart kan alleen in het dashboard",
-      "next_action": "Luka: SQL uit incidenten/2026-10-11-northsea-db.md stap 1, dan Restart project",
+      "verification_result": "Postgres herstart 15 okt 10:33 UTC (pg_postmaster_start_time); alle drie de NorthSea-jobs weer ok. Pauzeren van de engine door Luka geweigerd.",
+      "blocker": null,
+      "next_action": null,
       "rollback_reference": "update public.core_schedules set enabled = true where job_key = 'northsea:engine';"
     },
     {
@@ -84,7 +84,7 @@
       "objective": "northsea-mcp met deferred_until_reset (1c25cf93) live op de VPS",
       "phase": "N0",
       "priority": "P0",
-      "status": "queued",
+      "status": "waiting_approval",
       "owner_agent": "mac-uitvoerder",
       "approval_level": "B",
       "dependencies": [
@@ -105,9 +105,9 @@
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
-      "verification_result": null,
-      "blocker": "cloudsessies hebben geen VPS-sleutel",
-      "next_action": "op de iMac: bash backend/northsea_mcp/deploy/deploy.sh check && ... deploy",
+      "verification_result": "driftcontrole 15 okt 23:58: 30/34 bestanden gelijk aan orchestrator, 4 byte-gelijk aan 1c25cf93^; geen onbekend werk op de box",
+      "blocker": "vanuit de cloud blokkeert de veiligheidscontrole schrijven op de VPS (credential en remote shell); oude lus schrijft sinds 15 okt 17:00 weer ~900 rijen/uur",
+      "next_action": "iMac: deploy.sh check (moet precies 4 bestanden noemen) en deploy.sh deploy",
       "rollback_reference": "bash backend/northsea_mcp/deploy/deploy.sh rollback"
     },
     {
@@ -130,8 +130,8 @@
         "public.registered_apps",
         "docs/programma/register.json"
       ],
-      "started_at": "2026-10-15T15:00:00Z",
-      "last_progress_at": "2026-10-15T15:00:00Z",
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
@@ -161,8 +161,8 @@
         "backend/axe_api/service_monitor_worker.py",
         "docs/SERVICE-MONITORING.md"
       ],
-      "started_at": "2026-10-15T15:00:00Z",
-      "last_progress_at": "2026-10-15T15:00:00Z",
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
       "tests_run": [
         "backend/axe_api/test_service_monitor.py: 15 geslaagd (2 nieuw)"
@@ -337,8 +337,8 @@
         "the-one: supabase/functions/engine-proxy",
         "edge function engine-proxy (gedeeld project)"
       ],
-      "started_at": "2026-10-15T15:00:00Z",
-      "last_progress_at": "2026-10-15T15:00:00Z",
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
@@ -503,8 +503,8 @@
       "files_or_services_touched": [
         "axon-memory-app: supabase/migrations/20261015100000_a_key_is_made_by_the_server.sql"
       ],
-      "started_at": "2026-10-15T15:00:00Z",
-      "last_progress_at": "2026-10-15T15:00:00Z",
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
       "tests_run": [
         "wegwerp-Postgres 16 met Supabase-rollen: voor = eigen sleutel invoegen lukte; na = insert/hash/delete/terughalen geweigerd (42501), anon geweigerd, eigen hernoemen en intrekken werkt, service role werkt"
@@ -533,8 +533,8 @@
       "files_or_services_touched": [
         "edge functions ai-proxy (v48), ai-proxy-v2 (v47)"
       ],
-      "started_at": "2026-10-15T15:00:00Z",
-      "last_progress_at": "2026-10-15T15:00:00Z",
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
@@ -576,7 +576,7 @@
       "objective": "OAuth: PKCE alleen S256, tokens met verloop, scopes afgedwongen, toestemmingsscherm toont de geregistreerde client",
       "phase": "A6",
       "priority": "P0",
-      "status": "queued",
+      "status": "verifying",
       "owner_agent": "claude",
       "approval_level": "B",
       "dependencies": [],
@@ -584,15 +584,21 @@
       "files_or_services_touched": [
         "axon-memory-app: MCP/OAuth"
       ],
-      "started_at": null,
-      "last_progress_at": null,
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
-      "tests_run": [],
+      "tests_run": [
+        "oauth-client: 6/6 onder node --experimental-strip-types",
+        "oxlint schoon",
+        "npm run build ok",
+        "vitest 141/141",
+        "screenshot 375x812 van beide gevallen"
+      ],
       "build_result": null,
-      "deployment_result": null,
+      "deployment_result": "niet uitgerold: PR Ldezeeuw445/axon-memory-app#2",
       "verification_result": null,
       "blocker": null,
-      "next_action": null,
+      "next_action": "mini: functies mcp-oauth-consent, mcp-oauth-token, oauth-metadata en de frontend uitrollen",
       "rollback_reference": null
     },
     {
@@ -601,7 +607,7 @@
       "objective": "Recall levert bron-id's en notities komen weer in het pakket (kolomfout memory-core.ts:146)",
       "phase": "A3",
       "priority": "P1",
-      "status": "queued",
+      "status": "verifying",
       "owner_agent": "claude",
       "approval_level": "A",
       "dependencies": [],
@@ -612,15 +618,15 @@
       "files_or_services_touched": [
         "axon-memory-app"
       ],
-      "started_at": null,
-      "last_progress_at": null,
+      "started_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T07:30:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
-      "deployment_result": null,
+      "deployment_result": "niet uitgerold: PR Ldezeeuw445/axon-memory-app#2",
       "verification_result": null,
       "blocker": null,
-      "next_action": null,
+      "next_action": "mini: context-pack, mcp-server, remember uitrollen; recall op een account met notities toont your_notes",
       "rollback_reference": null
     },
     {
