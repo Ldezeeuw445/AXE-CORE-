@@ -1,5 +1,4 @@
 import { ExternalLink, Database, Cpu } from 'lucide-react';
-import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
 
 export interface CoreAgent {
   id: string;
@@ -44,7 +43,20 @@ export function AgentCard({ agent, highlighted }: AgentCardProps) {
     .slice(0, 2)
     .toUpperCase();
   const tableCount = Array.isArray(agent.supabase_tables) ? agent.supabase_tables.length : 0;
-  const badgeVariant = agent.status === 'active' ? 'active' : agent.status === 'online' ? 'online' : 'standby';
+  // UI-MAATSTAF regel 5: kleur zit in de letters, niet in een gevulde pil --
+  // dus geen <StatusBadge> (gekleurde achtergrond) meer hier, alleen gekleurde
+  // tekst. `statusNote` in Agents.tsx legt paused/deprecated/onbekend al uit;
+  // dit is alleen het woord zelf.
+  const statusKleur =
+    agent.status === 'active' ? 'var(--accent-cyan)'
+    : agent.status === 'online' ? 'var(--success)'
+    : 'var(--text-muted)';
+  const statusWoord =
+    agent.status === 'active' ? 'Active'
+    : agent.status === 'online' ? 'Online'
+    : agent.status === 'paused' || agent.status === 'statue' ? 'Paused'
+    : agent.status === 'deprecated' ? 'Deprecated'
+    : agent.status;
 
   return (
     <div
@@ -74,7 +86,9 @@ export function AgentCard({ agent, highlighted }: AgentCardProps) {
               <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
                 {agent.display_name}
               </span>
-              <StatusBadge variant={badgeVariant} />
+              <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: statusKleur }}>
+                {statusWoord}
+              </span>
             </div>
             <span
               className="text-[10px] font-medium uppercase tracking-wider"

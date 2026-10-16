@@ -23,7 +23,7 @@ import {
 } from '@/domain/agents/agentsTab';
 import { AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
-import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { SchuifBalk, KaartRaster, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -594,14 +594,15 @@ export default function Agents() {
 
       {weergave === 'settings' && (
       <>
-      <h2 className="text-small font-semibold tracking-wide mb-3" style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
-        FULL ROSTER &amp; SETTINGS
-        <span className="ml-2 font-mono text-[10.5px] font-normal tracking-normal" style={{ color: 'var(--text-muted)' }}>
-          {agents.length} rows{usingFallback ? ' · defaults' : ' · core_agents'}
-        </span>
-      </h2>
-
-      <div className={LIST_GRID}>
+      <SectieBlok
+        titel="FULL ROSTER & SETTINGS"
+        extra={(
+          <span className="font-mono text-[10.5px] font-normal tracking-normal" style={{ color: 'var(--text-muted)' }}>
+            {agents.length} rows{usingFallback ? ' · defaults' : ' · core_agents'}
+          </span>
+        )}
+      >
+      <KaartRaster>
         {agents.map(agent => {
           const editing = editingId === agent.id;
           const accent = ROLE_ACCENT[agent.role] ?? ROLE_ACCENT.assistant;
@@ -720,7 +721,8 @@ export default function Agents() {
             </div>
           );
         })}
-      </div>
+      </KaartRaster>
+      </SectieBlok>
 
       {/* De crew stond hier als tweede raster onder de roster. Hij staat nu in
           de Roster-weergave, onder de drie kolommen, waar ook meteen te zien is
