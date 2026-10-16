@@ -1992,17 +1992,17 @@ html:root[data-look][data-ios-pwa],
   margin-bottom: clamp(10px, 1.4vh, 20px);
   min-width: 0;
 }
-/* Een gewone tab staat in de kolom van de Browser-home: precies zo breed als
-   de composer en de onderbalk, in het midden (Luka, 25 sep). Op een breed
-   scherm liepen Agents, MCP, Settings en EVE anders van rand tot rand, met 9
-   tot 13 kaarten op een rij. Alleen wat echt ruimte nodig heeft (--vullen:
-   kalender, kaart, editor, grafiek, terminals) houdt het grote vak. */
-:root[data-look] .axe-tabruimte:not(.axe-tabruimte--vullen) {
-  width: min(var(--axe-barw, 1520px), calc(100% - 2 * var(--axe-onder, 75px)));
-  max-width: 100%;
-  margin-inline: auto;
-  align-self: center;
-}
+/* Geen tweede, smallere maat voor "gewone" tabs (Luka, 11 okt 2026).
+   Hier stond sinds 25 sep een regel `.axe-tabruimte:not(.axe-tabruimte--vullen)`
+   die elke tab zonder `vullen` terugkneep tot de bandbreedte (1026 tegen 1280
+   bij een venster van 1600). Daardoor zat de inhoud van bijna elke tab --
+   Tasks, Settings, Finance, Ledger, NorthSea Desk, Trading -- in de smalle
+   kolom van de composer in plaats van in het vak van de Browser-plaat. Dat is
+   precies wat layoutregel 1 verbiedt: één inhoudsruimte, geen tweede maat.
+   Kleine inhoud blijft gecentreerd doordat de inhoud zelf zijn maat bepaalt
+   (`.axe-inhoud` centreert, `.axe-kaart-raster` heeft vaste kolommen), niet
+   doordat het vak smaller wordt. Alleen de startpagina van de browser lijnt
+   op de band uit (`.axe-bandbreed`). */
 
 :root[data-look] .axe-tabruimte--vullen {
   min-height: 0;
@@ -2010,7 +2010,8 @@ html:root[data-look][data-ios-pwa],
 
 /* ── Op een telefoon is er geen ruimte om weg te geven ────────────────────
  *
- * De twee regels hierboven zijn op 25 september geschreven tegen een BREED
+ * De marge van .axe-tabruimte (en tot 11 okt een bandbreedte erbovenop) is
+ * geschreven tegen een BREED
  * scherm: daar liepen Agents, MCP, Settings en EVE van rand tot rand met
  * dertien kaarten op een rij, en een marge loste dat op. Voor een smal scherm
  * is er toen niets bijgekomen, en de som pakt daar rampzalig uit.
@@ -2033,8 +2034,7 @@ html:root[data-look][data-ios-pwa],
  * niet samenvallen geven een strook breedtes waarin het ene de telefoon ziet
  * en het andere niet. */
 @media (max-width: 767px) {
-  :root[data-look] .axe-tabruimte,
-  :root[data-look] .axe-tabruimte:not(.axe-tabruimte--vullen) {
+  :root[data-look] .axe-tabruimte {
     width: auto;
     max-width: none;
     margin-inline: 8px;
