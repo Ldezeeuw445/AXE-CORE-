@@ -139,8 +139,21 @@ openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
       spelling uit alle drie de lijsten langsloopt. Over: vier keer `northsea`
       (heeft nog geen echte afloop, zie 2.5 — bewust geen lus) en `eve` +
       `infrastructure_agent` (met reden geen agent).
-- [ ] **2.3** Per agent tonen: welke skills, welke tools, welk model, en of
+- [x] **2.3** Per agent tonen: welke skills, welke tools, welk model, en of
       zijn leerlus rondloopt (`agent_learning_episodes` per agent).
+
+      Stond nog open terwijl de code al klopte — afgevinkt 16 okt 2026,
+      geverifieerd door het bestand zelf te lezen (niet aangenomen). In
+      `Agents.tsx` (roster-weergave, rond regel 605-676): elke kaart
+      toont `model_provider`/`model_name`, skills (`agent.capabilities`)
+      en tools (`agent.toolset`) als badges, met "No skills or tools
+      registered yet." als geen van beide iets heeft, plus een leerlusregel
+      (`Learning loop (agent_learning_episodes): ...` met episodes,
+      close rate en `applied/reinforceable learned`). De agent-naar-lus-
+      koppeling loopt via `loopAgentForRow` → `loopAgentVoor`
+      (`memoryFeedbackService.ts`), dezelfde canonieke resolver als
+      retrieval zelf gebruikt — dus geen tweede, eigen lijst meer die uit
+      de pas kan lopen (zie 2.2a).
 - [ ] **2.4** RAG-bestanden per agent zichtbaar maken.
 - [ ] **2.5** Alle agents de lus geven. Nu: chat, browser, code-editor,
       lokale code en trading. Nog niet: `agenticEngine`, `langGraphOrchestrator`.
