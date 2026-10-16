@@ -37,6 +37,8 @@ interface RegisteredApp {
   android_package: string | null;
   user_added: boolean;
   sort_order: number | null;
+  /** Productsleutel uit het productregister (docs/programma, CORE-REG-1). */
+  product_key?: string | null;
 }
 
 type LiveState = 'checking' | 'online' | 'deploying' | 'error' | 'unknown';
@@ -67,8 +69,9 @@ const VPS_SERVICE_BY_APP_NAME: Record<string, string> = {
 // comment below). Each entry overrides both the card's status badge and adds
 // an explicit detail line, regardless of what prod_url/vercel_project_id
 // happen to hold on the row:
-//  - AXE Companion runs on the VPS today, but DNS still points at the
-//    disabled Vercel deployment, so nothing public actually resolves to it.
+//  - (AXE Companion stond hier als "Not launched". Gemeten 16 okt: www. en
+//    apex geven 200 van nginx op de VPS, dus de DNS is over. Hij krijgt nu
+//    gewoon zijn VPS-status via VPS_SERVICE_BY_APP_NAME.)
 //  - Trading OS has never been a separate deployment — it is an internal
 //    tab, hence no VPS_SERVICE_BY_APP_NAME entry for it either.
 //  - Axon Memory has its own domain and its own Supabase project, neither of
@@ -76,10 +79,6 @@ const VPS_SERVICE_BY_APP_NAME: Record<string, string> = {
 //    no-cors fetch as a stand-in for "launched", it says plainly that this
 //    dashboard doesn't know.
 const NOT_LAUNCHED_STATUS: Record<string, { badge: string; detail: string }> = {
-  'AXE Companion': {
-    badge: 'Not launched',
-    detail: 'Not launched — runs on the VPS (axe-companion service), DNS not yet cut over from the disabled Vercel deployment.',
-  },
   'Trading OS': {
     badge: 'No deployment',
     detail: 'Not a separate deployment — runs as a tab inside AXE CORE.',
@@ -98,8 +97,9 @@ interface AppHealthCheck {
   checkedAt?: number;
 }
 
-// NorthSea Commodity is a real business Luka runs, not a deploy target — it
-// has no registered_apps row and no VPS systemd unit of its own here, so it
+// NorthSea Commodity is a real business Luka runs, not a deploy target — its
+// registered_apps row (product_key 'northsea', sinds 16 okt) is skipped in the
+// grid in load(), and it has no VPS systemd unit of its own here, so it
 // gets its own card below the registry grid rather than a slot inside it
 // (same reasoning as Trading OS having no VPS_SERVICE_BY_APP_NAME entry
 // above). Revenue is carried explicitly as `commissie_bedragen`/`waarde_ingevuld`
@@ -229,7 +229,9 @@ export default function AppsPage() {
       // refresh began — so a failing reload looked like a working one until
       // it finished failing again.
       setLoadError(null);
-      const list = (rows ?? []).filter(a => a.enabled !== false);
+      // NorthSea staat sinds 16 okt in het productregister, maar heeft hieronder
+      // al een eigen kaart met omzetcijfers; in het raster zou hij dubbel staan.
+      const list = (rows ?? []).filter(a => a.enabled !== false && a.product_key !== 'northsea');
       setApps(list);
       if (isAxeApiConfigured) {
         const next: Record<string, LiveState> = {};
