@@ -9,12 +9,16 @@
  * Die worden geteld en benoemd, niet getoond als eigen geheugen.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { Upload, X } from 'lucide-react';
 import { Block } from '@/presentation/components/surface/Page';
 import {
   memoryOwners, loopAgentFor, relativeTime,
   type MemoryEntryRow, type MemoryOwner,
 } from '@/domain/agents/activity';
-import { loadNamespaceMemory, type NamespaceCount } from '@/infrastructure/persistence/agentActivityService';
+import {
+  loadNamespaceMemory, addNamespaceMemory, deleteNamespaceMemory,
+  type NamespaceCount,
+} from '@/infrastructure/persistence/agentActivityService';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
 
 const OWNERS = memoryOwners();
@@ -42,6 +46,10 @@ export function AgentMemoryPanel({ selectedId, onSelect, counts, loopHealth, sta
   // De lijst draagt zijn namespace mee: kies je een andere agent, dan staat de
   // oude lijst niet even onder de nieuwe naam maar zie je "Reading…".
   const [read, setRead] = useState<{ ns: string; rows: MemoryEntryRow[] | null } | null>(null);
+  // Telt op na een geslaagde upload/verwijdering, zodat de lijst meteen
+  // opnieuw leest in plaats van te wachten op de volgende poll van `stamp`.
+  const [localBump, setLocalBump] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -49,7 +57,7 @@ export function AgentMemoryPanel({ selectedId, onSelect, counts, loopHealth, sta
       if (alive) setRead({ ns: owner.namespace, rows });
     });
     return () => { alive = false; };
-  }, [owner.namespace, stamp]);
+  }, [owner.namespace, stamp, localBump]);
 
   const current = read?.ns === owner.namespace ? read : null;
   const entries = current ? (current.rows ?? []) : null;
@@ -57,6 +65,30 @@ export function AgentMemoryPanel({ selectedId, onSelect, counts, loopHealth, sta
 
   const c = counts[owner.namespace];
   const health = loopFor(owner, loopHealth);
+
+  // Bouwlijst 2.4: RAG-bestanden per agent. Schrijft in dezelfde `memory`-rij
+  // die hierboven al gelezen wordt (en die de brain/terrain op /memory ook
+  // toont) -- geen tweede, losse opslag die alleen deze tab kent.
+  const uploadFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = String(reader.result ?? '');
+      setUploading(true);
+      void addNamespaceMemory(owner.namespace, {
+        content,
+        kind: 'doc',
+        source: `agents-tab:${file.name}`,
+      }).finally(() => {
+        setUploading(false);
+        setLocalBump(n => n + 1);
+      });
+    };
+    reader.readAsText(file);
+  };
+
+  const removeEntry = (id: string) => {
+    void deleteNamespaceMemory(id).then(() => setLocalBump(n => n + 1));
+  };
 
   return (
     <section className="mb-6">
@@ -67,7 +99,28 @@ export function AgentMemoryPanel({ selectedId, onSelect, counts, loopHealth, sta
         <Block
           className="lg:col-span-2"
           title={<span style={{ color: owner.accent }}>{owner.name}</span>}
-          action={<code className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>memory · {owner.namespace}</code>}
+          action={(
+            <div className="flex items-center gap-2">
+              <code className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>memory · {owner.namespace}</code>
+              <label
+                className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                style={{ color: uploading ? 'var(--text-muted)' : 'var(--accent-cyan)' }}
+                title={`Add a RAG file to ${owner.name}'s own memory`}
+              >
+                <Upload size={10} /> {uploading ? 'Uploading…' : 'Add RAG file'}
+                <input
+                  type="file"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadFile(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+          )}
         >
           <div className="mb-2 flex flex-wrap gap-x-5 gap-y-1 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
             <span>
@@ -125,6 +178,15 @@ export function AgentMemoryPanel({ selectedId, onSelect, counts, loopHealth, sta
                     <span className="w-[62px] flex-none text-right font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
                       {Number.isFinite(at) ? relativeTime(at, now) : ''}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => removeEntry(e.id)}
+                      aria-label="Remove this memory"
+                      className="flex-none"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      <X size={10} />
+                    </button>
                   </div>
                 );
               })}

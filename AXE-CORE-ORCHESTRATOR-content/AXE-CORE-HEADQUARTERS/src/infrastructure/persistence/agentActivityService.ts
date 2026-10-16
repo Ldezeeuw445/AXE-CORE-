@@ -15,6 +15,9 @@
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { TERMINAL_TASK_STATUSES } from '@/domain/tasks/taskStatus';
+import { sbInsertRow, sbDeleteRow } from '@/infrastructure/gateways/axeCoreApiService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import type { MemoryKind } from '@/domain/memory/memoryKind';
 import {
   DESK_SOURCE_PATTERNS,
   type TaskRow, type EpisodeRow, type JobRunRow, type ScheduleRow, type MemoryEntryRow,
@@ -148,4 +151,60 @@ export async function loadNamespaceMemory(namespace: string, limit = 6): Promise
   return read<MemoryEntryRow>('memory', sb.from('memory').select(MEMORY_COLS)
     .eq('agent', namespace).or(NOT_DESK)
     .order('created_at', { ascending: false }).limit(limit), errors);
+}
+
+/**
+ * Eén agent een eigen herinnering/RAG-bestand geven. Bouwlijst 2.4.
+ *
+ * Schrijft in dezelfde `memory`-tabel die `loadNamespaceMemory` hierboven
+ * leest en die de brain/terrain-weergave (MemoryHub, `unifiedMemoryService`)
+ * al toont -- dus wat hier binnenkomt is meteen zichtbaar op beide plekken,
+ * in plaats van een tweede, eigen opslag die alleen deze tab kent.
+ *
+ * Via `sbInsertRow` (de VPS-bridge met de service-role-sleutel) en niet
+ * rechtstreeks via `getSupabase()`: de RLS-policy op `memory` eist dat
+ * `user_id` met `auth.uid()` overeenkomt, en deze pagina heeft geen eigen
+ * ingelogde sessie per agent. `remember()` in `agentMemoryService.ts` lost
+ * hetzelfde probleem exact zo op -- zelfde pad, zelfde `AXE_USER_ID`, nu ook
+ * bruikbaar voor een agent buiten de zes vaste MemoryNamespace-waarden (elke
+ * roster-agent heeft hier wel een eigen `namespace`, zie `memoryOwners()`).
+ *
+ * Nooit een exception naar boven: een mislukte opslag mag de tab niet breken,
+ * de aanroeper leest het `boolean`-resultaat.
+ */
+export async function addNamespaceMemory(namespace: string, input: {
+  content: string;
+  kind?: MemoryKind;
+  source?: string;
+  key?: string;
+}): Promise<boolean> {
+  const content = input.content?.trim();
+  if (!content || !namespace) return false;
+  try {
+    await sbInsertRow('memory', {
+      agent: namespace,
+      user_id: AXE_USER_ID,
+      kind: input.kind ?? 'doc',
+      key: input.key ?? null,
+      content: content.slice(0, 8000),
+      category: 'rag-file',
+      source: input.source ?? 'agents-tab',
+    });
+    return true;
+  } catch (err) {
+    console.warn('[agentActivityService] addNamespaceMemory failed:', err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
+/** Eén herinnering verwijderen -- hetzelfde VPS-pad als de schrijfactie. */
+export async function deleteNamespaceMemory(id: string): Promise<boolean> {
+  if (!id) return false;
+  try {
+    await sbDeleteRow('memory', id);
+    return true;
+  } catch (err) {
+    console.warn('[agentActivityService] deleteNamespaceMemory failed:', err instanceof Error ? err.message : err);
+    return false;
+  }
 }
