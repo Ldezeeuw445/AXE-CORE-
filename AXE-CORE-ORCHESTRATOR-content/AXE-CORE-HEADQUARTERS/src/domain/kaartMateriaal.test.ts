@@ -54,6 +54,27 @@ describe('kaartmateriaal staat één keer', () => {
     const marge = /margin-inline:\s*([^;]+)/;
     expect(tab![0].match(marge)?.[1]).toBe(vak![0].match(marge)?.[1]);
   });
+
+  /* 11 okt 2026: een regel `.axe-tabruimte:not(.axe-tabruimte--vullen)` kneep
+     sinds 25 sep elke tab zonder `vullen` terug tot de bandbreedte van de
+     composer. Layoutregel 1 kent één inhoudsruimte; de band is alleen voor de
+     composer, de chatplaat en de browser-startpagina. */
+  it('geen regel knijpt de tabruimte tot de bandbreedte', () => {
+    // Per regelblok: alles tussen twee `}`; selector = laatste stuk vóór `{`.
+    const blokken = css
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('}')
+      .map((b) => {
+        const i = b.lastIndexOf('{');
+        return i < 0 ? null : { selector: b.slice(0, i).split('{').pop()!.trim(), lijf: b.slice(i + 1) };
+      })
+      .filter((b): b is { selector: string; lijf: string } => !!b && b.selector.includes('.axe-tabruimte'));
+    expect(blokken.length).toBeGreaterThan(0);
+    for (const { selector, lijf } of blokken) {
+      expect(lijf, selector).not.toMatch(/--axe-barw/);
+      expect(lijf, selector).not.toMatch(/margin-inline:\s*auto/);
+    }
+  });
 });
 
 describe('Settings en MCP gebruiken de primitieven', () => {
