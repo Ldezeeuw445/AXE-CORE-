@@ -35,8 +35,19 @@ class TestCommandos:
         assert "read-only" in plan
         # En buiten plan mag hij schrijven, met automatische goedkeuring -- zonder
         # die vlag hangt een headless run op een vraag die niemand beantwoordt.
-        schrijf = a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
+        a._codex_help.cache_clear()
+        schrijf = a.ENGINES["codex"]["cmd"]("codex-die-er-niet-is", "p", "acceptEdits", "/tmp/uit")
         assert "workspace-write" in schrijf and "--approve-for-me" in schrijf
+
+    def test_een_oudere_codex_krijgt_geen_vlag_die_hij_niet_kent(self, monkeypatch):
+        # 15-16 okt: elke Codex-run van de planner faalde met exit 2,
+        # "unexpected argument '--approve-for-me'". De codex op de Mac mini is ouder
+        # dan de documentatie; wat hij niet kent, krijgt hij niet.
+        monkeypatch.setattr(a, "_codex_help", lambda _b: "Usage: codex exec [OPTIONS] [PROMPT]\n  -s, --sandbox <MODE>\n")
+        schrijf = a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
+        assert "workspace-write" in schrijf and "--approve-for-me" not in schrijf
+        monkeypatch.setattr(a, "_codex_help", lambda _b: "  --approve-for-me  route approvals through automatic review\n")
+        assert "--approve-for-me" in a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
 
     def test_cursor_schrijft_met_force_en_leest_met_ask(self):
         cmd = a.ENGINES["cursor"]["cmd"]("cursor-agent", "p", "acceptEdits", "")
@@ -327,3 +338,37 @@ def test_zonder_binary_is_niets_vast_te_stellen():
     import agent_runner as ar
     ar.vergeet_accounts()
     assert ar._account_van("codex", ar.ENGINES["codex"], None) == {"ingelogd": None, "account": None}
+
+
+class TestBouwrunMagControleren:
+    """16 okt: twee 'geslaagde' bouwruns van de planner schreven code maar draaiden
+    niets -- elk npm/tsc-commando bleef op een toestemmingsvraag hangen. Een bouwrun
+    krijgt nu de eigen controles van de repo, en verder niets; chat en editor niet."""
+
+    def _draai(self, monkeypatch, **kw):
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: "claude")
+        gezien = []
+        echte_run = subprocess.run
+
+        def run(cmd, *args, **kwargs):
+            if cmd and cmd[0] == "claude":
+                gezien.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0, stdout='{"result": "ok"}', stderr="")
+            return echte_run(cmd, *args, **kwargs)
+        monkeypatch.setattr(subprocess, "run", run)
+        a.run_agent("proef", "bouw iets", engine="claude", **kw)
+        return gezien[-1]
+
+    def test_bouwrun_krijgt_alleen_de_controles(self, monkeypatch):
+        cmd = self._draai(monkeypatch, permission_mode="acceptEdits", checks=True)
+        assert "--allowedTools" in cmd
+        toegestaan = cmd[cmd.index("--allowedTools") + 1:]
+        assert "Bash(npx vitest:*)" in toegestaan and "Bash(git diff:*)" in toegestaan
+        # Geen vrije shell, geen push, geen netwerk-installatie.
+        assert not any(t in ("Bash", "Bash(*)") or "push" in t or "install" in t or "curl" in t for t in toegestaan)
+
+    def test_zonder_vraag_of_in_plan_geen_extra_rechten(self, monkeypatch):
+        assert "--allowedTools" not in self._draai(monkeypatch, permission_mode="acceptEdits")
+        assert "--allowedTools" not in self._draai(monkeypatch, permission_mode="plan", checks=True)

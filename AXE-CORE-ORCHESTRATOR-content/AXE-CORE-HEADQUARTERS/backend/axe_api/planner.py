@@ -65,6 +65,9 @@ DAGBUDGET = int(os.environ.get("AXE_PLANNER_DAGBUDGET", "10"))
 MAX_VOORSTELLEN = 3
 MAX_POGINGEN = 2
 PLANNER_RUN_S = 300
+# Een bouwrun schrijft code en draait daarna tests, typecheck, lint en build. In
+# 300 s lukte dat niet ("Claude Code 4 liep langer dan 300s", 15 okt).
+BOUW_RUN_S = 1500
 # De sleutel-route: de proxy op de VPS vult zijn eigen server-sleutel aan.
 PROXY_URL = os.environ.get("AXE_PLANNER_PROXY", "https://api.axecompanion.com/proxy/ai")
 SLEUTEL_MODEL = {"provider": "groq", "model": "openai/gpt-oss-120b", "format": "openai",
@@ -644,7 +647,10 @@ class Planner:
         except ImportError:
             pass
         tel_gebruik(staat, motor, vandaag)
-        uit = self.run_agent(repo, prompt, modus, PLANNER_RUN_S, motor)
+        if modus == "acceptEdits":
+            uit = self.run_agent(repo, prompt, modus, BOUW_RUN_S, motor, checks=True)
+        else:
+            uit = self.run_agent(repo, prompt, modus, PLANNER_RUN_S, motor)
         if uit.get("status") == "ok":
             (staat.get("account_kapot") or {}).pop(motor, None)
             return str(uit.get("result") or ""), ""
@@ -762,7 +768,7 @@ class Planner:
                           # zette er "No handler for planner" op (10-11 okt). Drie runs
                           # (de accountterugval) plus marge.
                           "lease_expires_at": (datetime.now(timezone.utc)
-                                               + timedelta(seconds=3 * PLANNER_RUN_S + 300)).isoformat()})
+                                               + timedelta(seconds=3 * BOUW_RUN_S + 300)).isoformat()})
                  .eq("id", taak_id).eq("status", "pending").eq("capability", "planner")
                  .execute().data)
         return bool(rijen)

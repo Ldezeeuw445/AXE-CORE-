@@ -338,7 +338,7 @@ class TestVoerUitEerlijk:
         assert any(t == "core_tasks" and v.get("metadata", {}).get("uiStatus") == "blocked" for t, _, v in rijen)
 
     def test_schrijftaak_zonder_diff_heet_geen_wijziging(self, monkeypatch):
-        pl, rijen = self._pl(monkeypatch, lambda *a: {"status": "ok", "result": "Ik heb alles gebouwd!"})
+        pl, rijen = self._pl(monkeypatch, lambda *a, **k: {"status": "ok", "result": "Ik heb alles gebouwd!"})
         monkeypatch.setattr(pl, "_bewijs", lambda repo: {"repo": repo, "leesbaar": True, "veranderd": False, "diffstat": ""})
         taak = {"id": "t3", "title": "Build", "goal": "g", "payload": {"repo": "axe-core"},
                 "metadata": {"agent": "code-agent", "motor": "cursor", "risico": "schrijven"}}
@@ -346,3 +346,23 @@ class TestVoerUitEerlijk:
         klaar = [v for t, s, v in rijen if t == "core_tasks" and v.get("status") == "completed"][0]
         assert klaar["metadata"]["geen_wijziging"] is True
         assert klaar["result"]["output"].startswith("[No changes in the repo")
+
+
+def test_een_bouwrun_krijgt_tijd_en_zijn_controles():
+    """15 okt: 'Claude Code 4 liep langer dan 300s'; 16 okt: tests bleven op een
+    toestemmingsvraag hangen. Een schrijvende run krijgt BOUW_RUN_S en checks=True,
+    een lees-/planrun blijft op 300 s zonder extra rechten."""
+    import planner as p
+    aanroepen = []
+
+    def run(repo, prompt, modus, timeout, motor, **kw):
+        aanroepen.append((modus, timeout, kw.get("checks", False)))
+        return {"status": "ok", "result": "klaar"}
+
+    pl = p.Planner(lambda: None, run, lambda: {})
+    staat = {}
+    pl._vraag(staat, "claude", "bouw", "proef", "acceptEdits")
+    pl._vraag(staat, "claude", "lees", "proef", "plan")
+    assert aanroepen[0] == ("acceptEdits", p.BOUW_RUN_S, True)
+    assert aanroepen[1] == ("plan", p.PLANNER_RUN_S, False)
+    assert p.BOUW_RUN_S > p.PLANNER_RUN_S

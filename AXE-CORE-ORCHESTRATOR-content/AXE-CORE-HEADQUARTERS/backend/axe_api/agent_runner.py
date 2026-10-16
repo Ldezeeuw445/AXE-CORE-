@@ -46,6 +46,7 @@ die iemand in een verzoek kan zetten.
 """
 from __future__ import annotations
 import base64
+import functools
 import json
 import logging
 import os
@@ -68,7 +69,39 @@ DEFAULT_TIMEOUT = int(os.environ.get("AGENT_TIMEOUT", os.environ.get("CLAUDE_TIM
 PROTECTED_BRANCHES = {"main", "master"}
 
 ALLOWED_PERMISSION_MODES = ("default", "acceptEdits", "plan")
+
+# Wat een bouwrun van de planner zonder vraag mag draaien: de eigen controles van
+# een repo en git lezen. Op 16 okt meldden twee "geslaagde" runs dat elk commando
+# (npm test, tsc, node --test) op een toestemmingsvraag bleef hangen die headless
+# niemand beantwoordt -- code geschreven, niets bewezen. Alleen in acceptEdits en
+# alleen als de aanroeper erom vraagt (checks=True); chat en editor houden hun stand.
+CHECK_TOOLS = (
+    "Bash(npm test:*)", "Bash(npm run test:*)", "Bash(npm run lint:*)", "Bash(npm run typecheck:*)",
+    "Bash(npm run build:*)", "Bash(npm run verify:*)", "Bash(npx vitest:*)", "Bash(npx tsc:*)",
+    "Bash(npx eslint:*)", "Bash(npx oxlint:*)", "Bash(node --test:*)", "Bash(python3 -m pytest:*)",
+    "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)",
+)
 DEFAULT_PERMISSION_MODE = "acceptEdits"
+
+
+@functools.lru_cache(maxsize=8)
+def _codex_help(binary: str) -> str | None:
+    """`codex exec --help` van DEZE installatie, één keer per proces gelezen.
+    None als hij niet te lezen is (niet geïnstalleerd, timeout)."""
+    try:
+        uit = subprocess.run([binary, "exec", "--help"], capture_output=True, text=True, timeout=15)
+        return (uit.stdout or "") + (uit.stderr or "")
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _codex_kent(binary: str, vlag: str) -> bool:
+    """Kent de geïnstalleerde codex deze vlag? Op 15-16 okt faalde elke Codex-run van
+    de planner met "unexpected argument '--approve-for-me'": de documentatie (en de
+    meting van 11 sep) noemt hem, de codex op de Mac mini is ouder. Onleesbare help
+    = het gedocumenteerde gedrag aanhouden; dan faalt de run zichtbaar zoals voorheen."""
+    hulp = _codex_help(binary)
+    return True if hulp is None else vlag in hulp
 
 
 def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: str = "") -> list:
@@ -87,7 +120,10 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: 
     if mode == "plan":
         cmd += ["-s", "read-only"]
     else:
-        cmd += ["-s", "workspace-write", "--approve-for-me"]
+        # Een oudere codex kent --approve-for-me niet; daar vraagt exec niets en
+        # blijft hij binnen de workspace-write-sandbox. Zonder deze check weigerde
+        # hij elke schrijfrun meteen met exit 2.
+        cmd += ["-s", "workspace-write"] + (["--approve-for-me"] if _codex_kent(binary, "--approve-for-me") else [])
     return cmd
 
 
@@ -523,6 +559,7 @@ def run_agent(
     timeout: int = None,
     engine: str = DEFAULT_ENGINE,
     model: str = "",
+    checks: bool = False,
 ) -> dict:
     """Draai één sessie van `engine` in `repo`.
 
@@ -626,6 +663,8 @@ def run_agent(
             os.close(fd)
 
         cmd = motor["cmd"](binary, prompt, mode, tmp or "", (model or "").strip())
+        if checks and mode == "acceptEdits" and motor["cmd"] is _claude_cmd:
+            cmd += ["--allowedTools", *CHECK_TOOLS]
         proc = subprocess.run(
             cmd, cwd=repo_path, env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")),
             capture_output=True, text=True, timeout=limit,
