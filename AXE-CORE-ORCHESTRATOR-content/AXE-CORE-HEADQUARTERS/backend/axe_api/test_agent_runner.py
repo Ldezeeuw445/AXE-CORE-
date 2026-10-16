@@ -37,7 +37,7 @@ class TestCommandos:
         # die vlag hangt een headless run op een vraag die niemand beantwoordt.
         a._codex_help.cache_clear()
         schrijf = a.ENGINES["codex"]["cmd"]("codex-die-er-niet-is", "p", "acceptEdits", "/tmp/uit")
-        assert "workspace-write" in schrijf and "--approve-for-me" in schrijf
+        assert "--approve-for-me" in schrijf and "-s" not in schrijf
 
     def test_een_oudere_codex_krijgt_geen_vlag_die_hij_niet_kent(self, monkeypatch):
         # 15-16 okt: elke Codex-run van de planner faalde met exit 2,
@@ -47,7 +47,8 @@ class TestCommandos:
         schrijf = a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
         assert "workspace-write" in schrijf and "--approve-for-me" not in schrijf
         monkeypatch.setattr(a, "_codex_help", lambda _b: "  --approve-for-me  route approvals through automatic review\n")
-        assert "--approve-for-me" in a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
+        nieuw = a.ENGINES["codex"]["cmd"]("codex", "p", "acceptEdits", "/tmp/uit")
+        assert "--approve-for-me" in nieuw and "-s" not in nieuw
 
     def test_cursor_schrijft_met_force_en_leest_met_ask(self):
         cmd = a.ENGINES["cursor"]["cmd"]("cursor-agent", "p", "acceptEdits", "")

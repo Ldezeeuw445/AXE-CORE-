@@ -123,7 +123,9 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: 
         # Een oudere codex kent --approve-for-me niet; daar vraagt exec niets en
         # blijft hij binnen de workspace-write-sandbox. Zonder deze check weigerde
         # hij elke schrijfrun meteen met exit 2.
-        cmd += ["-s", "workspace-write"] + (["--approve-for-me"] if _codex_kent(binary, "--approve-for-me") else [])
+        # Een nieuwe codex weigert -s samen met --approve-for-me ("cannot be used
+        # with"); die vlag impliceert zelf de workspace-write-sandbox.
+        cmd += ["--approve-for-me"] if _codex_kent(binary, "--approve-for-me") else ["-s", "workspace-write"]
     return cmd
 
 
