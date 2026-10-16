@@ -8,6 +8,7 @@ import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import TabBar from '@/presentation/components/browser/TabBar';
 import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
+import type { LiveBrowserNav } from '@/presentation/components/browser/LiveBrowserView';
 import { BrowserStartPage } from '@/presentation/components/browser/BrowserStartPage';
 import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
 import { BrowserUnifiedSidebar } from '@/presentation/components/browser/BrowserUnifiedSidebar';
@@ -96,12 +97,12 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
   }, [activeTab.url]);
 
   useEffect(() => {
-    setCanGoBack(history.length > 0);
-  }, [history]);
+    setCanGoBack(history.length > 0 || !!activeTab.url);
+  }, [history, activeTab.url]);
 
   useEffect(() => {
-    setCanGoForward(false);
-  }, []);
+    setCanGoForward(!!activeTab.url && liveForward);
+  }, [activeTab.url, liveForward]);
 
   // WebView blocked-sites CTA → open Playwright Browser Agent panel
   useEffect(() => {
@@ -117,19 +118,50 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
 
   const handleNavigate = useCallback(
     (url: string, title?: string) => {
+      setLiveForward(false);
       navigateTo(url, title);
     },
     [navigateTo]
   );
 
-  const handleBack = useCallback(() => {
+  // TERUG/VOORUIT VAN DE ECHTE PAGINA. Deze knoppen sprongen naar de vorige
+  // regel in de app-geschiedenis, die alleen getypte adressen kende: een klik
+  // op een zoekresultaat zat er niet in, dus "terug" sloeg pagina's over en
+  // "vooruit" deed niets. Staat er een site open, dan vraagt de knop het de
+  // browser zelf; de oude sprong blijft alleen als terugval.
+  const liveNav = useRef<LiveBrowserNav | null>(null);
+  const [liveForward, setLiveForward] = useState(false);
+  const [liveSession, setLiveSession] = useState<string | null>(null);
+
+  const handleBack = useCallback(async () => {
+    if (activeTab.url && liveNav.current) {
+      try {
+        const moved = await liveNav.current.back();
+        if (moved) setLiveForward(true);
+        else navigateTo('', 'New Tab');
+        return;
+      } catch { /* oudere browser-agent zonder /back: de oude sprong */ }
+    }
     if (history.length > 1) {
       const prev = history[1];
       navigateTo(prev.url, prev.title);
     }
-  }, [history, navigateTo]);
+  }, [activeTab.url, history, navigateTo]);
 
-  const handleForward = useCallback(() => {}, []);
+  const handleForward = useCallback(async () => {
+    if (!liveNav.current) return;
+    try {
+      const moved = await liveNav.current.forward();
+      if (!moved) setLiveForward(false);
+    } catch {
+      setLiveForward(false);
+    }
+  }, []);
+
+  /** De pagina ging zelf ergens anders heen: adresbalk en geschiedenis mee. */
+  const handlePageChange = useCallback((url: string, title: string) => {
+    navigateTo(url, title);
+  }, [navigateTo]);
 
   const handleRefresh = useCallback(() => {
     if (activeTab.url) {
@@ -589,7 +621,13 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
             ) : (
               /* AXE presence is shell-owned now; the website gets the full browser workspace. */
               <div ref={mainRef} className="h-full w-full">
-                <WebView url={activeTab.url} mobile={isMobile} />
+                <WebView
+                  url={activeTab.url}
+                  mobile={isMobile}
+                  onPageChange={handlePageChange}
+                  onSession={setLiveSession}
+                  navRef={liveNav}
+                />
               </div>
             )}
             </div>
@@ -614,6 +652,7 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
           <BrowserAgentPanel
             onClose={() => { setShowBrowserAgent(false); setAgentSeed(undefined); }}
             initialInstruction={agentSeed}
+            sharedSessionId={activeTab.url ? liveSession : null}
           />
         </Suspense>
       )}

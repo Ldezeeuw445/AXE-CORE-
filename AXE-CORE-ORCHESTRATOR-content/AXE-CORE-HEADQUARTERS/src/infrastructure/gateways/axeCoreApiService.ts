@@ -61,6 +61,21 @@ async function basisVoor(path: string): Promise<string> {
   return (await browserBasis().catch(() => '')) || BASE_URL;
 }
 
+/**
+ * Een fetch die geen antwoord kreeg, met de bestemming erbij.
+ *
+ * WebKit zegt dan alleen "Load failed" (Chromium "Failed to fetch") -- geen
+ * host, geen reden. In de Browser-tab stond precies dat in een rode balk,
+ * terwijl de oorzaak een gekozen browser-host was die niet eens in DNS
+ * bestond. Wie leest welke machine niet antwoordt, weet waar hij moet kijken.
+ */
+function onbereikbaar(url: string, e: unknown): Error {
+  const ruw = e instanceof Error ? e.message : String(e);
+  let host = url;
+  try { host = new URL(url).host || url; } catch { /* relatief pad: laat staan */ }
+  return new Error(`Cannot reach ${host} (${ruw}). The service is down, the address is wrong, or the network blocks it.`);
+}
+
 async function call<T = unknown>(
   method: string,
   path: string,
@@ -68,16 +83,21 @@ async function call<T = unknown>(
 ): Promise<T> {
   const basis = await basisVoor(path);
   const url = `${basis}${path}`;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...axeCoreApiExtraHeaders(),
-      ...axeApiAuthHeaders(url),
-      ...(path.startsWith('/preview/') ? editorRepoHeaders() : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...axeCoreApiExtraHeaders(),
+        ...axeApiAuthHeaders(url),
+        ...(path.startsWith('/preview/') ? editorRepoHeaders() : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    throw onbereikbaar(url, e);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(`AXE API ${res.status}: ${err.detail ?? res.statusText}`);
@@ -1430,6 +1450,19 @@ export async function browserAgentPress(sessionId: string, key: string): Promise
   return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/press`, { key });
 }
 
+/** Terug/vooruit in de geschiedenis van de pagina zelf; `moved` false = er was geen stap. */
+export async function browserAgentHistory(
+  sessionId: string,
+  richting: 'back' | 'forward',
+): Promise<BrowserAgentPageState & { moved: boolean }> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/${richting}`);
+}
+
+/** Waar de pagina nu staat, zonder screenshot. */
+export async function browserAgentState(sessionId: string): Promise<BrowserAgentPageState> {
+  return call('GET', `/browser/agent/${encodeURIComponent(sessionId)}/state`);
+}
+
 export async function browserAgentScroll(sessionId: string, dy = 600, dx = 0): Promise<BrowserAgentPageState> {
   return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/scroll`, { dy, dx });
 }
@@ -1478,9 +1511,13 @@ export async function browserAgentScreenshot(sessionId: string): Promise<Blob> {
   // the whole point of a visible browser, and it was the one call that could
   // not succeed.
   const pad = `/browser/agent/${encodeURIComponent(sessionId)}/screenshot`;
-  const res = await fetch(`${await basisVoor(pad)}${pad}`, {
-    headers: { ...axeCoreApiExtraHeaders() },
-  });
+  const url = `${await basisVoor(pad)}${pad}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { ...axeCoreApiExtraHeaders(), ...axeApiAuthHeaders(url) } });
+  } catch (e) {
+    throw onbereikbaar(url, e);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(`Browser agent screenshot ${res.status}: ${err.detail ?? res.statusText}`);
