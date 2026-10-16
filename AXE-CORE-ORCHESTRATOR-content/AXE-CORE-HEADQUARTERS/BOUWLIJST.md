@@ -161,9 +161,38 @@ openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
       (`memoryFeedbackService.ts`), dezelfde canonieke resolver als
       retrieval zelf gebruikt — dus geen tweede, eigen lijst meer die uit
       de pas kan lopen (zie 2.2a).
-- [ ] **2.4** RAG-bestanden per agent zichtbaar maken.
-- [ ] **2.5** Alle agents de lus geven. Nu: chat, browser, code-editor,
-      lokale code en trading. Nog niet: `agenticEngine`, `langGraphOrchestrator`.
+- [x] **2.4** RAG-bestanden per agent zichtbaar maken.
+
+      Afgevinkt 16 okt 2026. `AgentMemoryPanel.tsx` las al echte rijen uit de
+      `memory`-tabel per agent (`loadNamespaceMemory`) -- dezelfde tabel die
+      MemoryHub's brain/terrain-weergave toont -- maar er was geen manier om
+      er zelf iets in te zetten. Nu: "Add RAG file" per agent (leest het
+      bestand als tekst, schrijft via het nieuwe `addNamespaceMemory()` in
+      `agentActivityService.ts`, zelfde VPS-pad/`AXE_USER_ID` als
+      `remember()` in `agentMemoryService.ts`) plus een verwijderknop per
+      rij (`deleteNamespaceMemory`). Geen tweede opslag: wat hier binnenkomt
+      staat meteen op /memory (brain + terrain) en in deze tab, voor elke
+      echte roster-agent (elke `core_agents`-rij heeft een eigen namespace
+      via `memoryOwners()`). Geverifieerd: tsc schoon, eslint op de twee
+      gewijzigde bestanden 0 fouten, vitest 2723/2725 (de 2 falende staan
+      los van deze wijziging).
+
+- [ ] **2.5** Alle agents de lus geven.
+
+      Gecorrigeerd 16 okt 2026 -- de regel hieronder was verouderd. Gemeten
+      door `LOOP_AGENTS` (`domain/memory/agentLoop.ts`) langs de 18 echte
+      `core_agents`-rijen te halen via `canoniekeAgent`/`loopAgentVoor`
+      (bewezen door `agentNaam.test.ts`, 9 groene testen): alle 15 agents die
+      een eigen kaart mogen tonen (18 min `eve`/`axe_ollama`/
+      `infrastructure_agent`, met reden geen agent) lossen op naar een
+      werkende lus -- chat, trading, code-editor (2x: `axe_developer` en
+      `code_agent`), browser, intel, companion, wingman, task, cron, memory,
+      thinktank, finance, apps. Nog niet: `agenticEngine.ts` (bedraad maar
+      dood -- nul importeurs) en `langGraphOrchestrator.ts` (hoort er bewust
+      niet in, zie CLAUDE-SESSIE 2 in WERKVERDELING.md). Dat zijn geen
+      roster-agents in deze tab maar interne orchestratiepaden; ze aansluiten
+      is een eigen beslissing (zie `browserAgentLoop.ts` als werkend
+      voorbeeld) en blijft open.
 
 ## 3 — Trading
 
