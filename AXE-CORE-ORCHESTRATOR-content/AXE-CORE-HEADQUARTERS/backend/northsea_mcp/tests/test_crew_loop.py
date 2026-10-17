@@ -59,24 +59,20 @@ async def test_historisch_concept_wordt_een_ja_en_gaat_niet_de_deur_uit(repo, re
     assert any("What yes does" in (t.get("description") or "") for t in taken)
 
 
-async def test_axe_mag_niet_bindende_kwalificatie_versturen_via_de_desk_manager(repo, research, crew):
+async def test_desk_manager_mag_niet_zelf_goedkeuren_of_versturen(repo, research, crew):
+    """Incident 6 + 17 okt 2026: de Desk Manager keurde engine-mails zelf goed. Nu blijft alles bij Luka."""
     for d in repo.t["reply_drafts"]:
         if d["approval_status"] == "pending":
             d["approval_status"] = "rejected"
     service = NorthSeaService(repo, research, crew)
     voor = list(repo.sends)
     uit = await finish_after_event(service, _event(), _ok())
-    assert uit.get("sent") == 1
-    assert uit.get("approved") == 1
-    assert uit.get("notice") is None
-    assert len(repo.sends) == len(voor) + 1
-    assert DRAFT_PENDING not in repo.sends
-    assert DRAFT_APPROVED not in repo.sends
+    assert uit.get("sent") == 0
+    assert uit.get("approved") == 0
+    assert uit.get("owner") == "luka"
+    assert len(repo.sends) == len(voor)
+    assert not any(d.get("approved_by") == "northsea-desk-manager" for d in repo.t["reply_drafts"])
     assert _flags(repo) == (False, False, False)
-    nieuw = next(d for d in repo.t["reply_drafts"] if d["id"] == repo.sends[-1])
-    assert nieuw["approval_actor_type"] == "human"
-    assert nieuw["approved_by"] == "northsea-desk-manager"
-    assert nieuw["sent_at"]
 
 
 async def test_handmatige_call_verandert_niets(repo, research, crew):
@@ -116,11 +112,9 @@ async def test_eerste_kwalificatie_loopt_door_de_bestaande_desk_manager_zonder_n
     repo.t["communications"].clear()
     service = NorthSeaService(repo, research, crew)
     uit = await finish_after_event(service, _event(), _ok())
-    assert uit["sent"] == 1 and uit["approved"] == 1
-    draft = next(d for d in repo.t["reply_drafts"] if d["id"] == uit["draft_id"])
-    assert draft["communication_id"] is None and draft["approval_status"] == "approved"
-    assert draft["approved_by"] == "northsea-desk-manager"
-    assert len(repo.sends) == 1
+    assert uit["sent"] == 0 and uit["approved"] == 0
+    assert not any(d.get("approved_by") == "northsea-desk-manager" for d in repo.t["reply_drafts"])
+    assert len(repo.sends) == 0
     assert _flags(repo) == (False, False, False)
 
 
@@ -161,5 +155,34 @@ async def test_stille_operations_sweep_schrijft_toch(repo):
 def test_desk_manager_is_geen_service_token():
     from northsea_mcp.crew_loop import desk_manager_caller
     c: Caller = desk_manager_caller()
-    assert c.is_human is True
     assert not c.principal.startswith("service:")
+    # Geen service-token, maar ook GEEN mens: agents mogen nooit goedkeuren.
+    assert c.is_human is False
+
+
+def test_is_human_is_een_allowlist(monkeypatch):
+    from northsea_mcp.service import is_human_principal
+    monkeypatch.setenv("NORTHSEA_HUMAN_PRINCIPALS", "luka-uuid, northsea-desk-manager")
+    assert is_human_principal("luka-uuid", "claude-ai") is True
+    assert is_human_principal("someone-else", "x") is False
+    assert is_human_principal("northsea-desk-manager", "x") is False  # ook niet als hij op de lijst staat
+    assert is_human_principal("luka-uuid", "axe-core-northsea-desk") is False
+    assert is_human_principal("service:engine", "x") is False
+    assert is_human_principal("", "x") is False
+    monkeypatch.setenv("NORTHSEA_HUMAN_PRINCIPALS", "")
+    assert is_human_principal("luka-uuid", "claude-ai") is False
+
+
+async def test_send_weigert_mcp_goedkeuring_door_agent(repo, research, crew):
+    """Ook een al (fout) goedgekeurd concept via northsea_mcp door een agent gaat er niet uit."""
+    import pytest
+    from northsea_mcp.crew_loop import desk_manager_caller
+    from northsea_mcp.service import PolicyDenied
+    d = next(x for x in repo.t["reply_drafts"] if x["approval_status"] == "pending")
+    d.update(approval_status="approved", approved_by="northsea-desk-manager", approval_actor_type="human",
+             approval_channel="northsea_mcp")
+    service = NorthSeaService(repo, research, crew)
+    voor = list(repo.sends)
+    with pytest.raises(PolicyDenied):
+        await service.send_approved_communication(desk_manager_caller(), draft_id=d["id"], confirm=True)
+    assert repo.sends == voor

@@ -22,6 +22,9 @@ from northsea_mcp.store import Store  # noqa: E402
 
 PUBLIC = "https://mcp.northsea.test"
 USER = "acff7a12-1111-481d-a7a9-cc07583b8069"
+# Alleen deze testmens staat op de allowlist; agents/bots nooit.
+import os  # noqa: E402
+os.environ["NORTHSEA_HUMAN_PRINCIPALS"] = USER
 ALL = frozenset(SCOPES)
 READ = frozenset({"northsea.read", "northsea.deal.read"})
 

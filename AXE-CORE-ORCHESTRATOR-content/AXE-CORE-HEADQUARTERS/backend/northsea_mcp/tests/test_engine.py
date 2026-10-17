@@ -610,3 +610,15 @@ async def test_second_tick_on_unchanged_state_creates_no_new_evaluation_or_deadl
     assert tweede["summary"]["evaluations"] == 0
     assert len(repo.t["deal_events"]) == voor
     assert len(repo.t["action_queue"]) == voor_queue
+
+
+@pytest.mark.parametrize("patch", [{"stage": "lost"}, {"automation_status": "disabled"}])
+async def test_no_followup_on_lost_or_automation_disabled_deal(patch):
+    """Incident 17 okt 2026: PMP-deal stond op lost/automation disabled en kreeg toch 'Follow-up 2 (engine)'."""
+    repo = FakeRepo()
+    oude_inbound(repo)
+    next(o for o in repo.t["opportunities"] if o["id"] == OPP).update(patch)
+    outbound(repo, h=-60)
+    uit = await eng(repo).tick()
+    assert uit["summary"]["followups"] == 0 and repo.t["northsea_followups"] == []
+    assert uit["plan"]["followups_skipped"][0]["reason"] == "opportunity_closed_or_automation_disabled"
