@@ -1,0 +1,79 @@
+.axe-architecture {
+  --xy-background-color: transparent;
+  --xy-minimap-background-color: rgba(12, 12, 12, 0.88);
+  --xy-minimap-mask-background-color: rgba(255, 255, 255, 0.04);
+  --xy-controls-button-background-color: rgba(12, 12, 12, 0.92);
+  --xy-controls-button-border-color: var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
+  --xy-controls-button-color: rgba(245, 240, 230, 0.78);
+  --xy-edge-stroke: rgba(255, 255, 255, 0.22);
+  --xy-edge-stroke-selected: rgba(245, 240, 230, 0.7);
+  --xy-node-border: transparent;
+}
+
+.axe-architecture .react-flow {
+  background: transparent;
+}
+
+.axe-architecture .react-flow__edge-path {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1.2;
+}
+
+.axe-architecture .react-flow__edge.selected .react-flow__edge-path,
+.axe-architecture .react-flow__edge:focus .react-flow__edge-path {
+  stroke: rgba(245, 240, 230, 0.7);
+}
+
+.axe-architecture .react-flow__edge-text {
+  fill: rgba(245, 240, 230, 0.55);
+  font-size: 9px;
+}
+
+.axe-architecture .react-flow__edge-textbg {
+  fill: rgba(8, 8, 8, 0.72);
+}
+
+.axe-architecture-kaart,
+.axe-architecture-groep {
+  background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn);
+  border-radius: 14px;
+  box-shadow: var(--axe-kaart-schaduw);
+  color: var(--text-primary, #f5f0e6);
+}
+
+.axe-architecture-kaart {
+  width: 238px;
+  min-height: 94px;
+  padding: 10px 12px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.axe-architecture-kaart.is-selected {
+  outline: 1px solid var(--accent-cyan);
+  outline-offset: 1px;
+}
+
+.axe-architecture-groep {
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  pointer-events: none;
+}
+
+.axe-architecture-zoek {
+  min-width: 220px;
+  background: rgba(12, 12, 12, 0.92);
+  border: 1px solid var(--axe-kaart-lijn);
+  color: var(--text-primary, #f5f0e6);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+}
+
+.axe-architecture-zoek::placeholder {
+  color: rgba(245, 240, 230, 0.38);
+}

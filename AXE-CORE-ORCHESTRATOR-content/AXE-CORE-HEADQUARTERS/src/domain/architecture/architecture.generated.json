@@ -1,0 +1,5971 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "path": "backend/axe_api/axe-browser-agent.service",
+      "kind": "systemd"
+    },
+    {
+      "path": "backend/axe_api/axe-core-api.service",
+      "kind": "systemd"
+    },
+    {
+      "path": "backend/axe_api/axe-task-worker.service",
+      "kind": "systemd"
+    },
+    {
+      "path": "backend/axe_api/ollama-geheugen.service",
+      "kind": "systemd"
+    },
+    {
+      "path": "backend/northsea_mcp/deploy/northsea-mcp.service",
+      "kind": "systemd"
+    },
+    {
+      "path": "backend/northsea_mcp/northsea_mcp/crews/catalog.py",
+      "kind": "northsea-crew"
+    },
+    {
+      "path": "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml",
+      "kind": "northsea-crew"
+    },
+    {
+      "path": "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/crew.yaml",
+      "kind": "northsea-crew"
+    },
+    {
+      "path": "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml",
+      "kind": "northsea-crew"
+    },
+    {
+      "path": "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/crew.yaml",
+      "kind": "northsea-crew"
+    },
+    {
+      "path": "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml",
+      "kind": "northsea-crew"
+    },
+    {
+      "path": "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/crew.yaml",
+      "kind": "northsea-crew"
+    },
+    {
+      "path": "docs/programma/01-REALITEIT.md",
+      "kind": "ecosystem"
+    },
+    {
+      "path": "docs/programma/programma.json",
+      "kind": "programme"
+    },
+    {
+      "path": "ECOSYSTEM.md",
+      "kind": "ecosystem"
+    },
+    {
+      "path": "infra/axe-core-api/axe-core-api.service",
+      "kind": "systemd"
+    },
+    {
+      "path": "infra/axe-core-api/axe-task-worker.service",
+      "kind": "systemd"
+    },
+    {
+      "path": "infra/axe-mac-tunnel/agent.cjs",
+      "kind": "systemd"
+    },
+    {
+      "path": "infra/axe-mac-tunnel/README.md",
+      "kind": "systemd"
+    },
+    {
+      "path": "infra/axe-mac-tunnel/relay.cjs",
+      "kind": "systemd"
+    },
+    {
+      "path": "infra/migrations/001_unified_memory.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "infra/migrations/002_push_meldingen.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "infra/migrations/003_push_verberg_inhoud.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "infra/migrations/004_core_notifications_dicht.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "infra/scripts/install-camofox.sh",
+      "kind": "systemd"
+    },
+    {
+      "path": "infra/terminal/install-axe-terminal.sh",
+      "kind": "systemd"
+    },
+    {
+      "path": "infra/vps-bootstrap.sh",
+      "kind": "systemd"
+    },
+    {
+      "path": "scripts/install-agent-tunnel-launchd.sh",
+      "kind": "launchd"
+    },
+    {
+      "path": "scripts/install-autosync-launchd.sh",
+      "kind": "launchd"
+    },
+    {
+      "path": "scripts/install-browser-agent-launchd.sh",
+      "kind": "launchd"
+    },
+    {
+      "path": "scripts/install-computer-worker-launchd.sh",
+      "kind": "launchd"
+    },
+    {
+      "path": "scripts/install-service-monitor-launchd.sh",
+      "kind": "launchd"
+    },
+    {
+      "path": "scripts/test_vps_sync.py",
+      "kind": "vps-manifest"
+    },
+    {
+      "path": "scripts/vps_sync.py",
+      "kind": "vps-manifest"
+    },
+    {
+      "path": "src/application/tradingIntel/researchCrewPrompt.ts",
+      "kind": "trading-crew"
+    },
+    {
+      "path": "src/domain/abonnementChat.ts",
+      "kind": "coding-seats"
+    },
+    {
+      "path": "src/domain/agents/roster.ts",
+      "kind": "roster"
+    },
+    {
+      "path": "src/domain/catalogs/specialists.ts",
+      "kind": "crew-specialists"
+    },
+    {
+      "path": "src/domain/providers.ts",
+      "kind": "providers"
+    },
+    {
+      "path": "supabase/migrations/20250715_agentic_logs.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20250715_shared_memory.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260513_axe_intel.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_agents.sql",
+      "kind": "agent-seed"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_brain.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_capabilities.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_livekit.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_n8n.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_registries.sql",
+      "kind": "mcp-seed"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_system_state.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260707_axe_core_user_settings.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260707125030_axe_core_system_state.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260708_axe_core_control_plane.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260708_axe_core_llm_models.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260708_axe_core_runtime_registry.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260709_axe_core_messages.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260709_axe_core_terminal_langgraph.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260715_ai_core_logs.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260715_global_memory.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260716_fix_messages_schema.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260723_registered_apps.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260725_axe_self_hosted_cron.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260725_secure_core_kb_documents_rls.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260726_axe_core_notifications.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260727_axe_core_obsidian_notes.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260727_axe_core_trust_levels.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260728_core_background_job_runs.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260728_core_webhook_secrets.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260728_memory_decay_pg_cron.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260806_global_memory_canonical.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260807_memory_health_check_pg_cron.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260810_trust_levels_local_categories.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260816_durable_task_kernel.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260831_messages_own_rows_rls.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260901_computer_use.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260901_memory_prune_and_rag_rls.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260901_rag_pgvector_search.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260908_core_trading_trades.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260915_core_tasks_dicht_voor_anon.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260916210000_core_schedules_dicht.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260916220000_een_planner_en_grootboek.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260916230000_grootboek_uitvoerder.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20260922120000_trading_autopilot_lease.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261007120000_missies_en_dax.sql",
+      "kind": "dax-seed"
+    },
+    {
+      "path": "supabase/migrations/20261010110000_developer_bouwt_door.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261016080000_productregister.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260916150100_p0_b1_functions.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260916150150_p0_b2_triggers.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260916150200_p0_c_data.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260917090000_p1_a_engine.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260917100000_p1_b_bounce_metadata.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260917110000_p1_c_housekeeping.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260919120000_p1_c_research_gate.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20260922090000_p2_outbound_reconciliation.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20261006163543_northsea_research_event_storm_guard.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20261006164053_northsea_first_contact_drafts.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20261006164146_northsea_first_contact_drafts_provenance.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql",
+      "kind": "migration"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "agent:apps",
+      "kind": "agent",
+      "label": "App Manager",
+      "appId": "app:axe_core",
+      "description": "Health-checks and can restart the VPS services behind AXE CORE and AXE Companion.",
+      "details": {
+        "role": "App registry + VPS ops",
+        "tier": "tier2",
+        "runtime": "auto-routed engine",
+        "route": "apps"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:axe",
+      "kind": "agent",
+      "label": "AXE Core",
+      "appId": "app:axe_core",
+      "description": "Talks to you, understands intent, answers directly, or hands off to a manager.",
+      "details": {
+        "role": "Orchestrator",
+        "tier": "axe",
+        "runtime": "your ★ Primary engine",
+        "route": ""
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:axe_companion",
+      "kind": "agent",
+      "label": "AXE Companion",
+      "description": "Personal AI assistant — conversations, tasks, reminders",
+      "details": {
+        "role": "assistant",
+        "registry": "core_agents"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "agent:axe_core",
+      "kind": "agent",
+      "label": "AXE CORE",
+      "description": "Main AI Operating System — orchestrates all agents",
+      "details": {
+        "role": "orchestrator",
+        "registry": "core_agents"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "agent:axe_developer",
+      "kind": "agent",
+      "label": "AXE Developer",
+      "description": "Code generation, review, and deployment agent",
+      "details": {
+        "role": "developer",
+        "registry": "core_agents"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "agent:axe_intel",
+      "kind": "agent",
+      "label": "AXE Intel",
+      "description": "Market analysis and intelligence agent",
+      "details": {
+        "role": "analyst",
+        "registry": "core_agents"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "agent:axe_ollama",
+      "kind": "agent",
+      "label": "Ollama (Local)",
+      "description": "Local model — privacy-sensitive tasks, no data leaves VPS",
+      "details": {
+        "role": "privacy",
+        "registry": "core_agents"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "agent:axe_trader",
+      "kind": "agent",
+      "label": "Trading OS",
+      "description": "Trading execution and risk management",
+      "details": {
+        "role": "trader",
+        "registry": "core_agents"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "agent:browser",
+      "kind": "agent",
+      "label": "Browser",
+      "appId": "app:axe_core",
+      "description": "Autonomous browser control — navigate, extract, and summarise pages.",
+      "details": {
+        "role": "Web agent",
+        "tier": "tier2",
+        "runtime": "auto-routed engine",
+        "route": "browser"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:companion",
+      "kind": "agent",
+      "label": "AXE Companion",
+      "appId": "app:axe_companion",
+      "description": "Lives in the other apps, driven through AXE CORE, used in the Trading tab.",
+      "details": {
+        "role": "Cross-app assistant",
+        "tier": "tier3",
+        "runtime": "paid API key (OpenAI/Anthropic)",
+        "route": "organization"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:cron",
+      "kind": "agent",
+      "label": "Cron Manager",
+      "appId": "app:axe_core",
+      "description": "Self-hosted scheduler: runs due schedules (prompt/exec/webhook/crew/flow) with nobody watching.",
+      "details": {
+        "role": "Scheduler",
+        "tier": "tier2",
+        "runtime": "auto-routed engine",
+        "route": "cron-manager"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:developer",
+      "kind": "agent",
+      "label": "AXE Developer",
+      "appId": "app:axe_code",
+      "description": "Reads, writes, builds, ships and deploys the codebase. May hand simple/local work to the Code agent.",
+      "details": {
+        "role": "Code manager",
+        "tier": "tier1",
+        "runtime": "subscription CLI ↔ OpenHands/Qwen for local work",
+        "route": "code-editor"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:finance",
+      "kind": "agent",
+      "label": "Finance",
+      "appId": "app:axe_core",
+      "description": "Finance/P&L and every subscription: watches credits and routes to the cheapest capable engine.",
+      "details": {
+        "role": "Money + credits manager",
+        "tier": "tier2",
+        "runtime": "cheapest capable engine",
+        "route": "finance"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:intel",
+      "kind": "agent",
+      "label": "AXE Intel",
+      "appId": "app:trading_os",
+      "description": "Market intelligence and signal detection, live in Trading OS, driven through AXE CORE.",
+      "details": {
+        "role": "Cross-app assistant",
+        "tier": "tier3",
+        "runtime": "paid API key (OpenAI/Anthropic)",
+        "route": "organization"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:memory",
+      "kind": "agent",
+      "label": "Memory",
+      "appId": "app:axe_core",
+      "description": "Builds and maintains the durable memory itself — consolidation, decay, the Obsidian vault.",
+      "details": {
+        "role": "Memory manager",
+        "tier": "tier2",
+        "runtime": "auto-routed engine",
+        "route": "memory"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:northsea",
+      "kind": "agent",
+      "label": "NorthSea Desk Manager",
+      "appId": "app:northsea",
+      "description": "Runs the NorthSea crews and moves deals — decides before you where it safely can.",
+      "details": {
+        "role": "Commodity desk manager",
+        "tier": "tier1",
+        "runtime": "subscription CLI · NorthSea MCP + crews",
+        "route": "maps-3d"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:task",
+      "kind": "agent",
+      "label": "Task",
+      "appId": "app:axe_core",
+      "description": "Picks up tasks from the Tasks tab and tracks them through to close.",
+      "details": {
+        "role": "Task manager",
+        "tier": "tier2",
+        "runtime": "auto-routed engine",
+        "route": "tasks"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:thinktank",
+      "kind": "agent",
+      "label": "ThinkTank",
+      "appId": "app:axe_core",
+      "description": "Runs the ThinkTank tab: score/rank ideas → build plan → Build → library → integrate plan → Integrate into the app.",
+      "details": {
+        "role": "Ideas manager",
+        "tier": "tier1",
+        "runtime": "subscription CLI",
+        "route": "thinkthanks"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:trading",
+      "kind": "agent",
+      "label": "Trading Agent",
+      "appId": "app:trading_os",
+      "description": "Market analysis, positions, risk and the final trade decision; owns the trading research crew.",
+      "details": {
+        "role": "AXE Algo · trading desk",
+        "tier": "tier1",
+        "runtime": "subscription CLI · AXE Algo stack",
+        "route": "trading"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:wingman",
+      "kind": "agent",
+      "label": "Wingman",
+      "appId": "app:axe_core",
+      "description": "Runs the free CrewAI crew from the Crew tab on AXE\\'s behalf, and helps anywhere.",
+      "details": {
+        "role": "",
+        "tier": "tier1",
+        "runtime": "subscription CLI · VPS crews",
+        "route": "crewai"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "app:android_device_manager",
+      "kind": "app",
+      "label": "Android Device Manager",
+      "description": "Kotlin/Compose shell that embeds the HQ web bundle and manages the Samsung.",
+      "details": {
+        "product_key": "android_device_manager",
+        "repo": "Ldezeeuw445/axe-core-android",
+        "platform": "Android"
+      },
+      "sources": [
+        "ECOSYSTEM.md"
+      ]
+    },
+    {
+      "id": "app:axe_code",
+      "kind": "app",
+      "label": "AXE Code",
+      "details": {
+        "product_key": "axe_code",
+        "fromProgramme": true
+      },
+      "sources": [
+        "docs/programma/programma.json"
+      ]
+    },
+    {
+      "id": "app:axe_companion",
+      "kind": "app",
+      "label": "AXE Companion",
+      "description": "Personal AI assistant for daily tasks and conversations",
+      "details": {
+        "product_key": "axe_companion",
+        "fromProgramme": true,
+        "repo": "",
+        "workdir": "",
+        "deploy_target": "vps-systemd",
+        "owner_agent": "",
+        "runbook": "AXE_SYSTEM_TRUTH.md",
+        "supabase_ref": "pqnngpcgbdwxavbatbia",
+        "secretNames": [
+          "UNUSUAL_WHALES_TOKEN",
+          "OPENAI_API_KEY",
+          "CRON_SECRET"
+        ]
+      },
+      "sources": [
+        "docs/programma/programma.json",
+        "supabase/migrations/20260723_registered_apps.sql",
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "app:axe_core",
+      "kind": "app",
+      "label": "AXE CORE HQ",
+      "description": "This command center — chat, terminal, editor, browser, 3D maps, agents.",
+      "details": {
+        "product_key": "axe_core",
+        "fromProgramme": true,
+        "repo": "",
+        "workdir": "AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS",
+        "deploy_target": "mixed",
+        "owner_agent": "developer",
+        "runbook": "AGENTS.md",
+        "supabase_ref": "",
+        "secretNames": [
+          "AXE_API_KEY",
+          "SUPABASE_SERVICE_ROLE",
+          "VAPID_PRIVATE_KEY",
+          "axe_uptime_webhook"
+        ],
+        "cronJobKeys": [
+          "axe_core:dax-wacht",
+          "axe_core:planner",
+          "axe_core:mac-opruimen"
+        ]
+      },
+      "sources": [
+        "docs/programma/programma.json",
+        "supabase/migrations/20260723_registered_apps.sql",
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "app:axon_memory",
+      "kind": "app",
+      "label": "Axon Memory",
+      "details": {
+        "product_key": "axon_memory",
+        "fromProgramme": true,
+        "repo": "Ldezeeuw445/axon-memory-app",
+        "workdir": "",
+        "deploy_target": "mixed",
+        "owner_agent": "",
+        "runbook": ".claude/skills/axon-memory/SKILL.md",
+        "supabase_ref": "ktaditgtbubonrahyiig"
+      },
+      "sources": [
+        "docs/programma/programma.json",
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "app:northsea",
+      "kind": "app",
+      "label": "NorthSea",
+      "description": "Global Trade Center: commodity-deals, desk, crews en de MCP voor ChatGPT.",
+      "details": {
+        "product_key": "northsea",
+        "fromProgramme": true,
+        "supabase_ref": "kbimnuepbecbyezedvih"
+      },
+      "sources": [
+        "docs/programma/programma.json",
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "app:trading_os",
+      "kind": "app",
+      "label": "Trading OS",
+      "description": "Market analysis, trade execution, and portfolio management",
+      "details": {
+        "product_key": "trading_os",
+        "fromProgramme": true,
+        "repo": "Ldezeeuw445/the-one",
+        "workdir": "Desktop/Trading OS Final APP/TRADING OS FINAL UI AND MAIN",
+        "deploy_target": "cf-pages-git",
+        "owner_agent": "trading",
+        "runbook": "docs/TRADING_OS_AUDIT.md",
+        "supabase_ref": "pqnngpcgbdwxavbatbia",
+        "secretNames": [
+          "POLYGON_API_KEY",
+          "TWELVEDATA_API_KEY",
+          "FMP_API_KEY",
+          "FRED_API_KEY",
+          "AISSTREAM_API_KEY"
+        ]
+      },
+      "sources": [
+        "docs/programma/programma.json",
+        "supabase/migrations/20260723_registered_apps.sql",
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "cloudflare:app:trading_os:pages",
+      "kind": "cloudflare",
+      "label": "Trading OS · Cloudflare Pages",
+      "appId": "app:trading_os",
+      "details": {
+        "deployTarget": "cf-pages-git"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "cloudflare:axon-app",
+      "kind": "cloudflare",
+      "label": "Cloudflare Pages · axon-app",
+      "appId": "app:axon_memory",
+      "details": {
+        "project": "axon-app"
+      },
+      "sources": [
+        "ECOSYSTEM.md"
+      ]
+    },
+    {
+      "id": "cloudflare:trading-os-live-engine",
+      "kind": "cloudflare",
+      "label": "trading-os-live-engine",
+      "appId": "app:trading_os",
+      "details": {
+        "kind": "worker",
+        "name": "trading-os-live-engine"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "coding-seat:claude",
+      "kind": "coding-seat",
+      "label": "claude",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (claude)",
+      "details": {
+        "engine": "claude",
+        "family": "claude",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:claude2",
+      "kind": "coding-seat",
+      "label": "claude2",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (claude)",
+      "details": {
+        "engine": "claude2",
+        "family": "claude",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:claude3",
+      "kind": "coding-seat",
+      "label": "claude3",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (claude)",
+      "details": {
+        "engine": "claude3",
+        "family": "claude",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:claude4",
+      "kind": "coding-seat",
+      "label": "claude4",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (claude)",
+      "details": {
+        "engine": "claude4",
+        "family": "claude",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:codex",
+      "kind": "coding-seat",
+      "label": "codex",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (codex)",
+      "details": {
+        "engine": "codex",
+        "family": "codex",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:codex2",
+      "kind": "coding-seat",
+      "label": "codex2",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (codex)",
+      "details": {
+        "engine": "codex2",
+        "family": "codex",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:codex3",
+      "kind": "coding-seat",
+      "label": "codex3",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (codex)",
+      "details": {
+        "engine": "codex3",
+        "family": "codex",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:cursor",
+      "kind": "coding-seat",
+      "label": "cursor",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (cursor)",
+      "details": {
+        "engine": "cursor",
+        "family": "cursor",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "crew:northsea:counterparty-sourcing",
+      "kind": "crew",
+      "label": "NorthSea Counterparty Intelligence & Sourcing",
+      "appId": "app:northsea",
+      "details": {
+        "config": "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/crew.yaml",
+        "studio_id": "9679d3e8-7e66-4017-9970-b67b447cc679"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/crew.yaml"
+      ]
+    },
+    {
+      "id": "crew:northsea:deal-execution",
+      "kind": "crew",
+      "label": "NorthSea Deal Execution Crew 2",
+      "appId": "app:northsea",
+      "details": {
+        "config": "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/crew.yaml",
+        "studio_id": "8c722284-b968-40d4-830f-aac179c21cfa"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/crew.yaml"
+      ]
+    },
+    {
+      "id": "crew:northsea:intelligence-operations",
+      "kind": "crew",
+      "label": "NorthSea Intelligence & Operations",
+      "appId": "app:northsea",
+      "details": {
+        "config": "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/crew.yaml",
+        "studio_id": "55f038dc-8816-4641-9fb5-a58022ec2fab"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/crew.yaml"
+      ]
+    },
+    {
+      "id": "crew:trading-research",
+      "kind": "crew",
+      "label": "Trading research crew",
+      "appId": "app:trading_os",
+      "description": "CrewAI research cycle for Trading Intel",
+      "details": {
+        "runner": "/crew/run"
+      },
+      "sources": [
+        "src/application/tradingIntel/researchCrewPrompt.ts"
+      ]
+    },
+    {
+      "id": "crew:wingman",
+      "kind": "crew",
+      "label": "Wingman CrewAI crew",
+      "appId": "app:axe_core",
+      "description": "Nine specialists driven by Wingman via /crew/run",
+      "details": {
+        "runner": "backend/axe_api/run_crew.py"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "cron:axe_core:dax-wacht",
+      "kind": "cron",
+      "label": "axe_core:dax-wacht",
+      "appId": "app:axe_core",
+      "details": {
+        "jobKey": "axe_core:dax-wacht"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "cron:axe_core:mac-opruimen",
+      "kind": "cron",
+      "label": "axe_core:mac-opruimen",
+      "appId": "app:axe_core",
+      "details": {
+        "jobKey": "axe_core:mac-opruimen"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "cron:axe_core:planner",
+      "kind": "cron",
+      "label": "axe_core:planner",
+      "appId": "app:axe_core",
+      "details": {
+        "jobKey": "axe_core:planner"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "dax:dax-browser-01",
+      "kind": "dax",
+      "label": "dax-browser-01",
+      "appId": "app:axe_core",
+      "description": "DAX computer owned by browser",
+      "details": {
+        "owner_agent": "browser",
+        "runtime": "docker"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "dax:dax-developer-01",
+      "kind": "dax",
+      "label": "dax-developer-01",
+      "appId": "app:axe_core",
+      "description": "DAX computer owned by developer",
+      "details": {
+        "owner_agent": "developer",
+        "runtime": "docker"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "dax:dax-northsea-01",
+      "kind": "dax",
+      "label": "dax-northsea-01",
+      "appId": "app:northsea",
+      "description": "DAX computer owned by northsea",
+      "details": {
+        "owner_agent": "northsea",
+        "runtime": "docker"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "dax:dax-thinktank-01",
+      "kind": "dax",
+      "label": "dax-thinktank-01",
+      "appId": "app:axe_core",
+      "description": "DAX computer owned by thinktank",
+      "details": {
+        "owner_agent": "thinktank",
+        "runtime": "docker"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "dax:dax-trading-01",
+      "kind": "dax",
+      "label": "dax-trading-01",
+      "appId": "app:trading_os",
+      "description": "DAX computer owned by trading",
+      "details": {
+        "owner_agent": "trading",
+        "runtime": "docker"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "mcp:axon_memory",
+      "kind": "mcp",
+      "label": "Axon Memory MCP",
+      "appId": "app:axon_memory",
+      "details": {
+        "surface": "mcp",
+        "url": "https://mcp.axon-memory.com/"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "mcp:cloudflare",
+      "kind": "mcp",
+      "label": "Cloudflare",
+      "description": "Manage Workers, KV, R2, D1, Pages",
+      "appId": "app:axe_core",
+      "details": {
+        "registry": "core_mcp_servers"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "mcp:cloudflare_workers",
+      "kind": "mcp",
+      "label": "CF Workers Edit",
+      "description": "Create and deploy Cloudflare Workers",
+      "appId": "app:axe_core",
+      "details": {
+        "registry": "core_mcp_servers"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "mcp:github",
+      "kind": "mcp",
+      "label": "GitHub",
+      "description": "Repos, PRs, issues, code management",
+      "appId": "app:axe_core",
+      "details": {
+        "registry": "core_mcp_servers"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "mcp:northsea-mcp",
+      "kind": "mcp",
+      "label": "northsea-mcp",
+      "appId": "app:northsea",
+      "description": "NorthSea Commodity Partners MCP (remote MCP facade)",
+      "details": {
+        "transport": "http",
+        "unit": "northsea-mcp"
+      },
+      "sources": [
+        "backend/northsea_mcp/deploy/northsea-mcp.service"
+      ]
+    },
+    {
+      "id": "mcp:railway",
+      "kind": "mcp",
+      "label": "Railway",
+      "description": "Deployments, services, environment vars",
+      "appId": "app:axe_core",
+      "details": {
+        "registry": "core_mcp_servers"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "mcp:supabase",
+      "kind": "mcp",
+      "label": "Supabase",
+      "description": "Database, auth, storage operations",
+      "appId": "app:axe_core",
+      "details": {
+        "registry": "core_mcp_servers"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "provider:anthropic",
+      "kind": "provider",
+      "label": "Anthropic",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "anthropic",
+        "defaultModel": "claude-sonnet-5"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:cerebras",
+      "kind": "provider",
+      "label": "Cerebras",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "cerebras",
+        "defaultModel": "gpt-oss-120b"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:google",
+      "kind": "provider",
+      "label": "Google",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "google",
+        "defaultModel": "gemini-3.5-flash"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:groq",
+      "kind": "provider",
+      "label": "Groq",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "groq",
+        "defaultModel": "openai/gpt-oss-120b"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:hermes",
+      "kind": "provider",
+      "label": "Hermes 3 (Ollama)",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "hermes",
+        "defaultModel": "hermes3:8b"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:ollama",
+      "kind": "provider",
+      "label": "Ollama",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "ollama",
+        "defaultModel": "qwen3.5:2b"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:openai",
+      "kind": "provider",
+      "label": "OpenAI",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "openai",
+        "defaultModel": "gpt-4o-mini"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:openhands",
+      "kind": "provider",
+      "label": "OpenHands",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "openhands",
+        "defaultModel": "claude-sonnet-4-5"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:openrouter",
+      "kind": "provider",
+      "label": "OpenRouter",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "openrouter",
+        "defaultModel": "openrouter/free"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:openrouter2",
+      "kind": "provider",
+      "label": "OpenRouter 2",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "openrouter2",
+        "defaultModel": "openrouter/auto"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "provider:xai",
+      "kind": "provider",
+      "label": "Grok",
+      "appId": "app:axe_core",
+      "details": {
+        "providerId": "xai",
+        "defaultModel": "grok-4.5"
+      },
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "runtime:app:axe_companion:web",
+      "kind": "runtime",
+      "label": "AXE Companion · web",
+      "appId": "app:axe_companion",
+      "details": {
+        "surface": "web",
+        "url": "https://www.axecompanion.com/"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runtime:app:axe_core:desktop",
+      "kind": "runtime",
+      "label": "AXE Core HQ · desktop",
+      "appId": "app:axe_core",
+      "details": {
+        "surface": "desktop",
+        "note": "Tauri, CI op push naar orchestrator"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runtime:app:axe_core:web",
+      "kind": "runtime",
+      "label": "AXE Core HQ · web",
+      "appId": "app:axe_core",
+      "details": {
+        "surface": "web",
+        "url": "https://axeheadquarters.com/"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runtime:app:axon_memory:app",
+      "kind": "runtime",
+      "label": "Axon Memory · app",
+      "appId": "app:axon_memory",
+      "details": {
+        "surface": "app",
+        "url": "https://app.axon-memory.com/"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runtime:app:trading_os:web",
+      "kind": "runtime",
+      "label": "Trading OS · web",
+      "appId": "app:trading_os",
+      "details": {
+        "surface": "web",
+        "note": "https://tradingosapp.com (402 sinds okt; besloten: naar Cloudflare Pages)"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runtime:cloudflare",
+      "kind": "runtime",
+      "label": "Cloudflare",
+      "details": {
+        "role": "Pages and Workers"
+      },
+      "sources": [
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "runtime:imac",
+      "kind": "runtime",
+      "label": "iMac",
+      "appId": "app:axe_core",
+      "details": {
+        "role": "computer-worker imac-1 · autosync"
+      },
+      "sources": [
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "runtime:mac-mini",
+      "kind": "runtime",
+      "label": "Mac mini",
+      "appId": "app:axe_core",
+      "details": {
+        "role": "Brain · local API :8001 · planner"
+      },
+      "sources": [
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "runtime:vps-api",
+      "kind": "runtime",
+      "label": "VPS api.axecompanion.com",
+      "appId": "app:axe_core",
+      "details": {
+        "host": "212.227.91.79",
+        "hostname": "api.axecompanion.com",
+        "role": "API box"
+      },
+      "sources": [
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "runtime:vps-strato",
+      "kind": "runtime",
+      "label": "VPS ollama.axecompanion.com",
+      "appId": "app:axe_core",
+      "details": {
+        "hostname": "ollama.axecompanion.com",
+        "role": "Ollama + DAX"
+      },
+      "sources": [
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "service:axe-browser-agent",
+      "kind": "service",
+      "label": "AXE browser agent (Playwright, single worker)",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "axe-browser-agent",
+        "from": "vps_sync.MANIFEST",
+        "unitFile": "backend/axe_api/axe-browser-agent.service",
+        "after": "network.target"
+      },
+      "sources": [
+        "backend/axe_api/axe-browser-agent.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "service:axe-companion",
+      "kind": "service",
+      "label": "AXE Companion (Next.js on VPS)",
+      "appId": "app:axe_companion",
+      "details": {
+        "unit": "axe-companion.service",
+        "host": "runtime:vps-api"
+      },
+      "sources": [
+        "ECOSYSTEM.md",
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "service:axe-core-api",
+      "kind": "service",
+      "label": "AXE Core API",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "axe-core-api",
+        "from": "vps_sync.MANIFEST",
+        "unitFile": "infra/axe-core-api/axe-core-api.service",
+        "after": "network.target"
+      },
+      "sources": [
+        "backend/axe_api/axe-core-api.service",
+        "infra/axe-core-api/axe-core-api.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "service:axe-task-worker",
+      "kind": "service",
+      "label": "AXE Durable Task Worker",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "axe-task-worker",
+        "from": "vps_sync.MANIFEST",
+        "unitFile": "infra/axe-core-api/axe-task-worker.service",
+        "after": "network.target axe-core-api.service"
+      },
+      "sources": [
+        "backend/axe_api/axe-task-worker.service",
+        "infra/axe-core-api/axe-task-worker.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "service:axe-terminal",
+      "kind": "service",
+      "label": "axe-terminal",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "axe-terminal",
+        "unitFile": "infra/terminal/install-axe-terminal.sh"
+      },
+      "sources": [
+        "infra/terminal/install-axe-terminal.sh"
+      ]
+    },
+    {
+      "id": "service:axe-tts",
+      "kind": "service",
+      "label": "axe-tts",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "axe-tts",
+        "from": "vps_sync.MANIFEST"
+      },
+      "sources": [
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "service:axe-tunnel-relay",
+      "kind": "service",
+      "label": "axe-tunnel-relay",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "axe-tunnel-relay",
+        "listen": "127.0.0.1:4023"
+      },
+      "sources": [
+        "infra/axe-mac-tunnel/README.md",
+        "infra/axe-mac-tunnel/relay.cjs"
+      ]
+    },
+    {
+      "id": "service:camofox",
+      "kind": "service",
+      "label": "camofox",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "camofox",
+        "aliasOf": "camofox-browser"
+      },
+      "sources": [
+        "infra/scripts/install-camofox.sh"
+      ]
+    },
+    {
+      "id": "service:camofox-browser",
+      "kind": "service",
+      "label": "camofox",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "camofox-browser",
+        "unitFile": "infra/scripts/install-camofox.sh"
+      },
+      "sources": [
+        "infra/scripts/install-camofox.sh"
+      ]
+    },
+    {
+      "id": "service:northsea-mcp",
+      "kind": "service",
+      "label": "NorthSea Commodity Partners MCP (remote MCP facade)",
+      "appId": "app:northsea",
+      "details": {
+        "unit": "northsea-mcp",
+        "unitFile": "backend/northsea_mcp/deploy/northsea-mcp.service",
+        "after": "network-online.target axe-core-api.service"
+      },
+      "sources": [
+        "backend/northsea_mcp/deploy/northsea-mcp.service"
+      ]
+    },
+    {
+      "id": "service:ollama",
+      "kind": "service",
+      "label": "Ollama",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "ollama.service",
+        "port": "11434",
+        "unitFile": "infra/vps-bootstrap.sh"
+      },
+      "sources": [
+        "docs/programma/01-REALITEIT.md",
+        "infra/vps-bootstrap.sh"
+      ]
+    },
+    {
+      "id": "service:ollama-geheugen",
+      "kind": "service",
+      "label": "Ollama voor het AXE-geheugen (bge-m3 op 127.0.0.1:11435)",
+      "appId": "app:axe_core",
+      "details": {
+        "unit": "ollama-geheugen",
+        "unitFile": "backend/axe_api/ollama-geheugen.service",
+        "after": "network-online.target"
+      },
+      "sources": [
+        "backend/axe_api/ollama-geheugen.service"
+      ]
+    },
+    {
+      "id": "specialist:atlas",
+      "kind": "agent",
+      "label": "Atlas",
+      "appId": "app:axe_core",
+      "description": "Institutional memory: past decisions, project context, preferences, retrievable knowledge.",
+      "details": {
+        "role": "Memory & Knowledge Specialist",
+        "crew": "wingman",
+        "specialistId": "atlas"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:axe_core",
+      "kind": "agent",
+      "label": "AXE CORE",
+      "appId": "app:axe_core",
+      "description": "Single point of contact — routes work to the right specialist and synthesizes the answer.",
+      "details": {
+        "role": "Master Orchestrator",
+        "crew": "wingman",
+        "specialistId": "axe_core"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:dollar_bill",
+      "kind": "agent",
+      "label": "Dollar Bill",
+      "appId": "app:axe_core",
+      "description": "Portfolio analysis, risk, P&L, market data, strategy evaluation for Trading OS & AXE Companion.",
+      "details": {
+        "role": "Finance & Trading Specialist",
+        "crew": "wingman",
+        "specialistId": "dollar_bill"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:forge",
+      "kind": "agent",
+      "label": "Forge",
+      "appId": "app:axe_core",
+      "description": "Deployment, Docker, CI/CD, GitHub repo management, build pipelines, VPS infrastructure.",
+      "details": {
+        "role": "Infrastructure & Build Specialist",
+        "crew": "wingman",
+        "specialistId": "forge"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:intel",
+      "kind": "agent",
+      "label": "Research",
+      "appId": "app:axe_core",
+      "description": "Deep web research, document analysis, competitor intelligence, knowledge synthesis.",
+      "details": {
+        "role": "Research Specialist",
+        "crew": "wingman",
+        "specialistId": "intel"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:northsea:approval_coordinator",
+      "kind": "agent",
+      "label": "Approval Coordinator",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "approval_coordinator"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:buyer_hunter",
+      "kind": "agent",
+      "label": "Buyer Hunter",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "counterparty-sourcing",
+        "specialistId": "buyer_hunter"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:buyer_qualification_agent",
+      "kind": "agent",
+      "label": "Buyer Qualification Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "buyer_qualification_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:commercial_alignment_agent",
+      "kind": "agent",
+      "label": "Commercial Alignment Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "commercial_alignment_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:commercial_fit_analyst",
+      "kind": "agent",
+      "label": "Commercial Fit Analyst",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "counterparty-sourcing",
+        "specialistId": "commercial_fit_analyst"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:communications_intelligence_agent",
+      "kind": "agent",
+      "label": "Communications Intelligence Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "communications_intelligence_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:counterparty_verifier",
+      "kind": "agent",
+      "label": "Counterparty Verifier",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "counterparty-sourcing",
+        "specialistId": "counterparty_verifier"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:deal_manager",
+      "kind": "agent",
+      "label": "Deal Manager",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "deal_manager"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:deal_risk_agent",
+      "kind": "agent",
+      "label": "Deal Risk Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "deal_risk_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:deal_watch_agent",
+      "kind": "agent",
+      "label": "Deal Watch Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "deal_watch_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:document_intelligence_agent",
+      "kind": "agent",
+      "label": "Document Intelligence Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "document_intelligence_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:evidence_provenance_analyst",
+      "kind": "agent",
+      "label": "Evidence & Provenance Analyst",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "counterparty-sourcing",
+        "specialistId": "evidence_provenance_analyst"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:exception_audit_agent",
+      "kind": "agent",
+      "label": "Exception & Audit Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "exception_audit_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:logistics_execution_agent",
+      "kind": "agent",
+      "label": "Logistics & Execution Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "logistics_execution_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:market_intelligence_agent",
+      "kind": "agent",
+      "label": "Market Intelligence Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "market_intelligence_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:next_best_action_agent",
+      "kind": "agent",
+      "label": "Next Best Action Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "next_best_action_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:operations_controller",
+      "kind": "agent",
+      "label": "Operations Controller",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "operations_controller"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:seller_qualification_agent",
+      "kind": "agent",
+      "label": "Seller Qualification Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "seller_qualification_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:sourcing_strategist",
+      "kind": "agent",
+      "label": "Sourcing Strategist",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "counterparty-sourcing",
+        "specialistId": "sourcing_strategist"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:sourcing_supervisor",
+      "kind": "agent",
+      "label": "Sourcing Supervisor",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "counterparty-sourcing",
+        "specialistId": "sourcing_supervisor"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:supplier_hunter",
+      "kind": "agent",
+      "label": "Supplier Hunter",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "counterparty-sourcing",
+        "specialistId": "supplier_hunter"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:task_chase_agent",
+      "kind": "agent",
+      "label": "Task & Chase Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "intelligence-operations",
+        "specialistId": "task_chase_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:northsea:trade_documentation_protection_agent",
+      "kind": "agent",
+      "label": "Trade Documentation & Protection Agent",
+      "appId": "app:northsea",
+      "details": {
+        "crew": "deal-execution",
+        "specialistId": "trade_documentation_protection_agent"
+      },
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "specialist:nova",
+      "kind": "agent",
+      "label": "Nova",
+      "appId": "app:axe_core",
+      "description": "Positioning, growth strategy, marketing copy, competitive analysis for the AXE products.",
+      "details": {
+        "role": "Product Strategy Specialist",
+        "crew": "wingman",
+        "specialistId": "nova"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:pulse",
+      "kind": "agent",
+      "label": "Pulse",
+      "appId": "app:axe_core",
+      "description": "Health checks, uptime, log analysis, diagnosing slow or failing services on the VPS.",
+      "details": {
+        "role": "System Monitoring Specialist",
+        "crew": "wingman",
+        "specialistId": "pulse"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:sentinel",
+      "kind": "agent",
+      "label": "Sentinel",
+      "appId": "app:axe_core",
+      "description": "Automation flows, cron jobs, API triggers, webhooks, n8n integrations across the ecosystem.",
+      "details": {
+        "role": "Automation Specialist",
+        "crew": "wingman",
+        "specialistId": "sentinel"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "specialist:wags",
+      "kind": "agent",
+      "label": "Wags",
+      "appId": "app:axe_core",
+      "description": "Read/analyze code, find and fix bugs, build features, ship working implementations.",
+      "details": {
+        "role": "Developer Specialist",
+        "crew": "wingman",
+        "specialistId": "wags"
+      },
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "supabase:kbimnuepbecbyezedvih",
+      "kind": "supabase-project",
+      "label": "Supabase · kbimnuepbecbyezedvih",
+      "appId": "app:northsea",
+      "details": {
+        "projectRef": "kbimnuepbecbyezedvih"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql",
+        "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
+        "supabase/northsea/migrations/20260916150100_p0_b1_functions.sql",
+        "supabase/northsea/migrations/20260916150150_p0_b2_triggers.sql",
+        "supabase/northsea/migrations/20260916150200_p0_c_data.sql",
+        "supabase/northsea/migrations/20260917090000_p1_a_engine.sql",
+        "supabase/northsea/migrations/20260917100000_p1_b_bounce_metadata.sql",
+        "supabase/northsea/migrations/20260917110000_p1_c_housekeeping.sql",
+        "supabase/northsea/migrations/20260919120000_p1_c_research_gate.sql",
+        "supabase/northsea/migrations/20260922090000_p2_outbound_reconciliation.sql",
+        "supabase/northsea/migrations/20261006163543_northsea_research_event_storm_guard.sql",
+        "supabase/northsea/migrations/20261006164053_northsea_first_contact_drafts.sql",
+        "supabase/northsea/migrations/20261006164146_northsea_first_contact_drafts_provenance.sql",
+        "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql"
+      ]
+    },
+    {
+      "id": "supabase:ktaditgtbubonrahyiig",
+      "kind": "supabase-project",
+      "label": "Supabase · ktaditgtbubonrahyiig",
+      "appId": "app:axon_memory",
+      "details": {
+        "projectRef": "ktaditgtbubonrahyiig"
+      },
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "supabase:pqnngpcgbdwxavbatbia",
+      "kind": "supabase-project",
+      "label": "Supabase · pqnngpcgbdwxavbatbia",
+      "appId": "app:axe_core",
+      "details": {
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "infra/migrations/001_unified_memory.sql",
+        "infra/migrations/002_push_meldingen.sql",
+        "infra/migrations/003_push_verberg_inhoud.sql",
+        "infra/migrations/004_core_notifications_dicht.sql",
+        "supabase/migrations/20250715_agentic_logs.sql",
+        "supabase/migrations/20250715_shared_memory.sql",
+        "supabase/migrations/20260513_axe_intel.sql",
+        "supabase/migrations/20260707125030_axe_core_system_state.sql",
+        "supabase/migrations/20260707_axe_core_agents.sql",
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260707_axe_core_capabilities.sql",
+        "supabase/migrations/20260707_axe_core_livekit.sql",
+        "supabase/migrations/20260707_axe_core_n8n.sql",
+        "supabase/migrations/20260707_axe_core_registries.sql",
+        "supabase/migrations/20260707_axe_core_system_state.sql",
+        "supabase/migrations/20260707_axe_core_user_settings.sql",
+        "supabase/migrations/20260708_axe_core_control_plane.sql",
+        "supabase/migrations/20260708_axe_core_llm_models.sql",
+        "supabase/migrations/20260708_axe_core_runtime_registry.sql",
+        "supabase/migrations/20260709_axe_core_messages.sql",
+        "supabase/migrations/20260709_axe_core_terminal_langgraph.sql",
+        "supabase/migrations/20260715_ai_core_logs.sql",
+        "supabase/migrations/20260715_global_memory.sql",
+        "supabase/migrations/20260716_fix_messages_schema.sql",
+        "supabase/migrations/20260723_registered_apps.sql",
+        "supabase/migrations/20260725_axe_self_hosted_cron.sql",
+        "supabase/migrations/20260725_secure_core_kb_documents_rls.sql",
+        "supabase/migrations/20260726_axe_core_notifications.sql",
+        "supabase/migrations/20260727_axe_core_obsidian_notes.sql",
+        "supabase/migrations/20260727_axe_core_trust_levels.sql",
+        "supabase/migrations/20260728_core_background_job_runs.sql",
+        "supabase/migrations/20260728_core_webhook_secrets.sql",
+        "supabase/migrations/20260728_memory_decay_pg_cron.sql",
+        "supabase/migrations/20260806_global_memory_canonical.sql",
+        "supabase/migrations/20260807_memory_health_check_pg_cron.sql",
+        "supabase/migrations/20260810_trust_levels_local_categories.sql",
+        "supabase/migrations/20260816_durable_task_kernel.sql",
+        "supabase/migrations/20260831_messages_own_rows_rls.sql",
+        "supabase/migrations/20260901_computer_use.sql",
+        "supabase/migrations/20260901_memory_prune_and_rag_rls.sql",
+        "supabase/migrations/20260901_rag_pgvector_search.sql",
+        "supabase/migrations/20260908_core_trading_trades.sql",
+        "supabase/migrations/20260915_core_tasks_dicht_voor_anon.sql",
+        "supabase/migrations/20260916210000_core_schedules_dicht.sql",
+        "supabase/migrations/20260916220000_een_planner_en_grootboek.sql",
+        "supabase/migrations/20260916230000_grootboek_uitvoerder.sql",
+        "supabase/migrations/20260922120000_trading_autopilot_lease.sql",
+        "supabase/migrations/20261007120000_missies_en_dax.sql",
+        "supabase/migrations/20261010110000_developer_bouwt_door.sql",
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "table:kbimnuepbecbyezedvih:northsea_audit_events",
+      "kind": "table",
+      "label": "northsea_audit_events",
+      "appId": "app:northsea",
+      "details": {
+        "schema": "public",
+        "table": "northsea_audit_events",
+        "projectRef": "kbimnuepbecbyezedvih"
+      },
+      "sources": [
+        "supabase/northsea/migrations/20260916150000_p0_a_columns.sql"
+      ]
+    },
+    {
+      "id": "table:kbimnuepbecbyezedvih:northsea_followups",
+      "kind": "table",
+      "label": "northsea_followups",
+      "appId": "app:northsea",
+      "details": {
+        "schema": "public",
+        "table": "northsea_followups",
+        "projectRef": "kbimnuepbecbyezedvih"
+      },
+      "sources": [
+        "supabase/northsea/migrations/20260917090000_p1_a_engine.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:agentic_logs",
+      "kind": "table",
+      "label": "agentic_logs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "agentic_logs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20250715_agentic_logs.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:ai_core_logs",
+      "kind": "table",
+      "label": "ai_core_logs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "ai_core_logs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260715_ai_core_logs.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:audit_trail",
+      "kind": "table",
+      "label": "audit_trail",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "audit_trail",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:automation_registry",
+      "kind": "table",
+      "label": "automation_registry",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "automation_registry",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:axe_intel",
+      "kind": "table",
+      "label": "axe_intel",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "axe_intel",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260513_axe_intel.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:axe_memory_archive_20260901",
+      "kind": "table",
+      "label": "axe_memory_archive_20260901",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "axe_memory_archive_20260901",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260901_memory_prune_and_rag_rls.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_agent_calls",
+      "kind": "table",
+      "label": "core_agent_calls",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_agent_calls",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_agent_memory",
+      "kind": "table",
+      "label": "core_agent_memory",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_agent_memory",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_agents",
+      "kind": "table",
+      "label": "core_agents",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_agents",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql",
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_ai_state",
+      "kind": "table",
+      "label": "core_ai_state",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_ai_state",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_applications",
+      "kind": "table",
+      "label": "core_applications",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_applications",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_approvals",
+      "kind": "table",
+      "label": "core_approvals",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_approvals",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql",
+        "supabase/migrations/20260816_durable_task_kernel.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_autopilot_lease",
+      "kind": "table",
+      "label": "core_autopilot_lease",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_autopilot_lease",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260922120000_trading_autopilot_lease.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_background_job_runs",
+      "kind": "table",
+      "label": "core_background_job_runs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_background_job_runs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260728_core_background_job_runs.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_bouw_apps",
+      "kind": "table",
+      "label": "core_bouw_apps",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_bouw_apps",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261010110000_developer_bouwt_door.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_capabilities",
+      "kind": "table",
+      "label": "core_capabilities",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_capabilities",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_capabilities.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_computer_workers",
+      "kind": "table",
+      "label": "core_computer_workers",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_computer_workers",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260901_computer_use.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_context",
+      "kind": "table",
+      "label": "core_context",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_context",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_dax_computers",
+      "kind": "table",
+      "label": "core_dax_computers",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_dax_computers",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_dax_slots",
+      "kind": "table",
+      "label": "core_dax_slots",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_dax_slots",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_deployments",
+      "kind": "table",
+      "label": "core_deployments",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_deployments",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_devices",
+      "kind": "table",
+      "label": "core_devices",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_devices",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_events",
+      "kind": "table",
+      "label": "core_events",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_events",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_integrations",
+      "kind": "table",
+      "label": "core_integrations",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_integrations",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_job_runs",
+      "kind": "table",
+      "label": "core_job_runs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_job_runs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260916220000_een_planner_en_grootboek.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_livekit_rooms",
+      "kind": "table",
+      "label": "core_livekit_rooms",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_livekit_rooms",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_llm_models",
+      "kind": "table",
+      "label": "core_llm_models",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_llm_models",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260708_axe_core_llm_models.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_mcp_servers",
+      "kind": "table",
+      "label": "core_mcp_servers",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_mcp_servers",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_memory",
+      "kind": "table",
+      "label": "core_memory",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_memory",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_runtime_registry.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_metrics",
+      "kind": "table",
+      "label": "core_metrics",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_metrics",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_mission_events",
+      "kind": "table",
+      "label": "core_mission_events",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_mission_events",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_missions",
+      "kind": "table",
+      "label": "core_missions",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_missions",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_models",
+      "kind": "table",
+      "label": "core_models",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_models",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_notifications",
+      "kind": "table",
+      "label": "core_notifications",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_notifications",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260726_axe_core_notifications.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_obsidian_notes",
+      "kind": "table",
+      "label": "core_obsidian_notes",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_obsidian_notes",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260727_axe_core_obsidian_notes.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_patches",
+      "kind": "table",
+      "label": "core_patches",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_patches",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_permissions",
+      "kind": "table",
+      "label": "core_permissions",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_permissions",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_presence",
+      "kind": "table",
+      "label": "core_presence",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_presence",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_push_subscriptions",
+      "kind": "table",
+      "label": "core_push_subscriptions",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_push_subscriptions",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "infra/migrations/002_push_meldingen.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_route_registry",
+      "kind": "table",
+      "label": "core_route_registry",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_route_registry",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_routing",
+      "kind": "table",
+      "label": "core_routing",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_routing",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_routing_rules",
+      "kind": "table",
+      "label": "core_routing_rules",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_routing_rules",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_schedules",
+      "kind": "table",
+      "label": "core_schedules",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_schedules",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260725_axe_self_hosted_cron.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_services",
+      "kind": "table",
+      "label": "core_services",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_services",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_sessions",
+      "kind": "table",
+      "label": "core_sessions",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_sessions",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_system_logs",
+      "kind": "table",
+      "label": "core_system_logs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_system_logs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_runtime_registry.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_system_state",
+      "kind": "table",
+      "label": "core_system_state",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_system_state",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707125030_axe_core_system_state.sql",
+        "supabase/migrations/20260707_axe_core_system_state.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_task_events",
+      "kind": "table",
+      "label": "core_task_events",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_task_events",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260816_durable_task_kernel.sql",
+        "supabase/migrations/20260901_computer_use.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_task_steps",
+      "kind": "table",
+      "label": "core_task_steps",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_task_steps",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql",
+        "supabase/migrations/20260816_durable_task_kernel.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_tasks",
+      "kind": "table",
+      "label": "core_tasks",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_tasks",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_tool_calls",
+      "kind": "table",
+      "label": "core_tool_calls",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_tool_calls",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_tools",
+      "kind": "table",
+      "label": "core_tools",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_tools",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_trading_trades",
+      "kind": "table",
+      "label": "core_trading_trades",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_trading_trades",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260908_core_trading_trades.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_trust_levels",
+      "kind": "table",
+      "label": "core_trust_levels",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_trust_levels",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260727_axe_core_trust_levels.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_voice_history",
+      "kind": "table",
+      "label": "core_voice_history",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_voice_history",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_voice_sessions",
+      "kind": "table",
+      "label": "core_voice_sessions",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_voice_sessions",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_voice_settings",
+      "kind": "table",
+      "label": "core_voice_settings",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_voice_settings",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_webhook_secrets",
+      "kind": "table",
+      "label": "core_webhook_secrets",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_webhook_secrets",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260728_core_webhook_secrets.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_workflow_runs",
+      "kind": "table",
+      "label": "core_workflow_runs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_workflow_runs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_workflows",
+      "kind": "table",
+      "label": "core_workflows",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_workflows",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:execution_logs",
+      "kind": "table",
+      "label": "execution_logs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "execution_logs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:global_memories",
+      "kind": "table",
+      "label": "global_memories",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "global_memories",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260715_global_memory.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:global_memory",
+      "kind": "table",
+      "label": "global_memory",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "global_memory",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260806_global_memory_canonical.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:memory",
+      "kind": "table",
+      "label": "memory",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "memory",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "infra/migrations/001_unified_memory.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:messages",
+      "kind": "table",
+      "label": "messages",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "messages",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260709_axe_core_messages.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:registered_apps",
+      "kind": "table",
+      "label": "registered_apps",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "registered_apps",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260723_registered_apps.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:shared_memory",
+      "kind": "table",
+      "label": "shared_memory",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "shared_memory",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20250715_shared_memory.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:trigger_registry",
+      "kind": "table",
+      "label": "trigger_registry",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "trigger_registry",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:user_settings",
+      "kind": "table",
+      "label": "user_settings",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "user_settings",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20260707_axe_core_user_settings.sql"
+      ]
+    },
+    {
+      "id": "worker:com.axe.agent-tunnel",
+      "kind": "worker",
+      "label": "com.axe.agent-tunnel",
+      "appId": "app:axe_core",
+      "description": "launchd agent from install-agent-tunnel-launchd.sh",
+      "details": {
+        "label": "com.axe.agent-tunnel",
+        "hosts": [
+          "Mac mini"
+        ]
+      },
+      "sources": [
+        "scripts/install-agent-tunnel-launchd.sh"
+      ]
+    },
+    {
+      "id": "worker:com.axe.autosync",
+      "kind": "worker",
+      "label": "com.axe.autosync",
+      "appId": "app:axe_core",
+      "description": "launchd agent from install-autosync-launchd.sh",
+      "details": {
+        "label": "com.axe.autosync",
+        "hosts": [
+          "Mac mini",
+          "iMac"
+        ]
+      },
+      "sources": [
+        "scripts/install-autosync-launchd.sh"
+      ]
+    },
+    {
+      "id": "worker:com.axe.browser-agent",
+      "kind": "worker",
+      "label": "com.axe.browser-agent",
+      "appId": "app:axe_core",
+      "description": "launchd agent from install-browser-agent-launchd.sh",
+      "details": {
+        "label": "com.axe.browser-agent",
+        "hosts": [
+          "Mac mini"
+        ]
+      },
+      "sources": [
+        "scripts/install-browser-agent-launchd.sh"
+      ]
+    },
+    {
+      "id": "worker:com.axe.computer-worker",
+      "kind": "worker",
+      "label": "com.axe.computer-worker",
+      "appId": "app:axe_core",
+      "description": "launchd agent from install-computer-worker-launchd.sh",
+      "details": {
+        "label": "com.axe.computer-worker",
+        "hosts": [
+          "Mac mini",
+          "iMac"
+        ]
+      },
+      "sources": [
+        "scripts/install-computer-worker-launchd.sh"
+      ]
+    },
+    {
+      "id": "worker:com.axe.service-monitor",
+      "kind": "worker",
+      "label": "com.axe.service-monitor",
+      "appId": "app:axe_core",
+      "description": "launchd agent from install-service-monitor-launchd.sh",
+      "details": {
+        "label": "com.axe.service-monitor",
+        "hosts": [
+          "Mac mini"
+        ]
+      },
+      "sources": [
+        "scripts/install-service-monitor-launchd.sh"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "deploy-target:app:axon_memory:cloudflare:axon-app",
+      "source": "app:axon_memory",
+      "target": "cloudflare:axon-app",
+      "relation": "deploy-target",
+      "label": "deploy-target",
+      "sources": [
+        "ECOSYSTEM.md"
+      ]
+    },
+    {
+      "id": "deploy-target:app:trading_os:cloudflare:app:trading_os:pages",
+      "source": "app:trading_os",
+      "target": "cloudflare:app:trading_os:pages",
+      "relation": "deploy-target",
+      "label": "deploy-target",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "deploys-to:app:axe_companion:runtime:vps-api",
+      "source": "app:axe_companion",
+      "target": "runtime:vps-api",
+      "relation": "deploys-to",
+      "label": "deploys-to",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "deploys-to:app:axe_core:runtime:vps-api",
+      "source": "app:axe_core",
+      "target": "runtime:vps-api",
+      "relation": "deploys-to",
+      "label": "deploys-to",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "deploys-to:app:axon_memory:runtime:vps-api",
+      "source": "app:axon_memory",
+      "target": "runtime:vps-api",
+      "relation": "deploys-to",
+      "label": "deploys-to",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "embeds:app:axe_core:app:android_device_manager",
+      "source": "app:axe_core",
+      "target": "app:android_device_manager",
+      "relation": "embeds",
+      "label": "embeds",
+      "sources": [
+        "ECOSYSTEM.md"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_code:agent:developer",
+      "source": "app:axe_code",
+      "target": "agent:developer",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_companion:agent:companion",
+      "source": "app:axe_companion",
+      "target": "agent:companion",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:apps",
+      "source": "app:axe_core",
+      "target": "agent:apps",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axe",
+      "source": "app:axe_core",
+      "target": "agent:axe",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axe_companion",
+      "source": "app:axe_core",
+      "target": "agent:axe_companion",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axe_core",
+      "source": "app:axe_core",
+      "target": "agent:axe_core",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axe_developer",
+      "source": "app:axe_core",
+      "target": "agent:axe_developer",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axe_intel",
+      "source": "app:axe_core",
+      "target": "agent:axe_intel",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axe_ollama",
+      "source": "app:axe_core",
+      "target": "agent:axe_ollama",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axe_trader",
+      "source": "app:axe_core",
+      "target": "agent:axe_trader",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:browser",
+      "source": "app:axe_core",
+      "target": "agent:browser",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:cron",
+      "source": "app:axe_core",
+      "target": "agent:cron",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:finance",
+      "source": "app:axe_core",
+      "target": "agent:finance",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:memory",
+      "source": "app:axe_core",
+      "target": "agent:memory",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:task",
+      "source": "app:axe_core",
+      "target": "agent:task",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:thinktank",
+      "source": "app:axe_core",
+      "target": "agent:thinktank",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:wingman",
+      "source": "app:axe_core",
+      "target": "agent:wingman",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:northsea:agent:northsea",
+      "source": "app:northsea",
+      "target": "agent:northsea",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:trading_os:agent:intel",
+      "source": "app:trading_os",
+      "target": "agent:intel",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:trading_os:agent:trading",
+      "source": "app:trading_os",
+      "target": "agent:trading",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-crew:app:axe_core:crew:wingman",
+      "source": "app:axe_core",
+      "target": "crew:wingman",
+      "relation": "has-crew",
+      "label": "has-crew",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-crew:app:northsea:crew:northsea:counterparty-sourcing",
+      "source": "app:northsea",
+      "target": "crew:northsea:counterparty-sourcing",
+      "relation": "has-crew",
+      "label": "has-crew",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/crew.yaml"
+      ]
+    },
+    {
+      "id": "has-crew:app:northsea:crew:northsea:deal-execution",
+      "source": "app:northsea",
+      "target": "crew:northsea:deal-execution",
+      "relation": "has-crew",
+      "label": "has-crew",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/crew.yaml"
+      ]
+    },
+    {
+      "id": "has-crew:app:northsea:crew:northsea:intelligence-operations",
+      "source": "app:northsea",
+      "target": "crew:northsea:intelligence-operations",
+      "relation": "has-crew",
+      "label": "has-crew",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/crew.yaml"
+      ]
+    },
+    {
+      "id": "has-dax:app:axe_core:dax:dax-browser-01",
+      "source": "app:axe_core",
+      "target": "dax:dax-browser-01",
+      "relation": "has-dax",
+      "label": "has-dax",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-dax:app:axe_core:dax:dax-developer-01",
+      "source": "app:axe_core",
+      "target": "dax:dax-developer-01",
+      "relation": "has-dax",
+      "label": "has-dax",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-dax:app:axe_core:dax:dax-thinktank-01",
+      "source": "app:axe_core",
+      "target": "dax:dax-thinktank-01",
+      "relation": "has-dax",
+      "label": "has-dax",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-dax:app:northsea:dax:dax-northsea-01",
+      "source": "app:northsea",
+      "target": "dax:dax-northsea-01",
+      "relation": "has-dax",
+      "label": "has-dax",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-dax:app:trading_os:dax:dax-trading-01",
+      "source": "app:trading_os",
+      "target": "dax:dax-trading-01",
+      "relation": "has-dax",
+      "label": "has-dax",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:counterparty-sourcing:specialist:northsea:buyer_hunter",
+      "source": "crew:northsea:counterparty-sourcing",
+      "target": "specialist:northsea:buyer_hunter",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:counterparty-sourcing:specialist:northsea:commercial_fit_analyst",
+      "source": "crew:northsea:counterparty-sourcing",
+      "target": "specialist:northsea:commercial_fit_analyst",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:counterparty-sourcing:specialist:northsea:counterparty_verifier",
+      "source": "crew:northsea:counterparty-sourcing",
+      "target": "specialist:northsea:counterparty_verifier",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:counterparty-sourcing:specialist:northsea:evidence_provenance_analyst",
+      "source": "crew:northsea:counterparty-sourcing",
+      "target": "specialist:northsea:evidence_provenance_analyst",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:counterparty-sourcing:specialist:northsea:sourcing_strategist",
+      "source": "crew:northsea:counterparty-sourcing",
+      "target": "specialist:northsea:sourcing_strategist",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:counterparty-sourcing:specialist:northsea:sourcing_supervisor",
+      "source": "crew:northsea:counterparty-sourcing",
+      "target": "specialist:northsea:sourcing_supervisor",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:counterparty-sourcing:specialist:northsea:supplier_hunter",
+      "source": "crew:northsea:counterparty-sourcing",
+      "target": "specialist:northsea:supplier_hunter",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:buyer_qualification_agent",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:buyer_qualification_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:commercial_alignment_agent",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:commercial_alignment_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:deal_manager",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:deal_manager",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:deal_risk_agent",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:deal_risk_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:logistics_execution_agent",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:logistics_execution_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:next_best_action_agent",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:next_best_action_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:seller_qualification_agent",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:seller_qualification_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:deal-execution:specialist:northsea:trade_documentation_protection_agent",
+      "source": "crew:northsea:deal-execution",
+      "target": "specialist:northsea:trade_documentation_protection_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:approval_coordinator",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:approval_coordinator",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:communications_intelligence_agent",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:communications_intelligence_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:deal_watch_agent",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:deal_watch_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:document_intelligence_agent",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:document_intelligence_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:exception_audit_agent",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:exception_audit_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:market_intelligence_agent",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:market_intelligence_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:operations_controller",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:operations_controller",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:northsea:intelligence-operations:specialist:northsea:task_chase_agent",
+      "source": "crew:northsea:intelligence-operations",
+      "target": "specialist:northsea:task_chase_agent",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/agents.yaml"
+      ]
+    },
+    {
+      "id": "has-member:crew:trading-research:specialist:axe_core",
+      "source": "crew:trading-research",
+      "target": "specialist:axe_core",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/application/tradingIntel/researchCrewPrompt.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:trading-research:specialist:dollar_bill",
+      "source": "crew:trading-research",
+      "target": "specialist:dollar_bill",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/application/tradingIntel/researchCrewPrompt.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:trading-research:specialist:intel",
+      "source": "crew:trading-research",
+      "target": "specialist:intel",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/application/tradingIntel/researchCrewPrompt.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:atlas",
+      "source": "crew:wingman",
+      "target": "specialist:atlas",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:axe_core",
+      "source": "crew:wingman",
+      "target": "specialist:axe_core",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:dollar_bill",
+      "source": "crew:wingman",
+      "target": "specialist:dollar_bill",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:forge",
+      "source": "crew:wingman",
+      "target": "specialist:forge",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:intel",
+      "source": "crew:wingman",
+      "target": "specialist:intel",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:nova",
+      "source": "crew:wingman",
+      "target": "specialist:nova",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:pulse",
+      "source": "crew:wingman",
+      "target": "specialist:pulse",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:sentinel",
+      "source": "crew:wingman",
+      "target": "specialist:sentinel",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-member:crew:wingman:specialist:wags",
+      "source": "crew:wingman",
+      "target": "specialist:wags",
+      "relation": "has-member",
+      "label": "has-member",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:claude",
+      "source": "app:axe_code",
+      "target": "coding-seat:claude",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:claude2",
+      "source": "app:axe_code",
+      "target": "coding-seat:claude2",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:claude3",
+      "source": "app:axe_code",
+      "target": "coding-seat:claude3",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:claude4",
+      "source": "app:axe_code",
+      "target": "coding-seat:claude4",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:codex",
+      "source": "app:axe_code",
+      "target": "coding-seat:codex",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:codex2",
+      "source": "app:axe_code",
+      "target": "coding-seat:codex2",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:codex3",
+      "source": "app:axe_code",
+      "target": "coding-seat:codex3",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:cursor",
+      "source": "app:axe_code",
+      "target": "coding-seat:cursor",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-surface:app:axe_companion:runtime:app:axe_companion:web",
+      "source": "app:axe_companion",
+      "target": "runtime:app:axe_companion:web",
+      "relation": "has-surface",
+      "label": "has-surface",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "has-surface:app:axe_core:runtime:app:axe_core:desktop",
+      "source": "app:axe_core",
+      "target": "runtime:app:axe_core:desktop",
+      "relation": "has-surface",
+      "label": "has-surface",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "has-surface:app:axe_core:runtime:app:axe_core:web",
+      "source": "app:axe_core",
+      "target": "runtime:app:axe_core:web",
+      "relation": "has-surface",
+      "label": "has-surface",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "has-surface:app:axon_memory:runtime:app:axon_memory:app",
+      "source": "app:axon_memory",
+      "target": "runtime:app:axon_memory:app",
+      "relation": "has-surface",
+      "label": "has-surface",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "has-surface:app:trading_os:runtime:app:trading_os:web",
+      "source": "app:trading_os",
+      "target": "runtime:app:trading_os:web",
+      "relation": "has-surface",
+      "label": "has-surface",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:kbimnuepbecbyezedvih:table:kbimnuepbecbyezedvih:northsea_audit_events",
+      "source": "supabase:kbimnuepbecbyezedvih",
+      "target": "table:kbimnuepbecbyezedvih:northsea_audit_events",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/northsea/migrations/20260916150000_p0_a_columns.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:kbimnuepbecbyezedvih:table:kbimnuepbecbyezedvih:northsea_followups",
+      "source": "supabase:kbimnuepbecbyezedvih",
+      "target": "table:kbimnuepbecbyezedvih:northsea_followups",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/northsea/migrations/20260917090000_p1_a_engine.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:agentic_logs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:agentic_logs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20250715_agentic_logs.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:ai_core_logs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:ai_core_logs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260715_ai_core_logs.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:audit_trail",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:audit_trail",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:automation_registry",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:automation_registry",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:axe_intel",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:axe_intel",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260513_axe_intel.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:axe_memory_archive_20260901",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:axe_memory_archive_20260901",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260901_memory_prune_and_rag_rls.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_agent_calls",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_agent_calls",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_agent_memory",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_agent_memory",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_agents",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_agents",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql",
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_ai_state",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_ai_state",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_applications",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_applications",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_approvals",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_approvals",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql",
+        "supabase/migrations/20260816_durable_task_kernel.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_autopilot_lease",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_autopilot_lease",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260922120000_trading_autopilot_lease.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_background_job_runs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_background_job_runs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260728_core_background_job_runs.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_bouw_apps",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_bouw_apps",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261010110000_developer_bouwt_door.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_capabilities",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_capabilities",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_capabilities.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_computer_workers",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_computer_workers",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260901_computer_use.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_context",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_context",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_dax_computers",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_dax_computers",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_dax_slots",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_dax_slots",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_deployments",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_deployments",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_devices",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_devices",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_events",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_events",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_integrations",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_integrations",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_job_runs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_job_runs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260916220000_een_planner_en_grootboek.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_livekit_rooms",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_livekit_rooms",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_llm_models",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_llm_models",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260708_axe_core_llm_models.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_mcp_servers",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_mcp_servers",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_memory",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_memory",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_runtime_registry.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_metrics",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_metrics",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_mission_events",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_mission_events",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_missions",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_missions",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_models",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_models",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_notifications",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_notifications",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260726_axe_core_notifications.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_obsidian_notes",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_obsidian_notes",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260727_axe_core_obsidian_notes.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_patches",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_patches",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_permissions",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_permissions",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_presence",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_presence",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_push_subscriptions",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_push_subscriptions",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "infra/migrations/002_push_meldingen.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_route_registry",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_route_registry",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_routing",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_routing",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_routing_rules",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_routing_rules",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_agents.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_schedules",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_schedules",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260725_axe_self_hosted_cron.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_services",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_services",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_sessions",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_sessions",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_system_logs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_system_logs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_runtime_registry.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_system_state",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_system_state",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707125030_axe_core_system_state.sql",
+        "supabase/migrations/20260707_axe_core_system_state.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_task_events",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_task_events",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260816_durable_task_kernel.sql",
+        "supabase/migrations/20260901_computer_use.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_task_steps",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_task_steps",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql",
+        "supabase/migrations/20260816_durable_task_kernel.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_tasks",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_tasks",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_tool_calls",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_tool_calls",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260708_axe_core_control_plane.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_tools",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_tools",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_trading_trades",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_trading_trades",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260908_core_trading_trades.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_trust_levels",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_trust_levels",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260727_axe_core_trust_levels.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_voice_history",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_voice_history",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_voice_sessions",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_voice_sessions",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_voice_settings",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_voice_settings",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_livekit.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_webhook_secrets",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_webhook_secrets",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260728_core_webhook_secrets.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_workflow_runs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_workflow_runs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_workflows",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_workflows",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:execution_logs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:execution_logs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:global_memories",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:global_memories",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260715_global_memory.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:global_memory",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:global_memory",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260806_global_memory_canonical.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:memory",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:memory",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "infra/migrations/001_unified_memory.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:messages",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:messages",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260709_axe_core_messages.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:registered_apps",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:registered_apps",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260723_registered_apps.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:shared_memory",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:shared_memory",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20250715_shared_memory.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:trigger_registry",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:trigger_registry",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:user_settings",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:user_settings",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_user_settings.sql"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:apps",
+      "source": "app:axe_core",
+      "target": "agent:apps",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:axe",
+      "source": "app:axe_core",
+      "target": "agent:axe",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:browser",
+      "source": "app:axe_core",
+      "target": "agent:browser",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:companion",
+      "source": "app:axe_core",
+      "target": "agent:companion",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:cron",
+      "source": "app:axe_core",
+      "target": "agent:cron",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:developer",
+      "source": "app:axe_core",
+      "target": "agent:developer",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:finance",
+      "source": "app:axe_core",
+      "target": "agent:finance",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:intel",
+      "source": "app:axe_core",
+      "target": "agent:intel",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:memory",
+      "source": "app:axe_core",
+      "target": "agent:memory",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:northsea",
+      "source": "app:axe_core",
+      "target": "agent:northsea",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:task",
+      "source": "app:axe_core",
+      "target": "agent:task",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:thinktank",
+      "source": "app:axe_core",
+      "target": "agent:thinktank",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:trading",
+      "source": "app:axe_core",
+      "target": "agent:trading",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:wingman",
+      "source": "app:axe_core",
+      "target": "agent:wingman",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "registers-cron:app:axe_core:cron:axe_core:dax-wacht",
+      "source": "app:axe_core",
+      "target": "cron:axe_core:dax-wacht",
+      "relation": "registers-cron",
+      "label": "registers-cron",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "registers-cron:app:axe_core:cron:axe_core:mac-opruimen",
+      "source": "app:axe_core",
+      "target": "cron:axe_core:mac-opruimen",
+      "relation": "registers-cron",
+      "label": "registers-cron",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "registers-cron:app:axe_core:cron:axe_core:planner",
+      "source": "app:axe_core",
+      "target": "cron:axe_core:planner",
+      "relation": "registers-cron",
+      "label": "registers-cron",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runs-crew:agent:northsea:crew:northsea:counterparty-sourcing",
+      "source": "agent:northsea",
+      "target": "crew:northsea:counterparty-sourcing",
+      "relation": "runs-crew",
+      "label": "runs-crew",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/counterparty-sourcing/crew.yaml"
+      ]
+    },
+    {
+      "id": "runs-crew:agent:northsea:crew:northsea:deal-execution",
+      "source": "agent:northsea",
+      "target": "crew:northsea:deal-execution",
+      "relation": "runs-crew",
+      "label": "runs-crew",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/deal-execution/crew.yaml"
+      ]
+    },
+    {
+      "id": "runs-crew:agent:northsea:crew:northsea:intelligence-operations",
+      "source": "agent:northsea",
+      "target": "crew:northsea:intelligence-operations",
+      "relation": "runs-crew",
+      "label": "runs-crew",
+      "sources": [
+        "backend/northsea_mcp/northsea_mcp/crews/config/intelligence-operations/crew.yaml"
+      ]
+    },
+    {
+      "id": "runs-crew:agent:trading:crew:trading-research",
+      "source": "agent:trading",
+      "target": "crew:trading-research",
+      "relation": "runs-crew",
+      "label": "runs-crew",
+      "sources": [
+        "src/application/tradingIntel/researchCrewPrompt.ts"
+      ]
+    },
+    {
+      "id": "runs-crew:agent:wingman:crew:wingman",
+      "source": "agent:wingman",
+      "target": "crew:wingman",
+      "relation": "runs-crew",
+      "label": "runs-crew",
+      "sources": [
+        "src/domain/catalogs/specialists.ts"
+      ]
+    },
+    {
+      "id": "runs-on:app:axe_core:runtime:mac-mini",
+      "source": "app:axe_core",
+      "target": "runtime:mac-mini",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runs-on:cloudflare:app:trading_os:pages:runtime:cloudflare",
+      "source": "cloudflare:app:trading_os:pages",
+      "target": "runtime:cloudflare",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runs-on:cloudflare:axon-app:runtime:cloudflare",
+      "source": "cloudflare:axon-app",
+      "target": "runtime:cloudflare",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "ECOSYSTEM.md"
+      ]
+    },
+    {
+      "id": "runs-on:cloudflare:trading-os-live-engine:runtime:cloudflare",
+      "source": "cloudflare:trading-os-live-engine",
+      "target": "runtime:cloudflare",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "runs-on:dax:dax-browser-01:runtime:vps-strato",
+      "source": "dax:dax-browser-01",
+      "target": "runtime:vps-strato",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "runs-on:dax:dax-developer-01:runtime:vps-strato",
+      "source": "dax:dax-developer-01",
+      "target": "runtime:vps-strato",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "runs-on:dax:dax-northsea-01:runtime:vps-strato",
+      "source": "dax:dax-northsea-01",
+      "target": "runtime:vps-strato",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "runs-on:dax:dax-thinktank-01:runtime:vps-strato",
+      "source": "dax:dax-thinktank-01",
+      "target": "runtime:vps-strato",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "runs-on:dax:dax-trading-01:runtime:vps-strato",
+      "source": "dax:dax-trading-01",
+      "target": "runtime:vps-strato",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "supabase/migrations/20261007120000_missies_en_dax.sql"
+      ]
+    },
+    {
+      "id": "runs-on:service:axe-browser-agent:runtime:vps-api",
+      "source": "service:axe-browser-agent",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "backend/axe_api/axe-browser-agent.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-on:service:axe-companion:runtime:vps-api",
+      "source": "service:axe-companion",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "ECOSYSTEM.md",
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "runs-on:service:axe-core-api:runtime:vps-api",
+      "source": "service:axe-core-api",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "backend/axe_api/axe-core-api.service",
+        "infra/axe-core-api/axe-core-api.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-on:service:axe-task-worker:runtime:vps-api",
+      "source": "service:axe-task-worker",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "backend/axe_api/axe-task-worker.service",
+        "infra/axe-core-api/axe-task-worker.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-on:service:axe-terminal:runtime:vps-api",
+      "source": "service:axe-terminal",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "infra/terminal/install-axe-terminal.sh"
+      ]
+    },
+    {
+      "id": "runs-on:service:axe-tts:runtime:vps-api",
+      "source": "service:axe-tts",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-on:service:axe-tunnel-relay:runtime:vps-api",
+      "source": "service:axe-tunnel-relay",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "infra/axe-mac-tunnel/README.md",
+        "infra/axe-mac-tunnel/relay.cjs"
+      ]
+    },
+    {
+      "id": "runs-on:service:camofox-browser:runtime:vps-api",
+      "source": "service:camofox-browser",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "infra/scripts/install-camofox.sh"
+      ]
+    },
+    {
+      "id": "runs-on:service:camofox:runtime:vps-api",
+      "source": "service:camofox",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "infra/scripts/install-camofox.sh"
+      ]
+    },
+    {
+      "id": "runs-on:service:northsea-mcp:runtime:vps-api",
+      "source": "service:northsea-mcp",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "backend/northsea_mcp/deploy/northsea-mcp.service"
+      ]
+    },
+    {
+      "id": "runs-on:service:ollama-geheugen:runtime:vps-api",
+      "source": "service:ollama-geheugen",
+      "target": "runtime:vps-api",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "backend/axe_api/ollama-geheugen.service"
+      ]
+    },
+    {
+      "id": "runs-on:service:ollama:runtime:vps-strato",
+      "source": "service:ollama",
+      "target": "runtime:vps-strato",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "docs/programma/01-REALITEIT.md",
+        "infra/vps-bootstrap.sh"
+      ]
+    },
+    {
+      "id": "runs-on:worker:com.axe.agent-tunnel:runtime:mac-mini",
+      "source": "worker:com.axe.agent-tunnel",
+      "target": "runtime:mac-mini",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/install-agent-tunnel-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-on:worker:com.axe.autosync:runtime:imac",
+      "source": "worker:com.axe.autosync",
+      "target": "runtime:imac",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/install-autosync-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-on:worker:com.axe.autosync:runtime:mac-mini",
+      "source": "worker:com.axe.autosync",
+      "target": "runtime:mac-mini",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/install-autosync-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-on:worker:com.axe.browser-agent:runtime:mac-mini",
+      "source": "worker:com.axe.browser-agent",
+      "target": "runtime:mac-mini",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/install-browser-agent-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-on:worker:com.axe.computer-worker:runtime:imac",
+      "source": "worker:com.axe.computer-worker",
+      "target": "runtime:imac",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/install-computer-worker-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-on:worker:com.axe.computer-worker:runtime:mac-mini",
+      "source": "worker:com.axe.computer-worker",
+      "target": "runtime:mac-mini",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/install-computer-worker-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-on:worker:com.axe.service-monitor:runtime:mac-mini",
+      "source": "worker:com.axe.service-monitor",
+      "target": "runtime:mac-mini",
+      "relation": "runs-on",
+      "label": "runs-on",
+      "sources": [
+        "scripts/install-service-monitor-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_companion:service:axe-companion",
+      "source": "app:axe_companion",
+      "target": "service:axe-companion",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "ECOSYSTEM.md",
+        "docs/programma/01-REALITEIT.md"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:axe-browser-agent",
+      "source": "app:axe_core",
+      "target": "service:axe-browser-agent",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "backend/axe_api/axe-browser-agent.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:axe-core-api",
+      "source": "app:axe_core",
+      "target": "service:axe-core-api",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "backend/axe_api/axe-core-api.service",
+        "infra/axe-core-api/axe-core-api.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:axe-task-worker",
+      "source": "app:axe_core",
+      "target": "service:axe-task-worker",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "backend/axe_api/axe-task-worker.service",
+        "infra/axe-core-api/axe-task-worker.service",
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:axe-terminal",
+      "source": "app:axe_core",
+      "target": "service:axe-terminal",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "infra/terminal/install-axe-terminal.sh"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:axe-tts",
+      "source": "app:axe_core",
+      "target": "service:axe-tts",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "scripts/vps_sync.py"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:axe-tunnel-relay",
+      "source": "app:axe_core",
+      "target": "service:axe-tunnel-relay",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "infra/axe-mac-tunnel/README.md",
+        "infra/axe-mac-tunnel/relay.cjs"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:camofox",
+      "source": "app:axe_core",
+      "target": "service:camofox",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "infra/scripts/install-camofox.sh"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:camofox-browser",
+      "source": "app:axe_core",
+      "target": "service:camofox-browser",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "infra/scripts/install-camofox.sh"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:ollama",
+      "source": "app:axe_core",
+      "target": "service:ollama",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "docs/programma/01-REALITEIT.md",
+        "infra/vps-bootstrap.sh"
+      ]
+    },
+    {
+      "id": "runs-service:app:axe_core:service:ollama-geheugen",
+      "source": "app:axe_core",
+      "target": "service:ollama-geheugen",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "backend/axe_api/ollama-geheugen.service"
+      ]
+    },
+    {
+      "id": "runs-service:app:northsea:service:northsea-mcp",
+      "source": "app:northsea",
+      "target": "service:northsea-mcp",
+      "relation": "runs-service",
+      "label": "runs-service",
+      "sources": [
+        "backend/northsea_mcp/deploy/northsea-mcp.service"
+      ]
+    },
+    {
+      "id": "runs-worker:app:axe_core:worker:com.axe.agent-tunnel",
+      "source": "app:axe_core",
+      "target": "worker:com.axe.agent-tunnel",
+      "relation": "runs-worker",
+      "label": "runs-worker",
+      "sources": [
+        "scripts/install-agent-tunnel-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-worker:app:axe_core:worker:com.axe.autosync",
+      "source": "app:axe_core",
+      "target": "worker:com.axe.autosync",
+      "relation": "runs-worker",
+      "label": "runs-worker",
+      "sources": [
+        "scripts/install-autosync-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-worker:app:axe_core:worker:com.axe.browser-agent",
+      "source": "app:axe_core",
+      "target": "worker:com.axe.browser-agent",
+      "relation": "runs-worker",
+      "label": "runs-worker",
+      "sources": [
+        "scripts/install-browser-agent-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-worker:app:axe_core:worker:com.axe.computer-worker",
+      "source": "app:axe_core",
+      "target": "worker:com.axe.computer-worker",
+      "relation": "runs-worker",
+      "label": "runs-worker",
+      "sources": [
+        "scripts/install-computer-worker-launchd.sh"
+      ]
+    },
+    {
+      "id": "runs-worker:app:axe_core:worker:com.axe.service-monitor",
+      "source": "app:axe_core",
+      "target": "worker:com.axe.service-monitor",
+      "relation": "runs-worker",
+      "label": "runs-worker",
+      "sources": [
+        "scripts/install-service-monitor-launchd.sh"
+      ]
+    },
+    {
+      "id": "served-by:mcp:northsea-mcp:service:northsea-mcp",
+      "source": "mcp:northsea-mcp",
+      "target": "service:northsea-mcp",
+      "relation": "served-by",
+      "label": "served-by",
+      "sources": [
+        "backend/northsea_mcp/deploy/northsea-mcp.service"
+      ]
+    },
+    {
+      "id": "served-by:provider:ollama:service:ollama",
+      "source": "provider:ollama",
+      "target": "service:ollama",
+      "relation": "served-by",
+      "label": "served-by",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-cloudflare:app:trading_os:cloudflare:trading-os-live-engine",
+      "source": "app:trading_os",
+      "target": "cloudflare:trading-os-live-engine",
+      "relation": "uses-cloudflare",
+      "label": "uses-cloudflare",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "uses-mcp:app:axe_core:mcp:cloudflare",
+      "source": "app:axe_core",
+      "target": "mcp:cloudflare",
+      "relation": "uses-mcp",
+      "label": "uses-mcp",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "uses-mcp:app:axe_core:mcp:cloudflare_workers",
+      "source": "app:axe_core",
+      "target": "mcp:cloudflare_workers",
+      "relation": "uses-mcp",
+      "label": "uses-mcp",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "uses-mcp:app:axe_core:mcp:github",
+      "source": "app:axe_core",
+      "target": "mcp:github",
+      "relation": "uses-mcp",
+      "label": "uses-mcp",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "uses-mcp:app:axe_core:mcp:railway",
+      "source": "app:axe_core",
+      "target": "mcp:railway",
+      "relation": "uses-mcp",
+      "label": "uses-mcp",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "uses-mcp:app:axe_core:mcp:supabase",
+      "source": "app:axe_core",
+      "target": "mcp:supabase",
+      "relation": "uses-mcp",
+      "label": "uses-mcp",
+      "sources": [
+        "supabase/migrations/20260707_axe_core_registries.sql"
+      ]
+    },
+    {
+      "id": "uses-mcp:app:axon_memory:mcp:axon_memory",
+      "source": "app:axon_memory",
+      "target": "mcp:axon_memory",
+      "relation": "uses-mcp",
+      "label": "uses-mcp",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "uses-mcp:app:northsea:mcp:northsea-mcp",
+      "source": "app:northsea",
+      "target": "mcp:northsea-mcp",
+      "relation": "uses-mcp",
+      "label": "uses-mcp",
+      "sources": [
+        "backend/northsea_mcp/deploy/northsea-mcp.service"
+      ]
+    },
+    {
+      "id": "uses-project:app:axe_companion:supabase:pqnngpcgbdwxavbatbia",
+      "source": "app:axe_companion",
+      "target": "supabase:pqnngpcgbdwxavbatbia",
+      "relation": "uses-project",
+      "label": "uses-project",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "uses-project:app:axe_core:supabase:pqnngpcgbdwxavbatbia",
+      "source": "app:axe_core",
+      "target": "supabase:pqnngpcgbdwxavbatbia",
+      "relation": "uses-project",
+      "label": "uses-project",
+      "sources": [
+        "infra/migrations/001_unified_memory.sql",
+        "infra/migrations/002_push_meldingen.sql",
+        "infra/migrations/003_push_verberg_inhoud.sql",
+        "infra/migrations/004_core_notifications_dicht.sql",
+        "supabase/migrations/20250715_agentic_logs.sql",
+        "supabase/migrations/20250715_shared_memory.sql",
+        "supabase/migrations/20260513_axe_intel.sql",
+        "supabase/migrations/20260707125030_axe_core_system_state.sql",
+        "supabase/migrations/20260707_axe_core_agents.sql",
+        "supabase/migrations/20260707_axe_core_brain.sql",
+        "supabase/migrations/20260707_axe_core_capabilities.sql",
+        "supabase/migrations/20260707_axe_core_livekit.sql",
+        "supabase/migrations/20260707_axe_core_n8n.sql",
+        "supabase/migrations/20260707_axe_core_registries.sql",
+        "supabase/migrations/20260707_axe_core_system_state.sql",
+        "supabase/migrations/20260707_axe_core_user_settings.sql",
+        "supabase/migrations/20260708_axe_core_control_plane.sql",
+        "supabase/migrations/20260708_axe_core_llm_models.sql",
+        "supabase/migrations/20260708_axe_core_runtime_registry.sql",
+        "supabase/migrations/20260709_axe_core_messages.sql",
+        "supabase/migrations/20260709_axe_core_terminal_langgraph.sql",
+        "supabase/migrations/20260715_ai_core_logs.sql",
+        "supabase/migrations/20260715_global_memory.sql",
+        "supabase/migrations/20260716_fix_messages_schema.sql",
+        "supabase/migrations/20260723_registered_apps.sql",
+        "supabase/migrations/20260725_axe_self_hosted_cron.sql",
+        "supabase/migrations/20260725_secure_core_kb_documents_rls.sql",
+        "supabase/migrations/20260726_axe_core_notifications.sql",
+        "supabase/migrations/20260727_axe_core_obsidian_notes.sql",
+        "supabase/migrations/20260727_axe_core_trust_levels.sql",
+        "supabase/migrations/20260728_core_background_job_runs.sql",
+        "supabase/migrations/20260728_core_webhook_secrets.sql",
+        "supabase/migrations/20260728_memory_decay_pg_cron.sql",
+        "supabase/migrations/20260806_global_memory_canonical.sql",
+        "supabase/migrations/20260807_memory_health_check_pg_cron.sql",
+        "supabase/migrations/20260810_trust_levels_local_categories.sql",
+        "supabase/migrations/20260816_durable_task_kernel.sql",
+        "supabase/migrations/20260831_messages_own_rows_rls.sql",
+        "supabase/migrations/20260901_computer_use.sql",
+        "supabase/migrations/20260901_memory_prune_and_rag_rls.sql",
+        "supabase/migrations/20260901_rag_pgvector_search.sql",
+        "supabase/migrations/20260908_core_trading_trades.sql",
+        "supabase/migrations/20260915_core_tasks_dicht_voor_anon.sql",
+        "supabase/migrations/20260916210000_core_schedules_dicht.sql",
+        "supabase/migrations/20260916220000_een_planner_en_grootboek.sql",
+        "supabase/migrations/20260916230000_grootboek_uitvoerder.sql",
+        "supabase/migrations/20260922120000_trading_autopilot_lease.sql",
+        "supabase/migrations/20261007120000_missies_en_dax.sql",
+        "supabase/migrations/20261010110000_developer_bouwt_door.sql",
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "uses-project:app:axon_memory:supabase:ktaditgtbubonrahyiig",
+      "source": "app:axon_memory",
+      "target": "supabase:ktaditgtbubonrahyiig",
+      "relation": "uses-project",
+      "label": "uses-project",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "uses-project:app:northsea:supabase:kbimnuepbecbyezedvih",
+      "source": "app:northsea",
+      "target": "supabase:kbimnuepbecbyezedvih",
+      "relation": "uses-project",
+      "label": "uses-project",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql",
+        "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
+        "supabase/northsea/migrations/20260916150100_p0_b1_functions.sql",
+        "supabase/northsea/migrations/20260916150150_p0_b2_triggers.sql",
+        "supabase/northsea/migrations/20260916150200_p0_c_data.sql",
+        "supabase/northsea/migrations/20260917090000_p1_a_engine.sql",
+        "supabase/northsea/migrations/20260917100000_p1_b_bounce_metadata.sql",
+        "supabase/northsea/migrations/20260917110000_p1_c_housekeeping.sql",
+        "supabase/northsea/migrations/20260919120000_p1_c_research_gate.sql",
+        "supabase/northsea/migrations/20260922090000_p2_outbound_reconciliation.sql",
+        "supabase/northsea/migrations/20261006163543_northsea_research_event_storm_guard.sql",
+        "supabase/northsea/migrations/20261006164053_northsea_first_contact_drafts.sql",
+        "supabase/northsea/migrations/20261006164146_northsea_first_contact_drafts_provenance.sql",
+        "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql"
+      ]
+    },
+    {
+      "id": "uses-project:app:trading_os:supabase:pqnngpcgbdwxavbatbia",
+      "source": "app:trading_os",
+      "target": "supabase:pqnngpcgbdwxavbatbia",
+      "relation": "uses-project",
+      "label": "uses-project",
+      "sources": [
+        "supabase/migrations/20261016080000_productregister.sql"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:anthropic",
+      "source": "app:axe_core",
+      "target": "provider:anthropic",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:cerebras",
+      "source": "app:axe_core",
+      "target": "provider:cerebras",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:google",
+      "source": "app:axe_core",
+      "target": "provider:google",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:groq",
+      "source": "app:axe_core",
+      "target": "provider:groq",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:hermes",
+      "source": "app:axe_core",
+      "target": "provider:hermes",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:ollama",
+      "source": "app:axe_core",
+      "target": "provider:ollama",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:openai",
+      "source": "app:axe_core",
+      "target": "provider:openai",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:openhands",
+      "source": "app:axe_core",
+      "target": "provider:openhands",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:openrouter",
+      "source": "app:axe_core",
+      "target": "provider:openrouter",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:openrouter2",
+      "source": "app:axe_core",
+      "target": "provider:openrouter2",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-provider:app:axe_core:provider:xai",
+      "source": "app:axe_core",
+      "target": "provider:xai",
+      "relation": "uses-provider",
+      "label": "uses-provider",
+      "sources": [
+        "src/domain/providers.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:claude",
+      "source": "agent:developer",
+      "target": "coding-seat:claude",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:claude2",
+      "source": "agent:developer",
+      "target": "coding-seat:claude2",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:claude3",
+      "source": "agent:developer",
+      "target": "coding-seat:claude3",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:claude4",
+      "source": "agent:developer",
+      "target": "coding-seat:claude4",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:codex",
+      "source": "agent:developer",
+      "target": "coding-seat:codex",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:codex2",
+      "source": "agent:developer",
+      "target": "coding-seat:codex2",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:codex3",
+      "source": "agent:developer",
+      "target": "coding-seat:codex3",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:cursor",
+      "source": "agent:developer",
+      "target": "coding-seat:cursor",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    }
+  ],
+  "warnings": []
+}

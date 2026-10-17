@@ -6,13 +6,25 @@ export const OVERVIEW = '__architecture_overview__';
 export const ALL_GROUPS = '__architecture_all__';
 
 export const ARCHITECTURE_KINDS: ArchitectureNode['kind'][] = [
-  'app', 'runtime', 'crew', 'agent', 'service', 'cron', 'mcp', 'cloudflare', 'supabase-project', 'table',
+  'app', 'runtime', 'crew', 'agent', 'coding-seat', 'dax', 'worker',
+  'service', 'cron', 'mcp', 'provider', 'cloudflare', 'supabase-project', 'table',
 ];
 
 export const KIND_LABELS: Record<ArchitectureNode['kind'], string> = {
-  app: 'App', agent: 'Agent', crew: 'Crew', service: 'Service',
-  'supabase-project': 'Supabase project', table: 'Table', cloudflare: 'Cloudflare',
-  mcp: 'MCP server', runtime: 'Runtime', cron: 'Scheduled job',
+  app: 'App',
+  agent: 'Agent',
+  crew: 'Crew',
+  service: 'Service',
+  'supabase-project': 'Supabase project',
+  table: 'Table',
+  cloudflare: 'Cloudflare',
+  mcp: 'MCP server',
+  runtime: 'Runtime',
+  cron: 'Scheduled job',
+  provider: 'LLM provider',
+  worker: 'Worker',
+  dax: 'DAX computer',
+  'coding-seat': 'Coding seat',
 };
 
 export type ArchitectureGraphFilters = {
