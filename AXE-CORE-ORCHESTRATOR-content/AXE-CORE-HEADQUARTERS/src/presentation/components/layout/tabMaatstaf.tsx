@@ -25,7 +25,7 @@ export function TabRuimte({
   return (
     <div
       className={cn(
-        'axe-tabruimte flex min-h-0 flex-1 flex-col',
+        'axe-plaat axe-tabruimte flex min-h-0 flex-1 flex-col',
         vullen && 'axe-tabruimte--vullen',
         className,
       )}

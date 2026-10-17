@@ -47,12 +47,36 @@ describe('kaartmateriaal staat één keer', () => {
     expect(blok![0]).toMatch(/--axe-kaart-kolom/);
   });
 
-  it('tabruimte en browservak delen dezelfde inline-marge', () => {
-    const tab = css.match(/:root\[data-look\] \.axe-tabruimte\s*\{[^}]+\}/);
-    const vak = css.match(/:root\[data-look\] \.axe-browser-vak\s*\{[^}]+\}/);
-    expect(tab && vak, 'beide klassen horen er te zijn').toBeTruthy();
-    const marge = /margin-inline:\s*([^;]+)/;
-    expect(tab![0].match(marge)?.[1]).toBe(vak![0].match(marge)?.[1]);
+  it('tabruimte en browservak delen dezelfde plaat-tokens', () => {
+    expect(css).toMatch(/--axe-plaat-marge-inline:\s*clamp\(14px,\s*10vw,\s*230px\)/);
+    expect(css).toMatch(/--axe-plaat-marge-onder:\s*clamp\(10px,\s*1\.4vh,\s*20px\)/);
+    const gedeeld = css.match(
+      /:root\[data-look\] \.axe-plaat,\s*:root\[data-look\] \.axe-tabruimte,\s*:root\[data-look\] \.axe-browser-vak\s*\{[^}]+\}/,
+    );
+    expect(gedeeld, 'één regel voor plaat + tabruimte + browservak').toBeTruthy();
+    expect(gedeeld![0]).toMatch(/margin-inline:\s*var\(--axe-plaat-marge-inline\)/);
+    expect(gedeeld![0]).toMatch(/margin-bottom:\s*var\(--axe-plaat-marge-onder\)/);
+  });
+
+  /* 11 okt 2026: een regel `.axe-tabruimte:not(.axe-tabruimte--vullen)` kneep
+     sinds 25 sep elke tab zonder `vullen` terug tot de bandbreedte van de
+     composer. Layoutregel 1 kent één inhoudsruimte; de band is alleen voor de
+     composer, de chatplaat en de browser-startpagina. */
+  it('geen regel knijpt de tabruimte tot de bandbreedte', () => {
+    // Per regelblok: alles tussen twee `}`; selector = laatste stuk vóór `{`.
+    const blokken = css
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('}')
+      .map((b) => {
+        const i = b.lastIndexOf('{');
+        return i < 0 ? null : { selector: b.slice(0, i).split('{').pop()!.trim(), lijf: b.slice(i + 1) };
+      })
+      .filter((b): b is { selector: string; lijf: string } => !!b && b.selector.includes('.axe-tabruimte'));
+    expect(blokken.length).toBeGreaterThan(0);
+    for (const { selector, lijf } of blokken) {
+      expect(lijf, selector).not.toMatch(/--axe-barw/);
+      expect(lijf, selector).not.toMatch(/margin-inline:\s*auto/);
+    }
   });
 });
 

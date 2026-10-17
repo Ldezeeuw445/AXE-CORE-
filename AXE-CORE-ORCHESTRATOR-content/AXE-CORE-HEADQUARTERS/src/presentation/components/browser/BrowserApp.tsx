@@ -603,7 +603,7 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
          * eromheen maakt er een venster-in-een-venster van. */}
         <div
           ref={contentRef}
-          className={`flex-1 relative flex flex-col min-h-0 ${isOnHome ? '' : 'axe-browser-vak'}`}
+          className={`flex-1 relative flex flex-col min-h-0 ${isOnHome ? '' : 'axe-plaat axe-browser-vak'}`}
         >
           <div className="flex-1 relative overflow-hidden min-h-0 flex">
             <div className="flex-1 min-w-0 relative overflow-hidden">
