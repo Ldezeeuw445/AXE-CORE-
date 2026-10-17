@@ -8017,3 +8017,20 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   background: transparent !important; border: 0 !important; box-shadow: none !important;
   backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 0 !important;
 }
+
+/* ── Android gesture-PIN kaarten ──────────────────────────────────────────
+   Alleen /lock/pin. Zelfde --kaart als de rest; geen eigen vlak, geen Home. */
+:root[data-look] .axe-lock-kaart {
+  background: var(--kaart);
+  backdrop-filter: var(--kaart-filter);
+  -webkit-backdrop-filter: var(--kaart-filter);
+  box-shadow: var(--kaart-rand), var(--kaart-schaduw);
+  border: 0;
+}
+:root[data-look='glass'] .axe-lock-kaart {
+  box-shadow: var(--kaart-rand), var(--axe-lift);
+}
+:root[data-look] .axe-lock-binnen {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent);
+}

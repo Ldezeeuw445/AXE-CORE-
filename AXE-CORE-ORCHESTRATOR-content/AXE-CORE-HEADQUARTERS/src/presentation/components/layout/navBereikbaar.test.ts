@@ -25,7 +25,9 @@ const VENSTERS = 'src/infrastructure/gateways/windowManagerService.ts';
  */
 const BEWUST_VERBORGEN: Record<string, string> = {
   '/device': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
+  '/devices': 'inventory van AXE-installaties; command palette (navRegistry), naast /device',
   '/lock': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
+  '/lock/pin': 'Android gesture-PIN; AndroidLockGate opent hem, desktop slaat hem over',
   '/': 'Home heeft zijn eigen icoon, staat als eerste in leftItems',
   '/mobile': 'Alleen voor het telefoonoppervlak',
   '/login': 'Voor wie niet ingelogd is; dan is er geen balk',
