@@ -25,6 +25,7 @@ def test_manifest_heeft_de_servermodules_die_199_miste():
         "backend/axe_api/dax_routine.py",
         "backend/axe_api/staande_diensten.py",
         "backend/axe_api/lockscreen.py",
+        "backend/axe_api/twelvedata_budget.py",
     ):
         assert pad in rels, pad
 

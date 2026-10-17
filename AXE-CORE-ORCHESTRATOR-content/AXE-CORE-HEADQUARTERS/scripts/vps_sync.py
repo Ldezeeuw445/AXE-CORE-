@@ -139,6 +139,8 @@ MANIFEST = {
     # main.py importeert lockscreen voor /lockscreen/snapshot. Zonder deze regel
     # bleef een koersfix in de repo terwijl de box de oude module bleef laden.
     "/opt/axe-core-api/lockscreen.py": ("backend/axe_api/lockscreen.py", "axe-core-api"),
+    # main.py importeert twelvedata_budget voor de daglimiet + gedeelde cache.
+    "/opt/axe-core-api/twelvedata_budget.py": ("backend/axe_api/twelvedata_budget.py", "axe-core-api"),
 }
 
 # MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).

@@ -14,10 +14,10 @@ Een koers die we eerder wél hadden blijft staan met `stale` en `last_updated_la
 ("Last updated 14:52 UTC") — het slotscherm toont dat in plaats van een streepje.
 Alleen als er nog nooit een koers was, blijft het veld leeg.
 
-- **Koersen**: Twelve Data (`/market/history`). Het gratis plan kent geen indices; daarom
-  XAU/USD en BTC/USD plus SPY en QQQ, eerlijk met hun eigen naam, in plaats van een
-  "US500" die eigenlijk iets anders meet. `LOCKSCREEN_SYMBOLS` past dat aan.
-  Een lege of 429-feed wordt niet 300 s gecachet.
+- **Koersen**: eerst vrije bronnen zonder sleutel (Coinbase/Kraken voor BTC,
+  Yahoo-chart of Stooq-CSV voor XAU/SPY/QQQ). Twelve Data alleen als die
+  zwijgen én het dagbudget nog ruimte heeft voor 'overig'. `LOCKSCREEN_SYMBOLS`
+  past de tickers aan. Een 429 wordt niet 300 s als 'geen prijs' gecachet.
 - **Machines**: de VPS meet zichzelf; de Mac mini en de iMac worden via de omgekeerde tunnel
   van de Mac mini gemeten (zie agent_tunnel.py). De iMac bereikt de Mac mini met SSH.
 - **Diensten**: AXE API, Database, Models, Workers, NorthSea en MCP, elk met een eigen echte
@@ -219,6 +219,149 @@ DEFAULT_SYMBOLS = (
 
 #: Venster -> aantal 1-uurskaarsen terug. 1D is 24, niet 1440: de schets is uurkoersen.
 WINDOWS = {"1H": 1, "4H": 4, "1D": 24}
+
+# Yahoo chart (geen sleutel). XAUUSD=X geeft 404; GC=F is COMEX-goud, gemeten 17 okt 2026.
+YAHOO_TICKER = {
+    "XAU/USD": "GC=F", "XAUUSD": "GC=F",
+    "SPY": "SPY", "QQQ": "QQQ",
+    "BTC/USD": "BTC-USD", "BTCUSD": "BTC-USD",
+}
+STOOQ_TICKER = {
+    "XAU/USD": "xauusd", "XAUUSD": "xauusd",
+    "SPY": "spy.us", "QQQ": "qqq.us",
+    "BTC/USD": "btcusd", "BTCUSD": "btcusd",
+}
+
+
+def yahoo_candles(payload: dict) -> list[dict]:
+    """query1.finance.yahoo.com/v8/finance/chart → kaarsen voor candle_summary."""
+    try:
+        res = ((payload or {}).get("chart") or {}).get("result") or []
+        blok = res[0]
+        ts = blok.get("timestamp") or []
+        q = ((blok.get("indicators") or {}).get("quote") or [{}])[0]
+        closes = q.get("close") or []
+    except (IndexError, TypeError, AttributeError):
+        return []
+    out = []
+    for i, t in enumerate(ts):
+        if i >= len(closes) or closes[i] is None:
+            continue
+        try:
+            out.append({"time": datetime.fromtimestamp(int(t), timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                        "close": float(closes[i])})
+        except (TypeError, ValueError, OSError):
+            continue
+    if not out:
+        meta = blok.get("meta") or {}
+        try:
+            price = float(meta["regularMarketPrice"])
+            t = int(meta["regularMarketTime"])
+        except (KeyError, TypeError, ValueError):
+            return []
+        out.append({"time": datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                    "close": price})
+    return out
+
+
+def stooq_last_candles(csv: str) -> list[dict]:
+    """Stooq last-quote CSV (s=…&f=sd2t2ohlcv) → één of meer rijen."""
+    rows = []
+    for line in (csv or "").splitlines()[1:]:
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 7:
+            continue
+        _sym, date, tm, _o, _h, _l, close = parts[:7]
+        if not date or date.lower() == "n/d" or not close:
+            continue
+        try:
+            rows.append({"time": f"{date} {tm or '00:00:00'}", "close": float(close)})
+        except ValueError:
+            continue
+    return rows
+
+
+def coinbase_spot_candles(payload: dict) -> list[dict]:
+    """api.coinbase.com/v2/prices/BTC-USD/spot → één punt, nu."""
+    try:
+        amount = float(((payload or {}).get("data") or {}).get("amount"))
+    except (TypeError, ValueError):
+        return []
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return [{"time": now, "close": amount}]
+
+
+def kraken_ticker_candles(payload: dict) -> list[dict]:
+    """api.kraken.com/0/public/Ticker?pair=XBTUSD → laatste trade-prijs."""
+    result = (payload or {}).get("result") or {}
+    if not isinstance(result, dict):
+        return []
+    for blok in result.values():
+        if not isinstance(blok, dict):
+            continue
+        last = blok.get("c")
+        try:
+            price = float(last[0] if isinstance(last, (list, tuple)) else last)
+        except (TypeError, ValueError, IndexError):
+            continue
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return [{"time": now, "close": price}]
+    return []
+
+
+def vrije_samenvatting(symbol: str, bron: str, candles: list[dict]) -> Optional[dict]:
+    s = candle_summary(candles)
+    if not s:
+        return None
+    s["source"] = bron
+    return s
+
+
+async def haal_vrije_koers(symbol: str, client: Any) -> Optional[dict]:
+    """Echte publieke tickers, geen sleutel. None als elke bron zwijgt."""
+    headers = {"User-Agent": "AXE-CORE-lockscreen/1"}
+    key = symbol.strip().upper()
+    if key in ("BTC/USD", "BTCUSD"):
+        try:
+            r = await client.get("https://api.coinbase.com/v2/prices/BTC-USD/spot", headers=headers, timeout=8)
+            s = vrije_samenvatting(symbol, "coinbase", coinbase_spot_candles(r.json()))
+            if s:
+                return s
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            r = await client.get("https://api.kraken.com/0/public/Ticker?pair=XBTUSD", headers=headers, timeout=8)
+            s = vrije_samenvatting(symbol, "kraken", kraken_ticker_candles(r.json()))
+            if s:
+                return s
+        except Exception:  # noqa: BLE001
+            pass
+    yahoo = YAHOO_TICKER.get(key) or YAHOO_TICKER.get(symbol)
+    if yahoo:
+        try:
+            r = await client.get(
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo}",
+                params={"interval": "1h", "range": "5d"},
+                headers=headers, timeout=10,
+            )
+            s = vrije_samenvatting(symbol, "yahoo", yahoo_candles(r.json()))
+            if s:
+                return s
+        except Exception:  # noqa: BLE001
+            pass
+    stooq = STOOQ_TICKER.get(key) or STOOQ_TICKER.get(symbol)
+    if stooq:
+        try:
+            r = await client.get(
+                f"https://stooq.com/q/l/?s={stooq}&f=sd2t2ohlcv&h&e=csv",
+                headers=headers, timeout=10,
+            )
+            s = vrije_samenvatting(symbol, "stooq", stooq_last_candles(r.text))
+            if s:
+                return s
+        except Exception:  # noqa: BLE001
+            pass
+    return None
 
 
 def parse_symbols(raw: str | None) -> tuple[tuple[str, str], ...]:

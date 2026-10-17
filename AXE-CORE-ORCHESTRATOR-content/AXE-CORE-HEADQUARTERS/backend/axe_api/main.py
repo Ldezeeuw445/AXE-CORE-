@@ -108,6 +108,27 @@ from browser_ai_agents import router as browser_ai_router
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("axe_core_api")
 
+class _RedactSleutels(logging.Filter):
+    """httpx logt GET-URL's op INFO, inclusief apikey=. Die horen niet in journald."""
+
+    _pat = re.compile(r"(?i)((?:api[_-]?key|apikey|authorization|token)=)[^&\s]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            tekst = record.getMessage()
+        except Exception:  # noqa: BLE001
+            return True
+        if self._pat.search(tekst):
+            record.msg = self._pat.sub(r"\1REDACTED", tekst)
+            record.args = ()
+        return True
+
+_redact = _RedactSleutels()
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+for _naam in ("httpx", "httpcore", "axe_core_api"):
+    logging.getLogger(_naam).addFilter(_redact)
+
 # ── Config ────────────────────────────────────────────────────────────────────
 AXE_API_KEY      = os.environ["AXE_API_KEY"]            # Secret bearer token
 SUPABASE_URL     = os.environ["SUPABASE_URL"]            # https://xxx.supabase.co
@@ -1156,13 +1177,36 @@ _TWELVEDATA_SYMBOL = {
 }
 
 
-async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int) -> dict:
+import twelvedata_budget as _td_budget
+
+
+def _td_engine_env() -> dict[str, str]:
+    """Zelfde .env voor de engines, maar zonder sleutel als het dagbudget op is.
+
+    Geen wijziging aan orderlogica: alleen of de subprocess de sleutel meekrijgt.
+    """
+    env = {**os.environ}
+    if not _td_budget.mag("handel"):
+        env["TWELVEDATA_API_KEY"] = ""
+        return env
+    _td_budget.boek(1)
+    return env
+
+
+async def _fetch_twelvedata_history(
+    symbol: str, interval: str, outputsize: int, *, prioriteit: str = "handel",
+) -> dict:
     # Canonical AXE name in, provider name out. Unmapped symbols pass through.
     symbol = _TWELVEDATA_SYMBOL.get(symbol.upper(), symbol)
+    outputsize = max(50, min(outputsize, 5000))
+    cached = _td_budget.cache_get(symbol, interval, outputsize)
+    if cached:
+        return cached
+    if not _td_budget.mag(prioriteit):
+        return {"ok": False, "error": "TwelveData: daily credit budget reserved for trading"}
     key = os.environ.get("TWELVEDATA_API_KEY", "")
     if not key:
         return {"ok": False, "error": "TWELVEDATA_API_KEY not configured on the server."}
-    outputsize = max(50, min(outputsize, 5000))
     td_symbol = _td_symbol(symbol)
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(
@@ -1176,7 +1220,10 @@ async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int)
     if not isinstance(data, dict):
         return {"ok": False, "error": "TwelveData: unexpected payload"}
     if data.get("status") == "error":
-        return {"ok": False, "error": f"TwelveData: {data.get('message', 'unknown error')}"}
+        fout = f"TwelveData: {data.get('message', 'unknown error')}"
+        if _td_budget.credits_op(fout) or r.status_code == 429:
+            _td_budget.uitgeput()
+        return {"ok": False, "error": fout}
     values = data.get("values") or []
     candles = []
     for v in values:
@@ -1193,7 +1240,10 @@ async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int)
             continue
     if not candles:
         return {"ok": False, "error": f"TwelveData: no candles for {td_symbol}"}
-    return {"ok": True, "symbol": symbol.upper(), "source": "twelvedata", "candles": candles}
+    _td_budget.boek(1)
+    result = {"ok": True, "symbol": symbol.upper(), "source": "twelvedata", "candles": candles}
+    _td_budget.cache_put(symbol, interval, outputsize, result)
+    return result
 
 
 @app.get("/backtest/vectorbt", dependencies=[AUTH])
@@ -1210,7 +1260,7 @@ async def backtest_vectorbt(symbol: str, interval: str = "1h", outputsize: int =
         proc = await asyncio.create_subprocess_exec(
             py, script, symbol, interval, str(outputsize),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+            env=_td_engine_env(),
         )
         out, err = await asyncio.wait_for(proc.communicate(), timeout=150)
     except asyncio.TimeoutError:
@@ -1235,7 +1285,7 @@ async def signal_vectorbt(symbol: str, interval: str = "1h", outputsize: int = 4
         proc = await asyncio.create_subprocess_exec(
             py, script, symbol, interval, str(outputsize), "signal",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            env={**os.environ},
+            env=_td_engine_env(),
         )
         out, err = await asyncio.wait_for(proc.communicate(), timeout=90)
     except asyncio.TimeoutError:
@@ -1284,7 +1334,7 @@ async def _run_engine(py: str, script: str, label: str, args: list[str], timeout
             proc = await asyncio.create_subprocess_exec(
                 py, script, *args,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+                env=_td_engine_env(),
                 preexec_fn=lagere_prioriteit,
             )
             try:
@@ -5230,32 +5280,33 @@ async def host_metrics(target: str = "self"):
 
 
 async def _ls_markets() -> list[dict]:
-    """Koersen via dezelfde `/market/history`-bron (Twelve Data). Geen mocks.
+    """Koersen voor het slotscherm: vrije tickers eerst, Twelve Data alleen als er budget is.
 
-    Vier parallelle time_series-calls op het gratis plan (8 credits/min, vaak
-    1 tegelijk) gaven stuk voor stuk een fout; die lege lijst werd 300 s
-    gecachet en het slotscherm zette dan '—' bij elke ticker. Per symbool
-    vangen we dat, bewaren we de laatst goede koers, en cachen we geen misser.
+    De 800-credits-dag (1014 gebruikt, 17 okt) kwam deels hier vandaan: vier
+    time_series-calls per 300 s × twee workers. Coinbase/Yahoo/Stooq kosten
+    geen credit. Twelve Data krijgt prioriteit='overig' en stopt bij OVERIG_MAX.
     """
     symbols = _lockscreen.parse_symbols(os.environ.get("LOCKSCREEN_SYMBOLS"))
 
-    async def one(symbol: str, label: str) -> dict:
+    async def one(symbol: str, label: str, client: httpx.AsyncClient) -> dict:
         summary = None
         try:
-            r = await _fetch_twelvedata_history(symbol, "1h", 50)
-            if r.get("ok"):
-                summary = _lockscreen.candle_summary(r.get("candles") or [])
-            else:
-                log.warning("lockscreen market %s: %s", label, r.get("error"))
-        except Exception as exc:  # noqa: BLE001 - time-out, JSON, quota: last-good, geen streepje
-            log.warning("lockscreen market %s: %s", label, exc)
+            summary = await _lockscreen.haal_vrije_koers(symbol, client)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("lockscreen free %s: %s", label, exc)
+        if summary is None:
+            try:
+                r = await _fetch_twelvedata_history(symbol, "1h", 50, prioriteit="overig")
+                if r.get("ok"):
+                    summary = _lockscreen.candle_summary(r.get("candles") or [])
+                else:
+                    log.warning("lockscreen market %s: %s", label, r.get("error"))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("lockscreen market %s: %s", label, exc)
         return _lockscreen.market_row(symbol, label, summary, _LS_LAST_QUOTES)
 
-    # Sequentiëel: één credit per keer, zodat een 429 niet alle vier leegtrekt.
-    rows = []
-    for s, l in symbols:
-        rows.append(await one(s, l))
-    return rows
+    async with httpx.AsyncClient(timeout=12) as client:
+        return [await one(s, l, client) for s, l in symbols]
 
 
 async def _ls_systems() -> list[dict]:

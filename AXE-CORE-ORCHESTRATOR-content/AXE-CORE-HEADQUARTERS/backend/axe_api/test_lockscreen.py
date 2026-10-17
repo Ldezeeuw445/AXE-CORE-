@@ -96,6 +96,31 @@ def test_a_short_history_still_gives_a_window_from_the_oldest_candle():
     assert s["chg"]["1D"]["abs"] == 10.0
 
 
+def test_yahoo_and_stooq_and_coinbase_parse_real_shapes():
+    yahoo = {
+        "chart": {"result": [{
+            "timestamp": [1760700000, 1760703600],
+            "indicators": {"quote": [{"close": [668.1, 670.4]}]},
+        }]}
+    }
+    s = ls.vrije_samenvatting("SPY", "yahoo", ls.yahoo_candles(yahoo))
+    assert s["price"] == 670.4 and s["source"] == "yahoo" and s["last_updated"]
+
+    csv = "Symbol,Date,Time,Open,High,Low,Close,Volume\nXAUUSD,2026-10-16,22:00:00,1,1,1,4195.3,0\n"
+    goud = ls.vrije_samenvatting("XAU/USD", "stooq", ls.stooq_last_candles(csv))
+    assert goud["price"] == 4195.3 and "Last updated" in (ls.last_updated_label(goud["last_updated"]) or "")
+
+    btc = ls.vrije_samenvatting("BTC/USD", "coinbase", ls.coinbase_spot_candles({"data": {"amount": "81545.99"}}))
+    assert btc["price"] == 81545.99
+    kr = ls.vrije_samenvatting("BTC/USD", "kraken", ls.kraken_ticker_candles({"result": {"XXBTZUSD": {"c": ["81400.1", "1"]}}}))
+    assert kr["price"] == 81400.1
+    assert ls.yahoo_candles({}) == []
+    assert ls.stooq_last_candles("Symbol,Date\nN/D") == []
+    alleen_meta = {"chart": {"result": [{"meta": {"regularMarketPrice": 4181.1, "regularMarketTime": 1760700000},
+                                         "timestamp": [], "indicators": {"quote": [{}]}}]}}
+    assert ls.yahoo_candles(alleen_meta)[0]["close"] == 4181.1
+
+
 def test_symbols_parse_and_fall_back():
     assert ls.parse_symbols("XAU/USD:XAUUSD,SPY") == (("XAU/USD", "XAUUSD"), ("SPY", "SPY"))
     assert ls.parse_symbols("BTC/USD") == (("BTC/USD", "BTCUSD"),)
