@@ -1,6 +1,7 @@
 /**
- * Living 24/7 strip around the core. Two small cards left of the composer,
- * two right — wrap, no ellipsis, no inner scroll. Extra rows behind "and N more".
+ * Living 24/7 strip around the core. Two cards left of the composer, two right,
+ * each pair side by side under its rail. Wrap, no ellipsis, no inner scroll.
+ * Extra rows behind "and N more".
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';

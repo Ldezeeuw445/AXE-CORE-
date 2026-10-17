@@ -100,41 +100,70 @@ test.describe('Home live layout blijft uit de composer', () => {
       const sceneTekst = await page.locator('[data-axe-home-scene]').innerText();
       expect(sceneTekst).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
       expect(sceneTekst).not.toMatch(/\{\s*"at"/);
+      const scherm = await page.evaluate(() => ({
+        sh: document.documentElement.scrollHeight,
+        ch: window.innerHeight,
+      }));
+      expect(scherm.sh, `no page scroll at ${maat.naam}`).toBeLessThanOrEqual(scherm.ch + 1);
 
-      const firstLinks = await box(page, '[data-axe-home-rail="links"] .axe-home-rail-rij');
-      const secondLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-rij').nth(1).boundingBox();
-      const lastLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-rij').last().boundingBox();
-      const firstRechts = await box(page, '[data-axe-home-rail="rechts"] .axe-home-rail-rij');
-      const lastRechts = await page.locator('[data-axe-home-rail="rechts"] .axe-home-rail-rij').last().boundingBox();
-      if (!lastLinks || !lastRechts || !secondLinks) throw new Error('rail row missing');
+      const rijenLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-rij').evaluateAll((nodes) =>
+        nodes.map((n) => {
+          const r = (n as HTMLElement).getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height };
+        }),
+      );
+      const rijenRechts = await page.locator('[data-axe-home-rail="rechts"] .axe-home-rail-rij').evaluateAll((nodes) =>
+        nodes.map((n) => {
+          const r = (n as HTMLElement).getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height };
+        }),
+      );
+      expect(rijenLinks.length, `left rail count at ${maat.naam}`).toBe(6);
+      expect(rijenRechts.length, `right rail count at ${maat.naam}`).toBe(7);
+      const firstLinks = rijenLinks[0];
+      const lastLinks = rijenLinks[rijenLinks.length - 1];
+      const firstRechts = rijenRechts[0];
+      const lastRechts = rijenRechts[rijenRechts.length - 1];
       expect(firstLinks.y, `left first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(links.y - 1);
       expect(firstRechts.y, `right first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
       expect(lastLinks.y + lastLinks.height, `left last clipped at ${maat.naam}`).toBeLessThanOrEqual(links.y + links.height + 1);
       expect(lastRechts.y + lastRechts.height, `right last clipped at ${maat.naam}`).toBeLessThanOrEqual(rechts.y + rechts.height + 1);
+      expect(Math.abs(firstLinks.y - firstRechts.y), `rails share top at ${maat.naam}`).toBeLessThan(2);
+      expect(Math.abs(firstLinks.height - firstRechts.height), `same card size at ${maat.naam}`).toBeLessThan(2);
       const companion = await box(page, '[data-axe-agent="companion"]');
       expect(await page.locator('[data-axe-agent="companion"]').innerText()).toMatch(/Companion/);
       expect(companion.y, `Companion top in rail at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
       expect(companion.y + companion.height, `Companion visible at ${maat.naam}`).toBeLessThanOrEqual(rechts.y + rechts.height + 1);
-      const rijGap = secondLinks.y - (firstLinks.y + firstLinks.height);
-      expect(rijGap, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(7);
-      expect(rijGap, `rail gap at ${maat.naam}`).toBeLessThanOrEqual(13);
+
+      const gatenVan = (rijen: Array<{ y: number; height: number }>) =>
+        rijen.slice(1).map((rij, i) => rij.y - (rijen[i].y + rijen[i].height));
+      const gatenLinks = gatenVan(rijenLinks);
+      const gatenRechts = gatenVan(rijenRechts);
+      for (const g of [...gatenLinks, ...gatenRechts]) {
+        expect(g, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(10);
+        expect(g, `rail gap at ${maat.naam}`).toBeLessThanOrEqual(14);
+      }
+      const spreiding = (gaten: number[]) => Math.max(...gaten) - Math.min(...gaten);
+      expect(spreiding(gatenLinks), `left gaps even at ${maat.naam}`).toBeLessThanOrEqual(2);
+      expect(spreiding(gatenRechts), `right gaps even at ${maat.naam}`).toBeLessThanOrEqual(2);
 
       const lopendBox = await box(page, '[data-axe-home-kaart="lopend"]');
       const recentBox = await box(page, '[data-axe-home-kaart="recent"]');
       const okBox = await box(page, '[data-axe-home-kaart="ok"]');
       const seatsBox = await box(page, '[data-axe-home-kaart="seats"]');
-      const stackGap = lopendBox.y - (lastLinks.y + lastLinks.height);
-      expect(stackGap, `rail-to-live gap at ${maat.naam}`).toBeGreaterThanOrEqual(7);
-      expect(stackGap, `rail-to-live gap at ${maat.naam}`).toBeLessThanOrEqual(14);
-      expect(recentBox.y, `RECENT stacked under WORKING NOW at ${maat.naam}`).toBeGreaterThan(lopendBox.y + 20);
-      expect(seatsBox.y, `SEATS stacked under OK at ${maat.naam}`).toBeGreaterThan(okBox.y + 20);
-      expect(Math.abs(lopendBox.x - recentBox.x), `left pair same column at ${maat.naam}`).toBeLessThan(8);
-      expect(Math.abs(okBox.x - seatsBox.x), `right pair same column at ${maat.naam}`).toBeLessThan(8);
+      expect(lopendBox.y - (lastLinks.y + lastLinks.height), `left rail above live at ${maat.naam}`).toBeGreaterThanOrEqual(8);
+      expect(okBox.y - (lastRechts.y + lastRechts.height), `right rail above live at ${maat.naam}`).toBeGreaterThanOrEqual(8);
+      expect(Math.abs(lopendBox.y - recentBox.y), `left pair one row at ${maat.naam}`).toBeLessThan(4);
+      expect(Math.abs(okBox.y - seatsBox.y), `right pair one row at ${maat.naam}`).toBeLessThan(4);
+      expect(Math.abs(lopendBox.y - okBox.y), `both pairs same row at ${maat.naam}`).toBeLessThan(4);
+      expect(recentBox.x, `RECENT right of WORKING NOW at ${maat.naam}`).toBeGreaterThan(lopendBox.x + lopendBox.width - 1);
+      expect(seatsBox.x, `SEATS right of OK at ${maat.naam}`).toBeGreaterThan(okBox.x + okBox.width - 1);
       expect(Math.abs(lopendBox.x - links.x), `left pair under left rail at ${maat.naam}`).toBeLessThan(12);
-      expect(Math.abs((okBox.x + okBox.width) - (rechts.x + rechts.width)), `right pair under right rail at ${maat.naam}`).toBeLessThan(12);
-      expect(lopendBox.width, `left cards not stretched at ${maat.naam}`).toBeLessThanOrEqual(links.width + 4);
-      expect(okBox.width, `right cards not stretched at ${maat.naam}`).toBeLessThanOrEqual(rechts.width + 4);
-      expect(okBox.x, `not a 4-across band at ${maat.naam}`).toBeGreaterThan(lopendBox.x + lopendBox.width + 24);
+      expect(Math.abs((seatsBox.x + seatsBox.width) - (rechts.x + rechts.width)), `right pair under right rail at ${maat.naam}`).toBeLessThan(16);
+      expect(lopendBox.width, `left cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(links.width + 8);
+      expect(okBox.width, `right cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(rechts.width + 8);
+      expect(okBox.x, `gap between pairs at ${maat.naam}`).toBeGreaterThan(recentBox.x + recentBox.width + 16);
+      expect(lopendBox.height, `live cards larger at ${maat.naam}`).toBeGreaterThanOrEqual(72);
 
       const lopend = await page.locator('[data-axe-home-kaart="lopend"]').innerText();
       expect(lopend).toMatch(/WORKING NOW/i);
@@ -194,6 +223,23 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(tegelNamen.map((n) => n.t)).toEqual(expect.arrayContaining(['Trade', 'Dev', 'Mem', 'Comp', 'North']));
       for (const n of tegelNamen) {
         expect(n.sw, `tegel label clipped "${n.t}" at ${maat.naam}`).toBeLessThanOrEqual(n.cw + 1);
+      }
+      const agentNamen = await page.locator('.axe-home-rail-naam').evaluateAll((nodes) =>
+        nodes.map((n) => {
+          const el = n as HTMLElement;
+          const cs = getComputedStyle(el);
+          return {
+            t: (el.textContent || '').trim(),
+            sw: el.scrollWidth,
+            cw: el.clientWidth,
+            fs: parseFloat(cs.fontSize),
+          };
+        }),
+      );
+      expect(agentNamen.map((n) => n.t)).toEqual(expect.arrayContaining(['Wingman', 'NorthSea', 'Companion', 'Developer']));
+      for (const n of agentNamen) {
+        expect(n.fs, `name size "${n.t}" at ${maat.naam}`).toBeGreaterThanOrEqual(maat.width <= 1100 ? 11.5 : 12.5);
+        expect(n.sw, `name clipped "${n.t}" at ${maat.naam}`).toBeLessThanOrEqual(n.cw + 1);
       }
 
       const lijven = page.locator('[data-axe-home-kaart] .axe-kaart-lijf');

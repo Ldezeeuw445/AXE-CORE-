@@ -128,20 +128,7 @@ function Balkje({
   const serverStand = !job && server ? bepaalServerStand(server) : null;
   const extraRegel = !job ? liveRegel(server) : '';
 
-  const kop = (
-    <>
-      <span style={{ color: agent.accent, fontWeight: 500 }}>{agent.kort ?? agent.name}</span>
-      {tierRegel ? (
-        <span className="ml-1.5" style={{ color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.04em' }}>
-          {tierRegel}
-        </span>
-      ) : null}
-      {' '}
-      <span style={{ color: 'var(--text-secondary)' }}>
-        {job ? regel : (extraRegel || serverStand?.regel || '')}
-      </span>
-    </>
-  );
+  const standTekst = job ? regel : (extraRegel || serverStand?.regel || '');
 
   if (wacht || (serverStand && !serverStand.stil) || job || extraRegel) {
     const stand = vraag || wacht
@@ -151,7 +138,7 @@ function Balkje({
         : { label: serverStand?.label ?? '', kleur: serverStand?.kleur ?? 'var(--text-secondary)' };
     return (
       <div
-        className="flex flex-col gap-1 w-full min-w-0 axe-home-rail-balk"
+        className="w-full min-w-0 axe-home-rail-balk"
         style={BALK}
         data-axe-server-status={server?.status}
       >
@@ -159,13 +146,16 @@ function Balkje({
           type="button"
           onClick={onKies}
           aria-label={`Gesprek met ${agent.name}`}
-          className="flex items-center gap-3 w-full cursor-pointer min-w-0 text-left"
+          className="axe-home-rail-balk-knop"
         >
-          <span className="flex-1 min-w-0 text-[11px] axe-home-rail-regel">{kop}</span>
-          <span
-            className="text-[9px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0 flex items-center gap-1.5"
-            style={{ color: stand.kleur }}
-          >
+          <span className="axe-home-rail-kop">
+            <span className="axe-home-rail-naam" style={{ color: agent.accent }}>
+              {agent.kort ?? agent.name}
+              {tierRegel ? <span className="axe-home-rail-tier">{tierRegel}</span> : null}
+            </span>
+            {standTekst ? <span className="axe-home-rail-regel">{standTekst}</span> : null}
+          </span>
+          <span className="axe-home-rail-label flex items-center gap-1.5" style={{ color: stand.kleur }}>
             {wacht ? STAND.waiting.label : stand.label}
             <DaxStip server={server} />
           </span>
@@ -183,14 +173,14 @@ function Balkje({
   }
 
   return (
-    <span
-      className="axe-home-rail-balk text-[10px] tracking-[0.16em] uppercase"
-      style={{ color: 'var(--text-secondary)', textShadow: LEESBAAR }}
-    >
-      {serverStand ? serverStand.label : 'idle'}
-      {tierRegel ? <span className="ml-1.5 normal-case tracking-normal" style={{ color: 'var(--text-muted)' }}>{tierRegel}</span> : null}
-      <span className="ml-1.5 inline-flex align-middle"><DaxStip server={server} /></span>
-    </span>
+    <div className="axe-home-rail-balk" style={{ ...BALK, textShadow: LEESBAAR }}>
+      <span className="axe-home-rail-naam" style={{ color: agent.accent }}>{agent.kort ?? agent.name}</span>
+      <span className="axe-home-rail-regel">
+        {serverStand ? serverStand.label : 'idle'}
+        {tierRegel ? <span className="axe-home-rail-tier">{tierRegel}</span> : null}
+        <span className="ml-1.5 inline-flex align-middle"><DaxStip server={server} /></span>
+      </span>
+    </div>
   );
 }
 

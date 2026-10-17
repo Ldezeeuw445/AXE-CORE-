@@ -1,18 +1,28 @@
-/* Home around the core: dual rails + stacked 2+2 cards under each rail.
+/* Home around the core: dual rails + 2+2 live cards side by side under each rail.
  *
  * The chat plate is transparent (--kaal), so anything at the bottom of a
  * 100% bol-vak shows through the composer and chips. These tokens keep the
- * rails and the cards in the free space around the orb. */
+ * rails and the cards in the free space around the orb.
+ *
+ * Rails are a compact even stack (fixed 12px gap, equal card height, same
+ * top). They do not stretch to fill a 4K window. Live pairs sit on one row
+ * under each rail, a bit wider toward the centre so two readable cards fit. */
 
 :root {
   --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
   --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-  --axe-home-rail-gap: clamp(8px, 1.1vh, 12px);
+  --axe-home-rail-gap: 12px;
+  --axe-home-rail-rijen: 7;
   /* Scene is fixed inset 0 onder de kopregel; zelfde offset als de asides. */
   --axe-home-rail-top: calc(var(--axe-kop-h, 66px) + var(--axe-sat, 0px) + 8px);
-  --axe-home-stack-gap: clamp(8px, 1.1vh, 12px);
-  /* Twee compacte kaarten: titel + max 2 hele regels. Niet rekken tot 24%. */
-  --axe-home-live-hoog: clamp(112px, 14vh, 128px);
+  --axe-home-stack-gap: 12px;
+  --axe-home-rail-rij-max: 76px;
+  /* One row of two cards: titel + 2 hele regels. */
+  --axe-home-live-hoog: clamp(96px, 12vh, 124px);
+  --axe-home-live-cluster-breed: min(
+    calc(var(--axe-home-rail-breed) * 2 + var(--axe-home-stack-gap)),
+    calc(50vw - var(--axe-home-rail-inset) - 24px)
+  );
 }
 
 .axe-home-rail {
@@ -50,9 +60,18 @@
   top: 8px;
 }
 
+.axe-home-rail--mobiel .axe-home-rail-naam {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.axe-home-rail--mobiel .axe-home-rail-regel {
+  font-size: 11px;
+}
+
 .axe-home-rail-rij {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
   min-width: 0;
   flex: 1 1 0;
@@ -60,6 +79,15 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
+}
+
+/* Desktop: compact even stack. 7-tall formula so left (6) and right (7)
+   share the same card size and the same top. Extra air stays below. */
+.axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-rij {
+  flex: none;
+  height: calc((100% - (var(--axe-home-rail-rijen) - 1) * var(--axe-home-rail-gap)) / var(--axe-home-rail-rijen));
+  max-height: var(--axe-home-rail-rij-max);
+  min-height: 0;
 }
 
 .axe-home-rail--rechts .axe-home-rail-rij {
@@ -71,6 +99,16 @@
   flex: none;
   padding: 2px 1px;
   overflow: hidden;
+}
+
+.axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-tegel {
+  width: 52px;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 
 .axe-home-rail-tegel-naam {
@@ -86,12 +124,72 @@
   text-align: center;
 }
 
+.axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-tegel-naam {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
 .axe-home-rail-balk {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   padding: 4px 10px;
   overflow: hidden;
+}
+
+.axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-balk {
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.axe-home-rail-balk-knop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.axe-home-rail-kop {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.axe-home-rail-naam {
+  display: block;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.axe-home-rail-tier {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.axe-home-rail-label {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .axe-home-rail-regel {
@@ -105,6 +203,14 @@
   font-size: 11px;
   line-height: 1.25;
   max-height: 2.5em;
+  flex-shrink: 0;
+}
+
+.axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-regel {
+  font-size: 12px;
+  line-height: 1.3;
+  max-height: 2.6em;
+  color: var(--text-secondary);
 }
 
 /* Titel + chip = twee hele regels. Geen Dit is/Waarom in de balk. */
@@ -117,7 +223,7 @@
 
 .axe-home-rail-balk:has([data-axe-ok-chip]) .axe-home-rail-regel {
   -webkit-line-clamp: 1;
-  max-height: 1.25em;
+  max-height: 1.3em;
 }
 
 .axe-ok-chip-lijst {
@@ -132,6 +238,7 @@
   height: 1.25em;
   max-height: 1.25em;
   flex: 0 0 1.25em;
+  flex-shrink: 0;
   overflow: hidden;
 }
 
@@ -146,8 +253,9 @@
   appearance: none;
   font: inherit;
   color: var(--ok);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.25em;
+  flex-shrink: 0;
   letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -179,7 +287,7 @@
   cursor: pointer;
 }
 
-/* 2+2 in the zijgoten, 8px boven de composer — rails houden daarboven 8–12px lucht. */
+/* 2+2 besides each other under the rails, 8px above the composer. */
 .axe-home-live {
   position: fixed;
   left: var(--axe-home-rail-inset);
@@ -199,12 +307,12 @@
 
 .axe-home-live-cluster {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 1fr 1fr;
-  gap: 8px;
-  width: var(--axe-home-rail-breed);
-  max-width: var(--axe-home-rail-breed);
-  flex: none;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--axe-home-stack-gap);
+  width: var(--axe-home-live-cluster-breed);
+  max-width: var(--axe-home-live-cluster-breed);
+  flex: 0 1 var(--axe-home-live-cluster-breed);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -212,6 +320,7 @@
 }
 
 .axe-home-live-cluster > * {
+  min-width: 0;
   min-height: 0;
 }
 
@@ -247,7 +356,7 @@
 
 .axe-home-live .axe-kaart-kop,
 :root[data-look] .axe-home-live .axe-kaart-kop {
-  padding: 4px 8px 0;
+  padding: 8px 10px 0;
   flex: none;
 }
 
@@ -258,16 +367,17 @@
   text-overflow: ellipsis;
   overflow-wrap: normal;
   word-break: normal;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   line-height: 1.2;
   max-height: 1.2em;
+  color: var(--text-secondary);
 }
 
 .axe-home-live .axe-kaart-lijf,
 :root[data-look] .axe-home-live .axe-kaart-lijf {
   box-sizing: content-box;
-  padding: 0 8px;
+  padding: 4px 10px 8px;
   flex: none;
   height: 2.5em;
   max-height: 2.5em;
@@ -294,7 +404,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.25em;
   height: 1.25em;
   min-height: 1.25em;
@@ -305,6 +415,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 0 0 1.25em;
+  color: var(--text-primary);
 }
 
 .axe-home-live-actie {
@@ -314,7 +425,7 @@
   border: 0;
   background: none;
   color: var(--accent-cyan);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   cursor: pointer;
 }
@@ -326,7 +437,7 @@
   border: 0;
   background: none;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.25;
   letter-spacing: 0.04em;
   cursor: pointer;
@@ -440,8 +551,10 @@
 @media (max-width: 1100px) {
   :root {
     --axe-home-rail-breed: clamp(200px, 26vw, 300px);
-    --axe-home-rail-gap: 8px;
-    --axe-home-live-hoog: 112px;
+    --axe-home-rail-gap: 10px;
+    --axe-home-stack-gap: 10px;
+    --axe-home-live-hoog: 88px;
+    --axe-home-rail-rij-max: 56px;
   }
 
   .axe-home-rail {
@@ -449,23 +562,44 @@
     padding: 0;
   }
 
-  .axe-home-rail-rij {
-    max-height: none;
-  }
-
-  .axe-home-rail-tegel {
+  .axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-tegel {
     width: 46px;
-    padding: 1px;
+    padding: 2px 1px;
   }
 
-  .axe-home-rail-balk {
-    padding: 1px 8px;
+  .axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-tegel-naam {
+    font-size: 8px;
   }
 
-  .axe-home-rail-regel {
+  .axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-balk {
+    padding: 4px 8px;
+  }
+
+  .axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-naam {
+    font-size: 12px;
+  }
+
+  .axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-regel {
+    font-size: 11px;
     -webkit-line-clamp: 1;
-    max-height: 1.25em;
+    max-height: 1.3em;
     white-space: nowrap;
     display: block;
+  }
+
+  .axe-home-live .axe-kaart-kop,
+  :root[data-look] .axe-home-live .axe-kaart-kop {
+    padding: 6px 8px 0;
+  }
+
+  .axe-home-live .axe-kaart-titel,
+  :root[data-look] .axe-home-live .axe-kaart-titel {
+    font-size: 10px;
+  }
+
+  .axe-home-live-regel,
+  .axe-home-live-meer,
+  .axe-home-live-actie {
+    font-size: 11px;
   }
 }

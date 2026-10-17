@@ -18,6 +18,7 @@
       --accent-cyan: #22d3ee;
       --axe-kaart-vlak: rgba(12,12,15,.88);
       --axe-kaart-lijn: rgba(255,255,255,.08);
+      --axe-kaart-lijn-boven: rgba(255,255,255,.12);
     }
     html, body { margin: 0; height: 100%; background: #05070c; color: var(--text-primary); font: 13px/1.35 ui-sans-serif, system-ui; }
     .scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
@@ -51,13 +52,16 @@
     }
     .axe-home-rail-tegel .icoon { width: 14px; height: 14px; border-radius: 50%; background: #1e3a4c; flex: none; }
     .axe-home-rail-balk {
-      border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn);
+      border-radius: 12px; background: var(--axe-kaart-vlak);
+      border: 1px solid var(--axe-kaart-lijn); border-top-color: var(--axe-kaart-lijn-boven);
     }
-    .balk .naam { color: #38bdf8; font-weight: 500; }
+    .axe-home-rail-naam, .balk .naam { color: #7dd3fc; font-weight: 600; }
     .axe-kaart {
       background: var(--axe-kaart-vlak);
       border: 1px solid var(--axe-kaart-lijn);
-      border-radius: 10px;
+      border-top-color: var(--axe-kaart-lijn-boven);
+      border-radius: 12px;
+      box-shadow: 0 8px 18px rgba(0,0,0,.28);
     }
     .axe-kaart-kop { display: flex; }
     .axe-kaart-titel { margin: 0; text-transform: uppercase; color: var(--text-muted); }
@@ -96,21 +100,21 @@
     <div class="bol-vak" data-axe-bol-vak>
       <div class="orb" data-axe-orb></div>
       <div class="axe-home-rail axe-home-rail--links" data-axe-home-rail="links">
-        <div class="axe-home-rail-rij" data-axe-agent="wingman"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Wing</span></div><div class="axe-home-rail-balk balk"><span class="naam">Wingman</span> <span class="axe-home-rail-regel regel">T1 · grok + claude-sonnet-seat · next 14:45 · last: inbox clear</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="northsea"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">North</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-regel regel"><span class="naam">NorthSea</span> T2 · groq + claude-sonnet-seat · needs your OK</span><button type="button" class="axe-ok-chip" data-axe-ok-chip>needs your OK: DEAL-002 Copper Cathode</button></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="trading"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Trade</span></div><div class="axe-home-rail-balk balk"><span class="naam">Trading</span> <span class="axe-home-rail-regel regel">T2 · claude-sonnet-seat · Next run 18:00 · last: market snapshot</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="developer"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Dev</span></div><div class="axe-home-rail-balk balk"><span class="naam">Developer</span> <span class="axe-home-rail-regel regel">T1 · claude opus/sonnet via Mac · Next run 00:10 · last: orchestrator health</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="thinktank"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Think</span></div><div class="axe-home-rail-balk balk"><span class="naam">ThinkTank</span> <span class="axe-home-rail-regel regel">T2 · claude-sonnet-seat · Next run 00:10 · last: idea scan</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="browser"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Web</span></div><div class="axe-home-rail-balk balk"><span class="naam">Browser</span> <span class="axe-home-rail-regel regel">T2 · groq + ollama · Next run 18:00 · last: site watch</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="wingman"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Wing</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Wingman</span><span class="axe-home-rail-regel regel">T1 · grok + claude-sonnet-seat · next 14:45 · last: inbox clear</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="northsea"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">North</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">NorthSea</span><span class="axe-home-rail-regel regel">T2 · groq + claude-sonnet-seat · needs your OK</span><button type="button" class="axe-ok-chip" data-axe-ok-chip>needs your OK: DEAL-002 Copper Cathode</button></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="trading"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Trade</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Trading</span><span class="axe-home-rail-regel regel">T2 · claude-sonnet-seat · Next run 18:00 · last: market snapshot</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="developer"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Dev</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Developer</span><span class="axe-home-rail-regel regel">T1 · claude opus/sonnet via Mac · Next run 00:10 · last: orchestrator health</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="thinktank"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Think</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">ThinkTank</span><span class="axe-home-rail-regel regel">T2 · claude-sonnet-seat · Next run 00:10 · last: idea scan</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="browser"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Web</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Browser</span><span class="axe-home-rail-regel regel">T2 · groq + ollama · Next run 18:00 · last: site watch</span></div></div>
       </div>
       <div class="axe-home-rail axe-home-rail--rechts" data-axe-home-rail="rechts">
-        <div class="axe-home-rail-rij" data-axe-agent="memory"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Mem</span></div><div class="axe-home-rail-balk balk"><span class="naam">Memory</span> <span class="axe-home-rail-regel regel">T2 · groq / ollama · Next run 13:00 · last: vault 12 events/24h</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="task"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Task</span></div><div class="axe-home-rail-balk balk"><span class="naam">Task</span> <span class="axe-home-rail-regel regel">T2 · groq / ollama · Next run 12:10 · last: queue 3 waiting</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="cron"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Cron</span></div><div class="axe-home-rail-balk balk"><span class="naam">Cron</span> <span class="axe-home-rail-regel regel">T3 · groq / cerebras / ollama · Next run 12:05 · last: 14 schedules on</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="finance"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Fin</span></div><div class="axe-home-rail-balk balk"><span class="naam">Finance</span> <span class="axe-home-rail-regel regel">Next run 13:05 · last: usage 2 seats, read-only</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="apps"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Apps</span></div><div class="axe-home-rail-balk balk"><span class="naam">Apps</span> <span class="axe-home-rail-regel regel">Next run 12:15 · last: axe_core 4/4</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="intel"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Intel</span></div><div class="axe-home-rail-balk balk"><span class="naam">Intel</span> <span class="axe-home-rail-regel regel">Next run 12:20 · last: signals 3 options, bias bullish</span></div></div>
-        <div class="axe-home-rail-rij" data-axe-agent="companion"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Comp</span></div><div class="axe-home-rail-balk balk"><span class="naam">Companion</span> <span class="axe-home-rail-regel regel">Next run 13:00 · last: companion 2 jobs</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="memory"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Mem</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Memory</span><span class="axe-home-rail-regel regel">T2 · groq / ollama · Next run 13:00 · last: vault 12 events/24h</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="task"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Task</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Task</span><span class="axe-home-rail-regel regel">T2 · groq / ollama · Next run 12:10 · last: queue 3 waiting</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="cron"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Cron</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Cron</span><span class="axe-home-rail-regel regel">T3 · groq / cerebras / ollama · Next run 12:05 · last: 14 schedules on</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="finance"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Fin</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Finance</span><span class="axe-home-rail-regel regel">Next run 13:05 · last: usage 2 seats, read-only</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="apps"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Apps</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Apps</span><span class="axe-home-rail-regel regel">Next run 12:15 · last: axe_core 4/4</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="intel"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Intel</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Intel</span><span class="axe-home-rail-regel regel">Next run 12:20 · last: signals 3 options, bias bullish</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="companion"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Comp</span></div><div class="axe-home-rail-balk balk"><span class="axe-home-rail-naam naam">Companion</span><span class="axe-home-rail-regel regel">Next run 13:00 · last: companion 2 jobs</span></div></div>
       </div>
       <div class="axe-home-live" data-axe-home-live>
         <div class="axe-home-live-cluster cluster" data-axe-home-live-cluster="links">
