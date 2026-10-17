@@ -1,6 +1,6 @@
 {
   "versie": 1,
-  "bijgewerkt": "2026-10-16T07:30:00Z",
+  "bijgewerkt": "2026-10-16T19:13:37Z",
   "canon": "docs/programma/canon/",
   "statussen": [
     "queued",
@@ -116,7 +116,7 @@
       "objective": "Eén productregister: registered_apps uitgebreid met repo per oppervlak, tak, werkmap, commando's, uitroldoel, health-URL, runbook, geheimnamen, cron-sleutels",
       "phase": "fundament",
       "priority": "P0",
-      "status": "waiting_approval",
+      "status": "done",
       "owner_agent": "claude",
       "approval_level": "B",
       "dependencies": [],
@@ -131,17 +131,17 @@
         "docs/programma/register.json"
       ],
       "started_at": "2026-10-16T07:30:00Z",
-      "last_progress_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-16T19:13:37Z",
       "attempts": 0,
       "tests_run": [
         "vitest supabaseMigrationAccess + apps 22/22",
         "tsc en eslint gelijk aan orchestrator"
       ],
       "build_result": null,
-      "deployment_result": null,
-      "verification_result": "gevonden en in de migratie gedicht: elke ingelogde gebruiker van het gedeelde project kon registered_apps lezen, wijzigen en verwijderen",
-      "blocker": "migratie 20261016080000_productregister wacht op Luka's bevestiging in Supabase (apply_migration liep af op 60 s)",
-      "next_action": "migratie toepassen; daarna list_migrations en bestandsnaam gelijk maken aan de ledger-versie",
+      "deployment_result": "applied 16 Oct as ledger version 20261016191337_productregister",
+      "verification_result": "gevonden en in de migratie gedicht: elke ingelogde gebruiker van het gedeelde project kon registered_apps lezen, wijzigen en verwijderen. Bestandsnaam gelijk aan ledger-versie.",
+      "blocker": null,
+      "next_action": null,
       "rollback_reference": "kolommen zijn additief; drop column per kolom in de terugdraaimigratie"
     },
     {
