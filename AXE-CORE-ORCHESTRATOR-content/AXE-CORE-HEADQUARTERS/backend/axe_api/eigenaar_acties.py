@@ -1,0 +1,190 @@
+"""Wat alleen Luka kan doen, en of het al gedaan is.
+
+Sessies schreven zulke stappen in een chat of in docs/programma, en daar raakten
+ze kwijt: op 17 okt stonden vier stappen al dagen open en liep de NorthSea-lus
+intussen op naar ~1.100 schrijfacties per uur. Hier staan ze op één plek, elk met
+een meting die zegt of hij gedaan is. De bewaker op de Mac mini meet ze elke
+ronde, zet ze in de status-snapshot en zet één keer per dag (vanaf 08:00
+Amsterdam) een herinnering in de bel zolang er iets openstaat. Die bel wordt in
+de Tauri-app een macOS-melding en op de telefoon een push.
+
+Een stap verdwijnt pas als de meting hem gedaan noemt, niet als iemand zegt dat
+hij klaar is. Kan een stap van hier niet gemeten worden, dan blijft hij open met
+die reden erbij, in plaats van stil als gedaan te tellen.
+
+Een nieuwe stap: een regel in ACTIES plus een meetfunctie in METINGEN. Is hij
+gedaan, dan mag hij weg; laten staan kan ook, hij meldt dan niets meer.
+"""
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Awaitable, Callable, Optional
+from zoneinfo import ZoneInfo
+
+import httpx
+
+USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069"
+AMSTERDAM = ZoneInfo("Europe/Amsterdam")
+HERINNER_VANAF_UUR = 8
+BOUW_REPOS = ("trading-os", "axe-companion", "axon-memory")
+AXON_OAUTH = "https://mcp.axon-memory.com/.well-known/oauth-authorization-server"
+# De lus van vóór 1c25cf93 werkt elke tick ~85 action_queue-rijen bij (gemeten 17 okt:
+# 146 rijen in 20 minuten). Na de fix wacht een budgetstempel tot de volgende dag.
+NORTHSEA_LUS_VENSTER = timedelta(minutes=20)
+NORTHSEA_LUS_DREMPEL = 30
+
+ACTIES = (
+    {
+        "id": "northsea-engine-fix",
+        "title": "NorthSea: deploy the engine fix (1c25cf93)",
+        "how": "On the iMac, in the HQ folder: bash backend/northsea_mcp/deploy/deploy.sh check "
+               "(must list exactly engine.py, engine_rules.py, service.py, sourcing_quality.py), "
+               "then bash backend/northsea_mcp/deploy/deploy.sh deploy.",
+    },
+    {
+        "id": "build-loop-canon",
+        "title": "Build loop: give it the programme tasks",
+        "how": "Supabase SQL editor (project AXE Companion): run "
+               "docs/programma/acties/2026-10-16-bouwlus-krijgt-de-canon.sql.",
+    },
+    {
+        "id": "product-registry",
+        "title": "Product registry: close it to customers and add NorthSea",
+        "how": "Supabase SQL editor (project AXE Companion): run "
+               "supabase/migrations/20261016080000_productregister.sql.",
+    },
+    {
+        "id": "axon-pr2-live",
+        "title": "AXON: put PR #2 live (key RLS, consent screen, S256 only)",
+        "how": "Merge Ldezeeuw445/axon-memory-app#2, then run the deploy steps from its description "
+               "on the Mac mini (migration, edge functions, frontend).",
+    },
+    {
+        "id": "northsea-inventory-job-off",
+        "title": "Scheduler: switch off the one-off NorthSea inventory job",
+        "how": "Supabase SQL editor: update public.core_schedules set enabled = false "
+               "where job_key = 'northsea:uitrol-inventaris';",
+    },
+)
+
+Meting = Callable[..., Awaitable[tuple[Optional[bool], str]]]
+
+
+def _rest(key: str, **extra: str) -> dict:
+    return {"apikey": key, "Authorization": f"Bearer {key}", **extra}
+
+
+async def _northsea_lus(client, supabase_url, key, env, nu):
+    url = (env.get("NORTHSEA_SUPABASE_URL") or "").strip().rstrip("/")
+    sk = (env.get("NORTHSEA_SUPABASE_SERVICE_ROLE") or "").strip()
+    if not url or not sk:
+        return None, "cannot measure here: no NORTHSEA_SUPABASE_URL on this host"
+    sinds = (nu - NORTHSEA_LUS_VENSTER).isoformat()
+    r = await client.get(url + "/rest/v1/action_queue", headers=_rest(sk, Prefer="count=exact", Range="0-0"),
+                         params={"select": "id", "updated_at": f"gte.{sinds}"})
+    m = re.search(r"/(\d+)$", r.headers.get("content-range", ""))
+    if not r.is_success or not m:
+        return None, f"cannot measure: action_queue answered {r.status_code}"
+    n = int(m.group(1))
+    return n <= NORTHSEA_LUS_DREMPEL, f"{n} action_queue rows touched in the last 20 minutes"
+
+
+async def _bouwlus_canon(client, supabase_url, key, env, nu):
+    r = await client.get(supabase_url + "/rest/v1/core_bouw_apps", headers=_rest(key),
+                         params={"select": "repo,opdracht"})
+    rijen = r.json() if r.is_success else None
+    if not isinstance(rijen, list):
+        return None, f"cannot measure: core_bouw_apps answered {r.status_code}"
+    zonder = [b for b in BOUW_REPOS
+              if not any(isinstance(x, dict) and x.get("repo") == b and (x.get("opdracht") or "").strip() for x in rijen)]
+    return not zonder, ("no task list for " + ", ".join(zonder)) if zonder else "all three apps have their tasks"
+
+
+async def _productregister(client, supabase_url, key, env, nu):
+    r = await client.get(supabase_url + "/rest/v1/registered_apps", headers=_rest(key),
+                         params={"select": "product_key", "product_key": "eq.northsea"})
+    if r.status_code == 400:
+        return False, "registered_apps has no product_key column yet"
+    rijen = r.json() if r.is_success else None
+    if not isinstance(rijen, list):
+        return None, f"cannot measure: registered_apps answered {r.status_code}"
+    return len(rijen) == 1, "NorthSea is registered" if rijen else "NorthSea row missing"
+
+
+async def _axon_pkce(client, supabase_url, key, env, nu):
+    r = await client.get(AXON_OAUTH)
+    data = r.json() if r.is_success else None
+    if not isinstance(data, dict) or not isinstance(data.get("code_challenge_methods_supported"), list):
+        return None, f"cannot measure: OAuth metadata answered {r.status_code}"
+    methodes = data["code_challenge_methods_supported"]
+    return methodes == ["S256"], "PKCE methods offered: " + ", ".join(map(str, methodes))
+
+
+async def _inventaris_uit(client, supabase_url, key, env, nu):
+    r = await client.get(supabase_url + "/rest/v1/core_schedules", headers=_rest(key),
+                         params={"select": "enabled", "job_key": "eq.northsea:uitrol-inventaris"})
+    rijen = r.json() if r.is_success else None
+    if not isinstance(rijen, list):
+        return None, f"cannot measure: core_schedules answered {r.status_code}"
+    aan = any(isinstance(x, dict) and x.get("enabled") is not False for x in rijen)
+    return not aan, "still enabled" if aan else "off"
+
+
+METINGEN: dict[str, Meting] = {
+    "northsea-engine-fix": _northsea_lus,
+    "build-loop-canon": _bouwlus_canon,
+    "product-registry": _productregister,
+    "axon-pr2-live": _axon_pkce,
+    "northsea-inventory-job-off": _inventaris_uit,
+}
+
+
+async def meet(client, supabase_url: str, key: str, env, nu: datetime) -> list[dict]:
+    """Elke stap met done (True/False/None) en wat er gemeten is. Gooit nooit."""
+    uit = []
+    for actie in ACTIES:
+        try:
+            done, gemeten = await METINGEN[actie["id"]](client, supabase_url, key, env, nu)
+        except (httpx.HTTPError, ValueError, KeyError) as e:
+            done, gemeten = None, f"cannot measure: {type(e).__name__}"
+        uit.append({**actie, "done": done, "measured": gemeten})
+    return uit
+
+
+def herinnering(stand: list[dict], nu: datetime, laatst: Optional[str]) -> Optional[tuple[str, str]]:
+    """(datum, tekst) als er vandaag nog herinnerd moet worden, anders None."""
+    lokaal = nu.astimezone(AMSTERDAM)
+    vandaag = lokaal.date().isoformat()
+    open_ = [a for a in stand if a.get("done") is not True]
+    if not open_ or laatst == vandaag or lokaal.hour < HERINNER_VANAF_UUR:
+        return None
+    regels = [f"{i}. {a['title']} ({a['measured']}). {a['how']}" for i, a in enumerate(open_, 1)]
+    kop = f"Owner actions: {len(open_)} open"
+    return vandaag, kop + "\n" + "\n".join(regels)
+
+
+async def herinner(client, supabase_url: str, key: str, stand: list[dict], nu: datetime, map_: Path) -> bool:
+    """Eén bel-rij per dag. Hetzelfde id per datum: een herhaalde poging na een
+    timeout kan nooit twee rijen geven. Pas na een geslaagde schrijfactie geldt
+    vandaag als gedaan."""
+    pad = map_ / "eigenaar_acties.json"
+    try:
+        laatst = json.loads(pad.read_text()).get("laatst")
+    except (OSError, ValueError):
+        laatst = None
+    h = herinnering(stand, nu, laatst)
+    if h is None:
+        return False
+    datum, tekst = h
+    r = await client.post(supabase_url + "/rest/v1/core_notifications", params={"on_conflict": "id"},
+                          headers=_rest(key, Prefer="resolution=ignore-duplicates"),
+                          json={"id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"axe-eigenaar-acties/{datum}")),
+                                "recipient": USER_ID, "type": "warning", "message": tekst[:1900],
+                                "read": False, "created_at": nu.isoformat()})
+    r.raise_for_status()
+    pad.write_text(json.dumps({"laatst": datum}))
+    return True

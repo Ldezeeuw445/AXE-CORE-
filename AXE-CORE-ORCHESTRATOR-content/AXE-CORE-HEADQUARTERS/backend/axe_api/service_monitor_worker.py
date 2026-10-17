@@ -17,6 +17,7 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 from service_monitor import ServiceMonitor, STATUS_PATH, USER_ID, utc_now
+import eigenaar_acties
 
 log = logging.getLogger("axe-service-monitor")
 
@@ -167,9 +168,17 @@ async def notify_local(monitor) -> None:
             await process.wait()
 
 
-async def tick(client, monitor, api_url, local_url, supabase_url, key):
+async def tick(client, monitor, api_url, local_url, supabase_url, key, state_dir: Path | None = None):
     at = utc_now()
     results = await probes(client, api_url, local_url, supabase_url, key)
+    # Wat alleen Luka kan doen, gemeten in plaats van onthouden (eigenaar_acties.py).
+    # Herinneren alleen met een eigen map: daar staat welke dag al herinnerd is.
+    owner_actions = await eigenaar_acties.meet(client, supabase_url, key, os.environ, datetime.now(timezone.utc))
+    if state_dir is not None:
+        try:
+            await eigenaar_acties.herinner(client, supabase_url, key, owner_actions, datetime.now(timezone.utc), state_dir)
+        except (httpx.HTTPError, OSError):
+            log.warning("Herinnering eigenaar-acties niet afgeleverd; volgende ronde opnieuw")
     for component, status in results.items():
         monitor.observe(component, status, at)
     try:
@@ -191,7 +200,7 @@ async def tick(client, monitor, api_url, local_url, supabase_url, key):
                 push_state = "observer_sender" if not result.get("mislukt") else "delivery_failed"
             except Exception:
                 push_state = "delivery_failed"
-        snapshot = {**monitor.snapshot(at), "push_transport": push_state}
+        snapshot = {**monitor.snapshot(at), "push_transport": push_state, "owner_actions": owner_actions}
         response = await client.post(supabase_url + "/rest/v1/core_obsidian_notes",
                                     params={"on_conflict": "path"}, headers={
                                         "apikey": key, "Authorization": f"Bearer {key}",
@@ -228,7 +237,7 @@ async def run():
         async with httpx.AsyncClient(timeout=8.0) as client:
             while True:
                 try:
-                    await tick(client, monitor, api, local, url, key)
+                    await tick(client, monitor, api, local, url, key, state_dir)
                 except Exception as error:
                     log.warning("Meetronde mislukt (%s); bewaker blijft actief", type(error).__name__)
                 await asyncio.sleep(60)

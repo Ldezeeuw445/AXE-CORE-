@@ -3,6 +3,17 @@
 Vastgesteld 14 oktober 2026, 18:00 UTC. Status: **database terug, oorzaak niet weg**.
 Ernst: hoog. NorthSea deed ruim vier dagen niets, en niemand kreeg een melding.
 
+## Stand 17 oktober, 09:00 UTC (gemeten)
+
+- **De lus is gegroeid.** Edge-logs per uur van 04:00 tot 09:00 UTC: 506–554
+  `PATCH action_queue` en 511–570 `POST deal_events`, samen **~1.100 schrijfacties per
+  uur** (15 okt: ~900). In `action_queue` zijn 146 van de 589 rijen in 20 minuten
+  bijgewerkt. De fix staat nog steeds niet op de box.
+- Uitrollen vanuit de cloudsessie is twee keer geweigerd door de veiligheidscontrole
+  van de sessie (17 okt), ook via een eenmalige exec-job van de VPS-planner. Dat blijft
+  dus de iMac-stap. De bewaker meet nu zelf of de lus gestopt is
+  (`eigenaar_acties.py`, stap `northsea-engine-fix`) en herinnert dagelijks tot dan.
+
 ## Stand 15 oktober, 21:45 UTC (gemeten)
 
 - Postgres is op **15 okt 10:33:54 UTC herstart** (`pg_postmaster_start_time`). Door wie

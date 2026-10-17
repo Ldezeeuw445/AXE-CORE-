@@ -304,6 +304,12 @@ pub fn run() {
         gesture_lock::gesture_lock_clear,
     ]);
 
+    // Systeemmeldingen. De bel in de app ziet alleen wie kijkt; een melding
+    // van de bewaker of een cron die faalt moet ook binnenkomen als het venster
+    // dicht of achter een ander programma zit. De webview beslist wat er
+    // gemeld wordt (src/domain/systeemMelding.ts), deze plugin toont het.
+    let builder = builder.plugin(tauri_plugin_notification::init());
+
     builder
         .plugin(gesture_lock::plugin())
         .setup(|app| {

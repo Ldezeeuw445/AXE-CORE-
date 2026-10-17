@@ -18,7 +18,8 @@ target, app, env_file, user_home = sys.argv[1:]
 if dotenv_values(env_file).get('AXE_MAC_EXECUTOR') != '1':
     raise SystemExit(0)  # alleen de agent-host; nooit een tweede bewaker op de iMac
 version = hashlib.sha256(b''.join(pathlib.Path(app + '/backend/axe_api/' + name).read_bytes()
-                                 for name in ('service_monitor.py', 'service_monitor_worker.py', 'push_meldingen.py'))).hexdigest()[:16]
+                                 for name in ('service_monitor.py', 'service_monitor_worker.py', 'push_meldingen.py',
+                                             'eigenaar_acties.py'))).hexdigest()[:16]
 with open(target, 'wb') as file:
     plistlib.dump({
         'Label': 'com.axe.service-monitor',

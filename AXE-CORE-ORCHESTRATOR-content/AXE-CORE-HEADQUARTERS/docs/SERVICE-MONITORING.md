@@ -96,3 +96,23 @@ keuze niet automatisch teruggedraaid. De interface toont welke zender is ingeste
 Een Mac mini die uit of offline is kan zelf geen uitvalmelding verzenden.
 De interface markeert zijn laatste meting als oud. Voor bewaking van de observer
 zelf is een tweede, onafhankelijk bereikbare host nodig.
+
+## Eigenaar-acties: gemeten, niet onthouden
+
+`backend/axe_api/eigenaar_acties.py` houdt de stappen bij die alleen Luka kan zetten
+(uitrol vanaf de iMac, SQL plakken, een PR live zetten). Elke stap heeft een meting:
+de bewaker meet ze elke ronde, zet ze als `owner_actions` in de status-snapshot en
+zet vanaf 08:00 (Amsterdam) één keer per dag één herinnering in de bel zolang er iets
+openstaat. Een stap telt pas als gedaan als de meting dat zegt. Kan hij op deze host
+niet gemeten worden, dan blijft hij open met de reden erbij. Nieuwe stap: een regel
+in `ACTIES` en een meetfunctie in `METINGEN`, met een test.
+
+## Systeemmeldingen in de Tauri-app
+
+De Tauri-app laat nieuwe bel-meldingen ook als macOS-melding zien
+(`tauri-plugin-notification`). Welke wel en welke niet staat in
+`src/domain/systeemMelding.ts`: niet de oude rijen bij het opstarten, alleen nieuwe
+ongelezen rijen van de laatste tien minuten, hetzelfde onderwerp hooguit eens per tien
+minuten, en boven drie per verversing één samenvatting. Op de Mac mini komt een
+uitvalmelding van de bewaker daardoor twee keer binnen (osascript en de app) zolang
+de app openstaat; de osascript-melding blijft, omdat die ook werkt als de app dicht is.

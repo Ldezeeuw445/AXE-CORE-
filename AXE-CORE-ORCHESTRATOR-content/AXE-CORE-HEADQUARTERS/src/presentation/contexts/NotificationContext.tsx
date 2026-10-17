@@ -1,7 +1,9 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { notificationText, collapseRepeats } from '@/domain/notification';
 import { pasBadgeToe } from '@/infrastructure/pwa/appBadge';
+import { kiesSysteemMeldingen, BEGINSTAND } from '@/domain/systeemMelding';
+import { toonSysteemMeldingen } from '@/infrastructure/ui/systeemMelding';
 import { startNotificationFeed } from '@/application/system/notificationFeed';
 import { useAuth } from '@/presentation/contexts/AuthContext';
 
@@ -97,10 +99,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const userId = user?.id;
   const [rows, setRows] = useState<NotificationItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const systeemStand = useRef(BEGINSTAND);
 
   useEffect(() => {
     if (!userId) return;
     const sb = getSupabase();
+    // Nieuwe gebruiker of herstart: wat er dan al staat is de nulstand.
+    systeemStand.current = BEGINSTAND;
     const feed = startNotificationFeed<NotificationItem>({
       load: async signal => {
         if (!sb) throw new Error('Supabase is not configured');
@@ -110,7 +115,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(error.message);
         return (data as NotificationRow[] ?? []).map(fromRow);
       },
-      changed: setRows,
+      changed: items => {
+        setRows(items);
+        // Ook buiten de bel laten weten wat er binnenkomt (Tauri: het
+        // meldingscentrum van macOS). Welke wel en welke niet: domain/systeemMelding.ts.
+        const uit = kiesSysteemMeldingen(items, systeemStand.current, Date.now());
+        systeemStand.current = uit.stand;
+        toonSysteemMeldingen(uit.tonen);
+      },
       failed: setLoadError,
     });
 

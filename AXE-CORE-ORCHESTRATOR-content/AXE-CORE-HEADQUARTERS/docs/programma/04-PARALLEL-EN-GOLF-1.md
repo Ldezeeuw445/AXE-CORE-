@@ -48,6 +48,13 @@ In volgorde van wat het meeste schade voorkomt. Status staat in `programma.json`
    online. Wacht op de Mac mini (autosync + twee sleutelnamen) en op een
    push-abonnement (CORE-ALERT-1). Daarna **CORE-REG-1**: het productregister.
 
+## Wat nog openstaat bewaakt AXE Core zelf (17 okt)
+
+De open stappen hieronder staan sinds 17 okt in `backend/axe_api/eigenaar_acties.py`,
+elk met een meting. De bewaker op de Mac mini herinnert elke ochtend in de bel (en
+daarmee als macOS-melding en push) zolang een meting "open" zegt. Deze tabel is de
+geschiedenis; de bel is de stand.
+
 ## De acht acties — stand 15 oktober, 21:45 UTC
 
 | # | actie | stand | wat er nog moet |
@@ -58,7 +65,7 @@ In volgorde van wat het meeste schade voorkomt. Status staat in `programma.json`
 | 4 | Unusual Whales-sleutel vernieuwen | open | alleen met Luka's account; daarna `UNUSUAL_WHALES_TOKEN` (Supabase) en `UNUSUAL_WHALES_API_KEY` (VPS) |
 | 5 | Meldingen op de telefoon toestaan | open | kan alleen op het toestel zelf |
 | 6 | NorthSea-sleutels op de Mac mini | **niet meer nodig**: `northsea_db` leest nu de engine-tick in het gedeelde project | niets; met de twee sleutels wordt de meting directer |
-| 7a | tradingosapp.com | **besloten: Cloudflare Pages**, geen Vercel-betaling. Zelfde host als AXE Core en AXON, geen nieuw platform (regel 3) | Pages-project aan `the-one` koppelen en de DNS van het domein omzetten; dat vraagt het Cloudflare-dashboard |
+| 7a | tradingosapp.com | **online** (17 okt 09:15 UTC: apex en `www` geven 200 met de pagina "Trading OS", via Cloudflare) | niets; de hartslag `trading_os_web` bewaakt het |
 | 7b | `ai-proxy`, `ai-proxy-v2` | **besloten: stubs blijven staan**. Ze doen niets meer (410, JWT verplicht) en kosten niets; verwijderen voegt geen veiligheid toe en is onomkeerbaar | na 30 dagen zonder aanroep mogen ze weg |
 | 8 | AXON-migratie toepassen | open | het AXON-project hangt niet aan deze Supabase-koppeling; op de iMac via de Supabase MCP, PR Ldezeeuw445/axon-memory-app#2 |
 
