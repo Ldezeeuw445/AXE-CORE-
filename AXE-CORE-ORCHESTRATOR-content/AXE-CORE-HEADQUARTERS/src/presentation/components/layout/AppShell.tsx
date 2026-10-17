@@ -209,19 +209,14 @@ export function AppShell() {
   // netjes ín de plaat vallen. De zwevende knoppen (wereldschakelaar, licht/
   // donker, FAB) blijven eroverheen zweven. Alleen op de home, zodat de andere
   // tabs (nog) ongemoeid blijven.
-  const opHome = mobileNav && location.pathname === '/';
-  // De glasplaat is nu de basis van ELKE mobiele tab (niet meer alleen de home):
-  // de Tauri-shell waar alleen het midden per tab wisselt. `/mobile` en `/lock`
-  // tekenen hun eigen volledige scherm, dus die houden we buiten de plaat.
-  // Zware, volscherm-ervaringen (3D-kaart, browser) vullen het scherm.
-  // /mobile is juist de canonical telefoon-home en gebruikt DEZELFDE zwevende
-  // glasplaat als de andere mobiele tabs; alleen /lock blijft erbuiten.
-  // Alleen de 3D-kaart vult nog het hele scherm. De browser ligt op de plaat (Luka, 9 okt): dezelfde
-  // composer als op elke tab, geen eigen chatvak onder de pagina.
+  // Alleen de 3D-kaart vult nog het hele scherm. De browser ligt in de randloze
+  // tab-schil (zelfde composer), zonder zwevende plaat eromheen.
   const volScherm = mobileNav && location.pathname === '/maps-3d';
-  const opPlaatMobiel = mobileNav
-    && !opSlot
-    && !volScherm;
+  // Alleen de telefoon-Home blijft de zwevende glasplaat (zoals vóór 31eaa88e).
+  // Elke andere tab is randloos, van safe-area tot safe-area — geen kader.
+  const telefoonHome = mobileNav && !opSlot && location.pathname === '/mobile';
+  const opPlaatMobiel = telefoonHome;
+  const mobielTab = mobileNav && !opSlot && !telefoonHome && !volScherm;
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -234,16 +229,12 @@ export function AppShell() {
   // plaat (slot 'wereld'), en het midden laat aanraking door naar die wereld --
   // alleen de wereldknoppen en de composer vangen nog tikken (MobileSystem).
   const coreView = useCoreViewStore(s => s.coreView);
-  const telefoonHome = opPlaatMobiel && location.pathname === '/mobile';
   const mobielWereld = telefoonHome && coreView !== 'axe';
 
   // One phone composer belongs to the shell, just like Tauri. Mobile Home
   // already renders that same component inside MobileSystem, so every other
-  // glass-plate tab gets it here exactly once.
-  const toonMobieleTabComposer = opPlaatMobiel
-    && location.pathname !== '/mobile'
-    && location.pathname !== '/'
-    && !opSlot;
+  // tab gets it here exactly once.
+  const toonMobieleTabComposer = mobielTab;
   /* Smal als dock (Luka, 2 okt). Blijft staan als je van tab wisselt: smal is
      een keuze voor rust, en spraak en bestanden zitten er nog gewoon in. Tot
      2 okt klapte hij helemaal weg en kwam hij op elke nieuwe tab terug. */
@@ -285,8 +276,10 @@ export function AppShell() {
         <div
           className="axe-mobile-look-toggle fixed z-[70] flex items-center gap-1.5"
           style={{
-            // 10px binnen de bovenrand van de plaat, wat die rand ook is (--axe-plaat-boven).
-            top: opPlaatMobiel ? 'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)' : 'calc(var(--axe-sat) + 10px)',
+            // Home: 10px binnen de plaatrand. Andere tabs: alleen safe-area.
+            top: opPlaatMobiel
+              ? 'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)'
+              : 'calc(var(--axe-sat) + 10px)',
             right: opPlaatMobiel ? 18 : 12,
           }}
         >
@@ -296,7 +289,9 @@ export function AppShell() {
       )}
 
     <div
-      className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opPlaatMobiel ? ' axe-plaat-mobiel' : ''}${volScherm ? ' axe-mobiel-desk' : ''}${opSlot ? ' axe-lock-pad' : ''}`}
+      className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opPlaatMobiel ? ' axe-plaat-mobiel' : ''}${mobielTab ? ' axe-mobiel-randloos' : ''}${volScherm ? ' axe-mobiel-desk' : ''}${opSlot ? ' axe-lock-pad' : ''}`}
+      data-axe-plaat={opPlaatMobiel ? 'ja' : undefined}
+      data-axe-randloos={mobielTab ? 'ja' : undefined}
       style={
         opPlaatMobiel
           ? {
@@ -333,6 +328,21 @@ export function AppShell() {
               paddingBottom: keyboardInset || 10,
               transition: 'padding-bottom 0.18s ease-out',
             }
+          : mobielTab
+            ? {
+                position: 'fixed',
+                inset: 0,
+                height: '100dvh',
+                zIndex: 1,
+                borderRadius: 0,
+                boxShadow: 'none',
+                paddingLeft: 0,
+                paddingRight: 0,
+                paddingTop: 0,
+                paddingBottom: keyboardInset || 0,
+                background: 'transparent',
+                transition: 'padding-bottom 0.18s ease-out',
+              }
           : { background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }
       }
     >
@@ -400,7 +410,7 @@ export function AppShell() {
                     : undefined
                 }
               >
-                {opPlaatMobiel && location.pathname !== '/mobile' ? (
+                {mobielTab ? (
                   <MobieleTabSchil>
                     <Outlet />
                   </MobieleTabSchil>
@@ -542,7 +552,7 @@ export function AppShell() {
           vervanging van de radiale hoekmenu's van de desktop. Op de glasplaat-
           home weg: de composer heeft z'n eigen knoppen en de FAB botste ertegen —
           de Tauri-home heeft daar ook geen zwevende hoekknop. */}
-      {mobileNav && !opPlaatMobiel && !volScherm && !opSlot && <MobileFab />}
+      {mobileNav && !opPlaatMobiel && !mobielTab && !volScherm && !opSlot && <MobileFab />}
       {/* De drie kerncijfers stonden hier los boven de composer; Luka wil ze
           weg — de composer (met kop + tip-chips) is nu de basis onder de sphere,
           zoals de echte AXE CORE-home. MobileStatsRow blijft bestaan voor als we

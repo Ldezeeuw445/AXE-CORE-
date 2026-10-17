@@ -36,8 +36,8 @@ export const ITERATIONS = 120_000;
 const SEPARATOR = '\u001f';
 const OPEN_SLEUTEL = 'axe_android_unlocked';
 const TERUG_SLEUTEL = 'axe_android_return';
-/** Na ontgrendelen: bestaande Android-schil, niet Device Manager. */
-export const SCHIL_START = '/';
+/** Na ontgrendelen: de telefoon-Home, nooit desktop-Home (tweede particle-bol). */
+export const SCHIL_START = '/mobile';
 
 type Record = {
   salt: string;
@@ -186,7 +186,7 @@ export function bewaarTerugPad(path: string, sessie: PinOpslag = sessionStorage)
 export function naOntgrendelenPad(sessie: PinOpslag = sessionStorage): string {
   try {
     const p = sessie.getItem(TERUG_SLEUTEL);
-    if (p && padIsSchil(p)) return p;
+    if (p && padIsSchil(p)) return p === '/' ? SCHIL_START : p;
   } catch { /* private mode */ }
   return SCHIL_START;
 }

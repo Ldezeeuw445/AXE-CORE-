@@ -620,9 +620,11 @@ export function PlaatChat() {
           <>
             <VisionCaptureButton compact />
             <button
+              className="axe-desktop-mic"
               onClick={handleChatMic}
               title={voice.liveCall ? 'End live conversation (Esc)' : 'Start live conversation'}
-              aria-pressed={voice.liveCall}
+              aria-pressed={voice.liveCall || chatIsListening}
+              data-axe-mic={voice.liveCall || chatIsListening ? 'aan' : 'uit'}
               data-axe-live={voice.liveCall ? 'ja' : 'nee'}
               style={voice.liveCall || chatIsListening ? { color: 'var(--accent-cyan)' } : undefined}
             >
