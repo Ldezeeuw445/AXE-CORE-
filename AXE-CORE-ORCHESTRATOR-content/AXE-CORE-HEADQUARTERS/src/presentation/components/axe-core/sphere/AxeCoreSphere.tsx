@@ -567,6 +567,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
     <canvas
       ref={ref}
       className="h-full w-full"
+      data-axe-bol={telefoon ? 'ja' : undefined}
       style={{ cursor: 'grab', touchAction: 'none' }}
       aria-hidden="true"
     />

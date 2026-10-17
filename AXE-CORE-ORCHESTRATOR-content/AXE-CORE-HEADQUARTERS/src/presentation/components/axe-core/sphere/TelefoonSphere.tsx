@@ -527,6 +527,7 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
     <canvas
       ref={ref}
       className="absolute left-0 top-0 block"
+      data-axe-bol="ja"
       style={{ cursor: 'grab', touchAction: 'none' }}
       aria-hidden="true"
     />

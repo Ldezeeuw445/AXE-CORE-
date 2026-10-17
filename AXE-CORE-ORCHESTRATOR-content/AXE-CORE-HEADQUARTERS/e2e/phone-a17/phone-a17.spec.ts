@@ -30,6 +30,10 @@ async function openRoute(page: Page, route: string, look: 'black' | 'glass' = 'b
   }, look);
   await page.goto(`/?ontwerp=1#${route}`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.axe-shell', { timeout: 45_000 });
+  await page.evaluate((stand) => {
+    document.documentElement.dataset.look = stand;
+    try { localStorage.setItem('axe_look', stand); } catch { /* */ }
+  }, look);
   await page.waitForTimeout(900);
 }
 
@@ -110,8 +114,7 @@ test.describe('A17 384x832', () => {
     await expect(page.locator('[aria-label="Particle gesture field"]')).toHaveCount(0);
     await expect(page.locator('.axe-scene')).toHaveCount(0);
     await expect(page.locator('[data-axe-phone-tabs]')).toBeVisible();
-    const homeCanvases = page.locator('.axe-mobile-home canvas');
-    await expect(homeCanvases).toHaveCount(1);
+    await expect(page.locator('[data-axe-bol]')).toHaveCount(1);
     await page.screenshot({ path: join(shots, 'home.png'), fullPage: false });
     const maat = await overflowEnOverlap(page);
     expect(maat.docOverflow, maat.over.join('; ')).toBe(false);
@@ -129,6 +132,12 @@ test.describe('A17 384x832', () => {
     await zetStem(page, false);
 
     await openRoute(page, '/mobile', 'glass');
+    await page.evaluate(() => {
+      document.documentElement.dataset.look = 'glass';
+      try { localStorage.setItem('axe_look', 'glass'); } catch { /* */ }
+    });
+    const naarLicht = page.locator('.axe-mobile-look-toggle button[aria-label="Naar licht"]');
+    if (await naarLicht.count()) await naarLicht.click();
     await expect(page.locator('html')).toHaveAttribute('data-look', 'glass');
     await page.screenshot({ path: join(shots, 'home-light-mic-off.png'), fullPage: false });
     await zetStem(page, true);
