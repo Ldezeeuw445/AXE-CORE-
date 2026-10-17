@@ -6,7 +6,7 @@ intussen op naar ~1.100 schrijfacties per uur. Hier staan ze op één plek, elk 
 een meting die zegt of hij gedaan is. De bewaker op de Mac mini meet ze elke
 ronde, zet ze in de status-snapshot en zet één keer per dag (vanaf 08:00
 Amsterdam) een herinnering in de bel zolang er iets openstaat. Die bel wordt in
-de Tauri-app een macOS-melding en op de telefoon een push.
+de Tauri-app een macOS-melding en op de A17 een native Device Manager-melding.
 
 Een stap verdwijnt pas als de meting hem gedaan noemt, niet als iemand zegt dat
 hij klaar is. Kan een stap van hier niet gemeten worden, dan blijft hij open met
@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
 from zoneinfo import ZoneInfo
@@ -85,9 +85,10 @@ ACTIES = (
     },
     {
         "id": "phone-push",
-        "title": "Phone: allow AXE Core notifications",
-        "how": "On the phone, in the installed AXE Core app (axeheadquarters.com): Settings, "
-               "the notifications card, 'Turn on for this device'. That registers the push subscription.",
+        "title": "Phone: Device Manager native notifications",
+        "how": "Rebuild com.axecore.core with docs/android/notify/ (WorkManager poll of "
+               "core_notifications). First launch: Android POST_NOTIFICATIONS prompt. No "
+               "Settings web-push. Open HQ once signed-in so the session reaches WorkManager.",
     },
     {
         "id": "northsea-inventory-job-off",
@@ -190,12 +191,33 @@ async def _api_health(client, supabase_url, key, env, nu):
 
 
 async def _push_abonnement(client, supabase_url, key, env, nu):
-    r = await client.get(supabase_url + "/rest/v1/core_push_subscriptions", headers=_rest(key),
-                         params={"select": "id", "limit": "1"})
+    """Web-push-rijen tellen niet. De A17 hoort via Device Manager + last_seen."""
+    r = await client.get(supabase_url + "/rest/v1/core_axe_devices", headers=_rest(key),
+                         params={"select": "device_id,platform,device_type,capabilities,last_seen",
+                                 "device_type": "eq.mobile"})
     rijen = r.json() if r.is_success else None
     if not isinstance(rijen, list):
-        return None, f"cannot measure: core_push_subscriptions answered {r.status_code}"
-    return bool(rijen), "subscribed" if rijen else "0 push subscriptions: the phone hears nothing"
+        return None, f"cannot measure: core_axe_devices answered {r.status_code}"
+    sinds = nu - timedelta(hours=24)
+    for x in rijen:
+        if not isinstance(x, dict):
+            continue
+        if str(x.get("platform") or "").lower() != "android":
+            continue
+        caps = x.get("capabilities") or []
+        if not isinstance(caps, list):
+            caps = [caps]
+        if "native_notify" not in caps:
+            continue
+        try:
+            t = datetime.fromisoformat(str(x.get("last_seen") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        if t >= sinds:
+            return True, f"{x.get('device_id')} native_notify {x.get('last_seen')}"
+    return False, "no Android Device Manager heartbeat with native_notify in the last 24h"
 
 
 async def _inventaris_uit(client, supabase_url, key, env, nu):

@@ -29,6 +29,10 @@ interface UIState {
   setVoiceState: (state: 'idle' | 'listening' | 'processing' | 'speaking') => void;
   toggleSplitView: () => void;
   setSplitViewOpen: (open: boolean) => void;
+  /** Voltooide taken op de telefoon: bel-badge i.p.v. een toast over de inhoud. */
+  phoneTaakBadge: number;
+  bumpPhoneTaakBadge: () => void;
+  clearPhoneTaakBadge: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -43,6 +47,7 @@ export const useUIStore = create<UIState>((set) => ({
   rightDrawerOpen: false,
   voiceState: 'idle',
   splitViewOpen: false,
+  phoneTaakBadge: 0,
 
   toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
@@ -59,4 +64,6 @@ export const useUIStore = create<UIState>((set) => ({
   setVoiceState: (state) => set({ voiceState: state }),
   toggleSplitView: () => set((s) => ({ splitViewOpen: !s.splitViewOpen })),
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
+  bumpPhoneTaakBadge: () => set((s) => ({ phoneTaakBadge: s.phoneTaakBadge + 1 })),
+  clearPhoneTaakBadge: () => set({ phoneTaakBadge: 0 }),
 }));

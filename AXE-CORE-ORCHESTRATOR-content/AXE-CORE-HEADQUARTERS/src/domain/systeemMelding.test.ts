@@ -24,7 +24,7 @@ describe('kiesSysteemMeldingen', () => {
   it('meldt een nieuwe ongelezen rij met onderwerp en detail', () => {
     const stand = gestart([rij('a', 'Oud')]);
     const uit = kiesSysteemMeldingen([rij('a', 'Oud'), rij('b', 'NorthSea offline')], stand, NU);
-    expect(uit.tonen).toEqual([{ title: 'NorthSea offline', body: 'detail b' }]);
+    expect(uit.tonen).toEqual([{ title: 'NorthSea offline', body: 'detail b', id: 'b' }]);
   });
 
   it('meldt dezelfde rij geen tweede keer bij de volgende verversing', () => {

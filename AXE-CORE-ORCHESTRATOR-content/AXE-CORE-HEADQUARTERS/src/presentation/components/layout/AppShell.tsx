@@ -38,9 +38,10 @@ import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDoc
 import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
 import { openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
-import { PhoneBel, PhoneVoet } from '@/presentation/components/layout/PhoneChrome';
+import { PhoneAppBar, PhoneBel } from '@/presentation/components/layout/PhoneChrome';
 import { MobieleTabSchil } from '@/presentation/components/layout/MobieleTabSchil';
 import { isLockPad, phoneZonderComposer } from '@/domain/phone/phoneChrome';
+import { phoneHeeftAppBar } from '@/domain/phone/phoneMenu';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -179,8 +180,8 @@ export function AppShell() {
       android: isAndroidShellRuntime(),
       ingebed: isIngebed(),
     });
-  // De nav-lade blijft; de A17 krijgt daarnaast de gedeelde onderbalk
-  // (Home/Desk/Agents/Trading/More) via PhoneVoet. Desktop houdt BottomNav.
+  // De hamburger is de enige telefoon-navigatie. PhoneVoet blijft in de
+  // module voor de wiring-test, maar de onderbalk wordt niet meer getoond.
   const mobileNav = mobileCommandSurface;
   /**
    * iPad: wél de laden, verder de volle schil.
@@ -240,6 +241,9 @@ export function AppShell() {
      een keuze voor rust, en spraak en bestanden zitten er nog gewoon in. Tot
      2 okt klapte hij helemaal weg en kwam hij op elke nieuwe tab terug. */
   const [mobieleDock, setMobieleDock] = useState(false);
+  useEffect(() => {
+    if (location.pathname === '/browser') setMobieleDock(true);
+  }, [location.pathname]);
 
   // Fixed to the dynamic viewport height (not min-h) so the shell never grows
   // past the visible area and pushes the BottomNav below the fold — the reason
@@ -273,11 +277,11 @@ export function AppShell() {
           dat maakt een vast-gepositioneerd kind t.o.v. de schil i.p.v. het scherm
           — dan verschuift de knop mee met de plaat. Hierbuiten blijft hij vast
           aan de schermhoek. Desktop-Home houdt PlaatViewSwitch voor Awareness. */}
-      {mobileNav && !opSlot && (
+      {mobileNav && !opSlot && !phoneHeeftAppBar(location.pathname) && (
         <div
           className="axe-mobile-look-toggle fixed z-[70] flex items-center gap-1.5"
           style={{
-            // Home: 10px binnen de plaatrand. Andere tabs: alleen safe-area.
+            // Home / embeds: 10px binnen de plaatrand. App-balk tabs dragen bel+look zelf.
             top: opPlaatMobiel
               ? 'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)'
               : 'calc(var(--axe-sat) + 10px)',
@@ -401,16 +405,8 @@ export function AppShell() {
                   mobiele home en het lock screen houden daar zelf rekening mee;
                   de overige pagina's krijgen hier bovenruimte zodat de knop hun
                   kop (titel/Refresh) niet afdekt. */}
-              <div
-                className="flex-1 min-h-0 flex flex-col"
-                style={
-                  mobileCommandSurface && location.pathname !== '/mobile' && !opSlot
-                    // Net genoeg om onder de zwevende top-bar (view-switcher) en de
-                    // hamburger te blijven; de 52 gaf een grote lege plek bovenin.
-                    ? { paddingTop: 'calc(var(--axe-sat) + 30px)' }
-                    : undefined
-                }
-              >
+              <div className="flex-1 min-h-0 flex flex-col">
+                {mobileNav && !opSlot && phoneHeeftAppBar(location.pathname) && <PhoneAppBar />}
                 {mobielTab ? (
                   <MobieleTabSchil>
                     <Outlet />
@@ -432,7 +428,13 @@ export function AppShell() {
           Home the arrow turns it into the dock: an island with files, camera,
           voice and the keyboard. Sending stays on the current tab, like Tauri. */}
       {toonMobieleTabComposer && (
-        <div className="axe-mobile-tab-composer relative z-[55] mt-auto w-full flex-none">
+        <div
+          className="axe-mobile-tab-composer relative z-[55] mt-auto w-full flex-none"
+          style={{
+            marginBottom: 0,
+            paddingBottom: keyboardInset ? 0 : 'env(safe-area-inset-bottom, 0px)',
+          }}
+        >
           {/* De goedkeuringsvraag staat BUITEN de dock-tak van de composer: als
               AXE op toestemming wacht is dat belangrijker dan of je de composer
               net smal gemaakt hebt. Op de telefoon-home zit hij in MobileChat;
@@ -539,14 +541,8 @@ export function AppShell() {
           raden. */}
       {!mobileCommandSurface && !opPlaat && <BottomBar />}
 
-      {/* Navigatie. Twee vormen, want een telefoon en een desktop willen niet
-          hetzelfde:
-          - Desktop (geen command-surface): de horizontale BottomNav-strip.
-          - Telefoon / Android-shell (command-surface): de gedeelde A17-onderbalk
-            (Home/Desk/Agents/Trading/More) plus de lade (MobileNav) achter More. */}
-      {mobileNav && !opSlot && (
-        <PhoneVoet toonTabs={keyboardInset === 0 && location.pathname !== '/browser'} />
-      )}
+      {/* Navigatie. Desktop houdt BottomNav. Op de telefoon is de hamburger
+          de enige navigatie — geen Home/Trading/AXE/Memory/More-balk. */}
       {!mobileNav && keyboardInset === 0 && <BottomNav />}
       {mobileNav && !opSlot && <MobileNav />}
       {/* Slimme hoekknop (mobiel): snelacties binnen duim-bereik, de mobiel-eigen

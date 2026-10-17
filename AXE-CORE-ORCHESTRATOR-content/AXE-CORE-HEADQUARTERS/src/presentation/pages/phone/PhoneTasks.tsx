@@ -4,7 +4,8 @@ import { GoedkeuringActie } from '@/presentation/components/axe-core/Goedkeuring
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { rijenVanLijst } from '@/domain/agents/pendingApproval';
-import { PhoneKaart, PhoneKop, PhoneRij, PhoneSeg } from '@/presentation/pages/phone/phoneUi';
+import { groepeerTelefoonTaken } from '@/domain/phone/phoneTaken';
+import { PhoneKaart, PhoneKop, PhoneSeg } from '@/presentation/pages/phone/phoneUi';
 
 const SEGS = [
   { id: 'open', label: 'Open' },
@@ -14,10 +15,6 @@ const SEGS = [
 ] as const;
 
 type Seg = (typeof SEGS)[number]['id'];
-
-function titelVan(row: DurableTaskRun): string {
-  return row.title || row.id.slice(0, 8);
-}
 
 function dueMs(row: DurableTaskRun): number {
   const due = row.metadata?.dueAt ?? row.metadata?.due_at ?? row.metadata?.due;
@@ -50,9 +47,8 @@ export default function PhoneTasks({ start = 'open' }: { start?: Seg }) {
   const follow = open.filter((r) => /follow|wacht|waiting/i.test(`${r.title} ${r.status}`));
 
   const lijst = useMemo(() => {
-    if (seg === 'overdue') return overdue;
-    if (seg === 'follow') return follow;
-    return open;
+    const bron = seg === 'overdue' ? overdue : seg === 'follow' ? follow : open;
+    return groepeerTelefoonTaken(bron);
   }, [seg, open, overdue, follow]);
 
   return (
@@ -80,12 +76,28 @@ export default function PhoneTasks({ start = 'open' }: { start?: Seg }) {
           )}
         </PhoneKaart>
       ) : (
-        <PhoneKaart kicker={`${lijst.length} items`}>
+        <div className="flex flex-col gap-2.5 pb-3">
+          <div className="px-1 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>
+            {lijst.length} items
+          </div>
           {lijst.slice(0, 40).map((r) => (
-            <PhoneRij key={r.id} title={titelVan(r)} sub={r.status} />
+            <PhoneKaart key={r.id}>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
+                  style={{ color: '#67e8f9', border: '1px solid rgba(103,232,249,.25)' }}
+                >
+                  {r.status}
+                </span>
+                {r.aantal > 1 && (
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{r.aantal}×</span>
+                )}
+              </div>
+              <div className="line-clamp-2 text-[14px] font-semibold leading-snug">{r.titel}</div>
+            </PhoneKaart>
           ))}
           {lijst.length === 0 && <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Nothing here.</div>}
-        </PhoneKaart>
+        </div>
       )}
     </div>
   );

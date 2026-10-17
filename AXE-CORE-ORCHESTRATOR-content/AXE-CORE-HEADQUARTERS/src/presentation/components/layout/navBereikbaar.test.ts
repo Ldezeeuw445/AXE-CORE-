@@ -29,7 +29,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/lock': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
   '/lock/pin': 'Android cijfer-PIN; AndroidLockGate opent hem alleen als er een PIN staat',
   '/companion': 'Telefoon-tab AXE Companion; iframe van axecompanion.com, pinbaar op de A17-balk',
-  '/notifications': 'Telefoon-alerts; More-grid + bel. Desktop gebruikt AwarenessCenter',
+  '/notifications': 'Telefoon-alerts; bel opent de in-app lijst. Desktop gebruikt AwarenessCenter',
   '/': 'Home heeft zijn eigen icoon, staat als eerste in leftItems',
   '/mobile': 'Alleen voor het telefoonoppervlak',
   '/login': 'Voor wie niet ingelogd is; dan is er geen balk',

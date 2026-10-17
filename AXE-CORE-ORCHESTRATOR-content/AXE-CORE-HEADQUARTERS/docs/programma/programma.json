@@ -204,8 +204,8 @@
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
-      "blocker": "17 okt: 0 push-abonnementen",
-      "next_action": "Luka meldt de telefoon aangezet; de bewaker meet core_push_subscriptions (eigenaar-actie phone-push)",
+      "blocker": "A17 APK moet docs/android/notify/ bevatten; web-push is niet het pad",
+      "next_action": "rebuild com.axecore.core with WorkManager poll (docs/android/notify/); first launch POST_NOTIFICATIONS; eigenaar-actie phone-push meet core_axe_devices native_notify",
       "rollback_reference": null
     },
     {

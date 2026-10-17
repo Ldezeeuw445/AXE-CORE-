@@ -190,9 +190,11 @@ export default function App() {
     import('@/application/system/axeBootstrap')
       .then(({ runAxeBootstrap }) => runAxeBootstrap())
       .catch((e) => console.error('[AXE] opstartroutine niet geladen', e));
-    import('@/infrastructure/persistence/pushAanmelding')
-      .then(({ herstelAanmelding }) => herstelAanmelding())
-      .catch((e) => console.warn('[AXE] push-aanmelding herstellen faalde', e));
+    if (!isAndroidShellRuntime()) {
+      import('@/infrastructure/persistence/pushAanmelding')
+        .then(({ herstelAanmelding }) => herstelAanmelding())
+        .catch((e) => console.warn('[AXE] push-aanmelding herstellen faalde', e));
+    }
   }, [user]);
 
   useKeyboardShortcuts({});

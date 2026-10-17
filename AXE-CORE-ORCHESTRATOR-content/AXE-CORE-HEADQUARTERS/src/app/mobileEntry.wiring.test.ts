@@ -14,6 +14,15 @@ describe('mobile PWA entry', () => {
     expect(app).toContain('<Route index element={<HomeEntry />} />');
   });
 
+  it('herstel web-push niet in Device Manager', () => {
+    const app = read('src/app/App.tsx');
+    expect(app).toContain('if (!isAndroidShellRuntime())');
+    expect(app).toContain('herstelAanmelding');
+    expect(read('src/infrastructure/ui/systeemMelding.ts')).toContain('nativeNotify');
+    expect(read('src/presentation/contexts/NotificationContext.tsx')).toContain('setNotifyPoll');
+    expect(read('src/presentation/contexts/NotificationContext.tsx')).toContain('ontwerpModus()');
+  });
+
   it('stuurt Android na login naar /mobile, nooit naar het particle-PIN', () => {
     const app = read('src/app/App.tsx');
     expect(app).toContain("? '/mobile' : '/'");

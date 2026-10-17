@@ -114,3 +114,11 @@ export function resetSupabaseClient(): void {
 
 export const SUPABASE_URL = ENV_URL || 'https://pqnngpcgbdwxavbatbia.supabase.co';
 
+/** Publieke helft voor de Android-poller. Geen service-sleutel. */
+export function supabasePubliek(): { url: string; anonKey: string } | null {
+  const url = readOverride('axe_supa_url') ?? (ENV_URL || SUPABASE_URL);
+  const anonKey = readOverride('axe_supa_key') ?? ENV_KEY;
+  if (!url || !anonKey) return null;
+  return { url, anonKey };
+}
+

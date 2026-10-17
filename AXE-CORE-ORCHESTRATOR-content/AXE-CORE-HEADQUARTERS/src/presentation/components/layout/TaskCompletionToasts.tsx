@@ -24,18 +24,15 @@
  * bij elke herstart in één klap alles wat ooit al klaar was.
  */
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, XCircle } from 'lucide-react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { taakMeldingVan } from '@/domain/taken/taakMelding';
-import { useIsMobile } from '@/presentation/hooks/use-mobile';
-import '@/presentation/components/axe-core/homeLive.css';
+import { useUIStore } from '@/presentation/store/uiStore';
 
 interface TaakRij { id: string; title: string; status: string }
 interface Melding { id: string; titel: string; mislukt: boolean }
 
 export function TaskCompletionToasts() {
-  const mobiel = useIsMobile();
-  const [meldingen, setMeldingen] = useState<Melding[]>([]);
+  const [, setMeldingen] = useState<Melding[]>([]);
   const bekend = useRef<Map<string, string> | null>(null);
   const timers = useRef<Map<string, number>>(new Map());
 
@@ -67,6 +64,7 @@ export function TaskCompletionToasts() {
         );
         if (m && !m.stuurde) {
           const melding: Melding = { id: `${rij.id}:${rij.status}:${Date.now()}`, titel: m.titel, mislukt: m.mislukt };
+          useUIStore.getState().bumpPhoneTaakBadge();
           setMeldingen(prev => [melding, ...prev].slice(0, 4));
           const t = window.setTimeout(() => {
             setMeldingen(prev => prev.filter(x => x.id !== melding.id));
@@ -93,36 +91,6 @@ export function TaskCompletionToasts() {
   }, []);
 
   // Desktop: dezelfde meldingen zitten in de taken-pill boven de composer.
-  // Telefoon houdt de toast (andere agent doet Home-mobiel).
-  if (!mobiel || meldingen.length === 0) return null;
-
-  return (
-    <div
-      className="axe-taak-toast fixed z-[108] flex flex-col gap-2 items-end pointer-events-none"
-      style={{ top: 'calc(66px + var(--axe-sat) + 12px)', maxWidth: 280 }}
-      aria-live="polite"
-    >
-      {meldingen.map(m => (
-        <div
-          key={m.id}
-          className="flex items-start gap-2 rounded-lg px-3 py-2 pointer-events-auto"
-          style={{
-            background: 'rgba(12,12,15,0.96)',
-            border: `1px solid ${m.mislukt ? 'rgba(239,68,68,0.35)' : 'rgba(52,211,153,0.35)'}`,
-            boxShadow: '0 12px 28px rgba(0,0,0,0.45)',
-          }}
-        >
-          {m.mislukt
-            ? <XCircle size={15} style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }} />
-            : <CheckCircle2 size={15} style={{ color: '#34D399', flexShrink: 0, marginTop: 1 }} />}
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium" style={{ color: 'var(--text-primary)' }}>
-              {m.mislukt ? 'Taak mislukt' : 'Taak klaar'}
-            </p>
-            <p className="text-[10px] truncate" style={{ color: 'var(--text-secondary)' }}>{m.titel}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  // Telefoon: bel-badge, nooit een toast over de inhoud (A17, okt 2026).
+  return null;
 }

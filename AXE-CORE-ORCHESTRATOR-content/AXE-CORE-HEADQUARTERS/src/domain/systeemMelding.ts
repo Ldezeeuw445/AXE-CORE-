@@ -6,7 +6,8 @@
  * De bel ziet alleen wie naar de app kijkt. Een cron die faalt of een product
  * dat offline gaat moet ook binnenkomen als het venster dicht is of achter
  * Mail zit. In de Tauri-app gaat dat via het meldingscentrum van macOS
- * (tauri-plugin-notification); de PWA heeft daar al web-push voor.
+ * (tauri-plugin-notification); op de A17 via Device Manager (NotificationManager).
+ * De PWA houdt web-push; dat is niet het pad van de Samsung.
  *
  * ## Waarom dit een eigen regel is
  *
@@ -34,6 +35,8 @@ export interface MeldingRij {
 export interface SysteemMelding {
   title: string;
   body: string;
+  /** Rij-id, zodat Android dezelfde melding niet twee keer post. */
+  id?: string;
 }
 
 export interface SysteemMeldingStand {
@@ -96,6 +99,7 @@ export function kiesSysteemMeldingen(
   const alsMelding = (r: MeldingRij): SysteemMelding => ({
     title: kort(r.title, MAX_TITEL),
     body: kort(r.detail, MAX_TEKST),
+    id: r.id,
   });
 
   let tonen: SysteemMelding[];

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Navigate, useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { Activity, ArrowRight, ExternalLink, Home, Plus, Power, RefreshCw, Smartphone, Trash2, Wrench } from 'lucide-react';
 import {
@@ -21,7 +21,6 @@ import {
   PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
 } from '@/presentation/components/ui/AxeUI';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
-import PhoneMore from '@/presentation/pages/phone/PhoneMore';
 
 interface RegisteredApp {
   id: string;
@@ -326,7 +325,7 @@ export default function AppsPage() {
   const naarApp = (id: string) =>
     document.getElementById(`axe-app-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  if (phone) return <PhoneMore />;
+  if (phone) return <Navigate to="/mobile" replace />;
 
   return (
     <>

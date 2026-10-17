@@ -21,6 +21,7 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { apparaatId } from '@/infrastructure/persistence/chatPersistence';
 import { pushStand, type PushStand } from '@/domain/pushMogelijk';
+import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 
 const TABEL = 'core_push_subscriptions';
 export const PUSH_TABEL = TABEL;
@@ -100,6 +101,7 @@ export function meldingStand(): PushStand {
     tauri: w.__TAURI_INTERNALS__ !== undefined,
     iosZonderInstallatie: iosZonderInstallatie(),
     sleutel: VAPID_PUBLIEK.trim().length > 0,
+    androidShell: isAndroidShellRuntime(),
   });
 }
 
@@ -226,7 +228,7 @@ export async function stuurTestPush(): Promise<{ ok: true } | { ok: false; reden
   const { error } = await sb.from('core_notifications').insert({
     recipient: LUKA_USER_ID,
     type: 'info',
-    message: 'Test push: if this reaches your lock screen, the sender is live.',
+    message: 'Yes needed: DEAL-002 — test: if this reaches the A17 shade, native notifications are live.',
   });
   if (error) return { ok: false, reden: error.message };
   return { ok: true };

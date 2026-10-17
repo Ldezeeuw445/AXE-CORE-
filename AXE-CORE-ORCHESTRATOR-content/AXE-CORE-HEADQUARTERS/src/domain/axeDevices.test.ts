@@ -42,6 +42,7 @@ describe('platform en kunnen', () => {
     expect(deviceTypeVoor('android')).toBe('mobile');
     expect(deviceTypeVoor('macos')).toBe('desktop');
     expect(capabilitiesVoor('android', 'mobile')).toContain('remote_terminal_client');
+    expect(capabilitiesVoor('android', 'mobile')).toContain('native_notify');
     expect(capabilitiesVoor('android', 'mobile')).not.toContain('local_filesystem');
     expect(capabilitiesVoor('macos', 'desktop')).toContain('terminal_host');
   });

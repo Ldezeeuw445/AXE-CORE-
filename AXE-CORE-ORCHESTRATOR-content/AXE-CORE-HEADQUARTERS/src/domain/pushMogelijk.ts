@@ -26,6 +26,8 @@ export interface PushOmgeving {
   iosZonderInstallatie: boolean;
   /** Staat er een VAPID-sleutel in de bundel? */
   sleutel: boolean;
+  /** Native Device Manager-schil (`__AXE_ANDROID__`): geen web-push. */
+  androidShell?: boolean;
 }
 
 export type PushStand =
@@ -38,6 +40,13 @@ export function pushStand(o: PushOmgeving): PushStand {
   // Eerst wat de gebruiker zelf kan oplossen, want dat is het antwoord waar hij
   // iets aan heeft. Een "niet ondersteund" bovenaan zetten zou de iPhone een
   // doodlopend bericht geven terwijl installeren het oplost.
+  if (o.androidShell) {
+    return {
+      kan: false,
+      herstelbaar: false,
+      reden: 'Device Manager posts AXE Core notifications itself. Android asks once for permission; there is no Settings opt-in.',
+    };
+  }
   if (o.iosZonderInstallatie) {
     return {
       kan: false,
@@ -56,7 +65,7 @@ export function pushStand(o: PushOmgeving): PushStand {
     return {
       kan: false,
       herstelbaar: false,
-      reden: 'De Mac-app heeft geen service worker. Meldingen lopen via de PWA op axeheadquarters.com en via je telefoon.',
+      reden: 'De Mac-app heeft geen service worker. Meldingen lopen via het macOS-meldingscentrum, en op de A17 via Device Manager.',
     };
   }
   if (!o.serviceWorker || !o.pushManager || o.toestemming === null) {

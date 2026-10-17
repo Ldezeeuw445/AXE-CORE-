@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 
 export function PhoneKop({ title, extra }: { title: string; extra?: ReactNode }) {
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-2 px-1">
-      <h1 className="m-0 text-[15px] font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>{title}</h1>
+    <div className="sr-only">
+      <h1>{title}</h1>
       {extra}
     </div>
   );
@@ -39,7 +39,7 @@ export function PhoneSeg({
   onKies: (id: string) => void;
 }) {
   return (
-    <div className="mb-2 flex flex-wrap gap-1 pb-1" role="tablist">
+    <div className="mb-2 mt-1 flex min-w-0 max-w-full flex-nowrap gap-1.5 overflow-x-auto pb-1" role="tablist" style={{ scrollbarWidth: 'none' }}>
       {items.map((it) => (
         <button
           key={it.id}
@@ -65,8 +65,8 @@ export function PhoneRij({ title, sub, extra }: { title: string; sub?: string; e
   return (
     <div className="flex min-h-[44px] items-center gap-2.5 border-t first:border-t-0" style={{ borderColor: 'rgba(255,255,255,.06)' }}>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-semibold">{title}</div>
-        {sub && <div className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>{sub}</div>}
+        <div className="line-clamp-2 text-[13px] font-semibold leading-snug">{title}</div>
+        {sub && <div className="line-clamp-2 text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }}>{sub}</div>}
       </div>
       {extra}
     </div>

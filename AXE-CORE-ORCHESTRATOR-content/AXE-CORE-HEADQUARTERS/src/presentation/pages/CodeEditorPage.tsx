@@ -694,7 +694,7 @@ export default function CodeEditorPage() {
   const [nieuwOpen, setNieuwOpen] = useState(false);
   const [previewDraait, setPreviewDraait] = useState(false);
   const isMobile = useIsMobile();
-  const [phoneProjects, setPhoneProjects] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [phoneProjects, setPhoneProjects] = useState(true);
   /* Op een telefoon is de code-stand een Replit-achtige studio: één paneel tegelijk. */
   const mobielStudio = isMobile && studioStand === 'code';
   useEffect(() => {
@@ -1809,12 +1809,6 @@ export default function CodeEditorPage() {
                       </div>
                     )}
                     <div ref={agentChatRef} className="flex-1 overflow-y-auto p-2 space-y-2">
-                      {agentMessages.length === 0 && (
-                        <div className="text-[9px] text-center py-6 space-y-1" style={{ color: 'var(--text-muted)' }}>
-                          <Bot size={20} style={{ margin: '0 auto 6px', opacity: 0.3 }} />
-                          <div>Ask in the AXE composer</div>
-                        </div>
-                      )}
                       {agentMessages.map((msg, i) => (
                         <div key={i} ref={el => { agentMessageRefs.current[i] = el; }}>
                           {msg.role === 'plan' && msg.planSteps && (

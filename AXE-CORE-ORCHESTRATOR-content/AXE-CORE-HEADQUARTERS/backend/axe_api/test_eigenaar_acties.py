@@ -50,8 +50,16 @@ def wereld(gedaan: bool, lus_rijen: int | None = None, functions_live: bool | No
             if gedaan:
                 body.update(checks={"supabase": {"state": "ok"}}, degraded=[])
             return httpx.Response(200, json=body)
-        if pad.endswith("/core_push_subscriptions"):
-            return httpx.Response(200, json=[{"id": "p"}] if gedaan else [])
+        if pad.endswith("/core_axe_devices"):
+            if gedaan:
+                return httpx.Response(200, json=[{
+                    "device_id": "a17",
+                    "platform": "android",
+                    "device_type": "mobile",
+                    "capabilities": ["mobile", "native_notify"],
+                    "last_seen": "2026-10-17T07:29:00+00:00",
+                }])
+            return httpx.Response(200, json=[])
         if pad.endswith("/core_schedules"):
             return httpx.Response(200, json=[{"enabled": not gedaan}])
         return httpx.Response(404)
@@ -71,6 +79,18 @@ def test_alles_gedaan_meet_elke_stap_als_gedaan():
     stand = meet(handler)
     assert [a["id"] for a in stand] == [a["id"] for a in ea.ACTIES]
     assert all(a["done"] is True for a in stand), stand
+
+
+def test_phone_push_meet_native_notify_niet_web_push():
+    handler, _ = wereld(gedaan=True)
+    stand = {a["id"]: a for a in meet(handler)}
+    assert stand["phone-push"]["done"] is True
+    assert "native_notify" in stand["phone-push"]["measured"]
+    handler0, _ = wereld(gedaan=False)
+    stand0 = {a["id"]: a for a in meet(handler0)}
+    assert stand0["phone-push"]["done"] is False
+    assert "web-push" not in stand0["phone-push"]["measured"]
+    assert "native_notify" in stand0["phone-push"]["measured"]
 
 
 def test_niets_gedaan_meet_elke_stap_als_open_met_wat_er_gemeten_is():

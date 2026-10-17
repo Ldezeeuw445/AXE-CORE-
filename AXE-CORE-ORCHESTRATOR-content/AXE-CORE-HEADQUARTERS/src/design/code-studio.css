@@ -675,7 +675,7 @@
 
 /* — agent-invoer — */
 .axe-mstudio-agent { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 0 2px 2px; }
-.axe-mstudio-snel { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.axe-mstudio-snel { display: flex; flex-wrap: nowrap; gap: 6px; max-width: 100%; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .axe-mstudio-snel button {
   flex: none; height: 34px; padding: 0 12px; border-radius: 999px; font-size: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1); background: var(--axe-mstudio-vlak, rgba(9, 11, 15, 0.9)); color: var(--text-secondary);

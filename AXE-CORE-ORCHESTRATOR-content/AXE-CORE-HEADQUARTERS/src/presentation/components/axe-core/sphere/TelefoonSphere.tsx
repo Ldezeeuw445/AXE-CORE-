@@ -181,6 +181,7 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
     if (!canvas || !vak) return;
     const gl = canvas.getContext('webgl', {
       alpha: true, premultipliedAlpha: true, antialias: false, powerPreference: 'high-performance',
+      preserveDrawingBuffer: true,
     });
     if (!gl) return;
 
@@ -475,10 +476,34 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
       }
     };
 
-    /* iOS haalt een WebGL-context weg als de app lang op de achtergrond staat. */
-    const contextWeg = (e: Event) => { e.preventDefault(); kwijt = true; };
+    /* iOS/Android halen WebGL weg op achtergrond. Houd het laatste beeld
+       zodat resume niet 3s zwart is. Home-visuals blijven hetzelfde. */
+    const snapshot = document.createElement('canvas');
+    snapshot.setAttribute('aria-hidden', 'true');
+    snapshot.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;';
+    const toonLaatste = () => {
+      try {
+        snapshot.width = canvas.width;
+        snapshot.height = canvas.height;
+        snapshot.style.width = canvas.style.width;
+        snapshot.style.height = canvas.style.height;
+        snapshot.style.transform = canvas.style.transform;
+        snapshot.getContext('2d')?.drawImage(canvas, 0, 0);
+        if (!snapshot.parentElement) vak.appendChild(snapshot);
+        snapshot.style.visibility = 'visible';
+      } catch { /* context al weg: vorige snapshot blijft staan */ }
+    };
+    const verbergSnapshot = () => { snapshot.style.visibility = 'hidden'; };
+    const contextWeg = (e: Event) => { toonLaatste(); e.preventDefault(); kwijt = true; };
     const contextTerug = () => {
-      try { opbouwen(); kwijt = false; fit(); teken(); } catch (fout) { console.warn('[TelefoonSphere] herstel lukt niet:', fout); }
+      try { opbouwen(); kwijt = false; fit(); teken(); verbergSnapshot(); } catch (fout) { console.warn('[TelefoonSphere] herstel lukt niet:', fout); }
+    };
+    const zichtApp = () => {
+      if (document.hidden) toonLaatste();
+      else {
+        if (kwijt) contextTerug();
+        else { teken(); verbergSnapshot(); }
+      }
     };
 
     canvas.addEventListener('pointerdown', omlaag);
@@ -487,6 +512,7 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
     canvas.addEventListener('pointercancel', los);
     canvas.addEventListener('webglcontextlost', contextWeg);
     canvas.addEventListener('webglcontextrestored', contextTerug);
+    document.addEventListener('visibilitychange', zichtApp);
 
     fit();
     teken();
@@ -517,6 +543,8 @@ export function TelefoonSphere({ boost = 0 }: { boost?: number }) {
       canvas.removeEventListener('pointercancel', los);
       canvas.removeEventListener('webglcontextlost', contextWeg);
       canvas.removeEventListener('webglcontextrestored', contextTerug);
+      document.removeEventListener('visibilitychange', zichtApp);
+      snapshot.remove();
       // iOS houdt maar een handvol WebGL-contexten tegelijk; deze geeft hij terug.
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };

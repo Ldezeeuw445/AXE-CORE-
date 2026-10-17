@@ -9,9 +9,9 @@ describe('de code-studio op een telefoon', () => {
     expect(MOBIEL_PANELEN.map(p => p.id)).toEqual(['files', 'code', 'agent', 'preview', 'git']);
   });
 
-  it('opent op Code, tenzij er een geldige keuze is bewaard', () => {
-    expect(leesPaneel(null)).toBe('code');
-    expect(leesPaneel('rommel')).toBe('code');
+  it('opent op Files, tenzij er een geldige keuze is bewaard', () => {
+    expect(leesPaneel(null)).toBe('files');
+    expect(leesPaneel('rommel')).toBe('files');
     expect(leesPaneel('preview')).toBe('preview');
   });
 

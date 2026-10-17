@@ -2,18 +2,17 @@
  * Systeemmeldingen écht tonen. Wát er getoond wordt staat in
  * domain/systeemMelding.ts; hier alleen de aanroep.
  *
- * Alleen in de Tauri-app (macOS-meldingscentrum via tauri-plugin-notification).
- * De PWA en de telefoon krijgen hun meldingen al via web-push van de service
- * worker; daar zou dit dubbel zijn. De plugin wordt pas geladen als hij nodig
- * is, zodat de webbundel er niets van merkt.
+ * Tauri (Mac): meldingscentrum via tauri-plugin-notification. Android Device
+ * Manager: NotificationManager via `__AXE_ANDROID__.notify`. De PWA houdt
+ * web-push; de A17 gebruikt dat pad niet — 0 subscriptions, de telefoon
+ * hoorde niets.
  *
- * Toestemming wordt één keer per sessie gevraagd. Weigert macOS, dan blijft de
- * bel gewoon werken; wie het later in Systeeminstellingen aanzet, krijgt de
- * meldingen vanaf de volgende verversing, omdat de stand elke keer opnieuw
- * wordt nagevraagd.
+ * Toestemming: macOS één keer per sessie; Android de systeemprompt op first
+ * launch (Kotlin). Weigert het OS, dan blijft de bel werken.
  */
-import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { isAndroidShellRuntime, isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import type { SysteemMelding } from '@/domain/systeemMelding';
+import { nativeNotify } from '@/infrastructure/gateways/androidNotifyBridge';
 
 let gevraagd = false;
 
@@ -26,7 +25,12 @@ async function magMelden(plugin: typeof import('@tauri-apps/plugin-notification'
 
 /** Gooit nooit: een melding die niet lukt mag de bel niet meenemen. */
 export function toonSysteemMeldingen(meldingen: readonly SysteemMelding[]): void {
-  if (meldingen.length === 0 || !isTauriRuntime()) return;
+  if (meldingen.length === 0) return;
+  if (isAndroidShellRuntime()) {
+    for (const m of meldingen) nativeNotify(m.title, m.body, m.id ?? m.title);
+    return;
+  }
+  if (!isTauriRuntime()) return;
   void (async () => {
     const plugin = await import('@tauri-apps/plugin-notification');
     if (!(await magMelden(plugin))) return;

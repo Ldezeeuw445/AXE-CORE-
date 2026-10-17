@@ -48,7 +48,17 @@ const TABELLEN: Record<string, Rij[]> = {
   core_notifications: reeks(9, i => ({
     id: `voorbeeld-melding-${i}`,
     type: ['info', 'warning', 'error'][i % 3],
-    message: `Voorbeeldmelding ${i + 1} — dit is nepdata uit de ontwerpmodus.`,
+    message: [
+      'Yes needed: DEAL-002 — Copper Cathode: Buyer waiting on commission protection.',
+      'Stuck: Import positions: Import positions',
+      'Done: NorthSea Desk Manager: NorthSea Desk Manager',
+      'Goedkeuring nodig: Agent wants to run a command.',
+      'Voorbeeldmelding 5 — dit is nepdata uit de ontwerpmodus.',
+      'Voorbeeldmelding 6 — dit is nepdata uit de ontwerpmodus.',
+      'Voorbeeldmelding 7 — dit is nepdata uit de ontwerpmodus.',
+      'Voorbeeldmelding 8 — dit is nepdata uit de ontwerpmodus.',
+      'Voorbeeldmelding 9 — dit is nepdata uit de ontwerpmodus.',
+    ][i],
     read: i % 3 === 0,
     created_at: geleden(i * 20),
   })),

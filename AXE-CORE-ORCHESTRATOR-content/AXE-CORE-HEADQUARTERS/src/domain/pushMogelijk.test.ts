@@ -38,7 +38,16 @@ describe('pushStand', () => {
     expect(s.kan).toBe(false);
     if (!s.kan) {
       expect(s.herstelbaar).toBe(false);
-      expect(s.reden).toMatch(/axeheadquarters\.com/);
+      expect(s.reden).toMatch(/macOS-meldingscentrum/);
+    }
+  });
+
+  it('zegt in Device Manager dat web-push niet het pad is', () => {
+    const s = pushStand(o({ androidShell: true, serviceWorker: true, pushManager: true }));
+    expect(s.kan).toBe(false);
+    if (!s.kan) {
+      expect(s.herstelbaar).toBe(false);
+      expect(s.reden).toMatch(/Device Manager/);
     }
   });
 

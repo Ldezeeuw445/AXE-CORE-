@@ -101,6 +101,13 @@ describe('notificationTarget', () => {
     expect(notificationTarget('Trade geopend op XAUUSD: 0.4 lot')?.route).toBe('/trading');
   });
 
+  it('stuurt NorthSea-OK naar de desk en klaar/mislukt naar taken', () => {
+    expect(notificationTarget('Yes needed: DEAL-002 — Copper Cathode')?.route).toBe('/maps-3d');
+    expect(notificationTarget('Goedkeuring nodig: Agent wil een commando')?.route).toBe('/tasks');
+    expect(notificationTarget('Stuck: Import positions')?.route).toBe('/tasks');
+    expect(notificationTarget('Done: NorthSea Desk Manager')?.route).toBe('/tasks');
+  });
+
   it('matches on the subject, not on a word buried in the detail', () => {
     // A detail paragraph mentions half the app in passing. Matching on it
     // sends people somewhere the notification was never about.

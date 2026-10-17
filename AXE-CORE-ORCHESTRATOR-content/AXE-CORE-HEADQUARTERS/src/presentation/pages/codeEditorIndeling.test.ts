@@ -37,4 +37,10 @@ describe('de indeling van de Code Editor', () => {
   it('laat het Canvas de toestellen op het raster zetten', () => {
     expect(lees('./CodeEditorPage.tsx')).toMatch(/layout="raster"/);
   });
+
+  it('opent AXE Developer op de telefoon bij de projectenlijst', () => {
+    const pagina = lees('./CodeEditorPage.tsx');
+    expect(pagina).toMatch(/const \[phoneProjects, setPhoneProjects\] = useState\(true\)/);
+    expect(pagina).toContain('<PhoneDeveloper');
+  });
 });

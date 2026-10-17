@@ -6,12 +6,12 @@ const ROOT = join(__dirname, '../../..');
 const bron = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 
 describe('gedeelde A17-schil', () => {
-  it('hangt bel, 44px-OK en onderbalk aan de telefoon-schil, niet aan desktop-Home', () => {
+  it('hangt bel en app-balk aan de telefoon-schil, zonder onderbalk', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const home = bron('presentation/pages/Home.tsx');
     expect(shell).toContain('<PhoneBel />');
-    expect(shell).toContain('<PhoneVoet');
-    expect(shell).toContain('toonTabs={keyboardInset === 0');
+    expect(shell).toContain('<PhoneAppBar');
+    expect(shell).not.toContain('<PhoneVoet');
     expect(shell).toContain('phoneZonderComposer');
     expect(shell).toContain('mobileNav && !opSlot');
     expect(shell).toContain('<MobieleTabSchil>');
@@ -42,5 +42,7 @@ describe('gedeelde A17-schil', () => {
     expect(shell).toContain('<PhoneBel />');
     expect(shell).toContain('<LookToggle />');
     expect(bron('presentation/components/layout/PhoneChrome.tsx')).toContain('Notifications, ${wacht} waiting');
+    expect(bron('presentation/components/layout/PhoneChrome.tsx')).toContain('PhoneMeldingen');
+    expect(bron('presentation/components/layout/PhoneChrome.tsx')).not.toContain('AwarenessCenter');
   });
 });

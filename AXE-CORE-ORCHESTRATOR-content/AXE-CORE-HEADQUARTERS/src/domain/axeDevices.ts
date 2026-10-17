@@ -19,7 +19,8 @@ export type AxeCapability =
   | 'tasks'
   | 'agenda'
   | 'communications'
-  | 'northsea';
+  | 'northsea'
+  | 'native_notify';
 
 export interface AxeDevice {
   device_id: string;
@@ -63,7 +64,7 @@ export function kiesDeviceId(hostname: string | null | undefined, bewaardeId: st
 export function capabilitiesVoor(platform: string, type: AxeDeviceType): AxeCapability[] {
   if (type === 'server') return ['terminal_host'];
   if (type === 'mobile' || platform === 'android') {
-    return ['mobile', 'remote_client', 'remote_terminal_client', 'tasks', 'agenda', 'communications', 'northsea'];
+    return ['mobile', 'remote_client', 'remote_terminal_client', 'tasks', 'agenda', 'communications', 'northsea', 'native_notify'];
   }
   return ['desktop', 'local_runtime', 'local_filesystem', 'terminal_host', 'tasks', 'agenda', 'communications', 'northsea'];
 }

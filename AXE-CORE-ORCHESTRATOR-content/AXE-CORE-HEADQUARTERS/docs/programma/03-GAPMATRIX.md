@@ -13,7 +13,7 @@ Fasenamen zijn die uit `canon/`. Bewijs staat in `01-REALITEIT.md`.
 | Scheduler | half | drie schedulers; Control Plane voegt samen |
 | Productregister | half | `registered_apps` (4 rijen, Axon wijst naar de landingsrepo, geen NorthSea, geen commando's/health) |
 | Heartbeat per product | half | sinds 15 okt zes productcomponenten in de servicebewaker (`docs/SERVICE-MONITORING.md`), live gemeten vanuit de cloud; nog niet bewezen op de Mac mini, `northsea_db` vraagt twee sleutelnamen in `.env.local` |
-| Meldingen naar Luka | stuk | bewaker schrijft `core_notifications` en een macOS-melding; 0 push-abonnementen, dus de telefoon hoort niets |
+| Meldingen naar Luka | half | Tauri macOS-meldingscentrum + Device Manager WorkManager-poll; web-push niet het A17-pad (0 subscriptions). APK met `docs/android/notify/` moet nog gebouwd |
 | Geheimen op naam | half | inventaris in Control Plane; Vault-keystore leeg; platte tabel `app_secrets` |
 | Uitrolbewijs | half | `vps_sync.py` voor de API; manifest mist ~11 modules; geen bewijs voor northsea-mcp |
 | CI | half | alleen Tauri-build |

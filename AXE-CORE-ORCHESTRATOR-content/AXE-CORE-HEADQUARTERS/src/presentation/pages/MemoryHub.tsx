@@ -15,7 +15,7 @@ import MemoryLibraryPanel from '@/presentation/components/axe-core/MemoryLibrary
 import TradingMemory from '@/presentation/pages/TradingMemory';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
-import { ProductEmbed, AXON_URL } from '@/presentation/pages/phone/ProductEmbed';
+import { AxonPage } from '@/presentation/pages/phone/ProductEmbed';
 
 // All three tabs render the same library page; only the map slot differs.
 // They were previously three separate screens, which meant switching lens
@@ -53,7 +53,7 @@ export default function MemoryHub() {
     void saveSetting(TAB_SETTING_KEY, id);
   }, []);
 
-  if (phone) return <ProductEmbed naam="AXON Memory" src={AXON_URL} testid="axon" />;
+  if (phone) return <AxonPage />;
 
   return (
     <motion.div

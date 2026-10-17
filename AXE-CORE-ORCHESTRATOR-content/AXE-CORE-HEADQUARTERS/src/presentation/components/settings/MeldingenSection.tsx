@@ -16,9 +16,11 @@ import {
   meldingStand, isAangemeld, meldAan, meldAf, leesVerbergInhoud, zetVerbergInhoud,
   herstelAanmelding, stuurTestPush,
 } from '@/infrastructure/persistence/pushAanmelding';
+import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 
 export function MeldingenSection() {
   const [stand] = useState(() => meldingStand());
+  const androidShell = isAndroidShellRuntime();
   const [aan, setAan] = useState(false);
   // Per apparaat: dit toestel toont op een vergrendeld scherm alleen "AXE has something".
   const [verberg, setVerberg] = useState(false);
@@ -26,13 +28,14 @@ export function MeldingenSection() {
   const [fout, setFout] = useState<string | null>(null);
 
   useEffect(() => {
+    if (androidShell) return;
     void (async () => {
       await herstelAanmelding();
       const nu = await isAangemeld();
       setAan(nu);
       if (nu) setVerberg(await leesVerbergInhoud());
     })();
-  }, []);
+  }, [androidShell]);
 
   const wissel = useCallback(() => {
     setFout(null);
@@ -76,11 +79,33 @@ export function MeldingenSection() {
       </h3>
 
       <p className="mt-2 text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-        AXE's notifications reach your lock screen on this device, also when the
-        app is closed. Per device: turn it on wherever you want them.
+        {androidShell
+          ? 'Device Manager posts AXE Core notifications itself — approvals, failed tasks, agent done, NorthSea needs-your-OK. Android asks once for permission. There is no Settings opt-in and no web-push.'
+          : "AXE's notifications reach your lock screen on this device, also when the app is closed. Per device: turn it on wherever you want them."}
       </p>
 
-      {stand.kan ? (
+      {androidShell ? (
+        <button
+          onClick={() => {
+            setFout(null);
+            setBezig(true);
+            void stuurTestPush().then((uit) => {
+              if (!uit.ok) setFout(uit.reden);
+              setBezig(false);
+            });
+          }}
+          disabled={bezig}
+          className="mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-primary)',
+            opacity: bezig ? 0.6 : 1,
+          }}
+        >
+          Send a test notification
+        </button>
+      ) : stand.kan ? (
         <button
           onClick={wissel}
           disabled={bezig}

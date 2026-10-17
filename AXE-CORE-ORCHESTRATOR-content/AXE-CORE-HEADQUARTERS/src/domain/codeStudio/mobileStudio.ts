@@ -18,10 +18,10 @@ export const MOBIEL_PANELEN: ReadonlyArray<{ id: MobielPaneel; label: string }> 
 
 export const PANEEL_KEY = 'axe_mobile_studio_paneel';
 
-/** Opgeslagen waarde -> paneel. Alles wat niet klopt is "nog niet gekozen" en opent op Code. */
+/** Opgeslagen waarde -> paneel. Nieuw: de file tree, niet een leeg editorvlak. */
 export function leesPaneel(raw: string | null | undefined): MobielPaneel {
-  if (raw === 'term') return 'code';
-  return MOBIEL_PANELEN.some(p => p.id === raw) ? (raw as MobielPaneel) : 'code';
+  if (raw === 'term') return 'files';
+  return MOBIEL_PANELEN.some(p => p.id === raw) ? (raw as MobielPaneel) : 'files';
 }
 
 // ── toetsenbalk ────────────────────────────────────────────────────────────

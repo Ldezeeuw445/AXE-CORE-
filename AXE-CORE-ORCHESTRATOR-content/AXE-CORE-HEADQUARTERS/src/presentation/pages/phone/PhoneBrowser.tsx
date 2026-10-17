@@ -1,80 +1,96 @@
 /**
- * Safari-achtige browser op de telefoon. Echte navigatie via useBrowserStore + WebView.
- * Device Manager-tabs verdwijnen (AppShell); AXE-mark gaat naar Home.
+ * Safari-achtige browser op de telefoon. Geen Mac-mini-proxy: op Android een
+ * echte WebView (JS-bridge), elders een iframe met mobiele layout.
  */
-import { useCallback, useRef, useState, type MutableRefObject } from 'react';
-import { useNavigate } from 'react-router';
-import { Bookmark, ChevronLeft, ChevronRight, Copy, LayoutGrid, Share, X } from 'lucide-react';
-import WebView from '@/presentation/components/browser/WebView';
-import type { LiveBrowserNav } from '@/presentation/components/browser/LiveBrowserView';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react';
+import { Bookmark, ChevronLeft, ChevronRight, Copy, LayoutGrid, RotateCw, Share, X } from 'lucide-react';
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
 import { sendBrowserAIMessage } from '@/application/browser/browserAIService';
-import { PhoneKaart, PhoneKop } from '@/presentation/pages/phone/phoneUi';
+import {
+  nativeBrowseAvailable, nativeBrowseBack, nativeBrowseForward, nativeBrowseOpen, nativeBrowseReload,
+} from '@/infrastructure/gateways/androidBrowseBridge';
+import { PhoneKaart } from '@/presentation/pages/phone/phoneUi';
+
+function OverlayKop({ title, extra }: { title: string; extra?: ReactNode }) {
+  return (
+    <div className="mb-2 flex min-h-[44px] items-center justify-between gap-2">
+      <h2 className="m-0 text-[16px] font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+      {extra}
+    </div>
+  );
+}
 
 function hostVan(url: string): string {
-  try { return new URL(url.includes('://') ? url : `https://${url}`).host; } catch { return url; }
+  try { return new URL(url.includes('://') ? url : `https://${url}`).host.replace(/^www\./, ''); } catch { return url; }
+}
+
+function maakUrl(ruw: string): string {
+  const t = ruw.trim();
+  if (!t) return '';
+  if (/^https?:\/\//i.test(t) || t.startsWith('about:')) return t;
+  if (t.includes('.') && !t.includes(' ')) return `https://${t}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(t)}`;
 }
 
 export default function PhoneBrowser() {
-  const navigate = useNavigate();
   const {
     tabs, activeTab, isHome, quickLinks, bookmarks, history,
     addTab, closeTab, switchTab, navigateTo, addBookmark,
   } = useBrowserStore();
   const [adres, setAdres] = useState(activeTab.url || '');
+  const [focus, setFocus] = useState(false);
   const [blad, setBlad] = useState<'geen' | 'tabs' | 'marks' | 'share' | 'reader'>('geen');
   const [reader, setReader] = useState<string>('');
-  const navRef = useRef<LiveBrowserNav | null>(null);
+  const invoer = useRef<HTMLInputElement>(null);
+  const native = nativeBrowseAvailable();
+  const [herlaad, setHerlaad] = useState(0);
+  const trek = useRef({ y: 0, aan: false });
+
+  useEffect(() => {
+    if (!focus) setAdres(activeTab.url || '');
+  }, [activeTab.url, focus]);
 
   const go = useCallback((ruw: string) => {
-    const t = ruw.trim();
-    if (!t) { navigateTo('', 'New Tab'); setAdres(''); return; }
-    const url = /^https?:\/\//i.test(t) || t.startsWith('about:')
-      ? t
-      : t.includes('.') && !t.includes(' ')
-        ? `https://${t}`
-        : `https://www.google.com/search?q=${encodeURIComponent(t)}`;
-    navigateTo(url, t);
+    const url = maakUrl(ruw);
+    if (!url) { navigateTo('', 'New Tab'); setAdres(''); return; }
+    navigateTo(url, hostVan(url));
     setAdres(url);
     setBlad('geen');
-  }, [navigateTo]);
+    setFocus(false);
+    invoer.current?.blur();
+    if (native) nativeBrowseOpen(url);
+  }, [navigateTo, native]);
+
+  useEffect(() => {
+    if (native && activeTab.url) nativeBrowseOpen(activeTab.url);
+  }, [native, activeTab.url]);
+
+  const toon = focus ? adres : (activeTab.url ? hostVan(activeTab.url) : adres);
+
+  const herladen = useCallback(() => {
+    if (native) nativeBrowseReload();
+    else setHerlaad((n) => n + 1);
+  }, [native]);
+
+  const opTouchStart = (e: TouchEvent<HTMLDivElement>) => {
+    const vak = e.currentTarget;
+    if (vak.scrollTop > 8) return;
+    trek.current = { y: e.touches[0]?.clientY ?? 0, aan: true };
+  };
+  const opTouchEnd = (e: TouchEvent<HTMLDivElement>) => {
+    if (!trek.current.aan) return;
+    const dy = (e.changedTouches[0]?.clientY ?? 0) - trek.current.y;
+    trek.current.aan = false;
+    if (dy > 56) herladen();
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full max-w-full flex-col overflow-hidden" data-axe-phone-app="browser">
-      <div className="flex min-h-[44px] flex-none items-center gap-1.5 px-1" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <button
-          type="button"
-          data-axe-browser-home
-          aria-label="Back to Home"
-          onClick={() => navigate('/mobile')}
-          className="flex size-11 items-center justify-center rounded-full text-[13px] font-bold"
-          style={{ color: '#22d3ee' }}
-        >
-          AXE
-        </button>
-        <form
-          className="min-w-0 flex-1"
-          onSubmit={(e) => { e.preventDefault(); go(adres); }}
-        >
-          <input
-            data-axe-browser-adres
-            value={adres}
-            onChange={(e) => setAdres(e.target.value)}
-            placeholder="Search or enter site"
-            inputMode="url"
-            autoCapitalize="none"
-            autoCorrect="off"
-            className="min-h-[44px] w-full rounded-full px-3 text-[13px]"
-            style={{
-              background: 'var(--axe-kaart-vlak, rgba(14,17,23,.82))',
-              border: '1px solid var(--axe-kaart-lijn, rgba(255,255,255,.1))',
-              color: 'var(--text-primary)',
-            }}
-          />
-        </form>
-      </div>
-
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div
+        className="relative min-h-0 flex-1 overflow-hidden"
+        onTouchStart={opTouchStart}
+        onTouchEnd={opTouchEnd}
+      >
         {isHome || !activeTab.url ? (
           <div className="h-full overflow-auto px-1" data-axe-browser-start>
             <div className="grid grid-cols-2 gap-2 pb-3">
@@ -95,18 +111,25 @@ export default function PhoneBrowser() {
               ))}
             </div>
           </div>
+        ) : native ? (
+          <div className="flex h-full items-center justify-center text-[12px]" data-axe-native-browse style={{ color: 'var(--text-muted)' }}>
+            {hostVan(activeTab.url)}
+          </div>
         ) : (
-          <WebView
-            url={activeTab.url}
-            mobile
-            navRef={navRef as MutableRefObject<LiveBrowserNav | null>}
-            onPageChange={(url) => { setAdres(url); navigateTo(url); }}
+          <iframe
+            key={`wv-${activeTab.id}-${herlaad}`}
+            title={activeTab.title || hostVan(activeTab.url)}
+            src={activeTab.url}
+            data-axe-phone-webview
+            className="h-full w-full border-0 bg-white"
+            referrerPolicy="no-referrer-when-downgrade"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
           />
         )}
 
         {blad === 'tabs' && (
           <div className="absolute inset-0 z-20 overflow-auto px-2 py-2" data-axe-browser-tabs style={{ background: 'var(--bg-base, #05070b)' }}>
-            <PhoneKop
+            <OverlayKop
               title="Tabs"
               extra={<button type="button" className="min-h-[44px] px-2" onClick={() => { addTab(); setAdres(''); setBlad('geen'); }}>+ New</button>}
             />
@@ -127,7 +150,7 @@ export default function PhoneBrowser() {
 
         {blad === 'marks' && (
           <div className="absolute inset-0 z-20 overflow-auto px-2 py-2" data-axe-browser-marks style={{ background: 'var(--bg-base, #05070b)' }}>
-            <PhoneKop title="Bookmarks" extra={<button type="button" className="min-h-[44px] px-2" onClick={() => setBlad('geen')}>Done</button>} />
+            <OverlayKop title="Bookmarks" extra={<button type="button" className="min-h-[44px] px-2" onClick={() => setBlad('geen')}>Done</button>} />
             <PhoneKaart kicker="Saved">
               {bookmarks.map((b) => (
                 <button key={b.id} type="button" className="flex min-h-[44px] w-full items-center text-left text-[13px]" onClick={() => go(b.url)}>
@@ -163,7 +186,7 @@ export default function PhoneBrowser() {
 
         {blad === 'reader' && (
           <div className="absolute inset-0 z-20 overflow-auto px-3 py-2" data-axe-browser-reader style={{ background: 'var(--bg-base, #05070b)' }}>
-            <PhoneKop title="Reader" extra={<button type="button" className="min-h-[44px] px-2" onClick={() => setBlad('geen')}>Done</button>} />
+            <OverlayKop title="Reader" extra={<button type="button" className="min-h-[44px] px-2" onClick={() => setBlad('geen')}>Done</button>} />
             <p className="text-[15px] leading-relaxed" style={{ color: 'var(--text-primary)' }}>
               {reader || activeTab.title || hostVan(activeTab.url) || 'Open a page first.'}
             </p>
@@ -182,23 +205,52 @@ export default function PhoneBrowser() {
         )}
       </div>
 
-      <nav className="flex flex-none items-stretch justify-around" data-axe-safari-voet aria-label="Browser chrome" style={{ minHeight: 44 }}>
-        <button type="button" aria-label="Back" className="flex min-h-[44px] min-w-[44px] items-center justify-center" onClick={() => { void navRef.current?.back(); }}>
-          <ChevronLeft size={18} />
-        </button>
-        <button type="button" aria-label="Forward" className="flex min-h-[44px] min-w-[44px] items-center justify-center" onClick={() => { void navRef.current?.forward(); }}>
-          <ChevronRight size={18} />
-        </button>
-        <button type="button" aria-label="Share" className="flex min-h-[44px] min-w-[44px] items-center justify-center" onClick={() => setBlad(blad === 'share' ? 'geen' : 'share')}>
-          <Share size={16} />
-        </button>
-        <button type="button" aria-label="Bookmarks" className="flex min-h-[44px] min-w-[44px] items-center justify-center" onClick={() => setBlad(blad === 'marks' ? 'geen' : 'marks')}>
-          <Bookmark size={16} />
-        </button>
-        <button type="button" aria-label="Tabs" className="flex min-h-[44px] min-w-[44px] items-center justify-center" onClick={() => setBlad(blad === 'tabs' ? 'geen' : 'tabs')}>
-          <LayoutGrid size={16} />
-        </button>
-      </nav>
+      <div className="flex flex-none flex-col" data-axe-safari-voet>
+        <form
+          className="px-3 pb-1"
+          onSubmit={(e) => { e.preventDefault(); go(adres); }}
+        >
+          <input
+            ref={invoer}
+            data-axe-browser-adres
+            value={toon}
+            onChange={(e) => { setFocus(true); setAdres(e.target.value); }}
+            onFocus={() => { setFocus(true); setAdres(activeTab.url || adres); }}
+            onBlur={() => setFocus(false)}
+            placeholder="Search or enter site"
+            inputMode="url"
+            enterKeyHint="go"
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="min-h-[40px] w-full rounded-full px-3 text-center text-[13px]"
+            style={{
+              background: 'var(--axe-kaart-vlak, rgba(14,17,23,.82))',
+              border: '1px solid var(--axe-kaart-lijn, rgba(255,255,255,.1))',
+              color: 'var(--text-primary)',
+            }}
+          />
+        </form>
+        <nav className="flex items-stretch justify-around" aria-label="Browser chrome" style={{ minHeight: 40 }}>
+          <button type="button" aria-label="Back" className="flex min-h-[40px] min-w-[44px] items-center justify-center" onClick={() => { if (!nativeBrowseBack()) window.history.back(); }}>
+            <ChevronLeft size={18} />
+          </button>
+          <button type="button" aria-label="Forward" className="flex min-h-[40px] min-w-[44px] items-center justify-center" onClick={() => { if (!nativeBrowseForward()) window.history.forward(); }}>
+            <ChevronRight size={18} />
+          </button>
+          <button type="button" aria-label="Reload" className="flex min-h-[40px] min-w-[44px] items-center justify-center" onClick={herladen}>
+            <RotateCw size={15} />
+          </button>
+          <button type="button" aria-label="Share" className="flex min-h-[40px] min-w-[44px] items-center justify-center" onClick={() => setBlad(blad === 'share' ? 'geen' : 'share')}>
+            <Share size={16} />
+          </button>
+          <button type="button" aria-label="Bookmarks" className="flex min-h-[40px] min-w-[44px] items-center justify-center" onClick={() => setBlad(blad === 'marks' ? 'geen' : 'marks')}>
+            <Bookmark size={16} />
+          </button>
+          <button type="button" aria-label="Tabs" className="flex min-h-[40px] min-w-[44px] items-center justify-center" onClick={() => setBlad(blad === 'tabs' ? 'geen' : 'tabs')}>
+            <LayoutGrid size={16} />
+          </button>
+        </nav>
+      </div>
     </div>
   );
 }

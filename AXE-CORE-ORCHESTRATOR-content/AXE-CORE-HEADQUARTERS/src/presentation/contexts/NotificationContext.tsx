@@ -1,11 +1,15 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase, supabasePubliek } from '@/infrastructure/supabase/supabaseClient';
 import { notificationText, collapseRepeats } from '@/domain/notification';
 import { pasBadgeToe } from '@/infrastructure/pwa/appBadge';
 import { kiesSysteemMeldingen, BEGINSTAND } from '@/domain/systeemMelding';
 import { toonSysteemMeldingen } from '@/infrastructure/ui/systeemMelding';
 import { startNotificationFeed } from '@/application/system/notificationFeed';
 import { useAuth } from '@/presentation/contexts/AuthContext';
+import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { isNativeSchaduwMelding } from '@/domain/nativeMelding';
+import { setNotifyPoll, vraagNotifyToestemming } from '@/infrastructure/gateways/androidNotifyBridge';
+import { ontwerpModus } from '@/infrastructure/supabase/ontwerpModus';
 
 export interface NotificationItem {
   id: string;
@@ -102,7 +106,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const systeemStand = useRef(BEGINSTAND);
 
   useEffect(() => {
-    if (!userId) return;
+    // Ontwerpmodus heeft geen login, maar wél nep-rijen — anders is de bel
+    // leeg terwijl we de lijst beoordelen (Playwright A17, okt 2026).
+    if (!userId && !ontwerpModus()) return;
     const sb = getSupabase();
     // Nieuwe gebruiker of herstart: wat er dan al staat is de nulstand.
     systeemStand.current = BEGINSTAND;
@@ -117,9 +123,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       },
       changed: items => {
         setRows(items);
-        // Ook buiten de bel laten weten wat er binnenkomt (Tauri: het
-        // meldingscentrum van macOS). Welke wel en welke niet: domain/systeemMelding.ts.
-        const uit = kiesSysteemMeldingen(items, systeemStand.current, Date.now());
+        // Ook buiten de bel laten weten wat er binnenkomt (Tauri: macOS;
+        // Device Manager: NotificationManager). Welke wel en welke niet:
+        // domain/systeemMelding.ts; op Android bovendien nativeMelding.ts.
+        const bron = isAndroidShellRuntime()
+          ? items.filter(i => isNativeSchaduwMelding(i.message))
+          : items;
+        const uit = kiesSysteemMeldingen(bron, systeemStand.current, Date.now());
         systeemStand.current = uit.stand;
         toonSysteemMeldingen(uit.tonen);
       },
@@ -139,6 +149,31 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       .subscribe() : null;
 
     return () => { feed.stop(); if (sb && channel) void sb.removeChannel(channel); };
+  }, [userId]);
+
+  // Device Manager: sessie naar WorkManager, zodat de A17 hoort met het scherm uit.
+  useEffect(() => {
+    if (!userId || !isAndroidShellRuntime()) return;
+    vraagNotifyToestemming();
+    let stop = false;
+    const sync = async () => {
+      const sb = getSupabase();
+      const cfg = supabasePubliek();
+      if (!sb || !cfg || stop) return;
+      const { data } = await sb.auth.getSession();
+      const s = data.session;
+      if (!s?.access_token || !s.refresh_token) return;
+      setNotifyPoll({
+        supabaseUrl: cfg.url,
+        anonKey: cfg.anonKey,
+        accessToken: s.access_token,
+        refreshToken: s.refresh_token,
+        userId: s.user.id,
+      });
+    };
+    void sync();
+    const id = window.setInterval(() => void sync(), 10 * 60_000);
+    return () => { stop = true; window.clearInterval(id); };
   }, [userId]);
 
   const addNotification = useCallback((notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => {

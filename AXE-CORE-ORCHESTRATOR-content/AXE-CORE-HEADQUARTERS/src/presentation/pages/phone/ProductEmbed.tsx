@@ -1,55 +1,61 @@
 /**
- * Vol-scherm iframe van een productie-app (AXON / Companion).
- * Geen herimplementatie, geen composer. Terug naar More.
+ * Product-tab onder de app-balk (AXON / Companion). Geen ‹ More, geen
+ * onderbalk, geen overlay-WebView die de hamburger bedekt. De iframe blijft
+ * in déze WebView zodat de login-cookie blijft staan. Als de native app
+ * geïnstalleerd is, openen we die ernaast — terugkeren toont dezelfde sessie.
  */
-import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
+import { isAppInstalled, openAndroidApp } from '@/infrastructure/gateways/androidAppsBridge';
+import { AXON_PACKAGE, COMPANION_PACKAGE } from '@/infrastructure/gateways/androidBrowseBridge';
 
 export const AXON_URL = 'https://app.axon-memory.com/';
-export const COMPANION_URL = 'https://axecompanion.com/';
+export const COMPANION_URL = 'https://axecompanion.com/chat';
 
 export function ProductEmbed({
-  naam, src, testid,
+  naam, src, testid, pakket,
 }: {
   naam: string;
   src: string;
   testid: string;
+  pakket?: string;
 }) {
-  const navigate = useNavigate();
+  const [klaar, setKlaar] = useState(false);
+
+  useEffect(() => {
+    if (pakket && isAppInstalled(pakket)) openAndroidApp(pakket);
+  }, [pakket]);
+
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden"
+      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
       data-axe-embed={testid}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="flex min-h-[44px] flex-none items-center gap-2 px-2" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <button
-          type="button"
-          data-axe-embed-terug
-          onClick={() => navigate('/apps')}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-[13px] font-medium"
-          style={{
-            background: 'var(--axe-kaart-vlak, rgba(14,17,23,.82))',
-            border: '1px solid var(--axe-kaart-lijn, rgba(255,255,255,.1))',
-            color: 'var(--text-primary)',
-          }}
-          aria-label="Back to More"
+      {!klaar && (
+        <div
+          className="absolute inset-0 z-0 flex items-center justify-center px-6 text-center text-[13px]"
+          style={{ color: 'var(--text-muted)' }}
+          data-axe-embed-wacht={testid}
         >
-          ‹ More
-        </button>
-        <div className="truncate text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{naam}</div>
-      </div>
+          Opening {naam}…
+        </div>
+      )}
       <iframe
         title={naam}
         src={src}
         data-axe-embed-frame={testid}
-        className="min-h-0 w-full flex-1 border-0 bg-black"
+        className="relative z-[1] min-h-0 w-full flex-1 border-0 bg-transparent"
         referrerPolicy="no-referrer-when-downgrade"
         allow="clipboard-read; clipboard-write; microphone; camera"
+        onLoad={() => setKlaar(true)}
       />
     </div>
   );
 }
 
 export default function CompanionPage() {
-  return <ProductEmbed naam="AXE Companion" src={COMPANION_URL} testid="companion" />;
+  return <ProductEmbed naam="AXE Companion" src={COMPANION_URL} testid="companion" pakket={COMPANION_PACKAGE} />;
+}
+
+export function AxonPage() {
+  return <ProductEmbed naam="AXON Memory" src={AXON_URL} testid="axon" pakket={AXON_PACKAGE} />;
 }
