@@ -18,11 +18,12 @@ import { leesModellen, zetModel } from '@/infrastructure/persistence/motorModell
 import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motorModellen';
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import {
-  claudeRepos, plannerStatus, plannerZetAan,
+  claudeRepos, plannerStatus, plannerZetAan, abonnementVerbruik,
   ledgerList,
   type PlannerStatus, type AgentSubscriptionUsage, type LedgerEntry,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { motorNaam, type MotorStatus } from '@/domain/motorNaam';
+import { verbruikBalken, verbruikMelding, verbruikStand, type AbonnementVerbruik } from '@/domain/abonnementVerbruik';
 import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
@@ -49,6 +50,7 @@ export function AgentMotorenSection() {
   const [modellen, setModellen] = useState<MotorModellen>(() => leesModellen());
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   const [abonnementGebruik, setAbonnementGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
+  const [verbruik, setVerbruik] = useState<Record<string, AbonnementVerbruik>>({});
   const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
   /* De vierde en laatste plek die dit zelf vroeg. `null` betekent hier nog
      steeds "nog niets gemeten" -- precies wat de eigen lus ook deed -- dus de
@@ -117,8 +119,16 @@ export function AgentMotorenSection() {
         })
         .catch(() => { if (alive) setAanwezig(null); });
     };
+    // Gemeten bij Anthropic/OpenAI zelf; de host onthoudt het twee minuten,
+    // dus elke minuut vragen kost de aanbieder hooguit één check per twee.
+    const laadVerbruik = () => {
+      void abonnementVerbruik()
+        .then(r => { if (alive) setVerbruik(Object.fromEntries((r.accounts ?? []).map(a => [a.motor, a]))); })
+        .catch(() => { /* host onbereikbaar: kaarten blijven op Checking */ });
+    };
     laadHost();
-    const timer = window.setInterval(laadHost, 60_000);
+    laadVerbruik();
+    const timer = window.setInterval(() => { laadHost(); laadVerbruik(); }, 60_000);
 
     return () => {
       alive = false;
@@ -159,11 +169,10 @@ export function AgentMotorenSection() {
     if (aanwezig === null || aanwezig[motor] !== true) return { toon: 'bad', tekst: 'Offline' };
     const koelt = planner?.koeling[motor];
     // A cooled-down subscription cannot currently do work, so it is not Online.
-    if (koelt) return { toon: 'bad', tekst: 'Offline' };
-    // Current host endpoint proves only that the CLI binary exists, not that
-    // its subscription session is authenticated. Until the backend exposes a
-    // real login probe, do not paint an unverified CLI green.
-    return { toon: 'bad', tekst: 'Offline' };
+    if (koelt) return { toon: 'bad', tekst: 'Cooling down' };
+    // The provider accepting this account's token for a usage check is the
+    // login proof the CLI binary alone never gave (abonnementVerbruik.ts).
+    return verbruikStand(verbruik[motor]);
   };
   const sleutelStatus = (provider?: ProviderId): Stand => {
     if (!provider) return { toon: 'muted', tekst: 'Auto' };
@@ -305,7 +314,7 @@ export function AgentMotorenSection() {
         })}
       </div>
 
-      <SectieKop titel="Subscriptions" uitleg="What each subscription did, as observed by AXE. Remaining plan quota is not readable from these CLIs." />
+      <SectieKop titel="Subscriptions" uitleg="Session and week usage as each provider reports it for that account, plus what AXE ran on it." />
       <div className="axe-agent-raster axe-agent-raster--ruim">
         {ALLE_MOTOREN.map((motor: AgentEngine) => {
           const g = abonnementGebruik[motor];
@@ -317,7 +326,7 @@ export function AgentMotorenSection() {
               key={motor}
               naam={motorNaam(MOTOR_LABEL[motor], motorAccounts[motor])}
               accent="var(--text-secondary)"
-              rol={door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}
+              rol={`${verbruik[motor]?.plan ? `${verbruik[motor]?.plan} plan · ` : ''}${door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}`}
               stand={motorStatus(motor)}
               keuze={
                 <>
@@ -332,10 +341,11 @@ export function AgentMotorenSection() {
                 { label: 'Last run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : '—' },
               ]}
               balken={[
+                ...verbruikBalken(verbruik[motor]),
                 ...(planner?.dagbudget ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
                 ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
               ]}
-              melding={g?.last_limit_message ?? undefined}
+              melding={verbruikMelding(verbruik[motor]) ?? g?.last_limit_message ?? undefined}
             />
           );
         })}

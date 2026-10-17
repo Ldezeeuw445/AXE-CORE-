@@ -19,6 +19,7 @@ def test_manifest_heeft_de_servermodules_die_199_miste():
         "backend/axe_api/review_desk_bron.py",
         "backend/axe_api/llm_cascade.py",
         "backend/axe_api/provider_probe.py",
+        "backend/axe_api/abonnement_verbruik.py",
     ):
         assert pad in rels, pad
 
