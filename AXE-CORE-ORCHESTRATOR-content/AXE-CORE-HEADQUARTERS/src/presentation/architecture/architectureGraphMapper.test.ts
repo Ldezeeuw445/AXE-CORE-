@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ArchitectureManifest } from '@/domain/architecture/architectureGraph';
-import { ALL_GROUPS, architectureNodeFromClick, mapArchitectureGraph, OVERVIEW } from './architectureGraphMapper';
+import { ALL_GROUPS, architectureNodeFromClick, mapArchitectureGraph, OVERVIEW, selectedArchitectureNodeFromFlow } from './architectureGraphMapper';
 
 const manifest: ArchitectureManifest = {
   schemaVersion: 1,
@@ -54,5 +54,13 @@ describe('mapArchitectureGraph', () => {
     expect(architectureNodeFromClick({
       label: api.label, kind: api.kind, node: api, groupId: 'app:axe_core', childCount: 0,
     }, api.id, manifest.nodes)).toEqual({ type: 'node', node: api });
+  });
+
+  it('inspector reads the selected flow node from the canvas store', () => {
+    const api = manifest.nodes[1]!;
+    expect(selectedArchitectureNodeFromFlow([
+      { selected: true, type: 'architectureGroup', data: { label: 'HQ', kind: 'group', groupId: 'app:axe_core', childCount: 1 } },
+      { selected: true, type: 'architecture', data: { label: api.label, kind: api.kind, node: api, groupId: 'app:axe_core', childCount: 0 } },
+    ])).toEqual(api);
   });
 });

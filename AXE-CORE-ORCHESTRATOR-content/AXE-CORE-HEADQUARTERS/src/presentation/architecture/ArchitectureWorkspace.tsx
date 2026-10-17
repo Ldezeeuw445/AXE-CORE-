@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Background,
   Controls,
@@ -7,13 +7,15 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
+  useStoreApi,
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './architectureCanvas.css';
 import { RefreshCw, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import { PlaatDock, PlaatRail } from '@/presentation/components/layout/PlaatSlots';
-import type { ArchitectureNode, ArchitectureSnapshot } from '@/domain/architecture/architectureGraph';
+import type { ArchitectureSnapshot } from '@/domain/architecture/architectureGraph';
 import { loadArchitectureSnapshot, staticArchitectureManifest } from '@/application/system/architectureSnapshotService';
 import { ArchitectureGroupCard, ArchitectureNodeCard } from './ArchitectureNodeCard';
 import { ArchitectureInspector } from './ArchitectureInspector';
@@ -24,6 +26,8 @@ import {
   OVERVIEW,
   architectureNodeFromClick,
   mapArchitectureGraph,
+  selectedArchitectureNodeFromFlow,
+  type ArchitectureFlowData,
   type ArchitectureGraphFilters,
 } from './architectureGraphMapper';
 
@@ -32,6 +36,35 @@ const NODE_TYPES = {
   architectureGroup: ArchitectureGroupCard,
 } as unknown as NodeTypes;
 
+function ArchitectureInspectorHost() {
+  const store = useStoreApi();
+  const selected = useStore(state => selectedArchitectureNodeFromFlow(
+    state.nodes as unknown as Array<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
+  ));
+  if (!selected) return null;
+  return (
+    <div
+      className="axe-architecture-inspector-panel"
+      data-testid="architecture-inspector-host"
+      style={{
+        position: 'absolute',
+        top: 72,
+        right: 12,
+        zIndex: 9999,
+        width: 308,
+        maxHeight: 'calc(100% - 96px)',
+        overflow: 'auto',
+        pointerEvents: 'auto',
+      }}
+    >
+      <ArchitectureInspector
+        node={selected}
+        onClose={() => store.getState().resetSelectedElements()}
+      />
+    </div>
+  );
+}
+
 function ArchitectureCanvas() {
   const { fitView, zoomIn, zoomOut, setViewport } = useReactFlow();
   const [snapshot, setSnapshot] = useState<ArchitectureSnapshot>({
@@ -39,11 +72,7 @@ function ArchitectureCanvas() {
     live: { state: 'unconfigured', issues: [] },
   });
   const [filters, setFilters] = useState<ArchitectureGraphFilters>({ group: OVERVIEW, kind: 'all', query: '' });
-  const [selected, setSelected] = useState<ArchitectureNode | null>(null);
   const [loading, setLoading] = useState(true);
-  const pickingNode = useRef(false);
-  const nodesRef = useRef(snapshot.manifest.nodes);
-  nodesRef.current = snapshot.manifest.nodes;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,44 +109,17 @@ function ArchitectureCanvas() {
     return () => cancelAnimationFrame(id);
   }, [fitView, setViewport, mapped.nodes.length, mapped.overview, mapped.visibleCount, filters.group, filters.kind, filters.query]);
 
-  const openNode = useCallback((data: Parameters<typeof architectureNodeFromClick>[0], fallbackId: string) => {
-    const picked = architectureNodeFromClick(data, fallbackId, snapshot.manifest.nodes);
-    if (!picked) return;
-    if (picked.type === 'group') {
-      setFilters(current => ({ ...current, group: picked.groupId, query: '' }));
-      setSelected(null);
-      return;
-    }
-    pickingNode.current = true;
-    setSelected(picked.node);
-    window.setTimeout(() => { pickingNode.current = false; }, 50);
-  }, [snapshot.manifest.nodes]);
-
-  const flowNodes = mapped.nodes;
-
   return (
     <div className="axe-scene-vlak axe-architecture absolute inset-0 overflow-hidden" style={{ isolation: 'isolate' }}>
       <ReactFlow
-        nodes={flowNodes}
+        nodes={mapped.nodes}
         edges={mapped.edges}
         nodeTypes={NODE_TYPES}
-        onNodeClick={(_, node) => openNode(node.data, node.id)}
-        onSelectionChange={({ nodes }) => {
-          const id = nodes.find(n => n.type !== 'architectureGroup')?.id;
-          if (!id) {
-            if (!pickingNode.current) setSelected(null);
-            return;
+        onNodeClick={(_, node) => {
+          const picked = architectureNodeFromClick(node.data, node.id, snapshot.manifest.nodes);
+          if (picked?.type === 'group') {
+            setFilters(current => ({ ...current, group: picked.groupId, query: '' }));
           }
-          const found = nodesRef.current.find(item => item.id === id);
-          if (found) {
-            pickingNode.current = true;
-            setSelected(found);
-            window.setTimeout(() => { pickingNode.current = false; }, 50);
-          }
-        }}
-        onPaneClick={() => {
-          if (pickingNode.current) return;
-          setSelected(null);
         }}
         minZoom={0.25}
         maxZoom={1.8}
@@ -200,23 +202,7 @@ function ArchitectureCanvas() {
         </div>
       </PlaatRail>
 
-      {selected && (
-        <div
-          className="axe-architecture-inspector-panel"
-          style={{
-            position: 'absolute',
-            top: 72,
-            right: 12,
-            zIndex: 9999,
-            width: 308,
-            maxHeight: 'calc(100% - 96px)',
-            overflow: 'auto',
-            pointerEvents: 'auto',
-          }}
-        >
-          <ArchitectureInspector node={selected} onClose={() => setSelected(null)} />
-        </div>
-      )}
+      <ArchitectureInspectorHost />
     </div>
   );
 }

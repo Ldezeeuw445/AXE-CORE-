@@ -64,6 +64,16 @@ export function architectureNodeFromClick(
   return node ? { type: 'node', node } : null;
 }
 
+export function selectedArchitectureNodeFromFlow(
+  nodes: Array<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
+): ArchitectureNode | null {
+  for (const node of nodes) {
+    if (!node.selected || node.data.overview || node.type === 'architectureGroup') continue;
+    if (node.data.node) return node.data.node;
+  }
+  return null;
+}
+
 export type ArchitectureFlowNode = Node<ArchitectureFlowData, 'architecture' | 'architectureGroup'>;
 export type ArchitectureFlowEdge = Edge<{ sourceEdges: string[]; relations: string[] }>;
 
