@@ -10,19 +10,24 @@
   --axe-home-rail-gap: clamp(8px, 1.1vh, 12px);
   /* Scene is fixed inset 0 onder de kopregel; zelfde offset als de asides. */
   --axe-home-rail-top: calc(var(--axe-kop-h, 66px) + var(--axe-sat, 0px) + 8px);
-  --axe-home-live-hoog: clamp(152px, 24%, 196px);
+  --axe-home-stack-gap: clamp(8px, 1.1vh, 12px);
+  /* Twee compacte kaarten: titel + max 2 hele regels. Niet rekken tot 24%. */
+  --axe-home-live-hoog: clamp(112px, 14vh, 128px);
 }
 
 .axe-home-rail {
-  position: absolute;
+  position: fixed;
   top: var(--axe-home-rail-top);
-  bottom: calc(10px + var(--axe-home-live-hoog));
+  bottom: calc(
+    var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 8px +
+      var(--axe-home-live-hoog) + var(--axe-home-stack-gap)
+  );
   width: var(--axe-home-rail-breed);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   gap: var(--axe-home-rail-gap);
-  padding: 2px 0;
+  padding: 0;
   overflow: hidden;
   z-index: 16;
   pointer-events: auto;
@@ -37,6 +42,7 @@
 }
 
 .axe-home-rail--mobiel {
+  position: absolute;
   left: var(--axe-home-rail-inset);
   right: auto;
   width: min(78%, 420px);
@@ -49,10 +55,9 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 0 0 auto;
-  height: clamp(40px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 58px);
-  min-height: 40px;
-  max-height: 58px;
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
   width: 100%;
   overflow: hidden;
 }
@@ -62,10 +67,23 @@
 }
 
 .axe-home-rail-tegel {
-  width: 36px;
+  width: 46px;
   flex: none;
   padding: 2px 1px;
   overflow: hidden;
+}
+
+.axe-home-rail-tegel-naam {
+  display: block;
+  width: 100%;
+  font-size: 7px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }
 
 .axe-home-rail-balk {
@@ -89,12 +107,12 @@
   max-height: 2.5em;
 }
 
-/* 2+2 under the rails: stacked pairs, never a 4-across band over the composer. */
+/* 2+2 in the zijgoten, 8px boven de composer — rails houden daarboven 8–12px lucht. */
 .axe-home-live {
-  position: absolute;
+  position: fixed;
   left: var(--axe-home-rail-inset);
   right: var(--axe-home-rail-inset);
-  bottom: 8px;
+  bottom: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 8px);
   width: auto;
   height: var(--axe-home-live-hoog);
   max-height: var(--axe-home-live-hoog);
@@ -143,7 +161,9 @@
 }
 
 .axe-home-live .axe-kaart,
-.axe-home-live-kaart {
+.axe-home-live-kaart,
+:root[data-look] .axe-home-live .axe-kaart,
+:root[data-look] .axe-home-live-kaart {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -153,12 +173,14 @@
   overflow: hidden;
 }
 
-.axe-home-live .axe-kaart-kop {
-  padding: 6px 8px 0;
+.axe-home-live .axe-kaart-kop,
+:root[data-look] .axe-home-live .axe-kaart-kop {
+  padding: 4px 8px 0;
   flex: none;
 }
 
-.axe-home-live .axe-kaart-titel {
+.axe-home-live .axe-kaart-titel,
+:root[data-look] .axe-home-live .axe-kaart-titel {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -170,34 +192,47 @@
   max-height: 1.2em;
 }
 
-.axe-home-live .axe-kaart-lijf {
-  padding: 2px 8px 6px;
-  flex: 1 1 auto;
-  min-height: 0;
+.axe-home-live .axe-kaart-lijf,
+:root[data-look] .axe-home-live .axe-kaart-lijf {
+  box-sizing: content-box;
+  padding: 0 8px;
+  flex: none;
+  height: 2.5em;
+  max-height: 2.5em;
+  min-height: 2.5em;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .axe-home-live-fit {
-  height: 100%;
+  height: 2.5em;
+  max-height: 2.5em;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
+.axe-home-live-fit > :nth-child(n + 3) {
+  display: none;
+}
+
 .axe-home-live-regel {
-  margin: 0 0 2px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   font-size: 10px;
-  line-height: 1.25;
+  line-height: 1.25em;
+  height: 1.25em;
+  min-height: 1.25em;
   max-height: 1.25em;
   overflow-wrap: break-word;
   word-break: normal;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: none;
+  flex: 0 0 1.25em;
 }
 
 .axe-home-live-actie {
@@ -227,8 +262,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 1.25em;
+  min-height: 1.25em;
   max-height: 1.25em;
-  flex: none;
+  flex: 0 0 1.25em;
 }
 
 .axe-home-live-lijst {
@@ -332,7 +369,7 @@
   :root {
     --axe-home-rail-breed: clamp(200px, 26vw, 300px);
     --axe-home-rail-gap: 8px;
-    --axe-home-live-hoog: clamp(128px, 28%, 160px);
+    --axe-home-live-hoog: 112px;
   }
 
   .axe-home-rail {
@@ -341,18 +378,12 @@
   }
 
   .axe-home-rail-rij {
-    height: clamp(22px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px);
-    min-height: 22px;
-    max-height: 44px;
+    max-height: none;
   }
 
   .axe-home-rail-tegel {
-    width: 22px;
-    padding: 0;
-  }
-
-  .axe-home-rail-tegel span {
-    display: none;
+    width: 46px;
+    padding: 1px;
   }
 
   .axe-home-rail-balk {
@@ -364,17 +395,5 @@
     max-height: 1.25em;
     white-space: nowrap;
     display: block;
-  }
-
-  .axe-home-live .axe-kaart-kop {
-    padding: 3px 8px 0;
-  }
-
-  .axe-home-live .axe-kaart-lijf {
-    padding: 1px 8px 3px;
-  }
-
-  .axe-home-live-regel {
-    margin: 0;
   }
 }

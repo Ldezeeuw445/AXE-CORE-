@@ -10,7 +10,7 @@ const shots = join(here, 'shots');
 const MATEN = [
   { naam: '1100x680', width: 1100, height: 680 },
   { naam: '1440x900', width: 1440, height: 900 },
-  { naam: '1560x980', width: 1560, height: 980 },
+  { naam: '1560x940', width: 1560, height: 940 },
   { naam: '1920x1080', width: 1920, height: 1080 },
   { naam: '2048x1080', width: 2048, height: 1080 },
   { naam: '2560x1440', width: 2560, height: 1440 },
@@ -111,6 +111,10 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(firstRechts.y, `right first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
       expect(lastLinks.y + lastLinks.height, `left last clipped at ${maat.naam}`).toBeLessThanOrEqual(links.y + links.height + 1);
       expect(lastRechts.y + lastRechts.height, `right last clipped at ${maat.naam}`).toBeLessThanOrEqual(rechts.y + rechts.height + 1);
+      const companion = await box(page, '[data-axe-agent="companion"]');
+      expect(await page.locator('[data-axe-agent="companion"]').innerText()).toMatch(/Companion/);
+      expect(companion.y, `Companion top in rail at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
+      expect(companion.y + companion.height, `Companion visible at ${maat.naam}`).toBeLessThanOrEqual(rechts.y + rechts.height + 1);
       const rijGap = secondLinks.y - (firstLinks.y + firstLinks.height);
       expect(rijGap, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(7);
       expect(rijGap, `rail gap at ${maat.naam}`).toBeLessThanOrEqual(13);
@@ -119,6 +123,9 @@ test.describe('Home live layout blijft uit de composer', () => {
       const recentBox = await box(page, '[data-axe-home-kaart="recent"]');
       const okBox = await box(page, '[data-axe-home-kaart="ok"]');
       const seatsBox = await box(page, '[data-axe-home-kaart="seats"]');
+      const stackGap = lopendBox.y - (lastLinks.y + lastLinks.height);
+      expect(stackGap, `rail-to-live gap at ${maat.naam}`).toBeGreaterThanOrEqual(7);
+      expect(stackGap, `rail-to-live gap at ${maat.naam}`).toBeLessThanOrEqual(14);
       expect(recentBox.y, `RECENT stacked under WORKING NOW at ${maat.naam}`).toBeGreaterThan(lopendBox.y + 20);
       expect(seatsBox.y, `SEATS stacked under OK at ${maat.naam}`).toBeGreaterThan(okBox.y + 20);
       expect(Math.abs(lopendBox.x - recentBox.x), `left pair same column at ${maat.naam}`).toBeLessThan(8);
@@ -138,11 +145,9 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(recent).toMatch(/NorthSea/);
       expect(recent).toMatch(/Copper PO/);
       expect(recent).toMatch(/Cron/);
-      expect(recent).toMatch(/and 21 more/);
       const seats = await page.locator('[data-axe-home-kaart="seats"]').innerText();
       expect(seats).toMatch(/claude4/);
       expect(seats).toMatch(/Wingman/);
-      expect(seats).toMatch(/and 14 more/);
 
       const kaarten = page.locator('[data-axe-home-kaart]');
       expect(await kaarten.count()).toBe(4);
@@ -164,8 +169,36 @@ test.describe('Home live layout blijft uit de composer', () => {
       }));
       expect(liveMaat.sh, `live strip scrollHeight<=clientHeight at ${maat.naam}`).toBeLessThanOrEqual(liveMaat.ch + 1);
 
-      await assertHeleRegels(page, '.balk .regel', `rail regel at ${maat.naam}`);
-      await assertHeleRegels(page, '[data-axe-home-kaart] p, [data-axe-home-kaart] .meer', `live regel at ${maat.naam}`);
+      await assertHeleRegels(page, '.axe-home-rail-regel', `rail regel at ${maat.naam}`);
+      await assertHeleRegels(page, '[data-axe-home-kaart] .axe-home-live-regel, [data-axe-home-kaart] .axe-home-live-meer', `live regel at ${maat.naam}`);
+
+      const tegelNamen = await page.locator('.axe-home-rail-tegel-naam').evaluateAll((nodes) =>
+        nodes.map((n) => {
+          const el = n as HTMLElement;
+          return { t: (el.textContent || '').trim(), sw: el.scrollWidth, cw: el.clientWidth };
+        }),
+      );
+      expect(tegelNamen.map((n) => n.t)).toEqual(expect.arrayContaining(['Trade', 'Dev', 'Mem', 'Comp', 'North']));
+      for (const n of tegelNamen) {
+        expect(n.sw, `tegel label clipped "${n.t}" at ${maat.naam}`).toBeLessThanOrEqual(n.cw + 1);
+      }
+
+      const lijven = page.locator('[data-axe-home-kaart] .axe-kaart-lijf');
+      const ln = await lijven.count();
+      for (let i = 0; i < ln; i++) {
+        const rijen = await lijven.nth(i).evaluate((lijf) => {
+          const box = (lijf as HTMLElement).getBoundingClientRect();
+          return [...(lijf as HTMLElement).querySelectorAll('.axe-home-live-regel, .axe-home-live-meer')].map((el) => {
+            const b = el.getBoundingClientRect();
+            const zicht = Math.min(b.bottom, box.bottom) - Math.max(b.top, box.top);
+            return { t: (el.textContent || '').slice(0, 40), zicht, h: b.height };
+          });
+        });
+        for (const rij of rijen) {
+          if (rij.zicht <= 1) continue;
+          expect(rij.zicht, `halve rij "${rij.t}" at ${maat.naam}`).toBeGreaterThanOrEqual(rij.h - 1);
+        }
+      }
 
       await page.screenshot({
         path: join(shots, `home-${maat.naam}.png`),

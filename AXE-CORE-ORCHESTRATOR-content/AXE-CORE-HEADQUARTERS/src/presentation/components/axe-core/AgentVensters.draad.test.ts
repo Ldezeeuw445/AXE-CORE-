@@ -38,6 +38,8 @@ describe('Home-agentvenster is een live draad', () => {
     expect(vensters).toMatch(/extraRegel/);
     expect(vensters).toMatch(/agentLiveRegel/);
     expect(vensters).toMatch(/agentTierRegel/);
+    expect(vensters).toMatch(/TEGEL_KORT/);
+    expect(vensters).toMatch(/tegelNaam/);
     expect(chat).toMatch(/tierRegel/);
   });
 });

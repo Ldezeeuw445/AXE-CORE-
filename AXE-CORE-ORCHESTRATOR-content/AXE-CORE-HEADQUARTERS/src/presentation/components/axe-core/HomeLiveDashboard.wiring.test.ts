@@ -24,11 +24,17 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toMatch(/axe-home-live-cluster/);
     expect(css).toMatch(/grid-template-rows: 1fr 1fr/);
     expect(css).toMatch(/--axe-home-rail-gap: clamp\(8px, 1\.1vh, 12px\)/);
+    expect(css).toMatch(/--axe-home-stack-gap: clamp\(8px, 1\.1vh, 12px\)/);
     expect(css).toMatch(/--axe-home-rail-top: calc\(var\(--axe-kop-h/);
     expect(css).toMatch(/top: var\(--axe-home-rail-top\)/);
+    expect(css).toMatch(/--axe-composer-onder/);
+    expect(css).toMatch(/--axe-composer-hoog/);
     expect(css).toMatch(/\.axe-home-rail--mobiel \{[^}]*top: 8px/);
     expect(css).toMatch(/\.axe-home-rail-regel \{[^}]*max-height: 2\.5em/);
     expect(css).toMatch(/\.axe-home-live-regel \{[^}]*max-height: 1\.25em/);
+    expect(css).toMatch(/\.axe-kaart-lijf \{[^}]*height: 2\.5em/);
+    expect(css).toMatch(/axe-home-rail-tegel-naam/);
+    expect(css).toMatch(/nth-child\(n \+ 3\)/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*overflow: hidden/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*pointer-events: none/);
     expect(css).not.toMatch(/grid-template-columns: repeat\(4,/);

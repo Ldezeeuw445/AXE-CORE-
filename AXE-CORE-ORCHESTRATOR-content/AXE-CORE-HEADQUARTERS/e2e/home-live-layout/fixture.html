@@ -1,17 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-look="black">
 <head>
   <meta charset="utf-8" />
   <title>AXE Home live layout fixture</title>
+  <link rel="stylesheet" href="../../src/presentation/components/axe-core/homeLive.css" />
   <style>
+    /* Tauri overlay-titelbalk: de webview IS het venster (inner ~1560×940). */
     :root {
       --axe-kop-h: 66px;
       --axe-sat: 0px;
-      --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
-      --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-      --axe-home-rail-gap: clamp(8px, 1.1vh, 12px);
-      --axe-home-rail-top: calc(var(--axe-kop-h, 66px) + var(--axe-sat, 0px) + 8px);
-      --axe-home-live-hoog: clamp(152px, 24%, 196px);
+      --axe-composer-onder: 52px;
+      --axe-composer-hoog: 96px;
       --text-primary: #f4f4f5;
       --text-secondary: #a1a1aa;
       --text-muted: #71717a;
@@ -19,13 +18,6 @@
       --accent-cyan: #22d3ee;
       --axe-kaart-vlak: rgba(12,12,15,.88);
       --axe-kaart-lijn: rgba(255,255,255,.08);
-    }
-    @media (max-width: 1100px) {
-      :root {
-        --axe-home-rail-breed: clamp(200px, 26vw, 300px);
-        --axe-home-rail-gap: 8px;
-        --axe-home-live-hoog: clamp(128px, 28%, 160px);
-      }
     }
     html, body { margin: 0; height: 100%; background: #05070c; color: var(--text-primary); font: 13px/1.35 ui-sans-serif, system-ui; }
     .scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
@@ -51,105 +43,28 @@
       background: radial-gradient(circle at 50% 45%, #16324a, #071018 70%);
       box-shadow: 0 0 40px rgba(34,211,238,.18);
     }
-    .axe-home-rail {
-      position: absolute; top: var(--axe-home-rail-top);
-      bottom: calc(10px + var(--axe-home-live-hoog));
-      width: var(--axe-home-rail-breed);
-      display: flex; flex-direction: column; justify-content: flex-start;
-      gap: var(--axe-home-rail-gap);
-      padding: 2px 0;
-      overflow: hidden;
+    .axe-home-rail-tegel {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 1px;
+      border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn);
+      color: var(--text-muted);
     }
-    .axe-home-rail--links { left: var(--axe-home-rail-inset); }
-    .axe-home-rail--rechts { right: var(--axe-home-rail-inset); }
-    .axe-home-rail-rij {
-      display: flex; align-items: center; gap: 8px; min-width: 0;
-      flex: 0 0 auto;
-      height: clamp(40px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 58px);
-      min-height: 40px; max-height: 58px;
-      overflow: hidden;
+    .axe-home-rail-tegel .icoon { width: 14px; height: 14px; border-radius: 50%; background: #1e3a4c; flex: none; }
+    .axe-home-rail-balk {
+      border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn);
     }
-    .axe-home-rail--rechts .axe-home-rail-rij { flex-direction: row-reverse; }
-    .tegel { width: 36px; flex: none; padding: 2px 1px; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); overflow: hidden; }
-    .balk { flex: 1; min-width: 0; min-height: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 4px 10px; overflow: hidden; }
     .balk .naam { color: #38bdf8; font-weight: 500; }
-    .balk .regel {
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      overflow: hidden; text-overflow: ellipsis;
-      overflow-wrap: break-word; word-break: normal;
-      font-size: 11px; line-height: 1.25; max-height: 2.5em;
-    }
-    .axe-home-live {
-      position: absolute;
-      left: var(--axe-home-rail-inset);
-      right: var(--axe-home-rail-inset);
-      bottom: 8px;
-      height: var(--axe-home-live-hoog);
-      max-height: var(--axe-home-live-hoog);
-      overflow: hidden;
-      display: flex;
-      justify-content: space-between;
-      align-items: stretch;
-      gap: 24px;
-      pointer-events: none;
-    }
-    .cluster {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: 1fr 1fr;
-      gap: 8px;
-      width: var(--axe-home-rail-breed);
-      max-width: var(--axe-home-rail-breed);
-      flex: none;
-      min-width: 0;
-      min-height: 0;
-      overflow: hidden;
-      pointer-events: auto;
-    }
-    .cluster > * { min-height: 0; }
-    .midden { pointer-events: none; flex: 1 1 auto; min-width: 0; }
-    @media (max-width: 1100px) {
-      .axe-home-rail { justify-content: flex-start; padding: 0; }
-      .axe-home-rail-rij { height: clamp(22px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px); min-height: 22px; max-height: 44px; }
-      .tegel { width: 22px; padding: 0; }
-      .balk { padding: 1px 8px; }
-      .balk .regel { -webkit-line-clamp: 1; max-height: 1.25em; white-space: nowrap; display: block; }
-      .kaart { padding: 4px 8px; }
-      .kaart h3 { margin: 0; }
-      .kaart p, .meer { margin: 0; }
-    }
-    .kaart {
+    .axe-kaart {
       background: var(--axe-kaart-vlak);
       border: 1px solid var(--axe-kaart-lijn);
       border-radius: 10px;
-      padding: 6px 8px;
-      font-size: 10px;
-      line-height: 1.25;
-      height: 100%;
-      min-width: 0;
-      min-height: 0;
-      overflow: hidden;
     }
-    .kaart h3 {
-      margin: 0 0 2px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
-      color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      line-height: 1.2; max-height: 1.2em;
-    }
-    .kaart p, .meer {
-      margin: 0 0 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      overflow-wrap: break-word;
-      word-break: normal;
-      font-size: 10px;
-      line-height: 1.25;
-      max-height: 1.25em;
-    }
+    .axe-kaart-kop { display: flex; }
+    .axe-kaart-titel { margin: 0; text-transform: uppercase; color: var(--text-muted); }
     .ok { color: var(--ok); }
-    .meer { color: var(--text-muted); background: none; border: 0; padding: 0; font-size: 10px; cursor: pointer; }
     .composer {
-      position: absolute; left: 18%; right: 18%; bottom: 52px;
+      position: absolute; left: 22%; right: 22%; bottom: var(--axe-composer-onder);
+      height: var(--axe-composer-hoog);
       border-radius: 18px; background: rgba(18,18,22,.94); border: 1px solid rgba(255,255,255,.12);
       display: flex; flex-direction: column; align-items: stretch; z-index: 40;
     }
@@ -158,7 +73,7 @@
       background: #0a0c0c; border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
       padding: 6px 12px; font-size: 11px; white-space: normal;
     }
-    .composer-in { height: 56px; display: flex; align-items: center; padding: 0 22px; }
+    .composer-in { flex: 1; display: flex; align-items: center; padding: 0 22px; }
     .chips {
       position: absolute; left: 10%; right: 10%; bottom: 12px; height: 34px;
       display: flex; justify-content: center; gap: 8px; z-index: 40;
@@ -181,41 +96,61 @@
     <div class="bol-vak" data-axe-bol-vak>
       <div class="orb" data-axe-orb></div>
       <div class="axe-home-rail axe-home-rail--links" data-axe-home-rail="links">
-        <div class="axe-home-rail-rij"><div class="tegel">Wingman</div><div class="balk"><span class="naam">Wingman</span> <span class="regel">T1 · grok + claude-sonnet-seat · next 14:45 · last: inbox clear</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">NorthSea</div><div class="balk"><span class="naam">NorthSea</span> <span class="regel">T2 · groq + claude-sonnet-seat · needs your OK</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Trading</div><div class="balk"><span class="naam">Trading</span> <span class="regel">T2 · claude-sonnet-seat · Next run 18:00 · last: market snapshot</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Developer</div><div class="balk"><span class="naam">Developer</span> <span class="regel">T1 · claude opus/sonnet via Mac · Next run 00:10 · last: orchestrator health</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">ThinkTank</div><div class="balk"><span class="naam">ThinkTank</span> <span class="regel">T2 · claude-sonnet-seat · Next run 00:10 · last: idea scan</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Browser</div><div class="balk"><span class="naam">Browser</span> <span class="regel">T2 · groq + ollama · Next run 18:00 · last: site watch</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="wingman"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Wing</span></div><div class="axe-home-rail-balk balk"><span class="naam">Wingman</span> <span class="axe-home-rail-regel regel">T1 · grok + claude-sonnet-seat · next 14:45 · last: inbox clear</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="northsea"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">North</span></div><div class="axe-home-rail-balk balk"><span class="naam">NorthSea</span> <span class="axe-home-rail-regel regel">T2 · groq + claude-sonnet-seat · needs your OK</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="trading"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Trade</span></div><div class="axe-home-rail-balk balk"><span class="naam">Trading</span> <span class="axe-home-rail-regel regel">T2 · claude-sonnet-seat · Next run 18:00 · last: market snapshot</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="developer"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Dev</span></div><div class="axe-home-rail-balk balk"><span class="naam">Developer</span> <span class="axe-home-rail-regel regel">T1 · claude opus/sonnet via Mac · Next run 00:10 · last: orchestrator health</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="thinktank"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Think</span></div><div class="axe-home-rail-balk balk"><span class="naam">ThinkTank</span> <span class="axe-home-rail-regel regel">T2 · claude-sonnet-seat · Next run 00:10 · last: idea scan</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="browser"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Web</span></div><div class="axe-home-rail-balk balk"><span class="naam">Browser</span> <span class="axe-home-rail-regel regel">T2 · groq + ollama · Next run 18:00 · last: site watch</span></div></div>
       </div>
       <div class="axe-home-rail axe-home-rail--rechts" data-axe-home-rail="rechts">
-        <div class="axe-home-rail-rij"><div class="tegel">Memory</div><div class="balk"><span class="naam">Memory</span> <span class="regel">T2 · groq / ollama · Next run 13:00 · last: vault 12 events/24h</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Task</div><div class="balk"><span class="naam">Task</span> <span class="regel">T2 · groq / ollama · Next run 12:10 · last: queue 3 waiting</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Cron</div><div class="balk"><span class="naam">Cron</span> <span class="regel">T3 · groq / cerebras / ollama · Next run 12:05 · last: 14 schedules on</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Finance</div><div class="balk"><span class="naam">Finance</span> <span class="regel">Next run 13:05 · last: usage 2 seats, read-only</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Apps</div><div class="balk"><span class="naam">Apps</span> <span class="regel">Next run 12:15 · last: axe_core 4/4</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Intel</div><div class="balk"><span class="naam">Intel</span> <span class="regel">Next run 12:20 · last: signals 3 options, bias bullish</span></div></div>
-        <div class="axe-home-rail-rij"><div class="tegel">Companion</div><div class="balk"><span class="naam">Companion</span> <span class="regel">Next run 13:00 · last: companion 2 jobs</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="memory"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Mem</span></div><div class="axe-home-rail-balk balk"><span class="naam">Memory</span> <span class="axe-home-rail-regel regel">T2 · groq / ollama · Next run 13:00 · last: vault 12 events/24h</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="task"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Task</span></div><div class="axe-home-rail-balk balk"><span class="naam">Task</span> <span class="axe-home-rail-regel regel">T2 · groq / ollama · Next run 12:10 · last: queue 3 waiting</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="cron"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Cron</span></div><div class="axe-home-rail-balk balk"><span class="naam">Cron</span> <span class="axe-home-rail-regel regel">T3 · groq / cerebras / ollama · Next run 12:05 · last: 14 schedules on</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="finance"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Fin</span></div><div class="axe-home-rail-balk balk"><span class="naam">Finance</span> <span class="axe-home-rail-regel regel">Next run 13:05 · last: usage 2 seats, read-only</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="apps"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Apps</span></div><div class="axe-home-rail-balk balk"><span class="naam">Apps</span> <span class="axe-home-rail-regel regel">Next run 12:15 · last: axe_core 4/4</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="intel"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Intel</span></div><div class="axe-home-rail-balk balk"><span class="naam">Intel</span> <span class="axe-home-rail-regel regel">Next run 12:20 · last: signals 3 options, bias bullish</span></div></div>
+        <div class="axe-home-rail-rij" data-axe-agent="companion"><div class="axe-home-rail-tegel"><div class="icoon"></div><span class="axe-home-rail-tegel-naam">Comp</span></div><div class="axe-home-rail-balk balk"><span class="naam">Companion</span> <span class="axe-home-rail-regel regel">Next run 13:00 · last: companion 2 jobs</span></div></div>
       </div>
       <div class="axe-home-live" data-axe-home-live>
-        <div class="cluster" data-axe-home-live-cluster="links">
-          <section class="kaart" data-axe-home-kaart="lopend"><h3>Working now</h3>
-            <p>Developer · Trading OS</p>
-            <button class="meer" data-axe-home-meer>and 1 more</button>
+        <div class="axe-home-live-cluster cluster" data-axe-home-live-cluster="links">
+          <section class="axe-kaart axe-home-live-kaart kaart" data-axe-home-kaart="lopend">
+            <header class="axe-kaart-kop"><h3 class="axe-kaart-titel">Working now</h3></header>
+            <div class="axe-kaart-lijf">
+              <div class="axe-home-live-fit">
+                <p class="axe-home-live-regel">Developer · Trading OS</p>
+                <button class="axe-home-live-meer meer" data-axe-home-meer>and 1 more</button>
+              </div>
+            </div>
           </section>
-          <section class="kaart" data-axe-home-kaart="recent"><h3>Recent</h3>
-            <p class="ok" data-axe-home-feed>NorthSea · Copper PO</p>
-            <p>Cron · schedules 16 on</p>
-            <button class="meer" data-axe-home-meer>and 21 more</button>
+          <section class="axe-kaart axe-home-live-kaart kaart" data-axe-home-kaart="recent">
+            <header class="axe-kaart-kop"><h3 class="axe-kaart-titel">Recent</h3></header>
+            <div class="axe-kaart-lijf">
+              <div class="axe-home-live-fit">
+                <p class="axe-home-live-regel ok" data-axe-home-feed>NorthSea · Copper PO</p>
+                <p class="axe-home-live-regel">Cron · schedules 16 on</p>
+                <button class="axe-home-live-meer meer" data-axe-home-meer>and 21 more</button>
+              </div>
+            </div>
           </section>
         </div>
-        <div class="midden"></div>
-        <div class="cluster" data-axe-home-live-cluster="rechts">
-          <section class="kaart" data-axe-home-ok data-axe-home-kaart="ok"><h3>Needs your OK</h3><p>No pending approvals.</p></section>
-          <section class="kaart" data-axe-home-seats data-axe-home-kaart="seats"><h3>Seats · Cron</h3>
-            <p class="ok">claude4 · online</p>
-            <p>Wingman · next 15:45</p>
-            <button class="meer" data-axe-home-meer>and 14 more</button>
+        <div class="axe-home-live-midden midden"></div>
+        <div class="axe-home-live-cluster cluster" data-axe-home-live-cluster="rechts">
+          <section class="axe-kaart axe-home-live-kaart kaart" data-axe-home-ok data-axe-home-kaart="ok">
+            <header class="axe-kaart-kop"><h3 class="axe-kaart-titel">Needs your OK</h3></header>
+            <div class="axe-kaart-lijf">
+              <p class="axe-home-live-regel">No pending approvals.</p>
+            </div>
+          </section>
+          <section class="axe-kaart axe-home-live-kaart kaart" data-axe-home-seats data-axe-home-kaart="seats">
+            <header class="axe-kaart-kop"><h3 class="axe-kaart-titel">Seats · Cron</h3></header>
+            <div class="axe-kaart-lijf">
+              <div class="axe-home-live-fit">
+                <p class="axe-home-live-regel ok">claude4 · online</p>
+                <p class="axe-home-live-regel">Wingman · next 15:45</p>
+                <button class="axe-home-live-meer meer" data-axe-home-meer>and 14 more</button>
+              </div>
+            </div>
           </section>
         </div>
       </div>

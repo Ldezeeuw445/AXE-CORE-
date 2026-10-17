@@ -62,6 +62,22 @@ function DaxStip({ server }: { server?: ServerAgent }) {
   );
 }
 
+const TEGEL_KORT: Partial<Record<AxeAgentId, string>> = {
+  wingman: 'Wing',
+  northsea: 'North',
+  trading: 'Trade',
+  developer: 'Dev',
+  thinktank: 'Think',
+  browser: 'Web',
+  memory: 'Mem',
+  finance: 'Fin',
+  companion: 'Comp',
+};
+
+function tegelNaam(id: AxeAgentId, fallback: string): string {
+  return TEGEL_KORT[id] ?? fallback;
+}
+
 function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: () => void }) {
   const { agent } = rij;
   return (
@@ -75,11 +91,8 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
       style={{ ...TEGEL, textShadow: LEESBAAR }}
     >
       <ManagerAvatar agent={agent} size={20} />
-      <span
-        className="text-[8px] tracking-[0.1em] uppercase leading-none whitespace-nowrap"
-        style={{ color: 'var(--text-muted)' }}
-      >
-        {agent.kort ?? agent.name}
+      <span className="axe-home-rail-tegel-naam" style={{ color: 'var(--text-muted)' }}>
+        {tegelNaam(agent.id, agent.kort ?? agent.name)}
       </span>
     </button>
   );
