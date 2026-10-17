@@ -119,31 +119,19 @@ function chromiumPad() {
       await page.addStyleTag({ content: SQUEEZE });
     }
     if (tab.site) {
-      const zoek = page.locator('form').filter({ has: page.locator('input, button') }).first();
-      const knop = page.getByPlaceholder(/Ask anything|navigate/i);
       try {
-        const zichtbaar = await knop.count();
-        if (zichtbaar) {
-          await knop.click({ timeout: 3000 });
+        const google = page.getByText('Google', { exact: true });
+        if (await google.count()) {
+          await google.first().click({ timeout: 4000, force: true });
         } else {
-          await page.locator('form button, form [type="text"]').first().click({ timeout: 3000 });
+          await page.getByText('Search or enter address').click({ timeout: 4000 });
+          const invoer = page.locator('input[placeholder*="Ask anything"], input[placeholder*="navigate"]');
+          await invoer.fill(tab.site, { timeout: 4000 });
+          await invoer.press('Enter');
         }
-        const invoer = page.locator('input[placeholder*="Ask anything"], input[placeholder*="navigate"]');
-        await invoer.fill(tab.site, { timeout: 4000 });
-        await invoer.press('Enter');
-        await page.waitForTimeout(1200);
-      } catch {
-        await page.evaluate((u) => {
-          const form = document.querySelector('form');
-          const input = form && form.querySelector('input');
-          if (input) {
-            input.focus();
-            input.value = u;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-          }
-        }, tab.site);
-        await page.waitForTimeout(800);
+        await page.waitForSelector('.axe-browser-vak', { timeout: 8000 });
+      } catch (e) {
+        process.stderr.write(`  site openen faalde: ${e.message}\n`);
       }
       if (o.fase === 'voor') await page.addStyleTag({ content: SQUEEZE });
     }
