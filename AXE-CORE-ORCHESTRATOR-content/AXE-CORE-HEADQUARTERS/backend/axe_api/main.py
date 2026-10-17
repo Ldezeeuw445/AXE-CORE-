@@ -3113,6 +3113,18 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
     return result
 
 
+@app.get("/claude/subscriptions/usage", dependencies=[AUTH])
+async def claude_subscriptions_usage(fresh: int = 0):
+    """Per abonnement-account: sessie- en weekverbruik zoals de aanbieder het meet."""
+    try:
+        import agent_runner as _ar
+        from abonnement_verbruik import verbruik as _verbruik
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(503, f"agent_runner niet beschikbaar: {type(e).__name__}")
+    accounts = await asyncio.to_thread(_verbruik, _ar.ENGINES, agent_engine_status(), _ar._binary, bool(fresh))
+    return {"accounts": accounts}
+
+
 @app.get("/claude/repos", dependencies=[AUTH])
 async def claude_repos():
     """Which repos this host will let Claude Code touch, and whether each one is

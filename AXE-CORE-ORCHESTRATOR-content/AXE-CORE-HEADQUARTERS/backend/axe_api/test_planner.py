@@ -250,6 +250,7 @@ class TestAccountfout:
     def test_herkent_login_en_factuur_maar_niet_een_gewone_fout(self):
         assert p.account_fout("Failed to authenticate: OAuth session expired and could not be refreshed") == "login verlopen"
         assert p.account_fout("ActionRequiredError: You have an unpaid invoice").startswith("betaling")
+        assert p.account_fout("OAuth authentication is currently not allowed for this organization") == "door de organisatie geblokkeerd"
         assert p.account_fout("TypeError: x is undefined") is None
         assert p.account_fout(None) is None
 

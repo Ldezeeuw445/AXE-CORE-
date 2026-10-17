@@ -90,6 +90,7 @@ MANIFEST = {
     # imports beschermd zijn, een functie die stil ontbreekt.
     "/opt/axe-core-api/zuinig.py": ("backend/axe_api/zuinig.py", "axe-core-api"),
     "/opt/axe-core-api/planner.py": ("backend/axe_api/planner.py", "axe-core-api"),
+    "/opt/axe-core-api/abonnement_verbruik.py": ("backend/axe_api/abonnement_verbruik.py", "axe-core-api"),
     "/opt/axe-core-api/cli_laag.py": ("backend/axe_api/cli_laag.py", "axe-core-api"),
     "/opt/axe-core-api/run_crew.py": ("backend/axe_api/run_crew.py", None),
     "/opt/axe-core-api/flow_runner.py": ("infra/axe-core-api/flow_runner.py", "axe-core-api"),
@@ -141,7 +142,7 @@ OPTIONAL_WHEN_MISSING = {
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

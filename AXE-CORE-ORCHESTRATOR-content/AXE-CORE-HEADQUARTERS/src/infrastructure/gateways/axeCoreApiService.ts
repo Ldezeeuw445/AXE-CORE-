@@ -13,6 +13,7 @@
  *   AXE_CORE_API_KEY = <your secret key>
  */
 
+import type { AbonnementVerbruik } from '@/domain/abonnementVerbruik';
 import type { NorthseaOverzicht } from '@/domain/northsea/chase';
 import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
 import type { KeystoreEntry, OpsCronJob, OpsCronRun } from '@/domain/controlPlane';
@@ -1018,6 +1019,11 @@ export interface AgentSubscriptionUsage {
   last_limit_message: string | null;
   exact_remaining_available: boolean;
   remaining_note: string;
+}
+
+/** Wat elk abonnement nog kan, gemeten bij de aanbieder (zie domain/abonnementVerbruik.ts). */
+export async function abonnementVerbruik(vers = false): Promise<{ accounts: AbonnementVerbruik[] }> {
+  return call('GET', `/claude/subscriptions/usage${vers ? '?fresh=1' : ''}`);
 }
 
 /** Which repos this host will let Claude Code touch, and their live branches. */
