@@ -69,6 +69,8 @@ const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
 const AxeDevicesPage = lazy(() => import('@/presentation/pages/AxeDevices'));
 const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
 const PhonePinScreen = lazy(() => import('@/presentation/pages/PhonePinScreen'));
+const CompanionPage = lazy(() => import('@/presentation/pages/phone/ProductEmbed'));
+const PhoneNotificationsPage = lazy(() => import('@/presentation/pages/phone/PhoneTasks'));
 
 function androidNaLogin(): string {
   // Native lockscreen (swipe) is de enige glance. Daarna Home; de gate toont
@@ -261,6 +263,8 @@ export default function App() {
             <Route path="tasks" element={<Tasks />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="ledger" element={<Grootboek />} />
+            <Route path="companion" element={<CompanionPage />} />
+            <Route path="notifications" element={<PhoneNotificationsPage start="alerts" />} />
             <Route path="memory" element={<MemoryHub />} />
             <Route path="memory/explore" element={<Memory />} />
             <Route path="memory/trading" element={<TradingMemory />} />

@@ -19,6 +19,7 @@ import {
   MobileStudioBar, MobileStudioNav, MobileKeyBar, MobileAgentInput, MobileNewSheet, MobileLegeEditor, type EditorHandvat,
 } from '@/presentation/components/code/MobileStudioChrome';
 import { PANEEL_KEY, leesPaneel, type MobielPaneel } from '@/domain/codeStudio/mobileStudio';
+import PhoneDeveloper from '@/presentation/pages/phone/PhoneDeveloper';
 import { previewStart } from '@/infrastructure/gateways/axeCoreApiService';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import { hostVanDeEditor, type TerminalHost } from '@/domain/terminalHosts';
@@ -693,6 +694,7 @@ export default function CodeEditorPage() {
   const [nieuwOpen, setNieuwOpen] = useState(false);
   const [previewDraait, setPreviewDraait] = useState(false);
   const isMobile = useIsMobile();
+  const [phoneProjects, setPhoneProjects] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   /* Op een telefoon is de code-stand een Replit-achtige studio: één paneel tegelijk. */
   const mobielStudio = isMobile && studioStand === 'code';
   useEffect(() => {
@@ -1324,6 +1326,16 @@ export default function CodeEditorPage() {
 
   return (
     <motion.div className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {isMobile && phoneProjects && (
+        <div className="absolute inset-0 z-40 overflow-auto" style={{ background: 'var(--bg-base, #05070b)' }}>
+          <PhoneDeveloper
+            repos={claudeRepoMap}
+            fout={claudeReposError}
+            huidig={claudeRepo}
+            onKies={(naam) => { kiesRepo(naam); setPhoneProjects(false); }}
+          />
+        </div>
+      )}
       <AnimatePresence>
         {paletteOpen && (
           <motion.div className="absolute inset-0 z-50 flex items-start justify-center pt-14"
@@ -1531,6 +1543,7 @@ export default function CodeEditorPage() {
               previewStart().then(() => setPreviewDraait(true)).catch(e => toast.error(`Could not start the preview: ${e instanceof Error ? e.message : String(e)}`));
             }}
             opNieuw={() => setNieuwOpen(true)}
+            opProjects={() => setPhoneProjects(true)}
           />
         )}
 
@@ -1912,6 +1925,11 @@ export default function CodeEditorPage() {
 
         {mobielStudio && (
           <>
+            {mPaneel === 'git' && (
+              <div className="min-h-0 flex-1 overflow-auto px-2" data-axe-dev-git>
+                <LiveGitPanel />
+              </div>
+            )}
             {mPaneel === 'code' && <MobileKeyBar editor={editorHandvat} />}
             {mPaneel === 'agent' && (
               <MobileAgentInput

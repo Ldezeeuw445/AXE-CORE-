@@ -6,7 +6,7 @@ import {
 // Luka, 9 okt: de code-tab als een echte native mobiele editor, zoals Replit of Emergent.
 describe('de code-studio op een telefoon', () => {
   it('heeft vijf panelen, in de volgorde van de onderbalk', () => {
-    expect(MOBIEL_PANELEN.map(p => p.id)).toEqual(['agent', 'files', 'code', 'term', 'preview']);
+    expect(MOBIEL_PANELEN.map(p => p.id)).toEqual(['files', 'code', 'agent', 'preview', 'git']);
   });
 
   it('opent op Code, tenzij er een geldige keuze is bewaard', () => {

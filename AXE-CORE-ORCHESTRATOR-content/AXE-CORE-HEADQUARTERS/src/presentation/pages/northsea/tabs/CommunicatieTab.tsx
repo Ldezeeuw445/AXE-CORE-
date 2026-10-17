@@ -27,6 +27,7 @@ import {
 } from './bouwstenen';
 import { useNorthseaTab } from './useNorthseaTab';
 import { northseaVerstuurConcept, northseaVerstuurStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
 
 type CommFilter = BerichtFilter | KoppelKlasse;
 const richtingToon = (r: string | null | undefined): Toon => (r === 'inbound' ? 'blauw' : r === 'outbound' ? 'grijs' : 'paars');
@@ -59,6 +60,7 @@ export function CommunicatieTab({
   startFilter?: 'niet_bezorgd' | 'akkoord';
   openDeal?: (id: string) => void;
 }) {
+  const phone = usePhoneApp();
   const { data, fout, bezig, ververs } = useNorthseaTab('communicatie');
   const dealsTab = useNorthseaTab('deals');
   const [filter, setFilter] = useState<CommFilter>(startFilter ?? 'alle');
@@ -397,7 +399,7 @@ export function CommunicatieTab({
                     {/* Alleen bij een concept dat AL goedgekeurd is en nog niet
                         verstuurd. Goedkeuren gebeurt niet hier: dat eist
                         menselijke herkomst, en die hoort bij de goedkeurder. */}
-                    {!c.sent_at && c.akkoord === 'approved' && kanVersturen?.kan && (
+                    {!phone && !c.sent_at && c.akkoord === 'approved' && kanVersturen?.kan && (
                       <button type="button" onClick={() => { void verstuur(c.id); }}
                         disabled={verstuurd[c.id]?.bezig}
                         className="ml-auto rounded-lg px-2 py-0.5 text-[11px]"

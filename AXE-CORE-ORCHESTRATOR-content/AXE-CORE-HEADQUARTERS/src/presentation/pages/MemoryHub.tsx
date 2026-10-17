@@ -14,6 +14,8 @@ import { BookOpen, Library, Network } from 'lucide-react';
 import MemoryLibraryPanel from '@/presentation/components/axe-core/MemoryLibraryPanel';
 import TradingMemory from '@/presentation/pages/TradingMemory';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import { ProductEmbed, AXON_URL } from '@/presentation/pages/phone/ProductEmbed';
 
 // All three tabs render the same library page; only the map slot differs.
 // They were previously three separate screens, which meant switching lens
@@ -28,6 +30,7 @@ type HubTab = 'neural' | 'terrain' | 'obsidian' | 'trading';
 const TAB_SETTING_KEY = 'memoryHub.lens';
 
 export default function MemoryHub() {
+  const phone = usePhoneApp();
   const [tab, setTab] = useState<HubTab>('terrain');
   const navigate = useNavigate();
 
@@ -49,6 +52,8 @@ export default function MemoryHub() {
     setTab(id);
     void saveSetting(TAB_SETTING_KEY, id);
   }, []);
+
+  if (phone) return <ProductEmbed naam="AXON Memory" src={AXON_URL} testid="axon" />;
 
   return (
     <motion.div

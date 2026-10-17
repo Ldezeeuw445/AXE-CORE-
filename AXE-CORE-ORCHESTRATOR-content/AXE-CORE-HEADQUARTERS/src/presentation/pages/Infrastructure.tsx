@@ -9,6 +9,8 @@ import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { Menu } from 'lucide-react';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import PhoneSystems from '@/presentation/pages/phone/PhoneSystems';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 
 /* ─── Project definitions ──────────────────────────────────────────── */
@@ -102,6 +104,7 @@ function classifyTable(name: string | undefined | null): string {
 
 /* ─── Component ─────────────────────────────────────────────────────── */
 export default function Infrastructure() {
+  const phone = usePhoneApp();
   const [activeProject, setActiveProject] = useState('axe-core');
   const [tables, setTables] = useState<TableStat[]>([]);
   const [liveStates, setLiveStates] = useState<Record<string, ServiceState>>({});
@@ -157,6 +160,8 @@ export default function Infrastructure() {
     'axe-intel':     ['supabase', 'axe_intel'],
     'shared':        ['supabase'],
   };
+
+  if (phone) return <PhoneSystems />;
 
   return (
     <motion.div className="axe-tabruimte h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>

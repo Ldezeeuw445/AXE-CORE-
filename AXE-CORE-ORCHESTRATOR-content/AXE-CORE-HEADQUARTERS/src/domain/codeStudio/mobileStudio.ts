@@ -6,20 +6,21 @@
  * staan de regels, zodat ze getest kunnen worden zonder editor.
  */
 
-export type MobielPaneel = 'agent' | 'files' | 'code' | 'term' | 'preview';
+export type MobielPaneel = 'agent' | 'files' | 'code' | 'term' | 'preview' | 'git';
 
 export const MOBIEL_PANELEN: ReadonlyArray<{ id: MobielPaneel; label: string }> = [
-  { id: 'agent', label: 'Agent' },
   { id: 'files', label: 'Files' },
   { id: 'code', label: 'Code' },
-  { id: 'term', label: 'Terminal' },
+  { id: 'agent', label: 'Agent' },
   { id: 'preview', label: 'Preview' },
+  { id: 'git', label: 'Git' },
 ];
 
 export const PANEEL_KEY = 'axe_mobile_studio_paneel';
 
 /** Opgeslagen waarde -> paneel. Alles wat niet klopt is "nog niet gekozen" en opent op Code. */
 export function leesPaneel(raw: string | null | undefined): MobielPaneel {
+  if (raw === 'term') return 'code';
   return MOBIEL_PANELEN.some(p => p.id === raw) ? (raw as MobielPaneel) : 'code';
 }
 

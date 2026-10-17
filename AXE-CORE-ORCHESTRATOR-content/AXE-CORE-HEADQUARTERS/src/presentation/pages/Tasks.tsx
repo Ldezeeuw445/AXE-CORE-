@@ -15,6 +15,8 @@ import { isNorthseaWerk, northseaTaken, type WerkTaak } from '@/domain/northsea/
 import { PlannerTaken } from '@/presentation/components/tasks/PlannerTaken';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 import { taakAlsBron, voegWerkSamen } from '@/domain/werkBron';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import PhoneTasks from '@/presentation/pages/phone/PhoneTasks';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -126,6 +128,7 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
 }
 
 export default function Tasks() {
+  const phone = usePhoneApp();
   const [tasks, setTasks] = useState<Task[]>([]);
   /* De open taken van de NorthSea-desk. Die staan in AXE Commodities en niet
      in core_tasks, dus zonder dit blijft de NorthSea-kolom leeg terwijl er
@@ -364,6 +367,8 @@ export default function Tasks() {
     setNewTask(v => ({ ...v, app }));
     setAdding(true);
   };
+
+  if (phone) return <PhoneTasks />;
 
   return (
     /* Flexkolom: knoppen en cijfers vast, de takenlijst krijgt de rest. */

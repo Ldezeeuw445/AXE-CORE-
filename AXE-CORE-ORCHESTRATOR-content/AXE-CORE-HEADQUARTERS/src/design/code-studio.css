@@ -621,6 +621,7 @@
 :root[data-look] .axe-studio[data-mobiel='agent'] .axe-studio-kolommen > .axe-studio-editor,
 :root[data-look] .axe-studio[data-mobiel='term'] .axe-studio-kolommen > .axe-studio-editor { display: flex; flex-direction: column; }
 :root[data-look] .axe-studio[data-mobiel='preview'] .axe-studio-kolommen > .axe-studio-previewkaart { display: flex; flex-direction: column; }
+:root[data-look] .axe-studio[data-mobiel='git'] .axe-studio-kolommen { display: none; }
 
 /* In het editorvak: Code = tabs + bron; Agent = alleen de agent; Terminal = alleen de terminal. */
 :root[data-look] .axe-studio[data-mobiel] .axe-studio-kruimel { display: none; }

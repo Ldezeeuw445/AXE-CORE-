@@ -40,7 +40,7 @@ import { openPersonalComputerUse } from '@/infrastructure/gateways/windowManager
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 import { PhoneBel, PhoneVoet } from '@/presentation/components/layout/PhoneChrome';
 import { MobieleTabSchil } from '@/presentation/components/layout/MobieleTabSchil';
-import { isLockPad } from '@/domain/phone/phoneChrome';
+import { isLockPad, phoneZonderComposer } from '@/domain/phone/phoneChrome';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -211,7 +211,8 @@ export function AppShell() {
   // tabs (nog) ongemoeid blijven.
   // Alleen de 3D-kaart vult nog het hele scherm. De browser ligt in de randloze
   // tab-schil (zelfde composer), zonder zwevende plaat eromheen.
-  const volScherm = mobileNav && location.pathname === '/maps-3d';
+  // NorthSea is a phone app (composer + balk), not a full-bleed map.
+  const volScherm = false;
   // Alleen de telefoon-Home blijft de zwevende glasplaat (zoals vóór 31eaa88e).
   // Elke andere tab is randloos, van safe-area tot safe-area — geen kader.
   const telefoonHome = mobileNav && !opSlot && location.pathname === '/mobile';
@@ -234,7 +235,7 @@ export function AppShell() {
   // One phone composer belongs to the shell, just like Tauri. Mobile Home
   // already renders that same component inside MobileSystem, so every other
   // tab gets it here exactly once.
-  const toonMobieleTabComposer = mobielTab;
+  const toonMobieleTabComposer = mobielTab && !phoneZonderComposer(location.pathname);
   /* Smal als dock (Luka, 2 okt). Blijft staan als je van tab wisselt: smal is
      een keuze voor rust, en spraak en bestanden zitten er nog gewoon in. Tot
      2 okt klapte hij helemaal weg en kwam hij op elke nieuwe tab terug. */
@@ -544,7 +545,7 @@ export function AppShell() {
           - Telefoon / Android-shell (command-surface): de gedeelde A17-onderbalk
             (Home/Desk/Agents/Trading/More) plus de lade (MobileNav) achter More. */}
       {mobileNav && !opSlot && (
-        <PhoneVoet toonTabs={keyboardInset === 0} />
+        <PhoneVoet toonTabs={keyboardInset === 0 && location.pathname !== '/browser'} />
       )}
       {!mobileNav && keyboardInset === 0 && <BottomNav />}
       {mobileNav && !opSlot && <MobileNav />}
