@@ -1,6 +1,6 @@
 {
   "versie": 1,
-  "bijgewerkt": "2026-10-16T19:13:37Z",
+  "bijgewerkt": "2026-10-17T13:00:00Z",
   "canon": "docs/programma/canon/",
   "statussen": [
     "queued",
@@ -53,7 +53,7 @@
       "product": "northsea",
       "objective": "Index onder de budget-rem zodat elke insert niet meer scant",
       "phase": "N0",
-      "priority": "P0",
+      "priority": "P2",
       "status": "queued",
       "owner_agent": "claude",
       "approval_level": "B",
@@ -68,14 +68,14 @@
         "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql"
       ],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
       "blocker": null,
-      "next_action": "na herstart los uitvoeren (concurrently, buiten transactie)",
+      "next_action": "niet meer dringend: de lus is weg (NS-INC-3). Alleen nog als de budget-rem traag blijkt.",
       "rollback_reference": "drop index concurrently if exists public.deal_events_engine_dedupe_idx;"
     },
     {
@@ -84,7 +84,7 @@
       "objective": "northsea-mcp met deferred_until_reset (1c25cf93) live op de VPS",
       "phase": "N0",
       "priority": "P0",
-      "status": "waiting_approval",
+      "status": "done",
       "owner_agent": "mac-uitvoerder",
       "approval_level": "B",
       "dependencies": [
@@ -100,14 +100,14 @@
         "VPS /opt/northsea-mcp"
       ],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
-      "deployment_result": null,
-      "verification_result": "driftcontrole 15 okt 23:58: 30/34 bestanden gelijk aan orchestrator, 4 byte-gelijk aan 1c25cf93^; geen onbekend werk op de box",
-      "blocker": "vanuit de cloud blokkeert de veiligheidscontrole schrijven op de VPS (credential en remote shell); oude lus schrijft sinds 15 okt 17:00 weer ~900 rijen/uur",
-      "next_action": "iMac: deploy.sh check (moet precies 4 bestanden noemen) en deploy.sh deploy",
+      "deployment_result": "uitgerold door Luka (iMac), 17 okt tussen 12:00 en 12:15 UTC",
+      "verification_result": "17 okt: edge-logs AXE Commodities, tick 12:00 nog 145 POST deal_events + 142 PATCH action_queue, ticks 12:15 en 12:30 nul; action_queue sinds 12:00:48 niet meer bijgewerkt; engine-ticks ok",
+      "blocker": null,
+      "next_action": null,
       "rollback_reference": "bash backend/northsea_mcp/deploy/deploy.sh rollback"
     },
     {
@@ -198,14 +198,14 @@
         "Vault-naam axe_uptime_webhook"
       ],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
-      "blocker": "0 push-abonnementen: de bel vult zich, de telefoon hoort niets",
-      "next_action": "Luka: op de telefoon in AXE Core meldingen toestaan (registreert het abonnement)",
+      "blocker": "17 okt: 0 push-abonnementen",
+      "next_action": "telefoon: Settings, Notifications, Turn on for this device (eigenaar-actie phone-push meet core_push_subscriptions)",
       "rollback_reference": null
     },
     {
@@ -214,7 +214,7 @@
       "objective": "/health van de AXE Core API controleert afhankelijkheden: Supabase, lease-versheid task worker, laatste tick, northsea-mcp",
       "phase": "fundament",
       "priority": "P1",
-      "status": "queued",
+      "status": "verifying",
       "owner_agent": "claude",
       "approval_level": "B",
       "dependencies": [],
@@ -223,17 +223,20 @@
         "vps_sync check groen na uitrol"
       ],
       "files_or_services_touched": [
+        "backend/axe_api/gezondheid.py",
         "backend/axe_api/main.py"
       ],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
-      "tests_run": [],
+      "tests_run": [
+        "test_gezondheid 7, test_health_endpoint 2, test_cancel_endpoint 11: geslaagd"
+      ],
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
       "blocker": null,
-      "next_action": null,
+      "next_action": "uitrol via vps_sync (eigenaar-actie axe-api-deploy meet /health op checks)",
       "rollback_reference": null
     },
     {
@@ -242,7 +245,7 @@
       "objective": "vps_sync-manifest compleet: de ~11 modules die main.py importeert, en actiontype dax terug in git",
       "phase": "fundament",
       "priority": "P1",
-      "status": "queued",
+      "status": "verifying",
       "owner_agent": "mac-uitvoerder",
       "approval_level": "B",
       "dependencies": [],
@@ -252,17 +255,19 @@
       ],
       "files_or_services_touched": [
         "scripts/vps_sync.py",
-        "backend/axe_api/planning.py"
+        "scripts/test_vps_sync.py"
       ],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
-      "tests_run": [],
+      "tests_run": [
+        "scripts/test_vps_sync.py 6 geslaagd; de nieuwe sluitingstest faalt aantoonbaar op het oude manifest (13 modules)"
+      ],
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
       "blocker": null,
-      "next_action": null,
+      "next_action": "python3 scripts/vps_sync.py check op de iMac: de 13 nieuwe regels voor het eerst vergelijken met de box",
       "rollback_reference": null
     },
     {
@@ -441,21 +446,21 @@
       "objective": "tradingosapp.com weer online",
       "phase": "T10",
       "priority": "P0",
-      "status": "waiting_approval",
+      "status": "done",
       "owner_agent": "luka",
       "approval_level": "C",
       "dependencies": [],
       "acceptance_criteria": [],
       "files_or_services_touched": [],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
-      "verification_result": null,
-      "blocker": "Vercel 402: betaling of andere host is een billingbesluit",
-      "next_action": "Luka kiest: Vercel betalen, of Cloudflare Pages zoals AXE Core",
+      "verification_result": "17 okt 09:15 UTC: apex en www 200, titel \"Trading OS\", via Cloudflare",
+      "blocker": null,
+      "next_action": null,
       "rollback_reference": null
     },
     {
@@ -507,7 +512,7 @@
         "axon-memory-app: supabase/migrations/20261015100000_a_key_is_made_by_the_server.sql"
       ],
       "started_at": "2026-10-16T07:30:00Z",
-      "last_progress_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
       "tests_run": [
         "wegwerp-Postgres 16 met Supabase-rollen: voor = eigen sleutel invoegen lukte; na = insert/hash/delete/terughalen geweigerd (42501), anon geweigerd, eigen hernoemen en intrekken werkt, service role werkt"
@@ -515,8 +520,8 @@
       "build_result": "n.v.t. (alleen SQL)",
       "deployment_result": "niet toegepast: geen toegang tot het AXON-project",
       "verification_result": null,
-      "blocker": "AXON-project niet bereikbaar vanuit deze sessie",
-      "next_action": "Luka/iMac: migratie toepassen via Supabase MCP, bestandsnaam gelijk aan ledger-versie maken; PR Ldezeeuw445/axon-memory-app#2 mergen",
+      "blocker": "AXON-project niet bereikbaar vanuit de cloudsessie",
+      "next_action": "volgens Luka toegepast; meten kan de bewaker zodra AXON_SUPABASE_URL en AXON_SUPABASE_ANON_KEY op de mini staan (eigenaar-actie axon-key-migration)",
       "rollback_reference": "terugdraai-SQL onderaan de migratie"
     },
     {
@@ -579,7 +584,7 @@
       "objective": "OAuth: PKCE alleen S256, tokens met verloop, scopes afgedwongen, toestemmingsscherm toont de geregistreerde client",
       "phase": "A6",
       "priority": "P0",
-      "status": "verifying",
+      "status": "done",
       "owner_agent": "claude",
       "approval_level": "B",
       "dependencies": [],
@@ -588,7 +593,7 @@
         "axon-memory-app: MCP/OAuth"
       ],
       "started_at": "2026-10-16T07:30:00Z",
-      "last_progress_at": "2026-10-16T07:30:00Z",
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
       "tests_run": [
         "oauth-client: 6/6 onder node --experimental-strip-types",
@@ -598,10 +603,10 @@
         "screenshot 375x812 van beide gevallen"
       ],
       "build_result": null,
-      "deployment_result": "niet uitgerold: PR Ldezeeuw445/axon-memory-app#2",
-      "verification_result": null,
+      "deployment_result": "PR Ldezeeuw445/axon-memory-app#2 gemerged 17 okt 12:06 UTC; functions en frontend daarna uitgerold",
+      "verification_result": "17 okt: oauth-metadata biedt alleen S256; de live bundel bevat het nieuwe toestemmingsscherm",
       "blocker": null,
-      "next_action": "mini: functies mcp-oauth-consent, mcp-oauth-token, oauth-metadata en de frontend uitrollen",
+      "next_action": null,
       "rollback_reference": null
     },
     {
@@ -769,7 +774,7 @@
       "objective": "RLS op AXE Commodities live bewijzen (anon en authenticated lezen niets)",
       "phase": "N0",
       "priority": "P0",
-      "status": "queued",
+      "status": "waiting_approval",
       "owner_agent": "claude",
       "approval_level": "A",
       "dependencies": [
@@ -778,17 +783,19 @@
       "acceptance_criteria": [
         "anon-select op elke tabel geeft 0 rijen of 401"
       ],
-      "files_or_services_touched": [],
+      "files_or_services_touched": [
+        "supabase/northsea/migrations/20261017130000_northsea_open_tabellen_dicht.sql"
+      ],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T13:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
-      "verification_result": null,
-      "blocker": null,
-      "next_action": null,
-      "rollback_reference": null
+      "verification_result": "17 okt, als rol anon: alle dealtabellen 0 rijen (RLS aan, geen policies). Open: hq_messages, hq_notes, hq_settings (allow_all voor public, lezen en schrijven; leeg, door geen repo gebruikt) en data_centers (insert voor public).",
+      "blocker": "apply_migration via de Supabase-koppeling liep vast op de goedkeuring (60 s)",
+      "next_action": "Luka: supabase/northsea/migrations/20261017130000_northsea_open_tabellen_dicht.sql plakken in de SQL Editor van AXE Commodities; daarna opnieuw meten als anon",
+      "rollback_reference": "terugdraai-regels onderaan de migratie"
     },
     {
       "id": "NS-N0-2",

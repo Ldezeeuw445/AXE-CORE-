@@ -392,6 +392,16 @@ class WebhookIngest(BaseModel):
 
 @app.get("/health")
 async def health():
+    # status blijft "ok" zolang dit proces leeft; wat er naast de API stilligt
+    # (Supabase, de crontab, de task worker, northsea-mcp) staat in checks en
+    # degraded. Zie gezondheid.py; gemeten hooguit eens per 20 s. Ontbreekt de
+    # module op de box, dan blijft /health gewoon antwoorden: anders meldt de
+    # bewaker de hele API offline om een meting die erbij hoort.
+    try:
+        import gezondheid
+        extra = await gezondheid.controles(SUPABASE_URL, SUPABASE_SRK)
+    except ImportError:
+        extra = {"checks": {}, "degraded": [], "checks_missing": "gezondheid.py not deployed"}
     return {
         "status": "ok",
         "service": "axe-core-api",
@@ -400,6 +410,7 @@ async def health():
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
         "cron": bool(CRON_SECRET),
+        **extra,
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -4461,6 +4472,11 @@ async def cron_tick(
     provided = x_cron_secret or x_cron_key
     if not CRON_SECRET or provided != CRON_SECRET:
         raise HTTPException(401, "Invalid cron secret")
+    try:
+        import gezondheid
+        gezondheid.tick_ontvangen()
+    except ImportError:
+        pass
     now = datetime.now(timezone.utc)
 
     # Whole body guarded: this used to have no try/except at all. The

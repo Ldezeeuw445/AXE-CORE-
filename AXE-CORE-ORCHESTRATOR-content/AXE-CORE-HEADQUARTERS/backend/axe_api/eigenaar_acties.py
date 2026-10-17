@@ -77,6 +77,19 @@ ACTIES = (
                "in .env.local on the Mac mini.",
     },
     {
+        "id": "axe-api-deploy",
+        "title": "AXE Core API: deploy /health with dependency checks and the complete manifest",
+        "how": "On the iMac in the HQ folder: python3 scripts/vps_sync.py check. Expect REPO AHEAD for "
+               "main.py and gezondheid.py; if anything says BOX DRIFT, run the capture line it prints "
+               "and commit that first. Then python3 scripts/vps_sync.py deploy.",
+    },
+    {
+        "id": "phone-push",
+        "title": "Phone: allow AXE Core notifications",
+        "how": "On the phone, in the installed AXE Core app (axeheadquarters.com): Settings, "
+               "the notifications card, 'Turn on for this device'. That registers the push subscription.",
+    },
+    {
         "id": "northsea-inventory-job-off",
         "title": "Scheduler: switch off the one-off NorthSea inventory job",
         "how": "Supabase SQL editor: update public.core_schedules set enabled = false "
@@ -164,6 +177,27 @@ async def _axon_migratie(client, supabase_url, key, env, nu):
     return None, f"cannot measure: api_keys answered {r.status_code}"
 
 
+async def _api_health(client, supabase_url, key, env, nu):
+    """Na de uitrol van CORE-HEALTH-1 heeft /health een veld checks."""
+    url = (env.get("AXE_MONITOR_API_URL") or "https://api.axecompanion.com").rstrip("/")
+    r = await client.get(url + "/health")
+    data = r.json() if r.is_success else None
+    if not isinstance(data, dict):
+        return None, f"cannot measure: /health answered {r.status_code}"
+    if "checks" in data:
+        return True, "live; degraded: " + (", ".join(data.get("degraded") or []) or "none")
+    return False, "/health has no dependency checks yet (old main.py)"
+
+
+async def _push_abonnement(client, supabase_url, key, env, nu):
+    r = await client.get(supabase_url + "/rest/v1/core_push_subscriptions", headers=_rest(key),
+                         params={"select": "id", "limit": "1"})
+    rijen = r.json() if r.is_success else None
+    if not isinstance(rijen, list):
+        return None, f"cannot measure: core_push_subscriptions answered {r.status_code}"
+    return bool(rijen), "subscribed" if rijen else "0 push subscriptions: the phone hears nothing"
+
+
 async def _inventaris_uit(client, supabase_url, key, env, nu):
     r = await client.get(supabase_url + "/rest/v1/core_schedules", headers=_rest(key),
                          params={"select": "enabled", "job_key": "eq.northsea:uitrol-inventaris"})
@@ -180,6 +214,8 @@ METINGEN: dict[str, Meting] = {
     "product-registry": _productregister,
     "axon-pr2-live": _axon_live,
     "axon-key-migration": _axon_migratie,
+    "axe-api-deploy": _api_health,
+    "phone-push": _push_abonnement,
     "northsea-inventory-job-off": _inventaris_uit,
 }
 

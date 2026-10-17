@@ -1,6 +1,7 @@
 """vps_sync: manifest, optionele MISSING, worker-imports."""
 from __future__ import annotations
 
+import ast
 import os
 import sys
 
@@ -77,3 +78,59 @@ def test_weiger_task_worker_zonder_agent_loop_imports():
          "northsea_desk_handler.py", "provider_router.py"},
     ) == []
     assert vs.ontbrekende_worker_imports({"push_meldingen.py"}, set()) == []
+
+
+# ── CORE-SYNC-1: alles wat de diensten importeren staat in het manifest ─────────
+#
+# Het manifest werd met de hand bijgehouden, en elke keer dat iemand een module
+# toevoegde aan main.py zonder het manifest, kon een fix eraan niet worden
+# uitgerold of op drift gecontroleerd (zie de commentaren in MANIFEST: #199,
+# 23 sep, 10 okt). Op 17 okt ontbraken er dertien. Deze test rekent de importketen
+# uit, ook imports binnen functies, en weigert een lokale module die nergens staat.
+
+API = os.path.join(vs.HQ, "backend", "axe_api")
+STARTPUNTEN = ("main", "task_worker", "browser_agent_app")
+# Lokale modules die bewust NIET naar de VPS gaan, met waarom.
+NIET_OP_DE_VPS: dict[str, str] = {}
+
+
+def _lokale_imports(naam: str, lokaal: set[str]) -> set[str]:
+    with open(os.path.join(API, naam + ".py"), encoding="utf-8") as fh:
+        boom = ast.parse(fh.read())
+    uit = set()
+    for knoop in ast.walk(boom):
+        if isinstance(knoop, ast.Import):
+            uit.update(a.name.split(".")[0] for a in knoop.names)
+        elif isinstance(knoop, ast.ImportFrom) and knoop.module and knoop.level == 0:
+            uit.add(knoop.module.split(".")[0])
+    return uit & lokaal
+
+
+def _sluiting(start: str, lokaal: set[str]) -> set[str]:
+    gezien, todo = set(), [start]
+    while todo:
+        naam = todo.pop()
+        if naam not in gezien:
+            gezien.add(naam)
+            todo.extend(_lokale_imports(naam, lokaal))
+    return gezien
+
+
+def test_import_sluiting_staat_in_het_manifest():
+    lokaal = {f[:-3] for f in os.listdir(API) if f.endswith(".py") and not f.startswith("test_")}
+    in_manifest = {rel for rel, _unit in vs.MANIFEST.values()}
+    ontbreekt = set()
+    for start in STARTPUNTEN:
+        for naam in _sluiting(start, lokaal):
+            if f"backend/axe_api/{naam}.py" not in in_manifest and naam not in NIET_OP_DE_VPS:
+                ontbreekt.add(naam)
+    assert not ontbreekt, (
+        f"main.py of de worker importeert {sorted(ontbreekt)}, maar vps_sync kent ze niet: "
+        "zet ze in MANIFEST (of met reden in NIET_OP_DE_VPS)")
+
+
+def test_optionele_imports_gaan_niet_ongevraagd_naar_de_box():
+    for remote in ("/opt/axe-core-api/agent_runner.py", "/opt/axe-core-api/agent_tunnel.py",
+                   "/opt/axe-core-api/trading_cockpit.py"):
+        assert remote in vs.MANIFEST and remote in vs.OPTIONAL_WHEN_MISSING, remote
+

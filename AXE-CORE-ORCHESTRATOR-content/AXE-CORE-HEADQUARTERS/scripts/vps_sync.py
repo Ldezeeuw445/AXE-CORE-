@@ -147,6 +147,29 @@ MANIFEST = {
     "/opt/axe-core-api/agent_tiers.json": ("backend/axe_api/agent_tiers.json", "axe-task-worker"),
     "/opt/axe-core-api/northsea_desk_handler.py": ("backend/axe_api/northsea_desk_handler.py", "axe-task-worker"),
     "/opt/axe-core-api/taak_fout.py": ("backend/axe_api/taak_fout.py", "axe-core-api"),
+    # CORE-SYNC-1 (17 okt 2026): dertien modules die main.py importeert stonden er niet in,
+    # gevonden door test_import_sluiting_staat_in_het_manifest. main.py importeert deze
+    # tien bij het opstarten (proxy_ai_stream, browser_ai_agents, mcp_hub, northsea*),
+    # of via browser_ai_agents. De API draait, dus ze staan op de box; alleen keek
+    # niemand of het dezelfde versie was.
+    "/opt/axe-core-api/proxy_ai_stream.py": ("backend/axe_api/proxy_ai_stream.py", "axe-core-api"),
+    "/opt/axe-core-api/browser_ai_agents.py": ("backend/axe_api/browser_ai_agents.py", "axe-core-api"),
+    "/opt/axe-core-api/browser_use_runner.py": ("backend/axe_api/browser_use_runner.py", "axe-core-api"),
+    "/opt/axe-core-api/browser_task_store.py": ("backend/axe_api/browser_task_store.py", "axe-core-api"),
+    "/opt/axe-core-api/camofox_client.py": ("backend/axe_api/camofox_client.py", "axe-core-api"),
+    "/opt/axe-core-api/camofox_runner.py": ("backend/axe_api/camofox_runner.py", "axe-core-api"),
+    "/opt/axe-core-api/mcp_hub.py": ("backend/axe_api/mcp_hub.py", "axe-core-api"),
+    "/opt/axe-core-api/northsea.py": ("backend/axe_api/northsea.py", "axe-core-api"),
+    "/opt/axe-core-api/northsea_gateway.py": ("backend/axe_api/northsea_gateway.py", "axe-core-api"),
+    "/opt/axe-core-api/northsea_verstuur.py": ("backend/axe_api/northsea_verstuur.py", "axe-core-api"),
+    # Deze drie laadt main.py alleen in een try of achter een omgevingsvariabele. Of ze op
+    # de box staan is niet gemeten; daarom ook in OPTIONAL_WHEN_MISSING, zodat deploy ze
+    # niet ongevraagd neerzet (agent_runner op de VPS zou /claude/* aanzetten).
+    "/opt/axe-core-api/agent_runner.py": ("backend/axe_api/agent_runner.py", "axe-core-api"),
+    "/opt/axe-core-api/agent_tunnel.py": ("backend/axe_api/agent_tunnel.py", "axe-core-api"),
+    "/opt/axe-core-api/trading_cockpit.py": ("backend/axe_api/trading_cockpit.py", "axe-core-api"),
+    # CORE-HEALTH-1: /health meet de afhankelijkheden (Supabase, tick, worker, northsea-mcp).
+    "/opt/axe-core-api/gezondheid.py": ("backend/axe_api/gezondheid.py", "axe-core-api"),
 }
 
 # MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).
@@ -155,13 +178,16 @@ OPTIONAL_WHEN_MISSING = {
     "/opt/axe-tts/app.py",
     "/etc/systemd/system/axe-tts.service",
     "/opt/axe-core-api/cli_laag.py",
+    "/opt/axe-core-api/agent_runner.py",
+    "/opt/axe-core-api/agent_tunnel.py",
+    "/opt/axe-core-api/trading_cockpit.py",
 }
 
 # Wie wie nodig heeft. Ship je de één zonder de ander, dan start de worker niet.
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "taak_fout.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "taak_fout.py", "gezondheid.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"
