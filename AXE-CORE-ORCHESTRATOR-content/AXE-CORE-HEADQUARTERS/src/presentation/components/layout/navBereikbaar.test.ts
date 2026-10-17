@@ -27,7 +27,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/device': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
   '/devices': 'inventory van AXE-installaties; command palette (navRegistry), naast /device',
   '/lock': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
-  '/lock/pin': 'Android gesture-PIN; AndroidLockGate opent hem, desktop slaat hem over',
+  '/lock/pin': 'Android cijfer-PIN; AndroidLockGate opent hem alleen als er een PIN staat',
   '/': 'Home heeft zijn eigen icoon, staat als eerste in leftItems',
   '/mobile': 'Alleen voor het telefoonoppervlak',
   '/login': 'Voor wie niet ingelogd is; dan is er geen balk',
