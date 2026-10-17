@@ -17,6 +17,7 @@ import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { useAxeDeviceHeartbeat } from '@/presentation/hooks/useAxeDeviceHeartbeat';
 import { AndroidLockGate } from '@/presentation/hooks/useAndroidLock';
 import { isAndroidTauriRuntime, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { vergrendel, wisPin, zetCijferPin } from '@/domain/androidPin';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
 import MemoryScenePreview from '@/presentation/pages/MemoryScenePreview';
@@ -67,10 +68,12 @@ const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
 const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
 const AxeDevicesPage = lazy(() => import('@/presentation/pages/AxeDevices'));
 const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
-const ParticlePinScreen = lazy(() => import('@/presentation/pages/ParticlePinScreen'));
+const PhonePinScreen = lazy(() => import('@/presentation/pages/PhonePinScreen'));
 
 function androidNaLogin(): string {
-  return (isAndroidTauriRuntime() || isAndroidShellRuntime()) ? '/lock/pin' : '/';
+  // Native lockscreen (swipe) is de enige glance. Daarna Home; de gate toont
+  // alleen een cijfer-keypad als er een PIN staat — nooit het particle-scherm.
+  return (isAndroidTauriRuntime() || isAndroidShellRuntime()) ? '/mobile' : '/';
 }
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
@@ -210,9 +213,22 @@ export default function App() {
   // Playwright/ontwerp: stemstand zetten zonder echte mic, voor mic-aan/uit shots.
   useEffect(() => {
     if (!ontwerpModus()) return;
-    const w = window as unknown as { __axeZetStem?: (s: Record<string, unknown>) => void };
+    const w = window as unknown as {
+      __axeZetStem?: (s: Record<string, unknown>) => void;
+      __axeZetPin?: (pin: string) => Promise<void>;
+      __axeWisPin?: () => Promise<void>;
+      __axeVergrendel?: () => void;
+    };
     w.__axeZetStem = (s) => { useVoiceStore.setState(s as never); };
-    return () => { delete w.__axeZetStem; };
+    w.__axeZetPin = async (pin) => { await zetCijferPin(pin); vergrendel(); };
+    w.__axeWisPin = async () => { await wisPin(); };
+    w.__axeVergrendel = () => { vergrendel(); };
+    return () => {
+      delete w.__axeZetStem;
+      delete w.__axeZetPin;
+      delete w.__axeWisPin;
+      delete w.__axeVergrendel;
+    };
   }, []);
 
   return (
@@ -282,7 +298,7 @@ export default function App() {
                 (zie AppShell): alle chrome weg, de plaat blijft eronder, dus
                 exact de app-look met licht/donker. */}
             <Route path="lock" element={<LockScreen />} />
-            <Route path="lock/pin" element={<ParticlePinScreen />} />
+            <Route path="lock/pin" element={<PhonePinScreen />} />
           </Route>
         </Routes>
       </NotificationProvider>

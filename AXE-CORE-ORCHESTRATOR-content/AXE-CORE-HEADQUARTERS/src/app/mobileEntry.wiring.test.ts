@@ -14,6 +14,14 @@ describe('mobile PWA entry', () => {
     expect(app).toContain('<Route index element={<HomeEntry />} />');
   });
 
+  it('stuurt Android na login naar /mobile, nooit naar het particle-PIN', () => {
+    const app = read('src/app/App.tsx');
+    expect(app).toContain("? '/mobile' : '/'");
+    expect(app).not.toContain("? '/lock/pin'");
+    expect(app).toContain("lock/pin\" element={<PhonePinScreen />}");
+    expect(app).not.toContain('ParticlePinScreen');
+  });
+
   it('keeps the PWA install identity stable and starts on mobile', () => {
     const manifest = JSON.parse(read('public/manifest.json')) as {
       id?: string;

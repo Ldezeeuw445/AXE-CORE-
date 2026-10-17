@@ -17,11 +17,25 @@ describe('lock-pad deelt geen Home-schil', () => {
     expect(shell).toContain('{!opSlot && <GlobalCommandPalette />}');
   });
 
-  it('toont geen rode Secure-storage-fout op het particle-slot', () => {
-    const pin = bron('presentation/pages/ParticlePinScreen.tsx');
-    expect(pin).toContain("setModus('setup')");
-    expect(pin).toContain('fout !== OPSLAG_DICHT');
-    expect(pin).not.toContain("setModus('dicht')");
+  it('telefoon-PIN is een cijfer-keypad zonder particle-canvas', () => {
+    const pin = bron('presentation/pages/PhonePinScreen.tsx');
     expect(pin).toContain('data-axe-lock-pin');
+    expect(pin).toContain('data-axe-pin-soort="numeric"');
+    expect(pin).toContain('data-axe-pin-pad');
+    expect(pin).toContain('data-axe-pin-overslaan');
+    expect(pin).toContain('Enter PIN');
+    expect(pin).not.toContain('ParticleGestureField');
+    expect(pin).not.toContain('<canvas');
+    expect(pin).not.toContain('Draw your code');
+    expect(pin).toContain("fout !== OPSLAG_DICHT");
+  });
+
+  it('Android-gate toont PIN alleen als telefoonPinNodig, anders Home', () => {
+    const gate = bron('presentation/hooks/useAndroidLock.tsx');
+    expect(gate).toContain('telefoonPinNodig');
+    expect(gate).toContain('ontgrendel()');
+    expect(gate).toContain('Navigate to="/lock/pin"');
+    expect(gate).toContain('androidPinPad');
+    expect(gate).not.toContain('ParticlePinScreen');
   });
 });

@@ -77,7 +77,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/device', label: 'Device Manager', keywords: ['device manager', 'device', 'phone', 'samsung', 'a17', 'toestel', 'telefoon', 'adb', 'mobile device'] },
   { path: '/devices', label: 'Devices', keywords: ['devices', 'device inventory', 'installations', 'presence', 'samsung', 'mac mini'] },
   { path: '/lock', label: 'Lock Screen', keywords: ['lock screen', 'lockscreen', 'vergrendelscherm', 'glance', 'lock', 'slot', 'startscherm'] },
-  { path: '/lock/pin', label: 'Android PIN', keywords: ['android pin', 'gesture lock', 'particle pin', 'slot'] },
+  { path: '/lock/pin', label: 'Android PIN', keywords: ['android pin', 'numeric pin', 'keypad', 'slot'] },
   { path: '/organization', label: 'Organization', keywords: ['organization', 'org', 'team', 'org chart'] },
   { path: '/terminal', label: 'Terminal', keywords: ['terminal', 'console', 'shell', 'command line'] },
   { path: '/terminals', label: 'Terminals', keywords: ['terminals', 'machines', 'mac mini', 'imac', 'vps', 'ssh', 'hosts', 'worker starten'] },
