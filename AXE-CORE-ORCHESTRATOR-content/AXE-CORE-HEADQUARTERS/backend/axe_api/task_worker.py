@@ -103,6 +103,26 @@ def verification_evidence(result: dict[str, Any]) -> dict[str, Any]:
     return {"passed": all(item["passed"] for item in checks), "checks": checks}
 
 
+def blokkade_uit_rapport(result: dict[str, Any]) -> dict[str, Any] | None:
+    """Zegt de agent zelf dat hij vastzit of Luka nodig heeft? Dan is de taak niet klaar.
+
+    Een bewezen "MILESTONE: blocked REASON: ..." of "MILESTONE: human REASON: ..."
+    werd tot 11 okt als voltooid opgeslagen; alleen de missie wist beter. Nu
+    wordt de taak zelf 'blocked' met de reden, zodat geen enkele lijst hem als
+    gedaan toont.
+    """
+    try:
+        from missies import lees_rapport
+    except Exception:  # noqa: BLE001
+        return None
+    oordeel, toelichting = lees_rapport(str(result.get("summary") or ""))
+    if oordeel == "blocked":
+        return {"code": "agent_blocked", "message": toelichting or "The agent reported it is blocked."}
+    if oordeel == "human":
+        return {"code": "needs_human", "message": toelichting or "The agent needs a decision from Luka."}
+    return None
+
+
 class TaskContext:
     def __init__(self, repo: TaskRepository, task: dict[str, Any], lease_seconds: int):
         self.repo = repo
@@ -224,6 +244,22 @@ class TaskWorker:
                 "AXE verified the persisted coding-agent evidence.",
                 evidence,
             )
+            geblokkeerd = blokkade_uit_rapport(result)
+            if geblokkeerd is not None:
+                # Bewezen dat hij het probeerde, maar hij zit vast: dat is GEEN
+                # voltooide taak. 'blocked' met de reden; de missie neemt het over.
+                await context.event("task.blocked", geblokkeerd["message"][:500], geblokkeerd)
+                await asyncio.to_thread(
+                    self.repo.transition,
+                    task["id"],
+                    "blocked",
+                    worker_id=self.worker_id,
+                    lease_token=context.task["lease_token"],
+                    checkpoint=context.task.get("checkpoint") or {},
+                    result={**result, "verification": evidence, "outcome": geblokkeerd["code"]},
+                    error=geblokkeerd,
+                )
+                return True
             await asyncio.to_thread(
                 self.repo.transition,
                 task["id"],
@@ -428,7 +464,10 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
                 "The integration target is orchestrator; push/merge remains subject to AXE approval "
                 "rules and you must not claim it is live until that integration actually succeeds."
             )
-        crew_ids = crew_voor(agent_ws)
+        # Een missie kan de CrewAI-ronde uitzetten (payload.crew=False): de vaste
+        # DAX-routines doen hun werk met een script op de eigen computer, en een
+        # crew van ~185 MB op de VPS per ronde voegt daar alleen gepraat aan toe.
+        crew_ids = crew_voor(agent_ws) if payload.get("crew", True) is not False else []
         if crew_ids:
             from crew_runner import run_crew
             await context.event("axe.progress", "CrewAI running from this agent's workspace.", {
@@ -454,6 +493,7 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             device=str(pinned_device) if pinned_device else None,
             should_stop=should_stop,
             dax=uitvoerder,
+            alleen_gratis=payload.get("free_models") is True,
         )
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})

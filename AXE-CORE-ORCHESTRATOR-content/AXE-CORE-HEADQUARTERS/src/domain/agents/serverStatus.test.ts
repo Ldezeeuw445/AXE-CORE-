@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { missieVoortgang, serverStand, type ServerAgent } from './serverStatus';
+import { daxRegel, missieVoortgang, serverStand, type ServerAgent } from './serverStatus';
 
 const basis = (p: Partial<ServerAgent>): ServerAgent => ({
   agent: 'developer', status: 'SLEEPING', reason: 'Nothing runnable for this agent.', events: [], ...p,
@@ -30,5 +30,33 @@ describe('Home toont wat de server echt ziet', () => {
     expect(serverStand(basis({ status: 'QUEUED', mission })).regel).toBe('Work on: API');
     expect(missieVoortgang(mission)).toBe('2/5 · 40%');
     expect(missieVoortgang(null)).toBe('');
+  });
+});
+
+describe('de eigen computer (DAX) zegt alleen wat gemeten is', () => {
+  const nu = Date.parse('2026-10-11T12:00:00Z');
+  it('wakker alleen met een verse heartbeat', () => {
+    const r = daxRegel(basis({ dax_computer: 'dax-trading-01', dax_status: 'running',
+      dax_heartbeat_at: '2026-10-11T11:57:00Z', dax_routine: 'Market data check' }), nu);
+    expect(r).toMatchObject({ wakker: true, blokkade: '' });
+    expect(r?.tekst).toBe('Computer dax-trading-01 · awake · heartbeat 3m ago · Market data check');
+  });
+
+  it('running in het register zonder recente meting is niet wakker', () => {
+    const r = daxRegel(basis({ dax_computer: 'dax-browser-01', dax_status: 'running',
+      dax_heartbeat_at: '2026-10-11T10:00:00Z' }), nu);
+    expect(r?.wakker).toBe(false);
+    expect(r?.tekst).toContain('no recent heartbeat · heartbeat 120m ago');
+  });
+
+  it('nooit gemeten en blokkades staan er letterlijk', () => {
+    const r = daxRegel(basis({ dax_computer: 'dax-developer-01', dax_status: 'provisioned',
+      dax_blockers: ['github.com unreachable from this DAX (HTTP 0)'] }), nu);
+    expect(r?.tekst).toContain('provisioned · never measured');
+    expect(r?.blokkade).toBe('github.com unreachable from this DAX (HTTP 0)');
+  });
+
+  it('geen DAX, geen regel', () => {
+    expect(daxRegel(basis({}), nu)).toBeNull();
   });
 });
