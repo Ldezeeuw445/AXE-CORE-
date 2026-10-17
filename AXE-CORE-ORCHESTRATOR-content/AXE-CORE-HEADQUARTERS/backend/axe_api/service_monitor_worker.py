@@ -173,7 +173,7 @@ async def tick(client, monitor, api_url, local_url, supabase_url, key, state_dir
     results = await probes(client, api_url, local_url, supabase_url, key)
     # Wat alleen Luka kan doen, gemeten in plaats van onthouden (eigenaar_acties.py).
     # Herinneren alleen met een eigen map: daar staat welke dag al herinnerd is.
-    owner_actions = await eigenaar_acties.meet(client, supabase_url, key, os.environ, datetime.now(timezone.utc))
+    owner_actions = await eigenaar_acties.meet_af_en_toe(client, supabase_url, key, os.environ, datetime.now(timezone.utc))
     if state_dir is not None:
         try:
             await eigenaar_acties.herinner(client, supabase_url, key, owner_actions, datetime.now(timezone.utc), state_dir)

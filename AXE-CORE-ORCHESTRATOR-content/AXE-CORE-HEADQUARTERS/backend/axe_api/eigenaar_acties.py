@@ -32,6 +32,11 @@ AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 HERINNER_VANAF_UUR = 8
 BOUW_REPOS = ("trading-os", "axe-companion", "axon-memory")
 AXON_OAUTH = "https://mcp.axon-memory.com/.well-known/oauth-authorization-server"
+AXON_APP = "https://app.axon-memory.com"
+# Een zin die alleen de toestemmingspagina van PR #2 heeft (src/pages/ConnectAuthorize.jsx).
+AXON_CONSENT_TEKST = "AXON has not verified this app"
+# Meten kost een paar verzoeken en één bundel van ~2 MB; elke minuut is zonde.
+MEET_ELKE = timedelta(minutes=15)
 # De lus van vóór 1c25cf93 werkt elke tick ~85 action_queue-rijen bij (gemeten 17 okt:
 # 146 rijen in 20 minuten). Na de fix wacht een budgetstempel tot de volgende dag.
 NORTHSEA_LUS_VENSTER = timedelta(minutes=20)
@@ -59,9 +64,17 @@ ACTIES = (
     },
     {
         "id": "axon-pr2-live",
-        "title": "AXON: put PR #2 live (key RLS, consent screen, S256 only)",
-        "how": "Merge Ldezeeuw445/axon-memory-app#2, then run the deploy steps from its description "
-               "on the Mac mini (migration, edge functions, frontend).",
+        "title": "AXON: put the PR #2 frontend live (consent screen)",
+        "how": "On the Mac mini, in axon-memory-app on main: npm run build && "
+               "npx wrangler pages deploy dist --project-name axon-app --branch main.",
+    },
+    {
+        "id": "axon-key-migration",
+        "title": "AXON: apply the API-key migration from PR #2",
+        "how": "Apply supabase/migrations/20261015100000_a_key_is_made_by_the_server.sql to the AXON "
+               "project (Supabase MCP on the Mac mini), then rename it to the ledger version. "
+               "To let AXE measure it: AXON_SUPABASE_URL and AXON_SUPABASE_ANON_KEY (public values) "
+               "in .env.local on the Mac mini.",
     },
     {
         "id": "northsea-inventory-job-off",
@@ -115,13 +128,40 @@ async def _productregister(client, supabase_url, key, env, nu):
     return len(rijen) == 1, "NorthSea is registered" if rijen else "NorthSea row missing"
 
 
-async def _axon_pkce(client, supabase_url, key, env, nu):
+async def _axon_live(client, supabase_url, key, env, nu):
+    """Functions en frontend van PR #2. De functions bleken op 17 okt eerder live dan de
+    frontend; alleen samen is het af."""
     r = await client.get(AXON_OAUTH)
     data = r.json() if r.is_success else None
     if not isinstance(data, dict) or not isinstance(data.get("code_challenge_methods_supported"), list):
         return None, f"cannot measure: OAuth metadata answered {r.status_code}"
     methodes = data["code_challenge_methods_supported"]
-    return methodes == ["S256"], "PKCE methods offered: " + ", ".join(map(str, methodes))
+    if methodes != ["S256"]:
+        return False, "edge functions not deployed (PKCE offers " + ", ".join(map(str, methodes)) + ")"
+    pagina = await client.get(AXON_APP + "/")
+    bundels = sorted(set(re.findall(r'/assets/[A-Za-z0-9_.-]+\.js', pagina.text))) if pagina.is_success else []
+    if not bundels:
+        return None, f"cannot measure: the app answered {pagina.status_code} without a bundle"
+    for pad in bundels:
+        b = await client.get(AXON_APP + pad)
+        if b.is_success and AXON_CONSENT_TEKST in b.text:
+            return True, "functions and consent screen are live"
+    return False, "functions live, frontend still the old build"
+
+
+async def _axon_migratie(client, supabase_url, key, env, nu):
+    """Na de migratie heeft anon geen enkel recht meer op api_keys; ervoor gaf RLS een
+    lege lijst. Met de publieke anon-sleutel, precies wat elke browser ook heeft."""
+    url = (env.get("AXON_SUPABASE_URL") or "").strip().rstrip("/")
+    anon = (env.get("AXON_SUPABASE_ANON_KEY") or "").strip()
+    if not url or not anon:
+        return None, "cannot measure here: no AXON_SUPABASE_URL / AXON_SUPABASE_ANON_KEY on this host"
+    r = await client.get(url + "/rest/v1/api_keys", headers=_rest(anon), params={"select": "id", "limit": "1"})
+    if r.status_code in (401, 403):
+        return True, "anon has no rights on api_keys"
+    if r.is_success:
+        return False, "anon can still query api_keys (old policy)"
+    return None, f"cannot measure: api_keys answered {r.status_code}"
 
 
 async def _inventaris_uit(client, supabase_url, key, env, nu):
@@ -138,7 +178,8 @@ METINGEN: dict[str, Meting] = {
     "northsea-engine-fix": _northsea_lus,
     "build-loop-canon": _bouwlus_canon,
     "product-registry": _productregister,
-    "axon-pr2-live": _axon_pkce,
+    "axon-pr2-live": _axon_live,
+    "axon-key-migration": _axon_migratie,
     "northsea-inventory-job-off": _inventaris_uit,
 }
 
@@ -153,6 +194,18 @@ async def meet(client, supabase_url: str, key: str, env, nu: datetime) -> list[d
             done, gemeten = None, f"cannot measure: {type(e).__name__}"
         uit.append({**actie, "done": done, "measured": gemeten})
     return uit
+
+
+_CACHE: dict = {}
+
+
+async def meet_af_en_toe(client, supabase_url: str, key: str, env, nu: datetime) -> list[dict]:
+    """meet(), maar hooguit eens per MEET_ELKE; daartussen de vorige stand."""
+    if _CACHE.get("tot") and nu < _CACHE["tot"]:
+        return _CACHE["stand"]
+    stand = await meet(client, supabase_url, key, env, nu)
+    _CACHE.update(stand=stand, tot=nu + MEET_ELKE)
+    return stand
 
 
 def herinnering(stand: list[dict], nu: datetime, laatst: Optional[str]) -> Optional[tuple[str, str]]:
