@@ -1,13 +1,13 @@
-/* Home around the core: two agent rails + a 4-card live band between orb and composer.
+/* Home around the core: tight dual rails + 2+2 live cards flanking the composer.
  *
  * The chat plate is transparent (--kaal), so anything at the bottom of a
  * 100% bol-vak shows through the composer and chips. These tokens keep the
- * rails and the strip in the free space around the orb. */
+ * rails and the cards in the free space around the orb. */
 
 :root {
   --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
   --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-  --axe-home-live-hoog: clamp(152px, 24%, 248px);
+  --axe-home-live-hoog: clamp(100px, 16%, 128px);
 }
 
 .axe-home-rail {
@@ -17,8 +17,8 @@
   width: var(--axe-home-rail-breed);
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
-  gap: 8px;
+  justify-content: center;
+  gap: 4px;
   overflow-x: hidden;
   overflow-y: auto;
   z-index: 16;
@@ -43,7 +43,7 @@
 .axe-home-rail-rij {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   width: 100%;
 }
@@ -53,15 +53,15 @@
 }
 
 .axe-home-rail-tegel {
-  width: 64px;
+  width: 56px;
   flex: none;
-  padding: 8px 4px 6px;
+  padding: 6px 3px 4px;
 }
 
 .axe-home-rail-balk {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 7px 11px;
+  padding: 5px 9px;
 }
 
 .axe-home-rail-regel {
@@ -72,8 +72,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Four equal matte cards in the centre column, on the floor of the bol-vak.
-   Never a full-width bottom band, never inner scroll. */
+/* Two small cards left of the composer, two right — not a full-width band. */
 .axe-home-live {
   position: absolute;
   left: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
@@ -85,34 +84,24 @@
   overflow: hidden;
   z-index: 15;
   pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.axe-home-live-pulse {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  flex: none;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
-}
-
-.axe-home-live-raster {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(18%, 240px) minmax(0, 1fr);
   gap: 8px;
   align-items: stretch;
-  width: 100%;
-  flex: 1 1 auto;
+}
+
+.axe-home-live-cluster {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.axe-home-live-midden {
+  pointer-events: none;
+  min-width: 0;
 }
 
 .axe-home-live .axe-sectie {
@@ -138,12 +127,17 @@
 }
 
 .axe-home-live .axe-kaart-kop {
-  padding: 8px 10px 0;
+  padding: 6px 8px 0;
   flex: none;
 }
 
+.axe-home-live .axe-kaart-titel {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .axe-home-live .axe-kaart-lijf {
-  padding: 4px 10px 8px;
+  padding: 2px 8px 6px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -158,12 +152,24 @@
 }
 
 .axe-home-live-regel {
-  margin: 0 0 4px;
-  font-size: 11px;
-  line-height: 1.35;
+  margin: 0 0 3px;
+  font-size: 10px;
+  line-height: 1.3;
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
+}
+
+.axe-home-live-actie {
+  display: inline;
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-cyan);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
 }
 
 .axe-home-live-meer {
@@ -173,7 +179,7 @@
   border: 0;
   background: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   cursor: pointer;
   text-align: left;
@@ -183,7 +189,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 22px;
+  top: 0;
   bottom: 0;
   z-index: 22;
   overflow: auto;
@@ -205,6 +211,63 @@
   color: var(--text-muted);
 }
 
+.axe-home-pillen {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 8px 6px;
+}
+
+.axe-home-pill {
+  width: fit-content;
+  max-width: min(420px, 100%);
+  background: var(--surface-bg, #0a0c0c);
+  border: 1px solid var(--tint-line);
+  border-radius: 10px;
+}
+
+.axe-home-pill-knop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.axe-home-pill-lijst {
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--tint-line);
+  max-height: min(42vh, 320px);
+  overflow: auto;
+}
+
+.axe-home-pill-rij {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.axe-home-pill-acties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.axe-home-pill-acties button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-cyan);
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .axe-taak-toast {
   right: calc(var(--axe-home-rail-inset, 16px) + var(--axe-home-rail-breed, 240px) + 12px);
 }
@@ -212,11 +275,11 @@
 @media (max-width: 1100px) {
   :root {
     --axe-home-rail-breed: clamp(210px, 28vw, 320px);
-    --axe-home-live-hoog: clamp(148px, 34%, 176px);
+    --axe-home-live-hoog: clamp(96px, 26%, 136px);
   }
 
   .axe-home-rail {
-    gap: 4px;
+    gap: 3px;
     justify-content: flex-start;
     padding-top: 2px;
   }
@@ -230,8 +293,12 @@
     padding: 4px 8px;
   }
 
-  .axe-home-live-raster {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .axe-home-live {
+    grid-template-columns: minmax(0, 1fr) minmax(12%, 160px) minmax(0, 1fr);
     gap: 6px;
+  }
+
+  .axe-home-live-cluster {
+    gap: 4px;
   }
 }

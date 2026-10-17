@@ -26,6 +26,10 @@ def test_manifest_heeft_de_servermodules_die_199_miste():
         "backend/axe_api/staande_diensten.py",
         "backend/axe_api/lockscreen.py",
         "backend/axe_api/twelvedata_budget.py",
+        "backend/axe_api/provider_router.py",
+        "backend/axe_api/agent_tiers.json",
+        "backend/axe_api/northsea_desk_handler.py",
+        "backend/axe_api/taak_fout.py",
     ):
         assert pad in rels, pad
 
@@ -69,6 +73,7 @@ def test_weiger_task_worker_zonder_agent_loop_imports():
     assert vs.ontbrekende_worker_imports(
         {"task_worker.py"},
         {"task_runtime.py", "agent_loop.py", "agent_workspace.py", "device_actions.py",
-         "beslis_beleid.py", "missies.py", "mission_engine.py", "dax.py"},
+         "beslis_beleid.py", "missies.py", "mission_engine.py", "dax.py",
+         "northsea_desk_handler.py", "provider_router.py"},
     ) == []
     assert vs.ontbrekende_worker_imports({"push_meldingen.py"}, set()) == []

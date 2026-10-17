@@ -19,7 +19,8 @@ import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp
 import { BezigVlag } from '@/presentation/components/layout/zweef/BezigVlag';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
-import { werkStand } from '@/domain/tierRouter/axeJobRegels';
+import { homeLiveStand } from '@/domain/homeLive';
+import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { coreStandVan } from '@/presentation/pages/coreStand';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
@@ -96,7 +97,13 @@ export default function Home() {
   // Twee losse selectors, nooit een object: zustand 5 ziet een vers object als
   // een nieuwe waarde en dan hertekent dit scherm zichzelf eindeloos.
   const jobs = useAxeJobStore((s) => s.jobs);
-  const coreStatus: CoreStatus = coreStandVan(voice.voiceStatus, !!voice.pendingExec, werkStand(jobs));
+  const server = useServerAgents();
+  const live = homeLiveStand({ agents: server.agents, jobs, extraGoedkeuringen: server.approvals.map((a) => ({
+    id: a.id, task_id: a.task_id, wat: a.wat, waarom: a.waarom, title: a.title, detail: a.detail,
+  })) });
+  const coreStatus: CoreStatus = coreStandVan(voice.voiceStatus, !!voice.pendingExec, {
+    lopend: live.werkend, wacht: live.goedkeuringen.length,
+  });
 
 
 

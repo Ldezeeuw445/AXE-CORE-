@@ -329,12 +329,27 @@ def stoel_tool(seat_id: str) -> str:
     return "claude_code.run"
 
 
-def stoel_model(seat_id: str, tier: int) -> str:
+CODEX_CLI_MODEL = "gpt-5-codex"
+_ASTRA = re.compile(r"astra|gpt-6\b", re.I)
+
+
+def codex_cli_model(model: str = "") -> str:
+    """Codex CLI op de Mac kent gpt-5-codex. gpt-6-astra geeft HTTP 400
+    ('requires a newer version') en mag nooit als -m meegaan."""
+    gekozen = (model or "").strip()
+    if not gekozen or _ASTRA.search(gekozen):
+        return CODEX_CLI_MODEL
+    return gekozen
+
+
+def stoel_model(seat_id: str, tier: int, model: str = "") -> str:
     fam = re.sub(r"\d+$", "", seat_id or "")
     if fam == "codex":
-        return "gpt-5-codex"
+        return codex_cli_model(model)
     if fam == "cursor":
-        return ""
+        return (model or "").strip()
+    if (model or "").strip():
+        return model.strip()
     if tier <= 1:
         return os.environ.get("AXE_CLAUDE_HEAVY_MODEL", "opus")
     return os.environ.get("AXE_CLAUDE_CYCLE_MODEL", "sonnet")

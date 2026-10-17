@@ -83,7 +83,7 @@ describe('tier-router is aangesloten, niet alleen gebouwd', () => {
   it('de bol en de kopstand weten dat er gewerkt wordt', () => {
     expect(bron('presentation/components/axe-core/sphere/AxeCoreSphere.tsx'))
       .toMatch(/useAxeJobStore\.subscribe\(/);
-    expect(bron('presentation/components/axe-core/sphere/AxeCoreSphere.tsx')).toMatch(/werkStand\(/);
+    expect(bron('presentation/components/axe-core/sphere/AxeCoreSphere.tsx')).toMatch(/homeLiveStand\(/);
     // De telefoon-sphere ademt mee op hetzelfde signaal.
     expect(bron('presentation/components/axe-core/sphere/TelefoonSphere.tsx')).toMatch(/useAxeJobStore\.subscribe\(/);
     expect(bron('presentation/components/axe-core/sphere/TelefoonSphere.tsx')).toMatch(/werkStand\(/);

@@ -44,6 +44,20 @@ def concurrency_count(gevraagd: int | None = None, env: str | None = None) -> in
 
 TaskHandler = Callable[[dict[str, Any], "TaskContext"], Awaitable[dict[str, Any]]]
 
+# Oude rijen in core_tasks hadden 'code'/'trading'/'research' als capability.
+# Alleen `agentic` had een handler (gemeten 25 sep: no_handler). Die namen
+# gaan naar dezelfde lus; northsea_desk heeft zijn eigen drafts-only pad.
+AGENTIC_ALIASSEN = ("code", "trading", "research", "browser", "build", "computer_use", "general")
+
+
+def kies_handler(handlers: dict[str, TaskHandler], capability: str | None) -> TaskHandler | None:
+    cap = capability or "general"
+    if cap in handlers:
+        return handlers[cap]
+    if cap in AGENTIC_ALIASSEN:
+        return handlers.get("agentic")
+    return None
+
 # Hetzelfde geval, alleen gezien via de repo: iemand heeft de taak op
 # 'cancelled' gezet terwijl wij hem draaiden, dus require_transition weigert
 # elke volgende overgang. Dat is geen fout van de handler en zeker geen reden
@@ -211,7 +225,7 @@ class TaskWorker:
                     await asyncio.to_thread(self.dax.geef_vrij, task["id"])
 
     async def _draai(self, task: dict[str, Any], heeft_slot: bool = False) -> bool:
-        handler = self.handlers.get(task.get("capability") or "general")
+        handler = kies_handler(self.handlers, task.get("capability") or "general")
         if not handler:
             await asyncio.to_thread(
                 self.repo.transition,
@@ -804,9 +818,14 @@ async def run_forever() -> None:
 
     repo = TaskRepository(db)
     from dax import DaxRegister, dax_aan
+    from northsea_desk_handler import northsea_desk_handler
     slots = run_slots(
         repo,
-        {"agentic": agentic_handler, "task_manage": task_manage_handler},
+        {
+            "agentic": agentic_handler,
+            "task_manage": task_manage_handler,
+            "northsea_desk": northsea_desk_handler,
+        },
         lease_seconds=int(os.environ.get("TASK_LEASE_SECONDS", "90")),
         dax=DaxRegister(db) if dax_aan() else None,
     )

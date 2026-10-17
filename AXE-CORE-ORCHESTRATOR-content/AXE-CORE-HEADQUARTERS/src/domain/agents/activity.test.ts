@@ -64,7 +64,8 @@ describe('de tijdlijn', () => {
     const done = taskActivity({ id: 'a', status: 'completed', assignee: 'axe-core', title: 'Refresh', completed_at: iso(3) });
     expect(done).toMatchObject({ agent: 'axe', tone: 'ok', text: 'Completed: Refresh', at: NOW - 3 * 60_000 });
     const failed = taskActivity({ id: 'b', status: 'failed', assignee: 'code-agent', title: 'Audit', updated_at: iso(4), error: { code: 'no_handler', message: 'No handler for planner' } });
-    expect(failed).toMatchObject({ tone: 'fail', detail: 'No handler for planner' });
+    expect(failed).toMatchObject({ tone: 'fail' });
+    expect(failed?.detail).toMatch(/no worker|Retry/i);
     const running = taskActivity({ id: 'c', status: 'running', title: 'Click', started_at: iso(1) });
     expect(running).toMatchObject({ tone: 'running', text: 'Working on: Click' });
     expect(taskActivity({ id: 'd', status: 'completed', assignee: 'axe-algo', completed_at: iso(1) })).toBeNull();

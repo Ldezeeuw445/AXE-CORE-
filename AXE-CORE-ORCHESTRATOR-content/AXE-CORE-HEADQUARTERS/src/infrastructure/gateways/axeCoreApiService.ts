@@ -359,6 +359,14 @@ export async function cancelDurableTask(
   return call('POST', `/tasks/${encodeURIComponent(taskId)}/cancel`, { by, reason });
 }
 
+/** Nieuwe queued-kopie van een mislukte taak. Geen send, geen order. */
+export async function retryDurableTask(
+  taskId: string,
+  by: string = 'luka',
+): Promise<{ task: DurableTaskRun }> {
+  return call('POST', `/tasks/${encodeURIComponent(taskId)}/retry`, { by });
+}
+
 export async function decideDurableTaskApproval(
   taskId: string,
   approvalId: string,

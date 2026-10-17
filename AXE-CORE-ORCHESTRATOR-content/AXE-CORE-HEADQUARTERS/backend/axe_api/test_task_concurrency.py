@@ -340,3 +340,16 @@ class TestStopCheck:
         assert gevangen["gestopt"] is False
         # Goedkoop: twee keer vragen binnen het venster is één databasevraag.
         assert gevangen["db"].aanroepen == 1
+
+
+def test_kies_handler_alias_en_northsea():
+    async def ag(task, ctx):
+        return {"summary": "a"}
+
+    async def ns(task, ctx):
+        return {"summary": "n", "sent": 0}
+
+    h = {"agentic": ag, "northsea_desk": ns}
+    assert tw.kies_handler(h, "northsea_desk") is ns
+    assert tw.kies_handler(h, "code") is ag
+    assert tw.kies_handler(h, "planner") is None

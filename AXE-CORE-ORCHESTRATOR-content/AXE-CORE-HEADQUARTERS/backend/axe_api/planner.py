@@ -134,6 +134,7 @@ _ACCOUNTFOUT = (
                 r"login required|failed to authenticate|authentication (failed|required)|invalid_grant", re.I),
      "login verlopen"),
 )
+_MODELFOUT = re.compile(r"gpt-6-astra|requires a newer version", re.I)
 
 
 def account_fout(tekst: Optional[str]) -> Optional[str]:
@@ -142,6 +143,18 @@ def account_fout(tekst: Optional[str]) -> Optional[str]:
         if patroon.search(tekst or ""):
             return reden
     return None
+
+
+def model_fout(tekst: Optional[str]) -> Optional[str]:
+    """CLI weigert het gevraagde model. Ander abonnement mag het overnemen."""
+    if _MODELFOUT.search(tekst or ""):
+        return "model not supported on this CLI"
+    return None
+
+
+def wissel_motor(tekst: Optional[str]) -> Optional[str]:
+    """Account kapot óf model dat deze CLI niet draait: volgende stoel."""
+    return account_fout(tekst) or model_fout(tekst)
 
 
 def familie(motor: str) -> str:
@@ -876,9 +889,9 @@ class Planner:
         for _ in range(3):
             geprobeerd.append(motor)
             tekst, fout = self._vraag(staat, motor, prompt, repo, "acceptEdits" if schrijven else "plan")
-            if tekst or not account_fout(fout):
+            if tekst or not wissel_motor(fout):
                 break
-            afgevallen[motor] = account_fout(fout) or "account werkt niet"
+            afgevallen[motor] = wissel_motor(fout) or "account werkt niet"
             motor, meer = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now())
             afgevallen.update(meer)
             if not motor:

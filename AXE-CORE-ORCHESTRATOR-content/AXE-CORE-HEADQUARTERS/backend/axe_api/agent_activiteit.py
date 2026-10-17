@@ -354,7 +354,12 @@ def agent_status(
         )
         if not later_goed and _fout_is_actueel(f.get("updated_at"), succes):
             fout = f.get("error") or {}
-            return resultaat("ERROR", str(fout.get("message") if isinstance(fout, dict) else fout)[:300], f, missie_van(f))
+            try:
+                from taak_fout import taak_fout
+                regel = taak_fout(fout, str(f.get("title") or "")).get("regel") or ""
+            except Exception:  # noqa: BLE001
+                regel = str(fout.get("message") if isinstance(fout, dict) else fout)
+            return resultaat("ERROR", (regel or str(fout))[:300], f, missie_van(f))
 
     loop = [m for m in mijn_missies if m.get("status") in ("monitoring", "active")]
     if loop:

@@ -6,6 +6,7 @@
  * core_missions en de events daarvan -- WORKING alleen bij een levende lease.
  * Hier staat alleen hoe hij eruitziet; niets wordt verzonnen of afgeleid.
  */
+import { taakFoutVan } from '@/domain/taken/taakFout';
 
 export type ServerAgentStatus =
   | 'WORKING' | 'VERIFYING' | 'WAITING_TOOL' | 'WAITING_AGENT' | 'WAITING_APPROVAL'
@@ -181,7 +182,9 @@ export function serverStand(a: ServerAgent): ServerStand {
   const m = a.mission;
   const gepland = (a.routines && a.routines.length > 0) || STAANDE_AGENTS.has(a.agent);
   let regel = '';
-  if (a.status === 'BLOCKED' || a.status === 'ERROR') regel = a.reason;
+  if (a.status === 'BLOCKED' || a.status === 'ERROR') {
+    regel = taakFoutVan(a.reason, a.task?.title || '').regel;
+  }
   else if (a.current_action) regel = a.current_action;
   else if (a.status === 'WAITING_APPROVAL' && a.task?.title) regel = `waiting on: ${a.task.title}`;
   else if (m?.next_action) regel = m.next_action;

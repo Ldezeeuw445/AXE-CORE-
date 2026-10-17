@@ -27,12 +27,14 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { taakMeldingVan } from '@/domain/taken/taakMelding';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import '@/presentation/components/axe-core/homeLive.css';
 
 interface TaakRij { id: string; title: string; status: string }
 interface Melding { id: string; titel: string; mislukt: boolean }
 
 export function TaskCompletionToasts() {
+  const mobiel = useIsMobile();
   const [meldingen, setMeldingen] = useState<Melding[]>([]);
   const bekend = useRef<Map<string, string> | null>(null);
   const timers = useRef<Map<string, number>>(new Map());
@@ -90,7 +92,9 @@ export function TaskCompletionToasts() {
     };
   }, []);
 
-  if (meldingen.length === 0) return null;
+  // Desktop: dezelfde meldingen zitten in de taken-pill boven de composer.
+  // Telefoon houdt de toast (andere agent doet Home-mobiel).
+  if (!mobiel || meldingen.length === 0) return null;
 
   return (
     <div

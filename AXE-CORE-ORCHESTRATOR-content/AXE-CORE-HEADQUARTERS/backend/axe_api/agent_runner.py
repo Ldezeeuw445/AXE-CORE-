@@ -115,9 +115,11 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: 
     nooit beantwoord wordt. Dat is erger dan een modus die iets ruimer is dan
     zijn naam belooft, zolang het maar ergens staat — hier dus.
     """
+    from provider_router import codex_cli_model
     cmd = [binary, "exec", str(prompt), "-C", ".", "-o", uitvoerbestand]
-    if model:
-        cmd += ["-m", model]
+    gekozen = codex_cli_model(model)
+    if gekozen:
+        cmd += ["-m", gekozen]
     if mode == "plan":
         cmd += ["-s", "read-only"]
     else:

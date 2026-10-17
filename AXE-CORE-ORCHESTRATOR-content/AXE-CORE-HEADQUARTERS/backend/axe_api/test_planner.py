@@ -257,6 +257,12 @@ class TestAccountfout:
         assert p.account_fout("TypeError: x is undefined") is None
         assert p.account_fout(None) is None
 
+    def test_astra_is_model_fout_geen_account(self):
+        tekst = "The 'gpt-6-astra' model requires a newer version of the Codex CLI"
+        assert p.account_fout(tekst) is None
+        assert p.model_fout(tekst) == "model not supported on this CLI"
+        assert p.wissel_motor(tekst)
+
 
 class TestKiesMotor:
     def test_sleutels_voert_nooit_uit_maar_een_vrij_abonnement_wel(self):

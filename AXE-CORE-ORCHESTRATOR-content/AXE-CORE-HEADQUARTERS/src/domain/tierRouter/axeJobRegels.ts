@@ -343,9 +343,9 @@ export function jobWachtTekst(job: AxeJob, vraag?: string | AxeGoedkeuring | nul
 }
 
 export function balkLabel(lopend: number): string {
-  if (lopend <= 0) return 'No agents running';
-  if (lopend === 1) return '1 agent running';
-  return `${lopend} agents running`;
+  if (lopend <= 0) return 'No agents working';
+  if (lopend === 1) return '1 agent working';
+  return `${lopend} agents working`;
 }
 
 /**

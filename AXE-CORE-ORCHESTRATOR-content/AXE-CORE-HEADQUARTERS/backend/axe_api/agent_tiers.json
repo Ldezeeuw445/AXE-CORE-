@@ -42,7 +42,8 @@
       "config": "~/.codex",
       "login": "codex login",
       "models": ["gpt-5-codex"],
-      "paid": true
+      "paid": true,
+      "note": "Nooit gpt-6-astra: de Codex CLI op de Mac geeft 400 (newer version)."
     },
     "codex2": {
       "family": "codex",

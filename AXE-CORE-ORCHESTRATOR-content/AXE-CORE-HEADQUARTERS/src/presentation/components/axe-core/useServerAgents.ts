@@ -57,6 +57,11 @@ export function verversServerAgents(): void {
   void poll();
 }
 
+/** Snapshot zonder hook: bol en pills lezen dezelfde poll. */
+export function leesServerAgents(): Stand {
+  return stand;
+}
+
 export function useServerAgents(): Stand {
   const [s, setS] = useState(stand);
   useEffect(() => {

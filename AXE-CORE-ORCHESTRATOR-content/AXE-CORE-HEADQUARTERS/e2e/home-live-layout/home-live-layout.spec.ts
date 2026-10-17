@@ -62,6 +62,11 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(overlap(toast, rechts), 'toast vs right rail').toBe(0);
       expect(live.y + live.height).toBeLessThanOrEqual(composer.y + 0.5);
       expect(await page.locator('.axe-home-rail-rij').count()).toBe(13);
+      expect(await page.locator('[data-axe-home-live-cluster]').count()).toBe(2);
+      expect(await page.locator('[data-axe-home-pill]').count()).toBe(2);
+      const takenTekst = await page.locator('[data-axe-home-pill="taken"]').innerText();
+      expect(takenTekst).toMatch(/NorthSea Desk Manager failed/);
+      expect(takenTekst).not.toMatch(/needsmy/);
 
       const kaarten = page.locator('[data-axe-home-kaart]');
       expect(await kaarten.count()).toBe(4);

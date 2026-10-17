@@ -47,8 +47,8 @@ describe('homeLiveStand', () => {
 
   it('kaartRegels houdt 5 zichtbaar en telt de rest', () => {
     const { zicht, meer } = kaartRegels([1, 2, 3, 4, 5, 6, 7]);
-    expect(zicht).toEqual([1, 2, 3, 4, 5]);
-    expect(meer).toBe(2);
+    expect(zicht).toEqual([1, 2, 3]);
+    expect(meer).toBe(4);
   });
 
   it('seatsRegels plakt stoelen, dax en roosters in één leesbare lijst', () => {

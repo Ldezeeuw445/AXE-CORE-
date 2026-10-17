@@ -266,12 +266,20 @@ class TestModelVlag:
         cursor = a.ENGINES["cursor"]["cmd"]("cursor-agent", "hoi", "plan", "", "gpt-5")
         assert "--model" in cursor and cursor[cursor.index("--model") + 1] == "gpt-5"
 
-    def test_zonder_keuze_staat_er_geen_vlag(self):
-        """Leeg betekent: de CLI houdt zijn eigen standaard."""
+    def test_zonder_keuze_staat_er_geen_vlag_behalve_codex(self):
+        """Leeg betekent: de CLI houdt zijn eigen standaard — behalve Codex,
+        die anders gpt-6-astra uit config.toml pakt en 400 geeft."""
         import agent_runner as a
-        for naam in ("claude", "codex", "cursor"):
+        for naam in ("claude", "cursor"):
             cmd = a.ENGINES[naam]["cmd"](naam, "hoi", "plan", "/tmp/uit.txt", "")
             assert "--model" not in cmd and "-m" not in cmd
+        codex = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "")
+        assert "-m" in codex and codex[codex.index("-m") + 1] == "gpt-5-codex"
+
+    def test_codex_astra_valt_terug_op_gpt5(self):
+        import agent_runner as a
+        cmd = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "gpt-6-astra")
+        assert cmd[cmd.index("-m") + 1] == "gpt-5-codex"
 
     def test_codex2_is_een_tweede_chatgpt_abonnement(self):
         """Eigen CODEX_HOME: dat is wat de limieten scheidt."""

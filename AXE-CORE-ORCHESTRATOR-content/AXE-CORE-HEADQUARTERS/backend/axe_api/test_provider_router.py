@@ -188,6 +188,13 @@ def test_computer_worker_kent_stoel_env():
     assert "ANTHROPIC_API_KEY" in tekst
 
 
+def test_codex_astra_wordt_gpt5():
+    assert pr.codex_cli_model("gpt-6-astra") == "gpt-5-codex"
+    assert pr.codex_cli_model("") == "gpt-5-codex"
+    assert pr.codex_cli_model("gpt-5-codex") == "gpt-5-codex"
+    assert pr.stoel_model("codex", 1, "gpt-6-astra") == "gpt-5-codex"
+
+
 def test_beleid_hard_limits_blijven_vragen():
     ask = lambda **k: beslis_goedkeuring(k).actie
     assert ask(title="Send a new intro email to Acme", kind="leave_plan") == ACTIE_ASK

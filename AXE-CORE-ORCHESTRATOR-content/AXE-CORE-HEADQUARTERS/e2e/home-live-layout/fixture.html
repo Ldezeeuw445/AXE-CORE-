@@ -7,7 +7,7 @@
     :root {
       --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
       --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-      --axe-home-live-hoog: clamp(152px, 24%, 248px);
+      --axe-home-live-hoog: clamp(100px, 16%, 128px);
       --text-primary: #f4f4f5;
       --text-secondary: #a1a1aa;
       --text-muted: #71717a;
@@ -19,12 +19,12 @@
     @media (max-width: 1100px) {
       :root {
         --axe-home-rail-breed: clamp(210px, 28vw, 320px);
-        --axe-home-live-hoog: clamp(148px, 34%, 176px);
+        --axe-home-live-hoog: clamp(96px, 26%, 136px);
       }
     }
     html, body { margin: 0; height: 100%; background: #05070c; color: var(--text-primary); font: 13px/1.35 ui-sans-serif, system-ui; }
     .scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
-    .bol-vak { position: absolute; inset: 0 0 var(--composer-band, 220px) 0; }
+    .bol-vak { position: absolute; inset: 0 0 var(--composer-band, 250px) 0; }
     .orb {
       position: absolute;
       top: 12%;
@@ -39,15 +39,15 @@
       position: absolute; top: 7%;
       bottom: calc(8px + var(--axe-home-live-hoog));
       width: var(--axe-home-rail-breed);
-      display: flex; flex-direction: column; justify-content: space-evenly; gap: 8px;
+      display: flex; flex-direction: column; justify-content: center; gap: 4px;
       overflow-x: hidden; overflow-y: auto;
     }
     .axe-home-rail--links { left: var(--axe-home-rail-inset); }
     .axe-home-rail--rechts { right: var(--axe-home-rail-inset); }
-    .axe-home-rail-rij { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .axe-home-rail-rij { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .axe-home-rail--rechts .axe-home-rail-rij { flex-direction: row-reverse; }
-    .tegel { width: 64px; flex: none; padding: 8px 4px; border-radius: 14px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
-    .balk { flex: 1; min-width: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 7px 11px; }
+    .tegel { width: 56px; flex: none; padding: 6px 3px; border-radius: 14px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
+    .balk { flex: 1; min-width: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 5px 9px; }
     .balk .naam { color: #38bdf8; font-weight: 500; }
     .balk .regel { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
     .axe-home-live {
@@ -58,55 +58,57 @@
       height: var(--axe-home-live-hoog);
       max-height: var(--axe-home-live-hoog);
       overflow: hidden;
-      display: flex; flex-direction: column;
-    }
-    .pulse { text-align: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; flex: none; }
-    .raster {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0,1fr));
-      grid-template-rows: minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) minmax(18%, 240px) minmax(0, 1fr);
       gap: 8px;
       align-items: stretch;
-      flex: 1 1 auto;
+    }
+    .cluster {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      min-width: 0;
       min-height: 0;
       overflow: hidden;
     }
+    .midden { pointer-events: none; min-width: 0; }
     @media (max-width: 1100px) {
-      .axe-home-rail { gap: 4px; justify-content: flex-start; }
+      .axe-home-rail { gap: 3px; justify-content: flex-start; }
       .tegel { width: 48px; padding: 4px 2px; }
       .balk { padding: 4px 8px; }
-      .raster { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; }
+      .axe-home-live { grid-template-columns: minmax(0,1fr) minmax(12%,160px) minmax(0,1fr); gap: 6px; }
     }
     .kaart {
       background: var(--axe-kaart-vlak);
       border: 1px solid var(--axe-kaart-lijn);
       border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 11px;
-      line-height: 1.35;
+      padding: 6px 8px;
+      font-size: 10px;
+      line-height: 1.3;
       height: 100%;
       min-width: 0;
       overflow: hidden;
     }
-    .kaart h3 { margin: 0 0 4px; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
-    .kaart p { margin: 0 0 4px; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+    .kaart h3 { margin: 0 0 4px; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); overflow-wrap: anywhere; }
+    .kaart p, .meer { margin: 0 0 3px; overflow-wrap: anywhere; }
     .ok { color: var(--ok); }
-    .meer { color: var(--text-muted); background: none; border: 0; padding: 0; font-size: 11px; cursor: pointer; }
+    .meer { color: var(--text-muted); background: none; border: 0; padding: 0; font-size: 10px; cursor: pointer; }
     .composer {
-      position: absolute; left: 12%; right: 12%; bottom: 52px; height: 72px;
-      border-radius: 999px; background: rgba(18,18,22,.94); border: 1px solid rgba(255,255,255,.12);
-      display: flex; align-items: center; padding: 0 22px; z-index: 40;
+      position: absolute; left: 18%; right: 18%; bottom: 52px;
+      border-radius: 18px; background: rgba(18,18,22,.94); border: 1px solid rgba(255,255,255,.12);
+      display: flex; flex-direction: column; align-items: stretch; z-index: 40;
     }
+    .pillen { display: flex; justify-content: center; gap: 8px; padding: 8px 8px 4px; }
+    .pill {
+      background: #0a0c0c; border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
+      padding: 6px 12px; font-size: 11px; white-space: normal;
+    }
+    .composer-in { height: 56px; display: flex; align-items: center; padding: 0 22px; }
     .chips {
       position: absolute; left: 10%; right: 10%; bottom: 12px; height: 34px;
       display: flex; justify-content: center; gap: 8px; z-index: 40;
     }
     .chip { border: 1px solid rgba(255,255,255,.12); border-radius: 11px; padding: 6px 12px; color: var(--text-secondary); font-size: 12px; background: none; }
-    .toast {
-      position: absolute; top: 18px;
-      right: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 12px);
-      background: rgba(12,12,15,.96); border: 1px solid rgba(239,68,68,.35); border-radius: 8px; padding: 8px 12px; font-size: 11px; z-index: 50;
-    }
     .dock {
       position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
       height: 22px; padding: 0 16px; z-index: 41;
@@ -137,22 +139,30 @@
         <div class="axe-home-rail-rij"><div class="tegel">Companion</div><div class="balk"><span class="naam">Companion</span> <span class="regel">Next run 13:00 · last: companion 2 jobs</span></div></div>
       </div>
       <div class="axe-home-live" data-axe-home-live>
-        <div class="pulse">No agents working · 1 needs your OK</div>
-        <div class="raster">
-          <section class="kaart" data-axe-home-kaart="lopend"><h3>Working now</h3><p>No running tasks right now.</p></section>
+        <div class="cluster" data-axe-home-live-cluster="links">
+          <section class="kaart" data-axe-home-kaart="lopend"><h3>Working now</h3><p>Quiet</p></section>
           <section class="kaart" data-axe-home-kaart="recent"><h3>Recent</h3>
-            <p class="ok" data-axe-home-feed>13:15 NorthSea · Copper PO sent</p>
+            <p class="ok" data-axe-home-feed>NorthSea · Copper PO</p>
             <button class="meer" data-axe-home-meer>and 6 more</button>
           </section>
-          <section class="kaart" data-axe-home-ok data-axe-home-kaart="ok"><h3>Needs your OK</h3><p>Seat waiting: Copper PO — read, then approve.</p></section>
-          <section class="kaart" data-axe-home-seats data-axe-home-kaart="seats"><h3>Seats · DAX · Cron</h3>
-            <p class="ok">claude4 · Online on Mac mini</p>
+        </div>
+        <div class="midden"></div>
+        <div class="cluster" data-axe-home-live-cluster="rechts">
+          <section class="kaart" data-axe-home-ok data-axe-home-kaart="ok"><h3>Needs your OK</h3><p>Copper PO — approve</p></section>
+          <section class="kaart" data-axe-home-seats data-axe-home-kaart="seats"><h3>Seats · Cron</h3>
+            <p class="ok">claude4 · online</p>
             <button class="meer" data-axe-home-meer>and 7 more</button>
           </section>
         </div>
       </div>
     </div>
-    <div class="composer" data-axe-composer>Ask anything. /models, /prompts</div>
+    <div class="composer" data-axe-composer>
+      <div class="pillen" data-axe-home-pillen>
+        <div class="pill" data-axe-home-pill="agents" data-axe-agents-balk>1 agent working · Developer</div>
+        <div class="pill" data-axe-home-pill="taken" data-axe-toast>what needs my OK? NorthSea Desk Manager failed — no worker. Retry.</div>
+      </div>
+      <div class="composer-in">Ask anything. /models, /prompts</div>
+    </div>
     <div class="chips" data-axe-snelacties>
       <span class="chip">Verhelder de vraag</span>
       <span class="chip">Geef context</span>
@@ -160,7 +170,6 @@
       <span class="chip">Scherp het aan</span>
     </div>
     <div class="dock" data-axe-dock>Home · Browser · Agents · NorthSea</div>
-    <div class="toast" data-axe-toast>Taak mislukt</div>
   </div>
 </body>
 </html>

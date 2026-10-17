@@ -30,6 +30,7 @@ import { AXE_AGENTS, type AxeAgentId } from './roster';
 import { AGENT_CATALOG } from './catalog';
 import { LOOP_AGENTS, type LoopAgent } from '@/domain/memory/agentLoop';
 import { isOpenTask } from '@/domain/tasks/taskStatus';
+import { taakFoutVan } from '@/domain/taken/taakFout';
 
 // ── Rijvormen zoals de tabellen ze teruggeven (alles optioneel: de
 //    ontwerpmodus levert rijen met de helft van de velden) ────────────────────
@@ -248,14 +249,9 @@ export interface ActivityItem {
 
 const RUNNING = new Set(['running', 'in_progress', 'claimed', 'verifying', 'retrying', 'planning']);
 
-function taskErrorText(err: unknown): string | undefined {
+function taskErrorText(err: unknown, titel = ''): string | undefined {
   if (!err) return undefined;
-  if (typeof err === 'string') return err;
-  if (typeof err === 'object') {
-    const m = (err as Record<string, unknown>).message;
-    if (typeof m === 'string' && m) return m;
-  }
-  return undefined;
+  return taakFoutVan(err, titel).regel;
 }
 
 /**
@@ -287,7 +283,7 @@ export function taskActivity(row: TaskRow): ActivityItem | null {
   if (at == null) return null;
   return {
     key: `task:${row.id}`, agent, at, kind: 'task', text, tone,
-    detail: tone === 'fail' ? taskErrorText(row.error) : undefined,
+    detail: tone === 'fail' ? taskErrorText(row.error, title) : undefined,
     // Dezelfde taak met dezelfde afloop is een herhaling: gemeten 23 sep
     // wisselden 'computer.permissions'-checks op twee apparaten elkaar elke
     // ~10 s af, en zonder samenvoegen vulden die de hele tijdlijn.

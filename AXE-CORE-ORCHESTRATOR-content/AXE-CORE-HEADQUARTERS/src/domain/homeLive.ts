@@ -19,6 +19,8 @@ export type LiveTaak = {
   stand: string;
   voortgang: string;
   kleur: string;
+  fout?: string;
+  taskId?: string;
 };
 
 export type LiveRooster = {
@@ -48,6 +50,7 @@ export type LiveRegel = {
   id: string;
   tekst: string;
   kleur: string;
+  actie?: 'retry' | 'open' | 'reconnect';
 };
 
 export type HomeLiveStand = {
@@ -61,8 +64,8 @@ export type HomeLiveStand = {
   roosters: LiveRooster[];
 };
 
-/** Zichtbare regels per live-kaart: ~5 regels tekst, rest achter 'and N more'. */
-export const LIVE_KAART_REGELS = 5;
+/** Zichtbare regels per live-kaart: kleine 2+2-kaarten, rest achter 'and N more'. */
+export const LIVE_KAART_REGELS = 3;
 
 export function kaartRegels<T>(items: T[]): { zicht: T[]; meer: number } {
   return {
@@ -138,12 +141,14 @@ export function homeLiveStand(in_: {
       const s = eventStand(ev.event_type || ev.kind || '');
       if (!s) continue;
       recent.push({
-        id: `${ev.at}-${ev.event_type}`,
+        id: ev.task_id || `${ev.at}-${ev.event_type}`,
         agent: naamVan(id),
         titel: ev.message || ev.event_type || s,
         stand: s,
         voortgang: ev.at ? eventTijd(ev.at) : '',
         kleur: s === 'failed' ? 'var(--err)' : 'var(--ok)',
+        fout: s === 'failed' ? (ev.message || ev.event_type || 'failed') : undefined,
+        taskId: ev.task_id || undefined,
       });
     }
   }
@@ -186,10 +191,12 @@ export function homeLiveStand(in_: {
 export function seatsRegels(stand: HomeLiveStand): LiveRegel[] {
   const uit: LiveRegel[] = [];
   for (const s of stand.stoelen) {
+    const slecht = s.toon === 'bad' || s.stand === 'Logged out' || s.stand === 'Offline';
     uit.push({
       id: `seat-${s.id}`,
       tekst: `${s.id} · ${s.stand}${s.taak && s.taak !== 'idle' && s.taak !== 'not used' ? ` · ${s.taak}` : ''}`,
-      kleur: s.toon === 'ok' || s.toon === 'info' ? 'var(--ok)' : 'var(--text-muted)',
+      kleur: s.toon === 'ok' || s.toon === 'info' ? 'var(--ok)' : slecht ? 'var(--err)' : 'var(--text-muted)',
+      actie: s.stand === 'Logged out' || s.stand === 'Offline' ? 'reconnect' : s.stand === 'Rate limited' ? 'retry' : undefined,
     });
   }
   for (const d of stand.dax) {
@@ -202,8 +209,9 @@ export function seatsRegels(stand: HomeLiveStand): LiveRegel[] {
   for (const r of stand.roosters) {
     uit.push({
       id: `cron-${r.agent}-${r.naam}`,
-      tekst: `${r.agent} · ${r.naam} · last ${r.laatste} · next ${r.volgende}`,
+      tekst: `${r.agent} · ${r.naam} · last ${r.laatste} · next ${r.volgende}${r.fout ? ' · failed last run' : ''}`,
       kleur: r.fout ? 'var(--err)' : 'var(--text-secondary)',
+      actie: r.fout ? 'retry' : undefined,
     });
   }
   return uit;

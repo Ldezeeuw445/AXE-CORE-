@@ -356,6 +356,9 @@ class TaskCancelRequest(BaseModel):
     by: str = "user"
     reason: Optional[str] = None
 
+class TaskRetryRequest(BaseModel):
+    by: str = "luka"
+
 class TaskApprovalRequest(BaseModel):
     kind: str
     title: str
@@ -517,6 +520,22 @@ async def cancel_task(
     await audit("task_cancel", task_id, {
         "by": req.by, "reason": req.reason,
     }, request.client.host if request.client else "")
+    return {"task": task}
+
+@app.post("/tasks/{task_id}/retry", dependencies=[AUTH])
+async def retry_task(
+    task_id: str, request: Request, req: Optional[TaskRetryRequest] = None,
+):
+    """Nieuwe queued-kopie van een mislukte taak. Geen send, geen order."""
+    req = req or TaskRetryRequest()
+    try:
+        task = task_repo().retry(task_id, by=req.by)
+    except KeyError as exc:
+        raise HTTPException(404, "Task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit("task_retry", task_id, {"by": req.by, "new_id": task.get("id")},
+                request.client.host if request.client else "")
     return {"task": task}
 
 @app.get("/approvals", dependencies=[AUTH])

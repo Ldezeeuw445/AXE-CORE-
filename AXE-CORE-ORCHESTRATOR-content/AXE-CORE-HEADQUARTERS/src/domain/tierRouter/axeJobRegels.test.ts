@@ -86,7 +86,7 @@ describe('sessie-samenvatting', () => {
       { text: 'a', agent: 'northsea' },
       { text: 'b', agent: 'task' },
     ])).toMatch(/2 jobs/);
-    expect(balkLabel(3)).toBe('3 agents running');
+    expect(balkLabel(3)).toBe('3 agents working');
     expect(jobResultaatTekst(job({ state: 'done', summary: '3 open deals' }))).toMatch(/3 open deals/);
     expect(jobModus('northsea')).toBe('read');
     expect(jobModus('trading')).toBe('execute');

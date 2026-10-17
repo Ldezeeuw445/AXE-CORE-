@@ -85,7 +85,9 @@ def core_task_rij(bericht: dict[str, Any]) -> dict[str, Any]:
         "title": bericht["titel"],
         "goal": bericht["tekst"][:800] if bericht.get("tekst") else bericht["titel"],
         "description": bericht.get("tekst") or None,
-        "status": "waiting_approval" if ja else "pending",
+        # Ja-vragen wachten. Overige notices zijn al gedaan: pending liet de
+        # VPS-worker ze claimen zonder handler (no_handler northsea_desk).
+        "status": "waiting_approval" if ja else "completed",
         "priority": "high" if ja else "medium",
         "assignee": AGENT,
         "capability": "northsea_desk",

@@ -29,7 +29,8 @@
 import { useEffect, useRef } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
-import { werkStand } from '@/domain/tierRouter/axeJobRegels';
+import { homeLiveStand } from '@/domain/homeLive';
+import { leesServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { getGlobalTtsLevel } from '@/infrastructure/gateways/globalTts';
 
 const N = 2200;
@@ -195,10 +196,12 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
      * Eén langzame ademhaling, duidelijk trager dan de lettergreep-piek van de
      * stem, zodat "hij werkt" en "hij praat" niet op elkaar lijken. Via
      * subscribe en niet via een hook: dit mag geen re-render per frame worden. */
-    let werkt = werkStand(useAxeJobStore.getState().jobs).lopend > 0;
-    const stopWerkLet = useAxeJobStore.subscribe((st) => {
-      werkt = werkStand(st.jobs).lopend > 0;
-    });
+    const werktNu = () => homeLiveStand({
+      agents: leesServerAgents().agents,
+      jobs: useAxeJobStore.getState().jobs,
+    }).werkend > 0;
+    let werkt = werktNu();
+    const stopWerkLet = useAxeJobStore.subscribe(() => { werkt = werktNu(); });
 
     const standBijwerken = () => {
       const ry = rotY + auto;

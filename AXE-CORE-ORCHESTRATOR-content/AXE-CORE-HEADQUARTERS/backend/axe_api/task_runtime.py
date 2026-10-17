@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
-from uuid import UUID
+from uuid import UUID, uuid4
 
 TERMINAL = {"completed", "done", "failed", "cancelled", "rejected"}
 ACTIVE = {"planning", "running", "in_progress", "verifying"}
@@ -391,6 +391,54 @@ class TaskRepository:
             data={"fields": list(patch.keys())},
         )
         return rows[0]
+
+    def retry(self, task_id: str, *, by: str = "luka") -> dict[str, Any]:
+        """Nieuwe queued-rij van een mislukte taak. De mislukte rij blijft staan.
+
+        failed is terminal, dus geen transition terug. Geen trading-execute,
+        geen send. northsea_desk blijft drafts-only.
+        """
+        UUID(task_id)
+        found = self._db().table("core_tasks").select("*").eq("id", task_id).limit(1).execute().data
+        if not found:
+            raise KeyError(task_id)
+        huidig = found[0]
+        if huidig.get("status") not in ("failed", "blocked", "cancelled"):
+            raise ValueError(f"task is {huidig.get('status')}, not retryable")
+        mode = str(huidig.get("execution_mode") or "read")
+        cap = str(huidig.get("capability") or "agentic")
+        titel = str(huidig.get("title") or "")
+        doel = str(huidig.get("goal") or "")
+        verboden = ("place order", "live order", "wire money", "verstuur", "auto_send")
+        blob = f"{titel} {doel} {cap} {mode}".lower()
+        if mode == "execute" and cap in ("trading",) or any(w in blob for w in verboden):
+            raise ValueError("refusing to retry a send, order or money move")
+        if cap in ("code", "trading", "research", "browser", "build", "computer_use", "general"):
+            cap = "agentic"
+        payload = dict(huidig.get("payload") or {})
+        payload.pop("send", None)
+        meta = dict(huidig.get("metadata") or {})
+        meta["retry_of"] = task_id
+        nieuw, _ = self.create({
+            "title": titel,
+            "goal": doel,
+            "description": huidig.get("description"),
+            "priority": huidig.get("priority") or "medium",
+            "assignee": huidig.get("assignee"),
+            "requested_by": by,
+            "capability": cap,
+            "execution_mode": "read" if cap == "northsea_desk" else mode,
+            "source_app": huidig.get("source_app") or "axe_core",
+            "parent_task_id": task_id,
+            "payload": payload,
+            "metadata": meta,
+            "idempotency_key": f"retry:{task_id}:{uuid4()}",
+        })
+        self.append_event(
+            task_id, "task.retried", actor_type="user", actor_id=by,
+            data={"new_task_id": nieuw["id"]},
+        )
+        return nieuw
 
     def list_approvals(self, status: str = "pending", limit: int = 20) -> list[dict[str, Any]]:
         """Every open question, across all tasks, oldest first.

@@ -141,6 +141,12 @@ MANIFEST = {
     "/opt/axe-core-api/lockscreen.py": ("backend/axe_api/lockscreen.py", "axe-core-api"),
     # main.py importeert twelvedata_budget voor de daglimiet + gedeelde cache.
     "/opt/axe-core-api/twelvedata_budget.py": ("backend/axe_api/twelvedata_budget.py", "axe-core-api"),
+    # Router + tierkaart: agent_loop importeert provider_router; zonder deze
+    # regels bleef gpt-6-astra/stoelkeuze onzichtbaar voor vps_sync.
+    "/opt/axe-core-api/provider_router.py": ("backend/axe_api/provider_router.py", "axe-task-worker"),
+    "/opt/axe-core-api/agent_tiers.json": ("backend/axe_api/agent_tiers.json", "axe-task-worker"),
+    "/opt/axe-core-api/northsea_desk_handler.py": ("backend/axe_api/northsea_desk_handler.py", "axe-task-worker"),
+    "/opt/axe-core-api/taak_fout.py": ("backend/axe_api/taak_fout.py", "axe-core-api"),
 }
 
 # MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).
@@ -153,9 +159,9 @@ OPTIONAL_WHEN_MISSING = {
 
 # Wie wie nodig heeft. Ship je de één zonder de ander, dan start de worker niet.
 WORKER_IMPORTS = {
-    "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py"),
-    "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py"),
+    "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py"),
+    "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "taak_fout.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

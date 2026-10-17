@@ -51,6 +51,13 @@ const schoon = (v: unknown): string | undefined => {
   return t ? t : undefined;
 };
 
+/** Codex CLI op de Mac weigert gpt-6-astra. Zelfde terugval als provider_router. */
+function codexCliModel(model: string | undefined): string {
+  const t = (model || '').trim();
+  if (!t || /astra|gpt-6\b/i.test(t)) return 'gpt-5-codex';
+  return t;
+}
+
 /** Leest wat er opgeslagen staat; onbekende motoren en lege waarden vallen weg. */
 export function normaliseerModellen(ruw: unknown): MotorModellen {
   if (!ruw || typeof ruw !== 'object') return {};
@@ -65,7 +72,10 @@ export function normaliseerModellen(ruw: unknown): MotorModellen {
 
 /** Het gekozen model, of undefined als de CLI zijn eigen standaard mag houden. */
 export function modelVoor(modellen: MotorModellen, motor: AgentEngine | 'sleutels'): string | undefined {
-  return motor === 'sleutels' ? undefined : modellen[motor];
+  if (motor === 'sleutels') return undefined;
+  const raw = modellen[motor];
+  if (motor === 'codex' || motor === 'codex2' || motor === 'codex3') return codexCliModel(raw);
+  return raw;
 }
 
 export function kiesModel(modellen: MotorModellen, motor: AgentEngine, model: string): MotorModellen {

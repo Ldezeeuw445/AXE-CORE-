@@ -108,7 +108,7 @@ def test_lege_discovery_verdwijnt_niet_en_vraagt_geen_jacht():
     assert "1554" in berichten[0]["tekst"]
     assert "What yes does: nothing" in berichten[0]["tekst"]
     rij = core_task_rij(berichten[0])
-    assert rij["status"] == "pending"
+    assert rij["status"] == "completed"
     assert rij["status"] != "waiting_approval"
 
 
