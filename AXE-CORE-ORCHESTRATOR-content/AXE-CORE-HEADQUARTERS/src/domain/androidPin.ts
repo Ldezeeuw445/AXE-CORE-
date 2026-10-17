@@ -1,10 +1,14 @@
 /**
  * Telefoon-PIN — PBKDF2-record, sessie-ontgrendeling, geen tweede account.
  *
- * Op de telefoon is de PIN cijfers (native keypad). Een oud particle-gebaar
- * telt niet als ingestelde PIN: dat scherm werkte niet in de WebView, en
- * Luka mag daar nooit in blijven hangen. Opslag die faalt = geen PIN nodig,
- * nooit een doodlopend slot.
+ * Ontworpen pad (Luka, 17 okt): native lockscreen → swipe → /mobile
+ * (TelefoonSphere). Geen keypad in de flow. Dit bestand blijft liggen voor
+ * het geval er ooit een cijfer-PIN is gezet; standaard staat er geen, en
+ * `telefoonPinNodig` is dan false. Niet uitbreiden (geen setup-UI, geen
+ * Settings-PIN) tot Luka dat expliciet vraagt.
+ *
+ * Een oud particle-gebaar telt niet als ingestelde PIN. Opslag die faalt =
+ * geen PIN nodig, nooit een doodlopend slot.
  *
  * Zelfde crypto als het Samsung-record (PBKDF2-HMAC-SHA256, 120000, 32-byte
  * salt). Tests injecteren memory-Storage. Session unlock blijft sessionStorage.
@@ -29,6 +33,8 @@ export type { PinOpslag };
 export const PIN_LENGTE = 4;
 export const CODE_LENGTE = 4;
 export const MINIMUM_LENGTE = 3;
+/** Geen PIN gezet = swipe gaat naar Home. Keypad-code blijft, maar staat uit. */
+export const PIN_STANDAARD_UIT = true;
 export const ITERATIONS = 120_000;
 export const SOORT_SLEUTEL = 'axe_android_pin_soort';
 const SEPARATOR = '\u001f';
@@ -212,7 +218,8 @@ function wisSoort(opslag?: PinOpslag): void {
 
 /**
  * Alleen een werkende cijfer-PIN mag het keypad tonen.
- * Gebaar-restant, lege opslag of KeyStore-fout: false — dan is swipe genoeg.
+ * Standaard (geen record): false — swipe opent Home.
+ * Gebaar-restant, lege opslag of KeyStore-fout: false.
  */
 export async function telefoonPinNodig(opslag?: PinOpslag): Promise<boolean> {
   try {

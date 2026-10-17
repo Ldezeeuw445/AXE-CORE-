@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  PIN_LENGTE, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
+  PIN_LENGTE, PIN_STANDAARD_UIT, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
   zetPin, pinKlopt, wisPin, androidSlotLaatDoor, androidPinPad, verifieerCode, MINIMUM_LENGTE,
   RECORD_SLEUTEL, bewaarTerugPad, naOntgrendelenPad, SCHIL_START,
   zetCijferPin, verifieerCijfers, telefoonPinNodig, leesPinSoort, isCijferReeks,
@@ -92,6 +92,11 @@ describe('android particle-gesture PIN', () => {
     expect(androidPinPad('/login')).toBe(true);
     expect(androidPinPad('/lock')).toBe(false);
     expect(androidPinPad('/mobile')).toBe(false);
+  });
+
+  it('standaard uit: zonder PIN nooit een keypad na swipe', async () => {
+    expect(PIN_STANDAARD_UIT).toBe(true);
+    expect(await telefoonPinNodig(geheugen())).toBe(false);
   });
 
   it('cijfer-PIN is nodig, gebaar-restant niet, lege opslag niet', async () => {
