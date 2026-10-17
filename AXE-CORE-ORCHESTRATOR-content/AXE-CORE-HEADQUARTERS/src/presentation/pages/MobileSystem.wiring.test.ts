@@ -28,9 +28,9 @@ describe('canonical mobile Home wiring', () => {
   });
 
 
-  it('centers the phone world switch between equal left and right control reserves', () => {
+  it('centers the phone world switch between hamburger left and bell+look right', () => {
     const mobile = bron('presentation/pages/MobileSystem.tsx');
-    expect(mobile).toContain("gridTemplateColumns: '58px minmax(0, 1fr) 58px'");
+    expect(mobile).toContain("gridTemplateColumns: '58px minmax(0, 1fr) 88px'");
   });
 
   it('keeps navigation hamburger tap-only and gives edge swipes to both AXE side drawers', () => {

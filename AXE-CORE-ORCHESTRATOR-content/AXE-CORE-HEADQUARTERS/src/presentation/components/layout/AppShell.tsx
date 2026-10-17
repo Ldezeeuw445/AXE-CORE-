@@ -38,6 +38,7 @@ import { AxePresenceDock } from '@/presentation/components/layout/AxePresenceDoc
 import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
 import { openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
+import { PhoneBel, PhoneVoet } from '@/presentation/components/layout/PhoneChrome';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -170,7 +171,8 @@ export function AppShell() {
       android: isAndroidShellRuntime(),
       ingebed: isIngebed(),
     });
-  // De nav is dan altijd de lade; de horizontale onderbalk is alleen desktop.
+  // De nav-lade blijft; de A17 krijgt daarnaast de gedeelde onderbalk
+  // (Home/Desk/Agents/Trading/More) via PhoneVoet. Desktop houdt BottomNav.
   const mobileNav = mobileCommandSurface;
   /**
    * iPad: wél de laden, verder de volle schil.
@@ -266,20 +268,21 @@ export function AppShell() {
           kluis als dashboard, geen radar. Desktop-Home blijft ongewijzigd. */}
       {!mobileCommandSurface && opPlaat && !volScherm && location.pathname !== '/obsidian' && <PlaatViewSwitch />}
 
-      {/* Licht/donker-knop rechtsboven op de telefoon. BUITEN de schil, want de
+      {/* Bel + licht/donker rechtsboven op de telefoon. BUITEN de schil, want de
           schil krijgt in de lichte stand een backdrop-filter (frosted glas) en
           dat maakt een vast-gepositioneerd kind t.o.v. de schil i.p.v. het scherm
           — dan verschuift de knop mee met de plaat. Hierbuiten blijft hij vast
-          aan de schermhoek. */}
+          aan de schermhoek. Desktop-Home houdt PlaatViewSwitch voor Awareness. */}
       {mobileNav && (
         <div
-          className="axe-mobile-look-toggle fixed z-[70]"
+          className="axe-mobile-look-toggle fixed z-[70] flex items-center gap-1.5"
           style={{
             // 10px binnen de bovenrand van de plaat, wat die rand ook is (--axe-plaat-boven).
             top: opPlaatMobiel ? 'calc(var(--axe-sat) + var(--axe-plaat-boven, 2px) + 10px)' : 'calc(var(--axe-sat) + 10px)',
             right: opPlaatMobiel ? 18 : 12,
           }}
         >
+          {location.pathname !== '/lock' && <PhoneBel />}
           <LookToggle />
         </div>
       )}
@@ -514,11 +517,11 @@ export function AppShell() {
       {/* Navigatie. Twee vormen, want een telefoon en een desktop willen niet
           hetzelfde:
           - Desktop (geen command-surface): de horizontale BottomNav-strip.
-          - Telefoon / Android-shell (command-surface): een lade van links
-            (MobileNav) die alleen ruimte pakt als je hem opent. De vaste
-            onderbalk nam hoogte in en toonde dezelfde tabs als de app-grid;
-            de lade lost dat op en laat home + composer de basis blijven,
-            precies zoals de Tauri-app. */}
+          - Telefoon / Android-shell (command-surface): de gedeelde A17-onderbalk
+            (Home/Desk/Agents/Trading/More) plus de lade (MobileNav) achter More. */}
+      {mobileNav && location.pathname !== '/lock' && (
+        <PhoneVoet toonTabs={keyboardInset === 0} />
+      )}
       {!mobileNav && keyboardInset === 0 && <BottomNav />}
       {mobileNav && <MobileNav />}
       {/* Slimme hoekknop (mobiel): snelacties binnen duim-bereik, de mobiel-eigen

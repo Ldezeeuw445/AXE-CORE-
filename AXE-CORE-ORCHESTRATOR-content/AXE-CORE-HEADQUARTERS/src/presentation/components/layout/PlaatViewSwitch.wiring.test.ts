@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const switchBron = readFileSync(join(__dirname, 'PlaatViewSwitch.tsx'), 'utf8');
 const paneel = readFileSync(join(__dirname, '../axe-core/AwarenessCenter.tsx'), 'utf8');
+const knoppen = readFileSync(join(__dirname, '../axe-core/GoedkeuringActie.tsx'), 'utf8');
 
 describe('Awareness-knop is geen dode knop', () => {
   it('opent het paneel bij de knop, met echte jobs en goedkeuringen', () => {
@@ -15,8 +16,9 @@ describe('Awareness-knop is geen dode knop', () => {
     expect(paneel).toMatch(/Alles stil/);
     expect(paneel).toMatch(/goedkeuring\.tekst|vraag\.tekst|execVraag\.tekst/);
     expect(paneel).not.toMatch(/Pak dit op/);
-    expect(paneel).toMatch(/Approve/);
-    expect(paneel).toMatch(/Decline/);
+    expect(paneel).toMatch(/GoedkeuringActie/);
     expect(paneel).toMatch(/server\.approvals/);
+    expect(knoppen).toMatch(/Approve/);
+    expect(knoppen).toMatch(/Decline/);
   });
 });

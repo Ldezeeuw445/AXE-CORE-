@@ -7899,6 +7899,46 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   .axe-live-dot, .axe-live-caret { animation: none; }
 }
 
+/* ── A17-schil: onderbalk + 44px Approve/Decline op elke tab ───────────────
+ * Gedeeld met desktop via GoedkeuringActie; alleen de tikmaat is groter. */
+:root[data-look] .axe-phone-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  padding: 4px 2px 2px;
+  border-top: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+  border-radius: 16px;
+}
+:root[data-look] .axe-phone-tabs button {
+  min-height: 44px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+}
+:root[data-look] .axe-phone-tabs button[data-aan='ja'] {
+  color: var(--accent-cyan);
+  background: rgba(34, 211, 238, 0.09);
+}
+:root[data-look] [data-axe-goedkeuring][data-touch='ja'] button {
+  min-height: 44px;
+  min-width: 44px;
+}
+@media (max-width: 767px) {
+  :root[data-look] [data-axe-goedkeuring] button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 
 /* ── De bol op de lichte telefoonplaat ───────────────────────────────────
  * De AXE-sphere heeft bleke deeltjes (zoals in Tauri, waar de plaat een middentint is). Op een lichte

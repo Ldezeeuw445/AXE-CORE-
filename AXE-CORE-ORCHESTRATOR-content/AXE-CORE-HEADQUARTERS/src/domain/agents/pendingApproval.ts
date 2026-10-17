@@ -83,6 +83,28 @@ function rijVanVraag(v: PendingVraag, fallbackTaskId?: string | null): Goedkeuri
   return { id: v.id, taskId, wat, waarom };
 }
 
+/** Alle open /approvals-rijen, zonder per-agent filter — de telefoonstrook. */
+export function rijenVanLijst(
+  extra: Array<{ id: string; task_id?: string; wat?: string | null; waarom?: string | null; title?: string; detail?: string }> = [],
+): GoedkeuringsRij[] {
+  const uit: GoedkeuringsRij[] = [];
+  const gezien = new Set<string>();
+  for (const e of extra) {
+    const rij = rijVanVraag({
+      id: e.id,
+      title: e.title,
+      detail: e.detail,
+      wat: e.wat,
+      waarom: e.waarom,
+      task_id: e.task_id,
+    }, e.task_id);
+    if (!rij || gezien.has(rij.id)) continue;
+    gezien.add(rij.id);
+    uit.push(rij);
+  }
+  return uit;
+}
+
 /** Open rijen voor deze agent: eigen pending + globale /approvals-lijst. */
 export function rijenVoorAgent(
   agent: ServerAgent | null | undefined,

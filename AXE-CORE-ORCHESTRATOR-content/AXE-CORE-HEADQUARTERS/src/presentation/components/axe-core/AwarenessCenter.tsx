@@ -1,6 +1,6 @@
 /**
  * Wat Awareness écht weet: wie iets doet, en welke actie het plan verlaat.
- * Geen tweede layout — dezelfde kaart als de agentvensters. Stil als er niets is.
+ * Geen tweede layout — dezelfde knoppen als Home: GoedkeuringActie.
  */
 import { useEffect, useState } from 'react';
 import { Eye } from 'lucide-react';
@@ -14,8 +14,16 @@ import { decideDurableTaskApproval, plannerBesluit } from '@/infrastructure/gate
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
+import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 
-export function AwarenessCenter({ onClose }: { onClose: () => void }) {
+export function AwarenessCenter({
+  onClose,
+  hoek = 'midden',
+}: {
+  onClose: () => void;
+  hoek?: 'midden' | 'rechts';
+}) {
   const jobs = useAxeJobStore((s) => s.jobs);
   const pendingExec = useVoiceStore((s) => s.pendingExec);
   const resolvePendingExec = useVoiceStore((s) => s.resolvePendingExec);
@@ -58,10 +66,13 @@ export function AwarenessCenter({ onClose }: { onClose: () => void }) {
   });
 
   const stil = agenten.length === 0 && !execVraag && uitJobs.length === 0 && uitTaken.length === 0;
+  const rechts = hoek === 'rechts';
 
   return (
     <div
-      className="absolute top-full left-1/2 z-40 mt-2 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl p-3 shadow-2xl"
+      className={rechts
+        ? 'absolute top-full right-0 z-40 mt-2 w-[min(360px,calc(100vw-3rem))] rounded-2xl p-3 shadow-2xl'
+        : 'absolute top-full left-1/2 z-40 mt-2 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl p-3 shadow-2xl'}
       style={{
         background: 'var(--axe-kaart-vlak)',
         border: '1px solid var(--axe-kaart-lijn)',
@@ -96,78 +107,66 @@ export function AwarenessCenter({ onClose }: { onClose: () => void }) {
       )}
 
       {uitJobs.map((g) => (
-        <GoedkeuringRij
+        <GoedkeuringActie
           key={`job-${g.job?.id ?? g.agentId}`}
-          tekst={g.goedkeuring.tekst}
-          ja={g.goedkeuring.ja}
-          onJa={() => {
+          touch={rechts}
+          rijen={[{
+            id: g.job?.approvalId || g.goedkeuring.tekst,
+            taskId: g.job?.taskId || '',
+            wat: g.goedkeuring.wat || g.goedkeuring.tekst,
+            waarom: g.goedkeuring.waarom || '',
+          }]}
+          onBeslis={(rij, akkoord) => {
             const j = g.job;
-            if (!j?.taskId || !j.approvalId) return;
-            void decideDurableTaskApproval(j.taskId, j.approvalId, true, g.goedkeuring.ja)
-              .then(() => useAxeJobStore.getState().patch(j.id, { state: 'running' }));
-          }}
-          onNee={() => {
-            const j = g.job;
-            if (!j?.taskId || !j.approvalId) return;
-            void decideDurableTaskApproval(j.taskId, j.approvalId, false, 'geweigerd')
-              .then(() => useAxeJobStore.getState().patch(j.id, { state: 'failed' }));
+            void beslisAgentOk({
+              akkoord,
+              job: j,
+              rij: rij.taskId ? rij : null,
+              reden: akkoord ? g.goedkeuring.ja : 'geweigerd',
+            }).then((ok) => {
+              if (ok && j) useAxeJobStore.getState().patch(j.id, { state: akkoord ? 'running' : 'failed' });
+              verversServerAgents();
+            });
           }}
         />
       ))}
 
       {execVraag && pendingExec && (
-        <GoedkeuringRij
-          tekst={execVraag.tekst}
-          ja={execVraag.ja}
-          onJa={() => resolvePendingExec(pendingExec.id, true)}
-          onNee={() => resolvePendingExec(pendingExec.id, false)}
+        <GoedkeuringActie
+          touch={rechts}
+          rijen={[{
+            id: pendingExec.id,
+            taskId: '',
+            wat: execVraag.wat || execVraag.tekst,
+            waarom: execVraag.waarom || '',
+          }]}
+          onBeslis={(_rij, akkoord) => resolvePendingExec(pendingExec.id, akkoord)}
         />
       )}
 
       {uitTaken.map((g) => (
-        <GoedkeuringRij
+        <GoedkeuringActie
           key={`taak-${g.approvalId ?? g.id}`}
-          tekst={g.tekst}
-          ja={g.ja}
-          onJa={() => {
+          touch={rechts}
+          rijen={[{
+            id: g.approvalId || g.id,
+            taskId: g.taskId || '',
+            wat: g.wat || g.tekst,
+            waarom: g.waarom || '',
+          }]}
+          onBeslis={(rij, akkoord) => {
             if (g.taskId && g.approvalId) {
-              void decideDurableTaskApproval(g.taskId, g.approvalId, true, g.ja).then(verversServerAgents);
+              void decideDurableTaskApproval(g.taskId, g.approvalId, akkoord, akkoord ? g.ja : 'geweigerd').then(verversServerAgents);
               return;
             }
-            void plannerBesluit(g.id, true);
-          }}
-          onNee={() => {
-            if (g.taskId && g.approvalId) {
-              void decideDurableTaskApproval(g.taskId, g.approvalId, false, 'geweigerd').then(verversServerAgents);
+            if (rij.taskId) {
+              void beslisAgentOk({ akkoord, rij }).then(verversServerAgents);
               return;
             }
-            void plannerBesluit(g.id, false);
+            void plannerBesluit(g.id, akkoord);
           }}
         />
       ))}
-    </div>
-  );
-}
-
-function GoedkeuringRij({
-  tekst, ja, onJa, onNee,
-}: {
-  tekst: string;
-  ja: string;
-  onJa: () => void;
-  onNee: () => void;
-}) {
-  return (
-    <div className="mb-2 rounded-xl px-2.5 py-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--axe-kaart-lijn)' }}>
-      <p className="mb-2 whitespace-pre-wrap text-[12px] leading-snug" style={{ color: 'var(--text-primary)' }}>{tekst}</p>
-      <div className="flex gap-1.5">
-        <button type="button" onClick={onJa} title={ja} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--ok)', background: 'var(--tint)' }}>
-          Approve
-        </button>
-        <button type="button" onClick={onNee} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-          Decline
-        </button>
-      </div>
     </div>
   );
 }

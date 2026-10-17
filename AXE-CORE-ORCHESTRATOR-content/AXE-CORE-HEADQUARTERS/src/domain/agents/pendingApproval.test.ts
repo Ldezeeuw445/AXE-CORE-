@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   normaliseerServerAgent,
+  rijenVanLijst,
   rijenVoorAgent,
   wachtOpOk,
 } from './pendingApproval';
@@ -54,6 +55,19 @@ describe('rijenVoorAgent', () => {
     ]);
     expect(rijen).toEqual([
       { id: 'a-9', taskId: 't-9', wat: 'Approve the step', waarom: 'It left the plan.' },
+    ]);
+  });
+});
+
+describe('rijenVanLijst', () => {
+  it('zet elke pending /approvals-rij om, zonder agentfilter', () => {
+    expect(rijenVanLijst([
+      { id: 'a-1', task_id: 't-1', wat: 'Send', waarom: 'Left the plan.' },
+      { id: 'a-2', task_id: 't-2', title: 'Pay', detail: 'Needs a card.' },
+      { id: 'a-1', task_id: 't-1', wat: 'dup' },
+    ])).toEqual([
+      { id: 'a-1', taskId: 't-1', wat: 'Send', waarom: 'Left the plan.' },
+      { id: 'a-2', taskId: 't-2', wat: 'Pay', waarom: 'Needs a card.' },
     ]);
   });
 });

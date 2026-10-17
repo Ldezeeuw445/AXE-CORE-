@@ -24,6 +24,8 @@ import { managerVan } from '@/domain/tierRouter/agentVenster';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
+import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
+import { rijenVoorAgent } from '@/domain/agents/pendingApproval';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -209,18 +211,13 @@ function MobileOkKaart({ id, onSluit }: { id: AxeAgentId; onSluit: () => void })
   const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
   const wat = vraag?.wat || server?.pendingApproval?.wat || server?.pendingApproval?.title || server?.task?.title || 'Needs your OK';
   const waarom = vraag?.waarom || server?.pendingApproval?.waarom || server?.pendingApproval?.detail || '';
-  const beslissen = (akkoord: boolean) => {
-    void beslisAgentOk({
-      akkoord,
-      agent: server,
-      job,
-      reden: akkoord ? 'Approved on phone.' : 'Declined on phone.',
-    }).then((ok) => {
-      if (ok && job) useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
-      verversServerAgents();
-    });
-    onSluit();
-  };
+  const rijen = rijenVoorAgent(server);
+  const fallback = [{
+    id: server?.pendingApproval?.id || job?.approvalId || `phone-ok-${id}`,
+    taskId: job?.taskId || server?.task?.id || '',
+    wat,
+    waarom,
+  }];
   return (
     <div
       className="axe-mobile-edge mb-1.5 rounded-[14px] px-3 py-2"
@@ -228,14 +225,24 @@ function MobileOkKaart({ id, onSluit }: { id: AxeAgentId; onSluit: () => void })
       data-axe-mobile-ok
     >
       <p className="text-[11px] font-semibold" style={{ color: agent.accent }}>{agent.name}</p>
-      <p className="mt-1 whitespace-pre-wrap text-[12px] leading-snug" style={{ color: 'var(--text-primary)' }}>
-        {wat}{waarom ? `\n${waarom}` : ''}
-      </p>
-      <div className="mt-2 flex gap-1.5">
-        <button type="button" onClick={() => beslissen(true)} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--ok)', background: 'var(--tint)' }}>Approve</button>
-        <button type="button" onClick={() => beslissen(false)} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>Decline</button>
-        <button type="button" onClick={onSluit} className="ml-auto rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>Close</button>
-      </div>
+      <GoedkeuringActie
+        touch
+        rijen={rijen.length ? rijen : fallback}
+        onBeslis={(rij, akkoord) => {
+          void beslisAgentOk({
+            akkoord,
+            agent: server,
+            job,
+            rij: rij.taskId ? rij : null,
+            reden: akkoord ? 'Approved on phone.' : 'Declined on phone.',
+          }).then((ok) => {
+            if (ok && job) useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
+            verversServerAgents();
+          });
+          onSluit();
+        }}
+      />
+      <button type="button" onClick={onSluit} className="mt-1 rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>Close</button>
     </div>
   );
 }
@@ -450,7 +457,7 @@ export default function MobileSystem() {
       <div
         ref={balkRef}
         className="relative z-[5] mb-2 grid w-full flex-none items-center"
-        style={{ gridTemplateColumns: '58px minmax(0, 1fr) 58px', pointerEvents: 'auto' }}
+        style={{ gridTemplateColumns: '58px minmax(0, 1fr) 88px', pointerEvents: 'auto' }}
       >
         <span aria-hidden="true" />
         <MobileWorldBar />
