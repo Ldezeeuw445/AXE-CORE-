@@ -5,9 +5,12 @@
   <title>AXE Home live layout fixture</title>
   <style>
     :root {
+      --axe-kop-h: 66px;
+      --axe-sat: 0px;
       --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
       --axe-home-rail-breed: clamp(220px, 24vw, 380px);
       --axe-home-rail-gap: clamp(8px, 1.1vh, 12px);
+      --axe-home-rail-top: calc(var(--axe-kop-h, 66px) + var(--axe-sat, 0px) + 8px);
       --axe-home-live-hoog: clamp(152px, 24%, 196px);
       --text-primary: #f4f4f5;
       --text-secondary: #a1a1aa;
@@ -21,11 +24,22 @@
       :root {
         --axe-home-rail-breed: clamp(200px, 26vw, 300px);
         --axe-home-rail-gap: 8px;
-        --axe-home-live-hoog: clamp(140px, 32%, 180px);
+        --axe-home-live-hoog: clamp(128px, 28%, 160px);
       }
     }
     html, body { margin: 0; height: 100%; background: #05070c; color: var(--text-primary); font: 13px/1.35 ui-sans-serif, system-ui; }
     .scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
+    .kop {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: var(--axe-kop-h);
+      z-index: 45;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 88px 0 96px;
+      pointer-events: none;
+      font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .kop-iconen { display: flex; gap: 10px; font-size: 12px; letter-spacing: 0; text-transform: none; }
     .bol-vak { position: absolute; inset: 0 0 var(--composer-band, 250px) 0; }
     .orb {
       position: absolute;
@@ -38,7 +52,7 @@
       box-shadow: 0 0 40px rgba(34,211,238,.18);
     }
     .axe-home-rail {
-      position: absolute; top: 6px;
+      position: absolute; top: var(--axe-home-rail-top);
       bottom: calc(10px + var(--axe-home-live-hoog));
       width: var(--axe-home-rail-breed);
       display: flex; flex-direction: column; justify-content: flex-start;
@@ -53,12 +67,18 @@
       flex: 0 0 auto;
       height: clamp(40px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 58px);
       min-height: 40px; max-height: 58px;
+      overflow: hidden;
     }
     .axe-home-rail--rechts .axe-home-rail-rij { flex-direction: row-reverse; }
-    .tegel { width: 36px; flex: none; padding: 2px 1px; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
-    .balk { flex: 1; min-width: 0; min-height: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 4px 10px; }
+    .tegel { width: 36px; flex: none; padding: 2px 1px; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); overflow: hidden; }
+    .balk { flex: 1; min-width: 0; min-height: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 4px 10px; overflow: hidden; }
     .balk .naam { color: #38bdf8; font-weight: 500; }
-    .balk .regel { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 11px; line-height: 1.25; }
+    .balk .regel {
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; text-overflow: ellipsis;
+      overflow-wrap: break-word; word-break: normal;
+      font-size: 11px; line-height: 1.25; max-height: 2.5em;
+    }
     .axe-home-live {
       position: absolute;
       left: var(--axe-home-rail-inset);
@@ -89,10 +109,14 @@
     .cluster > * { min-height: 0; }
     .midden { pointer-events: none; flex: 1 1 auto; min-width: 0; }
     @media (max-width: 1100px) {
-      .axe-home-rail { top: 4px; justify-content: flex-start; padding: 0; }
-      .axe-home-rail-rij { height: clamp(32px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px); min-height: 32px; max-height: 44px; }
-      .tegel { width: 30px; padding: 1px; }
-      .balk { padding: 2px 8px; }
+      .axe-home-rail { justify-content: flex-start; padding: 0; }
+      .axe-home-rail-rij { height: clamp(22px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px); min-height: 22px; max-height: 44px; }
+      .tegel { width: 22px; padding: 0; }
+      .balk { padding: 1px 8px; }
+      .balk .regel { -webkit-line-clamp: 1; max-height: 1.25em; white-space: nowrap; display: block; }
+      .kaart { padding: 4px 8px; }
+      .kaart h3 { margin: 0; }
+      .kaart p, .meer { margin: 0; }
     }
     .kaart {
       background: var(--axe-kaart-vlak);
@@ -106,15 +130,21 @@
       min-height: 0;
       overflow: hidden;
     }
-    .kaart h3 { margin: 0 0 2px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: normal; overflow: visible; }
+    .kaart h3 {
+      margin: 0 0 2px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.2; max-height: 1.2em;
+    }
     .kaart p, .meer {
       margin: 0 0 2px;
-      white-space: normal;
+      white-space: nowrap;
       overflow: hidden;
-      overflow-wrap: anywhere;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
+      text-overflow: ellipsis;
+      overflow-wrap: break-word;
+      word-break: normal;
+      font-size: 10px;
+      line-height: 1.25;
+      max-height: 1.25em;
     }
     .ok { color: var(--ok); }
     .meer { color: var(--text-muted); background: none; border: 0; padding: 0; font-size: 10px; cursor: pointer; }
@@ -144,6 +174,10 @@
 </head>
 <body>
   <div class="scene" data-axe-home-scene>
+    <header class="kop" data-axe-header>
+      <span>COMMAND CENTER · OPTIMAL · CORE ACTIVE</span>
+      <span class="kop-iconen" aria-hidden="true">▣ ⌂ ⚙</span>
+    </header>
     <div class="bol-vak" data-axe-bol-vak>
       <div class="orb" data-axe-orb></div>
       <div class="axe-home-rail axe-home-rail--links" data-axe-home-rail="links">

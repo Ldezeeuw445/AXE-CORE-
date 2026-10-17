@@ -8,12 +8,14 @@
   --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
   --axe-home-rail-breed: clamp(220px, 24vw, 380px);
   --axe-home-rail-gap: clamp(8px, 1.1vh, 12px);
+  /* Scene is fixed inset 0 onder de kopregel; zelfde offset als de asides. */
+  --axe-home-rail-top: calc(var(--axe-kop-h, 66px) + var(--axe-sat, 0px) + 8px);
   --axe-home-live-hoog: clamp(152px, 24%, 196px);
 }
 
 .axe-home-rail {
   position: absolute;
-  top: 6px;
+  top: var(--axe-home-rail-top);
   bottom: calc(10px + var(--axe-home-live-hoog));
   width: var(--axe-home-rail-breed);
   display: flex;
@@ -39,6 +41,7 @@
   right: auto;
   width: min(78%, 420px);
   bottom: 8%;
+  top: 8px;
 }
 
 .axe-home-rail-rij {
@@ -51,6 +54,7 @@
   min-height: 40px;
   max-height: 58px;
   width: 100%;
+  overflow: hidden;
 }
 
 .axe-home-rail--rechts .axe-home-rail-rij {
@@ -61,6 +65,7 @@
   width: 36px;
   flex: none;
   padding: 2px 1px;
+  overflow: hidden;
 }
 
 .axe-home-rail-balk {
@@ -68,6 +73,7 @@
   min-width: 0;
   min-height: 0;
   padding: 4px 10px;
+  overflow: hidden;
 }
 
 .axe-home-rail-regel {
@@ -75,9 +81,12 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  overflow-wrap: break-word;
+  word-break: normal;
   font-size: 11px;
   line-height: 1.25;
+  max-height: 2.5em;
 }
 
 /* 2+2 under the rails: stacked pairs, never a 4-across band over the composer. */
@@ -150,13 +159,15 @@
 }
 
 .axe-home-live .axe-kaart-titel {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: normal;
   font-size: 9px;
   letter-spacing: 0.08em;
   line-height: 1.2;
+  max-height: 1.2em;
 }
 
 .axe-home-live .axe-kaart-lijf {
@@ -172,19 +183,21 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .axe-home-live-regel {
   margin: 0 0 2px;
   font-size: 10px;
   line-height: 1.25;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  max-height: 1.25em;
+  overflow-wrap: break-word;
+  word-break: normal;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
 }
 
 .axe-home-live-actie {
@@ -207,9 +220,15 @@
   background: none;
   color: var(--text-muted);
   font-size: 10px;
+  line-height: 1.25;
   letter-spacing: 0.04em;
   cursor: pointer;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 1.25em;
+  flex: none;
 }
 
 .axe-home-live-lijst {
@@ -227,6 +246,14 @@
   border: 1px solid var(--axe-kaart-lijn);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
+}
+
+.axe-home-live-lijst .axe-home-live-regel,
+.axe-home-live-lijst .axe-home-live-meer {
+  white-space: normal;
+  max-height: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .axe-home-live-lijst-kop {
@@ -305,27 +332,49 @@
   :root {
     --axe-home-rail-breed: clamp(200px, 26vw, 300px);
     --axe-home-rail-gap: 8px;
-    --axe-home-live-hoog: clamp(140px, 32%, 180px);
+    --axe-home-live-hoog: clamp(128px, 28%, 160px);
   }
 
   .axe-home-rail {
-    top: 4px;
     justify-content: flex-start;
     padding: 0;
   }
 
   .axe-home-rail-rij {
-    height: clamp(32px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px);
-    min-height: 32px;
+    height: clamp(22px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px);
+    min-height: 22px;
     max-height: 44px;
   }
 
   .axe-home-rail-tegel {
-    width: 30px;
-    padding: 1px;
+    width: 22px;
+    padding: 0;
+  }
+
+  .axe-home-rail-tegel span {
+    display: none;
   }
 
   .axe-home-rail-balk {
-    padding: 2px 8px;
+    padding: 1px 8px;
+  }
+
+  .axe-home-rail-regel {
+    -webkit-line-clamp: 1;
+    max-height: 1.25em;
+    white-space: nowrap;
+    display: block;
+  }
+
+  .axe-home-live .axe-kaart-kop {
+    padding: 3px 8px 0;
+  }
+
+  .axe-home-live .axe-kaart-lijf {
+    padding: 1px 8px 3px;
+  }
+
+  .axe-home-live-regel {
+    margin: 0;
   }
 }

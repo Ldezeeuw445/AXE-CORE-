@@ -148,7 +148,7 @@ function Balkje({
           aria-label={`Gesprek met ${agent.name}`}
           className="flex items-center gap-3 w-full cursor-pointer min-w-0 text-left"
         >
-          <span className="flex-1 min-w-0 text-[11px] leading-snug axe-home-rail-regel">{kop}</span>
+          <span className="flex-1 min-w-0 text-[11px] axe-home-rail-regel">{kop}</span>
           <span
             className="text-[9px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0 flex items-center gap-1.5"
             style={{ color: stand.kleur }}

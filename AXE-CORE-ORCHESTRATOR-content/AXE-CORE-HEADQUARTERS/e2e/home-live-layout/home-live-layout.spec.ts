@@ -10,6 +10,7 @@ const shots = join(here, 'shots');
 const MATEN = [
   { naam: '1100x680', width: 1100, height: 680 },
   { naam: '1440x900', width: 1440, height: 900 },
+  { naam: '1560x980', width: 1560, height: 980 },
   { naam: '1920x1080', width: 1920, height: 1080 },
   { naam: '2048x1080', width: 2048, height: 1080 },
   { naam: '2560x1440', width: 2560, height: 1440 },
@@ -33,6 +34,28 @@ async function open(page: Page, width: number, height: number) {
   await page.goto(`file://${fixture}`);
 }
 
+/** Visible box height must land on a whole line, not cut through a glyph. */
+async function assertHeleRegels(page: Page, sel: string, waar: string) {
+  const rijen = await page.locator(sel).evaluateAll((nodes) =>
+    nodes.map((n) => {
+      const el = n as HTMLElement;
+      const cs = getComputedStyle(el);
+      const lh = parseFloat(cs.lineHeight);
+      const h = el.getBoundingClientRect().height;
+      const wrap = cs.overflowWrap;
+      const brk = cs.wordBreak;
+      const rest = lh > 0 ? Math.min(h % lh, lh - (h % lh)) : 0;
+      return { h, lh, wrap, brk, rest, tekst: (el.textContent || '').slice(0, 48) };
+    }),
+  );
+  for (const r of rijen) {
+    expect(r.wrap, `${waar} overflow-wrap (${r.tekst})`).not.toBe('anywhere');
+    expect(r.brk, `${waar} word-break (${r.tekst})`).not.toMatch(/break-all|break-word/);
+    if (r.h < 2 || !(r.lh > 0)) continue;
+    expect(r.rest, `${waar} partial line h=${r.h} lh=${r.lh} (${r.tekst})`).toBeLessThan(1.25);
+  }
+}
+
 test.describe('Home live layout blijft uit de composer', () => {
   test.beforeAll(() => { mkdirSync(shots, { recursive: true }); });
 
@@ -49,6 +72,12 @@ test.describe('Home live layout blijft uit de composer', () => {
       const feed = await box(page, '[data-axe-home-feed]');
       const orb = await box(page, '[data-axe-orb]');
       const dock = await box(page, '[data-axe-dock]');
+      const kop = await box(page, '[data-axe-header]');
+
+      expect(overlap(links, kop), `left rail vs header at ${maat.naam}`).toBe(0);
+      expect(overlap(rechts, kop), `right rail vs header at ${maat.naam}`).toBe(0);
+      expect(links.y, `left rail below header at ${maat.naam}`).toBeGreaterThanOrEqual(kop.y + kop.height - 0.5);
+      expect(rechts.y, `right rail below header at ${maat.naam}`).toBeGreaterThanOrEqual(kop.y + kop.height - 0.5);
 
       expect(overlap(live, composer), 'live strip vs composer').toBe(0);
       expect(overlap(live, chips), 'live strip vs chips').toBe(0);
@@ -134,6 +163,9 @@ test.describe('Home live layout blijft uit de composer', () => {
         ch: (el as HTMLElement).clientHeight,
       }));
       expect(liveMaat.sh, `live strip scrollHeight<=clientHeight at ${maat.naam}`).toBeLessThanOrEqual(liveMaat.ch + 1);
+
+      await assertHeleRegels(page, '.balk .regel', `rail regel at ${maat.naam}`);
+      await assertHeleRegels(page, '[data-axe-home-kaart] p, [data-axe-home-kaart] .meer', `live regel at ${maat.naam}`);
 
       await page.screenshot({
         path: join(shots, `home-${maat.naam}.png`),
