@@ -2,8 +2,11 @@
  * Native brug voor het particle-gesture PBKDF2-record.
  *
  * Alleen load/save/clear. Geen generieke KV, geen gebarenreeks.
- * Restanten in WebView localStorage worden gewist zodat een oude
+ * Op Tauri-Android: KeyStore, en web-restanten wissen zodat een oude
  * plaintext-record niet naast KeyStore blijft staan.
+ * Op de WebView-schil (com.axecore.core) en PWA: localStorage — daar is
+ * geen KeyStore-brug, en wissen + rood "Secure storage unavailable"
+ * maakte het slot onbruikbaar.
  */
 
 export const RECORD_SLEUTEL = 'axe_particle_gesture_lock';
@@ -55,6 +58,33 @@ export function recordJsonGeldig(raw: string): boolean {
   }
 }
 
+function webOpslag(): PinOpslag | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function webLees(): string | null {
+  const web = webOpslag();
+  if (!web) return null;
+  try {
+    const raw = web.getItem(RECORD_SLEUTEL);
+    if (raw == null) return null;
+    return recordJsonGeldig(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function webSchrijf(raw: string): void {
+  const web = webOpslag();
+  if (!web) throw new Error(OPSLAG_DICHT);
+  web.setItem(RECORD_SLEUTEL, raw);
+}
+
 async function invokeNative<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!opAndroidTauri()) throw new Error(OPSLAG_DICHT);
   try {
@@ -66,6 +96,7 @@ async function invokeNative<T>(cmd: string, args?: Record<string, unknown>): Pro
 }
 
 export async function nativeLeesRecord(): Promise<string | null> {
+  if (!opAndroidTauri()) return webLees();
   wisWebPinRest();
   const raw = await invokeNative<string | null>('gesture_lock_load');
   if (raw == null) return null;
@@ -75,11 +106,19 @@ export async function nativeLeesRecord(): Promise<string | null> {
 
 export async function nativeSchrijfRecord(raw: string): Promise<void> {
   if (!recordJsonGeldig(raw)) throw new Error(OPSLAG_DICHT);
+  if (!opAndroidTauri()) {
+    webSchrijf(raw);
+    return;
+  }
   wisWebPinRest();
   await invokeNative<void>('gesture_lock_save', { record: raw });
 }
 
 export async function nativeWisRecord(): Promise<void> {
+  if (!opAndroidTauri()) {
+    wisWebPinRest();
+    return;
+  }
   wisWebPinRest();
   await invokeNative<void>('gesture_lock_clear');
 }

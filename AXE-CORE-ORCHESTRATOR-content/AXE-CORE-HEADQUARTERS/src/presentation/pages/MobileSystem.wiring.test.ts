@@ -15,8 +15,9 @@ describe('canonical mobile Home wiring', () => {
 
   it('renders the /mobile route on the same floating glass plate as native phone tabs', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
-    expect(shell).toContain("location.pathname !== '/lock'");
+    expect(shell).toContain('isLockPad(location.pathname)');
     expect(shell).toContain("const opPlaatMobiel = mobileNav");
+    expect(shell).toContain('axe-lock-pad');
   });
 
   it('gives the mobile mic a real primary native control instead of the desktop transparent-button style', () => {
@@ -176,7 +177,7 @@ describe('canonical mobile Home wiring', () => {
     // `ladeOppervlak` = telefoon OF iPad. Eén vlag, want de desktop-sloten en
     // de ladesloten vechten anders om dezelfde id's (ladeSloten.ts slaat bij
     // botsing alleen maar over, en dan krijg je stil geen lade).
-    expect(shell).toContain("useLadeSloten(ladeOppervlak && location.pathname !== '/lock');");
+    expect(shell).toContain('useLadeSloten(ladeOppervlak && !opSlot)');
     expect(shell).toContain('const ladeOppervlak = mobileCommandSurface || isTablet;');
     expect(shell).toContain('{!ladeOppervlak && opPlaat && <PlaatSlotHosts />}');
     // Sidebar/RightPanel gebruiken dezelfde vlag als hun Sheet: een lade die

@@ -82,12 +82,13 @@ describe('gesture-lock native brug', () => {
     await expect(nativeSchrijfRecord(geldig)).rejects.toThrow(OPSLAG_DICHT);
   });
 
-  it('faalt dicht buiten Android-Tauri, zonder localStorage-schrijf', async () => {
+  it('buiten Android-Tauri bewaart het record in localStorage', async () => {
     vi.stubGlobal('window', {});
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' });
-    await expect(nativeSchrijfRecord(geldig)).rejects.toThrow(OPSLAG_DICHT);
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Linux; Android 15)' });
+    await nativeSchrijfRecord(geldig);
     expect(invoke).not.toHaveBeenCalled();
-    expect(bak.size).toBe(0);
+    expect(web.getItem(RECORD_SLEUTEL)).toBe(geldig);
+    await expect(nativeLeesRecord()).resolves.toBe(geldig);
   });
 
   it('wisWebPinRest haalt oude keypad-sleutels weg', () => {

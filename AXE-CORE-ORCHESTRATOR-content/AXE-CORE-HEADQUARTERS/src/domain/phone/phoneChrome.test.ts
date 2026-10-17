@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PHONE_TABS, PHONE_TIKMAAT, phoneTabActief, phoneTabDoel } from './phoneChrome';
+import { PHONE_TABS, PHONE_TIKMAAT, phoneTabActief, phoneTabDoel, isLockPad } from './phoneChrome';
 
 describe('phoneChrome', () => {
   it('heeft de vijf A17-tabs in deze volgorde', () => {
@@ -26,5 +26,12 @@ describe('phoneChrome', () => {
 
   it('houdt Approve/Decline op 44px', () => {
     expect(PHONE_TIKMAAT).toBe(44);
+  });
+
+  it('ziet /lock en /lock/pin als slot, verder niets', () => {
+    expect(isLockPad('/lock')).toBe(true);
+    expect(isLockPad('/lock/pin')).toBe(true);
+    expect(isLockPad('/mobile')).toBe(false);
+    expect(isLockPad('/agents')).toBe(false);
   });
 });

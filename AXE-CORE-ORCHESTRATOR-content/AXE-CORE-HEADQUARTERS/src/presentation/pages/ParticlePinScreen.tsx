@@ -22,7 +22,7 @@ import { useLook } from '@/presentation/hooks/useLook';
 export default function ParticlePinScreen() {
   const navigate = useNavigate();
   const [look] = useLook();
-  const [modus, setModus] = useState<'laden' | 'setup' | 'unlock' | 'dicht'>('laden');
+  const [modus, setModus] = useState<'laden' | 'setup' | 'unlock'>('laden');
   const [nodig, setNodig] = useState(CODE_LENGTE);
   const herkenner = useMemo(() => new UnistrokeRecognizer(lockAlphabet()), []);
   const [ingevoerd, setIngevoerd] = useState<string[]>([]);
@@ -43,9 +43,10 @@ export default function ParticlePinScreen() {
         setNodig(n);
         setModus(gezet ? 'unlock' : 'setup');
       } catch {
+        // Geen KeyStore (WebView) of lege opslag: setup, geen rode fout.
         if (alive) {
-          setModus('dicht');
-          setFout(OPSLAG_DICHT);
+          setModus('setup');
+          setFout(null);
         }
       }
     })();
@@ -96,7 +97,7 @@ export default function ParticlePinScreen() {
   };
 
   const slag = (points: GesturePoint[]) => {
-    if (bezig || modus === 'laden' || modus === 'dicht') return;
+    if (bezig || modus === 'laden') return;
     const result = herkenner.recognize(points);
     if (!isClearWinner(result) || !result) {
       setFout('Not clear enough — try again');
@@ -109,10 +110,10 @@ export default function ParticlePinScreen() {
   };
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden" data-axe-lock-pin>
       <MobileGlass />
       <div className="absolute inset-0 z-[1]">
-        <ParticleGestureField onStroke={slag} disabled={bezig || modus === 'laden' || modus === 'dicht'} />
+        <ParticleGestureField onStroke={slag} disabled={bezig || modus === 'laden'} />
       </div>
       <div
         className="pointer-events-none relative z-[2] mx-auto flex h-full w-full max-w-sm flex-col px-6"
@@ -138,7 +139,7 @@ export default function ParticlePinScreen() {
               />
             ))}
           </div>
-          {fout && (
+          {fout && fout !== OPSLAG_DICHT && (
             <p className="mt-3 text-[12px]" style={{ color: 'var(--error, #EF4444)' }}>{fout}</p>
           )}
         </div>
@@ -146,7 +147,7 @@ export default function ParticlePinScreen() {
           type="button"
           className="pointer-events-auto mt-auto mb-2 self-center text-[12px]"
           style={{ color: plaatGedempt }}
-          onClick={() => { setIngevoerd([]); setFout(modus === 'dicht' ? OPSLAG_DICHT : null); }}
+          onClick={() => { setIngevoerd([]); setFout(null); }}
         >
           Clear
         </button>

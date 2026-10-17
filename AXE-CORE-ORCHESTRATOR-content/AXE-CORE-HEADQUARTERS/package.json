@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "test:home-layout": "playwright test -c e2e/home-live-layout/playwright.config.ts",
+    "test:phone-a17": "playwright test -c e2e/phone-a17/playwright.config.ts",
     "lint": "eslint src",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

@@ -12,6 +12,8 @@ describe('gedeelde A17-schil', () => {
     expect(shell).toContain('<PhoneBel />');
     expect(shell).toContain('<PhoneVoet');
     expect(shell).toContain('toonTabs={keyboardInset === 0}');
+    expect(shell).toContain('mobileNav && !opSlot');
+    expect(shell).toContain('<MobieleTabSchil>');
     expect(home).not.toContain('PhoneVoet');
     expect(home).toContain('!isMobile && <HomeLiveDashboard');
   });

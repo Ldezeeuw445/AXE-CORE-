@@ -21,3 +21,4 @@ dist
 # headless VPS-runner (npm run build:runner)
 dist-runner
 e2e/home-live-layout/test-results/
+e2e/phone-a17/test-results/

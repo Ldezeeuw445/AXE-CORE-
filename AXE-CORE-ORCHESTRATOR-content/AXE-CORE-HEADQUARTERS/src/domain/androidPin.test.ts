@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   PIN_LENGTE, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
   zetPin, pinKlopt, wisPin, androidSlotLaatDoor, verifieerCode, MINIMUM_LENGTE,
-  RECORD_SLEUTEL, OPSLAG_DICHT, bewaarTerugPad, naOntgrendelenPad, SCHIL_START,
+  RECORD_SLEUTEL, bewaarTerugPad, naOntgrendelenPad, SCHIL_START,
 } from './androidPin';
 
 function geheugen(): Storage {
@@ -100,7 +100,7 @@ describe('android particle-gesture PIN', () => {
   });
 });
 
-describe('geen localStorage-fallback', () => {
+describe('WebView valt terug op localStorage', () => {
   const bak = new Map<string, string>();
   const web: Storage = {
     get length() { return bak.size; },
@@ -113,29 +113,34 @@ describe('geen localStorage-fallback', () => {
 
   beforeEach(() => {
     bak.clear();
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Linux; Android 15)' });
     vi.stubGlobal('localStorage', web);
   });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('zetPin zonder native brug schrijft het record niet naar localStorage', async () => {
+  it('zetPin zonder KeyStore schrijft het PBKDF2-record naar localStorage', async () => {
     const r = await zetPin(CODE);
-    expect(r.ok).toBe(false);
-    expect(r.fout).toBe(OPSLAG_DICHT);
-    expect(web.getItem(RECORD_SLEUTEL)).toBeNull();
-    expect(JSON.stringify([...bak.entries()])).not.toContain('swipeRight');
+    expect(r.ok).toBe(true);
+    const raw = web.getItem(RECORD_SLEUTEL) ?? '';
+    expect(raw.length).toBeGreaterThan(0);
+    expect(raw).not.toContain('swipeRight');
+    expect(await pinIsGezet()).toBe(true);
+    expect(await pinKlopt(CODE)).toBe(true);
   });
 
-  it('pinIsGezet gooit als KeyStore ontbreekt in plaats van "niet gezet"', async () => {
-    await expect(pinIsGezet()).rejects.toThrow(OPSLAG_DICHT);
+  it('pinIsGezet is false als er nog geen code staat, geen rode fout', async () => {
+    await expect(pinIsGezet()).resolves.toBe(false);
     expect(web.getItem(RECORD_SLEUTEL)).toBeNull();
   });
 
-  it('veegt een oude plaintext-record uit localStorage bij native-poging', async () => {
+  it('negeert een oude ongeldige plaintext-record en zet een nieuwe', async () => {
     web.setItem(RECORD_SLEUTEL, JSON.stringify({ hash: 'lek', salt: 'x', length: 4 }));
+    expect(await pinIsGezet()).toBe(false);
     const r = await zetPin(CODE);
-    expect(r.ok).toBe(false);
-    expect(web.getItem(RECORD_SLEUTEL)).toBeNull();
+    expect(r.ok).toBe(true);
+    expect(web.getItem(RECORD_SLEUTEL)).not.toContain('lek');
   });
 });

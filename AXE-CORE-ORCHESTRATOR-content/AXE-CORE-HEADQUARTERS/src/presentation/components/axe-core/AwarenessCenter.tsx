@@ -3,7 +3,10 @@
  * Geen tweede layout — dezelfde knoppen als Home: GoedkeuringActie.
  */
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Eye } from 'lucide-react';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { PhoneBlad } from '@/presentation/components/layout/PhoneBlad';
 import {
   bewustzijnVanJobs,
   goedkeuringVanActie,
@@ -28,6 +31,7 @@ export function AwarenessCenter({
   const pendingExec = useVoiceStore((s) => s.pendingExec);
   const resolvePendingExec = useVoiceStore((s) => s.resolvePendingExec);
   const server = useServerAgents();
+  const mobiel = useIsMobile();
   const [extra, setExtra] = useState<AwarenessGoedkeuring[]>([]);
 
   useEffect(() => {
@@ -68,26 +72,17 @@ export function AwarenessCenter({
   const stil = agenten.length === 0 && !execVraag && uitJobs.length === 0 && uitTaken.length === 0;
   const rechts = hoek === 'rechts';
 
-  return (
-    <div
-      className={rechts
-        ? 'absolute top-full right-0 z-40 mt-2 w-[min(360px,calc(100vw-3rem))] rounded-2xl p-3 shadow-2xl'
-        : 'absolute top-full left-1/2 z-40 mt-2 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl p-3 shadow-2xl'}
-      style={{
-        background: 'var(--axe-kaart-vlak)',
-        border: '1px solid var(--axe-kaart-lijn)',
-        borderTopColor: 'var(--axe-kaart-lijn-boven)',
-        boxShadow: 'var(--axe-kaart-schaduw)',
-      }}
-      data-axe-awareness
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-          <Eye size={13} />
-          <span className="text-[11px] font-semibold uppercase tracking-wide">Awareness</span>
+  const lijf = (
+    <>
+      {!mobiel && (
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+            <Eye size={13} />
+            <span className="text-[11px] font-semibold uppercase tracking-wide">Awareness</span>
+          </div>
+          <button type="button" onClick={onClose} className="text-sm leading-none" style={{ color: 'var(--text-muted)' }} aria-label="Close">×</button>
         </div>
-        <button type="button" onClick={onClose} className="text-sm leading-none" style={{ color: 'var(--text-muted)' }} aria-label="Close">×</button>
-      </div>
+      )}
 
       {stil && (
         <p className="py-3 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
@@ -167,6 +162,30 @@ export function AwarenessCenter({
           }}
         />
       ))}
+    </>
+  );
+
+  if (mobiel && typeof document !== 'undefined') {
+    return createPortal(
+      <PhoneBlad titel="Awareness" onSluit={onClose}>{lijf}</PhoneBlad>,
+      document.body,
+    );
+  }
+
+  return (
+    <div
+      className={rechts
+        ? 'absolute top-full right-0 z-40 mt-2 w-[min(360px,calc(100vw-3rem))] rounded-2xl p-3 shadow-2xl'
+        : 'absolute top-full left-1/2 z-40 mt-2 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl p-3 shadow-2xl'}
+      style={{
+        background: 'var(--axe-kaart-vlak)',
+        border: '1px solid var(--axe-kaart-lijn)',
+        borderTopColor: 'var(--axe-kaart-lijn-boven)',
+        boxShadow: 'var(--axe-kaart-schaduw)',
+      }}
+      data-axe-awareness
+    >
+      {lijf}
     </div>
   );
 }

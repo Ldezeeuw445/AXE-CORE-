@@ -39,6 +39,8 @@ import { QuickNoteDock } from '@/presentation/components/layout/QuickNoteDock';
 import { openPersonalComputerUse } from '@/infrastructure/gateways/windowManagerService';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 import { PhoneBel, PhoneVoet } from '@/presentation/components/layout/PhoneChrome';
+import { MobieleTabSchil } from '@/presentation/components/layout/MobieleTabSchil';
+import { isLockPad } from '@/domain/phone/phoneChrome';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -145,6 +147,12 @@ export function AppShell() {
   // dan weer op scherp: zonder dit is de eerste update van een sessie de enige
   // die zichzelf oplost, en zit je bij de tweede weer met de hand te herladen.
   useEffect(() => { meldGoedeLading(globalThis.sessionStorage); }, [location.pathname]);
+  const opSlot = isLockPad(location.pathname);
+  useEffect(() => {
+    if (opSlot) document.documentElement.dataset.axeLockPad = 'ja';
+    else delete document.documentElement.dataset.axeLockPad;
+    return () => { delete document.documentElement.dataset.axeLockPad; };
+  }, [opSlot]);
   const opPlaat = useHeeftPlaat();
   // The Android shell draws its own top bar, tab bar and composer natively, so
   // the web chrome would be a second copy of all three stacked on a 384px-wide
@@ -166,7 +174,7 @@ export function AppShell() {
   // chroom 80% van 393px, en daar had deze tak nog geen antwoord op.
   const mobileCommandSurface =
     isMobile || isAndroidShellRuntime()
-    || location.pathname === '/mobile' || location.pathname === '/lock'
+    || location.pathname === '/mobile' || opSlot
     || schilZonderChroom(location.pathname, {
       android: isAndroidShellRuntime(),
       ingebed: isIngebed(),
@@ -212,7 +220,7 @@ export function AppShell() {
   // composer als op elke tab, geen eigen chatvak onder de pagina.
   const volScherm = mobileNav && location.pathname === '/maps-3d';
   const opPlaatMobiel = mobileNav
-    && location.pathname !== '/lock'
+    && !opSlot
     && !volScherm;
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
@@ -221,7 +229,7 @@ export function AppShell() {
   // Telefoon: de zijsloten van een tab wonen in de laden, niet naast de plaat
   // (ladeSloten.ts). Op de desktop zet PlaatSlotHosts ze neer; die twee sluiten
   // elkaar uit via mobileCommandSurface.
-  useLadeSloten(ladeOppervlak && location.pathname !== '/lock');
+  useLadeSloten(ladeOppervlak && !opSlot);
   // Telefoon-Home met Neural, Terrain of Architecture: de wereld vult de hele
   // plaat (slot 'wereld'), en het midden laat aanraking door naar die wereld --
   // alleen de wereldknoppen en de composer vangen nog tikken (MobileSystem).
@@ -235,7 +243,7 @@ export function AppShell() {
   const toonMobieleTabComposer = opPlaatMobiel
     && location.pathname !== '/mobile'
     && location.pathname !== '/'
-    && location.pathname !== '/lock';
+    && !opSlot;
   /* Smal als dock (Luka, 2 okt). Blijft staan als je van tab wisselt: smal is
      een keuze voor rust, en spraak en bestanden zitten er nog gewoon in. Tot
      2 okt klapte hij helemaal weg en kwam hij op elke nieuwe tab terug. */
@@ -273,7 +281,7 @@ export function AppShell() {
           dat maakt een vast-gepositioneerd kind t.o.v. de schil i.p.v. het scherm
           — dan verschuift de knop mee met de plaat. Hierbuiten blijft hij vast
           aan de schermhoek. Desktop-Home houdt PlaatViewSwitch voor Awareness. */}
-      {mobileNav && (
+      {mobileNav && !opSlot && (
         <div
           className="axe-mobile-look-toggle fixed z-[70] flex items-center gap-1.5"
           style={{
@@ -282,13 +290,13 @@ export function AppShell() {
             right: opPlaatMobiel ? 18 : 12,
           }}
         >
-          {location.pathname !== '/lock' && <PhoneBel />}
+          <PhoneBel />
           <LookToggle />
         </div>
       )}
 
     <div
-      className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opPlaatMobiel ? ' axe-plaat-mobiel' : ''}`}
+      className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opPlaatMobiel ? ' axe-plaat-mobiel' : ''}${volScherm ? ' axe-mobiel-desk' : ''}${opSlot ? ' axe-lock-pad' : ''}`}
       style={
         opPlaatMobiel
           ? {
@@ -359,7 +367,7 @@ export function AppShell() {
         {/* Sidebar renders as a zero-width Sheet on phone and as the rail on
             desktop. Keep it mounted on mobile so the left edge swipe/chevron
             can open the real Tools drawer; only the lock screen suppresses it. */}
-        {(!mobileCommandSurface || location.pathname !== '/lock') && <Sidebar />}
+        {(!mobileCommandSurface || !opSlot) && <Sidebar />}
 
         {/* Main Content */}
         <main
@@ -385,14 +393,20 @@ export function AppShell() {
               <div
                 className="flex-1 min-h-0 flex flex-col"
                 style={
-                  mobileCommandSurface && location.pathname !== '/mobile' && location.pathname !== '/lock'
+                  mobileCommandSurface && location.pathname !== '/mobile' && !opSlot
                     // Net genoeg om onder de zwevende top-bar (view-switcher) en de
                     // hamburger te blijven; de 52 gaf een grote lege plek bovenin.
                     ? { paddingTop: 'calc(var(--axe-sat) + 30px)' }
                     : undefined
                 }
               >
-                <Outlet />
+                {opPlaatMobiel && location.pathname !== '/mobile' ? (
+                  <MobieleTabSchil>
+                    <Outlet />
+                  </MobieleTabSchil>
+                ) : (
+                  <Outlet />
+                )}
               </div>
             </Suspense>
           </ErrorBoundary>
@@ -400,7 +414,7 @@ export function AppShell() {
 
         {/* Same contract on the right: on phone this is the Status Sheet,
             opened by the right edge swipe/chevron; desktop keeps its rail. */}
-        {(!mobileCommandSurface || location.pathname !== '/lock') && <RightPanel />}
+        {(!mobileCommandSurface || !opSlot) && <RightPanel />}
       </div>
 
       {/* Mobile tabs use the exact same AXE composer as Mobile Home. Outside
@@ -519,23 +533,23 @@ export function AppShell() {
           - Desktop (geen command-surface): de horizontale BottomNav-strip.
           - Telefoon / Android-shell (command-surface): de gedeelde A17-onderbalk
             (Home/Desk/Agents/Trading/More) plus de lade (MobileNav) achter More. */}
-      {mobileNav && location.pathname !== '/lock' && (
+      {mobileNav && !opSlot && (
         <PhoneVoet toonTabs={keyboardInset === 0} />
       )}
       {!mobileNav && keyboardInset === 0 && <BottomNav />}
-      {mobileNav && <MobileNav />}
+      {mobileNav && !opSlot && <MobileNav />}
       {/* Slimme hoekknop (mobiel): snelacties binnen duim-bereik, de mobiel-eigen
           vervanging van de radiale hoekmenu's van de desktop. Op de glasplaat-
           home weg: de composer heeft z'n eigen knoppen en de FAB botste ertegen —
           de Tauri-home heeft daar ook geen zwevende hoekknop. */}
-      {mobileNav && !opPlaatMobiel && !volScherm && <MobileFab />}
+      {mobileNav && !opPlaatMobiel && !volScherm && !opSlot && <MobileFab />}
       {/* De drie kerncijfers stonden hier los boven de composer; Luka wil ze
           weg — de composer (met kop + tip-chips) is nu de basis onder de sphere,
           zoals de echte AXE CORE-home. MobileStatsRow blijft bestaan voor als we
           de cijfers later ergens anders willen tonen. */}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
-      <GlobalCommandPalette />
+      {!opSlot && <GlobalCommandPalette />}
       <SplitWorkspace />
 
       {/* AXE ALGO's floating chat — survives navigation, same pattern as RightPanel */}
