@@ -356,7 +356,7 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
                     autoFocus
                     value={nieuwAdres}
                     onChange={e => setNieuwAdres(e.target.value)}
-                    placeholder="http://mac-mini.ts.net:8099"
+                    placeholder="http://<host>.tailXXXX.ts.net:8002"
                     className="flex-1 min-w-0 rounded px-1.5 py-0.5 text-[10px] outline-none"
                     style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)', border: 'none' }}
                   />

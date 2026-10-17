@@ -24,7 +24,8 @@
  * The old implementation is in git (see the commit that introduced this file's
  * current shape) rather than kept here as dead code.
  */
-import LiveBrowserView from '@/presentation/components/browser/LiveBrowserView';
+import type { MutableRefObject } from 'react';
+import LiveBrowserView, { type LiveBrowserNav } from '@/presentation/components/browser/LiveBrowserView';
 
 interface WebViewProps {
   url: string;
@@ -33,15 +34,21 @@ interface WebViewProps {
   mobile?: boolean;
   /** Handed up so the agent panel can drive the session being watched. */
   onSession?: (sessionId: string | null) => void;
+  /** De pagina ging zelf naar een ander adres (link, terug). */
+  onPageChange?: (url: string, title: string) => void;
+  /** Terug/vooruit in de pagina, voor de kopbalk. */
+  navRef?: MutableRefObject<LiveBrowserNav | null>;
 }
 
-export default function WebView({ url, onTitleChange, mobile, onSession }: WebViewProps) {
+export default function WebView({ url, onTitleChange, mobile, onSession, onPageChange, navRef }: WebViewProps) {
   return (
     <LiveBrowserView
       url={url}
       mobile={mobile}
       onTitleChange={onTitleChange}
       onSession={onSession}
+      onPageChange={onPageChange}
+      navRef={navRef}
     />
   );
 }
