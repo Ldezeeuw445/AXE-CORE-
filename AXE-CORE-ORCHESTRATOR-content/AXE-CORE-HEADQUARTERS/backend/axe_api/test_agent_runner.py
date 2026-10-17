@@ -9,6 +9,7 @@ iets herschreven is dat je niet bedoelde.
 import os
 import subprocess
 import tempfile
+import time
 
 import agent_runner as a
 
@@ -373,3 +374,102 @@ class TestBouwrunMagControleren:
     def test_zonder_vraag_of_in_plan_geen_extra_rechten(self, monkeypatch):
         assert "--allowedTools" not in self._draai(monkeypatch, permission_mode="acceptEdits")
         assert "--allowedTools" not in self._draai(monkeypatch, permission_mode="plan", checks=True)
+
+
+class TestStoelKeuze:
+    """Volgende vrije stoel, en doorvallen bij login- of limietfout."""
+
+    def setup_method(self):
+        a.vergeet_accounts()
+        a._SEAT_LIMIT.clear()
+        a._SEAT_BUSY.clear()
+        self._snap = tempfile.NamedTemporaryFile(prefix="axe-seats-", suffix=".json", delete=False).name
+        self._usage = tempfile.NamedTemporaryFile(prefix="axe-usage-", suffix=".json", delete=False).name
+        a._SEAT_SNAP = self._snap
+        a._AGENT_USAGE_FILE = self._usage
+
+    def test_parse_limiet_leest_try_again_at(self):
+        nu = 1_779_000_000.0  # vaste epoch, niet afhankelijk van de klok
+        # 5:36 PM lokale tijd op die dag.
+        tot = a.parse_limiet_tot("You've hit your usage limit. try again at 5:36 PM.", nu)
+        assert tot is not None and tot > nu
+        lokale = time.localtime(tot)
+        assert (lokale.tm_hour, lokale.tm_min) == (17, 36)
+
+    def test_parse_limiet_zonder_klok_is_een_uur(self):
+        nu = 1_779_000_000.0
+        assert a.parse_limiet_tot("rate limit reached", nu) == nu + 3600
+        assert a.parse_limiet_tot("repo missing", nu) is None
+
+    def test_auth_fout_is_niet_een_repofout(self):
+        assert a._auth_fout("Not logged in")
+        assert a._auth_fout("please sign in to continue")
+        assert not a._auth_fout("Onbekende repo 'x'")
+
+    def test_kiest_volgende_als_gevraagde_niet_is_ingelogd(self, monkeypatch):
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        a._ACCOUNT_CACHE["claude"] = (0, {"ingelogd": False, "account": None})
+        a._ACCOUNT_CACHE["claude2"] = (0, {"ingelogd": True, "account": "a@b.nl"})
+        assert a.kies_vrije_stoel("claude") == "claude2"
+
+    def test_slaat_gelimiteerde_stoel_over(self, monkeypatch):
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        nu = time.time()
+        a._SEAT_LIMIT["claude"] = {"until": nu + 600, "message": "usage limit"}
+        a._ACCOUNT_CACHE["claude"] = (0, {"ingelogd": True, "account": "a@b.nl"})
+        a._ACCOUNT_CACHE["claude2"] = (0, {"ingelogd": True, "account": "a@b.nl"})
+        assert a.kies_vrije_stoel("claude", nu=nu) == "claude2"
+
+    def test_onbekende_motor_geen_stoel(self):
+        assert a.kies_vrije_stoel("verzonnen") is None
+
+    def _nep_cli(self, monkeypatch, antwoord):
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        echte = subprocess.run
+
+        def run(cmd, *args, **kwargs):
+            if cmd and cmd[0] == "git":
+                return echte(cmd, *args, **kwargs)
+            env = kwargs.get("env") or {}
+            return antwoord(cmd, env)
+        monkeypatch.setattr(subprocess, "run", run)
+        return pad
+
+    def test_niet_ingelogd_valt_door_naar_volgende(self, monkeypatch):
+        def antwoord(cmd, env):
+            cfg = env.get("CLAUDE_CONFIG_DIR", "")
+            if "tweede" in cfg:
+                return subprocess.CompletedProcess(cmd, 0, '{"result":"ok"}', "")
+            return subprocess.CompletedProcess(cmd, 1, "", "Not logged in")
+        self._nep_cli(monkeypatch, antwoord)
+        r = a.run_agent("proef", "x", permission_mode="plan", engine="claude")
+        assert r["status"] == "ok"
+        assert r["engine"] == "claude2"
+        assert r["seats_tried"][0] == "claude"
+
+    def test_limiet_tijdens_run_probeert_volgende(self, monkeypatch):
+        def antwoord(cmd, env):
+            cfg = env.get("CLAUDE_CONFIG_DIR", "")
+            if "tweede" in cfg:
+                return subprocess.CompletedProcess(cmd, 0, '{"result":"ok"}', "")
+            return subprocess.CompletedProcess(
+                cmd, 1, "",
+                "ERROR: You've hit your usage limit. try again at 10:36 PM.",
+            )
+        self._nep_cli(monkeypatch, antwoord)
+        r = a.run_agent("proef", "x", permission_mode="plan", engine="claude")
+        assert r["status"] == "ok" and r["engine"] == "claude2"
+        assert a._stoel_koelt("claude")
+
+    def test_gedeelde_quota_vlag_zelfde_email(self, monkeypatch):
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        monkeypatch.setattr(a, "_account_van", lambda naam, motor, binary: {
+            "ingelogd": True, "account": "support@axeheadquarters.com",
+        })
+        stoelen = a.coding_seats_status()
+        claude = next(s for s in stoelen if s["id"] == "claude")
+        assert "claude2" in claude["shared_quota_with"]
+        assert "codex" in claude["shared_quota_with"]
+        assert all("token" not in str(s).lower() or s["id"] == "openhands" for s in stoelen)

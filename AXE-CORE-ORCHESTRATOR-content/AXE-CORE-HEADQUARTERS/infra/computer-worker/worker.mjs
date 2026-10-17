@@ -35,6 +35,7 @@ import { resolve, sep, join, dirname, relative } from 'node:path';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { reportCodingSeats } from './codingSeats.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -362,6 +363,13 @@ async function heartbeat() {
         heartbeat_at: new Date().toISOString(),
         workspaces: Object.keys(WORKSPACES),
       }),
+    });
+    await reportCodingSeats(sbOrThrow, {
+      deviceId: DEVICE_ID,
+      host: hostname(),
+      env,
+    }).catch((err) => {
+      console.warn('coding seats heartbeat:', err?.message ?? err);
     });
     if (heartbeatWarned) {
       console.log('heartbeat: back');

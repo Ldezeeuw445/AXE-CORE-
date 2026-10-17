@@ -1017,6 +1017,9 @@ export interface AgentSubscriptionUsage {
   last_status: string | null;
   last_limit_at: number | null;
   last_limit_message: string | null;
+  rate_limited?: boolean;
+  rate_limit_until?: number | null;
+  current_task?: string | null;
   exact_remaining_available: boolean;
   remaining_note: string;
 }
@@ -1026,6 +1029,22 @@ export async function abonnementVerbruik(vers = false): Promise<{ accounts: Abon
   return call('GET', `/claude/subscriptions/usage${vers ? '?fresh=1' : ''}`);
 }
 
+export interface CodingSeatStatus {
+  id: string;
+  provider: string;
+  label: string;
+  email: string | null;
+  machine: string;
+  logged_in: boolean | null;
+  login_command: string;
+  current_task: string | null;
+  rate_limited: boolean;
+  rate_limit_until: number | null;
+  last_limit_message: string | null;
+  remaining_note: string;
+  shared_quota_with: string[];
+}
+
 /** Which repos this host will let Claude Code touch, and their live branches. */
 export async function claudeRepos(): Promise<{
   repos: Record<string, ClaudeRepoInfo>;
@@ -1033,6 +1052,7 @@ export async function claudeRepos(): Promise<{
   /** Welke CLI's op de host staan. Aanwezigheid, niet of je ingelogd bent. */
   engines?: Record<string, { label: string; aanwezig: boolean; login: string; alleen_lezen?: boolean; ingelogd?: boolean | null; account?: string | null }>;
   usage?: Record<string, AgentSubscriptionUsage>;
+  seats?: CodingSeatStatus[];
 }> {
   return call('GET', '/claude/repos');
 }
