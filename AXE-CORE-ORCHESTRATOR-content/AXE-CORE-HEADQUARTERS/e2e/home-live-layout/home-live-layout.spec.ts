@@ -171,8 +171,13 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(firstRechts.y, `right first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
       expect(lastLinks.y + lastLinks.height, `left last clipped at ${maat.naam}`).toBeLessThanOrEqual(links.y + links.height + 1);
       expect(lastRechts.y + lastRechts.height, `right last clipped at ${maat.naam}`).toBeLessThanOrEqual(rechts.y + rechts.height + 1);
-      expect(Math.abs(firstLinks.y - firstRechts.y), `rails share top at ${maat.naam}`).toBeLessThan(2);
-      expect(Math.abs(firstLinks.height - firstRechts.height), `same card size at ${maat.naam}`).toBeLessThan(2);
+      expect(Math.abs(firstLinks.height - firstRechts.height), `same card size at ${maat.naam}`).toBeLessThan(maat.width <= 1100 ? 6 : 2);
+
+      const stapelLinks = await box(page, '[data-axe-home-rail="links"] .axe-home-rail-stapel');
+      const stapelRechts = await box(page, '[data-axe-home-rail="rechts"] .axe-home-rail-stapel');
+      const middenVan = (r: { y: number; height: number }) => r.y + r.height / 2;
+      expect(Math.abs(middenVan(stapelLinks) - middenVan(links)), `left stack centered at ${maat.naam}`).toBeLessThanOrEqual(12);
+      expect(Math.abs(middenVan(stapelRechts) - middenVan(rechts)), `right stack centered at ${maat.naam}`).toBeLessThanOrEqual(12);
       const companion = await box(page, '[data-axe-agent="companion"]');
       expect(await page.locator('[data-axe-agent="companion"]').innerText()).toMatch(/Companion/);
       expect(companion.y, `Companion top in rail at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
@@ -182,9 +187,10 @@ test.describe('Home live layout blijft uit de composer', () => {
         rijen.slice(1).map((rij, i) => rij.y - (rijen[i].y + rijen[i].height));
       const gatenLinks = gatenVan(rijenLinks);
       const gatenRechts = gatenVan(rijenRechts);
+      const ruim = maat.height >= 985 && maat.width >= 1560;
       for (const g of [...gatenLinks, ...gatenRechts]) {
-        expect(g, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(8);
-        expect(g, `rail gap at ${maat.naam}`).toBeLessThanOrEqual(14);
+        expect(g, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(ruim ? 14 : 8);
+        expect(g, `rail gap at ${maat.naam}`).toBeLessThanOrEqual(18);
       }
       const spreiding = (gaten: number[]) => Math.max(...gaten) - Math.min(...gaten);
       expect(spreiding(gatenLinks), `left gaps even at ${maat.naam}`).toBeLessThanOrEqual(2);
@@ -203,10 +209,15 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(seatsBox.x, `SEATS right of OK at ${maat.naam}`).toBeGreaterThan(okBox.x + okBox.width - 1);
       expect(Math.abs(lopendBox.x - links.x), `left pair under left rail at ${maat.naam}`).toBeLessThan(12);
       expect(Math.abs((seatsBox.x + seatsBox.width) - (rechts.x + rechts.width)), `right pair under right rail at ${maat.naam}`).toBeLessThan(16);
-      expect(lopendBox.width, `left cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(links.width + 8);
-      expect(okBox.width, `right cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(rechts.width + 8);
+      expect(lopendBox.width, `left cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(links.width / 2 + 12);
+      expect(okBox.width, `right cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(rechts.width / 2 + 12);
       expect(okBox.x, `gap between pairs at ${maat.naam}`).toBeGreaterThan(recentBox.x + recentBox.width + 16);
-      expect(lopendBox.height, `live cards larger at ${maat.naam}`).toBeGreaterThanOrEqual(72);
+      expect(lopendBox.height, `live cards taller at ${maat.naam}`).toBeGreaterThanOrEqual(maat.width <= 1100 ? 100 : 160);
+      for (const kaart of [lopendBox, recentBox, okBox, seatsBox]) {
+        const verhouding = kaart.width / kaart.height;
+        expect(verhouding, `live aspect ${verhouding.toFixed(2)} at ${maat.naam}`).toBeGreaterThanOrEqual(0.8);
+        expect(verhouding, `live aspect ${verhouding.toFixed(2)} at ${maat.naam}`).toBeLessThanOrEqual(1.4);
+      }
 
       const lopend = await page.locator('[data-axe-home-kaart="lopend"]').innerText();
       expect(lopend).toMatch(/WORKING NOW/i);

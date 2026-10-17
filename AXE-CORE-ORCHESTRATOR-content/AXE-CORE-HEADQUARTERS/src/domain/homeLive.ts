@@ -65,8 +65,8 @@ export type HomeLiveStand = {
   roosters: LiveRooster[];
 };
 
-/** Zichtbare regels per live-kaart: altijd 1–2 echte rijen, rest achter 'and N more'. */
-export const LIVE_KAART_REGELS = 2;
+/** Zichtbare regels per live-kaart: 4 rijen in het vierkante blok, rest achter 'and N more'. */
+export const LIVE_KAART_REGELS = 4;
 
 export function kaartRegels<T>(items: T[]): { zicht: T[]; meer: number } {
   return {

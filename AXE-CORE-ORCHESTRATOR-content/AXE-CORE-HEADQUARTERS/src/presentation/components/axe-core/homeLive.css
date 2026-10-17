@@ -4,26 +4,26 @@
  * 100% bol-vak shows through the composer and chips. These tokens keep the
  * rails and the cards in the free space around the orb.
  *
- * Kaarten op inhoud: naam + max 2 statusregels. Gap en padding krimpen
- * gelijk als 7 kaarten krap zitten, nooit glyphs. Zelfde top als de
- * zijmarge tot de kop. Live-paren één rij onder elke rail. */
+ * Kaarten op inhoud: naam + max 2 statusregels. In een hoog venster
+ * hangt de stapel in het midden van de vrije ruimte (kop → live-rij)
+ * met gelijke tussenruimte 14–18px. Krap: gap/padding krimpen gelijk,
+ * nooit glyphs, nooit over de kop of de live-blokken. Live-paren zijn
+ * vierkanter: hoger, smaller, tegen de buitenrand van hun rail. */
 
 :root {
   --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
   --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-  --axe-home-rail-gap: clamp(8px, 1.2vh, 12px);
+  --axe-home-rail-gap: clamp(8px, 1.6vh, 18px);
   /* Zelfde marge tot de kopregel als tot de zijkant. */
   --axe-home-rail-top: calc(var(--axe-kop-h, 66px) + var(--axe-sat, 0px) + var(--axe-home-rail-inset));
   --axe-home-rail-pad-y: clamp(4px, 0.7vh, 8px);
   --axe-home-rail-tegel-pad: 6px;
   --axe-home-rail-regel-lijnen: 2;
   --axe-home-stack-gap: 12px;
-  /* One row of two cards: titel + 2 hele regels. */
-  --axe-home-live-hoog: clamp(96px, 12vh, 124px);
-  --axe-home-live-cluster-breed: min(
-    calc(var(--axe-home-rail-breed) * 2 + var(--axe-home-stack-gap)),
-    calc(50vw - var(--axe-home-rail-inset) - 24px)
-  );
+  /* Titel + 4 regels: 1,5–2× de oude strook, cluster = railbreedte. */
+  --axe-home-live-hoog: clamp(168px, 18vh, 216px);
+  --axe-home-live-cluster-breed: var(--axe-home-rail-breed);
+  --axe-home-live-lijnen: 4;
 }
 
 .axe-home-rail {
@@ -36,14 +36,25 @@
   width: var(--axe-home-rail-breed);
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: var(--axe-home-rail-gap);
+  justify-content: center;
+  align-items: stretch;
+  gap: 0;
   padding: 0;
   overflow: hidden;
   z-index: 16;
   pointer-events: auto;
   container-type: size;
   container-name: home-rail;
+}
+
+.axe-home-rail-stapel {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--axe-home-rail-gap);
+  width: 100%;
+  min-height: 0;
+  flex: 0 1 auto;
 }
 
 .axe-home-rail--links {
@@ -61,6 +72,7 @@
   width: min(78%, 420px);
   bottom: 8%;
   top: 8px;
+  justify-content: flex-start;
 }
 
 .axe-home-rail--mobiel .axe-home-rail-naam {
@@ -86,7 +98,7 @@
 
 /* Desktop: kaarten op inhoud (naam + max 2 statusregels). Niet rekken
    tot de live-strook, niet krimpen tot glyphs knippen. Links (6) en
-   rechts (7) delen daardoor dezelfde kaarthoogte en dezelfde top. */
+   rechts (7) hebben dezelfde kaarthoogte; de stapel hangt in het midden. */
 .axe-home-rail:not(.axe-home-rail--mobiel) .axe-home-rail-rij {
   flex: 0 1 auto;
   height: auto;
@@ -97,11 +109,28 @@
 /* Krappe rail (7 kaarten + live): één statusregel, kleinere padding.
    De min-content van de rij daalt mee, dus flex mag gelijkmatig krimpen
    zonder door een glyph te snijden. */
-@container home-rail (max-height: 500px) {
+@container home-rail (max-height: 530px) {
+  .axe-home-rail-stapel {
+    --axe-home-rail-gap: 8px;
+  }
+
   .axe-home-rail-rij {
     --axe-home-rail-regel-lijnen: 1;
     --axe-home-rail-pad-y: 4px;
     --axe-home-rail-tegel-pad: 2px;
+  }
+}
+
+/* Zeer krappe rail (1100×680, 7 kaarten): extra dun, anders knipt de status. */
+@container home-rail (max-height: 360px) {
+  .axe-home-rail-stapel {
+    --axe-home-rail-gap: 8px;
+  }
+
+  .axe-home-rail-rij {
+    --axe-home-rail-regel-lijnen: 1;
+    --axe-home-rail-pad-y: 2px;
+    --axe-home-rail-tegel-pad: 1px;
   }
 }
 
@@ -416,25 +445,26 @@
 :root[data-look] .axe-home-live .axe-kaart-lijf {
   box-sizing: content-box;
   padding: 4px 10px 8px;
-  flex: none;
-  height: 2.5em;
-  max-height: 2.5em;
-  min-height: 2.5em;
+  flex: 1 1 auto;
+  height: auto;
+  max-height: none;
+  min-height: calc(var(--axe-home-live-lijnen) * 1.25em);
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .axe-home-live-fit {
-  height: 2.5em;
-  max-height: 2.5em;
+  height: auto;
+  max-height: none;
   min-height: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.axe-home-live-fit > :nth-child(n + 3) {
+.axe-home-live-fit > :nth-child(n + 6) {
   display: none;
 }
 
@@ -606,11 +636,11 @@
     --axe-home-rail-breed: clamp(200px, 26vw, 300px);
     --axe-home-rail-gap: 8px;
     --axe-home-stack-gap: 10px;
-    --axe-home-live-hoog: 88px;
+    --axe-home-live-hoog: 112px;
+    --axe-home-live-lijnen: 3;
   }
 
   .axe-home-rail {
-    justify-content: flex-start;
     padding: 0;
   }
 

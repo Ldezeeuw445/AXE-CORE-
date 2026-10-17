@@ -9,6 +9,7 @@ const knoppen = readFileSync(join(__dirname, 'GoedkeuringActie.tsx'), 'utf8');
 describe('Home-agentvenster is een live draad', () => {
   it('de kolom-chrome blijft dezelfde plek; het venster krijgt de draad', () => {
     expect(vensters).toMatch(/axe-home-rail--links/);
+    expect(vensters).toMatch(/axe-home-rail-stapel/);
     expect(vensters).toMatch(/jobs=\{jobs\.filter/);
     expect(vensters).toMatch(/onOpvolging/);
     expect(vensters).toMatch(/bron: 'followup'/);

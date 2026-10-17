@@ -60,7 +60,7 @@ function Actie({
   );
 }
 
-/** Altijd de top 1–2 rijen; nooit alleen 'and N more'. */
+/** Altijd de top 1–4 rijen; nooit alleen 'and N more'. */
 function FitLijst<T>({
   items,
   render,

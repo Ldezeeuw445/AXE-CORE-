@@ -125,13 +125,32 @@ test.describe('echte Home-rails op 1560×985', () => {
     const laatsteLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-rij').last().boundingBox();
     const laatsteRechts = await page.locator('[data-axe-home-rail="rechts"] .axe-home-rail-rij').last().boundingBox();
     const companion = await page.locator('[data-axe-agent="companion"]').boundingBox();
-    if (!eerste || !laatsteLinks || !laatsteRechts || !companion) throw new Error('geen kaartbox');
+    const stapelLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-stapel').boundingBox();
+    const stapelRechts = await page.locator('[data-axe-home-rail="rechts"] .axe-home-rail-stapel').boundingBox();
+    const rechtsBox = await rechts.boundingBox();
+    const lopendBox = await page.locator('[data-axe-home-kaart="lopend"]').boundingBox();
+    const recentBox = await page.locator('[data-axe-home-kaart="recent"]').boundingBox();
+    const okBox = await page.locator('[data-axe-home-kaart="ok"]').boundingBox();
+    const seatsBox = await page.locator('[data-axe-home-kaart="seats"]').boundingBox();
+    if (!eerste || !laatsteLinks || !laatsteRechts || !companion || !stapelLinks || !stapelRechts || !rechtsBox || !lopendBox || !recentBox || !okBox || !seatsBox) {
+      throw new Error('geen kaartbox');
+    }
 
     const marge = linksBox.x;
     expect(eerste.y, 'eerste kaart onder kop + zijmarge').toBeGreaterThanOrEqual(kopBox.y + kopBox.height + marge - 1.5);
     expect(laatsteLinks.y + laatsteLinks.height, 'linker stapel boven live').toBeLessThan(liveBox.y - 7.5);
     expect(laatsteRechts.y + laatsteRechts.height, 'rechter stapel boven live').toBeLessThan(liveBox.y - 7.5);
     expect(companion.y + companion.height, 'Companion boven live').toBeLessThan(liveBox.y - 7.5);
+
+    const middenVan = (r: { y: number; height: number }) => r.y + r.height / 2;
+    expect(Math.abs(middenVan(stapelLinks) - middenVan(linksBox)), 'linker stapel gecentreerd').toBeLessThanOrEqual(12);
+    expect(Math.abs(middenVan(stapelRechts) - middenVan(rechtsBox)), 'rechter stapel gecentreerd').toBeLessThanOrEqual(12);
+    for (const kaart of [lopendBox, recentBox, okBox, seatsBox]) {
+      const verhouding = kaart.width / kaart.height;
+      expect(verhouding, `live aspect ${verhouding.toFixed(2)}`).toBeGreaterThanOrEqual(0.8);
+      expect(verhouding, `live aspect ${verhouding.toFixed(2)}`).toBeLessThanOrEqual(1.4);
+    }
+    expect(lopendBox.height, 'live kaart hoger').toBeGreaterThanOrEqual(160);
 
     const meting = await page.locator('.axe-home-rail-rij').evaluateAll((nodes) =>
       nodes.map((n) => {
@@ -176,5 +195,24 @@ test.describe('echte Home-rails op 1560×985', () => {
     expect(recent).toMatch(/Copper PO filed/);
 
     await page.screenshot({ path: join(shots, 'home-real-1560x985.png'), fullPage: false });
+
+    for (const maat of [
+      { naam: '1440x900', width: 1440, height: 900 },
+      { naam: '1920x1080', width: 1920, height: 1080 },
+    ] as const) {
+      await page.setViewportSize({ width: maat.width, height: maat.height });
+      await page.waitForFunction(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--axe-composer-hoog')) > 0);
+      const rail = await page.locator('[data-axe-home-rail="links"]').boundingBox();
+      const stapel = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-stapel').boundingBox();
+      const liveKaart = await page.locator('[data-axe-home-kaart="lopend"]').boundingBox();
+      const liveRij = await page.locator('[data-axe-home-live]').boundingBox();
+      if (!rail || !stapel || !liveKaart || !liveRij) throw new Error(`geen box at ${maat.naam}`);
+      expect(Math.abs((stapel.y + stapel.height / 2) - (rail.y + rail.height / 2)), `stapel midden ${maat.naam}`).toBeLessThanOrEqual(12);
+      const verhouding = liveKaart.width / liveKaart.height;
+      expect(verhouding, `live aspect ${maat.naam}`).toBeGreaterThanOrEqual(0.8);
+      expect(verhouding, `live aspect ${maat.naam}`).toBeLessThanOrEqual(1.4);
+      expect(stapel.y + stapel.height, `stapel boven live ${maat.naam}`).toBeLessThan(liveRij.y - 7.5);
+      await page.screenshot({ path: join(shots, `home-real-${maat.naam}.png`), fullPage: false });
+    }
   });
 });

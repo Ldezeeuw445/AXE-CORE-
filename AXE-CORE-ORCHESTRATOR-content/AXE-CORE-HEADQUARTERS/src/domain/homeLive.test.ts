@@ -76,10 +76,10 @@ describe('homeLiveStand', () => {
     expect(stand.recent[0]?.titel).toBe('task completed');
   });
 
-  it('kaartRegels toont de top 2 en telt de rest', () => {
+  it('kaartRegels toont de top 4 en telt de rest', () => {
     const { zicht, meer } = kaartRegels([1, 2, 3, 4, 5, 6, 7]);
-    expect(zicht).toEqual([1, 2]);
-    expect(meer).toBe(5);
+    expect(zicht).toEqual([1, 2, 3, 4]);
+    expect(meer).toBe(3);
   });
 
   it('seatsRegels plakt stoelen, dax en roosters in één leesbare lijst', () => {

@@ -242,22 +242,24 @@ export function AgentVensters() {
           className={`axe-home-rail ${isMobile ? 'axe-home-rail--mobiel' : kolom.id === 'rechts' ? 'axe-home-rail--rechts' : 'axe-home-rail--links'}`}
           data-axe-home-rail={kolom.id}
         >
-          {kolom.rijen.map((rij) => {
-            const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
-            return (
-              <div key={rij.agent.id} className="axe-home-rail-rij" data-axe-agent={rij.agent.id}>
-                <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
-                <Balkje
-                  rij={rij}
-                  onKies={kies}
-                  server={server.agents[rij.agent.id]}
-                  extra={extra}
-                  onBeslis={(g, akkoord) => beslissen(rij.agent.id, g, akkoord)}
-                  tierRegel={agentTierRegel(server.tiers, rij.agent.id)}
-                />
-              </div>
-            );
-          })}
+          <div className="axe-home-rail-stapel">
+            {kolom.rijen.map((rij) => {
+              const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
+              return (
+                <div key={rij.agent.id} className="axe-home-rail-rij" data-axe-agent={rij.agent.id}>
+                  <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
+                  <Balkje
+                    rij={rij}
+                    onKies={kies}
+                    server={server.agents[rij.agent.id]}
+                    extra={extra}
+                    onBeslis={(g, akkoord) => beslissen(rij.agent.id, g, akkoord)}
+                    tierRegel={agentTierRegel(server.tiers, rij.agent.id)}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       ))}
 

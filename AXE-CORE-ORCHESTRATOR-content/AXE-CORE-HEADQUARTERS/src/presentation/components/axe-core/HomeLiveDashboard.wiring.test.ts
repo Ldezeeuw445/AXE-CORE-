@@ -29,6 +29,12 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toMatch(/--axe-home-rail-tegel-pad: 6px/);
     expect(css).toMatch(/container-name: home-rail/);
     expect(css).toMatch(/--axe-home-stack-gap: 12px/);
+    expect(css).toMatch(/--axe-home-live-hoog: clamp\(168px/);
+    expect(css).toMatch(/--axe-home-live-cluster-breed: var\(--axe-home-rail-breed\)/);
+    expect(css).toMatch(/--axe-home-live-lijnen: 4/);
+    expect(css).toMatch(/axe-home-rail-stapel/);
+    expect(css).toMatch(/\.axe-home-rail \{[^}]*justify-content: center/);
+    expect(css).toMatch(/\.axe-home-rail--mobiel \{[^}]*justify-content: flex-start/);
     expect(css).toMatch(/--axe-home-rail-top: calc\(var\(--axe-kop-h/);
     expect(css).toMatch(/top: var\(--axe-home-rail-top\)/);
     expect(css).toMatch(/--axe-composer-onder/);
@@ -36,12 +42,12 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toMatch(/\.axe-home-rail--mobiel \{[^}]*top: 8px/);
     expect(css).toMatch(/\.axe-home-rail-regel \{[^}]*max-height: 2\.5em/);
     expect(css).toMatch(/\.axe-home-live-regel \{[^}]*max-height: 1\.25em/);
-    expect(css).toMatch(/\.axe-kaart-lijf \{[^}]*height: 2\.5em/);
+    expect(css).toMatch(/\.axe-kaart-lijf \{[^}]*min-height: calc\(var\(--axe-home-live-lijnen\)/);
     expect(css).toMatch(/axe-home-rail-tegel-naam/);
     expect(css).toMatch(/axe-home-rail-naam/);
     expect(css).toMatch(/\.axe-ok-chip \{/);
     expect(css).toMatch(/\.axe-home-rail-balk:has\(\[data-axe-ok-chip\]\) \.axe-home-rail-regel \{[^}]*-webkit-line-clamp: 1/);
-    expect(css).toMatch(/nth-child\(n \+ 3\)/);
+    expect(css).toMatch(/nth-child\(n \+ 6\)/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*overflow: hidden/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*pointer-events: none/);
     expect(css).toMatch(/axe-home-rail:not\(\.axe-home-rail--mobiel\)/);
