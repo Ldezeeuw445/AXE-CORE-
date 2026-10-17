@@ -32,6 +32,7 @@ import {
 import type { AxeRoute } from '@/domain/tierRouter/axeRoute';
 import { AXE_SKILLS, isAxeSkill, skillDef } from '@/domain/tierRouter/axeSkills';
 import { sneltoetsActie, SNELTOETS_EVENT } from '@/domain/voice/sneltoets';
+import { STILTE_MS, stilteVerlopen } from '@/domain/voice/luisterBeleid';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import {
   acquireMic,
@@ -64,6 +65,29 @@ let session: RealtimeVoiceSession | null = null;
 let responseActive = false;
 let micStreamForSession: MediaStream | null = null;
 let hotkeysInstalled = false;
+let laatsteSpraak = 0;
+let stilteKlok: ReturnType<typeof setTimeout> | null = null;
+
+function wisStilteKlok() {
+  if (stilteKlok != null) {
+    clearTimeout(stilteKlok);
+    stilteKlok = null;
+  }
+}
+
+function planStilteEinde() {
+  wisStilteKlok();
+  laatsteSpraak = Date.now();
+  stilteKlok = setTimeout(() => {
+    if (!realtimeActive) return;
+    if (responseActive) {
+      planStilteEinde();
+      return;
+    }
+    if (!stilteVerlopen(Date.now(), laatsteSpraak, STILTE_MS)) return;
+    useVoiceStore.getState().stopListening();
+  }, STILTE_MS);
+}
 
 function isRealtimeVoiceActive(): boolean {
   return realtimeActive || realtimeStarting;
@@ -431,9 +455,9 @@ function installVoiceHotkeys(): void {
 
   if (typeof window !== 'undefined') {
     window.addEventListener(STEM_TOGGLE_EVENT, sneltoetsAanslag);
-    // De Android-schil wacht hierop voordat hij het gesprek start: een event dat vóór de
-    // listener is verstuurd, is verloren, en de pagina is na het ontgrendelen nog aan het laden.
-    (window as unknown as Record<string, unknown>).__axeVoiceReady = true;
+    // Geen __axeVoiceReady: de Android-schil startte daarmee automatisch
+    // na ontgrendelen. Mic gaat alleen aan na een tik (of deze event van
+    // de lock-pil, die Luka zelf indrukt).
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (useVoiceStore.getState().voiceStatus === 'idle') return;
@@ -483,6 +507,8 @@ export function installOpenAIRealtimeVoice(): void {
   };
 
   const closeRealtime = async (setIdle = true) => {
+    wisStilteKlok();
+    laatsteSpraak = 0;
     pendingAnnouncements.length = 0;
     realtimeActive = false;
     useVoiceStore.setState({ liveCall: false });
@@ -573,11 +599,14 @@ export function installOpenAIRealtimeVoice(): void {
 
         onUserSpeechStarted: () => {
           if (myGeneration !== generation) return;
+          wisStilteKlok();
+          laatsteSpraak = Date.now();
           useVoiceStore.setState({ voiceStatus: 'listening', error: null });
         },
 
         onUserSpeechStopped: () => {
           if (myGeneration !== generation) return;
+          planStilteEinde();
           useVoiceStore.setState((s) => (s.voiceStatus === 'listening' ? { voiceStatus: 'processing' } : {}));
         },
 
@@ -635,6 +664,7 @@ export function installOpenAIRealtimeVoice(): void {
           responseActive = false;
           if (myGeneration === generation && realtimeActive) {
             useVoiceStore.setState((s) => (s.voiceStatus !== 'idle' ? { voiceStatus: 'listening' } : {}));
+            planStilteEinde();
           }
           flushPendingAnnouncements();
         },
@@ -672,6 +702,7 @@ export function installOpenAIRealtimeVoice(): void {
       session = opened;
       realtimeStarting = false;
       realtimeActive = true;
+      planStilteEinde();
       useVoiceStore.setState({ liveCall: true });
       setRealtimeJobAnnouncer((text) => {
         pendingAnnouncements.push(text);

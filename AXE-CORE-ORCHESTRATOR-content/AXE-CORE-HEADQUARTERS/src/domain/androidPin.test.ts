@@ -88,11 +88,13 @@ describe('android particle-gesture PIN', () => {
   it('na ontgrendelen terug naar de schil, niet Device Manager', () => {
     const sessie = geheugen();
     expect(naOntgrendelenPad(sessie)).toBe(SCHIL_START);
-    expect(SCHIL_START).toBe('/');
+    expect(SCHIL_START).toBe('/mobile');
     bewaarTerugPad('/lock', sessie);
     bewaarTerugPad('/lock/pin', sessie);
     bewaarTerugPad('/login', sessie);
-    expect(naOntgrendelenPad(sessie)).toBe('/');
+    expect(naOntgrendelenPad(sessie)).toBe('/mobile');
+    bewaarTerugPad('/', sessie);
+    expect(naOntgrendelenPad(sessie)).toBe('/mobile');
     bewaarTerugPad('/tasks', sessie);
     expect(naOntgrendelenPad(sessie)).toBe('/tasks');
     bewaarTerugPad('/lock', sessie);

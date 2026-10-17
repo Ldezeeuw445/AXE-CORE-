@@ -13,10 +13,12 @@ describe('canonical mobile Home wiring', () => {
   });
 
 
-  it('renders the /mobile route on the same floating glass plate as native phone tabs', () => {
+  it('renders the /mobile route on the original floating glass plate; other tabs are edge-to-edge', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     expect(shell).toContain('isLockPad(location.pathname)');
-    expect(shell).toContain("const opPlaatMobiel = mobileNav");
+    expect(shell).toContain("const telefoonHome = mobileNav && !opSlot && location.pathname === '/mobile'");
+    expect(shell).toContain('const opPlaatMobiel = telefoonHome');
+    expect(shell).toContain('axe-mobiel-randloos');
     expect(shell).toContain('axe-lock-pad');
   });
 
@@ -122,7 +124,7 @@ describe('canonical mobile Home wiring', () => {
     const shell = bron('presentation/components/layout/AppShell.tsx');
     const mobile = bron('presentation/pages/MobileSystem.tsx');
     expect(shell).toContain('id={SLOT_ID.wereld}');
-    expect(shell).toContain("const telefoonHome = opPlaatMobiel && location.pathname === '/mobile';");
+    expect(shell).toContain("const telefoonHome = mobileNav && !opSlot && location.pathname === '/mobile';");
     expect(shell).toContain("pointerEvents: mobielWereld ? 'none' : undefined");
     expect(mobile).toContain("pointerEvents: wereld ? 'none' : undefined");
     // De weg terug en de composer blijven aantikbaar.

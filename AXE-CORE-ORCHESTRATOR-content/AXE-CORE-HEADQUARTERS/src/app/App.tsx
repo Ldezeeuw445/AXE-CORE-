@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { AppShell } from '@/presentation/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/presentation/hooks/useKeyboardShortcuts';
 import { useClapDetector } from '@/presentation/hooks/useClapDetector';
+import { useWakeWord } from '@/presentation/hooks/useWakeWord';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import LoginPage from '@/presentation/pages/LoginPage';
@@ -82,7 +83,11 @@ function HomeEntry() {
   // still reopen #/ (the desktop Home) until the user navigates away. Make the
   // route itself authoritative: every phone-sized launch of Home becomes the
   // canonical mobile Home immediately. Desktop/Tauri keeps the desktop Home.
-  if (isMobile) return <Navigate to="/mobile" replace />;
+  // Android-WebView telt mee ook als de CSS-breedte even ≥768 is: anders landt
+  // de A17 op Home.tsx met een tweede particle-bol naast de telefoon-Home.
+  if (isMobile || isAndroidShellRuntime() || isAndroidTauriRuntime()) {
+    return <Navigate to="/mobile" replace />;
+  }
   return <Home />;
 }
 
@@ -184,6 +189,7 @@ export default function App() {
   }, [user]);
 
   useKeyboardShortcuts({});
+  useWakeWord();
 
   useEffect(() => {
     if (!user) { setClapEnabled(false); return; }
@@ -191,6 +197,7 @@ export default function App() {
   }, [user]);
 
   // 3 claps: stop speaking, show window (if hidden), start listening
+  // Alleen als Luka clap zelf aanzet (standaard uit). Geen auto-luisteren.
   useClapDetector(clapEnabled, () => {
     const voice = useVoiceStore.getState();
     stopTTS();
@@ -199,6 +206,14 @@ export default function App() {
     navigate('/');
     voice.startListening().catch(() => {});
   });
+
+  // Playwright/ontwerp: stemstand zetten zonder echte mic, voor mic-aan/uit shots.
+  useEffect(() => {
+    if (!ontwerpModus()) return;
+    const w = window as unknown as { __axeZetStem?: (s: Record<string, unknown>) => void };
+    w.__axeZetStem = (s) => { useVoiceStore.setState(s as never); };
+    return () => { delete w.__axeZetStem; };
+  }, []);
 
   return (
     <ErrorBoundary>

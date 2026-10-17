@@ -9,7 +9,8 @@ describe('mobile PWA entry', () => {
   it('redirects phone-sized root launches to the canonical mobile Home', () => {
     const app = read('src/app/App.tsx');
     expect(app).toContain('function HomeEntry()');
-    expect(app).toContain('if (isMobile) return <Navigate to="/mobile" replace />;');
+    expect(app).toContain('if (isMobile || isAndroidShellRuntime() || isAndroidTauriRuntime())');
+    expect(app).toContain('return <Navigate to="/mobile" replace />;');
     expect(app).toContain('<Route index element={<HomeEntry />} />');
   });
 

@@ -201,6 +201,7 @@ export function MobileComposer({ navigateAfterSend = true, dock = false, opDock 
       onClick={() => { void mic(); }}
       title={voice.liveCall ? 'End live conversation' : activeVoice ? 'Stop gesprek' : 'Start live conversation'}
       aria-pressed={activeVoice || voice.liveCall}
+      data-axe-mic={activeVoice || voice.liveCall ? 'aan' : 'uit'}
       data-axe-live={voice.liveCall ? 'ja' : 'nee'}
       style={{
         width: 44,

@@ -8097,8 +8097,15 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 /* ── Native telefoontabs (niet Home, niet lock, niet desktop) ──────────── */
 .axe-plaat-mobiel,
-.axe-mobiel-desk {
+.axe-mobiel-desk,
+.axe-mobiel-randloos {
   overflow-x: hidden;
+}
+.axe-shell.axe-mobiel-randloos {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
 }
 .axe-mobiel-tab-schil {
   display: flex;
@@ -8139,57 +8146,79 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-mobiel-ververs[data-bezig='ja'] { height: 36px; }
 
 .axe-plaat-mobiel .axe-mobiel-tab-schil .axe-tabruimte,
-.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-inhoud {
+.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-inhoud,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-tabruimte,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-inhoud {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow-x: hidden;
 }
 .axe-plaat-mobiel .axe-mobiel-tab-schil .axe-kaart-raster,
-.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-kaart-raster--ruim {
+.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-kaart-raster--ruim,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-kaart-raster,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-kaart-raster--ruim {
   grid-template-columns: 1fr !important;
   justify-content: stretch;
 }
-.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-stat-rij {
+.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-stat-rij,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-stat-rij {
   flex-direction: column;
   align-items: stretch;
 }
 .axe-plaat-mobiel .axe-mobiel-tab-schil .axe-kaart,
-.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-sectie {
+.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-sectie,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-kaart,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-sectie {
   width: 100%;
   max-width: 100%;
 }
 .axe-plaat-mobiel .axe-mobiel-tab-schil button,
 .axe-plaat-mobiel .axe-mobiel-tab-schil a[role='button'],
 .axe-plaat-mobiel .axe-mobiel-tab-schil [role='button'],
-.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-row {
+.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-row,
+.axe-mobiel-randloos .axe-mobiel-tab-schil button,
+.axe-mobiel-randloos .axe-mobiel-tab-schil a[role='button'],
+.axe-mobiel-randloos .axe-mobiel-tab-schil [role='button'],
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-row {
   min-height: 44px;
 }
 .axe-plaat-mobiel .axe-mobiel-tab-schil input,
 .axe-plaat-mobiel .axe-mobiel-tab-schil select,
-.axe-plaat-mobiel .axe-mobiel-tab-schil textarea {
+.axe-plaat-mobiel .axe-mobiel-tab-schil textarea,
+.axe-mobiel-randloos .axe-mobiel-tab-schil input,
+.axe-mobiel-randloos .axe-mobiel-tab-schil select,
+.axe-mobiel-randloos .axe-mobiel-tab-schil textarea {
   min-height: 44px;
   font-size: 16px;
 }
-.axe-plaat-mobiel .axe-mobiel-tab-schil {
+.axe-plaat-mobiel .axe-mobiel-tab-schil,
+.axe-mobiel-randloos .axe-mobiel-tab-schil {
   font-size: 15px;
   line-height: 1.45;
 }
 .axe-plaat-mobiel .axe-mobiel-tab-schil h1,
 .axe-plaat-mobiel .axe-mobiel-tab-schil h2,
 .axe-plaat-mobiel .axe-mobiel-tab-schil .axe-kaart-titel,
-.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-sectie-titel {
+.axe-plaat-mobiel .axe-mobiel-tab-schil .axe-sectie-titel,
+.axe-mobiel-randloos .axe-mobiel-tab-schil h1,
+.axe-mobiel-randloos .axe-mobiel-tab-schil h2,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-kaart-titel,
+.axe-mobiel-randloos .axe-mobiel-tab-schil .axe-sectie-titel {
   font-size: 17px;
   line-height: 1.3;
 }
-.axe-plaat-mobiel .axe-mobiel-tab-schil table {
+.axe-plaat-mobiel .axe-mobiel-tab-schil table,
+.axe-mobiel-randloos .axe-mobiel-tab-schil table {
   display: block;
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
 }
 .axe-plaat-mobiel .axe-mobiel-tab-schil th,
-.axe-plaat-mobiel .axe-mobiel-tab-schil td {
+.axe-plaat-mobiel .axe-mobiel-tab-schil td,
+.axe-mobiel-randloos .axe-mobiel-tab-schil th,
+.axe-mobiel-randloos .axe-mobiel-tab-schil td {
   word-break: break-word;
 }
 

@@ -13,6 +13,7 @@
  * ziet de telefoon er in beide standen uit als de Tauri-app.
  */
 import { useEffect } from 'react';
+import { useLocation } from 'react-router';
 import { useLook } from '@/presentation/hooks/useLook';
 import { useLookValue } from '@/presentation/hooks/usePlaatInk';
 import { hasNativeGlass } from '@/infrastructure/config/apiUrl';
@@ -83,6 +84,13 @@ export function MobileGlass() {
   const look = useLookValue();
   const wallpaper = useWallpaper();
   const { dim, blur } = useGlassTuning();
+  const pad = useLocation().pathname;
+  // Alleen de telefoon-Home heeft de afgeronde plaatclip. Andere tabs zijn
+  // randloos: de wallpaper vult het scherm, zonder kader.
+  const plaatClip = pad === '/mobile';
+  const clipStijl = plaatClip
+    ? { clipPath: PLAAT_CLIP, WebkitClipPath: PLAAT_CLIP }
+    : {};
   // In de lichte stand blurt de plaat zelf (backdrop-filter, zie axe-look.css): de
   // schuif "Frosting" stuurt die waarde, en "Opacity" de melkwitte sluier van de plaat.
   // Elke stand heeft zijn eigen waarden (useGlassTuning leest die van de huidige stand).
@@ -131,7 +139,7 @@ export function MobileGlass() {
           {glass ? (
             <div
               style={{
-                position: 'absolute', inset: 0, clipPath: PLAAT_CLIP, WebkitClipPath: PLAAT_CLIP,
+                position: 'absolute', inset: 0, ...clipStijl,
                 // De sluier zelf zit op de plaat (--axe-glass-sluier in axe-look.css),
                 // zodat hij ook zonder foto werkt; dit is alleen een zweem eronder.
                 background: `rgba(255,255,255,${(dim * 0.1).toFixed(3)})`,
@@ -140,7 +148,7 @@ export function MobileGlass() {
           ) : (
             <div
               style={{
-                position: 'absolute', inset: 0, clipPath: PLAAT_CLIP, WebkitClipPath: PLAAT_CLIP,
+                position: 'absolute', inset: 0, ...clipStijl,
                 overflow: 'hidden',
               }}
             >
