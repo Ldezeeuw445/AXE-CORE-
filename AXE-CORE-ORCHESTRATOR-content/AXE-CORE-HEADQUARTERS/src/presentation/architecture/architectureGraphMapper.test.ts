@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { asInspectorNode } from './ArchitectureInspector';
 import type { ArchitectureManifest } from '@/domain/architecture/architectureGraph';
 import { ALL_GROUPS, architectureNodeFromClick, mapArchitectureGraph, OVERVIEW, selectedArchitectureNodeFromFlow } from './architectureGraphMapper';
 
@@ -64,5 +65,11 @@ describe('mapArchitectureGraph', () => {
     ]);
     expect(selectedArchitectureNodeFromFlow(Array.from(lookup.values()))).toEqual(api);
     expect(selectedArchitectureNodeFromFlow(lookup.values())).toEqual(api);
+  });
+
+  it('inspector survives a node without details or sources', () => {
+    const safe = asInspectorNode({ id: 'service:axe-core-api', kind: 'service', label: 'AXE Core API' });
+    expect(safe?.details).toEqual({});
+    expect(safe?.sources).toEqual([]);
   });
 });

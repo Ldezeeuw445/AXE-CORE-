@@ -8,6 +8,22 @@ function display(value: unknown): string {
   return String(value);
 }
 
+export function asInspectorNode(value: unknown): ArchitectureNode | null {
+  if (!value || typeof value !== 'object') return null;
+  const node = value as Partial<ArchitectureNode> & { label?: string; id?: string };
+  const kind = node.kind;
+  if (!kind || !(kind in KIND_LABELS)) return null;
+  return {
+    id: String(node.id ?? ''),
+    kind,
+    label: String(node.label ?? node.id ?? 'Node'),
+    appId: typeof node.appId === 'string' ? node.appId : undefined,
+    description: typeof node.description === 'string' ? node.description : undefined,
+    details: node.details && typeof node.details === 'object' && !Array.isArray(node.details) ? node.details : {},
+    sources: Array.isArray(node.sources) ? node.sources.map(String) : [],
+  };
+}
+
 export function ArchitectureInspector({
   node,
   onClose,
@@ -15,42 +31,50 @@ export function ArchitectureInspector({
   node: ArchitectureNode;
   onClose: () => void;
 }) {
+  const safe = asInspectorNode(node) ?? {
+    id: 'unknown',
+    kind: 'service' as const,
+    label: 'Node',
+    details: {},
+    sources: [],
+  };
+  const details = safe.details;
   const where = [
-    typeof node.details.unit === 'string' ? node.details.unit : null,
-    typeof node.details.host === 'string' ? node.details.host : null,
-    typeof node.details.projectRef === 'string' ? node.details.projectRef : null,
-    typeof node.details.engine === 'string' ? node.details.engine : null,
+    typeof details.unit === 'string' ? details.unit : null,
+    typeof details.host === 'string' ? details.host : null,
+    typeof details.projectRef === 'string' ? details.projectRef : null,
+    typeof details.engine === 'string' ? details.engine : null,
   ].filter(Boolean);
 
   const rows = [
-    ['Kind', KIND_LABELS[node.kind]],
-    ['Id', node.id],
-    ['Runs with', node.appId || 'shared / unassigned'],
+    ['Kind', KIND_LABELS[safe.kind]],
+    ['Id', safe.id],
+    ['Runs with', safe.appId || 'shared / unassigned'],
     ['Where', where.length ? where.join(' · ') : 'not set'],
-    ['Status', display(node.details.liveStatus ?? node.details.status ?? node.details.heartbeat)],
-    ...Object.entries(node.details)
+    ['Status', display(details.liveStatus ?? details.status ?? details.heartbeat)],
+    ...Object.entries(details)
       .filter(([key]) => !['liveStatus', 'status', 'heartbeat', 'unit', 'host', 'projectRef', 'engine'].includes(key))
       .map(([key, value]) => [key, display(value)] as const),
-    ['Sources', node.sources.join(' · ')],
+    ['Sources', safe.sources.length ? safe.sources.join(' · ') : 'not set'],
   ] as const;
 
   return (
     <aside
       className="nodrag nopan nowheel axe-architecture-inspector"
       data-testid="architecture-inspector"
-      aria-label={`Details for ${node.label}`}
+      aria-label={`Details for ${safe.label}`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
-          <div className="text-[8px] uppercase tracking-[0.16em]" style={{ color: 'rgba(245,240,230,0.45)' }}>{KIND_LABELS[node.kind]}</div>
-          <h2 className="text-[14px] font-medium leading-tight" style={{ color: '#F5F0E6' }}>{node.label}</h2>
+          <div className="text-[8px] uppercase tracking-[0.16em]" style={{ color: 'rgba(245,240,230,0.45)' }}>{KIND_LABELS[safe.kind]}</div>
+          <h2 className="text-[14px] font-medium leading-tight" style={{ color: '#F5F0E6' }}>{safe.label}</h2>
         </div>
         <button type="button" onClick={onClose} className="p-1 rounded-md" style={{ color: 'rgba(245,240,230,0.55)' }} aria-label="Close details">
           <X size={14} />
         </button>
       </div>
-      {node.description ? (
-        <p className="text-[11px] mb-3 leading-snug" style={{ color: 'rgba(245,240,230,0.62)' }}>{node.description}</p>
+      {safe.description ? (
+        <p className="text-[11px] mb-3 leading-snug" style={{ color: 'rgba(245,240,230,0.62)' }}>{safe.description}</p>
       ) : null}
       <div className="flex flex-col gap-1.5">
         {rows.map(([label, value]) => (

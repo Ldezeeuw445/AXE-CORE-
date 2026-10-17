@@ -65,11 +65,21 @@ export function architectureNodeFromClick(
 }
 
 export function selectedArchitectureNodeFromFlow(
-  nodes: Iterable<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
+  nodes: Iterable<{ id?: string; selected?: boolean; type?: string; data: ArchitectureFlowData }>,
 ): ArchitectureNode | null {
   for (const node of nodes) {
-    if (!node.selected || node.data.overview || node.type === 'architectureGroup') continue;
-    if (node.data.node) return node.data.node;
+    if (!node.selected || node.data?.overview || node.type === 'architectureGroup') continue;
+    if (node.data?.node) return node.data.node;
+    if (node.data?.kind && node.data.kind !== 'group') {
+      return {
+        id: node.id ?? node.data.label,
+        kind: node.data.kind,
+        label: node.data.label,
+        details: {},
+        sources: [],
+        appId: node.data.groupId === SHARED_GROUP ? undefined : node.data.groupId,
+      };
+    }
   }
   return null;
 }
