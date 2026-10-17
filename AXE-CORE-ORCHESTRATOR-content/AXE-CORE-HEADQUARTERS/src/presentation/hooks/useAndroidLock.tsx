@@ -1,9 +1,10 @@
 /**
  * Houdt de Samsung op slot tot de cijfer-PIN klopt, en sluit weer bij achtergrond.
  *
- * Na de native lockscreen (swipe) mag er geen tweede particle-scherm komen.
- * Geen PIN of kapotte opslag: meteen de telefoon-Home. Alleen een échte
- * cijfer-PIN toont het keypad. Desktop slaat dit over.
+ * Ontworpen pad: native lockscreen → swipe → /mobile. Geen keypad in de flow.
+ * PIN_STANDAARD_UIT: zonder record is swipe genoeg. Alleen een eerder gezette
+ * cijfer-PIN toont nog het keypad. Geen tweede particle-scherm. Desktop slaat
+ * dit over. Niet uitbreiden tot Luka erom vraagt.
  */
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
