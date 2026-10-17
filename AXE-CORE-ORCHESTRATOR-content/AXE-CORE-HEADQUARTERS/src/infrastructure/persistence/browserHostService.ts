@@ -41,13 +41,33 @@ export async function kiesBrowserHost(id: string | null): Promise<void> {
 let cache: { basis: string; at: number } | null = null;
 const TTL_MS = 30_000;
 
-export function __resetBrowserHostCache(): void { cache = null; }
+/**
+ * Waarom de browser NIET bij de gekozen host uitkomt, of null.
+ *
+ * Gemeten 11 okt: de gekozen host was `https://mac-mini.ts.net:8099` -- het
+ * voorbeeld uit het invoerveld, geen echte tailnet-naam. Die naam bestaat
+ * niet, dus elke browseraanroep stierf in DNS en WebKit meldde alleen "Load
+ * failed". De Browser-tab hing op "Starting a real browser…" terwijl de VPS
+ * gewoon klaarstond. Een keuze die niet antwoordt mag de browser niet
+ * stilzetten; hij valt terug op de VPS, en de tab zegt waarom.
+ */
+let omleiding: string | null = null;
+
+export function browserRouteNotice(): string | null { return omleiding; }
+
+export function __resetBrowserHostCache(): void { cache = null; omleiding = null; }
 
 export async function browserBasis(): Promise<string> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.basis;
   try {
     const [hosts, keuze] = await Promise.all([laadBrowserHosts(), browserHostKeuze()]);
-    const basis = gekozenHost(hosts, keuze).url;
+    const host = gekozenHost(hosts, keuze);
+    let basis = host.url;
+    omleiding = null;
+    if (basis && !(await browserHostAntwoordt(basis))) {
+      omleiding = `Browser host "${host.naam}" (${basis}) does not answer — using the VPS instead. Change it under Browser in the composer's capabilities menu.`;
+      basis = '';
+    }
     cache = { basis, at: Date.now() };
     return basis;
   } catch {

@@ -22,12 +22,19 @@ interface LogEntry {
 export function BrowserAgentPanel({
   onClose,
   initialInstruction,
+  sharedSessionId = null,
 }: {
   onClose: () => void;
   /** Optional seed instruction (e.g. from WebView "Open with Browser Agent") */
   initialInstruction?: string;
+  /**
+   * De sessie die in de Browser-tab te zien is. Dan werkt de agent op DIE
+   * pagina, in plaats van in een tweede, onzichtbare browser -- wat je ziet is
+   * waar AXE op klikt. Die sessie is niet van dit paneel: niet sluiten.
+   */
+  sharedSessionId?: string | null;
 }) {
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(sharedSessionId);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [pageState, setPageState] = useState<{ url: string; title: string } | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -42,7 +49,7 @@ export function BrowserAgentPanel({
 
   useEffect(() => () => {
     if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
-    if (sessionId) void browserAgentClose(sessionId);
+    if (sessionId && sessionId !== sharedSessionId) void browserAgentClose(sessionId);
     abortRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

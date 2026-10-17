@@ -27,14 +27,21 @@
  * factor still applies there. Get this wrong and clicks land further off the
  * further you are from the top-left, which reads as "it works in the corner
  * and nowhere else".
+ *
+ * NIET MEER EEUWIG "STARTING" (11 okt). Mislukte de start, dan bleef de
+ * spinner draaien met een rode balk "Load failed" eronder, en de knop in die
+ * balk ververste alleen een screenshot van een sessie die nooit bestond. Nu
+ * zegt het vak wat er misging en start "Try again" echt een nieuwe sessie.
  */
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Loader2, AlertTriangle, RotateCw } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback, type MutableRefObject } from 'react';
+import { Loader2, AlertTriangle, RotateCw, Info } from 'lucide-react';
 import {
   browserAgentStart, browserAgentNavigate, browserAgentClick,
   browserAgentType, browserAgentPress, browserAgentScroll,
-  browserAgentScreenshot, browserAgentViewport,
+  browserAgentScreenshot, browserAgentViewport, browserAgentHistory,
+  browserAgentState, type BrowserAgentPageState,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { browserRouteNotice } from '@/infrastructure/persistence/browserHostService';
 
 /**
  * The page is rendered at the SIZE OF THE PANE, not at a fixed desktop size.
@@ -53,6 +60,14 @@ const MIN_W = 360, MIN_H = 400, MAX_W = 2200, MAX_H = 1600;
 /** Resizes are debounced — a drag would otherwise reconfigure the browser on
  *  every animation frame. */
 const RESIZE_DEBOUNCE_MS = 250;
+/** Losse toetsaanslagen worden zo lang verzameld en als één `type` verstuurd. */
+const TYPE_FLUSH_MS = 70;
+
+/** Terug/vooruit in de pagina zelf. `false` = er was geen stap. */
+export interface LiveBrowserNav {
+  back: () => Promise<boolean>;
+  forward: () => Promise<boolean>;
+}
 
 interface Props {
   url: string;
@@ -60,22 +75,71 @@ interface Props {
   onTitleChange?: (title: string) => void;
   /** Handed up so the agent panel drives the SAME session the user is looking at. */
   onSession?: (sessionId: string | null) => void;
+  /** De pagina staat op een ander adres dan `url` (klik op een link, terug). */
+  onPageChange?: (url: string, title: string) => void;
+  /** Hier hangt de view zijn terug/vooruit aan, voor de knoppen in de kopbalk. */
+  navRef?: MutableRefObject<LiveBrowserNav | null>;
 }
 
-export default function LiveBrowserView({ url, mobile = false, onTitleChange, onSession }: Props) {
+/** Een sessie die de server niet (meer) kent: herstart, niet blijven klagen. */
+function sessieWeg(msg: string): boolean {
+  return /\b404\b/.test(msg) && /session not found|expired/i.test(msg);
+}
+
+export default function LiveBrowserView({ url, mobile = false, onTitleChange, onSession, onPageChange, navRef }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [shot, setShot] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  /** Ophogen = een nieuwe sessie starten. */
+  const [attempt, setAttempt] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
   const paneRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 1280, h: 800 });
-  // Held in a ref as well: the screenshot poller closes over it and would
-  // otherwise keep reading the value from the render it was created in.
-  const sidRef = useRef<string | null>(null);
+
+  // Waar de pagina volgens de browser NU staat. Komt de prop `url` daarmee
+  // overeen (omdat wij hem net zelf naar boven gaven), dan niet opnieuw laden.
+  const pageUrlRef = useRef<string | null>(null);
+  const urlRef = useRef(url);
+  urlRef.current = url;
+  const cbRef = useRef({ onTitleChange, onPageChange });
+  cbRef.current = { onTitleChange, onPageChange };
+
+  // ACTIES ACHTER ELKAAR. Klik, toetsen en scroll liepen los van elkaar; een
+  // snel getypt woord kwam dan door elkaar aan, of een Enter vóór de laatste
+  // letter. Eén rij houdt de volgorde die de gebruiker gaf.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueue = useCallback(<T,>(fn: () => Promise<T>): Promise<T> => {
+    const run = queue.current.then(fn, fn);
+    queue.current = run.catch(() => undefined);
+    return run;
+  }, []);
 
   const vw = mobile ? MOBILE_W : size.w;
   const vh = mobile ? MOBILE_H : size.h;
+
+  const restart = useCallback(() => {
+    pageUrlRef.current = null;
+    setSessionId(null);
+    setShot(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setError(null);
+    setAttempt(a => a + 1);
+  }, []);
+
+  const fail = useCallback((e: unknown, fallback: string) => {
+    const msg = e instanceof Error ? e.message : fallback;
+    if (sessieWeg(msg)) { restart(); return; }
+    setError(msg);
+  }, [restart]);
+
+  /** Wat de server over de pagina zegt, doorgeven aan de adresbalk. */
+  const seen = useCallback((state: BrowserAgentPageState | null | undefined) => {
+    if (!state?.url) return;
+    pageUrlRef.current = state.url;
+    cbRef.current.onTitleChange?.(state.title || state.url);
+    if (state.url !== urlRef.current) cbRef.current.onPageChange?.(state.url, state.title || state.url);
+  }, []);
 
   const refresh = useCallback(async (sid: string) => {
     try {
@@ -88,9 +152,18 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
       });
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'screenshot failed');
+      fail(e, 'screenshot failed');
     }
-  }, []);
+  }, [fail]);
+
+  /** Een klik kan een pagina openen die pas na het antwoord laadt. */
+  const followUp = useCallback((sid: string) => {
+    for (const ms of [700, 2000]) {
+      setTimeout(() => {
+        void browserAgentState(sid).then(seen).catch(() => { /* oudere backend zonder /state */ });
+      }, ms);
+    }
+  }, [seen]);
 
   // Measure the pane. Desktop only: on mobile the point is to ask the site for
   // its phone layout at a real phone width, not for the width of whatever
@@ -122,22 +195,25 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
     return () => { cancelled = true; };
   }, [sessionId, size.w, size.h, mobile, refresh]);
 
-  // One session per mount.
+  // One session per mount (and per "Try again").
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setBusy(true);
+      setError(null);
       try {
         const { session_id } = await browserAgentStart();
         if (cancelled) return;
-        sidRef.current = session_id;
+        setNotice(browserRouteNotice());
         setSessionId(session_id);
         onSession?.(session_id);
         if (mobile) await browserAgentViewport(session_id, MOBILE_W, MOBILE_H).catch(() => {});
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'could not start a browser session');
-      } finally {
-        if (!cancelled) setBusy(false);
+        if (!cancelled) {
+          setNotice(browserRouteNotice());
+          setError(e instanceof Error ? e.message : 'could not start a browser session');
+          setBusy(false);
+        }
       }
     })();
     return () => {
@@ -148,25 +224,27 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
       // out. The backend reaps after SESSION_IDLE_TIMEOUT.
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mobile]);
+  }, [mobile, attempt]);
 
-  // Navigate whenever the address changes.
+  // Navigate whenever the address changes — unless the page is already there
+  // (we just reported that address upward ourselves).
   useEffect(() => {
     if (!sessionId || !url) return;
+    if (url === pageUrlRef.current) { setBusy(false); return; }
     let cancelled = false;
-    (async () => {
-      setBusy(true);
+    setBusy(true);
+    void enqueue(async () => {
       try {
         const state = await browserAgentNavigate(sessionId, url);
         if (cancelled) return;
-        onTitleChange?.(state.title || url);
+        seen(state);
         await refresh(sessionId);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'navigation failed');
+        if (!cancelled) fail(e, 'navigation failed');
       } finally {
         if (!cancelled) setBusy(false);
       }
-    })();
+    });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, url]);
@@ -179,44 +257,115 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
     return () => clearInterval(t);
   }, [sessionId, refresh]);
 
+  // Terug/vooruit voor de kopbalk.
+  useEffect(() => {
+    if (!navRef) return;
+    if (!sessionId) { navRef.current = null; return; }
+    const stap = (richting: 'back' | 'forward') => enqueue(async () => {
+      setBusy(true);
+      try {
+        const state = await browserAgentHistory(sessionId, richting);
+        if (state.moved) seen(state);
+        await refresh(sessionId);
+        return state.moved;
+      } finally {
+        setBusy(false);
+      }
+    });
+    navRef.current = { back: () => stap('back'), forward: () => stap('forward') };
+    return () => { navRef.current = null; };
+  }, [navRef, sessionId, enqueue, seen, refresh]);
+
   /** Screen point -> page point. See the note at the top of this file. */
   const toPage = (clientX: number, clientY: number) => {
     const el = imgRef.current;
     if (!el) return null;
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) return null;
-    return {
-      x: ((clientX - r.left) / r.width) * vw,
-      y: ((clientY - r.top) / r.height) * vh,
-    };
+    // object-contain: the picture can be letterboxed inside the element box,
+    // so map against the drawn image, not the box.
+    const nw = el.naturalWidth || vw, nh = el.naturalHeight || vh;
+    const scale = Math.min(r.width / nw, r.height / nh);
+    const dw = nw * scale, dh = nh * scale;
+    const ox = r.left + (r.width - dw) / 2, oy = r.top + (r.height - dh) / 2;
+    const px = (clientX - ox) / dw, py = (clientY - oy) / dh;
+    if (px < 0 || py < 0 || px > 1 || py > 1) return null;
+    return { x: px * nw, y: py * nh };
   };
 
-  const onClick = async (e: React.MouseEvent<HTMLImageElement>) => {
+  const onClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (!sessionId) return;
+    e.currentTarget.focus();
     const p = toPage(e.clientX, e.clientY);
     if (!p) return;
-    try {
-      const state = await browserAgentClick(sessionId, p);
-      onTitleChange?.(state.title || url);
-      await refresh(sessionId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'click failed');
-    }
+    const sid = sessionId;
+    void enqueue(async () => {
+      try {
+        seen(await browserAgentClick(sid, p));
+        await refresh(sid);
+        followUp(sid);
+      } catch (err) {
+        fail(err, 'click failed');
+      }
+    });
   };
 
-  const onKeyDown = async (e: React.KeyboardEvent) => {
+  // TYPEN WORDT GEBUNDELD. Eén API-aanroep per letter met een screenshot erachter
+  // maakte een zoekterm traag en liet letters inhalen. Letters gaan nu samen
+  // als één `type`; een speciale toets (Enter, Backspace) sluit de bundel eerst af.
+  const typeBuf = useRef('');
+  const typeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flushTyping = useCallback((sid: string) => {
+    clearTimeout(typeTimer.current);
+    const text = typeBuf.current;
+    typeBuf.current = '';
+    if (!text) return;
+    void enqueue(async () => {
+      try {
+        await browserAgentType(sid, text);
+        await refresh(sid);
+      } catch (err) {
+        fail(err, 'typing failed');
+      }
+    });
+  }, [enqueue, refresh, fail]);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
     if (!sessionId) return;
-    // Single printable characters go through `type`; everything else is a key
-    // press. Sending "Enter" as text would type the word.
-    const isChar = e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey;
+    const sid = sessionId;
+    const mod = e.metaKey || e.ctrlKey;
+    // Cmd/Ctrl+A selecteert alles in het veld; andere sneltoetsen (Cmd+R,
+    // Cmd+W …) horen bij de app, niet bij de pagina.
+    if (mod && e.key.toLowerCase() !== 'a') return;
     e.preventDefault();
-    try {
-      if (isChar) await browserAgentType(sessionId, e.key);
-      else await browserAgentPress(sessionId, e.key);
-      await refresh(sessionId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'key failed');
+    const isChar = e.key.length === 1 && !mod && !e.altKey;
+    if (isChar) {
+      typeBuf.current += e.key;
+      clearTimeout(typeTimer.current);
+      typeTimer.current = setTimeout(() => flushTyping(sid), TYPE_FLUSH_MS);
+      return;
     }
+    if (['Shift', 'Meta', 'Control', 'Alt', 'CapsLock'].includes(e.key)) return;
+    flushTyping(sid);
+    const key = mod ? 'Control+a' : e.key;
+    void enqueue(async () => {
+      try {
+        seen(await browserAgentPress(sid, key));
+        await refresh(sid);
+        if (key === 'Enter') followUp(sid);
+      } catch (err) {
+        fail(err, 'key failed');
+      }
+    });
+  };
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    if (!sessionId) return;
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+    e.preventDefault();
+    typeBuf.current += text;
+    flushTyping(sessionId);
   };
 
   // SCROLLING HAS TO BE ACCUMULATED, NOT FORWARDED PER EVENT.
@@ -231,17 +380,19 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
 
   const onWheel = (e: React.WheelEvent) => {
     if (!sessionId) return;
+    const sid = sessionId;
     pendingScroll.current += e.deltaY;
     clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(() => {
       const dy = pendingScroll.current;
       pendingScroll.current = 0;
       if (!dy) return;
-      void browserAgentScroll(sessionId, dy)
-        .then(() => refresh(sessionId))
+      void enqueue(() => browserAgentScroll(sid, dy).then(() => refresh(sid)))
         .catch(() => { /* a dropped scroll is not worth an error banner */ });
     }, 90);
   };
+
+  const startFailed = !shot && !busy && !!error;
 
   return (
     <div ref={paneRef} className="relative w-full h-full flex items-center justify-center bg-black/40 overflow-hidden">
@@ -253,6 +404,7 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
           tabIndex={0}
           onClick={onClick}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onWheel={onWheel}
           // Preserve aspect ratio on BOTH desktop and mobile. Desktop still
           // asks Chromium for the pane's measured viewport, so it normally
@@ -264,10 +416,32 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
             : 'w-full h-full object-contain cursor-pointer outline-none'}
           draggable={false}
         />
+      ) : startFailed ? (
+        <div className="flex flex-col items-center gap-3 max-w-md px-6 text-center">
+          <AlertTriangle size={20} className="text-red-300" />
+          <p className="text-[12px] text-white/80">The browser could not start.</p>
+          <p className="text-[11px] text-white/50 break-words">{error}</p>
+          <button
+            type="button"
+            onClick={restart}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] text-white/80 hover:text-white"
+            style={{ background: 'rgba(255,255,255,0.08)' }}
+          >
+            <RotateCw size={12} /> Try again
+          </button>
+        </div>
       ) : (
         <div className="flex flex-col items-center gap-2 text-white/40">
           <Loader2 size={20} className="animate-spin" />
-          <p className="text-[11px]">Starting a real browser…</p>
+          <p className="text-[11px]">{sessionId ? 'Loading the page…' : 'Starting a real browser…'}</p>
+        </div>
+      )}
+
+      {notice && (
+        <div className="absolute top-2 left-2 right-12 flex items-center gap-2 rounded-lg bg-black/75 px-3 py-1.5">
+          <Info size={12} className="text-amber-300 shrink-0" />
+          <p className="text-[11px] text-amber-100/90 flex-1 truncate" title={notice}>{notice}</p>
+          <button type="button" onClick={() => setNotice(null)} className="text-[11px] text-white/50 hover:text-white">×</button>
         </div>
       )}
 
@@ -277,13 +451,14 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
         </div>
       )}
 
-      {error && (
+      {error && !startFailed && (
         <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2 rounded-lg bg-red-950/80 px-3 py-2">
           <AlertTriangle size={13} className="text-red-300 shrink-0" />
-          <p className="text-[11px] text-red-200 flex-1 truncate">{error}</p>
+          <p className="text-[11px] text-red-200 flex-1 truncate" title={error}>{error}</p>
           <button
             type="button"
-            onClick={() => sessionId && void refresh(sessionId)}
+            title={sessionId ? 'Refresh' : 'Start a new browser session'}
+            onClick={() => (sessionId ? void refresh(sessionId) : restart())}
             className="text-[11px] text-red-200 hover:text-white"
           >
             <RotateCw size={12} />

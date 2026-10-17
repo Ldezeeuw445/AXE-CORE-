@@ -149,6 +149,58 @@ async def navigate(session_id: str, body: NavigateBody):
     return {"url": s.page.url, "title": await s.page.title()}
 
 
+async def _history_step(s: _Session, richting: str) -> dict:
+    """Terug of vooruit in de geschiedenis van de PAGINA zelf.
+
+    De knoppen in de app navigeerden naar de vorige URL uit de app-lijst.
+    Die kende alleen wat er in de adresbalk was getypt: klik je op Google een
+    resultaat aan, dan wist de app niet dat er een stap bij was gekomen, en
+    "terug" sprong over die pagina heen. Alleen de browser zelf weet waar
+    hij was. `moved` is False als er geen stap was (eerste pagina)."""
+    stap = s.page.go_back if richting == "back" else s.page.go_forward
+    voor = s.page.url
+    try:
+        resp = await stap(wait_until="domcontentloaded", timeout=15_000)
+    except Exception as e:
+        raise HTTPException(502, f"Going {richting} failed: {e}")
+    # go_back geeft None als er geen stap was, maar ook bij een stap binnen
+    # dezelfde pagina (#anker). Daarom telt een veranderde URL ook als stap.
+    moved = resp is not None or s.page.url != voor
+    # Elke sessie begint op about:blank. "Terug" vanaf de eerste echte pagina
+    # landt daar -- een lege, witte plaat die de adresbalk dan ook nog toont.
+    # Dat is geen pagina waar iemand heen wilde: stap terug en zeg dat er geen
+    # stap was, dan gaat de app naar zijn eigen startpagina.
+    if richting == "back" and s.page.url == "about:blank" and voor != "about:blank":
+        try:
+            await s.page.go_forward(wait_until="domcontentloaded", timeout=15_000)
+        except Exception:
+            pass
+        moved = False
+    return {"url": s.page.url, "title": await s.page.title(), "moved": moved}
+
+
+@router.post("/{session_id}/back")
+async def back(session_id: str):
+    return await _history_step(await _get_session(session_id), "back")
+
+
+@router.post("/{session_id}/forward")
+async def forward(session_id: str):
+    return await _history_step(await _get_session(session_id), "forward")
+
+
+@router.get("/{session_id}/state")
+async def state(session_id: str):
+    """Waar staat de pagina nu? Goedkoop (geen screenshot), zodat de adresbalk
+    kan meelopen met een klik die een nieuwe pagina opende."""
+    s = await _get_session(session_id)
+    try:
+        title = await s.page.title()
+    except Exception:
+        title = ""
+    return {"url": s.page.url, "title": title}
+
+
 @router.post("/{session_id}/click")
 async def click(session_id: str, body: ClickBody):
     s = await _get_session(session_id)
