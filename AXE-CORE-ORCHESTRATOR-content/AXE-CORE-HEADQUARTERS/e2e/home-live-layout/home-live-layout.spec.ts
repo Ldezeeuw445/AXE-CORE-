@@ -11,6 +11,7 @@ const MATEN = [
   { naam: '1100x680', width: 1100, height: 680 },
   { naam: '1440x900', width: 1440, height: 900 },
   { naam: '1560x940', width: 1560, height: 940 },
+  { naam: '1560x985', width: 1560, height: 985 },
   { naam: '1920x1080', width: 1920, height: 1080 },
   { naam: '2048x1080', width: 2048, height: 1080 },
   { naam: '2560x1440', width: 2560, height: 1440 },
@@ -32,6 +33,46 @@ async function box(page: Page, sel: string) {
 async function open(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
   await page.goto(`file://${fixture}`);
+}
+
+/** Elke tekst in een railkaart blijft binnen de kaart; geen verticale overflow. */
+async function assertTekstInKaart(page: Page, waar: string) {
+  const rijen = await page.locator('.axe-home-rail-rij').evaluateAll((nodes) =>
+    nodes.map((n) => {
+      const kaart = n as HTMLElement;
+      const kr = kaart.getBoundingClientRect();
+      const teksten = [...kaart.querySelectorAll(
+        '.axe-home-rail-naam, .axe-home-rail-regel, .axe-home-rail-tegel-naam, .axe-home-rail-label, .axe-home-rail-tier',
+      )].map((el) => {
+        const t = el as HTMLElement;
+        const r = t.getBoundingClientRect();
+        return {
+          sel: t.className,
+          tekst: (t.textContent || '').trim().slice(0, 40),
+          sh: t.scrollHeight,
+          ch: t.clientHeight,
+          top: r.top,
+          bottom: r.bottom,
+        };
+      });
+      return {
+        agent: kaart.getAttribute('data-axe-agent') || '',
+        sh: kaart.scrollHeight,
+        ch: kaart.clientHeight,
+        top: kr.top,
+        bottom: kr.bottom,
+        teksten,
+      };
+    }),
+  );
+  for (const rij of rijen) {
+    expect(rij.sh, `kaart ${rij.agent} scrollHeight at ${waar} (${rij.sh} vs ${rij.ch})`).toBeLessThanOrEqual(rij.ch + 1);
+    for (const t of rij.teksten) {
+      expect(t.top, `tekst "${t.tekst}" top in kaart ${rij.agent} at ${waar}`).toBeGreaterThanOrEqual(rij.top - 0.75);
+      expect(t.bottom, `tekst "${t.tekst}" bottom in kaart ${rij.agent} at ${waar}`).toBeLessThanOrEqual(rij.bottom + 0.75);
+      expect(t.ch, `tekst "${t.tekst}" zichtbaar in kaart ${rij.agent} at ${waar}`).toBeGreaterThan(0);
+    }
+  }
 }
 
 /** Visible box height must land on a whole line, not cut through a glyph. */
@@ -76,8 +117,10 @@ test.describe('Home live layout blijft uit de composer', () => {
 
       expect(overlap(links, kop), `left rail vs header at ${maat.naam}`).toBe(0);
       expect(overlap(rechts, kop), `right rail vs header at ${maat.naam}`).toBe(0);
-      expect(links.y, `left rail below header at ${maat.naam}`).toBeGreaterThanOrEqual(kop.y + kop.height - 0.5);
-      expect(rechts.y, `right rail below header at ${maat.naam}`).toBeGreaterThanOrEqual(kop.y + kop.height - 0.5);
+      const kopOnder = kop.y + kop.height;
+      const zijMarge = links.x;
+      expect(links.y, `left rail below header+margin at ${maat.naam}`).toBeGreaterThanOrEqual(kopOnder + zijMarge - 1.5);
+      expect(rechts.y, `right rail below header+margin at ${maat.naam}`).toBeGreaterThanOrEqual(kopOnder + zijMarge - 1.5);
 
       expect(overlap(live, composer), 'live strip vs composer').toBe(0);
       expect(overlap(live, chips), 'live strip vs chips').toBe(0);
@@ -140,7 +183,7 @@ test.describe('Home live layout blijft uit de composer', () => {
       const gatenLinks = gatenVan(rijenLinks);
       const gatenRechts = gatenVan(rijenRechts);
       for (const g of [...gatenLinks, ...gatenRechts]) {
-        expect(g, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(10);
+        expect(g, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(8);
         expect(g, `rail gap at ${maat.naam}`).toBeLessThanOrEqual(14);
       }
       const spreiding = (gaten: number[]) => Math.max(...gaten) - Math.min(...gaten);
@@ -200,6 +243,7 @@ test.describe('Home live layout blijft uit de composer', () => {
 
       await assertHeleRegels(page, '.axe-home-rail-regel', `rail regel at ${maat.naam}`);
       await assertHeleRegels(page, '[data-axe-home-kaart] .axe-home-live-regel, [data-axe-home-kaart] .axe-home-live-meer, [data-axe-ok-chip]', `live regel at ${maat.naam}`);
+      await assertTekstInKaart(page, maat.naam);
 
       const north = await page.locator('[data-axe-agent="northsea"]').innerText();
       expect(north, `NorthSea title at ${maat.naam}`).toMatch(/NorthSea/);

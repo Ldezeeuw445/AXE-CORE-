@@ -28,9 +28,11 @@ let stand: Stand = { agents: {}, ok: false, at: 0, approvals: [], tiers: null };
 const lezers = new Set<(s: Stand) => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let bezig = false;
+/** Ontwerp/Playwright heeft een stand gezet; de VPS-poll mag die niet overschrijven. */
+let vastgezet = false;
 
 async function poll(): Promise<void> {
-  if (bezig || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) return;
+  if (vastgezet || bezig || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) return;
   bezig = true;
   try {
     const [uit, approvals, tiers] = await Promise.all([
@@ -38,6 +40,7 @@ async function poll(): Promise<void> {
       listPendingApprovals(50).catch(() => [] as DurableTaskApproval[]),
       listAgentTiers().catch(() => stand.tiers),
     ]);
+    if (vastgezet) return;
     const agents: Record<string, ServerAgent> = {};
     for (const a of uit.agents) agents[a.agent] = normaliseerServerAgent(a);
     if (stand.ok) {
@@ -45,10 +48,10 @@ async function poll(): Promise<void> {
     }
     stand = { agents, ok: true, at: Date.now(), approvals, tiers: tiers ?? stand.tiers };
   } catch {
-    stand = { ...stand, ok: false };
+    if (!vastgezet) stand = { ...stand, ok: false };
   } finally {
     bezig = false;
-    lezers.forEach((l) => l(stand));
+    if (!vastgezet) lezers.forEach((l) => l(stand));
   }
 }
 
@@ -60,6 +63,19 @@ export function verversServerAgents(): void {
 /** Snapshot zonder hook: bol en pills lezen dezelfde poll. */
 export function leesServerAgents(): Stand {
   return stand;
+}
+
+/** Ontwerp/Playwright: een stand in de gedeelde poll zetten zonder de VPS. */
+export function zetServerAgentsStand(deel: Partial<Stand>): void {
+  vastgezet = true;
+  stand = {
+    agents: deel.agents ?? stand.agents,
+    ok: deel.ok ?? true,
+    at: Date.now(),
+    approvals: deel.approvals ?? stand.approvals,
+    tiers: deel.tiers === undefined ? stand.tiers : deel.tiers,
+  };
+  lezers.forEach((l) => l(stand));
 }
 
 export function useServerAgents(): Stand {

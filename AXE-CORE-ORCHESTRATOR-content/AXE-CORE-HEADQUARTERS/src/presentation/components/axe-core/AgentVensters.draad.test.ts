@@ -45,6 +45,8 @@ describe('Home-agentvenster is een live draad', () => {
     expect(vensters).toMatch(/agentTierRegel/);
     expect(vensters).toMatch(/TEGEL_KORT/);
     expect(vensters).toMatch(/tegelNaam/);
+    expect(vensters).toMatch(/data-axe-agent=\{rij\.agent\.id\}/);
+    expect(vensters).toMatch(/axe-home-rail-naam-rij/);
     expect(chat).toMatch(/tierRegel/);
   });
 });

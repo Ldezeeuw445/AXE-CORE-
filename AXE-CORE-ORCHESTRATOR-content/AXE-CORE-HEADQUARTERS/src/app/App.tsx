@@ -9,6 +9,8 @@ import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import LoginPage from '@/presentation/pages/LoginPage';
 import { useAuth } from '@/presentation/contexts/AuthContext';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { useUIStore } from '@/presentation/store/uiStore';
+import { zetServerAgentsStand } from '@/presentation/components/axe-core/useServerAgents';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
 import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
@@ -220,16 +222,25 @@ export default function App() {
       __axeZetPin?: (pin: string) => Promise<void>;
       __axeWisPin?: () => Promise<void>;
       __axeVergrendel?: () => void;
+      __axeZetServerAgents?: (s: Record<string, unknown>) => void;
+      __axeZetPanelen?: (open: boolean) => void;
     };
     w.__axeZetStem = (s) => { useVoiceStore.setState(s as never); };
     w.__axeZetPin = async (pin) => { await zetCijferPin(pin); vergrendel(); };
     w.__axeWisPin = async () => { await wisPin(); };
     w.__axeVergrendel = () => { vergrendel(); };
+    w.__axeZetServerAgents = (s) => { zetServerAgentsStand(s as never); };
+    w.__axeZetPanelen = (open) => {
+      useUIStore.getState().setLeftPanelOpen(open);
+      useUIStore.getState().setRightPanelOpen(open);
+    };
     return () => {
       delete w.__axeZetStem;
       delete w.__axeZetPin;
       delete w.__axeWisPin;
       delete w.__axeVergrendel;
+      delete w.__axeZetServerAgents;
+      delete w.__axeZetPanelen;
     };
   }, []);
 

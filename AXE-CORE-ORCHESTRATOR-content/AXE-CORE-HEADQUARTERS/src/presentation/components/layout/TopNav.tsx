@@ -61,6 +61,7 @@ export function TopNav() {
     <header
       data-tauri-drag-region
       className="axe-topbar flex-shrink-0 w-full z-fixed flex items-center justify-between px-3 md:px-4"
+      data-axe-header
       style={{
         height: 'calc(48px + var(--axe-sat))',
         minHeight: 'calc(48px + var(--axe-sat))',

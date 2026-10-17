@@ -81,6 +81,7 @@ describe('de view-balk ligt op het hart van de kopregel', () => {
        staan, en moet ook -- anders bouwt de volgende sessie het terug. */
     expect(chrome).not.toContain("querySelector('.axe-topbar-midden')");
     expect(chrome).not.toContain("setProperty('--axe-viewctl-b'");
+    expect(nav).toContain('data-axe-header');
     expect(nav).not.toContain('axe-topbar-midden');
     expect(css).not.toMatch(/\.axe-topbar-midden\s*\{/);
   });

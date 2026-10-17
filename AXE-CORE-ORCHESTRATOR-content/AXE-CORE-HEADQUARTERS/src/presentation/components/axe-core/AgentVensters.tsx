@@ -149,15 +149,17 @@ function Balkje({
           className="axe-home-rail-balk-knop"
         >
           <span className="axe-home-rail-kop">
-            <span className="axe-home-rail-naam" style={{ color: agent.accent }}>
-              {agent.kort ?? agent.name}
+            <span className="axe-home-rail-naam-rij">
+              <span className="axe-home-rail-naam" style={{ color: agent.accent }}>
+                {agent.kort ?? agent.name}
+              </span>
               {tierRegel ? <span className="axe-home-rail-tier">{tierRegel}</span> : null}
+              <span className="axe-home-rail-label flex items-center gap-1.5" style={{ color: stand.kleur }}>
+                {wacht ? STAND.waiting.label : stand.label}
+                <DaxStip server={server} />
+              </span>
             </span>
             {standTekst ? <span className="axe-home-rail-regel">{standTekst}</span> : null}
-          </span>
-          <span className="axe-home-rail-label flex items-center gap-1.5" style={{ color: stand.kleur }}>
-            {wacht ? STAND.waiting.label : stand.label}
-            <DaxStip server={server} />
           </span>
         </button>
         {wacht && (
@@ -174,11 +176,15 @@ function Balkje({
 
   return (
     <div className="axe-home-rail-balk" style={{ ...BALK, textShadow: LEESBAAR }}>
-      <span className="axe-home-rail-naam" style={{ color: agent.accent }}>{agent.kort ?? agent.name}</span>
-      <span className="axe-home-rail-regel">
-        {serverStand ? serverStand.label : 'idle'}
-        {tierRegel ? <span className="axe-home-rail-tier">{tierRegel}</span> : null}
-        <span className="ml-1.5 inline-flex align-middle"><DaxStip server={server} /></span>
+      <span className="axe-home-rail-kop">
+        <span className="axe-home-rail-naam-rij">
+          <span className="axe-home-rail-naam" style={{ color: agent.accent }}>{agent.kort ?? agent.name}</span>
+          {tierRegel ? <span className="axe-home-rail-tier">{tierRegel}</span> : null}
+          <span className="axe-home-rail-label flex items-center gap-1.5">
+            {serverStand ? serverStand.label : 'idle'}
+            <DaxStip server={server} />
+          </span>
+        </span>
       </span>
     </div>
   );
@@ -239,7 +245,7 @@ export function AgentVensters() {
           {kolom.rijen.map((rij) => {
             const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
             return (
-              <div key={rij.agent.id} className="axe-home-rail-rij">
+              <div key={rij.agent.id} className="axe-home-rail-rij" data-axe-agent={rij.agent.id}>
                 <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
                 <Balkje
                   rij={rij}

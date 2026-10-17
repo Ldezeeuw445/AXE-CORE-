@@ -94,6 +94,29 @@ function eventStand(kind: string): string | null {
   return null;
 }
 
+/** "task.completed" → "task completed"; echte zinnen blijven staan. */
+export function eventTitel(ev: { message?: string | null; event_type?: string | null; kind?: string | null }, nu: number): string {
+  const msg = (ev.message || '').trim();
+  const kind = (ev.event_type || ev.kind || '').trim();
+  const ruw = msg && msg.toLowerCase() !== kind.toLowerCase() ? msg : (msg || kind);
+  const tekst = mensTekst(ruw, nu);
+  if (/^[a-z0-9]+(\.[a-z0-9]+)+$/i.test(tekst)) return tekst.replace(/\./g, ' ');
+  return tekst;
+}
+
+/** Zelfde agent + titel + stand telt één keer, nieuwste eerst in de bronlijst. */
+export function recentUniek(items: LiveTaak[]): LiveTaak[] {
+  const gezien = new Set<string>();
+  const uit: LiveTaak[] = [];
+  for (const t of items) {
+    const sleutel = `${t.agent}\n${t.stand}\n${t.titel}`.toLowerCase();
+    if (gezien.has(sleutel)) continue;
+    gezien.add(sleutel);
+    uit.push(t);
+  }
+  return uit;
+}
+
 export function homeLiveStand(in_: {
   agents: Record<string, ServerAgent>;
   jobs?: AxeJob[];
@@ -144,7 +167,7 @@ export function homeLiveStand(in_: {
       recent.push({
         id: ev.task_id || `${ev.at}-${ev.event_type}`,
         agent: naamVan(id),
-        titel: mensTekst(ev.message || ev.event_type || s, nu),
+        titel: eventTitel(ev, nu),
         stand: s,
         voortgang: ev.at ? eventTijd(ev.at) : '',
         kleur: s === 'failed' ? 'var(--err)' : 'var(--ok)',
@@ -181,7 +204,7 @@ export function homeLiveStand(in_: {
     werkend: werkNamen.size,
     namen: [...werkNamen],
     lopend,
-    recent,
+    recent: recentUniek(recent),
     goedkeuringen: uniekeOk,
     stoelen,
     dax,

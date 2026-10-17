@@ -23,7 +23,11 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toMatch(/right: var\(--axe-home-rail-inset\)/);
     expect(css).toMatch(/axe-home-live-cluster/);
     expect(css).toMatch(/grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
-    expect(css).toMatch(/--axe-home-rail-gap: 12px/);
+    expect(css).toMatch(/--axe-home-rail-gap: clamp\(8px/);
+    expect(css).toMatch(/--axe-home-rail-pad-y: clamp\(4px/);
+    expect(css).toMatch(/--axe-home-rail-regel-lijnen: 2/);
+    expect(css).toMatch(/--axe-home-rail-tegel-pad: 6px/);
+    expect(css).toMatch(/container-name: home-rail/);
     expect(css).toMatch(/--axe-home-stack-gap: 12px/);
     expect(css).toMatch(/--axe-home-rail-top: calc\(var\(--axe-kop-h/);
     expect(css).toMatch(/top: var\(--axe-home-rail-top\)/);

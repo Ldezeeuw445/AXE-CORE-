@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kaartRegels, homeLiveStand, seatsRegels, werkPulseTekst } from './homeLive';
+import { kaartRegels, eventTitel, homeLiveStand, recentUniek, seatsRegels, werkPulseTekst } from './homeLive';
 import type { ServerAgent } from './agents/serverStatus';
 
 const agent = (p: Partial<ServerAgent>): ServerAgent => ({
@@ -43,6 +43,37 @@ describe('homeLiveStand', () => {
       { id: 'ok1', taskId: 't1', wat: 'Run the snapshot', waarom: 'Left the standing plan.' },
     ]);
     expect(werkPulseTekst(1)).toBe('1 agent working');
+  });
+
+  it('recentUniek laat identieke NorthSea-regels één keer staan', () => {
+    const dubbel = recentUniek([
+      { id: 'a', agent: 'NorthSea', titel: 'task completed', stand: 'done', voortgang: '18:17', kleur: 'var(--ok)' },
+      { id: 'b', agent: 'NorthSea', titel: 'task completed', stand: 'done', voortgang: '18:17', kleur: 'var(--ok)' },
+      { id: 'c', agent: 'Cron', titel: 'schedules 16 on', stand: 'done', voortgang: '18:10', kleur: 'var(--ok)' },
+    ]);
+    expect(dubbel).toHaveLength(2);
+    expect(dubbel.map((t) => t.titel)).toEqual(['task completed', 'schedules 16 on']);
+  });
+
+  it('eventTitel maakt task.completed leesbaar', () => {
+    expect(eventTitel({ event_type: 'task.completed', message: 'task.completed' }, 0)).toBe('task completed');
+    expect(eventTitel({ event_type: 'task.completed', message: 'Copper PO filed' }, 0)).toBe('Copper PO filed');
+  });
+
+  it('homeLiveStand dedupliceert dezelfde complete-events', () => {
+    const stand = homeLiveStand({
+      agents: {
+        northsea: agent({
+          agent: 'northsea',
+          events: [
+            { at: '2026-10-17T16:17:00Z', kind: 'task', event_type: 'task.completed', message: 'task.completed', task_id: 't1', mission_id: null, source: 'task' },
+            { at: '2026-10-17T16:17:01Z', kind: 'task', event_type: 'task.completed', message: 'task.completed', task_id: 't1', mission_id: null, source: 'task' },
+          ],
+        }),
+      },
+    });
+    expect(stand.recent).toHaveLength(1);
+    expect(stand.recent[0]?.titel).toBe('task completed');
   });
 
   it('kaartRegels toont de top 2 en telt de rest', () => {
