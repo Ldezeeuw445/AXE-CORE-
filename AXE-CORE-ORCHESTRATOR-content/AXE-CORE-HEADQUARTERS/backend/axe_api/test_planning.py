@@ -1,6 +1,8 @@
 """planning.py: agenda, lease-uitvoering, idempotentie, uitzetten na fouten. Geen netwerk."""
 import asyncio
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -90,6 +92,31 @@ def run(coro):
 def test_staande_draait_op_vps():
     assert "staande" in p.UITVOERBAAR["vps"]
     assert "staande" in p.ALLE_SOORTEN
+
+
+def _toegestane_action_types() -> set[str]:
+    """Laatste core_schedules_action_type_check in de migraties."""
+    map_ = Path(__file__).resolve().parents[2] / "supabase" / "migrations"
+    patroon = re.compile(
+        r"core_schedules_action_type_check.*?check\s*\(\s*action_type\s+in\s*\(([^)]+)\)",
+        re.I | re.S,
+    )
+    gevonden: set[str] | None = None
+    for pad in sorted(map_.glob("*.sql")):
+        for m in patroon.finditer(pad.read_text()):
+            gevonden = {deel.strip().strip("'\"") for deel in m.group(1).split(",") if deel.strip()}
+    assert gevonden, "geen core_schedules_action_type_check in de migraties"
+    return gevonden
+
+
+def test_elke_geregistreerde_action_type_staat_in_de_check():
+    toegestaan = _toegestane_action_types()
+    geregistreerd = set(p.ALLE_SOORTEN)
+    for soorten in p.UITVOERBAAR.values():
+        geregistreerd.update(soorten)
+    ontbreekt = sorted(geregistreerd - toegestaan)
+    assert ontbreekt == [], f"action_type niet in core_schedules_action_type_check: {ontbreekt}"
+    assert "staande" in toegestaan
 
 
 def test_two_hourly_job_gives_each_run():
