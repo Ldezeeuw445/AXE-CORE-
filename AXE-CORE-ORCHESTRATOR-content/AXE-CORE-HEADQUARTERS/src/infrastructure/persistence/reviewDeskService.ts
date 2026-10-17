@@ -36,7 +36,7 @@ export interface ReviewDeskRow {
   snapshot: ReviewDeskSnapshot;
 }
 
-export async function loadReviewDeskRow(): Promise<ReviewDeskRow | null> {
+async function loadReviewDeskRow(): Promise<ReviewDeskRow | null> {
   const sb = getSupabase();
   if (!sb) throw new Error('Cloud storage is not configured.');
   const userId = await currentUserId(sb);
