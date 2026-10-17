@@ -46,19 +46,28 @@ export function isOnline(lastSeen: string | null | undefined, nu = Date.now(), s
 }
 
 const ONSTABIEL = new Set(['localhost', '127.0.0.1', 'unknown', 'android', 'localhost.localdomain']);
+const LOKAAL_SUFFIX = /\.(local|home|lan|internal|localdomain)$/;
+const GENERIEKE_NAAM = new Set(['mac', 'imac', 'macbook', 'macmini', 'desktop', 'laptop', 'samsung']);
+
+/** Hostnaam zonder mDNS-suffix, kleine letters. */
+export function normaliseerHost(s: string | null | undefined): string {
+  return (s ?? '').trim().toLowerCase()
+    .replace(LOKAAL_SUFFIX, '')
+    .replace(/^mac-/, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 /** Hostnaam als vaste device_id, anders de bewaarde uuid. */
 export function kiesDeviceId(hostname: string | null | undefined, bewaardeId: string): string {
   const h = (hostname ?? '').trim().toLowerCase();
-  if (!h || ONSTABIEL.has(h) || h.includes('.')) {
-    // Punten: een FQDN is bruikbaar (mac-mini-van-luka-5.local), maar een
-    // toevallige Android-naam als `localhost` niet. local-suffix wél.
-    if (h.endsWith('.local') && h.split('.').length === 2 && !ONSTABIEL.has(h.slice(0, -6))) {
-      return h.slice(0, -6);
-    }
-    if (!h || ONSTABIEL.has(h) || h.includes('.')) return bewaardeId;
-  }
-  return h.replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '') || bewaardeId;
+  const kort = h.replace(LOKAAL_SUFFIX, '');
+  if (!kort || ONSTABIEL.has(kort) || ONSTABIEL.has(h) || kort.includes('.')) return bewaardeId;
+  return kort.replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '') || bewaardeId;
 }
 
 export function capabilitiesVoor(platform: string, type: AxeDeviceType): AxeCapability[] {
@@ -110,27 +119,84 @@ export function voegWorkerToe(device: AxeDevice, workerOnline: boolean): AxeDevi
   return { ...device, capabilities: [...caps] };
 }
 
-export function samenvoegen(rijen: AxeDevice[]): AxeDevice[] {
-  const uit = new Map<string, AxeDevice>();
-  for (const r of rijen) {
-    const bestaand = uit.get(r.device_id);
-    if (!bestaand) {
-      uit.set(r.device_id, r);
-      continue;
-    }
-    const caps = [...new Set([...bestaand.capabilities, ...r.capabilities])];
-    const last = later(bestaand.last_seen, r.last_seen);
-    uit.set(r.device_id, {
-      ...bestaand,
-      ...r,
-      capabilities: caps,
-      last_seen: last,
-      ditToestel: bestaand.ditToestel || r.ditToestel,
-      bron: r.bron === 'lokaal' ? bestaand.bron : r.bron,
-      device_name: r.bron === 'lokaal' ? bestaand.device_name : r.device_name || bestaand.device_name,
-    });
+function generiekNaam(naam: string): boolean {
+  return GENERIEKE_NAAM.has(normaliseerHost(naam).replace(/-/g, ''));
+}
+
+/**
+ * Eén sleutel per echte machine. `mini-van-luka-5.home` en
+ * `mac-mini-van-luka-5` zijn dezelfde mini; een kale `Mac` is dat niet —
+ * die wordt in samenvoegen pas aan een mini/iMac geplakt.
+ */
+export function machineSleutel(d: AxeDevice): string {
+  for (const kandidaat of [d.device_id, d.device_name]) {
+    const n = normaliseerHost(kandidaat);
+    if (!n || generiekNaam(kandidaat) || isUuid(kandidaat) || n.length < 4) continue;
+    return n;
   }
-  return [...uit.values()].sort((a, b) => {
+  return `id:${d.device_id}`;
+}
+
+function plakRij(a: AxeDevice, b: AxeDevice): AxeDevice {
+  const caps = [...new Set([...a.capabilities, ...b.capabilities])];
+  const last = later(a.last_seen, b.last_seen);
+  const aGeneriek = generiekNaam(a.device_name);
+  const bGeneriek = generiekNaam(b.device_name);
+  const naam = aGeneriek && !bGeneriek ? b.device_name
+    : bGeneriek && !aGeneriek ? a.device_name
+      : (b.bron === 'lokaal' ? a.device_name : b.device_name) || a.device_name;
+  const bron = b.bron === 'lokaal' ? a.bron : b.bron;
+  const id = isUuid(a.device_id) && !isUuid(b.device_id) ? b.device_id
+    : isUuid(b.device_id) && !isUuid(a.device_id) ? a.device_id
+      : a.device_id;
+  return {
+    ...a,
+    ...b,
+    device_id: id,
+    device_name: naam,
+    capabilities: caps,
+    last_seen: last,
+    ditToestel: a.ditToestel || b.ditToestel,
+    bron,
+  };
+}
+
+function doelVoorGenericMac(
+  groepen: Map<string, AxeDevice[]>,
+  generic: AxeDevice,
+): string | null {
+  const naam = normaliseerHost(generic.device_name);
+  const macos = [...groepen.entries()].filter(([k, arr]) => (
+    !k.startsWith('id:')
+    && arr.some((d) => d.device_type === 'desktop' && (d.platform === 'macos' || d.platform === 'darwin'))
+  ));
+  if (macos.length === 0) return null;
+  const zoek = (naald: string) => macos.find(([k]) => k.includes(naald))?.[0] ?? null;
+  if (naam.includes('imac')) return zoek('imac');
+  if (naam.includes('mini')) return zoek('mini');
+  // Kale "Mac": de mini is het brein dat HQ heartbeatt, niet de iMac.
+  return zoek('mini') ?? (macos.length === 1 ? macos[0][0] : null);
+}
+
+export function samenvoegen(rijen: AxeDevice[]): AxeDevice[] {
+  const groepen = new Map<string, AxeDevice[]>();
+  for (const r of rijen) {
+    const k = machineSleutel(r);
+    const arr = groepen.get(k) ?? [];
+    arr.push(r);
+    groepen.set(k, arr);
+  }
+  for (const [k, arr] of [...groepen.entries()]) {
+    if (!k.startsWith('id:')) continue;
+    const generic = arr.find((d) => d.device_type === 'desktop' && generiekNaam(d.device_name));
+    if (!generic) continue;
+    const doel = doelVoorGenericMac(groepen, generic);
+    if (!doel) continue;
+    groepen.set(doel, [...(groepen.get(doel) ?? []), ...arr]);
+    groepen.delete(k);
+  }
+  const uit = [...groepen.values()].map((arr) => arr.reduce(plakRij));
+  return uit.sort((a, b) => {
     if (a.ditToestel !== b.ditToestel) return a.ditToestel ? -1 : 1;
     return (b.last_seen ?? '').localeCompare(a.last_seen ?? '');
   });

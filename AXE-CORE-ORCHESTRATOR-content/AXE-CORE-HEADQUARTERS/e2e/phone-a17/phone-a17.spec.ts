@@ -402,6 +402,42 @@ test.describe('A17 384x832', () => {
     await expect(page.locator('[data-axe-phone-app="trading"]')).not.toContainText('{');
   });
 
+  test('AXON blijft in HQ-iframe zonder top-navigatie', async ({ page }) => {
+    await openRoute(page, '/memory', 'black', true);
+    await expect(page.locator('[data-axe-phone-appbar]')).toHaveCount(1);
+    const frame = page.locator('[data-axe-embed-frame="axon"]');
+    await expect(frame).toBeVisible();
+    const sandbox = await frame.getAttribute('sandbox');
+    expect(sandbox ?? '').toContain('allow-scripts');
+    expect(sandbox ?? '').not.toContain('allow-top-navigation');
+    await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+    await expect(page.locator('[data-axe-embed-terug]')).toHaveCount(0);
+  });
+
+  test('Developer: app-balk, registry-repos, geen overlappinge studio', async ({ page }) => {
+    await openRoute(page, '/code-editor', 'black', true);
+    await expect(page.locator('[data-axe-phone-appbar]')).toHaveCount(1);
+    await expect(page.getByText('AXE Developer').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Run' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Build' })).toHaveCount(0);
+    await expect(page.getByText(/Pick a project/)).toHaveCount(0);
+    await expect(page.getByText(/Tell the agent what to build/)).toHaveCount(0);
+    await expect(page.locator('[data-axe-repo="axe-core"]')).toBeVisible();
+    await expect(page.locator('[data-axe-repo="axe-companion"]')).toBeVisible();
+    await expect(page.locator('[data-axe-repo="trading-os"]')).toBeVisible();
+    await expect(page.locator('[data-axe-repo="axon"]')).toBeVisible();
+    await expect(page.locator('[data-axe-repo="axe-core-android"]')).toBeVisible();
+  });
+
+  test('Systems toont de Mac mini één keer', async ({ page }) => {
+    await openRoute(page, '/infrastructure', 'black', true);
+    await expect(page.locator('[data-axe-phone-app="systems"]')).toBeVisible();
+    await expect(page.getByText('mini-van-luka-5.home')).toBeVisible();
+    await expect(page.getByText('imac-1.home')).toBeVisible();
+    await expect(page.getByText('Mac', { exact: true })).toHaveCount(0);
+  });
+
   test('Companion en AXON roepen openApp nooit aan', async ({ page }) => {
     await page.addInitScript(() => {
       const calls: string[] = [];

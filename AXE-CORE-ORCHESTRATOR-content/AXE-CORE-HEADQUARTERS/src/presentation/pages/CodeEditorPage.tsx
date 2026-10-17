@@ -34,6 +34,7 @@ import {
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { motorNaam as motorMetAccount } from '@/domain/motorNaam';
 import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
+import { loadRepoConfigs } from '@/infrastructure/persistence/repoConfigService';
 import { openLeerbeurt, metGeheugen, sluitLeerbeurt } from '@/application/agents/abonnementLeerlus';
 import { classifyCodeTaskComplexity } from '@/domain/codeTaskComplexity';
 import {
@@ -1327,9 +1328,10 @@ export default function CodeEditorPage() {
   return (
     <motion.div className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {isMobile && phoneProjects && (
-        <div className="absolute inset-0 z-40 overflow-auto" style={{ background: 'var(--bg-base, #05070b)' }}>
+        <div className="relative z-[80] flex min-h-0 flex-1 flex-col overflow-auto" style={{ background: 'var(--bg-base, #05070b)' }} data-axe-dev-projects>
           <PhoneDeveloper
-            repos={claudeRepoMap}
+            host={claudeRepoMap}
+            github={loadRepoConfigs()}
             fout={claudeReposError}
             huidig={claudeRepo}
             onKies={(naam) => { kiesRepo(naam); setPhoneProjects(false); }}
@@ -1497,6 +1499,7 @@ export default function CodeEditorPage() {
 
       <div
         className="axe-studio flex-1 min-h-0"
+        style={isMobile && phoneProjects ? { display: 'none' } : undefined}
         data-stand={studioStand}
         data-toestel={studioDevice}
         data-files={showFiles ? 'aan' : 'uit'}
@@ -1530,7 +1533,7 @@ export default function CodeEditorPage() {
             </Sheet>
           </div>
         )}
-        {mobielStudio && (
+        {mobielStudio && !phoneProjects && (
           <MobileStudioBar
             repo={claudeRepo}
             branch={claudeRepoInfo?.branch ?? undefined}
@@ -1917,7 +1920,7 @@ export default function CodeEditorPage() {
           </div>
         )}
 
-        {mobielStudio && (
+        {mobielStudio && !phoneProjects && (
           <>
             {mPaneel === 'git' && (
               <div className="min-h-0 flex-1 overflow-auto px-2" data-axe-dev-git>

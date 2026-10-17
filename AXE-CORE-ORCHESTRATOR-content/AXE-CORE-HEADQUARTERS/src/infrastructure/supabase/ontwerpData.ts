@@ -107,6 +107,38 @@ const TABELLEN: Record<string, Rij[]> = {
           'companion_notes', 'core_tools', 'core_system_state'][i],
     approx_rows: (i + 1) * 37,
   })),
+  core_axe_devices: [
+    {
+      device_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      device_name: 'Mac',
+      device_type: 'desktop',
+      platform: 'macos',
+      app_version: '1.0.0',
+      capabilities: ['desktop', 'local_filesystem', 'tasks'],
+      last_seen: nu(),
+    },
+    {
+      device_id: 'SM-A175F',
+      device_name: 'SM-A175F',
+      device_type: 'mobile',
+      platform: 'android',
+      app_version: '1.0.0',
+      capabilities: ['mobile', 'remote_client', 'native_notify'],
+      last_seen: nu(),
+    },
+  ],
+  core_computer_workers: [
+    {
+      device_id: 'worker-mini',
+      host: 'mini-van-luka-5.home',
+      heartbeat_at: nu(),
+    },
+    {
+      device_id: 'worker-imac',
+      host: 'imac-1.home',
+      heartbeat_at: nu(),
+    },
+  ],
   core_schedules: reeks(7, i => ({
     id: `voorbeeld-planning-${i}`,
     name: `Voorbeeldtaak ${i + 1}`,

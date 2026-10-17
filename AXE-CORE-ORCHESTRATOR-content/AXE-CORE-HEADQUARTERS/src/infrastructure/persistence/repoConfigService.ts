@@ -32,6 +32,9 @@ export const REPO_ALIASES: Record<string, string> = {
   axon: 'axon',
   'axon-memory': 'axon',
   'axon memory': 'axon',
+  'axe-core-android': 'axe-core-android',
+  android: 'axe-core-android',
+  'trading-axe-os': 'trading-os',
 };
 
 /**
@@ -44,6 +47,7 @@ export const APP_TO_REPO_ID: Record<string, string> = {
   'trading-os': 'trading-os',
   'axon-memory': 'axon',
   axon: 'axon',
+  'axe-core-android': 'axe-core-android',
 };
 
 export function repoIdForApp(appId: string): string {
@@ -83,6 +87,15 @@ export const DEFAULT_REPOS: RepoConfig[] = [
     label: 'AXON Memory',
     owner: 'Ldezeeuw445',
     repo: 'axon-memory',
+    branch: 'main',
+    srcPrefix: '',
+    token: '',
+  },
+  {
+    id: 'axe-core-android',
+    label: 'AXE CORE Android',
+    owner: 'Ldezeeuw445',
+    repo: 'axe-core-android',
     branch: 'main',
     srcPrefix: '',
     token: '',

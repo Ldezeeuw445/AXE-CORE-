@@ -28,6 +28,7 @@ describe('vaste device_id', () => {
     expect(kiesDeviceId('mac-mini-van-luka-5', 'uuid-1')).toBe('mac-mini-van-luka-5');
     expect(kiesDeviceId('localhost', 'uuid-1')).toBe('uuid-1');
     expect(kiesDeviceId('mac-mini-van-luka-5.local', 'uuid-1')).toBe('mac-mini-van-luka-5');
+    expect(kiesDeviceId('mini-van-luka-5.home', 'uuid-1')).toBe('mini-van-luka-5');
   });
 });
 
@@ -78,6 +79,51 @@ describe('samenvoegen verzint geen tweede rij', () => {
     expect(uit[0].capabilities).toEqual(expect.arrayContaining(['desktop', 'local_runtime']));
     expect(uit[0].ditToestel).toBe(true);
     expect(uit[0].last_seen).toBe('2026-09-18T18:00:00Z');
+  });
+
+  it('plakt kale Mac-installatie op mini-van-luka-5.home, iMac blijft apart', () => {
+    const installatie: AxeDevice = {
+      device_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      device_name: 'Mac',
+      device_type: 'desktop',
+      platform: 'macos',
+      app_version: '1.0.0',
+      capabilities: ['desktop', 'local_filesystem'],
+      last_seen: '2026-10-17T21:00:00Z',
+      ditToestel: false,
+      bron: 'installatie',
+    };
+    const mini: AxeDevice = {
+      device_id: 'worker-mini',
+      device_name: 'mini-van-luka-5.home',
+      device_type: 'desktop',
+      platform: 'macos',
+      app_version: null,
+      capabilities: ['desktop', 'local_runtime', 'terminal_host'],
+      last_seen: '2026-10-17T21:01:00Z',
+      ditToestel: false,
+      bron: 'computer_worker',
+    };
+    const imac: AxeDevice = {
+      device_id: 'worker-imac',
+      device_name: 'imac-1.home',
+      device_type: 'desktop',
+      platform: 'macos',
+      app_version: null,
+      capabilities: ['desktop', 'local_runtime'],
+      last_seen: '2026-10-17T21:01:00Z',
+      ditToestel: false,
+      bron: 'computer_worker',
+    };
+    const uit = samenvoegen([installatie, mini, imac]);
+    expect(uit).toHaveLength(2);
+    const namen = uit.map((d) => d.device_name).sort();
+    expect(namen).toEqual(['imac-1.home', 'mini-van-luka-5.home']);
+    const samengevoegd = uit.find((d) => d.device_name.includes('mini'))!;
+    expect(samengevoegd.capabilities).toEqual(expect.arrayContaining([
+      'desktop', 'local_filesystem', 'local_runtime', 'terminal_host',
+    ]));
+    expect(uit.some((d) => d.device_name === 'Mac')).toBe(false);
   });
 });
 

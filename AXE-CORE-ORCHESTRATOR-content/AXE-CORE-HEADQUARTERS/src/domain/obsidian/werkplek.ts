@@ -24,6 +24,7 @@ export const REPO_WERKPLEKKEN: readonly RepoWerkplek[] = [
   { id: 'axe-companion', label: 'AXE Companion OS', owner: 'Ldezeeuw445', repo: 'AXE-COMPANION-OS-', branch: 'main' },
   { id: 'trading-os', label: 'Trading OS', owner: 'TRADING-AXE-OS-APPS', repo: 'TRADING-OS', branch: 'main' },
   { id: 'axon', label: 'AXON Memory', owner: 'Ldezeeuw445', repo: 'axon-memory', branch: 'main' },
+  { id: 'axe-core-android', label: 'AXE CORE Android', owner: 'Ldezeeuw445', repo: 'axe-core-android', branch: 'main' },
 ];
 
 const REPO_ALIAZEN: Record<string, string> = {
@@ -38,6 +39,8 @@ const REPO_ALIAZEN: Record<string, string> = {
   'trading os': 'trading-os',
   axon: 'axon',
   'axon memory': 'axon',
+  'axe-core-android': 'axe-core-android',
+  android: 'axe-core-android',
 };
 
 export interface WerkplekKeuze {

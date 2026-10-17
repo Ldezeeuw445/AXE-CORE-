@@ -53,6 +53,12 @@ Companion and AXON stay **inside HQ** (iframe under the app bar). Never call
 TWA/Custom Tab and leaves Device Manager. The Browser tab is the only one
 that calls `browseOpen`. Other Apps-tab tiles may still use `openApp`.
 
+The HQ iframe uses `sandbox` **without** `allow-top-navigation` (and without
+`allow-popups-to-escape-sandbox`). AXON's sign-in otherwise does `window.top`
+and Android opens Chrome. If the iframe cannot keep the AXON Supabase
+session, HQ shows a single in-app sign-in (`axe_axon_sessie`) and injects
+the tokens into the iframe hash.
+
 ## Rebuild
 
 ```bash

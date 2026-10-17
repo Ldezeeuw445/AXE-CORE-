@@ -31,7 +31,7 @@ describe('de indeling van de Code Editor', () => {
     // De balk bestaat alleen nog op mobiel, voor de bestanden-lade -- behalve in de telefoon-studio
     // (Replit-stijl, 9 okt), die zijn eigen werkbalk en onderbalk heeft.
     expect(pagina).toMatch(/\{isMobile && !mobielStudio && \(\s*<div className="axe-studio-balk">/);
-    expect(pagina).toMatch(/\{mobielStudio && \(\s*<MobileStudioBar/);
+    expect(pagina).toMatch(/\{mobielStudio && !phoneProjects && \(\s*<MobileStudioBar/);
   });
 
   it('laat het Canvas de toestellen op het raster zetten', () => {

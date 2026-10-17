@@ -63,12 +63,12 @@ export function PhoneSeg({
 
 export function PhoneRij({ title, sub, extra }: { title: string; sub?: string; extra?: ReactNode }) {
   return (
-    <div className="flex min-h-[44px] items-center gap-2.5 border-t first:border-t-0" style={{ borderColor: 'rgba(255,255,255,.06)' }}>
-      <div className="min-w-0 flex-1">
-        <div className="line-clamp-2 text-[13px] font-semibold leading-snug">{title}</div>
-        {sub && <div className="line-clamp-2 text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }}>{sub}</div>}
+    <div className="flex min-h-[44px] min-w-0 items-center gap-2.5 border-t first:border-t-0" style={{ borderColor: 'rgba(255,255,255,.06)' }}>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="truncate text-[13px] font-semibold leading-snug">{title}</div>
+        {sub && <div className="truncate text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }}>{sub}</div>}
       </div>
-      {extra}
+      {extra ? <div className="flex-none shrink-0">{extra}</div> : null}
     </div>
   );
 }
