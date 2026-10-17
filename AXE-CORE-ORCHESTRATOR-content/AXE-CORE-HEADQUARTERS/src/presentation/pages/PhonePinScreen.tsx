@@ -1,9 +1,10 @@
 /**
- * Cijfer-PIN na de native lockscreen. Geen particles, geen canvas, geen bol.
+ * Cijfer-PIN — dormant. Geen particles, geen canvas, geen bol.
  *
- * Swipe op het slot opent de WebView. Als er een cijfer-PIN staat, is dit het
- * enige scherm ertussen en de telefoon-Home. Geen PIN of dichte opslag: meteen
- * door. Setup hoort niet op dit pad — dat was hoe Luka vastzat.
+ * Ontworpen pad: swipe op het native slot opent /mobile (TelefoonSphere).
+ * Dit scherm bestaat alleen als er al een cijfer-PIN in de opslag staat.
+ * Standaard is die er niet (`PIN_STANDAARD_UIT`). Geen setup hier — dat was
+ * hoe Luka vastzat. Niet uitbreiden tot hij erom vraagt.
  */
 import { useEffect, useState } from 'react';
 import { Delete } from 'lucide-react';
