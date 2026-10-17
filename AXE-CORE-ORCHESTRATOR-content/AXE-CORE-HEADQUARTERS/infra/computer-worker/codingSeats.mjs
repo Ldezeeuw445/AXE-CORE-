@@ -51,13 +51,36 @@ export function claudeStatusFromText(tekst) {
     const end = tekst.lastIndexOf('}');
     if (start < 0 || end < start) return { loggedIn: null, email: null };
     const d = JSON.parse(tekst.slice(start, end + 1));
+    const loggedIn = typeof d.loggedIn === 'boolean' ? d.loggedIn : null;
     return {
-      loggedIn: typeof d.loggedIn === 'boolean' ? d.loggedIn : null,
-      email: typeof d.email === 'string' && d.email ? d.email : null,
+      loggedIn,
+      email: loggedIn === true && typeof d.email === 'string' && d.email ? d.email : null,
     };
   } catch {
     return { loggedIn: null, email: null };
   }
+}
+
+function withCliPath(env) {
+  const extra = '/opt/homebrew/bin:/usr/local/bin';
+  const path = env.PATH || process.env.PATH || '';
+  if (path.split(':').includes('/opt/homebrew/bin')) return { ...env };
+  return { ...env, PATH: `${extra}:${path}` };
+}
+
+function cliBin(env, keys, fallbackName) {
+  for (const k of keys) {
+    if (env[k]) return env[k];
+  }
+  const homebrew = `/opt/homebrew/bin/${fallbackName}`;
+  if (existsSync(homebrew)) return homebrew;
+  return fallbackName;
+}
+
+export function seatConfigured(seat, home = homedir()) {
+  if (seat.id === 'claude' || seat.provider === 'cursor') return true;
+  const dir = expandHome(seat.configDir || seat.home, home);
+  return existsSync(dir);
 }
 
 export function parseLimitReset(bericht, now = Date.now()) {
@@ -87,10 +110,15 @@ function readJsonSyncSafe(p) {
 
 async function probeClaude(seat, env) {
   const dir = expandHome(seat.configDir);
-  const bin = env.CLAUDE_BIN || env.AXE_CLAUDE_BIN || 'claude';
+  const bin = cliBin(env, ['CLAUDE_BIN', 'AXE_CLAUDE_BIN'], 'claude');
+  const childEnv = withCliPath({
+    ...process.env, ...env,
+    CLAUDE_CONFIG_DIR: dir,
+    ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: '', CLAUDECODE: '',
+  });
   try {
     const { stdout, stderr } = await execFileP(bin, ['auth', 'status'], {
-      env: { ...process.env, CLAUDE_CONFIG_DIR: dir, ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: '', CLAUDECODE: '' },
+      env: childEnv,
       timeout: 8000,
     });
     return claudeStatusFromText(`${stdout || ''}${stderr || ''}`);
@@ -113,9 +141,12 @@ async function probeCodex(seat) {
 }
 
 async function probeCursor(env) {
-  const bin = env.CURSOR_BIN || env.AXE_CURSOR_BIN || 'cursor-agent';
+  const bin = cliBin(env, ['CURSOR_BIN', 'AXE_CURSOR_BIN'], 'cursor-agent');
   try {
-    const { stdout, stderr } = await execFileP(bin, ['status'], { timeout: 8000 });
+    const { stdout, stderr } = await execFileP(bin, ['status'], {
+      env: withCliPath({ ...process.env, ...env }),
+      timeout: 8000,
+    });
     const tekst = `${stdout || ''}${stderr || ''}`;
     const mail = tekst.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/);
     const loggedIn = Boolean(mail) || (/logged in/i.test(tekst) && !/not logged in/i.test(tekst));
@@ -138,10 +169,13 @@ export async function collectSeats({ env = process.env, home = homedir() } = {})
   const now = Date.now();
 
   const rows = await Promise.all(SEATS.map(async (seat) => {
-    let login = { loggedIn: null, email: null };
-    if (seat.provider === 'claude') login = await probeClaude(seat, env);
-    else if (seat.provider === 'codex') login = await probeCodex(seat);
-    else login = await probeCursor(env);
+    const configured = seatConfigured(seat, home);
+    let login = { loggedIn: false, email: null };
+    if (configured) {
+      if (seat.provider === 'claude') login = await probeClaude(seat, env);
+      else if (seat.provider === 'codex') login = await probeCodex(seat);
+      else login = await probeCursor(env);
+    }
 
     const known = snapSeats[seat.id] || {};
     const lastEvent = events.filter(e => e && e.engine === seat.id && e.limit_message).at(-1);
@@ -150,18 +184,20 @@ export async function collectSeats({ env = process.env, home = homedir() } = {})
       ? Number(known.limit_until) * (Number(known.limit_until) < 1e12 ? 1000 : 1)
       : (lastEvent?.limit_until ? Number(lastEvent.limit_until) * 1000 : parseLimitReset(limitMsg || '', now));
     const rateLimited = Boolean(untilMs && untilMs > now);
+    const loggedIn = login.loggedIn === true;
 
     return {
       seat_id: seat.id,
       provider: seat.provider,
-      email: login.email,
-      logged_in: login.loggedIn,
+      email: loggedIn ? login.email : null,
+      logged_in: configured ? login.loggedIn : false,
       login_command: seat.login,
       current_task: known.task || null,
       rate_limited: rateLimited,
       rate_limit_until: rateLimited ? new Date(untilMs).toISOString() : null,
       last_limit_message: limitMsg,
       remaining_note: 'CLI does not expose exact remaining quota.',
+      config_exists: configured,
     };
   }));
   return rows;
@@ -183,6 +219,7 @@ export function seatRowsForUpsert(rows, { deviceId, host, now = new Date() }) {
     rate_limit_until: r.rate_limit_until,
     last_limit_message: r.last_limit_message,
     remaining_note: r.remaining_note,
+    config_exists: r.config_exists !== false,
     last_seen_at: seen,
     updated_at: seen,
   }));

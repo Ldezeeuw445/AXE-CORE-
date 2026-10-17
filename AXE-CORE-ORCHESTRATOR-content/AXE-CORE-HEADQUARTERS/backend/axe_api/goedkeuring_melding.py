@@ -73,11 +73,25 @@ def vraag_luka(
     detail: str,
     kind: str,
     requested_by: str = "axe",
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Schrijf de pending approval + precies één notification, of hergebruik de bestaande."""
     er = bestaande_pending(db, taak_id, kind)
     if er:
         return er
+    meta = dict(metadata or {})
+    if kind == "northsea_notice":
+        try:
+            from beslis_beleid import bestaande_deal_vraag
+            er_deal = bestaande_deal_vraag(
+                db,
+                deal_code=str(meta.get("deal_code") or "") or None,
+                deal_id=str(meta.get("deal_id") or "") or None,
+            )
+            if er_deal:
+                return er_deal
+        except Exception:
+            pass
     row = {
         "task_id": taak_id,
         "target_type": "task",
@@ -87,7 +101,7 @@ def vraag_luka(
         "detail": detail,
         "requested_by": requested_by,
         "status": "pending",
-        "metadata": {},
+        "metadata": meta,
     }
     try:
         approval = db.table("core_approvals").insert(row).execute().data[0]

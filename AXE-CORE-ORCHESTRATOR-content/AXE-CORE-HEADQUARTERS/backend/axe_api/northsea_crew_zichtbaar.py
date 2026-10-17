@@ -144,6 +144,10 @@ def schrijf_zichtbaar(db: Any, job: str, data: dict[str, Any] | None) -> dict[st
         if b.get("leeg"):
             continue
         try:
+            if b.get("akkoord_nodig"):
+                from beslis_beleid import bestaande_deal_vraag
+                if bestaande_deal_vraag(db, deal_code=b.get("deal_code"), deal_id=b.get("deal_id")):
+                    continue
             rij = core_task_rij(b)
             rij.setdefault("id", str(uuid4()))
             gemaakt = db.table("core_tasks").insert(rij).execute().data[0]
@@ -156,6 +160,11 @@ def schrijf_zichtbaar(db: Any, job: str, data: dict[str, Any] | None) -> dict[st
                     detail=b.get("tekst") or "",
                     kind="northsea_notice",
                     requested_by="northsea-desk",
+                    metadata={
+                        "app": "northsea",
+                        "deal_id": b.get("deal_id"),
+                        "deal_code": b.get("deal_code"),
+                    },
                 )
         except Exception:
             pass

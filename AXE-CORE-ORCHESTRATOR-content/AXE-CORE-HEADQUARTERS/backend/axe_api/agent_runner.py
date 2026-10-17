@@ -555,8 +555,7 @@ def _stoel_koelt(naam: str, nu: float | None = None) -> bool:
 
 def _onthoud_stoel_fout(naam: str, fout: str) -> None:
     if _auth_fout(fout):
-        vorig = (_ACCOUNT_CACHE.get(naam) or (0, {}))[1]
-        _ACCOUNT_CACHE[naam] = (time.monotonic(), {"ingelogd": False, "account": vorig.get("account")})
+        _ACCOUNT_CACHE[naam] = (time.monotonic(), {"ingelogd": False, "account": None})
     tot = parse_limiet_tot(fout)
     if tot:
         _SEAT_LIMIT[naam] = {"until": tot, "message": _limit_message(fout)}
@@ -1185,7 +1184,9 @@ def _account_van(naam: str, motor: dict, binary: str | None) -> dict:
         tekst = _draai_status([binary, "auth", "status"], motor)
         try:
             d = json.loads(tekst[tekst.index("{"):tekst.rindex("}") + 1])
-            uit = {"ingelogd": bool(d.get("loggedIn")), "account": d.get("email") or None}
+            ingelogd = bool(d.get("loggedIn"))
+            mail = d.get("email") or None
+            uit = {"ingelogd": ingelogd, "account": mail if ingelogd else None}
         except ValueError:
             uit = {"ingelogd": None, "account": None}
     elif naam.startswith("codex"):

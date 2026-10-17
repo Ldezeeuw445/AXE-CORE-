@@ -423,6 +423,35 @@ class TaskRepository:
             "expires_at": payload.get("expires_at"),
             "metadata": payload.get("metadata") or {},
         }
+        try:
+            from beslis_beleid import (
+                ACTIE_AUTO, AUTO_DOOR_AXE, beslis_goedkeuring, bestaande_deal_vraag,
+            )
+            if payload["kind"] == "northsea_notice":
+                meta = row["metadata"] if isinstance(row["metadata"], dict) else {}
+                er = bestaande_deal_vraag(
+                    self._db(),
+                    deal_code=str(meta.get("deal_code") or "") or None,
+                    deal_id=str(meta.get("deal_id") or "") or None,
+                )
+                if er:
+                    return er
+            besluit = beslis_goedkeuring(row)
+            if besluit.actie == ACTIE_AUTO:
+                row["status"] = "approved"
+                row["decided_by"] = AUTO_DOOR_AXE
+                row["decided_at"] = datetime.now(timezone.utc).isoformat()
+                row["decision_reason"] = besluit.reden
+                approval = self._db().table("core_approvals").insert(row).execute().data[0]
+                self.append_event(
+                    task_id, "approval.auto", actor_type="axe", actor_id=AUTO_DOOR_AXE,
+                    message=payload["title"],
+                    data={"approval_id": approval["id"], "kind": payload["kind"],
+                          "decision_reason": besluit.reden},
+                )
+                return approval
+        except Exception:
+            pass
         approval = self._db().table("core_approvals").insert(row).execute().data[0]
         try:
             from goedkeuring_melding import schrijf_goedkeuring_melding

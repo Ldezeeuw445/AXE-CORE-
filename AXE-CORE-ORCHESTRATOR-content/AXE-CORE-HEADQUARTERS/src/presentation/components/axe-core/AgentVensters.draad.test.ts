@@ -20,6 +20,14 @@ describe('Home-agentvenster is een live draad', () => {
     expect(chat).toMatch(/data-axe-agent-draad/);
     expect(chat).toMatch(/Follow-up/);
     expect(chat).toMatch(/Approve/);
+    expect(chat).toMatch(/Decline/);
+    expect(chat).toMatch(/pendingApproval/);
     expect(chat).toMatch(/draadVoorAgent/);
+  });
+
+  it('server-OK is ter plekke te beslissen zonder de Home-kolom te verzetten', () => {
+    expect(vensters).toMatch(/left: 'clamp\(24px, 3\.5vw, 64px\)'/);
+    expect(vensters).toMatch(/pendingApproval/);
+    expect(vensters).toMatch(/decideDurableTaskApproval/);
   });
 });

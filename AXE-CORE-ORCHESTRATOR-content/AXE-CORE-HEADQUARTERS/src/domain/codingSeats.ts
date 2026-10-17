@@ -26,6 +26,8 @@ export interface CodingSeat {
   last_limit_message: string | null;
   remaining_note: string;
   shared_quota_with: string[];
+  last_seen_at?: string | null;
+  config_exists?: boolean;
 }
 
 export type SeatStandToon = 'ok' | 'bad' | 'info' | 'muted';
@@ -71,20 +73,59 @@ export function emailUitCodexAuth(auth: unknown): { loggedIn: boolean; email: st
   }
 }
 
-/** Claude `auth status` JSON: loggedIn + email, verder niets. */
+/** Claude `auth status` JSON: loggedIn + email, verder niets. Uitgelogd = geen e-mail. */
 export function claudeStatusUitJson(tekst: string): { loggedIn: boolean | null; email: string | null } {
   try {
     const start = tekst.indexOf('{');
     const end = tekst.lastIndexOf('}');
     if (start < 0 || end < start) return { loggedIn: null, email: null };
     const d = JSON.parse(tekst.slice(start, end + 1)) as { loggedIn?: unknown; email?: unknown };
+    const loggedIn = typeof d.loggedIn === 'boolean' ? d.loggedIn : null;
     return {
-      loggedIn: typeof d.loggedIn === 'boolean' ? d.loggedIn : null,
-      email: typeof d.email === 'string' && d.email ? d.email : null,
+      loggedIn,
+      email: loggedIn === true && typeof d.email === 'string' && d.email ? d.email : null,
     };
   } catch {
     return { loggedIn: null, email: null };
   }
+}
+
+/** Heartbeat van de Mac mini: verser dan 5 minuten telt als Online. */
+const STOEL_VERS_MS = 5 * 60 * 1000;
+
+function stoelIsVers(lastSeenAt: string | null | undefined, nu = Date.now()): boolean {
+  if (!lastSeenAt) return false;
+  const t = Date.parse(lastSeenAt);
+  return !Number.isNaN(t) && nu - t < STOEL_VERS_MS;
+}
+
+export function stoelNietGebruikt(stoel: Pick<CodingSeat, 'id' | 'logged_in' | 'config_exists'>): boolean {
+  return stoel.id === 'claude' && stoel.logged_in === false && stoel.config_exists !== false;
+}
+
+export function verbergStoel(stoel: Pick<CodingSeat, 'config_exists'>): boolean {
+  return stoel.config_exists === false;
+}
+
+export function toonStoelEmail(stoel: Pick<CodingSeat, 'email' | 'logged_in'>): string | null {
+  return stoel.logged_in === true ? stoel.email : null;
+}
+
+/** Status op Settings-kaarten: heartbeat, niet de VPS-enginecheck. */
+export function stoelHeartbeatStand(
+  stoel: Pick<CodingSeat, 'id' | 'logged_in' | 'rate_limited' | 'current_task' | 'last_seen_at' | 'config_exists'>,
+  nu = Date.now(),
+): SeatStand {
+  if (stoel.config_exists === false) return { toon: 'muted', tekst: 'Not installed' };
+  if (stoelNietGebruikt(stoel)) return { toon: 'muted', tekst: 'Not used' };
+  if (stoel.rate_limited) return { toon: 'bad', tekst: 'Rate limited' };
+  const vers = stoelIsVers(stoel.last_seen_at, nu);
+  if (vers && stoel.logged_in === true) {
+    return stoel.current_task ? { toon: 'info', tekst: 'Running' } : { toon: 'ok', tekst: 'Online' };
+  }
+  if (vers && stoel.logged_in === false) return { toon: 'muted', tekst: 'Logged out' };
+  if (!vers) return { toon: 'bad', tekst: 'Offline' };
+  return { toon: 'muted', tekst: 'Unknown' };
 }
 
 export function stoelStand(stoel: Pick<CodingSeat, 'logged_in' | 'rate_limited' | 'current_task'>): SeatStand {

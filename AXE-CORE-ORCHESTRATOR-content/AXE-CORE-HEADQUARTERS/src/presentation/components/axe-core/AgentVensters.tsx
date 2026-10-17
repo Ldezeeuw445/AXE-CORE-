@@ -348,9 +348,17 @@ export function AgentVensters() {
               }}
               onGoedkeuring={(akkoord) => {
                 const j = open.job;
-                if (!j?.taskId || !j.approvalId) return;
-                void decideDurableTaskApproval(j.taskId, j.approvalId, akkoord, akkoord ? 'Approved in Home window.' : 'Rejected in Home window.')
-                  .then(() => useAxeJobStore.getState().patch(j.id, { state: akkoord ? 'running' : 'failed' }));
+                if (j?.taskId && j.approvalId) {
+                  void decideDurableTaskApproval(j.taskId, j.approvalId, akkoord, akkoord ? 'Approved in Home window.' : 'Declined in Home window.')
+                    .then(() => useAxeJobStore.getState().patch(j.id, { state: akkoord ? 'running' : 'failed' }));
+                  return;
+                }
+                const srv = server.agents[open.agent.id];
+                const pa = srv?.pendingApproval;
+                const taskId = srv?.task?.id;
+                if (!pa?.id || !taskId) return;
+                void decideDurableTaskApproval(taskId, pa.id, akkoord, akkoord ? 'Approved in Home window.' : 'Declined in Home window.')
+                  .then(verversServerAgents);
               }}
             />
           </div>

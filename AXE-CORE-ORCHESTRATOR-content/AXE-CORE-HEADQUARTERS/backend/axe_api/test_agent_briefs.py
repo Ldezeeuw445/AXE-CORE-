@@ -142,3 +142,5 @@ def test_elke_order_ingang_vraagt_ok():
     # Kijken naar de trading-stack blijft vrij.
     assert r("ls /opt/axe-trading/venv/bin") is None
     assert r("cat /opt/axe-workspace/trades.csv | tail -5") is None
+    assert r("apt list --installed") is None
+    assert r("cat > /dax/artifacts/health.json") is None

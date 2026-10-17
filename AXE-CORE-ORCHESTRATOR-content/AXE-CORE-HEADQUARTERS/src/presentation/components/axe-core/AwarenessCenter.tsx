@@ -11,6 +11,7 @@ import {
 } from '@/domain/agentBewustzijn';
 import { getAwarenessSnapshot, type AwarenessGoedkeuring } from '@/application/awareness/axeAwareness';
 import { decideDurableTaskApproval, plannerBesluit } from '@/infrastructure/gateways/axeCoreApiService';
+import { verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 
@@ -110,11 +111,23 @@ export function AwarenessCenter({ onClose }: { onClose: () => void }) {
 
       {uitTaken.map((g) => (
         <GoedkeuringRij
-          key={`taak-${g.id}`}
+          key={`taak-${g.approvalId ?? g.id}`}
           tekst={g.tekst}
           ja={g.ja}
-          onJa={() => { void plannerBesluit(g.id, true); }}
-          onNee={() => { void plannerBesluit(g.id, false); }}
+          onJa={() => {
+            if (g.taskId && g.approvalId) {
+              void decideDurableTaskApproval(g.taskId, g.approvalId, true, g.ja).then(verversServerAgents);
+              return;
+            }
+            void plannerBesluit(g.id, true);
+          }}
+          onNee={() => {
+            if (g.taskId && g.approvalId) {
+              void decideDurableTaskApproval(g.taskId, g.approvalId, false, 'geweigerd').then(verversServerAgents);
+              return;
+            }
+            void plannerBesluit(g.id, false);
+          }}
         />
       ))}
     </div>

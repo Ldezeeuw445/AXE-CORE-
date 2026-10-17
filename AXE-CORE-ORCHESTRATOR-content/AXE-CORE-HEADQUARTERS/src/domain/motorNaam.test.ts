@@ -8,6 +8,10 @@ describe('motorNaam', () => {
   });
   it('zegt het als er niet is ingelogd, met de vaste naam erbij zodat je weet welke', () => {
     expect(motorNaam('Claude 3', { account: null, ingelogd: false })).toBe('Claude 3 (not logged in)');
+    expect(motorNaam('Claude-abonnement', { account: 'support@axeheadquarters.com', ingelogd: false }))
+      .toBe('Claude-abonnement (not logged in)');
+    expect(motorNaam('Claude-abonnement', { ingelogd: false, nietGebruikt: true }))
+      .toBe('Claude-abonnement (not used)');
   });
   it('houdt de vaste naam als er niets bekend is', () => {
     expect(motorNaam('Cursor')).toBe('Cursor');

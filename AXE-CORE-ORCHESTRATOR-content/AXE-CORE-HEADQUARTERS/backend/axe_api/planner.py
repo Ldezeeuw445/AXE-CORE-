@@ -433,7 +433,15 @@ def verlaat_app_plan(tekst: str, app: str | None = None) -> bool:
 
 
 def goedkeuring_voor_taak(titel: str, doel: str = "", app: str | None = None) -> str:
-    return "nodig" if verlaat_app_plan(f"{titel} {doel}", app) else "niet_nodig"
+    try:
+        from beslis_beleid import ACTIE_ASK, beslis_goedkeuring
+        besluit = beslis_goedkeuring(
+            {"title": titel, "detail": doel, "kind": "leave_plan", "metadata": {"app": app}},
+            app=app,
+        )
+        return "nodig" if besluit.actie == ACTIE_ASK else "niet_nodig"
+    except Exception:
+        return "nodig" if verlaat_app_plan(f"{titel} {doel}", app) else "niet_nodig"
 
 
 def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:

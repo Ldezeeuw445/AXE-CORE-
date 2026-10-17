@@ -31,6 +31,20 @@ class _Tabel:
     def limit(self, *_a):
         return self
 
+    def order(self, *_a, **_k):
+        return self
+
+    def like(self, *_a):
+        return self
+
+    def gt(self, *_a):
+        return self
+
+    def update(self, rij):
+        self.actie = "update"
+        self.rij = dict(rij)
+        return self
+
     def insert(self, rij):
         self.actie = "insert"
         self.rij = dict(rij)
@@ -137,4 +151,23 @@ def test_ja_notice_schrijft_pending_approval_en_een_notification():
     assert vraag["status"] == "pending"
     assert heeft_a17_velden(vraag)
     assert meldingen[0]["recipient"] == LUKA_USER_ID
-    assert "Copper Cathode" in meldingen[0]["message"]
+    assert vraag.get("metadata", {}).get("deal_code") == "DEAL-001"
+
+
+def test_tweede_ja_notice_zelfde_deal_maakt_geen_tweede_vraag():
+    db = _Db()
+    data = {
+        "notices": [{
+            "soort": "ja",
+            "titel": "Yes needed: DEAL-002 — Copper",
+            "tekst": "What yes does: review.",
+            "akkoord_nodig": True,
+            "deal_code": "DEAL-002",
+            "deal_id": "opp-2",
+        }],
+        "sent": 0,
+    }
+    schrijf_zichtbaar(db, "operations_sweep", data)
+    schrijf_zichtbaar(db, "operations_sweep", data)
+    assert len(db.rijen["core_approvals"]) == 1
+    assert len(db.rijen["core_tasks"]) == 1

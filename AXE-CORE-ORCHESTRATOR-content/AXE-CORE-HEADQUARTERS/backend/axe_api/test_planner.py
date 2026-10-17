@@ -214,6 +214,9 @@ class TestGoedkeuringBinnenPlan:
         assert p.goedkeuring_voor_taak("Send the offer to the buyer", app="northsea") == "nodig"
         assert p.verlaat_app_plan("Send the offer to the buyer")
         assert p.goedkeuring_voor_taak("Send the offer to the buyer") == "nodig"
+        assert p.goedkeuring_voor_taak("Market data check (trading)") == "niet_nodig"
+        assert p.goedkeuring_voor_taak("Orchestrator health check") == "niet_nodig"
+        assert p.goedkeuring_voor_taak("Idea scan: run dax") == "niet_nodig"
 
 
 class TestPlannenOpSleutels:

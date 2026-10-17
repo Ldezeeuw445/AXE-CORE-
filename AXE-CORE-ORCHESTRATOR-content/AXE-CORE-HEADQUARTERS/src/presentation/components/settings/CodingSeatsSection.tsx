@@ -11,10 +11,13 @@ import {
   metGedeeldeQuota,
   resetTekst,
   stoelHeeftActie,
-  stoelStand,
+  stoelHeartbeatStand,
+  stoelNietGebruikt,
+  toonStoelEmail,
+  verbergStoel,
   type CodingSeat,
 } from '@/domain/codingSeats';
-import { abonnementVerbruik, claudeRepos, sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
+import { abonnementVerbruik, codingSeatsHeartbeat } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   resetTekst as vensterReset,
   verbruikBalken,
@@ -23,6 +26,7 @@ import {
 
 interface WorkerSeatRow {
   seat_id?: string;
+  id?: string;
   provider?: string;
   machine?: string;
   host?: string;
@@ -35,6 +39,7 @@ interface WorkerSeatRow {
   last_limit_message?: string | null;
   remaining_note?: string | null;
   last_seen_at?: string;
+  config_exists?: boolean;
 }
 
 function totMs(waarde: number | string | null | undefined): number | null {
@@ -44,32 +49,15 @@ function totMs(waarde: number | string | null | undefined): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-function vanApi(raw: Record<string, unknown>): CodingSeat {
-  return {
-    id: String(raw.id || ''),
-    provider: (raw.provider as CodingSeat['provider']) || 'claude',
-    label: String(raw.label || raw.id || ''),
-    email: typeof raw.email === 'string' ? raw.email : null,
-    machine: String(raw.machine || 'unknown'),
-    logged_in: typeof raw.logged_in === 'boolean' ? raw.logged_in : null,
-    login_command: String(raw.login_command || ''),
-    current_task: typeof raw.current_task === 'string' ? raw.current_task : null,
-    rate_limited: Boolean(raw.rate_limited),
-    rate_limit_until: totMs(raw.rate_limit_until as number | string | null),
-    last_limit_message: typeof raw.last_limit_message === 'string' ? raw.last_limit_message : null,
-    remaining_note: String(raw.remaining_note || 'CLI does not expose remaining quota.'),
-    shared_quota_with: Array.isArray(raw.shared_quota_with) ? raw.shared_quota_with.map(String) : [],
-  };
-}
-
 function vanWorker(row: WorkerSeatRow): CodingSeat {
+  const loggedIn = typeof row.logged_in === 'boolean' ? row.logged_in : null;
   return {
     id: String(row.seat_id || ''),
     provider: (row.provider as CodingSeat['provider']) || 'claude',
     label: String(row.seat_id || ''),
-    email: row.email ?? null,
+    email: loggedIn === true ? (row.email ?? null) : null,
     machine: row.machine || row.host || 'unknown',
-    logged_in: typeof row.logged_in === 'boolean' ? row.logged_in : null,
+    logged_in: loggedIn,
     login_command: row.login_command || '',
     current_task: row.current_task ?? null,
     rate_limited: Boolean(row.rate_limited),
@@ -77,25 +65,9 @@ function vanWorker(row: WorkerSeatRow): CodingSeat {
     last_limit_message: row.last_limit_message ?? null,
     remaining_note: row.remaining_note || 'CLI does not expose remaining quota.',
     shared_quota_with: [],
+    last_seen_at: row.last_seen_at ?? null,
+    config_exists: row.config_exists,
   };
-}
-
-function voegSamen(api: CodingSeat[], worker: CodingSeat[]): CodingSeat[] {
-  const uit = new Map<string, CodingSeat>();
-  for (const s of api) if (s.id) uit.set(s.id, s);
-  for (const s of worker) {
-    if (!s.id) continue;
-    const eerder = uit.get(s.id);
-    uit.set(s.id, {
-      ...eerder,
-      ...s,
-      label: eerder?.label || s.label,
-      email: s.email ?? eerder?.email ?? null,
-      login_command: s.login_command || eerder?.login_command || '',
-      remaining_note: s.remaining_note || eerder?.remaining_note || '',
-    });
-  }
-  return metGedeeldeQuota([...uit.values()]);
 }
 
 const ACCENT: Record<string, string> = {
@@ -114,14 +86,12 @@ export function CodingSeatsSection() {
     let alive = true;
     const laad = () => {
       void Promise.all([
-        claudeRepos().catch(() => ({ seats: [] as unknown[] })),
-        sbGetRows<WorkerSeatRow>('core_coding_seats', { limit: 40, orderBy: 'last_seen_at', orderDir: 'desc' })
-          .catch(() => [] as WorkerSeatRow[]),
+        codingSeatsHeartbeat().catch(() => ({ seats: [] as WorkerSeatRow[] })),
         abonnementVerbruik().catch(() => ({ accounts: [] as AbonnementVerbruik[] })),
-      ]).then(([repos, worker, gebruik]) => {
+      ]).then(([hb, gebruik]) => {
         if (!alive) return;
-        const api = Array.isArray(repos.seats) ? repos.seats.map(s => vanApi(s as Record<string, unknown>)) : [];
-        setStoelen(voegSamen(api, worker.map(vanWorker)));
+        const rijen = Array.isArray(hb.seats) ? hb.seats.map(s => vanWorker(s as WorkerSeatRow)) : [];
+        setStoelen(metGedeeldeQuota(rijen.filter(s => s.id && !verbergStoel(s))));
         setVerbruik(Object.fromEntries((gebruik.accounts ?? []).map(a => [a.motor, a])));
         setFout(null);
       }).catch((e: unknown) => {
@@ -153,19 +123,19 @@ export function CodingSeatsSection() {
           const v = verbruik[stoel.id];
           const getoond: CodingSeat = {
             ...stoel,
-            email: stoel.email || v?.account || null,
-            logged_in: v?.status === 'not_logged_in' || v?.status === 'expired' ? false : stoel.logged_in,
+            email: toonStoelEmail(stoel),
             rate_limited: stoel.rate_limited || Boolean(v?.limiet_bereikt),
           };
-          const rood = stoelHeeftActie(getoond);
+          const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond);
           const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
           return (
             <StatusKaart
               key={`${stoel.machine}:${stoel.id}`}
-              naam={getoond.email || stoel.label}
+              klein={stoelNietGebruikt(getoond)}
+              naam={toonStoelEmail(getoond) || (stoelNietGebruikt(getoond) ? `${stoel.label} (not used)` : stoel.label)}
               accent={ACCENT[stoel.provider] || 'var(--text-secondary)'}
               rol={`${stoel.provider} · ${stoel.machine}${stoel.shared_quota_with.length ? ` · same quota as ${stoel.shared_quota_with.join(', ')}` : ''}`}
-              stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : stoelStand(getoond)}
+              stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : stoelHeartbeatStand(getoond)}
               keuze={rood ? (
                 <code
                   title={stoel.login_command}

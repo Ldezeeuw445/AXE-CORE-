@@ -19,10 +19,12 @@ import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motor
 import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import {
   claudeRepos, plannerStatus, plannerZetAan, abonnementVerbruik,
-  ledgerList,
+  ledgerList, codingSeatsHeartbeat,
   type PlannerStatus, type AgentSubscriptionUsage, type LedgerEntry,
+  type CodingSeatStatus,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { motorNaam, type MotorStatus } from '@/domain/motorNaam';
+import { stoelHeartbeatStand, stoelNietGebruikt, verbergStoel } from '@/domain/codingSeats';
 import { verbruikBalken, verbruikMelding, verbruikStand, type AbonnementVerbruik } from '@/domain/abonnementVerbruik';
 import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -51,6 +53,7 @@ export function AgentMotorenSection() {
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   const [abonnementGebruik, setAbonnementGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
   const [verbruik, setVerbruik] = useState<Record<string, AbonnementVerbruik>>({});
+  const [stoelen, setStoelen] = useState<Record<string, CodingSeatStatus> | null>(null);
   const [overrides, setOverrides] = useState<OverrideMap>(() => leesOverrides());
   /* De vierde en laatste plek die dit zelf vroeg. `null` betekent hier nog
      steeds "nog niets gemeten" -- precies wat de eigen lus ook deed -- dus de
@@ -114,10 +117,25 @@ export function AgentMotorenSection() {
         .then(r => {
           if (!alive) return;
           setAanwezig(Object.fromEntries(Object.entries(r.engines ?? {}).map(([k, v]) => [k, v.aanwezig])));
-          setMotorAccounts(Object.fromEntries(Object.entries(r.engines ?? {}).map(([k, v]) => [k, { account: v.account, ingelogd: v.ingelogd }])));
           setAbonnementGebruik(r.usage ?? {});
         })
         .catch(() => { if (alive) setAanwezig(null); });
+      void codingSeatsHeartbeat()
+        .then(r => {
+          if (!alive) return;
+          const map: Record<string, CodingSeatStatus> = {};
+          for (const s of r.seats ?? []) {
+            const id = s.seat_id || s.id;
+            if (id) map[id] = { ...s, id };
+          }
+          setStoelen(map);
+          setMotorAccounts(Object.fromEntries(Object.entries(map).map(([k, v]) => [k, {
+            account: v.logged_in === true ? v.email : null,
+            ingelogd: v.logged_in,
+            nietGebruikt: stoelNietGebruikt({ id: k, logged_in: v.logged_in ?? null, config_exists: v.config_exists }),
+          }])));
+        })
+        .catch(() => { if (alive) setStoelen({}); });
     };
     // Gemeten bij Anthropic/OpenAI zelf; de host onthoudt het twee minuten,
     // dus elke minuut vragen kost de aanbieder hooguit één check per twee.
@@ -166,7 +184,25 @@ export function AgentMotorenSection() {
         ? { toon: 'ok', tekst: 'Online' }
         : { toon: 'bad', tekst: 'Offline' };
     }
-    if (aanwezig === null || aanwezig[motor] !== true) return { toon: 'bad', tekst: 'Offline' };
+    const stoel = stoelen?.[motor];
+    if (stoelen == null) return { toon: 'muted', tekst: 'Checking' };
+    if (stoel) {
+      const stand = stoelHeartbeatStand({
+        id: motor,
+        logged_in: stoel.logged_in ?? null,
+        rate_limited: Boolean(stoel.rate_limited),
+        current_task: stoel.current_task ?? null,
+        last_seen_at: stoel.last_seen_at,
+        config_exists: stoel.config_exists,
+      });
+      if (stand.tekst === 'Online' || stand.tekst === 'Running') {
+        const koeltHb = planner?.koeling[motor];
+        if (koeltHb) return { toon: 'bad', tekst: 'Cooling down' };
+      }
+      return stand;
+    }
+    if (aanwezig === null) return { toon: 'muted', tekst: 'Checking' };
+    if (aanwezig[motor] !== true) return { toon: 'bad', tekst: 'Offline' };
     const koelt = planner?.koeling[motor];
     // A cooled-down subscription cannot currently do work, so it is not Online.
     if (koelt) return { toon: 'bad', tekst: 'Cooling down' };
@@ -316,7 +352,10 @@ export function AgentMotorenSection() {
 
       <SectieKop titel="Subscriptions" uitleg="Session and week usage as each provider reports it for that account, plus what AXE ran on it." />
       <div className="axe-agent-raster axe-agent-raster--ruim">
-        {ALLE_MOTOREN.map((motor: AgentEngine) => {
+        {ALLE_MOTOREN.filter((motor: AgentEngine) => {
+          const s = stoelen?.[motor];
+          return !(s && verbergStoel({ config_exists: s.config_exists }));
+        }).map((motor: AgentEngine) => {
           const g = abonnementGebruik[motor];
           const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
           const vandaag = planner?.gebruik_vandaag[motor] ?? 0;
@@ -324,6 +363,7 @@ export function AgentMotorenSection() {
           return (
             <StatusKaart
               key={motor}
+              klein={stoelNietGebruikt({ id: motor, logged_in: stoelen?.[motor]?.logged_in ?? null, config_exists: stoelen?.[motor]?.config_exists })}
               naam={motorNaam(MOTOR_LABEL[motor], motorAccounts[motor])}
               accent="var(--text-secondary)"
               rol={`${verbruik[motor]?.plan ? `${verbruik[motor]?.plan} plan · ` : ''}${door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}`}

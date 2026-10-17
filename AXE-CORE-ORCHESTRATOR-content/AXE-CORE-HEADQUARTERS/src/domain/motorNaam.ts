@@ -8,10 +8,13 @@
 export interface MotorStatus {
   account?: string | null;
   ingelogd?: boolean | null;
+  nietGebruikt?: boolean;
 }
 
 export function motorNaam(vasteNaam: string, status?: MotorStatus | null): string {
+  if (status?.ingelogd === false) {
+    return status.nietGebruikt ? `${vasteNaam} (not used)` : `${vasteNaam} (not logged in)`;
+  }
   if (status?.account) return `${vasteNaam.split(' ')[0]} · ${status.account}`;
-  if (status?.ingelogd === false) return `${vasteNaam} (not logged in)`;
   return vasteNaam;
 }

@@ -22,6 +22,8 @@ import { jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 import { agentRegel, goedkeuringVanJob } from '@/domain/agentBewustzijn';
 import { managerVan } from '@/domain/tierRouter/agentVenster';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
+import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
+import { decideDurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -92,21 +94,27 @@ function useAgentJob(agent: AxeAgent) {
   }) ?? null;
 }
 
-function AgentTile({ id }: { id: AxeAgentId }) {
+function AgentTile({ id, onOpenOk }: { id: AxeAgentId; onOpenOk: () => void }) {
   const agent = agentById(id);
   const job = useAgentJob(agent);
+  const server = useServerAgents().agents[id];
   const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
-  const state = vraag
+  const serverWacht = server?.status === 'WAITING_APPROVAL';
+  const wacht = !!vraag || serverWacht;
+  const state = wacht
     ? 'WAITING'
     : job
       ? 'WORKING'
       : 'IDLE';
-  const detail = job ? agentRegel(job) : agent.handles;
+  const detail = vraag?.wat
+    || (serverWacht ? (server.pendingApproval?.title || server.task?.title || server.reason) : null)
+    || (job ? agentRegel(job) : agent.handles);
   const compactLabel = TEGEL_NAAM[agent.id] ?? (agent.kort ?? agent.name);
 
   return (
     <button
       type="button"
+      onClick={wacht ? onOpenOk : undefined}
       className="flex min-h-0 w-full flex-col items-center justify-center overflow-hidden rounded-[11px] px-0.5 py-1 text-center active:scale-[.98]"
       style={{
         background: 'var(--axe-kaart-vlak)',
@@ -114,8 +122,8 @@ function AgentTile({ id }: { id: AxeAgentId }) {
         borderTopColor: 'var(--axe-kaart-lijn-boven)',
         boxShadow: 'var(--axe-kaart-schaduw)',
       }}
-      title={vraag ? vraag.tekst : detail}
-      aria-label={`${agent.name}: ${state}${job ? ` · ${detail}` : ''}`}
+      title={wacht ? (vraag?.tekst || String(detail)) : detail}
+      aria-label={`${agent.name}: ${state}${detail ? ` · ${detail}` : ''}`}
     >
       <ManagerAvatar agent={agent} size={20} />
       <span
@@ -124,10 +132,10 @@ function AgentTile({ id }: { id: AxeAgentId }) {
       >
         {compactLabel}
       </span>
-      {job && (
+      {(job || serverWacht) && (
         <span
           className="mt-0.5 max-w-full truncate px-0.5 text-[7px] leading-tight"
-          style={{ color: vraag ? 'var(--warning)' : 'var(--text-secondary)' }}
+          style={{ color: wacht ? 'var(--warning)' : 'var(--text-secondary)' }}
         >
           {detail}
         </span>
@@ -194,8 +202,45 @@ function MobileProjection() {
   );
 }
 
+function MobileOkKaart({ id, onSluit }: { id: AxeAgentId; onSluit: () => void }) {
+  const agent = agentById(id);
+  const job = useAgentJob(agent);
+  const server = useServerAgents().agents[id];
+  const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
+  const wat = vraag?.wat || server?.pendingApproval?.wat || server?.pendingApproval?.title || server?.task?.title || 'Needs your OK';
+  const waarom = vraag?.waarom || server?.pendingApproval?.waarom || server?.pendingApproval?.detail || '';
+  const beslissen = (akkoord: boolean) => {
+    if (job?.taskId && job.approvalId) {
+      void decideDurableTaskApproval(job.taskId, job.approvalId, akkoord, akkoord ? 'Approved on phone.' : 'Declined on phone.')
+        .then(() => useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' }));
+    } else if (server?.task?.id && server.pendingApproval?.id) {
+      void decideDurableTaskApproval(server.task.id, server.pendingApproval.id, akkoord, akkoord ? 'Approved on phone.' : 'Declined on phone.')
+        .then(verversServerAgents);
+    }
+    onSluit();
+  };
+  return (
+    <div
+      className="axe-mobile-edge mb-1.5 rounded-[14px] px-3 py-2"
+      style={{ background: 'var(--axe-kaart-vlak)', border: '1px solid var(--axe-kaart-lijn)' }}
+      data-axe-mobile-ok
+    >
+      <p className="text-[11px] font-semibold" style={{ color: agent.accent }}>{agent.name}</p>
+      <p className="mt-1 whitespace-pre-wrap text-[12px] leading-snug" style={{ color: 'var(--text-primary)' }}>
+        {wat}{waarom ? `\n${waarom}` : ''}
+      </p>
+      <div className="mt-2 flex gap-1.5">
+        <button type="button" onClick={() => beslissen(true)} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--ok)', background: 'var(--tint)' }}>Approve</button>
+        <button type="button" onClick={() => beslissen(false)} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>Decline</button>
+        <button type="button" onClick={onSluit} className="ml-auto rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>Close</button>
+      </div>
+    </div>
+  );
+}
+
 function CoreHome() {
   const [chatOpen, setChatOpen] = useChatOpen();
+  const [okAgent, setOkAgent] = useState<AxeAgentId | null>(null);
   const projecteert = useSphereProjectionStore(s => s.payload !== null);
   const laatste = useVoiceStore(s => s.conversation[s.conversation.length - 1]);
   // Zelfde bron als de desktop-Home: installCoreStatus. Zie coreStatusStore.
@@ -212,7 +257,7 @@ function CoreHome() {
         aria-label="AXE Core en agents"
       >
         <div className="grid min-h-0 justify-items-start gap-2 py-1" style={AGENT_KOLOM}>
-          {LEFT.map(id => <AgentTile key={id} id={id} />)}
+          {LEFT.map(id => <AgentTile key={id} id={id} onOpenOk={() => setOkAgent(id)} />)}
         </div>
 
         <button
@@ -246,9 +291,10 @@ function CoreHome() {
         </button>
 
         <div className="grid min-h-0 justify-items-end gap-2 py-1" style={AGENT_KOLOM}>
-          {RIGHT.map(id => <AgentTile key={id} id={id} />)}
+          {RIGHT.map(id => <AgentTile key={id} id={id} onOpenOk={() => setOkAgent(id)} />)}
         </div>
       </section>
+      {okAgent && <MobileOkKaart id={okAgent} onSluit={() => setOkAgent(null)} />}
 
       {/* De bol en de agents staan vast bovenin (de sectie hierboven heeft een eigen hoogte); alleen dit
           vak gaat open of dicht. Dicht blijft er een smalle balk boven de composer, met de laatste

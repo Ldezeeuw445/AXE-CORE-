@@ -116,6 +116,7 @@ MANIFEST = {
     # Zonder deze regels bleef #199 deels op de Mac: de box had de nieuwe
     # modules nooit.
     "/opt/axe-core-api/goedkeuring_melding.py": ("backend/axe_api/goedkeuring_melding.py", "axe-core-api"),
+    "/opt/axe-core-api/beslis_beleid.py": ("backend/axe_api/beslis_beleid.py", "axe-core-api"),
     "/opt/axe-core-api/push_meldingen.py": ("backend/axe_api/push_meldingen.py", "axe-core-api"),
     "/opt/axe-core-api/northsea_crew_zichtbaar.py": ("backend/axe_api/northsea_crew_zichtbaar.py", "axe-core-api"),
     # agent_loop importeert deze twee. task_worker importeert agent_loop.
@@ -145,7 +146,7 @@ OPTIONAL_WHEN_MISSING = {
 # Wie wie nodig heeft. Ship je de één zonder de ander, dan start de worker niet.
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py"),
-    "agent_loop.py": ("device_actions.py", "agent_workspace.py"),
+    "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py"),
     "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py"),
 }
 

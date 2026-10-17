@@ -509,8 +509,19 @@ async def list_approvals(status: str = "pending", limit: int = 20):
     """
     try:
         from goedkeuring_melding import verval_oude_shell_vragen
+        from beslis_beleid import pas_beleid_toe_op_pending, beslis_goedkeuring
         verval_oude_shell_vragen(sb())
-        return {"approvals": task_repo().list_approvals(status, min(limit, 100))}
+        if status == "pending":
+            pas_beleid_toe_op_pending(sb())
+        rijen = task_repo().list_approvals(status, min(limit, 100))
+        for r in rijen:
+            try:
+                besluit = beslis_goedkeuring(r)
+                r["wat"] = besluit.wat
+                r["waarom"] = besluit.waarom
+            except Exception:
+                pass
+        return {"approvals": rijen}
     except Exception as exc:
         raise HTTPException(503, f"Could not read approvals: {exc}") from exc
 
@@ -3115,6 +3126,19 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
         log.warning(f"claude_run memory write failed: {e}")
 
     return result
+
+
+@app.get("/coding-seats", dependencies=[AUTH])
+async def list_coding_seats():
+    """Mac mini heartbeat: core_coding_seats via service_role. Geen VPS-CLI-check."""
+    try:
+        rijen = (
+            sb().table("core_coding_seats").select("*")
+            .order("last_seen_at", desc=True).limit(40).execute().data
+        ) or []
+    except Exception as exc:
+        raise HTTPException(503, f"Could not read coding seats: {exc}") from exc
+    return {"seats": rijen}
 
 
 @app.get("/claude/subscriptions/usage", dependencies=[AUTH])

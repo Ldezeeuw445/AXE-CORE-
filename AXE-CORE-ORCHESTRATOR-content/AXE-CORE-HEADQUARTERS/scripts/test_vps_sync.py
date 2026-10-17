@@ -12,6 +12,7 @@ def test_manifest_heeft_de_servermodules_die_199_miste():
     rels = {rel for rel, _unit in vs.MANIFEST.values()}
     for pad in (
         "backend/axe_api/goedkeuring_melding.py",
+        "backend/axe_api/beslis_beleid.py",
         "backend/axe_api/push_meldingen.py",
         "backend/axe_api/northsea_crew_zichtbaar.py",
         "backend/axe_api/agent_workspace.py",
@@ -53,17 +54,18 @@ def test_deploy_slaat_missing_over_als_de_dienst_niet_op_de_box_staat():
 
 
 def test_weiger_task_worker_zonder_agent_loop_imports():
-    assert vs.ontbrekende_worker_imports({"task_worker.py"}, {"task_runtime.py"}) == [
-        "agent_loop.py",
-        "agent_workspace.py",
-        "device_actions.py",
-    ]
-    assert vs.ontbrekende_worker_imports(
+    missing = vs.ontbrekende_worker_imports({"task_worker.py"}, {"task_runtime.py"})
+    for pad in ("agent_loop.py", "agent_workspace.py", "device_actions.py", "beslis_beleid.py"):
+        assert pad in missing, pad
+    missing2 = vs.ontbrekende_worker_imports(
         {"task_worker.py", "agent_loop.py"},
         {"task_runtime.py"},
-    ) == ["agent_workspace.py", "device_actions.py"]
+    )
+    for pad in ("agent_workspace.py", "device_actions.py", "beslis_beleid.py"):
+        assert pad in missing2, pad
     assert vs.ontbrekende_worker_imports(
         {"task_worker.py"},
-        {"task_runtime.py", "agent_loop.py", "agent_workspace.py", "device_actions.py"},
+        {"task_runtime.py", "agent_loop.py", "agent_workspace.py", "device_actions.py",
+         "beslis_beleid.py", "missies.py", "mission_engine.py", "dax.py"},
     ) == []
     assert vs.ontbrekende_worker_imports({"push_meldingen.py"}, set()) == []

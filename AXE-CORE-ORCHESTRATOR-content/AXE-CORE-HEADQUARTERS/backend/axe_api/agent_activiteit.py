@@ -396,10 +396,27 @@ class Activiteit:
 
     def overzicht(self, agents: Iterable[str], events_per_agent: int = 8) -> list[dict[str, Any]]:
         from agent_workspace import laad_workspace
+        try:
+            from beslis_beleid import pas_beleid_toe_op_pending, beslis_goedkeuring
+            pas_beleid_toe_op_pending(self._db())
+        except Exception:
+            beslis_goedkeuring = None  # type: ignore[assignment]
         taken = self._taken(600)
         missies = self._missies()
         routines = self._routines()
         dax = self._dax()
+        per_taak: dict[str, dict[str, Any]] = {}
+        try:
+            pending = (
+                self._db().table("core_approvals").select("id,task_id,kind,title,detail,metadata,requested_by")
+                .eq("status", "pending").order("created_at").limit(80).execute().data
+            ) or []
+            for r in pending:
+                tid = str(r.get("task_id") or "")
+                if tid and tid not in per_taak:
+                    per_taak[tid] = r
+        except Exception:
+            per_taak = {}
         uit = []
         for agent in agents:
             recent = self.events(agent, events_per_agent)
@@ -413,6 +430,24 @@ class Activiteit:
                 "crew": ws.get("crew") or [], "events": tijdlijn(recent),
                 "last_event_at": recent[0].get("created_at") if recent else None,
             })
+            taak_id = (status.get("task") or {}).get("id")
+            rij = per_taak.get(str(taak_id or ""))
+            if rij:
+                wat = waarom = None
+                if beslis_goedkeuring:
+                    try:
+                        besluit = beslis_goedkeuring(rij)
+                        wat, waarom = besluit.wat, besluit.waarom
+                    except Exception:
+                        pass
+                status["pending_approval"] = {
+                    "id": rij.get("id"),
+                    "kind": rij.get("kind"),
+                    "title": rij.get("title"),
+                    "detail": rij.get("detail"),
+                    "wat": wat or rij.get("title"),
+                    "waarom": waarom or rij.get("detail"),
+                }
             uit.append(status)
         return uit
 

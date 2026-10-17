@@ -40,6 +40,15 @@ class _Q:
     def limit(self, *_a):
         return self
 
+    def order(self, *_a, **_k):
+        return self
+
+    def like(self, *_a):
+        return self
+
+    def gt(self, *_a):
+        return self
+
     def execute(self):
         tabel = self.db.tabellen.setdefault(self.naam, [])
         if self.actie == "insert":

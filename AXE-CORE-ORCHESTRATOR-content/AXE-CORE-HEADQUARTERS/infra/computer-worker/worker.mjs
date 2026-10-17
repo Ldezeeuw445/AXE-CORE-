@@ -57,6 +57,9 @@ const env = {
   ...loadEnvFile(join(REPO, 'backend/axe_api/.env.local')),
   ...process.env,
 };
+// launchd PATH is smal; claude/codex/cursor-agent staan in Homebrew.
+env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || '/usr/bin:/bin'}`;
+process.env.PATH = env.PATH;
 
 const SUPABASE_URL = env.SUPABASE_URL ?? env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = env.SUPABASE_SERVICE_ROLE ?? env.VITE_SUPABASE_ANON_KEY;

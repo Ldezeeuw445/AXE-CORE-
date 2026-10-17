@@ -351,7 +351,7 @@ async def _ja_vraag(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluati
         task_type="manual_review", priority=90,
     )
     await _schrijf_chase(
-        service.repo, dedupe_key=f"desk-yes:{opp['id']}:{eval_.next_action_code}",
+        service.repo, dedupe_key=f"desk-yes:{opp['id']}",
         title=notice["titel"], description=notice["tekst"], opportunity_id=opp["id"],
         owner="luka", requires_approval=True, action_type="approval_required",
         extra={"what_yes_does": notice["what_yes_does"], "blocker": eval_.blocker_code},

@@ -201,7 +201,9 @@ export interface DurableTaskStep {
 export interface DurableTaskApproval {
   id: string;
   task_id: string;
-  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled';
+  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled' | 'superseded';
+  wat?: string | null;
+  waarom?: string | null;
   kind: string;
   title: string;
   detail: string;
@@ -1063,6 +1065,15 @@ export interface CodingSeatStatus {
   last_limit_message: string | null;
   remaining_note: string;
   shared_quota_with: string[];
+  last_seen_at?: string | null;
+  config_exists?: boolean;
+  seat_id?: string;
+  host?: string;
+}
+
+/** Mac mini heartbeat in core_coding_seats (service_role via de VPS). */
+export async function codingSeatsHeartbeat(): Promise<{ seats: CodingSeatStatus[] }> {
+  return call('GET', '/coding-seats');
 }
 
 /** Which repos this host will let Claude Code touch, and their live branches. */

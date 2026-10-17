@@ -192,8 +192,19 @@ def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> s
     inside the workspace runs, because the alternative is an agent that stops
     every few steps and finishes nothing. What earns a prompt is reaching
     *outside* the workspace, or touching the machine itself.
+
+    In-plan vrijstellingen (DAX /dax/artifacts, alleen-lezen inspectie zoals
+    `apt list --installed`) komen uit beslis_beleid — anders parkeert `apt `
+    in _NEEDS_APPROVAL elke health-check.
     """
     lowered = " ".join(command.lower().split())
+    try:
+        from beslis_beleid import shell_auto_reden, workspace_is_dax
+        dax = _HUIDIGE_DAX.get() is not None or workspace_is_dax(cwd)
+        if shell_auto_reden(command, dax=dax or "/dax/" in (command or "")):
+            return None
+    except Exception:
+        pass
     # Op een eigen DAX-computer is pakketten installeren werk in de eigen
     # werkplek: de container is van deze agent, niet van de VPS. Alles wat de
     # buitenwereld raakt (git push, ssh, systemctl, docker, mail, orders) blijft

@@ -9,8 +9,12 @@ import {
   metGedeeldeQuota,
   parseLimietTot,
   resetTekst,
+  stoelHeartbeatStand,
   stoelHeeftActie,
+  stoelNietGebruikt,
   stoelStand,
+  toonStoelEmail,
+  verbergStoel,
   type CodingSeat,
 } from './codingSeats';
 
@@ -58,6 +62,11 @@ describe('status parsing', () => {
     expect(JSON.stringify(uit)).not.toContain('GEHEIM');
   });
 
+  it('toont geen e-mail als Claude is uitgelogd', () => {
+    expect(claudeStatusUitJson('{"loggedIn": false, "email": "support@axeheadquarters.com"}'))
+      .toEqual({ loggedIn: false, email: null });
+  });
+
   it('haalt Codex-e-mail uit het id_token en toont nooit het token', () => {
     const kop = Buffer.from('{"alg":"none"}').toString('base64url');
     const lading = Buffer.from(JSON.stringify({ email: 'support@axeheadquarters.com' })).toString('base64url');
@@ -103,6 +112,20 @@ describe('gedeelde quota', () => {
   });
 });
 
+describe('heartbeat-stand', () => {
+  it('is Online bij verse heartbeat en login, Not used voor default ~/.claude uitgelogd', () => {
+    const nu = Date.parse('2026-10-17T09:00:00Z');
+    const vers = new Date(nu - 60_000).toISOString();
+    expect(stoelHeartbeatStand(stoel({ logged_in: true, last_seen_at: vers }), nu))
+      .toEqual({ toon: 'ok', tekst: 'Online' });
+    expect(stoelNietGebruikt(stoel({ id: 'claude', logged_in: false }))).toBe(true);
+    expect(stoelHeartbeatStand(stoel({ id: 'claude', logged_in: false, last_seen_at: vers }), nu))
+      .toEqual({ toon: 'muted', tekst: 'Not used' });
+    expect(verbergStoel(stoel({ id: 'codex3', config_exists: false }))).toBe(true);
+    expect(toonStoelEmail(stoel({ email: 'support@axeheadquarters.com', logged_in: false }))).toBeNull();
+  });
+});
+
 describe('Settings toont Accounts', () => {
   it('heeft een Accounts-sectie naast Providers, zonder Home te raken', () => {
     const settings = readFileSync(new URL('../presentation/pages/SettingsPage.tsx', import.meta.url), 'utf8');
@@ -110,5 +133,10 @@ describe('Settings toont Accounts', () => {
     expect(settings).toMatch(/label: 'Accounts'/);
     expect(settings).toMatch(/CodingSeatsSection/);
     expect(settings).not.toMatch(/HomeView|NeuralBrain|MemoryTerrain/);
+    const seats = readFileSync(new URL('../presentation/components/settings/CodingSeatsSection.tsx', import.meta.url), 'utf8');
+    const motoren = readFileSync(new URL('../presentation/components/settings/AgentMotorenSection.tsx', import.meta.url), 'utf8');
+    expect(seats).toMatch(/codingSeatsHeartbeat/);
+    expect(motoren).toMatch(/codingSeatsHeartbeat/);
+    expect(seats).not.toMatch(/stoel\.email \|\| v\?\.account/);
   });
 });

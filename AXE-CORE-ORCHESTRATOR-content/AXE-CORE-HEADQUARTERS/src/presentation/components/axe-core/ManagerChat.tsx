@@ -81,13 +81,22 @@ export function ManagerChat({
   }, [berichten.length, job?.summary, job?.approvalVraag]);
 
   const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
+  const serverVraag = !vraag && server?.pendingApproval
+    ? {
+        tekst: [server.pendingApproval.wat, server.pendingApproval.waarom].filter(Boolean).join('\n')
+          || server.pendingApproval.title
+          || server.reason,
+        wat: server.pendingApproval.wat || server.pendingApproval.title || '',
+        waarom: server.pendingApproval.waarom || server.pendingApproval.detail || '',
+      }
+    : null;
   const lokaal = job ? (vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state]) : null;
   const serverStand = server ? bepaalServerStand(server) : null;
   const stand = lokaal ?? (serverStand ? { label: serverStand.label, kleur: serverStand.kleur } : null);
   const missie = server?.mission ?? null;
   const pauzeerbaar = !!missie && ['active', 'monitoring', 'waiting_agent', 'waiting_approval'].includes(missie.status);
   const hervatbaar = !!missie && ['paused', 'blocked', 'human_decision_required'].includes(missie.status);
-  const wacht = !!vraag;
+  const wacht = !!vraag || !!serverVraag;
 
   const stuur = () => {
     const t = opvolging.trim();
@@ -227,25 +236,33 @@ export function ManagerChat({
           )}
         </div>
 
-        {wacht && onGoedkeuring && vraag && (
-          <div className="flex gap-1.5 mt-2">
-            <button
-              type="button"
-              onClick={() => onGoedkeuring(true)}
-              className="text-[10px] px-2 py-1 rounded-lg"
-              title={vraag.ja}
-              style={{ background: 'var(--tint)', color: 'var(--ok)' }}
-            >
-              Approve
-            </button>
-            <button
-              type="button"
-              onClick={() => onGoedkeuring(false)}
-              className="text-[10px] px-2 py-1 rounded-lg"
-              style={{ background: 'var(--tint-line)', color: 'var(--text-secondary)' }}
-            >
-              Reject
-            </button>
+        {wacht && onGoedkeuring && (vraag || serverVraag) && (
+          <div className="mt-2">
+            {(vraag || serverVraag)?.wat || (vraag || serverVraag)?.waarom ? (
+              <p className="mb-1.5 whitespace-pre-wrap text-[11px] leading-snug" style={{ color: 'var(--text-primary)' }}>
+                {(vraag || serverVraag)?.wat}
+                {(vraag || serverVraag)?.waarom ? `\n${(vraag || serverVraag)?.waarom}` : ''}
+              </p>
+            ) : null}
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => onGoedkeuring(true)}
+                className="text-[10px] px-2 py-1 rounded-lg"
+                title={vraag?.ja}
+                style={{ background: 'var(--tint)', color: 'var(--ok)' }}
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => onGoedkeuring(false)}
+                className="text-[10px] px-2 py-1 rounded-lg"
+                style={{ background: 'var(--tint-line)', color: 'var(--text-secondary)' }}
+              >
+                Decline
+              </button>
+            </div>
           </div>
         )}
 
