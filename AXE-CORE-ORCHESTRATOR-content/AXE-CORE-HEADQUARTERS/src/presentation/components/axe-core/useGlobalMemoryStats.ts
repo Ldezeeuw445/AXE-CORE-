@@ -21,6 +21,17 @@ import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ra
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
+import { loadAgentActivity } from '@/infrastructure/persistence/agentActivityService';
+import { AGENT_CATALOG } from '@/domain/agents/catalog';
+import {
+  agentEventsFromRecords,
+  collectHubRecords,
+  episodeEvents,
+  mergeAgentEvents,
+  type HubMemoryRecord,
+  type MemoryAgentEvent,
+} from '@/domain/memory/hubMemoryRecord';
+import { useMemorySceneSeed } from '@/presentation/components/axe-core/memory/MemorySceneData';
 
 // Defined in the domain layer so Neural, Terrain and this hook cannot drift.
 export type { HubId } from '@/domain/memory/memoryHubs';
@@ -54,6 +65,8 @@ export interface GlobalMemoryStats {
   integrityPct: number | null;
   stream: StreamEntry[];
   loading: boolean;
+  records: HubMemoryRecord[];
+  agentEvents: MemoryAgentEvent[];
 }
 
 const EMPTY_COUNTS: Record<HubId, number> = {
@@ -81,6 +94,7 @@ export function timeAgo(ts: number): string {
 }
 
 export function useGlobalMemoryStats(): GlobalMemoryStats {
+  const seed = useMemorySceneSeed();
   const [hubCounts, setHubCounts] = useState<Record<HubId, number>>(EMPTY_COUNTS);
   const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
   const [sourceCounts, setSourceCounts] = useState({ global: 0, rag: 0, notes: 0 });
@@ -89,6 +103,8 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [integrityPct, setIntegrityPct] = useState<number | null>(null);
   const [stream, setStream] = useState<StreamEntry[]>([]);
+  const [records, setRecords] = useState<HubMemoryRecord[]>([]);
+  const [agentEvents, setAgentEvents] = useState<MemoryAgentEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const seen = useRef<Set<string>>(new Set());
 
@@ -99,10 +115,25 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
   }, []);
 
   useEffect(() => {
+    if (seed) {
+      setRecords(seed.records);
+      setAgentEvents(seed.agentEvents);
+      setHubCounts({ ...EMPTY_COUNTS, ...seed.hubCounts });
+      setTotal(seed.total);
+      setSourceCounts({
+        global: seed.records.filter((r) => r.sourceKind === 'global').length,
+        rag: seed.records.filter((r) => r.sourceKind === 'rag').length,
+        notes: seed.records.filter((r) => r.sourceKind === 'obsidian').length,
+      });
+      setLoading(false);
+      return;
+    }
+
     let alive = true;
 
     const load = async () => {
-      const [remoteGlobals, notes, rag, growth, counted] = await Promise.all([
+      const namespaces = [...new Set(AGENT_CATALOG.map((a) => a.namespace).filter(Boolean))];
+      const [remoteGlobals, notes, rag, growth, counted, activity] = await Promise.all([
         loadGlobalMemories(AXE_USER_ID, undefined, 500).catch(() => [] as GlobalMemoryEntry[]),
         listRecentObsidianNotes(200).catch(() => [] as ObsidianNote[]),
         loadRagMemories(undefined, 1, 300).catch(() => [] as RagMemory[]),
@@ -110,6 +141,7 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
         // The rows above are a sample -- 500 of 16,000, 300 of 8,000. Counting
         // them told you how big the fetch was, not how big the memory is.
         loadHubCounts().catch(() => null),
+        loadAgentActivity(namespaces).catch(() => null),
       ]);
       if (!alive) return;
 
@@ -184,13 +216,19 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
           subtitle: growth.lastManagerMessage,
         });
       }
+      const built = collectHubRecords({ global: globals, rag, notes });
+      setRecords(built);
+      setAgentEvents(mergeAgentEvents(
+        agentEventsFromRecords(built),
+        episodeEvents(activity?.episodes ?? []),
+      ));
       setLoading(false);
     };
 
     void load();
     const t = window.setInterval(() => void load(), 45_000);
     return () => { alive = false; window.clearInterval(t); };
-  }, [pushStream]);
+  }, [pushStream, seed]);
 
   // The stream is the app's own event bus, seeded with history so the panel is
   // populated on first paint rather than empty until something happens.
@@ -238,5 +276,5 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
     return () => unsubs.forEach(u => u());
   }, [pushStream]);
 
-  return { hubCounts, agentCounts, sourceCounts, total, connections, lastUpdatedAt, integrityPct, stream, loading };
+  return { hubCounts, agentCounts, sourceCounts, total, connections, lastUpdatedAt, integrityPct, stream, loading, records, agentEvents };
 }

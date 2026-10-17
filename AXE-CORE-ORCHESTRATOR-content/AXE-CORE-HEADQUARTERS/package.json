@@ -10,6 +10,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "test:home-layout": "playwright test -c e2e/home-live-layout/playwright.config.ts",
     "lint": "eslint src",

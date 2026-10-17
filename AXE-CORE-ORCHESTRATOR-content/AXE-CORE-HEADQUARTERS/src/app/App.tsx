@@ -18,6 +18,7 @@ import { AndroidLockGate } from '@/presentation/hooks/useAndroidLock';
 import { isAndroidTauriRuntime, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
+import MemoryScenePreview from '@/presentation/pages/MemoryScenePreview';
 const AICore = lazy(() => import('@/presentation/pages/AICore'));
 const Agents = lazy(() => import('@/presentation/pages/Agents'));
 const Tasks = lazy(() => import('@/presentation/pages/Tasks'));
@@ -208,6 +209,7 @@ export default function App() {
               already redirected here stayed here. */}
           <Route path="/login" element={user ? <Navigate to={androidNaLogin()} replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
+          <Route path="/dev-memory-scene-preview" element={<MemoryScenePreview />} />
           {StrategyLabDevPreview && <Route path="/dev-strategy-lab-preview" element={<StrategyLabDevPreview />} />}
           <Route path="/dev-browser-preview" element={<div className="h-[100dvh] w-full overflow-hidden"><BrowserPage /></div>} />
           {/* Standalone desktop browser — no AppShell chrome */}

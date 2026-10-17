@@ -188,7 +188,10 @@ function HubBeacon({
                   <Icon size={18} strokeWidth={2.2} />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 600, letterSpacing: 0.2, textShadow: '0 2px 14px rgba(0,0,0,0.9)' }}>
+                  <div
+                    title={`${hub.name} — ${hub.memories.toLocaleString()} memories`}
+                    style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 600, letterSpacing: 0.2, textShadow: '0 2px 14px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,0.9)' }}
+                  >
                     {hub.name}
                   </div>
                   <div style={{ color: accent, fontSize: 11.5, marginTop: 1, opacity: 0.95, textShadow: '0 2px 10px rgba(0,0,0,0.9)' }}>

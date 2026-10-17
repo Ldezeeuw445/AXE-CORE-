@@ -2,12 +2,10 @@ name: Tauri compile check (macOS)
 
 # Compilatiecontrole zonder distributieartifact of ingebouwde backendsleutel.
 # Installatie op beide Macs blijft via de bestaande canonieke autosync lopen.
+# GitHub Actions is billing-locked on this account, so a push trigger only
+# paints the commit red. The real macOS build is `npm run bijwerken` on the
+# Mac mini (and autosync on both Macs). Keep the file for a manual run.
 on:
-  push:
-    branches: [orchestrator]
-    paths:
-      - 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/**'
-      - '.github/workflows/tauri-build.yml'
   workflow_dispatch:
 permissions:
   contents: read

@@ -42,6 +42,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/float/notes': 'Eigen venster boven het bureaublad (zwevendeVensters.ts), geopend vanuit het radiaal dok en de Quick Note',
   '/float/phone': 'Eigen venster boven het bureaublad (zwevendeVensters.ts), geopend vanuit het radiaal dok',
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
+  '/dev-memory-scene-preview': 'Ontwikkelvoorbeeld — Terrain/Neural screenshots',
   '/dev-strategy-lab-preview': 'Ontwikkelvoorbeeld, alleen in npm run dev (Strategy Lab buiten de login)',
   '/dev-browser-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-standalone': 'Ontwikkelvoorbeeld',

@@ -668,11 +668,15 @@
   line-height: 1.25;
 }
 .nm-hub-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 1);
   white-space: nowrap;
+}
+:root[data-look='light'] .nm-hub-name {
+  color: #14161c !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 .nm-hub-count {
   font-size: 9.5px;

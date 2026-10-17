@@ -1,0 +1,13 @@
+/* Alleen het ontwikkelvoorbeeld. Geen Home-layout. */
+.msp {
+  --axe-chat-links: 264px;
+  --axe-chat-rechts: 264px;
+  --axe-chat-onder: 96px;
+  --axe-viewctl-onder: 8px;
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: #020409;
+  color: #eef0f6;
+}

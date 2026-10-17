@@ -70,6 +70,7 @@ export function MemoryDock({
           boxShadow: 'var(--axe-vak-zweef)',
         }}
         data-axe-doel="memory-dock"
+        data-scene-reserve="dock"
       >
         <div className="axe-memdock-head">
           <span className="axe-memdock-label">Depth level</span>

@@ -307,7 +307,7 @@ export default function MemoryTerrainMap({
             onHover={setHoveredId}
             onSelectHub={handleSelectHub}
             onSelectLeaf={handleSelectLeaf}
-            showLeafLabels={depthLevel >= 4}
+            showLeafLabels={false}
           />
         </RiseIn>
         {/* Geen eigen sterren op de plaat: die heeft er al een veld, en twee

@@ -16,7 +16,7 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
   Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
-  RotateCw, Sparkles, Database, Link2, Clock, ShieldCheck, X,
+  Sparkles, Database, ShieldCheck, X,
   MessageSquare, Settings2, Zap, Lightbulb, Users, Activity, Layers,
 } from 'lucide-react';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
@@ -26,12 +26,28 @@ import { loadMemories, type CoreMemoryEntry } from '@/infrastructure/persistence
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
 import { loadHubCounts, peakHeightFor, type HubCounts } from '@/infrastructure/persistence/memoryHubCountsService';
-import { hubForGlobalRow, hubForNotePath } from '@/domain/memory/hubClassifier';
+import {
+  agentEventsFromRecords,
+  collectHubRecords,
+  episodeEvents,
+  mergeAgentEvents,
+  recordsForHub,
+  type HubMemoryRecord,
+  type MemoryAgentEvent,
+} from '@/domain/memory/hubMemoryRecord';
 import { HUB_ICONS } from '@/presentation/components/axe-core/hubIcons';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
+import { loadAgentActivity } from '@/infrastructure/persistence/agentActivityService';
+import { AGENT_CATALOG } from '@/domain/agents/catalog';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import MemoryTerrainMap from './terrain/MemoryTerrainMap';
+import {
+  MemoryAgentActivity,
+  MemoryHubDetailPanel,
+  MemoryTypeLegend,
+} from '@/presentation/components/axe-core/memory/MemoryHubDetailPanel';
+import { useMemorySceneSeed } from '@/presentation/components/axe-core/memory/MemorySceneData';
 import './NeuralMemorySystem.css';
 
 const CREAM = '#F5F0E6';
@@ -62,6 +78,11 @@ export interface BrainLeaf {
   label: string;
   detail: string;
   href?: string;
+  type?: string;
+  date?: string | null;
+  source?: string;
+  importance?: number | null;
+  agentId?: string;
 }
 
 export interface BrainHub {
@@ -91,11 +112,6 @@ interface StreamItem {
   color: string;
   title: string;
   subtitle: string;
-}
-
-function folderOf(path: string): string {
-  const parts = path.replace(/^AXE\//, '').split('/');
-  return parts.length > 1 ? parts[0] : 'AXE';
 }
 
 function timeAgo(ts: number): string {
@@ -1064,6 +1080,7 @@ function MiniTerrainPreview({ hubs, spinning }: { hubs: BrainHub[]; spinning: bo
 /* ── real memory data ───────────────────────────────────────────────────── */
 
 function useNeuralBrainData() {
+  const seed = useMemorySceneSeed();
   const [hubs, setHubs] = useState<BrainHub[]>([]);
   const [counts, setCounts] = useState({ global: 0, rag: 0, notes: 0, total: 0 });
   const [wikilinkCount, setWikilinkCount] = useState(0);
@@ -1071,6 +1088,8 @@ function useNeuralBrainData() {
   const [integrityPct, setIntegrityPct] = useState(100);
   const [loading, setLoading] = useState(true);
   const [stream, setStream] = useState<StreamItem[]>([]);
+  const [records, setRecords] = useState<HubMemoryRecord[]>([]);
+  const [agentEvents, setAgentEvents] = useState<MemoryAgentEvent[]>([]);
   const notesRef = useRef<ObsidianNote[]>([]);
   const ragRef = useRef<RagMemory[]>([]);
   const globalRef = useRef<MemEntry[]>([]);
@@ -1111,6 +1130,8 @@ function useNeuralBrainData() {
     setWikilinkCount(notes.reduce((n, note) => n + (note.wikilinks?.length || 0), 0));
 
     const raw: Omit<BrainHub, 'pos'>[] = [];
+    const built = collectHubRecords({ global: mems, rag, notes, core });
+    setRecords(built);
 
     // AXE Core — always center, always tallest, holds ALL memory
     raw.push({
@@ -1121,66 +1142,28 @@ function useNeuralBrainData() {
       href: '/memory',
       memoryCount: Math.max(hubCountsRef.current?.total ?? total, 1),
       iconKey: 'core',
-      leaves: core.slice(0, 16).map((m, j) => ({
-        id: `leaf-core-${m.id || j}`,
-        label: (m.content || '').slice(0, 24) + ((m.content || '').length > 24 ? '…' : ''),
-        detail: `[${m.source} · ${m.importance}] ${(m.content || '').slice(0, 160)}`,
-        href: '/memory',
+      leaves: built.filter((m) => m.hubId === 'core').slice(0, 8).map((m) => ({
+        id: m.id,
+        label: m.title,
+        detail: m.detail,
+        href: m.href,
+        type: m.type,
+        date: m.date,
+        source: m.source,
+        importance: m.importance,
+        agentId: m.agentId,
       })),
     });
 
-    // The same eight hubs Neural draws, from the same shared definition.
-    // This used to build peaks straight from global_memory's category column,
-    // so Terrain showed a different set with different names — "Specialists"
-    // existed here and nowhere else, and Knowledge/Obsidian were separate
-    // peaks rather than hubs. Two lenses on one memory have to agree on what
-    // they are lensing.
-    //
-    // Classification mirrors useGlobalMemoryStats exactly; if that changes,
-    // change it there and here together.
-    // One classifier, shared with the counts and with the Neural view --
-    // see domain/memory/hubClassifier for why this stopped living here.
-    const folderHubOf = hubForNotePath;
-
-    const hubMembers: Record<HubId, Array<{ label: string; detail: string; href: string; id: string }>> = {
+    const hubMembers: Record<HubId, HubMemoryRecord[]> = {
       knowledge: [], conversations: [], tasksgoals: [], projects: [],
       insights: [], resources: [], preferences: [], events: [], agents: [],
       trading: [],
     };
-
-    rag.forEach((m, j) => hubMembers.knowledge.push({
-      id: `leaf-rag-${m.id ?? j}`,
-      label: (m.content || '').slice(0, 24) + ((m.content || '').length > 24 ? '…' : ''),
-      detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 160)}`,
-      href: '/memory/explore',
-    }));
-
-    mems.forEach((mem, j) => {
-      // Agent-tagged rows go to the agents hub instead of their concept
-      // bucket — same rule as useGlobalMemoryStats, kept in step so Neural
-      // and Terrain never disagree about where a tagged memory lives.
-      const agentId = mem.metadata?.agentId;
-      const hub: HubId = hubForGlobalRow(mem);
-      let detail: string;
-      try {
-        detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 160);
-      } catch {
-        detail = String(mem.value ?? '').slice(0, 160);
-      }
-      hubMembers[hub].push({
-        id: `leaf-g-${mem.id ?? `${mem.category}-${j}`}`,
-        label: agentId ? `[${agentId}] ${mem.key.length > 24 ? `${mem.key.slice(0, 24)}…` : mem.key}` : (mem.key.length > 24 ? `${mem.key.slice(0, 24)}…` : mem.key),
-        detail,
-        href: '/memory/explore',
-      });
+    built.forEach((row) => {
+      if (row.hubId === 'core') return;
+      hubMembers[row.hubId].push(row);
     });
-
-    notes.forEach((n) => hubMembers[folderHubOf(n.path)].push({
-      id: `leaf-note-${n.path}`,
-      label: n.title.length > 24 ? `${n.title.slice(0, 24)}…` : n.title,
-      detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 140)}`,
-      href: `/obsidian?note=${encodeURIComponent(n.path)}`,
-    }));
 
     // Every hub is pushed even at zero, so the ring keeps its shape and an
     // empty category reads as "nothing here yet" rather than silently missing.
@@ -1197,7 +1180,17 @@ function useNeuralBrainData() {
         // one number doing duty as both.
         memoryCount: hubCountsRef.current?.byHub[def.id] ?? members.length,
         iconKey: def.id,
-        leaves: members.slice(0, 14),
+        leaves: members.slice(0, 8).map((m) => ({
+          id: m.id,
+          label: m.title,
+          detail: m.detail,
+          href: m.href,
+          type: m.type,
+          date: m.date,
+          source: m.source,
+          importance: m.importance,
+          agentId: m.agentId,
+        })),
       });
     });
 
@@ -1205,13 +1198,72 @@ function useNeuralBrainData() {
   }, []);
 
   useEffect(() => {
+    if (seed) {
+      setRecords(seed.records);
+      setAgentEvents(seed.agentEvents);
+      setCounts({
+        global: seed.records.filter((r) => r.sourceKind === 'global').length,
+        rag: seed.records.filter((r) => r.sourceKind === 'rag').length,
+        notes: seed.records.filter((r) => r.sourceKind === 'obsidian').length,
+        total: seed.total,
+      });
+      hubCountsRef.current = {
+        ok: true,
+        byHub: seed.hubCounts,
+        total: seed.total,
+        globalTotal: seed.records.filter((r) => r.sourceKind === 'global').length,
+        ragTotal: seed.records.filter((r) => r.sourceKind === 'rag').length,
+        noteTotal: seed.records.filter((r) => r.sourceKind === 'obsidian').length,
+        agentStoreTotal: 0,
+      };
+      const raw: Omit<BrainHub, 'pos'>[] = [
+        {
+          id: 'hub-core',
+          label: 'AXE Core',
+          color: CORE_COLOR,
+          layer: 'core',
+          href: '/memory',
+          memoryCount: Math.max(seed.total, 1),
+          iconKey: 'core',
+          leaves: [],
+        },
+        ...MEMORY_HUBS.map((def) => {
+          const members = recordsForHub(seed.records, def.id);
+          return {
+            id: `hub-${def.id}`,
+            label: def.name,
+            color: def.css,
+            layer: 'global' as const,
+            href: '/memory/explore',
+            memoryCount: seed.hubCounts[def.id] ?? members.length,
+            iconKey: def.id,
+            leaves: members.slice(0, 8).map((m) => ({
+              id: m.id,
+              label: m.title,
+              detail: m.detail,
+              href: m.href,
+              type: m.type,
+              date: m.date,
+              source: m.source,
+              importance: m.importance,
+              agentId: m.agentId,
+            })),
+          };
+        }),
+      ];
+      setHubs(placeHubsOnTerrain(raw));
+      setLoading(false);
+      return;
+    }
+
     let alive = true;
     const load = async () => {
       let ragFailed = false;
       let notesFailed = false;
       let globalFailed = false;
       try {
-        const [notes, rag, globals, core, growth, hubCounts] = await Promise.all([
+        const namespaces = [...new Set(AGENT_CATALOG.map((a) => a.namespace).filter(Boolean))];
+        const [notes, rag, globals, core, growth, hubCounts, activity] = await Promise.all([
           listRecentObsidianNotes(50).catch(() => {
             notesFailed = true;
             return [] as ObsidianNote[];
@@ -1227,6 +1279,7 @@ function useNeuralBrainData() {
           loadMemories(80).catch(() => [] as CoreMemoryEntry[]),
           loadMemoryGrowthStats().catch(() => null),
           loadHubCounts().catch(() => null),
+          loadAgentActivity(namespaces).catch(() => null),
         ]);
         if (!alive) return;
         hubCountsRef.current = hubCounts?.ok ? hubCounts : null;
@@ -1255,6 +1308,10 @@ function useNeuralBrainData() {
             subtitle: growth.lastManagerMessage,
           });
         }
+        setAgentEvents(mergeAgentEvents(
+          agentEventsFromRecords(collectHubRecords({ global: globals, rag, notes, core })),
+          episodeEvents(activity?.episodes ?? []),
+        ));
         setLoading(false);
       } catch {
         rebuild();
@@ -1267,7 +1324,7 @@ function useNeuralBrainData() {
       alive = false;
       window.clearInterval(t);
     };
-  }, [rebuild, pushStream]);
+  }, [rebuild, pushStream, seed]);
 
   useEffect(() => {
     const labelFor = (name: string, payload: unknown): { color: string; title: string; subtitle: string } | null => {
@@ -1318,7 +1375,7 @@ function useNeuralBrainData() {
 
   const connections = wikilinkCount + hubs.reduce((n, h) => n + h.leaves.length, 0);
 
-  return { hubs, counts, connections, lastUpdated, integrityPct, loading, stream };
+  return { hubs, counts, connections, lastUpdated, integrityPct, loading, stream, records, agentEvents };
 }
 
 /* ── chrome ─────────────────────────────────────────────────────────────── */
@@ -1380,7 +1437,7 @@ function LeftSidebar({
               className={`nm-hub-row${focusHubId === hub.id ? ' active' : ''}`}
               onClick={() => onFocusHub(focusHubId === hub.id ? null : hub.id)}
               onDoubleClick={() => onNavigate(hub.href)}
-              title="Click to zoom into peak · double-click to open"
+              title="Click to open this hub · double-click to open the library"
             >
               <span className="nm-hub-row-icon" style={{ color: hub.color, borderColor: `${hub.color}55`, background: `${hub.color}18` }}>
                 <Icon size={12} />
@@ -1439,7 +1496,7 @@ function RightSidebar({
         <h2>About this view <span className="nm-live-tag"><span className="nm-dot" />LIVE</span></h2>
         <p className="nm-about">
           Volumetric memory map of AXE Core. Peak height = memory volume. AXE Core is always the tallest center summit.
-          Click a hub to zoom into its peak and explore sub-hubs as smaller mountains.
+          Click a hub to open its memories — title, type, date, source and importance — with search inside the hub.
         </p>
       </div>
 
@@ -1529,7 +1586,7 @@ function Legend() {
 function Composer({ onSend, lastReply }: { onSend: (text: string) => void; lastReply: string | null }) {
   const [text, setText] = useState('');
   return (
-    <div className="nm-composer">
+    <div className="nm-composer" data-scene-reserve="composer">
       <div className="box">
         <Sparkles size={14} color="#a78bfa" />
         <input
@@ -1613,18 +1670,24 @@ function buildDockColumns(args: {
 
 /* ── main ───────────────────────────────────────────────────────────────── */
 
-export function NeuralMemorySystem() {
+export function NeuralMemorySystem({ initialFocusHubId = null }: { initialFocusHubId?: string | null } = {}) {
   const navigate = useNavigate();
   const voice = useVoiceStore();
-  const { hubs, counts, connections, lastUpdated, integrityPct, loading, stream } = useNeuralBrainData();
-  const [focusHubId, setFocusHubId] = useState<string | null>(null);
+  const { hubs, counts, connections, lastUpdated, integrityPct, loading, stream, records, agentEvents } = useNeuralBrainData();
+  const [focusHubId, setFocusHubId] = useState<string | null>(initialFocusHubId);
   const [selectedLeaf, setSelectedLeaf] = useState<BrainLeaf | null>(null);
   const [depthLevel, setDepthLevel] = useState(5);
   const [autoRotate, setAutoRotate] = useState(true);
   const [everFocused, setEverFocused] = useState(false);
   const [lastReply, setLastReply] = useState<string | null>(null);
 
-  const focusHub = hubs.find((h) => h.id === focusHubId) ?? null;
+  const focusHub = hubs.find((h) => h.id === focusHubId || h.id === `hub-${focusHubId}` || h.iconKey === focusHubId) ?? null;
+
+  useEffect(() => {
+    if (!initialFocusHubId || hubs.length === 0) return;
+    const match = hubs.find((h) => h.id === initialFocusHubId || h.id === `hub-${initialFocusHubId}` || h.iconKey === initialFocusHubId);
+    if (match && match.id !== focusHubId) setFocusHubId(match.id);
+  }, [initialFocusHubId, hubs, focusHubId]);
 
   const handleFocusHub = useCallback((id: string | null) => {
     setFocusHubId(id);
@@ -1687,12 +1750,25 @@ export function NeuralMemorySystem() {
       )}
 
       {focusHub && (
-        <div className="nm-hub-info">
-          <div className="breadcrumb">AXE Core / {focusHub.layer}</div>
-          <h3 style={{ color: focusHub.color }}>{focusHub.label}</h3>
-          <div className="cnt">{focusHub.memoryCount} memories · {focusHub.leaves.length} on peak</div>
-        </div>
+        <MemoryHubDetailPanel
+          hubId={focusHub.id}
+          hubLabel={focusHub.label}
+          hubColor={focusHub.color}
+          memoryCount={focusHub.memoryCount}
+          records={records}
+          onClose={() => handleFocusHub(null)}
+          onOpen={(row) => {
+            if (row.href) navigate(row.href);
+          }}
+        />
       )}
+
+      {!focusHub && (
+        <MemoryTypeLegend
+          counts={Object.fromEntries(hubs.filter((h) => h.layer !== 'core').map((h) => [h.iconKey, h.memoryCount]))}
+        />
+      )}
+      <MemoryAgentActivity events={agentEvents} />
 
       <LeftSidebar
         hubs={hubs}
@@ -1734,20 +1810,15 @@ export function NeuralMemorySystem() {
         </div>
       )}
 
-      {selectedLeaf && (
-        <div className="nm-leaf-card">
+      {selectedLeaf && !focusHub && (
+        <div className="nm-leaf-card" data-scene-reserve="leaf">
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: CREAM }}>{selectedLeaf.label}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary, #f5f0e6)' }} title={selectedLeaf.label}>{selectedLeaf.label}</div>
             <button type="button" onClick={() => setSelectedLeaf(null)} style={{ background: 'none', border: 'none', color: 'var(--nm-dim)', cursor: 'pointer' }}>
               <X size={13} />
             </button>
           </div>
           <p style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--nm-dim)', marginBottom: 10 }}>{selectedLeaf.detail || 'No detail'}</p>
-          <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--nm-dim)', marginBottom: 8 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Database size={11} /> {counts.total} nodes</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Link2 size={11} /> {connections} links</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {fmtWhen(lastUpdated)}</span>
-          </div>
           {selectedLeaf.href && (
             <button
               type="button"

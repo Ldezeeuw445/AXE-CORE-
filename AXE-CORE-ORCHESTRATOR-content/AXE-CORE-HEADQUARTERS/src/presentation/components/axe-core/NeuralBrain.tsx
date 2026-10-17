@@ -23,9 +23,15 @@ import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 
 import { useGlobalMemoryStats, timeAgo, type GlobalMemoryStats, type HubId } from './useGlobalMemoryStats';
 import './NeuralBrain.css';
 import { MEMORY_HUBS } from '@/domain/memory/memoryHubs';
-import { AGENT_SEEDS } from '@/domain/agents/agentRegistry';
 import { hubIcon } from '@/presentation/components/axe-core/hubIcons';
 import { MemoryDock, type MemoryDockColumn } from '@/presentation/components/axe-core/MemoryDock';
+import {
+  MemoryAgentActivity,
+  MemoryHubDetailPanel,
+  MemoryTypeLegend,
+} from '@/presentation/components/axe-core/memory/MemoryHubDetailPanel';
+import { recordsForHub, type HubMemoryRecord } from '@/domain/memory/hubMemoryRecord';
+import { resolveLabelCollisions, measureReservedIn, type SceneLabel } from '@/domain/memory/sceneLabels';
 
 /**
  * Renders a shared `hubIcons.ts` glyph to an inline SVG string.
@@ -64,7 +70,7 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
   <div class="cnt" id="hi-count"></div>
 </div>
 
-<div id="composer">
+<div id="composer" data-scene-reserve="composer">
   <div class="box">
     <svg class="nb-zoek-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><path d="M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3z"/></svg>
     <input id="neural-input" type="text" placeholder="Search memories or ask AXE Core..." />
@@ -199,9 +205,10 @@ const NeuralShell = memo(function NeuralShell(
    verhuisd te worden. */
 const NEURAL_SIDE_SLOTS = { links: '#sidebar-left', rechts: '#sidebar-right' } as const;
 
-export default function NeuralBrain() {
+export default function NeuralBrain({ initialFocusHubId = null }: { initialFocusHubId?: string | null } = {}) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stats = useGlobalMemoryStats();
+  const [focusHubId, setFocusHubId] = useState<string | null>(initialFocusHubId);
   /* Alleen op de plaat: zonder data-look bestaan de sloten niet en hoort deze
      weergave zich te gedragen zoals hij altijd deed. */
   const opPlaat = useHeeftPlaat();
@@ -221,6 +228,7 @@ export default function NeuralBrain() {
      alleen de brug ernaartoe, zelfde patroon als applyStatsRef hierboven. */
   const [depthLevel, setDepthLevelState] = useState(2);
   const setDepthImperativeRef = useRef<((n: number) => void) | null>(null);
+  const zoomOutRef = useRef<(() => void) | null>(null);
 
   /**
    * The build waits for real counts. statsRef above already carries them into
@@ -308,61 +316,19 @@ export default function NeuralBrain() {
       desc: h.desc,
     })) as Array<{
       id: string; name: string; color: number; count: string; pos: number[]; desc: string;
-      _phase?: number; _glowSprite?: THREE.Sprite; _hotSprite?: THREE.Sprite; _marker?: THREE.Group;
+      _phase?: number; _scale?: number; _glowSprite?: THREE.Sprite; _hotSprite?: THREE.Sprite; _marker?: THREE.Group;
     }>;
 
-    const TREE_DATA: Record<string, Array<{ name: string; leaves: string[] }>> = {
-      knowledge: [
-        { name: 'Market Structure', leaves: ['Order flow basics', 'Liquidity zones'] },
-        { name: 'Risk Frameworks', leaves: ['Position sizing', 'Drawdown limits'] },
-        { name: 'Technical Patterns', leaves: ['Trend continuation', 'Reversal setups'] },
-      ],
-      conversations: [
-        { name: 'Strategy Sessions', leaves: ['Roadmap Q3', 'Pricing model'] },
-        { name: 'Daily Check-ins', leaves: ['Morning sync', 'Blockers review'] },
-        { name: 'Feature Debates', leaves: ['Voice UI', 'Onboarding flow'] },
-      ],
-      tasksgoals: [
-        { name: 'Launch Checklist', leaves: ['App store listing', 'Beta invites'] },
-        { name: 'Bug Backlog', leaves: ['Sync lag fix', 'Chart render bug'] },
-        { name: 'Growth Targets', leaves: ['1k active users', 'Retention 40%'] },
-      ],
-      projects: [
-        { name: 'AXE Companion', leaves: ['Mobile UI polish', 'Push notifications'] },
-        { name: 'TradingOS App', leaves: ['PWA offline mode', 'Terminal view'] },
-        { name: 'RAG Pipeline', leaves: ['Per-user embeddings', 'Vector refresh'] },
-      ],
-      insights: [
-        { name: 'User Behavior', leaves: ['Peak usage hours', 'Drop-off screen'] },
-        { name: 'Pricing Feedback', leaves: ['Tier confusion', 'Trial length'] },
-        { name: 'Feature Requests', leaves: ['Dark mode', 'Alerts export'] },
-      ],
-      resources: [
-        { name: 'API Docs', leaves: ['Supabase schema', 'Broker endpoints'] },
-        { name: 'Design Assets', leaves: ['Icon set', 'Color tokens'] },
-        { name: 'Data Feeds', leaves: ['Market data vendor', 'News API'] },
-      ],
-      preferences: [
-        { name: 'Communication Style', leaves: ['Concise tone', 'Emoji off'] },
-        { name: 'UI Theme', leaves: ['Dark mode default', 'Accent color'] },
-        { name: 'Notifications', leaves: ['Trade alerts', 'Digest time'] },
-      ],
-      events: [
-        { name: 'Product Launches', leaves: ['AXE Companion v1', 'TradingOS beta'] },
-        { name: 'Milestones', leaves: ['First 100 users', 'Supabase sync live'] },
-        { name: 'Outages', leaves: ['API downtime', 'Sync delay'] },
-      ],
-      // Real, not decorative: built from the same AGENT_SEEDS the agents
-      // registry table is seeded from, grouped exactly as they'll appear in
-      // the Agents tab. Statue agents are labelled as such rather than
-      // hidden, so the gap between "named" and "actually running" stays
-      // visible here too.
-      agents: Object.entries(
-        AGENT_SEEDS.reduce<Record<string, string[]>>((acc, a) => {
-          (acc[a.groupLabel] ??= []).push(a.status === 'active' ? a.name : `${a.name} (nog te bouwen)`);
-          return acc;
-        }, {}),
-      ).map(([name, leaves]) => ({ name, leaves })),
+    const recordsRef = { current: statsRef.current.records };
+    const branchesFromRecords = (hubId: string): Array<{ name: string; leaves: HubMemoryRecord[] }> => {
+      const rows = recordsForHub(recordsRef.current, hubId).slice(0, 18);
+      const byType = new Map<string, HubMemoryRecord[]>();
+      for (const row of rows) {
+        const list = byType.get(row.type) ?? [];
+        list.push(row);
+        byType.set(row.type, list);
+      }
+      return [...byType.entries()].map(([name, leaves]) => ({ name, leaves: leaves.slice(0, 5) }));
     };
 
     /* ============================== SETUP ============================== */
@@ -567,15 +533,15 @@ export default function NeuralBrain() {
 
     function hubGlowColor(pv: THREE.Vector3, hubVecs: THREE.Vector3[]) {
       let d0 = 1e9;
+      let i0 = 0;
       for (let h = 0; h < hubVecs.length; h++) {
         const d = pv.distanceToSquared(hubVecs[h]);
-        if (d < d0) d0 = d;
+        if (d < d0) { d0 = d; i0 = h; }
       }
       const nearDist = Math.sqrt(d0);
-      // Gaussian, not the old inverse-square: it actually reaches ~0 within a
-      // couple of sigma instead of trailing off across the whole cortex.
       const glow = Math.exp(-d0 / (2 * HUB_GLOW_SIGMA * HUB_GLOW_SIGMA));
-      const col = BASE_HUE.clone().lerp(HUB_GLOW_ACCENT, glow);
+      const hubCol = new THREE.Color(HUBS[i0].color);
+      const col = BASE_HUE.clone().lerp(hubCol, 0.28 + 0.72 * glow);
       return { col, nearDist };
     }
 
@@ -873,7 +839,7 @@ export default function NeuralBrain() {
         phases[idx] = Math.random() * Math.PI * 2;
         // Smaller and less variable. Big bright motes at every depth are the
         // "fireworks" -- the eye reads sparkle instead of surface.
-        sizes[idx] = (0.027 + Math.random() * 0.014) * (0.42 + 0.58 * skin);
+        sizes[idx] = (0.036 + Math.random() * 0.016) * (0.48 + 0.52 * skin);
         idx++;
       }
       // Whatever the guard cut short stays as zeroed, fully transparent points.
@@ -965,7 +931,7 @@ export default function NeuralBrain() {
     // doc comment for why (image 10's "firework explosion" complaint traces to
     // this system across three prior rewrites; it is removed rather than
     // rewritten a fourth time).
-    const brainGeo = buildBrainGeometry(122000, 2600);
+    const brainGeo = buildBrainGeometry(48000, 900);
     const brainPoints = new THREE.Points(brainGeo.points, brainMat);
     brainGroup.add(brainPoints);
     // Hoe groot het brein is, voor de passende afstand op de telefoon.
@@ -1009,19 +975,21 @@ export default function NeuralBrain() {
     HUBS.forEach(hub => {
       const grp = new THREE.Group();
       grp.position.set(hub.pos[0], hub.pos[1], hub.pos[2]);
+      const n = hubCountFor(hub.id);
+      const scale = 0.7 + Math.min(1.8, Math.log10(Math.max(n, 1) + 1) / Math.log10(HUB_COUNT_MAX + 1) * 1.6);
 
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({
         map: makeGlowTexture(hub.color, false), transparent: true,
         blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5,
       }));
-      glow.scale.set(0.5, 0.5, 0.5);
+      glow.scale.set(0.5 * scale, 0.5 * scale, 0.5 * scale);
       grp.add(glow);
 
       const hot = new THREE.Sprite(new THREE.SpriteMaterial({
         map: makeGlowTexture(hub.color, true), transparent: true,
         blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.95,
       }));
-      hot.scale.set(0.14, 0.14, 0.14);
+      hot.scale.set(0.14 * scale, 0.14 * scale, 0.14 * scale);
       grp.add(hot);
 
       // Fix 6: the four-spike diffraction "glint" sprite is gone -- ten of
@@ -1038,6 +1006,7 @@ export default function NeuralBrain() {
       hitMeshes.push(hit);
 
       hub._phase = Math.random() * Math.PI * 2;
+      hub._scale = scale;
       hub._glowSprite = glow;
       hub._hotSprite = hot;
 
@@ -1092,7 +1061,7 @@ export default function NeuralBrain() {
       // sidebar row and Terrain's own summit markers instead of a bare dot --
       // "gebruik dezelfde icons als op terrain, het is tenslotte dezelfde
       // memory" (Luka).
-      el.innerHTML = `<span class="hub-label-icon" style="color:${hex}; background:${hex}1a; border-color:${hex}aa;">${hubIconSvg(hub.id, 11)}</span><span class="hub-label-text"><span style="color:var(--text)">${hub.name}</span><span class="sub" data-hub-sub="${hub.id}">${hub.count} memories</span></span>`;
+      el.innerHTML = `<span class="hub-label-icon" style="color:${hex}; background:${hex}1a; border-color:${hex}aa;">${hubIconSvg(hub.id, 11)}</span><span class="hub-label-text"><span style="color:#eef0f6">${hub.name}</span><span class="sub" data-hub-sub="${hub.id}">${hub.count} memories</span></span>`;
       // Op de telefoon staat alleen het icoon er (NeuralBrain.css); de naam
       // blijft zo voor voorlezen en voor een lange druk.
       el.setAttribute('aria-label', hub.name);
@@ -1234,6 +1203,23 @@ export default function NeuralBrain() {
           return;
         }
       }
+      if (!isDown && treeData) {
+        const box = root.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+          ((e.clientX - box.left) / box.width) * 2 - 1,
+          -((e.clientY - box.top) / box.height) * 2 + 1,
+        );
+        raycaster.setFromCamera(ndc, camera);
+        const meshes = treeData.nodes.map((n) => n.parentMesh).filter((m): m is THREE.Mesh => !!m);
+        const hits = meshes.length ? raycaster.intersectObjects(meshes) : [];
+        treeData.nodes.forEach((n) => n.el.classList.remove('is-hot'));
+        const hit = hits[0]?.object;
+        const node = treeData.nodes.find((n) => n.parentMesh === hit);
+        if (node) {
+          node.el.classList.add('is-hot');
+          node.el.title = node.el.dataset.full || node.el.textContent || '';
+        }
+      }
       if (!isDown) return;
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
@@ -1287,7 +1273,7 @@ export default function NeuralBrain() {
       const group = new THREE.Group();
       const hubPos = new THREE.Vector3(hub.pos[0], hub.pos[1], hub.pos[2]);
       const { outward, t1, t2 } = outwardBasis(hub.pos);
-      const branches = TREE_DATA[hub.id];
+      const branches = branchesFromRecords(hub.id);
       const nodes: TreeNode[] = [];
       const lineMat = new THREE.LineBasicMaterial({ color: hub.color, transparent: true, opacity: 0.55 });
 
@@ -1378,12 +1364,15 @@ export default function NeuralBrain() {
 
           const lMesh = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), new THREE.MeshBasicMaterial({ color: hub.color }));
           lMesh.position.copy(lPos);
+          lMesh.userData.record = leaf;
           group.add(lMesh);
 
           const lLabel = document.createElement('div');
           lLabel.className = 'node-label leaf';
           lLabel.style.color = '#' + hub.color.toString(16).padStart(6, '0');
-          lLabel.textContent = leaf;
+          lLabel.textContent = leaf.title;
+          lLabel.title = leaf.title;
+          lLabel.dataset.full = leaf.title;
           labelsLayer.appendChild(lLabel);
           nodes.push({ el: lLabel, pos: lPos, level: 2, parentLine: lLine, parentMesh: lMesh });
         });
@@ -1432,6 +1421,7 @@ export default function NeuralBrain() {
       activeHub = hub;
       treeData = buildTree(hub);
       applyDepth();
+      setFocusHubId(hub.id);
 
       const { outward } = outwardBasis(hub.pos);
       const focusPoint = new THREE.Vector3(hub.pos[0], hub.pos[1], hub.pos[2]).add(outward.clone().multiplyScalar(-0.9));
@@ -1441,7 +1431,8 @@ export default function NeuralBrain() {
       goal.elevation = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(outward.y, -1, 1)) * 0.55, -1.2, 1.2);
 
       const backBtn = q('#back-btn'); if (backBtn) backBtn.style.display = 'flex';
-      const hubInfo = q('#hub-info'); if (hubInfo) hubInfo.style.display = 'block';
+      const hubInfo = q('#hub-info');
+      if (hubInfo) hubInfo.style.display = leesVrijeRuimte(root) ? 'block' : 'none';
       const set = (sel: string, txt: string) => { const el = q(sel); if (el) el.textContent = txt; };
       set('#hi-crumb', hub.name);
       set('#hi-title', hub.name);
@@ -1450,13 +1441,13 @@ export default function NeuralBrain() {
       set('#about-text', hub.desc);
 
       qAll<HTMLElement>('.hub-row').forEach(r => r.classList.toggle('active', r.dataset.id === hub.id));
-      Object.values(hubLabelEls).forEach(el => { el.style.opacity = '0'; });
-      Object.values(hubLeaderLines).forEach(l => { l.glow.style.opacity = '0'; l.core.style.opacity = '0'; });
+      Object.values(hubLabelEls).forEach(el => { el.style.opacity = '1'; });
     }
 
     function zoomToGlobal() {
       if (!activeHub) return;
       activeHub = null;
+      setFocusHubId(null);
       clearTree();
       goal.target.set(0, 0, 0);
       goal.distance = telefoonAfstand ?? 14.5;
@@ -1467,6 +1458,7 @@ export default function NeuralBrain() {
       qAll('.hub-row').forEach(r => r.classList.remove('active'));
       Object.values(hubLabelEls).forEach(el => { el.style.opacity = '1'; });
     }
+    zoomOutRef.current = zoomToGlobal;
 
     /* ============================== UI ============================== */
     const hubList = q('#hub-list');
@@ -1484,12 +1476,17 @@ export default function NeuralBrain() {
       row.addEventListener('click', () => zoomToHub(hub));
       hubList?.appendChild(row);
     });
+    if (initialFocusHubId) {
+      const start = HUBS.find((h) => h.id === initialFocusHubId);
+      if (start) zoomToHub(start);
+    }
 
     /**
      * Pushes live counts into the already-built DOM. Kept imperative on purpose:
      * re-rendering this view through React would tear down the WebGL scene.
      */
     function applyStats(s: GlobalMemoryStats) {
+      recordsRef.current = s.records;
       const nf = new Intl.NumberFormat('en-US');
       HUBS.forEach(hub => {
         const n = s.hubCounts[hub.id as HubId] ?? 0;
@@ -1609,14 +1606,14 @@ export default function NeuralBrain() {
       const hub = HUBS.find(h => query.includes(h.name.toLowerCase()) || query.includes(h.id));
       if (hub) { zoomToHub(hub); return `Ik zoom in op ${hub.name} — ${hub.count} memories. ${hub.desc}`; }
       for (const h of HUBS) {
-        for (const b of TREE_DATA[h.id]) {
+        for (const b of branchesFromRecords(h.id)) {
           if (query.includes(b.name.toLowerCase())) { zoomToHub(h); return `Gevonden onder ${h.name} → ${b.name}.`; }
           for (const leaf of b.leaves) {
-            if (query.includes(leaf.toLowerCase())) { zoomToHub(h); return `"${leaf}" leeft in ${h.name} → ${b.name}.`; }
+            if (query.includes(leaf.title.toLowerCase())) { zoomToHub(h); return `"${leaf.title}" leeft in ${h.name} → ${b.name}.`; }
           }
         }
       }
-      return `Searching 24,892 memories for "${qs}"… (wire this field to your AXE Core / Memory agent API for live answers)`;
+      return `Searching ${statsRef.current.total.toLocaleString()} memories for "${qs}"…`;
     }
     const neuralInput = q<HTMLInputElement>('#neural-input');
     const neuralReply = q('#neural-reply');
@@ -1688,18 +1685,19 @@ export default function NeuralBrain() {
       brainUniforms.uTime.value = t;
       brainUniforms.uOpacity.value = lerp(brainUniforms.uOpacity.value, activeHub ? 0.22 : 0.94, 0.08);
 
-      HUBS.forEach((hub, hi) => {
-        // A slow, shallow breath. The old version swelled with each pulse and
-        // throbbed at 1.4Hz on top, which is what made the hubs read as
-        // fireworks going off rather than as steady sources.
+      HUBS.forEach((hub) => {
         const breath = 1 + 0.05 * Math.sin(t * 0.35 + (hub._phase ?? 0));
-        const fade = (activeHub && activeHub.id === hub.id) ? 0.15 : 1;
-        hub._glowSprite?.scale.setScalar(0.26 * breath * fade);
-        hub._hotSprite?.scale.setScalar(0.12 * breath * fade);
+        const fade = !activeHub || activeHub.id === hub.id ? 1 : 0.28;
+        const s = hub._scale ?? 1;
+        hub._glowSprite?.scale.setScalar(0.58 * s * breath * fade);
+        hub._hotSprite?.scale.setScalar(0.18 * s * breath * fade);
       });
 
       const { w, h } = viewSize();
       const cc = { x: w / 2, y: h / 2 };
+      const reserved = measureReservedIn(document, { left: root.getBoundingClientRect().left, top: root.getBoundingClientRect().top, w, h });
+      const pending: SceneLabel[] = [];
+      const anchors: Record<string, { x: number; y: number; el: HTMLElement; line?: { glow: SVGLineElement; core: SVGLineElement } }> = {};
       HUBS.forEach(hub => {
         const wp = new THREE.Vector3();
         hub._marker?.getWorldPosition(wp);
@@ -1712,49 +1710,64 @@ export default function NeuralBrain() {
           line.core.style.opacity = '0';
           return;
         }
-        el.style.display = activeHub ? 'none' : 'flex';
-        if (!activeHub) {
-          const dx = s.x - cc.x, dy = s.y - cc.y, len = Math.hypot(dx, dy) || 1;
-          const ux = dx / len, uy = dy / len;
-          let lx = s.x + ux * 58, ly = s.y + uy * 58;
-          let x1 = lx - ux * 20, y1 = ly - uy * 20;
-          if (telefoonVrij) {
-            /* Telefoon: alleen het icoon, dichter bij zijn knoop, en binnen de
-               plaat. Aan de rand viel Insights half weg en lag Preferences op
-               het pijltje van de rechterlade, zodat een tik de lade opende. */
-            const zij = 42;
-            lx = THREE.MathUtils.clamp(s.x + ux * 44, zij, w - zij);
-            ly = THREE.MathUtils.clamp(s.y + uy * 44, telefoonVrij.boven + 70, h - telefoonVrij.onder - 24);
-            const ex = lx - s.x, ey = ly - s.y, el2 = Math.hypot(ex, ey) || 1;
-            const kort = Math.min(18, el2);
-            x1 = lx - (ex / el2) * kort; y1 = ly - (ey / el2) * kort;
-          }
-          el.style.left = lx + 'px';
-          el.style.top = ly + 'px';
-          [line.glow, line.core].forEach(el2 => {
-            el2.setAttribute('x1', String(x1));
-            el2.setAttribute('y1', String(y1));
-            el2.setAttribute('x2', String(s.x));
-            el2.setAttribute('y2', String(s.y));
-          });
-          line.glow.style.opacity = '0.5';
-          line.core.style.opacity = '0.85';
-        } else {
+        const show = !activeHub || activeHub.id === hub.id;
+        if (!show) {
+          el.style.display = 'none';
           line.glow.style.opacity = '0';
           line.core.style.opacity = '0';
+          return;
         }
+        const dx = s.x - cc.x, dy = s.y - cc.y, len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        let lx = s.x + ux * 58, ly = s.y + uy * 58;
+        if (telefoonVrij) {
+          const zij = 42;
+          lx = THREE.MathUtils.clamp(s.x + ux * 44, zij, w - zij);
+          ly = THREE.MathUtils.clamp(s.y + uy * 44, telefoonVrij.boven + 70, h - telefoonVrij.onder - 24);
+        }
+        pending.push({ id: hub.id, x: lx, y: ly, w: 170, h: 36, priority: 10 });
+        anchors[hub.id] = { x: s.x, y: s.y, el, line };
       });
 
       if (treeData) {
-        treeData.nodes.forEach(n => {
+        treeData.nodes.forEach((n, i) => {
           const wp = n.pos.clone().applyMatrix4(brainGroup.matrixWorld);
           const s = toScreen(wp);
           if (!s) { n.el.style.display = 'none'; return; }
-          n.el.style.display = n.level <= Math.min(currentDepth, 2) ? 'block' : 'none';
-          n.el.style.left = s.x + 'px';
-          n.el.style.top = s.y + 'px';
+          const hot = n.el.classList.contains('is-hot');
+          const show = n.level === 1 || (n.level === 2 && hot && currentDepth >= 2);
+          if (!show) { n.el.style.display = 'none'; return; }
+          pending.push({ id: `n-${i}`, x: s.x, y: s.y - 18, w: 160, h: 22, priority: n.level === 1 ? 4 : 1 });
+          anchors[`n-${i}`] = { x: s.x, y: s.y, el: n.el };
         });
       }
+
+      const placed = resolveLabelCollisions(pending, { w, h }, reserved);
+      placed.forEach((p) => {
+        const a = anchors[p.id];
+        if (!a) return;
+        if (p.hidden) {
+          a.el.style.display = 'none';
+          if (a.line) { a.line.glow.style.opacity = '0'; a.line.core.style.opacity = '0'; }
+          return;
+        }
+        a.el.style.display = a.el.classList.contains('hub-label') ? 'flex' : 'block';
+        a.el.style.left = p.x + 'px';
+        a.el.style.top = p.y + 'px';
+        if (a.line) {
+          const dx = p.x - a.x, dy = p.y - a.y, len = Math.hypot(dx, dy) || 1;
+          const x1 = p.x - (dx / len) * 18;
+          const y1 = p.y - (dy / len) * 18;
+          [a.line.glow, a.line.core].forEach(el2 => {
+            el2.setAttribute('x1', String(x1));
+            el2.setAttribute('y1', String(y1));
+            el2.setAttribute('x2', String(a.x));
+            el2.setAttribute('y2', String(a.y));
+          });
+          a.line.glow.style.opacity = '0.5';
+          a.line.core.style.opacity = '0.85';
+        }
+      });
 
       applySceneBackdrop(renderer, scene, 0x020203);
       composer.render();
@@ -1797,9 +1810,26 @@ export default function NeuralBrain() {
     applyStatsRef.current?.(stats);
   }, [stats]);
 
+  const focusHub = MEMORY_HUBS.find((h) => h.id === focusHubId) ?? null;
+
   return (
-    <>
+    <div className="relative h-full w-full">
       <NeuralShell rootRef={rootRef} />
+      {focusHub && (
+        <MemoryHubDetailPanel
+          hubId={focusHub.id}
+          hubLabel={focusHub.name}
+          hubColor={focusHub.css}
+          memoryCount={stats.hubCounts[focusHub.id] ?? 0}
+          records={stats.records}
+          onClose={() => zoomOutRef.current?.()}
+          onOpen={(row) => {
+            if (row.href) window.location.assign(row.href);
+          }}
+        />
+      )}
+      {!focusHub && <MemoryTypeLegend counts={stats.hubCounts} />}
+      <MemoryAgentActivity events={stats.agentEvents} />
       {/* Fix 7: dezelfde fold-out als Terrain, met de dieptekiezer in de
           koprij (Fix 3). Op echte data uit useGlobalMemoryStats -- geen
           sessies of CPU-cijfers die deze app niet bijhoudt. */}
@@ -1814,6 +1844,6 @@ export default function NeuralBrain() {
         }}
         columns={buildNeuralDockColumns(stats)}
       />
-    </>
+    </div>
   );
 }
