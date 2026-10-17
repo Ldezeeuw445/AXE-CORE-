@@ -103,7 +103,7 @@ export function daxRegel(a: ServerAgent, nu: number = Date.now()): DaxRegel | nu
   else if (a.dax_status === 'running') staat = 'no recent heartbeat';
   else staat = a.dax_status || 'unknown';
   const hartTekst = minuten === null ? 'never measured' : minuten < 1 ? 'heartbeat just now' : `heartbeat ${minuten}m ago`;
-  const blokkade = a.dax_error || (a.dax_blockers ?? []).join('; ');
+  const blokkade = wakker ? (a.dax_blockers ?? []).join('; ') : (a.dax_error || (a.dax_blockers ?? []).join('; '));
   return {
     wakker,
     tekst: `Computer ${a.dax_computer} · ${staat} · ${hartTekst}${a.dax_routine ? ` · ${a.dax_routine}` : ''}`,
@@ -179,6 +179,20 @@ export function serverStand(a: ServerAgent): ServerStand {
     regel: kort(regel),
     stil: a.status === 'SLEEPING',
   };
+}
+
+/**
+ * Wat de Home-rail onder de naam zet. Geen hintergebleven blocked_reason of
+ * DAX-fout van een eerdere cyclus: die leeft alleen in BLOCKED/ERROR (reason).
+ */
+export function agentLiveRegel(server: ServerAgent, nu: number = Date.now()): string {
+  const stand = serverStand(server);
+  if (stand.regel) return stand.regel;
+  const next = (server.routines ?? []).find((r) => r.next_run_at && !r.running);
+  const dax = daxRegel(server, nu);
+  if (dax && !dax.wakker && dax.blokkade) return dax.blokkade;
+  if (next) return `next ${eventTijd(next.next_run_at)} · ${next.name}`;
+  return '';
 }
 
 /** Voortgang als "2/5 · 40%", of '' zonder missie. */

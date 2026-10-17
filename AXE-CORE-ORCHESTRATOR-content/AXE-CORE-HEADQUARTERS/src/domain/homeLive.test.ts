@@ -17,6 +17,7 @@ describe('homeLiveStand', () => {
     expect(stand.lopend).toEqual([]);
     expect(stand.goedkeuringen).toEqual([]);
     expect(werkPulseTekst(0)).toBe('No agents working');
+    expect(werkPulseTekst(0, 2)).toBe('No agents working · 2 need your OK');
   });
 
   it('zet een wachtende NorthSea-taak in lopend + goedkeuringen', () => {

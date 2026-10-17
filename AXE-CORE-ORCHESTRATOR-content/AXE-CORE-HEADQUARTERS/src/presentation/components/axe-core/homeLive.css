@@ -1,11 +1,86 @@
-/* Living strip under the orb, right of the agent rail. Cards stay compact. */
+/* Home around the core: two agent rails + a live strip ABOVE the composer.
+ *
+ * The chat plate is transparent (--kaal), so anything at the bottom of a
+ * 100% bol-vak shows through the composer and chips. These tokens keep the
+ * rails and the strip in the free space around the orb. */
+
+:root {
+  --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
+  --axe-home-rail-breed: clamp(220px, 24vw, 380px);
+  --axe-home-live-hoog: min(22%, 176px);
+}
+
+.axe-home-rail {
+  position: absolute;
+  top: 7%;
+  bottom: calc(8px + var(--axe-home-live-hoog));
+  width: var(--axe-home-rail-breed);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: 16;
+  pointer-events: auto;
+}
+
+.axe-home-rail--links {
+  left: var(--axe-home-rail-inset);
+}
+
+.axe-home-rail--rechts {
+  right: var(--axe-home-rail-inset);
+}
+
+.axe-home-rail--mobiel {
+  left: var(--axe-home-rail-inset);
+  right: auto;
+  width: min(78%, 420px);
+  bottom: 8%;
+}
+
+.axe-home-rail-rij {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.axe-home-rail--rechts .axe-home-rail-rij {
+  flex-direction: row-reverse;
+}
+
+.axe-home-rail-tegel {
+  width: 64px;
+  flex: none;
+  padding: 8px 4px 6px;
+}
+
+.axe-home-rail-balk {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 11px;
+}
+
+.axe-home-rail-regel {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Slim strip between the rails, sitting on the floor of the bol-vak —
+   which already stops above the chat plate. Never a full-width bottom band. */
 .axe-home-live {
   position: absolute;
-  left: calc(clamp(16px, 2.4vw, 48px) + min(32%, 420px) + 16px);
-  right: 16px;
-  bottom: 10px;
+  left: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
+  right: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
+  bottom: 8px;
   width: auto;
-  max-height: min(36%, 300px);
+  max-height: var(--axe-home-live-hoog);
   overflow: auto;
   z-index: 15;
   pointer-events: auto;
@@ -16,7 +91,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -25,7 +100,11 @@
 }
 
 .axe-home-live-raster {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
   align-items: start;
+  width: 100%;
 }
 
 .axe-home-live .axe-sectie {
@@ -33,5 +112,42 @@
 }
 
 .axe-home-live .axe-kaart {
-  width: min(var(--axe-kaart-kolom, 240px), 100%);
+  width: 100%;
+}
+
+.axe-taak-toast {
+  right: calc(var(--axe-home-rail-inset, 16px) + var(--axe-home-rail-breed, 240px) + 12px);
+}
+
+@media (max-width: 1440px) {
+  .axe-home-live-raster {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --axe-home-rail-breed: clamp(210px, 28vw, 320px);
+    --axe-home-live-hoog: min(22%, 118px);
+  }
+
+  .axe-home-rail {
+    gap: 4px;
+    justify-content: flex-start;
+    padding-top: 2px;
+  }
+
+  .axe-home-rail-tegel {
+    width: 48px;
+    padding: 4px 2px 3px;
+  }
+
+  .axe-home-rail-balk {
+    padding: 4px 8px;
+  }
+
+  .axe-home-live-raster {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
 }

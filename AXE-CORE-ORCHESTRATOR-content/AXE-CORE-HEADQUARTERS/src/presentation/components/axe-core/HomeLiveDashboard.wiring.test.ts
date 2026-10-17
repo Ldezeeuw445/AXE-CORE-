@@ -10,6 +10,16 @@ describe('Home live dashboard is aangesloten', () => {
     expect(home).toContain('HomeLiveDashboard');
     expect(home).toMatch(/!isMobile && <HomeLiveDashboard/);
     expect(home).not.toContain('ArchitectureWorkspace');
+    expect(home).toMatch(/--axe-chat-onder/);
+  });
+
+  it('de live strip blijft tussen de rails, niet onder de composer', () => {
+    const css = bron('homeLive.css');
+    expect(css).toContain('--axe-home-rail-breed');
+    expect(css).toContain('.axe-home-rail--rechts');
+    expect(css).toMatch(/left: calc\(var\(--axe-home-rail-inset\) \+ var\(--axe-home-rail-breed\)/);
+    expect(css).toMatch(/right: calc\(var\(--axe-home-rail-inset\) \+ var\(--axe-home-rail-breed\)/);
+    expect(css).not.toMatch(/left: calc\(clamp\(16px/);
   });
 
   it('de strip leest echte polls en Approve/Decline', () => {

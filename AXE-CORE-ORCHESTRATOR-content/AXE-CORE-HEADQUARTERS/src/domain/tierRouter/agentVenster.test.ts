@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   gewoneTaal, stappenUit, zichtbareVensters, managerRijen, managerVan, werkerRijen, regelVan,
   railRijen,
+  railKolommen,
   VENSTER_NAGLOEI_MS, MAX_VENSTERS, MAX_WERKERS,
 } from './agentVenster';
 import type { AxeJob } from './axeJobRegels';
@@ -69,6 +70,16 @@ describe('managerRijen', () => {
     expect(ids).toContain('companion');
     expect(ids).not.toContain('axe');
     expect(ids.length).toBeGreaterThan(5);
+  });
+
+  it('railKolommen splitst roster-volgorde: hoofdagents links, rest rechts', () => {
+    const { links, rechts } = railKolommen(railRijen([], 0));
+    expect(links.map((r) => r.agent.id)).toEqual([
+      'wingman', 'northsea', 'trading', 'developer', 'thinktank', 'browser',
+    ]);
+    expect(rechts.map((r) => r.agent.id)).toEqual([
+      'memory', 'task', 'cron', 'finance', 'apps', 'intel', 'companion',
+    ]);
   });
 
   it('geeft altijd alle vijf de managers, in de volgorde van de roster', () => {

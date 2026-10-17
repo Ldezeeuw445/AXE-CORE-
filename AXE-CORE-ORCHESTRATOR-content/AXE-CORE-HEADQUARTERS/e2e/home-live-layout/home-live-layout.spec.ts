@@ -1,0 +1,66 @@
+import { test, expect, type Page } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const fixture = join(here, 'fixture.html');
+const shots = join(here, 'shots');
+
+const MATEN = [
+  { naam: '1100x680', width: 1100, height: 680 },
+  { naam: '1440x900', width: 1440, height: 900 },
+  { naam: '1920x1080', width: 1920, height: 1080 },
+  { naam: '2560x1360', width: 2560, height: 1360 },
+] as const;
+
+function overlap(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): number {
+  const x = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const y = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return x * y;
+}
+
+async function box(page: Page, sel: string) {
+  const el = page.locator(sel).first();
+  const r = await el.boundingBox();
+  if (!r) throw new Error(`geen box voor ${sel}`);
+  return r;
+}
+
+async function open(page: Page, width: number, height: number) {
+  await page.setViewportSize({ width, height });
+  await page.goto(`file://${fixture}`);
+}
+
+test.describe('Home live layout blijft uit de composer', () => {
+  test.beforeAll(() => { mkdirSync(shots, { recursive: true }); });
+
+  for (const maat of MATEN) {
+    test(`${maat.naam}: rails, live strip, feed en toast overlappen composer/chips niet`, async ({ page }) => {
+      await open(page, maat.width, maat.height);
+      const live = await box(page, '[data-axe-home-live]');
+      const composer = await box(page, '[data-axe-composer]');
+      const chips = await box(page, '[data-axe-snelacties]');
+      const links = await box(page, '[data-axe-home-rail="links"]');
+      const rechts = await box(page, '[data-axe-home-rail="rechts"]');
+      const toast = await box(page, '[data-axe-toast]');
+      const ok = await box(page, '[data-axe-home-ok]');
+      const feed = await box(page, '[data-axe-home-feed]');
+
+      expect(overlap(live, composer), 'live strip vs composer').toBe(0);
+      expect(overlap(live, chips), 'live strip vs chips').toBe(0);
+      expect(overlap(ok, composer), 'NEEDS YOUR OK vs composer').toBe(0);
+      expect(overlap(feed, chips), 'activity feed vs chips').toBe(0);
+      expect(overlap(links, composer), 'left rail vs composer').toBe(0);
+      expect(overlap(rechts, composer), 'right rail vs composer').toBe(0);
+      expect(overlap(toast, rechts), 'toast vs right rail').toBe(0);
+      expect(live.y + live.height).toBeLessThanOrEqual(composer.y + 0.5);
+      expect(await page.locator('.axe-home-rail-rij').count()).toBe(13);
+
+      await page.screenshot({
+        path: join(shots, `home-${maat.naam}.png`),
+        fullPage: true,
+      });
+    });
+  }
+});

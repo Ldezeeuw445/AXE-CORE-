@@ -167,8 +167,9 @@ export function homeLiveStand(in_: {
   };
 }
 
-export function werkPulseTekst(n: number): string {
-  if (n <= 0) return 'No agents working';
-  if (n === 1) return '1 agent working';
-  return `${n} agents working`;
+export function werkPulseTekst(n: number, ok = 0): string {
+  const werk = n <= 0 ? 'No agents working' : n === 1 ? '1 agent working' : `${n} agents working`;
+  if (ok <= 0) return werk;
+  if (ok === 1) return `${werk} · 1 needs your OK`;
+  return `${werk} · ${ok} need your OK`;
 }

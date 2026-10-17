@@ -140,6 +140,45 @@ def _tijd(waarde: Any) -> datetime | None:
         return None
 
 
+def _tijd_of_epoch(waarde: Any) -> datetime:
+    return _tijd(waarde) or datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _laatste_succes(
+    taken: list[dict[str, Any]],
+    routines: list[dict[str, Any]],
+    computer: dict[str, Any] | None,
+    moment: datetime,
+) -> datetime | None:
+    """Laatste geslaagde cyclus: voltooide taak, ok-rooster, of verse DAX-heartbeat."""
+    tijden: list[datetime] = []
+    for t in taken:
+        if t.get("status") in ("completed", "done"):
+            dt = _tijd(t.get("completed_at") or t.get("updated_at"))
+            if dt:
+                tijden.append(dt)
+    for r in routines:
+        if r.get("last_status") in ("ok", "skipped"):
+            dt = _tijd(r.get("last_run_at"))
+            if dt:
+                tijden.append(dt)
+    if computer and computer.get("status") == "running":
+        hart = _tijd(computer.get("last_heartbeat_at"))
+        if hart and moment - hart <= timedelta(minutes=15):
+            tijden.append(hart)
+    return max(tijden) if tijden else None
+
+
+def _fout_is_actueel(fout_at: Any, succes: datetime | None) -> bool:
+    """Fout ouder dan de laatste geslaagde cyclus telt niet meer."""
+    if not succes:
+        return True
+    t = _tijd(fout_at)
+    if not t:
+        return True
+    return t > succes
+
+
 def _lease_leeft(taak: dict[str, Any], moment: datetime) -> bool:
     verloopt = _tijd(taak.get("lease_expires_at"))
     return bool(taak.get("lease_token")) and verloopt is not None and verloopt > moment
@@ -202,12 +241,14 @@ def agent_status(
     laatste_event: dict[str, Any] | None = None,
     moment: datetime | None = None,
     routines: list[dict[str, Any]] | None = None,
+    computer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Status + waarom, uit de taken/missies/roosters van deze agent. Puur."""
     moment = moment or datetime.now(timezone.utc)
     mijn_taken = [t for t in taken if roster_agent(t.get("assignee")) == agent and not is_notitie(t)]
     mijn_routines = routines_voor(agent, routines or [], moment)
     mijn_missies = [m for m in missies if m.get("owner_agent") == agent]
+    succes = _laatste_succes(mijn_taken, mijn_routines, computer, moment)
 
     def resultaat(status: str, reden: str, taak: dict[str, Any] | None = None,
                   missie: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -255,7 +296,8 @@ def agent_status(
     vast = [m for m in mijn_missies if m.get("status") in ("blocked", "human_decision_required")]
     if vast:
         m = vast[0]
-        return resultaat("BLOCKED", str(m.get("blocked_reason") or m["status"]), None, m)
+        if _fout_is_actueel(m.get("updated_at"), succes):
+            return resultaat("BLOCKED", str(m.get("blocked_reason") or m["status"]), None, m)
 
     rij = [t for t in mijn_taken if t.get("status") in WACHTRIJ
            or (t.get("status") in BEZIG and not _lease_leeft(t, moment))]
@@ -276,9 +318,12 @@ def agent_status(
               and (_tijd(t.get("updated_at")) or moment) > moment - RECENT_FOUT]
     gelukt_na = [t for t in mijn_taken if t.get("status") in ("completed", "done")]
     if fouten:
-        f = max(fouten, key=lambda x: str(x.get("updated_at") or ""))
-        later_goed = any(str(g.get("updated_at") or "") > str(f.get("updated_at") or "") for g in gelukt_na)
-        if not later_goed:
+        f = max(fouten, key=lambda x: _tijd_of_epoch(x.get("updated_at")))
+        later_goed = any(
+            _tijd_of_epoch(g.get("completed_at") or g.get("updated_at")) > _tijd_of_epoch(f.get("updated_at"))
+            for g in gelukt_na
+        )
+        if not later_goed and _fout_is_actueel(f.get("updated_at"), succes):
             fout = f.get("error") or {}
             return resultaat("ERROR", str(fout.get("message") if isinstance(fout, dict) else fout)[:300], f, missie_van(f))
 
@@ -299,10 +344,13 @@ def agent_status(
     # vond en wanneer de volgende is.
     if mijn_routines:
         r = mijn_routines[0]
-        if r["failures"] and r["last_status"] not in ("ok", "skipped"):
+        if r["failures"] and r["last_status"] not in ("ok", "skipped") and _fout_is_actueel(r.get("last_run_at"), succes):
             return resultaat("ERROR", f"{r['name']} failed {r['failures']}x; retrying itself (last {_klok(r['last_run_at'])}).")
         volgende = f"; next {_klok(r['next_run_at'])}" if r.get("next_run_at") else ""
-        return resultaat("MONITORING", f"{r['name']} {_klok(r['last_run_at'])}: {r['summary']}{volgende}")
+        tekst = r["summary"]
+        if r["failures"] and r["last_status"] not in ("ok", "skipped"):
+            tekst = "cycle recovered"
+        return resultaat("MONITORING", f"{r['name']} {_klok(r['last_run_at'])}: {tekst}{volgende}")
 
     return resultaat("SLEEPING", "Nothing runnable for this agent.")
 
@@ -467,9 +515,12 @@ class Activiteit:
         uit = []
         for agent in agents:
             recent = self.events(agent, events_per_agent)
-            status = agent_status(agent, taken, missies, recent[0] if recent else None, routines=routines)
             ws = laad_workspace(agent)
             computer = dax.get(str(ws.get("dax_computer") or ""))
+            status = agent_status(
+                agent, taken, missies, recent[0] if recent else None,
+                routines=routines, computer=computer,
+            )
             status.update({
                 "role": ws.get("role"), "dax_computer": ws.get("dax_computer"),
                 "dax_status": (computer or {}).get("status"),

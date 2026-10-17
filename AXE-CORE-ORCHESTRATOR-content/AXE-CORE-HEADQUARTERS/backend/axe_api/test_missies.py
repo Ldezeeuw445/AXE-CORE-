@@ -184,6 +184,34 @@ def test_fout_verdwijnt_na_latere_succes():
     assert agent_status("trading", [oud, goed], [], None, NU)["status"] == "SLEEPING"
 
 
+def test_verouderde_pip_fout_wijkt_voor_verse_dax_heartbeat():
+    oud = {"id": "a", "assignee": "developer", "status": "failed",
+           "updated_at": (NU - timedelta(hours=2)).isoformat(),
+           "error": {"message": "Mislukt: pip install failed"}}
+    computer = {"status": "running", "last_heartbeat_at": NU.isoformat()}
+    s = agent_status("developer", [oud], [], None, NU, computer=computer)
+    assert s["status"] != "ERROR"
+    assert "pip install" not in (s.get("reason") or "")
+
+
+def test_verouderde_blokkade_wijkt_voor_geslaagde_cyclus():
+    blok = {"id": "m", "owner_agent": "developer", "status": "blocked",
+            "blocked_reason": "Mislukt: pip install failed",
+            "updated_at": (NU - timedelta(hours=3)).isoformat(), "milestones": []}
+    goed = {"id": "b", "assignee": "developer", "status": "completed", "updated_at": NU.isoformat()}
+    s = agent_status("developer", [goed], [blok], None, NU)
+    assert s["status"] != "BLOCKED"
+    assert "pip install" not in (s.get("reason") or "")
+
+
+def test_verse_fout_blijft_staan_na_oudere_heartbeat():
+    fout = {"id": "a", "assignee": "developer", "status": "failed",
+            "updated_at": NU.isoformat(), "error": {"message": "boom"}}
+    computer = {"status": "running", "last_heartbeat_at": (NU - timedelta(hours=1)).isoformat()}
+    s = agent_status("developer", [fout], [], None, NU, computer=computer)
+    assert s["status"] == "ERROR"
+
+
 def test_event_soorten_uit_echte_berichten():
     assert soort_van({"event_type": "axe.progress", "message": "Step 3: $ npm test"}) == "shell"
     assert soort_van({"event_type": "axe.progress", "message": "Step 2: writing a.py"}) == "file"

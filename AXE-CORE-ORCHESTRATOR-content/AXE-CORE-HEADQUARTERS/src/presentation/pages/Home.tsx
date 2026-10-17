@@ -203,7 +203,7 @@ export default function Home() {
               Terugval op 100% voor het eerste frame, vóór de eerste meting. */}
           <div
             className="absolute top-0 left-0 right-0"
-            style={{ height: 'var(--axe-bol-vak, 100%)' }}
+            style={{ height: 'var(--axe-bol-vak, calc(100% - var(--axe-chat-onder, 280px)))' }}
           >
             <div
               className="absolute inset-0"

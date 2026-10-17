@@ -8,7 +8,7 @@ const knoppen = readFileSync(join(__dirname, 'GoedkeuringActie.tsx'), 'utf8');
 
 describe('Home-agentvenster is een live draad', () => {
   it('de kolom-chrome blijft dezelfde plek; het venster krijgt de draad', () => {
-    expect(vensters).toMatch(/left: 'clamp\(16px, 2\.4vw, 48px\)'/);
+    expect(vensters).toMatch(/axe-home-rail--links/);
     expect(vensters).toMatch(/jobs=\{jobs\.filter/);
     expect(vensters).toMatch(/onOpvolging/);
     expect(vensters).toMatch(/bron: 'followup'/);
@@ -29,13 +29,14 @@ describe('Home-agentvenster is een live draad', () => {
   });
 
   it('server-OK is ter plekke te beslissen zonder de Home-kolom te verzetten', () => {
-    expect(vensters).toMatch(/left: 'clamp\(16px, 2\.4vw, 48px\)'/);
+    expect(vensters).toMatch(/axe-home-rail--rechts/);
+    expect(vensters).toMatch(/railKolommen/);
     expect(vensters).toMatch(/beslisAgentOk/);
     expect(vensters).toMatch(/GoedkeuringActie/);
     expect(vensters).toMatch(/followupIsAkkoord/);
     expect(vensters).toMatch(/railRijen/);
     expect(vensters).toMatch(/extraRegel/);
-    expect(vensters).toMatch(/next \$\{eventTijd/);
+    expect(vensters).toMatch(/agentLiveRegel/);
     expect(vensters).toMatch(/agentTierRegel/);
     expect(chat).toMatch(/tierRegel/);
   });

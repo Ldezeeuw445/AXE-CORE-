@@ -192,6 +192,16 @@ export function railRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
 }
 
 /**
+ * Verdeel de roster-rail in twee kolommen: hoofdagents links, de rest rechts.
+ * Eerste helft (afgerond naar beneden) blijft links — bij 13 rijen is dat
+ * Wingman…Browser / Memory…Companion.
+ */
+export function railKolommen(rijen: ManagerRij[]): { links: ManagerRij[]; rechts: ManagerRij[] } {
+  const midden = Math.floor(rijen.length / 2);
+  return { links: rijen.slice(0, midden), rechts: rijen.slice(midden) };
+}
+
+/**
  * De werkers rechts naast de sphere: tier 2 en tier 3, en alleen wie op dit
  * moment iets doet. Geen vaste lijst dus -- doet er niemand iets, dan is de
  * kolom leeg en houdt de sphere het rijk alleen.

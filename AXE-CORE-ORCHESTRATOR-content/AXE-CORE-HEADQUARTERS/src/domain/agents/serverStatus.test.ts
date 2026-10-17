@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { daxRegel, missieVoortgang, serverStand, type ServerAgent } from './serverStatus';
+import { agentLiveRegel, daxRegel, missieVoortgang, serverStand, type ServerAgent } from './serverStatus';
 
 const basis = (p: Partial<ServerAgent>): ServerAgent => ({
   agent: 'developer', status: 'SLEEPING', reason: 'Nothing runnable for this agent.', events: [], ...p,
@@ -58,5 +58,38 @@ describe('de eigen computer (DAX) zegt alleen wat gemeten is', () => {
 
   it('geen DAX, geen regel', () => {
     expect(daxRegel(basis({}), nu)).toBeNull();
+  });
+});
+
+describe('agentLiveRegel laat verouderde fouten vallen', () => {
+  it('toont geen hintergebleven blocked_reason als de status niet BLOCKED is', () => {
+    const regel = agentLiveRegel(basis({
+      status: 'MONITORING',
+      reason: 'next cycle at 12:00',
+      mission: {
+        id: 'm', title: 'DAX', status: 'monitoring', progress: 0.2, next_action: null,
+        current_milestone: null, milestones_total: 1,
+        blocked_reason: 'Mislukt: pip install failed',
+      },
+    }));
+    expect(regel).not.toMatch(/pip install/);
+    expect(regel).toMatch(/next cycle|DAX/);
+  });
+
+  it('toont geen DAX-blokkade als de computer wakker is', () => {
+    const nu = Date.parse('2026-10-11T12:00:00Z');
+    const regel = agentLiveRegel(basis({
+      status: 'SLEEPING',
+      dax_computer: 'dax-developer-01',
+      dax_status: 'running',
+      dax_heartbeat_at: '2026-10-11T11:57:00Z',
+      dax_error: 'Mislukt: pip install failed',
+    }), nu);
+    expect(regel).toBe('');
+    const dax = daxRegel(basis({
+      dax_computer: 'dax-developer-01', dax_status: 'running',
+      dax_heartbeat_at: '2026-10-11T11:57:00Z',
+    }), nu);
+    expect(dax?.wakker).toBe(true);
   });
 });

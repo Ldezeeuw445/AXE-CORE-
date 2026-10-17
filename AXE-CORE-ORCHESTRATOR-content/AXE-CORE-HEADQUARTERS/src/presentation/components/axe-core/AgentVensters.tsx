@@ -1,17 +1,19 @@
 /**
- * Alle hoofdagents links naast de sphere, in gewone taal, met live status.
+ * Alle hoofdagents naast de sphere, in gewone taal, met live status.
  *
  * Luka, 17 okt: niet alleen de vijf managers — élke roster-agent behalve de
- * core zelf (die is de bol). Statusregel: wat hij nu doet, volgende cyclus,
- * of waarom hij vastzit. Needs-your-OK krijgt Approve/Decline op de rij.
+ * core zelf (die is de bol), verdeeld over een linker- en een gespiegelde
+ * rechterkolom. Statusregel: wat hij nu doet, volgende cyclus, of waarom hij
+ * vastzit. Needs-your-OK krijgt Approve/Decline op de rij.
  */
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { agentRegel, goedkeuringVanJob } from '@/domain/agentBewustzijn';
-import { railRijen } from '@/domain/tierRouter/agentVenster';
+import { railKolommen, railRijen } from '@/domain/tierRouter/agentVenster';
 import type { ManagerRij } from '@/domain/tierRouter/agentVenster';
 import type { AxeAgentId } from '@/domain/agents/roster';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
@@ -19,7 +21,8 @@ import { STAND } from '@/presentation/components/axe-core/managerStand';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
 import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
 import { pauseMission, resumeMission } from '@/infrastructure/gateways/axeCoreApiService';
-import { daxRegel, eventTijd, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
+import { agentLiveRegel, daxRegel, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
+import './homeLive.css';
 import { rijenVoorAgent, wachtOpOk } from '@/domain/agents/pendingApproval';
 import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFollowup';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
@@ -31,8 +34,6 @@ const TIK_MS = 1_000;
 const LEESBAAR = '0 1px 3px rgba(0,0,0,.7)';
 
 const TEGEL: React.CSSProperties = {
-  width: 64,
-  padding: '8px 4px 6px',
   borderRadius: 14,
   background: 'var(--axe-kaart-vlak)',
   border: '1px solid var(--axe-kaart-lijn)',
@@ -45,7 +46,6 @@ const BALK: React.CSSProperties = {
   background: 'var(--axe-kaart-vlak)',
   border: '1px solid var(--axe-kaart-lijn)',
   borderTopColor: 'var(--axe-kaart-lijn-boven)',
-  padding: '7px 11px',
 };
 
 function DaxStip({ server }: { server?: ServerAgent }) {
@@ -71,7 +71,7 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
       aria-expanded={open}
       aria-label={`Gesprek met ${agent.name}`}
       data-axe-doel={`agent:${agent.id}`}
-      className="flex flex-col items-center gap-1 cursor-pointer"
+      className="axe-home-rail-tegel flex flex-col items-center gap-1 cursor-pointer"
       style={{ ...TEGEL, textShadow: LEESBAAR }}
     >
       <ManagerAvatar agent={agent} size={28} />
@@ -86,14 +86,7 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
 }
 
 function liveRegel(server?: ServerAgent): string {
-  if (!server) return '';
-  const stand = bepaalServerStand(server);
-  const next = (server.routines ?? []).find((r) => r.next_run_at && !r.running);
-  const blok = server.mission?.blocked_reason || daxRegel(server)?.blokkade || '';
-  if (stand.regel) return stand.regel;
-  if (blok) return blok;
-  if (next) return `next ${eventTijd(next.next_run_at)} · ${next.name}`;
-  return '';
+  return server ? agentLiveRegel(server) : '';
 }
 
 function Balkje({
@@ -145,7 +138,7 @@ function Balkje({
         : { label: serverStand?.label ?? '', kleur: serverStand?.kleur ?? 'var(--text-secondary)' };
     return (
       <div
-        className="flex flex-col gap-1 w-full min-w-0"
+        className="flex flex-col gap-1 w-full min-w-0 axe-home-rail-balk"
         style={BALK}
         data-axe-server-status={server?.status}
       >
@@ -155,7 +148,7 @@ function Balkje({
           aria-label={`Gesprek met ${agent.name}`}
           className="flex items-center gap-3 w-full cursor-pointer min-w-0 text-left"
         >
-          <span className="flex-1 min-w-0 text-[12px] leading-snug line-clamp-2">{kop}</span>
+          <span className="flex-1 min-w-0 text-[12px] leading-snug axe-home-rail-regel">{kop}</span>
           <span
             className="text-[9px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0 flex items-center gap-1.5"
             style={{ color: stand.kleur }}
@@ -178,7 +171,7 @@ function Balkje({
 
   return (
     <span
-      className="text-[10px] tracking-[0.16em] uppercase"
+      className="axe-home-rail-balk text-[10px] tracking-[0.16em] uppercase"
       style={{ color: 'var(--text-secondary)', textShadow: LEESBAAR }}
     >
       {serverStand ? serverStand.label : 'idle'}
@@ -191,6 +184,7 @@ function Balkje({
 export function AgentVensters() {
   const jobs = useAxeJobStore((s) => s.jobs);
   const server = useServerAgents();
+  const isMobile = useIsMobile();
   const [gekozen, setGekozen] = useState<AxeAgentId | null>(null);
   const [nu, setNu] = useState(() => Date.now());
   const heeftKlare = jobs.some((j) => j.finishedAt != null);
@@ -200,8 +194,14 @@ export function AgentVensters() {
     return () => clearInterval(t);
   }, [heeftKlare]);
 
-  const links = railRijen(jobs, nu);
-  const open = gekozen ? links.find((r) => r.agent.id === gekozen) ?? null : null;
+  const alle = railRijen(jobs, nu);
+  const { links, rechts } = railKolommen(alle);
+  const kolommen = isMobile ? [{ id: 'links' as const, rijen: alle }] : [
+    { id: 'links' as const, rijen: links },
+    { id: 'rechts' as const, rijen: rechts },
+  ];
+  const open = gekozen ? alle.find((r) => r.agent.id === gekozen) ?? null : null;
+  const openRechts = !isMobile && !!open && rechts.some((r) => r.agent.id === open.agent.id);
   const extra = server.approvals.map((a) => ({
     id: a.id,
     task_id: a.task_id,
@@ -227,35 +227,30 @@ export function AgentVensters() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20" data-axe-agent-vensters>
-      <div
-        className="pointer-events-auto absolute grid items-start overflow-y-auto"
-        style={{
-          left: 'clamp(16px, 2.4vw, 48px)',
-          top: '8%',
-          bottom: '8%',
-          width: 'min(32%, 420px)',
-          gridTemplateColumns: 'auto minmax(0, 1fr)',
-          columnGap: 12,
-          rowGap: 10,
-        }}
-      >
-        {links.map((rij) => {
-          const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
-          return (
-            <Fragment key={rij.agent.id}>
-              <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
-              <Balkje
-                rij={rij}
-                onKies={kies}
-                server={server.agents[rij.agent.id]}
-                extra={extra}
-                onBeslis={(g, akkoord) => beslissen(rij.agent.id, g, akkoord)}
-                tierRegel={agentTierRegel(server.tiers, rij.agent.id)}
-              />
-            </Fragment>
-          );
-        })}
-      </div>
+      {kolommen.map((kolom) => (
+        <div
+          key={kolom.id}
+          className={`axe-home-rail ${isMobile ? 'axe-home-rail--mobiel' : kolom.id === 'rechts' ? 'axe-home-rail--rechts' : 'axe-home-rail--links'}`}
+          data-axe-home-rail={kolom.id}
+        >
+          {kolom.rijen.map((rij) => {
+            const kies = () => setGekozen((v) => (v === rij.agent.id ? null : rij.agent.id));
+            return (
+              <div key={rij.agent.id} className="axe-home-rail-rij">
+                <Tegel rij={rij} open={gekozen === rij.agent.id} onKies={kies} />
+                <Balkje
+                  rij={rij}
+                  onKies={kies}
+                  server={server.agents[rij.agent.id]}
+                  extra={extra}
+                  onBeslis={(g, akkoord) => beslissen(rij.agent.id, g, akkoord)}
+                  tierRegel={agentTierRegel(server.tiers, rij.agent.id)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ))}
 
       <AnimatePresence>
         {open && (
@@ -263,7 +258,9 @@ export function AgentVensters() {
             key={open.agent.id}
             className="pointer-events-none absolute"
             style={{
-              left: 'calc(clamp(16px, 2.4vw, 48px) + 64px + 12px)',
+              ...(openRechts
+                ? { right: 'calc(var(--axe-home-rail-inset) + 64px + 12px)' }
+                : { left: 'calc(var(--axe-home-rail-inset) + 64px + 12px)' }),
               top: '40%',
               transform: 'translateY(-50%)',
             }}

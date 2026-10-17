@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { taakMeldingVan } from '@/domain/taken/taakMelding';
+import '@/presentation/components/axe-core/homeLive.css';
 
 interface TaakRij { id: string; title: string; status: string }
 interface Melding { id: string; titel: string; mislukt: boolean }
@@ -93,8 +94,8 @@ export function TaskCompletionToasts() {
 
   return (
     <div
-      className="fixed z-[108] flex flex-col gap-2 items-end pointer-events-none"
-      style={{ top: 'calc(66px + var(--axe-sat) + 12px)', right: 16, maxWidth: 320 }}
+      className="axe-taak-toast fixed z-[108] flex flex-col gap-2 items-end pointer-events-none"
+      style={{ top: 'calc(66px + var(--axe-sat) + 12px)', maxWidth: 280 }}
       aria-live="polite"
     >
       {meldingen.map(m => (

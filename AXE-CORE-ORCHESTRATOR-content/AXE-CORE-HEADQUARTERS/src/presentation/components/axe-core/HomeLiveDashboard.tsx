@@ -1,6 +1,6 @@
 /**
- * Living 24/7 strip around the core. The orb stays; this sits in the plate
- * under it. Real data only — empty cards say so.
+ * Living 24/7 strip around the core. The orb stays; this sits between the
+ * agent rails, above the composer — never under the chips. Real data only.
  */
 import { useEffect, useState } from 'react';
 import { Kaart, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
@@ -73,11 +73,11 @@ export function HomeLiveDashboard() {
             boxShadow: stand.werkend ? '0 0 8px var(--accent-cyan)' : 'none',
           }}
         />
-        {werkPulseTekst(stand.werkend)}
+        {werkPulseTekst(stand.werkend, stand.goedkeuringen.length)}
         {stand.namen.length ? ` · ${stand.namen.join(', ')}` : ''}
       </div>
 
-      <div className="axe-kaart-raster axe-home-live-raster">
+      <div className="axe-home-live-raster">
         <SectieBlok titel="WORKING NOW">
           <Kaart compact titel={`${stand.lopend.length || 'No'} running`}>
             {stand.lopend.length === 0 && (
