@@ -34,6 +34,8 @@ import { haalServerProviders } from '@/infrastructure/config/serverProviders';
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 import { mergeConnections } from '@/domain/providerConnections';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
+import { WAKE_SLEUTEL, wakeAanVan } from '@/domain/voice/luisterBeleid';
+import { meldWakeKeuze } from '@/presentation/hooks/useWakeWord';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
 import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
@@ -1950,6 +1952,7 @@ export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
+  const [wakeEnabled, setWakeEnabled] = useState(false);
   const [sectie, setSectie] = useState('accounts');
   // Eén sectie tegelijk, zoals de Browser: de lade kiest, het vak toont die
   // ene sectie als dashboard in kaarten (25 sep).
@@ -1959,11 +1962,19 @@ export default function SettingsPage() {
 
   useEffect(() => { voice.checkMicPermission(); }, []);
   useEffect(() => { loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled); }, []);
+  useEffect(() => { loadSetting(WAKE_SLEUTEL, false).then((v) => setWakeEnabled(wakeAanVan(v))); }, []);
 
   const toggleClap = () => {
     const next = !clapEnabled;
     setClapEnabled(next);
     void saveSetting('axe_clap_activate_enabled', next);
+  };
+
+  const toggleWake = () => {
+    const next = !wakeEnabled;
+    setWakeEnabled(next);
+    meldWakeKeuze(next);
+    void saveSetting(WAKE_SLEUTEL, next);
   };
 
   const testMic = async () => {
@@ -2062,6 +2073,22 @@ export default function SettingsPage() {
                 Clap to activate {clapEnabled ? 'on' : 'off'}
               </label>
             }
+          />
+          <StatusKaart
+            naam="Hey AXE"
+            accent="var(--text-secondary)"
+            rol="Always-on wake listening. Off by default — AXE does not listen until you tap the mic. Turn this on only if you want 'hey axe' to open the mic."
+            stand={wakeEnabled ? { toon: 'ok', tekst: 'On' } : { toon: 'muted', tekst: 'Off' }}
+            keuze={
+              <label className="axe-agentkaart-schakel">
+                <input type="checkbox" checked={wakeEnabled} onChange={toggleWake} />
+                Hey AXE wake word {wakeEnabled ? 'on' : 'off'}
+              </label>
+            }
+            stats={[
+              { label: 'Default', waarde: 'Off' },
+              { label: 'Phrase', waarde: 'hey axe' },
+            ]}
           />
           <VoiceSection />
           {/* Meldingen staan bij stem: allebei gaan ze over hoe AXE je bereikt
