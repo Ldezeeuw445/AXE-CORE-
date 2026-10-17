@@ -10,7 +10,7 @@ import { useServerAgents, verversServerAgents } from '@/presentation/components/
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { codingSeatsHeartbeat } from '@/infrastructure/gateways/axeCoreApiService';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
-import type { CodingSeat } from '@/domain/codingSeats';
+import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
 import './homeLive.css';
 
 export function HomeLiveDashboard() {
@@ -24,23 +24,28 @@ export function HomeLiveDashboard() {
       void codingSeatsHeartbeat()
         .then((r) => {
           if (!alive) return;
-          setStoelen((r.seats ?? []).map((s) => ({
-            id: s.seat_id || s.id,
-            provider: (s.provider as CodingSeat['provider']) || 'claude',
-            label: s.label || s.seat_id || s.id,
-            email: s.email,
-            machine: s.machine || s.host || '',
-            logged_in: s.logged_in,
-            login_command: s.login_command,
-            current_task: s.current_task,
-            rate_limited: s.rate_limited,
-            rate_limit_until: s.rate_limit_until,
-            last_limit_message: s.last_limit_message,
-            remaining_note: s.remaining_note,
-            shared_quota_with: s.shared_quota_with ?? [],
-            last_seen_at: s.last_seen_at,
-            config_exists: s.config_exists,
-          })));
+          const rijen: CodingSeat[] = (r.seats ?? []).map((s) => {
+            const sid = stoelSleutel(s);
+            return {
+              id: sid,
+              seat_id: sid,
+              provider: (s.provider as CodingSeat['provider']) || 'claude',
+              label: s.label || sid,
+              email: s.logged_in === true ? s.email : null,
+              machine: s.machine || s.host || '',
+              logged_in: s.logged_in,
+              login_command: s.login_command,
+              current_task: s.current_task,
+              rate_limited: s.rate_limited,
+              rate_limit_until: s.rate_limit_until,
+              last_limit_message: s.last_limit_message,
+              remaining_note: s.remaining_note,
+              shared_quota_with: s.shared_quota_with ?? [],
+              last_seen_at: s.last_seen_at,
+              config_exists: s.config_exists,
+            };
+          });
+          setStoelen(groepeerAbonnementen(rijen).kaarten.map((g) => g.stoel));
         })
         .catch(() => { if (alive) setStoelen([]); });
     };

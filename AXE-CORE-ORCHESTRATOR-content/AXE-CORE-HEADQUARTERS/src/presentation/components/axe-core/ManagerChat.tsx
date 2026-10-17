@@ -56,6 +56,7 @@ export function ManagerChat({
   server,
   onMissie,
   extraGoedkeuringen = [],
+  tierRegel = '',
 }: {
   agent: AxeAgent;
   job: AxeJob | null;
@@ -67,6 +68,8 @@ export function ManagerChat({
   /** Wat de server over deze agent weet: missie, DAX, echte tijdlijn. */
   server?: ServerAgent;
   onMissie?: (missieId: string, actie: 'pause' | 'resume') => void;
+  /** GET /agent-tiers: "T1 · opus/sonnet". */
+  tierRegel?: string;
 }) {
   const sluitRef = useRef<HTMLButtonElement>(null);
   const draadRef = useRef<HTMLDivElement>(null);
@@ -142,7 +145,14 @@ export function ManagerChat({
         titel={
           <span className="flex items-center gap-2 min-w-0">
             <ManagerAvatar agent={agent} size={22} />
-            <span className="truncate">{agent.name}</span>
+            <span className="min-w-0 truncate">
+              {agent.name}
+              {tierRegel ? (
+                <span className="ml-1.5 font-normal" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                  {tierRegel}
+                </span>
+              ) : null}
+            </span>
           </span>
         }
         actie={

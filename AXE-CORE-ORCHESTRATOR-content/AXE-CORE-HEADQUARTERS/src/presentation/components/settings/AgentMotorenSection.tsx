@@ -21,7 +21,7 @@ import {
   type CodingSeatStatus,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { motorNaam, type MotorStatus } from '@/domain/motorNaam';
-import { abonnementKaartStand } from '@/domain/codingSeats';
+import { abonnementKaartStand, stoelSleutel, winnendeStoel } from '@/domain/codingSeats';
 import { type AbonnementVerbruik } from '@/domain/abonnementVerbruik';
 import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -119,8 +119,10 @@ export function AgentMotorenSection() {
           if (!alive) return;
           const map: Record<string, CodingSeatStatus> = {};
           for (const s of r.seats ?? []) {
-            const id = s.seat_id || s.id;
-            if (id) map[id] = { ...s, id };
+            const id = stoelSleutel(s);
+            if (!id) continue;
+            const rij = { ...s, id, seat_id: id };
+            map[id] = winnendeStoel([map[id], rij].filter(Boolean) as CodingSeatStatus[]) ?? rij;
           }
           setStoelen(map);
           setMotorAccounts(Object.fromEntries(Object.entries(map).map(([k, v]) => [k, {

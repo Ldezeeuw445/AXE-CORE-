@@ -29,6 +29,7 @@ describe('Home toont de server-status', () => {
   it('de poll gaat naar de echte endpoint', () => {
     expect(bron('useServerAgents.ts')).toContain('getAgentActivity(');
     expect(bron('useServerAgents.ts')).toContain('listPendingApprovals(');
+    expect(bron('useServerAgents.ts')).toContain('listAgentTiers');
     expect(bron('useServerAgents.ts')).toContain('normaliseerServerAgent');
     expect(bron('../../../infrastructure/gateways/axeCoreApiService.ts')).toContain('`/agents/activity?events=');
   });

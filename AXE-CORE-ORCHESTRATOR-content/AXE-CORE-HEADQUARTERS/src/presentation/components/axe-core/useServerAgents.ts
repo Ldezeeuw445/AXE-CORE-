@@ -7,9 +7,10 @@
  * verzonnen nieuwe, en de kolom valt dan terug op wat hij al deed.
  */
 import { useEffect, useState } from 'react';
-import { getAgentActivity, listPendingApprovals, type DurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
+import { getAgentActivity, listAgentTiers, listPendingApprovals, type DurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
 import type { ServerAgent } from '@/domain/agents/serverStatus';
 import { normaliseerServerAgent } from '@/domain/agents/pendingApproval';
+import type { AgentTierKaart } from '@/domain/agents/agentTiers';
 import { meldActiviteit } from '@/shared/axeActiviteit';
 import { activiteitUitServer } from '@/domain/agents/activiteitUitServer';
 
@@ -20,9 +21,10 @@ interface Stand {
   ok: boolean;
   at: number;
   approvals: DurableTaskApproval[];
+  tiers: AgentTierKaart | null;
 }
 
-let stand: Stand = { agents: {}, ok: false, at: 0, approvals: [] };
+let stand: Stand = { agents: {}, ok: false, at: 0, approvals: [], tiers: null };
 const lezers = new Set<(s: Stand) => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let bezig = false;
@@ -31,16 +33,17 @@ async function poll(): Promise<void> {
   if (bezig || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) return;
   bezig = true;
   try {
-    const [uit, approvals] = await Promise.all([
+    const [uit, approvals, tiers] = await Promise.all([
       getAgentActivity(10),
       listPendingApprovals(50).catch(() => [] as DurableTaskApproval[]),
+      listAgentTiers().catch(() => stand.tiers),
     ]);
     const agents: Record<string, ServerAgent> = {};
     for (const a of uit.agents) agents[a.agent] = normaliseerServerAgent(a);
     if (stand.ok) {
       for (const a of activiteitUitServer(stand.agents, agents)) meldActiviteit(a);
     }
-    stand = { agents, ok: true, at: Date.now(), approvals };
+    stand = { agents, ok: true, at: Date.now(), approvals, tiers: tiers ?? stand.tiers };
   } catch {
     stand = { ...stand, ok: false };
   } finally {

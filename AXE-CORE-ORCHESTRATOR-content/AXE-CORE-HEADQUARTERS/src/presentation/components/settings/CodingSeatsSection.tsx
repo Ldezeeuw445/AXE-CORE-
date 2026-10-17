@@ -3,19 +3,22 @@
  *
  * Status uit core_coding_seats (vers < 5 min). Stale last-run "Login expired"
  * overschrijft een verse logged_in=true nooit — die fout is geschiedenis.
- * Ontbrekende dirs (codex3 / ~/.codex-derde) blijven weg. Default ~/.claude
- * uitgelogd is een kleine 'not used'-kaart.
+ * Ontbrekende dirs (codex3 / ~/.codex-derde) blijven weg. Eén kaart per
+ * account-e-mail+provider; machines waar hij écht inlogt staan erbij.
+ * Default ~/.claude uitgelogd is een kleine 'not used'-kaart.
  */
 import { useEffect, useState } from 'react';
 import { SectieKop, StatusKaart, geleden, kort } from '@/presentation/components/settings/StatusKaart';
 import {
   abonnementKaartStand,
+  groepeerAbonnementen,
   metGedeeldeQuota,
   resetTekst,
   stoelHeeftActie,
   stoelNietGebruikt,
+  stoelSleutel,
   toonStoelEmail,
-  verbergStoel,
+  type AbonnementGroep,
   type CodingSeat,
 } from '@/domain/codingSeats';
 import { MOTOR_LABEL, HOOFD_AGENTS, AGENT_LABEL } from '@/domain/agentMotoren';
@@ -55,10 +58,12 @@ function totMs(waarde: number | string | null | undefined): number | null {
 
 function vanWorker(row: WorkerSeatRow): CodingSeat {
   const loggedIn = typeof row.logged_in === 'boolean' ? row.logged_in : null;
+  const sid = stoelSleutel({ id: row.id, seat_id: row.seat_id });
   return {
-    id: String(row.seat_id || row.id || ''),
+    id: sid,
+    seat_id: sid,
     provider: (row.provider as CodingSeat['provider']) || 'claude',
-    label: String(row.seat_id || row.id || ''),
+    label: sid,
     email: loggedIn === true ? (row.email ?? null) : null,
     machine: row.machine || row.host || 'unknown',
     logged_in: loggedIn,
@@ -102,7 +107,7 @@ export function CodingSeatsSection() {
         if (!alive) return;
         setHeartbeatOk(hb.ok);
         const rijen = Array.isArray(hb.hb.seats) ? hb.hb.seats.map((s) => vanWorker(s as WorkerSeatRow)) : [];
-        setStoelen(metGedeeldeQuota(rijen.filter((s) => s.id && !verbergStoel(s))));
+        setStoelen(metGedeeldeQuota(rijen.filter((s) => s.id)));
         setVerbruik(Object.fromEntries((gebruikR.accounts ?? []).map((a) => [a.motor, a])));
         setGebruik(repos.usage ?? {});
         setPlanner(plan);
@@ -116,18 +121,18 @@ export function CodingSeatsSection() {
     return () => { alive = false; window.clearInterval(timer); };
   }, []);
 
-  const delen = (stoelen ?? []).filter((s) => s.shared_quota_with.length > 0);
+  const groepen = groepeerAbonnementen(stoelen ?? []);
+  const delen = (stoelen ?? []).filter((s) => s.shared_quota_with.length > 0 && s.logged_in === true);
   const zelfdeMail = delen[0]?.email ?? null;
-  const gebruiktDoor = (motor: string) => HOOFD_AGENTS.filter((a) => toewijzing[a] === motor).map((a) => AGENT_LABEL[a]);
-  const actief = (stoelen ?? []).filter((s) => !stoelNietGebruikt(s));
-  const ongebruikt = (stoelen ?? []).filter((s) => stoelNietGebruikt(s));
+  const gebruiktDoor = (ids: string[]) => HOOFD_AGENTS.filter((a) => ids.includes(toewijzing[a])).map((a) => AGENT_LABEL[a]);
 
-  const kaartVoor = (stoel: CodingSeat) => {
-    const v = verbruik[stoel.id];
-    const g = gebruik[stoel.id];
+  const kaartVoor = (groep: AbonnementGroep) => {
+    const stoel = groep.stoel;
+    const v = groep.seatIds.map((id) => verbruik[id]).find(Boolean);
+    const g = groep.seatIds.map((id) => gebruik[id]).find(Boolean);
     const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
-    const vandaag = planner?.gebruik_vandaag[stoel.id] ?? 0;
-    const door = gebruiktDoor(stoel.id);
+    const vandaag = groep.seatIds.reduce((n, id) => n + (planner?.gebruik_vandaag[id] ?? 0), 0);
+    const door = gebruiktDoor(groep.seatIds);
     const getoond: CodingSeat = {
       ...stoel,
       email: toonStoelEmail(stoel),
@@ -142,18 +147,21 @@ export function CodingSeatsSection() {
     const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond) && kaart.stand.tekst !== 'Online' && kaart.stand.tekst !== 'Running' && kaart.stand.tekst !== 'Not used';
     const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
     const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || stoel.label;
+    const machines = groep.bruikbaarOp.length
+      ? `Usable on ${groep.bruikbaarOp.join(', ')}`
+      : 'Not logged in on any machine';
     return (
       <StatusKaart
-        key={`${stoel.machine}:${stoel.id}`}
-        klein={stoelNietGebruikt(getoond)}
+        key={groep.key}
+        klein={groep.nietGebruikt}
         naam={motorNaam(label, {
-          account: toonStoelEmail(getoond),
+          account: groep.email,
           ingelogd: stoel.logged_in,
-          nietGebruikt: stoelNietGebruikt(getoond),
+          nietGebruikt: groep.nietGebruikt,
         })}
-        accent={ACCENT[stoel.provider] || 'var(--text-secondary)'}
-        rol={`${v?.plan ? `${v.plan} plan · ` : ''}${door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}`}
-        stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : kaart.stand}
+        accent={ACCENT[groep.provider] || 'var(--text-secondary)'}
+        rol={`${v?.plan ? `${v.plan} plan · ` : ''}${machines}${door.length ? ` · ${door.join(', ')}` : ''}`}
+        stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : (groep.nietGebruikt ? { toon: 'muted', tekst: 'Not used' } : kaart.stand)}
         keuze={rood ? (
           <code
             title={stoel.login_command}
@@ -180,7 +188,7 @@ export function CodingSeatsSection() {
     <div className="axe-motoren">
       <SectieKop
         titel="Subscriptions"
-        uitleg="Status from the Mac mini heartbeat in core_coding_seats (fresh < 5 min). Usage as each provider reports it. A last-run login error never overrides a seat that is logged in now."
+        uitleg="One card per account. Status from core_coding_seats (fresh < 5 min) on Mac mini and iMac. A null row on the other machine never overrides logged_in=true. Missing CLIs stay hidden."
       />
       {zelfdeMail && (
         <p className="axe-agentkaart-melding" style={{ color: 'var(--warning)', marginBottom: 12 }}>
@@ -189,7 +197,7 @@ export function CodingSeatsSection() {
       )}
       {fout && <p className="axe-agentkaart-melding">{fout}</p>}
       <div className="axe-agent-raster axe-agent-raster--ruim">
-        {actief.map(kaartVoor)}
+        {groepen.kaarten.map(kaartVoor)}
         {stoelen?.length === 0 && (
           <StatusKaart
             naam="No seats reported"
@@ -200,9 +208,9 @@ export function CodingSeatsSection() {
           />
         )}
       </div>
-      {ongebruikt.length > 0 && (
+      {groepen.ongebruikt.length > 0 && (
         <div className="axe-agent-raster" style={{ marginTop: 12, justifyContent: 'start' }}>
-          {ongebruikt.map(kaartVoor)}
+          {groepen.ongebruikt.map(kaartVoor)}
         </div>
       )}
     </div>

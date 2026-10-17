@@ -28,6 +28,7 @@ import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
 const BASE_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 import { browserBasis } from '@/infrastructure/persistence/browserHostService';
 import type { ServerAgent } from '@/domain/agents/serverStatus';
+import type { AgentTierKaart } from '@/domain/agents/agentTiers';
 import type { SindsSamenvatting } from '@/domain/chat/hoofdgesprek';
 
 // The proxy path always exists in this app; whether the *server* actually
@@ -1074,6 +1075,11 @@ export interface CodingSeatStatus {
 /** Mac mini heartbeat in core_coding_seats (service_role via de VPS). */
 export async function codingSeatsHeartbeat(): Promise<{ seats: CodingSeatStatus[] }> {
   return call('GET', '/coding-seats');
+}
+
+/** Read-only tierkaart van de VPS (PR #214): agent → tier → model → stoel. */
+export async function listAgentTiers(): Promise<AgentTierKaart> {
+  return call('GET', '/agent-tiers');
 }
 
 /** Which repos this host will let Claude Code touch, and their live branches. */

@@ -28,6 +28,8 @@ export interface CodingSeat {
   shared_quota_with: string[];
   last_seen_at?: string | null;
   config_exists?: boolean;
+  /** CLI-stoel zonder machine-prefix (claude2, niet mini-van-luka-5:claude2). */
+  seat_id?: string;
 }
 
 export type SeatStandToon = 'ok' | 'bad' | 'info' | 'muted';
@@ -99,8 +101,152 @@ function stoelIsVers(lastSeenAt: string | null | undefined, nu = Date.now()): bo
   return !Number.isNaN(t) && nu - t < STOEL_VERS_MS;
 }
 
-export function stoelNietGebruikt(stoel: Pick<CodingSeat, 'id' | 'logged_in' | 'config_exists'>): boolean {
-  return stoel.id === 'claude' && stoel.logged_in === false && stoel.config_exists !== false;
+/** core_coding_seats.id is '<machine>:<seat_id>'; de CLI-naam is seat_id. */
+export function stoelSleutel(stoel: { id?: string | null; seat_id?: string | null }): string {
+  const sid = (stoel.seat_id || '').trim();
+  if (sid && !sid.includes(':')) return sid;
+  const id = String(stoel.id || stoel.seat_id || '');
+  const i = id.lastIndexOf(':');
+  if (i > 0 && i < id.length - 1) return id.slice(i + 1);
+  return id;
+}
+
+export function machineLabel(machine: string | null | undefined): string {
+  const s = (machine || '').trim();
+  if (!s) return 'unknown';
+  const laag = s.toLowerCase();
+  if (laag.includes('imac')) return 'iMac';
+  if (laag.includes('mini')) return 'Mac mini';
+  return s;
+}
+
+function providerVanSeat(seatId: string, provider?: string | null): CodingProvider {
+  if (provider === 'claude' || provider === 'codex' || provider === 'cursor' || provider === 'openhands') {
+    return provider;
+  }
+  if (seatId.startsWith('codex')) return 'codex';
+  if (seatId.startsWith('cursor')) return 'cursor';
+  if (seatId.startsWith('openhands')) return 'openhands';
+  return 'claude';
+}
+
+/**
+ * logged_in=true wint altijd van een null/false-rij op een andere machine,
+ * ook als die andere hartslag verse is.
+ */
+export function winnendeStoel<T extends Pick<CodingSeat, 'logged_in' | 'last_seen_at'>>(rijen: T[]): T | null {
+  if (rijen.length === 0) return null;
+  const gezien = (s: T) => {
+    const t = Date.parse(s.last_seen_at || '');
+    return Number.isNaN(t) ? 0 : t;
+  };
+  return [...rijen].sort((a, b) => {
+    const la = a.logged_in === true ? 2 : a.logged_in === false ? 1 : 0;
+    const lb = b.logged_in === true ? 2 : b.logged_in === false ? 1 : 0;
+    if (lb !== la) return lb - la;
+    return gezien(b) - gezien(a);
+  })[0] ?? null;
+}
+
+export function stoelNietGebruikt(stoel: Pick<CodingSeat, 'id' | 'logged_in' | 'config_exists' | 'seat_id'>): boolean {
+  const sid = stoelSleutel(stoel);
+  return sid === 'claude' && stoel.logged_in !== true && stoel.config_exists !== false;
+}
+
+export type AbonnementGroep = {
+  key: string;
+  provider: CodingProvider;
+  email: string | null;
+  seatIds: string[];
+  bruikbaarOp: string[];
+  stoel: CodingSeat;
+  nietGebruikt: boolean;
+};
+
+/**
+ * Eén kaart per account (e-mail + provider). Machines waar logged_in=true
+ * staan onder "usable on". config_exists=false verdwijnt. Nooit ingelogd op
+ * enige machine → kleine 'not used'-lijst.
+ */
+export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: AbonnementGroep[]; ongebruikt: AbonnementGroep[] } {
+  const zichtbaar = stoelen.filter((s) => !verbergStoel(s) && stoelSleutel(s));
+  const groepen = new Map<string, CodingSeat[]>();
+  const rest: CodingSeat[] = [];
+
+  for (const s of zichtbaar) {
+    if (s.logged_in === true && toonStoelEmail(s)) {
+      const provider = providerVanSeat(stoelSleutel(s), s.provider);
+      const sleutel = `${provider}:${toonStoelEmail(s)!.trim().toLowerCase()}`;
+      const lijst = groepen.get(sleutel) ?? [];
+      lijst.push(s);
+      groepen.set(sleutel, lijst);
+    } else {
+      rest.push(s);
+    }
+  }
+
+  const restPerSeat = new Map<string, CodingSeat[]>();
+  for (const s of rest) {
+    const sid = stoelSleutel(s);
+    const lijst = restPerSeat.get(sid) ?? [];
+    lijst.push(s);
+    restPerSeat.set(sid, lijst);
+  }
+
+  const ongebruiktSeats: CodingSeat[][] = [];
+  for (const [sid, rijen] of restPerSeat) {
+    const hosts = [...groepen.entries()].filter(([, rows]) => rows.some((r) => stoelSleutel(r) === sid));
+    if (hosts.length === 1) {
+      hosts[0][1].push(...rijen);
+    } else {
+      ongebruiktSeats.push(rijen);
+    }
+  }
+
+  const naarGroep = (rijen: CodingSeat[], nietGebruikt: boolean): AbonnementGroep | null => {
+    const win = winnendeStoel(rijen);
+    if (!win) return null;
+    const sid = stoelSleutel(win);
+    const provider = providerVanSeat(sid, win.provider);
+    const email = win.logged_in === true ? toonStoelEmail(win) : null;
+    const seatIds = [...new Set(rijen.map(stoelSleutel))];
+    const bruikbaarOp = [...new Set(
+      rijen.filter((s) => s.logged_in === true).map((s) => machineLabel(s.machine)),
+    )].sort((a, b) => {
+      const rang = (x: string) => (x === 'Mac mini' ? 0 : x === 'iMac' ? 1 : 2);
+      return rang(a) - rang(b) || a.localeCompare(b);
+    });
+    return {
+      key: `${provider}:${email || sid}:${seatIds.join(',')}`,
+      provider,
+      email,
+      seatIds,
+      bruikbaarOp,
+      stoel: { ...win, id: sid, provider, email, seat_id: sid },
+      nietGebruikt,
+    };
+  };
+
+  const kaarten: AbonnementGroep[] = [];
+  for (const rijen of groepen.values()) {
+    const g = naarGroep(rijen, false);
+    if (g) kaarten.push(g);
+  }
+  const ongebruikt: AbonnementGroep[] = [];
+  for (const rijen of ongebruiktSeats) {
+    const g = naarGroep(rijen, true);
+    if (g) ongebruikt.push(g);
+  }
+
+  const volgorde = ['claude2', 'claude3', 'claude4', 'claude', 'codex', 'codex2', 'cursor'];
+  const sorteer = (a: AbonnementGroep, b: AbonnementGroep) => {
+    const ia = volgorde.indexOf(a.stoel.id);
+    const ib = volgorde.indexOf(b.stoel.id);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  };
+  kaarten.sort(sorteer);
+  ongebruikt.sort(sorteer);
+  return { kaarten, ongebruikt };
 }
 
 export function verbergStoel(stoel: Pick<CodingSeat, 'config_exists'>): boolean {

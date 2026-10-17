@@ -10,13 +10,17 @@ import {
   parseLimietTot,
   resetTekst,
   abonnementKaartStand,
+  groepeerAbonnementen,
+  machineLabel,
   stoelHeartbeatStand,
   stoelHeeftActie,
   stoelNietGebruikt,
+  stoelSleutel,
   stoelStand,
   toonStoelEmail,
   toonStoelIds,
   verbergStoel,
+  winnendeStoel,
   type CodingSeat,
 } from './codingSeats';
 
@@ -152,6 +156,63 @@ describe('heartbeat-stand', () => {
     expect(verbergStoel(stoel({ id: 'codex3', config_exists: false }))).toBe(true);
     expect(toonStoelEmail(stoel({ email: 'support@axeheadquarters.com', logged_in: false }))).toBeNull();
   });
+
+  it('groepeert per account-e-mail en laat logged_in=true winnen van een andere machine', () => {
+    const nu = Date.parse('2026-10-17T11:00:00Z');
+    const vers = new Date(nu - 30_000).toISOString();
+    const ouder = new Date(nu - 120_000).toISOString();
+    const mini = (id: string, extra: Partial<CodingSeat> = {}) => stoel({
+      id: `mini-van-luka-5:${id}`,
+      seat_id: id,
+      machine: 'mini-van-luka-5',
+      last_seen_at: vers,
+      ...extra,
+    });
+    const imac = (id: string, extra: Partial<CodingSeat> = {}) => stoel({
+      id: `imac-1:${id}`,
+      seat_id: id,
+      machine: 'imac-1',
+      last_seen_at: ouder,
+      ...extra,
+    });
+    const rijen = [
+      mini('claude2', { email: 'support@axeheadquarters.com', logged_in: true, provider: 'claude' }),
+      mini('claude3', { email: 'lukadezeeuw205@gmail.com', logged_in: true, provider: 'claude' }),
+      mini('claude4', { email: 'lukadezeeuw4@gmail.com', logged_in: true, provider: 'claude' }),
+      mini('claude', { logged_in: false, email: null, provider: 'claude' }),
+      mini('codex', { email: 'support@axeheadquarters.com', logged_in: true, provider: 'codex' }),
+      mini('codex2', { email: 'lukadezeeuw1994@hotmail.com', logged_in: true, provider: 'codex' }),
+      mini('cursor', { email: 'lukadezeeuw4@gmail.com', logged_in: true, provider: 'cursor' }),
+      imac('codex', { email: 'lukadezeeuw1994@hotmail.com', logged_in: true, provider: 'codex', last_seen_at: vers }),
+      imac('claude', { logged_in: false, email: null, provider: 'claude' }),
+      imac('claude2', { logged_in: null, email: null, provider: 'claude', last_seen_at: vers }),
+      imac('claude3', { logged_in: false, email: null, provider: 'claude' }),
+      imac('claude4', { logged_in: null, email: null, provider: 'claude' }),
+      stoel({ id: 'imac-1:codex3', seat_id: 'codex3', machine: 'imac-1', config_exists: false, logged_in: false }),
+    ];
+    expect(stoelSleutel({ id: 'mini-van-luka-5:claude2' })).toBe('claude2');
+    expect(machineLabel('mini-van-luka-5')).toBe('Mac mini');
+    expect(machineLabel('imac-1')).toBe('iMac');
+    const win = winnendeStoel([
+      imac('claude2', { logged_in: null, last_seen_at: vers }),
+      mini('claude2', { logged_in: true, email: 'support@axeheadquarters.com', last_seen_at: ouder }),
+    ]);
+    expect(win?.logged_in).toBe(true);
+    expect(win?.machine).toBe('mini-van-luka-5');
+
+    const { kaarten, ongebruikt } = groepeerAbonnementen(rijen);
+    expect(kaarten.map((k) => `${k.provider}:${k.email}:${k.bruikbaarOp.join('+')}`).sort()).toEqual([
+      'claude:lukadezeeuw205@gmail.com:Mac mini',
+      'claude:lukadezeeuw4@gmail.com:Mac mini',
+      'claude:support@axeheadquarters.com:Mac mini',
+      'codex:lukadezeeuw1994@hotmail.com:Mac mini+iMac',
+      'codex:support@axeheadquarters.com:Mac mini',
+      'cursor:lukadezeeuw4@gmail.com:Mac mini',
+    ].sort());
+    expect(ongebruikt.map((g) => g.stoel.id)).toEqual(['claude']);
+    expect(kaarten.every((k) => k.stoel.logged_in === true)).toBe(true);
+    expect(kaarten.some((k) => k.seatIds.includes('codex3'))).toBe(false);
+  });
 });
 
 describe('Settings toont Accounts', () => {
@@ -168,7 +229,7 @@ describe('Settings toont Accounts', () => {
     expect(motoren).toMatch(/codingSeatsHeartbeat/);
     expect(motoren).not.toMatch(/titel="Subscriptions"/);
     expect(seats).not.toMatch(/stoel\.email \|\| v\?\.account/);
-    expect(seats).toMatch(/ongebruikt/);
-    expect(seats).toMatch(/stoelNietGebruikt/);
+    expect(seats).toMatch(/groepeerAbonnementen/);
+    expect(seats).toMatch(/bruikbaarOp/);
   });
 });

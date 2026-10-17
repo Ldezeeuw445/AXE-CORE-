@@ -25,6 +25,7 @@ import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFoll
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import type { GoedkeuringsRij } from '@/domain/agents/pendingApproval';
+import { agentTierRegel } from '@/domain/agents/agentTiers';
 
 const TIK_MS = 1_000;
 const LEESBAAR = '0 1px 3px rgba(0,0,0,.7)';
@@ -96,13 +97,14 @@ function liveRegel(server?: ServerAgent): string {
 }
 
 function Balkje({
-  rij, onKies, server, extra, onBeslis,
+  rij, onKies, server, extra, onBeslis, tierRegel,
 }: {
   rij: ManagerRij;
   onKies: () => void;
   server?: ServerAgent;
   extra: Array<{ id: string; task_id?: string; wat?: string | null; waarom?: string | null; title?: string; detail?: string }>;
   onBeslis: (rij: GoedkeuringsRij, akkoord: boolean) => void;
+  tierRegel?: string;
 }) {
   const { agent, job } = rij;
   const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
@@ -123,6 +125,11 @@ function Balkje({
   const kop = (
     <>
       <span style={{ color: agent.accent, fontWeight: 500 }}>{agent.kort ?? agent.name}</span>
+      {tierRegel ? (
+        <span className="ml-1.5" style={{ color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.04em' }}>
+          {tierRegel}
+        </span>
+      ) : null}
       {' '}
       <span style={{ color: 'var(--text-secondary)' }}>
         {job ? regel : (extraRegel || serverStand?.regel || '')}
@@ -175,6 +182,7 @@ function Balkje({
       style={{ color: 'var(--text-secondary)', textShadow: LEESBAAR }}
     >
       {serverStand ? serverStand.label : 'idle'}
+      {tierRegel ? <span className="ml-1.5 normal-case tracking-normal" style={{ color: 'var(--text-muted)' }}>{tierRegel}</span> : null}
       <span className="ml-1.5 inline-flex align-middle"><DaxStip server={server} /></span>
     </span>
   );
@@ -242,6 +250,7 @@ export function AgentVensters() {
                 server={server.agents[rij.agent.id]}
                 extra={extra}
                 onBeslis={(g, akkoord) => beslissen(rij.agent.id, g, akkoord)}
+                tierRegel={agentTierRegel(server.tiers, rij.agent.id)}
               />
             </Fragment>
           );
@@ -265,6 +274,7 @@ export function AgentVensters() {
               jobs={jobs.filter((j) => j.agent === open.agent.id)}
               server={server.agents[open.agent.id]}
               extraGoedkeuringen={extra}
+              tierRegel={agentTierRegel(server.tiers, open.agent.id)}
               onMissie={(id, actie) => {
                 void (actie === 'pause' ? pauseMission(id) : resumeMission(id)).then(verversServerAgents);
               }}
