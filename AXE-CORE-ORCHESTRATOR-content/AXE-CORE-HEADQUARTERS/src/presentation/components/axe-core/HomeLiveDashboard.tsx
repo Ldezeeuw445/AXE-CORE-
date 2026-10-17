@@ -1,11 +1,11 @@
 /**
- * Living 24/7 strip around the core. The orb stays; this sits between the
- * agent rails, above the composer — never under the chips. Real data only.
+ * Living 24/7 strip around the core. Four equal matte cards between orb and
+ * composer: wrap, no ellipsis, no inner scroll. Extra rows behind "and N more".
  */
-import { useEffect, useState } from 'react';
-import { Kaart, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
-import { homeLiveStand, werkPulseTekst } from '@/domain/homeLive';
+import { homeLiveStand, LIVE_KAART_REGELS, seatsRegels, werkPulseTekst } from '@/domain/homeLive';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { codingSeatsHeartbeat } from '@/infrastructure/gateways/axeCoreApiService';
@@ -13,10 +13,64 @@ import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
 import './homeLive.css';
 
+type LijstSleutel = 'lopend' | 'recent' | 'ok' | 'seats' | null;
+
+function Meer({ n, onOpen }: { n: number; onOpen: () => void }) {
+  if (n <= 0) return null;
+  return (
+    <button type="button" className="axe-home-live-meer" data-axe-home-meer onClick={onOpen}>
+      {`and ${n} more`}
+    </button>
+  );
+}
+
+function Regel({ kleur, children }: { kleur?: string; children: ReactNode }) {
+  return (
+    <p className="axe-home-live-regel" style={{ color: kleur || 'var(--text-primary)' }}>
+      {children}
+    </p>
+  );
+}
+
+/** Zoveel items als in de kaart passen, tot 5 regels; de rest achter 'and N more'. */
+function FitLijst<T>({
+  items,
+  render,
+  leeg,
+  onMeer,
+}: {
+  items: T[];
+  render: (item: T) => ReactNode;
+  leeg: ReactNode;
+  onMeer: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const aantal = items.length;
+  const [zicht, setZicht] = useState(() => Math.min(LIVE_KAART_REGELS, aantal));
+  useLayoutEffect(() => {
+    setZicht(Math.min(LIVE_KAART_REGELS, aantal));
+  }, [aantal]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.scrollHeight > el.clientHeight + 1 && zicht > 0) {
+      setZicht((n) => Math.max(0, n - 1));
+    }
+  }, [zicht, aantal]);
+  if (items.length === 0) return <>{leeg}</>;
+  return (
+    <div ref={ref} className="axe-home-live-fit">
+      {items.slice(0, zicht).map(render)}
+      <Meer n={items.length - zicht} onOpen={onMeer} />
+    </div>
+  );
+}
+
 export function HomeLiveDashboard() {
   const server = useServerAgents();
   const jobs = useAxeJobStore((s) => s.jobs);
   const [stoelen, setStoelen] = useState<CodingSeat[]>([]);
+  const [lijst, setLijst] = useState<LijstSleutel>(null);
 
   useEffect(() => {
     let alive = true;
@@ -63,6 +117,9 @@ export function HomeLiveDashboard() {
     stoelen,
   });
 
+  const okZicht = stand.goedkeuringen.slice(0, 1);
+  const seats = seatsRegels(stand);
+
   return (
     <div className="pointer-events-auto axe-home-live" data-axe-home-live>
       <div className="axe-home-live-pulse" aria-live="polite">
@@ -78,80 +135,92 @@ export function HomeLiveDashboard() {
       </div>
 
       <div className="axe-home-live-raster">
-        <SectieBlok titel="WORKING NOW">
-          <Kaart compact titel={`${stand.lopend.length || 'No'} running`}>
-            {stand.lopend.length === 0 && (
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>No running tasks or missions right now.</p>
-            )}
-            {stand.lopend.map((t) => (
-              <p key={t.id} className="text-[11px] leading-snug truncate" style={{ color: 'var(--text-primary)' }}>
+        <div className="axe-home-live-kaart-vak" data-axe-home-kaart="lopend">
+        <Kaart className="axe-home-live-kaart" titel="WORKING NOW">
+          <FitLijst
+            items={stand.lopend}
+            leeg={<Regel kleur="var(--text-muted)">No running tasks or missions right now.</Regel>}
+            onMeer={() => setLijst('lopend')}
+            render={(t) => (
+              <Regel key={t.id}>
                 <span style={{ color: t.kleur }}>{t.agent}</span>
                 {' · '}
                 {t.titel}
                 {t.voortgang ? <span style={{ color: 'var(--text-muted)' }}> · {t.voortgang}</span> : null}
-              </p>
-            ))}
-          </Kaart>
-        </SectieBlok>
-
-        <SectieBlok titel="RECENT">
-          <Kaart compact titel="Completed / failed">
-            {stand.recent.length === 0 && (
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>No recent completed or failed tasks in this feed.</p>
+              </Regel>
             )}
-            {stand.recent.map((t) => (
-              <p key={t.id} className="text-[11px] leading-snug truncate" style={{ color: t.kleur }}>
+          />
+        </Kaart>
+        </div>
+
+        <div className="axe-home-live-kaart-vak" data-axe-home-kaart="recent">
+        <Kaart className="axe-home-live-kaart" titel="RECENT">
+          <FitLijst
+            items={stand.recent}
+            leeg={<Regel kleur="var(--text-muted)">No recent completed or failed tasks in this feed.</Regel>}
+            onMeer={() => setLijst('recent')}
+            render={(t) => (
+              <Regel key={t.id} kleur={t.kleur}>
                 {t.voortgang} {t.agent} · {t.titel}
-              </p>
-            ))}
-          </Kaart>
-        </SectieBlok>
-
-        <SectieBlok titel="NEEDS YOUR OK">
-          <Kaart compact titel={stand.goedkeuringen.length ? `${stand.goedkeuringen.length} pending` : 'None pending'}>
-            {stand.goedkeuringen.length === 0 && (
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>No pending approvals.</p>
+              </Regel>
             )}
+          />
+        </Kaart>
+        </div>
+
+        <div className="axe-home-live-kaart-vak" data-axe-home-ok data-axe-home-kaart="ok">
+        <Kaart className="axe-home-live-kaart" titel="NEEDS YOUR OK">
+          {stand.goedkeuringen.length === 0 && (
+            <Regel kleur="var(--text-muted)">No pending approvals.</Regel>
+          )}
+          <GoedkeuringActie
+            rijen={okZicht}
+            compact
+            onBeslis={(rij, akkoord) => { void beslisAgentOk({ akkoord, rij }).then(verversServerAgents); }}
+          />
+          <Meer n={Math.max(0, stand.goedkeuringen.length - okZicht.length)} onOpen={() => setLijst('ok')} />
+        </Kaart>
+        </div>
+
+        <div className="axe-home-live-kaart-vak" data-axe-home-seats data-axe-home-kaart="seats">
+        <Kaart className="axe-home-live-kaart" titel="SEATS · DAX · CRON">
+          <FitLijst
+            items={seats}
+            leeg={<Regel kleur="var(--text-muted)">No seat, DAX or schedule heartbeat yet.</Regel>}
+            onMeer={() => setLijst('seats')}
+            render={(s) => (
+              <Regel key={s.id} kleur={s.kleur}>{s.tekst}</Regel>
+            )}
+          />
+        </Kaart>
+        </div>
+      </div>
+
+      {lijst && (
+        <div className="axe-home-live-lijst" data-axe-home-lijst={lijst} role="dialog" aria-label="Full live list">
+          <div className="axe-home-live-lijst-kop">
+            <span>
+              {lijst === 'lopend' ? 'WORKING NOW' : lijst === 'recent' ? 'RECENT' : lijst === 'ok' ? 'NEEDS YOUR OK' : 'SEATS · DAX · CRON'}
+            </span>
+            <button type="button" className="axe-home-live-meer" onClick={() => setLijst(null)}>Close</button>
+          </div>
+          {lijst === 'lopend' && stand.lopend.map((t) => (
+            <Regel key={t.id}><span style={{ color: t.kleur }}>{t.agent}</span> · {t.titel}</Regel>
+          ))}
+          {lijst === 'recent' && stand.recent.map((t) => (
+            <Regel key={t.id} kleur={t.kleur}>{t.voortgang} {t.agent} · {t.titel}</Regel>
+          ))}
+          {lijst === 'ok' && (
             <GoedkeuringActie
               rijen={stand.goedkeuringen}
               onBeslis={(rij, akkoord) => { void beslisAgentOk({ akkoord, rij }).then(verversServerAgents); }}
             />
-          </Kaart>
-        </SectieBlok>
-
-        <SectieBlok titel="SEATS · DAX · CRON">
-          <Kaart compact titel="Coding seats">
-            {stand.stoelen.length === 0 && (
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>No seat heartbeat yet.</p>
-            )}
-            {stand.stoelen.map((s) => (
-              <p key={s.id} className="text-[11px] truncate" style={{ color: s.toon === 'ok' || s.toon === 'info' ? 'var(--ok)' : 'var(--text-muted)' }}>
-                {s.id} · {s.stand}{s.taak && s.taak !== 'idle' ? ` · ${s.taak}` : ''}
-              </p>
-            ))}
-          </Kaart>
-          <Kaart compact titel="DAX computers">
-            {stand.dax.length === 0 && (
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>No DAX heartbeat on these agents.</p>
-            )}
-            {stand.dax.map((d) => (
-              <p key={d.agent} className="text-[11px] leading-snug" style={{ color: d.wakker ? 'var(--accent-cyan)' : 'var(--text-muted)' }} title={d.blokkade}>
-                {d.agent} · {d.tekst}
-              </p>
-            ))}
-          </Kaart>
-          <Kaart compact titel="Schedules">
-            {stand.roosters.length === 0 && (
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>No schedules reported.</p>
-            )}
-            {stand.roosters.map((r) => (
-              <p key={`${r.agent}-${r.naam}`} className="text-[11px] truncate" style={{ color: r.fout ? 'var(--err)' : 'var(--text-secondary)' }}>
-                {r.agent} · {r.naam} · last {r.laatste} · next {r.volgende}
-              </p>
-            ))}
-          </Kaart>
-        </SectieBlok>
-      </div>
+          )}
+          {lijst === 'seats' && seatsRegels(stand).map((s) => (
+            <Regel key={s.id} kleur={s.kleur}>{s.tekst}</Regel>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

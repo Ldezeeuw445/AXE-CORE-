@@ -87,6 +87,11 @@ def run(coro):
 
 # ── Agenda ─────────────────────────────────────────────────────────────────
 
+def test_staande_draait_op_vps():
+    assert "staande" in p.UITVOERBAAR["vps"]
+    assert "staande" in p.ALLE_SOORTEN
+
+
 def test_two_hourly_job_gives_each_run():
     items = p.agenda([sched(cron_expr="0 */2 * * *")], [], NU, NU + timedelta(hours=5))
     assert [i["at"][11:16] for i in items] == ["12:00", "14:00", "16:00"]

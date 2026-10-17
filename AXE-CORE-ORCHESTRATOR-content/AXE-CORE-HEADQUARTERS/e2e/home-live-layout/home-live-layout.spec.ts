@@ -36,7 +36,7 @@ test.describe('Home live layout blijft uit de composer', () => {
   test.beforeAll(() => { mkdirSync(shots, { recursive: true }); });
 
   for (const maat of MATEN) {
-    test(`${maat.naam}: rails, live strip, feed en toast overlappen composer/chips niet`, async ({ page }) => {
+    test(`${maat.naam}: rails, live strip, feed en toast overlappen composer/chips/orb/dock niet`, async ({ page }) => {
       await open(page, maat.width, maat.height);
       const live = await box(page, '[data-axe-home-live]');
       const composer = await box(page, '[data-axe-composer]');
@@ -46,16 +46,42 @@ test.describe('Home live layout blijft uit de composer', () => {
       const toast = await box(page, '[data-axe-toast]');
       const ok = await box(page, '[data-axe-home-ok]');
       const feed = await box(page, '[data-axe-home-feed]');
+      const orb = await box(page, '[data-axe-orb]');
+      const dock = await box(page, '[data-axe-dock]');
 
       expect(overlap(live, composer), 'live strip vs composer').toBe(0);
       expect(overlap(live, chips), 'live strip vs chips').toBe(0);
+      expect(overlap(live, orb), 'live strip vs orb').toBe(0);
+      expect(overlap(live, dock), 'live strip vs dock').toBe(0);
       expect(overlap(ok, composer), 'NEEDS YOUR OK vs composer').toBe(0);
       expect(overlap(feed, chips), 'activity feed vs chips').toBe(0);
       expect(overlap(links, composer), 'left rail vs composer').toBe(0);
       expect(overlap(rechts, composer), 'right rail vs composer').toBe(0);
+      expect(overlap(links, live), 'left rail vs live').toBe(0);
+      expect(overlap(rechts, live), 'right rail vs live').toBe(0);
       expect(overlap(toast, rechts), 'toast vs right rail').toBe(0);
       expect(live.y + live.height).toBeLessThanOrEqual(composer.y + 0.5);
       expect(await page.locator('.axe-home-rail-rij').count()).toBe(13);
+
+      const kaarten = page.locator('[data-axe-home-kaart]');
+      expect(await kaarten.count()).toBe(4);
+      const n = await kaarten.count();
+      for (let i = 0; i < n; i++) {
+        const maatKaart = await kaarten.nth(i).evaluate((el) => {
+          const node = el as HTMLElement;
+          return { sh: node.scrollHeight, ch: node.clientHeight, overflow: getComputedStyle(node).overflow };
+        });
+        expect(maatKaart.overflow, `kaart ${i} overflow at ${maat.naam}`).toMatch(/hidden|clip/);
+        expect(
+          maatKaart.sh,
+          `kaart ${i} scrollHeight<=clientHeight at ${maat.naam} (${maatKaart.sh} vs ${maatKaart.ch})`,
+        ).toBeLessThanOrEqual(maatKaart.ch + 1);
+      }
+      const liveMaat = await page.locator('[data-axe-home-live]').evaluate((el) => ({
+        sh: (el as HTMLElement).scrollHeight,
+        ch: (el as HTMLElement).clientHeight,
+      }));
+      expect(liveMaat.sh, `live strip scrollHeight<=clientHeight at ${maat.naam}`).toBeLessThanOrEqual(liveMaat.ch + 1);
 
       await page.screenshot({
         path: join(shots, `home-${maat.naam}.png`),

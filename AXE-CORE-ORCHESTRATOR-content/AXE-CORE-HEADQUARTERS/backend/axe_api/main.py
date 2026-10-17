@@ -3735,6 +3735,14 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
             uit = await asyncio.to_thread(dax_wacht.ronde, sb)
             return {"status": dax_wacht.ronde_status(uit), "output": json.dumps(uit, default=str)[:4000]}
 
+        if action_type == "staande":
+            # 24/7-loops voor agents zonder DAX (Wingman/Memory/Task/Cron/…).
+            # Alleen meten en rapporteren: geen mail, geen orders, geen geld.
+            import staande_diensten
+            agent = str((payload or {}).get("agent") or "").strip()
+            uit = await asyncio.to_thread(staande_diensten.voer_uit, agent, sb())
+            return {"status": uit.get("status", "fail"), "output": str(uit.get("output") or "")[:4000]}
+
         if action_type in ("crew", "prompt"):
             task = (payload.get("task") or payload.get("prompt") or "").strip()
             if not task:
@@ -4388,6 +4396,11 @@ async def cron_tick(
     try:
         # Claim met lease (planning.py): een job die langer dan een minuut duurt start
         # niet nog eens, en elke run staat in core_job_runs.
+        try:
+            import staande_diensten
+            staande_diensten.zorg_voor_roosters(sb())
+        except Exception as staande_err:
+            print(f"[cron_tick] standing schedules: {staande_err}", flush=True)
         ran = await _uitvoerder("vps").tick()
         for r in ran:
             if r.get("status") == "skipped":

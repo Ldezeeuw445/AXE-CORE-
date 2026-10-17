@@ -96,6 +96,33 @@ def _routine_samenvatting(r: dict[str, Any]) -> str:
             return ", ".join(delen) or "nothing to do"
         if "gemaakt" in d:
             return f"planned {len(d.get('gemaakt') or [])} tasks"
+        if "triage" in d and isinstance(d.get("triage"), dict):
+            t = d["triage"]
+            return d.get("routing") or (
+                f"triage {t.get('pending_ok', 0)} OK, {t.get('queued', 0)} queued, {t.get('blocked', 0)} blocked"
+            )
+        if "queue" in d and isinstance(d.get("queue"), dict):
+            q = d["queue"]
+            return f"queue {q.get('queued', 0)} waiting, {q.get('stale_leases', 0)} stale, {q.get('failed', 0)} failed"
+        if "vault" in d and isinstance(d.get("vault"), dict):
+            v = d["vault"]
+            return f"vault {v.get('events_24h', 0)} events/24h, {v.get('memories_seen', 0)} memories"
+        if "schedules" in d and isinstance(d.get("schedules"), dict):
+            s = d["schedules"]
+            return f"schedules {s.get('enabled', 0)} on, {s.get('failing', 0)} failing, {s.get('due_now', 0)} due"
+        if isinstance(d.get("seats"), list) and d.get("costs"):
+            return f"usage {len(d['seats'])} seats, read-only"
+        if "health" in d and isinstance(d.get("health"), dict):
+            return "app health " + ", ".join(
+                f"{k} {v.get('ok', 0)}/{v.get('enabled', 0)}"
+                for k, v in list(d["health"].items())[:3] if isinstance(v, dict)
+            ) or "app health clear"
+        if "signals" in d and isinstance(d.get("signals"), dict):
+            s = d["signals"]
+            return f"signals {s.get('options_seen', 0)} options, bias {s.get('bias') or 'none'}"
+        if "companion" in d and isinstance(d.get("companion"), dict):
+            c = d["companion"]
+            return f"companion {c.get('jobs', 0)} jobs, last {c.get('last') or 'none'}"
     tekst = re.sub(r"\s+", " ", tekst).strip()
     return tekst[:110]
 
@@ -106,6 +133,8 @@ def routine_agent(r: dict[str, Any]) -> str:
         if isinstance(meta, dict) and meta.get(k):
             return roster_agent(str(meta[k]))
     key = str(r.get("job_key") or "")
+    if ":staande-" in key:
+        return roster_agent(key.rsplit("-", 1)[-1])
     if key.endswith(":planner"):
         return "axe"
     app = str(r.get("app") or "")
@@ -351,6 +380,24 @@ def agent_status(
         if r["failures"] and r["last_status"] not in ("ok", "skipped"):
             tekst = "cycle recovered"
         return resultaat("MONITORING", f"{r['name']} {_klok(r['last_run_at'])}: {tekst}{volgende}")
+
+    # Agents met een vast 24/7-ritme (staande_diensten) zijn niet aan het slapen
+    # als het rooster nog niet in de DB staat of nog nooit gelopen heeft.
+    try:
+        from staande_diensten import catalogus_voor, volgende_run
+        vast = catalogus_voor(agent)
+    except Exception:  # noqa: BLE001
+        vast = None
+    if vast:
+        try:
+            nxt = volgende_run(vast["cron_expr"], na=moment)
+            volgende = f"; next {_klok(nxt.isoformat())}"
+        except Exception:  # noqa: BLE001
+            volgende = ""
+        return resultaat(
+            "MONITORING",
+            f"{vast['name']} never: waiting first cycle{volgende}",
+        )
 
     return resultaat("SLEEPING", "Nothing runnable for this agent.")
 

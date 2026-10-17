@@ -42,11 +42,12 @@ EXECUTORS = ("vps", "mac", "supabase")
 # Wat de tick kan uitvoeren, per uitvoerder. 'observed' draait elders en meldt zijn runs.
 UITVOERBAAR = {
     # dax: de DAX-wacht (dax_wacht.py) -- houdt de DAX-bots wakker, meet ze, geeft ze hun vaste werk.
-    "vps": ("prompt", "exec", "webhook", "crew", "northsea", "review_desk", "dax"),
+    # staande: 24/7-loops voor agents zonder DAX (staande_diensten.py).
+    "vps": ("prompt", "exec", "webhook", "crew", "northsea", "review_desk", "dax", "staande"),
     # review_desk: de bronworker van Website Review Desk; zijn sleutels staan in de kluis op de Mac.
     "mac": ("exec", "webhook", "planner", "review_desk"),
 }
-ALLE_SOORTEN = ("prompt", "exec", "webhook", "crew", "observed", "planner", "northsea", "review_desk", "dax")
+ALLE_SOORTEN = ("prompt", "exec", "webhook", "crew", "observed", "planner", "northsea", "review_desk", "dax", "staande")
 MAX_FAILS = 5
 RUST_MAX_MIN = 360
 

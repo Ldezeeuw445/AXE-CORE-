@@ -262,10 +262,10 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
       // Snel omhoog, rustiger omlaag: lettergrepen zie je, geen flikkering.
       stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
       const cx = w / 2, cy = h * BOL_HOOGTE;
-      // Iets groter standaard (0.31 -> 0.34): op klein formaat lagen de deeltjes
-      // te dicht op elkaar en versmolten tot één waas. Meer straal = meer lucht
-      // tussen de punten, dus ook zonder inzoomen leest de korrel.
-      const R = Math.min(w, h) * 0.34 * zoom;
+      // Desktop: 0.34 was te groot toen de live-kaarten ~5 regels kregen
+      // (17 okt). 0.28 laat lucht tussen bol en de band. Telefoon blijft 0.34
+      // in tekenFijn — die layout mag niet meeschuiven.
+      const R = Math.min(w, h) * 0.28 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
 
       // Binnenbol op 46% van de straal: je ziet hem door de buitenste heen

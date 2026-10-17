@@ -153,10 +153,24 @@ const LABEL: Record<ServerAgentStatus, string> = {
   QUEUED: 'queued',
   BLOCKED: 'blocked',
   ERROR: 'error',
-  MONITORING: 'monitoring',
+  MONITORING: 'scheduled',
   MISSION_COMPLETE: 'mission complete',
   SLEEPING: 'sleeping',
 };
+
+/** Agents met een vast 24/7-ritme (staande_diensten op de VPS). Nooit een kaal SLEEPING. */
+const STAANDE_AGENTS: ReadonlySet<string> = new Set([
+  'wingman', 'memory', 'task', 'cron', 'finance', 'apps', 'intel', 'companion',
+]);
+
+function roosterRegel(a: ServerAgent): string {
+  const r = (a.routines ?? []).find((x) => x.next_run_at || x.summary || x.last_run_at)
+    ?? (a.routines ?? [])[0];
+  if (!r && !STAANDE_AGENTS.has(a.agent)) return '';
+  const next = r?.next_run_at && !r.running ? eventTijd(r.next_run_at) : (r?.running ? 'now' : '—');
+  const last = (r?.summary || '').trim() || (r?.last_status ? `cycle ${r.last_status}` : 'none yet');
+  return `Next run ${next || '—'} · last: ${last}`;
+}
 
 function kort(tekst: string | null | undefined, max = 140): string {
   const t = (tekst || '').replace(/\s+/g, ' ').trim();
@@ -165,6 +179,7 @@ function kort(tekst: string | null | undefined, max = 140): string {
 
 export function serverStand(a: ServerAgent): ServerStand {
   const m = a.mission;
+  const gepland = (a.routines && a.routines.length > 0) || STAANDE_AGENTS.has(a.agent);
   let regel = '';
   if (a.status === 'BLOCKED' || a.status === 'ERROR') regel = a.reason;
   else if (a.current_action) regel = a.current_action;
@@ -172,12 +187,14 @@ export function serverStand(a: ServerAgent): ServerStand {
   else if (m?.next_action) regel = m.next_action;
   else if (a.task?.title) regel = a.task.title;
   else if (m?.title) regel = m.title;
-  else if (a.status !== 'SLEEPING') regel = a.reason;
+  else if (a.status === 'MONITORING' || a.status === 'SLEEPING') regel = roosterRegel(a) || (a.status === 'SLEEPING' ? '' : a.reason);
+  else regel = a.reason;
+  const kaalSlapen = a.status === 'SLEEPING' && !gepland;
   return {
-    label: LABEL[a.status] ?? a.status.toLowerCase(),
+    label: kaalSlapen ? LABEL.SLEEPING : (gepland && (a.status === 'SLEEPING' || a.status === 'MONITORING') ? 'scheduled' : (LABEL[a.status] ?? a.status.toLowerCase())),
     kleur: KLEUR[a.status] ?? 'var(--text-secondary)',
     regel: kort(regel),
-    stil: a.status === 'SLEEPING',
+    stil: kaalSlapen,
   };
 }
 
@@ -188,10 +205,12 @@ export function serverStand(a: ServerAgent): ServerStand {
 export function agentLiveRegel(server: ServerAgent, nu: number = Date.now()): string {
   const stand = serverStand(server);
   if (stand.regel) return stand.regel;
+  const rooster = roosterRegel(server);
+  if (rooster) return rooster;
   const next = (server.routines ?? []).find((r) => r.next_run_at && !r.running);
   const dax = daxRegel(server, nu);
   if (dax && !dax.wakker && dax.blokkade) return dax.blokkade;
-  if (next) return `next ${eventTijd(next.next_run_at)} · ${next.name}`;
+  if (next) return `Next run ${eventTijd(next.next_run_at)} · last: ${next.summary || next.name}`;
   return '';
 }
 

@@ -11,6 +11,27 @@ describe('Home toont wat de server echt ziet', () => {
     expect(s).toMatchObject({ label: 'sleeping', stil: true, regel: '' });
   });
 
+  it('een 24/7-agent toont nooit een kaal SLEEPING', () => {
+    const s = serverStand(basis({
+      agent: 'wingman',
+      status: 'SLEEPING',
+      routines: [{
+        name: 'Wingman triage + routing',
+        last_run_at: '2026-10-17T12:30:00+00:00',
+        last_status: 'ok',
+        next_run_at: '2026-10-17T12:45:00+00:00',
+        running: false,
+        failures: 0,
+        summary: 'inbox clear',
+      }],
+    }));
+    expect(s.stil).toBe(false);
+    expect(s.label).toBe('scheduled');
+    expect(s.regel).toMatch(/Next run /);
+    expect(s.regel).toMatch(/last: inbox clear/);
+    expect(s.regel.toLowerCase()).not.toBe('sleeping');
+  });
+
   it('werkend toont de echte laatste actie', () => {
     const s = serverStand(basis({ status: 'WORKING', current_action: 'Step 3: $ npm test' }));
     expect(s.label).toBe('working');

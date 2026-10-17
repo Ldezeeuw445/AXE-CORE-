@@ -169,6 +169,13 @@ def test_working_alleen_met_levende_lease():
 
 def test_sleeping_waiting_blocked_monitoring():
     assert agent_status("browser", [], [], None, NU)["status"] == "SLEEPING"
+
+
+def test_staande_agent_is_niet_sleeping_zonder_roosterrij():
+    s = agent_status("wingman", [], [], None, NU)
+    assert s["status"] == "MONITORING"
+    assert "waiting first cycle" in s["reason"]
+    assert "next" in s["reason"].lower()
     assert agent_status("developer", [{"id": "t", "assignee": "developer", "status": "waiting_approval"}], [], None, NU)["status"] == "WAITING_APPROVAL"
     blok = {"id": "m", "owner_agent": "northsea", "status": "blocked", "blocked_reason": "x", "milestones": []}
     assert agent_status("northsea", [], [blok], None, NU)["status"] == "BLOCKED"
@@ -228,6 +235,18 @@ def test_planner_namen_tellen_voor_de_roster_agent():
 def test_desk_notitie_is_geen_werk():
     notitie = {"id": "n", "assignee": "northsea", "status": "pending", "metadata": {"source": "cron"}}
     assert agent_status("northsea", [notitie], [], None, NU)["status"] == "SLEEPING"
+
+
+def test_staande_job_key_hoort_bij_de_agent_niet_bij_apps():
+    from agent_activiteit import routine_agent
+    assert routine_agent({"job_key": "axe_core:staande-memory", "app": "axe_core", "enabled": True}) == "memory"
+    assert routine_agent({"job_key": "axe_core:staande-wingman", "metadata": {"agent": "wingman"}}) == "wingman"
+
+
+def test_staande_samenvatting_uit_json():
+    from agent_activiteit import routine_samenvatting
+    r = {"last_result": '{"job": "triage+routing", "triage": {"pending_ok": 2, "queued": 1, "blocked": 0}, "routing": "2 need OK, 1 queued, 0 blocked"}'}
+    assert "2 need OK" in routine_samenvatting(r)
 
 
 def test_rooster_maakt_monitoring_met_wat_het_vond():

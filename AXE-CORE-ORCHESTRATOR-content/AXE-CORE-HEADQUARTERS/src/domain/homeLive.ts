@@ -44,6 +44,12 @@ export type LiveStoel = {
   taak: string;
 };
 
+export type LiveRegel = {
+  id: string;
+  tekst: string;
+  kleur: string;
+};
+
 export type HomeLiveStand = {
   werkend: number;
   namen: string[];
@@ -54,6 +60,16 @@ export type HomeLiveStand = {
   dax: LiveDax[];
   roosters: LiveRooster[];
 };
+
+/** Zichtbare regels per live-kaart: ~5 regels tekst, rest achter 'and N more'. */
+export const LIVE_KAART_REGELS = 5;
+
+export function kaartRegels<T>(items: T[]): { zicht: T[]; meer: number } {
+  return {
+    zicht: items.slice(0, LIVE_KAART_REGELS),
+    meer: Math.max(0, items.length - LIVE_KAART_REGELS),
+  };
+}
 
 const HOOFD: readonly AxeAgentId[] = [
   ...agentsByTier('tier1').map((a) => a.id),
@@ -159,12 +175,38 @@ export function homeLiveStand(in_: {
     werkend: werkNamen.size,
     namen: [...werkNamen],
     lopend,
-    recent: recent.slice(0, 8),
+    recent,
     goedkeuringen: uniekeOk,
     stoelen,
     dax,
-    roosters: roosters.slice(0, 8),
+    roosters,
   };
+}
+
+export function seatsRegels(stand: HomeLiveStand): LiveRegel[] {
+  const uit: LiveRegel[] = [];
+  for (const s of stand.stoelen) {
+    uit.push({
+      id: `seat-${s.id}`,
+      tekst: `${s.id} · ${s.stand}${s.taak && s.taak !== 'idle' && s.taak !== 'not used' ? ` · ${s.taak}` : ''}`,
+      kleur: s.toon === 'ok' || s.toon === 'info' ? 'var(--ok)' : 'var(--text-muted)',
+    });
+  }
+  for (const d of stand.dax) {
+    uit.push({
+      id: `dax-${d.agent}`,
+      tekst: `${d.agent} · ${d.tekst}`,
+      kleur: d.wakker ? 'var(--accent-cyan)' : 'var(--text-muted)',
+    });
+  }
+  for (const r of stand.roosters) {
+    uit.push({
+      id: `cron-${r.agent}-${r.naam}`,
+      tekst: `${r.agent} · ${r.naam} · last ${r.laatste} · next ${r.volgende}`,
+      kleur: r.fout ? 'var(--err)' : 'var(--text-secondary)',
+    });
+  }
+  return uit;
 }
 
 export function werkPulseTekst(n: number, ok = 0): string {

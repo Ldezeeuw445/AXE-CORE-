@@ -19,6 +19,9 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toContain('.axe-home-rail--rechts');
     expect(css).toMatch(/left: calc\(var\(--axe-home-rail-inset\) \+ var\(--axe-home-rail-breed\)/);
     expect(css).toMatch(/right: calc\(var\(--axe-home-rail-inset\) \+ var\(--axe-home-rail-breed\)/);
+    expect(css).toMatch(/grid-template-columns: repeat\(4,/);
+    expect(css).toMatch(/\.axe-home-live \{[^}]*overflow: hidden/);
+    expect(css).not.toMatch(/\.axe-home-live \{[^}]*overflow:\s*auto/);
     expect(css).not.toMatch(/left: calc\(clamp\(16px/);
   });
 
@@ -29,5 +32,7 @@ describe('Home live dashboard is aangesloten', () => {
     expect(dash).toContain('beslisAgentOk');
     expect(dash).toContain('GoedkeuringActie');
     expect(dash).toContain('No running tasks or missions right now');
+    expect(dash).toContain('and ${n} more');
+    expect(dash).not.toContain('truncate');
   });
 });
