@@ -878,7 +878,8 @@ class Planner:
             return {"taak": taak["id"], "overgeslagen": "al opgepakt"}
         prompt = (
             f"Taak van de planner ({AGENT_LABEL[agent]}): {taak.get('title')}\n\n{taak.get('goal')}\n\n"
-            + ("Je mag bestanden in deze repo aanpassen. Commit en push NIET; Luka bekijkt de diff.\n"
+            + ("Je mag bestanden in deze repo aanpassen. Commit en push NIET zelf: de planner legt je "
+               "wijzigingen na afloop vast op deze branch en zet ze in een draft-PR voor Luka.\n"
                if schrijven else "Alleen lezen: verander niets. Geef een beknopt, concreet verslag.\n")
             + "Zet je volledige verslag in je antwoord zelf. Schrijf geen plan- of verslagbestand.\n"
         )
@@ -897,9 +898,32 @@ class Planner:
             if not motor:
                 break
         bewijs = self._bewijs(repo) if schrijven and tekst else None
+        if bewijs and bewijs.get("veranderd"):
+            # Vastleggen en als draft-PR op GitHub, anders stapelt het werk zich
+            # ongezien op in de checkout op de Mac (zie bouw_publiceer.py).
+            pub = self._publiceer(repo, taak, tekst)
+            bewijs["publicatie"] = pub
+            if pub.get("gepusht"):
+                regel = f"[Pushed {pub.get('sha')} to {pub.get('branch')}" + (f"; draft PR: {pub['pr']}]" if pub.get("pr") else "]")
+                tekst = f"{regel}\n\n{tekst}"
+            elif pub.get("geblokkeerd"):
+                tekst = f"[Not pushed: {pub.get('reden')}. The change stays in the checkout for review.]\n\n{tekst}"
         self._sluit(taak, tekst, fout, geprobeerd[-1], bewijs)
         return {"taak": taak["id"], "ok": bool(tekst), "fout": fout or None, "motoren": geprobeerd,
                 **({"bewijs": bewijs} if bewijs else {})}
+
+    def _publiceer(self, repo: str, taak: dict, verslag: Optional[str]) -> dict:
+        import bouw_publiceer
+        if not bouw_publiceer.aan():
+            return {"gepusht": False, "reden": "AXE_BOUW_PUSH=0"}
+        try:
+            from agent_runner import _git, _repo_pad, commit_en_push
+        except ImportError as e:
+            return {"gepusht": False, "reden": f"agent_runner: {e}"}
+        return bouw_publiceer.publiceer(
+            repo, str(taak.get("title") or "AXE build run"), verslag or "", str(taak.get("id")),
+            git=_git, commit_en_push=commit_en_push, repo_pad=_repo_pad,
+            token=os.environ.get("GITHUB_TOKEN", ""))
 
     def _blokkeer(self, taak: dict, afgevallen: dict) -> dict:
         """Geen enkele motor kan: zichtbaar geblokkeerd, en het kost geen poging."""

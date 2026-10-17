@@ -24,6 +24,25 @@ zit. AXE Core voert het uit; agents en sessies lezen het voordat ze beginnen.
    11 oktober stilviel.
 5. Niveau C (zie `goedkeuringsniveaus`) gaat naar Luka. Altijd.
 
+## De bouwlus (autopilot)
+
+`pg_cron` zet elk uur via `core_bouw_aanvullen()` per app één bouwtaak klaar, met de
+opdracht uit `core_bouw_apps.opdracht` (de programmataken hierboven). De planner op
+de Mac mini voert hem uit met een ingelogde CLI (Claude, Codex; Cursor valt bij een
+betaalfout zes uur weg), in de checkout van die repo op zijn werkbranch, met 25
+minuten en rechten om tests, lint, typecheck en build te draaien.
+
+Sinds 17 okt blijft het werk niet meer in die checkout liggen. Na een geslaagde run met
+echte wijzigingen doet `backend/axe_api/bouw_publiceer.py` het volgende:
+- Hij weigert als er iets geheims mee zou gaan: een `.env`, een sleutelbestand, of een
+  regel die op een sleutel lijkt. Een anon-JWT mag wel mee, een service-role-JWT niet.
+- Hij commit op de werkbranch, nooit op main of master en nooit met force.
+- Hij pusht en houdt per branch één **draft-PR** bij.
+
+De lus merget nooit en haalt nooit een PR uit draft; dat doet Luka. Uitzetten zonder
+uitrol: `AXE_BOUW_PUSH=0` in de omgeving van de planner op de Mac mini. Zonder
+`GITHUB_TOKEN` daar wordt er wel gepusht, maar komt er geen PR.
+
 ## Grenzen die niet verschuiven
 
 Toestemming van Luka is nodig voor: destructieve productie-DB-wijzigingen,

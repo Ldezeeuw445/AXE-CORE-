@@ -1,6 +1,6 @@
 {
   "versie": 1,
-  "bijgewerkt": "2026-10-17T13:00:00Z",
+  "bijgewerkt": "2026-10-17T18:00:00Z",
   "canon": "docs/programma/canon/",
   "statussen": [
     "queued",
@@ -183,7 +183,7 @@
       "objective": "Meldingen die aankomen op de telefoon: Web Push-abonnement van Luka geregistreerd, of ntfy (Vault axe_uptime_webhook) als tweede kanaal voor statusovergangen",
       "phase": "fundament",
       "priority": "P0",
-      "status": "waiting_approval",
+      "status": "verifying",
       "owner_agent": "luka",
       "approval_level": "B",
       "dependencies": [
@@ -198,14 +198,14 @@
         "Vault-naam axe_uptime_webhook"
       ],
       "started_at": null,
-      "last_progress_at": "2026-10-17T13:00:00Z",
+      "last_progress_at": "2026-10-17T18:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
       "blocker": "17 okt: 0 push-abonnementen",
-      "next_action": "telefoon: Settings, Notifications, Turn on for this device (eigenaar-actie phone-push meet core_push_subscriptions)",
+      "next_action": "Luka meldt de telefoon aangezet; de bewaker meet core_push_subscriptions (eigenaar-actie phone-push)",
       "rollback_reference": null
     },
     {
@@ -214,7 +214,7 @@
       "objective": "/health van de AXE Core API controleert afhankelijkheden: Supabase, lease-versheid task worker, laatste tick, northsea-mcp",
       "phase": "fundament",
       "priority": "P1",
-      "status": "verifying",
+      "status": "done",
       "owner_agent": "claude",
       "approval_level": "B",
       "dependencies": [],
@@ -227,16 +227,16 @@
         "backend/axe_api/main.py"
       ],
       "started_at": null,
-      "last_progress_at": "2026-10-17T13:00:00Z",
+      "last_progress_at": "2026-10-17T18:00:00Z",
       "attempts": 0,
       "tests_run": [
         "test_gezondheid 7, test_health_endpoint 2, test_cancel_endpoint 11: geslaagd"
       ],
       "build_result": null,
-      "deployment_result": null,
-      "verification_result": null,
+      "deployment_result": "vps_sync deploy door Luka, 17 okt",
+      "verification_result": "https://api.axecompanion.com/health: checks supabase ok, cron_tick ok (98 s), task_worker active, northsea_mcp 1.4.1; degraded leeg",
       "blocker": null,
-      "next_action": "uitrol via vps_sync (eigenaar-actie axe-api-deploy meet /health op checks)",
+      "next_action": null,
       "rollback_reference": null
     },
     {
@@ -245,7 +245,7 @@
       "objective": "vps_sync-manifest compleet: de ~11 modules die main.py importeert, en actiontype dax terug in git",
       "phase": "fundament",
       "priority": "P1",
-      "status": "verifying",
+      "status": "done",
       "owner_agent": "mac-uitvoerder",
       "approval_level": "B",
       "dependencies": [],
@@ -258,16 +258,16 @@
         "scripts/test_vps_sync.py"
       ],
       "started_at": null,
-      "last_progress_at": "2026-10-17T13:00:00Z",
+      "last_progress_at": "2026-10-17T18:00:00Z",
       "attempts": 0,
       "tests_run": [
         "scripts/test_vps_sync.py 6 geslaagd; de nieuwe sluitingstest faalt aantoonbaar op het oude manifest (13 modules)"
       ],
       "build_result": null,
-      "deployment_result": null,
-      "verification_result": null,
+      "deployment_result": "vps_sync deploy door Luka, 17 okt (gezondheid.py staat live, dus de nieuwe manifestregels zijn meegegaan)",
+      "verification_result": "de sluitingstest ving op 17 okt meteen een nieuwe import (bouw_publiceer via planner)",
       "blocker": null,
-      "next_action": "python3 scripts/vps_sync.py check op de iMac: de 13 nieuwe regels voor het eerst vergelijken met de box",
+      "next_action": null,
       "rollback_reference": null
     },
     {
@@ -774,7 +774,7 @@
       "objective": "RLS op AXE Commodities live bewijzen (anon en authenticated lezen niets)",
       "phase": "N0",
       "priority": "P0",
-      "status": "waiting_approval",
+      "status": "done",
       "owner_agent": "claude",
       "approval_level": "A",
       "dependencies": [
@@ -787,14 +787,14 @@
         "supabase/northsea/migrations/20261017130000_northsea_open_tabellen_dicht.sql"
       ],
       "started_at": null,
-      "last_progress_at": "2026-10-17T13:00:00Z",
+      "last_progress_at": "2026-10-17T18:00:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
-      "deployment_result": null,
-      "verification_result": "17 okt, als rol anon: alle dealtabellen 0 rijen (RLS aan, geen policies). Open: hq_messages, hq_notes, hq_settings (allow_all voor public, lezen en schrijven; leeg, door geen repo gebruikt) en data_centers (insert voor public).",
-      "blocker": "apply_migration via de Supabase-koppeling liep vast op de goedkeuring (60 s)",
-      "next_action": "Luka: supabase/northsea/migrations/20261017130000_northsea_open_tabellen_dicht.sql plakken in de SQL Editor van AXE Commodities; daarna opnieuw meten als anon",
+      "deployment_result": "migratie door Luka in de SQL Editor van AXE Commodities geplakt (17 okt)",
+      "verification_result": "17 okt na de migratie: geen policies meer op hq_messages/hq_notes/hq_settings; anon en authenticated hebben daar geen select/insert; anon heeft geen insert op data_centers. Dealtabellen bleven 0 rijen voor anon.",
+      "blocker": null,
+      "next_action": null,
       "rollback_reference": "terugdraai-regels onderaan de migratie"
     },
     {
@@ -872,6 +872,39 @@
       "blocker": null,
       "next_action": null,
       "rollback_reference": null
+    },
+    {
+      "id": "CORE-AUTO-1",
+      "product": "axe_core",
+      "objective": "Bouwlus legt elke geslaagde run vast en zet hem als draft-PR op GitHub, met een geheimenwacht, in plaats van ongecommit op de Mac te laten liggen",
+      "phase": "fundament",
+      "priority": "P0",
+      "status": "verifying",
+      "owner_agent": "claude",
+      "approval_level": "B",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "geslaagde schrijfrun met wijzigingen geeft een commit op de werkbranch en één draft-PR per branch",
+        "nooit main/master, nooit force, nooit een .env, sleutelbestand of sleutelregel",
+        "AXE_BOUW_PUSH=0 zet het uit zonder uitrol"
+      ],
+      "files_or_services_touched": [
+        "backend/axe_api/bouw_publiceer.py",
+        "backend/axe_api/planner.py",
+        "scripts/vps_sync.py"
+      ],
+      "started_at": "2026-10-17T18:00:00Z",
+      "last_progress_at": "2026-10-17T18:00:00Z",
+      "attempts": 1,
+      "tests_run": [
+        "test_bouw_publiceer 12 (echte git, nagebootste GitHub-API), test_planner + test_agent_runner, samen 130 geslaagd"
+      ],
+      "build_result": null,
+      "deployment_result": "Mac mini haalt het op via autosync",
+      "verification_result": null,
+      "blocker": null,
+      "next_action": "eerste bouwrun na de autosync: een commit op de werkbranch en een draft-PR in de repo van die app (of de reden in core_tasks.result.bewijs.publicatie)",
+      "rollback_reference": "AXE_BOUW_PUSH=0, of git revert van de commit"
     }
   ]
 }

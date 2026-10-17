@@ -170,6 +170,9 @@ MANIFEST = {
     "/opt/axe-core-api/trading_cockpit.py": ("backend/axe_api/trading_cockpit.py", "axe-core-api"),
     # CORE-HEALTH-1: /health meet de afhankelijkheden (Supabase, tick, worker, northsea-mcp).
     "/opt/axe-core-api/gezondheid.py": ("backend/axe_api/gezondheid.py", "axe-core-api"),
+    # planner importeert dit na een geslaagde bouwrun (draft-PR); de bouwlus draait op de
+    # Mac, maar planner.py staat op de box, dus zijn module ook.
+    "/opt/axe-core-api/bouw_publiceer.py": ("backend/axe_api/bouw_publiceer.py", "axe-core-api"),
 }
 
 # MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).
