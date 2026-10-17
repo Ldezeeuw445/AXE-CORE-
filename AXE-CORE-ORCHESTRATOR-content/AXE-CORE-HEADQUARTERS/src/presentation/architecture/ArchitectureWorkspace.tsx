@@ -39,29 +39,21 @@ const NODE_TYPES = {
 function ArchitectureInspectorHost() {
   const store = useStoreApi();
   const selected = useStore(state => selectedArchitectureNodeFromFlow(
-    state.nodeLookup.values() as Iterable<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
+    Array.from(state.nodeLookup.values()) as Array<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
   ));
   if (!selected) return null;
   return (
-    <div
+    <Panel
+      position="top-right"
       className="axe-architecture-inspector-panel"
       data-testid="architecture-inspector-host"
-      style={{
-        position: 'absolute',
-        top: 72,
-        right: 12,
-        zIndex: 9999,
-        width: 308,
-        maxHeight: 'calc(100% - 96px)',
-        overflow: 'auto',
-        pointerEvents: 'auto',
-      }}
+      style={{ marginTop: 58, marginRight: 10, zIndex: 20, pointerEvents: 'all' }}
     >
       <ArchitectureInspector
         node={selected}
         onClose={() => store.getState().resetSelectedElements()}
       />
-    </div>
+    </Panel>
   );
 }
 
@@ -171,6 +163,7 @@ function ArchitectureCanvas() {
           </select>
           {loading && <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>loading live registers…</span>}
         </Panel>
+        <ArchitectureInspectorHost />
       </ReactFlow>
 
       <PlaatDock>
@@ -201,8 +194,6 @@ function ArchitectureCanvas() {
           </div>
         </div>
       </PlaatRail>
-
-      <ArchitectureInspectorHost />
     </div>
   );
 }

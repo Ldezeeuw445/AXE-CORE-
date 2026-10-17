@@ -58,9 +58,11 @@ describe('mapArchitectureGraph', () => {
 
   it('inspector reads the selected flow node from the canvas store', () => {
     const api = manifest.nodes[1]!;
-    expect(selectedArchitectureNodeFromFlow([
-      { selected: true, type: 'architectureGroup', data: { label: 'HQ', kind: 'group', groupId: 'app:axe_core', childCount: 1 } },
-      { selected: true, type: 'architecture', data: { label: api.label, kind: api.kind, node: api, groupId: 'app:axe_core', childCount: 0 } },
-    ])).toEqual(api);
+    const lookup = new Map([
+      ['group', { selected: true, type: 'architectureGroup', data: { label: 'HQ', kind: 'group' as const, groupId: 'app:axe_core', childCount: 1 } }],
+      [api.id, { selected: true, type: 'architecture', data: { label: api.label, kind: api.kind, node: api, groupId: 'app:axe_core', childCount: 0 } }],
+    ]);
+    expect(selectedArchitectureNodeFromFlow(Array.from(lookup.values()))).toEqual(api);
+    expect(selectedArchitectureNodeFromFlow(lookup.values())).toEqual(api);
   });
 });
