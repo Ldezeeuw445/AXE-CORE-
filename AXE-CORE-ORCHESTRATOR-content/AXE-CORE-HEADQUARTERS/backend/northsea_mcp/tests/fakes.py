@@ -179,6 +179,41 @@ class FakeRepo:
         self.engine_writes.append((table, "patch"))
         return copy.deepcopy(hits)
 
+    # ── Discovery (N4) ──
+    fail_discovery_insert = False
+
+    async def discovery_insert(self, table, row):
+        from northsea_mcp.repository import RepositoryError
+        assert table in {"sourcing_campaigns", "sourcing_candidates"}, table
+        if self.fail_discovery_insert:
+            raise RepositoryError(f"database write failed for {table} (500): simulated")
+        if table == "sourcing_campaigns":
+            ok = (row.get("buyer_requirement_id") and not row.get("supplier_offer_id") and row.get("direction") == "find_supplier")
+            assert ok, "sourcing_campaigns_check"
+        if table == "sourcing_candidates":
+            assert row.get("status") in {"found", "screening", "qualified", "contacted", "responded", "rejected", "converted"}
+            assert row.get("fit_score") is None or 0 <= row["fit_score"] <= 100
+            assert not row.get("company_id") and not row.get("contact_id"), "discovery maakt nooit een feit"
+        nieuw = {"id": str(uuid.uuid4()), "created_at": ts(), "updated_at": ts(),
+                 **({"status": "active", "candidates_found": 0} if table == "sourcing_campaigns" else {}), **copy.deepcopy(row)}
+        self.t.setdefault(table, []).append(nieuw)
+        self.engine_writes.append((table, "insert"))
+        return [copy.deepcopy(nieuw)]
+
+    async def discovery_patch_campaign(self, campaign_id, body):
+        assert set(body) <= {"candidates_found", "next_action", "next_action_at", "updated_at"}
+        hits = [c for c in self.t.setdefault("sourcing_campaigns", []) if c["id"] == campaign_id]
+        for c in hits:
+            c.update(copy.deepcopy(body))
+        return copy.deepcopy(hits)
+
+    async def list_campaigns_for_requirement(self, requirement_id):
+        return sorted((copy.deepcopy(c) for c in self.t.setdefault("sourcing_campaigns", [])
+                       if c.get("buyer_requirement_id") == requirement_id), key=lambda c: str(c.get("created_at")))
+
+    async def list_campaign_candidates(self, campaign_id):
+        return [copy.deepcopy(k) for k in self.t.setdefault("sourcing_candidates", []) if k.get("campaign_id") == campaign_id]
+
     async def fetch_all(self, table, max_rows=5000):
         from northsea_mcp.repository import SNAPSHOT_SELECT
         assert table in SNAPSHOT_SELECT

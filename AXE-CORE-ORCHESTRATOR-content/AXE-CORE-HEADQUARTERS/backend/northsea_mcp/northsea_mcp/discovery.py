@@ -45,7 +45,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import canon, matching
+from . import canon, kandidaat_opslag, matching
 from .repository import InvalidId, RepositoryError, uid
 from .research import ResearchError
 from .sourcing_quality import split_quality, supplier_search_query
@@ -271,8 +271,9 @@ class DiscoveryService:
 
         Bestaande Chase-review wordt bijgewerkt in plaats van overgeslagen, zodat een
         verloren slate (Copper Cathode 84eed8f3 / action 90e282a5) hersteld kan worden
-        zonder een tweede item. Schrijft bewust NIET naar sourcing_candidates: crew-
-        output is analyse, geen feit, en de engine mag die tabel niet aanraken."""
+        zonder een tweede item. Sinds N4 (17 okt) gaan de kandidaten ook naar
+        sourcing_candidates, als `found` en zonder company of contact: een vondst,
+        geen feit (kandidaat_opslag.py)."""
         return await self.crew_assisted_review(
             dry_run=dry_run, buyer_requirement_id=buyer_requirement_id,
             replace_existing=True, ignore_daily_cap=True, search_only=True)
@@ -445,6 +446,8 @@ class DiscoveryService:
             return {"created_review": False, "buyer_requirement_id": kandidaat["id"],
                     "reason": f"persist failed: {e}", "search_status": zoek_status, "search_only": search_only}
 
+        opgeslagen = await self._bewaar_kandidaten(kandidaat, kandidaten_gevonden, metadata, rij, bestaand if vervangen else None)
+
         await self._resilient(lambda info=info: self.repo.engine_insert("northsea_audit_events", {
             "actor_type": "automation", "actor": ACTOR, "action": "crew_candidate_review_requested",
             "details": {"buyer_requirement_id": kandidaat["id"], "crew_route": info.route, "crew_backend": info.backend,
@@ -457,4 +460,30 @@ class DiscoveryService:
                 "search_hits": metadata["search_hits"], "candidate_count": metadata["candidate_count"],
                 "rejected_count": metadata["rejected_count"], "search_only": search_only,
                 "replaced_existing": vervangen, "used_today": al_vandaag + (0 if vervangen else 1),
-                "max_crew_calls_per_day": self.max_crew_calls_per_day}
+                "max_crew_calls_per_day": self.max_crew_calls_per_day, "candidates_persisted": opgeslagen}
+
+    async def _bewaar_kandidaten(self, requirement: dict, kandidaten: list[dict], metadata: dict,
+                                 rij: Any, bestaand: dict | None) -> dict:
+        """N4: de kandidaten van deze review duurzaam in sourcing_candidates (kandidaat_opslag.py).
+        Faalt dit, dan blijft de review staan en komt er een auditregel; de kandidaten staan
+        dan nog in de review-metadata en gaan niet verloren."""
+        review = (rij[0] if isinstance(rij, list) and rij else None) or bestaand or {}
+        herkomst = {
+            "origin": ACTOR, "action_queue_id": review.get("id"), "buyer_requirement_id": requirement["id"],
+            "crew_route": metadata.get("crew_route"), "crew_backend": metadata.get("crew_backend"),
+            "execution_mode": metadata.get("execution_mode"), "actual_specialists": metadata.get("actual_specialists"),
+            "search_provider": metadata.get("search_provider"),
+        }
+        try:
+            uit = await kandidaat_opslag.bewaar_kandidaten(self.repo, requirement=requirement, kandidaten=kandidaten,
+                                                           herkomst=herkomst, now=self.now())
+        except RepositoryError as e:
+            uit = {"persisted": 0, "error": str(e)[:300]}
+        actie = "sourcing_candidates_persist_failed" if uit.get("error") else "sourcing_candidates_persisted"
+        try:
+            await self.repo.engine_insert("northsea_audit_events", {
+                "actor_type": "automation", "actor": ACTOR, "action": actie,
+                "details": {**uit, "buyer_requirement_id": requirement["id"], "action_queue_id": review.get("id")}})
+        except RepositoryError as e:
+            log.warning("discovery candidate-persist audit failed: %s", e)
+        return uit

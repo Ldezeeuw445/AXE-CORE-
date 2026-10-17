@@ -1,6 +1,6 @@
 {
   "versie": 1,
-  "bijgewerkt": "2026-10-17T18:30:00Z",
+  "bijgewerkt": "2026-10-17T20:00:00Z",
   "canon": "docs/programma/canon/",
   "statussen": [
     "queued",
@@ -854,24 +854,30 @@
       "objective": "Discovery schrijft naar sourcing_candidates, niet alleen naar action_queue.metadata",
       "phase": "N4",
       "priority": "P1",
-      "status": "queued",
+      "status": "verifying",
       "owner_agent": "claude",
       "approval_level": "A",
       "dependencies": [
         "NS-INC-3"
       ],
       "acceptance_criteria": [],
-      "files_or_services_touched": [],
-      "started_at": null,
-      "last_progress_at": "2026-10-17T18:30:00Z",
-      "attempts": 0,
-      "tests_run": [],
+      "files_or_services_touched": [
+        "backend/northsea_mcp/northsea_mcp/kandidaat_opslag.py",
+        "backend/northsea_mcp/northsea_mcp/discovery.py",
+        "backend/northsea_mcp/northsea_mcp/repository.py"
+      ],
+      "started_at": "2026-10-17T20:00:00Z",
+      "last_progress_at": "2026-10-17T20:00:00Z",
+      "attempts": 1,
+      "tests_run": [
+        "test_kandidaat_opslag 7; hele NorthSea-suite 412 geslaagd"
+      ],
       "build_result": null,
       "deployment_result": null,
-      "verification_result": null,
+      "verification_result": "17 okt gemeten: alle 39 bestaande crew-reviews (142 kandidaten) zijn bewust geannuleerd (21 lege crew-runs 16 okt, 15 opruiming 5 okt, 1 stale junk, 2 lege runs). Die worden NIET teruggezet als gevonden; N4 geldt vanaf de uitrol voor elke nieuwe review.",
       "blocker": null,
-      "next_action": "Plan (17 okt gemeten: 36 crew-reviews met kandidaten staan alleen in action_queue.metadata; sourcing_candidates heeft 7 rijen, campaign_id verplicht, company_id optioneel, status standaard found; sourcing_campaigns hangt aan buyer_requirement_id met tellers). crew_assisted_review schrijft elke kwaliteitskandidaat als found in sourcing_candidates van de campagne van die requirement, met bron-URL en herkomst (action_queue-id, route, specialisten) in evidence, dedupe op campagne + website of naam, en telt candidates_found op. Nooit company, contact of outreach: company_id blijft leeg tot een mens kwalificeert, zodat crew-output geen feit wordt. Daarna de 36 bestaande reviews nalopen. Uitrol via deploy.sh op de iMac.",
-      "rollback_reference": null
+      "next_action": "iMac: deploy.sh check en deploy (versie 1.5.0; eigenaar-actie northsea-n4-deploy meet /health). Daarna: de eerstvolgende crew-review geeft rijen in sourcing_candidates en een audit sourcing_candidates_persisted.",
+      "rollback_reference": "deploy.sh rollback (vorige versie 1.4.1); de nieuwe rijen hebben status found en evidence.origin northsea-discovery"
     },
     {
       "id": "CORE-AUTO-1",

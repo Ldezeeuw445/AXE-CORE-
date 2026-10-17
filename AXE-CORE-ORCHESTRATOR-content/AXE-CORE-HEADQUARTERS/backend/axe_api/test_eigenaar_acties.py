@@ -45,6 +45,8 @@ def wereld(gedaan: bool, lus_rijen: int | None = None, functions_live: bool | No
             if not gedaan:
                 return httpx.Response(400, json={"code": "42703"})
             return httpx.Response(200, json=[{"product_key": "northsea"}])
+        if request.url.host == "mcp.northseacommodity.com":
+            return httpx.Response(200, json={"status": "ok", "version": "1.5.0" if gedaan else "1.4.1"})
         if request.url.host == "api.axecompanion.com" and pad == "/health":
             body = {"status": "ok"}
             if gedaan:
@@ -163,7 +165,7 @@ def test_herinnering_pas_vanaf_acht_uur_en_een_keer_per_dag():
     assert ea.herinnering(stand, VOOR_ACHT, None) is None
     datum, tekst = ea.herinnering(stand, NA_ACHT, None)
     assert datum == "2026-10-17"
-    assert tekst.startswith("Owner actions: 8 open\n1. NorthSea")
+    assert tekst.startswith("Owner actions: 9 open\n1. NorthSea")
     assert "deploy.sh check" in tekst
     assert ea.herinnering(stand, NA_ACHT, "2026-10-17") is None
 
@@ -186,7 +188,7 @@ def test_herinner_schrijft_een_rij_per_dag_met_vast_id(tmp_path):
     assert len(posts) == 1
     rij = posts[0]
     assert rij["recipient"] == ea.USER_ID and rij["type"] == "warning"
-    assert rij["message"].startswith("Owner actions: 8 open")
+    assert rij["message"].startswith("Owner actions: 9 open")
     # Zelfde datum, zelfde id: een herhaalde poging na een timeout wordt geen tweede rij.
     assert rij["id"] == "%s" % ea.uuid.uuid5(ea.uuid.NAMESPACE_URL, "axe-eigenaar-acties/2026-10-17")
 

@@ -146,6 +146,33 @@ class SupabaseRepository:
             raise RepositoryError(f"engine may not patch {table}")
         return await self._write("PATCH", table, filters, body)
 
+    # ── Discovery (N4): kandidaten duurzaam vastleggen, nooit als feit ────────
+    # Alleen deze twee tabellen, en alleen invoegen (kandidaten, campagnes) of de
+    # tellers van een campagne bijwerken. Een bedrijf, contact of outreach maakt
+    # discovery nooit aan: dat blijft een menselijke stap (zie kandidaat_opslag.py).
+    DISCOVERY_TABLES = frozenset({"sourcing_campaigns", "sourcing_candidates"})
+
+    async def discovery_insert(self, table: str, row: dict) -> list[dict]:
+        if table not in self.DISCOVERY_TABLES:
+            raise RepositoryError(f"discovery may not write {table}")
+        return await self._write("POST", table, None, row)
+
+    async def discovery_patch_campaign(self, campaign_id: str, body: dict) -> list[dict]:
+        toegestaan = {"candidates_found", "next_action", "next_action_at", "updated_at"}
+        if not body or set(body) - toegestaan:
+            raise RepositoryError("discovery may only update campaign counters and next action")
+        return await self._write("PATCH", "sourcing_campaigns", {"id": f"eq.{uid(campaign_id, 'campaign_id')}"}, body)
+
+    async def list_campaigns_for_requirement(self, requirement_id: str) -> list[dict]:
+        return await self._get("sourcing_campaigns", {
+            "buyer_requirement_id": f"eq.{uid(requirement_id, 'buyer_requirement_id')}",
+            "select": "id,status,candidates_found,created_at", "order": "created_at.asc"})
+
+    async def list_campaign_candidates(self, campaign_id: str) -> list[dict]:
+        return await self._get("sourcing_candidates", {
+            "campaign_id": f"eq.{uid(campaign_id, 'campaign_id')}",
+            "select": "id,candidate_name,website,source_url", "limit": "2000"})
+
     async def find_crew_audit(self, event_id: str) -> dict | None:
         """Idempotentie: bestaande crew_run met dit event_id, of None."""
         if not event_id:

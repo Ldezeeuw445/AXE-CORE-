@@ -77,6 +77,12 @@ ACTIES = (
                "in .env.local on the Mac mini.",
     },
     {
+        "id": "northsea-n4-deploy",
+        "title": "NorthSea: deploy 1.5.0 (discovery keeps every candidate in sourcing_candidates)",
+        "how": "On the iMac in the HQ folder: bash backend/northsea_mcp/deploy/deploy.sh check, "
+               "then bash backend/northsea_mcp/deploy/deploy.sh deploy.",
+    },
+    {
         "id": "axe-api-deploy",
         "title": "AXE Core API: deploy /health with dependency checks and the complete manifest",
         "how": "On the iMac in the HQ folder: python3 scripts/vps_sync.py check. Expect REPO AHEAD for "
@@ -178,6 +184,25 @@ async def _axon_migratie(client, supabase_url, key, env, nu):
     return None, f"cannot measure: api_keys answered {r.status_code}"
 
 
+NORTHSEA_MCP_HEALTH = "https://mcp.northseacommodity.com/health"
+NORTHSEA_N4_VERSIE = (1, 5, 0)
+
+
+def _versie(tekst: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(x) for x in str(tekst).split(".")[:3])
+    except ValueError:
+        return ()
+
+
+async def _northsea_n4(client, supabase_url, key, env, nu):
+    r = await client.get(NORTHSEA_MCP_HEALTH)
+    data = r.json() if r.is_success else None
+    if not isinstance(data, dict) or not data.get("version"):
+        return None, f"cannot measure: northsea-mcp /health answered {r.status_code}"
+    return _versie(data["version"]) >= NORTHSEA_N4_VERSIE, f"northsea-mcp runs {data['version']}"
+
+
 async def _api_health(client, supabase_url, key, env, nu):
     """Na de uitrol van CORE-HEALTH-1 heeft /health een veld checks."""
     url = (env.get("AXE_MONITOR_API_URL") or "https://api.axecompanion.com").rstrip("/")
@@ -236,6 +261,7 @@ METINGEN: dict[str, Meting] = {
     "product-registry": _productregister,
     "axon-pr2-live": _axon_live,
     "axon-key-migration": _axon_migratie,
+    "northsea-n4-deploy": _northsea_n4,
     "axe-api-deploy": _api_health,
     "phone-push": _push_abonnement,
     "northsea-inventory-job-off": _inventaris_uit,
