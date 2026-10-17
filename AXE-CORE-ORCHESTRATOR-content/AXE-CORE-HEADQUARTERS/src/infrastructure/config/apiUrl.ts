@@ -37,6 +37,23 @@ export function isAndroidShellRuntime(): boolean {
 }
 
 /**
+ * Elke Android-host: de oude native shell én Tauri v2 Android (user-agent).
+ * Verandert currentHostKind/hasNativeGlass niet — die blijven de nieuwere
+ * orch-takken (isTauriMobile). Alleen aanwezigheid, zodat slot en inventory
+ * de Samsung herkennen.
+ */
+export function isAndroidRuntime(): boolean {
+  if (isAndroidShellRuntime()) return true;
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent);
+}
+
+/** De Samsung Tauri-app, niet een telefoonbrowser en niet de Mac. */
+export function isAndroidTauriRuntime(): boolean {
+  return isTauriRuntime() && isAndroidRuntime();
+}
+
+/**
  * De Tauri-app draait sinds Tauri 2 óók op Android (`tauri android`), met exact
  * dit web-frontend. Dat is een telefoon zonder het macOS-glas achter het
  * venster, dus daar hoort de mobiele indeling + een geschilderde plaat, net als

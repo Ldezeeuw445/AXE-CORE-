@@ -5,6 +5,7 @@
 mod diensten;
 #[cfg(desktop)]
 mod launchd;
+mod gesture_lock;
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -285,6 +286,9 @@ pub fn run() {
         dienst_stop,
         worker_dienst_stand,
         worker_dienst_herstart,
+        gesture_lock::gesture_lock_load,
+        gesture_lock::gesture_lock_save,
+        gesture_lock::gesture_lock_clear,
     ]);
     #[cfg(not(desktop))]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -295,9 +299,13 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        gesture_lock::gesture_lock_load,
+        gesture_lock::gesture_lock_save,
+        gesture_lock::gesture_lock_clear,
     ]);
 
     builder
+        .plugin(gesture_lock::plugin())
         .setup(|app| {
             let handle = app.handle().clone();
 

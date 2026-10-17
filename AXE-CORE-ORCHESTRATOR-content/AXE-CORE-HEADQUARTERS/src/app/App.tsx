@@ -13,6 +13,9 @@ import { NotificationProvider } from '@/presentation/contexts/NotificationContex
 import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
 import { isIngebed } from '@/presentation/components/layout/zweef/ingebed';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
+import { useAxeDeviceHeartbeat } from '@/presentation/hooks/useAxeDeviceHeartbeat';
+import { AndroidLockGate } from '@/presentation/hooks/useAndroidLock';
+import { isAndroidTauriRuntime, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
 const AICore = lazy(() => import('@/presentation/pages/AICore'));
@@ -60,7 +63,13 @@ const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
 const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
+const AxeDevicesPage = lazy(() => import('@/presentation/pages/AxeDevices'));
 const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
+const ParticlePinScreen = lazy(() => import('@/presentation/pages/ParticlePinScreen'));
+
+function androidNaLogin(): string {
+  return (isAndroidTauriRuntime() || isAndroidShellRuntime()) ? '/lock/pin' : '/';
+}
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
@@ -137,6 +146,7 @@ export default function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [clapEnabled, setClapEnabled] = useState(false);
+  useAxeDeviceHeartbeat();
 
   useEffect(() => {
     useVoiceStore.getState().loadConversation().catch(() => {});
@@ -196,7 +206,7 @@ export default function App() {
           {/* Once there is a session — live or restored — the login form is the one
               page that must not stay on screen. Without this, anything that had
               already redirected here stayed here. */}
-          <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+          <Route path="/login" element={user ? <Navigate to={androidNaLogin()} replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
           {StrategyLabDevPreview && <Route path="/dev-strategy-lab-preview" element={<StrategyLabDevPreview />} />}
           <Route path="/dev-browser-preview" element={<div className="h-[100dvh] w-full overflow-hidden"><BrowserPage /></div>} />
@@ -208,7 +218,7 @@ export default function App() {
           <Route path="/float/notes" element={<RequireAuth><FloatNotes /></RequireAuth>} />
           <Route path="/float/phone" element={<RequireAuth><FloatPhone /></RequireAuth>} />
           <Route path="/northsea-desktop" element={<RequireAuth><StandaloneNorthseaPage /></RequireAuth>} />
-          <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+          <Route element={<RequireAuth><AndroidLockGate><AppShell /></AndroidLockGate></RequireAuth>}>
             <Route index element={<HomeEntry />} />
             {/* The page that answers "what actually works". */}
             <Route path="status" element={<StatusPage />} />
@@ -250,10 +260,12 @@ export default function App() {
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />
             <Route path="device" element={<DeviceManager />} />
+            <Route path="devices" element={<AxeDevicesPage />} />
             {/* Lock Screen — binnen de AppShell, maar als command-surface
                 (zie AppShell): alle chrome weg, de plaat blijft eronder, dus
                 exact de app-look met licht/donker. */}
             <Route path="lock" element={<LockScreen />} />
+            <Route path="lock/pin" element={<ParticlePinScreen />} />
           </Route>
         </Routes>
       </NotificationProvider>
