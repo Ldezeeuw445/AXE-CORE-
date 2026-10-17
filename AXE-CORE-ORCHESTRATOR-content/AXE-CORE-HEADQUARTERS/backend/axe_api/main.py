@@ -68,6 +68,7 @@ try:
         run_agent,
         engine_status as agent_engine_status,
         agent_usage_status,
+        coding_seats_status,
         repo_status as claude_repo_status,
         cli_available as claude_cli_available,
         ALLOWED_PERMISSION_MODES,
@@ -91,6 +92,9 @@ except Exception as _e:  # noqa: BLE001
 
     def agent_usage_status(*_a, **_k) -> dict:  # type: ignore[misc]
         return {}
+
+    def coding_seats_status(*_a, **_k) -> list:  # type: ignore[misc]
+        return []
 
     def claude_repo_status(*_a, **_k) -> dict:  # type: ignore[misc]
         return {}
@@ -3138,6 +3142,7 @@ async def claude_repos():
         # sessie van je abonnement op te maken.
         "engines": agent_engine_status(),
         "usage": agent_usage_status(),
+        "seats": coding_seats_status(),
     }
 
 

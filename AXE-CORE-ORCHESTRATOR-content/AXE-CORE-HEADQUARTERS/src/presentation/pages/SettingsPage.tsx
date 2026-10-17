@@ -51,6 +51,7 @@ import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
 import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
+import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 import {
   readAllProviderUsage,
@@ -1992,6 +1993,7 @@ export default function SettingsPage() {
             {
               titel: 'Setup',
               items: [
+                { id: 'accounts', label: 'Accounts', actief: sectie === 'accounts', onKies: () => kiesSectie('accounts') },
                 { id: 'providers', label: 'Providers', actief: sectie === 'providers', onKies: () => kiesSectie('providers') },
                 { id: 'voice', label: 'Voice', actief: sectie === 'voice', onKies: () => kiesSectie('voice') },
                 { id: 'trust', label: 'Trust', actief: sectie === 'trust', onKies: () => kiesSectie('trust') },
@@ -2013,6 +2015,12 @@ export default function SettingsPage() {
             API key while signed out looks identical to pasting one that worked,
             and every background agent keeps using the old value. */}
         <UnsyncedSettingsBanner />
+
+        {sectie === 'accounts' && (
+        <SectieBlok id="accounts" titel="ACCOUNTS">
+          <CodingSeatsSection />
+        </SectieBlok>
+        )}
 
         {sectie === 'providers' && (
         <SectieBlok id="providers" titel="PROVIDERS">

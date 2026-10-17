@@ -51,6 +51,7 @@ import json
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import threading
@@ -487,10 +488,169 @@ def _limit_message(text: str) -> str | None:
     return (m.group(1) if m else clean)[:280]
 
 
+_AUTH_FOUT = re.compile(
+    r"not logged in|please (log|sign) in|login required|"
+    r"failed to authenticate|authentication (failed|required)|"
+    r"oauth session expired|could not be refreshed|invalid_grant",
+    re.I,
+)
+_LIMIET_KLOK = re.compile(r"try again at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?", re.I)
+SEAT_VOLGORDE = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor")
+_SEAT_BUSY: dict[str, dict] = {}
+_SEAT_LIMIT: dict[str, dict] = {}
+_SEAT_SNAP = os.path.expanduser(os.environ.get("AXE_CODING_SEATS_FILE", "~/.axe/coding-seats.json"))
+
+
+def _auth_fout(tekst: str) -> bool:
+    return bool(_AUTH_FOUT.search(tekst or ""))
+
+
+def _familie(naam: str) -> str:
+    return re.sub(r"\d+$", "", naam or "")
+
+
+def _machine_naam() -> str:
+    return (os.environ.get("AXE_DEVICE_ID") or socket.gethostname().split(".")[0]).lower()
+
+
+def parse_limiet_tot(tekst: str, nu: float | None = None) -> float | None:
+    """Epoch-seconden tot wanneer de stoel koelt. None als dit geen limiet is."""
+    if not _limit_message(tekst):
+        return None
+    nu = time.time() if nu is None else nu
+    m = _LIMIET_KLOK.search(tekst or "")
+    if not m:
+        return nu + 3600
+    uur, minuut = int(m.group(1)), int(m.group(2))
+    ampm = (m.group(3) or "").upper()
+    if ampm == "PM" and uur < 12:
+        uur += 12
+    if ampm == "AM" and uur == 12:
+        uur = 0
+    if uur > 23 or minuut > 59:
+        return nu + 3600
+    lokale = time.localtime(nu)
+    kandidaat = time.mktime((
+        lokale.tm_year, lokale.tm_mon, lokale.tm_mday,
+        uur, minuut, 0, lokale.tm_wday, lokale.tm_yday, lokale.tm_isdst,
+    ))
+    if kandidaat <= nu:
+        kandidaat += 86400
+    return kandidaat
+
+
+def _stoel_koelt(naam: str, nu: float | None = None) -> bool:
+    nu = time.time() if nu is None else nu
+    info = _SEAT_LIMIT.get(naam)
+    if info and float(info.get("until") or 0) > nu:
+        return True
+    state = _usage_state()
+    eigen = [
+        e for e in (state.get("events") or [])
+        if isinstance(e, dict) and e.get("engine") == naam and e.get("limit_until")
+    ]
+    laatste = max(eigen, key=lambda e: float(e.get("ts") or 0), default=None)
+    return bool(laatste and float(laatste["limit_until"]) > nu)
+
+
+def _onthoud_stoel_fout(naam: str, fout: str) -> None:
+    if _auth_fout(fout):
+        vorig = (_ACCOUNT_CACHE.get(naam) or (0, {}))[1]
+        _ACCOUNT_CACHE[naam] = (time.monotonic(), {"ingelogd": False, "account": vorig.get("account")})
+    tot = parse_limiet_tot(fout)
+    if tot:
+        _SEAT_LIMIT[naam] = {"until": tot, "message": _limit_message(fout)}
+    _schrijf_stoel_snapshot()
+
+
+def _schrijf_stoel_snapshot() -> None:
+    """Laatste stand voor de computer-worker. Geen tokens, geen prompts."""
+    try:
+        os.makedirs(os.path.dirname(_SEAT_SNAP) or ".", exist_ok=True)
+        stoelen = {}
+        for naam in SEAT_VOLGORDE:
+            busy = _SEAT_BUSY.get(naam) or {}
+            lim = _SEAT_LIMIT.get(naam) or {}
+            stoelen[naam] = {
+                "busy": bool(busy),
+                "task": busy.get("task"),
+                "limit_until": lim.get("until"),
+                "limit_message": lim.get("message"),
+            }
+        fd, tmp = tempfile.mkstemp(prefix="axe-seats-", suffix=".json", dir=os.path.dirname(_SEAT_SNAP) or ".")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"updated_at": time.time(), "machine": _machine_naam(), "seats": stoelen}, f)
+            os.replace(tmp, _SEAT_SNAP)
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    except OSError as e:
+        log.warning("coding-seats snapshot write failed: %s", str(e)[:160])
+
+
+def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float | None = None) -> str | None:
+    """Volgende stoel die ingelogd is en niet op een limiet zit.
+
+    Zelfde familie eerst (claude → claude2 → …), daarna de rest van het team.
+    Onbekend (ingelogd is None) telt als probeerbaar: liever één echte fout
+    dan een stoel overslaan die wél werkt. None = niemand over.
+    """
+    if gewenst not in ENGINES:
+        return None
+    nu = time.time() if nu is None else nu
+    skip = set(overslaan or ())
+    familie = _familie(gewenst)
+    zelfde = [n for n in SEAT_VOLGORDE if _familie(n) == familie]
+    rest = [n for n in SEAT_VOLGORDE if n not in zelfde]
+    kandidaten = [gewenst] + [n for n in zelfde + rest if n != gewenst]
+    for naam in kandidaten:
+        if naam in skip or naam not in ENGINES:
+            continue
+        motor = ENGINES[naam]
+        if not _binary(motor):
+            continue
+        # Alleen wat we al weten: een eerdere login-fout of een limiet.
+        # Geen live `auth status` (dat start een CLI) en geen auth.json-probe
+        # hier — anders valt een verse Codex-stoel meteen af terwijl de run
+        # hem nog moet mogen proberen.
+        hit = _ACCOUNT_CACHE.get(naam)
+        acc = hit[1] if hit else {"ingelogd": None, "account": None}
+        if acc.get("ingelogd") is False:
+            continue
+        if _stoel_koelt(naam, nu):
+            continue
+        return naam
+    return None
+
+
+def _openhands_stoel() -> dict:
+    url = (os.environ.get("OPENHANDS_URL") or "").strip()
+    return {
+        "id": "openhands",
+        "provider": "openhands",
+        "label": "OpenHands",
+        "email": None,
+        "machine": os.environ.get("AXE_OPENHANDS_MACHINE") or "vps",
+        "logged_in": True if url else None,
+        "login_command": "Set OPENHANDS_URL on the VPS (no CLI login).",
+        "current_task": None,
+        "rate_limited": False,
+        "rate_limit_until": None,
+        "last_limit_message": None,
+        "remaining_note": "OpenHands draait op de VPS, niet op een abonnements-CLI.",
+        "shared_quota_with": [],
+    }
+
+
 def _record_agent_usage(engine: str, repo: str, result: dict, started_at: float, model: str = "") -> None:
     meta = result.get("meta") if isinstance(result, dict) else None
     usage = meta.get("usage") if isinstance(meta, dict) and isinstance(meta.get("usage"), dict) else {}
     errorish = str(result.get("error") or (result.get("result") if result.get("status") == "error" else "") or "")
+    limit_msg = _limit_message(errorish)
     event = {
         "ts": time.time(),
         "engine": engine,
@@ -501,7 +661,8 @@ def _record_agent_usage(engine: str, repo: str, result: dict, started_at: float,
         "input_tokens": usage.get("input_tokens"),
         "output_tokens": usage.get("output_tokens"),
         "cache_read_tokens": usage.get("cache_read_input_tokens"),
-        "limit_message": _limit_message(errorish),
+        "limit_message": limit_msg,
+        "limit_until": parse_limiet_tot(errorish) if limit_msg else None,
     }
 
     def mutate(state):
@@ -533,10 +694,19 @@ def agent_usage_status() -> dict:
         last = max(own, key=lambda e: float(e.get("ts") or 0), default=None)
         limits = [e for e in own if e.get("limit_message")]
         last_limit = max(limits, key=lambda e: float(e.get("ts") or 0), default=None)
+        limit_until = None
+        if last_limit and last_limit.get("limit_until"):
+            try:
+                limit_until = float(last_limit["limit_until"])
+            except (TypeError, ValueError):
+                limit_until = None
+        if name in _SEAT_LIMIT:
+            limit_until = float(_SEAT_LIMIT[name].get("until") or 0) or limit_until
 
         def isum(rows, key):
             return sum(int(e.get(key) or 0) for e in rows)
 
+        busy = _SEAT_BUSY.get(name) or {}
         out[name] = {
             "label": motor["label"],
             "runs_24h": len(day),
@@ -549,6 +719,9 @@ def agent_usage_status() -> dict:
             "last_status": last.get("status") if last else None,
             "last_limit_at": last_limit.get("ts") if last_limit else None,
             "last_limit_message": last_limit.get("limit_message") if last_limit else None,
+            "rate_limited": bool(limit_until and limit_until > now),
+            "rate_limit_until": limit_until if limit_until and limit_until > now else None,
+            "current_task": busy.get("task"),
             "exact_remaining_available": False,
             "remaining_note": "De CLI geeft geen exact resterend abonnementssaldo machine-readable terug.",
         }
@@ -567,11 +740,14 @@ def run_agent(
 
     Elke weigering hieronder gebeurt vóórdat de CLI start, dus een afgewezen
     aanroep kost niets en verandert niets op schijf.
+
+    Een stoel die niet is ingelogd of op een limiet zit, wordt overgeslagen.
+    Faalt de gekozen stoel alsnog op login of limiet, dan de volgende — een
+    taak faalt niet met 'Not logged in' terwijl een andere stoel werkt.
     """
-    motornaam = (engine or DEFAULT_ENGINE).strip()
-    motor = ENGINES.get(motornaam)
-    if not motor:
-        return {"status": "error", "error": f"Onbekende motor '{motornaam}'. Bekend: {', '.join(sorted(ENGINES))}"}
+    gevraagd = (engine or DEFAULT_ENGINE).strip()
+    if gevraagd not in ENGINES:
+        return {"status": "error", "error": f"Onbekende motor '{gevraagd}'. Bekend: {', '.join(sorted(ENGINES))}"}
 
     if not prompt or not str(prompt).strip():
         return {"status": "error", "error": "prompt is required"}
@@ -601,12 +777,65 @@ def run_agent(
             "status": "error",
             "error": f"permission_mode '{mode}' mag niet. Toegestaan: {', '.join(ALLOWED_PERMISSION_MODES)}",
         }
+
+    branch = _current_branch(repo_path)
+    if not branch:
+        return {"status": "error", "error": f"Kon de branch van '{repo}' ({repo_path}) niet lezen; weiger te draaien."}
+    if branch in PROTECTED_BRANCHES:
+        return {
+            "status": "error",
+            "error": f"Repo '{repo}' staat op beschermde branch '{branch}'. "
+                     f"Check een werkbranch uit voordat {ENGINES[gevraagd]['label']} hier draait.",
+            "branch": branch,
+        }
+
+    geprobeerd: list[str] = []
+    overslaan: set[str] = set()
+    huidige = kies_vrije_stoel(gevraagd) or gevraagd
+    laatste: dict | None = None
+    while huidige and huidige not in geprobeerd:
+        geprobeerd.append(huidige)
+        laatste = _run_agent_stoel(
+            huidige, repo, repo_path, branch, prompt, mode, timeout, model, checks,
+        )
+        if laatste.get("status") == "ok":
+            if len(geprobeerd) > 1:
+                laatste["seats_tried"] = geprobeerd
+            return laatste
+        fout = str(laatste.get("error") or laatste.get("result") or "")
+        if _auth_fout(fout) or _limit_message(fout):
+            _onthoud_stoel_fout(huidige, fout)
+            overslaan.add(huidige)
+            volgende = kies_vrije_stoel(gevraagd, overslaan=overslaan)
+            if volgende:
+                log.info("%s faalde op account/limiet; probeer %s", huidige, volgende)
+                huidige = volgende
+                continue
+        break
+    if laatste is not None:
+        if geprobeerd:
+            laatste["seats_tried"] = geprobeerd
+        return laatste
+    return {"status": "error", "error": f"Geen vrije stoel voor '{gevraagd}'.", "engine": gevraagd}
+
+
+def _run_agent_stoel(
+    motornaam: str,
+    repo: str,
+    repo_path: str,
+    branch: str,
+    prompt: str,
+    mode: str,
+    timeout: int | None,
+    model: str,
+    checks: bool,
+) -> dict:
+    """Eén stoel, één run. Aanroeper valt door bij login- of limietfout."""
+    motor = ENGINES.get(motornaam)
+    if not motor:
+        return {"status": "error", "error": f"Onbekende motor '{motornaam}'.", "engine": motornaam}
+
     if mode == "plan" and not motor.get("alleen_lezen", False):
-        # Weigeren, en niet "dan maar zonder schrijfrechten proberen": die stand
-        # bestaat bij deze motor niet. Een run die toch mag schrijven terwijl de
-        # aanroeper om alleen-lezen vroeg, is erger dan geen run -- de chat
-        # vraagt hier om, en daar is de hele belofte dat een vraag stellen niets
-        # herschrijft.
         return {
             "status": "error",
             "error": f"{motor['label']} kent geen alleen-lezen stand: zijn niet-interactieve "
@@ -616,17 +845,6 @@ def run_agent(
             "engine": motornaam,
         }
 
-    branch = _current_branch(repo_path)
-    if not branch:
-        return {"status": "error", "error": f"Kon de branch van '{repo}' ({repo_path}) niet lezen; weiger te draaien."}
-    if branch in PROTECTED_BRANCHES:
-        return {
-            "status": "error",
-            "error": f"Repo '{repo}' staat op beschermde branch '{branch}'. "
-                     f"Check een werkbranch uit voordat {motor['label']} hier draait.",
-            "branch": branch,
-        }
-
     binary = _binary(motor)
     if not binary:
         return {
@@ -634,6 +852,7 @@ def run_agent(
             "error": f"{motor['label']} CLI niet gevonden. Installeer met `{motor['install']}` "
                      f"en log in met `{motor['login']}` op deze host. Zet géén API-sleutel — "
                      f"deze runner stript die met opzet.",
+            "engine": motornaam,
         }
 
     limit = int(timeout or DEFAULT_TIMEOUT)
@@ -652,8 +871,13 @@ def run_agent(
         log.info("%s: %.1fs gewacht op een andere run", motornaam, gewacht)
 
     run_started = time.time()
+    taak = f"{repo}: {str(prompt).strip()[:80]}"
+    _SEAT_BUSY[motornaam] = {"task": taak, "since": run_started}
+    _schrijf_stoel_snapshot()
 
     def finish(result: dict) -> dict:
+        _SEAT_BUSY.pop(motornaam, None)
+        _schrijf_stoel_snapshot()
         _record_agent_usage(motornaam, repo, result, run_started, (model or "").strip())
         return result
 
@@ -1010,6 +1234,48 @@ def engine_status() -> dict:
             "alleen_lezen": m.get("alleen_lezen", False),
         }
     return uit
+
+
+def coding_seats_status() -> list[dict]:
+    """Eén kaart per stoel: e-mail, machine, taak, limiet, login-commando.
+
+    Geen tokens. Zelfde e-mail op twee stoelen krijgt shared_quota_with, omdat
+    die stoelen één quotum delen — vandaag allemaal support@axeheadquarters.com.
+    """
+    gebruik = agent_usage_status()
+    machine = _machine_naam()
+    stoelen = []
+    for naam in SEAT_VOLGORDE:
+        motor = ENGINES[naam]
+        binary = _binary(motor)
+        account = _account_van(naam, motor, binary)
+        g = gebruik.get(naam) or {}
+        stoelen.append({
+            "id": naam,
+            "provider": _familie(naam),
+            "label": motor["label"],
+            "email": account.get("account"),
+            "machine": machine,
+            "logged_in": account.get("ingelogd"),
+            "login_command": motor["login"],
+            "current_task": (_SEAT_BUSY.get(naam) or {}).get("task") or g.get("current_task"),
+            "rate_limited": bool(g.get("rate_limited")),
+            "rate_limit_until": g.get("rate_limit_until"),
+            "last_limit_message": g.get("last_limit_message"),
+            "remaining_note": g.get("remaining_note") or "De CLI geeft geen exact resterend saldo.",
+            "shared_quota_with": [],
+        })
+    stoelen.append(_openhands_stoel())
+    per_mail: dict[str, list[str]] = {}
+    for s in stoelen:
+        mail = (s.get("email") or "").strip().lower()
+        if mail:
+            per_mail.setdefault(mail, []).append(s["id"])
+    for s in stoelen:
+        mail = (s.get("email") or "").strip().lower()
+        anderen = [i for i in per_mail.get(mail, []) if i != s["id"]] if mail else []
+        s["shared_quota_with"] = anderen
+    return stoelen
 
 
 def cli_available(engine: str = DEFAULT_ENGINE) -> bool:
