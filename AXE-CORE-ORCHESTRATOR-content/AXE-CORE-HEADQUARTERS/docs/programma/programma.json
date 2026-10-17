@@ -1,6 +1,6 @@
 {
   "versie": 1,
-  "bijgewerkt": "2026-10-17T18:00:00Z",
+  "bijgewerkt": "2026-10-17T18:30:00Z",
   "canon": "docs/programma/canon/",
   "statussen": [
     "queued",
@@ -828,7 +828,7 @@
       "objective": "Twee open cursor-takken beoordelen en mergen of sluiten",
       "phase": "N0",
       "priority": "P1",
-      "status": "queued",
+      "status": "done",
       "owner_agent": "claude",
       "approval_level": "A",
       "dependencies": [],
@@ -838,12 +838,12 @@
         "origin/cursor/northsea-discovery-quality-06db"
       ],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T18:30:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
-      "verification_result": null,
+      "verification_result": "17 okt: de vier NorthSea-takken zijn alle vier via een PR gemerged (Ldezeeuw445/AXE-CORE-#176, #198, #201, #202); hun code staat op orchestrator en is daar later verder gegroeid. Niets meer te mergen. De takken zelf kunnen weg (herstelbaar via de PR-pagina).",
       "blocker": null,
       "next_action": null,
       "rollback_reference": null
@@ -863,14 +863,14 @@
       "acceptance_criteria": [],
       "files_or_services_touched": [],
       "started_at": null,
-      "last_progress_at": null,
+      "last_progress_at": "2026-10-17T18:30:00Z",
       "attempts": 0,
       "tests_run": [],
       "build_result": null,
       "deployment_result": null,
       "verification_result": null,
       "blocker": null,
-      "next_action": null,
+      "next_action": "Plan (17 okt gemeten: 36 crew-reviews met kandidaten staan alleen in action_queue.metadata; sourcing_candidates heeft 7 rijen, campaign_id verplicht, company_id optioneel, status standaard found; sourcing_campaigns hangt aan buyer_requirement_id met tellers). crew_assisted_review schrijft elke kwaliteitskandidaat als found in sourcing_candidates van de campagne van die requirement, met bron-URL en herkomst (action_queue-id, route, specialisten) in evidence, dedupe op campagne + website of naam, en telt candidates_found op. Nooit company, contact of outreach: company_id blijft leeg tot een mens kwalificeert, zodat crew-output geen feit wordt. Daarna de 36 bestaande reviews nalopen. Uitrol via deploy.sh op de iMac.",
       "rollback_reference": null
     },
     {
