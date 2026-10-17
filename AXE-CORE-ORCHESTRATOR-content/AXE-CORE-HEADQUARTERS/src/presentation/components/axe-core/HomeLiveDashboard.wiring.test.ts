@@ -35,6 +35,8 @@ describe('Home live dashboard is aangesloten', () => {
     expect(dash).toContain('GoedkeuringActie');
     expect(dash).toContain('No running tasks or missions right now');
     expect(dash).toContain('and ${n} more');
+    expect(dash).toContain('kaartRegels');
     expect(dash).not.toContain('truncate');
+    expect(dash).not.toContain('useLayoutEffect');
   });
 });

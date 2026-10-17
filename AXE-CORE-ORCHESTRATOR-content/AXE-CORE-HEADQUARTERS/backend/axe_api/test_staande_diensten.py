@@ -23,6 +23,10 @@ class FakeQuery:
         self.op, self.body = "insert", body
         return self
 
+    def update(self, body):
+        self.op, self.body = "update", body
+        return self
+
     def upsert(self, body, on_conflict=None):
         self.op, self.body = "upsert", body
         return self
@@ -42,6 +46,10 @@ class FakeQuery:
             rows.append(row)
             return FakeResult([row])
         hits = [r for r in rows if all(r.get(k) == v for k, v in self.filters.items())]
+        if self.op == "update":
+            for r in hits:
+                r.update(self.body)
+            return FakeResult(hits)
         return FakeResult(hits[: getattr(self, "limit_n", len(hits))])
 
 
@@ -128,3 +136,47 @@ def test_intel_plaatst_geen_orders():
 
 def test_onbekende_agent_faalt_eerlijk():
     assert sd.voer_uit("northsea", FakeDb(), NU)["status"] == "fail"
+
+
+def test_archiveert_astra_en_telt_alleen_verse_fouten():
+    oud = (NU - timedelta(days=3)).isoformat()
+    db = FakeDb(core_tasks=[
+        {"id": "astra", "status": "failed", "error": {"message": "The 'gpt-6-astra' model requires a newer version"},
+         "updated_at": NU.isoformat(), "title": "Build"},
+        {"id": "pip", "status": "failed", "error": {"message": "pip install failed: No module named pip"},
+         "updated_at": NU.isoformat(), "title": "Trading OS"},
+        {"id": "ancient", "status": "failed", "error": {"message": "unknown workspace '@device'"},
+         "updated_at": oud, "title": "device"},
+        {"id": "notice", "status": "pending", "capability": "northsea_desk",
+         "title": "Desk run: nothing to decide", "metadata": {}},
+        {"id": "venv", "status": "blocked", "error": {"message": "Mislukt: venv failed:"},
+         "updated_at": oud, "title": "Orchestrator health"},
+    ])
+    body = sd.run_task(db, NU)
+    by_id = {t["id"]: t for t in db.db["core_tasks"]}
+    assert by_id["astra"]["status"] == "cancelled"
+    assert by_id["astra"]["error"]["archived"] is True
+    assert by_id["pip"]["status"] == "failed"
+    assert by_id["ancient"]["status"] == "cancelled"
+    assert by_id["notice"]["status"] == "completed"
+    assert by_id["venv"]["status"] == "cancelled"
+    assert body["queue"]["failed"] == 1
+    assert body["queue"]["blocked"] == 0
+
+
+def test_samenvatting_nooit_iso_of_json_dump():
+    from agent_activiteit import agent_status, routine_samenvatting
+    dump = {"at": "2026-10-17T13:40:02.798367+00:00", "ok": 4, "enabled": 4}
+    tekst = routine_samenvatting({"last_result": dump})
+    assert "{" not in tekst and "T13:40" not in tekst
+    assert "15:40" in tekst
+    missie = {"id": "m", "owner_agent": "browser", "status": "monitoring",
+              "next_run_at": "2026-10-17T13:45:00+00:00", "title": "Watch"}
+    s = agent_status("browser", [], [missie], None, datetime(2026, 10, 17, 13, 39, tzinfo=timezone.utc))
+    assert "2026-10-17T" not in s["reason"]
+    assert "15:45" in s["reason"]
+    wachtrij = routine_samenvatting({"last_result": {
+        "queue": {"queued": 0, "pending": 53, "stale_leases": 0, "failed": 0, "blocked": 1},
+    }})
+    assert wachtrij == "queue 53 planned, 1 blocked"
+    assert "failed" not in wachtrij

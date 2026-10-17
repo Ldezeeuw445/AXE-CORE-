@@ -7,7 +7,7 @@
     :root {
       --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
       --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-      --axe-home-live-hoog: clamp(100px, 16%, 128px);
+      --axe-home-live-hoog: clamp(112px, 18%, 140px);
       --text-primary: #f4f4f5;
       --text-secondary: #a1a1aa;
       --text-muted: #71717a;
@@ -18,8 +18,8 @@
     }
     @media (max-width: 1100px) {
       :root {
-        --axe-home-rail-breed: clamp(210px, 28vw, 320px);
-        --axe-home-live-hoog: clamp(96px, 26%, 136px);
+        --axe-home-rail-breed: clamp(200px, 26vw, 300px);
+        --axe-home-live-hoog: clamp(124px, 30%, 168px);
       }
     }
     html, body { margin: 0; height: 100%; background: #05070c; color: var(--text-primary); font: 13px/1.35 ui-sans-serif, system-ui; }
@@ -36,20 +36,25 @@
       box-shadow: 0 0 40px rgba(34,211,238,.18);
     }
     .axe-home-rail {
-      position: absolute; top: 7%;
-      bottom: calc(8px + var(--axe-home-live-hoog));
+      position: absolute; top: 4px;
+      bottom: calc(6px + var(--axe-home-live-hoog));
       width: var(--axe-home-rail-breed);
-      display: flex; flex-direction: column; justify-content: center; gap: 4px;
-      overflow-x: hidden; overflow-y: auto;
+      display: flex; flex-direction: column; justify-content: flex-start; gap: 2px;
+      padding: 2px 0;
+      overflow: hidden;
     }
     .axe-home-rail--links { left: var(--axe-home-rail-inset); }
     .axe-home-rail--rechts { right: var(--axe-home-rail-inset); }
-    .axe-home-rail-rij { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .axe-home-rail-rij {
+      display: flex; align-items: center; gap: 5px; min-width: 0;
+      flex: 0 1 auto; height: clamp(34px, calc((100% - 14px) / 7), 46px);
+      min-height: 34px; max-height: 46px;
+    }
     .axe-home-rail--rechts .axe-home-rail-rij { flex-direction: row-reverse; }
-    .tegel { width: 56px; flex: none; padding: 6px 3px; border-radius: 14px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
-    .balk { flex: 1; min-width: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 5px 9px; }
+    .tegel { width: 32px; flex: none; padding: 1px; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+    .balk { flex: 1; min-width: 0; min-height: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 2px 7px; }
     .balk .naam { color: #38bdf8; font-weight: 500; }
-    .balk .regel { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .balk .regel { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 10px; line-height: 1.2; }
     .axe-home-live {
       position: absolute;
       left: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
@@ -73,9 +78,10 @@
     }
     .midden { pointer-events: none; min-width: 0; }
     @media (max-width: 1100px) {
-      .axe-home-rail { gap: 3px; justify-content: flex-start; }
-      .tegel { width: 48px; padding: 4px 2px; }
-      .balk { padding: 4px 8px; }
+      .axe-home-rail { gap: 1px; justify-content: flex-start; }
+      .axe-home-rail-rij { min-height: 32px; max-height: 42px; }
+      .tegel { width: 28px; padding: 1px; }
+      .balk { padding: 1px 6px; }
       .axe-home-live { grid-template-columns: minmax(0,1fr) minmax(12%,160px) minmax(0,1fr); gap: 6px; }
     }
     .kaart {
@@ -84,13 +90,21 @@
       border-radius: 10px;
       padding: 6px 8px;
       font-size: 10px;
-      line-height: 1.3;
+      line-height: 1.25;
       height: 100%;
       min-width: 0;
       overflow: hidden;
     }
-    .kaart h3 { margin: 0 0 4px; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); overflow-wrap: anywhere; }
-    .kaart p, .meer { margin: 0 0 3px; overflow-wrap: anywhere; }
+    .kaart h3 { margin: 0 0 2px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: normal; overflow: visible; }
+    .kaart p, .meer {
+      margin: 0 0 2px;
+      white-space: normal;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
     .ok { color: var(--ok); }
     .meer { color: var(--text-muted); background: none; border: 0; padding: 0; font-size: 10px; cursor: pointer; }
     .composer {
@@ -122,7 +136,7 @@
     <div class="bol-vak" data-axe-bol-vak>
       <div class="orb" data-axe-orb></div>
       <div class="axe-home-rail axe-home-rail--links" data-axe-home-rail="links">
-        <div class="axe-home-rail-rij"><div class="tegel">Wingman</div><div class="balk"><span class="naam">Wingman</span> <span class="regel">T1 · grok + claude-sonnet-seat · Next run 14:45 · last: inbox clear</span></div></div>
+        <div class="axe-home-rail-rij"><div class="tegel">Wingman</div><div class="balk"><span class="naam">Wingman</span> <span class="regel">T1 · grok + claude-sonnet-seat · next 14:45 · last: inbox clear</span></div></div>
         <div class="axe-home-rail-rij"><div class="tegel">NorthSea</div><div class="balk"><span class="naam">NorthSea</span> <span class="regel">T2 · groq + claude-sonnet-seat · needs your OK</span></div></div>
         <div class="axe-home-rail-rij"><div class="tegel">Trading</div><div class="balk"><span class="naam">Trading</span> <span class="regel">T2 · claude-sonnet-seat · Next run 18:00 · last: market snapshot</span></div></div>
         <div class="axe-home-rail-rij"><div class="tegel">Developer</div><div class="balk"><span class="naam">Developer</span> <span class="regel">T1 · claude opus/sonnet via Mac · Next run 00:10 · last: orchestrator health</span></div></div>
@@ -140,18 +154,23 @@
       </div>
       <div class="axe-home-live" data-axe-home-live>
         <div class="cluster" data-axe-home-live-cluster="links">
-          <section class="kaart" data-axe-home-kaart="lopend"><h3>Working now</h3><p>Quiet</p></section>
+          <section class="kaart" data-axe-home-kaart="lopend"><h3>Working now</h3>
+            <p>Developer · Trading OS</p>
+            <button class="meer" data-axe-home-meer>and 1 more</button>
+          </section>
           <section class="kaart" data-axe-home-kaart="recent"><h3>Recent</h3>
             <p class="ok" data-axe-home-feed>NorthSea · Copper PO</p>
-            <button class="meer" data-axe-home-meer>and 6 more</button>
+            <p>Cron · schedules 16 on</p>
+            <button class="meer" data-axe-home-meer>and 21 more</button>
           </section>
         </div>
         <div class="midden"></div>
         <div class="cluster" data-axe-home-live-cluster="rechts">
-          <section class="kaart" data-axe-home-ok data-axe-home-kaart="ok"><h3>Needs your OK</h3><p>Copper PO — approve</p></section>
+          <section class="kaart" data-axe-home-ok data-axe-home-kaart="ok"><h3>Needs your OK</h3><p>No pending approvals.</p></section>
           <section class="kaart" data-axe-home-seats data-axe-home-kaart="seats"><h3>Seats · Cron</h3>
             <p class="ok">claude4 · online</p>
-            <button class="meer" data-axe-home-meer>and 7 more</button>
+            <p>Wingman · next 15:45</p>
+            <button class="meer" data-axe-home-meer>and 14 more</button>
           </section>
         </div>
       </div>

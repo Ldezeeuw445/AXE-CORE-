@@ -7,6 +7,7 @@
  * Hier staat alleen hoe hij eruitziet; niets wordt verzonnen of afgeleid.
  */
 import { taakFoutVan } from '@/domain/taken/taakFout';
+import { amsterdamKlok, mensTekst, nextTekst } from '@/domain/tijd';
 
 export type ServerAgentStatus =
   | 'WORKING' | 'VERIFYING' | 'WAITING_TOOL' | 'WAITING_AGENT' | 'WAITING_APPROVAL'
@@ -164,13 +165,13 @@ const STAANDE_AGENTS: ReadonlySet<string> = new Set([
   'wingman', 'memory', 'task', 'cron', 'finance', 'apps', 'intel', 'companion',
 ]);
 
-function roosterRegel(a: ServerAgent): string {
+function roosterRegel(a: ServerAgent, nu?: number): string {
   const r = (a.routines ?? []).find((x) => x.next_run_at || x.summary || x.last_run_at)
     ?? (a.routines ?? [])[0];
   if (!r && !STAANDE_AGENTS.has(a.agent)) return '';
-  const next = r?.next_run_at && !r.running ? eventTijd(r.next_run_at) : (r?.running ? 'now' : '—');
-  const last = (r?.summary || '').trim() || (r?.last_status ? `cycle ${r.last_status}` : 'none yet');
-  return `Next run ${next || '—'} · last: ${last}`;
+  const next = r?.running ? 'now' : nextTekst(r?.next_run_at, nu);
+  const last = mensTekst((r?.summary || '').trim() || (r?.last_status ? `cycle ${r.last_status}` : 'none yet'), nu);
+  return `${next} · last: ${last}`;
 }
 
 function kort(tekst: string | null | undefined, max = 140): string {
@@ -178,25 +179,27 @@ function kort(tekst: string | null | undefined, max = 140): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
-export function serverStand(a: ServerAgent): ServerStand {
+export function serverStand(a: ServerAgent, nu?: number): ServerStand {
   const m = a.mission;
   const gepland = (a.routines && a.routines.length > 0) || STAANDE_AGENTS.has(a.agent);
+  const rooster = roosterRegel(a, nu);
   let regel = '';
   if (a.status === 'BLOCKED' || a.status === 'ERROR') {
     regel = taakFoutVan(a.reason, a.task?.title || '').regel;
   }
-  else if (a.current_action) regel = a.current_action;
+  else if (a.current_action) regel = mensTekst(a.current_action, nu);
   else if (a.status === 'WAITING_APPROVAL' && a.task?.title) regel = `waiting on: ${a.task.title}`;
-  else if (m?.next_action) regel = m.next_action;
+  else if ((a.status === 'MONITORING' || a.status === 'SLEEPING') && rooster) regel = rooster;
+  else if (m?.next_action) regel = mensTekst(m.next_action, nu);
   else if (a.task?.title) regel = a.task.title;
   else if (m?.title) regel = m.title;
-  else if (a.status === 'MONITORING' || a.status === 'SLEEPING') regel = roosterRegel(a) || (a.status === 'SLEEPING' ? '' : a.reason);
-  else regel = a.reason;
+  else if (a.status === 'MONITORING' || a.status === 'SLEEPING') regel = rooster || (a.status === 'SLEEPING' ? '' : mensTekst(a.reason, nu));
+  else regel = mensTekst(a.reason, nu);
   const kaalSlapen = a.status === 'SLEEPING' && !gepland;
   return {
     label: kaalSlapen ? LABEL.SLEEPING : (gepland && (a.status === 'SLEEPING' || a.status === 'MONITORING') ? 'scheduled' : (LABEL[a.status] ?? a.status.toLowerCase())),
     kleur: KLEUR[a.status] ?? 'var(--text-secondary)',
-    regel: kort(regel),
+    regel: kort(mensTekst(regel, nu)),
     stil: kaalSlapen,
   };
 }
@@ -206,14 +209,14 @@ export function serverStand(a: ServerAgent): ServerStand {
  * DAX-fout van een eerdere cyclus: die leeft alleen in BLOCKED/ERROR (reason).
  */
 export function agentLiveRegel(server: ServerAgent, nu: number = Date.now()): string {
-  const stand = serverStand(server);
+  const stand = serverStand(server, nu);
   if (stand.regel) return stand.regel;
-  const rooster = roosterRegel(server);
+  const rooster = roosterRegel(server, nu);
   if (rooster) return rooster;
   const next = (server.routines ?? []).find((r) => r.next_run_at && !r.running);
   const dax = daxRegel(server, nu);
-  if (dax && !dax.wakker && dax.blokkade) return dax.blokkade;
-  if (next) return `Next run ${eventTijd(next.next_run_at)} · last: ${next.summary || next.name}`;
+  if (dax && !dax.wakker && dax.blokkade) return mensTekst(dax.blokkade, nu);
+  if (next) return `${nextTekst(next.next_run_at, nu)} · last: ${mensTekst(next.summary || next.name, nu)}`;
   return '';
 }
 
@@ -224,10 +227,7 @@ export function missieVoortgang(m: ServerMissie | null | undefined): string {
   return `${klaar}/${m.milestones_total} · ${Math.round(m.progress * 100)}%`;
 }
 
-/** Leesbare tijd voor de tijdlijn: "14:03". */
+/** Leesbare tijd voor de tijdlijn: "14:03" in Europe/Amsterdam. */
 export function eventTijd(at: string | null): string {
-  if (!at) return '';
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  return amsterdamKlok(at);
 }

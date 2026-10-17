@@ -96,22 +96,138 @@ def run_memory(db: Any, nu: datetime) -> dict[str, Any]:
     }
 
 
+STALE_FOUT = (
+    "gpt-6-astra",
+    "no handler for northsea_desk",
+    "no handler for planner",
+    "unknown workspace '@device'",
+    "ran on a chat model without repo access",
+    "axe native runtime mismatch",
+    "personal.files.list' is not implemented",
+    "no computer action was executed",
+)
+
+
+def _fout_tekst(t: dict[str, Any]) -> str:
+    err = t.get("error")
+    if isinstance(err, dict):
+        return " ".join(str(err.get(k) or "") for k in ("message", "code", "output")).lower()
+    return str(err or "").lower()
+
+
+def is_stale_mislukking(t: dict[str, Any], nu: datetime) -> bool:
+    """Oude, al gefixte of achterhaalde failed/blocked-rijen. Niet de echte 24u-fouten."""
+    if t.get("status") not in ("failed", "blocked"):
+        return False
+    blob = _fout_tekst(t)
+    if any(p in blob for p in STALE_FOUT):
+        return True
+    at = _tijd(t.get("updated_at"))
+    return bool(at and nu - at > timedelta(hours=24))
+
+
+def archiveer_bekende_fouten(db: Any, nu: datetime | None = None) -> int:
+    """Zet stale failed op cancelled met reden, zodat Home ophoudt te tellen.
+
+    Geen send, geen order, geen geld. Alleen boekhouding.
+    """
+    nu = nu or _nu()
+    kolommen = "id,status,error,title,capability,updated_at,metadata"
+    taken = (
+        _rijen(db, "core_tasks", kolommen, limiet=400, status="failed")
+        + _rijen(db, "core_tasks", kolommen, limiet=200, status="blocked")
+    )
+    n = 0
+    reden = (
+        "Archived: stale failure from before 2026-10-17 Home/planner/northsea fixes. "
+        "Not retried automatically."
+    )
+    for t in taken:
+        if not is_stale_mislukking(t, nu):
+            continue
+        try:
+            meta = t.get("metadata") if isinstance(t.get("metadata"), dict) else {}
+            db.table("core_tasks").update({
+                "status": "cancelled",
+                "cancelled_at": nu.isoformat(),
+                "error": {
+                    **(t.get("error") if isinstance(t.get("error"), dict) else {"message": t.get("error")}),
+                    "archived": True,
+                    "archive_reason": reden,
+                },
+                "metadata": {**meta, "archived": True, "archive_reason": reden},
+            }).eq("id", t["id"]).execute()
+            n += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("staande: kon %s niet archiveren (%s)", t.get("id"), exc)
+    notices = _rijen(db, "core_tasks", "id,status,title,capability,metadata", limiet=400, capability="northsea_desk")
+    for t in notices:
+        if t.get("status") not in ("pending", "queued"):
+            continue
+        titel = str(t.get("title") or "")
+        if titel.lower().startswith("yes needed"):
+            continue
+        meta = t.get("metadata") or {}
+        if isinstance(meta, dict) and meta.get("goedkeuring") == "nodig":
+            continue
+        try:
+            db.table("core_tasks").update({
+                "status": "completed",
+                "completed_at": nu.isoformat(),
+                "metadata": {**(meta if isinstance(meta, dict) else {}), "archived": True,
+                             "archive_reason": "NorthSea desk notice; no worker claim, drafts only."},
+            }).eq("id", t["id"]).execute()
+            n += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("staande: kon notice %s niet sluiten (%s)", t.get("id"), exc)
+    return n
+
+
+def _niet_gearchiveerd(t: dict[str, Any]) -> bool:
+    err = t.get("error") if isinstance(t.get("error"), dict) else {}
+    meta = t.get("metadata") if isinstance(t.get("metadata"), dict) else {}
+    return not err.get("archived") and not meta.get("archived")
+
+
+def _status_rijen(db: Any, status: str, limiet: int = 400) -> list[dict[str, Any]]:
+    return _rijen(
+        db, "core_tasks",
+        "id,status,lease_expires_at,lease_token,updated_at,error,metadata",
+        limiet=limiet, status=status,
+    )
+
+
 def run_task(db: Any, nu: datetime) -> dict[str, Any]:
     """Wachtrij-onderhoud: tellen, stale leases melden. Kernel recovered zelf."""
-    taken = _rijen(db, "core_tasks", "id,status,lease_expires_at,lease_token")
-    queued = sum(1 for t in taken if t.get("status") in ("queued", "retrying", "pending"))
-    running = sum(1 for t in taken if t.get("status") in ("running", "in_progress", "planning"))
-    failed = sum(1 for t in taken if t.get("status") == "failed")
+    gearchiveerd = archiveer_bekende_fouten(db, nu)
+    grens = nu - timedelta(hours=24)
+    queued = len(_status_rijen(db, "queued")) + len(_status_rijen(db, "retrying"))
+    pending = len(_status_rijen(db, "pending"))
+    running = (
+        len(_status_rijen(db, "running"))
+        + len(_status_rijen(db, "in_progress"))
+        + len(_status_rijen(db, "planning"))
+    )
+    failed = sum(
+        1 for t in _status_rijen(db, "failed")
+        if _niet_gearchiveerd(t) and ((_tijd(t.get("updated_at")) or nu) >= grens)
+    )
+    blocked = sum(
+        1 for t in _status_rijen(db, "blocked")
+        if _niet_gearchiveerd(t) and ((_tijd(t.get("updated_at")) or nu) >= grens)
+    )
     stale = 0
-    for t in taken:
-        if t.get("status") not in ("running", "in_progress", "planning"):
-            continue
+    for t in _status_rijen(db, "running") + _status_rijen(db, "in_progress") + _status_rijen(db, "planning"):
         exp = _tijd(t.get("lease_expires_at"))
         if t.get("lease_token") and exp and exp < nu:
             stale += 1
     return {
         "job": "task queue upkeep",
-        "queue": {"queued": queued, "running": running, "stale_leases": stale, "failed": failed},
+        "queue": {
+            "queued": queued, "pending": pending, "running": running,
+            "stale_leases": stale, "failed": failed, "blocked": blocked,
+        },
+        "archived": gearchiveerd,
         "upkeep": "reported; kernel recovers expired leases",
     }
 

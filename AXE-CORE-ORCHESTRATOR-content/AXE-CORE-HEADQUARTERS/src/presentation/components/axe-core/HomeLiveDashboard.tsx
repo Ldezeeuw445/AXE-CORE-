@@ -2,11 +2,11 @@
  * Living 24/7 strip around the core. Two small cards left of the composer,
  * two right — wrap, no ellipsis, no inner scroll. Extra rows behind "and N more".
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
-import { homeLiveStand, LIVE_KAART_REGELS, seatsRegels, type LiveRegel, type LiveTaak } from '@/domain/homeLive';
+import { homeLiveStand, kaartRegels, seatsRegels, type LiveRegel, type LiveTaak } from '@/domain/homeLive';
 import { taakActieLabel, taakFoutVan } from '@/domain/taken/taakFout';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
@@ -59,7 +59,7 @@ function Actie({
   );
 }
 
-/** Zoveel items als in de kaart passen, tot LIVE_KAART_REGELS; de rest achter 'and N more'. */
+/** Altijd de top 1–2 rijen; nooit alleen 'and N more'. */
 function FitLijst<T>({
   items,
   render,
@@ -71,24 +71,12 @@ function FitLijst<T>({
   leeg: ReactNode;
   onMeer: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const aantal = items.length;
-  const [zicht, setZicht] = useState(() => Math.min(LIVE_KAART_REGELS, aantal));
-  useLayoutEffect(() => {
-    setZicht(Math.min(LIVE_KAART_REGELS, aantal));
-  }, [aantal]);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (el.scrollHeight > el.clientHeight + 1 && zicht > 0) {
-      setZicht((n) => Math.max(0, n - 1));
-    }
-  }, [zicht, aantal]);
   if (items.length === 0) return <>{leeg}</>;
+  const { zicht, meer } = kaartRegels(items);
   return (
-    <div ref={ref} className="axe-home-live-fit">
-      {items.slice(0, zicht).map(render)}
-      <Meer n={items.length - zicht} onOpen={onMeer} />
+    <div className="axe-home-live-fit">
+      {zicht.map(render)}
+      <Meer n={meer} onOpen={onMeer} />
     </div>
   );
 }

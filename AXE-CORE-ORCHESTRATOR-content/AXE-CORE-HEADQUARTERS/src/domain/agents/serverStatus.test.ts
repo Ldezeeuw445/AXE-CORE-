@@ -27,8 +27,9 @@ describe('Home toont wat de server echt ziet', () => {
     }));
     expect(s.stil).toBe(false);
     expect(s.label).toBe('scheduled');
-    expect(s.regel).toMatch(/Next run /);
+    expect(s.regel).toMatch(/next /);
     expect(s.regel).toMatch(/last: inbox clear/);
+    expect(s.regel).not.toMatch(/T\d{2}:\d{2}/);
     expect(s.regel.toLowerCase()).not.toBe('sleeping');
   });
 
@@ -83,6 +84,20 @@ describe('de eigen computer (DAX) zegt alleen wat gemeten is', () => {
 });
 
 describe('agentLiveRegel laat verouderde fouten vallen', () => {
+  it('ISO in next_action wordt Amsterdam-tijd, geen dump', () => {
+    const regel = agentLiveRegel(basis({
+      status: 'MONITORING',
+      reason: 'Next cycle at 2026-10-17T13:45:00+00:00.',
+      mission: {
+        id: 'm', title: 'Watch', status: 'monitoring', progress: 0,
+        next_action: 'Next cycle at 2026-10-17T13:45:00+00:00.',
+        current_milestone: null, milestones_total: 1, blocked_reason: null,
+      },
+    }), Date.parse('2026-10-17T13:39:00Z'));
+    expect(regel).not.toMatch(/2026-10-17T/);
+    expect(regel).toMatch(/15:45/);
+  });
+
   it('toont geen hintergebleven blocked_reason als de status niet BLOCKED is', () => {
     const regel = agentLiveRegel(basis({
       status: 'MONITORING',

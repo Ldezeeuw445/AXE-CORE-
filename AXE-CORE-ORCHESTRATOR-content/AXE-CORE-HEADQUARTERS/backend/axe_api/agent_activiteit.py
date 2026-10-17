@@ -66,6 +66,55 @@ def _klok(waarde: Any) -> str:
     return t.strftime("%H:%M")
 
 
+def _over(waarde: Any, moment: datetime | None = None) -> str:
+    t = _tijd(waarde)
+    if not t:
+        return ""
+    moment = moment or datetime.now(timezone.utc)
+    minuten = int(round((t - moment).total_seconds() / 60))
+    if abs(minuten) < 2:
+        return "now"
+    if 2 <= minuten < 120:
+        return f"in {minuten} min"
+    if -120 < minuten <= -2:
+        return f"{-minuten} min ago"
+    return ""
+
+
+def mens_tijd(waarde: Any, moment: datetime | None = None) -> str:
+    """'next 15:45 · in 6 min' — nooit een ISO-string."""
+    klok = _klok(waarde)
+    if klok == "?":
+        return ""
+    rel = _over(waarde, moment)
+    if rel.startswith("in ") or rel.endswith("ago"):
+        return f"next {klok} · {rel}"
+    return f"next {klok}"
+
+
+_ISO = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?"
+)
+
+
+def mens_regel(ruw: Any, moment: datetime | None = None) -> str:
+    """JSON-dump en ISO eruit, Amsterdam-klok erin."""
+    if ruw is None:
+        return ""
+    if isinstance(ruw, dict):
+        return routine_samenvatting({"last_result": ruw})
+    tekst = str(ruw).strip()
+    if not tekst:
+        return ""
+    if tekst[:1] in "{[":
+        try:
+            import json as _json
+            return routine_samenvatting({"last_result": _json.loads(tekst)})
+        except Exception:  # noqa: BLE001
+            pass
+    return _ISO.sub(lambda m: _klok(m.group(0)), tekst)
+
+
 def routine_samenvatting(r: dict[str, Any]) -> str:
     """Wat de laatste run van een rooster opleverde, in één regel. Breekt nooit:
     een onverwachte vorm in last_result legde op 10 okt heel /agents/activity
@@ -77,12 +126,17 @@ def routine_samenvatting(r: dict[str, Any]) -> str:
 
 
 def _routine_samenvatting(r: dict[str, Any]) -> str:
-    tekst = str(r.get("last_result") or "")
-    try:
-        import json as _json
-        d = _json.loads(tekst)
-    except Exception:  # noqa: BLE001
-        d = None
+    ruw = r.get("last_result")
+    d: Any = ruw if isinstance(ruw, dict) else None
+    tekst = "" if d is not None else str(ruw or "")
+    if d is None and tekst:
+        try:
+            import json as _json
+            geladen = _json.loads(tekst)
+            if isinstance(geladen, dict):
+                d = geladen
+        except Exception:  # noqa: BLE001
+            d = None
     if isinstance(d, dict):
         if "created" in d and "considered_pairs" in d:
             return f"{d.get('created') or 0} new matches from {d.get('considered_pairs')} pairs"
@@ -103,7 +157,15 @@ def _routine_samenvatting(r: dict[str, Any]) -> str:
             )
         if "queue" in d and isinstance(d.get("queue"), dict):
             q = d["queue"]
-            return f"queue {q.get('queued', 0)} waiting, {q.get('stale_leases', 0)} stale, {q.get('failed', 0)} failed"
+            delen = []
+            for sleutel, label in (
+                ("queued", "waiting"), ("pending", "planned"), ("running", "running"),
+                ("stale_leases", "stale"), ("failed", "failed"), ("blocked", "blocked"),
+            ):
+                n = int(q.get(sleutel) or 0)
+                if n:
+                    delen.append(f"{n} {label}")
+            return "queue " + (", ".join(delen) or "clear")
         if "vault" in d and isinstance(d.get("vault"), dict):
             v = d["vault"]
             return f"vault {v.get('events_24h', 0)} events/24h, {v.get('memories_seen', 0)} memories"
@@ -119,12 +181,30 @@ def _routine_samenvatting(r: dict[str, Any]) -> str:
             ) or "app health clear"
         if "signals" in d and isinstance(d.get("signals"), dict):
             s = d["signals"]
-            return f"signals {s.get('options_seen', 0)} options, bias {s.get('bias') or 'none'}"
+            wanneer = _klok(s.get("at")) if s.get("at") else ""
+            return f"signals {s.get('options_seen', 0)} options, bias {s.get('bias') or 'none'}" + (
+                f" {wanneer}" if wanneer and wanneer != "?" else ""
+            )
         if "companion" in d and isinstance(d.get("companion"), dict):
             c = d["companion"]
             return f"companion {c.get('jobs', 0)} jobs, last {c.get('last') or 'none'}"
+        # Onbekende JSON: platte sleutels, ISO als klok, nooit de dump.
+        delen = []
+        for k, v in list(d.items())[:8]:
+            if k in ("job", "billing", "costs", "moved", "invented", "orders") or v in (None, "", 0):
+                continue
+            if isinstance(v, str) and _ISO.search(v):
+                delen.append(f"{k} {_klok(v)}")
+            elif isinstance(v, dict):
+                stuk = _routine_samenvatting({"last_result": v})
+                if stuk:
+                    delen.append(stuk)
+            else:
+                delen.append(f"{k} {v}")
+        if delen:
+            return ", ".join(delen)[:110]
     tekst = re.sub(r"\s+", " ", tekst).strip()
-    return tekst[:110]
+    return _ISO.sub(lambda m: _klok(m.group(0)), tekst)[:110]
 
 
 def routine_agent(r: dict[str, Any]) -> str:
@@ -365,7 +445,8 @@ def agent_status(
     if loop:
         m = loop[0]
         if m.get("status") == "monitoring":
-            return resultaat("MONITORING", f"Next cycle at {m.get('next_run_at')}.", None, m)
+            nxt = mens_tijd(m.get("next_run_at"), moment)
+            return resultaat("MONITORING", (nxt + ".") if nxt else "Scheduled.", None, m)
         return resultaat("QUEUED", "Mission active; choosing its next step.", None, m)
 
     klaar = [m for m in mijn_missies if m.get("status") == "completed"
@@ -380,8 +461,8 @@ def agent_status(
         r = mijn_routines[0]
         if r["failures"] and r["last_status"] not in ("ok", "skipped") and _fout_is_actueel(r.get("last_run_at"), succes):
             return resultaat("ERROR", f"{r['name']} failed {r['failures']}x; retrying itself (last {_klok(r['last_run_at'])}).")
-        volgende = f"; next {_klok(r['next_run_at'])}" if r.get("next_run_at") else ""
-        tekst = r["summary"]
+        volgende = f"; {mens_tijd(r['next_run_at'], moment)}" if r.get("next_run_at") else ""
+        tekst = mens_regel(r["summary"], moment) or r["summary"]
         if r["failures"] and r["last_status"] not in ("ok", "skipped"):
             tekst = "cycle recovered"
         return resultaat("MONITORING", f"{r['name']} {_klok(r['last_run_at'])}: {tekst}{volgende}")

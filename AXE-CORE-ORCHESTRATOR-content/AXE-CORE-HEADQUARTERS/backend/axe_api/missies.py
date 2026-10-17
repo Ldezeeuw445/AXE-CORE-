@@ -65,6 +65,16 @@ def iso(moment: datetime) -> str:
     return moment.astimezone(timezone.utc).isoformat()
 
 
+def _next_cycle_tekst(moment: datetime) -> str:
+    """Home-rails lezen next_action letterlijk; ISO hoort daar niet."""
+    try:
+        from zoneinfo import ZoneInfo
+        t = moment.astimezone(ZoneInfo("Europe/Amsterdam"))
+    except Exception:  # noqa: BLE001
+        t = moment
+    return f"Next cycle at {t.strftime('%H:%M')}"
+
+
 # ── Wat de agent aan het eind zegt ───────────────────────────────────────────
 
 _RAPPORT = re.compile(
@@ -251,7 +261,7 @@ def _afronden(missie: dict[str, Any], mijlpalen: list[dict[str, Any]], moment: d
         return Besluit(
             status="monitoring",
             velden={"milestones": vers, "current_milestone": 0, "progress": 0,
-                    "next_action": f"Next cycle at {iso(moment + timedelta(seconds=int(interval)))}",
+                    "next_action": _next_cycle_tekst(moment + timedelta(seconds=int(interval))),
                     "metadata": meta, "blocked_reason": None},
             wacht_seconden=int(interval),
             events=[("mission.cycle_completed", f"Cycle {cyclus} completed; monitoring until the next one.",

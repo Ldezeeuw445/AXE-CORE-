@@ -6,6 +6,7 @@
  */
 import { agentsByTier, AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
 import { daxRegel, eventTijd, missieVoortgang, serverStand, type ServerAgent } from '@/domain/agents/serverStatus';
+import { mensTekst, nextTekst } from '@/domain/tijd';
 import { rijenVoorAgent, type GoedkeuringsRij } from '@/domain/agents/pendingApproval';
 import { stoelHeartbeatStand, type CodingSeat } from '@/domain/codingSeats';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
@@ -64,8 +65,8 @@ export type HomeLiveStand = {
   roosters: LiveRooster[];
 };
 
-/** Zichtbare regels per live-kaart: kleine 2+2-kaarten, rest achter 'and N more'. */
-export const LIVE_KAART_REGELS = 3;
+/** Zichtbare regels per live-kaart: altijd 1–2 echte rijen, rest achter 'and N more'. */
+export const LIVE_KAART_REGELS = 2;
 
 export function kaartRegels<T>(items: T[]): { zicht: T[]; meer: number } {
   return {
@@ -132,7 +133,7 @@ export function homeLiveStand(in_: {
         agent: naamVan(id),
         naam: r.name,
         laatste: r.last_run_at ? eventTijd(r.last_run_at) : 'never',
-        volgende: r.next_run_at && !r.running ? eventTijd(r.next_run_at) : (r.running ? 'now' : '—'),
+        volgende: r.running ? 'now' : nextTekst(r.next_run_at, nu),
         running: r.running,
         fout: r.failures > 0,
       });
@@ -143,7 +144,7 @@ export function homeLiveStand(in_: {
       recent.push({
         id: ev.task_id || `${ev.at}-${ev.event_type}`,
         agent: naamVan(id),
-        titel: ev.message || ev.event_type || s,
+        titel: mensTekst(ev.message || ev.event_type || s, nu),
         stand: s,
         voortgang: ev.at ? eventTijd(ev.at) : '',
         kleur: s === 'failed' ? 'var(--err)' : 'var(--ok)',
@@ -209,7 +210,7 @@ export function seatsRegels(stand: HomeLiveStand): LiveRegel[] {
   for (const r of stand.roosters) {
     uit.push({
       id: `cron-${r.agent}-${r.naam}`,
-      tekst: `${r.agent} · ${r.naam} · last ${r.laatste} · next ${r.volgende}${r.fout ? ' · failed last run' : ''}`,
+      tekst: `${r.agent} · ${r.naam} · last ${r.laatste} · ${r.volgende}${r.fout ? ' · failed last run' : ''}`,
       kleur: r.fout ? 'var(--err)' : 'var(--text-secondary)',
       actie: r.fout ? 'retry' : undefined,
     });

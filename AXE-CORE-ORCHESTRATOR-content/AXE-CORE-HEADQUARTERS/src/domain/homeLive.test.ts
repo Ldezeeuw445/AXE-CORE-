@@ -45,10 +45,10 @@ describe('homeLiveStand', () => {
     expect(werkPulseTekst(1)).toBe('1 agent working');
   });
 
-  it('kaartRegels houdt 5 zichtbaar en telt de rest', () => {
+  it('kaartRegels toont de top 2 en telt de rest', () => {
     const { zicht, meer } = kaartRegels([1, 2, 3, 4, 5, 6, 7]);
-    expect(zicht).toEqual([1, 2, 3]);
-    expect(meer).toBe(4);
+    expect(zicht).toEqual([1, 2]);
+    expect(meer).toBe(5);
   });
 
   it('seatsRegels plakt stoelen, dax en roosters in één leesbare lijst', () => {

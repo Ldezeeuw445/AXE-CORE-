@@ -35,6 +35,7 @@ type TaakRij = {
   assignee?: string | null;
   capability?: string | null;
   updated_at?: string;
+  metadata?: { archived?: boolean } | null;
 };
 
 type Melding = {
@@ -85,13 +86,18 @@ export function AxeAgentsBalk() {
       const sinds = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
       const { data } = await sb
         .from('core_tasks')
-        .select('id,title,status,error,assignee,capability,updated_at')
+        .select('id,title,status,error,assignee,capability,updated_at,metadata')
         .gte('updated_at', sinds)
         .order('updated_at', { ascending: false })
         .limit(30);
       if (!levend || !data) return;
       const rijen = data as TaakRij[];
-      const vast = rijen.filter((r) => ['failed', 'blocked', 'cancelled', 'rejected'].includes(r.status));
+      const vast = rijen.filter((r) => {
+        if (!['failed', 'blocked'].includes(r.status)) return false;
+        if (r.metadata?.archived) return false;
+        const err = r.error && typeof r.error === 'object' ? r.error as { archived?: boolean } : null;
+        return !err?.archived;
+      });
       const lijst: Melding[] = vast.map((r) => {
         const f = taakFoutVan(r.error, r.title);
         return { id: r.id, titel: r.title, regel: f.regel, mislukt: true, actie: f.actie };

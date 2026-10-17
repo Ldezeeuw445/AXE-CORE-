@@ -71,12 +71,12 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
       aria-expanded={open}
       aria-label={`Gesprek met ${agent.name}`}
       data-axe-doel={`agent:${agent.id}`}
-      className="axe-home-rail-tegel flex flex-col items-center gap-1 cursor-pointer"
+      className="axe-home-rail-tegel flex flex-col items-center gap-px cursor-pointer"
       style={{ ...TEGEL, textShadow: LEESBAAR }}
     >
-      <ManagerAvatar agent={agent} size={28} />
+      <ManagerAvatar agent={agent} size={18} />
       <span
-        className="text-[8px] tracking-[0.12em] uppercase leading-none whitespace-nowrap"
+        className="text-[7px] tracking-[0.1em] uppercase leading-none whitespace-nowrap"
         style={{ color: 'var(--text-muted)' }}
       >
         {agent.kort ?? agent.name}
@@ -148,7 +148,7 @@ function Balkje({
           aria-label={`Gesprek met ${agent.name}`}
           className="flex items-center gap-3 w-full cursor-pointer min-w-0 text-left"
         >
-          <span className="flex-1 min-w-0 text-[12px] leading-snug axe-home-rail-regel">{kop}</span>
+          <span className="flex-1 min-w-0 text-[11px] leading-snug axe-home-rail-regel">{kop}</span>
           <span
             className="text-[9px] tracking-[0.08em] uppercase whitespace-nowrap flex-shrink-0 flex items-center gap-1.5"
             style={{ color: stand.kleur }}

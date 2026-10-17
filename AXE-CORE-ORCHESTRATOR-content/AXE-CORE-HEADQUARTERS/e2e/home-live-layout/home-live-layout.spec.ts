@@ -67,6 +67,34 @@ test.describe('Home live layout blijft uit de composer', () => {
       const takenTekst = await page.locator('[data-axe-home-pill="taken"]').innerText();
       expect(takenTekst).toMatch(/NorthSea Desk Manager failed/);
       expect(takenTekst).not.toMatch(/needsmy/);
+      const sceneTekst = await page.locator('[data-axe-home-scene]').innerText();
+      expect(sceneTekst).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+      expect(sceneTekst).not.toMatch(/\{\s*"at"/);
+
+      const firstLinks = await box(page, '[data-axe-home-rail="links"] .axe-home-rail-rij');
+      const lastLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-rij').last().boundingBox();
+      const firstRechts = await box(page, '[data-axe-home-rail="rechts"] .axe-home-rail-rij');
+      const lastRechts = await page.locator('[data-axe-home-rail="rechts"] .axe-home-rail-rij').last().boundingBox();
+      if (!lastLinks || !lastRechts) throw new Error('rail last row missing');
+      expect(firstLinks.y, `left first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(links.y - 1);
+      expect(firstRechts.y, `right first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
+      expect(lastLinks.y + lastLinks.height, `left last clipped at ${maat.naam}`).toBeLessThanOrEqual(links.y + links.height + 1);
+      expect(lastRechts.y + lastRechts.height, `right last clipped at ${maat.naam}`).toBeLessThanOrEqual(rechts.y + rechts.height + 1);
+
+      const lopend = await page.locator('[data-axe-home-kaart="lopend"]').innerText();
+      expect(lopend).toMatch(/WORKING NOW/i);
+      expect(lopend).toMatch(/Developer/);
+      expect(lopend).toMatch(/Trading OS/);
+      expect(lopend).toMatch(/and 1 more/);
+      const recent = await page.locator('[data-axe-home-kaart="recent"]').innerText();
+      expect(recent).toMatch(/NorthSea/);
+      expect(recent).toMatch(/Copper PO/);
+      expect(recent).toMatch(/Cron/);
+      expect(recent).toMatch(/and 21 more/);
+      const seats = await page.locator('[data-axe-home-kaart="seats"]').innerText();
+      expect(seats).toMatch(/claude4/);
+      expect(seats).toMatch(/Wingman/);
+      expect(seats).toMatch(/and 14 more/);
 
       const kaarten = page.locator('[data-axe-home-kaart]');
       expect(await kaarten.count()).toBe(4);
