@@ -42,6 +42,19 @@ def zwaarte(agent: str) -> str:
         return "light"
 
 
+# Wat een missie aan haar taken mag meegeven (metadata.task_payload). Een vaste
+# lijst: een missie mag zo de CrewAI-ronde overslaan of betaalde modellen uitsluiten,
+# niet de bewijsplicht.
+TAAK_EXTRA_SLEUTELS = ("crew", "free_models")
+
+
+def taak_extra(missie: dict[str, Any]) -> dict[str, Any]:
+    extra = (missie.get("metadata") or {}).get("task_payload") or {}
+    if not isinstance(extra, dict):
+        return {}
+    return {k: extra[k] for k in TAAK_EXTRA_SLEUTELS if k in extra}
+
+
 class MissieMotor:
     def __init__(self, missies: MissieRepository, taken: TaskRepository, *, eigenaar: str | None = None,
                  melden: Callable[[str, str], None] | None = None):
@@ -90,6 +103,7 @@ class MissieMotor:
                 "idempotency_key": t.idempotency_key,
                 "mission_id": missie["id"],
                 "payload": {
+                    **taak_extra(missie),
                     "request": t.request, "agent": t.agent, "mission_id": missie["id"],
                     "milestone_index": t.mijlpaal_index, "weight": zwaarte(t.agent),
                 },

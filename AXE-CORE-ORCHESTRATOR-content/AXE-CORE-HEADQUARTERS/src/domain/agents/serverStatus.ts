@@ -48,6 +48,53 @@ export interface ServerAgent {
   dax_status?: string | null;
   /** Roosters die voor deze agent draaien, met wat de laatste run vond. */
   routines?: ServerRoutine[];
+  /** Laatste gemeten heartbeat van de DAX (dax_wacht, elke 5 min). */
+  dax_heartbeat_at?: string | null;
+  /** Wat de bot nu niet kan, gemeten; leeg = alles is er. */
+  dax_blockers?: string[];
+  dax_error?: string | null;
+  /** Het vaste werk van deze bot ("Market data check"). */
+  dax_routine?: string | null;
+  dax_always_on?: boolean | null;
+  /** Abonnement-CLI's die ín de DAX zijn ingelogd (claude_logged_in, codex_logged_in). */
+  dax_engines?: Record<string, boolean>;
+  dax_notes?: string[];
+}
+
+/** Na zoveel minuten zonder heartbeat telt een DAX niet meer als wakker (wacht tikt elke 5 min). */
+export const DAX_HARTSLAG_MAX_MIN = 15;
+
+export interface DaxRegel {
+  /** Echt wakker: draaiend én een verse heartbeat. */
+  wakker: boolean;
+  /** Eén regel voor het venster, Engels. */
+  tekst: string;
+  /** Wat hij niet kan, of ''. */
+  blokkade: string;
+}
+
+/**
+ * De eigen computer in één regel, alleen uit wat de server mat.
+ * "running" zonder verse heartbeat is niet wakker: dan zeggen we hoe oud hij is.
+ */
+export function daxRegel(a: ServerAgent, nu: number = Date.now()): DaxRegel | null {
+  if (!a.dax_computer) return null;
+  const hart = a.dax_heartbeat_at ? new Date(a.dax_heartbeat_at).getTime() : NaN;
+  const minuten = Number.isNaN(hart) ? null : Math.max(0, Math.round((nu - hart) / 60000));
+  const vers = minuten !== null && minuten <= DAX_HARTSLAG_MAX_MIN;
+  const wakker = a.dax_status === 'running' && vers;
+  let staat: string;
+  if (a.dax_status === 'error') staat = 'unreachable';
+  else if (wakker) staat = 'awake';
+  else if (a.dax_status === 'running') staat = 'no recent heartbeat';
+  else staat = a.dax_status || 'unknown';
+  const hartTekst = minuten === null ? 'never measured' : minuten < 1 ? 'heartbeat just now' : `heartbeat ${minuten}m ago`;
+  const blokkade = a.dax_error || (a.dax_blockers ?? []).join('; ');
+  return {
+    wakker,
+    tekst: `Computer ${a.dax_computer} · ${staat} · ${hartTekst}${a.dax_routine ? ` · ${a.dax_routine}` : ''}`,
+    blokkade,
+  };
 }
 
 export interface ServerRoutine {

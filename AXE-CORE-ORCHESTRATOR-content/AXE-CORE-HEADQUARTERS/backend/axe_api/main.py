@@ -3689,6 +3689,13 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
         if action_type == "review_desk":
             return await asyncio.to_thread(_review_desk_run_sync, "scheduled")
 
+        if action_type == "dax":
+            # De DAX-wacht: elke bot always-on, gemeten (heartbeat), met zijn vaste missie of
+            # een eerlijke blokkade. Geen LLM in deze ronde. Zie dax_wacht.py.
+            import dax_wacht
+            uit = await asyncio.to_thread(dax_wacht.ronde, sb)
+            return {"status": dax_wacht.ronde_status(uit), "output": json.dumps(uit, default=str)[:4000]}
+
         if action_type in ("crew", "prompt"):
             task = (payload.get("task") or payload.get("prompt") or "").strip()
             if not task:

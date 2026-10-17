@@ -61,6 +61,19 @@ def max_zwaar() -> int:
     return max(1, int(os.environ.get("AXE_DAX_MAX_HEAVY", "3")))
 
 
+def altijd_aan(rij: dict[str, Any]) -> bool:
+    """Staat deze computer altijd aan? metadata.always_on wint; anders AXE_DAX_ALWAYS_ON (default aan).
+
+    Sinds 11 okt zijn de DAX-bots always-on (dax_wacht.py houdt ze wakker en
+    meet ze). Slapen bij stilte geldt alleen nog voor een computer die
+    expliciet always_on=false heeft.
+    """
+    meta = rij.get("metadata") or {}
+    if "always_on" in meta:
+        return bool(meta.get("always_on"))
+    return os.environ.get("AXE_DAX_ALWAYS_ON", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
 @dataclass
 class DaxComputer:
     id: str
@@ -395,7 +408,7 @@ def slaap_inactieven(register: DaxRegister, *, idle_seconden: int | None = None,
     bezet = {s.get("computer_id") for s in register.bezette_slots()}
     gestopt = []
     for rij in register.rijen():
-        if rij.get("status") != "running" or rij["id"] in bezet:
+        if rij.get("status") != "running" or rij["id"] in bezet or altijd_aan(rij):
             continue
         laatst = rij.get("last_heartbeat_at")
         try:

@@ -14,7 +14,7 @@ import { draadVoorAgent, type DraadBericht } from '@/domain/tierRouter/agentDraa
 import type { AxeAgent } from '@/domain/agents/roster';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
-import { eventTijd, missieVoortgang, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
+import { daxRegel, eventTijd, missieVoortgang, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
 
 function wieEnWat(agent: AxeAgent, job: AxeJob | null): string {
   if (!job) return `AXE has nothing running with ${agent.name} right now.`;
@@ -165,9 +165,16 @@ export function ManagerChat({
             ))}
             {(server.dax_computer || server.task?.engine || server.task?.model) && (
               <p style={{ color: 'var(--text-muted)' }}>
-                {server.dax_computer ? `Computer ${server.dax_computer}${server.dax_status ? ` (${server.dax_status === 'running' ? 'awake' : server.dax_status})` : ''}` : ''}
+                {/* Gemeten door de DAX-wacht: staat, heartbeat-leeftijd, vast werk. Niets geraden. */}
+                {server.dax_computer ? (daxRegel(server)?.tekst ?? `Computer ${server.dax_computer}`) : ''}
                 {server.task?.engine ? ` · ${server.task.engine}` : ''}
                 {server.task?.model ? ` · ${server.task.model}` : ''}
+              </p>
+            )}
+            {server.dax_computer && daxRegel(server)?.blokkade && (
+              <p style={{ color: 'var(--err)' }} title={daxRegel(server)?.blokkade}>
+                <span className="text-[9px] tracking-widest uppercase mr-1">Can't</span>
+                {daxRegel(server)?.blokkade}
               </p>
             )}
             {server.events.length > 0 && (

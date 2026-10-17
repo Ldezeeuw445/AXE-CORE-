@@ -892,6 +892,23 @@ async def _call_openai_compat(
     return {"parts": parts}
 
 
+# Welke aanbieder de laatste stap beantwoordde ("groq/openai/gpt-oss-120b",
+# "ollama/llama3.1:8b-16k"). Gaat mee in het resultaat, zodat Home en het
+# verslag zeggen welk model het werk deed in plaats van niets (of iets geradens).
+_LAATSTE_MOTOR: contextvars.ContextVar[str | None] = contextvars.ContextVar("axe_laatste_motor", default=None)
+# True = alleen gratis aanbieders (Groq, modelbox-Ollama). Gezet per run via run_agent_loop(alleen_gratis=...).
+_ALLEEN_GRATIS: contextvars.ContextVar[bool] = contextvars.ContextVar("axe_alleen_gratis", default=False)
+GROQ_KLEIN_MODEL = os.environ.get("AXE_AGENT_GROQ_SMALL_MODEL", "openai/gpt-oss-20b")
+
+
+def motor_velden() -> dict[str, str]:
+    naam = _LAATSTE_MOTOR.get()
+    if not naam:
+        return {}
+    engine, _, model = naam.partition("/")
+    return {"engine": engine, "model": model or engine}
+
+
 async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> dict[str, Any]:
     """Try each provider in turn until one answers.
 
@@ -907,11 +924,18 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     attempts: list[tuple[str, Any]] = []
     groq_key = os.environ.get("GROQ_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
+    gratis = _ALLEEN_GRATIS.get()
     if groq_key:
         attempts.append((f"groq/{GROQ_MODEL}", lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_MODEL)))
-    if api_key:
+        if gratis and GROQ_KLEIN_MODEL != GROQ_MODEL:
+            # Eigen limietemmer bij Groq: als 120b op zijn tokens-per-minuut zit, past 20b vaak nog.
+            attempts.append((f"groq/{GROQ_KLEIN_MODEL}",
+                             lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_KLEIN_MODEL)))
+    # Betaalde aanbieders alleen als de taak dat niet uitsluit. De vaste DAX-routines
+    # draaien gratis (Groq + modelbox): een lus die elke paar uur loopt, mag geen tegoed opmaken.
+    if api_key and not gratis:
         attempts.append((f"gemini/{MODEL}", lambda: _call_gemini(contents, api_key)))
-    if openai_key:
+    if openai_key and not gratis:
         attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
     # De terugval is begrensd: nooit twee Ollama-aanroepen tegelijk op deze box.
     attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
@@ -928,7 +952,9 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
                 continue
             _AFKOELING.pop(name, None)
         try:
-            return await call()
+            antwoord = await call()
+            _LAATSTE_MOTOR.set(name)
+            return antwoord
         except Exception as exc:
             seconden = _afkoelduur(exc)
             if seconden:
@@ -955,6 +981,7 @@ async def run_agent_loop(
     device: str | None = None,
     should_stop: Callable[[], Awaitable[bool]] | None = None,
     dax: Any = None,
+    alleen_gratis: bool = False,
 ) -> dict[str, Any]:
     """Run the request to completion.
 
@@ -997,6 +1024,7 @@ async def run_agent_loop(
     ws_fiche = _HUIDIGE_AGENT_WS.set(agent_ws)
     device_fiche = _HUIDIGE_DEVICE.set(pinned if pinned in ("vps", "mac-mini", "imac") else None)
     dax_fiche = _HUIDIGE_DAX.set(dax)
+    gratis_fiche = _ALLEEN_GRATIS.set(bool(alleen_gratis))
 
     async def stop_gevraagd() -> None:
         """Werp TaskCancelled als de taak intussen geannuleerd is."""
@@ -1016,6 +1044,7 @@ async def run_agent_loop(
         _HUIDIGE_AGENT_WS.reset(ws_fiche)
         _HUIDIGE_DEVICE.reset(device_fiche)
         _HUIDIGE_DAX.reset(dax_fiche)
+        _ALLEEN_GRATIS.reset(gratis_fiche)
 
 
 async def _lus(
@@ -1103,6 +1132,7 @@ async def _lus(
                         {"verify_command": verify_command, "expect": expect},
                     )
                     return {
+                        **motor_velden(),
                         "summary": summary,
                         "steps_used": step,
                         "verification": {

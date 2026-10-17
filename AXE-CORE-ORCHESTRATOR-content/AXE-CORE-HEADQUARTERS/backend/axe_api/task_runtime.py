@@ -16,7 +16,10 @@ TRANSITIONS: dict[str, set[str]] = {
     "in_progress": {"waiting_approval", "verifying", "retrying", "completed", "failed", "cancelled"},
     "waiting_approval": {"queued", "running", "rejected", "cancelled"},
     "approved": {"queued", "running", "cancelled"},
-    "verifying": {"running", "retrying", "completed", "failed", "cancelled"},
+    # blocked: de stap is echt gedraaid en bewezen, maar de agent meldt dat hij
+    # vastzit ("MILESTONE: blocked"). Dat is geen voltooiing (11 okt 2026: een
+    # automatisering markeerde verzonnen werk als klaar). Zie task_worker._draai.
+    "verifying": {"running", "retrying", "completed", "failed", "cancelled", "blocked"},
     "retrying": {"queued", "running", "failed", "cancelled"},
     "blocked": {"queued", "waiting_approval", "failed", "cancelled"},
 }
@@ -271,7 +274,7 @@ class TaskRepository:
             changes["error"] = None
         if status == "cancelled":
             changes["cancelled_at"] = now
-        if status in TERMINAL or status == "waiting_approval":
+        if status in TERMINAL or status in ("waiting_approval", "blocked"):
             changes.update({"worker_id": None, "lease_token": None, "lease_expires_at": None})
 
         query = self._db().table("core_tasks").update(changes).eq("id", task_id).eq("revision", current["revision"])
