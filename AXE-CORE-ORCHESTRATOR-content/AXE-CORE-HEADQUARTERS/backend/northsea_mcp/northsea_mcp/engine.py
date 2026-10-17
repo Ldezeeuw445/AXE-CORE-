@@ -293,7 +293,10 @@ class EngineService:
             co = companies.get(o.get("company_id")) or {}
             ct = contacts.get(o.get("contact_id")) or {}
             adressen = [a for a in ontvangers(o) if a not in bounced_adressen]
-            if CANONICAL_MAILBOX not in _lower(o.get("from_address")):
+            deal = opp_by_id.get(o.get("opportunity_id")) or {}
+            if deal.get("stage") in ("lost", "won", "closed", "cancelled") or deal.get("automation_status") == "disabled":
+                reden = "opportunity_closed_or_automation_disabled"
+            elif CANONICAL_MAILBOX not in _lower(o.get("from_address")):
                 reden = "provenance_unknown"  # P0.9: niet opvolgen namens trade@ wat niet aantoonbaar van trade@ kwam
             elif co.get("is_synthetic"):
                 reden = "synthetic"

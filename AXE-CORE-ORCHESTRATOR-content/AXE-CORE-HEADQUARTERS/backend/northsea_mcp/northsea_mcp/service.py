@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -57,6 +58,27 @@ class ServiceError(Exception):
         self.message = message
 
 
+# Agent-/bot-/service-identiteiten zijn NOOIT mens, ook niet als ze in de allowlist staan.
+NON_HUMAN_PREFIXES = ("service:", "agent:", "bot:", "axe-", "northsea-", "crew:", "mcp:")
+NON_HUMAN_MARKERS = ("desk-manager", "desk_manager", "engine", "crew", "agent", "bot", "loop", "automation", "routine")
+
+
+def human_principals() -> frozenset[str]:
+    raw = os.environ.get("NORTHSEA_HUMAN_PRINCIPALS", "")
+    return frozenset(x.strip().lower() for x in raw.split(",") if x.strip())
+
+
+def is_human_principal(principal: str | None, client_id: str | None = None) -> bool:
+    p = (principal or "").strip().lower()
+    c = (client_id or "").strip().lower()
+    if not p:
+        return False
+    for v in (p, c):
+        if v.startswith(NON_HUMAN_PREFIXES) or any(m in v for m in NON_HUMAN_MARKERS):
+            return False
+    return p in human_principals()
+
+
 @dataclass(frozen=True)
 class Caller:
     principal: str
@@ -65,8 +87,15 @@ class Caller:
 
     @property
     def is_human(self) -> bool:
-        """Een ingelogde gebruiker (OAuth) en geen service-token (principal/client 'service:...')."""
-        return not (self.principal.startswith("service:") or self.client_id.startswith("service:"))
+        """Alleen een echte, expliciet toegestane mens telt als mens (allowlist, fail closed).
+
+        Vroeger telde elke principal zonder 'service:'-prefix als mens; daardoor keurde de
+        in-process Desk Manager ('northsea-desk-manager') engine-follow-ups zelf goed en
+        verstuurde ze (incident 6 + 17 okt 2026). Nu: alleen principals in
+        NORTHSEA_HUMAN_PRINCIPALS (komma-gescheiden, standaard leeg) en nooit een bekende
+        agent/bot/service-identiteit. Luka keurt goed in de Deal Desk UI, niet via MCP.
+        """
+        return is_human_principal(self.principal, self.client_id)
 
     @property
     def identity(self) -> bool:
@@ -1654,6 +1683,9 @@ class NorthSeaService:
         if d.get("approval_actor_type") != "human" or not str(d.get("approved_by") or "").strip():
             raise PolicyDenied("human_approval_provenance_missing",
                                "This draft has no recorded human approval (approver unknown). Reject and re-approve it before sending.")
+        if d.get("approval_channel") == "northsea_mcp" and not is_human_principal(d.get("approved_by")):
+            raise PolicyDenied("human_approval_provenance_missing",
+                               "This draft was approved via MCP by a non-human identity. Luka must approve it in the Deal Desk.")
         opp = await self.repo.get_opportunity(d["opportunity_id"]) if d.get("opportunity_id") else None
         check_sensitive_draft(d, opp)
         beleid = await self.repo.outbound_block_reason(company_id=d.get("company_id"), contact_id=d.get("contact_id"),
