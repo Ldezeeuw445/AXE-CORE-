@@ -1169,19 +1169,30 @@ async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int)
             "https://api.twelvedata.com/time_series",
             params={"symbol": td_symbol, "interval": interval, "outputsize": outputsize, "apikey": key, "order": "ASC"},
         )
-    data = r.json()
+    try:
+        data = r.json()
+    except ValueError as exc:
+        return {"ok": False, "error": f"TwelveData: invalid response ({exc.__class__.__name__})"}
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "TwelveData: unexpected payload"}
     if data.get("status") == "error":
         return {"ok": False, "error": f"TwelveData: {data.get('message', 'unknown error')}"}
     values = data.get("values") or []
-    candles = [
-        {
-            "time": v.get("datetime"),
-            "open": float(v["open"]), "high": float(v["high"]),
-            "low": float(v["low"]), "close": float(v["close"]),
-            "volume": float(v.get("volume") or 0),
-        }
-        for v in values
-    ]
+    candles = []
+    for v in values:
+        try:
+            candles.append(
+                {
+                    "time": v.get("datetime"),
+                    "open": float(v["open"]), "high": float(v["high"]),
+                    "low": float(v["low"]), "close": float(v["close"]),
+                    "volume": float(v.get("volume") or 0),
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not candles:
+        return {"ok": False, "error": f"TwelveData: no candles for {td_symbol}"}
     return {"ok": True, "symbol": symbol.upper(), "source": "twelvedata", "candles": candles}
 
 
@@ -5190,6 +5201,7 @@ async def places_geocode(q: str):
 import lockscreen as _lockscreen
 
 _LS_CACHE = _lockscreen.TTLCache()
+_LS_LAST_QUOTES = _lockscreen.LastGoodQuotes()
 IMAC_SSH = os.environ.get("AXE_IMAC_SSH", "lukadezeeuw@100.65.216.90")
 # De modelbox (Strato, ollama.axecompanion.com): de Mac mini meet hem via SSH met de axe-core-vps-sleutel.
 MODELBOX_SSH = os.environ.get("AXE_MODELBOX_SSH", "root@217.160.135.111")
@@ -5218,17 +5230,32 @@ async def host_metrics(target: str = "self"):
 
 
 async def _ls_markets() -> list[dict]:
+    """Koersen via dezelfde `/market/history`-bron (Twelve Data). Geen mocks.
+
+    Vier parallelle time_series-calls op het gratis plan (8 credits/min, vaak
+    1 tegelijk) gaven stuk voor stuk een fout; die lege lijst werd 300 s
+    gecachet en het slotscherm zette dan '—' bij elke ticker. Per symbool
+    vangen we dat, bewaren we de laatst goede koers, en cachen we geen misser.
+    """
     symbols = _lockscreen.parse_symbols(os.environ.get("LOCKSCREEN_SYMBOLS"))
 
     async def one(symbol: str, label: str) -> dict:
+        summary = None
         try:
-            r = await _fetch_twelvedata_history(symbol, "1h", 30)
-            summary = _lockscreen.candle_summary(r.get("candles") or []) if r.get("ok") else None
-        except httpx.HTTPError:
-            summary = None
-        return {"symbol": symbol, "label": label, **(summary or {"price": None, "spark": [], "chg": {}})}
+            r = await _fetch_twelvedata_history(symbol, "1h", 50)
+            if r.get("ok"):
+                summary = _lockscreen.candle_summary(r.get("candles") or [])
+            else:
+                log.warning("lockscreen market %s: %s", label, r.get("error"))
+        except Exception as exc:  # noqa: BLE001 - time-out, JSON, quota: last-good, geen streepje
+            log.warning("lockscreen market %s: %s", label, exc)
+        return _lockscreen.market_row(symbol, label, summary, _LS_LAST_QUOTES)
 
-    return list(await asyncio.gather(*[one(s, l) for s, l in symbols]))
+    # Sequentiëel: één credit per keer, zodat een 429 niet alle vier leegtrekt.
+    rows = []
+    for s, l in symbols:
+        rows.append(await one(s, l))
+    return rows
 
 
 async def _ls_systems() -> list[dict]:
@@ -5333,7 +5360,7 @@ async def lockscreen_snapshot():
     minuut mag de bronnen niet vijf keer raken. Koersen hebben een eigen, langere cache (credits)."""
     async def build():
         now = datetime.now(timezone.utc)
-        markets_f = _LS_CACHE.get("ls-markets", 300, _ls_markets)
+        markets_f = _LS_CACHE.get("ls-markets", 300, _ls_markets, bewaar=_lockscreen.verse_koersen)
         markets, systems, services, attention = await asyncio.gather(
             markets_f, _ls_systems(), _ls_services(), _ls_attention(now),
         )

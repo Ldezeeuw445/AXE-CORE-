@@ -32,6 +32,8 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { MobileGlass, LookToggle } from '@/presentation/components/layout/MobileGlass';
 import { usePlaatInk } from '@/presentation/hooks/usePlaatInk';
 import { ServiceMonitoringGlance } from '@/presentation/components/axe-core/ServiceMonitoringGlance';
+import { lockscreenSnapshot, type LockscreenMarket } from '@/infrastructure/gateways/axeCoreApiService';
+import { marktOnderschrift, marktPrijsTekst } from '@/domain/lockMarkets';
 
 /** Tikkende klok. Eén interval, opgeruimd bij unmount. */
 function useClock(): Date {
@@ -84,13 +86,17 @@ export function LockScreenContent({ compact = false, children }: { compact?: boo
   const navigate = useNavigate();
   const now = useClock();
   const [aware, setAware] = useState<AwarenessSnapshot | null>(null);
+  const [markets, setMarkets] = useState<LockscreenMarket[] | null>(null);
   const algo = useAxeAlgoAccountSnapshot(compact ? 60_000 : 20_000);
   const sendMessage = useVoiceStore((s) => s.sendMessage);
   const [draft, setDraft] = useState('');
 
   useEffect(() => {
     let alive = true;
-    const load = () => { void getAwarenessSnapshot().then((s) => { if (alive) setAware(s); }).catch(() => {}); };
+    const load = () => {
+      void getAwarenessSnapshot().then((s) => { if (alive) setAware(s); }).catch(() => {});
+      void lockscreenSnapshot().then((s) => { if (alive) setMarkets(s.markets); }).catch(() => {});
+    };
     load();
     const id = setInterval(load, 30_000);
     return () => { alive = false; clearInterval(id); };
@@ -139,6 +145,23 @@ export function LockScreenContent({ compact = false, children }: { compact?: boo
             </div>
           )}
         </div>
+
+        {!!markets?.length && (
+        <Card>
+          <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[.1em]" style={{ color: 'var(--text-muted)' }}>
+            <span className="flex items-center gap-2"><LineChart size={14} /> Markets</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {markets.map((m) => (
+              <div key={m.label} className="min-w-0">
+                <div className="text-[11px] font-semibold tracking-wide" style={{ color: 'var(--text-muted)' }}>{m.label}</div>
+                <div className="text-sm font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{marktPrijsTekst(m)}</div>
+                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{marktOnderschrift(m) ?? '\u00a0'}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        )}
 
         <Card><ServiceMonitoringGlance /></Card>
 

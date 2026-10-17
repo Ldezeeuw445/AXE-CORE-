@@ -1,5 +1,7 @@
 """Slotscherm-samenstelling: de parsers en de regels, met uitvoer zoals de echte machines die geven."""
 import asyncio
+import os
+import tempfile
 from datetime import datetime, timezone
 
 import lockscreen as ls
@@ -84,8 +86,9 @@ def test_summary_does_not_care_which_way_the_source_sorts():
 
 def test_summary_with_too_little_data_is_none_not_a_made_up_zero():
     assert ls.candle_summary([]) is None
-    assert ls.candle_summary(candles(5)) is None
     assert ls.candle_summary([{"time": "x"}, {"close": 1}]) is None
+    een = ls.candle_summary(candles(5))
+    assert een["price"] == 5 and een["chg"] == {} and een["stale"] is False
 
 
 def test_a_short_history_still_gives_a_window_from_the_oldest_candle():
@@ -140,6 +143,67 @@ def test_machine_row_none_is_offline_with_blank_numbers():
     assert r["online"] is False and r["cpu"] is None
     r2 = ls.machine_row("vps", "VPS", {"cpu": 14.0, "mem": 41.0, "disk": 37.0})
     assert r2["online"] is True and r2["mem"] == 41.0
+
+
+def test_summary_carries_last_updated_from_the_last_candle():
+    s = ls.candle_summary(candles(100, 110))
+    assert s["last_updated"] == "2026-10-06T01:00:00+00:00"
+    assert s["stale"] is False
+
+
+def test_last_updated_label_is_english_and_relative_when_old():
+    assert ls.last_updated_label("2026-10-06T11:52:00+00:00", NOW) == "Last updated 11:52 UTC"
+    assert ls.last_updated_label("2026-10-06T10:00:00+00:00", NOW) == "Last updated 2h ago"
+    assert ls.last_updated_label("niet-een-tijd", NOW) is None
+
+
+def test_market_row_keeps_last_good_instead_of_dashes():
+    store = ls.LastGoodQuotes(pad="")
+    fresh = ls.candle_summary(candles(100, 110))
+    goed = ls.market_row("XAU/USD", "XAUUSD", fresh, store, NOW)
+    assert goed["price"] == 110 and goed["stale"] is False
+    leeg = ls.market_row("XAU/USD", "XAUUSD", None, store, NOW)
+    assert leeg["price"] == 110 and leeg["stale"] is True
+    assert leeg["last_updated_label"] == "Last updated 11h ago"
+    nooit = ls.market_row("SPY", "SPY", None, ls.LastGoodQuotes(pad=""), NOW)
+    assert nooit["price"] is None and nooit["last_updated_label"] is None
+
+
+def test_last_good_survives_a_restart_via_the_file():
+    with tempfile.TemporaryDirectory() as d:
+        pad = os.path.join(d, "quotes.json")
+        a = ls.LastGoodQuotes(pad)
+        ls.market_row("BTC/USD", "BTCUSD", ls.candle_summary(candles(10, 12)), a, NOW)
+        b = ls.LastGoodQuotes(pad)
+        terug = ls.market_row("BTC/USD", "BTCUSD", None, b, NOW)
+        assert terug["price"] == 12 and terug["stale"] is True
+
+
+def test_cache_does_not_store_an_empty_feed_over_a_good_one():
+    t = [0.0]
+    cache = ls.TTLCache(klok=lambda: t[0])
+    n = [0]
+
+    async def fetch():
+        n[0] += 1
+        if n[0] == 1:
+            return [{"price": 10, "stale": False}]
+        return [{"price": None, "stale": True}]
+
+    async def go():
+        a = await cache.get("k", 60, fetch, bewaar=ls.verse_koersen)
+        t[0] = 61
+        b = await cache.get("k", 60, fetch, bewaar=ls.verse_koersen)
+        return a, b, n[0]
+
+    a, b, calls = asyncio.run(go())
+    assert a[0]["price"] == 10
+    assert b[0]["price"] is None  # verse misser gaat naar de beller
+    assert calls == 2
+    # De misser is niet gecachet, dus na TTL proberen we opnieuw.
+    t[0] = 122
+    c = asyncio.run(cache.get("k", 60, fetch, bewaar=ls.verse_koersen))
+    assert c[0]["price"] is None and n[0] == 3
 
 
 def test_assemble_counts_the_attention_total_over_duplicates():

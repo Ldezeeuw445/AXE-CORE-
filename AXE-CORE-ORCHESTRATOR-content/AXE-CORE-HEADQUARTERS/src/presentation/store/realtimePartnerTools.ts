@@ -122,6 +122,9 @@ export async function toolGetOverview(): Promise<string> {
     attention_total: s.attention_total,
     machines: s.systems.map(m => ({ name: m.name, online: m.online, cpu: m.cpu, ram: m.mem, disk: m.disk })),
     services: s.services.map(x => ({ name: x.name, ok: x.ok })),
-    markets: s.markets.map(m => ({ symbol: m.label, price: m.price })),
+    markets: s.markets.map(m => ({
+      symbol: m.label, price: m.price, stale: m.stale,
+      last_updated: m.last_updated, last_updated_label: m.last_updated_label,
+    })),
   });
 }

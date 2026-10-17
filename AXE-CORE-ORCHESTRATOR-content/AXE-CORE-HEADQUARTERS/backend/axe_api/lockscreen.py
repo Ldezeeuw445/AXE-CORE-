@@ -9,12 +9,15 @@ gecachet worden, zodat het wakker worden van de telefoon geen werk geeft aan de 
 
 ## Wat er echt is en wat niet
 
-Elk getal hier komt ergens vandaan en wordt als `None` teruggegeven als de bron niet
-antwoordde -- nooit als een aannemelijke vulling. Het slotscherm toont dan een streepje.
+Elk getal hier komt ergens vandaan. Een misser is `None`, nooit een verzonnen koers.
+Een koers die we eerder wél hadden blijft staan met `stale` en `last_updated_label`
+("Last updated 14:52 UTC") — het slotscherm toont dat in plaats van een streepje.
+Alleen als er nog nooit een koers was, blijft het veld leeg.
 
 - **Koersen**: Twelve Data (`/market/history`). Het gratis plan kent geen indices; daarom
   XAU/USD en BTC/USD plus SPY en QQQ, eerlijk met hun eigen naam, in plaats van een
   "US500" die eigenlijk iets anders meet. `LOCKSCREEN_SYMBOLS` past dat aan.
+  Een lege of 429-feed wordt niet 300 s gecachet.
 - **Machines**: de VPS meet zichzelf; de Mac mini en de iMac worden via de omgekeerde tunnel
   van de Mac mini gemeten (zie agent_tunnel.py). De iMac bereikt de Mac mini met SSH.
 - **Diensten**: AXE API, Database, Models, Workers, NorthSea en MCP, elk met een eigen echte
@@ -26,6 +29,7 @@ antwoordde -- nooit als een aannemelijke vulling. Het slotscherm toont dan een s
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import shutil
@@ -229,25 +233,154 @@ def parse_symbols(raw: str | None) -> tuple[tuple[str, str], ...]:
     return tuple(out) or DEFAULT_SYMBOLS
 
 
+def candle_iso(raw: Any) -> Optional[str]:
+    """Twelve Data's '2026-10-17 13:00:00' (geen zone) -> ISO-UTC. Rommel -> None."""
+    dt = _parse_ts(raw)
+    return dt.isoformat() if dt else None
+
+
+def last_updated_label(ts: Any, now: datetime | None = None) -> Optional[str]:
+    """Zin die het slotscherm toont in plaats van een streepje: 'Last updated 14:52 UTC'."""
+    dt = _parse_ts(ts)
+    if not dt:
+        return None
+    stamp = dt.astimezone(timezone.utc).strftime("%H:%M")
+    if now is None:
+        return f"Last updated {stamp} UTC"
+    age = max(0, int((now - dt).total_seconds()))
+    if age < 3600:
+        return f"Last updated {stamp} UTC"
+    if age < 86400:
+        return f"Last updated {age // 3600}h ago"
+    return f"Last updated {age // 86400}d ago"
+
+
 def candle_summary(candles: list[dict], max_points: int = 24) -> Optional[dict]:
-    """Kaarsen (oud -> nieuw of andersom) -> laatste koers, schets en verandering per venster."""
+    """Kaarsen (oud -> nieuw of andersom) -> laatste koers, schets en verandering per venster.
+
+    Eén geldige kaars is genoeg voor de koers (weekend / dunne feed). Vensters blijven
+    leeg tot er een tweede punt is — geen verzonnen 0%-verandering.
+    """
     rows = []
     for c in candles or []:
         try:
             rows.append((str(c["time"]), float(c["close"])))
         except (KeyError, TypeError, ValueError):
             continue
-    if len(rows) < 2:
+    if not rows:
         return None
     rows.sort(key=lambda r: r[0])  # oplopend in tijd, wat de bron ook zegt
     closes = [r[1] for r in rows]
     price = closes[-1]
     chg: dict[str, dict[str, float]] = {}
-    for name, back in WINDOWS.items():
-        ref = closes[max(0, len(closes) - 1 - back)]
-        if ref:
-            chg[name] = {"abs": round(price - ref, 4), "pct": round((price - ref) / ref * 100, 2)}
-    return {"price": price, "spark": [round(x, 4) for x in closes[-max_points:]], "chg": chg}
+    if len(closes) >= 2:
+        for name, back in WINDOWS.items():
+            ref = closes[max(0, len(closes) - 1 - back)]
+            if ref:
+                chg[name] = {"abs": round(price - ref, 4), "pct": round((price - ref) / ref * 100, 2)}
+    return {
+        "price": price,
+        "spark": [round(x, 4) for x in closes[-max_points:]],
+        "chg": chg,
+        "last_updated": candle_iso(rows[-1][0]),
+        "stale": False,
+    }
+
+
+def empty_market(symbol: str, label: str) -> dict:
+    return {
+        "symbol": symbol, "label": label, "price": None, "spark": [], "chg": {},
+        "last_updated": None, "stale": True, "last_updated_label": None,
+    }
+
+
+def market_row(symbol: str, label: str, summary: Optional[dict], store: "LastGoodQuotes",
+               now: datetime | None = None) -> dict:
+    """Verse samenvatting wint; anders de laatst goede koers met 'Last updated', nooit een verzonnen prijs."""
+    when = now or datetime.now(timezone.utc)
+    if summary and summary.get("price") is not None:
+        row = {
+            "symbol": symbol, "label": label,
+            "price": summary["price"], "spark": summary.get("spark") or [],
+            "chg": summary.get("chg") or {},
+            "last_updated": summary.get("last_updated"),
+            "stale": False,
+            "last_updated_label": last_updated_label(summary.get("last_updated"), when),
+        }
+        store.put(label, row)
+        return row
+    prev = store.get(label)
+    if prev and prev.get("price") is not None:
+        return {
+            **prev,
+            "symbol": symbol, "label": label,
+            "stale": True,
+            "last_updated_label": last_updated_label(prev.get("last_updated"), when),
+        }
+    return empty_market(symbol, label)
+
+
+def verse_koersen(rows: Any) -> bool:
+    """Alleen een verse (niet-stale) koers mag de 5-minutencache vullen — een lege feed niet."""
+    if not isinstance(rows, list):
+        return False
+    return any(isinstance(r, dict) and r.get("price") is not None and not r.get("stale") for r in rows)
+
+
+class LastGoodQuotes:
+    """Laatst goede koers, in geheugen én op schijf, zodat een korte Twelve Data-storing geen streepjes geeft.
+
+    De VPS herstart bij een deploy; zonder bestand zou de eerste misser na boot weer '—' zijn.
+    """
+
+    def __init__(self, pad: str | None = None) -> None:
+        self._pad = pad if pad is not None else _default_quotes_path()
+        self._data: dict[str, dict] = self._lees()
+
+    def get(self, label: str) -> Optional[dict]:
+        row = self._data.get(label)
+        return dict(row) if row else None
+
+    def put(self, label: str, row: dict) -> None:
+        if row.get("price") is None:
+            return
+        self._data[label] = {
+            k: row[k] for k in ("symbol", "label", "price", "spark", "chg", "last_updated") if k in row
+        }
+        self._schrijf()
+
+    def _lees(self) -> dict[str, dict]:
+        if not self._pad:
+            return {}
+        try:
+            with open(self._pad, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, ValueError):
+            return {}
+        return raw if isinstance(raw, dict) else {}
+
+    def _schrijf(self) -> None:
+        if not self._pad:
+            return
+        try:
+            os.makedirs(os.path.dirname(self._pad) or ".", exist_ok=True)
+            tmp = self._pad + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self._data, f)
+            os.replace(tmp, self._pad)
+        except OSError:
+            return
+
+
+def _default_quotes_path() -> str:
+    gekozen = (os.environ.get("LOCKSCREEN_LAST_QUOTES") or "").strip()
+    if gekozen:
+        return gekozen
+    for pad in ("/opt/axe-core-api/ls-markets-last.json", "/tmp/axe-ls-markets-last.json"):
+        mapa = os.path.dirname(pad)
+        if os.path.isdir(mapa) and os.access(mapa, os.W_OK):
+            return pad
+    return "/tmp/axe-ls-markets-last.json"
 
 
 # ── Aandacht ─────────────────────────────────────────────────────────────────────
@@ -324,13 +457,23 @@ class TTLCache:
         self._klok = klok
         self._data: dict[str, tuple[float, Any]] = {}
 
-    async def get(self, key: str, ttl: float, fetch: Callable[[], Awaitable[Any]]) -> Any:
+    async def get(
+        self,
+        key: str,
+        ttl: float,
+        fetch: Callable[[], Awaitable[Any]],
+        bewaar: Callable[[Any], bool] | None = None,
+    ) -> Any:
         now = self._klok()
         hit = self._data.get(key)
         if hit and now - hit[0] < ttl:
             return hit[1]
         value = await fetch()
-        self._data[key] = (now, value)
+        if bewaar is None or bewaar(value):
+            self._data[key] = (now, value)
+            return value
+        # Lege of stale feed: de oude goede waarde blijft staan, de nieuwe gaat wel terug
+        # naar de beller (die zelf last-good per symbool al heeft ingevuld).
         return value
 
 
