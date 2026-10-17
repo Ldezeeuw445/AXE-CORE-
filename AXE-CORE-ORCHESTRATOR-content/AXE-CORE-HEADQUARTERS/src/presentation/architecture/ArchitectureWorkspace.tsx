@@ -42,6 +42,8 @@ function ArchitectureCanvas() {
   const [selected, setSelected] = useState<ArchitectureNode | null>(null);
   const [loading, setLoading] = useState(true);
   const pickingNode = useRef(false);
+  const nodesRef = useRef(snapshot.manifest.nodes);
+  nodesRef.current = snapshot.manifest.nodes;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,30 +90,33 @@ function ArchitectureCanvas() {
     }
     pickingNode.current = true;
     setSelected(picked.node);
-    window.setTimeout(() => { pickingNode.current = false; }, 0);
+    window.setTimeout(() => { pickingNode.current = false; }, 50);
   }, [snapshot.manifest.nodes]);
 
-  const flowNodes = useMemo(() => mapped.nodes.map(node => ({
-    ...node,
-    data: {
-      ...node.data,
-      active: selected?.id === node.id,
-      onSelect: () => openNode(node.data, node.id),
-    },
-  })), [mapped.nodes, openNode, selected?.id]);
+  const flowNodes = mapped.nodes;
 
   return (
-    <div className="axe-scene-vlak axe-architecture absolute inset-0 overflow-hidden">
+    <div className="axe-scene-vlak axe-architecture absolute inset-0 overflow-hidden" style={{ isolation: 'isolate' }}>
       <ReactFlow
         nodes={flowNodes}
         edges={mapped.edges}
         nodeTypes={NODE_TYPES}
         onNodeClick={(_, node) => openNode(node.data, node.id)}
-        onPaneClick={() => {
-          if (pickingNode.current) {
-            pickingNode.current = false;
+        onSelectionChange={({ nodes }) => {
+          const id = nodes.find(n => n.type !== 'architectureGroup')?.id;
+          if (!id) {
+            if (!pickingNode.current) setSelected(null);
             return;
           }
+          const found = nodesRef.current.find(item => item.id === id);
+          if (found) {
+            pickingNode.current = true;
+            setSelected(found);
+            window.setTimeout(() => { pickingNode.current = false; }, 50);
+          }
+        }}
+        onPaneClick={() => {
+          if (pickingNode.current) return;
           setSelected(null);
         }}
         minZoom={0.25}
@@ -125,11 +130,6 @@ function ArchitectureCanvas() {
         <Background color="rgba(255,255,255,0.04)" gap={22} />
         <MiniMap pannable zoomable />
         <Controls showInteractive={false} />
-        {selected && (
-          <Panel position="top-right" className="axe-architecture-inspector-panel">
-            <ArchitectureInspector node={selected} onClose={() => setSelected(null)} />
-          </Panel>
-        )}
         <Panel position="top-left" className="flex flex-wrap items-center gap-2 !ml-3 max-w-[min(720px,70%)]" style={{ top: 58 }}>
           {filters.group !== OVERVIEW ? (
             <button
@@ -200,6 +200,23 @@ function ArchitectureCanvas() {
         </div>
       </PlaatRail>
 
+      {selected && (
+        <div
+          className="axe-architecture-inspector-panel"
+          style={{
+            position: 'absolute',
+            top: 72,
+            right: 12,
+            zIndex: 9999,
+            width: 308,
+            maxHeight: 'calc(100% - 96px)',
+            overflow: 'auto',
+            pointerEvents: 'auto',
+          }}
+        >
+          <ArchitectureInspector node={selected} onClose={() => setSelected(null)} />
+        </div>
+      )}
     </div>
   );
 }

@@ -45,12 +45,8 @@ export function ArchitectureNodeCard({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`axe-architecture-kaart nodrag nopan${active ? ' is-selected' : ''}`}
+      className={`axe-architecture-kaart${active ? ' is-selected' : ''}`}
       data-architecture-node={nodeData.node?.id ?? ''}
-      onPointerDown={event => {
-        event.stopPropagation();
-        nodeData.onSelect?.();
-      }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0.35 }} />
       <div className="flex items-center justify-between gap-2">
