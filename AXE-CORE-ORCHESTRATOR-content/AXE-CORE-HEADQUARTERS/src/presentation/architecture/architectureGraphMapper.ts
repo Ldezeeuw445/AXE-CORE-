@@ -65,7 +65,7 @@ export function architectureNodeFromClick(
 }
 
 export function selectedArchitectureNodeFromFlow(
-  nodes: Array<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
+  nodes: Iterable<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
 ): ArchitectureNode | null {
   for (const node of nodes) {
     if (!node.selected || node.data.overview || node.type === 'architectureGroup') continue;

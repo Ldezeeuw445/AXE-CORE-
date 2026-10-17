@@ -39,7 +39,7 @@ const NODE_TYPES = {
 function ArchitectureInspectorHost() {
   const store = useStoreApi();
   const selected = useStore(state => selectedArchitectureNodeFromFlow(
-    state.nodes as unknown as Array<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
+    state.nodeLookup.values() as Iterable<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
   ));
   if (!selected) return null;
   return (
