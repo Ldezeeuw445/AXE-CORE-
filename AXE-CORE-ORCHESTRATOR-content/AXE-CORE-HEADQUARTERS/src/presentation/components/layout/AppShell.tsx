@@ -369,15 +369,10 @@ export function AppShell() {
           {/* Suspense hoort hier en niet per route: de pagina's worden lui
               geladen (zie App.tsx), en zonder vangnet valt de hele boom om
               tijdens het ophalen. Eén plek, want elke route komt hier langs. */}
-          {/* Elke pagina op de bandbreedte, op ÉÉN plek geregeld.
-              Geen enkele pagina gebruikte .axe-bandbreed, dus lijnde op elke
-              tab iets anders uit: de een liep tot de rand, de ander stopte
-              halverwege, en geen van beide viel samen met de composer eronder.
-              Zevenentwintig pagina's stuk voor stuk aanpassen zou zevenentwintig
-              kansen op een afwijking zijn -- hier is het er één.
-              Een pagina die de volle breedte nodig heeft (een 3D-scene) breekt
-              eruit met .axe-vol-breed; dat is de uitzondering en die moet je
-              opschrijven, niet per ongeluk krijgen. */}
+          {/* Elke tab zet zelf `.axe-tabruimte` / `TabRuimte`: dezelfde marges
+              als de Browser-plaat. De band (`.axe-bandbreed`) is alleen voor
+              composer, chatplaat, nav en de Browser-startpagina. Home en de
+              mobiele Home blijven volle breedte — die horen niet in de plaat. */}
           <ErrorBoundary key={location.pathname} fallback={(fout) => <PageError fout={fout} />}>
             <Suspense fallback={<PageLoading />}>
               {/* Op de telefoon zweeft de hamburger van de lade linksboven. De

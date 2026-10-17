@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { RefreshCw, ExternalLink } from 'lucide-react';
 import { Page, Grid, Block, Stat } from '@/presentation/components/surface/Page';
+import { TabRuimte } from '@/presentation/components/layout/tabMaatstaf';
 import { getSystemState, checkAllServices, type ServiceState } from '@/application/system/systemService';
 import { FEATURES, STATE_META, countByState, type Feature, type FeatureState } from '@/domain/system/featureRegistry';
 import { chatSaveHealth, type ChatSaveHealth } from '@/infrastructure/persistence/chatPersistence';
@@ -133,6 +134,7 @@ export default function StatusPage() {
   const offline = services.filter(s => s.status === 'offline').length;
 
   return (
+    <TabRuimte vullen>
     <Page
       title="Status"
       subtitle={
@@ -266,5 +268,6 @@ export default function StatusPage() {
         </Block>
       </Grid>
     </Page>
+    </TabRuimte>
   );
 }

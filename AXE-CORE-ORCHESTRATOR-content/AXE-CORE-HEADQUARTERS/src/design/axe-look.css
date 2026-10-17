@@ -1130,6 +1130,12 @@ html:root[data-look][data-ios-pwa],
      afgekapt. Een kwart erbij is 261px, dus de plaat levert 104px in. Dat is
      de hele rekensom; er zit geen smaak in. */
   --axe-barw: min(1520px, calc(100vw - 574px));
+  /* Eén inhoudsruimte (Luka, okt 2026): het vak van de Browser-plaat als er
+     een site openstaat. `.axe-plaat`, `.axe-tabruimte` en `.axe-browser-vak`
+     lezen hieruit, zodat ze niet uit elkaar kunnen lopen. Bij 1600 is de
+     inline-marge 160px en blijft 1280 over — dezelfde som als UI-MAATSTAF.md. */
+  --axe-plaat-marge-inline: clamp(14px, 10vw, 230px);
+  --axe-plaat-marge-onder: clamp(10px, 1.4vh, 20px);
 }
 :root[data-look] .axe-shell footer {
   background: none !important;
@@ -1987,9 +1993,13 @@ html:root[data-look][data-ios-pwa],
  *
  * De uitzondering is de startpagina van de browser: die lijnt WEL op de band
  * uit, omdat hij vlak boven de composer staat en daar samen mee moet ogen. */
+:root[data-look] .axe-plaat,
+:root[data-look] .axe-tabruimte,
+:root[data-look] .axe-browser-vak {
+  margin-inline: var(--axe-plaat-marge-inline);
+  margin-bottom: var(--axe-plaat-marge-onder);
+}
 :root[data-look] .axe-tabruimte {
-  margin-inline: clamp(14px, 10vw, 230px);
-  margin-bottom: clamp(10px, 1.4vh, 20px);
   min-width: 0;
 }
 /* Geen tweede, smallere maat voor "gewone" tabs (Luka, 11 okt 2026).
@@ -2034,11 +2044,13 @@ html:root[data-look][data-ios-pwa],
  * niet samenvallen geven een strook breedtes waarin het ene de telefoon ziet
  * en het andere niet. */
 @media (max-width: 767px) {
+  :root[data-look] {
+    --axe-plaat-marge-inline: 8px;
+    --axe-plaat-marge-onder: 8px;
+  }
   :root[data-look] .axe-tabruimte {
     width: auto;
     max-width: none;
-    margin-inline: 8px;
-    margin-bottom: 8px;
     align-self: stretch;
   }
 }
@@ -2260,12 +2272,10 @@ html:root[data-look][data-ios-pwa],
 :root[data-look] .axe-schuifbalk--rail .axe-schuifbalk-lijf * { max-width: 100%; }
 
 :root[data-look] .axe-browser-vak {
-  /* De marges horen hier, niet elders.
+  /* De marges komen van --axe-plaat-marge-* (gedeeld met .axe-tabruimte).
      Ik haalde ze weg op de aanname dat .axe-tabruimte om elke pagina ze zou
      leveren. De browser krijgt die klasse niet, dus liep het vak tot de rand
      en viel het samen met de plaat -- een vak zonder marge is geen vak. */
-  margin-inline: clamp(14px, 10vw, 230px);
-  margin-bottom: clamp(10px, 1.4vh, 20px);
   border-radius: 18px;
   overflow: hidden;
   background: var(--surface-bg);

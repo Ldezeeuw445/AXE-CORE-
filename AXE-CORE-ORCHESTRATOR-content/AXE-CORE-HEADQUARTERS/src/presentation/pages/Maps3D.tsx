@@ -355,7 +355,7 @@ function Maps3DContent() {
 export default function Maps3D() {
   return (
     <motion.div
-      className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden"
+      className="axe-plaat axe-tabruimte axe-tabruimte--vullen flex min-h-0 flex-1 flex-col overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >

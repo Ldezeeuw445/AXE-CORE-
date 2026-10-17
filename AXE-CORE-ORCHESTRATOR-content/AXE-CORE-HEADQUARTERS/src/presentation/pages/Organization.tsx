@@ -253,7 +253,7 @@ export default function Organization() {
                   ))}
                 </div>
               </div>
-              <div className="w-full max-w-5xl mt-2">
+              <div className="w-full mt-2">
                 <div className="flex items-center gap-2 mb-2 text-[10px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
                   <ArrowDown size={12} />
                   Specialists
