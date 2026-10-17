@@ -190,7 +190,7 @@ export function HomeLiveDashboard() {
         )}
         <GoedkeuringActie
           rijen={okZicht}
-          compact
+          chip
           onBeslis={(rij, akkoord) => { void beslisAgentOk({ akkoord, rij }).then(verversServerAgents); }}
         />
         <Meer n={Math.max(0, stand.goedkeuringen.length - okZicht.length)} onOpen={() => setLijst('ok')} />

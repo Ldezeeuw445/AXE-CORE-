@@ -33,6 +33,11 @@ describe('Home-agentvenster is een live draad', () => {
     expect(vensters).toMatch(/railKolommen/);
     expect(vensters).toMatch(/beslisAgentOk/);
     expect(vensters).toMatch(/GoedkeuringActie/);
+    expect(vensters).toMatch(/chip onBeslis/);
+    expect(knoppen).toMatch(/okChipTekst/);
+    expect(knoppen).toMatch(/needs your OK:/);
+    expect(knoppen).toMatch(/const kort = okChipTekst\(rij\.wat\)/);
+    expect(chat).not.toMatch(/\schip[=\s]/);
     expect(vensters).toMatch(/followupIsAkkoord/);
     expect(vensters).toMatch(/railRijen/);
     expect(vensters).toMatch(/extraRegel/);

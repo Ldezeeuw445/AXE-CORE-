@@ -34,6 +34,8 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toMatch(/\.axe-home-live-regel \{[^}]*max-height: 1\.25em/);
     expect(css).toMatch(/\.axe-kaart-lijf \{[^}]*height: 2\.5em/);
     expect(css).toMatch(/axe-home-rail-tegel-naam/);
+    expect(css).toMatch(/\.axe-ok-chip \{/);
+    expect(css).toMatch(/\.axe-home-rail-balk:has\(\[data-axe-ok-chip\]\) \.axe-home-rail-regel \{[^}]*-webkit-line-clamp: 1/);
     expect(css).toMatch(/nth-child\(n \+ 3\)/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*overflow: hidden/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*pointer-events: none/);
@@ -51,6 +53,9 @@ describe('Home live dashboard is aangesloten', () => {
     expect(dash).toContain('codingSeatsHeartbeat');
     expect(dash).toContain('beslisAgentOk');
     expect(dash).toContain('GoedkeuringActie');
+    expect(dash).toMatch(/<GoedkeuringActie\s+rijen=\{okZicht\}\s+chip/);
+    expect(dash).toMatch(/rijen=\{stand\.goedkeuringen\}/);
+    expect(dash).not.toMatch(/rijen=\{stand\.goedkeuringen\}[\s\S]{0,80}chip/);
     expect(dash).toContain('No running tasks or missions right now');
     expect(dash).toContain('and ${n} more');
     expect(dash).toContain('kaartRegels');

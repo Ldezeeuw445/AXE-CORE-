@@ -70,6 +70,36 @@ export function wachtOpOk(agent: Pick<ServerAgent, 'status' | 'pendingApproval'>
   return !!agent.pendingApproval?.id;
 }
 
+function schoonChip(s: string): string {
+  return s
+    .replace(/\s*[—–]+\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[.)]+$/g, '')
+    .trim();
+}
+
+/** Eénregel-chip: DEAL-id + onderwerp, zonder Dit is / Waarom. */
+export function okChipTekst(wat: string | null | undefined): string {
+  const ruw = (wat || '').replace(/\s+/g, ' ').trim();
+  if (!ruw) return 'this step';
+
+  const yes = /Yes needed:\s*([^)\n]+)/i.exec(ruw);
+  if (yes) return schoonChip(yes[1]) || 'this step';
+
+  const deal = /\b(DEAL-\d+)\b(?:\s*[—–-]+\s*|\s+)([^)\n.,]+)/i.exec(ruw);
+  if (deal) return schoonChip(`${deal[1]} ${deal[2]}`);
+
+  const alleen = /\b(DEAL-\d+)\b/i.exec(ruw);
+  if (alleen) return alleen[1];
+
+  const haak = /\(([^)]+)\)/.exec(ruw);
+  if (haak && /DEAL-\d+|Yes needed/i.test(haak[1])) {
+    return schoonChip(haak[1].replace(/^Yes needed:\s*/i, '')) || 'this step';
+  }
+
+  return schoonChip(ruw.replace(/^Dit is:\s*/i, '')) || 'this step';
+}
+
 function vraagTekst(v: PendingVraag | null | undefined, fallback = ''): { wat: string; waarom: string } {
   const wat = (v?.wat || v?.title || fallback).trim();
   const waarom = (v?.waarom || v?.detail || '').trim();

@@ -107,6 +107,78 @@
   max-height: 2.5em;
 }
 
+/* Titel + chip = twee hele regels. Geen Dit is/Waarom in de balk. */
+.axe-home-rail-balk:has([data-axe-ok-chip]) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.axe-home-rail-balk:has([data-axe-ok-chip]) .axe-home-rail-regel {
+  -webkit-line-clamp: 1;
+  max-height: 1.25em;
+}
+
+.axe-ok-chip-lijst {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.axe-ok-chip-rij {
+  min-width: 0;
+  height: 1.25em;
+  max-height: 1.25em;
+  flex: 0 0 1.25em;
+  overflow: hidden;
+}
+
+.axe-ok-chip {
+  display: block;
+  width: 100%;
+  height: 1.25em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  font: inherit;
+  color: var(--ok);
+  font-size: 10px;
+  line-height: 1.25em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-align: left;
+  cursor: pointer;
+}
+
+.axe-ok-chip-menu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 1.25em;
+  min-width: 0;
+}
+
+.axe-ok-chip-knop {
+  flex: none;
+  margin: 0;
+  padding: 0 6px;
+  height: 1.25em;
+  border: 0;
+  border-radius: 6px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  line-height: 1.25em;
+  cursor: pointer;
+}
+
 /* 2+2 in the zijgoten, 8px boven de composer — rails houden daarboven 8–12px lucht. */
 .axe-home-live {
   position: fixed;

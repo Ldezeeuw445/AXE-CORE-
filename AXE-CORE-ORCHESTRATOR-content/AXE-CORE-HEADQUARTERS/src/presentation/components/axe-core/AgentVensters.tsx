@@ -176,7 +176,7 @@ function Balkje({
             taskId: server?.task?.id || job?.taskId || '',
             wat: vraag?.wat || server?.pendingApproval?.wat || server?.pendingApproval?.title || server?.reason || 'A step is waiting for Luka\'s approval.',
             waarom: vraag?.waarom || server?.pendingApproval?.waarom || server?.pendingApproval?.detail || '',
-          }]} compact onBeslis={onBeslis} />
+          }]} chip onBeslis={onBeslis} />
         )}
       </div>
     );

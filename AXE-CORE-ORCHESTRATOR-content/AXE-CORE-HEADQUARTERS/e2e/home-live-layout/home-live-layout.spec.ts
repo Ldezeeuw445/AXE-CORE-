@@ -170,7 +170,20 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(liveMaat.sh, `live strip scrollHeight<=clientHeight at ${maat.naam}`).toBeLessThanOrEqual(liveMaat.ch + 1);
 
       await assertHeleRegels(page, '.axe-home-rail-regel', `rail regel at ${maat.naam}`);
-      await assertHeleRegels(page, '[data-axe-home-kaart] .axe-home-live-regel, [data-axe-home-kaart] .axe-home-live-meer', `live regel at ${maat.naam}`);
+      await assertHeleRegels(page, '[data-axe-home-kaart] .axe-home-live-regel, [data-axe-home-kaart] .axe-home-live-meer, [data-axe-ok-chip]', `live regel at ${maat.naam}`);
+
+      const north = await page.locator('[data-axe-agent="northsea"]').innerText();
+      expect(north, `NorthSea title at ${maat.naam}`).toMatch(/NorthSea/);
+      expect(north, `NorthSea seat at ${maat.naam}`).toMatch(/T2/);
+      expect(north, `NorthSea chip at ${maat.naam}`).toMatch(/needs your OK: DEAL-002 Copper Cathode/);
+      expect(north, `NorthSea dump at ${maat.naam}`).not.toMatch(/Dit is:/);
+      expect(north, `NorthSea waarom at ${maat.naam}`).not.toMatch(/Waarom/);
+      expect(north, `NorthSea buttons closed at ${maat.naam}`).not.toMatch(/Approve|Decline/);
+      const okKaart = await page.locator('[data-axe-home-kaart="ok"]').innerText();
+      expect(okKaart, `OK chip at ${maat.naam}`).toMatch(/needs your OK: DEAL-002 Copper Cathode/);
+      expect(okKaart, `OK dump at ${maat.naam}`).not.toMatch(/Dit is:/);
+      expect(okKaart, `OK waarom at ${maat.naam}`).not.toMatch(/Waarom/);
+      expect(okKaart, `OK buttons closed at ${maat.naam}`).not.toMatch(/Approve|Decline/);
 
       const tegelNamen = await page.locator('.axe-home-rail-tegel-naam').evaluateAll((nodes) =>
         nodes.map((n) => {
@@ -188,7 +201,7 @@ test.describe('Home live layout blijft uit de composer', () => {
       for (let i = 0; i < ln; i++) {
         const rijen = await lijven.nth(i).evaluate((lijf) => {
           const box = (lijf as HTMLElement).getBoundingClientRect();
-          return [...(lijf as HTMLElement).querySelectorAll('.axe-home-live-regel, .axe-home-live-meer')].map((el) => {
+          return [...(lijf as HTMLElement).querySelectorAll('.axe-home-live-regel, .axe-home-live-meer, .axe-ok-chip')].map((el) => {
             const b = el.getBoundingClientRect();
             const zicht = Math.min(b.bottom, box.bottom) - Math.max(b.top, box.top);
             return { t: (el.textContent || '').slice(0, 40), zicht, h: b.height };

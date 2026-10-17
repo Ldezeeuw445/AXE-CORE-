@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   normaliseerServerAgent,
+  okChipTekst,
   rijenVanLijst,
   rijenVoorAgent,
   wachtOpOk,
@@ -56,6 +57,27 @@ describe('rijenVoorAgent', () => {
     expect(rijen).toEqual([
       { id: 'a-9', taskId: 't-9', wat: 'Approve the step', waarom: 'It left the plan.' },
     ]);
+  });
+});
+
+describe('okChipTekst', () => {
+  it('haalt DEAL-id en onderwerp uit de Dit is/Yes needed-dump', () => {
+    expect(okChipTekst(
+      'Dit is: een dealbeslissing (Yes needed: DEAL-002 — Copper Cathode).',
+    )).toBe('DEAL-002 Copper Cathode');
+  });
+
+  it('leest Yes needed zonder haakjes', () => {
+    expect(okChipTekst('Yes needed: DEAL-001 — Copper Cathode')).toBe('DEAL-001 Copper Cathode');
+  });
+
+  it('houdt een korte titel in stand', () => {
+    expect(okChipTekst('Send the intro')).toBe('Send the intro');
+  });
+
+  it('valt terug als er geen tekst is', () => {
+    expect(okChipTekst('')).toBe('this step');
+    expect(okChipTekst(null)).toBe('this step');
   });
 });
 
