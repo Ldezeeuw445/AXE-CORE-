@@ -23,9 +23,10 @@ import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
 import { CorrelatieTab } from '@/presentation/pages/tradingIntel/CorrelatieTab';
 import { KalenderTab } from '@/presentation/pages/tradingIntel/KalenderTab';
+import { LseVaultTab } from '@/presentation/pages/tradingIntel/LseVaultTab';
 import { AccountsTab } from './tradingIntel/AccountsTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie' | 'kalender';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie' | 'kalender' | 'vault';
 
 /**
  * The tabs are the pipeline, in the order the work actually happens.
@@ -47,6 +48,7 @@ type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'chart', label: 'Chart' },
   { id: 'research', label: 'Research' },
+  { id: 'vault', label: 'Vault (LSE)' },
   { id: 'brain', label: 'Brain' },
   { id: 'memory', label: 'Memory' },
   { id: 'frameworks', label: 'Frameworks' },
@@ -138,6 +140,7 @@ export default function TradingIntel() {
       <div className={`flex-1 overflow-x-hidden min-h-0 ${bare ? 'p-0 overflow-hidden' : 'p-3 overflow-y-auto'}`}>
         {tab === 'chart' && <ChartTab desk={desk} />}
         {tab === 'research' && <ResearchTab desk={desk} />}
+        {tab === 'vault' && <LseVaultTab />}
         {tab === 'brain' && <BrainTab desk={desk} />}
         {tab === 'scorecard' && <ScorecardTab desk={desk} />}
         {tab === 'funnel' && <FunnelTab desk={desk} />}

@@ -4,7 +4,7 @@
  * ## Waarom dit bestaat
  *
  * De tabs staan als kale iconen naast de composer -- de namen zijn weg, want
- * twaalf labels in die strook is een tweede navigatie. Je ziet de naam pas als
+ * dertien labels in die strook is een tweede navigatie. Je ziet de naam pas als
  * je erover gaat, en dan in de kleur van die tab.
  *
  * Dat werkt alleen als de koppeling icoon-kleur-tab VAST is. Verspringt hij,
@@ -27,7 +27,7 @@ export interface TabStijl {
 }
 
 /**
- * De twaalf tabs van de desk.
+ * De dertien tabs van de desk.
  *
  * De kleuren lopen van koel naar warm in de vololgorde waarin je een beslissing
  * doorloopt -- chart en research zijn koel (kijken), funnel en scorecard zijn
@@ -37,6 +37,7 @@ export interface TabStijl {
 export const TAB_STIJL: Readonly<Record<string, TabStijl>> = {
   chart:      { icoon: 'CandlestickChart', kleur: '#22D3EE' },
   research:   { icoon: 'Telescope',        kleur: '#38BDF8' },
+  vault:      { icoon: 'Archive',          kleur: '#0EA5E9' },
   brain:      { icoon: 'Brain',            kleur: '#8B7CF6' },
   memory:     { icoon: 'Database',         kleur: '#A78BFA' },
   frameworks: { icoon: 'Blocks',           kleur: '#C084FC' },

@@ -10,7 +10,7 @@ import { accentAfstand } from '@/domain/snelacties';
  * hieronder is er juist om te merken dát ze uit de pas lopen.
  */
 const TAB_IDS = [
-  'chart', 'research', 'brain', 'memory', 'frameworks', 'strategies',
+  'chart', 'research', 'vault', 'brain', 'memory', 'frameworks', 'strategies',
   'correlatie', 'kalender', 'funnel', 'scorecard', 'accounts', 'demo',
 ];
 
