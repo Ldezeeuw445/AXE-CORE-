@@ -15,6 +15,10 @@ import type { AxeAgent } from '@/domain/agents/roster';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
 import { daxRegel, eventTijd, missieVoortgang, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
+import { rijenVoorAgent, wachtOpOk } from '@/domain/agents/pendingApproval';
+import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
+import type { GoedkeuringsRij } from '@/domain/agents/pendingApproval';
+import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFollowup';
 
 function wieEnWat(agent: AxeAgent, job: AxeJob | null): string {
   if (!job) return `AXE has nothing running with ${agent.name} right now.`;
@@ -51,6 +55,7 @@ export function ManagerChat({
   onGoedkeuring,
   server,
   onMissie,
+  extraGoedkeuringen = [],
 }: {
   agent: AxeAgent;
   job: AxeJob | null;
@@ -58,6 +63,7 @@ export function ManagerChat({
   onSluit: () => void;
   onOpvolging?: (tekst: string) => void;
   onGoedkeuring?: (akkoord: boolean) => void;
+  extraGoedkeuringen?: Array<{ id: string; task_id?: string; wat?: string | null; waarom?: string | null; title?: string; detail?: string }>;
   /** Wat de server over deze agent weet: missie, DAX, echte tijdlijn. */
   server?: ServerAgent;
   onMissie?: (missieId: string, actie: 'pause' | 'resume') => void;
@@ -81,26 +87,40 @@ export function ManagerChat({
   }, [berichten.length, job?.summary, job?.approvalVraag]);
 
   const vraag = job?.state === 'waiting' ? goedkeuringVanJob(job) : null;
-  const serverVraag = !vraag && server?.pendingApproval
-    ? {
-        tekst: [server.pendingApproval.wat, server.pendingApproval.waarom].filter(Boolean).join('\n')
-          || server.pendingApproval.title
-          || server.reason,
-        wat: server.pendingApproval.wat || server.pendingApproval.title || '',
-        waarom: server.pendingApproval.waarom || server.pendingApproval.detail || '',
-      }
+  const okRijen = rijenVoorAgent(server, extraGoedkeuringen);
+  if (job?.taskId && job.approvalId && !okRijen.some((r) => r.id === job.approvalId)) {
+    okRijen.unshift({
+      id: job.approvalId,
+      taskId: job.taskId,
+      wat: vraag?.wat || job.approvalVraag || job.title || 'This needs your OK.',
+      waarom: vraag?.waarom || '',
+    });
+  }
+  const lokaal = job
+    ? (job.state === 'waiting' ? STAND.waiting : STAND[job.state])
     : null;
-  const lokaal = job ? (vraag ? STAND.waiting : STAND[job.state === 'waiting' ? 'running' : job.state]) : null;
   const serverStand = server ? bepaalServerStand(server) : null;
-  const stand = lokaal ?? (serverStand ? { label: serverStand.label, kleur: serverStand.kleur } : null);
+  const stand = (wachtOpOk(server, job?.state === 'waiting') ? STAND.waiting : lokaal)
+    ?? (serverStand ? { label: serverStand.label, kleur: serverStand.kleur } : null);
   const missie = server?.mission ?? null;
   const pauzeerbaar = !!missie && ['active', 'monitoring', 'waiting_agent', 'waiting_approval'].includes(missie.status);
   const hervatbaar = !!missie && ['paused', 'blocked', 'human_decision_required'].includes(missie.status);
-  const wacht = !!vraag || !!serverVraag;
+  const wacht = wachtOpOk(server, job?.state === 'waiting');
+  const knopRijen: GoedkeuringsRij[] = okRijen.length ? okRijen : (wacht ? [{
+    id: server?.pendingApproval?.id || job?.approvalId || `${agent.id}-ok`,
+    taskId: server?.task?.id || job?.taskId || '',
+    wat: vraag?.wat || server?.pendingApproval?.wat || server?.pendingApproval?.title || server?.reason || 'A step is waiting for Luka\'s approval.',
+    waarom: vraag?.waarom || server?.pendingApproval?.waarom || server?.pendingApproval?.detail || '',
+  }] : []);
 
   const stuur = () => {
     const t = opvolging.trim();
     if (!t || !onOpvolging) return;
+    if (wacht && onGoedkeuring && (followupIsAkkoord(t) || followupIsAfwijzing(t))) {
+      onGoedkeuring(followupIsAkkoord(t));
+      setOpvolging('');
+      return;
+    }
     onOpvolging(t);
     setOpvolging('');
   };
@@ -236,34 +256,11 @@ export function ManagerChat({
           )}
         </div>
 
-        {wacht && onGoedkeuring && (vraag || serverVraag) && (
-          <div className="mt-2">
-            {(vraag || serverVraag)?.wat || (vraag || serverVraag)?.waarom ? (
-              <p className="mb-1.5 whitespace-pre-wrap text-[11px] leading-snug" style={{ color: 'var(--text-primary)' }}>
-                {(vraag || serverVraag)?.wat}
-                {(vraag || serverVraag)?.waarom ? `\n${(vraag || serverVraag)?.waarom}` : ''}
-              </p>
-            ) : null}
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => onGoedkeuring(true)}
-                className="text-[10px] px-2 py-1 rounded-lg"
-                title={vraag?.ja}
-                style={{ background: 'var(--tint)', color: 'var(--ok)' }}
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                onClick={() => onGoedkeuring(false)}
-                className="text-[10px] px-2 py-1 rounded-lg"
-                style={{ background: 'var(--tint-line)', color: 'var(--text-secondary)' }}
-              >
-                Decline
-              </button>
-            </div>
-          </div>
+        {wacht && onGoedkeuring && (
+          <GoedkeuringActie
+            rijen={knopRijen}
+            onBeslis={(_rij, akkoord) => onGoedkeuring(akkoord)}
+          />
         )}
 
         <div className="mt-2 flex gap-1.5">

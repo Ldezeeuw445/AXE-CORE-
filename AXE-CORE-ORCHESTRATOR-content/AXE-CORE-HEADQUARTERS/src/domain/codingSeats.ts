@@ -112,6 +112,46 @@ export function toonStoelEmail(stoel: Pick<CodingSeat, 'email' | 'logged_in'>): 
 }
 
 /** Status op Settings-kaarten: heartbeat, niet de VPS-enginecheck. */
+/**
+ * Status van een abonnementskaart.
+ *
+ * Heartbeat van core_coding_seats (vers < 5 min) wint. Een stale last-run
+ * "Login expired" overschrijft nooit een verse logged_in=true. Die oude fout
+ * mag alleen als geschiedenis onder de kaart.
+ */
+export function abonnementKaartStand(in_: {
+  stoel?: Pick<CodingSeat, 'id' | 'logged_in' | 'rate_limited' | 'current_task' | 'last_seen_at' | 'config_exists'> | null;
+  heartbeatOk: boolean;
+  verbruikStatus?: string | null;
+  lastRunFout?: string | null;
+  nu?: number;
+}): { stand: SeatStand; geschiedenis?: string } {
+  const { stoel, heartbeatOk, verbruikStatus, lastRunFout, nu = Date.now() } = in_;
+  if (!heartbeatOk) {
+    return { stand: { toon: 'muted', tekst: 'No heartbeat' }, geschiedenis: lastRunFout || undefined };
+  }
+  if (!stoel) {
+    return { stand: { toon: 'muted', tekst: 'No seat' }, geschiedenis: lastRunFout || undefined };
+  }
+  const stand = stoelHeartbeatStand(stoel, nu);
+  const versOnline = stand.tekst === 'Online' || stand.tekst === 'Running' || stand.tekst === 'Not used';
+  const stale = (verbruikStatus === 'expired' || verbruikStatus === 'not_logged_in')
+    ? (lastRunFout || 'Login failed on the last agent run.')
+    : lastRunFout || undefined;
+  if (versOnline) {
+    return { stand, geschiedenis: stale };
+  }
+  return { stand, geschiedenis: stale };
+}
+
+export function toonStoelIds<T extends { id: string; config_exists?: boolean }>(
+  stoelen: T[] | Record<string, T> | null,
+): string[] {
+  if (stoelen == null) return [];
+  const rijen = Array.isArray(stoelen) ? stoelen : Object.values(stoelen);
+  return rijen.filter((s) => s.id && !verbergStoel(s)).map((s) => s.id);
+}
+
 export function stoelHeartbeatStand(
   stoel: Pick<CodingSeat, 'id' | 'logged_in' | 'rate_limited' | 'current_task' | 'last_seen_at' | 'config_exists'>,
   nu = Date.now(),

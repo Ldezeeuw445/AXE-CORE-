@@ -1,23 +1,27 @@
 /**
- * Settings → Accounts: één kaart per codeer-stoel.
+ * Settings → Subscriptions: één kaart per codeer-stoel.
  *
- * Live stand van /claude/repos (host die de CLI's draait) plus de heartbeat
- * van de Mac mini in core_coding_seats. Geen tokens, wel het exacte
- * login-commando als een stoel uitgelogd of gelimiteerd is.
+ * Status uit core_coding_seats (vers < 5 min). Stale last-run "Login expired"
+ * overschrijft een verse logged_in=true nooit — die fout is geschiedenis.
+ * Ontbrekende dirs (codex3 / ~/.codex-derde) blijven weg. Default ~/.claude
+ * uitgelogd is een kleine 'not used'-kaart.
  */
 import { useEffect, useState } from 'react';
-import { SectieKop, StatusKaart } from '@/presentation/components/settings/StatusKaart';
+import { SectieKop, StatusKaart, geleden, kort } from '@/presentation/components/settings/StatusKaart';
 import {
+  abonnementKaartStand,
   metGedeeldeQuota,
   resetTekst,
   stoelHeeftActie,
-  stoelHeartbeatStand,
   stoelNietGebruikt,
   toonStoelEmail,
   verbergStoel,
   type CodingSeat,
 } from '@/domain/codingSeats';
-import { abonnementVerbruik, codingSeatsHeartbeat } from '@/infrastructure/gateways/axeCoreApiService';
+import { MOTOR_LABEL, HOOFD_AGENTS, AGENT_LABEL } from '@/domain/agentMotoren';
+import { leesToewijzing } from '@/infrastructure/persistence/agentMotorenOpslag';
+import { motorNaam } from '@/domain/motorNaam';
+import { abonnementVerbruik, codingSeatsHeartbeat, claudeRepos, plannerStatus, type AgentSubscriptionUsage, type PlannerStatus } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   resetTekst as vensterReset,
   verbruikBalken,
@@ -52,9 +56,9 @@ function totMs(waarde: number | string | null | undefined): number | null {
 function vanWorker(row: WorkerSeatRow): CodingSeat {
   const loggedIn = typeof row.logged_in === 'boolean' ? row.logged_in : null;
   return {
-    id: String(row.seat_id || ''),
+    id: String(row.seat_id || row.id || ''),
     provider: (row.provider as CodingSeat['provider']) || 'claude',
-    label: String(row.seat_id || ''),
+    label: String(row.seat_id || row.id || ''),
     email: loggedIn === true ? (row.email ?? null) : null,
     machine: row.machine || row.host || 'unknown',
     logged_in: loggedIn,
@@ -79,21 +83,30 @@ const ACCENT: Record<string, string> = {
 
 export function CodingSeatsSection() {
   const [stoelen, setStoelen] = useState<CodingSeat[] | null>(null);
+  const [heartbeatOk, setHeartbeatOk] = useState(false);
   const [verbruik, setVerbruik] = useState<Record<string, AbonnementVerbruik>>({});
+  const [gebruik, setGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
+  const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   const [fout, setFout] = useState<string | null>(null);
+  const toewijzing = leesToewijzing();
 
   useEffect(() => {
     let alive = true;
     const laad = () => {
       void Promise.all([
-        codingSeatsHeartbeat().catch(() => ({ seats: [] as WorkerSeatRow[] })),
+        codingSeatsHeartbeat().then((hb) => ({ ok: true as const, hb })).catch(() => ({ ok: false as const, hb: { seats: [] as WorkerSeatRow[] } })),
         abonnementVerbruik().catch(() => ({ accounts: [] as AbonnementVerbruik[] })),
-      ]).then(([hb, gebruik]) => {
+        claudeRepos().catch(() => ({ usage: {} as Record<string, AgentSubscriptionUsage> })),
+        plannerStatus().catch(() => null),
+      ]).then(([hb, gebruikR, repos, plan]) => {
         if (!alive) return;
-        const rijen = Array.isArray(hb.seats) ? hb.seats.map(s => vanWorker(s as WorkerSeatRow)) : [];
-        setStoelen(metGedeeldeQuota(rijen.filter(s => s.id && !verbergStoel(s))));
-        setVerbruik(Object.fromEntries((gebruik.accounts ?? []).map(a => [a.motor, a])));
-        setFout(null);
+        setHeartbeatOk(hb.ok);
+        const rijen = Array.isArray(hb.hb.seats) ? hb.hb.seats.map((s) => vanWorker(s as WorkerSeatRow)) : [];
+        setStoelen(metGedeeldeQuota(rijen.filter((s) => s.id && !verbergStoel(s))));
+        setVerbruik(Object.fromEntries((gebruikR.accounts ?? []).map((a) => [a.motor, a])));
+        setGebruik(repos.usage ?? {});
+        setPlanner(plan);
+        setFout(hb.ok ? null : 'No fresh coding-seat heartbeat from the Mac mini.');
       }).catch((e: unknown) => {
         if (alive) setFout(e instanceof Error ? e.message : String(e));
       });
@@ -103,14 +116,71 @@ export function CodingSeatsSection() {
     return () => { alive = false; window.clearInterval(timer); };
   }, []);
 
-  const delen = (stoelen ?? []).filter(s => s.shared_quota_with.length > 0);
+  const delen = (stoelen ?? []).filter((s) => s.shared_quota_with.length > 0);
   const zelfdeMail = delen[0]?.email ?? null;
+  const gebruiktDoor = (motor: string) => HOOFD_AGENTS.filter((a) => toewijzing[a] === motor).map((a) => AGENT_LABEL[a]);
+  const actief = (stoelen ?? []).filter((s) => !stoelNietGebruikt(s));
+  const ongebruikt = (stoelen ?? []).filter((s) => stoelNietGebruikt(s));
+
+  const kaartVoor = (stoel: CodingSeat) => {
+    const v = verbruik[stoel.id];
+    const g = gebruik[stoel.id];
+    const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
+    const vandaag = planner?.gebruik_vandaag[stoel.id] ?? 0;
+    const door = gebruiktDoor(stoel.id);
+    const getoond: CodingSeat = {
+      ...stoel,
+      email: toonStoelEmail(stoel),
+      rate_limited: stoel.rate_limited || Boolean(v?.limiet_bereikt),
+    };
+    const kaart = abonnementKaartStand({
+      stoel: getoond,
+      heartbeatOk,
+      verbruikStatus: v?.status,
+      lastRunFout: v?.status === 'ok' ? (g?.last_limit_message ?? null) : (v?.reden ?? g?.last_limit_message ?? null),
+    });
+    const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond) && kaart.stand.tekst !== 'Online' && kaart.stand.tekst !== 'Running' && kaart.stand.tekst !== 'Not used';
+    const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
+    const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || stoel.label;
+    return (
+      <StatusKaart
+        key={`${stoel.machine}:${stoel.id}`}
+        klein={stoelNietGebruikt(getoond)}
+        naam={motorNaam(label, {
+          account: toonStoelEmail(getoond),
+          ingelogd: stoel.logged_in,
+          nietGebruikt: stoelNietGebruikt(getoond),
+        })}
+        accent={ACCENT[stoel.provider] || 'var(--text-secondary)'}
+        rol={`${v?.plan ? `${v.plan} plan · ` : ''}${door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}`}
+        stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : kaart.stand}
+        keuze={rood ? (
+          <code
+            title={stoel.login_command}
+            style={{ display: 'block', fontSize: 10, color: 'var(--error)', overflow: 'auto', whiteSpace: 'nowrap' }}
+          >{stoel.login_command}</code>
+        ) : undefined}
+        stats={[
+          { label: 'Runs 24h', waarde: g ? String(g.runs_24h) : '—' },
+          { label: 'Runs 7d', waarde: g ? String(g.runs_7d) : '—' },
+          { label: 'Tokens 7d', waarde: tokens ? kort(tokens) : '—' },
+          { label: 'Last run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : (reset || '—') },
+        ]}
+        balken={[
+          ...verbruikBalken(v),
+          ...(planner?.dagbudget ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
+          ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
+        ]}
+        melding={kaart.geschiedenis ?? undefined}
+      />
+    );
+  };
 
   return (
     <div className="axe-motoren">
       <SectieKop
-        titel="Coding seats"
-        uitleg="Every paid Claude, Codex, Cursor and OpenHands login as one team. AXE picks the next free seat and falls through on login or rate-limit errors."
+        titel="Subscriptions"
+        uitleg="Status from the Mac mini heartbeat in core_coding_seats (fresh < 5 min). Usage as each provider reports it. A last-run login error never overrides a seat that is logged in now."
       />
       {zelfdeMail && (
         <p className="axe-agentkaart-melding" style={{ color: 'var(--warning)', marginBottom: 12 }}>
@@ -119,50 +189,22 @@ export function CodingSeatsSection() {
       )}
       {fout && <p className="axe-agentkaart-melding">{fout}</p>}
       <div className="axe-agent-raster axe-agent-raster--ruim">
-        {(stoelen ?? []).map(stoel => {
-          const v = verbruik[stoel.id];
-          const getoond: CodingSeat = {
-            ...stoel,
-            email: toonStoelEmail(stoel),
-            rate_limited: stoel.rate_limited || Boolean(v?.limiet_bereikt),
-          };
-          const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond);
-          const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
-          return (
-            <StatusKaart
-              key={`${stoel.machine}:${stoel.id}`}
-              klein={stoelNietGebruikt(getoond)}
-              naam={toonStoelEmail(getoond) || (stoelNietGebruikt(getoond) ? `${stoel.label} (not used)` : stoel.label)}
-              accent={ACCENT[stoel.provider] || 'var(--text-secondary)'}
-              rol={`${stoel.provider} · ${stoel.machine}${stoel.shared_quota_with.length ? ` · same quota as ${stoel.shared_quota_with.join(', ')}` : ''}`}
-              stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : stoelHeartbeatStand(getoond)}
-              keuze={rood ? (
-                <code
-                  title={stoel.login_command}
-                  style={{ display: 'block', fontSize: 10, color: 'var(--error)', overflow: 'auto', whiteSpace: 'nowrap' }}
-                >{stoel.login_command}</code>
-              ) : undefined}
-              stats={[
-                { label: 'Provider', waarde: stoel.provider },
-                { label: 'Machine', waarde: stoel.machine },
-                { label: 'Task', waarde: stoel.current_task || 'idle' },
-                { label: 'Reset', waarde: reset || '—' },
-              ]}
-              balken={verbruikBalken(v)}
-              melding={stoel.last_limit_message ?? (rood ? stoel.login_command : undefined)}
-            />
-          );
-        })}
+        {actief.map(kaartVoor)}
         {stoelen?.length === 0 && (
           <StatusKaart
             naam="No seats reported"
             accent="var(--text-muted)"
-            rol="The Mac mini worker has not heartbeated seats yet, and the agent host did not return /claude/repos."
+            rol="The Mac mini worker has not heartbeated seats yet."
             stand={{ toon: 'muted', tekst: 'Waiting' }}
             stats={[{ label: 'Last check', waarde: '—' }]}
           />
         )}
       </div>
+      {ongebruikt.length > 0 && (
+        <div className="axe-agent-raster" style={{ marginTop: 12, justifyContent: 'start' }}>
+          {ongebruikt.map(kaartVoor)}
+        </div>
+      )}
     </div>
   );
 }

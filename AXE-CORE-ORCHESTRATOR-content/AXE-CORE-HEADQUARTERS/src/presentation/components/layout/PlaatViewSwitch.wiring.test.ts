@@ -15,5 +15,8 @@ describe('Awareness-knop is geen dode knop', () => {
     expect(paneel).toMatch(/Alles stil/);
     expect(paneel).toMatch(/goedkeuring\.tekst|vraag\.tekst|execVraag\.tekst/);
     expect(paneel).not.toMatch(/Pak dit op/);
+    expect(paneel).toMatch(/Approve/);
+    expect(paneel).toMatch(/Decline/);
+    expect(paneel).toMatch(/server\.approvals/);
   });
 });

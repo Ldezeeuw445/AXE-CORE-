@@ -1,0 +1,37 @@
+/* Living strip under the orb, right of the agent rail. Cards stay compact. */
+.axe-home-live {
+  position: absolute;
+  left: calc(clamp(16px, 2.4vw, 48px) + min(32%, 420px) + 16px);
+  right: 16px;
+  bottom: 10px;
+  width: auto;
+  max-height: min(36%, 300px);
+  overflow: auto;
+  z-index: 15;
+  pointer-events: auto;
+}
+
+.axe-home-live-pulse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.axe-home-live-raster {
+  align-items: start;
+}
+
+.axe-home-live .axe-sectie {
+  margin: 0;
+}
+
+.axe-home-live .axe-kaart {
+  width: min(var(--axe-kaart-kolom, 240px), 100%);
+}

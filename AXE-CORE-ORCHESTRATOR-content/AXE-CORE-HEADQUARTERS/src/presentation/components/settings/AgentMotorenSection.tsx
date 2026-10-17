@@ -10,13 +10,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StatusKaart, SectieKop, geleden, duur, kort, type Stand } from '@/presentation/components/settings/StatusKaart';
 import {
-  HOOFD_AGENTS, AGENT_LABEL, MOTOR_LABEL, TOEGESTAAN, kiesbaar,
+  HOOFD_AGENTS, AGENT_LABEL, MOTOR_LABEL, kiesbaar,
   type HoofdAgent, type HoofdMotor, type MotorToewijzing,
 } from '@/domain/agentMotoren';
 import { leesToewijzing, kiesMotor } from '@/infrastructure/persistence/agentMotorenOpslag';
-import { leesModellen, zetModel } from '@/infrastructure/persistence/motorModellenOpslag';
-import { MODEL_SUGGESTIES, MODEL_VLAG, type MotorModellen } from '@/domain/motorModellen';
-import { ALLE_MOTOREN, type AgentEngine } from '@/domain/abonnementChat';
 import {
   claudeRepos, plannerStatus, plannerZetAan, abonnementVerbruik,
   ledgerList, codingSeatsHeartbeat,
@@ -24,12 +21,12 @@ import {
   type CodingSeatStatus,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { motorNaam, type MotorStatus } from '@/domain/motorNaam';
-import { stoelHeartbeatStand, stoelNietGebruikt, verbergStoel } from '@/domain/codingSeats';
-import { verbruikBalken, verbruikMelding, verbruikStand, type AbonnementVerbruik } from '@/domain/abonnementVerbruik';
+import { abonnementKaartStand } from '@/domain/codingSeats';
+import { type AbonnementVerbruik } from '@/domain/abonnementVerbruik';
 import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
-import { isActief, leesVerbindingen, type Verbinding } from '@/domain/chatModelKeuzes';
+import { isActief, leesVerbindingen } from '@/domain/chatModelKeuzes';
 import { agentsByTier, type AxeAgent } from '@/domain/agents/roster';
 import { keuzesVoorAgent } from '@/domain/agents/motorScope';
 import { leesOverrides, zetOverride, type OverrideMap } from '@/infrastructure/persistence/agentEngineOverrides';
@@ -47,9 +44,7 @@ const WAARVOOR: Record<HoofdAgent, string> = {
 
 export function AgentMotorenSection() {
   const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
-  const [aanwezig, setAanwezig] = useState<Record<string, boolean> | null>(null);
   const [motorAccounts, setMotorAccounts] = useState<Record<string, MotorStatus>>({});
-  const [modellen, setModellen] = useState<MotorModellen>(() => leesModellen());
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
   const [abonnementGebruik, setAbonnementGebruik] = useState<Record<string, AgentSubscriptionUsage>>({});
   const [verbruik, setVerbruik] = useState<Record<string, AbonnementVerbruik>>({});
@@ -116,10 +111,9 @@ export function AgentMotorenSection() {
       void claudeRepos()
         .then(r => {
           if (!alive) return;
-          setAanwezig(Object.fromEntries(Object.entries(r.engines ?? {}).map(([k, v]) => [k, v.aanwezig])));
           setAbonnementGebruik(r.usage ?? {});
         })
-        .catch(() => { if (alive) setAanwezig(null); });
+        .catch(() => { /* host onbereikbaar: usage blijft leeg */ });
       void codingSeatsHeartbeat()
         .then(r => {
           if (!alive) return;
@@ -132,10 +126,10 @@ export function AgentMotorenSection() {
           setMotorAccounts(Object.fromEntries(Object.entries(map).map(([k, v]) => [k, {
             account: v.logged_in === true ? v.email : null,
             ingelogd: v.logged_in,
-            nietGebruikt: stoelNietGebruikt({ id: k, logged_in: v.logged_in ?? null, config_exists: v.config_exists }),
+            nietGebruikt: k === 'claude' && v.logged_in === false && v.config_exists !== false,
           }])));
         })
-        .catch(() => { if (alive) setStoelen({}); });
+        .catch(() => { if (alive) setStoelen(null); });
     };
     // Gemeten bij Anthropic/OpenAI zelf; de host onthoudt het twee minuten,
     // dus elke minuut vragen kost de aanbieder hooguit één check per twee.
@@ -173,7 +167,6 @@ export function AgentMotorenSection() {
     const d = runs.filter(r => r.name.toLowerCase().includes(id) && typeof r.duration_ms === 'number').map(r => r.duration_ms as number);
     return d.length ? Math.round(d.reduce((a, b) => a + b, 0) / d.length) : null;
   };
-  const gebruiktDoor = (motor: string) => HOOFD_AGENTS.filter(a => toewijzing[a] === motor).map(a => AGENT_LABEL[a]);
 
   const motorStatus = (motor: HoofdMotor): Stand => {
     // Top-right status is capability truth only. "API keys", "CLI present" and
@@ -186,29 +179,24 @@ export function AgentMotorenSection() {
     }
     const stoel = stoelen?.[motor];
     if (stoelen == null) return { toon: 'muted', tekst: 'Checking' };
-    if (stoel) {
-      const stand = stoelHeartbeatStand({
+    const kaart = abonnementKaartStand({
+      stoel: stoel ? {
         id: motor,
         logged_in: stoel.logged_in ?? null,
         rate_limited: Boolean(stoel.rate_limited),
         current_task: stoel.current_task ?? null,
         last_seen_at: stoel.last_seen_at,
         config_exists: stoel.config_exists,
-      });
-      if (stand.tekst === 'Online' || stand.tekst === 'Running') {
-        const koeltHb = planner?.koeling[motor];
-        if (koeltHb) return { toon: 'bad', tekst: 'Cooling down' };
-      }
-      return stand;
+      } : null,
+      heartbeatOk: true,
+      verbruikStatus: verbruik[motor]?.status,
+      lastRunFout: verbruik[motor]?.reden ?? null,
+    });
+    if (kaart.stand.tekst === 'Online' || kaart.stand.tekst === 'Running') {
+      const koeltHb = planner?.koeling[motor];
+      if (koeltHb) return { toon: 'bad', tekst: 'Cooling down' };
     }
-    if (aanwezig === null) return { toon: 'muted', tekst: 'Checking' };
-    if (aanwezig[motor] !== true) return { toon: 'bad', tekst: 'Offline' };
-    const koelt = planner?.koeling[motor];
-    // A cooled-down subscription cannot currently do work, so it is not Online.
-    if (koelt) return { toon: 'bad', tekst: 'Cooling down' };
-    // The provider accepting this account's token for a usage check is the
-    // login proof the CLI binary alone never gave (abonnementVerbruik.ts).
-    return verbruikStand(verbruik[motor]);
+    return kaart.stand;
   };
   const sleutelStatus = (provider?: ProviderId): Stand => {
     if (!provider) return { toon: 'muted', tekst: 'Auto' };
@@ -349,47 +337,9 @@ export function AgentMotorenSection() {
           );
         })}
       </div>
-
-      <SectieKop titel="Subscriptions" uitleg="Session and week usage as each provider reports it for that account, plus what AXE ran on it." />
-      <div className="axe-agent-raster axe-agent-raster--ruim">
-        {ALLE_MOTOREN.filter((motor: AgentEngine) => {
-          const s = stoelen?.[motor];
-          return !(s && verbergStoel({ config_exists: s.config_exists }));
-        }).map((motor: AgentEngine) => {
-          const g = abonnementGebruik[motor];
-          const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
-          const vandaag = planner?.gebruik_vandaag[motor] ?? 0;
-          const door = gebruiktDoor(motor);
-          return (
-            <StatusKaart
-              key={motor}
-              klein={stoelNietGebruikt({ id: motor, logged_in: stoelen?.[motor]?.logged_in ?? null, config_exists: stoelen?.[motor]?.config_exists })}
-              naam={motorNaam(MOTOR_LABEL[motor], motorAccounts[motor])}
-              accent="var(--text-secondary)"
-              rol={`${verbruik[motor]?.plan ? `${verbruik[motor]?.plan} plan · ` : ''}${door.length ? `Used by ${door.join(', ')}` : 'Not assigned to a main agent'}`}
-              stand={motorStatus(motor)}
-              keuze={
-                <>
-                  <input value={modellen[motor] ?? ''} onChange={e => setModellen(zetModel(motor, e.target.value))} list={`modellen-${motor}`} placeholder={`CLI default · ${MODEL_VLAG[motor]}`} spellCheck={false} aria-label={`Model for ${MOTOR_LABEL[motor]}`} />
-                  <datalist id={`modellen-${motor}`}>{MODEL_SUGGESTIES[motor].map(m => <option key={m} value={m} />)}</datalist>
-                </>
-              }
-              stats={[
-                { label: 'Runs 24h', waarde: g ? String(g.runs_24h) : '—' },
-                { label: 'Runs 7d', waarde: g ? String(g.runs_7d) : '—' },
-                { label: 'Tokens 7d', waarde: tokens ? kort(tokens) : '—' },
-                { label: 'Last run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : '—' },
-              ]}
-              balken={[
-                ...verbruikBalken(verbruik[motor]),
-                ...(planner?.dagbudget ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
-                ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
-              ]}
-              melding={verbruikMelding(verbruik[motor]) ?? g?.last_limit_message ?? undefined}
-            />
-          );
-        })}
-      </div>
+      <p className="text-[11px] mt-3" style={{ color: 'var(--text-muted)' }}>
+        Live seat status and usage live under Settings → Subscriptions. Assignment stays here so two agents never share a limit.
+      </p>
     </div>
   );
 }

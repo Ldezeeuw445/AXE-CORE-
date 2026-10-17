@@ -32,6 +32,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 
 const SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCircuit }> = [
   { id: 'axe', label: 'Core', icon: Sparkles },
@@ -48,8 +49,10 @@ export function PlaatViewSwitch() {
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
   const jobs = useAxeJobStore(s => s.jobs);
   const pendingExec = useVoiceStore(s => s.pendingExec);
+  const serverOk = useServerAgents().approvals.length;
   const wacht = openGoedkeuringen(jobs).length
-    + (pendingExec && goedkeuringVanActie({ title: pendingExec.title, detail: pendingExec.detail }) ? 1 : 0);
+    + (pendingExec && goedkeuringVanActie({ title: pendingExec.title, detail: pendingExec.detail }) ? 1 : 0)
+    + serverOk;
 
   return (
     <div className="axe-viewctl over-canvas-group" role="tablist" aria-label="Core view">

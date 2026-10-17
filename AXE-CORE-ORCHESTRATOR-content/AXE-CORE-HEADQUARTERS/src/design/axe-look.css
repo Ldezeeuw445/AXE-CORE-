@@ -7211,6 +7211,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-agentkaart-balk em { display: block; height: 100%; border-radius: 999px; }
 .axe-agentkaart-melding { font-size: 10px; color: var(--warning); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .axe-agentkaart--klein .axe-agentkaart-rol { -webkit-line-clamp: 2; }
+.axe-agent-raster > .axe-agentkaart--klein {
+  max-width: 240px;
+  justify-self: start;
+  align-self: start;
+}
 /* In Settings lijnen alle rasters op dezelfde volle breedte uit, zodat de
    providerkaarten onder de agentkaarten één geheel vormen. */
 :root[data-look] .axe-settings .axe-kaart-raster {

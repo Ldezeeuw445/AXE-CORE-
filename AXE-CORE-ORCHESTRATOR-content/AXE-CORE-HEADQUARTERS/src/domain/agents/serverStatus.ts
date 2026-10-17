@@ -32,6 +32,16 @@ export interface ServerMissie {
   blocked_reason: string | null;
 }
 
+export interface ServerPendingApproval {
+  id: string;
+  kind?: string | null;
+  title?: string | null;
+  detail?: string | null;
+  wat?: string | null;
+  waarom?: string | null;
+  task_id?: string | null;
+}
+
 export interface ServerAgent {
   agent: string;
   status: ServerAgentStatus;
@@ -42,14 +52,9 @@ export interface ServerAgent {
   current_action?: string | null;
   task?: { id: string; title: string | null; status: string; engine?: string | null; model?: string | null } | null;
   /** Pending core_approvals-rij, zodat Home OK ter plekke Approve/Decline kan. */
-  pendingApproval?: {
-    id: string;
-    kind?: string | null;
-    title?: string | null;
-    detail?: string | null;
-    wat?: string | null;
-    waarom?: string | null;
-  } | null;
+  pendingApproval?: ServerPendingApproval | null;
+  /** Alle open vragen van deze agent (niet alleen de huidige taak). */
+  pendingApprovals?: ServerPendingApproval[];
   mission?: ServerMissie | null;
   events: ServerEvent[];
   last_event_at?: string | null;

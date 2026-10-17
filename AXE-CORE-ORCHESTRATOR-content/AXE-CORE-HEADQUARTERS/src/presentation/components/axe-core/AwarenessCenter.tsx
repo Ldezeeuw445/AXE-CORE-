@@ -11,7 +11,7 @@ import {
 } from '@/domain/agentBewustzijn';
 import { getAwarenessSnapshot, type AwarenessGoedkeuring } from '@/application/awareness/axeAwareness';
 import { decideDurableTaskApproval, plannerBesluit } from '@/infrastructure/gateways/axeCoreApiService';
-import { verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
+import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 
@@ -19,6 +19,7 @@ export function AwarenessCenter({ onClose }: { onClose: () => void }) {
   const jobs = useAxeJobStore((s) => s.jobs);
   const pendingExec = useVoiceStore((s) => s.pendingExec);
   const resolvePendingExec = useVoiceStore((s) => s.resolvePendingExec);
+  const server = useServerAgents();
   const [extra, setExtra] = useState<AwarenessGoedkeuring[]>([]);
 
   useEffect(() => {
@@ -40,7 +41,21 @@ export function AwarenessCenter({ onClose }: { onClose: () => void }) {
     : null;
   const gezien = new Set(uitJobs.map((g) => g.goedkeuring.tekst));
   if (execVraag) gezien.add(execVraag.tekst);
-  const uitTaken = extra.filter((g) => !gezien.has(g.tekst));
+  const uitServer: AwarenessGoedkeuring[] = server.approvals.map((a) => ({
+    id: a.task_id,
+    tekst: `${a.wat || a.title}${a.waarom || a.detail ? `\n${a.waarom || a.detail}` : ''}\nApprove?`,
+    wat: a.wat || a.title,
+    waarom: a.waarom || a.detail || '',
+    ja: 'Approve',
+    taskId: a.task_id,
+    approvalId: a.id,
+  }));
+  const uitTaken = [...extra, ...uitServer].filter((g) => {
+    if (gezien.has(g.tekst) || gezien.has(g.approvalId || '')) return false;
+    gezien.add(g.tekst);
+    if (g.approvalId) gezien.add(g.approvalId);
+    return true;
+  });
 
   const stil = agenten.length === 0 && !execVraag && uitJobs.length === 0 && uitTaken.length === 0;
 
@@ -150,7 +165,7 @@ function GoedkeuringRij({
           Approve
         </button>
         <button type="button" onClick={onNee} className="rounded-lg px-2 py-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-          Reject
+          Decline
         </button>
       </div>
     </div>

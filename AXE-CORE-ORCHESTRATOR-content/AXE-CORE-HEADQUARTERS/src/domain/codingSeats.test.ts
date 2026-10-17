@@ -9,11 +9,13 @@ import {
   metGedeeldeQuota,
   parseLimietTot,
   resetTekst,
+  abonnementKaartStand,
   stoelHeartbeatStand,
   stoelHeeftActie,
   stoelNietGebruikt,
   stoelStand,
   toonStoelEmail,
+  toonStoelIds,
   verbergStoel,
   type CodingSeat,
 } from './codingSeats';
@@ -113,6 +115,32 @@ describe('gedeelde quota', () => {
 });
 
 describe('heartbeat-stand', () => {
+  it('laat een verse logged_in heartbeat winnen van een stale last-run expired', () => {
+    const nu = Date.parse('2026-10-17T09:00:00Z');
+    const vers = new Date(nu - 60_000).toISOString();
+    const claude3 = stoel({ id: 'claude3', logged_in: true, last_seen_at: vers, email: 'lukadezeeuw205@gmail.com' });
+    const kaart = abonnementKaartStand({
+      stoel: claude3,
+      heartbeatOk: true,
+      verbruikStatus: 'expired',
+      lastRunFout: 'Login failed on the last agent run. Log in again.',
+      nu,
+    });
+    expect(kaart.stand).toEqual({ toon: 'ok', tekst: 'Online' });
+    expect(kaart.geschiedenis).toMatch(/Login failed on the last agent run/);
+    const defaultClaude = abonnementKaartStand({
+      stoel: stoel({ id: 'claude', logged_in: false, last_seen_at: vers }),
+      heartbeatOk: true,
+      nu,
+    });
+    expect(defaultClaude.stand.tekst).toBe('Not used');
+    expect(toonStoelIds([
+      stoel({ id: 'claude', logged_in: false }),
+      stoel({ id: 'codex3', config_exists: false }),
+      stoel({ id: 'codex', logged_in: true }),
+    ])).toEqual(['claude', 'codex']);
+  });
+
   it('is Online bij verse heartbeat en login, Not used voor default ~/.claude uitgelogd', () => {
     const nu = Date.parse('2026-10-17T09:00:00Z');
     const vers = new Date(nu - 60_000).toISOString();
@@ -127,16 +155,20 @@ describe('heartbeat-stand', () => {
 });
 
 describe('Settings toont Accounts', () => {
-  it('heeft een Accounts-sectie naast Providers, zonder Home te raken', () => {
+  it('heeft één Subscriptions-sectie, geen tweede kaartgrid onder Providers', () => {
     const settings = readFileSync(new URL('../presentation/pages/SettingsPage.tsx', import.meta.url), 'utf8');
     expect(settings).toMatch(/id: 'accounts'/);
-    expect(settings).toMatch(/label: 'Accounts'/);
+    expect(settings).toMatch(/label: 'Subscriptions'/);
     expect(settings).toMatch(/CodingSeatsSection/);
     expect(settings).not.toMatch(/HomeView|NeuralBrain|MemoryTerrain/);
     const seats = readFileSync(new URL('../presentation/components/settings/CodingSeatsSection.tsx', import.meta.url), 'utf8');
     const motoren = readFileSync(new URL('../presentation/components/settings/AgentMotorenSection.tsx', import.meta.url), 'utf8');
     expect(seats).toMatch(/codingSeatsHeartbeat/);
+    expect(seats).toMatch(/abonnementKaartStand/);
     expect(motoren).toMatch(/codingSeatsHeartbeat/);
+    expect(motoren).not.toMatch(/titel="Subscriptions"/);
     expect(seats).not.toMatch(/stoel\.email \|\| v\?\.account/);
+    expect(seats).toMatch(/ongebruikt/);
+    expect(seats).toMatch(/stoelNietGebruikt/);
   });
 });

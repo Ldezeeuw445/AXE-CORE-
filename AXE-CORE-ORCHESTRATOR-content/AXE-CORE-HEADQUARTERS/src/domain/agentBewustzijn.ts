@@ -65,6 +65,24 @@ export function bewustzijnVanJobs(jobs: readonly AxeJob[], nu = Date.now()): Age
 }
 
 export function openGoedkeuringen(jobs: readonly AxeJob[]): Array<AgentBewustzijn & { goedkeuring: GoedkeuringsVraag }> {
-  return bewustzijnVanJobs(jobs).filter((r): r is AgentBewustzijn & { goedkeuring: GoedkeuringsVraag } => r.goedkeuring !== null);
+  const uit = bewustzijnVanJobs(jobs).filter((r): r is AgentBewustzijn & { goedkeuring: GoedkeuringsVraag } => r.goedkeuring !== null);
+  const gezien = new Set(uit.map((r) => r.job?.id));
+  for (const job of jobs) {
+    if (job.state !== 'waiting' || !job.approvalId || gezien.has(job.id)) continue;
+    const vraag = goedkeuringVanJob(job) ?? {
+      wat: job.approvalVraag || job.title || 'This needs your OK.',
+      waarom: '',
+      ja: 'Approve',
+      tekst: job.approvalVraag || job.title || 'This needs your OK.',
+    };
+    uit.push({
+      agentId: job.agent,
+      naam: job.agent,
+      regel: vraag.wat,
+      goedkeuring: vraag,
+      job,
+    });
+  }
+  return uit;
 }
 

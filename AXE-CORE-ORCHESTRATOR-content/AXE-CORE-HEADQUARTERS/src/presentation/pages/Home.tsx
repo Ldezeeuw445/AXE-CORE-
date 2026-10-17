@@ -6,6 +6,7 @@ import type { CoreStatus } from '@/presentation/components/axe-core/HolographicS
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
 import { AgentVensters } from '@/presentation/components/axe-core/AgentVensters';
+import { HomeLiveDashboard } from '@/presentation/components/axe-core/HomeLiveDashboard';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
@@ -222,6 +223,7 @@ export default function Home() {
               <SphereStage status={coreStatus} bol={opPlaat ? <AxeCoreSphere /> : undefined} />
               {/* Wie AXE nu aan het werk heeft, in gewone taal, rond de core. */}
               <AgentVensters />
+              {!isMobile && <HomeLiveDashboard />}
             </div>
           {/* De drie weergaven vullen het HELE vak, niet alleen het stuk boven
               de chatplaat.

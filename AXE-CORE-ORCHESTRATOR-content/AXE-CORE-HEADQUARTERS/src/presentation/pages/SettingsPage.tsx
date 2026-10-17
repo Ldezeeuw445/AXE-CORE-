@@ -1950,7 +1950,7 @@ export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
-  const [sectie, setSectie] = useState('providers');
+  const [sectie, setSectie] = useState('accounts');
   // Eén sectie tegelijk, zoals de Browser: de lade kiest, het vak toont die
   // ene sectie als dashboard in kaarten (25 sep).
   const kiesSectie = (id: string) => {
@@ -1993,7 +1993,7 @@ export default function SettingsPage() {
             {
               titel: 'Setup',
               items: [
-                { id: 'accounts', label: 'Accounts', actief: sectie === 'accounts', onKies: () => kiesSectie('accounts') },
+                { id: 'accounts', label: 'Subscriptions', actief: sectie === 'accounts', onKies: () => kiesSectie('accounts') },
                 { id: 'providers', label: 'Providers', actief: sectie === 'providers', onKies: () => kiesSectie('providers') },
                 { id: 'voice', label: 'Voice', actief: sectie === 'voice', onKies: () => kiesSectie('voice') },
                 { id: 'trust', label: 'Trust', actief: sectie === 'trust', onKies: () => kiesSectie('trust') },
@@ -2017,7 +2017,7 @@ export default function SettingsPage() {
         <UnsyncedSettingsBanner />
 
         {sectie === 'accounts' && (
-        <SectieBlok id="accounts" titel="ACCOUNTS">
+        <SectieBlok id="accounts" titel="SUBSCRIPTIONS">
           <CodingSeatsSection />
         </SectieBlok>
         )}

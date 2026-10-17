@@ -1,12 +1,16 @@
 /**
  * Compacte balk boven de composer: hoeveel agents lopen, klik om uit te klappen.
  * Mat zwart, dunne lichte rand, niet uitgerekt — zelfde materiaal als de plaat.
+ * Wachtende OK's krijgen hier dezelfde Approve/Decline als op Home.
  */
 import { useState } from 'react';
 import { useAxeJobStore, lopendeJobs } from '@/presentation/store/axeJobStore';
 import { agentById } from '@/domain/agents/roster';
 import { balkLabel, jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 import { regelVan } from '@/domain/tierRouter/agentVenster';
+import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
+import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
+import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 
 const STAND: Record<string, string> = {
   queued: 'queued',
@@ -18,9 +22,11 @@ const STAND: Record<string, string> = {
 
 export function AxeAgentsBalk() {
   const jobs = useAxeJobStore((s) => s.jobs);
+  const server = useServerAgents();
   const [open, setOpen] = useState(false);
   const lopend = lopendeJobs(jobs);
-  if (jobs.length === 0) return null;
+  const serverWacht = server.approvals.length;
+  if (jobs.length === 0 && serverWacht === 0) return null;
 
   return (
     <div className="flex-shrink-0 px-2 pb-1">
@@ -45,11 +51,12 @@ export function AxeAgentsBalk() {
             style={{
               width: 6,
               height: 6,
-              background: lopend.length ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              background: lopend.length || serverWacht ? 'var(--accent-cyan)' : 'var(--text-muted)',
             }}
           />
           <span className="text-[11px]" style={{ color: 'var(--text-primary)' }}>
-            {balkLabel(lopend.length)}
+            {balkLabel(Math.max(lopend.length, Object.values(server.agents).filter((a) => a.status === 'WORKING').length))}
+            {serverWacht ? ` · ${serverWacht} need your OK` : ''}
           </span>
         </button>
         {open && (
@@ -57,18 +64,48 @@ export function AxeAgentsBalk() {
             {jobs.slice(-8).map((j) => (
               <li key={j.id} className="text-[10px] leading-tight py-0.5">
                 <div className="flex items-baseline gap-2">
-                <span style={{ color: 'var(--text-primary)' }}>{j.title}</span>
-                <span style={{ color: 'var(--accent-cyan)' }}>{agentById(j.agent).name}</span>
-                <span style={{ color: 'var(--text-muted)' }}>{STAND[j.state] ?? j.state}</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{j.title}</span>
+                  <span style={{ color: 'var(--accent-cyan)' }}>{agentById(j.agent).name}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{STAND[j.state] ?? j.state}</span>
                 </div>
-                {/* De laatste stap, niet alleen het statuswoord: "running" zegt
-                    niet of hij vastzit. `stappen` werd al bijgehouden en werd
-                    hier nergens getoond. */}
                 {jobLoopt(j.state) && (
                   <div className="truncate" style={{ color: 'var(--text-muted)', opacity: 0.75 }}>
                     {regelVan(j)}
                   </div>
                 )}
+                {j.state === 'waiting' && (
+                  <GoedkeuringActie
+                    compact
+                    rijen={[{
+                      id: j.approvalId || j.id,
+                      taskId: j.taskId || '',
+                      wat: j.approvalVraag || j.title,
+                      waarom: '',
+                    }]}
+                    onBeslis={(rij, akkoord) => {
+                      void beslisAgentOk({
+                        akkoord,
+                        job: j,
+                        rij: rij.taskId ? rij : null,
+                        agent: server.agents[j.agent],
+                      }).then((ok) => {
+                        if (ok) useAxeJobStore.getState().patch(j.id, { state: akkoord ? 'running' : 'failed' });
+                        verversServerAgents();
+                      });
+                    }}
+                  />
+                )}
+              </li>
+            ))}
+            {server.approvals.map((a) => (
+              <li key={`ok-${a.id}`} className="text-[10px] leading-tight py-0.5">
+                <GoedkeuringActie
+                  compact
+                  rijen={[{ id: a.id, taskId: a.task_id, wat: a.wat || a.title, waarom: a.waarom || a.detail || '' }]}
+                  onBeslis={(rij, akkoord) => {
+                    void beslisAgentOk({ akkoord, rij }).then(verversServerAgents);
+                  }}
+                />
               </li>
             ))}
           </ul>

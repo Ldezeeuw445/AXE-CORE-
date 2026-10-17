@@ -330,6 +330,47 @@ def _missie_kort(m: dict[str, Any] | None) -> dict[str, Any] | None:
 
 # ── Alles bij elkaar, uit de database ────────────────────────────────────────
 
+def pending_vraag(rij: dict[str, Any], besluit_fn: Callable[..., Any] | None = None) -> dict[str, Any]:
+    """Wat Home op Approve/Decline zet: id + wat/waarom, snake én camel."""
+    wat = waarom = None
+    if besluit_fn:
+        try:
+            besluit = besluit_fn(rij)
+            wat, waarom = besluit.wat, besluit.waarom
+        except Exception:
+            pass
+    payload = {
+        "id": rij.get("id"),
+        "kind": rij.get("kind"),
+        "title": rij.get("title"),
+        "detail": rij.get("detail"),
+        "wat": wat or rij.get("title") or rij.get("wat"),
+        "waarom": waarom or rij.get("detail") or rij.get("waarom"),
+        "task_id": rij.get("task_id"),
+    }
+    return payload
+
+
+def koppel_pending(
+    agent: str,
+    status: dict[str, Any],
+    per_taak: dict[str, dict[str, Any]],
+    per_agent: dict[str, list[dict[str, Any]]],
+) -> None:
+    """Hang pending core_approvals aan de agent. CamelCase mee voor de UI."""
+    vragen = list(per_agent.get(agent) or [])
+    taak_id = str((status.get("task") or {}).get("id") or "")
+    if taak_id and taak_id in per_taak:
+        eerste = per_taak[taak_id]
+        vragen = [eerste] + [v for v in vragen if v.get("id") != eerste.get("id")]
+    if not vragen:
+        return
+    status["pending_approval"] = vragen[0]
+    status["pendingApproval"] = vragen[0]
+    status["pending_approvals"] = vragen
+    status["pendingApprovals"] = vragen
+
+
 def dax_velden(computer: dict[str, Any] | None) -> dict[str, Any]:
     """Wat Home over de eigen computer laat zien: heartbeat, wat hij niet kan, wat hij doet.
 
@@ -406,17 +447,23 @@ class Activiteit:
         routines = self._routines()
         dax = self._dax()
         per_taak: dict[str, dict[str, Any]] = {}
+        per_agent: dict[str, list[dict[str, Any]]] = {}
+        taken_by_id = {str(t.get("id")): t for t in taken}
         try:
             pending = (
                 self._db().table("core_approvals").select("id,task_id,kind,title,detail,metadata,requested_by")
                 .eq("status", "pending").order("created_at").limit(80).execute().data
             ) or []
             for r in pending:
+                payload = pending_vraag(r, beslis_goedkeuring)
                 tid = str(r.get("task_id") or "")
                 if tid and tid not in per_taak:
-                    per_taak[tid] = r
+                    per_taak[tid] = payload
+                taak = taken_by_id.get(tid) or {}
+                wie = roster_agent(str(taak.get("assignee") or r.get("requested_by") or ""))
+                per_agent.setdefault(wie, []).append(payload)
         except Exception:
-            per_taak = {}
+            per_taak, per_agent = {}, {}
         uit = []
         for agent in agents:
             recent = self.events(agent, events_per_agent)
@@ -430,24 +477,7 @@ class Activiteit:
                 "crew": ws.get("crew") or [], "events": tijdlijn(recent),
                 "last_event_at": recent[0].get("created_at") if recent else None,
             })
-            taak_id = (status.get("task") or {}).get("id")
-            rij = per_taak.get(str(taak_id or ""))
-            if rij:
-                wat = waarom = None
-                if beslis_goedkeuring:
-                    try:
-                        besluit = beslis_goedkeuring(rij)
-                        wat, waarom = besluit.wat, besluit.waarom
-                    except Exception:
-                        pass
-                status["pending_approval"] = {
-                    "id": rij.get("id"),
-                    "kind": rij.get("kind"),
-                    "title": rij.get("title"),
-                    "detail": rij.get("detail"),
-                    "wat": wat or rij.get("title"),
-                    "waarom": waarom or rij.get("detail"),
-                }
+            koppel_pending(str(agent), status, per_taak, per_agent)
             uit.append(status)
         return uit
 

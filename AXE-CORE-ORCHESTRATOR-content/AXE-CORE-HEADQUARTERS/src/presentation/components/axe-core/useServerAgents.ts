@@ -7,16 +7,22 @@
  * verzonnen nieuwe, en de kolom valt dan terug op wat hij al deed.
  */
 import { useEffect, useState } from 'react';
-import { getAgentActivity } from '@/infrastructure/gateways/axeCoreApiService';
+import { getAgentActivity, listPendingApprovals, type DurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
 import type { ServerAgent } from '@/domain/agents/serverStatus';
+import { normaliseerServerAgent } from '@/domain/agents/pendingApproval';
 import { meldActiviteit } from '@/shared/axeActiviteit';
 import { activiteitUitServer } from '@/domain/agents/activiteitUitServer';
 
-const POLL_MS = 15_000;
+const POLL_MS = 10_000;
 
-interface Stand { agents: Record<string, ServerAgent>; ok: boolean; at: number }
+interface Stand {
+  agents: Record<string, ServerAgent>;
+  ok: boolean;
+  at: number;
+  approvals: DurableTaskApproval[];
+}
 
-let stand: Stand = { agents: {}, ok: false, at: 0 };
+let stand: Stand = { agents: {}, ok: false, at: 0, approvals: [] };
 const lezers = new Set<(s: Stand) => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let bezig = false;
@@ -25,16 +31,16 @@ async function poll(): Promise<void> {
   if (bezig || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) return;
   bezig = true;
   try {
-    const uit = await getAgentActivity(10);
+    const [uit, approvals] = await Promise.all([
+      getAgentActivity(10),
+      listPendingApprovals(50).catch(() => [] as DurableTaskApproval[]),
+    ]);
     const agents: Record<string, ServerAgent> = {};
-    for (const a of uit.agents) agents[a.agent] = a;
-    /* Wat er sinds de vorige poll echt gebeurde, als vlucht van de bol naar die
-       agent (10 okt: "voorheen zag je particles met wat hij deed"). Niet bij de
-       eerste poll: dan is alles "nieuw" en vliegt er een zwerm. */
+    for (const a of uit.agents) agents[a.agent] = normaliseerServerAgent(a);
     if (stand.ok) {
       for (const a of activiteitUitServer(stand.agents, agents)) meldActiviteit(a);
     }
-    stand = { agents, ok: true, at: Date.now() };
+    stand = { agents, ok: true, at: Date.now(), approvals };
   } catch {
     stand = { ...stand, ok: false };
   } finally {
@@ -43,7 +49,7 @@ async function poll(): Promise<void> {
   }
 }
 
-/** Ververs nu, bv. na pauzeren/hervatten. */
+/** Ververs nu, bv. na pauzeren/hervatten of Approve/Decline. */
 export function verversServerAgents(): void {
   void poll();
 }

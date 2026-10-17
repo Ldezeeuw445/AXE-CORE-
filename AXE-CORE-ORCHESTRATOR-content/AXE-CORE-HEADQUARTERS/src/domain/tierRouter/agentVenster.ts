@@ -5,7 +5,7 @@
  */
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 import type { AxeAgent, AxeAgentId } from '@/domain/agents/roster';
-import { agentById, agentsByTier } from '@/domain/agents/roster';
+import { agentById, agentsByTier, AXE_AGENTS } from '@/domain/agents/roster';
 
 /** Hoe lang een klaar venster blijft staan voor het wegschuift. */
 export const VENSTER_NAGLOEI_MS = 25_000;
@@ -170,6 +170,24 @@ export function managerRijen(
   return managers.map((agent) => {
     const job = perManager.get(agent.id) ?? null;
     return { agent, job, regel: job ? rijRegel(job, agent) : '' };
+  });
+}
+
+/**
+ * Linker rail op Home: élke roster-agent behalve de core zelf (die is de bol).
+ * Eigen job, geen roll-up — anders verdwijnt Cron/Memory achter Developer.
+ */
+export function railRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
+  const agents = AXE_AGENTS.filter((a) => a.id !== 'axe');
+  const perAgent = new Map<AxeAgentId, AxeJob>();
+  for (const job of jobs) {
+    if (!levendeJob(job, nu)) continue;
+    const staand = perAgent.get(job.agent);
+    if (!staand || job.startedAt >= staand.startedAt) perAgent.set(job.agent, job);
+  }
+  return agents.map((agent) => {
+    const job = perAgent.get(agent.id) ?? null;
+    return { agent, job, regel: job ? regelVan(job) : '' };
   });
 }
 

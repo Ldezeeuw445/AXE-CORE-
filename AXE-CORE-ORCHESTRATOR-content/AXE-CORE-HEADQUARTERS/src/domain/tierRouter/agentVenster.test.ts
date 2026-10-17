@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   gewoneTaal, stappenUit, zichtbareVensters, managerRijen, managerVan, werkerRijen, regelVan,
+  railRijen,
   VENSTER_NAGLOEI_MS, MAX_VENSTERS, MAX_WERKERS,
 } from './agentVenster';
 import type { AxeJob } from './axeJobRegels';
@@ -58,6 +59,16 @@ describe('zichtbareVensters', () => {
 describe('managerRijen', () => {
   const job = (id: string, over: Partial<AxeJob> = {}): AxeJob => ({
     id, title: id, agent: 'northsea', state: 'running', startedAt: 0, sourceText: id, ...over,
+  });
+
+  it('railRijen toont elke roster-agent behalve de core', () => {
+    const ids = railRijen([], 0).map((r) => r.agent.id);
+    expect(ids[0]).toBe('wingman');
+    expect(ids).toContain('cron');
+    expect(ids).toContain('memory');
+    expect(ids).toContain('companion');
+    expect(ids).not.toContain('axe');
+    expect(ids.length).toBeGreaterThan(5);
   });
 
   it('geeft altijd alle vijf de managers, in de volgorde van de roster', () => {

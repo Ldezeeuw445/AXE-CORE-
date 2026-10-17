@@ -23,7 +23,7 @@ import { agentRegel, goedkeuringVanJob } from '@/domain/agentBewustzijn';
 import { managerVan } from '@/domain/tierRouter/agentVenster';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
-import { decideDurableTaskApproval } from '@/infrastructure/gateways/axeCoreApiService';
+import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { useCoreViewStore, type CoreView } from '@/presentation/store/coreViewStore';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -210,13 +210,15 @@ function MobileOkKaart({ id, onSluit }: { id: AxeAgentId; onSluit: () => void })
   const wat = vraag?.wat || server?.pendingApproval?.wat || server?.pendingApproval?.title || server?.task?.title || 'Needs your OK';
   const waarom = vraag?.waarom || server?.pendingApproval?.waarom || server?.pendingApproval?.detail || '';
   const beslissen = (akkoord: boolean) => {
-    if (job?.taskId && job.approvalId) {
-      void decideDurableTaskApproval(job.taskId, job.approvalId, akkoord, akkoord ? 'Approved on phone.' : 'Declined on phone.')
-        .then(() => useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' }));
-    } else if (server?.task?.id && server.pendingApproval?.id) {
-      void decideDurableTaskApproval(server.task.id, server.pendingApproval.id, akkoord, akkoord ? 'Approved on phone.' : 'Declined on phone.')
-        .then(verversServerAgents);
-    }
+    void beslisAgentOk({
+      akkoord,
+      agent: server,
+      job,
+      reden: akkoord ? 'Approved on phone.' : 'Declined on phone.',
+    }).then((ok) => {
+      if (ok && job) useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
+      verversServerAgents();
+    });
     onSluit();
   };
   return (
