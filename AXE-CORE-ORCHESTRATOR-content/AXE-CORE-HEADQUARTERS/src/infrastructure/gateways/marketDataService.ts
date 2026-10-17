@@ -247,13 +247,15 @@ function synthBars(seedPrice: number): OhlcBar[] {
 export async function fetchMarketSnapshot(
   symbol: string,
   timeframe = 'h1',
-  opts: { priority?: 'trade' | 'background' } = {},
+  opts: { priority?: 'trade' | 'background'; skipBroker?: boolean } = {},
 ): Promise<MarketSnapshot> {
   const sym = symbol.trim().toUpperCase();
   const tf = timeframe.trim().toLowerCase() || 'h1';
 
-  const metaSnap = await tryMetaApiSnapshot(sym, tf, opts.priority ?? 'trade');
-  if (metaSnap) return metaSnap;
+  if (!opts.skipBroker) {
+    const metaSnap = await tryMetaApiSnapshot(sym, tf, opts.priority ?? 'trade');
+    if (metaSnap) return metaSnap;
+  }
 
   /* LSE vóór Binance, en dat is de hele reden dat deze bron er nu is.
      Binance levert voor alles behalve crypto het VERKEERDE instrument -- zijn

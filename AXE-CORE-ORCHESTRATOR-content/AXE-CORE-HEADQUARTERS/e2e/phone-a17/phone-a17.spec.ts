@@ -37,7 +37,12 @@ const ALLE_TABS: readonly string[] = [
 ];
 
 type AxeOntwerp = {
-  __AXE_ANDROID__?: { v: number };
+  __AXE_ANDROID__?: {
+    v: number;
+    openApp?: (pkg: string) => boolean;
+    hasApp?: (pkg: string) => boolean;
+  };
+  __AXE_OPENAPP_CALLS__?: string[];
   __axeZetPin?: (pin: string) => Promise<void>;
   __axeWisPin?: () => Promise<void>;
   __axeVergrendel?: () => void;
@@ -46,7 +51,8 @@ type AxeOntwerp = {
 async function openRoute(page: Page, route: string, look: 'black' | 'glass' = 'black', android = false) {
   if (android) {
     await page.addInitScript(() => {
-      (window as unknown as AxeOntwerp).__AXE_ANDROID__ = { v: 1 };
+      const w = window as unknown as AxeOntwerp;
+      w.__AXE_ANDROID__ = { ...(w.__AXE_ANDROID__ ?? {}), v: 1 };
     });
   }
   await page.addInitScript((stand) => {
@@ -390,6 +396,33 @@ test.describe('A17 384x832', () => {
     await expect(page.getByText('Read-only')).toBeVisible();
     await expect(page.getByRole('button', { name: /^buy$/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^sell$/i })).toHaveCount(0);
+    await expect(page.locator('[data-axe-phone-chart]')).toBeVisible();
+    await expect(page.getByText(/quota was exceeded/i)).toHaveCount(0);
+    await expect(page.getByText(/positions 429/i)).toHaveCount(0);
+    await expect(page.locator('[data-axe-phone-app="trading"]')).not.toContainText('{');
+  });
+
+  test('Companion en AXON roepen openApp nooit aan', async ({ page }) => {
+    await page.addInitScript(() => {
+      const calls: string[] = [];
+      const w = window as unknown as AxeOntwerp;
+      w.__AXE_OPENAPP_CALLS__ = calls;
+      w.__AXE_ANDROID__ = {
+        v: 1,
+        hasApp: () => true,
+        openApp: (pkg: string) => {
+          calls.push(pkg);
+          return true;
+        },
+      };
+    });
+    for (const route of ['/companion', '/memory'] as const) {
+      await openRoute(page, route, 'black', true);
+      await expect(page.locator('[data-axe-phone-appbar]')).toHaveCount(1);
+      await expect(page.locator('[data-axe-embed-frame]')).toBeVisible();
+      const calls = await page.evaluate(() => (window as unknown as AxeOntwerp).__AXE_OPENAPP_CALLS__ ?? []);
+      expect(calls, `${route} openApp`).toEqual([]);
+    }
   });
 
   test('Browser navigeert via de adresbalk', async ({ page }) => {

@@ -1,15 +1,17 @@
 /**
- * Read-only trading app on the A17. Watchlist uses the lockscreen Markets
- * snapshot (same gold 4,181 as Home), plus chart, positions and algo.
- * Never opens a ticket and never calls order endpoints.
+ * Read-only trading on the A17. Watchlist + sparkline from the lockscreen
+ * snapshot (same gold 4,181 as Home). Positions from one shared cache.
+ * No live desk chart (that polls candles/orders). Never a ticket.
  */
-import { useEffect, useState } from 'react';
-import { CompanionChart } from '@/presentation/components/trading/companion/CompanionChart';
+import { useEffect, useMemo, useState } from 'react';
 import { recentCycles } from '@/application/tradingIntel/cycleJournalService';
 import type { CycleRecord } from '@/domain/tradingIntel/cycleJournal';
 import { marktVoorSymbool, prijsTekst, quoteVanMarkt, type PhoneQuote } from '@/domain/phone/phoneQuotes';
-import { lockscreenSnapshot } from '@/infrastructure/gateways/axeCoreApiService';
-import { metaApiGetPositions } from '@/infrastructure/gateways/metaApiService';
+import { sparkLijn, sparkPunten } from '@/domain/phone/phoneGrafiek';
+import {
+  leesPhonePosities, leesPubliekeSpark, type PhonePositieStand,
+} from '@/application/phone/phoneTradingBron';
+import { lockscreenSnapshot, type LockscreenMarket } from '@/infrastructure/gateways/axeCoreApiService';
 import { PhoneKaart, PhoneKop, PhoneRij, PhoneSeg } from '@/presentation/pages/phone/phoneUi';
 
 const MARKTEN = ['XAUUSD', 'BTCUSD', 'SPY', 'QQQ'] as const;
@@ -23,19 +25,45 @@ const SEGS = [
 
 type Seg = (typeof SEGS)[number]['id'];
 
-function positieRij(raw: unknown): { symbol: string; volume: string; pnl: string } {
-  const o = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
-  const symbol = String(o.symbol ?? o.symbolName ?? '—');
-  const volume = String(o.volume ?? o.quantity ?? o.qty ?? '—');
-  const pnl = String(o.profit ?? o.unrealizedProfit ?? o.floating ?? '—');
-  return { symbol, volume, pnl };
+function PhoneSpark({ punten, symbol }: { punten: number[]; symbol: string }) {
+  const w = 320;
+  const h = 140;
+  const pad = sparkLijn(punten, w, h);
+  const last = punten[punten.length - 1];
+  const first = punten[0];
+  const omhoog = last >= first;
+  return (
+    <div
+      className="mb-2.5 overflow-hidden rounded-2xl px-3 py-2.5"
+      data-axe-phone-chart={symbol}
+      style={{
+        minHeight: 180,
+        background: 'var(--axe-kaart-vlak, rgba(14,17,23,.82))',
+        border: '1px solid var(--axe-kaart-lijn, rgba(255,255,255,.10))',
+      }}
+    >
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{symbol}</span>
+        {last != null && (
+          <span className="text-[13px] tabular-nums" style={{ color: omhoog ? '#34d399' : '#f87171' }}>
+            {prijsTekst(last)}
+          </span>
+        )}
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-[140px] w-full" aria-hidden="true">
+        <path d={pad} fill="none" stroke={omhoog ? '#34d399' : '#f87171'} strokeWidth="2" />
+      </svg>
+    </div>
+  );
 }
 
 export default function PhoneTrading() {
   const [seg, setSeg] = useState<Seg>('markets');
   const [sym, setSym] = useState('XAUUSD');
   const [quotes, setQuotes] = useState<PhoneQuote[]>(MARKTEN.map((s) => ({ symbol: s })));
-  const [pos, setPos] = useState<{ ok: boolean; rijen: ReturnType<typeof positieRij>[]; fout?: string }>({ ok: true, rijen: [] });
+  const [markets, setMarkets] = useState<LockscreenMarket[]>([]);
+  const [publiek, setPubliek] = useState<Record<string, number[]>>({});
+  const [pos, setPos] = useState<PhonePositieStand>({ soort: 'leeg' });
   const [cycles, setCycles] = useState<CycleRecord[]>([]);
   const [cycleFout, setCycleFout] = useState<string | null>(null);
 
@@ -43,6 +71,7 @@ export default function PhoneTrading() {
     let weg = false;
     void lockscreenSnapshot().then((s) => {
       if (weg) return;
+      setMarkets(s.markets);
       setQuotes(MARKTEN.map((naam) => quoteVanMarkt(naam, marktVoorSymbool(s.markets, naam))));
     }).catch(() => {
       if (!weg) setQuotes(MARKTEN.map((naam) => ({ symbol: naam })));
@@ -52,16 +81,33 @@ export default function PhoneTrading() {
 
   useEffect(() => {
     let weg = false;
-    void metaApiGetPositions().then((r) => {
-      if (weg) return;
-      if (!r.ok) setPos({ ok: false, rijen: [], fout: r.error });
-      else setPos({ ok: true, rijen: r.positions.map(positieRij) });
-    });
-    void recentCycles(8).then((c) => { if (!weg) setCycles(c); }).catch((e) => {
-      if (!weg) setCycleFout(e instanceof Error ? e.message : String(e));
+    void leesPhonePosities().then((stand) => { if (!weg) setPos(stand); });
+    void recentCycles(8).then((c) => { if (!weg) setCycles(c); }).catch(() => {
+      if (!weg) setCycleFout('Cycle journal paused.');
     });
     return () => { weg = true; };
   }, []);
+
+  useEffect(() => {
+    const markt = marktVoorSymbool(markets, sym);
+    const last = quotes.find((q) => q.symbol === sym)?.last;
+    if (sparkPunten(markt?.spark, last).length >= 2 && (markt?.spark?.length ?? 0) >= 2) return;
+    let weg = false;
+    void leesPubliekeSpark(sym).then((punten) => {
+      if (!weg) setPubliek((p) => ({ ...p, [sym]: punten }));
+    });
+    return () => { weg = true; };
+  }, [sym, markets, quotes]);
+
+  const chartPunten = useMemo(() => {
+    const markt = marktVoorSymbool(markets, sym);
+    const last = quotes.find((q) => q.symbol === sym)?.last;
+    const uitSpark = sparkPunten(markt?.spark, undefined);
+    if (uitSpark.length >= 2) return uitSpark;
+    const uitPubliek = sparkPunten(publiek[sym], last);
+    if (uitPubliek.length >= 2) return uitPubliek;
+    return sparkPunten(undefined, last);
+  }, [markets, publiek, quotes, sym]);
 
   const openChart = (s: string) => { setSym(s); setSeg('chart'); };
 
@@ -90,17 +136,25 @@ export default function PhoneTrading() {
     </PhoneKaart>
   );
 
-  const chart = (
-    <div className="mb-2.5 min-h-[240px] overflow-hidden rounded-2xl" data-axe-phone-chart={sym} style={{ height: 260 }}>
-      <CompanionChart symbol={sym} timeframe="h1" readOnly className="h-full" />
-    </div>
+  const chart = chartPunten.length >= 2 ? (
+    <PhoneSpark punten={chartPunten} symbol={sym} />
+  ) : (
+    <PhoneKaart kicker="Chart">
+      <div className="flex min-h-[140px] items-center text-[12px]" style={{ color: 'var(--text-muted)' }} data-axe-phone-chart={sym}>
+        Chart paused.
+      </div>
+    </PhoneKaart>
   );
 
   const positions = (
     <PhoneKaart kicker="Positions & P&L">
-      {!pos.ok && <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{pos.fout}</div>}
-      {pos.ok && pos.rijen.length === 0 && <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No open positions.</div>}
-      {pos.rijen.map((r, i) => (
+      {pos.soort === 'gepauzeerd' && (
+        <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{pos.tekst}</div>
+      )}
+      {pos.soort === 'leeg' && (
+        <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No open positions.</div>
+      )}
+      {pos.soort === 'rijen' && pos.rijen.map((r, i) => (
         <button key={`${r.symbol}-${i}`} type="button" onClick={() => openChart(r.symbol)} className="w-full text-left">
           <PhoneRij title={r.symbol} sub={`Vol ${r.volume}`} extra={<span className="text-[13px] tabular-nums">{r.pnl}</span>} />
         </button>
@@ -113,7 +167,7 @@ export default function PhoneTrading() {
       <p className="mb-2 text-[12px]" style={{ color: 'var(--text-muted)' }}>
         This phone cannot place, modify or close orders.
       </p>
-      {cycleFout && <div className="text-[12px]">{cycleFout}</div>}
+      {cycleFout && <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{cycleFout}</div>}
       {cycles[0] ? (
         <PhoneRij
           title={cycles[0].symbol}
