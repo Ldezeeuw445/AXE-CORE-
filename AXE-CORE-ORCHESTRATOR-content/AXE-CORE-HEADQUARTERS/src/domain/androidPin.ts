@@ -1,17 +1,14 @@
 /**
- * Particle-gesture PIN — recovered from the Samsung APK
- * (com.axecore.core 0.1.0-mvp, 26 Aug 2026).
+ * Telefoon-PIN — PBKDF2-record, sessie-ontgrendeling, geen tweede account.
  *
- * Source: com.particlequickactions.GestureLockStore + GestureLockCrypto,
- * wrapped by com.axecore.core.lock.AxeGestureLock.
+ * Op de telefoon is de PIN cijfers (native keypad). Een oud particle-gebaar
+ * telt niet als ingestelde PIN: dat scherm werkte niet in de WebView, en
+ * Luka mag daar nooit in blijven hangen. Opslag die faalt = geen PIN nodig,
+ * nooit een doodlopend slot.
  *
- * Four unistroke names (lock alphabet) are joined with U+001F, then
- * PBKDF2-HMAC-SHA256 (120000, 32-byte salt, 256-bit key). On Android the
- * JSON record is wrapped by Android KeyStore AES-GCM (Tauri command →
- * Kotlin GestureLockStore → SharedPreferences blob). Tests inject memory
- * Storage of the same JSON. Session unlock stays in sessionStorage.
- *
- * This is not a second account. Supabase remains authentication.
+ * Zelfde crypto als het Samsung-record (PBKDF2-HMAC-SHA256, 120000, 32-byte
+ * salt). Tests injecteren memory-Storage. Session unlock blijft sessionStorage.
+ * Supabase blijft authenticatie.
  */
 
 import {
@@ -33,11 +30,14 @@ export const PIN_LENGTE = 4;
 export const CODE_LENGTE = 4;
 export const MINIMUM_LENGTE = 3;
 export const ITERATIONS = 120_000;
+export const SOORT_SLEUTEL = 'axe_android_pin_soort';
 const SEPARATOR = '\u001f';
 const OPEN_SLEUTEL = 'axe_android_unlocked';
 const TERUG_SLEUTEL = 'axe_android_return';
 /** Na ontgrendelen: de telefoon-Home, nooit desktop-Home (tweede particle-bol). */
 export const SCHIL_START = '/mobile';
+
+export type PinSoort = 'numeric' | 'gesture';
 
 type Record = {
   salt: string;
@@ -161,9 +161,11 @@ export async function wisPin(opslag?: PinOpslag, sessie: PinOpslag = sessionStor
       opslag.removeItem(RECORD_SLEUTEL);
       opslag.removeItem(OUD_HASH);
       opslag.removeItem(OUD_SALT);
+      opslag.removeItem(SOORT_SLEUTEL);
     } catch { /* */ }
   } else {
     await nativeWisRecord();
+    wisSoort();
   }
   wisWebPinRest(opslag);
   vergrendel(sessie);
@@ -171,6 +173,54 @@ export async function wisPin(opslag?: PinOpslag, sessie: PinOpslag = sessionStor
 
 export function androidSlotLaatDoor(path: string): boolean {
   return path === '/lock' || path === '/lock/pin' || path === '/login';
+}
+
+/** Alleen het cijfer-pad mag de schil tegenhouden. Glance-lock is geen PIN. */
+export function androidPinPad(path: string): boolean {
+  return path === '/lock/pin' || path === '/login';
+}
+
+export function isCijferReeks(deel: string[]): boolean {
+  return deel.length >= PIN_LENGTE && deel.every((d) => /^[0-9]$/.test(d));
+}
+
+function soortOpslag(opslag?: PinOpslag): PinOpslag | null {
+  if (opslag) return opslag;
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function leesPinSoort(opslag?: PinOpslag): PinSoort | null {
+  try {
+    const raw = soortOpslag(opslag)?.getItem(SOORT_SLEUTEL);
+    if (raw === 'numeric' || raw === 'gesture') return raw;
+  } catch { /* private mode */ }
+  return null;
+}
+
+function schrijfPinSoort(soort: PinSoort, opslag?: PinOpslag): void {
+  try { soortOpslag(opslag)?.setItem(SOORT_SLEUTEL, soort); } catch { /* private mode */ }
+}
+
+function wisSoort(opslag?: PinOpslag): void {
+  try { soortOpslag(opslag)?.removeItem(SOORT_SLEUTEL); } catch { /* private mode */ }
+}
+
+/**
+ * Alleen een werkende cijfer-PIN mag het keypad tonen.
+ * Gebaar-restant, lege opslag of KeyStore-fout: false — dan is swipe genoeg.
+ */
+export async function telefoonPinNodig(opslag?: PinOpslag): Promise<boolean> {
+  try {
+    if (!(await pinIsGezet(opslag))) return false;
+    return leesPinSoort(opslag) === 'numeric';
+  } catch {
+    return false;
+  }
 }
 
 function padIsSchil(path: string): boolean {
@@ -223,10 +273,28 @@ export async function zetPin(
       failedAttempts: 0,
       lockedUntil: 0,
     }, opslag);
+    schrijfPinSoort(isCijferReeks(gestures) ? 'numeric' : 'gesture', opslag);
   } catch {
     return { ok: false, fout: OPSLAG_DICHT };
   }
   return { ok: true, fout: null };
+}
+
+export async function zetCijferPin(
+  pin: string,
+  opslag?: PinOpslag,
+): Promise<{ ok: boolean; fout: string | null }> {
+  const deel = pin.split('');
+  if (!isCijferReeks(deel)) {
+    return { ok: false, fout: `PIN must be ${PIN_LENGTE}+ digits` };
+  }
+  return zetPin(deel, opslag);
+}
+
+export async function verifieerCijfers(pin: string, opslag?: PinOpslag): Promise<PinCheck> {
+  const deel = pin.split('');
+  if (!isCijferReeks(deel)) return { ok: false, fout: 'Invalid PIN' };
+  return verifieerCode(deel, opslag);
 }
 
 export async function verifieerCode(

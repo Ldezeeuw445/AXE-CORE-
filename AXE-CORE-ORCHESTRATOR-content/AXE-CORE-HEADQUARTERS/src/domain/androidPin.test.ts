@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   PIN_LENGTE, pinIsGezet, isOntgrendeld, ontgrendel, vergrendel,
-  zetPin, pinKlopt, wisPin, androidSlotLaatDoor, verifieerCode, MINIMUM_LENGTE,
+  zetPin, pinKlopt, wisPin, androidSlotLaatDoor, androidPinPad, verifieerCode, MINIMUM_LENGTE,
   RECORD_SLEUTEL, bewaarTerugPad, naOntgrendelenPad, SCHIL_START,
+  zetCijferPin, verifieerCijfers, telefoonPinNodig, leesPinSoort, isCijferReeks,
+  OPSLAG_DICHT,
 } from './androidPin';
 
 function geheugen(): Storage {
@@ -83,6 +85,41 @@ describe('android particle-gesture PIN', () => {
     expect(androidSlotLaatDoor('/devices')).toBe(false);
     expect(androidSlotLaatDoor('/maps-3d')).toBe(false);
     expect(androidSlotLaatDoor('/')).toBe(false);
+  });
+
+  it('cijfer-pad is alleen /lock/pin en login, niet de glance', () => {
+    expect(androidPinPad('/lock/pin')).toBe(true);
+    expect(androidPinPad('/login')).toBe(true);
+    expect(androidPinPad('/lock')).toBe(false);
+    expect(androidPinPad('/mobile')).toBe(false);
+  });
+
+  it('cijfer-PIN is nodig, gebaar-restant niet, lege opslag niet', async () => {
+    const opslag = geheugen();
+    expect(isCijferReeks(['1', '4', '7', '2'])).toBe(true);
+    expect(isCijferReeks(CODE)).toBe(false);
+    expect(await telefoonPinNodig(opslag)).toBe(false);
+    await zetPin(CODE, opslag);
+    expect(leesPinSoort(opslag)).toBe('gesture');
+    expect(await telefoonPinNodig(opslag)).toBe(false);
+    const r = await zetCijferPin('1472', opslag);
+    expect(r.ok).toBe(true);
+    expect(leesPinSoort(opslag)).toBe('numeric');
+    expect(await telefoonPinNodig(opslag)).toBe(true);
+    expect((await verifieerCijfers('1472', opslag)).ok).toBe(true);
+    expect((await verifieerCijfers('0000', opslag)).ok).toBe(false);
+  });
+
+  it('opslagfout is geen PIN: nooit een doodlopend slot', async () => {
+    const kapot: Storage = {
+      get length() { return 0; },
+      clear() {},
+      getItem() { throw new Error(OPSLAG_DICHT); },
+      setItem() { throw new Error(OPSLAG_DICHT); },
+      removeItem() { throw new Error(OPSLAG_DICHT); },
+      key() { return null; },
+    };
+    await expect(telefoonPinNodig(kapot)).resolves.toBe(false);
   });
 
   it('na ontgrendelen terug naar de schil, niet Device Manager', () => {

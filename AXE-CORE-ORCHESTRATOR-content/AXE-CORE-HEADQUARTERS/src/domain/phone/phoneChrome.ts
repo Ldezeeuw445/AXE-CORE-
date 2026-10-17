@@ -36,7 +36,7 @@ export function phoneTabActief(pathname: string, tab: PhoneTab): boolean {
   return pathname === tab.path || pathname.startsWith(`${tab.path}/`);
 }
 
-/** Glance-lock én particle-PIN: geen composer, onderbalk, bel of Home-bol. */
+/** Glance-lock én cijfer-PIN: geen composer, onderbalk, bel of Home-bol. */
 export function isLockPad(path: string): boolean {
   return path === '/lock' || path === '/lock/pin';
 }
