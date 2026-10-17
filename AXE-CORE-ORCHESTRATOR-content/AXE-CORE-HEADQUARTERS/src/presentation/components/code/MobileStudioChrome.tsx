@@ -16,7 +16,7 @@ import {
 } from '@/domain/codeStudio/mobileStudio';
 
 const ICOON: Record<MobielPaneel, typeof Bot> = {
-  agent: Bot, files: FolderOpen, code: Code2, term: TerminalSquare, preview: Eye,
+  agent: Bot, files: FolderOpen, code: Code2, term: TerminalSquare, preview: Eye, git: GitBranch,
 };
 
 /** Wat de toetsenbalk van de Monaco-editor nodig heeft. Eigen minimale vorm, zodat dit bestand Monaco niet kent. */
@@ -52,10 +52,10 @@ function voerToetsUit(ed: EditorHandvat, t: Toets): void {
 // ── werkbalk ────────────────────────────────────────────────────────────
 
 export function MobileStudioBar({
-  repo, branch, ongeslagen, opslaan, bezigMetOpslaan, draait, opRun, opNieuw,
+  repo, branch, ongeslagen, opslaan, bezigMetOpslaan, draait, opRun, opNieuw, opProjects,
 }: {
   repo: string; branch?: string; ongeslagen: boolean; opslaan: () => void; bezigMetOpslaan: boolean;
-  draait: boolean; opRun: () => void; opNieuw: () => void;
+  draait: boolean; opRun: () => void; opNieuw: () => void; opProjects?: () => void;
 }) {
   return (
     <div className="axe-mstudio-top">
@@ -71,11 +71,11 @@ export function MobileStudioBar({
           <Layers size={16} /> <span>Build</span>
         </button>
       </div>
-      <span className="axe-mstudio-repo" title={repo}>
+      <button type="button" className="axe-mstudio-repo" title={repo} onClick={opProjects}>
         <GitBranch size={13} />
         <b>{repo || 'workspace'}</b>
         {branch && <i>{branch}</i>}
-      </span>
+      </button>
     </div>
   );
 }

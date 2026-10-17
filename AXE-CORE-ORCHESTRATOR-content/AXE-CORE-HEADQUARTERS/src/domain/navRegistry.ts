@@ -52,6 +52,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/tasks', label: 'Tasks', keywords: ['tasks', 'todo', 'to-do', 'task'], recordType: 'task' },
   { path: '/finance', label: 'Finance', keywords: ['finance', 'financien', 'budget', 'money'] },
   { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets', 'trading os', 'trading desk'] },
+  { path: '/companion', label: 'AXE Companion', keywords: ['companion', 'axe companion', 'pocket trading'] },
+  { path: '/notifications', label: 'Notifications', keywords: ['notifications', 'alerts', 'bell'] },
   {
     path: '/trading-intel',
     label: 'Trading Intel',

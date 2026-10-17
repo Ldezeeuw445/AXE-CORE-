@@ -53,6 +53,8 @@ type Props = {
    * en orders plaatsen staan dan uit — een replay is alleen-lezen.
    */
   replay?: { candles: MetaApiCandle[]; overlays: ChartOverlayRow[]; markers: ChartTradeMarker[] };
+  /** Telefoon / Device Manager: candles and positions stay, tickets never open. */
+  readOnly?: boolean;
 };
 
 const TFS = ["m5", "m15", "h1", "h4", "d1"] as const;
@@ -64,7 +66,7 @@ const PAIRS = [
  *  matching MT5 (and Companion) rather than forcing one to always be visible. */
 type ExecutionMode = "market" | "limit" | null;
 
-export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies, replay }: Props) {
+export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies, replay, readOnly = false }: Props) {
   // Renaming the prop rather than threading a second variable through: every
   // existing `symbol` read -- broker symbol, digits, ticket, annotations, all
   // 38 of them -- then follows the picker. A chart showing one pair while the
@@ -110,6 +112,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
   // Initial (and symbol/tf-change) candle load. Niet in replay: dan komen de
   // candles van de replay en zou een eigen lading ze overschrijven.
   const replayMode = replay != null;
+  const hideOrders = replayMode || readOnly;
   useEffect(() => {
     if (replayMode) return;
     let cancelled = false;
@@ -569,7 +572,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
         </div>
       </div>
 
-      {bridgeOpen ? (
+      {bridgeOpen && !hideOrders ? (
         <ChartExecutionBridge
           symbol={symbol}
           brokerSymbol={brokerSymbol}
@@ -823,7 +826,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
         </ResizablePane>
       ) : null}
 
-      {replayMode || executionMode === null ? null : executionMode === "market" ? (
+      {hideOrders || executionMode === null ? null : executionMode === "market" ? (
         <ChartExecutionBar
           symbol={symbol}
           bid={tick.bid ?? lastPrice}
@@ -867,7 +870,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
       )}
 
       <ChartOrderConfirm
-        open={!!confirmInput}
+        open={!hideOrders && !!confirmInput}
         input={confirmInput}
         status={confirmStatus}
         onCancel={() => {

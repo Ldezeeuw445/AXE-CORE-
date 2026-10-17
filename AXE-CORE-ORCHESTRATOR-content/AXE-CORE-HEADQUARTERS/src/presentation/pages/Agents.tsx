@@ -24,6 +24,8 @@ import {
 import { AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchuifBalk, KaartRaster, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import PhoneAgents from '@/presentation/pages/phone/PhoneAgents';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -177,6 +179,7 @@ function statusNote(status: string): string | null {
 }
 
 export default function Agents() {
+  const phone = usePhoneApp();
   const [agents, setAgents] = useState<CoreAgent[]>(DEFAULT_AGENTS);
   const [loading, setLoading] = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
@@ -443,6 +446,8 @@ export default function Agents() {
      Activity. Hiervoor scrolde dit naar een anker verderop de pagina; die
      ankers zijn weg nu je één weergave tegelijk ziet. */
   const volg = (f: AgentFilter) => { chooseFilter(f); setWeergave('activity'); };
+
+  if (phone) return <PhoneAgents />;
 
   return (
     <>

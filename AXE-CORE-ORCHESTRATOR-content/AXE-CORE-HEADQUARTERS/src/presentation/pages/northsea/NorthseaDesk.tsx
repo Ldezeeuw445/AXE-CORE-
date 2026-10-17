@@ -46,6 +46,8 @@ import { BewijsTab } from './tabs/BewijsTab';
 import { AutomatiseringTab } from './tabs/AutomatiseringTab';
 import { RapportenTab } from './tabs/RapportenTab';
 import { WerkstroomHint } from './tabs/bouwstenen';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import PhoneNorthsea from '@/presentation/pages/phone/PhoneNorthsea';
 
 type Tab = 'live' | 'chase' | 'deals' | 'pipeline' | 'tegenpartijen' | 'communicatie' | 'markt' | 'documenten' | 'bewijs' | 'automatisering' | 'rapporten';
 type ChaseFilter = 'alle' | 'kritiek' | 'nieuw' | 'akkoord';
@@ -56,6 +58,7 @@ const VERVERS_MS = 60_000;
 const CHASE_ZICHTBAAR = 7;
 
 export default function NorthseaDesk() {
+  const phone = usePhoneApp();
   const [data, setData] = useState<NorthseaOverzicht | null>(null);
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
@@ -168,6 +171,8 @@ export default function NorthseaDesk() {
       uitleg: 'Weather & Disruptions — no data source connected yet',
     },
   ];
+
+  if (phone) return <PhoneNorthsea />;
 
   return (
     <div className="axe-plaat axe-tabruimte relative flex min-h-0 flex-1 flex-col">

@@ -20,6 +20,8 @@ import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import {
   PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
 } from '@/presentation/components/ui/AxeUI';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import PhoneMore from '@/presentation/pages/phone/PhoneMore';
 
 interface RegisteredApp {
   id: string;
@@ -123,6 +125,7 @@ interface NorthseaSummaryState {
 }
 
 export default function AppsPage() {
+  const phone = usePhoneApp();
   const navigate = useNavigate();
   const sendMessage = useVoiceStore(s => s.sendMessage);
   const [apps, setApps] = useState<RegisteredApp[] | null>(null);
@@ -322,6 +325,8 @@ export default function AppsPage() {
 
   const naarApp = (id: string) =>
     document.getElementById(`axe-app-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  if (phone) return <PhoneMore />;
 
   return (
     <>

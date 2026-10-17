@@ -11,7 +11,8 @@ describe('gedeelde A17-schil', () => {
     const home = bron('presentation/pages/Home.tsx');
     expect(shell).toContain('<PhoneBel />');
     expect(shell).toContain('<PhoneVoet');
-    expect(shell).toContain('toonTabs={keyboardInset === 0}');
+    expect(shell).toContain('toonTabs={keyboardInset === 0');
+    expect(shell).toContain('phoneZonderComposer');
     expect(shell).toContain('mobileNav && !opSlot');
     expect(shell).toContain('<MobieleTabSchil>');
     expect(home).not.toContain('PhoneVoet');

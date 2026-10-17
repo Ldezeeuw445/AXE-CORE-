@@ -1,11 +1,15 @@
 /**
  * A17-schil die op élke telefoontab hetzelfde is: bel rechtsboven,
- * 44px Approve/Decline als er iets wacht, onderbalk Home/Desk/Agents/Trading/More.
+ * 44px Approve/Decline als er iets wacht, onderbalk (pinbaar) + More.
  *
  * Desktop-Home blijft de live dashboard-layout; dit component hangt alleen
  * aan `mobileCommandSurface` in AppShell.
  */
-import { Bell, Briefcase, Home, LayoutGrid, LineChart, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  Bell, Code2, Compass, Database, Globe, Home, LayoutGrid, LineChart,
+  Settings, Sparkles, Users,
+} from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
 import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
@@ -14,18 +18,29 @@ import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { rijenVanLijst } from '@/domain/agents/pendingApproval';
 import { goedkeuringVanActie, openGoedkeuringen } from '@/domain/agentBewustzijn';
 import { PHONE_TABS, phoneTabActief, phoneTabDoel } from '@/domain/phone/phoneChrome';
+import {
+  balkTabs, leesPhonePins, PHONE_PIN_KEY, type PhonePin,
+} from '@/domain/phone/phonePins';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
-import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 
-const TAB_ICON = {
+const TAB_ICON: Record<string, typeof Home> = {
   home: Home,
-  desk: Briefcase,
-  agents: Users,
   trading: LineChart,
+  companion: Sparkles,
+  memory: Database,
   more: LayoutGrid,
-} as const;
+  northsea: Compass,
+  browser: Globe,
+  developer: Code2,
+  agents: Users,
+  systems: LayoutGrid,
+  tasks: LayoutGrid,
+  settings: Settings,
+  calendar: LayoutGrid,
+  devices: LayoutGrid,
+};
 
 export function PhoneBel() {
   const show = useCoreViewStore((s) => s.showAwareness);
@@ -68,7 +83,7 @@ export function PhoneBel() {
 export function PhoneVoet({ toonTabs }: { toonTabs: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const setMenu = useUIStore((s) => s.setMobileNavOpen);
+  const [pins, setPins] = useState<PhonePin[]>(() => leesPhonePins());
   const server = useServerAgents();
   const jobs = useAxeJobStore((s) => s.jobs);
   const rijen = rijenVanLijst(server.approvals);
@@ -83,6 +98,18 @@ export function PhoneVoet({ toonTabs }: { toonTabs: boolean }) {
       waarom: '',
     });
   }
+
+  useEffect(() => {
+    const lees = () => setPins(leesPhonePins());
+    window.addEventListener('storage', lees);
+    window.addEventListener('axe-phone-pins', lees);
+    return () => {
+      window.removeEventListener('storage', lees);
+      window.removeEventListener('axe-phone-pins', lees);
+    };
+  }, []);
+
+  const tabs = pins.length ? balkTabs(pins) : [...PHONE_TABS];
 
   return (
     <div className="axe-phone-voet relative z-[60] w-full flex-none" data-axe-phone-voet>
@@ -103,9 +130,9 @@ export function PhoneVoet({ toonTabs }: { toonTabs: boolean }) {
       )}
       {toonTabs && (
         <nav className="axe-phone-tabs" aria-label="Phone tabs" data-axe-phone-tabs>
-          {PHONE_TABS.map((tab) => {
-            const Icon = TAB_ICON[tab.id];
-            const aan = phoneTabActief(location.pathname, tab);
+          {tabs.map((tab) => {
+            const Icon = TAB_ICON[tab.id] ?? LayoutGrid;
+            const aan = phoneTabActief(location.pathname, tab, tabs);
             return (
               <button
                 key={tab.id}
@@ -113,13 +140,7 @@ export function PhoneVoet({ toonTabs }: { toonTabs: boolean }) {
                 aria-current={aan ? 'page' : undefined}
                 aria-label={tab.label}
                 data-aan={aan ? 'ja' : undefined}
-                onClick={() => {
-                  if (tab.path == null) {
-                    setMenu(true);
-                    return;
-                  }
-                  navigate(phoneTabDoel(tab.path));
-                }}
+                onClick={() => navigate(phoneTabDoel(tab.path))}
               >
                 <Icon size={18} />
                 <span>{tab.label}</span>
@@ -131,3 +152,5 @@ export function PhoneVoet({ toonTabs }: { toonTabs: boolean }) {
     </div>
   );
 }
+
+export { PHONE_PIN_KEY };

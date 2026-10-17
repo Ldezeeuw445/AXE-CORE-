@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,7 +17,14 @@ const TABS: ReadonlyArray<{ route: string; naam: string }> = [
   { route: '/calendar', naam: 'calendar' },
   { route: '/settings', naam: 'settings' },
   { route: '/browser', naam: 'browser' },
+  { route: '/companion', naam: 'companion' },
+  { route: '/apps', naam: 'more' },
+  { route: '/code-editor', naam: 'developer' },
+  { route: '/infrastructure', naam: 'systems' },
+  { route: '/notifications', naam: 'notifications' },
 ];
+
+const ZONDER_COMPOSER = new Set(['/memory', '/companion', '/code-editor']);
 
 /** Alle AppShell-routes die na unlock bereikbaar zijn. /lock en /lock/pin sturen Android naar Home. */
 const ALLE_TABS: readonly string[] = [
@@ -26,7 +33,7 @@ const ALLE_TABS: readonly string[] = [
   '/knowledge', '/trading-intel', '/finance', '/mcp', '/infrastructure', '/terminals',
   '/table-editor', '/cron-manager', '/control-plane', '/crewai', '/developer',
   '/code-editor', '/eve', '/computer-use', '/organization', '/thinkthanks',
-  '/device', '/devices', '/lock', '/lock/pin',
+  '/device', '/devices', '/lock', '/lock/pin', '/companion', '/notifications',
 ];
 
 type AxeOntwerp = {
@@ -122,6 +129,7 @@ async function overflowEnOverlap(page: Page) {
 }
 
 test.describe('A17 384x832', () => {
+  test.describe.configure({ mode: 'serial' });
   test('lockscreen blijft glance: geen PIN, geen particle, geen Home-bol', async ({ page }) => {
     await openRoute(page, '/lock', 'black', false);
     await expect(page.locator('.axe-lock-pad')).toBeVisible();
@@ -272,28 +280,93 @@ test.describe('A17 384x832', () => {
       await expect(page.locator('.axe-shell')).toBeVisible();
       await expect(page.locator('[data-axe-lock-pin]')).toHaveCount(0);
       await expect(page.locator('[data-axe-bol]')).toHaveCount(0);
-      if (tab.route !== '/maps-3d') {
+      if (tab.route !== '/browser') {
         await expect(page.locator('[data-axe-randloos]')).toHaveAttribute('data-axe-randloos', 'ja');
-        await expect(page.locator('.axe-plaat-mobiel')).toHaveCount(0);
-        const kader = await page.evaluate(() => {
-          const el = document.querySelector('.axe-shell');
-          if (!el) return { radius: 'missing', left: -1 };
-          const cs = getComputedStyle(el);
-          const r = el.getBoundingClientRect();
-          return { radius: cs.borderRadius, left: Math.round(r.left), right: Math.round(window.innerWidth - r.right) };
-        });
-        expect(kader.left, `${tab.route} left inset`).toBe(0);
-        expect(kader.right, `${tab.route} right inset`).toBe(0);
-        expect(kader.radius === '0px' || kader.radius === '0' || kader.radius === '', kader.radius).toBeTruthy();
       }
+      await expect(page.locator('.axe-plaat-mobiel')).toHaveCount(0);
+      const kader = await page.evaluate(() => {
+        const el = document.querySelector('.axe-shell');
+        if (!el) return { radius: 'missing', left: -1 };
+        const cs = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        return { radius: cs.borderRadius, left: Math.round(r.left), right: Math.round(window.innerWidth - r.right) };
+      });
+      expect(kader.left, `${tab.route} left inset`).toBe(0);
+      expect(kader.right, `${tab.route} right inset`).toBe(0);
+      expect(kader.radius === '0px' || kader.radius === '0' || kader.radius === '', kader.radius).toBeTruthy();
       await page.screenshot({ path: join(shots, `${tab.naam}.png`), fullPage: false });
-      if (tab.naam === 'agents' || tab.naam === 'trading' || tab.naam === 'settings') {
-        await openRoute(page, tab.route, 'glass');
-        await page.screenshot({ path: join(shots, `${tab.naam}-light.png`), fullPage: false });
-      }
+      await openRoute(page, tab.route, 'glass');
+      await page.screenshot({ path: join(shots, `${tab.naam}-light.png`), fullPage: false });
       const maat = await overflowEnOverlap(page);
       expect(maat.docOverflow, `${tab.route} doc: ${maat.over.join('; ')}`).toBe(false);
       expect(maat.overlaps, `${tab.route} overlap: ${maat.overlaps.join('; ')}`).toEqual([]);
     });
   }
+
+  test('composer aanwezig behalve AXON, Companion en Developer', async ({ page }) => {
+    const routes = [
+      '/trading', '/maps-3d', '/browser', '/agents', '/infrastructure',
+      '/tasks', '/settings', '/apps', '/notifications',
+      '/memory', '/companion', '/code-editor',
+    ];
+    for (const route of routes) {
+      await openRoute(page, route, 'black', true);
+      const n = await page.locator('.axe-mobile-tab-composer').count();
+      if (ZONDER_COMPOSER.has(route)) {
+        expect(n, `${route} composer`).toBe(0);
+      } else {
+        expect(n, `${route} composer`).toBeGreaterThan(0);
+        await expect(page.locator('[data-axe-mic]').first()).toBeVisible();
+      }
+    }
+  });
+
+  test('Trading heeft geen Buy/Sell', async ({ page }) => {
+    await openRoute(page, '/trading', 'black', true);
+    await expect(page.getByText('Read-only')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^buy$/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^sell$/i })).toHaveCount(0);
+  });
+
+  test('Browser navigeert via de adresbalk', async ({ page }) => {
+    await openRoute(page, '/browser', 'black', true);
+    await expect(page.locator('[data-axe-browser-adres]')).toBeVisible();
+    await page.locator('[data-axe-browser-adres]').fill('example.com');
+    await page.locator('[data-axe-browser-adres]').press('Enter');
+    await expect(page.locator('[data-axe-browser-adres]')).toHaveValue(/example\.com/);
+    await expect(page.locator('[data-axe-phone-app="browser"]')).toBeVisible();
+  });
+
+  test('contact sheets van de gebouwde app', async ({ page }) => {
+    const groepen: Record<string, string[]> = {
+      shell: ['home', 'more', 'agents', 'systems', 'tasks', 'notifications', 'settings'],
+      trading: ['trading'],
+      northsea: ['desk'],
+      browser: ['browser'],
+      companion: ['companion'],
+      axon: ['memory'],
+      developer: ['developer'],
+    };
+    for (const look of ['black', 'glass'] as const) {
+      for (const [groep, namen] of Object.entries(groepen)) {
+        const html = `<!doctype html><meta charset="utf-8"><style>
+          body{margin:0;background:#111;color:#eee;font:12px sans-serif}
+          .g{display:flex;flex-wrap:wrap;gap:8px;padding:8px}
+          img{width:192px;height:416px;object-fit:cover;border:1px solid #333}
+        </style><div class="g">${namen.map((n) => {
+          const file = look === 'glass'
+            ? (n === 'home' ? 'home-light-mic-off.png' : `${n}-light.png`)
+            : (n === 'home' ? 'home.png' : `${n}.png`);
+          return `<div><img src="${file}"><div>${n}</div></div>`;
+        }).join('')}</div>`;
+        writeFileSync(join(shots, `contact-${groep}-${look}.html`), html);
+      }
+    }
+    await page.setViewportSize({ width: 1400, height: 900 });
+    for (const look of ['dark', 'light'] as const) {
+      const key = look === 'dark' ? 'black' : 'glass';
+      await page.goto(`file://${join(shots, `contact-shell-${key}.html`)}`);
+      await page.screenshot({ path: join(shots, `contact-shell-${look}.png`), fullPage: true });
+    }
+  });
 });

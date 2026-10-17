@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import TradingIntel from '@/presentation/pages/TradingIntel';
 import { AxeButton } from '@/presentation/components/ui/AxeUI';
+import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import PhoneTrading from '@/presentation/pages/phone/PhoneTrading';
 
 const EXTERNAL = [
   { id: 'tradingos', label: 'TradingOS', url: 'https://tradingosapp.com', color: 'var(--accent-cyan)' },
@@ -13,7 +15,9 @@ const EXTERNAL = [
 ] as const;
 
 export default function Trading() {
+  const phone = usePhoneApp();
   const [showLinks, setShowLinks] = useState(false);
+  if (phone) return <PhoneTrading />;
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--bg-base)' }}>
