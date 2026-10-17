@@ -6,7 +6,7 @@
  * login-commando als een stoel uitgelogd of gelimiteerd is.
  */
 import { useEffect, useState } from 'react';
-import { SectieKop, StatusKaart, geleden } from '@/presentation/components/settings/StatusKaart';
+import { SectieKop, StatusKaart } from '@/presentation/components/settings/StatusKaart';
 import {
   metGedeeldeQuota,
   resetTekst,
@@ -172,7 +172,7 @@ export function CodingSeatsSection() {
             accent="var(--text-muted)"
             rol="The Mac mini worker has not heartbeated seats yet, and the agent host did not return /claude/repos."
             stand={{ toon: 'muted', tekst: 'Waiting' }}
-            stats={[{ label: 'Last check', waarde: geleden(Date.now()) }]}
+            stats={[{ label: 'Last check', waarde: '—' }]}
           />
         )}
       </div>
