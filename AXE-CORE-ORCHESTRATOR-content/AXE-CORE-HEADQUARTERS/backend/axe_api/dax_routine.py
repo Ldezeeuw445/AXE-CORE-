@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -171,6 +172,63 @@ def _sh(cmd: list[str], cwd: str | None = None, timeout: int = 600) -> subproces
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
 
 
+def _heeft_pip(py: str) -> bool:
+    try:
+        p = _sh([py, "-m", "pip", "--version"], timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return p.returncode == 0
+
+
+def _systeem_python() -> str:
+    for kandidaat in ("/usr/bin/python3", "/usr/local/bin/python3", "python3"):
+        if os.path.isabs(kandidaat):
+            if os.path.exists(kandidaat) and kandidaat != sys.executable:
+                return kandidaat
+        else:
+            gevonden = shutil.which(kandidaat)
+            if gevonden and gevonden != sys.executable:
+                return gevonden
+    return "python3"
+
+
+def python_voor_ci() -> str:
+    """Python die `pip` heeft. Een dode `.venv-ci` (17 okt: No module named pip) herstellen."""
+    exe = sys.executable
+    if _heeft_pip(exe) and ".venv" not in exe.replace("\\", "/"):
+        return exe
+    if _heeft_pip(exe):
+        return exe
+    try:
+        _sh([exe, "-m", "ensurepip", "--upgrade"], timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    if _heeft_pip(exe):
+        return exe
+
+    sys_py = _systeem_python()
+    try:
+        _sh([sys_py, "-m", "ensurepip", "--upgrade"], timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    if _heeft_pip(sys_py):
+        return sys_py
+
+    venv = os.path.join(WORKSPACE, ".venv-ci")
+    try:
+        if os.path.isdir(venv):
+            shutil.rmtree(venv, ignore_errors=True)
+        gemaakt = _sh([sys_py, "-m", "venv", venv], timeout=180)
+        kandidaat = os.path.join(venv, "bin", "python")
+        if gemaakt.returncode == 0 and os.path.exists(kandidaat):
+            _sh([kandidaat, "-m", "ensurepip", "--upgrade"], timeout=120)
+            if _heeft_pip(kandidaat):
+                return kandidaat
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return sys_py
+
+
 def werk_ci() -> dict:
     """Haal orchestrator op (publieke repo, alleen lezen) en draai de pure backendtests."""
     repo = os.path.join(WORKSPACE, "repos", "AXE-CORE-")
@@ -187,12 +245,15 @@ def werk_ci() -> dict:
     sha = _sh(["git", "rev-parse", "HEAD"], cwd=repo).stdout.strip()
     onderwerp = _sh(["git", "log", "-1", "--format=%s"], cwd=repo).stdout.strip()
     api = os.path.join(repo, "AXE-CORE-ORCHESTRATOR-content", "AXE-CORE-HEADQUARTERS", "backend", "axe_api")
-    comp = _sh([sys.executable, "-m", "compileall", "-q", "."], cwd=api, timeout=300)
-    # Geen venv: het image heeft geen ensurepip (11 okt: "venv failed"). De testpakketten gaan
-    # met --user in het home-volume van deze DAX en blijven daar staan.
-    py = sys.executable
+    py = python_voor_ci()
+    comp = _sh([py, "-m", "compileall", "-q", "."], cwd=api, timeout=300)
+    # Eerst --user op een python mét pip. Een kapotte .venv-ci wordt hierboven
+    # hersteld of overgeslagen (17 okt: No module named pip).
     p = _sh([py, "-m", "pip", "install", "-q", "--user", "--break-system-packages",
              "pytest", "croniter", "python-dateutil", "tzdata"], timeout=600)
+    if p.returncode != 0:
+        p = _sh([py, "-m", "pip", "install", "-q", "--user",
+                 "pytest", "croniter", "python-dateutil", "tzdata"], timeout=600)
     if p.returncode != 0:
         raise Mislukt(f"pip install failed: {(p.stderr or p.stdout)[-300:]}")
     tests = [t for t in CI_TESTS if os.path.exists(os.path.join(api, t))]

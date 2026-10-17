@@ -379,13 +379,14 @@ def ronde(client_factory: Callable[[], Any], *, runtime_factory: Callable[[DaxCo
             if meting.get("exit_code") != 0:
                 raise RuntimeError(f"heartbeat exit {meting.get('exit_code')}: {(meting.get('stderr') or '')[-300:]}")
             hart = lees_hartslag(meting.get("stdout") or "")
-            if hart.get("routine_sha") != sha:
-                inst = rt.exec(c, "mkdir -p ~/.local/bin && cat > ~/.local/bin/dax-routine && chmod +x ~/.local/bin/dax-routine",
-                               cwd="/dax/workspace", timeout=60, stdin=script)
-                if inst.get("exit_code") != 0:
-                    raise RuntimeError(f"installing dax-routine failed: {(inst.get('stderr') or '')[-300:]}")
-                hart["routine_sha"] = sha
-                verslag["routine_installed"] = True
+            # Altijd de huidige routine schrijven. Een oude container met een
+            # kapotte .venv-ci bleef anders op de sha van gisteren hangen.
+            inst = rt.exec(c, "mkdir -p ~/.local/bin && cat > ~/.local/bin/dax-routine && chmod +x ~/.local/bin/dax-routine",
+                           cwd="/dax/workspace", timeout=60, stdin=script)
+            if inst.get("exit_code") != 0:
+                raise RuntimeError(f"installing dax-routine failed: {(inst.get('stderr') or '')[-300:]}")
+            hart["routine_sha"] = sha
+            verslag["routine_installed"] = True
         except Exception as exc:  # noqa: BLE001 — één kapotte computer mag de rest niet stoppen
             fout = str(exc)[:500]
             register.meld(c.id, status="error", fout=fout)

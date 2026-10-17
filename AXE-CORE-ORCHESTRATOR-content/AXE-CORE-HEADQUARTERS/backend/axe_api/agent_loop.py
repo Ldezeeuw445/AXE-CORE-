@@ -45,6 +45,20 @@ from agent_workspace import (
     laad_workspace,
     tools_voor,
 )
+from provider_router import (
+    WaitingForCapacity,
+    api_namen,
+    kaart_voor,
+    kies_stoel,
+    lees_stoelen,
+    mag_stoel,
+    meld_tegoed_eenmaal,
+    parse_seat_antwoord,
+    provider_uit_fout,
+    roep_stoel,
+    seat_prompt,
+    vroegste_stoel_vrij,
+)
 
 # Budget. The old loop allowed 10 steps and 2 minutes, which is not enough to
 # do anything real -- a single "read the file, change it, check it built" cycle
@@ -102,8 +116,10 @@ _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:gen
 # die stap gewoon over.
 GROQ_MODEL = os.environ.get("AXE_AGENT_GROQ_MODEL", "openai/gpt-oss-120b")
 OPENAI_MODEL = os.environ.get("AXE_AGENT_OPENAI_MODEL", "gpt-4.1-mini")
+CEREBRAS_MODEL = os.environ.get("AXE_AGENT_CEREBRAS_MODEL", "gpt-oss-120b")
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 _OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+_CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
 
 # Cheap insurance on a box that also serves the API. This is not a security
 # boundary -- the agent legitimately has shell here -- it only catches the
@@ -519,6 +535,13 @@ def systeem_prompt() -> str:
             )
         if ws.get("preferred_device"):
             extra.append(f"Preferred device: {ws['preferred_device']}.")
+        master = str(ws.get("master_prompt") or "").strip()
+        if master:
+            extra.append(master)
+        if ws.get("model_tier"):
+            extra.append(f"Model tier: {ws['model_tier']}.")
+        if ws.get("cadence"):
+            extra.append(f"Cadence: {ws['cadence']}.")
     dax = _HUIDIGE_DAX.get()
     if dax is not None:
         extra.append(
@@ -910,6 +933,9 @@ _LAATSTE_MOTOR: contextvars.ContextVar[str | None] = contextvars.ContextVar("axe
 # True = alleen gratis aanbieders (Groq, modelbox-Ollama). Gezet per run via run_agent_loop(alleen_gratis=...).
 _ALLEEN_GRATIS: contextvars.ContextVar[bool] = contextvars.ContextVar("axe_alleen_gratis", default=False)
 GROQ_KLEIN_MODEL = os.environ.get("AXE_AGENT_GROQ_SMALL_MODEL", "openai/gpt-oss-20b")
+# Tests zetten deze; productie leest core_coding_seats en belt de Mac-worker.
+_stoel_runner = None
+_stoel_db = None
 
 
 def motor_velden() -> dict[str, str]:
@@ -918,6 +944,21 @@ def motor_velden() -> dict[str, str]:
         return {}
     engine, _, model = naam.partition("/")
     return {"engine": engine, "model": model or engine}
+
+
+def _huidige_agent() -> str | None:
+    ws = _HUIDIGE_AGENT_WS.get() or {}
+    return str(ws.get("agent") or "") or None
+
+
+def _db_voor_stoelen():
+    if _stoel_db is not None:
+        return _stoel_db() if callable(_stoel_db) else _stoel_db
+    try:
+        from supabase import create_client
+        return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE"])
+    except Exception:
+        return None
 
 
 async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> dict[str, Any]:
@@ -931,25 +972,38 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     died with it. Luka's point, and he was right: "er zijn modellen met genoeg
     capability die dat gewoon over kunnen nemen." Verified on Hetzner:
     llama3.1:8b-32k returns a correct tool call in ~13s while warm.
+
+    17 okt: als de API-keten leegloopt, gaat de cyclus naar een vrije
+    abonnements-stoel op de Mac mini. Geen stoel = wachten op capaciteit,
+    geen rode 'Taak mislukt'.
     """
     attempts: list[tuple[str, Any]] = []
     groq_key = os.environ.get("GROQ_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
+    cerebras_key = os.environ.get("CEREBRAS_API_KEY")
     gratis = _ALLEEN_GRATIS.get()
-    if groq_key:
+    agent = _huidige_agent()
+    toegestaan = set(api_namen(agent, alleen_gratis=gratis))
+
+    def api_aan(naam: str) -> bool:
+        return naam in toegestaan
+
+    if groq_key and api_aan("groq"):
         attempts.append((f"groq/{GROQ_MODEL}", lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_MODEL)))
         if gratis and GROQ_KLEIN_MODEL != GROQ_MODEL:
             # Eigen limietemmer bij Groq: als 120b op zijn tokens-per-minuut zit, past 20b vaak nog.
             attempts.append((f"groq/{GROQ_KLEIN_MODEL}",
                              lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_KLEIN_MODEL)))
-    # Betaalde aanbieders alleen als de taak dat niet uitsluit. De vaste DAX-routines
-    # draaien gratis (Groq + modelbox): een lus die elke paar uur loopt, mag geen tegoed opmaken.
-    if api_key and not gratis:
+    if cerebras_key and api_aan("cerebras"):
+        attempts.append((f"cerebras/{CEREBRAS_MODEL}",
+                         lambda: _call_openai_compat(contents, _CEREBRAS_URL, cerebras_key, CEREBRAS_MODEL)))
+    # Betaalde aanbieders alleen als de taak én de tierkaart dat toestaan.
+    if api_key and not gratis and api_aan("gemini"):
         attempts.append((f"gemini/{MODEL}", lambda: _call_gemini(contents, api_key)))
-    if openai_key and not gratis:
+    if openai_key and not gratis and api_aan("openai"):
         attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
-    # De terugval is begrensd: nooit twee Ollama-aanroepen tegelijk op deze box.
-    attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
+    if api_aan("ollama"):
+        attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
 
     errors: list[str] = []
     for name, call in attempts:
@@ -977,7 +1031,39 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
             else:
                 log.warning("[agent_loop] %s failed: %s", name, str(exc)[:200])
             errors.append(f"{name}: {str(exc)[:150]}")
-    raise RuntimeError("every provider failed — " + " | ".join(errors))
+
+    samenvatting = "every provider failed — " + " | ".join(errors)
+    db = _db_voor_stoelen()
+    for fout in errors:
+        wie = provider_uit_fout(fout)
+        if wie:
+            meld_tegoed_eenmaal(db, wie, fout)
+
+    if mag_stoel(agent, alleen_gratis=gratis):
+        rijen = lees_stoelen(db)
+        familie = str((kaart_voor(agent).get("seat_family") or "") or "") or None
+        stoel = kies_stoel(rijen, familie=familie)
+        if stoel:
+            try:
+                raw = await asyncio.to_thread(
+                    roep_stoel, stoel, seat_prompt(contents, agent),
+                    tier=int(kaart_voor(agent).get("tier") or 2),
+                    runner=_stoel_runner,
+                )
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"seat/{stoel.get('seat_id')}: {str(exc)[:150]}")
+                raw = {"ok": False, "error": str(exc)}
+            if raw.get("ok") and raw.get("output"):
+                _LAATSTE_MOTOR.set(f"seat/{stoel.get('seat_id')}")
+                return parse_seat_antwoord(str(raw.get("output") or ""))
+            errors.append(f"seat/{stoel.get('seat_id')}: {str(raw.get('error') or 'no output')[:150]}")
+        wacht = vroegste_stoel_vrij(rijen)
+        raise WaitingForCapacity(
+            f"waiting for capacity — {samenvatting}",
+            retry_after_s=wacht, errors=errors,
+        )
+
+    raise WaitingForCapacity(samenvatting, errors=errors)
 
 
 async def run_agent_loop(

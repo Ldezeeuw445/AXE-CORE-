@@ -3128,6 +3128,16 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
     return result
 
 
+@app.get("/agent-tiers", dependencies=[AUTH])
+async def list_agent_tiers():
+    """Read-only tierkaart: agent → tier → model → stoel. Geen UI, geen writes."""
+    try:
+        from provider_router import laad_kaart
+        return laad_kaart()
+    except Exception as exc:
+        raise HTTPException(503, f"Could not read agent tiers: {exc}") from exc
+
+
 @app.get("/coding-seats", dependencies=[AUTH])
 async def list_coding_seats():
     """Mac mini heartbeat: core_coding_seats via service_role. Geen VPS-CLI-check."""

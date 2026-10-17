@@ -463,9 +463,32 @@ function safePath(root, p) {
   return abs;
 }
 
-function run(cmd, args, cwd) {
+const SEAT_ENV = {
+  claude:  { CLAUDE_CONFIG_DIR: join(homedir(), '.claude') },
+  claude2: { CLAUDE_CONFIG_DIR: join(homedir(), '.claude-tweede') },
+  claude3: { CLAUDE_CONFIG_DIR: join(homedir(), '.claude-derde') },
+  claude4: { CLAUDE_CONFIG_DIR: join(homedir(), '.claude-vierde') },
+  codex:   { CODEX_HOME: join(homedir(), '.codex') },
+  codex2:  { CODEX_HOME: join(homedir(), '.codex-tweede') },
+  codex3:  { CODEX_HOME: join(homedir(), '.codex-derde') },
+  cursor:  {},
+};
+
+function seatChildEnv(seatId) {
+  const extra = SEAT_ENV[seatId] || {};
+  const child = { ...process.env, ...env, ...extra };
+  for (const k of [
+    'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDECODE',
+    'OPENAI_API_KEY', 'OPENAI_BASE_URL',
+  ]) {
+    delete child[k];
+  }
+  return child;
+}
+
+function run(cmd, args, cwd, extraEnv) {
   return new Promise((res, rej) => {
-    execFile(cmd, args, { cwd, timeout: STEP_TIMEOUT_MS, maxBuffer: 8 << 20 },
+    execFile(cmd, args, { cwd, env: extraEnv || process.env, timeout: STEP_TIMEOUT_MS, maxBuffer: 8 << 20 },
       (err, stdout, stderr) => {
         const out = `${stdout ?? ''}${stderr ?? ''}`.slice(0, MAX_OUTPUT);
         // A non-zero exit is a RESULT, not a transport failure: "31 tests
@@ -682,21 +705,22 @@ async function execute(payload) {
       const prompt = String(args.prompt ?? '').trim();
       if (!prompt) throw new Error('claude_code.run needs a prompt');
       const bin = env.AXE_CLAUDE_BIN ?? '/opt/homebrew/bin/claude';
-      return run(bin, [
-        '-p', prompt,
-        '--continue',
-        '--allowedTools', 'Read,Glob,Grep,Edit,Write',
-      ], root);
+      const seat = String(args.seat ?? 'claude');
+      const argv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
+      const model = String(args.model ?? '').trim();
+      if (model) argv.push('--model', model);
+      return run(bin, argv, root, seatChildEnv(seat));
     }
 
     case 'codex.run': {
       const prompt = String(args.prompt ?? '').trim();
       if (!prompt) throw new Error('codex.run needs a prompt');
       const bin = env.AXE_CODEX_BIN ?? '/opt/homebrew/bin/codex';
+      const seat = String(args.seat ?? 'codex');
       const argv = ['exec', prompt, '-C', '.', '-s', 'workspace-write', '--approve-for-me'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('-m', model);
-      return run(bin, argv, root);
+      return run(bin, argv, root, seatChildEnv(seat));
     }
 
     case 'cursor.run': {
@@ -706,7 +730,7 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--force'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return run(bin, argv, root);
+      return run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor')));
     }
 
     default:

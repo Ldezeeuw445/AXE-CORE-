@@ -606,24 +606,36 @@ def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float 
     zelfde = [n for n in SEAT_VOLGORDE if _familie(n) == familie]
     rest = [n for n in SEAT_VOLGORDE if n not in zelfde]
     kandidaten = [gewenst] + [n for n in zelfde + rest if n != gewenst]
-    for naam in kandidaten:
+    gebruik = {}
+    try:
+        gebruik = agent_usage_status()
+    except Exception:
+        gebruik = {}
+
+    def geschikt(naam: str) -> bool:
         if naam in skip or naam not in ENGINES:
-            continue
-        motor = ENGINES[naam]
-        if not _binary(motor):
-            continue
-        # Alleen wat we al weten: een eerdere login-fout of een limiet.
-        # Geen live `auth status` (dat start een CLI) en geen auth.json-probe
-        # hier — anders valt een verse Codex-stoel meteen af terwijl de run
-        # hem nog moet mogen proberen.
+            return False
+        if not _binary(ENGINES[naam]):
+            return False
         hit = _ACCOUNT_CACHE.get(naam)
         acc = hit[1] if hit else {"ingelogd": None, "account": None}
         if acc.get("ingelogd") is False:
+            return False
+        return not _stoel_koelt(naam, nu)
+
+    # Gevraagde stoel eerst als hij kan: een vastgehouden lock hoort bij díe
+    # stoel, niet bij een stillere met minder weekruns.
+    if geschikt(gewenst):
+        return gewenst
+    vrij: list[tuple[tuple, str]] = []
+    for naam in kandidaten:
+        if not geschikt(naam):
             continue
-        if _stoel_koelt(naam, nu):
-            continue
-        return naam
-    return None
+        g = gebruik.get(naam) or {}
+        score = (0 if _familie(naam) == familie else 1, int(g.get("runs_7d") or 0))
+        vrij.append((score, naam))
+    vrij.sort()
+    return vrij[0][1] if vrij else None
 
 
 def _openhands_stoel() -> dict:

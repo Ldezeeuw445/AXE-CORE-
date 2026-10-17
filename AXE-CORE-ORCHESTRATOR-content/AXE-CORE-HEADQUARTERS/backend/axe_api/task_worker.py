@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from agent_loop import ApprovalRequired
+from provider_router import WaitingForCapacity
 from task_runtime import TaskRepository
 
 try:  # agent_loop levert deze klasse volgens het gedeelde contract.
@@ -274,6 +275,19 @@ class TaskWorker:
             # up its lease. Falling through to the generic branch below would
             # overwrite that with retrying/failed and lose the pending question.
             log.info("[task_worker] task %s is waiting for approval", task["id"])
+        except WaitingForCapacity as wacht:
+            # Geen rode 'Taak mislukt': terug in de rij tot een stoel of API kan.
+            log.info("[task_worker] task %s waiting for capacity (%ss)", task["id"], wacht.retry_after_s)
+            await context.event(
+                "task.deferred",
+                str(wacht)[:500],
+                {"retry_after_s": wacht.retry_after_s, "errors": wacht.errors[:8]},
+            )
+            await asyncio.to_thread(
+                self.repo.defer,
+                task["id"], self.worker_id, context.task.get("lease_token") or task.get("lease_token"),
+                wacht.retry_after_s, "provider_capacity",
+            )
         except TaskCancelled:
             # Annuleren is geen mislukking. De taak staat al op 'cancelled' en
             # heeft geen lease meer; verifying of retrying proberen zou alleen
@@ -525,6 +539,9 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
                 "metadata": {"command": pause.command, "reason": pause.reason},
             },
         )
+        raise
+    except WaitingForCapacity:
+        # Geen failed-stap: _draai parkeert de taak via defer_core_task.
         raise
     except TaskCancelled:
         # Afgebroken, niet mislukt. Een stap op 'failed' zou bij een volgende

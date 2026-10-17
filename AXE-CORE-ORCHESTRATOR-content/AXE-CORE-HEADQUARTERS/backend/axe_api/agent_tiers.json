@@ -1,0 +1,232 @@
+{
+  "version": 1,
+  "updated": "2026-10-17",
+  "note": "Bron voor de provider-router. Roster + CrewAI-specialisten + NorthSea-crew-agents. Geen UI-gok.",
+  "seats": {
+    "claude": {
+      "family": "claude",
+      "label": "Claude Code",
+      "config": "~/.claude",
+      "login": "claude auth login",
+      "models": ["opus", "sonnet"],
+      "paid": false,
+      "note": "Standaard-CLI-map. Luka's drie Pro-seats staan hieronder."
+    },
+    "claude2": {
+      "family": "claude",
+      "label": "Claude Pro 2",
+      "config": "~/.claude-tweede",
+      "login": "CLAUDE_CONFIG_DIR=~/.claude-tweede claude auth login",
+      "models": ["opus", "sonnet", "haiku"],
+      "paid": true
+    },
+    "claude3": {
+      "family": "claude",
+      "label": "Claude Pro 3",
+      "config": "~/.claude-derde",
+      "login": "CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login",
+      "models": ["opus", "sonnet", "haiku"],
+      "paid": true
+    },
+    "claude4": {
+      "family": "claude",
+      "label": "Claude Pro 4",
+      "config": "~/.claude-vierde",
+      "login": "CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login",
+      "models": ["opus", "sonnet", "haiku"],
+      "paid": true
+    },
+    "codex": {
+      "family": "codex",
+      "label": "ChatGPT Plus / Codex",
+      "config": "~/.codex",
+      "login": "codex login",
+      "models": ["gpt-5-codex"],
+      "paid": true
+    },
+    "codex2": {
+      "family": "codex",
+      "label": "ChatGPT Plus 2 / Codex",
+      "config": "~/.codex-tweede",
+      "login": "CODEX_HOME=~/.codex-tweede codex login",
+      "models": ["gpt-5-codex"],
+      "paid": true
+    },
+    "cursor": {
+      "family": "cursor",
+      "label": "Cursor Pro",
+      "config": null,
+      "login": "cursor-agent login",
+      "models": ["cursor-cloud"],
+      "paid": true
+    },
+    "openhands": {
+      "family": "openhands",
+      "label": "OpenHands",
+      "config": null,
+      "login": "OPENHANDS_URL on the VPS",
+      "models": ["openhands"],
+      "paid": true,
+      "note": "VPS, geen Mac-CLI."
+    }
+  },
+  "tiers": {
+    "1": {
+      "name": "heavy",
+      "use": "Zwaar redeneren en coderen.",
+      "prefer": ["seat:claude:opus", "seat:claude:sonnet", "seat:codex:gpt-5-codex", "seat:cursor"],
+      "api": [],
+      "never": ["paid-api:openai", "paid-api:anthropic", "paid-api:openrouter"]
+    },
+    "2": {
+      "name": "cycle",
+      "use": "Gewone agent-cycli.",
+      "prefer": ["api:groq", "seat:claude:sonnet", "seat:claude:haiku"],
+      "api": ["groq", "cerebras", "ollama"],
+      "never": ["paid-api:openai", "paid-api:anthropic"]
+    },
+    "3": {
+      "name": "cheap",
+      "use": "Periodieke checks. Nooit een abonnements-stoel.",
+      "prefer": ["api:groq", "api:cerebras", "api:ollama"],
+      "api": ["groq", "cerebras", "ollama"],
+      "never": ["seat", "paid-api"]
+    }
+  },
+  "agents": {
+    "axe": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq/openai/gpt-oss-120b",
+      "seat_family": "claude",
+      "cadence": "24/7: antwoordt Luka; delegeert; geen eigen cron"
+    },
+    "wingman": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "24/7: crews op de VPS; volgt AXE"
+    },
+    "northsea": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "always-on DAX energy snapshot elke 6u; desk-cycli verder 24/7"
+    },
+    "trading": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "always-on DAX market data elke 6u; geen live orders"
+    },
+    "developer": {
+      "kind": "main",
+      "tier": 1,
+      "model": "claude opus/sonnet via Mac-stoel; codex gpt-5-codex tweede; cursor bij repo-wijd",
+      "seat_family": "claude",
+      "cadence": "always-on DAX CI elke 12u; codewerk op Mac mini"
+    },
+    "thinktank": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "always-on DAX idea scan elke 12u"
+    },
+    "browser": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + ollama",
+      "seat_family": "claude",
+      "cadence": "always-on DAX site watch elke 6u"
+    },
+    "memory": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + ollama",
+      "seat_family": null,
+      "cadence": "24/7 consolidatie; geen stoel"
+    },
+    "task": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + ollama",
+      "seat_family": null,
+      "cadence": "24/7 queue"
+    },
+    "cron": {
+      "kind": "main",
+      "tier": 3,
+      "model": "groq / cerebras / ollama",
+      "seat_family": null,
+      "cadence": "elke minuut tick; zelf geen LLM tenzij een job het vraagt"
+    },
+    "finance": {
+      "kind": "main",
+      "tier": 3,
+      "model": "groq / ollama",
+      "seat_family": null,
+      "cadence": "dagelijkse digest; credits watch"
+    },
+    "apps": {
+      "kind": "main",
+      "tier": 3,
+      "model": "groq / ollama",
+      "seat_family": null,
+      "cadence": "health-check VPS"
+    },
+    "intel": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-haiku seat",
+      "seat_family": "claude",
+      "cadence": "signalen in Trading OS, via AXE"
+    },
+    "companion": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-haiku seat",
+      "seat_family": "claude",
+      "cadence": "cross-app, via AXE"
+    }
+  },
+  "crews": {
+    "axe_core": { "kind": "crew", "manager": "wingman", "tier": 2, "model": "groq + claude-sonnet", "seat_family": "claude" },
+    "wags": { "kind": "crew", "manager": "developer", "tier": 1, "model": "claude opus/sonnet seat", "seat_family": "claude" },
+    "dollar_bill": { "kind": "crew", "manager": "trading", "tier": 2, "model": "groq + claude-sonnet", "seat_family": "claude" },
+    "intel": { "kind": "crew", "manager": "wingman", "tier": 2, "model": "groq + claude-haiku", "seat_family": "claude" },
+    "sentinel": { "kind": "crew", "manager": "wingman", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "forge": { "kind": "crew", "manager": "developer", "tier": 1, "model": "claude sonnet seat", "seat_family": "claude" },
+    "pulse": { "kind": "crew", "manager": "wingman", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "atlas": { "kind": "crew", "manager": "thinktank", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "nova": { "kind": "crew", "manager": "thinktank", "tier": 2, "model": "groq + claude-haiku", "seat_family": "claude" }
+  },
+  "northsea": {
+    "deal_manager": { "kind": "northsea", "crew": "deal_execution", "tier": 2, "model": "groq + claude-sonnet", "seat_family": "claude" },
+    "buyer_qualification_agent": { "kind": "northsea", "crew": "deal_execution", "tier": 2, "model": "groq", "seat_family": null },
+    "seller_qualification_agent": { "kind": "northsea", "crew": "deal_execution", "tier": 2, "model": "groq", "seat_family": null },
+    "commercial_alignment_agent": { "kind": "northsea", "crew": "deal_execution", "tier": 2, "model": "groq", "seat_family": null },
+    "trade_documentation_protection_agent": { "kind": "northsea", "crew": "deal_execution", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "logistics_execution_agent": { "kind": "northsea", "crew": "deal_execution", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "deal_risk_agent": { "kind": "northsea", "crew": "deal_execution", "tier": 2, "model": "groq + claude-haiku", "seat_family": "claude" },
+    "next_best_action_agent": { "kind": "northsea", "crew": "deal_execution", "tier": 2, "model": "groq + claude-sonnet", "seat_family": "claude" },
+    "communications_intelligence_agent": { "kind": "northsea", "crew": "intelligence_operations", "tier": 2, "model": "groq", "seat_family": null },
+    "deal_watch_agent": { "kind": "northsea", "crew": "intelligence_operations", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "task_chase_agent": { "kind": "northsea", "crew": "intelligence_operations", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "market_intelligence_agent": { "kind": "northsea", "crew": "intelligence_operations", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "document_intelligence_agent": { "kind": "northsea", "crew": "intelligence_operations", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "approval_coordinator": { "kind": "northsea", "crew": "intelligence_operations", "tier": 2, "model": "groq + claude-haiku", "seat_family": "claude" },
+    "operations_controller": { "kind": "northsea", "crew": "intelligence_operations", "tier": 2, "model": "groq + claude-sonnet", "seat_family": "claude" },
+    "exception_audit_agent": { "kind": "northsea", "crew": "intelligence_operations", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "sourcing_strategist": { "kind": "northsea", "crew": "counterparty_sourcing", "tier": 2, "model": "groq + claude-sonnet", "seat_family": "claude" },
+    "buyer_hunter": { "kind": "northsea", "crew": "counterparty_sourcing", "tier": 2, "model": "groq", "seat_family": null },
+    "supplier_hunter": { "kind": "northsea", "crew": "counterparty_sourcing", "tier": 2, "model": "groq", "seat_family": null },
+    "counterparty_verifier": { "kind": "northsea", "crew": "counterparty_sourcing", "tier": 2, "model": "groq + claude-haiku", "seat_family": "claude" },
+    "commercial_fit_analyst": { "kind": "northsea", "crew": "counterparty_sourcing", "tier": 2, "model": "groq", "seat_family": null },
+    "evidence_provenance_analyst": { "kind": "northsea", "crew": "counterparty_sourcing", "tier": 3, "model": "groq / ollama", "seat_family": null },
+    "sourcing_supervisor": { "kind": "northsea", "crew": "counterparty_sourcing", "tier": 2, "model": "groq + claude-sonnet", "seat_family": "claude" }
+  }
+}

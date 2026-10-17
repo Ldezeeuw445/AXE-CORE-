@@ -60,6 +60,17 @@ def test_lus_laadt_de_werkplek_in_de_prompt(monkeypatch):
     assert "CrewAI" in gezien["prompt"] or "crew" in gezien["prompt"].lower()
 
 
+def test_elke_hoofdagent_heeft_master_prompt_en_kluispad():
+    from agent_workspace import KLUIS_NAAM, kluis_pad_voor, kluis_workspace_md, master_prompt_voor
+    for agent in KLUIS_NAAM:
+        tekst = master_prompt_voor(agent)
+        assert "Hard limits" in tekst, agent
+        md = kluis_workspace_md(agent)
+        assert kluis_pad_voor(agent) == f"AXE/Agents/{KLUIS_NAAM[agent]}/workspace.md"
+        assert "Master prompt" in md
+        assert agent in md or KLUIS_NAAM[agent] in md
+
+
 def test_crew_staat_op_de_werkplek_niet_alleen_in_de_galerij():
     wingman = aw.laad_workspace("wingman")
     assert "axe_core" in wingman["crew"]

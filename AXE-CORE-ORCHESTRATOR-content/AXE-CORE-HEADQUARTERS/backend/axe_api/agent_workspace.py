@@ -5,7 +5,29 @@ een agent zonder werkplek, dan stopt de lus — geen stille val terug op AXE.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+
+PROMPTS_DIR = Path(__file__).with_name("prompts")
+GRENZEN_PAD = PROMPTS_DIR / "_grenzen.md"
+
+# Zichtbare namen in de Obsidian-kluis (src/domain/agents/roster.ts).
+KLUIS_NAAM: dict[str, str] = {
+    "axe": "AXE Core",
+    "wingman": "Wingman",
+    "northsea": "NorthSea Desk Manager",
+    "trading": "Trading Agent",
+    "developer": "AXE Developer",
+    "thinktank": "ThinkTank",
+    "browser": "Browser",
+    "memory": "Memory",
+    "task": "Task",
+    "cron": "Cron Manager",
+    "finance": "Finance",
+    "apps": "App Manager",
+    "intel": "AXE Intel",
+    "companion": "AXE Companion",
+}
 
 # Zelfde brieven als voorheen in agent_loop.AGENT_BRIEFS. Niet herschrijven:
 # test_agent_briefs.py leest de tekst letterlijk.
@@ -188,14 +210,76 @@ class WorkspaceOntbreekt(RuntimeError):
     """De lus weigert te starten als de agent geen werkplek heeft."""
 
 
+def master_prompt_voor(agent: str) -> str:
+    """Master prompt + harde grenzen uit prompts/. Leeg als het bestand ontbreekt."""
+    stukken: list[str] = []
+    pad = PROMPTS_DIR / f"{agent}.md"
+    if pad.is_file():
+        stukken.append(pad.read_text(encoding="utf-8").strip())
+    if GRENZEN_PAD.is_file():
+        stukken.append(GRENZEN_PAD.read_text(encoding="utf-8").strip())
+    return "\n\n".join(stukken)
+
+
+def kluis_pad_voor(agent: str) -> str:
+    naam = KLUIS_NAAM.get(agent, agent)
+    return f"AXE/Agents/{naam}/workspace.md"
+
+
+def kluis_workspace_md(agent: str) -> str:
+    """Tekst voor de Obsidian-werkplek. De lus laadt dezelfde bron."""
+    ws = AGENT_WORKSPACES.get(agent) or AGENT_WORKSPACES["axe"]
+    master = master_prompt_voor(agent)
+    tools = ", ".join(str(t) for t in (ws.get("tools") or ()))
+    crew = ", ".join(str(c) for c in (ws.get("crew") or ())) or "none"
+    return "\n".join([
+        f"# {KLUIS_NAAM.get(agent, agent)}",
+        "",
+        f"- kind: agent",
+        f"- agent: {agent}",
+        f"- role: {ws.get('role')}",
+        f"- tools: {tools}",
+        f"- crew: {crew}",
+        f"- preferred device: {ws.get('preferred_device') or 'any'}",
+        f"- memory: {ws.get('memory_scope')}",
+        "",
+        "## System prompt",
+        "",
+        str(ws.get("system_prompt") or ""),
+        "",
+        "## Master prompt",
+        "",
+        master,
+        "",
+    ])
+
+
 def laad_workspace(agent: str | None) -> dict[str, Any]:
     """Laad de werkplek. Onbekende id = fout, geen stille AXE-val."""
     if not agent:
-        return dict(AGENT_WORKSPACES["axe"], agent="axe")
+        agent = "axe"
+        return _verrijk(dict(AGENT_WORKSPACES["axe"], agent="axe"))
     ws = AGENT_WORKSPACES.get(agent)
     if ws is None:
         raise WorkspaceOntbreekt(f"agent {agent!r} has no workspace")
-    return dict(ws, agent=agent)
+    return _verrijk(dict(ws, agent=agent))
+
+
+def _verrijk(ws: dict[str, Any]) -> dict[str, Any]:
+    agent = str(ws.get("agent") or "axe")
+    master = master_prompt_voor(agent)
+    if master:
+        ws["master_prompt"] = master
+    ws["kluis_pad"] = kluis_pad_voor(agent)
+    try:
+        from provider_router import kaart_voor
+        kaart = kaart_voor(agent)
+        ws["model_tier"] = kaart.get("tier")
+        ws["cadence"] = kaart.get("cadence")
+        ws["preferred_model"] = kaart.get("model")
+    except Exception:
+        pass
+    return ws
 
 
 def tools_voor(workspace: dict[str, Any]) -> tuple[str, ...]:

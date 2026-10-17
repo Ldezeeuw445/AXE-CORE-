@@ -234,13 +234,14 @@ def test_ronde_maakt_wakker_meet_installeert_en_geeft_vast_werk():
     assert dax_wacht.ronde_status(uit) == "ok"
 
 
-def test_ronde_tweede_keer_maakt_geen_tweede_missie_en_installeert_niet_opnieuw():
+def test_ronde_tweede_keer_maakt_geen_tweede_missie_maar_zet_wel_de_huidige_routine():
     db = NepDB(core_dax_computers=[computer("trading")], core_missions=[], core_mission_events=[])
     rt = NepRuntime(gezond_hart(routine_sha=dax_wacht.routine_sha()), status="running")
     dax_wacht.ronde(lambda: db, runtime_factory=lambda c: rt, model_check=lambda: None, nu=NU)
     dax_wacht.ronde(lambda: db, runtime_factory=lambda c: rt, model_check=lambda: None, nu=NU)
     assert len(db.tabellen["core_missions"]) == 1
-    assert not [c for c, _ in rt.commando if "cat > ~/.local/bin/dax-routine" in c]
+    # 17 okt: altijd herschrijven, anders blijft een kapotte .venv-ci-routine staan.
+    assert [c for c, _ in rt.commando if "cat > ~/.local/bin/dax-routine" in c]
 
 
 def test_onbereikbare_computer_is_error_en_blokkeert_de_missie():
