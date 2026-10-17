@@ -60,7 +60,7 @@ ACTIES = (
         "id": "product-registry",
         "title": "Product registry: close it to customers and add NorthSea",
         "how": "Supabase SQL editor (project AXE Companion): run "
-               "supabase/migrations/20261016080000_productregister.sql.",
+               "supabase/migrations/20261016191337_productregister.sql.",
     },
     {
         "id": "axon-pr2-live",

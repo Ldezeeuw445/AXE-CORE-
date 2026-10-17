@@ -61,7 +61,7 @@ geschiedenis; de bel is de stand.
 |---|---|---|---|
 | 1 | `northsea:engine` pauzeren | **door Luka geweigerd** (15 okt) | niets, zolang 3 snel komt; zonder pauze schrijft de oude engine ~900 rijen per uur |
 | 2 | AXE Commodities herstarten | **gebeurd**: Postgres herstart 15 okt 10:33 UTC, alle NorthSea-jobs weer `ok` | niets |
-| 3 | northsea-mcp met de fix van 6 okt uitrollen | **open, de belangrijkste** | iMac: `bash backend/northsea_mcp/deploy/deploy.sh check`, dan `deploy`. Vanuit de cloud weigert de veiligheidscontrole het gebruik van de AXE API-sleutel voor `/internal/exec` |
+| 3 | northsea-mcp met de fix van 6 okt uitrollen | **gebeurd** (17 okt, tussen 12:00 en 12:15 UTC): 0 schrijfacties per tick sindsdien | niets; zie het incident |
 | 4 | Unusual Whales-sleutel vernieuwen | open | alleen met Luka's account; daarna `UNUSUAL_WHALES_TOKEN` (Supabase) en `UNUSUAL_WHALES_API_KEY` (VPS) |
 | 5 | Meldingen op de telefoon toestaan | open | kan alleen op het toestel zelf |
 | 6 | NorthSea-sleutels op de Mac mini | **niet meer nodig**: `northsea_db` leest nu de engine-tick in het gedeelde project | niets; met de twee sleutels wordt de meting directer |

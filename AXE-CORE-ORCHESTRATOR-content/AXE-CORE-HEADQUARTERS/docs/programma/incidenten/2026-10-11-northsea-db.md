@@ -1,7 +1,23 @@
 # Incident — NorthSea-database stond stil van 11 tot 15 oktober
 
-Vastgesteld 14 oktober 2026, 18:00 UTC. Status: **database terug, oorzaak niet weg**.
+Vastgesteld 14 oktober 2026, 18:00 UTC. Status: **gesloten op 17 oktober**: de fix staat live en de lus is weg.
 Ernst: hoog. NorthSea deed ruim vier dagen niets, en niemand kreeg een melding.
+
+## Gesloten — 17 oktober, 12:40 UTC (gemeten)
+
+De fix van 6 okt staat op de box. Edge-logs van AXE Commodities per 5 minuten:
+
+| engine-tick | `POST deal_events` | `PATCH action_queue` |
+|---|---|---|
+| 11:45 | 139 | 142 |
+| 12:00 | 145 | 142 |
+| 12:15 | 0 | 0 |
+| 12:30 | 0 | 0 |
+
+`action_queue` is sinds 12:00:48 UTC niet meer bijgewerkt (0 rijen in de laatste 20
+minuten, was 146). De engine-ticks van 12:15 en 12:30 staan op `ok`. Van ~1.100
+schrijfacties per uur naar nul. Wat blijft: de bewaker meet dit elke 15 minuten
+(`eigenaar_acties.py`, stap `northsea-engine-fix`) en meldt het als het terugkomt.
 
 ## Stand 17 oktober, 09:00 UTC (gemeten)
 
