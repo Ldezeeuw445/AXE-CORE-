@@ -1,29 +1,21 @@
 /**
- * Product-tab onder de app-balk (AXON / Companion). Geen ‹ More, geen
- * onderbalk, geen overlay-WebView die de hamburger bedekt. De iframe blijft
- * in déze WebView zodat de login-cookie blijft staan. Als de native app
- * geïnstalleerd is, openen we die ernaast — terugkeren toont dezelfde sessie.
+ * Product-tab onder de HQ-app-balk (AXON / Companion). Altijd de iframe van
+ * de website. Een native TWA/Custom Tab verlaat Device Manager en neemt
+ * hamburger + app-balk mee, dus die starten we hier niet.
  */
-import { useEffect, useState } from 'react';
-import { isAppInstalled, openAndroidApp } from '@/infrastructure/gateways/androidAppsBridge';
-import { AXON_PACKAGE, COMPANION_PACKAGE } from '@/infrastructure/gateways/androidBrowseBridge';
+import { useState } from 'react';
 
 export const AXON_URL = 'https://app.axon-memory.com/';
 export const COMPANION_URL = 'https://axecompanion.com/chat';
 
 export function ProductEmbed({
-  naam, src, testid, pakket,
+  naam, src, testid,
 }: {
   naam: string;
   src: string;
   testid: string;
-  pakket?: string;
 }) {
   const [klaar, setKlaar] = useState(false);
-
-  useEffect(() => {
-    if (pakket && isAppInstalled(pakket)) openAndroidApp(pakket);
-  }, [pakket]);
 
   return (
     <div
@@ -53,9 +45,9 @@ export function ProductEmbed({
 }
 
 export default function CompanionPage() {
-  return <ProductEmbed naam="AXE Companion" src={COMPANION_URL} testid="companion" pakket={COMPANION_PACKAGE} />;
+  return <ProductEmbed naam="AXE Companion" src={COMPANION_URL} testid="companion" />;
 }
 
 export function AxonPage() {
-  return <ProductEmbed naam="AXON Memory" src={AXON_URL} testid="axon" pakket={AXON_PACKAGE} />;
+  return <ProductEmbed naam="AXON Memory" src={AXON_URL} testid="axon" />;
 }

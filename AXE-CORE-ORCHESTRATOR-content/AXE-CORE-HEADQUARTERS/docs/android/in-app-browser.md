@@ -48,11 +48,10 @@ The overlay WebView must:
 - `settings.javaScriptEnabled = true`, `domStorageEnabled = true`
 - not go through the Mac-mini browser-agent
 
-Companion and AXON stay **inside HQ** (iframe + app bar + hamburger). Do not
-open `browseOpen` for those two: that overlay would hide the menu. Prefer the
-native package when installed (`com.axecompanion.app`, `com.axonmemory.app`).
-
-The Browser tab is the only one that calls `browseOpen`.
+Companion and AXON stay **inside HQ** (iframe under the app bar). Never call
+`openApp` / `hasApp` / `browseOpen` for those two: `com.axecompanion.app` is a
+TWA/Custom Tab and leaves Device Manager. The Browser tab is the only one
+that calls `browseOpen`. Other Apps-tab tiles may still use `openApp`.
 
 ## Rebuild
 
