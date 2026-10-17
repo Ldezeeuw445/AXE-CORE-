@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Background,
   Controls,
@@ -7,18 +8,17 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
-  useStore,
-  useStoreApi,
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './architectureCanvas.css';
 import { RefreshCw, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import { PlaatDock, PlaatRail } from '@/presentation/components/layout/PlaatSlots';
-import type { ArchitectureSnapshot } from '@/domain/architecture/architectureGraph';
+import type { ArchitectureNode, ArchitectureSnapshot } from '@/domain/architecture/architectureGraph';
 import { loadArchitectureSnapshot, staticArchitectureManifest } from '@/application/system/architectureSnapshotService';
 import { ArchitectureGroupCard, ArchitectureNodeCard } from './ArchitectureNodeCard';
 import { ArchitectureInspector } from './ArchitectureInspector';
+import { emitArchitectureSelection, onArchitectureSelection } from './architectureSelection';
 import {
   ALL_GROUPS,
   ARCHITECTURE_KINDS,
@@ -26,8 +26,6 @@ import {
   OVERVIEW,
   architectureNodeFromClick,
   mapArchitectureGraph,
-  selectedArchitectureNodeFromFlow,
-  type ArchitectureFlowData,
   type ArchitectureGraphFilters,
 } from './architectureGraphMapper';
 
@@ -37,23 +35,33 @@ const NODE_TYPES = {
 } as unknown as NodeTypes;
 
 function ArchitectureInspectorHost() {
-  const store = useStoreApi();
-  const selected = useStore(state => selectedArchitectureNodeFromFlow(
-    Array.from(state.nodeLookup.values()) as Array<{ selected?: boolean; type?: string; data: ArchitectureFlowData }>,
-  ));
-  if (!selected) return null;
-  return (
-    <Panel
-      position="top-right"
+  const [selected, setSelected] = useState<ArchitectureNode | null>(null);
+  useEffect(() => onArchitectureSelection(setSelected), []);
+  if (!selected || typeof document === 'undefined') return null;
+  return createPortal(
+    <div
       className="axe-architecture-inspector-panel"
       data-testid="architecture-inspector-host"
-      style={{ marginTop: 58, marginRight: 10, zIndex: 20, pointerEvents: 'all' }}
+      style={{
+        position: 'fixed',
+        top: 72,
+        right: 16,
+        zIndex: 2147483647,
+        width: 308,
+        maxHeight: 'calc(100vh - 96px)',
+        overflow: 'auto',
+        pointerEvents: 'auto',
+      }}
     >
       <ArchitectureInspector
         node={selected}
-        onClose={() => store.getState().resetSelectedElements()}
+        onClose={() => {
+          setSelected(null);
+          emitArchitectureSelection(null);
+        }}
       />
-    </Panel>
+    </div>,
+    document.body,
   );
 }
 
@@ -163,8 +171,8 @@ function ArchitectureCanvas() {
           </select>
           {loading && <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>loading live registers…</span>}
         </Panel>
-        <ArchitectureInspectorHost />
       </ReactFlow>
+      <ArchitectureInspectorHost />
 
       <PlaatDock>
         <button type="button" onClick={() => void load()} className="p-1.5 rounded-lg" style={{ color: 'var(--accent-cyan)' }} title="Refresh live registers"><RefreshCw size={13} /></button>

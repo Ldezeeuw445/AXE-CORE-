@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { ArchitectureFlowData } from './architectureGraphMapper';
 import { KIND_LABELS } from './architectureGraphMapper';
+import { emitArchitectureSelection } from './architectureSelection';
 
 const KIND_INK: Record<string, string> = {
   app: '#E8C547',
@@ -47,6 +48,11 @@ export function ArchitectureNodeCard({ data, selected }: NodeProps) {
     <div
       className={`axe-architecture-kaart${active ? ' is-selected' : ''}`}
       data-architecture-node={nodeData.node?.id ?? ''}
+      onClick={event => {
+        if (nodeData.overview || !nodeData.node) return;
+        event.stopPropagation();
+        emitArchitectureSelection(nodeData.node);
+      }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0.35 }} />
       <div className="flex items-center justify-between gap-2">

@@ -15,7 +15,9 @@ describe('Architecture panel wiring', () => {
     expect(workspace).toContain('loadArchitectureSnapshot');
     expect(workspace).toContain('mapArchitectureGraph');
     expect(workspace).toContain('ArchitectureInspector');
-    expect(workspace).toContain('selectedArchitectureNodeFromFlow');
     expect(workspace).toContain('ArchitectureInspectorHost');
+    expect(workspace).toContain('onArchitectureSelection');
+    const card = readFileSync(resolve(hq, 'src/presentation/architecture/ArchitectureNodeCard.tsx'), 'utf8');
+    expect(card).toContain('emitArchitectureSelection');
   });
 });
