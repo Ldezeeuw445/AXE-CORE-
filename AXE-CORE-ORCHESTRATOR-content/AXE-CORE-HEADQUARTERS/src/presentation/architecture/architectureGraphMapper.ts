@@ -65,7 +65,7 @@ function ownership(manifest: ArchitectureManifest) {
     : node.appId && apps.has(node.appId) ? node.appId : SHARED_GROUP;
 }
 
-export function getArchitectureGroups(manifest: ArchitectureManifest): ArchitectureGroup[] {
+function getArchitectureGroups(manifest: ArchitectureManifest): ArchitectureGroup[] {
   const ownerOf = ownership(manifest);
   const groups = new Map<string, ArchitectureGroup>();
   for (const app of sortedNodes(manifest.nodes.filter(node => node.kind === 'app'))) {

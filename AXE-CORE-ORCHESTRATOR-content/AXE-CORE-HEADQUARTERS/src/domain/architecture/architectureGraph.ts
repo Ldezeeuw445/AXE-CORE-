@@ -102,7 +102,7 @@ export function heartbeatLiveStatus(at: unknown, now = Date.now()): string {
 }
 
 /** Alleen benoemde beschrijvende velden. Prompts, payloads, env en credentials blijven erbuiten. */
-export function detailsOf(row: Record<string, unknown>, fields: string[]): ArchitectureDetails {
+function detailsOf(row: Record<string, unknown>, fields: string[]): ArchitectureDetails {
   const result: ArchitectureDetails = {};
   for (const key of fields) {
     const value = row[key];
@@ -111,7 +111,7 @@ export function detailsOf(row: Record<string, unknown>, fields: string[]): Archi
   return result;
 }
 
-export function sortArchitectureManifest(manifest: ArchitectureManifest): ArchitectureManifest {
+function sortArchitectureManifest(manifest: ArchitectureManifest): ArchitectureManifest {
   return {
     schemaVersion: 1,
     sources: [...manifest.sources].sort((a, b) => a.path.localeCompare(b.path)),
