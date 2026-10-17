@@ -14,5 +14,7 @@ describe('Architecture panel wiring', () => {
     expect(canvas).toContain("ArchitectureWorkspace as RuntimeWorkspace");
     expect(workspace).toContain('loadArchitectureSnapshot');
     expect(workspace).toContain('mapArchitectureGraph');
+    expect(workspace).toContain('ArchitectureInspector');
+    expect(workspace).toContain('axe-architecture-inspector-panel');
   });
 });

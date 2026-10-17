@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   Controls,
@@ -22,7 +22,7 @@ import {
   ARCHITECTURE_KINDS,
   KIND_LABELS,
   OVERVIEW,
-  SHARED_GROUP,
+  architectureNodeFromClick,
   mapArchitectureGraph,
   type ArchitectureGraphFilters,
 } from './architectureGraphMapper';
@@ -33,14 +33,15 @@ const NODE_TYPES = {
 } as unknown as NodeTypes;
 
 function ArchitectureCanvas() {
-  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, setViewport } = useReactFlow();
   const [snapshot, setSnapshot] = useState<ArchitectureSnapshot>({
     manifest: staticArchitectureManifest(),
     live: { state: 'unconfigured', issues: [] },
   });
   const [filters, setFilters] = useState<ArchitectureGraphFilters>({ group: OVERVIEW, kind: 'all', query: '' });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ArchitectureNode | null>(null);
   const [loading, setLoading] = useState(true);
+  const pickingNode = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,44 +68,69 @@ function ArchitectureCanvas() {
   );
 
   useEffect(() => {
-    const id = requestAnimationFrame(() => { void fitView({ padding: 0.16, duration: 220 }); });
+    const id = requestAnimationFrame(() => {
+      if (mapped.overview || mapped.visibleCount <= 20) {
+        void fitView({ padding: 0.18, duration: 220 });
+        return;
+      }
+      void setViewport({ x: 36, y: 88, zoom: 0.72 }, { duration: 220 });
+    });
     return () => cancelAnimationFrame(id);
-  }, [fitView, mapped.nodes.length, filters.group, filters.kind, filters.query]);
+  }, [fitView, setViewport, mapped.nodes.length, mapped.overview, mapped.visibleCount, filters.group, filters.kind, filters.query]);
 
-  const selected: ArchitectureNode | null = selectedId
-    ? snapshot.manifest.nodes.find(node => node.id === selectedId) ?? null
-    : null;
-
-  const onNodeClick = useCallback((_: unknown, node: { id: string; data: unknown }) => {
-    const data = node.data as { overview?: boolean; groupId?: string; node?: ArchitectureNode };
-    if (data.overview && data.groupId) {
-      const group = data.groupId === SHARED_GROUP ? ALL_GROUPS : data.groupId;
-      setFilters(current => ({ ...current, group }));
-      setSelectedId(null);
+  const openNode = useCallback((data: Parameters<typeof architectureNodeFromClick>[0], fallbackId: string) => {
+    const picked = architectureNodeFromClick(data, fallbackId, snapshot.manifest.nodes);
+    if (!picked) return;
+    if (picked.type === 'group') {
+      setFilters(current => ({ ...current, group: picked.groupId, query: '' }));
+      setSelected(null);
       return;
     }
-    setSelectedId(data.node?.id ?? node.id);
-  }, []);
+    pickingNode.current = true;
+    setSelected(picked.node);
+    window.setTimeout(() => { pickingNode.current = false; }, 0);
+  }, [snapshot.manifest.nodes]);
+
+  const flowNodes = useMemo(() => mapped.nodes.map(node => ({
+    ...node,
+    data: {
+      ...node.data,
+      active: selected?.id === node.id,
+      onSelect: () => openNode(node.data, node.id),
+    },
+  })), [mapped.nodes, openNode, selected?.id]);
 
   return (
     <div className="axe-scene-vlak axe-architecture absolute inset-0 overflow-hidden">
       <ReactFlow
-        nodes={mapped.nodes}
+        nodes={flowNodes}
         edges={mapped.edges}
         nodeTypes={NODE_TYPES}
-        onNodeClick={onNodeClick}
-        onPaneClick={() => setSelectedId(null)}
-        fitView
-        minZoom={0.2}
+        onNodeClick={(_, node) => openNode(node.data, node.id)}
+        onPaneClick={() => {
+          if (pickingNode.current) {
+            pickingNode.current = false;
+            return;
+          }
+          setSelected(null);
+        }}
+        minZoom={0.25}
         maxZoom={1.8}
         nodesConnectable={false}
+        nodesDraggable={false}
         elementsSelectable
+        selectNodesOnDrag={false}
         proOptions={{ hideAttribution: true }}
       >
         <Background color="rgba(255,255,255,0.04)" gap={22} />
         <MiniMap pannable zoomable />
         <Controls showInteractive={false} />
-        <Panel position="top-left" className="flex flex-wrap items-center gap-2 !m-3 max-w-[72%]">
+        {selected && (
+          <Panel position="top-right" className="axe-architecture-inspector-panel">
+            <ArchitectureInspector node={selected} onClose={() => setSelected(null)} />
+          </Panel>
+        )}
+        <Panel position="top-left" className="flex flex-wrap items-center gap-2 !ml-3 max-w-[min(720px,70%)]" style={{ top: 58 }}>
           {filters.group !== OVERVIEW ? (
             <button
               type="button"
@@ -120,7 +146,7 @@ function ArchitectureCanvas() {
           <label className="flex items-center gap-1.5">
             <Search size={12} style={{ color: 'rgba(245,240,230,0.45)' }} />
             <input
-              className="axe-architecture-zoek"
+              className="axe-architecture-zoek nodrag nopan"
               value={filters.query}
               placeholder="Search apps, agents, services, tables…"
               onChange={event => setFilters(current => ({
@@ -131,7 +157,7 @@ function ArchitectureCanvas() {
             />
           </label>
           <select
-            className="axe-architecture-zoek"
+            className="axe-architecture-zoek nodrag nopan"
             value={filters.kind}
             onChange={event => setFilters(current => ({ ...current, kind: event.target.value as ArchitectureGraphFilters['kind'] }))}
             aria-label="Filter by kind"
@@ -174,7 +200,6 @@ function ArchitectureCanvas() {
         </div>
       </PlaatRail>
 
-      {selected && <ArchitectureInspector node={selected} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }

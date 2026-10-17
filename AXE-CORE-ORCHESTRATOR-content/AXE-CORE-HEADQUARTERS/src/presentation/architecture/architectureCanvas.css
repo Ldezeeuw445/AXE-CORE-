@@ -77,3 +77,23 @@
 .axe-architecture-zoek::placeholder {
   color: rgba(245, 240, 230, 0.38);
 }
+
+.axe-architecture .react-flow__panel.axe-architecture-inspector-panel {
+  margin-top: 58px;
+  margin-right: 10px;
+  z-index: 20;
+  pointer-events: all;
+  max-height: calc(100% - 96px);
+}
+
+.axe-architecture-inspector {
+  width: 300px;
+  max-width: min(300px, calc(100vw - 2rem));
+  max-height: inherit;
+  overflow-y: auto;
+  border-radius: 18px;
+  padding: 12px;
+  background: var(--axe-kaart-vlak, #17181c);
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.1));
+  box-shadow: var(--axe-kaart-schaduw, 0 18px 40px -20px rgba(0, 0, 0, 0.7));
+}

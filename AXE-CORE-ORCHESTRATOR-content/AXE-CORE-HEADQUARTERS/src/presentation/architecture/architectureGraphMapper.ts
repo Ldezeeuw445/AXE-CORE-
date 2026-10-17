@@ -48,8 +48,21 @@ export type ArchitectureFlowData = {
   childCount: number;
   overview?: boolean;
   counts?: ArchitectureGroup['kinds'];
+  active?: boolean;
   onSelect?: () => void;
 };
+
+export function architectureNodeFromClick(
+  data: ArchitectureFlowData,
+  fallbackId: string,
+  nodes: ArchitectureNode[],
+): { type: 'group'; groupId: string } | { type: 'node'; node: ArchitectureNode } | null {
+  if (data.overview && data.groupId) {
+    return { type: 'group', groupId: data.groupId === SHARED_GROUP ? ALL_GROUPS : data.groupId };
+  }
+  const node = data.node ?? nodes.find(item => item.id === fallbackId || item.id === data.node?.id);
+  return node ? { type: 'node', node } : null;
+}
 
 export type ArchitectureFlowNode = Node<ArchitectureFlowData, 'architecture' | 'architectureGroup'>;
 export type ArchitectureFlowEdge = Edge<{ sourceEdges: string[]; relations: string[] }>;
@@ -84,9 +97,12 @@ function getArchitectureGroups(manifest: ArchitectureManifest): ArchitectureGrou
 function matchesQuery(node: ArchitectureNode, query: string): boolean {
   const needle = query.trim().toLocaleLowerCase('en');
   if (!needle) return true;
-  return [node.id, node.label, node.description ?? '', ...node.sources,
-    ...Object.values(node.details).flatMap(value => Array.isArray(value) ? value : [String(value)])]
-    .some(value => value.toLocaleLowerCase('en').includes(needle));
+  const fields = [node.id, node.label, node.description ?? '', node.kind, node.appId ?? ''];
+  for (const key of ['unit', 'product_key', 'table', 'projectRef', 'engine', 'host', 'label'] as const) {
+    const value = node.details[key];
+    if (typeof value === 'string') fields.push(value);
+  }
+  return fields.some(value => value.toLocaleLowerCase('en').includes(needle));
 }
 
 /** Groepering verandert de tekening; alleen bronrelaties leveren lijnen op. */
@@ -142,7 +158,7 @@ export function mapArchitectureGraph(manifest: ArchitectureManifest, filters: Ar
   const sections = groups.flatMap(group => {
     const members = visible.filter(node => ownerOf(node) === group.id);
     if (!members.length) return [];
-    const columns = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(members.length))));
+    const columns = Math.min(6, Math.max(1, Math.ceil(Math.sqrt(members.length))));
     const rows = Math.ceil(members.length / columns);
     return [{ group, members, columns, width: columns * 262 + 28, height: rows * 118 + 72 }];
   });
@@ -156,12 +172,13 @@ export function mapArchitectureGraph(manifest: ArchitectureManifest, filters: Ar
       nodes.push({
         id: parentId, type: 'architectureGroup', position: { x: columnX, y: rowY },
         data: { label: group.label, kind: 'group', groupId: group.id, childCount: members.length },
-        style: { width, height }, selectable: false, focusable: false,
+        style: { width, height, pointerEvents: 'none' }, selectable: false, focusable: false,
       });
       members.forEach((node, memberIndex) => nodes.push({
         id: node.id, type: 'architecture', parentId, extent: 'parent',
         position: { x: 24 + (memberIndex % columns) * 262, y: 54 + Math.floor(memberIndex / columns) * 118 },
         data: { label: node.label, kind: node.kind, node, groupId: group.id, childCount: 0 },
+        style: { pointerEvents: 'all' },
         width: 238, height: 94,
       }));
       columnX += width + 80;

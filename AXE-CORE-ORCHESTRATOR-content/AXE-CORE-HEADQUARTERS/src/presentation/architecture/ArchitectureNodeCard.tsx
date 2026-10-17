@@ -32,6 +32,7 @@ export function ArchitectureNodeCard({ data, selected }: NodeProps) {
   const nodeData = data as ArchitectureFlowData;
   const ink = KIND_INK[nodeData.kind] ?? '#F5F0E6';
   const status = nodeData.node?.details.liveStatus;
+  const active = Boolean(nodeData.active || selected);
   const where = typeof nodeData.node?.details.unit === 'string'
     ? nodeData.node.details.unit
     : typeof nodeData.node?.details.host === 'string'
@@ -43,7 +44,14 @@ export function ArchitectureNodeCard({ data, selected }: NodeProps) {
           : nodeData.node?.description;
 
   return (
-    <div className={`axe-architecture-kaart${selected ? ' is-selected' : ''}`}>
+    <div
+      className={`axe-architecture-kaart nodrag nopan${active ? ' is-selected' : ''}`}
+      data-architecture-node={nodeData.node?.id ?? ''}
+      onPointerDown={event => {
+        event.stopPropagation();
+        nodeData.onSelect?.();
+      }}
+    >
       <Handle type="target" position={Position.Left} style={{ opacity: 0.35 }} />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[8px] uppercase tracking-[0.16em]" style={{ color: ink }}>

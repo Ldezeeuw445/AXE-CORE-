@@ -15,22 +15,30 @@ export function ArchitectureInspector({
   node: ArchitectureNode;
   onClose: () => void;
 }) {
+  const where = [
+    typeof node.details.unit === 'string' ? node.details.unit : null,
+    typeof node.details.host === 'string' ? node.details.host : null,
+    typeof node.details.projectRef === 'string' ? node.details.projectRef : null,
+    typeof node.details.engine === 'string' ? node.details.engine : null,
+  ].filter(Boolean);
+
   const rows = [
     ['Kind', KIND_LABELS[node.kind]],
     ['Id', node.id],
     ['Runs with', node.appId || 'shared / unassigned'],
-    ...Object.entries(node.details).map(([key, value]) => [key, display(value)] as const),
+    ['Where', where.length ? where.join(' · ') : 'not set'],
+    ['Status', display(node.details.liveStatus ?? node.details.status ?? node.details.heartbeat)],
+    ...Object.entries(node.details)
+      .filter(([key]) => !['liveStatus', 'status', 'heartbeat', 'unit', 'host', 'projectRef', 'engine'].includes(key))
+      .map(([key, value]) => [key, display(value)] as const),
     ['Sources', node.sources.join(' · ')],
   ] as const;
 
   return (
     <aside
-      className="absolute top-12 right-3 bottom-10 z-30 w-[300px] max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-[18px] p-3"
-      style={{
-        background: 'var(--axe-kaart-vlak)',
-        border: '1px solid var(--axe-kaart-lijn)',
-        boxShadow: 'var(--axe-kaart-schaduw)',
-      }}
+      className="nodrag nopan nowheel axe-architecture-inspector"
+      data-testid="architecture-inspector"
+      aria-label={`Details for ${node.label}`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ArchitectureManifest } from '@/domain/architecture/architectureGraph';
-import { ALL_GROUPS, mapArchitectureGraph, OVERVIEW } from './architectureGraphMapper';
+import { ALL_GROUPS, architectureNodeFromClick, mapArchitectureGraph, OVERVIEW } from './architectureGraphMapper';
 
 const manifest: ArchitectureManifest = {
   schemaVersion: 1,
@@ -34,5 +34,25 @@ describe('mapArchitectureGraph', () => {
     expect(mapped.overview).toBe(false);
     expect(mapped.nodes.some(n => n.id === 'mcp:northsea-mcp')).toBe(true);
     expect(mapped.visibleCount).toBe(1);
+  });
+
+  it('does not match a node just because After= mentions another unit', () => {
+    const noisy: ArchitectureManifest = {
+      ...manifest,
+      nodes: [...manifest.nodes, {
+        id: 'service:northsea-mcp', kind: 'service', label: 'northsea-mcp', appId: 'app:northsea',
+        details: { after: 'network-online.target axe-core-api.service' }, sources: ['test'],
+      }],
+    };
+    const mapped = mapArchitectureGraph(noisy, { group: ALL_GROUPS, kind: 'all', query: 'axe-core-api' });
+    expect(mapped.nodes.some(n => n.id === 'service:northsea-mcp')).toBe(false);
+    expect(mapped.nodes.some(n => n.id === 'service:axe-core-api')).toBe(true);
+  });
+
+  it('clicking a node card selects that node, not the group frame', () => {
+    const api = manifest.nodes[1]!;
+    expect(architectureNodeFromClick({
+      label: api.label, kind: api.kind, node: api, groupId: 'app:axe_core', childCount: 0,
+    }, api.id, manifest.nodes)).toEqual({ type: 'node', node: api });
   });
 });
