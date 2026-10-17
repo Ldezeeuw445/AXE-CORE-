@@ -286,6 +286,9 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/ui/nativePrompt.ts', 'nativePrompt'],
   ['src/presentation/components/axe-core/AgentChatHub.tsx', 'AgentChatHub'],
   ['src/presentation/components/axe-core/ArchitectureRedesign.tsx', 'ArchitectureRedesign'],
+  // 17 okt 2026: Architecture is een nodes+edges-graaf. Deze balk telde
+  // kinds van de oude org-boom; niemand rendert die boom nog op Home.
+  ['src/presentation/components/axe-core/RuntimeStatusBar.tsx', 'RuntimeStatusBar'],
   ['src/presentation/components/axe-core/ChatToolbar.tsx', 'ChatToolbar'],
   ['src/presentation/components/axe-core/CodeEditor.tsx', 'CodeEditor'],
   ['src/presentation/components/axe-core/CodeStudioNameDialog.tsx', 'CodeStudioNameDialog'],
