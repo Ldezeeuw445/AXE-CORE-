@@ -11,7 +11,8 @@ const MATEN = [
   { naam: '1100x680', width: 1100, height: 680 },
   { naam: '1440x900', width: 1440, height: 900 },
   { naam: '1920x1080', width: 1920, height: 1080 },
-  { naam: '2560x1360', width: 2560, height: 1360 },
+  { naam: '2048x1080', width: 2048, height: 1080 },
+  { naam: '2560x1440', width: 2560, height: 1440 },
 ] as const;
 
 function overlap(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): number {
@@ -72,14 +73,32 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(sceneTekst).not.toMatch(/\{\s*"at"/);
 
       const firstLinks = await box(page, '[data-axe-home-rail="links"] .axe-home-rail-rij');
+      const secondLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-rij').nth(1).boundingBox();
       const lastLinks = await page.locator('[data-axe-home-rail="links"] .axe-home-rail-rij').last().boundingBox();
       const firstRechts = await box(page, '[data-axe-home-rail="rechts"] .axe-home-rail-rij');
       const lastRechts = await page.locator('[data-axe-home-rail="rechts"] .axe-home-rail-rij').last().boundingBox();
-      if (!lastLinks || !lastRechts) throw new Error('rail last row missing');
+      if (!lastLinks || !lastRechts || !secondLinks) throw new Error('rail row missing');
       expect(firstLinks.y, `left first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(links.y - 1);
       expect(firstRechts.y, `right first clipped at ${maat.naam}`).toBeGreaterThanOrEqual(rechts.y - 1);
       expect(lastLinks.y + lastLinks.height, `left last clipped at ${maat.naam}`).toBeLessThanOrEqual(links.y + links.height + 1);
       expect(lastRechts.y + lastRechts.height, `right last clipped at ${maat.naam}`).toBeLessThanOrEqual(rechts.y + rechts.height + 1);
+      const rijGap = secondLinks.y - (firstLinks.y + firstLinks.height);
+      expect(rijGap, `rail gap at ${maat.naam}`).toBeGreaterThanOrEqual(7);
+      expect(rijGap, `rail gap at ${maat.naam}`).toBeLessThanOrEqual(13);
+
+      const lopendBox = await box(page, '[data-axe-home-kaart="lopend"]');
+      const recentBox = await box(page, '[data-axe-home-kaart="recent"]');
+      const okBox = await box(page, '[data-axe-home-kaart="ok"]');
+      const seatsBox = await box(page, '[data-axe-home-kaart="seats"]');
+      expect(recentBox.y, `RECENT stacked under WORKING NOW at ${maat.naam}`).toBeGreaterThan(lopendBox.y + 20);
+      expect(seatsBox.y, `SEATS stacked under OK at ${maat.naam}`).toBeGreaterThan(okBox.y + 20);
+      expect(Math.abs(lopendBox.x - recentBox.x), `left pair same column at ${maat.naam}`).toBeLessThan(8);
+      expect(Math.abs(okBox.x - seatsBox.x), `right pair same column at ${maat.naam}`).toBeLessThan(8);
+      expect(Math.abs(lopendBox.x - links.x), `left pair under left rail at ${maat.naam}`).toBeLessThan(12);
+      expect(Math.abs((okBox.x + okBox.width) - (rechts.x + rechts.width)), `right pair under right rail at ${maat.naam}`).toBeLessThan(12);
+      expect(lopendBox.width, `left cards not stretched at ${maat.naam}`).toBeLessThanOrEqual(links.width + 4);
+      expect(okBox.width, `right cards not stretched at ${maat.naam}`).toBeLessThanOrEqual(rechts.width + 4);
+      expect(okBox.x, `not a 4-across band at ${maat.naam}`).toBeGreaterThan(lopendBox.x + lopendBox.width + 24);
 
       const lopend = await page.locator('[data-axe-home-kaart="lopend"]').innerText();
       expect(lopend).toMatch(/WORKING NOW/i);

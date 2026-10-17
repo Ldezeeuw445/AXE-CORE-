@@ -7,7 +7,8 @@
     :root {
       --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
       --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-      --axe-home-live-hoog: clamp(112px, 18%, 140px);
+      --axe-home-rail-gap: clamp(8px, 1.1vh, 12px);
+      --axe-home-live-hoog: clamp(152px, 24%, 196px);
       --text-primary: #f4f4f5;
       --text-secondary: #a1a1aa;
       --text-muted: #71717a;
@@ -19,7 +20,8 @@
     @media (max-width: 1100px) {
       :root {
         --axe-home-rail-breed: clamp(200px, 26vw, 300px);
-        --axe-home-live-hoog: clamp(124px, 30%, 168px);
+        --axe-home-rail-gap: 8px;
+        --axe-home-live-hoog: clamp(140px, 32%, 180px);
       }
     }
     html, body { margin: 0; height: 100%; background: #05070c; color: var(--text-primary); font: 13px/1.35 ui-sans-serif, system-ui; }
@@ -36,53 +38,61 @@
       box-shadow: 0 0 40px rgba(34,211,238,.18);
     }
     .axe-home-rail {
-      position: absolute; top: 4px;
-      bottom: calc(6px + var(--axe-home-live-hoog));
+      position: absolute; top: 6px;
+      bottom: calc(10px + var(--axe-home-live-hoog));
       width: var(--axe-home-rail-breed);
-      display: flex; flex-direction: column; justify-content: flex-start; gap: 2px;
+      display: flex; flex-direction: column; justify-content: flex-start;
+      gap: var(--axe-home-rail-gap);
       padding: 2px 0;
       overflow: hidden;
     }
     .axe-home-rail--links { left: var(--axe-home-rail-inset); }
     .axe-home-rail--rechts { right: var(--axe-home-rail-inset); }
     .axe-home-rail-rij {
-      display: flex; align-items: center; gap: 5px; min-width: 0;
-      flex: 0 1 auto; height: clamp(34px, calc((100% - 14px) / 7), 46px);
-      min-height: 34px; max-height: 46px;
+      display: flex; align-items: center; gap: 8px; min-width: 0;
+      flex: 0 0 auto;
+      height: clamp(40px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 58px);
+      min-height: 40px; max-height: 58px;
     }
     .axe-home-rail--rechts .axe-home-rail-rij { flex-direction: row-reverse; }
-    .tegel { width: 32px; flex: none; padding: 1px; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
-    .balk { flex: 1; min-width: 0; min-height: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 2px 7px; }
+    .tegel { width: 36px; flex: none; padding: 2px 1px; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); text-align: center; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+    .balk { flex: 1; min-width: 0; min-height: 0; border-radius: 12px; background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn); padding: 4px 10px; }
     .balk .naam { color: #38bdf8; font-weight: 500; }
-    .balk .regel { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 10px; line-height: 1.2; }
+    .balk .regel { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 11px; line-height: 1.25; }
     .axe-home-live {
       position: absolute;
-      left: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
-      right: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
+      left: var(--axe-home-rail-inset);
+      right: var(--axe-home-rail-inset);
       bottom: 8px;
       height: var(--axe-home-live-hoog);
       max-height: var(--axe-home-live-hoog);
       overflow: hidden;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(18%, 240px) minmax(0, 1fr);
-      gap: 8px;
+      display: flex;
+      justify-content: space-between;
       align-items: stretch;
+      gap: 24px;
+      pointer-events: none;
     }
     .cluster {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: 1fr 1fr;
+      gap: 8px;
+      width: var(--axe-home-rail-breed);
+      max-width: var(--axe-home-rail-breed);
+      flex: none;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
+      pointer-events: auto;
     }
-    .midden { pointer-events: none; min-width: 0; }
+    .cluster > * { min-height: 0; }
+    .midden { pointer-events: none; flex: 1 1 auto; min-width: 0; }
     @media (max-width: 1100px) {
-      .axe-home-rail { gap: 1px; justify-content: flex-start; }
-      .axe-home-rail-rij { min-height: 32px; max-height: 42px; }
-      .tegel { width: 28px; padding: 1px; }
-      .balk { padding: 1px 6px; }
-      .axe-home-live { grid-template-columns: minmax(0,1fr) minmax(12%,160px) minmax(0,1fr); gap: 6px; }
+      .axe-home-rail { top: 4px; justify-content: flex-start; padding: 0; }
+      .axe-home-rail-rij { height: clamp(32px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px); min-height: 32px; max-height: 44px; }
+      .tegel { width: 30px; padding: 1px; }
+      .balk { padding: 2px 8px; }
     }
     .kaart {
       background: var(--axe-kaart-vlak);
@@ -93,6 +103,7 @@
       line-height: 1.25;
       height: 100%;
       min-width: 0;
+      min-height: 0;
       overflow: hidden;
     }
     .kaart h3 { margin: 0 0 2px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: normal; overflow: visible; }

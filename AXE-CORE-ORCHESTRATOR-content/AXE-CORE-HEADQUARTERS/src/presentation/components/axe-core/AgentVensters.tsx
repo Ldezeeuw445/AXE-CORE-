@@ -74,9 +74,9 @@ function Tegel({ rij, open, onKies }: { rij: ManagerRij; open: boolean; onKies: 
       className="axe-home-rail-tegel flex flex-col items-center gap-px cursor-pointer"
       style={{ ...TEGEL, textShadow: LEESBAAR }}
     >
-      <ManagerAvatar agent={agent} size={18} />
+      <ManagerAvatar agent={agent} size={20} />
       <span
-        className="text-[7px] tracking-[0.1em] uppercase leading-none whitespace-nowrap"
+        className="text-[8px] tracking-[0.1em] uppercase leading-none whitespace-nowrap"
         style={{ color: 'var(--text-muted)' }}
       >
         {agent.kort ?? agent.name}

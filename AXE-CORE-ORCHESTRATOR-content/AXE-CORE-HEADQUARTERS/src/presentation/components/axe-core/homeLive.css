@@ -1,4 +1,4 @@
-/* Home around the core: tight dual rails + 2+2 live cards flanking the composer.
+/* Home around the core: dual rails + stacked 2+2 cards under each rail.
  *
  * The chat plate is transparent (--kaal), so anything at the bottom of a
  * 100% bol-vak shows through the composer and chips. These tokens keep the
@@ -7,18 +7,19 @@
 :root {
   --axe-home-rail-inset: clamp(12px, 1.8vw, 40px);
   --axe-home-rail-breed: clamp(220px, 24vw, 380px);
-  --axe-home-live-hoog: clamp(112px, 18%, 140px);
+  --axe-home-rail-gap: clamp(8px, 1.1vh, 12px);
+  --axe-home-live-hoog: clamp(152px, 24%, 196px);
 }
 
 .axe-home-rail {
   position: absolute;
-  top: 4px;
-  bottom: calc(6px + var(--axe-home-live-hoog));
+  top: 6px;
+  bottom: calc(10px + var(--axe-home-live-hoog));
   width: var(--axe-home-rail-breed);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 2px;
+  gap: var(--axe-home-rail-gap);
   padding: 2px 0;
   overflow: hidden;
   z-index: 16;
@@ -43,12 +44,12 @@
 .axe-home-rail-rij {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   min-width: 0;
-  flex: 0 1 auto;
-  height: clamp(34px, calc((100% - 14px) / 7), 46px);
-  min-height: 34px;
-  max-height: 46px;
+  flex: 0 0 auto;
+  height: clamp(40px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 58px);
+  min-height: 40px;
+  max-height: 58px;
   width: 100%;
 }
 
@@ -57,16 +58,16 @@
 }
 
 .axe-home-rail-tegel {
-  width: 32px;
+  width: 36px;
   flex: none;
-  padding: 1px;
+  padding: 2px 1px;
 }
 
 .axe-home-rail-balk {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  padding: 2px 7px;
+  padding: 4px 10px;
 }
 
 .axe-home-rail-regel {
@@ -75,39 +76,49 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
   overflow-wrap: anywhere;
-  font-size: 10px;
-  line-height: 1.2;
+  font-size: 11px;
+  line-height: 1.25;
 }
 
-/* Two small cards left of the composer, two right — not a full-width band. */
+/* 2+2 under the rails: stacked pairs, never a 4-across band over the composer. */
 .axe-home-live {
   position: absolute;
-  left: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
-  right: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 10px);
+  left: var(--axe-home-rail-inset);
+  right: var(--axe-home-rail-inset);
   bottom: 8px;
   width: auto;
   height: var(--axe-home-live-hoog);
   max-height: var(--axe-home-live-hoog);
   overflow: hidden;
   z-index: 15;
-  pointer-events: auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18%, 240px) minmax(0, 1fr);
-  gap: 8px;
+  pointer-events: none;
+  display: flex;
+  justify-content: space-between;
   align-items: stretch;
+  gap: 24px;
 }
 
 .axe-home-live-cluster {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+  width: var(--axe-home-rail-breed);
+  max-width: var(--axe-home-rail-breed);
+  flex: none;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  pointer-events: auto;
+}
+
+.axe-home-live-cluster > * {
+  min-height: 0;
 }
 
 .axe-home-live-midden {
   pointer-events: none;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -203,17 +214,19 @@
 
 .axe-home-live-lijst {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 50%;
   top: 0;
   bottom: 0;
   z-index: 22;
   overflow: auto;
   padding: 10px 12px;
+  width: min(420px, 90%);
+  transform: translateX(-50%);
   border-radius: 12px;
   background: var(--axe-kaart-vlak);
   border: 1px solid var(--axe-kaart-lijn);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
 }
 
 .axe-home-live-lijst-kop {
@@ -291,35 +304,28 @@
 @media (max-width: 1100px) {
   :root {
     --axe-home-rail-breed: clamp(200px, 26vw, 300px);
-    --axe-home-live-hoog: clamp(124px, 30%, 168px);
+    --axe-home-rail-gap: 8px;
+    --axe-home-live-hoog: clamp(140px, 32%, 180px);
   }
 
   .axe-home-rail {
-    gap: 1px;
+    top: 4px;
     justify-content: flex-start;
-    padding-top: 0;
+    padding: 0;
   }
 
   .axe-home-rail-rij {
+    height: clamp(32px, calc((100% - (6 * var(--axe-home-rail-gap))) / 7), 44px);
     min-height: 32px;
-    max-height: 42px;
+    max-height: 44px;
   }
 
   .axe-home-rail-tegel {
-    width: 28px;
+    width: 30px;
     padding: 1px;
   }
 
   .axe-home-rail-balk {
-    padding: 1px 6px;
-  }
-
-  .axe-home-live {
-    grid-template-columns: minmax(0, 1fr) minmax(12%, 160px) minmax(0, 1fr);
-    gap: 6px;
-  }
-
-  .axe-home-live-cluster {
-    gap: 4px;
+    padding: 2px 8px;
   }
 }

@@ -16,15 +16,19 @@ describe('Home live dashboard is aangesloten', () => {
   it('de live strip blijft tussen de rails, niet onder de composer', () => {
     const css = bron('homeLive.css');
     expect(css).toContain('--axe-home-rail-breed');
+    expect(css).toContain('--axe-home-rail-gap');
     expect(css).toContain('.axe-home-rail--rechts');
-    expect(css).toMatch(/left: calc\(var\(--axe-home-rail-inset\) \+ var\(--axe-home-rail-breed\)/);
-    expect(css).toMatch(/right: calc\(var\(--axe-home-rail-inset\) \+ var\(--axe-home-rail-breed\)/);
+    expect(css).toMatch(/left: var\(--axe-home-rail-inset\)/);
+    expect(css).toMatch(/right: var\(--axe-home-rail-inset\)/);
     expect(css).toMatch(/axe-home-live-cluster/);
-    expect(css).toMatch(/grid-template-columns: 1fr 1fr/);
+    expect(css).toMatch(/grid-template-rows: 1fr 1fr/);
+    expect(css).toMatch(/--axe-home-rail-gap: clamp\(8px, 1\.1vh, 12px\)/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*overflow: hidden/);
+    expect(css).toMatch(/\.axe-home-live \{[^}]*pointer-events: none/);
     expect(css).not.toMatch(/grid-template-columns: repeat\(4,/);
     expect(css).not.toMatch(/\.axe-home-live \{[^}]*overflow:\s*auto/);
     expect(css).not.toMatch(/left: calc\(clamp\(16px/);
+    expect(css).not.toMatch(/\.axe-home-live-cluster \{[^}]*grid-template-columns: 1fr 1fr/);
   });
 
   it('de strip leest echte polls en Approve/Decline', () => {

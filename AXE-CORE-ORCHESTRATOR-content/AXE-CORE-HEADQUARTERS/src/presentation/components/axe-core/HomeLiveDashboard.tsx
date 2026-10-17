@@ -217,7 +217,7 @@ export function HomeLiveDashboard() {
   );
 
   return (
-    <div className="pointer-events-auto axe-home-live" data-axe-home-live>
+    <div className="axe-home-live" data-axe-home-live>
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="links">
         {kaartLopend}
         {kaartRecent}
