@@ -14,6 +14,11 @@ die reden erbij, in plaats van stil als gedaan te tellen.
 
 Een nieuwe stap: een regel in ACTIES plus een meetfunctie in METINGEN. Is hij
 gedaan, dan mag hij weg; laten staan kan ook, hij meldt dan niets meer.
+
+Weg sinds 19 okt: northsea-engine-fix (live gemeten 17 okt: nul schrijfacties per
+tick, zie het incident) en axon-key-migration (door Luka toegepast gemeld). Op de
+Mac mini waren ze niet meetbaar en bleven ze elke ochtend als open terugkomen. De
+meetfuncties blijven staan voor wie ze met de juiste sleutels opnieuw wil gebruiken.
 """
 from __future__ import annotations
 
@@ -44,13 +49,6 @@ NORTHSEA_LUS_DREMPEL = 30
 
 ACTIES = (
     {
-        "id": "northsea-engine-fix",
-        "title": "NorthSea: deploy the engine fix (1c25cf93)",
-        "how": "On the iMac, in the HQ folder: bash backend/northsea_mcp/deploy/deploy.sh check "
-               "(must list exactly engine.py, engine_rules.py, service.py, sourcing_quality.py), "
-               "then bash backend/northsea_mcp/deploy/deploy.sh deploy.",
-    },
-    {
         "id": "build-loop-canon",
         "title": "Build loop: give it the programme tasks",
         "how": "Supabase SQL editor (project AXE Companion): run "
@@ -67,14 +65,6 @@ ACTIES = (
         "title": "AXON: put the PR #2 frontend live (consent screen)",
         "how": "On the Mac mini, in axon-memory-app on main: npm run build && "
                "npx wrangler pages deploy dist --project-name axon-app --branch main.",
-    },
-    {
-        "id": "axon-key-migration",
-        "title": "AXON: apply the API-key migration from PR #2",
-        "how": "Apply supabase/migrations/20261015100000_a_key_is_made_by_the_server.sql to the AXON "
-               "project (Supabase MCP on the Mac mini), then rename it to the ledger version. "
-               "To let AXE measure it: AXON_SUPABASE_URL and AXON_SUPABASE_ANON_KEY (public values) "
-               "in .env.local on the Mac mini.",
     },
     {
         "id": "northsea-n4-deploy",
@@ -256,11 +246,9 @@ async def _inventaris_uit(client, supabase_url, key, env, nu):
 
 
 METINGEN: dict[str, Meting] = {
-    "northsea-engine-fix": _northsea_lus,
     "build-loop-canon": _bouwlus_canon,
     "product-registry": _productregister,
     "axon-pr2-live": _axon_live,
-    "axon-key-migration": _axon_migratie,
     "northsea-n4-deploy": _northsea_n4,
     "axe-api-deploy": _api_health,
     "phone-push": _push_abonnement,

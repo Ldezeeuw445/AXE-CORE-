@@ -95,21 +95,28 @@ def test_phone_push_meet_native_notify_niet_web_push():
     assert "native_notify" in stand0["phone-push"]["measured"]
 
 
+def meting(handler, functie, env=NS_ENV, nu=NA_ACHT):
+    """Eén meetfunctie los, ook als zijn stap niet meer in ACTIES staat."""
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await functie(client, SB, "secret", env, nu)
+    return asyncio.run(run())
+
+
 def test_niets_gedaan_meet_elke_stap_als_open_met_wat_er_gemeten_is():
     handler, _ = wereld(gedaan=False)
     stand = {a["id"]: a for a in meet(handler)}
     assert all(a["done"] is False for a in stand.values()), stand
-    assert "146 action_queue rows" in stand["northsea-engine-fix"]["measured"]
     assert "plain" in stand["axon-pr2-live"]["measured"]
-    assert "old policy" in stand["axon-key-migration"]["measured"]
+    assert "146 action_queue rows" in meting(handler, ea._northsea_lus)[1]
+    assert "old policy" in meting(handler, ea._axon_migratie)[1]
     assert "no product_key column" in stand["product-registry"]["measured"]
 
 
 def test_northsea_zonder_eigen_sleutel_is_onmeetbaar_en_niet_stil_gedaan():
     handler, _ = wereld(gedaan=True)
-    stand = {a["id"]: a for a in meet(handler, env={})}
-    assert stand["northsea-engine-fix"]["done"] is None
-    assert "cannot measure" in stand["northsea-engine-fix"]["measured"]
+    done, gemeten = meting(handler, ea._northsea_lus, env={})
+    assert done is None and "cannot measure" in gemeten
 
 
 def test_axon_functions_live_maar_frontend_oud_is_niet_af():
@@ -121,8 +128,7 @@ def test_axon_functions_live_maar_frontend_oud_is_niet_af():
 
 def test_axon_migratie_zonder_anon_sleutel_is_onmeetbaar():
     handler, _ = wereld(gedaan=True)
-    stand = {a["id"]: a for a in meet(handler, env={})}
-    assert stand["axon-key-migration"]["done"] is None
+    assert meting(handler, ea._axon_migratie, env={})[0] is None
 
 
 def test_meet_af_en_toe_meet_hooguit_eens_per_kwartier():
@@ -148,8 +154,13 @@ def test_meet_af_en_toe_meet_hooguit_eens_per_kwartier():
 
 def test_northsea_drempel():
     handler, _ = wereld(gedaan=True, lus_rijen=ea.NORTHSEA_LUS_DREMPEL + 1)
-    stand = {a["id"]: a for a in meet(handler)}
-    assert stand["northsea-engine-fix"]["done"] is False
+    assert meting(handler, ea._northsea_lus)[0] is False
+
+
+def test_afgeronde_onmeetbare_stappen_herinneren_niet_meer():
+    ids = {a["id"] for a in ea.ACTIES}
+    assert "northsea-engine-fix" not in ids and "axon-key-migration" not in ids
+    assert set(ea.METINGEN) == ids
 
 
 def test_een_kapotte_verbinding_geeft_onbekend_in_plaats_van_een_crash():
@@ -165,7 +176,7 @@ def test_herinnering_pas_vanaf_acht_uur_en_een_keer_per_dag():
     assert ea.herinnering(stand, VOOR_ACHT, None) is None
     datum, tekst = ea.herinnering(stand, NA_ACHT, None)
     assert datum == "2026-10-17"
-    assert tekst.startswith("Owner actions: 9 open\n1. NorthSea")
+    assert tekst.startswith("Owner actions: 7 open\n1. Build loop")
     assert "deploy.sh check" in tekst
     assert ea.herinnering(stand, NA_ACHT, "2026-10-17") is None
 
@@ -188,7 +199,7 @@ def test_herinner_schrijft_een_rij_per_dag_met_vast_id(tmp_path):
     assert len(posts) == 1
     rij = posts[0]
     assert rij["recipient"] == ea.USER_ID and rij["type"] == "warning"
-    assert rij["message"].startswith("Owner actions: 9 open")
+    assert rij["message"].startswith("Owner actions: 7 open")
     # Zelfde datum, zelfde id: een herhaalde poging na een timeout wordt geen tweede rij.
     assert rij["id"] == "%s" % ea.uuid.uuid5(ea.uuid.NAMESPACE_URL, "axe-eigenaar-acties/2026-10-17")
 
