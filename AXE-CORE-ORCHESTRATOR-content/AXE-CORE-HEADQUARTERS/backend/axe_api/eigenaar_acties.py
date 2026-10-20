@@ -74,10 +74,10 @@ ACTIES = (
     },
     {
         "id": "axe-api-deploy",
-        "title": "AXE Core API: deploy /health with dependency checks and the complete manifest",
+        "title": "AXE Core API: deploy the approval fix and the Ollama box check (20 Oct)",
         "how": "On the iMac in the HQ folder: python3 scripts/vps_sync.py check. Expect REPO AHEAD for "
-               "main.py and gezondheid.py; if anything says BOX DRIFT, run the capture line it prints "
-               "and commit that first. Then python3 scripts/vps_sync.py deploy.",
+               "main.py, task_runtime.py, gezondheid.py and agent_runner.py; if anything says BOX DRIFT, "
+               "run the capture line it prints and commit that first. Then python3 scripts/vps_sync.py deploy.",
     },
     {
         "id": "phone-push",
@@ -194,14 +194,21 @@ async def _northsea_n4(client, supabase_url, key, env, nu):
 
 
 async def _api_health(client, supabase_url, key, env, nu):
-    """Na de uitrol van CORE-HEALTH-1 heeft /health een veld checks."""
+    """Na de uitrol van 20 okt meet /health ook de Ollama box (checks.ollama_box).
+
+    Die check komt in dezelfde uitrol als de idempotente approval-beslissing
+    (task_runtime.py), dus zijn aanwezigheid bewijst dat de VPS die ook heeft.
+    """
     url = (env.get("AXE_MONITOR_API_URL") or "https://api.axecompanion.com").rstrip("/")
     r = await client.get(url + "/health")
     data = r.json() if r.is_success else None
     if not isinstance(data, dict):
         return None, f"cannot measure: /health answered {r.status_code}"
-    if "checks" in data:
+    checks = data.get("checks")
+    if isinstance(checks, dict) and "ollama_box" in checks:
         return True, "live; degraded: " + (", ".join(data.get("degraded") or []) or "none")
+    if isinstance(checks, dict):
+        return False, "/health has checks but no ollama_box yet (20 Oct deploy not on the VPS)"
     return False, "/health has no dependency checks yet (old main.py)"
 
 

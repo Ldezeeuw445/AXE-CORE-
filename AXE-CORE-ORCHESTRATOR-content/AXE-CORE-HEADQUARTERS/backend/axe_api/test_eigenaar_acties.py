@@ -50,7 +50,7 @@ def wereld(gedaan: bool, lus_rijen: int | None = None, functions_live: bool | No
         if request.url.host == "api.axecompanion.com" and pad == "/health":
             body = {"status": "ok"}
             if gedaan:
-                body.update(checks={"supabase": {"state": "ok"}}, degraded=[])
+                body.update(checks={"supabase": {"state": "ok"}, "ollama_box": {"state": "ok", "models": 12}}, degraded=[])
             return httpx.Response(200, json=body)
         if pad.endswith("/core_axe_devices"):
             if gedaan:
@@ -219,3 +219,10 @@ def test_mislukte_aflevering_telt_niet_als_herinnerd(tmp_path):
                 pass
     asyncio.run(run())
     assert not (tmp_path / "eigenaar_acties.json").exists()
+
+
+def test_api_deploy_is_pas_af_als_de_vps_de_ollama_box_meet():
+    def handler(request):
+        return httpx.Response(200, json={"status": "ok", "checks": {"supabase": {"state": "ok"}}, "degraded": []})
+    done, gemeten = meting(handler, ea._api_health)
+    assert done is False and "ollama_box" in gemeten
