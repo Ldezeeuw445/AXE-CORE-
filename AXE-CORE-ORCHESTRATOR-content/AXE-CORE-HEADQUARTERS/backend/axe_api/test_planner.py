@@ -376,3 +376,38 @@ def test_een_bouwrun_krijgt_tijd_en_zijn_controles():
     assert aanroepen[0] == ("acceptEdits", p.BOUW_RUN_S, True)
     assert aanroepen[1] == ("plan", p.PLANNER_RUN_S, False)
     assert p.BOUW_RUN_S > p.PLANNER_RUN_S
+
+
+class TestCheckIn:
+    """Een Claude-stoel die een dag stil was krijgt één korte run; een loginfout wordt meteen gemeld."""
+
+    NU = datetime(2026, 10, 20, 12, 0)
+
+    def test_alleen_claude_stoelen_zonder_recente_run(self):
+        staat = {"warm": {"claude": {"at": "2026-10-20T09:00:00", "ok": True},
+                          "claude2": {"at": "2026-10-18T09:00:00", "ok": True},
+                          "claude3": {"at": "2026-10-20T11:00:00", "ok": False}}}
+        assert p.warm_nodig(staat, self.NU) == ["claude2", "claude3", "claude4"]
+
+    def test_een_echte_run_telt_als_check_in(self):
+        staat = {"warm": {m: {"at": "2026-10-20T11:59:00", "ok": True} for m in ("claude", "claude2", "claude3", "claude4")}}
+        assert p.warm_nodig(staat, self.NU) == []
+
+    def test_check_in_schrijft_warm_en_meldt_een_kapotte_login(self):
+        antwoorden = {"claude": {"status": "ok"}, "claude2": {"status": "error", "error": "Not logged in · Please run /login"},
+                      "claude3": {"status": "skip", "reden": "bezig"}}
+        engines = {"claude": {"aanwezig": True, "ingelogd": True}, "claude2": {"aanwezig": True, "ingelogd": True},
+                   "claude3": {"aanwezig": True, "ingelogd": True}, "claude4": {"aanwezig": False}}
+        staat = {"account_kapot": {"claude": {"reden": "login verlopen", "tot": "2099-01-01T00:00:00"}}}
+        pl = p.Planner(lambda: None, lambda *a, **k: {}, lambda: {}, houd_warm=lambda m: antwoorden[m])
+        verslag = pl._houd_warm(staat, self.NU, engines)
+        assert verslag == {"claude": "ok", "claude2": "fout", "claude3": "overgeslagen: bezig",
+                           "claude4": "overgeslagen: niet geïnstalleerd"}
+        assert staat["warm"]["claude"]["ok"] is True and "claude" not in staat["account_kapot"]
+        assert staat["warm"]["claude2"]["ok"] is False and "claude2" in staat["account_kapot"]
+        # Bezig of niet geïnstalleerd: geen rij, dus volgende ronde opnieuw.
+        assert "claude3" not in staat["warm"] and "claude4" not in staat["warm"]
+
+    def test_zonder_houd_warm_geen_check_in(self):
+        pl = p.Planner(lambda: None, lambda *a, **k: {}, lambda: {})
+        assert pl._houd_warm({}, self.NU, {"claude": {"aanwezig": True}}) == {}

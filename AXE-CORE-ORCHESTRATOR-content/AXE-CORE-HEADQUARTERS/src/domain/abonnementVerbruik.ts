@@ -11,7 +11,13 @@
  * zeggen dat de CLI bestond, niet dat de login werkte. Een geslaagde
  * verbruiksmeting IS dat bewijs, dus die bepaalt nu de status.
  */
-export type VerbruikStatus = 'ok' | 'expired' | 'blocked' | 'not_logged_in' | 'error';
+/**
+ * `idle`: ingelogd, maar het toegangstoken is verlopen omdat de stoel een tijd
+ * niets deed. De CLI ververst het bij de volgende run, en de planner doet elke
+ * dag een check-in (agent_runner.houd_warm). Geen waarschuwing: tot 20 okt
+ * stond precies dit als "Limit seen · Token expired" op drie kaarten.
+ */
+export type VerbruikStatus = 'ok' | 'idle' | 'expired' | 'blocked' | 'not_logged_in' | 'error';
 export type Venster = { procent: number; reset: string | null };
 export type AbonnementVerbruik = {
   motor: string;
@@ -41,6 +47,7 @@ export function verbruikStand(v: AbonnementVerbruik | undefined): { toon: Toon; 
       if (vol >= 80) return { toon: 'warn', tekst: 'Almost full' };
       return { toon: 'ok', tekst: 'Online' };
     }
+    case 'idle': return { toon: 'info', tekst: 'Idle' };
     case 'expired': return { toon: 'warn', tekst: 'Login expired' };
     case 'blocked': return { toon: 'bad', tekst: 'Blocked' };
     case 'not_logged_in': return { toon: 'bad', tekst: 'Not logged in' };
@@ -79,7 +86,7 @@ export function verbruikBalken(v: AbonnementVerbruik | undefined, nu: number = D
 /** De regel onder de kaart: waarom hij niet werkt, en wat jij dan doet. */
 export function verbruikMelding(v: AbonnementVerbruik | undefined): string | undefined {
   if (!v) return undefined;
-  if (v.status === 'ok' && !v.reden) return undefined;
+  if (v.status === 'idle' || (v.status === 'ok' && !v.reden)) return undefined;
   const actie = (v.status === 'expired' || v.status === 'not_logged_in') && v.login ? ` Log in: ${v.login}` : '';
   return `${v.reden ?? ''}${actie}`.trim() || undefined;
 }

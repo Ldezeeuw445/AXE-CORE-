@@ -4662,8 +4662,11 @@ _MARKET_TOOLS = [
 # Zonder planner antwoorden deze routes 503 in plaats van dat niets meer werkt.
 try:
     import planner as _planner_mod
+    import agent_runner as _planner_runner
     from agent_runner import whitelisted_repos as _planner_repos
-    _planner = _planner_mod.Planner(sb, run_agent, _planner_repos)
+    # getattr: een oudere agent_runner op een box zonder check-in mag de planner niet uitzetten.
+    _planner = _planner_mod.Planner(sb, run_agent, _planner_repos,
+                                    houd_warm=getattr(_planner_runner, "houd_warm", None))
     _PLANNER_IMPORT_ERROR = None
 except Exception as _e:  # noqa: BLE001
     _planner_mod = None  # type: ignore[assignment]

@@ -152,6 +152,42 @@ def model_fout(tekst: Optional[str]) -> Optional[str]:
     return None
 
 
+def markeer_kapot(staat: dict, motor: str, fout: str, nu: datetime) -> Optional[str]:
+    """Zet de stoel in account_kapot als de fout over het account gaat. Geeft de reden."""
+    reden = account_fout(fout)
+    if reden:
+        vorig = (staat.get("account_kapot") or {}).get(motor) or {}
+        staat.setdefault("account_kapot", {})[motor] = {
+            "reden": reden, "fout": fout[-300:],
+            "tot": (nu + timedelta(seconds=ACCOUNT_RUST_S)).isoformat(),
+            # Eén melding per kapotte periode, niet één per ronde.
+            "gemeld": bool(vorig.get("gemeld")) and vorig.get("reden") == reden,
+        }
+    return reden
+
+
+# Een check-in per Claude-stoel als hij zo lang niets deed. De planner draait elke
+# drie uur, dus dit wordt hooguit één korte run per stoel per dag.
+WARM_ELKE_S = int(os.environ.get("AXE_PLANNER_WARM_ELKE_S", str(20 * 3600)))
+
+
+def warm_nodig(staat: dict, nu: datetime) -> list[str]:
+    """Claude-stoelen zonder geslaagde run of check-in in de laatste WARM_ELKE_S."""
+    uit = []
+    for motor in ABONNEMENTEN:
+        if familie(motor) != "claude":
+            continue
+        rij = (staat.get("warm") or {}).get(motor) or {}
+        try:
+            recent = (nu - datetime.fromisoformat(rij["at"])).total_seconds() < WARM_ELKE_S
+        except (KeyError, TypeError, ValueError):
+            recent = False
+        # Een mislukte check-in telt niet als warm: volgende ronde opnieuw.
+        if not (recent and rij.get("ok")):
+            uit.append(motor)
+    return uit
+
+
 def wissel_motor(tekst: Optional[str]) -> Optional[str]:
     """Account kapot óf model dat deze CLI niet draait: volgende stoel."""
     return account_fout(tekst) or model_fout(tekst)
@@ -553,10 +589,13 @@ def schrijf_staat(staat: dict) -> None:
 class Planner:
     """Eén ronde plannen en uitvoeren. sb: supabase-client-fabriek; run_agent uit agent_runner."""
 
-    def __init__(self, sb: Callable[[], Any], run_agent: Callable[..., dict], repos: Callable[[], dict]):
+    def __init__(self, sb: Callable[[], Any], run_agent: Callable[..., dict], repos: Callable[[], dict],
+                 houd_warm: Optional[Callable[[str], dict]] = None):
         self.sb = sb
         self.run_agent = run_agent
         self.repos = repos
+        # agent_runner.houd_warm op de agent-host; None = geen check-ins (tests, VPS).
+        self.houd_warm = houd_warm
         self.bezig = False
 
     # context ---------------------------------------------------------------
@@ -676,21 +715,46 @@ class Planner:
             uit = self.run_agent(repo, prompt, modus, PLANNER_RUN_S, motor)
         if uit.get("status") == "ok":
             (staat.get("account_kapot") or {}).pop(motor, None)
+            # Een echte run ververst het token net zo goed als een check-in.
+            staat.setdefault("warm", {})[motor] = {"at": nu.isoformat(), "ok": True, "via": "run"}
             return str(uit.get("result") or ""), ""
         fout = str(uit.get("error") or uit.get("result") or "onbekende fout")
         tot = limiet_tot(fout, nu)
         if tot:
             staat.setdefault("koeling", {})[motor] = tot.isoformat()
-        reden = account_fout(fout)
-        if reden:
-            vorig = (staat.get("account_kapot") or {}).get(motor) or {}
-            staat.setdefault("account_kapot", {})[motor] = {
-                "reden": reden, "fout": fout[-300:],
-                "tot": (nu + timedelta(seconds=ACCOUNT_RUST_S)).isoformat(),
-                # Eén melding per kapotte periode, niet één per ronde.
-                "gemeld": bool(vorig.get("gemeld")) and vorig.get("reden") == reden,
-            }
+        markeer_kapot(staat, motor, fout, nu)
         return None, fout[-400:]
+
+    def _houd_warm(self, staat: dict, nu: datetime, engines: Optional[dict] = None) -> dict:
+        """Check-in op elke Claude-stoel die een dag niets deed (agent_runner.houd_warm).
+
+        Lukt hij niet op login, dan staat de stoel meteen in account_kapot en
+        meldt _meld_accounts het deze ronde nog -- niet pas als een taak hem nodig heeft.
+        """
+        nodig = warm_nodig(staat, nu)
+        if not nodig or self.houd_warm is None:
+            return {}
+        engines = engines if engines is not None else self._engines()
+        verslag: dict[str, str] = {}
+        for motor in nodig:
+            e = engines.get(motor) or {}
+            if not e.get("aanwezig") or e.get("ingelogd") is False:
+                verslag[motor] = "overgeslagen: " + ("niet ingelogd" if e.get("aanwezig") else "niet geïnstalleerd")
+                continue
+            uit = self.houd_warm(motor)
+            if uit.get("status") == "skip":
+                verslag[motor] = "overgeslagen: " + str(uit.get("reden"))
+                continue
+            ok = uit.get("status") == "ok"
+            rij: dict[str, Any] = {"at": nu.isoformat(), "ok": ok, "via": "check-in"}
+            if ok:
+                (staat.get("account_kapot") or {}).pop(motor, None)
+            else:
+                rij["fout"] = str(uit.get("error") or "")[-300:]
+                markeer_kapot(staat, motor, rij["fout"], nu)
+            staat.setdefault("warm", {})[motor] = rij
+            verslag[motor] = "ok" if ok else "fout"
+        return verslag
 
     def _engines(self) -> dict:
         try:
@@ -1088,6 +1152,10 @@ class Planner:
                     elif uit.get("ok") is False:
                         fouten.append(f"{AGENT_LABEL[agent]}: {uit.get('fout') or 'run failed'}")
                 verslag["agents"][agent] = a
+            if self.houd_warm is not None and warm_nodig(staat, datetime.now()):
+                if engines is None:
+                    engines = self._engines()
+                verslag["check_in"] = self._houd_warm(staat, datetime.now(), engines)
             verslag["accountmeldingen"] = self._meld_accounts(staat, engines or {})
             # Het grootboek moet zien dat een agent faalde: een ronde met een
             # mislukte of geblokkeerde taak is geen 'ok' (_mac_actie leest dit).

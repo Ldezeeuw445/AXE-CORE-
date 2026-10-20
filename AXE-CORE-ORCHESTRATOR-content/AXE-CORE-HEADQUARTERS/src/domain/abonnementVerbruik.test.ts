@@ -28,6 +28,11 @@ describe('abonnementVerbruik', () => {
     expect(verbruikBalken(verlopen)).toEqual([]);
     expect(verbruikMelding(verlopen)).toBe('Token expired. Log in: claude auth login');
     expect(verbruikStand({ ...claude4, status: 'blocked' }).toon).toBe('bad');
+    // Ingelogd, alleen het korte token verlopen: geen waarschuwing meer.
+    const stil: AbonnementVerbruik = { ...claude4, status: 'idle', reden: 'Idle. Checked in 3h ago; the session renews on the next run.', sessie: undefined };
+    expect(verbruikStand(stil)).toEqual({ toon: 'info', tekst: 'Idle' });
+    expect(verbruikMelding(stil)).toBeUndefined();
+    expect(verbruikBalken(stil)).toEqual([]);
   });
 
   it('nog niets gemeten is "Checking", geen rood', () => {

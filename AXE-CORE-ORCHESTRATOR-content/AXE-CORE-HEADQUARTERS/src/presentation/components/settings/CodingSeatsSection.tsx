@@ -142,7 +142,7 @@ export function CodingSeatsSection() {
       stoel: getoond,
       heartbeatOk,
       verbruikStatus: v?.status,
-      lastRunFout: v?.status === 'ok' ? (g?.last_limit_message ?? null) : (v?.reden ?? g?.last_limit_message ?? null),
+      lastRunFout: v?.status === 'ok' || v?.status === 'idle' ? (g?.last_limit_message ?? null) : (v?.reden ?? g?.last_limit_message ?? null),
     });
     const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond) && kaart.stand.tekst !== 'Online' && kaart.stand.tekst !== 'Running' && kaart.stand.tekst !== 'Not used';
     const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);

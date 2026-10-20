@@ -102,6 +102,35 @@ def status_uit_fout(code: int, tekst: str) -> tuple[str, str]:
     return "error", f"Usage check failed (HTTP {code})."
 
 
+WARM_GELDIG_S = 26 * 3600
+
+
+def stand_na_verlopen_token(plan: Any, warm: Optional[dict], nu: Optional[datetime] = None) -> dict:
+    """Wat een kaart zegt als het toegangstoken van een Claude-stoel verlopen is.
+
+    Dat token leeft een paar uur en de CLI ververst het bij zijn volgende run;
+    een stoel die een dag niets deed staat dus altijd op verlopen. Op 20 okt
+    stonden drie van de vier zo op "Limit seen · Token expired" terwijl ze
+    ingelogd waren. De planner doet sindsdien een dagelijkse check-in
+    (agent_runner.houd_warm): slaagde die, dan is de stoel gewoon Idle. Faalde
+    hij, dan is het een echte waarschuwing, met de fout die de CLI gaf.
+    """
+    nu = nu or datetime.now()
+    try:
+        leeftijd = (nu - datetime.fromisoformat(str((warm or {}).get("at")))).total_seconds()
+    except ValueError:
+        leeftijd = None
+    if warm and warm.get("ok") is False:
+        return {"status": "expired", "plan": plan,
+                "reden": f"The daily check-in failed: {str(warm.get('fout') or 'unknown error')[:160]}. Log in again."}
+    if leeftijd is not None and leeftijd < WARM_GELDIG_S:
+        uur = max(0, int(leeftijd // 3600))
+        return {"status": "idle", "plan": plan,
+                "reden": f"Idle. Checked in {uur}h ago; the session renews on the next run."}
+    return {"status": "idle", "plan": plan,
+            "reden": "Idle. The session renews on the next run; the planner checks in once a day."}
+
+
 def lees_cursor_about(tekst: str) -> dict:
     """Plan en e-mail uit `cursor-agent about`."""
     plan = re.search(r"Subscription Tier\s+(.+)", tekst)
@@ -159,15 +188,14 @@ def _get(url: str, headers: dict) -> tuple[int, Any]:
 
 # ── Per motor ────────────────────────────────────────────────────────────────
 
-def _claude(motor: dict, get: Callable = _get) -> dict:
+def _claude(motor: dict, get: Callable = _get, naam: str = "") -> dict:
     oauth = _claude_oauth((motor.get("extra_env") or {}).get("CLAUDE_CONFIG_DIR"))
     if not oauth or not oauth.get("accessToken"):
         return {"status": "not_logged_in", "reden": "No Claude login found for this account."}
     plan = oauth.get("subscriptionType")
     verloopt = oauth.get("expiresAt")
     if isinstance(verloopt, (int, float)) and verloopt / 1000 < time.time():
-        return {"status": "expired", "plan": plan,
-                "reden": "Token expired. It refreshes on the next run of this account; if that fails, log in again."}
+        return stand_na_verlopen_token(plan, (_planner_staat().get("warm") or {}).get(naam))
     code, body = get(CLAUDE_URL, {"Authorization": f"Bearer {oauth['accessToken']}",
                                   "anthropic-beta": "oauth-2025-04-20"})
     if code != 200 or not isinstance(body, dict):
@@ -232,7 +260,7 @@ def verbruik(engines: dict, status: dict, binary: Callable[[dict], Optional[str]
         else:
             try:
                 if naam.startswith("claude"):
-                    uit = _claude(motor)
+                    uit = _claude(motor, naam=naam)
                 elif naam.startswith("codex"):
                     uit = _codex(motor)
                 else:

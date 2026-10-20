@@ -1,4 +1,6 @@
 """Verbruik per abonnement: vertalen wat de aanbieder zegt, nooit een token naar buiten."""
+from datetime import datetime
+
 import abonnement_verbruik as v
 
 
@@ -58,8 +60,30 @@ def test_token_gaat_alleen_als_header_mee_en_niet_in_het_antwoord(monkeypatch):
 
 def test_verlopen_token_wordt_niet_zelf_ververst(monkeypatch):
     monkeypatch.setattr(v, "_claude_oauth", lambda m: {"accessToken": "x", "expiresAt": 1000})
-    uit = v._claude({"extra_env": {}}, get=lambda *a: (_ for _ in ()).throw(AssertionError("geen call")))
-    assert uit["status"] == "expired"
+    monkeypatch.setattr(v, "_planner_staat", lambda: {})
+    uit = v._claude({"extra_env": {}}, get=lambda *a: (_ for _ in ()).throw(AssertionError("geen call")), naam="claude2")
+    # Ingelogd maar een dag stil is Idle, geen "Limit seen · Token expired".
+    assert uit["status"] == "idle" and "renews" in uit["reden"]
+
+
+def test_verlopen_token_na_geslaagde_check_in_is_idle():
+    nu = datetime(2026, 10, 20, 12, 0)
+    uit = v.stand_na_verlopen_token("pro", {"at": "2026-10-20T09:00:00", "ok": True}, nu)
+    assert uit == {"status": "idle", "plan": "pro", "reden": "Idle. Checked in 3h ago; the session renews on the next run."}
+
+
+def test_mislukte_check_in_is_een_echte_waarschuwing():
+    uit = v.stand_na_verlopen_token("pro", {"at": "2026-10-20T09:00:00", "ok": False, "fout": "OAuth token revoked"},
+                                    datetime(2026, 10, 20, 12, 0))
+    assert uit["status"] == "expired" and "OAuth token revoked" in uit["reden"]
+
+
+def test_verlopen_token_gebruikt_de_check_in_van_deze_stoel(monkeypatch):
+    monkeypatch.setattr(v, "_claude_oauth", lambda m: {"accessToken": "x", "expiresAt": 1000})
+    monkeypatch.setattr(v, "_planner_staat", lambda: {"warm": {"claude3": {"at": "2000-01-01T00:00:00", "ok": False,
+                                                                           "fout": "Invalid API key"}}})
+    assert v._claude({}, naam="claude3")["status"] == "expired"
+    assert v._claude({}, naam="claude2")["status"] == "idle"
 
 
 def test_planner_ervaring_wint_van_een_groene_check(monkeypatch):

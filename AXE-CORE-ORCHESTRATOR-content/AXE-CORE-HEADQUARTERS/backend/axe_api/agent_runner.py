@@ -969,6 +969,59 @@ def _run_agent_stoel(
             "meta": parsed if isinstance(parsed, dict) else None})
 
 
+# Een Claude-stoel die dagen niets doet, stond op Subscriptions als "Limit seen ·
+# Token expired" (20 okt: drie van de vier). Het toegangstoken leeft een paar
+# uur; de CLI ververst het pas bij zijn volgende run, en een login die écht
+# stuk is zag je pas als een taak die stoel nodig had. Deze check-in IS die
+# volgende run: de CLI zelf ververst, wij schrijven nooit aan een token
+# (abonnement_verbruik.py zegt waarom). Klein model, leeg mapje, alleen lezen,
+# en niet in de runstatistiek.
+WARM_PROMPT = "Reply with the single word: ok"
+WARM_MODEL = os.environ.get("AXE_WARM_MODEL", "haiku")
+
+
+def houd_warm(naam: str, timeout: int = 90) -> dict:
+    """Eén minimale run op precies deze stoel, zonder terugval naar een andere.
+
+    {"status": "ok"} | {"status": "skip", "reden": ...} | {"status": "error", "error": ...}
+    """
+    motor = ENGINES.get(naam)
+    if not motor or motor.get("cmd") is not _claude_cmd:
+        return {"status": "skip", "reden": "geen Claude-stoel"}
+    binary = _binary(motor)
+    if not binary:
+        return {"status": "skip", "reden": "niet geïnstalleerd"}
+    slot = _motor_slot(naam)
+    if not slot.acquire(blocking=False):
+        # Bezig met echt werk: dat ververst het token al.
+        return {"status": "skip", "reden": "bezig"}
+    try:
+        with tempfile.TemporaryDirectory(prefix="axe-warm-") as map_:
+            proc = subprocess.run(
+                _claude_cmd(binary, WARM_PROMPT, "plan", "", WARM_MODEL),
+                cwd=map_, env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")),
+                capture_output=True, text=True, timeout=timeout,
+            )
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": f"check-in liep langer dan {timeout}s"}
+    except OSError as e:
+        return {"status": "error", "error": f"{type(e).__name__}: {e}"}
+    finally:
+        slot.release()
+    try:
+        parsed = json.loads((proc.stdout or "").strip() or "null")
+    except json.JSONDecodeError:
+        parsed = None
+    fout_in_json = isinstance(parsed, dict) and parsed.get("is_error") is True
+    if proc.returncode == 0 and isinstance(parsed, dict) and not fout_in_json:
+        return {"status": "ok"}
+    fout = str(parsed.get("result") or "") if isinstance(parsed, dict) else ""
+    fout = fout or _stderr_staart(proc.stderr or proc.stdout or "") or f"exit {proc.returncode}"
+    if _auth_fout(fout) or _limit_message(fout):
+        _onthoud_stoel_fout(naam, fout)
+    return {"status": "error", "error": fout[-400:]}
+
+
 def _git(repo_path: str, *args: str, timeout: int = 120) -> subprocess.CompletedProcess:
     """Eén git-aanroep in een checkout, zonder shell en zonder interactie.
 
