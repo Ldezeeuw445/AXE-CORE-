@@ -8,8 +8,12 @@ import gezondheid as gz
 SB = "https://project.supabase.co"
 
 
-def client(supabase_ok=True, northsea_ok=True):
+def client(supabase_ok=True, northsea_ok=True, ollama_ok=True):
     def handler(request: httpx.Request):
+        if request.url.host == "ollama.axecompanion.com":
+            if ollama_ok:
+                return httpx.Response(200, json={"models": [{"name": "hermes3:8b"}, {"name": "qwen2.5-coder:7b"}]})
+            return httpx.Response(401, text="<html>401 Authorization Required</html>")
         if request.url.host == "project.supabase.co":
             return httpx.Response(200 if supabase_ok else 503, json=[{"id": "x"}] if supabase_ok else {})
         if request.url.host == "127.0.0.1":
@@ -41,13 +45,15 @@ def test_alles_gezond(tmp_path):
     assert uit["checks"]["northsea_mcp"] == {"state": "ok", "version": "1.4.1"}
     assert uit["checks"]["cron_tick"] == {"state": "ok", "age_s": 30}
     assert uit["checks"]["task_worker"]["state"] == "ok"
+    assert uit["checks"]["ollama_box"] == {"state": "ok", "models": 2}
 
 
 def test_elke_kapotte_afhankelijkheid_staat_in_degraded(tmp_path):
     gz.tick_ontvangen(1_000.0)
-    uit = meet(c=client(supabase_ok=False, northsea_ok=False), systemctl=nep_systemctl(tmp_path, "inactive"),
-               nu=1_000.0 + gz.TICK_MAX_S + 1)
-    assert uit["degraded"] == ["cron_tick", "northsea_mcp", "supabase", "task_worker"]
+    uit = meet(c=client(supabase_ok=False, northsea_ok=False, ollama_ok=False),
+               systemctl=nep_systemctl(tmp_path, "inactive"), nu=1_000.0 + gz.TICK_MAX_S + 1)
+    assert uit["degraded"] == ["cron_tick", "northsea_mcp", "ollama_box", "supabase", "task_worker"]
+    assert uit["checks"]["ollama_box"] == {"state": "fail", "detail": "HTTP 401"}
 
 
 def test_zonder_systemd_is_de_worker_onbekend_en_niet_kapot():

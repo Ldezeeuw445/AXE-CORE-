@@ -2,13 +2,20 @@
 
 /health zei altijd "ok" zolang uvicorn antwoordde. Op 11 okt stond AXE Commodities
 drie dagen stil en zei de API "ok"; een /cron/tick die niet meer binnenkomt of een
-task worker die stilligt zag je er ook niet aan. Hier staan de vier afhankelijkheden
+task worker die stilligt zag je er ook niet aan. Hier staan de afhankelijkheden
 die de API zelf goedkoop kan meten:
 
   supabase       één rij lezen uit het gedeelde project
   cron_tick      hoe lang geleden /cron/tick binnenkwam (de crontab tikt elke minuut)
   task_worker    `systemctl is-active axe-task-worker`, alleen waar systemd is
   northsea_mcp   de /health van de MCP op 127.0.0.1:8040
+  ollama_box     /api/tags van de modelbox (ollama.axecompanion.com)
+
+De modelbox laat deze VPS op IP door en een browser alleen met een sleutel per
+apparaat. De zijbalk mat hem vanuit de browser: geen sleutel op dat apparaat
+gaf een 401 zonder CORS-header, en dat leest een browser als "unreachable".
+Zo stond de box op 20 okt op beide apparaten OFFLINE terwijl hij met 12
+modellen antwoordde. Hier meet de VPS hem, en de zijbalk leest dit.
 
 Elke meting heeft een korte timeout en gooit nooit; samen hooguit eens per CACHE_S.
 `status` blijft "ok" zolang de API zelf leeft, zodat de bewaker en de uptimecheck
@@ -29,6 +36,7 @@ TIMEOUT_S = 2.0
 # De crontab tikt elke 60 s; drie gemiste tikken is geen ruis meer.
 TICK_MAX_S = 180.0
 NORTHSEA_MCP_HEALTH = "http://127.0.0.1:8040/health"
+OLLAMA_BOX_TAGS = "https://ollama.axecompanion.com/api/tags"
 
 _laatste_tick: Optional[float] = None
 _cache: dict = {}
@@ -65,6 +73,14 @@ async def _northsea(client: httpx.AsyncClient, url: str) -> dict:
     return {"state": "fail", "detail": f"HTTP {r.status_code}"}
 
 
+async def _ollama_box(client: httpx.AsyncClient, url: str) -> dict:
+    r = await client.get(url)
+    modellen = (r.json() if r.is_success else {}).get("models")
+    if isinstance(modellen, list) and modellen:
+        return {"state": "ok", "models": len(modellen)}
+    return {"state": "fail", "detail": f"HTTP {r.status_code}" if not r.is_success else "no models"}
+
+
 async def _task_worker(systemctl: Optional[str]) -> dict:
     if not systemctl:
         return {"state": "unknown", "detail": "no systemd on this host"}
@@ -92,6 +108,7 @@ async def _veilig(meting: Callable[[], Awaitable[dict]]) -> dict:
 
 async def controles(supabase_url: str, supabase_key: str, *, client: Optional[httpx.AsyncClient] = None,
                     systemctl: Optional[str] = None, northsea_url: str = NORTHSEA_MCP_HEALTH,
+                    ollama_url: str = OLLAMA_BOX_TAGS,
                     nu: Optional[float] = None, cache: bool = True) -> dict:
     """{"checks": {...}, "degraded": [...], "checked_at": ...}; hooguit eens per CACHE_S."""
     t = time.time() if nu is None else nu
@@ -101,15 +118,17 @@ async def controles(supabase_url: str, supabase_key: str, *, client: Optional[ht
     eigen = client is None
     client = client or httpx.AsyncClient(timeout=TIMEOUT_S)
     try:
-        sb, ns, tw = await asyncio.gather(
+        sb, ns, tw, ob = await asyncio.gather(
             _veilig(lambda: _supabase(client, supabase_url, supabase_key)),
             _veilig(lambda: _northsea(client, northsea_url)),
             _veilig(lambda: _task_worker(systemctl)),
+            _veilig(lambda: _ollama_box(client, ollama_url)),
         )
     finally:
         if eigen:
             await client.aclose()
-    checks = {"supabase": sb, "cron_tick": beoordeel_tick(_laatste_tick, t), "task_worker": tw, "northsea_mcp": ns}
+    checks = {"supabase": sb, "cron_tick": beoordeel_tick(_laatste_tick, t), "task_worker": tw, "northsea_mcp": ns,
+              "ollama_box": ob}
     uit = {
         "checks": checks,
         "degraded": sorted(k for k, v in checks.items() if v.get("state") == "fail"),

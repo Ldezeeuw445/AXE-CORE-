@@ -26,6 +26,7 @@ import { VPS_API_ORIGIN, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 import { webProxyStand } from '@/domain/webProxyStand';
 import { useLocation } from 'react-router';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { modelboxUitHealth, ZONDER_SLEUTEL } from '@/domain/modelboxStand';
 import { STEM_UI, stemStandVanHealth, type StemStand } from '@/domain/stemIdentiteit';
 import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
 import { useCoreOnline } from '@/presentation/store/coreStatusStore';
@@ -169,6 +170,8 @@ function VpsHealthWidget() {
 
   useEffect(() => {
     let cancelled = false;
+    // Meet de VPS de modelbox (checks.ollama_box), dan geldt dat; zie domain/modelboxStand.ts.
+    let modelboxViaVps = false;
 
     // Rechtstreeks: /health is openbaar en de VPS staat CORS toe vanaf
     // axeheadquarters.com. Zo meet deze regel de VPS en niets anders.
@@ -177,10 +180,15 @@ function VpsHealthWidget() {
       try {
         const res = await fetch(`${VPS_API_ORIGIN}/health`, { signal: AbortSignal.timeout(6000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const health = await res.json() as { status?: string; supabase?: boolean; n8n?: boolean; github?: boolean };
+        const health = await res.json() as {
+          status?: string; supabase?: boolean; n8n?: boolean; github?: boolean; checks?: Record<string, unknown>;
+        };
 
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
+        const box = modelboxUitHealth(health.checks?.ollama_box);
+        modelboxViaVps = box !== null;
+        if (box) setModelbox({ ...box, latencyMs: null });
 
         const bits: string[] = [];
         if (health.supabase) bits.push('supabase');
@@ -199,7 +207,9 @@ function VpsHealthWidget() {
     };
 
     const tickModelbox = async () => {
+      if (modelboxViaVps) return;
       const t0 = performance.now();
+      const heeftSleutel = Object.keys(ollamaHeaders(OLLAMA_HEALTH_URL)).length > 0;
       try {
         const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { headers: ollamaHeaders(OLLAMA_HEALTH_URL), signal: AbortSignal.timeout(6000) });
         if (cancelled) return;
@@ -217,7 +227,9 @@ function VpsHealthWidget() {
         });
       } catch {
         if (cancelled) return;
-        setModelbox({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+        setModelbox(heeftSleutel || !OLLAMA_HEALTH_URL.includes('ollama.axecompanion.com')
+          ? { status: 'offline', latencyMs: null, detail: 'unreachable' }
+          : { ...ZONDER_SLEUTEL, latencyMs: null });
       }
     };
 
@@ -268,7 +280,7 @@ function VpsHealthWidget() {
       }
     };
 
-    const tick = () => { void tickStrato(); void tickProxy(); void tickModelbox(); void tickGcp(); };
+    const tick = () => { void tickStrato().then(tickModelbox); void tickProxy(); void tickGcp(); };
     tick();
     const id = window.setInterval(tick, 30_000);
     return () => {
