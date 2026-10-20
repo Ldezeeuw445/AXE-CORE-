@@ -9,6 +9,8 @@ import { useState } from 'react';
 import { okChipTekst, type GoedkeuringsRij } from '@/domain/agents/pendingApproval';
 import { PHONE_TIKMAAT } from '@/domain/phone/phoneChrome';
 
+const KNOP_UIT_MS = 10_000;
+
 export function GoedkeuringActie({
   rijen,
   onBeslis,
@@ -23,7 +25,20 @@ export function GoedkeuringActie({
   chip?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  // Na een tik staan de knoppen even uit: de lijst ververst pas na de API, en
+  // een tweede tik in die tijd gaf "approval failed" (zie beslisAgentOk.ts).
+  const [bezig, setBezig] = useState<ReadonlySet<string>>(() => new Set());
   if (rijen.length === 0) return null;
+  const kies = (rij: GoedkeuringsRij, akkoord: boolean) => {
+    if (bezig.has(rij.id)) return;
+    setBezig((oud) => new Set(oud).add(rij.id));
+    window.setTimeout(() => setBezig((oud) => {
+      const nieuw = new Set(oud);
+      nieuw.delete(rij.id);
+      return nieuw;
+    }), KNOP_UIT_MS);
+    onBeslis(rij, akkoord);
+  };
   const chipStand = chip && !touch;
   return (
     <div
@@ -42,17 +57,19 @@ export function GoedkeuringActie({
                 <div className="axe-ok-chip-menu">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onBeslis(rij, true); }}
+                    onClick={(e) => { e.stopPropagation(); kies(rij, true); }}
+                    disabled={bezig.has(rij.id)}
                     className="axe-ok-chip-knop"
-                    style={{ background: 'var(--tint)', color: 'var(--ok)' }}
+                    style={{ background: 'var(--tint)', color: 'var(--ok)', opacity: bezig.has(rij.id) ? 0.5 : undefined }}
                   >
                     Approve
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onBeslis(rij, false); }}
+                    onClick={(e) => { e.stopPropagation(); kies(rij, false); }}
+                    disabled={bezig.has(rij.id)}
                     className="axe-ok-chip-knop"
-                    style={{ background: 'var(--tint-line)', color: 'var(--text-secondary)' }}
+                    style={{ background: 'var(--tint-line)', color: 'var(--text-secondary)', opacity: bezig.has(rij.id) ? 0.5 : undefined }}
                   >
                     Decline
                   </button>
@@ -85,24 +102,28 @@ export function GoedkeuringActie({
             <div className={touch ? 'flex gap-2' : 'flex gap-1.5'}>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onBeslis(rij, true); }}
+                onClick={(e) => { e.stopPropagation(); kies(rij, true); }}
+                disabled={bezig.has(rij.id)}
                 className={touch ? 'axe-ok-knop flex-1 rounded-lg px-3 text-[13px] font-medium' : 'rounded-lg px-2 py-1 text-[10px]'}
                 style={{
                   background: 'var(--tint)',
                   color: 'var(--ok)',
                   minHeight: touch ? PHONE_TIKMAAT : undefined,
+                  opacity: bezig.has(rij.id) ? 0.5 : undefined,
                 }}
               >
                 Approve
               </button>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onBeslis(rij, false); }}
+                onClick={(e) => { e.stopPropagation(); kies(rij, false); }}
+                disabled={bezig.has(rij.id)}
                 className={touch ? 'axe-ok-knop flex-1 rounded-lg px-3 text-[13px] font-medium' : 'rounded-lg px-2 py-1 text-[10px]'}
                 style={{
                   background: 'var(--tint-line)',
                   color: 'var(--text-secondary)',
                   minHeight: touch ? PHONE_TIKMAAT : undefined,
+                  opacity: bezig.has(rij.id) ? 0.5 : undefined,
                 }}
               >
                 Decline

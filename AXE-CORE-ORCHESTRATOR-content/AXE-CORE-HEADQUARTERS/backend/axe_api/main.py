@@ -603,6 +603,8 @@ async def decide_task_approval(
         raise HTTPException(404, "Pending approval not found") from exc
     except RuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc
+    if approval.get("already_decided"):
+        return {"approval": approval}
     await audit("approval_decision", task_id, {
         "approval_id": approval_id, "approved": req.approved,
         "decided_by": req.decided_by,

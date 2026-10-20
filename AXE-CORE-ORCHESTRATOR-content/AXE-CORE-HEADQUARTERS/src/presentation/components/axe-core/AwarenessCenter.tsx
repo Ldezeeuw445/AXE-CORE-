@@ -13,12 +13,12 @@ import {
   openGoedkeuringen,
 } from '@/domain/agentBewustzijn';
 import { getAwarenessSnapshot, type AwarenessGoedkeuring } from '@/application/awareness/axeAwareness';
-import { decideDurableTaskApproval, plannerBesluit } from '@/infrastructure/gateways/axeCoreApiService';
+import { plannerBesluit } from '@/infrastructure/gateways/axeCoreApiService';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
-import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
+import { beslisAgentOk, beslisApproval } from '@/application/approvals/beslisAgentOk';
 
 export function AwarenessCenter({
   onClose,
@@ -151,7 +151,7 @@ export function AwarenessCenter({
           }]}
           onBeslis={(rij, akkoord) => {
             if (g.taskId && g.approvalId) {
-              void decideDurableTaskApproval(g.taskId, g.approvalId, akkoord, akkoord ? g.ja : 'geweigerd').then(verversServerAgents);
+              void beslisApproval(g.taskId, g.approvalId, akkoord, akkoord ? g.ja : 'geweigerd').then(verversServerAgents);
               return;
             }
             if (rij.taskId) {

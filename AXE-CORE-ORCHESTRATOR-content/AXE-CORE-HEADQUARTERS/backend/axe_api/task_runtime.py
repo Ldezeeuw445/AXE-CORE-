@@ -520,14 +520,29 @@ class TaskRepository:
         self, task_id: str, approval_id: str, approved: bool,
         decided_by: str, reason: str | None,
     ) -> dict[str, Any]:
+        status = "approved" if approved else "rejected"
         pending = (
             self._db().table("core_approvals").select("*")
             .eq("id", approval_id).eq("task_id", task_id).eq("status", "pending")
             .limit(1).execute().data
         )
         if not pending:
-            raise KeyError(approval_id)
-        status = "approved" if approved else "rejected"
+            # Een tweede tik op dezelfde knop, of hetzelfde besluit vanaf het
+            # andere apparaat: de logs van 19 okt tonen telkens 200 en een paar
+            # seconden later 404 op dezelfde approval, en de app meldde dan
+            # "approval failed" terwijl het besluit al stond. Hetzelfde besluit
+            # nog eens is geen fout; een ander besluit wel (409), en een
+            # onbekende approval blijft 404.
+            bestaand = (
+                self._db().table("core_approvals").select("*")
+                .eq("id", approval_id).eq("task_id", task_id)
+                .limit(1).execute().data
+            )
+            if not bestaand:
+                raise KeyError(approval_id)
+            if bestaand[0].get("status") == status:
+                return {**bestaand[0], "already_decided": True}
+            raise RuntimeError(f"approval already {bestaand[0].get('status')}")
         rows = self._db().table("core_approvals").update({
             "status": status,
             "decided_by": decided_by,
