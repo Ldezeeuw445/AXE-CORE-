@@ -26,6 +26,7 @@
 import { memUpsert } from '@/infrastructure/gateways/axeCoreApiService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
+import { isNoopMemory, isRunLogKey, magGeheugenSchrijven } from '@/domain/memory/memoryWriteGuard';
 
 /** What happened. Drives both the key prefix and how the brain view groups it. */
 export type EventKind =
@@ -159,6 +160,9 @@ function schedule(): void {
  */
 export function recordEvent(input: RecordInput): void {
   try {
+    if (input.kind === 'agent_run' || isNoopMemory(input.summary)) return;
+    const probeKey = input.dedupeKey ? `${input.kind}:${input.dedupeKey}` : `${input.kind}:x`;
+    if (isRunLogKey(probeKey) || magGeheugenSchrijven({ key: probeKey, content: input.summary }) !== 'ok') return;
     const payload = {
       summary: input.summary,
       ...(input.details ?? {}),

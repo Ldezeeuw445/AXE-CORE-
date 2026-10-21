@@ -35,6 +35,7 @@ import { recall, remember } from '@/infrastructure/persistence/agentMemoryServic
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import type { TradingAgentDecision } from '@/domain/tradingIntel/demoTypes';
 import { TRADING_AGENT_ID } from '@/domain/tradingIntel/demoTypes';
+import { inhoudHashAsync, isNoopMemory } from '@/domain/memory/memoryWriteGuard';
 
 const PREFIX = `ta:${TRADING_AGENT_ID}:`;
 
@@ -55,6 +56,7 @@ async function mirrorObsidian(_title: string, _content: string, _tags: string[])
 }
 
 export async function rememberTradeDecision(d: TradingAgentDecision): Promise<void> {
+  if (d.action === 'hold' || isNoopMemory(d.rationale) || isNoopMemory(JSON.stringify(d))) return;
   await remember({
     agent: 'axe_trader',
     // MemoryKind is a small shared vocabulary — 'fact' | 'lesson' | 'event' |
@@ -96,10 +98,12 @@ export async function rememberTradeDecision(d: TradingAgentDecision): Promise<vo
 }
 
 export async function rememberLesson(symbol: string, lesson: string, confidence = 0.7): Promise<void> {
+  if (isNoopMemory(lesson)) return;
+  const hash = await inhoudHashAsync(lesson.slice(0, 1500));
   await remember({
     agent: 'axe_trader',
     kind: 'lesson',
-    key: key(`lesson:${symbol}:${Date.now()}`),
+    key: key(`lesson:${symbol}:${hash}`),
     content: lesson.slice(0, 1500),
     category: 'system_event',
     symbol,

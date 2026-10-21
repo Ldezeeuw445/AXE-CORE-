@@ -32,6 +32,7 @@ import {
   episodeEvents,
   mergeAgentEvents,
   recordsForHub,
+  sampleHubRecords,
   type HubMemoryRecord,
   type MemoryAgentEvent,
 } from '@/domain/memory/hubMemoryRecord';
@@ -1142,7 +1143,7 @@ function useNeuralBrainData() {
       href: '/memory',
       memoryCount: Math.max(hubCountsRef.current?.total ?? total, 1),
       iconKey: 'core',
-      leaves: built.filter((m) => m.hubId === 'core').slice(0, 8).map((m) => ({
+      leaves: sampleHubRecords(built.filter((m) => m.hubId === 'core'), 8).map((m) => ({
         id: m.id,
         label: m.title,
         detail: m.detail,
@@ -1180,7 +1181,7 @@ function useNeuralBrainData() {
         // one number doing duty as both.
         memoryCount: hubCountsRef.current?.byHub[def.id] ?? members.length,
         iconKey: def.id,
-        leaves: members.slice(0, 8).map((m) => ({
+        leaves: sampleHubRecords(members, 8).map((m) => ({
           id: m.id,
           label: m.title,
           detail: m.detail,
@@ -1237,7 +1238,7 @@ function useNeuralBrainData() {
             href: '/memory/explore',
             memoryCount: seed.hubCounts[def.id] ?? members.length,
             iconKey: def.id,
-            leaves: members.slice(0, 8).map((m) => ({
+            leaves: sampleHubRecords(members, 8).map((m) => ({
               id: m.id,
               label: m.title,
               detail: m.detail,

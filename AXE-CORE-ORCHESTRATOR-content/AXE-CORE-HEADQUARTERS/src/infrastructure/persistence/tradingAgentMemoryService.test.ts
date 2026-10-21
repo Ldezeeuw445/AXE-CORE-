@@ -38,6 +38,16 @@ beforeEach(() => {
 });
 
 describe('the trader writes where it reads', () => {
+  it('schrijft geen HOLD en geen skip als les', async () => {
+    await rememberLesson('EURUSD', 'HOLD score=0.012');
+    await rememberLesson('EURUSD', 'no change');
+    await rememberTradeDecision({
+      id: 'h1', symbol: 'XAUUSD', action: 'hold', confidence: 0.1,
+      createdAt: '2026-10-21T00:00:00Z', rationale: 'nothing new',
+    } as never);
+    expect(remember).not.toHaveBeenCalled();
+  });
+
   it('sends a lesson to its own namespace', async () => {
     await rememberLesson('EURUSD', 'stopped out on the retest', 0.8);
     expect(remember).toHaveBeenCalledTimes(1);

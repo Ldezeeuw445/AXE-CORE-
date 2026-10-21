@@ -8,6 +8,7 @@
  */
 import { MEMORY_HUBS, type HubId } from './memoryHubs';
 import { hubForGlobalRow, hubForNotePath } from './hubClassifier';
+import { stabieleSleutel } from './memoryWriteGuard';
 
 export type MemorySourceKind = 'global' | 'rag' | 'obsidian' | 'core';
 
@@ -197,6 +198,26 @@ export function collectHubRecords(input: {
     ...recordsFromNotes(input.notes ?? []),
     ...recordsFromCore(input.core ?? []),
   ];
+}
+
+export const HUB_SAMPLE_MAX = 48;
+
+/** Unieke rijen op titel+detail, nieuwste eerst. De Neural-lijst mag dit niet als 42k identieke HOLD-regels tekenen. */
+export function uniqueHubRecords(records: HubMemoryRecord[]): HubMemoryRecord[] {
+  const sorted = [...records].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+  const seen = new Set<string>();
+  const out: HubMemoryRecord[] = [];
+  for (const r of sorted) {
+    const k = `${stabieleSleutel(r.title) || r.title}\n${r.detail}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
+}
+
+export function sampleHubRecords(records: HubMemoryRecord[], limit = HUB_SAMPLE_MAX): HubMemoryRecord[] {
+  return uniqueHubRecords(records).slice(0, limit);
 }
 
 export function recordsForHub(records: HubMemoryRecord[], hubId: string | null | undefined): HubMemoryRecord[] {

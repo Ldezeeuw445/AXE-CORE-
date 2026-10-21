@@ -1886,8 +1886,18 @@ async def get_table_rows(
 @app.post("/supabase/table/{table_name}", dependencies=[AUTH])
 async def insert_row(table_name: str, req: RowData, request: Request):
     """Insert a row into any table."""
-    result = sb().table(table_name).insert(req.data).execute()
-    await audit("insert", table_name, {"data": req.data}, request.client.host if request.client else "")
+    data = req.data
+    if table_name in ("memory", "rag_memories", "global_memory"):
+        try:
+            import memory_schrijfhek as hek
+            reden, data = hek.filter_rij(sb(), table_name, data)
+            if reden != "ok" or data is None:
+                return {"skipped": reden}
+        except Exception as hek_err:
+            log.warning("memory hek failed, writing anyway: %s", hek_err)
+            data = req.data
+    result = sb().table(table_name).insert(data).execute()
+    await audit("insert", table_name, {"data": data}, request.client.host if request.client else "")
     return result.data
 
 @app.patch("/supabase/table/{table_name}/{row_id}", dependencies=[AUTH])
@@ -1931,7 +1941,18 @@ async def memory_upsert(entries: list[MemoryEntry]):
     for e in entries:
         deduped[(e.user_id, e.key)] = e
     rows = [e.model_dump() for e in deduped.values()]
-    result = sb().table("global_memory").upsert(rows, on_conflict="user_id,key").execute()
+    try:
+        import memory_schrijfhek as hek
+        rows, _skipped = hek.filter_batch(sb(), "global_memory", rows)
+    except Exception as hek_err:
+        log.warning("memory hek batch failed, writing anyway: %s", hek_err)
+    if not rows:
+        return []
+    # Na het hek kunnen twee rijen dezelfde stabiele sleutel hebben.
+    uniek: dict[tuple[str, str], dict] = {}
+    for rij in rows:
+        uniek[(str(rij.get("user_id") or ""), str(rij.get("key") or ""))] = rij
+    result = sb().table("global_memory").upsert(list(uniek.values()), on_conflict="user_id,key").execute()
     return result.data
 
 @app.get("/memory", dependencies=[AUTH])
@@ -4503,22 +4524,9 @@ async def cron_tick(
         for r in ran:
             if r.get("status") == "skipped":
                 continue
-            try:
-                sb().table("global_memory").upsert({
-                    "user_id": AXE_CORE_DEFAULT_USER_ID,
-                    "category": "system_event",
-                    "key": f"agent_run:cron:{r['id']}:{int(now.timestamp())}",
-                    "value": json.dumps({
-                        "summary": f"Cron fired: {r['name']} -> {r['status']}",
-                        "schedule_id": r["id"], "name": r["name"], "status": r["status"], "run_id": r.get("run_id"),
-                        "at": now.isoformat(),
-                    }),
-                    "confidence": 1,
-                    "metadata": {"kind": "agent_run", "agentId": "cron_manager",
-                                 "summary": f"Cron fired: {r['name']} -> {r['status']}"},
-                }, on_conflict="user_id,key").execute()
-            except Exception as mem_err:
-                print(f"[cron_tick] memory write failed for {r['id']}: {mem_err}", flush=True)
+            # Run-logs blijven in core_job_runs, niet in global_memory. Elke
+            # tik een agent_run:cron:* rij was hoe Neural 9k cron-herinneringen
+            # kreeg zonder dat er iets geleerd werd.
             try:
                 # Gives cron a real learning-loop episode, same table and shape
                 # as openEpisode()/closeEpisode() in agentFeedbackService.ts

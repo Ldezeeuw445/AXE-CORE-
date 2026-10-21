@@ -4,6 +4,8 @@ import { MEMORY_HUBS } from '@/domain/memory/memoryHubs';
 import {
   filterHubMemories,
   recordsForHub,
+  sampleHubRecords,
+  uniqueHubRecords,
   type HubMemoryRecord,
   type MemoryAgentEvent,
 } from '@/domain/memory/hubMemoryRecord';
@@ -37,11 +39,13 @@ export function MemoryHubDetailPanel({
   const [type, setType] = useState('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const members = useMemo(() => recordsForHub(records, hubId), [records, hubId]);
+  const unique = useMemo(() => uniqueHubRecords(members), [members]);
+  const sampled = useMemo(() => sampleHubRecords(members), [members]);
   const types = useMemo(
-    () => ['all', ...Array.from(new Set(members.map((m) => m.type))).sort()],
-    [members],
+    () => ['all', ...Array.from(new Set(sampled.map((m) => m.type))).sort()],
+    [sampled],
   );
-  const visible = useMemo(() => filterHubMemories(members, query, type), [members, query, type]);
+  const visible = useMemo(() => filterHubMemories(sampled, query, type), [sampled, query, type]);
   const selected = visible.find((m) => m.id === openId) ?? null;
 
   return (
@@ -56,10 +60,7 @@ export function MemoryHubDetailPanel({
           <div className="axe-hubdetail-crumb">AXE Core / {hubLabel}</div>
           <h3 style={{ color: hubColor }}>{hubLabel}</h3>
           <div className="axe-hubdetail-count">
-            {memoryCount.toLocaleString()} memories
-            {members.length !== memoryCount
-              ? ` · ${visible.length} shown from sample`
-              : ` · ${visible.length} shown`}
+            {memoryCount.toLocaleString()} memories · {unique.length.toLocaleString()} unique · {visible.length} shown
           </div>
         </div>
         <button type="button" className="axe-hubdetail-close" onClick={onClose} aria-label="Close hub">

@@ -11,6 +11,7 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { isAxeApiConfigured, sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { APP_SOURCE, AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { inhoudHashAsync, isNoopMemory } from '@/domain/memory/memoryWriteGuard';
 import {
   cosineSimilarity,
   embedText,
@@ -77,7 +78,12 @@ async function withEmbedding(
 export async function saveRagMemory(
   memory: Omit<RagMemory, 'id' | 'created_at'>
 ): Promise<void> {
-  const enriched = await withEmbedding(memory);
+  if (isNoopMemory(memory.content)) return;
+  const hash = await inhoudHashAsync(memory.content);
+  const enriched = await withEmbedding({
+    ...memory,
+    metadata: { ...(memory.metadata || {}), content_hash: hash },
+  });
   // Alleen een bge-m3-vector past in de kolom (vector(1024)). De hash (256)
   // liet Postgres de HELE rij weigeren: op 28 sep 744 herinneringen van de
   // telefoon weg, "expected 1024 dimensions, not 256". Zonder vector bewaard

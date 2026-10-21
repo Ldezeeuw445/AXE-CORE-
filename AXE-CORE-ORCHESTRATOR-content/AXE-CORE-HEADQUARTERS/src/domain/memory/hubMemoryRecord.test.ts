@@ -5,6 +5,8 @@ import {
   collectHubRecords,
   filterHubMemories,
   recordsForHub,
+  sampleHubRecords,
+  uniqueHubRecords,
   typeLabelFor,
 } from './hubMemoryRecord';
 
@@ -55,6 +57,27 @@ describe('hubMemoryRecord', () => {
     expect(filterHubMemories(resources, 'natgas')).toHaveLength(1);
     expect(filterHubMemories(resources, '', 'Note')).toHaveLength(1);
     expect(filterHubMemories(resources, 'niet-bestaand')).toHaveLength(0);
+  });
+
+  it('dedupeert identieke rijen en houdt een steekproef', () => {
+    const flood = collectHubRecords({
+      global: Array.from({ length: 80 }, (_, i) => ({
+        id: `d${i}`,
+        category: 'system_event',
+        key: `ta:axe_trading_agent:lesson:XAUUSD:${1787700000000 + i}`,
+        value: 'HOLD score=0.012',
+        created_at: new Date(Date.UTC(2026, 9, 21, 0, 0, i)).toISOString(),
+      })),
+    });
+    expect(uniqueHubRecords(flood)).toHaveLength(1);
+    expect(sampleHubRecords(flood, 8)).toHaveLength(1);
+    const mixed = collectHubRecords({
+      global: [
+        { id: 'a', category: 'system_event', key: 'ta:axe_trading_agent:lesson:XAUUSD:1787700000001', value: 'stopped out on the retest', created_at: '2026-10-21T00:00:01Z' },
+        { id: 'b', category: 'system_event', key: 'ta:axe_trading_agent:lesson:XAUUSD:1787700000002', value: 'sized too wide into news', created_at: '2026-10-21T00:00:02Z' },
+      ],
+    });
+    expect(uniqueHubRecords(mixed)).toHaveLength(2);
   });
 
   it('maakt agentactiviteit van wie schreef', () => {

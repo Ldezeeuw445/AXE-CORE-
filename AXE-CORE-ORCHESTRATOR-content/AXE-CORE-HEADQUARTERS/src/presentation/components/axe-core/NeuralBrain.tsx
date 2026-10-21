@@ -30,7 +30,7 @@ import {
   MemoryHubDetailPanel,
   MemoryTypeLegend,
 } from '@/presentation/components/axe-core/memory/MemoryHubDetailPanel';
-import { recordsForHub, type HubMemoryRecord } from '@/domain/memory/hubMemoryRecord';
+import { recordsForHub, sampleHubRecords, type HubMemoryRecord } from '@/domain/memory/hubMemoryRecord';
 import { resolveLabelCollisions, measureReservedIn, type SceneLabel } from '@/domain/memory/sceneLabels';
 
 /**
@@ -321,7 +321,7 @@ export default function NeuralBrain({ initialFocusHubId = null }: { initialFocus
 
     const recordsRef = { current: statsRef.current.records };
     const branchesFromRecords = (hubId: string): Array<{ name: string; leaves: HubMemoryRecord[] }> => {
-      const rows = recordsForHub(recordsRef.current, hubId).slice(0, 18);
+      const rows = sampleHubRecords(recordsForHub(recordsRef.current, hubId), 18);
       const byType = new Map<string, HubMemoryRecord[]>();
       for (const row of rows) {
         const list = byType.get(row.type) ?? [];

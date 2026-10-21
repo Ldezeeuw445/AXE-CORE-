@@ -170,6 +170,7 @@ MANIFEST = {
     "/opt/axe-core-api/trading_cockpit.py": ("backend/axe_api/trading_cockpit.py", "axe-core-api"),
     # CORE-HEALTH-1: /health meet de afhankelijkheden (Supabase, tick, worker, northsea-mcp).
     "/opt/axe-core-api/gezondheid.py": ("backend/axe_api/gezondheid.py", "axe-core-api"),
+    "/opt/axe-core-api/memory_schrijfhek.py": ("backend/axe_api/memory_schrijfhek.py", "axe-core-api"),
     # planner importeert dit na een geslaagde bouwrun (draft-PR); de bouwlus draait op de
     # Mac, maar planner.py staat op de box, dus zijn module ook.
     "/opt/axe-core-api/bouw_publiceer.py": ("backend/axe_api/bouw_publiceer.py", "axe-core-api"),
@@ -190,7 +191,7 @@ OPTIONAL_WHEN_MISSING = {
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "taak_fout.py", "gezondheid.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

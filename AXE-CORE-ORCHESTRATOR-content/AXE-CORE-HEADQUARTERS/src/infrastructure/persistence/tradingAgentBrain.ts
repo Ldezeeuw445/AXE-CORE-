@@ -162,6 +162,9 @@ async function writeBrain(input: {
 }
 
 export async function recordTrade(t: TradeRecord): Promise<void> {
+  // HOLD/cycle-logs horen in de run-tabellen, niet in memory. Elke tik een
+  // cycle-rij was hoe Trading 42k herinneringen kreeg zonder iets te leren.
+  if (t.action === 'hold') return;
   await writeBrain({ ns: 'cycle', id: t.id, payload: t, symbol: t.symbol, confidence: t.confidence });
 }
 

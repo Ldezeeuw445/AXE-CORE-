@@ -250,16 +250,7 @@ export async function recordUnconfirmedDecision(input: {
       blockReason: reason, autoExecute: Boolean(input.autoExecute),
     }),
   };
-  await Promise.resolve(rememberTradeDecision(decision)).catch(() => undefined);
-  await Promise.resolve(recordTrade({
-    id: decision.id,
-    symbol,
-    action: 'hold',
-    confidence: 0,
-    rationale: reason,
-    context: { indicators: { blockedByRisk: reason }, intelIds: [] },
-    createdAt: decision.createdAt,
-  })).catch(() => undefined);
+  // HOLD is geen les. Run-logs blijven in de trade/task-tabellen.
   await saveThinkingTrace(trace);
   return {
     decision,
@@ -900,12 +891,12 @@ export async function runTradingAgent(input: {
     createdAt: new Date().toISOString(),
   };
 
-  await rememberTradeDecision(decision);
+  if (action !== 'hold') {
+    await rememberTradeDecision(decision);
+  }
   if (intel?.thesis) await rememberOpenThesis(symbol, intel.thesis);
 
-  // Structured brain record. Written for every decision including holds and
-  // risk-blocked ones: a review that only sees executed trades cannot tell
-  // whether the agent was right to stay out.
+  // Alleen een echte actie gaat het geheugen in. HOLD was elke cyclus een rij.
   await recordTrade({
     id: decision.id,
     symbol,
@@ -994,7 +985,6 @@ export async function runTradingAgent(input: {
       blockedByRisk || (action === 'hold' ? 'HOLD' : 'autoExecute off or qty=0'),
       0,
     ));
-    if (action === 'hold') await rememberLesson(symbol, `HOLD score=${score.toFixed(3)}`);
   }
 
   steps.push(step(

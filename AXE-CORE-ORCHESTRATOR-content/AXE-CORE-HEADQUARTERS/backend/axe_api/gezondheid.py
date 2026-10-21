@@ -29,6 +29,11 @@ import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Optional
 
+try:
+    from memory_schrijfhek import GEHEUGEN_MAG_PER_DAG
+except ImportError:
+    GEHEUGEN_MAG_PER_DAG = 120
+
 import httpx
 
 CACHE_S = 20.0
@@ -81,6 +86,34 @@ async def _ollama_box(client: httpx.AsyncClient, url: str) -> dict:
     return {"state": "fail", "detail": f"HTTP {r.status_code}" if not r.is_success else "no models"}
 
 
+async def _memory_cap(client: httpx.AsyncClient, url: str, key: str) -> dict:
+    """Waarschuwing als één agent vandaag de daglimiet volschrijft. Geen degraded."""
+    if not url or not key:
+        return {"state": "unknown", "detail": "not configured"}
+    vandaag = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    r = await client.get(
+        url.rstrip("/") + "/rest/v1/memory",
+        headers={"apikey": key, "Authorization": f"Bearer {key}"},
+        params={"select": "agent", "created_at": f"gte.{vandaag}", "limit": "2000"},
+    )
+    if not r.is_success:
+        return {"state": "unknown", "detail": f"HTTP {r.status_code}"}
+    rows = r.json()
+    if not isinstance(rows, list):
+        return {"state": "ok", "over": []}
+    counts: dict[str, int] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        agent = str(row.get("agent") or "global")
+        counts[agent] = counts.get(agent, 0) + 1
+    over = {a: n for a, n in counts.items() if n >= GEHEUGEN_MAG_PER_DAG}
+    if over:
+        detail = ", ".join(f"{a} {n}/{GEHEUGEN_MAG_PER_DAG}" for a, n in sorted(over.items()))
+        return {"state": "warn", "detail": f"daily memory cap: {detail}", "agents": over}
+    return {"state": "ok", "agents_today": len(counts)}
+
+
 async def _task_worker(systemctl: Optional[str]) -> dict:
     if not systemctl:
         return {"state": "unknown", "detail": "no systemd on this host"}
@@ -118,20 +151,24 @@ async def controles(supabase_url: str, supabase_key: str, *, client: Optional[ht
     eigen = client is None
     client = client or httpx.AsyncClient(timeout=TIMEOUT_S)
     try:
-        sb, ns, tw, ob = await asyncio.gather(
+        sb, ns, tw, ob, cap = await asyncio.gather(
             _veilig(lambda: _supabase(client, supabase_url, supabase_key)),
             _veilig(lambda: _northsea(client, northsea_url)),
             _veilig(lambda: _task_worker(systemctl)),
             _veilig(lambda: _ollama_box(client, ollama_url)),
+            _veilig(lambda: _memory_cap(client, supabase_url, supabase_key)),
         )
     finally:
         if eigen:
             await client.aclose()
+    if cap.get("state") == "fail":
+        cap = {"state": "unknown", "detail": cap.get("detail", "fail")}
     checks = {"supabase": sb, "cron_tick": beoordeel_tick(_laatste_tick, t), "task_worker": tw, "northsea_mcp": ns,
-              "ollama_box": ob}
+              "ollama_box": ob, "memory_cap": cap}
     uit = {
         "checks": checks,
         "degraded": sorted(k for k, v in checks.items() if v.get("state") == "fail"),
+        "warnings": sorted(k for k, v in checks.items() if v.get("state") == "warn"),
         "checked_at": datetime.fromtimestamp(t, timezone.utc).isoformat(),
     }
     if cache:

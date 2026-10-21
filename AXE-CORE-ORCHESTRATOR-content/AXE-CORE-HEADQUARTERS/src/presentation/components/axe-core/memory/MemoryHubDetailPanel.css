@@ -1,12 +1,12 @@
-/* Hubdetail — leesbaar paneel boven het landschap, in de vrije scene. */
+/* Hubdetail — zijpaneel, nooit over het midden van de graaf. */
 .axe-hubdetail {
   position: absolute;
-  left: 50%;
+  left: calc(var(--axe-chat-links, 248px) + 20px);
   top: calc(var(--axe-viewctl-onder, 64px) + 52px);
-  transform: translateX(-50%);
+  transform: none;
   z-index: 26;
-  width: min(680px, calc(100% - 32px));
-  max-width: calc(100% - var(--axe-chat-links, 248px) - var(--axe-chat-rechts, 248px) - 24px);
+  width: min(340px, 32vw);
+  max-width: min(340px, calc(100% - var(--axe-chat-links, 248px) - var(--axe-chat-rechts, 248px) - 48px));
   max-height: calc(100% - var(--axe-chat-onder, 168px) - var(--axe-viewctl-onder, 64px) - 72px);
   display: flex;
   flex-direction: column;
@@ -105,7 +105,7 @@
 
 .axe-hubdetail-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) 92px 88px 88px 56px;
+  grid-template-columns: minmax(0, 1fr) 72px 64px;
   gap: 8px;
   align-items: center;
   width: 100%;
@@ -282,15 +282,20 @@
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
+.axe-hubdetail-row > .axe-hubdetail-meta:nth-child(4),
+.axe-hubdetail-row > .axe-hubdetail-meta:nth-child(5) {
+  display: none;
+}
+
 @media (max-width: 1100px) {
   .axe-hubdetail {
-    max-width: calc(100% - 24px);
+    width: min(340px, calc(100% - 24px));
+    max-width: min(340px, calc(100% - 24px));
   }
   .axe-hubdetail-row {
-    grid-template-columns: minmax(0, 1fr) 80px 72px;
+    grid-template-columns: minmax(0, 1fr) 72px;
   }
-  .axe-hubdetail-row > .axe-hubdetail-meta:nth-child(4),
-  .axe-hubdetail-row > .axe-hubdetail-meta:nth-child(5) {
+  .axe-hubdetail-row > .axe-hubdetail-meta:nth-child(3) {
     display: none;
   }
   .axe-memory-legend,

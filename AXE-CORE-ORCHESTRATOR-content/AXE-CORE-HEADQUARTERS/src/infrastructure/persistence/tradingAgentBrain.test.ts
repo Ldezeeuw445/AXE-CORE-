@@ -28,6 +28,11 @@ beforeEach(() => { remember.mockClear(); recall.mockClear(); saveGlobalMemory.mo
 const arg = () => remember.mock.calls[0][0] as Record<string, unknown>;
 
 describe('every namespace writes to the trader namespace', () => {
+  it('schrijft geen HOLD-cycle naar memory', async () => {
+    await brain.recordTrade({ id: 'h1', symbol: 'EURUSD', action: 'hold', confidence: 0 } as never);
+    expect(remember).not.toHaveBeenCalled();
+  });
+
   it('a cycle', async () => {
     await brain.recordTrade({ id: 't1', symbol: 'EURUSD', action: 'buy', confidence: 0.7 } as never);
     expect(arg()).toMatchObject({ agent: 'axe_trader', kind: 'event', symbol: 'EURUSD' });

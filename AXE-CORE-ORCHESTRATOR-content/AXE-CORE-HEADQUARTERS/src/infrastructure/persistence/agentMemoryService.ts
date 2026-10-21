@@ -30,6 +30,11 @@
 import { sbGetRows, sbInsertRow, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { meldActiviteit } from '@/shared/axeActiviteit';
+import {
+  inhoudHashAsync,
+  magGeheugenSchrijven,
+  sleutelMetHash,
+} from '@/domain/memory/memoryWriteGuard';
 
 /** The namespaces that exist. Agents own memory; capabilities do not. */
 export type MemoryNamespace =
@@ -96,14 +101,18 @@ export async function remember(input: RememberInput): Promise<boolean> {
   if (!isAxeApiConfigured) return false;
   const content = input.content?.trim();
   if (!content) return false;
-  meldActiviteit({ doelen: ['geheugen', '/memory'], label: `onthoudt: ${content.slice(0, 60)}`, kleur: '#a78bfa' });
+  const reden = magGeheugenSchrijven({ key: input.key, content });
+  if (reden !== 'ok') return false;
 
   try {
+    const hash = await inhoudHashAsync(content);
+    const key = input.key ? sleutelMetHash(input.key, hash) : `mem:${hash}`;
+    meldActiviteit({ doelen: ['geheugen', '/memory'], label: `onthoudt: ${content.slice(0, 60)}`, kleur: '#a78bfa' });
     await sbInsertRow('memory', {
       agent: input.agent ?? GLOBAL,
       user_id: AXE_USER_ID,
       kind: input.kind ?? 'fact',
-      key: input.key ?? null,
+      key,
       content: content.slice(0, 8000),
       category: input.category ?? null,
       tags: input.tags ?? null,
@@ -111,6 +120,7 @@ export async function remember(input: RememberInput): Promise<boolean> {
       importance: input.importance ?? null,
       confidence: input.confidence ?? null,
       source: input.source ?? 'axe',
+      metadata: { content_hash: hash },
     });
     return true;
   } catch (err) {

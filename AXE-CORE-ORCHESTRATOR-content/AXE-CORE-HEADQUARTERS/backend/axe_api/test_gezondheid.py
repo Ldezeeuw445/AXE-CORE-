@@ -46,6 +46,8 @@ def test_alles_gezond(tmp_path):
     assert uit["checks"]["cron_tick"] == {"state": "ok", "age_s": 30}
     assert uit["checks"]["task_worker"]["state"] == "ok"
     assert uit["checks"]["ollama_box"] == {"state": "ok", "models": 2}
+    assert uit["checks"]["memory_cap"]["state"] == "ok"
+    assert uit["warnings"] == []
 
 
 def test_elke_kapotte_afhankelijkheid_staat_in_degraded(tmp_path):
@@ -93,6 +95,27 @@ def test_cache_meet_hooguit_eens_per_venster():
             return gelijk, teller["n"] > na_eerste
     assert asyncio.run(run()) == (True, True)
     gz._cache.clear()
+
+
+def test_memory_cap_is_waarschuwing_niet_degraded(tmp_path):
+    gz.tick_ontvangen(1_000.0)
+
+    def handler(request: httpx.Request):
+        if "/rest/v1/memory" in str(request.url):
+            return httpx.Response(200, json=[{"agent": "axe_trader"}] * gz.GEHEUGEN_MAG_PER_DAG)
+        if request.url.host == "ollama.axecompanion.com":
+            return httpx.Response(200, json={"models": [{"name": "hermes3:8b"}]})
+        if request.url.host == "project.supabase.co":
+            return httpx.Response(200, json=[{"id": "x"}])
+        if request.url.host == "127.0.0.1":
+            return httpx.Response(200, json={"status": "ok", "version": "1.4.1"})
+        return httpx.Response(404)
+
+    uit = meet(c=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+               systemctl=nep_systemctl(tmp_path, "active"), nu=1_030.0)
+    assert "memory_cap" in uit["warnings"]
+    assert "memory_cap" not in uit["degraded"]
+    assert uit["checks"]["memory_cap"]["state"] == "warn"
 
 
 def test_niet_geconfigureerd_supabase_is_onbekend():

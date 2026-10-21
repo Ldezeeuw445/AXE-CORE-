@@ -17,6 +17,17 @@ describe('memory scene — echte hubinhoud, geen overlap', () => {
     expect(terrain).not.toMatch(/Click a hub to zoom into its peak and explore sub-hubs/);
   });
 
+  it('hubdetail is een zijpaneel, niet over het midden van de graaf', () => {
+    const css = bron('memory/MemoryHubDetailPanel.css');
+    expect(css).not.toMatch(/left:\s*50%/);
+    expect(css).toContain('transform: none');
+    expect(css).toContain('--axe-chat-links');
+    expect(css).toContain('min(340px');
+    const panel = bron('memory/MemoryHubDetailPanel.tsx');
+    expect(panel).toContain('unique ·');
+    expect(panel).toContain('sampleHubRecords');
+  });
+
   it('Neural gebruikt echte records en dezelfde hubkleuren als Distribution', () => {
     const neural = bron('NeuralBrain.tsx');
     expect(neural).not.toContain('TREE_DATA');
@@ -25,6 +36,7 @@ describe('memory scene — echte hubinhoud, geen overlap', () => {
     expect(neural).toContain('MemoryTypeLegend');
     expect(neural).toContain('resolveLabelCollisions');
     expect(neural).toContain('buildBrainGeometry(48000, 900)');
+    expect(neural).toContain('sampleHubRecords');
   });
 
   it('Terrain tekent geen bladlabels over de composer', () => {
