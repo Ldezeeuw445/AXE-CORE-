@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 from uuid import uuid4
 
+from pydantic import BaseModel, Field
+
 AXE_USER_UUID = "acff7a12-1111-481d-a7a9-cc07583b8069"
 AXE_USER_MEMORY = f"{AXE_USER_UUID}-axe-core"
 OS3_CONVERSATION = "axe-os3"
@@ -120,40 +122,48 @@ def capability_for(agent: str) -> str:
     return CAPABILITY.get(agent, "agentic")
 
 
+# Op moduleniveau, niet in build_router: met `from __future__ import annotations`
+# zijn de annotaties van de routes strings, en FastAPI zoekt "AgentRunBody" dan in
+# de module. Binnen de functie vond hij hem niet, en sinds 17 okt gaf elke POST
+# hier een 500 (PydanticUserError, gezien in de VPS-log van 28 okt).
+class AgentRunBody(BaseModel):
+    instruction: str
+    requested_by: str = "os3"
+
+
+class MemoryAddBody(BaseModel):
+    text: str
+    key: str | None = None
+    category: str = "cli"
+    user_id: str = AXE_USER_MEMORY
+
+
+class NotifyBody(BaseModel):
+    message: str
+    actor: str = "os3"
+
+
+class ReportBody(BaseModel):
+    title: str
+    text: str
+    actor: str = "os3"
+
+
+class AuditBody(BaseModel):
+    actor: str = "os3"
+    command: str
+    args: str = ""
+    status: str = "ok"
+    at: str | None = None
+    extras: dict[str, Any] = Field(default_factory=dict)
+
+
 def build_router(
     sb: Callable[[], Any],
     task_repo: Callable[[], Any],
     audit: Callable[..., Any],
 ) -> Any:
     from fastapi import APIRouter
-    from pydantic import BaseModel, Field
-
-    class AgentRunBody(BaseModel):
-        instruction: str
-        requested_by: str = "os3"
-
-    class MemoryAddBody(BaseModel):
-        text: str
-        key: str | None = None
-        category: str = "cli"
-        user_id: str = AXE_USER_MEMORY
-
-    class NotifyBody(BaseModel):
-        message: str
-        actor: str = "os3"
-
-    class ReportBody(BaseModel):
-        title: str
-        text: str
-        actor: str = "os3"
-
-    class AuditBody(BaseModel):
-        actor: str = "os3"
-        command: str
-        args: str = ""
-        status: str = "ok"
-        at: str | None = None
-        extras: dict[str, Any] = Field(default_factory=dict)
 
     router = APIRouter()
 

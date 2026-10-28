@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_laag
 from cli_laag import BLOCKED_FLAGS, capability_for, heartbeat_online, inspect_approval, inspect_blocked, redact
 
 
@@ -54,3 +55,42 @@ if __name__ == "__main__":
     test_capability_volgt_de_roster()
     test_worker_heartbeat_stale_is_45s()
     print("ok")
+
+
+def test_de_post_routes_lezen_hun_body_ook_met_uitgestelde_annotaties():
+    """28 okt in de VPS-log: PydanticUserError 'AgentRunBody is not fully defined'.
+
+    De modellen stonden binnen build_router; met `from __future__ import
+    annotations` kon FastAPI de naam niet meer vinden en gaf elke POST hier 500.
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    gemaakt = []
+
+    class Repo:
+        def create(self, rij):
+            gemaakt.append(rij)
+            return {"id": "t1", **rij}, True
+
+    class Tabel:
+        def insert(self, rij):
+            return self
+
+        def execute(self):
+            return type("R", (), {"data": [{"id": "n1"}]})()
+
+    class Sb:
+        def table(self, _naam):
+            return Tabel()
+
+    async def audit(*_a, **_k):
+        return None
+
+    app = FastAPI()
+    app.include_router(cli_laag.build_router(lambda: Sb(), lambda: Repo(), audit), prefix="/cli")
+    c = TestClient(app)
+    r = c.post("/cli/agents/developer/run", json={"instruction": "check the build"})
+    assert r.status_code == 200, r.text
+    assert gemaakt and gemaakt[0]["goal"] == "check the build"
+    assert c.post("/cli/notify", json={"message": "hoi"}).status_code != 500
