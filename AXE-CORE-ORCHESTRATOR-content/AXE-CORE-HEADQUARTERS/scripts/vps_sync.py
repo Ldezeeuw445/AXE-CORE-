@@ -186,6 +186,9 @@ MANIFEST = {
     # planner importeert dit na een geslaagde bouwrun (draft-PR); de bouwlus draait op de
     # Mac, maar planner.py staat op de box, dus zijn module ook.
     "/opt/axe-core-api/bouw_publiceer.py": ("backend/axe_api/bouw_publiceer.py", "axe-core-api"),
+    # Usage & Credits (plan B stap 1): main.py importeert usage_credits in
+    # GET /usage-credits. Zonder deze regel blijft de module op de Mac.
+    "/opt/axe-core-api/usage_credits.py": ("backend/axe_api/usage_credits.py", "axe-core-api"),
 }
 
 # MISSING op de box, en de bijbehorende dienst staat er niet (of is optioneel).
