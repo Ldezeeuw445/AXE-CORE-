@@ -247,6 +247,11 @@ def kies_motor(staat: dict, agent: str, gewenst: str, motoren: dict, engines: di
             redenen[m] = reden
         return None, redenen
 
+    if gewenst not in ABONNEMENTEN and gewenst not in uitsluiten:
+        reden = motor_reden(staat, gewenst, engines, nu)
+        if reden:
+            redenen[gewenst] = reden
+
     dag = nu.strftime("%Y-%m-%d")
     vrij: list[tuple[tuple, str]] = []
     for m in ABONNEMENTEN:

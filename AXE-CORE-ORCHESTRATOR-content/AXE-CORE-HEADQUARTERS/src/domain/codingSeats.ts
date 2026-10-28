@@ -228,7 +228,7 @@ export function winnendeStoel<T extends Pick<CodingSeat, 'logged_in' | 'last_see
   })[0] ?? null;
 }
 
-export function stoelNietGebruikt(stoel: Pick<CodingSeat, 'id' | 'logged_in' | 'config_exists' | 'seat_id' | 'email'>): boolean {
+export function stoelNietGebruikt(stoel: Pick<CodingSeat, 'id' | 'logged_in'> & Partial<Pick<CodingSeat, 'config_exists' | 'seat_id' | 'email'>>): boolean {
   const sid = stoelSleutel(stoel);
   if (stoel.logged_in === true) return false;
   if (stoel.email) return false;

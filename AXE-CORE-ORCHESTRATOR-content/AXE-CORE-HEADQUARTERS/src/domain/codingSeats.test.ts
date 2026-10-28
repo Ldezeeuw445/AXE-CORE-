@@ -280,7 +280,7 @@ describe('heartbeat-stand', () => {
 
 describe('wat Luka moet doen', () => {
   it('geeft het login-commando of de sleutel, niet Limit seen voor een exitfout', () => {
-    expect(watMoetLukaDoen(stoel({ provider: 'cursor', logged_in: false, login_command: 'cursor-agent login', machine: 'mini-van-luka-5' })))
+    expect(watMoetLukaDoen(stoel({ id: 'cursor', provider: 'cursor', logged_in: false, login_command: 'cursor-agent login', machine: 'mini-van-luka-5' })))
       .toMatch(/cursor-agent login/);
     expect(watMoetLukaDoen(stoel({ id: 'cursor2', provider: 'cursor', logged_in: false, machine: 'imac-1' })))
       .toMatch(/CURSOR2_API_KEY/);

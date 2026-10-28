@@ -459,7 +459,7 @@ class TestStoelKeuze:
     def test_onbekende_motor_geen_stoel(self):
         assert a.kies_vrije_stoel("verzonnen") is None
 
-    def test_kiest_minste_gebruik_over_alle_merken(self, monkeypatch):
+    def test_kiest_minste_gebruik_over_alle_merken_als_gevraagde_niet_kan(self, monkeypatch):
         monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
         monkeypatch.setattr(a, "agent_usage_status", lambda: {
             "claude": {"runs_7d": 80},
@@ -473,6 +473,7 @@ class TestStoelKeuze:
         })
         for naam in a.SEAT_VOLGORDE:
             a._ACCOUNT_CACHE[naam] = (0, {"ingelogd": True, "account": f"{naam}@x.nl"})
+        a._ACCOUNT_CACHE["claude"] = (0, {"ingelogd": False, "account": None})
         monkeypatch.delenv("CURSOR2_API_KEY", raising=False)
         assert a.kies_vrije_stoel("claude") == "codex"
 

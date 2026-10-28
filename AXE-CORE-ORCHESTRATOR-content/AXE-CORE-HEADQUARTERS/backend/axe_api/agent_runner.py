@@ -716,6 +716,9 @@ def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float 
             return False
         return not _stoel_koelt(naam, nu)
 
+    if geschikt(gewenst):
+        return gewenst
+
     vrij_rijen: list[tuple[tuple, str]] = []
     gezien_account: dict[tuple[str, str], str] = {}
     for naam in SEAT_VOLGORDE:
