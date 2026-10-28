@@ -87,6 +87,21 @@ def test_kies_stoel_spreidt_op_resterend_en_slaat_limiet_over():
     assert pr.kies_stoel(alleen_codex, familie="claude")["seat_id"] == "codex"
 
 
+def test_kies_stoel_codex_op_nul_wint_van_volle_claude():
+    rijen = [
+        stoel("claude2", used_week=69, runs_7d=56),
+        stoel("codex", used_week=0, runs_7d=0),
+        stoel("codex2", used_week=0, runs_7d=0, email="tweede@x.nl"),
+    ]
+    gekozen = pr.kies_stoel(rijen, familie="claude")
+    assert gekozen["seat_id"] in ("codex", "codex2")
+
+
+def test_kies_stoel_slaat_xai_over_want_geen_cli():
+    rijen = [stoel("xai", provider="xai", machine="vps")]
+    assert pr.kies_stoel(rijen, familie="claude") is None
+
+
 def test_bezette_of_oude_stoel_telt_niet():
     rijen = [
         stoel("claude2", current_task="ci"),
@@ -125,6 +140,8 @@ def test_call_model_valt_door_naar_stoel(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
 
     async def ollama(_c):
         raise RuntimeError("ollama down")
@@ -159,6 +176,8 @@ def test_call_model_wacht_op_capaciteit_in_plaats_van_rood(monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
 
     async def ollama(_c):
         raise RuntimeError("openai 429: You have no credits remaining")
@@ -186,6 +205,11 @@ def test_computer_worker_kent_stoel_env():
     assert "~/.claude-tweede" in tekst or ".claude-tweede" in tekst
     assert "seatChildEnv" in tekst
     assert "ANTHROPIC_API_KEY" in tekst
+    assert "CURSOR2_API_KEY" in tekst
+    assert "gpt-5-codex" in tekst
+    stoelen = (Path(__file__).resolve().parents[2] / "infra/computer-worker/codingSeats.mjs").read_text()
+    assert "cursor2" in stoelen and "isRealLimitMessage" in stoelen
+    assert "CURSOR2_API_KEY" in stoelen
 
 
 def test_codex_leeg_en_astra_krijgen_geen_model(monkeypatch):
@@ -193,15 +217,18 @@ def test_codex_leeg_en_astra_krijgen_geen_model(monkeypatch):
     monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
     assert pr.codex_cli_model("gpt-6-astra") == ""
     assert pr.codex_cli_model("") == ""
-    assert pr.codex_cli_model("gpt-5-codex") == "gpt-5-codex"
+    assert pr.codex_cli_model("gpt-5-codex") == ""
     assert pr.stoel_model("codex", 1, "gpt-6-astra") == ""
     assert pr.stoel_model("codex", 1, "") == ""
+    assert pr.stoel_model("codex", 1, "o3") == "o3"
 
 
 def test_codex_model_via_env(monkeypatch):
     monkeypatch.setenv("AXE_CODEX_MODEL", "o3")
     assert pr.codex_cli_model("") == "o3"
     monkeypatch.setenv("AXE_CODEX_MODEL", "gpt-6-astra")
+    assert pr.codex_cli_model("") == ""
+    monkeypatch.setenv("AXE_CODEX_MODEL", "gpt-5-codex")
     assert pr.codex_cli_model("") == ""
 
 
@@ -227,6 +254,16 @@ def test_computer_worker_codex_fallback_zonder_hard_model():
     assert "/opt/homebrew/bin/claude" in tekst
     assert "retry without -m" in tekst
     assert "Codex model_not_found" in tekst
+    assert "gpt-5-codex" in tekst
+
+
+def test_xai_stoel_uit_de_sleutel(monkeypatch):
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
+    uit = pr.xai_stoel()
+    assert uit["seat_id"] == "xai" and uit["logged_in"] is False
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    assert pr.xai_stoel()["logged_in"] is True
 
 
 def test_beleid_hard_limits_blijven_vragen():

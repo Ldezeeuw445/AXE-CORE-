@@ -10,13 +10,15 @@
  */
 import { isLimietFout, limietTijdstip, STANDAARD_KOELING_MS } from './gebruikslimiet';
 
-export type CodingProvider = 'claude' | 'codex' | 'cursor' | 'openhands';
+export type CodingProvider = 'claude' | 'codex' | 'cursor' | 'openhands' | 'xai';
 
 export interface CodingSeat {
   id: string;
   provider: CodingProvider;
   label: string;
   email: string | null;
+  /** ChatGPT-account-id of org, los van het e-mailadres. */
+  org_id?: string | null;
   machine: string;
   logged_in: boolean | null;
   login_command: string;
@@ -30,6 +32,11 @@ export interface CodingSeat {
   config_exists?: boolean;
   /** CLI-stoel zonder machine-prefix (claude2, niet mini-van-luka-5:claude2). */
   seat_id?: string;
+  /** Wat Luka moet doen als de stoel niet bruikbaar is (login of sleutel). */
+  actie?: string | null;
+  used_session?: number | null;
+  used_week?: number | null;
+  runs_7d?: number | null;
 }
 
 export type SeatStandToon = 'ok' | 'bad' | 'info' | 'muted';
@@ -55,24 +62,85 @@ export function parseLimietTot(bericht: string, nu: Date): number | null {
  * E-mail uit een Codex auth.json. Alleen de claim; het token zelf gaat nooit
  * het resultaat in — ook niet per ongeluk via JSON.stringify van de invoer.
  */
-export function emailUitCodexAuth(auth: unknown): { loggedIn: boolean; email: string | null } {
-  if (!auth || typeof auth !== 'object') return { loggedIn: false, email: null };
-  const tokens = (auth as { tokens?: { id_token?: unknown; access_token?: unknown } }).tokens;
-  if (!tokens || typeof tokens !== 'object') return { loggedIn: false, email: null };
+export function emailUitCodexAuth(auth: unknown): { loggedIn: boolean; email: string | null; orgId: string | null } {
+  if (!auth || typeof auth !== 'object') return { loggedIn: false, email: null, orgId: null };
+  const tokens = (auth as { tokens?: { id_token?: unknown; access_token?: unknown; account_id?: unknown } }).tokens;
+  if (!tokens || typeof tokens !== 'object') return { loggedIn: false, email: null, orgId: null };
   const jwt = typeof tokens.id_token === 'string' ? tokens.id_token : '';
   const heeftSessie = Boolean(tokens.access_token || jwt);
-  if (!heeftSessie) return { loggedIn: false, email: null };
+  if (!heeftSessie) return { loggedIn: false, email: null, orgId: null };
+  const accountId = typeof tokens.account_id === 'string' ? tokens.account_id : null;
   const deel = jwt.split('.')[1] ?? '';
-  if (!deel) return { loggedIn: true, email: null };
+  if (!deel) return { loggedIn: true, email: null, orgId: accountId };
   try {
     const pad = deel.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (deel.length % 4)) % 4);
     const json = typeof atob === 'function' ? atob(pad) : '';
-    const claims = JSON.parse(json) as { email?: unknown };
+    const claims = JSON.parse(json) as { email?: unknown; 'https://api.openai.com/auth'?: { chatgpt_account_id?: unknown } };
     const email = typeof claims.email === 'string' ? claims.email : null;
-    return { loggedIn: true, email };
+    const authClaim = claims['https://api.openai.com/auth'];
+    const org = typeof authClaim?.chatgpt_account_id === 'string' ? authClaim.chatgpt_account_id : accountId;
+    return { loggedIn: true, email, orgId: org };
   } catch {
-    return { loggedIn: true, email: null };
+    return { loggedIn: true, email: null, orgId: accountId };
   }
+}
+
+/** E-mail uit Claude-oauth, ook als `auth status` loggedIn=false zegt (restant-token). */
+export function emailUitClaudeOauth(oauth: unknown): string | null {
+  if (!oauth || typeof oauth !== 'object') return null;
+  const o = oauth as Record<string, unknown>;
+  const inner = (o.claudeAiOauth && typeof o.claudeAiOauth === 'object')
+    ? o.claudeAiOauth as Record<string, unknown>
+    : o;
+  for (const v of [inner.email, inner.account, (inner.user as { email?: unknown } | undefined)?.email]) {
+    if (typeof v === 'string' && v.includes('@')) return v;
+  }
+  return null;
+}
+
+/**
+ * `cursor-agent status` / `about`: JSON of tekst. Exit 1 + "Not authenticated"
+ * is uitgelogd, geen limiet. CURSOR_API_KEY telt als headless-login.
+ */
+export function cursorStatusUitTekst(
+  tekst: string,
+  opts: { hasApiKey?: boolean } = {},
+): { loggedIn: boolean | null; email: string | null } {
+  const raw = tekst || '';
+  const json = (() => {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      return JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  })();
+  if (json) {
+    const user = json.user && typeof json.user === 'object' ? json.user as Record<string, unknown> : json;
+    const emailRaw = json.email ?? json.userEmail ?? user.email ?? json.account;
+    const email = typeof emailRaw === 'string' && emailRaw.includes('@') ? emailRaw : null;
+    const auth = json.authenticated ?? json.loggedIn ?? json.logged_in;
+    if (typeof auth === 'boolean') return { loggedIn: auth, email: auth ? email : null };
+    if (email) return { loggedIn: true, email };
+  }
+  if (/not authenticated|not logged in|please (log|sign) in/i.test(raw) && !/logged in as/i.test(raw)) {
+    return { loggedIn: opts.hasApiKey ? true : false, email: null };
+  }
+  const mail = raw.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/);
+  if (mail) return { loggedIn: true, email: mail[0] };
+  if (/logged in/i.test(raw)) return { loggedIn: true, email: null };
+  if (opts.hasApiKey) return { loggedIn: true, email: null };
+  if (!raw.trim()) return { loggedIn: opts.hasApiKey ? true : null, email: null };
+  return { loggedIn: null, email: null };
+}
+
+/** Alleen een echte quotum-melding, niet "Cursor ended with 1". */
+export function isEchteLimietMelding(bericht: string): boolean {
+  if (!isLimietFout(bericht || '')) return false;
+  if (/eindigde met|ended with/i.test(bericht || '')) return false;
+  return true;
 }
 
 /** Claude `auth status` JSON: loggedIn + email, verder niets. Uitgelogd = geen e-mail. */
@@ -121,13 +189,25 @@ export function machineLabel(machine: string | null | undefined): string {
 }
 
 function providerVanSeat(seatId: string, provider?: string | null): CodingProvider {
-  if (provider === 'claude' || provider === 'codex' || provider === 'cursor' || provider === 'openhands') {
+  if (provider === 'claude' || provider === 'codex' || provider === 'cursor' || provider === 'openhands' || provider === 'xai') {
     return provider;
   }
   if (seatId.startsWith('codex')) return 'codex';
   if (seatId.startsWith('cursor')) return 'cursor';
   if (seatId.startsWith('openhands')) return 'openhands';
+  if (seatId.startsWith('xai') || seatId.startsWith('grok')) return 'xai';
   return 'claude';
+}
+
+/** Eén account: provider + e-mail, of provider + org-id. Leeg = onbekend. */
+export function accountSleutel(stoel: Pick<CodingSeat, 'id' | 'provider' | 'email' | 'org_id' | 'seat_id'>): string | null {
+  const sid = stoelSleutel(stoel);
+  const provider = providerVanSeat(sid, stoel.provider);
+  const mail = (stoel.email || '').trim().toLowerCase();
+  if (mail) return `${provider}:${mail}`;
+  const org = (stoel.org_id || '').trim();
+  if (org) return `${provider}:org:${org}`;
+  return null;
 }
 
 /**
@@ -148,9 +228,12 @@ export function winnendeStoel<T extends Pick<CodingSeat, 'logged_in' | 'last_see
   })[0] ?? null;
 }
 
-export function stoelNietGebruikt(stoel: Pick<CodingSeat, 'id' | 'logged_in' | 'config_exists' | 'seat_id'>): boolean {
+export function stoelNietGebruikt(stoel: Pick<CodingSeat, 'id' | 'logged_in'> & Partial<Pick<CodingSeat, 'config_exists' | 'seat_id' | 'email'>>): boolean {
   const sid = stoelSleutel(stoel);
-  return sid === 'claude' && stoel.logged_in !== true && stoel.config_exists !== false;
+  if (stoel.logged_in === true) return false;
+  if (stoel.email) return false;
+  // Default ~/.claude zonder login is de lege vierde map, geen vierde Pro-seat.
+  return sid === 'claude' && stoel.config_exists !== false;
 }
 
 export type AbonnementGroep = {
@@ -164,9 +247,10 @@ export type AbonnementGroep = {
 };
 
 /**
- * Eén kaart per account (e-mail + provider). Machines waar logged_in=true
- * staan onder "usable on". config_exists=false verdwijnt. Nooit ingelogd op
- * enige machine → kleine 'not used'-lijst.
+ * Eén kaart per account (e-mail/org + provider). Een restant-login in ~/.claude
+ * met hetzelfde adres als een andere map is geen vierde Pro-seat: die rijen
+ * gaan in dezelfde groep. Machines waar logged_in=true staan onder "usable on".
+ * config_exists=false verdwijnt. Nooit ingelogd en geen identiteit → 'not used'.
  */
 export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: AbonnementGroep[]; ongebruikt: AbonnementGroep[] } {
   const zichtbaar = stoelen.filter((s) => !verbergStoel(s) && stoelSleutel(s));
@@ -174,12 +258,11 @@ export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: Abonneme
   const rest: CodingSeat[] = [];
 
   for (const s of zichtbaar) {
-    if (s.logged_in === true && toonStoelEmail(s)) {
-      const provider = providerVanSeat(stoelSleutel(s), s.provider);
-      const sleutel = `${provider}:${toonStoelEmail(s)!.trim().toLowerCase()}`;
-      const lijst = groepen.get(sleutel) ?? [];
+    const ident = accountSleutel(s);
+    if (ident) {
+      const lijst = groepen.get(ident) ?? [];
       lijst.push(s);
-      groepen.set(sleutel, lijst);
+      groepen.set(ident, lijst);
     } else {
       rest.push(s);
     }
@@ -198,8 +281,10 @@ export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: Abonneme
     const hosts = [...groepen.entries()].filter(([, rows]) => rows.some((r) => stoelSleutel(r) === sid));
     if (hosts.length === 1) {
       hosts[0][1].push(...rijen);
-    } else {
+    } else if (rijen.every(stoelNietGebruikt)) {
       ongebruiktSeats.push(rijen);
+    } else {
+      groepen.set(`seat:${sid}`, rijen);
     }
   }
 
@@ -208,7 +293,8 @@ export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: Abonneme
     if (!win) return null;
     const sid = stoelSleutel(win);
     const provider = providerVanSeat(sid, win.provider);
-    const email = win.logged_in === true ? toonStoelEmail(win) : null;
+    const email = (rijen.map((s) => (s.email || '').trim()).find(Boolean) || null);
+    const getoondEmail = win.logged_in === true ? email : (nietGebruikt ? null : email);
     const seatIds = [...new Set(rijen.map(stoelSleutel))];
     const bruikbaarOp = [...new Set(
       rijen.filter((s) => s.logged_in === true).map((s) => machineLabel(s.machine)),
@@ -216,14 +302,15 @@ export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: Abonneme
       const rang = (x: string) => (x === 'Mac mini' ? 0 : x === 'iMac' ? 1 : 2);
       return rang(a) - rang(b) || a.localeCompare(b);
     });
+    const echtOngebruikt = nietGebruikt || (bruikbaarOp.length === 0 && stoelNietGebruikt(win));
     return {
       key: `${provider}:${email || sid}:${seatIds.join(',')}`,
       provider,
-      email,
+      email: echtOngebruikt ? null : getoondEmail,
       seatIds,
       bruikbaarOp,
-      stoel: { ...win, id: sid, provider, email, seat_id: sid },
-      nietGebruikt,
+      stoel: { ...win, id: sid, provider, email: echtOngebruikt ? null : getoondEmail, seat_id: sid },
+      nietGebruikt: echtOngebruikt,
     };
   };
 
@@ -238,7 +325,7 @@ export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: Abonneme
     if (g) ongebruikt.push(g);
   }
 
-  const volgorde = ['claude2', 'claude3', 'claude4', 'claude', 'codex', 'codex2', 'cursor'];
+  const volgorde = ['claude2', 'claude3', 'claude4', 'claude', 'codex', 'codex2', 'codex3', 'cursor', 'cursor2', 'xai'];
   const sorteer = (a: AbonnementGroep, b: AbonnementGroep) => {
     const ia = volgorde.indexOf(a.stoel.id);
     const ib = volgorde.indexOf(b.stoel.id);
@@ -341,6 +428,117 @@ export function gedeeldeQuota(stoelen: Array<Pick<CodingSeat, 'id' | 'email'>>):
     if (ids.length > 1) uit[mail] = ids;
   }
   return uit;
+}
+
+/**
+ * Twee CLI-mappen op dezelfde machine, hetzelfde account: verspilde stoel.
+ * Dezelfde login op Mac mini én iMac is géén verspilling — dat is één account
+ * dat op twee machines staat.
+ */
+export function verspildeStoelen(stoelen: CodingSeat[]): { email: string; machines: string[] }[] {
+  const perIdent = new Map<string, CodingSeat[]>();
+  for (const s of stoelen) {
+    if (s.logged_in !== true) continue;
+    const ident = accountSleutel(s);
+    if (!ident) continue;
+    const lijst = perIdent.get(ident) ?? [];
+    lijst.push(s);
+    perIdent.set(ident, lijst);
+  }
+  const uit: { email: string; machines: string[] }[] = [];
+  for (const [ident, rijen] of perIdent) {
+    const perMachine = new Map<string, Set<string>>();
+    for (const s of rijen) {
+      const m = machineLabel(s.machine);
+      const ids = perMachine.get(m) ?? new Set();
+      ids.add(stoelSleutel(s));
+      perMachine.set(m, ids);
+    }
+    const dubbel = [...perMachine.entries()].filter(([, ids]) => ids.size > 1);
+    if (dubbel.length === 0) continue;
+    const email = ident.split(':').slice(1).join(':');
+    uit.push({ email, machines: dubbel.map(([m]) => m) });
+  }
+  return uit;
+}
+
+/** Wat Luka moet doen als de stoel niet bruikbaar is. Null = niets, hij draait. */
+export function watMoetLukaDoen(stoel: Pick<CodingSeat, 'provider' | 'id' | 'logged_in' | 'login_command' | 'machine' | 'rate_limited' | 'rate_limit_until' | 'config_exists' | 'seat_id' | 'actie' | 'email'>): string | null {
+  if (stoel.actie) return stoel.actie;
+  if (stoelNietGebruikt(stoel) && !stoel.rate_limited) return null;
+  const sid = stoelSleutel(stoel);
+  const machine = machineLabel(stoel.machine);
+  if (stoel.provider === 'xai') {
+    return stoel.logged_in === true
+      ? null
+      : 'Set XAI_API_KEY on the VPS (OpenAI-compatible API at https://api.x.ai).';
+  }
+  if (stoel.config_exists === false) {
+    return `Install the CLI on ${machine}, then ${stoel.login_command || 'log in'}.`;
+  }
+  if (stoel.logged_in !== true) {
+    if (sid === 'cursor2' || sid.startsWith('cursor') && sid !== 'cursor') {
+      return `On ${machine}: set CURSOR2_API_KEY (second Cursor seat), or run: cursor-agent login`;
+    }
+    if (stoel.provider === 'cursor' || sid === 'cursor') {
+      return `On ${machine}: cursor-agent login   — or set CURSOR_API_KEY for headless.`;
+    }
+    return stoel.login_command
+      ? `On ${machine}: ${stoel.login_command}`
+      : `Log in on ${machine}.`;
+  }
+  if (stoel.rate_limited) {
+    const tot = stoel.rate_limit_until
+      ? new Date(stoel.rate_limit_until).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      : null;
+    return tot ? `Wait until ${tot}, or another seat will take the work.` : 'This seat is at its limit. Another healthy seat takes the work.';
+  }
+  return null;
+}
+
+/** Kaartmelding: geen "Limit seen" voor een uitlog- of exitfout. */
+export function kaartMelding(bericht: string | null | undefined): string | null {
+  const t = (bericht || '').trim();
+  if (!t) return null;
+  if (isEchteLimietMelding(t)) return t;
+  if (/eindigde met|ended with/i.test(t) && /not authenticated|not logged in/i.test(t)) {
+    return t;
+  }
+  return t;
+}
+
+export type GebruikSom = {
+  runs_24h: number;
+  runs_7d: number;
+  input_tokens_7d: number;
+  output_tokens_7d: number;
+  ok_7d: number;
+  failed_7d: number;
+  last_run_at: number | null;
+  last_limit_message: string | null;
+};
+
+/** Tel runs/tokens van alle CLI-mappen die tot hetzelfde account horen. */
+export function somGebruik(
+  ids: string[],
+  gebruik: Record<string, Partial<GebruikSom> | undefined>,
+): GebruikSom | null {
+  const rijen = ids.map((id) => gebruik[id]).filter(Boolean) as Partial<GebruikSom>[];
+  if (rijen.length === 0) return null;
+  const som = (k: keyof GebruikSom) => rijen.reduce((n, r) => n + (typeof r[k] === 'number' ? Number(r[k]) : 0), 0);
+  const last = rijen.map((r) => r.last_run_at).filter((n): n is number => typeof n === 'number');
+  const limiet = rijen.map((r) => r.last_limit_message).find((m) => typeof m === 'string' && isEchteLimietMelding(m))
+    ?? rijen.map((r) => r.last_limit_message).find((m) => typeof m === 'string' && m) ?? null;
+  return {
+    runs_24h: som('runs_24h'),
+    runs_7d: som('runs_7d'),
+    input_tokens_7d: som('input_tokens_7d'),
+    output_tokens_7d: som('output_tokens_7d'),
+    ok_7d: som('ok_7d'),
+    failed_7d: som('failed_7d'),
+    last_run_at: last.length ? Math.max(...last) : null,
+    last_limit_message: typeof limiet === 'string' ? limiet : null,
+  };
 }
 
 export function metGedeeldeQuota<T extends CodingSeat>(stoelen: T[]): T[] {

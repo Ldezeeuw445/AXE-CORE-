@@ -261,8 +261,8 @@ class TestModelVlag:
         claude = a.ENGINES["claude"]["cmd"]("claude", "hoi", "plan", "", "opus")
         assert "--model" in claude and claude[claude.index("--model") + 1] == "opus"
 
-        codex = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "gpt-5-codex")
-        assert "-m" in codex and codex[codex.index("-m") + 1] == "gpt-5-codex"
+        codex = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "o3")
+        assert "-m" in codex and codex[codex.index("-m") + 1] == "o3"
 
         cursor = a.ENGINES["cursor"]["cmd"]("cursor-agent", "hoi", "plan", "", "gpt-5")
         assert "--model" in cursor and cursor[cursor.index("--model") + 1] == "gpt-5"
@@ -276,11 +276,12 @@ class TestModelVlag:
             cmd = a.ENGINES[naam]["cmd"](naam, "hoi", "plan", "/tmp/uit.txt", "")
             assert "--model" not in cmd and "-m" not in cmd
 
-    def test_codex_astra_krijgt_geen_modelvlag(self, monkeypatch):
+    def test_codex_astra_en_gpt5_codex_krijgen_geen_vlag(self, monkeypatch):
         monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
         import agent_runner as a
-        cmd = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "gpt-6-astra")
-        assert "-m" not in cmd
+        for model in ("gpt-6-astra", "gpt-5-codex"):
+            cmd = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", model)
+            assert "-m" not in cmd
 
     def test_codex_env_pinn_het_model(self, monkeypatch):
         monkeypatch.setenv("AXE_CODEX_MODEL", "o3")
@@ -323,13 +324,13 @@ def test_codex_account_komt_uit_het_id_token_en_nooit_het_token_zelf(tmp_path):
     import agent_runner as ar
     (tmp_path / "auth.json").write_text(_json.dumps({"tokens": {"id_token": _jwt({"email": "a@b.nl"}), "access_token": "geheim"}}))
     uit = ar._codex_account({"extra_env": {"CODEX_HOME": str(tmp_path)}})
-    assert uit == {"ingelogd": True, "account": "a@b.nl"}
+    assert uit == {"ingelogd": True, "account": "a@b.nl", "org_id": None}
     assert "geheim" not in str(uit)
 
 
 def test_codex_zonder_auth_json_is_niet_ingelogd(tmp_path):
     import agent_runner as ar
-    assert ar._codex_account({"extra_env": {"CODEX_HOME": str(tmp_path)}}) == {"ingelogd": False, "account": None}
+    assert ar._codex_account({"extra_env": {"CODEX_HOME": str(tmp_path)}}) == {"ingelogd": False, "account": None, "org_id": None}
 
 
 def test_label_noemt_het_account_in_plaats_van_een_volgnummer():
@@ -345,12 +346,12 @@ def test_claude_account_uit_auth_status_en_een_minuut_onthouden(monkeypatch):
     ar.vergeet_accounts()
     aanroepen = []
 
-    def nep(cmd, motor, timeout=15.0):
+    def nep(cmd, motor, timeout=15.0, naam=""):
         aanroepen.append(cmd)
         return 'tekst voor {"loggedIn": true, "authMethod": "claude.ai", "email": "me@x.nl"} tekst na'
     monkeypatch.setattr(ar, "_draai_status", nep)
     m = ar.ENGINES["claude"]
-    assert ar._account_van("claude", m, "/usr/bin/claude") == {"ingelogd": True, "account": "me@x.nl"}
+    assert ar._account_van("claude", m, "/usr/bin/claude") == {"ingelogd": True, "account": "me@x.nl", "org_id": None}
     ar._account_van("claude", m, "/usr/bin/claude")
     assert len(aanroepen) == 1 and aanroepen[0][1:] == ["auth", "status"]
     ar.vergeet_accounts()
@@ -359,7 +360,22 @@ def test_claude_account_uit_auth_status_en_een_minuut_onthouden(monkeypatch):
 def test_zonder_binary_is_niets_vast_te_stellen():
     import agent_runner as ar
     ar.vergeet_accounts()
-    assert ar._account_van("codex", ar.ENGINES["codex"], None) == {"ingelogd": None, "account": None}
+    assert ar._account_van("codex", ar.ENGINES["codex"], None) == {"ingelogd": None, "account": None, "org_id": None}
+
+
+def test_cursor_account_uit_json_en_api_sleutel(monkeypatch):
+    import agent_runner as ar
+    ar.vergeet_accounts()
+
+    def nep(cmd, motor, timeout=15.0, naam=""):
+        return '{"loggedIn":false}'
+    monkeypatch.setattr(ar, "_draai_status", nep)
+    monkeypatch.delenv("CURSOR_API_KEY", raising=False)
+    assert ar._account_van("cursor", ar.ENGINES["cursor"], "/usr/bin/cursor-agent")["ingelogd"] is False
+    ar.vergeet_accounts()
+    monkeypatch.setenv("CURSOR_API_KEY", "k")
+    assert ar._account_van("cursor", ar.ENGINES["cursor"], "/usr/bin/cursor-agent")["ingelogd"] is True
+    assert "cursor2" in ar.ENGINES
 
 
 class TestBouwrunMagControleren:
@@ -443,6 +459,24 @@ class TestStoelKeuze:
     def test_onbekende_motor_geen_stoel(self):
         assert a.kies_vrije_stoel("verzonnen") is None
 
+    def test_kiest_minste_gebruik_over_alle_merken_als_gevraagde_niet_kan(self, monkeypatch):
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        monkeypatch.setattr(a, "agent_usage_status", lambda: {
+            "claude": {"runs_7d": 80},
+            "claude2": {"runs_7d": 56},
+            "claude3": {"runs_7d": 40},
+            "claude4": {"runs_7d": 30},
+            "codex": {"runs_7d": 0},
+            "codex2": {"runs_7d": 1},
+            "codex3": {"runs_7d": 2},
+            "cursor": {"runs_7d": 5},
+        })
+        for naam in a.SEAT_VOLGORDE:
+            a._ACCOUNT_CACHE[naam] = (0, {"ingelogd": True, "account": f"{naam}@x.nl"})
+        a._ACCOUNT_CACHE["claude"] = (0, {"ingelogd": False, "account": None})
+        monkeypatch.delenv("CURSOR2_API_KEY", raising=False)
+        assert a.kies_vrije_stoel("claude") == "codex"
+
     def test_model_dat_een_stoel_weigert_gaat_naar_de_volgende_zonder_koeling(self, monkeypatch):
         pad = _repo()
         monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
@@ -513,7 +547,7 @@ class TestStoelKeuze:
         )
         pad = _repo()
         monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
-        monkeypatch.setenv("AXE_CODEX_MODEL", "gpt-5-codex")
+        monkeypatch.setenv("AXE_CODEX_MODEL", "o3")
         monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
         monkeypatch.setattr(a, "_claude_fallback_binary", lambda: "claude")
         for m in ("codex", "codex2"):

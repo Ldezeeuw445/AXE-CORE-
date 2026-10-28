@@ -4,6 +4,7 @@
  * gebruiken allemaal deze, zodat Settings één geheel is.
  */
 import type { ReactNode } from 'react';
+import { isEchteLimietMelding } from '@/domain/codingSeats';
 
 
 export type Toon = 'ok' | 'bad' | 'warn' | 'info' | 'muted';
@@ -85,7 +86,11 @@ export function StatusKaart({ naam, accent, rol, stand, keuze, stats, balken, me
           })}
         </div>
       )}
-      {melding && <p className="axe-agentkaart-melding" title={melding}>Limit seen · {melding}</p>}
+      {melding && (
+        <p className="axe-agentkaart-melding" title={melding}>
+          {isEchteLimietMelding(melding) ? `Limit seen · ${melding}` : melding}
+        </p>
+      )}
     </div>
   );
 }

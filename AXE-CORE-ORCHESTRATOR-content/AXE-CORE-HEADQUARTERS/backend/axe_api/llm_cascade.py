@@ -67,6 +67,7 @@ AANBIEDERS: tuple[Aanbieder, ...] = (
     # gpt-oss denkt eerst; zonder "low" gaat de hele tokenbudget op aan redeneren en blijft het antwoord leeg.
     Aanbieder("groq", "https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY", "BROWSER_LLM_GROQ_MODEL",
               "openai/gpt-oss-120b", {"reasoning_effort": "low"}),
+    Aanbieder("xai", "https://api.x.ai/v1/chat/completions", "XAI_API_KEY", "BROWSER_LLM_XAI_MODEL", "grok-4.5"),
     # De eigen modelbox: geen tegoed om op te raken. Hetzelfde model als de agent-loop en de crews, zodat
     # er maar één algemeen model in het geheugen staat.
     Aanbieder("ollama", "", "OLLAMA_PROXY_KEY", "BROWSER_LLM_OLLAMA_MODEL", "llama3.1:8b-16k", {},

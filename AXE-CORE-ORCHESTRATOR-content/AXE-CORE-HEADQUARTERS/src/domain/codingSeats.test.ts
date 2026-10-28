@@ -1,17 +1,23 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  accountSleutel,
   claudeStatusUitJson,
+  cursorStatusUitTekst,
+  emailUitClaudeOauth,
   emailUitCodexAuth,
   gedeeldeQuota,
+  groepeerAbonnementen,
   isAuthFout,
+  isEchteLimietMelding,
   isStoelFout,
+  kaartMelding,
+  machineLabel,
   metGedeeldeQuota,
   parseLimietTot,
   resetTekst,
   abonnementKaartStand,
-  groepeerAbonnementen,
-  machineLabel,
+  somGebruik,
   stoelHeartbeatStand,
   stoelHeeftActie,
   stoelNietGebruikt,
@@ -20,6 +26,8 @@ import {
   toonStoelEmail,
   toonStoelIds,
   verbergStoel,
+  verspildeStoelen,
+  watMoetLukaDoen,
   winnendeStoel,
   type CodingSeat,
 } from './codingSeats';
@@ -75,12 +83,24 @@ describe('status parsing', () => {
 
   it('haalt Codex-e-mail uit het id_token en toont nooit het token', () => {
     const kop = Buffer.from('{"alg":"none"}').toString('base64url');
-    const lading = Buffer.from(JSON.stringify({ email: 'support@axeheadquarters.com' })).toString('base64url');
+    const lading = Buffer.from(JSON.stringify({
+      email: 'support@axeheadquarters.com',
+      'https://api.openai.com/auth': { chatgpt_account_id: 'org-1' },
+    })).toString('base64url');
     const auth = { tokens: { id_token: `${kop}.${lading}.x`, access_token: 'sk-GEHEIM' } };
     const uit = emailUitCodexAuth(auth);
-    expect(uit).toEqual({ loggedIn: true, email: 'support@axeheadquarters.com' });
+    expect(uit).toEqual({ loggedIn: true, email: 'support@axeheadquarters.com', orgId: 'org-1' });
     expect(JSON.stringify(uit)).not.toContain('sk-GEHEIM');
     expect(JSON.stringify(uit)).not.toMatch(/eyJ/);
+  });
+
+  it('leest cursor-agent status JSON en behandelt exit-1 niet als limiet', () => {
+    expect(cursorStatusUitTekst('{"loggedIn":true,"email":"luka@axe.local"}'))
+      .toEqual({ loggedIn: true, email: 'luka@axe.local' });
+    expect(cursorStatusUitTekst('Not authenticated')).toEqual({ loggedIn: false, email: null });
+    expect(cursorStatusUitTekst('', { hasApiKey: true })).toEqual({ loggedIn: true, email: null });
+    expect(isEchteLimietMelding('Cursor ended with 1. stderr: boom')).toBe(false);
+    expect(isEchteLimietMelding("You've hit your usage limit. try again at 5:36 PM.")).toBe(true);
   });
 });
 
@@ -213,6 +233,72 @@ describe('heartbeat-stand', () => {
     expect(kaarten.every((k) => k.stoel.logged_in === true)).toBe(true);
     expect(kaarten.some((k) => k.seatIds.includes('codex3'))).toBe(false);
   });
+
+  it('voegt een restant-login in ~/.claude samen met het echte account, geen vierde kaart', () => {
+    const vers = new Date(Date.parse('2026-10-17T11:00:00Z') - 30_000).toISOString();
+    const rijen = [
+      stoel({ id: 'mini:claude2', seat_id: 'claude2', email: 'a@x.nl', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5' }),
+      stoel({ id: 'mini:claude3', seat_id: 'claude3', email: 'b@x.nl', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5' }),
+      stoel({ id: 'mini:claude4', seat_id: 'claude4', email: 'c@x.nl', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5' }),
+      // Default map nog ingelogd op hetzelfde adres als claude2 — duplicaat, geen 4e Pro.
+      stoel({ id: 'mini:claude', seat_id: 'claude', email: 'a@x.nl', logged_in: false, last_seen_at: vers, machine: 'mini-van-luka-5' }),
+    ];
+    const { kaarten, ongebruikt } = groepeerAbonnementen(rijen);
+    expect(kaarten).toHaveLength(3);
+    expect(ongebruikt).toHaveLength(0);
+    const a = kaarten.find((k) => k.email === 'a@x.nl')!;
+    expect(a.seatIds.sort()).toEqual(['claude', 'claude2']);
+    expect(a.bruikbaarOp).toEqual(['Mac mini']);
+    expect(verspildeStoelen(rijen)).toEqual([]);
+  });
+
+  it('vlagt alleen twee mappen op dezelfde machine als verspild quotum', () => {
+    const vers = new Date().toISOString();
+    const zelfdeMini = [
+      stoel({ id: 'mini:codex', seat_id: 'codex', email: 'lukadezeeuw1994@hotmail.com', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5', provider: 'codex' }),
+      stoel({ id: 'mini:codex2', seat_id: 'codex2', email: 'lukadezeeuw1994@hotmail.com', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5', provider: 'codex' }),
+    ];
+    expect(verspildeStoelen(zelfdeMini)[0]?.email).toBe('lukadezeeuw1994@hotmail.com');
+    const tweeMachines = [
+      stoel({ id: 'mini:codex2', seat_id: 'codex2', email: 'lukadezeeuw1994@hotmail.com', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5', provider: 'codex' }),
+      stoel({ id: 'imac:codex', seat_id: 'codex', email: 'lukadezeeuw1994@hotmail.com', logged_in: true, last_seen_at: vers, machine: 'imac-1', provider: 'codex' }),
+    ];
+    expect(verspildeStoelen(tweeMachines)).toEqual([]);
+  });
+
+  it('houdt Cursor en xAI zonder e-mail als echte kaarten, niet als Not used', () => {
+    const vers = new Date().toISOString();
+    const rijen = [
+      stoel({ id: 'mini:cursor', seat_id: 'cursor', provider: 'cursor', logged_in: false, last_seen_at: vers, machine: 'mini-van-luka-5' }),
+      stoel({ id: 'vps:xai', seat_id: 'xai', provider: 'xai', logged_in: false, last_seen_at: vers, machine: 'vps' }),
+    ];
+    const { kaarten, ongebruikt } = groepeerAbonnementen(rijen);
+    expect(ongebruikt).toHaveLength(0);
+    expect(kaarten.map((k) => k.stoel.id).sort()).toEqual(['cursor', 'xai']);
+  });
+});
+
+describe('wat Luka moet doen', () => {
+  it('geeft het login-commando of de sleutel, niet Limit seen voor een exitfout', () => {
+    expect(watMoetLukaDoen(stoel({ id: 'cursor', provider: 'cursor', logged_in: false, login_command: 'cursor-agent login', machine: 'mini-van-luka-5' })))
+      .toMatch(/cursor-agent login/);
+    expect(watMoetLukaDoen(stoel({ id: 'cursor2', provider: 'cursor', logged_in: false, machine: 'imac-1' })))
+      .toMatch(/CURSOR2_API_KEY/);
+    expect(watMoetLukaDoen(stoel({ id: 'xai', provider: 'xai', logged_in: false, machine: 'vps' })))
+      .toMatch(/XAI_API_KEY/);
+    expect(watMoetLukaDoen(stoel({ logged_in: true }))).toBeNull();
+    expect(watMoetLukaDoen(stoel({ id: 'claude', logged_in: false }))).toBeNull();
+    expect(kaartMelding('Cursor ended with 1')).toBe('Cursor ended with 1');
+    expect(kaartMelding("You've hit your usage limit")).toMatch(/usage limit/);
+    expect(emailUitClaudeOauth({ claudeAiOauth: { email: 'a@x.nl', accessToken: 'GEHEIM' } })).toBe('a@x.nl');
+    expect(accountSleutel(stoel({ email: 'A@X.nl', provider: 'claude' }))).toBe('claude:a@x.nl');
+    const som = somGebruik(['claude', 'claude2'], {
+      claude: { runs_7d: 56, input_tokens_7d: 100, output_tokens_7d: 20, runs_24h: 2, ok_7d: 50, failed_7d: 6, last_run_at: 10 },
+      claude2: { runs_7d: 4, input_tokens_7d: 5, output_tokens_7d: 1, runs_24h: 1, ok_7d: 4, failed_7d: 0, last_run_at: 20 },
+    });
+    expect(som?.runs_7d).toBe(60);
+    expect(som?.last_run_at).toBe(20);
+  });
 });
 
 describe('Settings toont Accounts', () => {
@@ -231,5 +317,9 @@ describe('Settings toont Accounts', () => {
     expect(seats).not.toMatch(/stoel\.email \|\| v\?\.account/);
     expect(seats).toMatch(/groepeerAbonnementen/);
     expect(seats).toMatch(/bruikbaarOp/);
+    expect(seats).toMatch(/watMoetLukaDoen/);
+    expect(seats).toMatch(/verspildeStoelen/);
+    const kaart = readFileSync(new URL('../presentation/components/settings/StatusKaart.tsx', import.meta.url), 'utf8');
+    expect(kaart).toMatch(/isEchteLimietMelding/);
   });
 });

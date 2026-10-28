@@ -117,9 +117,11 @@ _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:gen
 GROQ_MODEL = os.environ.get("AXE_AGENT_GROQ_MODEL", "openai/gpt-oss-120b")
 OPENAI_MODEL = os.environ.get("AXE_AGENT_OPENAI_MODEL", "gpt-4.1-mini")
 CEREBRAS_MODEL = os.environ.get("AXE_AGENT_CEREBRAS_MODEL", "gpt-oss-120b")
+XAI_MODEL = os.environ.get("AXE_AGENT_XAI_MODEL", "grok-4.5")
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 _OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 _CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
+_XAI_URL = "https://api.x.ai/v1/chat/completions"
 
 # Cheap insurance on a box that also serves the API. This is not a security
 # boundary -- the agent legitimately has shell here -- it only catches the
@@ -981,6 +983,7 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     groq_key = os.environ.get("GROQ_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
     cerebras_key = os.environ.get("CEREBRAS_API_KEY")
+    xai_key = os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY")
     gratis = _ALLEEN_GRATIS.get()
     agent = _huidige_agent()
     toegestaan = set(api_namen(agent, alleen_gratis=gratis))
@@ -1002,6 +1005,8 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
         attempts.append((f"gemini/{MODEL}", lambda: _call_gemini(contents, api_key)))
     if openai_key and not gratis and api_aan("openai"):
         attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
+    if xai_key and not gratis and api_aan("xai"):
+        attempts.append((f"xai/{XAI_MODEL}", lambda: _call_openai_compat(contents, _XAI_URL, xai_key, XAI_MODEL)))
     if api_aan("ollama"):
         attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
 

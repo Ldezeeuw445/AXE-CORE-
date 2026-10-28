@@ -82,6 +82,7 @@ export const MOTOR_LABEL: Record<HoofdMotor, string> = {
   codex: 'ChatGPT-abonnement (Codex)',
   codex3: 'ChatGPT-abonnement 3 (Codex)',
   cursor: 'Cursor-abonnement',
+  cursor2: 'Cursor-abonnement 2',
   sleutels: 'API-sleutels',
 };
 

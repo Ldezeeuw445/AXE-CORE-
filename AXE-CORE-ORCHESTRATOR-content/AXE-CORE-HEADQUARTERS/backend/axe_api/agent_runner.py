@@ -322,6 +322,23 @@ ENGINES = {
         "login": "CODEX_HOME=~/.codex-derde codex login",
         "alleen_lezen": True,
     },
+    "cursor2": {
+        # Tweede Cursor-seat: eigen API-sleutel (CURSOR2_API_KEY), want
+        # cursor-agent heeft één login-store per machine.
+        "label": "Cursor 2",
+        "bin_env": "CURSOR_BIN",
+        "bin_default": "cursor-agent",
+        "blocked_env": ("OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+        "extra_env": (
+            {"CURSOR_API_KEY": os.environ["CURSOR2_API_KEY"]}
+            if os.environ.get("CURSOR2_API_KEY") else {}
+        ),
+        "cmd": _cursor_cmd,
+        "leest_bestand": False,
+        "install": "curl https://cursor.com/install -fsS | bash",
+        "login": "Set CURSOR2_API_KEY on this Mac (second Cursor seat)",
+        "alleen_lezen": True,
+    },
     "cursor": {
         "label": "Cursor",
         "bin_env": "CURSOR_BIN",
@@ -423,6 +440,15 @@ _SLOTEN_SLOT = threading.Lock()
 def _motor_slot(naam: str) -> threading.Lock:
     with _SLOTEN_SLOT:
         return _MOTOR_SLOTEN.setdefault(naam, threading.Lock())
+
+
+def _extra_voor(naam: str, motor: dict) -> dict:
+    extra = dict(motor.get("extra_env") or {})
+    if naam == "cursor2":
+        key = os.environ.get("CURSOR2_API_KEY")
+        if key:
+            extra["CURSOR_API_KEY"] = key
+    return extra
 
 
 def _subprocess_env(blocked: tuple, extra: dict | None = None) -> dict:
@@ -549,7 +575,7 @@ _AUTH_FOUT = re.compile(
     re.I,
 )
 _LIMIET_KLOK = re.compile(r"try again at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?", re.I)
-SEAT_VOLGORDE = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor")
+SEAT_VOLGORDE = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2")
 _SEAT_BUSY: dict[str, dict] = {}
 _SEAT_LIMIT: dict[str, dict] = {}
 _SEAT_SNAP = os.path.expanduser(os.environ.get("AXE_CODING_SEATS_FILE", "~/.axe/coding-seats.json"))
@@ -662,18 +688,15 @@ def _schrijf_stoel_snapshot() -> None:
 def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float | None = None) -> str | None:
     """Volgende stoel die ingelogd is en niet op een limiet zit.
 
-    Zelfde familie eerst (claude → claude2 → …), daarna de rest van het team.
-    Onbekend (ingelogd is None) telt als probeerbaar: liever één echte fout
-    dan een stoel overslaan die wél werkt. None = niemand over.
+    Minste gebruik eerst over ALLE gezonde stoelen. Familie/voorkeur is
+    tiebreaker, geen muur: Codex op 0 runs wint van Claude op 56. Zelfde
+    e-mail = één quotum. Onbekend (ingelogd is None) telt als probeerbaar.
     """
     if gewenst not in ENGINES:
         return None
     nu = time.time() if nu is None else nu
     skip = set(overslaan or ())
     familie = _familie(gewenst)
-    zelfde = [n for n in SEAT_VOLGORDE if _familie(n) == familie]
-    rest = [n for n in SEAT_VOLGORDE if n not in zelfde]
-    kandidaten = [gewenst] + [n for n in zelfde + rest if n != gewenst]
     gebruik = {}
     try:
         gebruik = agent_usage_status()
@@ -683,6 +706,8 @@ def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float 
     def geschikt(naam: str) -> bool:
         if naam in skip or naam not in ENGINES:
             return False
+        if naam == "cursor2" and not os.environ.get("CURSOR2_API_KEY"):
+            return False
         if not _binary(ENGINES[naam]):
             return False
         hit = _ACCOUNT_CACHE.get(naam)
@@ -691,19 +716,37 @@ def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float 
             return False
         return not _stoel_koelt(naam, nu)
 
-    # Gevraagde stoel eerst als hij kan: een vastgehouden lock hoort bij díe
-    # stoel, niet bij een stillere met minder weekruns.
     if geschikt(gewenst):
         return gewenst
-    vrij: list[tuple[tuple, str]] = []
-    for naam in kandidaten:
+
+    vrij_rijen: list[tuple[tuple, str]] = []
+    gezien_account: dict[tuple[str, str], str] = {}
+    for naam in SEAT_VOLGORDE:
         if not geschikt(naam):
             continue
+        hit = _ACCOUNT_CACHE.get(naam)
+        acc = (hit[1] if hit else {}) or {}
+        mail = str(acc.get("account") or "").strip().lower()
+        org = str(acc.get("org_id") or "").strip()
+        ident = (_familie(naam), mail or org or naam)
         g = gebruik.get(naam) or {}
-        score = (0 if _familie(naam) == familie else 1, int(g.get("runs_7d") or 0))
-        vrij.append((score, naam))
-    vrij.sort()
-    return vrij[0][1] if vrij else None
+        runs = int(g.get("runs_7d") or 0)
+        vorig = gezien_account.get(ident)
+        if vorig is not None:
+            vorig_runs = int((gebruik.get(vorig) or {}).get("runs_7d") or 0)
+            if runs >= vorig_runs:
+                continue
+            vrij_rijen = [x for x in vrij_rijen if x[1] != vorig]
+        gezien_account[ident] = naam
+        score = (
+            runs,
+            0 if _familie(naam) == familie else 1,
+            0 if naam == gewenst else 1,
+            SEAT_VOLGORDE.index(naam) if naam in SEAT_VOLGORDE else 99,
+        )
+        vrij_rijen.append((score, naam))
+    vrij_rijen.sort()
+    return vrij_rijen[0][1] if vrij_rijen else None
 
 
 def _openhands_stoel() -> dict:
@@ -980,7 +1023,7 @@ def _run_agent_stoel(
                 cmd_nu, cwd=repo_path,
                 env=_subprocess_env(
                     blocked if blocked is not None else motor["blocked_env"],
-                    extra if extra is not None else motor.get("extra_env"),
+                    extra if extra is not None else _extra_voor(motornaam, motor),
                 ),
                 capture_output=True, text=True, timeout=limit,
             )
@@ -1128,7 +1171,7 @@ def houd_warm(naam: str, timeout: int = 90) -> dict:
         with tempfile.TemporaryDirectory(prefix="axe-warm-") as map_:
             proc = subprocess.run(
                 _claude_cmd(binary, WARM_PROMPT, "plan", "", WARM_MODEL),
-                cwd=map_, env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")),
+                cwd=map_, env=_subprocess_env(motor["blocked_env"], _extra_voor(naam, motor)),
                 capture_output=True, text=True, timeout=timeout,
             )
     except subprocess.TimeoutExpired:
@@ -1343,10 +1386,10 @@ _ACCOUNT_CACHE: dict[str, tuple[float, dict]] = {}
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 
 
-def _draai_status(cmd: list[str], motor: dict, timeout: float = 15.0) -> str:
+def _draai_status(cmd: list[str], motor: dict, timeout: float = 15.0, naam: str = "") -> str:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                           env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")))
+                           env=_subprocess_env(motor["blocked_env"], _extra_voor(naam, motor)))
         return (r.stdout or "") + (r.stderr or "")
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -1355,45 +1398,83 @@ def _draai_status(cmd: list[str], motor: dict, timeout: float = 15.0) -> str:
 def _codex_account(motor: dict) -> dict:
     """De e-mail uit het id_token in auth.json (alleen de claim, nooit het token zelf)."""
     thuis = (motor.get("extra_env") or {}).get("CODEX_HOME") or os.path.expanduser("~/.codex")
+    leeg = {"ingelogd": False, "account": None, "org_id": None}
     try:
         with open(os.path.join(thuis, "auth.json")) as f:
             tokens = (json.load(f).get("tokens") or {})
         jwt = tokens.get("id_token") or ""
         if not tokens.get("access_token") and not jwt:
-            return {"ingelogd": False, "account": None}
+            return leeg
         deel = jwt.split(".")[1] if jwt.count(".") >= 2 else ""
         claims = json.loads(base64.urlsafe_b64decode(deel + "=" * (-len(deel) % 4))) if deel else {}
-        return {"ingelogd": True, "account": claims.get("email") or None}
+        auth_claim = claims.get("https://api.openai.com/auth") or {}
+        org = auth_claim.get("chatgpt_account_id") or tokens.get("account_id")
+        return {
+            "ingelogd": True,
+            "account": claims.get("email") or None,
+            "org_id": org if isinstance(org, str) else None,
+        }
     except (OSError, ValueError, IndexError):
-        return {"ingelogd": False, "account": None}
+        return leeg
+
+
+def _cursor_account(naam: str, motor: dict, binary: str) -> dict:
+    """cursor-agent status/about JSON, of CURSOR_API_KEY / CURSOR2_API_KEY."""
+    extra = _extra_voor(naam, motor)
+    has_key = bool(extra.get("CURSOR_API_KEY") or (naam == "cursor" and os.environ.get("CURSOR_API_KEY")))
+    tekst = _draai_status([binary, "status", "--format", "json"], motor, naam=naam)
+    if not tekst.strip():
+        tekst = _draai_status([binary, "about", "--format", "json"], motor, naam=naam)
+    start, end = tekst.find("{"), tekst.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            d = json.loads(tekst[start:end + 1])
+            user = d.get("user") if isinstance(d.get("user"), dict) else d
+            email_raw = d.get("email") or d.get("userEmail") or (user or {}).get("email") or d.get("account")
+            email = email_raw if isinstance(email_raw, str) and "@" in email_raw else None
+            auth = d.get("authenticated", d.get("loggedIn", d.get("logged_in")))
+            if isinstance(auth, bool):
+                ingelogd = auth or has_key
+                return {"ingelogd": ingelogd, "account": email if ingelogd else None, "org_id": None}
+            if email:
+                return {"ingelogd": True, "account": email, "org_id": None}
+        except (ValueError, TypeError):
+            pass
+    niet_auth = bool(re.search(r"not authenticated|not logged in|please (log|sign) in", tekst, re.I))
+    mail = _EMAIL_RE.search(tekst)
+    if mail:
+        return {"ingelogd": True, "account": mail.group(0), "org_id": None}
+    if has_key:
+        return {"ingelogd": True, "account": None, "org_id": None}
+    if niet_auth:
+        return {"ingelogd": False, "account": None, "org_id": None}
+    if not tekst.strip():
+        return {"ingelogd": True if has_key else None, "account": None, "org_id": None}
+    ingelogd = "logged in" in tekst.lower() and "not logged in" not in tekst.lower()
+    return {"ingelogd": True if ingelogd else None, "account": None, "org_id": None}
 
 
 def _account_van(naam: str, motor: dict, binary: str | None) -> dict:
     """{"ingelogd": bool | None, "account": e-mail | None}; None = niet vast te stellen."""
     if not binary:
-        return {"ingelogd": None, "account": None}
+        return {"ingelogd": None, "account": None, "org_id": None}
     nu = time.monotonic()
     hit = _ACCOUNT_CACHE.get(naam)
     if hit and nu - hit[0] < _ACCOUNT_TTL_S:
         return hit[1]
     if naam.startswith("claude"):
-        tekst = _draai_status([binary, "auth", "status"], motor)
+        tekst = _draai_status([binary, "auth", "status"], motor, naam=naam)
         try:
             d = json.loads(tekst[tekst.index("{"):tekst.rindex("}") + 1])
             ingelogd = bool(d.get("loggedIn"))
             mail = d.get("email") or None
-            uit = {"ingelogd": ingelogd, "account": mail if ingelogd else None}
+            uit = {"ingelogd": ingelogd, "account": mail, "org_id": None}
         except ValueError:
-            uit = {"ingelogd": None, "account": None}
+            uit = {"ingelogd": None, "account": None, "org_id": None}
     elif naam.startswith("codex"):
         uit = _codex_account(motor)
-    else:  # cursor
-        tekst = _draai_status([binary, "status"], motor)
-        mail = _EMAIL_RE.search(tekst)
-        uit = {"ingelogd": bool(mail) or ("logged in" in tekst.lower() and "not logged in" not in tekst.lower()),
-               "account": mail.group(0) if mail else None}
-        if not tekst.strip():
-            uit = {"ingelogd": None, "account": None}
+    else:
+        uit = _cursor_account(naam, motor, binary)
     _ACCOUNT_CACHE[naam] = (nu, uit)
     return uit
 
@@ -1452,6 +1533,7 @@ def coding_seats_status() -> list[dict]:
             "provider": _familie(naam),
             "label": motor["label"],
             "email": account.get("account"),
+            "org_id": account.get("org_id"),
             "machine": machine,
             "logged_in": account.get("ingelogd"),
             "login_command": motor["login"],
@@ -1461,8 +1543,14 @@ def coding_seats_status() -> list[dict]:
             "last_limit_message": g.get("last_limit_message"),
             "remaining_note": g.get("remaining_note") or "De CLI geeft geen exact resterend saldo.",
             "shared_quota_with": [],
+            "runs_7d": g.get("runs_7d"),
         })
     stoelen.append(_openhands_stoel())
+    try:
+        from provider_router import xai_stoel
+        stoelen.append(xai_stoel())
+    except Exception:
+        pass
     per_mail: dict[str, list[str]] = {}
     for s in stoelen:
         mail = (s.get("email") or "").strip().lower()
