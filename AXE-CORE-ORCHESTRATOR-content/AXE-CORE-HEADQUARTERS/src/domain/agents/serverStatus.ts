@@ -163,6 +163,7 @@ const LABEL: Record<ServerAgentStatus, string> = {
 /** Agents met een vast 24/7-ritme (staande_diensten op de VPS). Nooit een kaal SLEEPING. */
 const STAANDE_AGENTS: ReadonlySet<string> = new Set([
   'wingman', 'memory', 'task', 'cron', 'finance', 'apps', 'intel', 'companion',
+  'axemanager', 'projectsmgr', 'companionmgr', 'axon', 'tradingos', 'northseamgr',
 ]);
 
 function roosterRegel(a: ServerAgent, nu?: number): string {

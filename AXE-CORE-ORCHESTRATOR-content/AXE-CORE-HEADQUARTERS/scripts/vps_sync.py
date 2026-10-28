@@ -136,6 +136,16 @@ MANIFEST = {
     # 24/7 staande diensten (17 okt 2026): main.py importeert staande_diensten bij
     # action_type "staande" en bij elke /cron/tick (zorg_voor_roosters).
     "/opt/axe-core-api/staande_diensten.py": ("backend/axe_api/staande_diensten.py", "axe-core-api"),
+    "/opt/axe-core-api/grok_managers.py": ("backend/axe_api/grok_managers.py", "axe-core-api"),
+    # Master-prompts van de zes Grok-managers. agent_workspace.master_prompt_voor
+    # leest ze als bestand, dus zonder deze regels blijft de identiteit op de box
+    # bij de korte _BRIEVEN-zin.
+    "/opt/axe-core-api/prompts/axemanager.md": ("backend/axe_api/prompts/axemanager.md", "axe-core-api"),
+    "/opt/axe-core-api/prompts/projectsmgr.md": ("backend/axe_api/prompts/projectsmgr.md", "axe-core-api"),
+    "/opt/axe-core-api/prompts/companionmgr.md": ("backend/axe_api/prompts/companionmgr.md", "axe-core-api"),
+    "/opt/axe-core-api/prompts/axon.md": ("backend/axe_api/prompts/axon.md", "axe-core-api"),
+    "/opt/axe-core-api/prompts/tradingos.md": ("backend/axe_api/prompts/tradingos.md", "axe-core-api"),
+    "/opt/axe-core-api/prompts/northseamgr.md": ("backend/axe_api/prompts/northseamgr.md", "axe-core-api"),
     # main.py importeert lockscreen voor /lockscreen/snapshot. Zonder deze regel
     # bleef een koersfix in de repo terwijl de box de oude module bleef laden.
     "/opt/axe-core-api/lockscreen.py": ("backend/axe_api/lockscreen.py", "axe-core-api"),
@@ -191,7 +201,8 @@ OPTIONAL_WHEN_MISSING = {
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py"),
+    "staande_diensten.py": ("grok_managers.py",),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"
@@ -445,6 +456,7 @@ def cmd_deploy(args) -> int:
     stamp = ssh("date +%Y%m%d-%H%M%S").strip()
     units = set()
     for remote, rel, unit, _s in todo:
+        ssh(f"mkdir -p {os.path.dirname(remote)}")
         ssh(f"cp {remote} {remote}.bak-{stamp} 2>/dev/null")
         subprocess.run(["scp", "-i", KEY, "-q", os.path.join(HQ, rel), f"{HOST}:{remote}"], check=True)
         print(f"  shipped {rel} -> {remote}  (backup {remote}.bak-{stamp})")

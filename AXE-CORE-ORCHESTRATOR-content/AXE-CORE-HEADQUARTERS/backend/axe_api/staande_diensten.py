@@ -373,6 +373,15 @@ DIENSTEN: tuple[dict[str, Any], ...] = (
     },
 )
 
+try:
+    import grok_managers as _grok
+    _GROK_DIENSTEN: tuple[dict[str, Any], ...] = _grok.diensten()
+except Exception:  # noqa: BLE001 — pulse mag de oude 24/7-jobs niet kielen
+    _GROK_DIENSTEN = ()
+
+# Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), ernaast.
+DIENSTEN = DIENSTEN + _GROK_DIENSTEN
+
 STAANDE_AGENTS = frozenset(str(d["agent"]) for d in DIENSTEN)
 
 

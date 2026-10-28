@@ -192,6 +192,48 @@
       "model": "groq + claude-haiku seat",
       "seat_family": "claude",
       "cadence": "cross-app, via AXE"
+    },
+    "axemanager": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "24/7 pulse elke 10 min; baas van de andere Grok-managers"
+    },
+    "projectsmgr": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "24/7 pulse elke 15 min; projecten en taken"
+    },
+    "companionmgr": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "24/7 pulse elke 20 min; AXE Companion repo/VPS/smoke"
+    },
+    "axon": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + ollama",
+      "seat_family": null,
+      "cadence": "24/7 pulse elke 20 min; AXON Memory, alleen echte lessen"
+    },
+    "tradingos": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "24/7 pulse elke 15 min; Trading OS, geen live orders"
+    },
+    "northseamgr": {
+      "kind": "main",
+      "tier": 2,
+      "model": "groq + claude-sonnet seat",
+      "seat_family": "claude",
+      "cadence": "24/7 pulse elke 15 min; NorthSea desk, sends alleen na Luka"
     }
   },
   "crews": {

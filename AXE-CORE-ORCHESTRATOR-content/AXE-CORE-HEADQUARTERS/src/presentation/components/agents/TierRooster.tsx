@@ -21,12 +21,14 @@
  */
 import { SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
-import { tierKolommen, tellersVoor } from '@/domain/agents/agentsTab';
+import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
+import { tierKolommen, tellersVoor, grokManagerLeden } from '@/domain/agents/agentsTab';
 import { relativeTime, type AgentPulse, type SchedulePlan, type AgentQueue } from '@/domain/agents/activity';
 import { agentsByKind } from '@/domain/agents/catalog';
 import { AXE_AGENTS, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
 import { useVoiceStore, type RoutingEvent } from '@/presentation/store/voiceStore';
 import type { NamespaceCount } from '@/infrastructure/persistence/agentActivityService';
+import type { GoedkeuringsRij } from '@/domain/agents/pendingApproval';
 
 const CREW_ACCENT = '#38BDF8';
 
@@ -43,6 +45,9 @@ export interface TierRoosterProps {
   gekozenCrew: string | null;
   onKies: (id: AxeAgentId) => void;
   onKiesCrew: (id: string) => void;
+  /** Open vragen aan Luka (core_approvals), zelfde knoppen als Home. */
+  goedkeuringen?: readonly GoedkeuringsRij[];
+  onBeslis?: (rij: GoedkeuringsRij, akkoord: boolean) => void;
 }
 
 function Teller({ n, woord, kleur }: { n: number; woord: string; kleur?: string }) {
@@ -229,6 +234,52 @@ export function TierRooster(p: TierRoosterProps) {
           </div>
         ))}
       </div>
+
+      <SectieBlok
+        id="managers"
+        titel="MANAGERS"
+        extra={
+          <span className="text-[10.5px]" style={{ color: 'var(--text-muted)' }}>
+            The six Grok Bot managers, always on — next to the War Room, not instead of it.
+          </span>
+        }
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 9 }}>
+          {grokManagerLeden().map((agent) => (
+            <AgentKaart
+              key={agent.id}
+              agent={agent}
+              pulse={p.pulses[agent.id]}
+              routing={laatstePerAgent.get(agent.id)}
+              tellers={tellersVoor(agent.id, p.plans, p.queues, p.counts, p.episodes)}
+              now={p.now}
+              actief={p.gekozen === agent.id}
+              werkendNu={bezig && huidig === agent.id}
+              onKies={() => p.onKies(agent.id)}
+            />
+          ))}
+        </div>
+      </SectieBlok>
+
+      <SectieBlok
+        id="approvals"
+        titel="Approvals for Luka"
+        extra={
+          <span className="text-[10.5px]" style={{ color: 'var(--text-muted)' }}>
+            {p.goedkeuringen && p.goedkeuringen.length > 0
+              ? `${p.goedkeuringen.length} waiting`
+              : 'Nothing waiting'}
+          </span>
+        }
+      >
+        {p.goedkeuringen && p.goedkeuringen.length > 0 && p.onBeslis ? (
+          <GoedkeuringActie rijen={[...p.goedkeuringen]} onBeslis={p.onBeslis} />
+        ) : (
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Managers ask here only for out-of-plan or irreversible work.
+          </p>
+        )}
+      </SectieBlok>
 
       <SectieBlok
         titel="Wingman's crew"

@@ -38,9 +38,12 @@ export type AxeAgentId =
   // tier 2 — workers (auto-route, optional pin)
   | 'browser' | 'memory' | 'task' | 'cron' | 'finance' | 'apps'
   // tier 3 — cross-app assistants (paid-API-only dropdown)
-  | 'intel' | 'companion';
+  | 'intel' | 'companion'
+  // Grok Bot managers (27 okt 2026) — naast de roster, niet in plaats van.
+  // Eigen blok op de Agents-tab. De drie War Room-kolommen blijven tier 1-3.
+  | 'axemanager' | 'projectsmgr' | 'companionmgr' | 'axon' | 'tradingos' | 'northseamgr';
 
-export type AgentTier = 'axe' | 'tier1' | 'tier2' | 'tier3';
+export type AgentTier = 'axe' | 'tier1' | 'tier2' | 'tier3' | 'managers';
 
 /** What kind of engine picker this agent's row gets in Settings. */
 export type DropdownScope =
@@ -75,10 +78,11 @@ export interface AxeAgent {
 }
 
 /**
- * AXE plus the twelve. Order is deliberate: AXE first (it runs the show),
- * then tier 1, tier 2, tier 3. Keep new capability inside one of these, or
- * make the case for a new row here explicitly — a thirteenth ad-hoc agent
- * outside this list is how the old mess started.
+ * AXE plus the twelve, then the six Grok Bot managers (27 okt 2026). Order is
+ * deliberate: AXE first, then tier 1, 2, 3, then `managers`. Those six are a
+ * named group Luka already runs in Grok Bot — added next to the existing
+ * rows, never as a replacement, and never as a fourteenth ad-hoc agent
+ * stuffed into a War Room column.
  */
 export const AXE_AGENTS: readonly AxeAgent[] = [
   {
@@ -273,6 +277,86 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
     runtime: 'paid API key (OpenAI/Anthropic)',
     route: 'organization',
     accent: '#60A5FA',
+  },
+
+  // ── Grok Bot managers (27 okt 2026) — eigen MANAGERS-blok, niet in de kolommen ─
+  {
+    id: 'axemanager',
+    name: 'AXE CORE Manager',
+    kort: 'CORE Mgr',
+    role: 'Boss · orchestrator of the other managers',
+    handles: 'Directs the other Grok managers, merges, deploys and verifies live. Reports to Luka in short Dutch, recommendation first.',
+    tier: 'managers',
+    canDecide: true,
+    dropdownScope: 'subscription',
+    runtime: 'subscription CLI · standing pulse',
+    route: '',
+    accent: '#67E8F9',
+  },
+  {
+    id: 'projectsmgr',
+    name: 'Projects Manager',
+    kort: 'Projects',
+    role: 'Projects and tasks · Notion-style rows',
+    handles: 'Runs projects and tasks as rows, and assigns them to specialists.',
+    tier: 'managers',
+    canDecide: true,
+    dropdownScope: 'subscription',
+    runtime: 'subscription CLI · standing pulse',
+    route: 'tasks',
+    accent: '#C084FC',
+  },
+  {
+    id: 'companionmgr',
+    name: 'AXE Companion Manager',
+    kort: 'Companion Mgr',
+    role: 'Owns AXE Companion',
+    handles: 'Owns AXE Companion: repo AXE-COMPANION-OS-, VPS deploy, smoke tests.',
+    tier: 'managers',
+    canDecide: true,
+    dropdownScope: 'subscription',
+    runtime: 'subscription CLI · standing pulse',
+    route: 'apps',
+    accent: '#818CF8',
+  },
+  {
+    id: 'axon',
+    name: 'AXON Memory Manager',
+    kort: 'AXON',
+    role: 'Owns AXON Memory',
+    handles: 'Owns AXON Memory: repo axon-memory, Supabase ktaditgtbubonrahyiig. Only real lessons, memory cap respected.',
+    tier: 'managers',
+    canDecide: true,
+    dropdownScope: 'subscription',
+    runtime: 'subscription CLI · standing pulse',
+    route: 'memory',
+    accent: '#14B8A6',
+  },
+  {
+    id: 'tradingos',
+    name: 'Trading OS Manager',
+    kort: 'Trading OS',
+    role: 'Owns Trading OS · no live orders',
+    handles: 'Owns Trading OS (trading-os-app / axe-trading-core). Analysis only — never a live order.',
+    tier: 'managers',
+    canDecide: true,
+    dropdownScope: 'subscription',
+    runtime: 'subscription CLI · standing pulse',
+    route: 'trading',
+    accent: '#FB923C',
+  },
+  {
+    id: 'northseamgr',
+    name: 'Northsea Desk Manager',
+    kort: 'NorthSea Mgr',
+    role: 'Owns NorthSea Desk · first deal is the priority',
+    handles: 'Owns NorthSea Desk. Sends only with Luka’s approval; never flips auto_send_*; chases in existing threads only after Luka’s own yes.',
+    tier: 'managers',
+    canDecide: true,
+    dropdownScope: 'subscription',
+    runtime: 'subscription CLI · standing pulse',
+    route: 'maps-3d',
+    accent: '#F472B6',
   },
 ] as const;
 

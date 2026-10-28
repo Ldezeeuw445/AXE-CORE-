@@ -133,6 +133,13 @@ const MANAGER_VAN: Record<AxeAgentId, AxeAgentId> = {
   // tier 3
   intel: 'wingman',
   companion: 'wingman',
+  // Grok-managers (27 okt 2026): eigen desk op de Agents-tab, niet op Home.
+  axemanager: 'axemanager',
+  projectsmgr: 'projectsmgr',
+  companionmgr: 'companionmgr',
+  axon: 'axon',
+  tradingos: 'tradingos',
+  northseamgr: 'northseamgr',
 };
 
 /** Welke manager deze agent bezit. Onbekende id (oude job uit de store) → wingman. */
@@ -178,7 +185,7 @@ export function managerRijen(
  * Eigen job, geen roll-up — anders verdwijnt Cron/Memory achter Developer.
  */
 export function railRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
-  const agents = AXE_AGENTS.filter((a) => a.id !== 'axe');
+  const agents = AXE_AGENTS.filter((a) => a.id !== 'axe' && a.tier !== 'managers');
   const perAgent = new Map<AxeAgentId, AxeJob>();
   for (const job of jobs) {
     if (!levendeJob(job, nu)) continue;

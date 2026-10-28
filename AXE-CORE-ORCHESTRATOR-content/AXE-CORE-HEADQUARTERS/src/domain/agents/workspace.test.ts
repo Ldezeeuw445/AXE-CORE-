@@ -22,6 +22,8 @@ describe('agent-werkplek', () => {
     expect(AGENT_WORKSPACES.northsea.crew).toEqual([]);
     expect(AGENT_WORKSPACES.northsea.tools).not.toContain('write_file');
     expect(AGENT_WORKSPACES.northsea.tools).not.toContain('run_crew');
+    expect(AGENT_WORKSPACES.northseamgr.tools).not.toContain('write_file');
+    expect(AGENT_WORKSPACES.tradingos.tools).not.toContain('write_file');
   });
 
   it('een onbekende agent heeft geen werkplek — de lus mag hem niet stilletjes als AXE draaien', () => {

@@ -160,6 +160,12 @@ const EPISODE_AGENT: Partial<Record<LoopAgent, AxeAgentId>> = {
   thinktank: 'thinktank',
   finance: 'finance',
   apps: 'apps',
+  axemanager: 'axemanager',
+  projectsmgr: 'projectsmgr',
+  companionmgr: 'companionmgr',
+  axon: 'axon',
+  tradingos: 'tradingos',
+  northseamgr: 'northseamgr',
 };
 
 export function agentForEpisode(agent: unknown): AxeAgentId | null {
@@ -172,9 +178,14 @@ export function loopAgentFor(id: AxeAgentId): LoopAgent | null {
   return hit && (LOOP_AGENTS as readonly string[]).includes(hit[0]) ? hit[0] : null;
 }
 
-/** Een schedule-run: NorthSea-engine is van de desk manager, de rest draait de Cron Manager. */
+/** Een schedule-run: NorthSea-engine is van de desk manager, een staande pulse van zijn agent, de rest van Cron. */
 function agentForJob(row: { app?: string | null; job_key?: string | null }): AxeAgentId {
   if (str(row.app) === 'northsea' || str(row.job_key).startsWith('northsea')) return 'northsea';
+  const key = str(row.job_key);
+  const staande = /^axe_core:staande-(.+)$/.exec(key);
+  if (staande && ROSTER_IDS.has(staande[1]) && staande[1] !== 'trading') {
+    return staande[1] as AxeAgentId;
+  }
   return 'cron';
 }
 

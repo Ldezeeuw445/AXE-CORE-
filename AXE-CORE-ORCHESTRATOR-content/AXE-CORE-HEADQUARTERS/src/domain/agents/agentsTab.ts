@@ -19,6 +19,7 @@
  * tab al gebruikte — er komt geen tweede bron bij.
  */
 import { AXE_AGENTS, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
+import { grokManagers } from '@/domain/agents/grokManagers';
 import { agentsByKind } from '@/domain/agents/catalog';
 import { memoryOwners, type SchedulePlan, type AgentQueue } from '@/domain/agents/activity';
 
@@ -102,6 +103,11 @@ export function tierKolommen(): TierKolom[] {
     ...TIER_TEKST[key],
     leden: AXE_AGENTS.filter((a) => a.tier === key),
   }));
+}
+
+/** De zes Grok Bot-managers: eigen MANAGERS-blok, niet in de drie kolommen. */
+export function grokManagerLeden(): AxeAgent[] {
+  return grokManagers();
 }
 
 /**

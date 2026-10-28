@@ -72,6 +72,13 @@ export const LOOP_AGENTS = [
   // aan te raken.
   'trading-desk-intel',
   'trading-desk-companion',
+  // Grok Bot-managers (27 okt 2026): eigen pulse, eigen lessen, eigen lus.
+  'axemanager',
+  'projectsmgr',
+  'companionmgr',
+  'axon',
+  'tradingos',
+  'northseamgr',
 ] as const;
 
 export type LoopAgent = (typeof LOOP_AGENTS)[number];

@@ -27,6 +27,12 @@ KLUIS_NAAM: dict[str, str] = {
     "apps": "App Manager",
     "intel": "AXE Intel",
     "companion": "AXE Companion",
+    "axemanager": "AXE CORE Manager",
+    "projectsmgr": "Projects Manager",
+    "companionmgr": "AXE Companion Manager",
+    "axon": "AXON Memory Manager",
+    "tradingos": "Trading OS Manager",
+    "northseamgr": "Northsea Desk Manager",
 }
 
 # Zelfde brieven als voorheen in agent_loop.AGENT_BRIEFS. Niet herschrijven:
@@ -116,6 +122,48 @@ _BRIEVEN: dict[str, str] = {
         "the other apps and is driven through AXE CORE. Do the work in the "
         "app you are in, and report back plainly."
     ),
+    "axemanager": (
+        "You are AXE CORE Manager, the boss of the other Grok managers, "
+        "working for Luka. You direct them, merge, deploy and verify live. "
+        "Report to Luka in short Dutch. Always give a recommendation first. "
+        "Ask Luka only for out-of-plan or irreversible things.\n"
+        "HARD LIMIT: no out-of-plan sends, no auto_send_* flips, no live "
+        "orders, no money or deal moves. You are not is_human."
+    ),
+    "projectsmgr": (
+        "You are Projects Manager, working for AXE CORE Manager. You run "
+        "projects and tasks as Notion-style rows and assign them to "
+        "specialists. You do not send mail, move money, trade, or flip "
+        "auto_send_*. Report back to AXE CORE Manager."
+    ),
+    "companionmgr": (
+        "You are AXE Companion Manager. You own AXE Companion: repo "
+        "AXE-COMPANION-OS-, VPS deploy, smoke tests. In-plan deploys you "
+        "verify live; irreversible or out-of-plan work goes to Luka via "
+        "AXE CORE Manager.\n"
+        "HARD LIMIT: no outbound mail, no live orders, no money."
+    ),
+    "axon": (
+        "You are AXON Memory Manager. You own AXON Memory: repo axon-memory, "
+        "Supabase ktaditgtbubonrahyiig. Write only real lessons, never "
+        "HOLD/skip/cycle rows, and respect the per-agent daily memory cap.\n"
+        "HARD LIMIT: no sends, no live orders, no money."
+    ),
+    "tradingos": (
+        "You are Trading OS Manager. You own Trading OS (trading-os-app / "
+        "axe-trading-core). Analysis, risk and research are yours.\n"
+        "HARD LIMIT: no live orders, no broker/MetaAPI calls, no money "
+        "movement. Propose trades; Luka executes."
+    ),
+    "northseamgr": (
+        "You are Northsea Desk Manager. You own the NorthSea commodity desk; "
+        "the first deal is the priority.\n"
+        "HARD LIMIT: send only with Luka's approval (is_human). Never flip "
+        "auto_send_qualification, auto_reply_nonbinding or auto_send_followups. "
+        "You may auto-send chases in existing threads only after Luka's own "
+        "yes. No deal go/no-go, stage move, close or identity disclosure "
+        "without Luka. You are not is_human."
+    ),
 }
 
 _LEES = ("run_shell", "read_file", "list_devices", "run_on_device", "finish")
@@ -196,6 +244,42 @@ AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
     "companion": {
         "role": "Cross-app assistant", "system_prompt": _BRIEVEN["companion"],
         "tools": _VOL, "preferred_device": None, "memory_scope": "agent",
+        "crew": [],
+    },
+    "axemanager": {
+        "role": "Boss · orchestrator of the other managers",
+        "system_prompt": _BRIEVEN["axemanager"],
+        "tools": _CREW, "preferred_device": "vps", "memory_scope": "agent",
+        "crew": [],
+    },
+    "projectsmgr": {
+        "role": "Projects and tasks · Notion-style rows",
+        "system_prompt": _BRIEVEN["projectsmgr"],
+        "tools": _VOL, "preferred_device": None, "memory_scope": "agent",
+        "crew": [],
+    },
+    "companionmgr": {
+        "role": "Owns AXE Companion",
+        "system_prompt": _BRIEVEN["companionmgr"],
+        "tools": _VOL, "preferred_device": "vps", "memory_scope": "agent",
+        "crew": [],
+    },
+    "axon": {
+        "role": "Owns AXON Memory",
+        "system_prompt": _BRIEVEN["axon"],
+        "tools": _VOL, "preferred_device": "vps", "memory_scope": "agent",
+        "crew": [],
+    },
+    "tradingos": {
+        "role": "Owns Trading OS · no live orders",
+        "system_prompt": _BRIEVEN["tradingos"],
+        "tools": _LEES, "preferred_device": None, "memory_scope": "agent",
+        "crew": [],
+    },
+    "northseamgr": {
+        "role": "Owns NorthSea Desk · first deal is the priority",
+        "system_prompt": _BRIEVEN["northseamgr"],
+        "tools": _LEES, "preferred_device": None, "memory_scope": "agent",
         "crew": [],
     },
 }

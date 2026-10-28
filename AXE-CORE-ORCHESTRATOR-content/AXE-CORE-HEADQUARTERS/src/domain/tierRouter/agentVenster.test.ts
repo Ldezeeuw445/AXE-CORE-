@@ -69,6 +69,8 @@ describe('managerRijen', () => {
     expect(ids).toContain('memory');
     expect(ids).toContain('companion');
     expect(ids).not.toContain('axe');
+    expect(ids).not.toContain('axemanager');
+    expect(ids).not.toContain('northseamgr');
     expect(ids.length).toBeGreaterThan(5);
   });
 
@@ -133,6 +135,8 @@ describe('managerRijen', () => {
     // Een manager houdt zijn eigen werk.
     expect(managerVan('trading')).toBe('trading');
     expect(managerVan('northsea')).toBe('northsea');
+    expect(managerVan('axemanager')).toBe('axemanager');
+    expect(managerVan('northseamgr')).toBe('northseamgr');
   });
 
   it('een manager die zelf werkt krijgt geen naam voor zijn zin geplakt', () => {

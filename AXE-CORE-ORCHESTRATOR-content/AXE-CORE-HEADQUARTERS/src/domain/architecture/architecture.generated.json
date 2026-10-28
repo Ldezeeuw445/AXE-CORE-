@@ -358,6 +358,18 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261017180000_core_schedules_allow_staande.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261021120000_memory_ruis_archiveren.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261028120000_core_manager_messages.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
       "kind": "migration"
     },
@@ -407,6 +419,10 @@
     },
     {
       "path": "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/northsea/migrations/20261017130000_northsea_open_tabellen_dicht.sql",
       "kind": "migration"
     }
   ],
@@ -522,6 +538,38 @@
       ]
     },
     {
+      "id": "agent:axemanager",
+      "kind": "agent",
+      "label": "AXE CORE Manager",
+      "appId": "app:axe_core",
+      "description": "Directs the other Grok managers, merges, deploys and verifies live. Reports to Luka in short Dutch, recommendation first.",
+      "details": {
+        "role": "Boss · orchestrator of the other managers",
+        "tier": "managers",
+        "runtime": "subscription CLI · standing pulse",
+        "route": ""
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:axon",
+      "kind": "agent",
+      "label": "AXON Memory Manager",
+      "appId": "app:axe_core",
+      "description": "Owns AXON Memory: repo axon-memory, Supabase ktaditgtbubonrahyiig. Only real lessons, memory cap respected.",
+      "details": {
+        "role": "Owns AXON Memory",
+        "tier": "managers",
+        "runtime": "subscription CLI · standing pulse",
+        "route": "memory"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
       "id": "agent:browser",
       "kind": "agent",
       "label": "Browser",
@@ -548,6 +596,22 @@
         "tier": "tier3",
         "runtime": "paid API key (OpenAI/Anthropic)",
         "route": "organization"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:companionmgr",
+      "kind": "agent",
+      "label": "AXE Companion Manager",
+      "appId": "app:axe_core",
+      "description": "Owns AXE Companion: repo AXE-COMPANION-OS-, VPS deploy, smoke tests.",
+      "details": {
+        "role": "Owns AXE Companion",
+        "tier": "managers",
+        "runtime": "subscription CLI · standing pulse",
+        "route": "apps"
       },
       "sources": [
         "src/domain/agents/roster.ts"
@@ -650,6 +714,38 @@
       ]
     },
     {
+      "id": "agent:northseamgr",
+      "kind": "agent",
+      "label": "Northsea Desk Manager",
+      "appId": "app:axe_core",
+      "description": "Owns NorthSea Desk. Sends only with Luka’s approval; never flips auto_send_*; chases in existing threads only after Luka’s own yes.",
+      "details": {
+        "role": "Owns NorthSea Desk · first deal is the priority",
+        "tier": "managers",
+        "runtime": "subscription CLI · standing pulse",
+        "route": "maps-3d"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:projectsmgr",
+      "kind": "agent",
+      "label": "Projects Manager",
+      "appId": "app:axe_core",
+      "description": "Runs projects and tasks as rows, and assigns them to specialists.",
+      "details": {
+        "role": "Projects and tasks · Notion-style rows",
+        "tier": "managers",
+        "runtime": "subscription CLI · standing pulse",
+        "route": "tasks"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
       "id": "agent:task",
       "kind": "agent",
       "label": "Task",
@@ -691,6 +787,22 @@
         "role": "AXE Algo · trading desk",
         "tier": "tier1",
         "runtime": "subscription CLI · AXE Algo stack",
+        "route": "trading"
+      },
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "agent:tradingos",
+      "kind": "agent",
+      "label": "Trading OS Manager",
+      "appId": "app:axe_core",
+      "description": "Owns Trading OS (trading-os-app / axe-trading-core). Analysis only — never a live order.",
+      "details": {
+        "role": "Owns Trading OS · no live orders",
+        "tier": "managers",
+        "runtime": "subscription CLI · standing pulse",
         "route": "trading"
       },
       "sources": [
@@ -2178,7 +2290,8 @@
         "supabase/northsea/migrations/20261006163543_northsea_research_event_storm_guard.sql",
         "supabase/northsea/migrations/20261006164053_northsea_first_contact_drafts.sql",
         "supabase/northsea/migrations/20261006164146_northsea_first_contact_drafts_provenance.sql",
-        "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql"
+        "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql",
+        "supabase/northsea/migrations/20261017130000_northsea_open_tabellen_dicht.sql"
       ]
     },
     {
@@ -2255,7 +2368,10 @@
         "supabase/migrations/20261011120000_dax_always_on.sql",
         "supabase/migrations/20261016191337_productregister.sql",
         "supabase/migrations/20261017120000_core_coding_seats.sql",
-        "supabase/migrations/20261017150000_axe_beslist_zelf.sql"
+        "supabase/migrations/20261017150000_axe_beslist_zelf.sql",
+        "supabase/migrations/20261017180000_core_schedules_allow_staande.sql",
+        "supabase/migrations/20261021120000_memory_ruis_archiveren.sql",
+        "supabase/migrations/20261028120000_core_manager_messages.sql"
       ]
     },
     {
@@ -2368,6 +2484,20 @@
       },
       "sources": [
         "supabase/migrations/20260901_memory_prune_and_rag_rls.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:axe_memory_archive_20261021",
+      "kind": "table",
+      "label": "axe_memory_archive_20261021",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "axe_memory_archive_20261021",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261021120000_memory_ruis_archiveren.sql"
       ]
     },
     {
@@ -2693,6 +2823,20 @@
       },
       "sources": [
         "supabase/migrations/20260708_axe_core_llm_models.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_manager_messages",
+      "kind": "table",
+      "label": "core_manager_messages",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_manager_messages",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261028120000_core_manager_messages.sql"
       ]
     },
     {
@@ -3536,9 +3680,39 @@
       ]
     },
     {
+      "id": "has-agent:app:axe_core:agent:axemanager",
+      "source": "app:axe_core",
+      "target": "agent:axemanager",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:axon",
+      "source": "app:axe_core",
+      "target": "agent:axon",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
       "id": "has-agent:app:axe_core:agent:browser",
       "source": "app:axe_core",
       "target": "agent:browser",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:companionmgr",
+      "source": "app:axe_core",
+      "target": "agent:companionmgr",
       "relation": "has-agent",
       "label": "has-agent",
       "sources": [
@@ -3576,6 +3750,26 @@
       ]
     },
     {
+      "id": "has-agent:app:axe_core:agent:northseamgr",
+      "source": "app:axe_core",
+      "target": "agent:northseamgr",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:projectsmgr",
+      "source": "app:axe_core",
+      "target": "agent:projectsmgr",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
       "id": "has-agent:app:axe_core:agent:task",
       "source": "app:axe_core",
       "target": "agent:task",
@@ -3589,6 +3783,16 @@
       "id": "has-agent:app:axe_core:agent:thinktank",
       "source": "app:axe_core",
       "target": "agent:thinktank",
+      "relation": "has-agent",
+      "label": "has-agent",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "has-agent:app:axe_core:agent:tradingos",
+      "source": "app:axe_core",
+      "target": "agent:tradingos",
       "relation": "has-agent",
       "label": "has-agent",
       "sources": [
@@ -4286,6 +4490,16 @@
       ]
     },
     {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:axe_memory_archive_20261021",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:axe_memory_archive_20261021",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261021120000_memory_ruis_archiveren.sql"
+      ]
+    },
+    {
       "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_agent_calls",
       "source": "supabase:pqnngpcgbdwxavbatbia",
       "target": "table:pqnngpcgbdwxavbatbia:core_agent_calls",
@@ -4516,6 +4730,16 @@
       "label": "has-table",
       "sources": [
         "supabase/migrations/20260708_axe_core_llm_models.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_manager_messages",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_manager_messages",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261028120000_core_manager_messages.sql"
       ]
     },
     {
@@ -4967,6 +5191,26 @@
       ]
     },
     {
+      "id": "orchestrates:app:axe_core:agent:axemanager",
+      "source": "app:axe_core",
+      "target": "agent:axemanager",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:axon",
+      "source": "app:axe_core",
+      "target": "agent:axon",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
       "id": "orchestrates:app:axe_core:agent:browser",
       "source": "app:axe_core",
       "target": "agent:browser",
@@ -4980,6 +5224,16 @@
       "id": "orchestrates:app:axe_core:agent:companion",
       "source": "app:axe_core",
       "target": "agent:companion",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:companionmgr",
+      "source": "app:axe_core",
+      "target": "agent:companionmgr",
       "relation": "orchestrates",
       "label": "orchestrates",
       "sources": [
@@ -5047,6 +5301,26 @@
       ]
     },
     {
+      "id": "orchestrates:app:axe_core:agent:northseamgr",
+      "source": "app:axe_core",
+      "target": "agent:northseamgr",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:projectsmgr",
+      "source": "app:axe_core",
+      "target": "agent:projectsmgr",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
       "id": "orchestrates:app:axe_core:agent:task",
       "source": "app:axe_core",
       "target": "agent:task",
@@ -5070,6 +5344,16 @@
       "id": "orchestrates:app:axe_core:agent:trading",
       "source": "app:axe_core",
       "target": "agent:trading",
+      "relation": "orchestrates",
+      "label": "orchestrates",
+      "sources": [
+        "src/domain/agents/roster.ts"
+      ]
+    },
+    {
+      "id": "orchestrates:app:axe_core:agent:tradingos",
+      "source": "app:axe_core",
+      "target": "agent:tradingos",
       "relation": "orchestrates",
       "label": "orchestrates",
       "sources": [
@@ -5802,7 +6086,10 @@
         "supabase/migrations/20261011120000_dax_always_on.sql",
         "supabase/migrations/20261016191337_productregister.sql",
         "supabase/migrations/20261017120000_core_coding_seats.sql",
-        "supabase/migrations/20261017150000_axe_beslist_zelf.sql"
+        "supabase/migrations/20261017150000_axe_beslist_zelf.sql",
+        "supabase/migrations/20261017180000_core_schedules_allow_staande.sql",
+        "supabase/migrations/20261021120000_memory_ruis_archiveren.sql",
+        "supabase/migrations/20261028120000_core_manager_messages.sql"
       ]
     },
     {
@@ -5835,7 +6122,8 @@
         "supabase/northsea/migrations/20261006163543_northsea_research_event_storm_guard.sql",
         "supabase/northsea/migrations/20261006164053_northsea_first_contact_drafts.sql",
         "supabase/northsea/migrations/20261006164146_northsea_first_contact_drafts_provenance.sql",
-        "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql"
+        "supabase/northsea/migrations/20261015090000_northsea_deal_events_dedupe_index.sql",
+        "supabase/northsea/migrations/20261017130000_northsea_open_tabellen_dicht.sql"
       ]
     },
     {

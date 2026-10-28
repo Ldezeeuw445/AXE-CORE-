@@ -83,6 +83,10 @@ describe('de tijdlijn', () => {
       .toMatchObject({ agent: 'northsea', tone: 'ok', text: 'Ran: Engine', detail: '2.4s' });
     expect(runActivity({ id: 'r2', app: 'axe_core', job_key: 'axe_core:mac-opruimen', status: 'fail', error: 'disk', started_at: iso(2) }))
       .toMatchObject({ agent: 'cron', tone: 'fail', detail: 'disk' });
+    expect(runActivity({
+      id: 'r3', app: 'axe_core', job_key: 'axe_core:staande-axemanager',
+      job_name: 'AXE CORE Manager pulse', status: 'ok', started_at: iso(1),
+    })).toMatchObject({ agent: 'axemanager', tone: 'ok' });
   });
 
   it('geheugen: desk-schrijfsels vallen weg, de rest komt bij de eigenaar van de namespace', () => {

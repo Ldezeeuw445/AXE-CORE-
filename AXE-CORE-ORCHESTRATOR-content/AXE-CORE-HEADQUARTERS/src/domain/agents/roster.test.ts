@@ -6,13 +6,14 @@ describe('AXE agent roster', () => {
     // Was 13 (AXE + twelve) until 'apps' (App Manager) got a real action —
     // health-check/restart via axeCoreApiService.ts — the same day 'finance'
     // did. See roster.ts's 'apps' entry and LOOP_AGENTS in agentLoop.ts.
-    expect(AXE_AGENTS).toHaveLength(14);
+    expect(AXE_AGENTS).toHaveLength(20);
     expect(AXE_AGENTS[0].id).toBe('axe');
     const ids = AXE_AGENTS.map((a) => a.id).sort();
     expect(ids).toEqual([
-      'apps', 'axe',
-      'browser', 'companion', 'cron', 'developer', 'finance',
-      'intel', 'memory', 'northsea', 'task', 'thinktank', 'trading', 'wingman',
+      'apps', 'axe', 'axemanager', 'axon',
+      'browser', 'companion', 'companionmgr', 'cron', 'developer', 'finance',
+      'intel', 'memory', 'northsea', 'northseamgr', 'projectsmgr',
+      'task', 'thinktank', 'trading', 'tradingos', 'wingman',
     ]);
   });
 
@@ -23,6 +24,9 @@ describe('AXE agent roster', () => {
       .toEqual(['apps', 'browser', 'cron', 'finance', 'memory', 'task']);
     expect(agentsByTier('tier3').map((a) => a.id).sort())
       .toEqual(['companion', 'intel']);
+    expect(agentsByTier('managers').map((a) => a.id)).toEqual([
+      'axemanager', 'projectsmgr', 'companionmgr', 'axon', 'tradingos', 'northseamgr',
+    ]);
   });
 
   it('gives each tier the dropdown scope Luka confirmed', () => {
@@ -30,6 +34,7 @@ describe('AXE agent roster', () => {
     for (const a of agentsByTier('tier1')) expect(a.dropdownScope).toBe('subscription');
     for (const a of agentsByTier('tier2')) expect(a.dropdownScope).toBe('auto-route');
     for (const a of agentsByTier('tier3')) expect(a.dropdownScope).toBe('paid-api');
+    for (const a of agentsByTier('managers')) expect(a.dropdownScope).toBe('subscription');
   });
 
   it('resolves ids and falls back to AXE for the unknown', () => {

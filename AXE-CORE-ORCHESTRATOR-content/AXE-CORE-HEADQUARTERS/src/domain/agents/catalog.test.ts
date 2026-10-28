@@ -2,13 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { AGENT_CATALOG, namespaceFor, agentsByKind } from './catalog';
 
 describe('agent catalog (the one force)', () => {
-  it('has the fourteen core agents (AXE + thirteen tiered) and the eight crew specialists', () => {
+  it('has the twenty core agents (AXE + thirteen tiered + six Grok managers) and the eight crew specialists', () => {
     // 'apps' joined 22-23 sep 2026 once App Manager got a real action (VPS
     // health-check/restart) to hang a learning-loop episode on.
+    // The six Grok managers joined 27 okt 2026, next to the existing rows.
     expect(agentsByKind('core').map((a) => a.id).sort()).toEqual([
-      'apps', 'axe',
-      'browser', 'companion', 'cron', 'developer', 'finance',
-      'intel', 'memory', 'northsea', 'task', 'thinktank', 'trading', 'wingman',
+      'apps', 'axe', 'axemanager', 'axon',
+      'browser', 'companion', 'companionmgr', 'cron', 'developer', 'finance',
+      'intel', 'memory', 'northsea', 'northseamgr', 'projectsmgr',
+      'task', 'thinktank', 'trading', 'tradingos', 'wingman',
     ]);
     // nine specialists minus axe_core (which IS the core orchestrator) = eight
     expect(agentsByKind('crew')).toHaveLength(8);

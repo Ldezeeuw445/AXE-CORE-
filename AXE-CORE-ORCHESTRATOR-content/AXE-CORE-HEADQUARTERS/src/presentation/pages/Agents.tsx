@@ -22,6 +22,9 @@ import {
   WEERGAVEN, aantalWerkend, type AgentsWeergave, type LadeTab,
 } from '@/domain/agents/agentsTab';
 import { AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
+import { rijenVanLijst, type GoedkeuringsRij } from '@/domain/agents/pendingApproval';
+import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
+import { listPendingApprovals } from '@/infrastructure/gateways/axeCoreApiService';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchuifBalk, KaartRaster, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
@@ -206,6 +209,7 @@ export default function Agents() {
   const [gekozenAgent, setGekozenAgent] = useState<AxeAgentId | null>(null);
   const [gekozenCrew, setGekozenCrew] = useState<string | null>(null);
   const [ladeTab, setLadeTab] = useState<LadeTab>('nu');
+  const [goedkeuringen, setGoedkeuringen] = useState<GoedkeuringsRij[]>([]);
 
   /* Is er een ECHTE rechterrail om het detail in te hangen?
    *
@@ -366,6 +370,18 @@ export default function Agents() {
   }, []);
 
   useEffect(() => {
+    let alive = true;
+    const laad = () => {
+      void listPendingApprovals(50)
+        .then((lijst) => { if (alive) setGoedkeuringen(rijenVanLijst(lijst)); })
+        .catch(() => { if (alive) setGoedkeuringen([]); });
+    };
+    laad();
+    const t = window.setInterval(laad, 15_000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
     if (!openId || loading) return;
     const agent = agents.find(a => a.id === openId);
     if (!agent) return;
@@ -496,7 +512,7 @@ export default function Agents() {
         title="Agents"
         description={loading
           ? 'Loading agents…'
-          : 'AXE and the thirteen he delegates to, in the three tiers. Pick a view; click an agent for only his.'}
+          : 'AXE, the thirteen he delegates to, and the six Grok managers. Pick a view; click an agent for only his.'}
       />
       <div className="flex flex-wrap items-center gap-2 mt-3 mb-4">
         <StatPill label="Working" value={String(aantalWerkend(pulses))} tone="success" />
@@ -564,6 +580,12 @@ export default function Agents() {
           gekozenCrew={gekozenCrew}
           onKies={kiesAgent}
           onKiesCrew={kiesCrew}
+          goedkeuringen={goedkeuringen}
+          onBeslis={(rij, akkoord) => {
+            void beslisAgentOk({ akkoord, rij }).then(() => {
+              setGoedkeuringen((nu) => nu.filter((r) => r.id !== rij.id));
+            });
+          }}
         />
       )}
 

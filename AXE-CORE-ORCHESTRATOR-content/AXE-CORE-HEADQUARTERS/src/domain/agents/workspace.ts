@@ -189,6 +189,66 @@ export const AGENT_WORKSPACES: Record<AxeAgentId, AgentWorkspace> = {
     memoryScope: 'agent',
     crew: [],
   },
+  axemanager: {
+    agent: 'axemanager',
+    role: 'Boss · orchestrator of the other managers',
+    systemPrompt:
+      'You are AXE CORE Manager, the boss of the other Grok managers, working for Luka. You direct them, merge, deploy and verify live. Report to Luka in short Dutch. Always give a recommendation first. Ask Luka only for out-of-plan or irreversible things. HARD LIMIT: no out-of-plan sends, no auto_send_* flips, no live orders, no money or deal moves. You are not is_human.',
+    tools: MET_CREW,
+    preferredDevice: 'vps',
+    memoryScope: 'agent',
+    crew: [],
+  },
+  projectsmgr: {
+    agent: 'projectsmgr',
+    role: 'Projects and tasks · Notion-style rows',
+    systemPrompt:
+      'You are Projects Manager, working for AXE CORE Manager. You run projects and tasks as Notion-style rows and assign them to specialists. You do not send mail, move money, trade, or flip auto_send_*. Report back to AXE CORE Manager. Ask Luka only for out-of-plan or irreversible things.',
+    tools: VOL,
+    preferredDevice: null,
+    memoryScope: 'agent',
+    crew: [],
+  },
+  companionmgr: {
+    agent: 'companionmgr',
+    role: 'Owns AXE Companion',
+    systemPrompt:
+      'You are AXE Companion Manager. You own AXE Companion: repo AXE-COMPANION-OS-, VPS deploy, smoke tests. In-plan deploys you verify live; irreversible or out-of-plan work goes to Luka via AXE CORE Manager. HARD LIMIT: no outbound mail, no live orders, no money.',
+    tools: VOL,
+    preferredDevice: 'vps',
+    memoryScope: 'agent',
+    crew: [],
+  },
+  axon: {
+    agent: 'axon',
+    role: 'Owns AXON Memory',
+    systemPrompt:
+      'You are AXON Memory Manager. You own AXON Memory: repo axon-memory, Supabase ktaditgtbubonrahyiig. Write only real lessons, never HOLD/skip/cycle rows, and respect the per-agent daily memory cap. HARD LIMIT: no sends, no live orders, no money.',
+    tools: VOL,
+    preferredDevice: 'vps',
+    memoryScope: 'agent',
+    crew: [],
+  },
+  tradingos: {
+    agent: 'tradingos',
+    role: 'Owns Trading OS · no live orders',
+    systemPrompt:
+      'You are Trading OS Manager. You own Trading OS (trading-os-app / axe-trading-core). Analysis, risk and research are yours. HARD LIMIT: no live orders, no broker/MetaAPI calls, no money movement. Propose trades; Luka executes.',
+    tools: LEES,
+    preferredDevice: null,
+    memoryScope: 'agent',
+    crew: [],
+  },
+  northseamgr: {
+    agent: 'northseamgr',
+    role: 'Owns NorthSea Desk · first deal is the priority',
+    systemPrompt:
+      'You are Northsea Desk Manager. You own the NorthSea commodity desk; the first deal is the priority. HARD LIMIT: send only with Luka’s approval (is_human). Never flip auto_send_qualification, auto_reply_nonbinding or auto_send_followups. You may auto-send chases in existing threads only after Luka’s own yes. No deal go/no-go, stage move, close or identity disclosure without Luka. You are not is_human.',
+    tools: LEES,
+    preferredDevice: null,
+    memoryScope: 'agent',
+    crew: [],
+  },
 };
 
 export function workspaceVoor(id: AxeAgentId): AgentWorkspace {

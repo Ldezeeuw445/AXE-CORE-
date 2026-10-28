@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   tierKolommen, namespaceVan, teltMeeOpDezeTab, tellersVoor, aantalWerkend,
-  WEERGAVEN, LADE_TABS,
+  grokManagerLeden, WEERGAVEN, LADE_TABS,
 } from './agentsTab';
 import { AXE_AGENTS, type AxeAgentId } from './roster';
 import type { SchedulePlan, AgentQueue } from './activity';
@@ -23,7 +23,10 @@ describe('tierKolommen', () => {
   it('laat AXE zelf buiten de kolommen', () => {
     const alle = tierKolommen().flatMap((k) => k.leden.map((a) => a.id));
     expect(alle).not.toContain('axe');
-    expect(alle).toHaveLength(AXE_AGENTS.length - 1);
+    expect(alle).not.toContain('axemanager');
+    expect(alle).toHaveLength(
+      AXE_AGENTS.filter((a) => a.tier === 'tier1' || a.tier === 'tier2' || a.tier === 'tier3').length,
+    );
   });
 
   it('elke kolom draagt zijn eigen motorregel', () => {
@@ -99,6 +102,19 @@ describe('tellersVoor', () => {
   it('echte episodes gaan voor de geheugentelling zodra die er zijn', () => {
     const t = tellersVoor('finance', [], [], { axe_finance: { own: 2, desk: 0 } }, { finance: 379 });
     expect(t.episodes).toBe(379);
+  });
+});
+
+describe('grokManagerLeden', () => {
+  it('zijn de zes Grok-managers, in roster-volgorde, buiten de drie kolommen', () => {
+    expect(grokManagerLeden().map((a) => a.id)).toEqual([
+      'axemanager', 'projectsmgr', 'companionmgr', 'axon', 'tradingos', 'northseamgr',
+    ]);
+    expect(grokManagerLeden().every((a) => a.tier === 'managers')).toBe(true);
+    const kolomIds = tierKolommen().flatMap((k) => k.leden.map((a) => a.id));
+    for (const id of grokManagerLeden().map((a) => a.id)) {
+      expect(kolomIds).not.toContain(id);
+    }
   });
 });
 

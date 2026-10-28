@@ -62,9 +62,15 @@ class FakeDb:
 
 
 def test_catalogus_dekt_de_slapende_home_agents():
-    assert sd.STAANDE_AGENTS == {
+    oorspronkelijk = {
         "wingman", "memory", "task", "cron", "finance", "apps", "intel", "companion",
     }
+    grok = {
+        "axemanager", "projectsmgr", "companionmgr", "axon", "tradingos", "northseamgr",
+    }
+    assert oorspronkelijk <= sd.STAANDE_AGENTS
+    assert grok <= sd.STAANDE_AGENTS
+    assert sd.STAANDE_AGENTS == oorspronkelijk | grok
     for agent in sd.STAANDE_AGENTS:
         d = sd.catalogus_voor(agent)
         assert d and d["job_key"].startswith("axe_core:staande-")
