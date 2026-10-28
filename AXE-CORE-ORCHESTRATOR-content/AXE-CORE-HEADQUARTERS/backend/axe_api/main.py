@@ -3279,6 +3279,57 @@ async def list_coding_seats():
     return {"seats": rijen}
 
 
+@app.get("/usage-credits", dependencies=[AUTH])
+async def usage_credits():
+    """Per-stoel sessies + app-budgetten, uit core_tasks / core_coding_seats.
+
+    Schrijft niets. `config` is wat de load balancer (stap 2) leest.
+    Zonder de tabel core_usage_config valt hij terug op de catalogus in code.
+    """
+    try:
+        import usage_credits as _uc
+    except Exception as exc:
+        raise HTTPException(503, f"usage_credits unavailable: {exc}") from exc
+    try:
+        rijen = (
+            sb().table("core_coding_seats").select("*")
+            .order("last_seen_at", desc=True).limit(40).execute().data
+        ) or []
+    except Exception as exc:
+        raise HTTPException(503, f"Could not read coding seats: {exc}") from exc
+    try:
+        from provider_router import xai_stoel
+        grok = xai_stoel()
+        if not any(str(r.get("seat_id") or r.get("id") or "") in {"xai", "vps:xai"} for r in rijen):
+            rijen.append(grok)
+    except Exception:
+        pass
+    try:
+        taken = _uc.lees_taken(sb())
+    except Exception as exc:
+        log.warning("usage-credits taken: %s", exc)
+        taken = []
+    try:
+        cfg = _uc.lees_config(sb())
+    except Exception:
+        cfg = None
+    return _uc.aggregeer(taken, rijen, config_rijen=cfg)
+
+
+@app.get("/usage-credits/config", dependencies=[AUTH])
+async def usage_credits_config():
+    """Alleen de caps. Load balancer (stap 2) mag dit lezen zonder de telling."""
+    try:
+        import usage_credits as _uc
+    except Exception as exc:
+        raise HTTPException(503, f"usage_credits unavailable: {exc}") from exc
+    try:
+        cfg = _uc.lees_config(sb())
+    except Exception:
+        cfg = None
+    return _uc.config_voor_balancer(_uc.catalogus_uit(cfg))
+
+
 @app.get("/claude/subscriptions/usage", dependencies=[AUTH])
 async def claude_subscriptions_usage(fresh: int = 0):
     """Per abonnement-account: sessie- en weekverbruik zoals de aanbieder het meet."""

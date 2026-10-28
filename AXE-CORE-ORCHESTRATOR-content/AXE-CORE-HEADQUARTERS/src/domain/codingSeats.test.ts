@@ -307,6 +307,8 @@ describe('Settings toont Accounts', () => {
     expect(settings).toMatch(/id: 'accounts'/);
     expect(settings).toMatch(/label: 'Subscriptions'/);
     expect(settings).toMatch(/CodingSeatsSection/);
+    expect(settings).toMatch(/label: 'Usage & Credits'/);
+    expect(settings).toMatch(/UsageCreditsSection/);
     expect(settings).not.toMatch(/HomeView|NeuralBrain|MemoryTerrain/);
     const seats = readFileSync(new URL('../presentation/components/settings/CodingSeatsSection.tsx', import.meta.url), 'utf8');
     const motoren = readFileSync(new URL('../presentation/components/settings/AgentMotorenSection.tsx', import.meta.url), 'utf8');

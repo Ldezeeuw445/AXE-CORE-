@@ -14,6 +14,7 @@
  */
 
 import type { AbonnementVerbruik } from '@/domain/abonnementVerbruik';
+import type { UsageCreditsSnapshot } from '@/domain/usageCredits';
 import type { NorthseaOverzicht } from '@/domain/northsea/chase';
 import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
 import type { KeystoreEntry, OpsCronJob, OpsCronRun } from '@/domain/controlPlane';
@@ -1084,6 +1085,11 @@ export interface CodingSeatStatus {
 /** Mac mini heartbeat in core_coding_seats (service_role via de VPS). */
 export async function codingSeatsHeartbeat(): Promise<{ seats: CodingSeatStatus[] }> {
   return call('GET', '/coding-seats');
+}
+
+/** Usage & Credits: sessies per stoel + app-budgetten. Config voor de load balancer zit in `config`. */
+export async function usageCreditsSnapshot(): Promise<UsageCreditsSnapshot> {
+  return call('GET', '/usage-credits');
 }
 
 /** Read-only tierkaart van de VPS (PR #214): agent → tier → model → stoel. */

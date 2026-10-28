@@ -54,6 +54,7 @@ import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } fro
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
 import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
 import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
+import { UsageCreditsSection } from '@/presentation/components/settings/UsageCreditsSection';
 import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 import {
   readAllProviderUsage,
@@ -2005,6 +2006,7 @@ export default function SettingsPage() {
               titel: 'Setup',
               items: [
                 { id: 'accounts', label: 'Subscriptions', actief: sectie === 'accounts', onKies: () => kiesSectie('accounts') },
+                { id: 'usage', label: 'Usage & Credits', actief: sectie === 'usage', onKies: () => kiesSectie('usage') },
                 { id: 'providers', label: 'Providers', actief: sectie === 'providers', onKies: () => kiesSectie('providers') },
                 { id: 'voice', label: 'Voice', actief: sectie === 'voice', onKies: () => kiesSectie('voice') },
                 { id: 'trust', label: 'Trust', actief: sectie === 'trust', onKies: () => kiesSectie('trust') },
@@ -2032,6 +2034,8 @@ export default function SettingsPage() {
           <CodingSeatsSection />
         </SectieBlok>
         )}
+
+        {sectie === 'usage' && <UsageCreditsSection />}
 
         {sectie === 'providers' && (
         <SectieBlok id="providers" titel="PROVIDERS">
