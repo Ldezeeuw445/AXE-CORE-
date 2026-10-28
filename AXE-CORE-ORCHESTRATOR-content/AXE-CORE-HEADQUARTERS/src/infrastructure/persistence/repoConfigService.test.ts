@@ -50,4 +50,36 @@ describe('loadRepoConfigs', () => {
     const repos = loadRepoConfigs();
     expect(repos.some((r) => r.id === 'axe-core')).toBe(true);
   });
+
+  it('Trading OS is Ldezeeuw445/trading-os-app on snapshot-2026-10-17, not TRADING-AXE-OS', () => {
+    const tos = loadRepoConfigs().find((r) => r.id === 'trading-os');
+    expect(tos).toMatchObject({
+      owner: 'Ldezeeuw445',
+      repo: 'trading-os-app',
+      branch: 'snapshot-2026-10-17',
+    });
+    expect(tos?.owner).not.toMatch(/trading-axe-os/i);
+    expect(tos?.repo).not.toMatch(/^TRADING-OS-?$/i);
+    expect(tos?.branch).not.toBe('main');
+  });
+
+  it('rewrites a stored TRADING-AXE-OS / main card to the canon and keeps the token', () => {
+    localStorage.setItem('axe_github_repos', JSON.stringify([
+      { id: 'axe-core', owner: 'Ldezeeuw445', repo: 'AXE-CORE-', branch: 'orchestrator',
+        srcPrefix: 'src', token: '', label: 'AXE CORE' },
+      { id: 'trading-os', owner: 'TRADING-AXE-OS-APPS', repo: 'TRADING-OS', branch: 'main',
+        srcPrefix: 'src', token: 'ghp_keep', label: 'Trading OS' },
+    ]));
+    const tos = loadRepoConfigs().find((r) => r.id === 'trading-os');
+    expect(tos).toMatchObject({
+      owner: 'Ldezeeuw445',
+      repo: 'trading-os-app',
+      branch: 'snapshot-2026-10-17',
+      token: 'ghp_keep',
+    });
+    const opgeslagen = JSON.parse(localStorage.getItem('axe_github_repos') ?? '[]');
+    const bewaard = opgeslagen.find((r: { id: string }) => r.id === 'trading-os');
+    expect(bewaard.repo).toBe('trading-os-app');
+    expect(bewaard.branch).toBe('snapshot-2026-10-17');
+  });
 });

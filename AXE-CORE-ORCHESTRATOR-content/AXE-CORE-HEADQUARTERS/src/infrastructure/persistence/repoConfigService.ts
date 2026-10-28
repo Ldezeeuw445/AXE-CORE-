@@ -76,9 +76,9 @@ export const DEFAULT_REPOS: RepoConfig[] = [
   {
     id: 'trading-os',
     label: 'Trading OS',
-    owner: 'TRADING-AXE-OS-APPS',
-    repo: 'TRADING-OS',
-    branch: 'main',
+    owner: 'Ldezeeuw445',
+    repo: 'trading-os-app',
+    branch: 'snapshot-2026-10-17',
     srcPrefix: 'src',
     token: '',
   },
@@ -151,6 +151,36 @@ function normalizeRepo(r: Partial<RepoConfig> | null | undefined): RepoConfig {
   };
 }
 
+/**
+ * Trading OS moved: Ldezeeuw445/trading-os-app @ snapshot-2026-10-17, not
+ * TRADING-AXE-OS-APPS/TRADING-OS @ main. A stored card with the old coordinates
+ * (or main) would keep the bouwlus and the editor in the empty repo. Token stays.
+ */
+function metTradingOsCanon(def: RepoConfig, existing: RepoConfig): RepoConfig {
+  const merged = {
+    ...def,
+    ...existing,
+    owner: existing.owner || def.owner,
+    repo: existing.repo || def.repo,
+    branch: existing.branch || def.branch,
+    srcPrefix: existing.srcPrefix ?? def.srcPrefix,
+    label: existing.label || def.label,
+  };
+  if (def.id !== 'trading-os') return merged;
+  return {
+    ...merged,
+    owner: def.owner,
+    repo: def.repo,
+    branch: def.branch,
+    srcPrefix: def.srcPrefix,
+  };
+}
+
+function tradingOsDrift(r: RepoConfig | undefined, def: RepoConfig): boolean {
+  if (!r || def.id !== 'trading-os') return false;
+  return r.owner !== def.owner || r.repo !== def.repo || r.branch !== def.branch;
+}
+
 /** Merge stored configs with DEFAULT_REPOS so new entries (e.g. Axon) appear. */
 export function loadRepoConfigs(): RepoConfig[] {
   let stored: RepoConfig[] = [];
@@ -165,16 +195,7 @@ export function loadRepoConfigs(): RepoConfig[] {
   const merged: RepoConfig[] = DEFAULT_REPOS.map((def) => {
     const existing = byId.get(def.id);
     if (!existing) return { ...def };
-    return {
-      ...def,
-      ...existing,
-      // Keep user token/branch overrides; fill empty structural fields from defaults
-      owner: existing.owner || def.owner,
-      repo: existing.repo || def.repo,
-      branch: existing.branch || def.branch,
-      srcPrefix: existing.srcPrefix ?? def.srcPrefix,
-      label: existing.label || def.label,
-    };
+    return metTradingOsCanon(def, existing);
   });
 
   // Keep any custom repos the user added that are not in defaults
@@ -185,9 +206,11 @@ export function loadRepoConfigs(): RepoConfig[] {
   // dropped — it could never clone or edit anything, and it must not crash a
   // render on the way to being ignored.
   const clean = merged.map(normalizeRepo).filter((r) => r.id || r.repo);
-  // If stored list was older (no AXON), write the merged list back so the next
-  // Settings hydrate / save keeps all DEFAULT_REPOS cards visible.
-  if (stored.length < DEFAULT_REPOS.length || !byId.has('axon')) {
+  // If stored list was older (no AXON) or still had TRADING-AXE-OS / main,
+  // write the merged list back so the next Settings hydrate / save keeps canon.
+  const tradingDef = DEFAULT_REPOS.find((r) => r.id === 'trading-os');
+  const tradingDrift = !!tradingDef && tradingOsDrift(byId.get('trading-os'), tradingDef);
+  if (stored.length < DEFAULT_REPOS.length || !byId.has('axon') || tradingDrift) {
     try {
       localStorage.setItem('axe_github_repos', JSON.stringify(clean));
     } catch { /* ignore */ }
@@ -201,7 +224,7 @@ export function saveRepoConfigs(repos: RepoConfig[]) {
   const merged: RepoConfig[] = DEFAULT_REPOS.map((def) => {
     const existing = byId.get(def.id);
     if (!existing) return { ...def };
-    return { ...def, ...existing };
+    return metTradingOsCanon(def, existing);
   });
   for (const r of repos) {
     if (!merged.some((m) => m.id === r.id)) merged.push(r);

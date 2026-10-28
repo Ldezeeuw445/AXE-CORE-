@@ -67,7 +67,7 @@ log = logging.getLogger("axe_core_api.agent_runner")
 
 DEFAULT_TIMEOUT = int(os.environ.get("AGENT_TIMEOUT", os.environ.get("CLAUDE_TIMEOUT", "900")))
 
-PROTECTED_BRANCHES = {"main", "master"}
+PROTECTED_BRANCHES = {"main", "master", "snapshot-2026-10-17"}
 
 ALLOWED_PERMISSION_MODES = ("default", "acceptEdits", "plan")
 

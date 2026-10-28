@@ -22,7 +22,7 @@ export interface RepoWerkplek {
 export const REPO_WERKPLEKKEN: readonly RepoWerkplek[] = [
   { id: 'axe-core', label: 'AXE CORE', owner: 'Ldezeeuw445', repo: 'AXE-CORE-', branch: 'orchestrator' },
   { id: 'axe-companion', label: 'AXE Companion OS', owner: 'Ldezeeuw445', repo: 'AXE-COMPANION-OS-', branch: 'main' },
-  { id: 'trading-os', label: 'Trading OS', owner: 'TRADING-AXE-OS-APPS', repo: 'TRADING-OS', branch: 'main' },
+  { id: 'trading-os', label: 'Trading OS', owner: 'Ldezeeuw445', repo: 'trading-os-app', branch: 'snapshot-2026-10-17' },
   { id: 'axon', label: 'AXON Memory', owner: 'Ldezeeuw445', repo: 'axon-memory', branch: 'main' },
   { id: 'axe-core-android', label: 'AXE CORE Android', owner: 'Ldezeeuw445', repo: 'axe-core-android', branch: 'main' },
 ];

@@ -285,3 +285,198 @@ def test_de_whitelist_volgt_alleen_een_override_binnen_de_werkmap(tmp_path, monk
     repos = agent_runner._repos()
     assert repos["axon-memory"] == os.path.realpath(werk_map / "axon-memory")
     assert repos["axe-core"] == str(tmp_path / "core") and "nieuw" not in repos
+
+
+# ── Trading OS: trading-os-app @ snapshot-2026-10-17, taken uit BOUWLIJST.md ──
+
+BOUWLIJST = """# Trading OS — bouwlijst
+
+Never deploy. Never apply migrations. Never place live orders.
+Never touch main. PRs go into snapshot-2026-10-17.
+
+## Foundation
+
+- [x] **T0** Repo boots and tests run
+- [ ] **T1** Persist chart drawings per user, symbol and timeframe
+- [ ] **T2** Local indicator engine (EMA, SMA, RSI)
+"""
+
+
+def test_bouwljist_pakt_de_eerste_open_taak_in_volgorde_en_bewaart_de_regels():
+    uit = bp.parse_bouwljist(BOUWLIJST)
+    assert "Never deploy" in uit["regels"] and "Never apply migrations" in uit["regels"]
+    assert "Never place live orders" in uit["regels"] and "Never touch main" in uit["regels"]
+    assert [t["id"] for t in uit["taken"]] == ["T0", "T1", "T2"]
+    assert uit["taken"][0]["done"] is True
+    assert uit["volgende"]["id"] == "T1"
+    assert "chart drawings" in uit["volgende"]["titel"]
+    leeg = bp.parse_bouwljist("# done\n\n- [x] **T0** klaar\n")
+    assert leeg["volgende"] is None
+    prompt = bp.trading_os_prompt({**uit, "ok": True})
+    assert "T1" in prompt and "trading-os-app" in prompt and "snapshot-2026-10-17" in prompt
+    assert "Never deploy" in prompt and "TRADING-AXE-OS" in prompt
+
+
+def test_volgende_bouwljist_leest_het_bestand_in_de_checkout(tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "BOUWLIJST.md").write_text(BOUWLIJST)
+    uit = bp.volgende_bouwljist_in(str(tmp_path))
+    assert uit["ok"] is True and uit["volgende"]["id"] == "T1"
+    assert bp.volgende_bouwljist_in(str(tmp_path / "leeg"))["ok"] is False
+
+
+@pytest.fixture
+def trading_os_repo(tmp_path, monkeypatch):
+    """Kale remote met main én snapshot-2026-10-17; werkcheckout op axe-agent vanaf snapshot."""
+    remote = tmp_path / "trading-os-app.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True)
+    zaad = tmp_path / "zaad"
+    subprocess.run(["git", "clone", "-q", str(remote), str(zaad)], check=True, capture_output=True)
+    sh(zaad, "config", "user.email", "test@example.com")
+    sh(zaad, "config", "user.name", "Test")
+    (zaad / "app.py").write_text("print('main')\n")
+    sh(zaad, "add", "-A")
+    sh(zaad, "commit", "-q", "-m", "on main")
+    sh(zaad, "push", "-q", "origin", "main")
+    sh(zaad, "checkout", "-q", "-b", bp.TRADING_OS_BASIS)
+    (zaad / "app.py").write_text("print('snapshot')\n")
+    docs = zaad / "docs"
+    docs.mkdir()
+    (docs / "BOUWLIJST.md").write_text(BOUWLIJST)
+    sh(zaad, "add", "-A")
+    sh(zaad, "commit", "-q", "-m", "snapshot + bouwlijst")
+    sh(zaad, "push", "-q", "-u", "origin", bp.TRADING_OS_BASIS)
+    werk = tmp_path / "werk"
+    subprocess.run(["git", "clone", "-q", "--branch", bp.TRADING_OS_BASIS, str(remote), str(werk)],
+                   check=True, capture_output=True)
+    sh(werk, "config", "user.email", "test@example.com")
+    sh(werk, "config", "user.name", "Test")
+    sh(werk, "checkout", "-q", "-B", "axe-agent", f"origin/{bp.TRADING_OS_BASIS}")
+    monkeypatch.setenv("AGENT_REPOS", f"trading-os={werk}")
+    return werk, remote, zaad
+
+
+def github_default(default="main"):
+    gezien = []
+
+    def handler(request: httpx.Request):
+        gezien.append((request.method, request.url.path,
+                       json.loads(request.content) if request.content else None))
+        if request.method == "GET" and request.url.path.endswith("/pulls"):
+            return httpx.Response(200, json=[])
+        if request.method == "GET":
+            return httpx.Response(200, json={"default_branch": default})
+        return httpx.Response(201, json={"html_url": "https://github.com/Ldezeeuw445/trading-os-app/pull/4"})
+    return httpx.Client(transport=httpx.MockTransport(handler)), gezien
+
+
+def test_canon_heeft_trading_os_app_niet_trading_axe_os():
+    info = bp.canon_info("trading-os")
+    assert info["repo"] == "Ldezeeuw445/trading-os-app"
+    assert info["basis"] == "snapshot-2026-10-17"
+    assert "main" in bp.verboden_basis("trading-os")
+    assert bp.basis_voor("trading-os") == "snapshot-2026-10-17"
+    assert bp.basis_voor("axe-companion") in (None, "")
+    assert "main" not in bp.verboden_basis("axe-companion")
+
+
+def test_oude_trading_os_checkout_wordt_trading_os_app_vanaf_snapshot(tmp_path):
+    oud = tmp_path / "oud"
+    subprocess.run(["git", "init", "-q", "-b", "axe-agent", str(oud)], check=True)
+    sh(oud, "remote", "add", "origin", "https://github.com/TRADING-AXE-OS-APPS/TRADING-OS.git")
+    nieuw_remote = tmp_path / "trading-os-app.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(nieuw_remote)], check=True)
+    zaad = tmp_path / "zaad"
+    subprocess.run(["git", "clone", "-q", str(nieuw_remote), str(zaad)], check=True, capture_output=True)
+    sh(zaad, "config", "user.email", "t@example.com")
+    sh(zaad, "config", "user.name", "T")
+    (zaad / "README.md").write_text("Trading OS app\n")
+    sh(zaad, "add", "-A")
+    sh(zaad, "commit", "-q", "-m", "main")
+    sh(zaad, "push", "-q", "origin", "main")
+    sh(zaad, "checkout", "-q", "-b", bp.TRADING_OS_BASIS)
+    (zaad / "README.md").write_text("snapshot\n")
+    sh(zaad, "commit", "-q", "-am", "snapshot")
+    sh(zaad, "push", "-q", "-u", "origin", bp.TRADING_OS_BASIS)
+    werk_map = tmp_path / "werk"
+    overrides = werk_map / "agent-repos.json"
+    uit = bp.zorg_voor_canon(agent_runner._git, "trading-os", str(oud), werk_map=str(werk_map),
+                             overrides_pad=str(overrides), url_voor=lambda r: str(nieuw_remote))
+    assert uit["actie"] == "overgezet"
+    assert uit["van"] == "TRADING-AXE-OS-APPS/TRADING-OS"
+    assert uit["naar"] == "Ldezeeuw445/trading-os-app"
+    kloon = werk_map / "trading-os"
+    assert (kloon / "README.md").read_text() == "snapshot\n"
+    assert sh(kloon, "rev-parse", "--abbrev-ref", "HEAD").strip() == "axe-agent"
+
+
+def test_trading_os_op_main_gaat_naar_axe_agent_vanaf_snapshot(trading_os_repo):
+    werk, _, _ = trading_os_repo
+    sh(werk, "checkout", "-q", "main")
+    assert sh(werk, "rev-parse", "--abbrev-ref", "HEAD").strip() == "main"
+    uit = bp.zorg_voor_werkbranch(agent_runner._git, str(werk), basis_naam=bp.TRADING_OS_BASIS)
+    assert uit["actie"] == "gezet" and uit["branch"] == "axe-agent"
+    assert "snapshot" in uit["basis"]
+    assert sh(werk, "rev-parse", "--abbrev-ref", "HEAD").strip() == "axe-agent"
+    assert (werk / "app.py").read_text() == "print('snapshot')\n"
+
+
+def test_trading_os_haalt_snapshot_binnen_niet_main(trading_os_repo):
+    werk, _, zaad = trading_os_repo
+    (werk / "agent.py").write_text("x = 1\n")
+    sh(werk, "add", "-A")
+    sh(werk, "commit", "-q", "-m", "werk van de lus")
+    sh(zaad, "checkout", "-q", bp.TRADING_OS_BASIS)
+    (zaad / "nieuw_op_snapshot.py").write_text("y = 2\n")
+    sh(zaad, "add", "-A")
+    sh(zaad, "commit", "-q", "-m", "nieuw op snapshot")
+    sh(zaad, "push", "-q", "origin", bp.TRADING_OS_BASIS)
+    sh(zaad, "checkout", "-q", "main")
+    (zaad / "alleen_op_main.py").write_text("z = 3\n")
+    sh(zaad, "add", "-A")
+    sh(zaad, "commit", "-q", "-m", "alleen op main")
+    sh(zaad, "push", "-q", "origin", "main")
+    uit = bp.ververs_werkbranch(agent_runner._git, str(werk), "axe-agent",
+                                basis_naam=bp.TRADING_OS_BASIS, verboden=bp.verboden_basis("trading-os"))
+    assert uit["actie"] == "gemerged" and "snapshot" in uit["basis"]
+    assert (werk / "nieuw_op_snapshot.py").exists()
+    assert not (werk / "alleen_op_main.py").exists()
+    assert bp.ververs_werkbranch(agent_runner._git, str(werk), "axe-agent",
+                                 basis_naam="main", verboden=bp.verboden_basis("trading-os"))["actie"] == "geen"
+
+
+def test_trading_os_pr_gaat_naar_snapshot_niet_main(trading_os_repo):
+    werk, remote, _ = trading_os_repo
+    sh(werk, "remote", "set-url", "origin", "https://github.com/Ldezeeuw445/trading-os-app.git")
+    sh(werk, "config", "remote.origin.pushurl", str(remote))
+    (werk / "app.py").write_text("print('lus')\n")
+    client, gezien = github_default("main")
+    uit = bp.publiceer(
+        "trading-os", "Build next step: Trading OS", "T1: done, tests green", "taak-tos",
+        git=agent_runner._git, commit_en_push=agent_runner.commit_en_push,
+        repo_pad=agent_runner._repo_pad, token="t", http=client)
+    assert uit["gepusht"] is True and uit["pr"].endswith("/pull/4")
+    post = [g for g in gezien if g[0] == "POST"][0]
+    assert post[2]["base"] == "snapshot-2026-10-17"
+    assert post[2]["base"] != "main"
+    assert post[2]["draft"] is True
+    assert post[2]["head"] == "axe-agent"
+
+
+def test_trading_os_weiger_pr_naar_main():
+    gezien = []
+
+    def handler(request: httpx.Request):
+        gezien.append(request.method)
+        if request.method == "GET" and str(request.url.path).endswith("/pulls"):
+            return httpx.Response(200, json=[])
+        if request.method == "GET":
+            return httpx.Response(200, json={"default_branch": "main"})
+        return httpx.Response(201, json={"html_url": "https://example/pull/1"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    uit = bp.zorg_voor_pr(client, "t", "Ldezeeuw445/trading-os-app", "axe-agent",
+                          "x", "y", basis=None, verboden=bp.verboden_basis("trading-os"))
+    assert uit.get("pr") is None and "main" in uit["reden_geen_pr"]
+    assert "POST" not in gezien

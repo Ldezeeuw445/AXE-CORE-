@@ -7,30 +7,7 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { ghGetFile, ghUpdateFile, ghGetTree } from '@/infrastructure/gateways/axeCoreApiService';
-
-interface RepoConfig {
-  id: string;
-  label: string;
-  owner: string;
-  repo: string;
-  branch: string;
-  srcPrefix: string;
-  token: string;
-}
-
-const REPO_DEFAULTS: RepoConfig[] = [
-  { id: 'axe-core', label: 'AXE CORE', owner: 'Ldezeeuw445', repo: 'AXE-CORE-', branch: 'orchestrator', srcPrefix: 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src', token: '' },
-  { id: 'axe-companion', label: 'AXE Companion', owner: 'Ldezeeuw445', repo: 'AXE-COMPANION-OS-', branch: 'main', srcPrefix: 'src', token: '' },
-  { id: 'trading-os', label: 'Trading OS', owner: 'TRADING-AXE-OS-APPS', repo: 'TRADING-OS', branch: 'main', srcPrefix: 'src', token: '' },
-];
-
-function loadRepoConfigs(): RepoConfig[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem('axe_github_repos') ?? 'null');
-    if (Array.isArray(stored) && stored.length > 0) return stored as RepoConfig[];
-  } catch { /* */ }
-  return REPO_DEFAULTS;
-}
+import { loadRepoConfigs, DEFAULT_REPOS, type RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 
 export default function CommandCenter() {
   const voice = useVoiceStore();
@@ -50,7 +27,7 @@ export default function CommandCenter() {
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
   const isMobile = useIsMobile();
 
-  const repo = repos.find(r => r.id === activeRepo) ?? REPO_DEFAULTS[0];
+  const repo = repos.find(r => r.id === activeRepo) ?? DEFAULT_REPOS[0];
 
   const loadTree = async () => {
     setStatus('loading'); setStatusText('Loading all repos...');

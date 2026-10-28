@@ -26,6 +26,14 @@ Twee gaten, gemeten op de Mac mini:
     schrijfrun. Botst dat, dan gaat de oude branch als archief naar GitHub
     (er raakt niets weg) en begint de werkbranch opnieuw op main. Dat is de enige
     plek met --force-with-lease, en alleen op de eigen werkbranch van de lus.
+
+## Trading OS (28 okt, ná de drie gaten hierboven)
+
+Niet TRADING-AXE-OS / TRADING-OS / main. Canon: Ldezeeuw445/trading-os-app,
+basis snapshot-2026-10-17 (pull vóór elke run, PR daarheen, nooit main).
+Taken uit docs/BOUWLIJST.md op die tak, in volgorde, wat [x] is overslaan.
+Nooit uitrollen, nooit migraties, nooit live orders. Draait op Luka's
+CLI-stoelen (Claude / ChatGPT / Cursor op mini en iMac), niet op Grok Bot.
 """
 from __future__ import annotations
 
@@ -145,6 +153,24 @@ def github_token(env: dict | None = None, run: Callable[..., subprocess.Complete
     return ""
 
 
+BESCHERMD = {"main", "master"}
+TRADING_OS = "trading-os"
+TRADING_OS_BASIS = "snapshot-2026-10-17"
+TRADING_OS_REPO = "Ldezeeuw445/trading-os-app"
+TRADING_OS_TAKEN = "docs/BOUWLIJST.md"
+# Hardcoded naast de regels bovenaan BOUWLIJST.md: de lus mag dit niet "vergeten"
+# als het bestand ontbreekt of de kop verandert.
+TRADING_OS_GRENZEN = (
+    "HARD LIMITS (enforced by the build loop, not optional): never touch main or master; "
+    "never deploy; never apply migrations; never place live orders; never call a broker "
+    "or MetaAPI to execute. Work on the work branch. Open PRs into snapshot-2026-10-17."
+)
+CHECKBOX = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+\[([ xX])\]\s+(.*)$")
+TAAK_ID = re.compile(
+    r"^(?:\*\*)?([A-Za-z][A-Za-z0-9._-]*|\d+(?:\.\d+)*[a-z]?)(?:\*\*)?\s*[:.—–-]?\s*(.*)$"
+)
+
+
 def _basis(git: Git, pad: str) -> str | None:
     """origin/<standaardbranch>, zoals de remote hem noemt."""
     kop = (git(pad, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout or "").strip()
@@ -156,26 +182,46 @@ def _basis(git: Git, pad: str) -> str | None:
     return None
 
 
-def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = None) -> dict:
-    """Haal de standaardbranch binnen voordat de lus verder bouwt. Gooit nooit.
+def _korte_ref(ref: str) -> str:
+    return (ref or "").rsplit("/", 1)[-1]
+
+
+def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = None,
+                       basis_naam: str | None = None, verboden: set[str] | None = None) -> dict:
+    """Haal de basisbranch binnen voordat de lus verder bouwt. Gooit nooit.
 
     {"actie": "geen" | "gemerged" | "opnieuw", ...}; "opnieuw" noemt het archief.
+    `basis_naam` (bijv. snapshot-2026-10-17) wint van origin/HEAD. Trading OS mag
+    nooit main mergen, ook niet als GitHub die als default voert.
     """
-    if not branch or branch in ("main", "master"):
+    verboden = set() if verboden is None else set(verboden)
+    nooit_werk = BESCHERMD | {TRADING_OS_BASIS} | verboden
+    if basis_naam:
+        nooit_werk.add(basis_naam)
+    if not branch or branch in nooit_werk:
         return {"actie": "geen", "reden": "not a work branch"}
     if (git(pad, "status", "--porcelain").stdout or "").strip():
         return {"actie": "geen", "reden": "uncommitted changes in the checkout; left as is"}
-    if git(pad, "fetch", "--quiet", "origin", timeout=180).returncode != 0:
-        return {"actie": "geen", "reden": "fetch failed"}
-    basis = _basis(git, pad)
-    if not basis:
-        return {"actie": "geen", "reden": "no default branch on origin"}
+    if basis_naam:
+        if git(pad, "fetch", "--quiet", "origin", basis_naam, timeout=180).returncode != 0:
+            return {"actie": "geen", "reden": f"fetch {basis_naam} failed"}
+        basis = f"origin/{basis_naam}"
+        if git(pad, "rev-parse", "--verify", "--quiet", basis).returncode != 0:
+            return {"actie": "geen", "reden": f"missing {basis}"}
+    else:
+        if git(pad, "fetch", "--quiet", "origin", timeout=180).returncode != 0:
+            return {"actie": "geen", "reden": "fetch failed"}
+        basis = _basis(git, pad)
+        if not basis:
+            return {"actie": "geen", "reden": "no default branch on origin"}
+    if _korte_ref(basis) in verboden:
+        return {"actie": "geen", "reden": f"refusing to merge {_korte_ref(basis)}"}
     try:
         achter = int((git(pad, "rev-list", "--count", f"HEAD..{basis}").stdout or "0").strip() or 0)
     except ValueError:
         achter = 0
     if achter == 0:
-        return {"actie": "geen", "achter": 0}
+        return {"actie": "geen", "achter": 0, "basis": basis}
     m = git(pad, "merge", "--no-edit", "-m", f"Merge {basis} into {branch} (AXE build loop)", basis, timeout=180)
     if m.returncode == 0:
         return {"actie": "gemerged", "achter": achter, "basis": basis}
@@ -184,7 +230,7 @@ def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = No
     git(pad, "branch", "-f", archief, "HEAD")
     if git(pad, "push", "--quiet", "origin", f"{archief}:refs/heads/{archief}", timeout=180).returncode != 0:
         return {"actie": "geen", "achter": achter,
-                "reden": "main does not merge cleanly and the old branch could not be archived; nothing reset"}
+                "reden": "base does not merge cleanly and the old branch could not be archived; nothing reset"}
     git(pad, "reset", "--hard", basis)
     weg = git(pad, "push", "--quiet", "--force-with-lease", "origin", f"{branch}:refs/heads/{branch}", timeout=180)
     return {"actie": "opnieuw", "achter": achter, "basis": basis, "archief": archief,
@@ -195,20 +241,53 @@ def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = No
 # sleutel; de checkout erachter kan verouderd zijn. 28 okt: "axon-memory" wees
 # naar een kloon van axon-memory-app, terwijl AXON sinds 17 okt in axon-memory
 # wordt gebouwd. 21 bouwruns gingen zo naar een repo waar niemand meer kijkt.
+# Trading OS: niet TRADING-AXE-OS / TRADING-OS / main — Ldezeeuw445/trading-os-app
+# op snapshot-2026-10-17, taken uit docs/BOUWLIJST.md.
 # Alleen wat hier staat wordt afgedwongen; een onbekende naam blijft zoals hij is.
+# Waarde is "owner/repo" of {"repo", "basis", "taken"}.
 CANON = {
-    "axon-memory": "Ldezeeuw445/axon-memory",
-    "axe-companion": "Ldezeeuw445/AXE-COMPANION-OS-",
-    "axe-core": "Ldezeeuw445/AXE-CORE-",
+    "axon-memory": {"repo": "Ldezeeuw445/axon-memory"},
+    "axe-companion": {"repo": "Ldezeeuw445/AXE-COMPANION-OS-"},
+    "axe-core": {"repo": "Ldezeeuw445/AXE-CORE-", "basis": "orchestrator"},
+    "trading-os": {
+        "repo": TRADING_OS_REPO,
+        "basis": TRADING_OS_BASIS,
+        "taken": TRADING_OS_TAKEN,
+        "verboden": ("main", "master"),
+    },
 }
 WERKBRANCH = "axe-agent"
+
+
+def canon_info(naam: str, canon: dict | None = None) -> dict:
+    waarde = (CANON if canon is None else canon).get(naam)
+    if isinstance(waarde, str) and waarde.strip():
+        return {"repo": waarde.strip()}
+    if isinstance(waarde, dict) and (waarde.get("repo") or "").strip():
+        return waarde
+    return {}
+
+
+def basis_voor(naam: str, canon: dict | None = None) -> str | None:
+    return canon_info(naam, canon).get("basis") or None
+
+
+def verboden_basis(naam: str, canon: dict | None = None) -> set[str]:
+    """Branches this app must never receive a PR. Empty for Companion/AXON (their
+    base is main). Trading OS: never main/master, only snapshot-2026-10-17."""
+    info = canon_info(naam, canon)
+    extra = set(info.get("verboden") or ())
+    if naam == TRADING_OS or (info.get("repo") or "") == TRADING_OS_REPO:
+        return set(BESCHERMD) | extra
+    return extra
 
 
 def zorg_voor_canon(git: Git, naam: str, pad: str | None, *, werk_map: str, overrides_pad: str,
                     canon: dict | None = None, url_voor: Callable[[str], str] | None = None) -> dict:
     """Wijst `naam` naar een checkout van de repo uit CANON? Zo niet: kloon hem in
     werk_map, zet de werkbranch, en laat de whitelist daarheen wijzen. Gooit nooit."""
-    doel = (CANON if canon is None else canon).get(naam)
+    info = canon_info(naam, canon)
+    doel = info.get("repo")
     if not doel:
         return {"actie": "geen"}
     huidig = _eigenaar_repo(git, pad) if pad else None
@@ -218,17 +297,21 @@ def zorg_voor_canon(git: Git, naam: str, pad: str | None, *, werk_map: str, over
         return {"actie": "geen"}
     url_voor = url_voor or (lambda r: f"https://github.com/{r}.git")
     nieuw = os.path.join(werk_map, naam)
+    basis_naam = info.get("basis")
     try:
         os.makedirs(werk_map, exist_ok=True)
-        if (not os.path.isdir(os.path.join(nieuw, ".git"))
-                and git(werk_map, "clone", "--quiet", url_voor(doel), nieuw, timeout=900).returncode != 0):
-            return {"actie": "geen", "reden": f"could not clone {doel}"}
-        if git(nieuw, "rev-parse", "--verify", "--quiet", WERKBRANCH).returncode != 0:
-            bron = f"origin/{WERKBRANCH}"
-            if git(nieuw, "rev-parse", "--verify", "--quiet", bron).returncode != 0:
-                bron = _basis(git, nieuw) or "origin/main"
-            if git(nieuw, "checkout", "-q", "-B", WERKBRANCH, bron).returncode != 0:
-                return {"actie": "geen", "reden": f"could not create {WERKBRANCH} in {doel}"}
+        if not os.path.isdir(os.path.join(nieuw, ".git")):
+            args = ["clone", "--quiet"]
+            if basis_naam:
+                args += ["--branch", basis_naam]
+            args += [url_voor(doel), nieuw]
+            if git(werk_map, *args, timeout=900).returncode != 0:
+                return {"actie": "geen", "reden": f"could not clone {doel}"
+                        + (f"@{basis_naam}" if basis_naam else "")}
+        gezet = zorg_voor_werkbranch(git, nieuw, basis_naam=basis_naam)
+        if gezet.get("reden") and gezet.get("actie") == "geen" and gezet.get("branch") != WERKBRANCH:
+            if (git(nieuw, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip() != WERKBRANCH:
+                return {"actie": "geen", "reden": gezet.get("reden") or f"could not create {WERKBRANCH} in {doel}"}
         try:
             with open(overrides_pad) as fh:
                 data = json.load(fh) or {}
@@ -244,6 +327,102 @@ def zorg_voor_canon(git: Git, naam: str, pad: str | None, *, werk_map: str, over
     return {"actie": "overgezet", "van": huidig, "naar": doel, "pad": nieuw}
 
 
+def zorg_voor_werkbranch(git: Git, pad: str, branch: str = WERKBRANCH,
+                         basis_naam: str | None = None) -> dict:
+    """Zet de checkout op de werkbranch, vanaf de basis. Nooit main.
+
+    Staat hij al op de werkbranch, dan niets. Staat hij op main/master of op de
+    basis zelf (snapshot-2026-10-17), dan checkout -B vanaf origin/<basis>.
+    Gooit nooit.
+    """
+    huidig = (git(pad, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
+    if huidig == branch:
+        return {"actie": "geen", "branch": branch}
+    beschermd = set(BESCHERMD)
+    if basis_naam:
+        beschermd.add(basis_naam)
+    if huidig not in beschermd and huidig not in ("HEAD", "", "DETACHED"):
+        return {"actie": "geen", "branch": huidig, "reden": "already on a work branch"}
+    if basis_naam:
+        if basis_naam in BESCHERMD:
+            return {"actie": "geen", "reden": f"refusing to base work on {basis_naam}"}
+        if git(pad, "fetch", "--quiet", "origin", basis_naam, timeout=180).returncode != 0:
+            return {"actie": "geen", "reden": f"fetch {basis_naam} failed"}
+        bron = f"origin/{basis_naam}"
+        if git(pad, "rev-parse", "--verify", "--quiet", bron).returncode != 0:
+            return {"actie": "geen", "reden": f"missing {bron}"}
+    else:
+        bron = f"origin/{branch}"
+        if git(pad, "rev-parse", "--verify", "--quiet", bron).returncode != 0:
+            bron = _basis(git, pad) or "origin/main"
+    if git(pad, "checkout", "-q", "-B", branch, bron).returncode != 0:
+        return {"actie": "geen", "reden": f"could not create {branch} from {bron}"}
+    return {"actie": "gezet", "branch": branch, "van": huidig, "basis": bron}
+
+
+def parse_bouwljist(tekst: str) -> dict:
+    """Regels bovenaan + checklist in volgorde. `volgende` is de eerste open taak."""
+    regels_lijnen: list[str] = []
+    taken: list[dict] = []
+    gezien_check = False
+    for regel in (tekst or "").splitlines():
+        m = CHECKBOX.match(regel)
+        if not m:
+            if not gezien_check:
+                regels_lijnen.append(regel)
+            continue
+        gezien_check = True
+        done = m.group(1).lower() == "x"
+        rest = m.group(2).strip()
+        id_m = TAAK_ID.match(rest)
+        if id_m and id_m.group(1):
+            tid, titel = id_m.group(1), (id_m.group(2) or rest).strip()
+        else:
+            tid, titel = rest[:40], rest
+        taken.append({"id": tid, "titel": titel or rest, "done": done, "regel": rest})
+    volgende = next((t for t in taken if not t["done"]), None)
+    regels = "\n".join(regels_lijnen).strip()
+    return {"regels": regels, "taken": taken, "volgende": volgende}
+
+
+def volgende_bouwljist_in(pad: str, rel: str = TRADING_OS_TAKEN) -> dict:
+    """Leest docs/BOUWLIJST.md in de checkout. Gooit nooit."""
+    bestand = os.path.join(pad, rel)
+    try:
+        tekst = open(bestand, encoding="utf-8").read()
+    except OSError as e:
+        return {"ok": False, "reden": f"could not read {rel}: {type(e).__name__}"}
+    parsed = parse_bouwljist(tekst)
+    if not parsed["volgende"]:
+        return {"ok": False, "reden": f"no open tasks in {rel}", **parsed}
+    return {"ok": True, **parsed}
+
+
+def trading_os_prompt(bouwljist: dict | None) -> str:
+    """Opdracht voor één Trading OS-bouwrun: canon-repo, snapshot, BOUWLIJST, grenzen."""
+    delen = [
+        f"Repo: {TRADING_OS_REPO} (not TRADING-AXE-OS / TRADING-OS).",
+        f"Base branch: {TRADING_OS_BASIS}. Pull it before you start. Open the PR into that "
+        "branch, never into main.",
+        TRADING_OS_GRENZEN,
+    ]
+    if bouwljist and bouwljist.get("regels"):
+        delen.append("Rules from the top of docs/BOUWLIJST.md — follow them:\n"
+                     + str(bouwljist["regels"])[:2500])
+    volg = (bouwljist or {}).get("volgende") if bouwljist else None
+    if volg:
+        delen.append(
+            f"This run's task is the first undone item in {TRADING_OS_TAKEN}, in order: {volg['id']}.\n"
+            f"{volg.get('titel') or volg.get('regel') or ''}\n"
+            "Skip everything already marked done ([x]). Implement only this item.\n"
+            f"Start your report with the task id {volg['id']}."
+        )
+    else:
+        reden = (bouwljist or {}).get("reden") or f"no open item in {TRADING_OS_TAKEN}"
+        delen.append(f"Do not invent work. {reden}")
+    return "\n\n".join(delen)
+
+
 def _eigenaar_repo(git: Git, pad: str) -> Optional[str]:
     url = (git(pad, "remote", "get-url", "origin").stdout or "").strip()
     m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(\.git)?$", url)
@@ -251,8 +430,9 @@ def _eigenaar_repo(git: Git, pad: str) -> Optional[str]:
 
 
 def zorg_voor_pr(http: httpx.Client, token: str, eigenaar_repo: str, branch: str,
-                 titel: str, tekst: str) -> dict:
-    """Bestaande open PR van deze branch, of een nieuwe draft-PR naar de standaardbranch."""
+                 titel: str, tekst: str, basis: str | None = None,
+                 verboden: set[str] | None = None) -> dict:
+    """Bestaande open PR van deze branch, of een nieuwe draft-PR naar de basisbranch."""
     kop = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
     api = f"https://api.github.com/repos/{eigenaar_repo}"
     eigenaar = eigenaar_repo.split("/", 1)[0]
@@ -260,12 +440,17 @@ def zorg_voor_pr(http: httpx.Client, token: str, eigenaar_repo: str, branch: str
     r.raise_for_status()
     if r.json():
         return {"pr": r.json()[0]["html_url"], "nieuw": False}
-    basis = http.get(api, headers=kop)
-    basis.raise_for_status()
+    verboden = set() if verboden is None else set(verboden)
+    if not basis:
+        info = http.get(api)
+        info.raise_for_status()
+        basis = info.json()["default_branch"]
+    if not basis or basis in verboden:
+        return {"pr": None, "reden_geen_pr": f"refusing PR into protected branch {basis or '(none)'}"}
     r = http.post(f"{api}/pulls", headers=kop, json={
-        "title": titel, "head": branch, "base": basis.json()["default_branch"], "body": tekst, "draft": True})
+        "title": titel, "head": branch, "base": basis, "body": tekst, "draft": True})
     r.raise_for_status()
-    return {"pr": r.json()["html_url"], "nieuw": True}
+    return {"pr": r.json()["html_url"], "nieuw": True, "basis": basis}
 
 
 PR_TEKST = (
@@ -303,7 +488,9 @@ def publiceer(repo: str, titel: str, verslag: str, taak_id: str, *, git: Git,
     eigen = http is None
     http = http or httpx.Client(timeout=20)
     try:
-        resultaat.update(zorg_voor_pr(http, token, eigenaar_repo, branch, f"AXE build loop: {repo} ({branch})", PR_TEKST))
+        resultaat.update(zorg_voor_pr(
+            http, token, eigenaar_repo, branch, f"AXE build loop: {repo} ({branch})", PR_TEKST,
+            basis=basis_voor(repo), verboden=verboden_basis(repo)))
     except (httpx.HTTPError, KeyError, ValueError) as e:
         resultaat["pr"] = None
         resultaat["reden_geen_pr"] = f"GitHub: {type(e).__name__}"

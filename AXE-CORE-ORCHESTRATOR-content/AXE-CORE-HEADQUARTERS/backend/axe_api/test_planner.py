@@ -372,38 +372,89 @@ class TestVoerUitEerlijk:
 
 
 class TestHandoffAndereManager:
-    """Bouwlus-taken voor Trading OS / axe-trading-core horen bij `trading`, niet AXE CORE."""
+    """axe-trading-core blijft van `trading`. Trading OS bouwt de Mac mini-lus zelf."""
 
     def test_herkent_repo_en_titel(self):
         assert p.is_bouw_next_step({"title": "Build next step: Trading OS", "metadata": {}})
         assert p.is_bouw_next_step({"title": "Iets anders", "metadata": {"oorsprong_bouw": "ja"}})
         assert not p.is_bouw_next_step({"title": "Read the Trading OS README", "metadata": {}})
-        assert p.andere_manager_voor("trading-os") == "trading"
-        assert p.andere_manager_voor("trading-os-app") == "trading"
+        assert p.andere_manager_voor("trading-os") is None
+        assert p.andere_manager_voor("trading-os-app") is None
         assert p.andere_manager_voor("axe-trading-core") == "trading"
-        assert p.andere_manager_voor(None, "Build next step: Trading OS") == "trading"
+        assert p.andere_manager_voor(None, "Build next step: Trading OS") is None
+        assert p.andere_manager_voor(None, "Build next step: axe-trading-core") == "trading"
         assert p.andere_manager_voor("axe-core", "Build next step: AXE Core") is None
+        assert p.REPO_ALIAS["trading-os-app"] == "trading-os"
 
-    def test_bouw_trading_os_wordt_handoff_niet_in_axe_core_gebouwd(self, monkeypatch):
+    def test_bouw_trading_os_draait_op_een_cli_stoel_met_de_bouwljist_taak(self, monkeypatch):
+        """Niet Grok Bot, niet AXE CORE: Luka's CLI, eerste open item uit BOUWLIJST.md."""
         gedraaid = []
-        pl, rijen = TestVoerUitEerlijk()._pl(
-            monkeypatch, lambda *a, **k: gedraaid.append(a) or (_ for _ in ()).throw(AssertionError("geen run"))
-        )
-        monkeypatch.setattr(pl, "_werkrepo", lambda *a, **k: (_ for _ in ()).throw(AssertionError("niet in axe-core")))
+
+        def run(repo, prompt, modus, t, motor, **kw):
+            gedraaid.append((repo, prompt, motor, modus))
+            return {"status": "ok", "result": "T1: chart drawings, tests green"}
+
+        pl, rijen = TestVoerUitEerlijk()._pl(monkeypatch, run)
+        monkeypatch.setattr(pl, "_werkrepo", lambda *a, **k: "trading-os")
+        monkeypatch.setattr(pl, "_canon", lambda repo: {"actie": "geen"})
+        monkeypatch.setattr(pl, "_ververs", lambda repo: {
+            "actie": "gemerged", "basis": "origin/snapshot-2026-10-17", "achter": 2,
+        })
+        monkeypatch.setattr(pl, "_bouwljist", lambda repo: {
+            "ok": True,
+            "regels": "Never deploy. Never apply migrations. Never place live orders. Never touch main.",
+            "volgende": {"id": "T1", "titel": "persist chart drawings per user", "done": False},
+        })
+        monkeypatch.setattr(pl, "_bewijs", lambda repo: {
+            "repo": repo, "leesbaar": True, "veranderd": False, "diffstat": "",
+        })
         taak = {
             "id": "t-tos",
             "title": "Build next step: Trading OS",
-            "goal": "Keep building Trading OS",
+            "goal": "old programme text that must not replace BOUWLIJST",
             "payload": {"repo": "trading-os"},
-            "metadata": {"agent": "code-agent", "motor": "codex", "risico": "schrijven", "oorsprong_bouw": "ja"},
+            "metadata": {"agent": "code-agent", "motor": "cursor", "risico": "schrijven",
+                         "oorsprong_bouw": "ja"},
         }
         uit = pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
-        assert uit["ok"] and uit["handoff"] == "trading" and not gedraaid
-        inserts = [v for t, s, v in rijen if t == "core_tasks" and s == "insert"]
-        assert inserts and inserts[0]["assignee"] == "trading"
-        assert inserts[0]["capability"] == "trading"
+        assert uit.get("ok") and not uit.get("handoff")
+        assert gedraaid and gedraaid[0][0] == "trading-os"
+        assert gedraaid[0][2] in p.ABONNEMENTEN and gedraaid[0][2] != "xai"
+        tekst = gedraaid[0][1]
+        assert "T1" in tekst and "persist chart drawings per user" in tekst
+        assert "trading-os-app" in tekst and "snapshot-2026-10-17" in tekst
+        assert "Never deploy" in tekst and "Never apply migrations" in tekst
+        assert "Never place live orders" in tekst
+        assert "old programme text" in tekst  # original goal stays, BOUWLIJST wins the task
         klaar = [v for t, s, v in rijen if t == "core_tasks" and v.get("status") == "completed"]
-        assert klaar and "Handed off to trading" in klaar[0]["result"]["output"]
+        assert klaar and klaar[0]["metadata"]["bewijs"]["bouwljist"]["id"] == "T1"
+        assert klaar[0]["metadata"]["bewijs"]["bouwljist"]["basis"] == "snapshot-2026-10-17"
+        assert not any(v.get("assignee") == "trading" for t, s, v in rijen if s == "insert")
+
+    def test_bouw_trading_os_zonder_open_bouwljist_verzint_geen_werk(self, monkeypatch):
+        gedraaid = []
+        pl, rijen = TestVoerUitEerlijk()._pl(
+            monkeypatch, lambda *a, **k: gedraaid.append(a) or {"status": "ok", "result": "nee"},
+        )
+        monkeypatch.setattr(pl, "_werkrepo", lambda *a, **k: "trading-os")
+        monkeypatch.setattr(pl, "_canon", lambda repo: {"actie": "geen"})
+        monkeypatch.setattr(pl, "_ververs", lambda repo: {"actie": "geen", "achter": 0})
+        monkeypatch.setattr(pl, "_bouwljist", lambda repo: {
+            "ok": False, "reden": "no open tasks in docs/BOUWLIJST.md", "volgende": None,
+        })
+        taak = {
+            "id": "t-tos-leeg",
+            "title": "Build next step: Trading OS",
+            "goal": "Keep building",
+            "payload": {"repo": "trading-os"},
+            "metadata": {"agent": "code-agent", "motor": "cursor", "risico": "schrijven",
+                         "oorsprong_bouw": "ja"},
+        }
+        uit = pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert uit.get("ok") and uit.get("overgeslagen") and "BOUWLIJST" in uit["overgeslagen"]
+        assert not gedraaid
+        klaar = [v for t, s, v in rijen if t == "core_tasks" and v.get("status") == "completed"]
+        assert klaar and "Skipped:" in klaar[0]["result"]["output"] and "BOUWLIJST" in klaar[0]["result"]["output"]
 
     def test_bouw_axe_trading_core_via_titel(self, monkeypatch):
         pl, rijen = TestVoerUitEerlijk()._pl(

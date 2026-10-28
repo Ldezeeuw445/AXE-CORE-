@@ -312,14 +312,14 @@ REPO_APP = {"axe-core": "axe_core", "axe-companion": "axe_companion",
 # een dashboard op de 3D Maps-tab van AXE CORE (Luka, 14 september). Werk
 # ervoor gaat dus naar axe-core, en de taak staat in de kolom Northsea.
 REPO_ALIAS = {"cloudflare-migration-2": "axe-companion", "companion": "axe-companion",
-              "northsea-commodity": "axe-core", "northsea": "axe-core", "trading os": "trading-os"}
+              "northsea-commodity": "axe-core", "northsea": "axe-core", "trading os": "trading-os",
+              "trading-os-app": "trading-os"}
 
 # Repos die AXE CORE's code-agent niet mag bouwen: ze horen bij een andere
-# manager. "Build next step: Trading OS" in de AXE-CORE-checkout is precies
-# hoe die taak 25-28 okt Codex op gpt-5-codex zette in de verkeerde boom.
+# manager. Trading OS zelf bouwt de Mac mini-bouwlus wél, in trading-os-app
+# op snapshot-2026-10-17, op Luka's CLI-stoelen. axe-trading-core blijft van
+# `trading` — dat in de AXE-CORE-checkout zetten was 25-28 okt het gat.
 ANDERE_MANAGER_REPOS = {
-    "trading-os": "trading",
-    "trading-os-app": "trading",
     "axe-trading-core": "trading",
 }
 
@@ -1006,30 +1006,54 @@ class Planner:
         if schrijven and not gevraagd:
             # Nooit raden waar geschreven wordt: zie repo_uit_tekst.
             return {"taak": taak["id"], "overgeslagen": "schrijftaak noemt geen (bekende) repo"}
+        # Eerst de checkout op de repo waar het product nu leeft (en bij Trading OS
+        # van main/snapshot af op de werkbranch), anders weigert _werkrepo een
+        # oude TRADING-OS-boom op main voordat we hem kunnen omzetten.
+        canon = self._canon(gevraagd) if gevraagd else {"actie": "geen"}
         repo = self._werkrepo(gevraagd, streng=schrijven)
         if not repo:
             return {"taak": taak["id"], "overgeslagen":
                     f"repo {gevraagd} mag niet (beschermde branch of niet op de whitelist)" if gevraagd
                     else "geen bruikbare repo (alle op main/master of weg)"}
-        canon = self._canon(repo)
         engines = engines if engines is not None else self._engines()
         motor, afgevallen = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now())
         if not motor:
             return self._blokkeer(taak, afgevallen)
+        if is_bouw_next_step(taak) and motor not in ABONNEMENTEN:
+            afgevallen[motor] = "bouwloop uses Luka's CLI seats only (Claude/ChatGPT/Cursor)"
+            motor, meer = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now(),
+                                     uitsluiten={motor})
+            afgevallen.update(meer)
+            if not motor:
+                return self._blokkeer(taak, afgevallen)
         if not self._claim(taak["id"]):
             return {"taak": taak["id"], "overgeslagen": "al opgepakt"}
-        prompt = (
-            f"Taak van de planner ({AGENT_LABEL[agent]}): {taak.get('title')}\n\n{taak.get('goal')}\n\n"
-            + ("Je mag bestanden in deze repo aanpassen. Commit en push NIET zelf: de planner legt je "
-               "wijzigingen na afloop vast op deze branch en zet ze in een draft-PR voor Luka.\n"
-               if schrijven else "Alleen lezen: verander niets. Geef een beknopt, concreet verslag.\n")
-            + "Zet je volledige verslag in je antwoord zelf. Schrijf geen plan- of verslagbestand.\n"
-        )
         # Faalt de motor op zijn ACCOUNT, dan meteen het volgende account: de
         # taak kan er niets aan doen. Hooguit drie, zodat een kapotte dag geen
         # abonnementen opbrandt.
         tekst, fout, geprobeerd = None, "", []
         vers = self._ververs(repo) if schrijven and bouw_publiceer_aan() else None
+        bouwljist = self._bouwljist(repo) if schrijven and repo == "trading-os" else None
+        if bouwljist is not None and not bouwljist.get("ok"):
+            bewijs = {"repo": repo, "leesbaar": True, "veranderd": False, "bouwljist": bouwljist}
+            if vers and vers.get("actie") != "geen":
+                bewijs["werkbranch"] = vers
+            reden = bouwljist.get("reden") or "no open BOUWLIJST task"
+            self._sluit(taak, f"Skipped: {reden}", "", motor, bewijs)
+            return {"taak": taak["id"], "ok": True, "overgeslagen": reden, "bewijs": bewijs,
+                    "motoren": [motor]}
+        extra = ""
+        if bouwljist is not None:
+            import bouw_publiceer
+            extra = "\n" + bouw_publiceer.trading_os_prompt(bouwljist) + "\n"
+        prompt = (
+            f"Taak van de planner ({AGENT_LABEL[agent]}): {taak.get('title')}\n\n{taak.get('goal')}\n"
+            + extra
+            + ("Je mag bestanden in deze repo aanpassen. Commit en push NIET zelf: de planner legt je "
+               "wijzigingen na afloop vast op deze branch en zet ze in een draft-PR voor Luka.\n"
+               if schrijven else "Alleen lezen: verander niets. Geef een beknopt, concreet verslag.\n")
+            + "Zet je volledige verslag in je antwoord zelf. Schrijf geen plan- of verslagbestand.\n"
+        )
         for _ in range(3):
             geprobeerd.append(motor)
             tekst, fout = self._vraag(staat, motor, prompt, repo, "acceptEdits" if schrijven else "plan")
@@ -1046,6 +1070,14 @@ class Planner:
             bewijs["werkbranch"] = vers
         if bewijs is not None and canon.get("actie") == "overgezet":
             bewijs["repo_overgezet"] = canon
+        if bewijs is not None and bouwljist is not None:
+            bewijs["bouwljist"] = {
+                "id": (bouwljist.get("volgende") or {}).get("id"),
+                "titel": (bouwljist.get("volgende") or {}).get("titel"),
+                "bestand": "docs/BOUWLIJST.md",
+                "basis": "snapshot-2026-10-17",
+                "repo": "Ldezeeuw445/trading-os-app",
+            }
         if bewijs and bewijs.get("veranderd"):
             # Vastleggen en als draft-PR op GitHub, anders stapelt het werk zich
             # ongezien op in de checkout op de Mac (zie bouw_publiceer.py).
@@ -1063,7 +1095,8 @@ class Planner:
     def _handoff_andere_manager(self, taak: dict, manager: str, repo: Optional[str]) -> dict:
         """Sluit de bouwlus-taak en zet een nieuwe klaar voor de eigenaar-manager.
 
-        Niet bouwen in AXE CORE: Trading OS / axe-trading-core horen bij `trading`.
+        Niet bouwen in AXE CORE: axe-trading-core hoort bij `trading`. Trading OS
+        zelf blijft in deze lus (trading-os-app, snapshot-2026-10-17).
         """
         if not self._claim(taak["id"]):
             return {"taak": taak["id"], "overgeslagen": "al opgepakt"}
@@ -1130,10 +1163,17 @@ class Planner:
                                              werk_map=WERK_MAP, overrides_pad=WERK_OVERRIDES)
         if uit.get("actie") == "overgezet":
             log.info("planner: %s wijst nu naar %s (%s)", repo, uit.get("naar"), uit.get("pad"))
+        pad = _repos().get(repo)
+        if pad:
+            werk = bouw_publiceer.zorg_voor_werkbranch(
+                _git, pad, basis_naam=bouw_publiceer.basis_voor(repo))
+            if werk.get("actie") == "gezet":
+                uit = {**uit, "werkbranch": werk}
+                log.info("planner: %s staat nu op %s vanaf %s", repo, werk.get("branch"), werk.get("basis"))
         return uit
 
     def _ververs(self, repo: str) -> dict:
-        """Main binnenhalen op de werkbranch voor een schrijfrun (bouw_publiceer.ververs_werkbranch)."""
+        """Basisbranch binnenhalen op de werkbranch voor een schrijfrun."""
         import bouw_publiceer
         try:
             from agent_runner import _git, _repo_pad
@@ -1142,7 +1182,23 @@ class Planner:
         pad, branch, fout = _repo_pad(repo)
         if fout:
             return {"actie": "geen", "reden": fout}
-        return bouw_publiceer.ververs_werkbranch(_git, pad, branch)
+        return bouw_publiceer.ververs_werkbranch(
+            _git, pad, branch,
+            basis_naam=bouw_publiceer.basis_voor(repo),
+            verboden=bouw_publiceer.verboden_basis(repo))
+
+    def _bouwljist(self, repo: str) -> dict:
+        """Eerste open taak uit docs/BOUWLIJST.md in de (net ververste) checkout."""
+        import bouw_publiceer
+        try:
+            from agent_runner import _repo_pad
+        except ImportError as e:
+            return {"ok": False, "reden": f"agent_runner: {e}"}
+        pad, _, fout = _repo_pad(repo)
+        if fout:
+            return {"ok": False, "reden": fout}
+        rel = (bouw_publiceer.canon_info(repo).get("taken") or bouw_publiceer.TRADING_OS_TAKEN)
+        return bouw_publiceer.volgende_bouwljist_in(pad, rel)
 
     def _blokkeer(self, taak: dict, afgevallen: dict) -> dict:
         """Geen enkele motor kan: zichtbaar geblokkeerd, en het kost geen poging."""
