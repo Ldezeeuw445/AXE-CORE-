@@ -379,8 +379,15 @@ try:
 except Exception:  # noqa: BLE001 — pulse mag de oude 24/7-jobs niet kielen
     _GROK_DIENSTEN = ()
 
-# Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), ernaast.
-DIENSTEN = DIENSTEN + _GROK_DIENSTEN
+try:
+    import dax_bouw as _dax_bouw
+    _DAX_BOUW: tuple[dict[str, Any], ...] = _dax_bouw.diensten()
+except Exception:  # noqa: BLE001 — net zo: de bouwdienst mag de rest niet kielen
+    _DAX_BOUW = ()
+
+# Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), en de bouwende
+# developer-DAX (28 okt), ernaast.
+DIENSTEN = DIENSTEN + _GROK_DIENSTEN + _DAX_BOUW
 
 STAANDE_AGENTS = frozenset(str(d["agent"]) for d in DIENSTEN)
 

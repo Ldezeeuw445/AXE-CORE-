@@ -484,7 +484,24 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             "dax": uitvoerder.computer.id if uitvoerder is not None else None,
         })
         agent_request = request_text
-        if agent_id == "developer":
+        # DAX-bouw (dax_bouw.py): de developer werkt zoals Grok Bot in een eigen
+        # worktree, en na de lus legt AXE vast, test, pusht en opent de PR.
+        bouw_prep: dict[str, Any] | None = None
+        bouw_repo = str(payload.get("repo") or "")
+        if agent_id == "developer" and payload.get("dax_bouw") and uitvoerder is not None and bouw_repo:
+            import dax_bouw
+            from bouw_publiceer import github_token
+            bouw_prep = await asyncio.to_thread(
+                dax_bouw.voorbereid, uitvoerder, bouw_repo, str(task["id"]), github_token())
+            if bouw_prep.get("fout"):
+                raise RuntimeError(f"DAX build checkout failed: {bouw_prep['fout']}")
+            uitvoerder.werkmap = bouw_prep["pad"]
+            task_workspace = bouw_prep["pad"]
+            branch_name = bouw_prep["branch"]
+            await context.event("axe.progress", f"DAX build: {bouw_repo} on {branch_name}.", {
+                "repo": bouw_repo, "branch": branch_name, "basis": bouw_prep.get("basis")})
+            agent_request += dax_bouw.contract(bouw_prep, bouw_repo)
+        elif agent_id == "developer":
             agent_request += (
                 "\n\n[AXE execution contract] You own this coding run. Work in an isolated "
                 f"checkout/worktree on branch {branch_name}. Inspect the target app/device first. "
@@ -523,6 +540,16 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             dax=uitvoerder,
             alleen_gratis=payload.get("free_models") is True,
         )
+        if bouw_prep is not None:
+            import dax_bouw
+            publicatie = await asyncio.to_thread(
+                dax_bouw.afronden, uitvoerder, bouw_prep, bouw_repo,
+                str(task.get("title") or "DAX build"), str(output.get("summary") or ""), str(task["id"]))
+            output = {**output, "publicatie": publicatie}
+            regel = ("merged" if publicatie.get("gemerged") else
+                     f"PR {publicatie['pr']}" if publicatie.get("pr") else
+                     publicatie.get("reden") or "no PR")
+            await context.event("axe.progress", f"DAX build {bouw_repo}: {regel}", {"publicatie": publicatie})
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})
         await context.event(

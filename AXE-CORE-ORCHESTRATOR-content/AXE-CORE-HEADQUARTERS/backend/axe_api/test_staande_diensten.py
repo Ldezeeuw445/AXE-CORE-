@@ -70,7 +70,8 @@ def test_catalogus_dekt_de_slapende_home_agents():
     }
     assert oorspronkelijk <= sd.STAANDE_AGENTS
     assert grok <= sd.STAANDE_AGENTS
-    assert sd.STAANDE_AGENTS == oorspronkelijk | grok
+    # 28 okt: de bouwende developer-DAX (dax_bouw.py) staat ernaast.
+    assert sd.STAANDE_AGENTS == oorspronkelijk | grok | {"dax-bouw"}
     for agent in sd.STAANDE_AGENTS:
         d = sd.catalogus_voor(agent)
         assert d and d["job_key"].startswith("axe_core:staande-")

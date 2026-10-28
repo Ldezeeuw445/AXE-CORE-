@@ -82,7 +82,7 @@ def test_weiger_task_worker_zonder_agent_loop_imports():
         {"task_worker.py"},
         {"task_runtime.py", "agent_loop.py", "agent_workspace.py", "device_actions.py",
          "beslis_beleid.py", "missies.py", "mission_engine.py", "dax.py",
-         "northsea_desk_handler.py", "provider_router.py"},
+         "northsea_desk_handler.py", "provider_router.py", "dax_bouw.py", "bouw_publiceer.py"},
     ) == []
     assert vs.ontbrekende_worker_imports({"push_meldingen.py"}, set()) == []
 
