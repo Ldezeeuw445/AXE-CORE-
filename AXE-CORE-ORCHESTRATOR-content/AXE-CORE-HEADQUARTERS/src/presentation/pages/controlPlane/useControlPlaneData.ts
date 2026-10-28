@@ -21,7 +21,7 @@ import {
   apiOpenApi, calendarJobs, checkAxeApi, keystoreList, ledgerList, listPendingApprovals, opsCronJobs, sbGetRows,
   type DurableTaskApproval,
 } from '@/infrastructure/gateways/axeCoreApiService';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
 import { useVensterZichtbaar } from '@/presentation/hooks/useVensterZichtbaar';
 
 export interface Peiling<T> {
@@ -141,10 +141,8 @@ const KOLOMMEN = 'id,title,status,priority,assignee,capability,source_app,worker
 const WEEK_MS = 7 * 86400_000;
 
 async function takenViaSessie(): Promise<TaskRow[] | null> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return null;
-  const { data: sessie } = await sb.auth.getSession();
-  if (!sessie.session) return null;
   const sinds = new Date(Date.now() - WEEK_MS).toISOString();
   const [open, mislukt] = await Promise.all([
     sb.from('core_tasks').select(KOLOMMEN).in('status', OPEN_TASK_STATUSES).order('created_at', { ascending: false }).limit(800),

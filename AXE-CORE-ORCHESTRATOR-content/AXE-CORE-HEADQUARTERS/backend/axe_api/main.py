@@ -615,8 +615,12 @@ async def decide_task_approval(
 # MISSIES, AGENT-ACTIVITEIT, DAX, OBSERVABILITY — zie missie_api.py
 # ══════════════════════════════════════════════════════════════════════════════
 from missie_api import maak_router as _missie_router  # noqa: E402
+from device_notify import maak_router as _device_notify_router  # noqa: E402
 
 app.include_router(_missie_router(sb), dependencies=[AUTH], tags=["missions"])
+# Device-token, geen AXE_API_KEY: de Android-poller mag de service-sleutel
+# niet op het toestel bewaren. AUTH hangt hier bewust niet op.
+app.include_router(_device_notify_router(sb), tags=["device"])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PROXIES — LLM providers, Exa search, Fish TTS

@@ -1,4 +1,4 @@
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
 
 export interface CoreMemoryEntry {
   id: string;
@@ -35,7 +35,7 @@ export async function logMessage(
   message: string,
   metadata: Record<string, unknown> = {},
 ): Promise<void> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return;
   try {
     await sb.from('core_system_logs').insert({ level, source, message, metadata });
@@ -85,7 +85,7 @@ export async function saveMemory(
     created_at: new Date().toISOString(),
   };
 
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (sb) {
     try {
       const { data, error } = await sb
@@ -112,7 +112,7 @@ export async function saveMemory(
 export async function loadMemories(limit = 50): Promise<CoreMemoryEntry[]> {
   const local = loadLocalCore();
   let remote: CoreMemoryEntry[] = [];
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (sb) {
     try {
       const { data, error } = await sb
@@ -141,7 +141,7 @@ export async function loadMemories(limit = 50): Promise<CoreMemoryEntry[]> {
 
 /** Delete a memory entry by id */
 export async function deleteMemory(id: string): Promise<void> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return;
   try {
     await sb.from('core_memory').delete().eq('id', id);
@@ -152,7 +152,7 @@ export async function deleteMemory(id: string): Promise<void> {
 
 /** Load recent system logs (newest first) */
 export async function loadLogs(limit = 100): Promise<CoreLogEntry[]> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return [];
   const { data, error } = await sb
     .from('core_system_logs')

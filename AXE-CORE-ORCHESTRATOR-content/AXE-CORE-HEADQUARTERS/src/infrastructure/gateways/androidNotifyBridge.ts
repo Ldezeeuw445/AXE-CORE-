@@ -5,15 +5,13 @@
  * every call is a no-op so Playwright, the PWA and the Mac app stay quiet.
  *
  * `notify` posts immediately while the WebView is alive. `setNotifyPoll` hands
- * the signed-in Supabase session to WorkManager so the phone still hears
- * approvals / failed tasks / agent-done / NorthSea-OK when the app is closed.
+ * a device token to WorkManager; the worker polls AXE Core API
+ * `/device/notifications` (service_role achter de VPS), niet Supabase-anon.
  */
 export interface NotifyPollSessie {
-  supabaseUrl: string;
-  anonKey: string;
-  accessToken: string;
-  refreshToken: string;
-  userId: string;
+  apiOrigin: string;
+  deviceToken: string;
+  deviceId: string;
 }
 
 interface NotifyBridge {

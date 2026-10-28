@@ -4,7 +4,7 @@ import { Activity, ArrowRight, Brain, Shield, Webhook, Workflow } from 'lucide-r
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
 import { TabRuimte, Kaart, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchedulesBlock } from '@/presentation/pages/controlPlane/SchedulesBlock';
@@ -55,7 +55,7 @@ export default function ControlPlane() {
       setError(null);
       try {
         const loadFromSupabase = async () => {
-          const sb = getSupabase();
+          const sb = await sessieClient();
           if (!sb) return { routes: [] as ControlPlaneRoute[], tasks: [] as TableRow[], events: [] as TableRow[] };
           const [routeRes, taskRes, eventRes] = await Promise.all([
             sb.from('core_route_registry').select('*').order('display_name'),

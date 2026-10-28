@@ -13,8 +13,7 @@ describe('androidNotifyBridge', () => {
     expect(nativeNotifyAvailable()).toBe(false);
     expect(nativeNotify('t', 'b', '1')).toBe(false);
     expect(setNotifyPoll({
-      supabaseUrl: 'https://x.supabase.co', anonKey: 'k',
-      accessToken: 'a', refreshToken: 'r', userId: 'u',
+      apiOrigin: 'https://api.axecompanion.com', deviceToken: 'axe_dev_x', deviceId: 'samsung',
     })).toBe(false);
     expect(vraagNotifyToestemming()).toBe(false);
   });
@@ -29,18 +28,22 @@ describe('androidNotifyBridge', () => {
     expect(nativeNotify('Yes needed', 'DEAL-002', 'n1')).toBe(true);
   });
 
-  it('geeft de sessie als JSON aan WorkManager', () => {
+  it('geeft het device-token als JSON aan WorkManager', () => {
     let raw = '';
     vi.stubGlobal('window', {
       __AXE_ANDROID__: { setNotifyPoll: (j: string) => { raw = j; return true; } },
     });
     expect(setNotifyPoll({
-      supabaseUrl: 'https://pqnngpcgbdwxavbatbia.supabase.co',
-      anonKey: 'anon',
-      accessToken: 'at',
-      refreshToken: 'rt',
-      userId: 'acff7a12-1111-481d-a7a9-cc07583b8069',
+      apiOrigin: 'https://api.axecompanion.com',
+      deviceToken: 'axe_dev_ab',
+      deviceId: 'samsung-a17',
     })).toBe(true);
-    expect(JSON.parse(raw)).toMatchObject({ refreshToken: 'rt', userId: 'acff7a12-1111-481d-a7a9-cc07583b8069' });
+    expect(JSON.parse(raw)).toMatchObject({
+      apiOrigin: 'https://api.axecompanion.com',
+      deviceToken: 'axe_dev_ab',
+      deviceId: 'samsung-a17',
+    });
+    expect(raw).not.toContain('anon');
+    expect(raw).not.toContain('refreshToken');
   });
 });
