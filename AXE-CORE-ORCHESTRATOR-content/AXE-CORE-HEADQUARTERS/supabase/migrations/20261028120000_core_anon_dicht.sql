@@ -23,8 +23,12 @@
 -- Wie er wel bij moet:
 --   - service_role (backend, workers): BYPASSRLS, policies niet aangeraakt.
 --   - authenticated Luka (`core_owner()`): per operatie SELECT/INSERT/
---     UPDATE/DELETE op de veertien tabellen.
+--     UPDATE/DELETE op dertien tabellen. core_permissions is alleen SELECT
+--     (live al REVOKE INSERT/UPDATE/DELETE/TRUNCATE van anon én
+--     authenticated; deze migratie mag dat niet teruggeven).
 --   - core_task_events: alleen service_role, frontend leest via de API.
+--   - `authenticated` omvat 182 anonieme Companion-sign-ins. core_owner()
+--     eist Luka's uid én is_anonymous is not true.
 --
 -- Terugdraaien: de oude `anon_all_*` policies (ALL using true) en GRANT
 -- ALL aan anon. Doe dat niet.
@@ -41,6 +45,7 @@ as $$
     from auth.users u
     where u.id = 'acff7a12-1111-481d-a7a9-cc07583b8069'::uuid
       and u.id = (select auth.uid())
+      and u.is_anonymous is not true
   );
 $$;
 
@@ -197,6 +202,8 @@ revoke all on table public.core_models from anon;
 grant select, insert, update, delete on table public.core_models to authenticated;
 
 -- ── core_permissions ───────────────────────────────────────────────────────
+-- Live (28 okt): INSERT/UPDATE/DELETE/TRUNCATE al ingetrokken voor anon én
+-- authenticated; alleen SELECT blijft. Niet teruggeven.
 drop policy if exists anon_all_core_permissions on public.core_permissions;
 drop policy if exists luka_select_core_permissions on public.core_permissions;
 drop policy if exists luka_insert_core_permissions on public.core_permissions;
@@ -204,15 +211,10 @@ drop policy if exists luka_update_core_permissions on public.core_permissions;
 drop policy if exists luka_delete_core_permissions on public.core_permissions;
 create policy luka_select_core_permissions on public.core_permissions
   for select to authenticated using (public.core_owner());
-create policy luka_insert_core_permissions on public.core_permissions
-  for insert to authenticated with check (public.core_owner());
-create policy luka_update_core_permissions on public.core_permissions
-  for update to authenticated using (public.core_owner()) with check (public.core_owner());
-create policy luka_delete_core_permissions on public.core_permissions
-  for delete to authenticated using (public.core_owner());
 alter table public.core_permissions enable row level security;
 revoke all on table public.core_permissions from anon;
-grant select, insert, update, delete on table public.core_permissions to authenticated;
+revoke insert, update, delete, truncate on table public.core_permissions from authenticated;
+grant select on table public.core_permissions to authenticated;
 
 -- ── core_routing ───────────────────────────────────────────────────────────
 drop policy if exists anon_all_core_routing on public.core_routing;
