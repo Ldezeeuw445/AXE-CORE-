@@ -170,6 +170,31 @@ def test_archiveert_astra_en_telt_alleen_verse_fouten():
     assert body["queue"]["blocked"] == 0
 
 
+def test_verse_bouw_mislukking_is_geen_stale_oktober_fout():
+    """04afc4dd was van 27 okt, niet 'before 2026-10-17'. 14 u oud + Codex-model
+    is een echte fout; no_handler op een retry van 10 s is wél de bekende bug."""
+    vers = (NU - timedelta(hours=14)).isoformat()
+    db = FakeDb(core_tasks=[
+        {"id": "codex", "status": "failed", "title": "Build next step: Trading OS",
+         "updated_at": vers, "capability": "planner",
+         "error": {"message": "The 'gpt-5-codex' model is not supported when using Codex "
+                   "with a ChatGPT account. code: model_not_found"},
+         "metadata": {"oorsprong_bouw": "ja", "pogingen": 2, "motor": "cursor"}},
+        {"id": "retry", "status": "failed", "title": "Build next step: Trading OS",
+         "updated_at": NU.isoformat(), "capability": "planner",
+         "error": {"code": "no_handler", "message": "No handler for planner"},
+         "metadata": {"oorsprong_bouw": "ja", "retry_of": "codex", "pogingen": 2}},
+    ])
+    sd.run_task(db, NU)
+    by_id = {t["id"]: t for t in db.db["core_tasks"]}
+    assert by_id["codex"]["status"] == "failed"
+    assert not (by_id["codex"].get("metadata") or {}).get("archived")
+    assert by_id["retry"]["status"] == "cancelled"
+    reden = (by_id["retry"].get("error") or {}).get("archive_reason", "")
+    assert "2026-10-17" not in reden
+    assert "Not retried automatically" in reden
+
+
 def test_samenvatting_nooit_iso_of_json_dump():
     from agent_activiteit import agent_status, routine_samenvatting
     dump = {"at": "2026-10-17T13:40:02.798367+00:00", "ok": 4, "enabled": 4}

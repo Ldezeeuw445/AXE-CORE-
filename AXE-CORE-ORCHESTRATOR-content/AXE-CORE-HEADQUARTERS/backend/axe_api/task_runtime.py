@@ -156,7 +156,7 @@ class TaskRepository:
             "title": payload["title"],
             "goal": payload["goal"],
             "description": payload.get("description"),
-            "status": "queued",
+            "status": payload.get("status") or "queued",
             "priority": payload.get("priority", "medium"),
             "source_app": payload.get("source_app", "axe_core"),
             "requested_by": requester,
@@ -393,10 +393,13 @@ class TaskRepository:
         return rows[0]
 
     def retry(self, task_id: str, *, by: str = "luka") -> dict[str, Any]:
-        """Nieuwe queued-rij van een mislukte taak. De mislukte rij blijft staan.
+        """Nieuwe rij van een mislukte taak. De mislukte rij blijft staan.
 
-        failed is terminal, dus geen transition terug. Geen trading-execute,
-        geen send. northsea_desk blijft drafts-only.
+        Gewone taken: queued (de VPS-worker pakt ze). Bouwlus/planner: pending,
+        anders pakt claim_next_core_task ze en zet er "No handler for planner"
+        op (28 okt: Trading OS in een retry/archive-lus). failed is terminal,
+        dus geen transition terug. Geen trading-execute, geen send.
+        northsea_desk blijft drafts-only.
         """
         UUID(task_id)
         found = self._db().table("core_tasks").select("*").eq("id", task_id).limit(1).execute().data
@@ -419,6 +422,14 @@ class TaskRepository:
         payload.pop("send", None)
         meta = dict(huidig.get("metadata") or {})
         meta["retry_of"] = task_id
+        status = "queued"
+        if cap == "planner" or meta.get("oorsprong_bouw") == "ja":
+            cap = "planner"
+            status = "pending"
+            for k in ("archived", "archive_reason", "pogingen", "motor_gebruikt",
+                      "geblokkeerd", "motor"):
+                meta.pop(k, None)
+            meta["uiStatus"] = "todo"
         nieuw, _ = self.create({
             "title": titel,
             "goal": doel,
@@ -432,6 +443,7 @@ class TaskRepository:
             "parent_task_id": task_id,
             "payload": payload,
             "metadata": meta,
+            "status": status,
             "idempotency_key": f"retry:{task_id}:{uuid4()}",
         })
         self.append_event(
