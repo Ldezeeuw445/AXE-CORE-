@@ -267,6 +267,11 @@ def _proxy_headers() -> dict:
     return {"Authorization": f"Bearer {sleutel}"} if sleutel else {}
 
 
+def bouw_publiceer_aan() -> bool:
+    """Zelfde schakelaar als het pushen: AXE_BOUW_PUSH=0 laat de checkout ook verder met rust."""
+    return os.environ.get("AXE_BOUW_PUSH", "1").strip() != "0"
+
+
 def planner_aan() -> bool:
     return os.environ.get("AXE_PLANNER", "").strip() == "1"
 
@@ -946,6 +951,7 @@ class Planner:
             return {"taak": taak["id"], "overgeslagen":
                     f"repo {gevraagd} mag niet (beschermde branch of niet op de whitelist)" if gevraagd
                     else "geen bruikbare repo (alle op main/master of weg)"}
+        canon = self._canon(repo)
         engines = engines if engines is not None else self._engines()
         motor, afgevallen = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now())
         if not motor:
@@ -963,6 +969,7 @@ class Planner:
         # taak kan er niets aan doen. Hooguit drie, zodat een kapotte dag geen
         # abonnementen opbrandt.
         tekst, fout, geprobeerd = None, "", []
+        vers = self._ververs(repo) if schrijven and bouw_publiceer_aan() else None
         for _ in range(3):
             geprobeerd.append(motor)
             tekst, fout = self._vraag(staat, motor, prompt, repo, "acceptEdits" if schrijven else "plan")
@@ -975,6 +982,10 @@ class Planner:
             if not motor:
                 break
         bewijs = self._bewijs(repo) if schrijven and tekst else None
+        if bewijs is not None and vers and vers.get("actie") != "geen":
+            bewijs["werkbranch"] = vers
+        if bewijs is not None and canon.get("actie") == "overgezet":
+            bewijs["repo_overgezet"] = canon
         if bewijs and bewijs.get("veranderd"):
             # Vastleggen en als draft-PR op GitHub, anders stapelt het werk zich
             # ongezien op in de checkout op de Mac (zie bouw_publiceer.py).
@@ -1000,7 +1011,32 @@ class Planner:
         return bouw_publiceer.publiceer(
             repo, str(taak.get("title") or "AXE build run"), verslag or "", str(taak.get("id")),
             git=_git, commit_en_push=commit_en_push, repo_pad=_repo_pad,
-            token=os.environ.get("GITHUB_TOKEN", ""))
+            token=bouw_publiceer.github_token())
+
+    def _canon(self, repo: str) -> dict:
+        """Werk in de repo waar het product nu leeft (bouw_publiceer.zorg_voor_canon)."""
+        import bouw_publiceer
+        try:
+            from agent_runner import WERK_MAP, WERK_OVERRIDES, _git, _repos
+        except ImportError as e:
+            return {"actie": "geen", "reden": f"agent_runner: {e}"}
+        uit = bouw_publiceer.zorg_voor_canon(_git, repo, _repos().get(repo),
+                                             werk_map=WERK_MAP, overrides_pad=WERK_OVERRIDES)
+        if uit.get("actie") == "overgezet":
+            log.info("planner: %s wijst nu naar %s (%s)", repo, uit.get("naar"), uit.get("pad"))
+        return uit
+
+    def _ververs(self, repo: str) -> dict:
+        """Main binnenhalen op de werkbranch voor een schrijfrun (bouw_publiceer.ververs_werkbranch)."""
+        import bouw_publiceer
+        try:
+            from agent_runner import _git, _repo_pad
+        except ImportError as e:
+            return {"actie": "geen", "reden": f"agent_runner: {e}"}
+        pad, branch, fout = _repo_pad(repo)
+        if fout:
+            return {"actie": "geen", "reden": fout}
+        return bouw_publiceer.ververs_werkbranch(_git, pad, branch)
 
     def _blokkeer(self, taak: dict, afgevallen: dict) -> dict:
         """Geen enkele motor kan: zichtbaar geblokkeerd, en het kost geen poging."""

@@ -343,7 +343,28 @@ def _repos() -> dict:
         name, path = name.strip(), os.path.abspath(os.path.expanduser(path.strip()))
         if name and path:
             out[name] = path
+    # Een naam die al op de whitelist staat mag naar een eigen checkout van de
+    # lus wijzen (bouw_publiceer.zorg_voor_canon), nooit een nieuwe naam erbij
+    # en nooit buiten WERK_MAP. Zo bleef de whitelist van Luka de baas.
+    for name, path in _werk_overrides().items():
+        if name in out:
+            out[name] = path
     return out
+
+
+WERK_MAP = os.path.expanduser(os.environ.get("AXE_WERK_MAP", "~/.axe/werk"))
+WERK_OVERRIDES = os.path.join(WERK_MAP, "agent-repos.json")
+
+
+def _werk_overrides() -> dict:
+    try:
+        with open(WERK_OVERRIDES) as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    basis = os.path.realpath(WERK_MAP) + os.sep
+    return {str(k): os.path.realpath(v) for k, v in (data or {}).items()
+            if isinstance(v, str) and os.path.realpath(v).startswith(basis)}
 
 
 # Hoe lang een run op een bezette motor mag wachten voor hij opgeeft.

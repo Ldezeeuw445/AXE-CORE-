@@ -13,13 +13,29 @@ of achterloopt. Nu: na een geslaagde schrijfrun met echte wijzigingen
 
 Wat dit NIET doet: mergen, of een PR uit draft halen. Dat blijft bij Luka.
 Uitzetten zonder uitrol: AXE_BOUW_PUSH=0 in de omgeving van de planner.
+
+## 28 okt: 61 pushes, nul PR's, en gebouwd op code van 11 september
+
+Twee gaten, gemeten op de Mac mini:
+  * elke run zei "no GITHUB_TOKEN on this host". Er werd wel gepusht (git heeft
+    zijn eigen login), maar een PR vraagt de GitHub-API en die kreeg geen
+    sleutel. github_token() gebruikt nu dezelfde login als git zelf;
+  * de werkbranch haalde main nooit binnen. axe-agent in AXE Companion stond 27
+    commits voor en 142 achter: elke "volgende stap" werd gebouwd op een
+    checkout van 11 september. ververs_werkbranch() haalt main binnen voor elke
+    schrijfrun. Botst dat, dan gaat de oude branch als archief naar GitHub
+    (er raakt niets weg) en begint de werkbranch opnieuw op main. Dat is de enige
+    plek met --force-with-lease, en alleen op de eigen werkbranch van de lus.
 """
 from __future__ import annotations
 
 import base64
 import binascii
+import json
 import os
 import re
+import subprocess
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 import httpx
@@ -95,6 +111,137 @@ def controleer(git: Git, pad: str) -> Optional[str]:
     if lijkt_geheim(_toegevoegd(git, pad, paden)):
         return "an added line looks like an API key or private key"
     return None
+
+
+def github_token(env: dict | None = None, run: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> str:
+    """Een GitHub-sleutel voor de PR, zonder dat Luka er een hoeft te zetten.
+
+    Volgorde: GITHUB_TOKEN of GH_TOKEN; anders `gh auth token`; anders de login
+    die git zelf gebruikt om te pushen (`git credential fill` voor github.com).
+    Dat laatste is precies de sleutel waarmee de push al slaagde: een PR openen
+    vraagt niets wat de push niet al mocht. Wordt nooit gelogd of teruggegeven.
+    """
+    env = dict(os.environ if env is None else env)
+    token = (env.get("GITHUB_TOKEN") or env.get("GH_TOKEN") or "").strip()
+    if token:
+        return token
+    stil = {**env, "GIT_TERMINAL_PROMPT": "0", "GH_PROMPT_DISABLED": "1"}
+    try:
+        p = run(["gh", "auth", "token", "--hostname", "github.com"], capture_output=True, text=True,
+                timeout=10, env=stil)
+        if p.returncode == 0 and (p.stdout or "").strip():
+            return p.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        p = run(["git", "credential", "fill"], input="protocol=https\nhost=github.com\n\n",
+                capture_output=True, text=True, timeout=10, env=stil)
+        if p.returncode == 0:
+            for regel in (p.stdout or "").splitlines():
+                if regel.startswith("password="):
+                    return regel.split("=", 1)[1].strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return ""
+
+
+def _basis(git: Git, pad: str) -> str | None:
+    """origin/<standaardbranch>, zoals de remote hem noemt."""
+    kop = (git(pad, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout or "").strip()
+    if kop:
+        return kop
+    for naam in ("origin/main", "origin/master"):
+        if git(pad, "rev-parse", "--verify", "--quiet", naam).returncode == 0:
+            return naam
+    return None
+
+
+def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = None) -> dict:
+    """Haal de standaardbranch binnen voordat de lus verder bouwt. Gooit nooit.
+
+    {"actie": "geen" | "gemerged" | "opnieuw", ...}; "opnieuw" noemt het archief.
+    """
+    if not branch or branch in ("main", "master"):
+        return {"actie": "geen", "reden": "not a work branch"}
+    if (git(pad, "status", "--porcelain").stdout or "").strip():
+        return {"actie": "geen", "reden": "uncommitted changes in the checkout; left as is"}
+    if git(pad, "fetch", "--quiet", "origin", timeout=180).returncode != 0:
+        return {"actie": "geen", "reden": "fetch failed"}
+    basis = _basis(git, pad)
+    if not basis:
+        return {"actie": "geen", "reden": "no default branch on origin"}
+    try:
+        achter = int((git(pad, "rev-list", "--count", f"HEAD..{basis}").stdout or "0").strip() or 0)
+    except ValueError:
+        achter = 0
+    if achter == 0:
+        return {"actie": "geen", "achter": 0}
+    m = git(pad, "merge", "--no-edit", "-m", f"Merge {basis} into {branch} (AXE build loop)", basis, timeout=180)
+    if m.returncode == 0:
+        return {"actie": "gemerged", "achter": achter, "basis": basis}
+    git(pad, "merge", "--abort")
+    archief = f"{branch}-archief-{(nu or datetime.now(timezone.utc)).strftime('%Y%m%d-%H%M')}"
+    git(pad, "branch", "-f", archief, "HEAD")
+    if git(pad, "push", "--quiet", "origin", f"{archief}:refs/heads/{archief}", timeout=180).returncode != 0:
+        return {"actie": "geen", "achter": achter,
+                "reden": "main does not merge cleanly and the old branch could not be archived; nothing reset"}
+    git(pad, "reset", "--hard", basis)
+    weg = git(pad, "push", "--quiet", "--force-with-lease", "origin", f"{branch}:refs/heads/{branch}", timeout=180)
+    return {"actie": "opnieuw", "achter": achter, "basis": basis, "archief": archief,
+            **({} if weg.returncode == 0 else {"reden": "reset locally; the remote work branch was not updated"})}
+
+
+# Waar elk product NU leeft. De naam op de whitelist van de Mac mini is een
+# sleutel; de checkout erachter kan verouderd zijn. 28 okt: "axon-memory" wees
+# naar een kloon van axon-memory-app, terwijl AXON sinds 17 okt in axon-memory
+# wordt gebouwd. 21 bouwruns gingen zo naar een repo waar niemand meer kijkt.
+# Alleen wat hier staat wordt afgedwongen; een onbekende naam blijft zoals hij is.
+CANON = {
+    "axon-memory": "Ldezeeuw445/axon-memory",
+    "axe-companion": "Ldezeeuw445/AXE-COMPANION-OS-",
+    "axe-core": "Ldezeeuw445/AXE-CORE-",
+}
+WERKBRANCH = "axe-agent"
+
+
+def zorg_voor_canon(git: Git, naam: str, pad: str | None, *, werk_map: str, overrides_pad: str,
+                    canon: dict | None = None, url_voor: Callable[[str], str] | None = None) -> dict:
+    """Wijst `naam` naar een checkout van de repo uit CANON? Zo niet: kloon hem in
+    werk_map, zet de werkbranch, en laat de whitelist daarheen wijzen. Gooit nooit."""
+    doel = (CANON if canon is None else canon).get(naam)
+    if not doel:
+        return {"actie": "geen"}
+    huidig = _eigenaar_repo(git, pad) if pad else None
+    # Alleen een GitHub-checkout van een ÁNDERE repo wordt omgezet. Geen origin of
+    # geen GitHub (een test, een lokale map): niets doen, nooit gokken.
+    if not huidig or huidig.lower() == doel.lower():
+        return {"actie": "geen"}
+    url_voor = url_voor or (lambda r: f"https://github.com/{r}.git")
+    nieuw = os.path.join(werk_map, naam)
+    try:
+        os.makedirs(werk_map, exist_ok=True)
+        if (not os.path.isdir(os.path.join(nieuw, ".git"))
+                and git(werk_map, "clone", "--quiet", url_voor(doel), nieuw, timeout=900).returncode != 0):
+            return {"actie": "geen", "reden": f"could not clone {doel}"}
+        if git(nieuw, "rev-parse", "--verify", "--quiet", WERKBRANCH).returncode != 0:
+            bron = f"origin/{WERKBRANCH}"
+            if git(nieuw, "rev-parse", "--verify", "--quiet", bron).returncode != 0:
+                bron = _basis(git, nieuw) or "origin/main"
+            if git(nieuw, "checkout", "-q", "-B", WERKBRANCH, bron).returncode != 0:
+                return {"actie": "geen", "reden": f"could not create {WERKBRANCH} in {doel}"}
+        try:
+            with open(overrides_pad) as fh:
+                data = json.load(fh) or {}
+        except (OSError, ValueError):
+            data = {}
+        data[naam] = nieuw
+        tijdelijk = overrides_pad + ".tmp"
+        with open(tijdelijk, "w") as fh:
+            json.dump(data, fh, indent=2)
+        os.replace(tijdelijk, overrides_pad)
+    except OSError as e:
+        return {"actie": "geen", "reden": f"{type(e).__name__}: {e}"[:200]}
+    return {"actie": "overgezet", "van": huidig, "naar": doel, "pad": nieuw}
 
 
 def _eigenaar_repo(git: Git, pad: str) -> Optional[str]:
