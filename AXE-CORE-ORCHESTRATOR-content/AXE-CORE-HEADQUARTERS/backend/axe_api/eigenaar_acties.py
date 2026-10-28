@@ -75,9 +75,10 @@ ACTIES = (
     {
         "id": "axe-api-deploy",
         "title": "AXE Core API: deploy the approval fix and the Ollama box check (20 Oct)",
-        "how": "On the iMac in the HQ folder: python3 scripts/vps_sync.py check. Expect REPO AHEAD for "
-               "main.py, task_runtime.py, gezondheid.py and agent_runner.py; if anything says BOX DRIFT, "
-               "run the capture line it prints and commit that first. Then python3 scripts/vps_sync.py deploy.",
+        "how": "Since 28 Oct the Macs deploy this themselves (axe-autosync, vps_sync.py auto: clean box and "
+               "green tests only, rolled back on a bad /health). If it stays open, read "
+               "~/Library/Logs/axe-autodeploy.log on the iMac; by hand: python3 scripts/vps_sync.py check, "
+               "then python3 scripts/vps_sync.py deploy.",
     },
     {
         "id": "phone-push",

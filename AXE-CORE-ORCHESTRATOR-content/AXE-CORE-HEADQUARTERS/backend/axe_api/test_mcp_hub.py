@@ -124,7 +124,10 @@ class TestSsdHangt:
     def test_een_hangende_vault_bevriest_niets_en_zegt_wat_er_is(self, schoon, monkeypatch):
         import time as _t
         monkeypatch.setattr(h, "SLEUTEL_WACHT_S", 0.2)
+        # test() haalt sleutels sinds de kandidatenlijst via sleutel_kandidaten op;
+        # alleen sleutel_voor laten hangen mat dat pad niet meer (rood sinds die wijziging).
         monkeypatch.setattr(h, "sleutel_voor", lambda vid: (_t.sleep(2), (None, ""))[1])
+        monkeypatch.setattr(h, "sleutel_kandidaten", lambda vid: (_t.sleep(2), [])[1])
         uit = asyncio.run(h.test("supabase"))
         assert uit["status"] == "offline" and "Sta toe" in uit["fout"]
 

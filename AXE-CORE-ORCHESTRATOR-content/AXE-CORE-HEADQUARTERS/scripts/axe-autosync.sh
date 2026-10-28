@@ -61,6 +61,20 @@ if [[ -x "$HIER/backend/axe_api/.venv-local/bin/python" && -f "$HIER/backend/axe
     log "service-bewaker kon niet worden bijgewerkt — zie ~/Library/Logs/axe-service-monitor.log"
   fi
 fi
+# De AXE Core API op de VPS zelf bijwerken (Luka, 28 okt: "ja auto deploy").
+# Alleen op een Mac met de VPS-sleutel, alleen met een schone box en groene
+# tests, en bij een slechte /health gaat het vanzelf terug: zie vps_sync.py auto.
+# Uit: touch ~/.axe/auto-deploy-uit
+if [[ -f "${AXE_VPS_KEY:-$HOME/.ssh/axe-core-vps}" ]]; then
+  ENVF="$HIER/backend/axe_api/.env.local"
+  SBU="$(grep -E '^SUPABASE_URL=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
+  SBK="$(grep -E '^SUPABASE_SERVICE_ROLE(_KEY)?=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
+  if ! SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" python3 "$HIER/scripts/vps_sync.py" auto \
+       >> "$HOME/Library/Logs/axe-autodeploy.log" 2>&1; then
+    log "VPS-update wacht of is teruggezet — zie ~/Library/Logs/axe-autodeploy.log"
+  fi
+fi
+
 DOEL="$(git rev-parse --short HEAD)"
 GEBOUWD="$(cat "$APP_STEMPEL" 2>/dev/null || true)"
 [[ "$GEBOUWD" == "$DOEL" ]] && exit 0

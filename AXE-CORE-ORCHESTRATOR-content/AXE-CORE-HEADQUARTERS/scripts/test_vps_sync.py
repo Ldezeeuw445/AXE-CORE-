@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import ast
+import json
 import os
 import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vps_sync as vs
@@ -141,3 +144,68 @@ def test_optionele_imports_gaan_niet_ongevraagd_naar_de_box():
                    "/opt/axe-core-api/trading_cockpit.py"):
         assert remote in vs.MANIFEST and remote in vs.OPTIONAL_WHEN_MISSING, remote
 
+
+
+# ── auto (28 okt): de Macs zetten zelf live, alleen schoon en groen ───────────
+
+AHEAD = ("/opt/axe-core-api/main.py", "backend/axe_api/main.py", "axe-core-api", vs.REPO_AHEAD)
+DRIFT = ("/opt/axe-core-api/planner.py", "backend/axe_api/planner.py", "axe-core-api", vs.BOX_DRIFT)
+
+
+def test_auto_besluit():
+    assert vs.auto_besluit([], [], True)[0] == "niets"
+    assert vs.auto_besluit([AHEAD, DRIFT], [AHEAD], True) == ("geweigerd", "edited on the box and not in git: planner.py")
+    assert vs.auto_besluit([AHEAD], [AHEAD], False)[0] == "geweigerd"
+    assert "no test environment" in vs.auto_besluit([AHEAD], [AHEAD], None)[1]
+    assert vs.auto_besluit([AHEAD], [AHEAD], True)[0] == "deploy"
+
+
+@pytest.fixture
+def nep_box(tmp_path, monkeypatch):
+    staat = {"ssh": [], "teruggezet": False, "health": "200", "tests": (True, "1 passed")}
+    monkeypatch.setattr(vs, "STAAT", str(tmp_path / "auto.json"))
+    monkeypatch.setattr(vs, "survey", lambda: [AHEAD])
+    monkeypatch.setattr(vs, "geinstalleerde_eenheden", lambda: {"axe-core-api"})
+    monkeypatch.setattr(vs, "draai_tests", lambda: staat["tests"])
+    monkeypatch.setattr(vs, "verzend", lambda todo: ("20261028-1700", {"axe-core-api"}))
+    monkeypatch.setattr(vs, "gezondheid", lambda: staat["health"])
+    monkeypatch.setattr(vs, "terugzetten", lambda todo, stamp, units: staat.__setitem__("teruggezet", True))
+    monkeypatch.setattr(vs, "ssh", lambda cmd: staat["ssh"].append(cmd) or ("ok" if "mkdir" in cmd else ""))
+    monkeypatch.setattr(vs, "meld", lambda uit, vorige: None)
+    monkeypatch.setattr(vs, "ontbrekende_worker_imports", lambda *a: [])
+    monkeypatch.delenv("AXE_AUTO_DEPLOY", raising=False)
+    return staat
+
+
+def lees_staat():
+    with open(vs.STAAT) as fh:
+        return json.load(fh)
+
+
+def test_auto_zet_live_met_slot_en_ruimt_het_slot_op(nep_box):
+    assert vs.cmd_auto(None) == 0
+    uit = lees_staat()
+    assert uit["actie"] == "gedeployd" and uit["bestanden"] == ["main.py"]
+    assert any("mkdir" in c for c in nep_box["ssh"]) and any(c.startswith("rm -rf") for c in nep_box["ssh"])
+
+
+def test_auto_zet_terug_als_health_faalt(nep_box):
+    nep_box["health"] = "502"
+    assert vs.cmd_auto(None) == 1
+    assert nep_box["teruggezet"] is True
+    assert lees_staat()["actie"] == "teruggezet"
+
+
+def test_auto_rolt_niet_uit_bij_rode_tests_en_probeert_dezelfde_commit_niet_elke_ronde(nep_box, monkeypatch):
+    nep_box["tests"] = (False, "1 failed")
+    assert vs.cmd_auto(None) == 1
+    assert lees_staat()["actie"] == "geweigerd"
+    assert not any("mkdir" in c for c in nep_box["ssh"])
+    monkeypatch.setattr(vs, "survey", lambda: (_ for _ in ()).throw(AssertionError("niet opnieuw meten")))
+    assert vs.cmd_auto(None) == 0
+
+
+def test_auto_staat_uit_met_de_schakelaar(nep_box, monkeypatch):
+    monkeypatch.setenv("AXE_AUTO_DEPLOY", "0")
+    monkeypatch.setattr(vs, "survey", lambda: (_ for _ in ()).throw(AssertionError("uit is uit")))
+    assert vs.cmd_auto(None) == 0

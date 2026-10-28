@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -460,6 +461,20 @@ def cmd_deploy(args) -> int:
                 print(f"✗ {rel} does not parse — nothing shipped")
                 return 1
 
+    stamp, _units = verzend(todo)
+    health = gezondheid()
+    print(f"\n  /health -> {health}")
+    if health != "200":
+        print("✗ the API is not answering. Roll back with:")
+        for remote, _rel, _unit, _s in todo:
+            print(f"      ssh {HOST} 'cp {remote}.bak-{stamp} {remote}' && ssh {HOST} 'systemctl restart axe-core-api'")
+        return 1
+    print("✓ deployed")
+    return 0
+
+
+def verzend(todo: list) -> tuple[str, set]:
+    """Backup, kopie, herstart. Geeft de stempel van de backups en de units."""
     stamp = ssh("date +%Y%m%d-%H%M%S").strip()
     units = set()
     for remote, rel, unit, _s in todo:
@@ -469,24 +484,180 @@ def cmd_deploy(args) -> int:
         print(f"  shipped {rel} -> {remote}  (backup {remote}.bak-{stamp})")
         if unit:
             units.add(unit)
-
     if any(r[0].startswith("/etc/systemd") for r in todo):
         ssh("systemctl daemon-reload")
-    for unit in units:
+    for unit in sorted(units):
         ssh(f"systemctl restart {unit}")
         print(f"  restarted {unit}")
+    return stamp, units
 
+
+def gezondheid() -> str:
     # `is-active` is not proof: uvicorn can be up while the app failed to
     # import. Ask it something only a working app can answer.
-    health = ssh("sleep 4; curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8001/health").strip()
-    print(f"\n  /health -> {health}")
-    if health != "200":
-        print("✗ the API is not answering. Roll back with:")
-        for remote, _rel, _unit, _s in todo:
-            print(f"      ssh {HOST} 'cp {remote}.bak-{stamp} {remote}' && ssh {HOST} 'systemctl restart axe-core-api'")
-        return 1
-    print("✓ deployed")
-    return 0
+    return ssh("sleep 4; curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8001/health").strip()
+
+
+def terugzetten(todo: list, stamp: str, units: set) -> None:
+    """Alles van deze ronde terug: de backup terug, of weg als het bestand nieuw was."""
+    for remote, _rel, _unit, _s in todo:
+        ssh(f"if [ -f {remote}.bak-{stamp} ]; then cp {remote}.bak-{stamp} {remote}; else rm -f {remote}; fi")
+    if any(r[0].startswith("/etc/systemd") for r in todo):
+        ssh("systemctl daemon-reload")
+    for unit in sorted(units):
+        ssh(f"systemctl restart {unit}")
+
+
+# ── auto: de Macs zetten zelf live (Luka, 28 okt: "ja auto deploy") ──────────
+#
+# Tot 28 okt was deze uitrol een handeling van Luka, en die bleef liggen terwijl
+# hij ziek was: vijf commits stonden een dag op orchestrator en niet op de VPS.
+# `auto` draait vanuit axe-autosync.sh (elke 5 minuten, op de Mac met de
+# VPS-sleutel) en zet alleen live als:
+#   * er niets met de hand op de box is veranderd (BOX DRIFT = nooit);
+#   * de backendtests op deze Mac groen zijn;
+#   * geen andere Mac op dat moment uitrolt (slot op de VPS).
+# Faalt /health daarna, dan gaat alles van die ronde vanzelf terug.
+SLOT = "/tmp/axe-vps-sync.lock"
+STAAT = os.path.expanduser(os.environ.get("AXE_AUTO_DEPLOY_STAAT", "~/.axe/auto-deploy.json"))
+
+
+def auto_besluit(rows: list, todo: list, tests: bool | None) -> tuple[str, str]:
+    """("niets" | "geweigerd" | "deploy", reden). Puur, zodat het te testen is."""
+    if not todo:
+        return "niets", "every managed file already matches the repo"
+    drift = [naam_van(r[0]) for r in rows if r[3] == BOX_DRIFT]
+    if drift:
+        return "geweigerd", "edited on the box and not in git: " + ", ".join(drift[:5])
+    if tests is None:
+        return "geweigerd", "no test environment on this Mac (pytest + backend requirements)"
+    if tests is False:
+        return "geweigerd", "backend tests are red on this Mac"
+    return "deploy", "box matches git, tests green"
+
+
+def test_python() -> str | None:
+    for kandidaat in (os.environ.get("AXE_TEST_PYTHON"),
+                      os.path.join(HQ, "backend", "axe_api", ".venv-local", "bin", "python"),
+                      sys.executable):
+        if kandidaat and os.path.exists(kandidaat):
+            ok = subprocess.run([kandidaat, "-c", "import pytest, fastapi, httpx"], capture_output=True, check=False)
+            if ok.returncode == 0:
+                return kandidaat
+    return None
+
+
+def draai_tests() -> tuple[bool | None, str]:
+    py = test_python()
+    if not py:
+        return None, ""
+    # Zonder sleutels: een test mag nooit per ongeluk een echte dienst raken.
+    schoon = {k: v for k, v in os.environ.items()
+              if not k.startswith(("SUPABASE", "AXE_", "GITHUB", "GH_", "OPENAI", "GROQ", "ANTHROPIC",
+                                   "XAI", "GEMINI", "CEREBRAS", "OLLAMA", "STRIPE", "METAAPI"))}
+    p = subprocess.run([py, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=os.path.join(HQ, "backend", "axe_api"),
+                       capture_output=True, text=True, timeout=1800, env=schoon, check=False)
+    staart = (p.stdout or "")[-1200:] + (p.stderr or "")[-300:]
+    return p.returncode == 0, staart
+
+
+def _schrijf_staat(uitkomst: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(STAAT), exist_ok=True)
+        with open(STAAT, "w") as fh:
+            json.dump(uitkomst, fh, indent=2)
+    except OSError as e:
+        print(f"  (could not write {STAAT}: {e})", file=sys.stderr)
+
+
+def _lees_staat() -> dict:
+    try:
+        with open(STAAT) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def meld(uitkomst: dict, vorige: dict) -> None:
+    """Eén core_notifications-rij per nieuwe uitkomst, nooit dezelfde twee keer."""
+    if uitkomst.get("actie") == "niets":
+        return
+    sleutel = f"{uitkomst.get('actie')}|{uitkomst.get('reden')}|{uitkomst.get('commit')}"
+    if vorige.get("gemeld") == sleutel:
+        uitkomst["gemeld"] = sleutel
+        return
+    url, sleutel_sb = os.environ.get("SUPABASE_URL", ""), (os.environ.get("SUPABASE_SERVICE_ROLE")
+                                                           or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "")
+    if not url or not sleutel_sb:
+        return
+    soort = {"gedeployd": "success", "teruggezet": "error"}.get(uitkomst["actie"], "warning")
+    tekst = {
+        "gedeployd": f"AXE Core API updated on the VPS ({uitkomst.get('commit')}): "
+                     + ", ".join(uitkomst.get("bestanden") or []),
+        "teruggezet": f"AXE Core API update {uitkomst.get('commit')} rolled back: /health answered "
+                      f"{uitkomst.get('health')}. The previous version runs again.",
+    }.get(uitkomst["actie"], f"AXE Core API update waits: {uitkomst.get('reden')}.")
+    import urllib.request
+    req = urllib.request.Request(
+        url.rstrip("/") + "/rest/v1/core_notifications", method="POST",
+        data=json.dumps({"type": soort, "message": tekst[:1900]}).encode(),
+        headers={"apikey": sleutel_sb, "Authorization": f"Bearer {sleutel_sb}",
+                 "Content-Type": "application/json", "Prefer": "return=minimal"})
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        uitkomst["gemeld"] = sleutel
+    except Exception as e:  # noqa: BLE001 — melden mag de uitrol niet breken
+        print(f"  (notification not sent: {type(e).__name__})", file=sys.stderr)
+
+
+def cmd_auto(_args) -> int:
+    if os.environ.get("AXE_AUTO_DEPLOY", "1").strip() == "0" or os.path.exists(os.path.expanduser("~/.axe/auto-deploy-uit")):
+        return 0
+    vorige = _lees_staat()
+    commit = subprocess.run(["git", "-C", HQ, "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+                            check=False).stdout.strip()
+    # Dezelfde commit geeft dezelfde tests: niet elke 5 minuten opnieuw rood draaien
+    # (en niet elke 5 minuten dezelfde regel in het log). Een nieuwe commit probeert opnieuw.
+    if vorige.get("commit") == commit and vorige.get("actie") in ("geweigerd", "teruggezet"):
+        return 0
+    try:
+        rows = survey()
+        todo, _skip = deploy_kandidaten(rows, geinstalleerd=geinstalleerde_eenheden())
+    except Exception as e:  # noqa: BLE001 — geen VPS-toegang vanaf deze Mac
+        _schrijf_staat({**vorige, "laatst": commit, "actie": "niets", "reden": f"no VPS access: {type(e).__name__}"})
+        return 0
+    worker_mist = ontbrekende_worker_imports(
+        {naam_van(r[0]) for r in todo}, aanwezig_namen(rows, {naam_van(r[0]) for r in todo})) if todo else []
+    if worker_mist:
+        actie, reden = "geweigerd", "worker imports missing from the manifest: " + "; ".join(worker_mist[:3])
+        tests, staart = None, ""
+    else:
+        tests, staart = (draai_tests() if todo and not [r for r in rows if r[3] == BOX_DRIFT] else (True, ""))
+        actie, reden = auto_besluit(rows, todo, tests)
+    uitkomst = {"commit": commit, "actie": actie, "reden": reden,
+                "bestanden": [naam_van(r[0]) for r in todo], "tests": staart[-600:]}
+    if actie == "deploy":
+        if ssh(f"mkdir {SLOT} 2>/dev/null && echo ok || (find {SLOT} -maxdepth 0 -mmin +30 -exec rm -rf {{}} \\; ; echo bezet)").strip() != "ok":
+            print("another Mac is deploying; next round")
+            return 0
+        try:
+            stamp, units = verzend(todo)
+            health = gezondheid()
+            uitkomst["health"] = health
+            if health == "200":
+                uitkomst["actie"] = "gedeployd"
+                print(f"✓ auto-deployed {commit}")
+            else:
+                terugzetten(todo, stamp, units)
+                uitkomst["actie"] = "teruggezet"
+                print(f"✗ /health {health} after the update; rolled back")
+        finally:
+            ssh(f"rm -rf {SLOT}")
+    elif actie == "geweigerd":
+        print(f"✗ auto-deploy waits: {reden}")
+    meld(uitkomst, vorige)
+    _schrijf_staat(uitkomst)
+    return 0 if uitkomst["actie"] in ("niets", "gedeployd") else 1
 
 
 def main() -> int:
@@ -498,8 +669,9 @@ def main() -> int:
     dep = sub.add_parser("deploy", help="ship repo-ahead files, restart, verify")
     dep.add_argument("--only", nargs="+", help="limit to these filenames")
     dep.add_argument("--allow-drift", action="store_true", help="overwrite box edits anyway")
+    sub.add_parser("auto", help="for axe-autosync: deploy only with a clean box and green tests, roll back on a bad /health")
     args = ap.parse_args()
-    return {"check": cmd_check, "capture": cmd_capture, "deploy": cmd_deploy}[args.cmd](args)
+    return {"check": cmd_check, "capture": cmd_capture, "deploy": cmd_deploy, "auto": cmd_auto}[args.cmd](args)
 
 
 if __name__ == "__main__":
