@@ -3254,7 +3254,10 @@ async def list_agent_tiers():
 
 @app.get("/coding-seats", dependencies=[AUTH])
 async def list_coding_seats():
-    """Mac mini heartbeat: core_coding_seats via service_role. Geen VPS-CLI-check."""
+    """Mac mini heartbeat: core_coding_seats via service_role. Geen VPS-CLI-check.
+
+    xAI staat niet op een Mac-CLI: die rij komt hier uit XAI_API_KEY op de VPS.
+    """
     try:
         rijen = (
             sb().table("core_coding_seats").select("*")
@@ -3262,6 +3265,13 @@ async def list_coding_seats():
         ) or []
     except Exception as exc:
         raise HTTPException(503, f"Could not read coding seats: {exc}") from exc
+    try:
+        from provider_router import xai_stoel
+        grok = xai_stoel()
+        if not any(str(r.get("seat_id") or r.get("id") or "") == "xai" for r in rijen):
+            rijen.append(grok)
+    except Exception:
+        pass
     return {"seats": rijen}
 
 

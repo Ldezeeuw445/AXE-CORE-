@@ -1065,6 +1065,7 @@ export interface CodingSeatStatus {
   provider: string;
   label: string;
   email: string | null;
+  org_id?: string | null;
   machine: string;
   logged_in: boolean | null;
   login_command: string;

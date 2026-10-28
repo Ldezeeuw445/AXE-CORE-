@@ -57,7 +57,7 @@ GEHEUGEN_AGENT = {"axe-core": "global", "code-agent": "axe_code", "axe-algo": "a
                   "maps-agent": "global"}
 STANDAARD_MOTOREN = {"axe-core": "claude", "code-agent": "cursor", "axe-algo": "codex",
                      "maps-agent": "sleutels"}
-ABONNEMENTEN = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor")
+ABONNEMENTEN = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2")
 
 STAAT_PAD = os.path.expanduser(os.environ.get("AXE_PLANNER_STAAT", "~/.axe/planner.json"))
 INTERVAL_S = int(os.environ.get("AXE_PLANNER_INTERVAL_S", str(3 * 3600)))
@@ -234,19 +234,38 @@ def kies_motor(staat: dict, agent: str, gewenst: str, motoren: dict, engines: di
 
     `uitsluiten`: stoelen die deze taak al probeerden. Zonder dat koos de lus in
     _voer_uit na een modelfout gewoon dezelfde stoel opnieuw, drie keer.
+    Minste planner-gebruik eerst; familie/voorkeur is tiebreaker.
     """
     bezet = {m for a, m in motoren.items() if a != agent} | set(uitsluiten)
-    kandidaten = [gewenst] if gewenst not in uitsluiten else []
-    if agent not in ZONDER_TERUGVAL:
-        kandidaten += [m for m in ABONNEMENTEN if familie(m) == familie(gewenst) and m != gewenst and m not in bezet]
-        kandidaten += [m for m in ABONNEMENTEN if m not in kandidaten and m not in bezet]
     redenen: dict[str, str] = {}
-    for m in kandidaten:
+    if agent in ZONDER_TERUGVAL:
+        kandidaten = [gewenst] if gewenst not in uitsluiten else []
+        for m in kandidaten:
+            reden = motor_reden(staat, m, engines, nu)
+            if reden is None:
+                return m, redenen
+            redenen[m] = reden
+        return None, redenen
+
+    dag = nu.strftime("%Y-%m-%d")
+    vrij: list[tuple[tuple, str]] = []
+    for m in ABONNEMENTEN:
+        if m in bezet:
+            continue
         reden = motor_reden(staat, m, engines, nu)
-        if reden is None:
-            return m, redenen
-        redenen[m] = reden
-    return None, redenen
+        if reden:
+            redenen[m] = reden
+            continue
+        gebruikt = int((staat.get("gebruik") or {}).get(dag, {}).get(m, 0) or 0)
+        score = (
+            gebruikt,
+            0 if familie(m) == familie(gewenst) else 1,
+            0 if m == gewenst else 1,
+            ABONNEMENTEN.index(m) if m in ABONNEMENTEN else 99,
+        )
+        vrij.append((score, m))
+    vrij.sort()
+    return (vrij[0][1], redenen) if vrij else (None, redenen)
 
 
 def plan_motor_voor(motor: str) -> str:

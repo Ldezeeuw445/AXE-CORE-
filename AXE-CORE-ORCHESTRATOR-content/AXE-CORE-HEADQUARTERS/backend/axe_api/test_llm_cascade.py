@@ -1,11 +1,16 @@
 """De LLM-keten voor de browser-agents: wie komt aan de beurt, en wanneer rust een aanbieder."""
 import asyncio
 
+import pytest
+
 import llm_cascade as lc
 
 
-def setup_function():
+@pytest.fixture(autouse=True)
+def _reset(monkeypatch):
     lc.vergeet_alles()
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
 
 
 def test_zonder_sleutels_blijft_alleen_de_eigen_modelbox_over_en_de_keten_is_nooit_leeg(monkeypatch):
@@ -100,6 +105,13 @@ def test_chat_meldt_eerlijk_dat_niets_werkt(monkeypatch):
         raise AssertionError("had moeten falen")
     except RuntimeError as e:
         assert "openai" in str(e) and "402" in str(e)
+
+
+def test_xai_zit_in_de_keten_als_de_sleutel_er_is(monkeypatch):
+    monkeypatch.setenv("XAI_API_KEY", "xai-test")
+    namen = [a.naam for a in lc.volgorde()]
+    assert "xai" in namen
+    assert namen[-1] == "ollama"
 
 
 def test_zijn_alle_betaalde_aanbieders_leeg_dan_antwoordt_de_modelbox(monkeypatch):

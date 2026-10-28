@@ -37,12 +37,13 @@ export const MODEL_SUGGESTIES: Record<AgentEngine, readonly string[]> = {
   codex2: ['gpt-5-codex', 'o3'],
   codex3: ['gpt-5-codex', 'o3'],
   cursor: ['gpt-5', 'sonnet-4-thinking'],
+  cursor2: ['gpt-5', 'sonnet-4-thinking'],
 };
 
 /** De vlag waarmee deze motor zijn model aanneemt. Alleen ter uitleg in de UI. */
 export const MODEL_VLAG: Record<AgentEngine, string> = {
   claude: '--model', claude2: '--model', claude3: '--model', claude4: '--model',
-  codex: '-m', codex2: '-m', codex3: '-m', cursor: '--model',
+  codex: '-m', codex2: '-m', codex3: '-m', cursor: '--model', cursor2: '--model',
 };
 
 const schoon = (v: unknown): string | undefined => {
@@ -51,10 +52,13 @@ const schoon = (v: unknown): string | undefined => {
   return t ? t : undefined;
 };
 
-/** Codex: leeg of gpt-6-astra → geen -m (account-standaard). Anders de gekozen naam. */
+/**
+ * Codex: leeg of astra / gpt-6 / gpt-5-codex → geen -m (account-standaard).
+ * gpt-5-codex geeft model_not_found op een ChatGPT-login; astra/gpt-6 400.
+ */
 function codexCliModel(model: string | undefined): string | undefined {
   const t = (model || '').trim();
-  if (!t || /astra|gpt-6\b/i.test(t)) return undefined;
+  if (!t || /astra|gpt-6\b|gpt-5-codex/i.test(t)) return undefined;
   return t;
 }
 

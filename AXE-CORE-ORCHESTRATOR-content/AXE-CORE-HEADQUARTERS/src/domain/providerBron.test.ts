@@ -50,7 +50,7 @@ describe('één bron voor providers', () => {
     // ze "voor de volledigheid" terugzet -- dat is precies hoe ze er de eerste
     // keer in kwamen.
     expect(ids, 'smartthings is eruit gehaald').not.toContain('smartthings');
-    expect(ids, 'Grok (xAI) is eruit gehaald').not.toContain('xai');
+    expect(ids, 'Grok (xAI) hoort in de catalogus').toContain('xai');
     // Perplexity is onderzoek, geen chatmodel. In de sleutelcatalogus, niet
     // in PROVIDERS — anders gaat de cascade hem als LLM inzetten.
     expect(PROVIDERS.map(p => p.id), 'Perplexity is geen chat-provider').not.toContain('perplexity');

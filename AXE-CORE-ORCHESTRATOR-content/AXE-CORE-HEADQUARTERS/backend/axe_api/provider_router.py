@@ -22,7 +22,7 @@ KAART_PAD = Path(__file__).with_name("agent_tiers.json")
 SEAT_FAMILIES = ("claude", "codex", "cursor")
 SEAT_VOLGORDE = (
     "claude2", "claude3", "claude4", "claude",
-    "codex", "codex2", "cursor",
+    "codex", "codex2", "codex3", "cursor", "cursor2",
 )
 HARTSLAG_STALE_S = 180
 WACHT_STANDAARD_S = 300
@@ -112,9 +112,9 @@ def api_namen(agent: str | None, *, alleen_gratis: bool = False, kaart: dict[str
     if alleen_gratis or tier >= 3:
         return ["groq", "cerebras", "ollama"]
     if tier == 1:
-        # Seats eerst in de lus; API alleen als noodrem (gratis).
-        return ["groq", "cerebras", "ollama"]
-    return ["groq", "cerebras", "gemini", "openai", "ollama"]
+        # Seats eerst in de lus; API alleen als noodrem (gratis + xAI als die er is).
+        return ["groq", "cerebras", "xai", "ollama"]
+    return ["groq", "cerebras", "gemini", "openai", "xai", "ollama"]
 
 
 def _iso_ts(waarde: Any) -> float | None:
@@ -132,6 +132,9 @@ def _iso_ts(waarde: Any) -> float | None:
 def stoel_vrij(rij: dict[str, Any], *, nu: float | None = None, stale_s: int = HARTSLAG_STALE_S) -> bool:
     """True als deze core_coding_seats-rij werk mag krijgen."""
     nu = time.time() if nu is None else nu
+    fam = str(rij.get("provider") or re.sub(r"\d+$", "", str(rij.get("seat_id") or rij.get("id") or "")))
+    if fam not in SEAT_FAMILIES:
+        return False
     if rij.get("logged_in") is not True:
         return False
     if rij.get("rate_limited") is True:
@@ -147,13 +150,21 @@ def stoel_vrij(rij: dict[str, Any], *, nu: float | None = None, stale_s: int = H
 
 
 def _resterend(rij: dict[str, Any]) -> float:
-    """Hoger = meer ruimte. Geen echte quota-API: weekruns en limiet als proxy."""
-    for sleutel in ("remaining_week", "remaining_session", "remaining"):
+    """Hoger = meer ruimte. used_week/session (0-100 gebruikt) of weekruns als proxy."""
+    for sleutel, omgekeerd in (("remaining_week", False), ("remaining_session", False), ("remaining", False)):
         raw = rij.get(sleutel)
         if raw is None:
             continue
         try:
             return float(raw)
+        except (TypeError, ValueError):
+            continue
+    for sleutel in ("used_week", "used_session"):
+        raw = rij.get(sleutel)
+        if raw is None:
+            continue
+        try:
+            return 100.0 - float(raw)
         except (TypeError, ValueError):
             continue
     runs = rij.get("runs_7d")
@@ -163,6 +174,14 @@ def _resterend(rij: dict[str, Any]) -> float:
         return 500.0
 
 
+def _stoel_identiteit(rij: dict[str, Any]) -> tuple[str, str]:
+    sid = str(rij.get("seat_id") or rij.get("id") or "")
+    fam = str(rij.get("provider") or re.sub(r"\d+$", "", sid))
+    mail = str(rij.get("email") or "").strip().lower()
+    org = str(rij.get("org_id") or "").strip()
+    return fam, mail or org or sid
+
+
 def kies_stoel(
     rijen: list[dict[str, Any]],
     *,
@@ -170,24 +189,34 @@ def kies_stoel(
     voorkeur: str | None = None,
     nu: float | None = None,
 ) -> dict[str, Any] | None:
-    """Vrije stoel, eerst dezelfde familie, dan de rest. Meeste restant eerst."""
+    """Vrije stoel, minste gebruik eerst, alle gezonde stoelen.
+
+    Familie is alleen tiebreaker: Codex met 0% wint van Claude op 69%.
+    Zelfde e-mail+provider = één quotum, één kandidaat. Voorkeur-pinnet niet
+    als een stillere stoel vrijer is.
+    """
     nu = time.time() if nu is None else nu
     vrij = [r for r in rijen if stoel_vrij(r, nu=nu)]
     if not vrij:
         return None
+
+    uniek: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in vrij:
+        key = _stoel_identiteit(r)
+        vorig = uniek.get(key)
+        if vorig is None or _resterend(r) > _resterend(vorig):
+            uniek[key] = r
+    vrij = list(uniek.values())
 
     def sleutel(r: dict[str, Any]) -> tuple:
         sid = str(r.get("seat_id") or r.get("id") or "")
         fam = str(r.get("provider") or re.sub(r"\d+$", "", sid))
         zelfde = 0 if (familie and fam == familie) or (voorkeur and sid == voorkeur) else 1
         volgorde = SEAT_VOLGORDE.index(sid) if sid in SEAT_VOLGORDE else 99
-        return (zelfde, -_resterend(r), volgorde)
+        # Restant eerst (Codex 0% gebruikt vóór Claude 69%), familie alleen daarna.
+        return (-_resterend(r), zelfde, volgorde)
 
     vrij.sort(key=sleutel)
-    if voorkeur:
-        hit = next((r for r in vrij if str(r.get("seat_id") or r.get("id")) == voorkeur), None)
-        if hit:
-            return hit
     return vrij[0]
 
 
@@ -214,7 +243,7 @@ def is_limiet_fout(tekst: str) -> bool:
 
 def provider_uit_fout(tekst: str) -> str | None:
     low = (tekst or "").lower()
-    for naam in ("openai", "anthropic", "openrouter", "gemini", "google", "groq", "cerebras"):
+    for naam in ("openai", "anthropic", "openrouter", "gemini", "google", "groq", "cerebras", "xai"):
         if naam in low:
             return "gemini" if naam == "google" else naam
     return None
@@ -329,7 +358,7 @@ def stoel_tool(seat_id: str) -> str:
     return "claude_code.run"
 
 
-_ASTRA = re.compile(r"astra|gpt-6\b", re.I)
+_CODEX_WEIGER = re.compile(r"astra|gpt-6\b|gpt-5-codex", re.I)
 
 
 def codex_cli_model(model: str = "") -> str:
@@ -338,16 +367,46 @@ def codex_cli_model(model: str = "") -> str:
     25-28 okt: -m gpt-5-codex gaf HTTP 400 model_not_found op een ChatGPT-
     abonnement ("not supported when using Codex with a ChatGPT account").
     gpt-6-astra evenmin: die 400't met 'requires a newer version'. AXE_CODEX_MODEL
-    is de operator-override als iemand wél een model wil pinnen.
+    is de operator-override als iemand wél een model wil pinnen — astra / gpt-6 /
+    gpt-5-codex blijven geweigerd, zodat de CLI zelf kiest en de retry-zonder-m
+    plus Claude-terugval daarop aansluiten.
     """
     gekozen = (model or "").strip()
-    if _ASTRA.search(gekozen):
+    if _CODEX_WEIGER.search(gekozen):
         gekozen = ""
     if not gekozen:
         gekozen = (os.environ.get("AXE_CODEX_MODEL") or "").strip()
-        if _ASTRA.search(gekozen):
+        if _CODEX_WEIGER.search(gekozen):
             gekozen = ""
     return gekozen
+
+
+def xai_stoel(*, nu: datetime | None = None) -> dict[str, Any]:
+    """Grok via XAI_API_KEY op de VPS. Geen CLI-login; de sleutel ís de stoel."""
+    key = bool((os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY") or "").strip())
+    gezien = (nu or datetime.now(timezone.utc)).isoformat()
+    actie = None if key else "Set XAI_API_KEY on the VPS (OpenAI-compatible API at https://api.x.ai)."
+    return {
+        "id": "vps:xai",
+        "seat_id": "xai",
+        "provider": "xai",
+        "label": "Grok (xAI)",
+        "email": None,
+        "org_id": None,
+        "machine": "vps",
+        "logged_in": True if key else False,
+        "login_command": "Set XAI_API_KEY on the VPS (OpenAI-compatible API at https://api.x.ai).",
+        "current_task": None,
+        "rate_limited": False,
+        "rate_limit_until": None,
+        "last_limit_message": None,
+        "remaining_note": "Metered xAI API key, not a CLI subscription.",
+        "shared_quota_with": [],
+        "config_exists": True,
+        "last_seen_at": gezien,
+        "updated_at": gezien,
+        "actie": actie,
+    }
 
 
 def stoel_model(seat_id: str, tier: int, model: str = "") -> str:

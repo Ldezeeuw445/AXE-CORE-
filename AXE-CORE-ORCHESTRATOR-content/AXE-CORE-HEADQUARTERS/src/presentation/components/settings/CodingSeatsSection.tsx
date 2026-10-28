@@ -12,12 +12,16 @@ import { SectieKop, StatusKaart, geleden, kort } from '@/presentation/components
 import {
   abonnementKaartStand,
   groepeerAbonnementen,
+  kaartMelding,
   metGedeeldeQuota,
   resetTekst,
+  somGebruik,
   stoelHeeftActie,
   stoelNietGebruikt,
   stoelSleutel,
   toonStoelEmail,
+  verspildeStoelen,
+  watMoetLukaDoen,
   type AbonnementGroep,
   type CodingSeat,
 } from '@/domain/codingSeats';
@@ -38,6 +42,7 @@ interface WorkerSeatRow {
   machine?: string;
   host?: string;
   email?: string | null;
+  org_id?: string | null;
   logged_in?: boolean | null;
   login_command?: string;
   current_task?: string | null;
@@ -47,6 +52,10 @@ interface WorkerSeatRow {
   remaining_note?: string | null;
   last_seen_at?: string;
   config_exists?: boolean;
+  actie?: string | null;
+  used_session?: number | null;
+  used_week?: number | null;
+  runs_7d?: number | null;
 }
 
 function totMs(waarde: number | string | null | undefined): number | null {
@@ -64,7 +73,10 @@ function vanWorker(row: WorkerSeatRow): CodingSeat {
     seat_id: sid,
     provider: (row.provider as CodingSeat['provider']) || 'claude',
     label: sid,
-    email: loggedIn === true ? (row.email ?? null) : null,
+    // Restant-login in ~/.claude houdt het e-mailadres, ook als logged_in=false:
+    // anders wordt het een vierde Pro-kaart in plaats van samen te vallen.
+    email: row.email ?? null,
+    org_id: row.org_id ?? null,
     machine: row.machine || row.host || 'unknown',
     logged_in: loggedIn,
     login_command: row.login_command || '',
@@ -76,6 +88,10 @@ function vanWorker(row: WorkerSeatRow): CodingSeat {
     shared_quota_with: [],
     last_seen_at: row.last_seen_at ?? null,
     config_exists: row.config_exists,
+    actie: row.actie ?? null,
+    used_session: row.used_session ?? null,
+    used_week: row.used_week ?? null,
+    runs_7d: row.runs_7d ?? null,
   };
 }
 
@@ -84,6 +100,7 @@ const ACCENT: Record<string, string> = {
   codex: '#34d399',
   cursor: '#60a5fa',
   openhands: '#fb923c',
+  xai: '#1DA1F2',
 };
 
 export function CodingSeatsSection() {
@@ -122,14 +139,13 @@ export function CodingSeatsSection() {
   }, []);
 
   const groepen = groepeerAbonnementen(stoelen ?? []);
-  const delen = (stoelen ?? []).filter((s) => s.shared_quota_with.length > 0 && s.logged_in === true);
-  const zelfdeMail = delen[0]?.email ?? null;
+  const verspild = verspildeStoelen(stoelen ?? []);
   const gebruiktDoor = (ids: string[]) => HOOFD_AGENTS.filter((a) => ids.includes(toewijzing[a])).map((a) => AGENT_LABEL[a]);
 
   const kaartVoor = (groep: AbonnementGroep) => {
     const stoel = groep.stoel;
     const v = groep.seatIds.map((id) => verbruik[id]).find(Boolean);
-    const g = groep.seatIds.map((id) => gebruik[id]).find(Boolean);
+    const g = somGebruik(groep.seatIds, gebruik);
     const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
     const vandaag = groep.seatIds.reduce((n, id) => n + (planner?.gebruik_vandaag[id] ?? 0), 0);
     const door = gebruiktDoor(groep.seatIds);
@@ -144,12 +160,14 @@ export function CodingSeatsSection() {
       verbruikStatus: v?.status,
       lastRunFout: v?.status === 'ok' || v?.status === 'idle' ? (g?.last_limit_message ?? null) : (v?.reden ?? g?.last_limit_message ?? null),
     });
+    const actie = watMoetLukaDoen(getoond);
     const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond) && kaart.stand.tekst !== 'Online' && kaart.stand.tekst !== 'Running' && kaart.stand.tekst !== 'Not used';
     const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
     const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || stoel.label;
     const machines = groep.bruikbaarOp.length
       ? `Usable on ${groep.bruikbaarOp.join(', ')}`
       : 'Not logged in on any machine';
+    const geschiedenis = kaartMelding(kaart.geschiedenis ?? g?.last_limit_message);
     return (
       <StatusKaart
         key={groep.key}
@@ -162,11 +180,11 @@ export function CodingSeatsSection() {
         accent={ACCENT[groep.provider] || 'var(--text-secondary)'}
         rol={`${v?.plan ? `${v.plan} plan · ` : ''}${machines}${door.length ? ` · ${door.join(', ')}` : ''}`}
         stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : (groep.nietGebruikt ? { toon: 'muted', tekst: 'Not used' } : kaart.stand)}
-        keuze={rood ? (
+        keuze={(rood || actie) && !groep.nietGebruikt ? (
           <code
-            title={stoel.login_command}
+            title={actie || stoel.login_command}
             style={{ display: 'block', fontSize: 10, color: 'var(--error)', overflow: 'auto', whiteSpace: 'nowrap' }}
-          >{stoel.login_command}</code>
+          >{actie || stoel.login_command}</code>
         ) : undefined}
         stats={[
           { label: 'Runs 24h', waarde: g ? String(g.runs_24h) : '—' },
@@ -179,7 +197,7 @@ export function CodingSeatsSection() {
           ...(planner?.dagbudget ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
           ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
         ]}
-        melding={kaart.geschiedenis ?? undefined}
+        melding={geschiedenis ?? undefined}
       />
     );
   };
@@ -190,11 +208,11 @@ export function CodingSeatsSection() {
         titel="Subscriptions"
         uitleg="One card per account. Status from core_coding_seats (fresh < 5 min) on Mac mini and iMac. A null row on the other machine never overrides logged_in=true. Missing CLIs stay hidden."
       />
-      {zelfdeMail && (
-        <p className="axe-agentkaart-melding" style={{ color: 'var(--warning)', marginBottom: 12 }}>
-          Several seats are {zelfdeMail} — they share one quota. Log the extra Claude/Codex seats into different accounts to get separate limits.
+      {verspild.map((v) => (
+        <p key={v.email} className="axe-agentkaart-melding" style={{ color: 'var(--warning)', marginBottom: 12 }}>
+          {v.email} is logged into two CLI folders on {v.machines.join(' and ')} — they share one quota. Same account on Mac mini and iMac is fine.
         </p>
-      )}
+      ))}
       {fout && <p className="axe-agentkaart-melding">{fout}</p>}
       <div className="axe-agent-raster axe-agent-raster--ruim">
         {groepen.kaarten.map(kaartVoor)}

@@ -472,10 +472,15 @@ const SEAT_ENV = {
   codex2:  { CODEX_HOME: join(homedir(), '.codex-tweede') },
   codex3:  { CODEX_HOME: join(homedir(), '.codex-derde') },
   cursor:  {},
+  cursor2: {},
 };
 
 function seatChildEnv(seatId) {
-  const extra = SEAT_ENV[seatId] || {};
+  const extra = { ...(SEAT_ENV[seatId] || {}) };
+  if (seatId === 'cursor2') {
+    const key = env.CURSOR2_API_KEY || process.env.CURSOR2_API_KEY;
+    if (key) extra.CURSOR_API_KEY = key;
+  }
   const child = { ...process.env, ...env, ...extra };
   for (const k of [
     'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDECODE',
@@ -514,7 +519,9 @@ function run(cmd, args, cwd, extraEnv) {
 async function runCodexWithFallback(prompt, root, seat, requestedModel) {
   const bin = env.AXE_CODEX_BIN ?? '/opt/homebrew/bin/codex';
   const raw = String(requestedModel || env.AXE_CODEX_MODEL || '').trim();
-  const model = /astra|gpt-6\b/i.test(raw) ? '' : raw;
+  // gpt-5-codex geeft model_not_found op een ChatGPT-login; astra/gpt-6 400.
+  // Leeg = de CLI kiest zelf. Andere AXE_CODEX_MODEL-waarden blijven een pin.
+  const model = /astra|gpt-6\b|gpt-5-codex/i.test(raw) ? '' : raw;
   const base = ['exec', prompt, '-C', '.', '-s', 'workspace-write', '--approve-for-me'];
   const child = seatChildEnv(seat);
   const tried = [];
