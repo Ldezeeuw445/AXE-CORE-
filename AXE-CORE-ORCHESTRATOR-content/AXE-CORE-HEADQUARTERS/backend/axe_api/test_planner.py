@@ -545,3 +545,30 @@ class TestCheckIn:
     def test_zonder_houd_warm_geen_check_in(self):
         pl = p.Planner(lambda: None, lambda *a, **k: {}, lambda: {})
         assert pl._houd_warm({}, self.NU, {"claude": {"aanwezig": True}}) == {}
+
+
+class TestBouwBeurtTelt:
+    """Meetlat van core_bouw_aanvullen: een gearchiveerde retry is geen beurt."""
+
+    def test_verse_mislukking_telt_gearchiveerde_retry_niet(self):
+        vers = {"status": "failed",
+                "metadata": {"oorsprong_bouw": "ja"}}
+        retry = {"status": "cancelled",
+                 "metadata": {"oorsprong_bouw": "ja", "retry_of": "04afc4dd", "archived": True}}
+        queued = {"status": "queued",
+                  "metadata": {"oorsprong_bouw": "ja", "retry_of": "04afc4dd"}}
+        assert p.bouw_beurt_telt(vers) is True
+        assert p.bouw_beurt_telt(retry) is False
+        assert p.bouw_beurt_telt(queued) is False
+
+    def test_migratie_filtert_status_en_archived(self):
+        from pathlib import Path
+        map_ = Path(__file__).resolve().parents[2] / "supabase" / "migrations"
+        laatste = None
+        for pad in sorted(map_.glob("*.sql")):
+            tekst = pad.read_text(encoding="utf-8")
+            if "function core_bouw_aanvullen" in tekst:
+                laatste = tekst
+        assert laatste, "geen core_bouw_aanvullen-migratie"
+        assert "coalesce(t.metadata->>'archived', '') <> 'true'" in laatste
+        assert "t.status in ('pending', 'running', 'completed', 'failed')" in laatste

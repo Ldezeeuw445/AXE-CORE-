@@ -139,7 +139,7 @@ def archiveer_bekende_fouten(db: Any, nu: datetime | None = None) -> int:
     )
     n = 0
     reden = (
-        "Archived: stale failure from before 2026-10-17 Home/planner/northsea fixes. "
+        "Archived: stale failure (known-fixed worker/planner bug, or older than 24h). "
         "Not retried automatically."
     )
     for t in taken:

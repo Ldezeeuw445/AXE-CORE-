@@ -351,6 +351,23 @@ def is_bouw_next_step(taak: dict) -> bool:
     return meta.get("oorsprong_bouw") == "ja" or titel.lower().startswith("build next step")
 
 
+BOUW_BEURT_STATUS = ("pending", "running", "completed", "failed")
+
+
+def bouw_beurt_telt(taak: dict) -> bool:
+    """Meetlat van core_bouw_aanvullen: welke rij telt als beurt van een app.
+
+    Gearchiveerde retries (queued → VPS no_handler → archiver) mogen de beurt
+    niet stelen, anders krijgt Trading OS nooit een verse pending-taak.
+    """
+    meta = taak.get("metadata") if isinstance(taak.get("metadata"), dict) else {}
+    if meta.get("oorsprong_bouw") != "ja":
+        return False
+    if meta.get("archived"):
+        return False
+    return str(taak.get("status") or "") in BOUW_BEURT_STATUS
+
+
 def andere_manager_voor(repo: Optional[str], titel: str = "", doel: str = "") -> Optional[str]:
     """Manager-id als deze bouwrepo van iemand anders is, anders None."""
     sleutel = (repo or "").strip().lower()
