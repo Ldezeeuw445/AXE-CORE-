@@ -117,6 +117,7 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: 
     """
     from provider_router import codex_cli_model
     cmd = [binary, "exec", str(prompt), "-C", ".", "-o", uitvoerbestand]
+    # Leeg = geen -m: ChatGPT-accounts weigeren gpt-5-codex (model_not_found).
     gekozen = codex_cli_model(model)
     if gekozen:
         cmd += ["-m", gekozen]
@@ -130,6 +131,36 @@ def _codex_cmd(binary: str, prompt: str, mode: str, uitvoerbestand: str, model: 
         # with"); die vlag impliceert zelf de workspace-write-sandbox.
         cmd += ["--approve-for-me"] if _codex_kent(binary, "--approve-for-me") else ["-s", "workspace-write"]
     return cmd
+
+
+def _zonder_model_vlag(cmd: list) -> list:
+    """Zelfde Codex-aanroep, zonder -m / waarde. Voor de éénmalige retry."""
+    uit: list = []
+    sla_over = False
+    for stuk in cmd:
+        if sla_over:
+            sla_over = False
+            continue
+        if stuk == "-m":
+            sla_over = True
+            continue
+        uit.append(stuk)
+    return uit
+
+
+def _claude_fallback_binary() -> str | None:
+    """Claude CLI voor als Codex het model weigert. Eerst PATH, dan Homebrew."""
+    gevonden = _binary(ENGINES["claude"])
+    if gevonden:
+        return gevonden
+    for kandidaat in (
+        (os.environ.get("AXE_CLAUDE_BIN") or "").strip(),
+        "/opt/homebrew/bin/claude",
+        "/usr/local/bin/claude",
+    ):
+        if kandidaat and os.path.exists(kandidaat):
+            return kandidaat
+    return None
 
 
 # Let op: hieronder stonden tot 16 september TWEE definities van _claude_cmd en
@@ -532,7 +563,8 @@ def _auth_fout(tekst: str) -> bool:
 # using Codex with a ChatGPT account", 25-28 okt). Niet het account en niet de
 # taak: de volgende stoel. Geen koeling, want het account werkt gewoon.
 _MODEL_FOUT = re.compile(
-    r"not supported when using codex with a chatgpt account|\bmodel_not_found\b|requires a newer version",
+    r"not supported when using codex with a chatgpt account|\bmodel_not_found\b|"
+    r"unsupported model|model is not supported|requires a newer version",
     re.IGNORECASE,
 )
 
@@ -931,25 +963,72 @@ def _run_agent_stoel(
 
     uitvoer = ""
     tmp = None
+    leest_bestand = motor["leest_bestand"]
+    fallback = None
+    fallback_note = ""
     try:
-        if motor["leest_bestand"]:
+        if leest_bestand:
             fd, tmp = tempfile.mkstemp(prefix="axe-agent-", suffix=".txt")
             os.close(fd)
 
         cmd = motor["cmd"](binary, prompt, mode, tmp or "", (model or "").strip())
         if checks and mode == "acceptEdits" and motor["cmd"] is _claude_cmd:
             cmd += ["--allowedTools", *CHECK_TOOLS]
-        proc = subprocess.run(
-            cmd, cwd=repo_path, env=_subprocess_env(motor["blocked_env"], motor.get("extra_env")),
-            capture_output=True, text=True, timeout=limit,
-        )
 
-        if motor["leest_bestand"] and tmp and os.path.exists(tmp):
+        def draai(cmd_nu: list, blocked=None, extra=None):
+            return subprocess.run(
+                cmd_nu, cwd=repo_path,
+                env=_subprocess_env(
+                    blocked if blocked is not None else motor["blocked_env"],
+                    extra if extra is not None else motor.get("extra_env"),
+                ),
+                capture_output=True, text=True, timeout=limit,
+            )
+
+        def lees_tmp() -> str:
+            if not (tmp and os.path.exists(tmp)):
+                return ""
             try:
                 with open(tmp, "r", encoding="utf-8") as f:
-                    uitvoer = f.read().strip()
+                    return f.read().strip()
             except Exception as e:  # noqa: BLE001
                 log.warning("kon %s niet lezen: %s", tmp, e)
+                return ""
+
+        proc = draai(cmd)
+        uitvoer = lees_tmp() if leest_bestand else ""
+
+        if motor["cmd"] is _codex_cmd:
+            fouttekst = "\n".join(x for x in (proc.stderr, proc.stdout, uitvoer) if x)
+            if proc.returncode != 0 and _model_fout(fouttekst):
+                if "-m" in cmd:
+                    log.info("codex model_not_found with -m; retry without model flag")
+                    proc = draai(_zonder_model_vlag(cmd))
+                    uitvoer = lees_tmp() if leest_bestand else ""
+                    fouttekst = "\n".join(x for x in (proc.stderr, proc.stdout, uitvoer) if x)
+                    fallback = "no-m"
+                    fallback_note = "Codex rejected the model flag; retried without -m. "
+                if proc.returncode != 0 and _model_fout(fouttekst):
+                    claude_bin = _claude_fallback_binary()
+                    if claude_bin:
+                        log.info("codex still model_not_found; fallback to Claude CLI %s", claude_bin)
+                        claude_motor = ENGINES["claude"]
+                        claude_cmd = _claude_cmd(claude_bin, prompt, mode, "", "")
+                        if checks and mode == "acceptEdits":
+                            claude_cmd += ["--allowedTools", *CHECK_TOOLS]
+                        proc = draai(claude_cmd, claude_motor["blocked_env"], claude_motor.get("extra_env"))
+                        leest_bestand = False
+                        uitvoer = ""
+                        fallback = "claude"
+                        fallback_note = (
+                            "Codex model_not_found on this ChatGPT account; retried without -m, "
+                            "then fell back to Claude CLI. "
+                        )
+                    else:
+                        fallback_note = (
+                            "Codex model_not_found on this ChatGPT account; retried without -m; "
+                            "Claude CLI fallback unavailable (/opt/homebrew/bin/claude not found). "
+                        )
     except subprocess.TimeoutExpired:
         return finish({"status": "error", "error": f"{motor['label']} liep langer dan {limit}s", "repo": repo, "branch": branch, "engine": motornaam})
     except Exception as e:  # noqa: BLE001
@@ -964,18 +1043,27 @@ def _run_agent_stoel(
 
     stdout = (proc.stdout or "").strip()
     basis = {"repo": repo, "branch": branch, "permission_mode": mode, "engine": motornaam, "exit_code": proc.returncode}
+    if fallback:
+        basis["codex_fallback"] = fallback
 
-    if motor["leest_bestand"]:
+    def foutzin() -> str:
+        return (
+            fallback_note
+            + f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"
+        ).strip()
+
+    if leest_bestand:
         if proc.returncode != 0 and not uitvoer:
-            return finish({**basis, "status": "error",
-                    "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"})
+            return finish({**basis, "status": "error", "error": foutzin()})
+        resultaat = (uitvoer or stdout)[:8000]
+        if fallback_note and resultaat:
+            resultaat = fallback_note + resultaat
         return finish({**basis, "status": "error" if proc.returncode != 0 else "ok",
-                "result": (uitvoer or stdout)[:8000]})
+                "result": resultaat, **({"error": foutzin()} if proc.returncode != 0 else {})})
 
-    # Claude: JSON op stdout.
+    # Claude: JSON op stdout. (Ook de Codex→Claude-terugval komt hier.)
     if proc.returncode != 0 and not stdout:
-        return finish({**basis, "status": "error",
-                "error": f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"})
+        return finish({**basis, "status": "error", "error": foutzin()})
 
     try:
         parsed = json.loads(stdout) if stdout else None
@@ -985,8 +1073,10 @@ def _run_agent_stoel(
     if parsed is None:
         # --output-format json houdt normaal stand, maar een versiewissel of een
         # wrapper op PATH mag geen verzonnen succes worden.
+        tekst = (fallback_note + stdout)[:8000] if fallback_note else stdout[:8000]
         return finish({**basis, "status": "error" if proc.returncode != 0 else "ok",
-                "result": stdout[:8000], "raw": True})
+                "result": tekst, "raw": True,
+                **({"error": foutzin()} if proc.returncode != 0 else {})})
 
     mislukt = proc.returncode != 0
     result_text = ""
@@ -999,9 +1089,13 @@ def _run_agent_stoel(
         if parsed.get("is_error") is True:
             mislukt = True
 
+    tekst = result_text or stdout[:8000]
+    if fallback_note:
+        tekst = (fallback_note + tekst)[:8000]
     return finish({**basis, "status": "error" if mislukt else "ok",
-            "result": result_text or stdout[:8000],
-            "meta": parsed if isinstance(parsed, dict) else None})
+            "result": tekst,
+            "meta": parsed if isinstance(parsed, dict) else None,
+            **({"error": foutzin()} if mislukt else {})})
 
 
 # Een Claude-stoel die dagen niets doet, stond op Subscriptions als "Limit seen ·

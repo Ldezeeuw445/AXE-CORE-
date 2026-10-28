@@ -41,16 +41,16 @@
       "label": "ChatGPT Plus / Codex",
       "config": "~/.codex",
       "login": "codex login",
-      "models": ["gpt-5-codex"],
+      "models": [],
       "paid": true,
-      "note": "Nooit gpt-6-astra: de Codex CLI op de Mac geeft 400 (newer version)."
+      "note": "Geen -m by default: ChatGPT-accounts weigeren gpt-5-codex (model_not_found). Override: AXE_CODEX_MODEL. Nooit gpt-6-astra."
     },
     "codex2": {
       "family": "codex",
       "label": "ChatGPT Plus 2 / Codex",
       "config": "~/.codex-tweede",
       "login": "CODEX_HOME=~/.codex-tweede codex login",
-      "models": ["gpt-5-codex"],
+      "models": [],
       "paid": true
     },
     "cursor": {
@@ -75,7 +75,7 @@
     "1": {
       "name": "heavy",
       "use": "Zwaar redeneren en coderen.",
-      "prefer": ["seat:claude:opus", "seat:claude:sonnet", "seat:codex:gpt-5-codex", "seat:cursor"],
+      "prefer": ["seat:claude:opus", "seat:claude:sonnet", "seat:codex", "seat:cursor"],
       "api": [],
       "never": ["paid-api:openai", "paid-api:anthropic", "paid-api:openrouter"]
     },
@@ -126,7 +126,7 @@
     "developer": {
       "kind": "main",
       "tier": 1,
-      "model": "claude opus/sonnet via Mac-stoel; codex gpt-5-codex tweede; cursor bij repo-wijd",
+      "model": "claude opus/sonnet via Mac-stoel; Codex zonder -m (account-standaard); cursor bij repo-wijd",
       "seat_family": "claude",
       "cadence": "always-on DAX CI elke 12u; codewerk op Mac mini"
     },

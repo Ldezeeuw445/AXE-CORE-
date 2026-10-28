@@ -33,7 +33,10 @@ export function taakFoutVan(error: unknown, titel = ''): TaakFout {
     return { regel: 'AXE had no worker for this job. Retry sends it to the agent loop.', actie: 'retry' };
   }
   if (/gpt-6-astra|requires a newer version/.test(laag)) {
-    return { regel: 'Codex asked for gpt-6-astra; this CLI is too old. Retry uses gpt-5-codex.', actie: 'retry' };
+    return { regel: 'Codex asked for a model this CLI cannot run. Retry omits -m (account default), then Claude CLI.', actie: 'retry' };
+  }
+  if (/model_not_found|not supported when using codex|unsupported model/.test(laag)) {
+    return { regel: 'Codex rejected the model on this ChatGPT account. Retry omits -m, then falls back to Claude CLI.', actie: 'retry' };
   }
   if (/unpaid invoice|payment required|insufficient (credits|balance)|billing/.test(laag)) {
     return { regel: 'This seat needs billing or credits before it can run.', actie: 'reconnect' };

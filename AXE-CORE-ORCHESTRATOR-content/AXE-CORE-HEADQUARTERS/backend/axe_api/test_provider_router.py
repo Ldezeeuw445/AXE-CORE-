@@ -188,11 +188,45 @@ def test_computer_worker_kent_stoel_env():
     assert "ANTHROPIC_API_KEY" in tekst
 
 
-def test_codex_astra_wordt_gpt5():
-    assert pr.codex_cli_model("gpt-6-astra") == "gpt-5-codex"
-    assert pr.codex_cli_model("") == "gpt-5-codex"
+def test_codex_leeg_en_astra_krijgen_geen_model(monkeypatch):
+    """Geen -m by default: ChatGPT-accounts weigeren gpt-5-codex. Astra evenmin."""
+    monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
+    assert pr.codex_cli_model("gpt-6-astra") == ""
+    assert pr.codex_cli_model("") == ""
     assert pr.codex_cli_model("gpt-5-codex") == "gpt-5-codex"
-    assert pr.stoel_model("codex", 1, "gpt-6-astra") == "gpt-5-codex"
+    assert pr.stoel_model("codex", 1, "gpt-6-astra") == ""
+    assert pr.stoel_model("codex", 1, "") == ""
+
+
+def test_codex_model_via_env(monkeypatch):
+    monkeypatch.setenv("AXE_CODEX_MODEL", "o3")
+    assert pr.codex_cli_model("") == "o3"
+    monkeypatch.setenv("AXE_CODEX_MODEL", "gpt-6-astra")
+    assert pr.codex_cli_model("") == ""
+
+
+def test_roep_stoel_laat_model_weg_als_leeg(monkeypatch):
+    monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
+    gezien = []
+
+    def runner(device, tool, args, **kw):
+        gezien.append((device, tool, args))
+        return {"status": "ok"}
+
+    pr.roep_stoel({"seat_id": "codex", "machine": "mac-mini"}, "bouw", runner=runner)
+    assert gezien[0][1] == "codex.run"
+    assert "model" not in gezien[0][2]
+
+
+def test_computer_worker_codex_fallback_zonder_hard_model():
+    from pathlib import Path
+    tekst = (Path(__file__).resolve().parents[2] / "infra/computer-worker/worker.mjs").read_text()
+    assert "runCodexWithFallback" in tekst
+    assert "AXE_CODEX_MODEL" in tekst
+    assert "isCodexModelNotFound" in tekst
+    assert "/opt/homebrew/bin/claude" in tekst
+    assert "retry without -m" in tekst
+    assert "Codex model_not_found" in tekst
 
 
 def test_beleid_hard_limits_blijven_vragen():

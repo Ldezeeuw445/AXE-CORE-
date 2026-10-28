@@ -14,11 +14,12 @@ describe('normaliseerModellen', () => {
 });
 
 describe('modelVoor', () => {
-  it('leeg betekent: de CLI kiest zelf, Codex pinnet gpt-5-codex', () => {
+  it('leeg betekent: de CLI kiest zelf, ook voor Codex; astra wordt niet gepind', () => {
     expect(modelVoor({}, 'claude')).toBeUndefined();
     expect(modelVoor({ claude: 'opus' }, 'claude')).toBe('opus');
-    expect(modelVoor({}, 'codex')).toBe('gpt-5-codex');
-    expect(modelVoor({ codex: 'gpt-6-astra' }, 'codex')).toBe('gpt-5-codex');
+    expect(modelVoor({}, 'codex')).toBeUndefined();
+    expect(modelVoor({ codex: 'gpt-6-astra' }, 'codex')).toBeUndefined();
+    expect(modelVoor({ codex: 'o3' }, 'codex')).toBe('o3');
   });
 
   it('API-sleutels hebben deze keuze niet', () => {

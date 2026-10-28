@@ -486,7 +486,11 @@ function seatChildEnv(seatId) {
   return child;
 }
 
-function run(cmd, args, cwd, extraEnv) {
+function isCodexModelNotFound(text) {
+  return /model_not_found|not supported when using Codex|model is not supported|unsupported model/i.test(text || '');
+}
+
+function runStatus(cmd, args, cwd, extraEnv) {
   return new Promise((res, rej) => {
     execFile(cmd, args, { cwd, env: extraEnv || process.env, timeout: STEP_TIMEOUT_MS, maxBuffer: 8 << 20 },
       (err, stdout, stderr) => {
@@ -497,9 +501,59 @@ function run(cmd, args, cwd, extraEnv) {
         if (err && (err.code === 'ENOENT' || err.killed)) {
           return rej(new Error(err.killed ? `timed out after ${STEP_TIMEOUT_MS / 1000}s` : `not found: ${cmd}`));
         }
-        res(out.trim() || '(no output)');
+        const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
+        res({ out: out.trim() || '(no output)', code });
       });
   });
+}
+
+function run(cmd, args, cwd, extraEnv) {
+  return runStatus(cmd, args, cwd, extraEnv).then(r => r.out);
+}
+
+async function runCodexWithFallback(prompt, root, seat, requestedModel) {
+  const bin = env.AXE_CODEX_BIN ?? '/opt/homebrew/bin/codex';
+  const raw = String(requestedModel || env.AXE_CODEX_MODEL || '').trim();
+  const model = /astra|gpt-6\b/i.test(raw) ? '' : raw;
+  const base = ['exec', prompt, '-C', '.', '-s', 'workspace-write', '--approve-for-me'];
+  const child = seatChildEnv(seat);
+  const tried = [];
+
+  const first = model ? [...base, '-m', model] : base;
+  tried.push(model ? `-m ${model}` : 'account default (no -m)');
+  let result = await runStatus(bin, first, root, child);
+
+  if (result.code !== 0 && isCodexModelNotFound(result.out) && model) {
+    tried.push('retry without -m');
+    result = await runStatus(bin, base, root, child);
+  }
+
+  if (result.code === 0 && !isCodexModelNotFound(result.out)) {
+    return result.out;
+  }
+
+  if (isCodexModelNotFound(result.out)) {
+    const claude = env.AXE_CLAUDE_BIN ?? '/opt/homebrew/bin/claude';
+    tried.push(`claude CLI fallback (${claude})`);
+    try {
+      const claudeArgv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
+      const claudeResult = await runStatus(claude, claudeArgv, root, seatChildEnv('claude'));
+      if (claudeResult.code === 0 && !isCodexModelNotFound(claudeResult.out)) {
+        return `[Codex model unsupported; ran Claude CLI instead. Tried: ${tried.join(' → ')}]\n${claudeResult.out}`;
+      }
+      throw new Error(
+        `Codex model_not_found: this ChatGPT account does not support the requested model. `
+        + `Tried: ${tried.join(' → ')}. Claude CLI then failed: ${claudeResult.out.slice(0, 400)}`,
+      );
+    } catch (e) {
+      if (String(e.message || '').startsWith('Codex model_not_found')) throw e;
+      throw new Error(
+        `Codex model_not_found: this ChatGPT account does not support the requested model. `
+        + `Tried: ${tried.join(' → ')}. Claude CLI fallback failed: ${e.message}`,
+      );
+    }
+  }
+  return result.out;
 }
 const git = (root, ...a) => run('git', a, root);
 const startBuild = git(REPO, 'rev-parse', '--short', 'HEAD').then(s => s.trim()).catch(() => '');
@@ -715,12 +769,9 @@ async function execute(payload) {
     case 'codex.run': {
       const prompt = String(args.prompt ?? '').trim();
       if (!prompt) throw new Error('codex.run needs a prompt');
-      const bin = env.AXE_CODEX_BIN ?? '/opt/homebrew/bin/codex';
       const seat = String(args.seat ?? 'codex');
-      const argv = ['exec', prompt, '-C', '.', '-s', 'workspace-write', '--approve-for-me'];
       const model = String(args.model ?? '').trim();
-      if (model) argv.push('-m', model);
-      return run(bin, argv, root, seatChildEnv(seat));
+      return runCodexWithFallback(prompt, root, seat, model);
     }
 
     case 'cursor.run': {

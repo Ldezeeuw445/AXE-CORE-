@@ -8,10 +8,17 @@ describe('taakFoutVan', () => {
     expect(f.regel).toMatch(/8040/);
   });
 
-  it('zet gpt-6-astra om in een Codex-terugval', () => {
+  it('zet gpt-6-astra om in een Codex-terugval zonder -m', () => {
     const f = taakFoutVan("The 'gpt-6-astra' model requires a newer version of the Codex CLI");
     expect(f.actie).toBe('retry');
-    expect(f.regel).toMatch(/gpt-5-codex/);
+    expect(f.regel).toMatch(/omits -m|Claude CLI/);
+  });
+
+  it('zet model_not_found van een ChatGPT-account om in dezelfde terugval', () => {
+    const f = taakFoutVan("The 'gpt-5-codex' model is not supported when using Codex with a ChatGPT account. code: model_not_found");
+    expect(f.actie).toBe('retry');
+    expect(f.regel).toMatch(/ChatGPT account/);
+    expect(f.regel).toMatch(/Claude CLI/);
   });
 
   it('stuurt login-fouten naar reconnect', () => {

@@ -371,6 +371,76 @@ class TestVoerUitEerlijk:
         assert klaar["result"]["output"].startswith("[No changes in the repo")
 
 
+class TestHandoffAndereManager:
+    """Bouwlus-taken voor Trading OS / axe-trading-core horen bij `trading`, niet AXE CORE."""
+
+    def test_herkent_repo_en_titel(self):
+        assert p.is_bouw_next_step({"title": "Build next step: Trading OS", "metadata": {}})
+        assert p.is_bouw_next_step({"title": "Iets anders", "metadata": {"oorsprong_bouw": "ja"}})
+        assert not p.is_bouw_next_step({"title": "Read the Trading OS README", "metadata": {}})
+        assert p.andere_manager_voor("trading-os") == "trading"
+        assert p.andere_manager_voor("trading-os-app") == "trading"
+        assert p.andere_manager_voor("axe-trading-core") == "trading"
+        assert p.andere_manager_voor(None, "Build next step: Trading OS") == "trading"
+        assert p.andere_manager_voor("axe-core", "Build next step: AXE Core") is None
+
+    def test_bouw_trading_os_wordt_handoff_niet_in_axe_core_gebouwd(self, monkeypatch):
+        gedraaid = []
+        pl, rijen = TestVoerUitEerlijk()._pl(
+            monkeypatch, lambda *a, **k: gedraaid.append(a) or (_ for _ in ()).throw(AssertionError("geen run"))
+        )
+        monkeypatch.setattr(pl, "_werkrepo", lambda *a, **k: (_ for _ in ()).throw(AssertionError("niet in axe-core")))
+        taak = {
+            "id": "t-tos",
+            "title": "Build next step: Trading OS",
+            "goal": "Keep building Trading OS",
+            "payload": {"repo": "trading-os"},
+            "metadata": {"agent": "code-agent", "motor": "codex", "risico": "schrijven", "oorsprong_bouw": "ja"},
+        }
+        uit = pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert uit["ok"] and uit["handoff"] == "trading" and not gedraaid
+        inserts = [v for t, s, v in rijen if t == "core_tasks" and s == "insert"]
+        assert inserts and inserts[0]["assignee"] == "trading"
+        assert inserts[0]["capability"] == "trading"
+        klaar = [v for t, s, v in rijen if t == "core_tasks" and v.get("status") == "completed"]
+        assert klaar and "Handed off to trading" in klaar[0]["result"]["output"]
+
+    def test_bouw_axe_trading_core_via_titel(self, monkeypatch):
+        pl, rijen = TestVoerUitEerlijk()._pl(
+            monkeypatch, lambda *a, **k: (_ for _ in ()).throw(AssertionError("geen run"))
+        )
+        monkeypatch.setattr(pl, "_werkrepo", lambda *a, **k: (_ for _ in ()).throw(AssertionError("niet in axe-core")))
+        taak = {
+            "id": "t-atc",
+            "title": "Build next step: axe-trading-core",
+            "goal": "Finish the next item",
+            "payload": {},
+            "metadata": {"agent": "code-agent", "risico": "schrijven", "oorsprong_bouw": "ja"},
+        }
+        uit = pl._voer_uit({}, taak)
+        assert uit["handoff"] == "trading"
+
+    def test_axe_core_bouw_blijft_in_axe_core(self, monkeypatch):
+        gedraaid = []
+
+        def run(*a, **k):
+            gedraaid.append(a)
+            return {"status": "ok", "result": "gebouwd"}
+
+        pl, rijen = TestVoerUitEerlijk()._pl(monkeypatch, run)
+        taak = {
+            "id": "t-core",
+            "title": "Build next step: AXE Core",
+            "goal": "g",
+            "payload": {"repo": "axe-core"},
+            "metadata": {"agent": "code-agent", "motor": "cursor", "risico": "schrijven", "oorsprong_bouw": "ja"},
+        }
+        monkeypatch.setattr(pl, "_bewijs", lambda repo: {"repo": repo, "leesbaar": True, "veranderd": False, "diffstat": ""})
+        uit = pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert uit.get("ok") and gedraaid
+        assert not any(v.get("assignee") == "trading" for t, s, v in rijen if s == "insert")
+
+
 def test_een_bouwrun_krijgt_tijd_en_zijn_controles():
     """15 okt: 'Claude Code 4 liep langer dan 300s'; 16 okt: tests bleven op een
     toestemmingsvraag hangen. Een schrijvende run krijgt BOUW_RUN_S en checks=True,

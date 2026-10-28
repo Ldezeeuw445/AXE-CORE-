@@ -329,16 +329,24 @@ def stoel_tool(seat_id: str) -> str:
     return "claude_code.run"
 
 
-CODEX_CLI_MODEL = "gpt-5-codex"
 _ASTRA = re.compile(r"astra|gpt-6\b", re.I)
 
 
 def codex_cli_model(model: str = "") -> str:
-    """Codex CLI op de Mac kent gpt-5-codex. gpt-6-astra geeft HTTP 400
-    ('requires a newer version') en mag nooit als -m meegaan."""
+    """Model voor `codex exec -m`. Leeg = géén -m, de CLI gebruikt het account.
+
+    25-28 okt: -m gpt-5-codex gaf HTTP 400 model_not_found op een ChatGPT-
+    abonnement ("not supported when using Codex with a ChatGPT account").
+    gpt-6-astra evenmin: die 400't met 'requires a newer version'. AXE_CODEX_MODEL
+    is de operator-override als iemand wél een model wil pinnen.
+    """
     gekozen = (model or "").strip()
-    if not gekozen or _ASTRA.search(gekozen):
-        return CODEX_CLI_MODEL
+    if _ASTRA.search(gekozen):
+        gekozen = ""
+    if not gekozen:
+        gekozen = (os.environ.get("AXE_CODEX_MODEL") or "").strip()
+        if _ASTRA.search(gekozen):
+            gekozen = ""
     return gekozen
 
 
@@ -367,7 +375,10 @@ def roep_stoel(
     seat_id = str(stoel.get("seat_id") or stoel.get("id") or "")
     device = str(stoel.get("machine") or os.environ.get("AXE_SEAT_DEVICE", "mac-mini-van-luka-5"))
     tool = stoel_tool(seat_id)
-    args = {"prompt": prompt, "seat": seat_id, "model": stoel_model(seat_id, tier)}
+    args: dict[str, Any] = {"prompt": prompt, "seat": seat_id}
+    model = stoel_model(seat_id, tier)
+    if model:
+        args["model"] = model
     if runner is None:
         import device_actions
         runner = device_actions.run_on_device

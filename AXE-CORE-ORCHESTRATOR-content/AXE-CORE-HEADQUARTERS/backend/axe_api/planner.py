@@ -140,7 +140,7 @@ _ACCOUNTFOUT = (
 # is geen account dat stuk is en geen taak die fout is: een andere stoel kan het.
 _MODELFOUT = re.compile(
     r"gpt-6-astra|requires a newer version|not supported when using codex with a chatgpt account"
-    r"|\bmodel_not_found\b",
+    r"|\bmodel_not_found\b|unsupported model|model is not supported",
     re.I,
 )
 
@@ -290,6 +290,15 @@ REPO_APP = {"axe-core": "axe_core", "axe-companion": "axe_companion",
 REPO_ALIAS = {"cloudflare-migration-2": "axe-companion", "companion": "axe-companion",
               "northsea-commodity": "axe-core", "northsea": "axe-core", "trading os": "trading-os"}
 
+# Repos die AXE CORE's code-agent niet mag bouwen: ze horen bij een andere
+# manager. "Build next step: Trading OS" in de AXE-CORE-checkout is precies
+# hoe die taak 25-28 okt Codex op gpt-5-codex zette in de verkeerde boom.
+ANDERE_MANAGER_REPOS = {
+    "trading-os": "trading",
+    "trading-os-app": "trading",
+    "axe-trading-core": "trading",
+}
+
 
 def repo_uit_tekst(tekst: str) -> Optional[str]:
     """De repo die een voorstel bij naam noemt, als het er precies één is.
@@ -309,6 +318,30 @@ def app_voor_repo(repo: Optional[str], agent: str = "", tekst: str = "") -> str:
     if agent == "maps-agent" or "northsea" in (tekst or "").lower():
         return "northsea"
     return REPO_APP.get(repo or "", "axe_core")
+
+
+def is_bouw_next_step(taak: dict) -> bool:
+    """De bouwlus-taken: titel of oorsprong_bouw, niet elke vermelding van een app."""
+    titel = str(taak.get("title") or "")
+    meta = taak.get("metadata") or {}
+    return meta.get("oorsprong_bouw") == "ja" or titel.lower().startswith("build next step")
+
+
+def andere_manager_voor(repo: Optional[str], titel: str = "", doel: str = "") -> Optional[str]:
+    """Manager-id als deze bouwrepo van iemand anders is, anders None."""
+    sleutel = (repo or "").strip().lower()
+    if sleutel in REPO_ALIAS:
+        sleutel = REPO_ALIAS[sleutel]
+    if sleutel in ANDERE_MANAGER_REPOS:
+        return ANDERE_MANAGER_REPOS[sleutel]
+    plat = re.sub(r"[^a-z0-9]+", " ", f"{titel} {doel} {repo or ''}".lower()).strip()
+    for naam, manager in ANDERE_MANAGER_REPOS.items():
+        alias = naam.replace("-", " ")
+        if re.search(rf"(^| ){re.escape(alias)}( |$)", plat):
+            return manager
+        if naam.replace("-", "") in re.sub(r"[^a-z0-9]", "", plat):
+            return manager
+    return None
 
 
 def lees_voorstellen(tekst: str) -> list[dict]:
@@ -932,6 +965,12 @@ class Planner:
     def _voer_uit(self, staat: dict, taak: dict, motoren: Optional[dict] = None,
                   engines: Optional[dict] = None) -> dict:
         meta = taak.get("metadata") or {}
+        gevraagd = (REPO_ALIAS.get((taak.get("payload") or {}).get("repo") or "")
+                    or (taak.get("payload") or {}).get("repo")
+                    or repo_uit_tekst(f"{taak.get('title') or ''} {taak.get('goal') or ''}"))
+        eigenaar = andere_manager_voor(gevraagd, str(taak.get("title") or ""), str(taak.get("goal") or ""))
+        if eigenaar and is_bouw_next_step(taak):
+            return self._handoff_andere_manager(taak, eigenaar, gevraagd)
         agent = meta.get("agent") or taak.get("assignee") or "axe-core"
         if agent not in AGENTS:
             agent = "axe-core"
@@ -940,9 +979,6 @@ class Planner:
         schrijven = meta.get("risico") == "schrijven"
         if schrijven and agent not in ("code-agent", "maps-agent"):
             return {"taak": taak["id"], "overgeslagen": "alleen de Code Agent en de Northsea Desk voeren schrijftaken uit"}
-        gevraagd = (REPO_ALIAS.get((taak.get("payload") or {}).get("repo") or "")
-                    or (taak.get("payload") or {}).get("repo")
-                    or repo_uit_tekst(f"{taak.get('title') or ''} {taak.get('goal') or ''}"))
         if schrijven and not gevraagd:
             # Nooit raden waar geschreven wordt: zie repo_uit_tekst.
             return {"taak": taak["id"], "overgeslagen": "schrijftaak noemt geen (bekende) repo"}
@@ -999,6 +1035,52 @@ class Planner:
         self._sluit(taak, tekst, fout, geprobeerd[-1], bewijs)
         return {"taak": taak["id"], "ok": bool(tekst), "fout": fout or None, "motoren": geprobeerd,
                 **({"bewijs": bewijs} if bewijs else {})}
+
+    def _handoff_andere_manager(self, taak: dict, manager: str, repo: Optional[str]) -> dict:
+        """Sluit de bouwlus-taak en zet een nieuwe klaar voor de eigenaar-manager.
+
+        Niet bouwen in AXE CORE: Trading OS / axe-trading-core horen bij `trading`.
+        """
+        if not self._claim(taak["id"]):
+            return {"taak": taak["id"], "overgeslagen": "al opgepakt"}
+        titel = str(taak.get("title") or "Build next step")
+        meta = dict(taak.get("metadata") or {})
+        nieuw = {
+            "title": titel,
+            "goal": taak.get("goal") or "",
+            "description": (
+                f"Handoff from AXE CORE: repo {repo or titel!r} is owned by {manager}, "
+                "not built in the AXE CORE checkout."
+            ),
+            "status": "pending",
+            "priority": taak.get("priority") or "medium",
+            "assignee": manager,
+            "capability": manager,
+            "execution_mode": "patch",
+            "source_app": "axe_core",
+            "requested_by": taak.get("requested_by") or "luka",
+            "payload": {**(taak.get("payload") or {}), "repo": repo, "handoff_from": taak["id"]},
+            "metadata": {
+                **meta,
+                "agent": manager,
+                "oorsprong": "handoff",
+                "handoff_from": taak["id"],
+                "niet_in_axe_core": True,
+            },
+        }
+        try:
+            gemaakt = self.sb().table("core_tasks").insert(nieuw).execute().data[0]
+            nieuw_id = (gemaakt or {}).get("id")
+        except Exception as e:  # noqa: BLE001
+            fout = f"Handoff to {manager} failed: {e}"
+            self._sluit(taak, None, fout, None)
+            return {"taak": taak["id"], "ok": False, "fout": fout}
+        tekst = (
+            f"Handed off to {manager}: repo {repo or titel!r} is owned by that manager, "
+            f"not built in AXE CORE. New task: {nieuw_id}."
+        )
+        self._sluit(taak, tekst, "", None)
+        return {"taak": taak["id"], "ok": True, "handoff": manager, "nieuw": nieuw_id}
 
     def _publiceer(self, repo: str, taak: dict, verslag: Optional[str]) -> dict:
         import bouw_publiceer

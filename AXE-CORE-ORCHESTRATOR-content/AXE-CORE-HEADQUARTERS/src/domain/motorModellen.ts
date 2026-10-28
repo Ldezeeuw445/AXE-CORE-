@@ -51,10 +51,10 @@ const schoon = (v: unknown): string | undefined => {
   return t ? t : undefined;
 };
 
-/** Codex CLI op de Mac weigert gpt-6-astra. Zelfde terugval als provider_router. */
-function codexCliModel(model: string | undefined): string {
+/** Codex: leeg of gpt-6-astra → geen -m (account-standaard). Anders de gekozen naam. */
+function codexCliModel(model: string | undefined): string | undefined {
   const t = (model || '').trim();
-  if (!t || /astra|gpt-6\b/i.test(t)) return 'gpt-5-codex';
+  if (!t || /astra|gpt-6\b/i.test(t)) return undefined;
   return t;
 }
 

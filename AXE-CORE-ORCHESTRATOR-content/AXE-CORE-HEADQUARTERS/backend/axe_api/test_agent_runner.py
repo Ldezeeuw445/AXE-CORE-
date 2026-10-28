@@ -255,7 +255,8 @@ class TestWorktree:
 class TestModelVlag:
     """Het gekozen model moet in het commando belanden, met de vlag die die CLI kent."""
 
-    def test_elke_motor_krijgt_zijn_eigen_vlag(self):
+    def test_elke_motor_krijgt_zijn_eigen_vlag(self, monkeypatch):
+        monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
         import agent_runner as a
         claude = a.ENGINES["claude"]["cmd"]("claude", "hoi", "plan", "", "opus")
         assert "--model" in claude and claude[claude.index("--model") + 1] == "opus"
@@ -266,20 +267,31 @@ class TestModelVlag:
         cursor = a.ENGINES["cursor"]["cmd"]("cursor-agent", "hoi", "plan", "", "gpt-5")
         assert "--model" in cursor and cursor[cursor.index("--model") + 1] == "gpt-5"
 
-    def test_zonder_keuze_staat_er_geen_vlag_behalve_codex(self):
-        """Leeg betekent: de CLI houdt zijn eigen standaard — behalve Codex,
-        die anders gpt-6-astra uit config.toml pakt en 400 geeft."""
+    def test_zonder_keuze_staat_er_geen_vlag(self, monkeypatch):
+        """Leeg betekent: de CLI houdt zijn eigen standaard. Codex krijgt géén -m:
+        ChatGPT-accounts weigeren gpt-5-codex (model_not_found)."""
+        monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
         import agent_runner as a
-        for naam in ("claude", "cursor"):
+        for naam in ("claude", "cursor", "codex"):
             cmd = a.ENGINES[naam]["cmd"](naam, "hoi", "plan", "/tmp/uit.txt", "")
             assert "--model" not in cmd and "-m" not in cmd
-        codex = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "")
-        assert "-m" in codex and codex[codex.index("-m") + 1] == "gpt-5-codex"
 
-    def test_codex_astra_valt_terug_op_gpt5(self):
+    def test_codex_astra_krijgt_geen_modelvlag(self, monkeypatch):
+        monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
         import agent_runner as a
         cmd = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "gpt-6-astra")
-        assert cmd[cmd.index("-m") + 1] == "gpt-5-codex"
+        assert "-m" not in cmd
+
+    def test_codex_env_pinn_het_model(self, monkeypatch):
+        monkeypatch.setenv("AXE_CODEX_MODEL", "o3")
+        import agent_runner as a
+        cmd = a.ENGINES["codex"]["cmd"]("codex", "hoi", "plan", "/tmp/uit.txt", "")
+        assert "-m" in cmd and cmd[cmd.index("-m") + 1] == "o3"
+
+    def test_zonder_model_vlag_stript_m(self):
+        import agent_runner as a
+        cmd = ["codex", "exec", "p", "-C", ".", "-o", "uit.txt", "-m", "gpt-5-codex", "-s", "read-only"]
+        assert a._zonder_model_vlag(cmd) == ["codex", "exec", "p", "-C", ".", "-o", "uit.txt", "-s", "read-only"]
 
     def test_codex2_is_een_tweede_chatgpt_abonnement(self):
         """Eigen CODEX_HOME: dat is wat de limieten scheidt."""
@@ -491,6 +503,83 @@ class TestStoelKeuze:
         r = a.run_agent("proef", "x", permission_mode="plan", engine="claude")
         assert r["status"] == "ok" and r["engine"] == "claude2"
         assert a._stoel_koelt("claude")
+
+    def test_codex_model_not_found_probeert_eerst_zonder_m_dan_claude(self, monkeypatch):
+        """ChatGPT-account weigert -m gpt-5-codex: één retry zonder vlag, daarna Claude CLI."""
+        geweigerd = (
+            "ERROR: {\"type\":\"error\",\"status\":400,\"error\":{\"message\":"
+            "\"The 'gpt-5-codex' model is not supported when using Codex with a ChatGPT account.\","
+            "\"code\":\"model_not_found\"}}"
+        )
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setenv("AXE_CODEX_MODEL", "gpt-5-codex")
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        monkeypatch.setattr(a, "_claude_fallback_binary", lambda: "claude")
+        for m in ("codex", "codex2"):
+            a._ACCOUNT_CACHE[m] = (time.monotonic(), {"ingelogd": True, "account": "a@b.nl"})
+            a._SEAT_LIMIT.pop(m, None)
+        echte = subprocess.run
+        gezien = []
+
+        def run(cmd, *args, **kwargs):
+            if cmd and cmd[0] == "git":
+                return echte(cmd, *args, **kwargs)
+            gezien.append(list(cmd))
+            if cmd and cmd[0] == "codex":
+                return subprocess.CompletedProcess(cmd, 1, "", geweigerd)
+            return subprocess.CompletedProcess(cmd, 0, '{"result":"claude nam het over"}', "")
+        monkeypatch.setattr(subprocess, "run", run)
+        uit = a._run_agent_stoel("codex", "proef", pad, "werkbranch", "bouw", "plan", 30, "", False)
+        assert uit["status"] == "ok"
+        assert uit.get("codex_fallback") == "claude"
+        assert "Claude CLI" in (uit.get("result") or "")
+        assert any(c[0] == "codex" and "-m" in c for c in gezien)
+        assert any(c[0] == "codex" and "-m" not in c for c in gezien)
+        assert any(c[0] == "claude" for c in gezien)
+
+    def test_codex_model_not_found_zonder_m_valt_direct_naar_claude(self, monkeypatch):
+        monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
+        geweigerd = "The 'gpt-5-codex' model is not supported when using Codex with a ChatGPT account. code: model_not_found"
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        monkeypatch.setattr(a, "_claude_fallback_binary", lambda: "claude")
+        a._ACCOUNT_CACHE["codex"] = (time.monotonic(), {"ingelogd": True, "account": "a@b.nl"})
+        echte = subprocess.run
+        gezien = []
+
+        def run(cmd, *args, **kwargs):
+            if cmd and cmd[0] == "git":
+                return echte(cmd, *args, **kwargs)
+            gezien.append(list(cmd))
+            if cmd and cmd[0] == "codex":
+                return subprocess.CompletedProcess(cmd, 1, "", geweigerd)
+            return subprocess.CompletedProcess(cmd, 0, '{"result":"ok"}', "")
+        monkeypatch.setattr(subprocess, "run", run)
+        uit = a._run_agent_stoel("codex", "proef", pad, "werkbranch", "bouw", "plan", 30, "", False)
+        assert uit["status"] == "ok" and uit.get("codex_fallback") == "claude"
+        assert sum(1 for c in gezien if c[0] == "codex") == 1
+
+    def test_codex_model_not_found_zonder_claude_zet_reden_op_de_taak(self, monkeypatch):
+        monkeypatch.delenv("AXE_CODEX_MODEL", raising=False)
+        geweigerd = "code: model_not_found"
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        monkeypatch.setattr(a, "_claude_fallback_binary", lambda: None)
+        a._ACCOUNT_CACHE["codex"] = (time.monotonic(), {"ingelogd": True, "account": "a@b.nl"})
+        echte = subprocess.run
+
+        def run(cmd, *args, **kwargs):
+            if cmd and cmd[0] == "git":
+                return echte(cmd, *args, **kwargs)
+            return subprocess.CompletedProcess(cmd, 1, "", geweigerd)
+        monkeypatch.setattr(subprocess, "run", run)
+        uit = a._run_agent_stoel("codex", "proef", pad, "werkbranch", "bouw", "plan", 30, "", False)
+        assert uit["status"] == "error"
+        assert "Codex model_not_found" in (uit.get("error") or "")
+        assert "Claude CLI fallback unavailable" in (uit.get("error") or "")
 
     def test_gedeelde_quota_vlag_zelfde_email(self, monkeypatch):
         monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])

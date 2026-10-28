@@ -10,7 +10,13 @@ def test_northsea_no_handler():
 def test_gpt6_astra():
     uit = taak_fout("The 'gpt-6-astra' model requires a newer version of the Codex CLI")
     assert uit["actie"] == "retry"
-    assert "gpt-5-codex" in uit["regel"]
+    assert "omits -m" in uit["regel"] or "Claude CLI" in uit["regel"]
+
+
+def test_chatgpt_model_not_found():
+    uit = taak_fout("The 'gpt-5-codex' model is not supported when using Codex with a ChatGPT account. code: model_not_found")
+    assert uit["actie"] == "retry"
+    assert "ChatGPT" in uit["regel"] and "Claude CLI" in uit["regel"]
 
 
 def test_login():

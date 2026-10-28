@@ -33,7 +33,7 @@ def test_groepeert_taken_roosters_stoelen():
     bronnen = {r["bron"] for r in uit}
     assert bronnen == {"core_tasks", "core_schedules", "seats"}
     astra = next(r for r in uit if r["id"] == "t1")
-    assert astra["actie"] == "retry" and "gpt-5-codex" in astra["regel"]
+    assert astra["actie"] == "retry" and ("omits -m" in astra["regel"] or "Claude CLI" in astra["regel"])
     ns = next(r for r in uit if r["id"] == "t2")
     assert "8040" in ns["regel"]
     assert any(r["actie"] == "reconnect" for r in uit)

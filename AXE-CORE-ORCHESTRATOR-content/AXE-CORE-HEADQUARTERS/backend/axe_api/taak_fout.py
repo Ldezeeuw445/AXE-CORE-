@@ -40,7 +40,12 @@ def taak_fout(error: Any, titel: str = "") -> dict[str, str]:
         }
     if "gpt-6-astra" in laag or "requires a newer version" in laag:
         return {
-            "regel": "Codex asked for gpt-6-astra; this CLI is too old. Retry uses gpt-5-codex.",
+            "regel": "Codex asked for a model this CLI cannot run. Retry omits -m (account default), then Claude CLI.",
+            "actie": "retry",
+        }
+    if re.search(r"model_not_found|not supported when using codex|unsupported model", laag):
+        return {
+            "regel": "Codex rejected the model on this ChatGPT account. Retry omits -m, then falls back to Claude CLI.",
             "actie": "retry",
         }
     if re.search(r"unpaid invoice|payment required|insufficient (credits|balance)|billing", laag):
