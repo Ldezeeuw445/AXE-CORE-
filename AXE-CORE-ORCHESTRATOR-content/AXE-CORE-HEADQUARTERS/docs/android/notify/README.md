@@ -28,8 +28,9 @@ once on first launch.
    realtime + 30s poll), filters the four kinds, calls
    `__AXE_ANDROID__.notify(title, body, id)`.
 2. **App closed** — `NotifyPollWorker` (WorkManager, every 15 min, network
-   required) reads `core_notifications` with the stored user refresh token,
-   posts via `NotificationManager`. Dedup by row id.
+   required) reads `/device/notifications` on the AXE Core API with a
+   device token (hash in `core_axe_devices`). Dedup by row id. The anon
+   key never leaves HQ.
 
 Tauri (Mac) already posts via `tauri-plugin-notification` from the same
 `kiesSysteemMeldingen` path. Unchanged, no Settings opt-in there either.
@@ -91,8 +92,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 Package id: `com.axecore.core`.
 
 First launch: Android permission sheet → Allow. Open HQ once while signed in
-so `__AXE_ANDROID__.setNotifyPoll` stores the session. After that the worker
-runs with the screen off.
+so `__AXE_ANDROID__.setNotifyPoll` stores the device token. After that the
+worker runs with the screen off.
 
 Prove it: in Settings (desktop) or by inserting a row:
 
@@ -108,6 +109,6 @@ web-push and there is still no sender with subscriptions.
 | Where | What |
 |---|---|
 | HQ `orchestrator` | this commit (autosync rebuilds the Mac app) |
-| VPS `api.axecompanion.com` | `python3 scripts/vps_sync.py deploy` — `eigenaar_acties.py` no longer treats 0 web-push rows as "phone hears nothing" |
+| VPS `api.axecompanion.com` | `python3 scripts/vps_sync.py deploy` — `/device/notifications` must be live before the new APK |
 | A17 APK | rebuild as above; web-only HQ deploy does **not** change the installed Device Manager |
-| Supabase | no new table; worker reads existing `core_notifications` with the user JWT |
+| Supabase | `core_axe_devices.device_token_hash`; apply `20261028120000_core_anon_dicht.sql` **after** HQ + APK + API |

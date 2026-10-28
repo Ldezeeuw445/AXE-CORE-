@@ -60,6 +60,19 @@ export async function currentUserId(sb: SupabaseClient): Promise<string | null> 
 }
 
 /**
+ * Supabase-client met een echte sessie (of de headless service-identity).
+ * Zonder sessie is de rol `anon`; na het dichtdraaien van core_* mag die
+ * niets meer. Aanroepers moeten dit afwachten in plaats van `getSupabase()`
+ * te vuren op een client die nog geen JWT heeft.
+ */
+export async function sessieClient(): Promise<SupabaseClient | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const uid = await currentUserId(sb);
+  return uid ? sb : null;
+}
+
+/**
  * `?? ENV_URL` only falls back on `null`/`undefined` — an empty string
  * survives it untouched. localStorage.getItem() returns `null` when a key is
  * absent, but the literal `""` when a key exists and was set to nothing (e.g.

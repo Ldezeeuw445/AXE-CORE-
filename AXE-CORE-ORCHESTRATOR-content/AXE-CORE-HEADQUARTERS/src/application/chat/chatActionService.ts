@@ -7,7 +7,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { NAV_ITEMS, getAllNavItems, type NavItem } from '@/domain/navRegistry';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
 import { n8nListWorkflows, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 
 export type ChatAction =
@@ -94,7 +94,7 @@ async function resolveRecordDeepLink(recordType: NonNullable<NavItem['recordType
     // KB documents live in their own core_kb_documents table (see
     // KnowledgeBase.tsx), so lookups query it directly instead of a blob —
     // this scales past a handful of docs and works from any device.
-    const sb = getSupabase();
+    const sb = await sessieClient();
     if (!sb) return 'not_found';
     const { data } = await sb.from('core_kb_documents').select('id,title').ilike('title', `%${query}%`).limit(5);
     const rows = data ?? [];
@@ -118,7 +118,7 @@ async function resolveRecordDeepLink(recordType: NonNullable<NavItem['recordType
     return { id: rows[0].id, label: `cron workflow "${rows[0].name}"` };
   }
 
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return 'not_found';
 
   if (recordType === 'task') {

@@ -5,7 +5,7 @@
  * Requires: VITE_N8N_API_KEY (base URL falls back to /proxy/n8n)
  */
 
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
 
 // ── Config ────────────────────────────────────────────────────────────────
 const N8N_BASE_URL = import.meta.env.VITE_N8N_URL     ?? '/proxy/n8n';
@@ -124,7 +124,7 @@ export async function executeWorkflow(
   });
 
   // Log to Supabase audit trail
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (sb) {
     void sb.from('audit_trail').insert({
       actor: `agent:axe_core`,
@@ -197,7 +197,7 @@ export async function deleteExecution(id: string): Promise<boolean> {
  * Call this after adding/changing workflows in n8n.
  */
 export async function syncWorkflowsToRegistry(): Promise<number> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return 0;
 
   const workflows = await listWorkflows();
@@ -232,7 +232,7 @@ export async function registerWorkflow(opts: {
   triggerType?: string;
   tags?: string[];
 }): Promise<string | null> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return null;
 
   const { data, error } = await sb.from('automation_registry').upsert({

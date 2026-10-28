@@ -5,7 +5,7 @@
  * workers en de VPS-health erbij. Geen mock-rijen: wat hier niet gemeten
  * is, staat er niet.
  */
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
 import { isTauriRuntime, isAndroidRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
   capabilitiesVoor,
@@ -75,7 +75,7 @@ export async function ditToestel(): Promise<AxeDevice> {
 
 export async function heartbeatDitToestel(): Promise<{ ok: boolean; fout: string | null; device: AxeDevice }> {
   const device = await ditToestel();
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return { ok: false, fout: 'not signed in', device };
   const { error } = await sb.from('core_axe_devices').upsert({
     device_id: device.device_id,
@@ -91,7 +91,7 @@ export async function heartbeatDitToestel(): Promise<{ ok: boolean; fout: string
 }
 
 async function installaties(ditId: string): Promise<{ rijen: AxeDevice[]; fout: string | null }> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return { rijen: [], fout: 'not signed in' };
   const { data, error } = await sb
     .from('core_axe_devices')
@@ -112,7 +112,7 @@ async function installaties(ditId: string): Promise<{ rijen: AxeDevice[]; fout: 
 }
 
 async function computerWorkers(): Promise<AxeDevice[]> {
-  const sb = getSupabase();
+  const sb = await sessieClient();
   if (!sb) return [];
   const { data, error } = await sb
     .from('core_computer_workers')

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { getSupabase, supabasePubliek } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { notificationText, collapseRepeats } from '@/domain/notification';
 import { pasBadgeToe } from '@/infrastructure/pwa/appBadge';
 import { kiesSysteemMeldingen, BEGINSTAND } from '@/domain/systeemMelding';
@@ -9,6 +9,7 @@ import { useAuth } from '@/presentation/contexts/AuthContext';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { isNativeSchaduwMelding } from '@/domain/nativeMelding';
 import { setNotifyPoll, vraagNotifyToestemming } from '@/infrastructure/gateways/androidNotifyBridge';
+import { registreerDeviceNotifyToken } from '@/infrastructure/gateways/deviceNotifyToken';
 import { ontwerpModus } from '@/infrastructure/supabase/ontwerpModus';
 
 export interface NotificationItem {
@@ -151,25 +152,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => { feed.stop(); if (sb && channel) void sb.removeChannel(channel); };
   }, [userId]);
 
-  // Device Manager: sessie naar WorkManager, zodat de A17 hoort met het scherm uit.
+  // Device Manager: device-token naar WorkManager, zodat de A17 hoort met het scherm uit.
   useEffect(() => {
     if (!userId || !isAndroidShellRuntime()) return;
     vraagNotifyToestemming();
     let stop = false;
     const sync = async () => {
-      const sb = getSupabase();
-      const cfg = supabasePubliek();
-      if (!sb || !cfg || stop) return;
-      const { data } = await sb.auth.getSession();
-      const s = data.session;
-      if (!s?.access_token || !s.refresh_token) return;
-      setNotifyPoll({
-        supabaseUrl: cfg.url,
-        anonKey: cfg.anonKey,
-        accessToken: s.access_token,
-        refreshToken: s.refresh_token,
-        userId: s.user.id,
-      });
+      const poll = await registreerDeviceNotifyToken();
+      if (!poll || stop) return;
+      setNotifyPoll(poll);
     };
     void sync();
     const id = window.setInterval(() => void sync(), 10 * 60_000);

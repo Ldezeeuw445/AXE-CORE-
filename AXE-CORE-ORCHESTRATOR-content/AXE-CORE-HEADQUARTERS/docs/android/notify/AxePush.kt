@@ -24,9 +24,10 @@ import java.util.concurrent.TimeUnit
  * Shade notifications for Device Manager (`com.axecore.core`).
  *
  * No FCM. No web-push. The HQ WebView posts immediately via [notifyNow];
- * [NotifyPollWorker] polls `core_notifications` every 15 minutes when the
- * WebView is gone. Same four events as `src/domain/nativeMelding.ts` —
- * keep [isShadeEvent] in lockstep with that file.
+ * [NotifyPollWorker] polls AXE Core API `/device/notifications` every 15
+ * minutes when the WebView is gone (device token, never the anon key).
+ * Same four events as `src/domain/nativeMelding.ts` — keep [isShadeEvent]
+ * in lockstep with that file.
  *
  * Drop this file next to `AxeWebView.kt`, add the JavascriptInterface methods
  * from `AxePushBridge.kt`, and the WorkManager bits in Application/Activity.
@@ -61,11 +62,13 @@ object AxePush {
     fun savePoll(ctx: Context, json: String): Boolean {
         val o = JSONObject(json)
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("supabaseUrl", o.optString("supabaseUrl"))
-            .putString("anonKey", o.optString("anonKey"))
-            .putString("accessToken", o.optString("accessToken"))
-            .putString("refreshToken", o.optString("refreshToken"))
-            .putString("userId", o.optString("userId"))
+            .putString("apiOrigin", o.optString("apiOrigin"))
+            .putString("deviceToken", o.optString("deviceToken"))
+            .putString("deviceId", o.optString("deviceId"))
+            .remove("anonKey")
+            .remove("accessToken")
+            .remove("refreshToken")
+            .remove("supabaseUrl")
             .apply()
         schedule(ctx)
         return true
@@ -123,16 +126,13 @@ object AxePush {
 
     fun pollConfig(ctx: Context): JSONObject? {
         val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val url = p.getString("supabaseUrl", "") ?: ""
-        val key = p.getString("anonKey", "") ?: ""
-        val refresh = p.getString("refreshToken", "") ?: ""
-        if (url.isBlank() || key.isBlank() || refresh.isBlank()) return null
+        val origin = p.getString("apiOrigin", "") ?: ""
+        val token = p.getString("deviceToken", "") ?: ""
+        if (origin.isBlank() || token.isBlank()) return null
         return JSONObject()
-            .put("supabaseUrl", url.trimEnd('/'))
-            .put("anonKey", key)
-            .put("accessToken", p.getString("accessToken", "") ?: "")
-            .put("refreshToken", refresh)
-            .put("userId", p.getString("userId", "") ?: "")
+            .put("apiOrigin", origin.trimEnd('/'))
+            .put("deviceToken", token)
+            .put("deviceId", p.getString("deviceId", "") ?: "")
     }
 
     /**
