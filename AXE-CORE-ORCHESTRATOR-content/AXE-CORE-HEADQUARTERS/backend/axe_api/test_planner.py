@@ -1,5 +1,5 @@
 """De planner: wat hij uit een antwoord haalt, en wanneer hij een abonnement met rust laat."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 import planner as p
 
@@ -263,8 +263,21 @@ class TestAccountfout:
         assert p.model_fout(tekst) == "model not supported on this CLI"
         assert p.wissel_motor(tekst)
 
+    def test_chatgpt_account_dat_het_model_weigert_is_model_fout(self):
+        tekst = ('ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":'
+                 '"The \'gpt-5-codex\' model is not supported when using Codex with a ChatGPT account.",'
+                 '"code":"model_not_found"}}')
+        assert p.account_fout(tekst) is None
+        assert p.model_fout(tekst) == "model not supported on this CLI"
+
 
 class TestKiesMotor:
+    def test_een_al_geprobeerde_stoel_wordt_overgeslagen(self):
+        engines = {m: {"aanwezig": True, "ingelogd": True} for m in p.ABONNEMENTEN}
+        motor, _ = p.kies_motor({}, "code-agent", "cursor", {}, engines, datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc),
+                                uitsluiten={"cursor"})
+        assert motor not in (None, "cursor")
+
     def test_sleutels_voert_nooit_uit_maar_een_vrij_abonnement_wel(self):
         motor, afgevallen = p.kies_motor({}, "code-agent", "sleutels", MOTOREN_11OKT, ALLES_INGELOGD, NU)
         assert motor in p.ABONNEMENTEN and motor != "claude"  # claude hoort bij AXE Core

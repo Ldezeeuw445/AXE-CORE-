@@ -507,6 +507,19 @@ def _auth_fout(tekst: str) -> bool:
     return bool(_AUTH_FOUT.search(tekst or ""))
 
 
+# Een stoel die het model weigert ("The 'gpt-5-codex' model is not supported when
+# using Codex with a ChatGPT account", 25-28 okt). Niet het account en niet de
+# taak: de volgende stoel. Geen koeling, want het account werkt gewoon.
+_MODEL_FOUT = re.compile(
+    r"not supported when using codex with a chatgpt account|\bmodel_not_found\b|requires a newer version",
+    re.IGNORECASE,
+)
+
+
+def _model_fout(tekst: str) -> bool:
+    return bool(_MODEL_FOUT.search(tekst or ""))
+
+
 def _familie(naam: str) -> str:
     return re.sub(r"\d+$", "", naam or "")
 
@@ -816,12 +829,13 @@ def run_agent(
                 laatste["seats_tried"] = geprobeerd
             return laatste
         fout = str(laatste.get("error") or laatste.get("result") or "")
-        if _auth_fout(fout) or _limit_message(fout):
-            _onthoud_stoel_fout(huidige, fout)
+        if _auth_fout(fout) or _limit_message(fout) or _model_fout(fout):
+            if not _model_fout(fout):
+                _onthoud_stoel_fout(huidige, fout)
             overslaan.add(huidige)
             volgende = kies_vrije_stoel(gevraagd, overslaan=overslaan)
             if volgende:
-                log.info("%s faalde op account/limiet; probeer %s", huidige, volgende)
+                log.info("%s faalde op account/limiet/model; probeer %s", huidige, volgende)
                 huidige = volgende
                 continue
         break

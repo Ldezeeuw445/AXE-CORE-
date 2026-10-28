@@ -134,7 +134,15 @@ _ACCOUNTFOUT = (
                 r"login required|failed to authenticate|authentication (failed|required)|invalid_grant", re.I),
      "login verlopen"),
 )
-_MODELFOUT = re.compile(r"gpt-6-astra|requires a newer version", re.I)
+# 25-28 okt: elke planner-ronde "fail" op één Code Agent-taak. Een Codex-stoel met
+# een ChatGPT-login weigert zijn eigen standaardmodel: "The 'gpt-5-codex' model is
+# not supported when using Codex with a ChatGPT account" (model_not_found). Dat
+# is geen account dat stuk is en geen taak die fout is: een andere stoel kan het.
+_MODELFOUT = re.compile(
+    r"gpt-6-astra|requires a newer version|not supported when using codex with a chatgpt account"
+    r"|\bmodel_not_found\b",
+    re.I,
+)
 
 
 def account_fout(tekst: Optional[str]) -> Optional[str]:
@@ -221,10 +229,14 @@ def motor_reden(staat: dict, motor: str, engines: dict, nu: datetime) -> Optiona
 
 
 def kies_motor(staat: dict, agent: str, gewenst: str, motoren: dict, engines: dict,
-               nu: datetime) -> tuple[Optional[str], dict]:
-    """(motor, {motor: reden} van wat afviel). None = geen enkele bruikbare CLI."""
-    bezet = {m for a, m in motoren.items() if a != agent}
-    kandidaten = [gewenst]
+               nu: datetime, uitsluiten: tuple[str, ...] | set[str] = ()) -> tuple[Optional[str], dict]:
+    """(motor, {motor: reden} van wat afviel). None = geen enkele bruikbare CLI.
+
+    `uitsluiten`: stoelen die deze taak al probeerden. Zonder dat koos de lus in
+    _voer_uit na een modelfout gewoon dezelfde stoel opnieuw, drie keer.
+    """
+    bezet = {m for a, m in motoren.items() if a != agent} | set(uitsluiten)
+    kandidaten = [gewenst] if gewenst not in uitsluiten else []
     if agent not in ZONDER_TERUGVAL:
         kandidaten += [m for m in ABONNEMENTEN if familie(m) == familie(gewenst) and m != gewenst and m not in bezet]
         kandidaten += [m for m in ABONNEMENTEN if m not in kandidaten and m not in bezet]
@@ -957,7 +969,8 @@ class Planner:
             if tekst or not wissel_motor(fout):
                 break
             afgevallen[motor] = wissel_motor(fout) or "account werkt niet"
-            motor, meer = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now())
+            motor, meer = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now(),
+                                     uitsluiten=set(geprobeerd))
             afgevallen.update(meer)
             if not motor:
                 break

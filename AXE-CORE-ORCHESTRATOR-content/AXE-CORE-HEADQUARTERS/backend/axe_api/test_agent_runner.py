@@ -431,6 +431,27 @@ class TestStoelKeuze:
     def test_onbekende_motor_geen_stoel(self):
         assert a.kies_vrije_stoel("verzonnen") is None
 
+    def test_model_dat_een_stoel_weigert_gaat_naar_de_volgende_zonder_koeling(self, monkeypatch):
+        pad = _repo()
+        monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        for m in ("codex", "codex2"):
+            a._ACCOUNT_CACHE[m] = (time.monotonic(), {"ingelogd": True, "account": "a@b.nl"})
+            a._SEAT_LIMIT.pop(m, None)
+        geweigerd = ("The 'gpt-5-codex' model is not supported when using Codex with a ChatGPT account. "
+                     "code: model_not_found")
+        gedraaid = []
+
+        def stoel(naam, *args, **kwargs):
+            gedraaid.append(naam)
+            return {"status": "error", "error": geweigerd} if naam == "codex" else {"status": "ok", "result": "klaar"}
+        monkeypatch.setattr(a, "_run_agent_stoel", stoel)
+        uit = a.run_agent("proef", "doe iets", "plan", 30, "codex")
+        assert uit["status"] == "ok" and gedraaid[:2] == ["codex", "codex2"]
+        # Het account werkt gewoon: geen limiet en niet uitgelogd.
+        assert "codex" not in a._SEAT_LIMIT
+        assert a._ACCOUNT_CACHE["codex"][1]["ingelogd"] is True
+
     def _nep_cli(self, monkeypatch, antwoord):
         pad = _repo()
         monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
