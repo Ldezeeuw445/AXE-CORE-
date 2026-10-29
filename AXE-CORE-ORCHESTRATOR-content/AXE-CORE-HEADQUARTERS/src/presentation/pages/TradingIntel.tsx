@@ -25,8 +25,9 @@ import { CorrelatieTab } from '@/presentation/pages/tradingIntel/CorrelatieTab';
 import { KalenderTab } from '@/presentation/pages/tradingIntel/KalenderTab';
 import { LseVaultTab } from '@/presentation/pages/tradingIntel/LseVaultTab';
 import { AccountsTab } from './tradingIntel/AccountsTab';
+import { TradingTeamTab } from './tradingIntel/TradingTeamTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie' | 'kalender' | 'vault';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie' | 'kalender' | 'vault' | 'team';
 
 /**
  * The tabs are the pipeline, in the order the work actually happens.
@@ -58,6 +59,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'correlatie', label: 'Correlatie' },
   { id: 'kalender', label: 'Kalender' },
   { id: 'funnel', label: 'Funnel' },
+  { id: 'team', label: 'Team' },
   { id: 'scorecard', label: 'Scorecard' },
   { id: 'accounts', label: 'Accounts' },
   { id: 'demo', label: 'Accounts book' },
@@ -144,6 +146,7 @@ export default function TradingIntel() {
         {tab === 'brain' && <BrainTab desk={desk} />}
         {tab === 'scorecard' && <ScorecardTab desk={desk} />}
         {tab === 'funnel' && <FunnelTab desk={desk} />}
+        {tab === 'team' && <TradingTeamTab />}
         {tab === 'memory' && <TradingMemoryPanel />}
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
