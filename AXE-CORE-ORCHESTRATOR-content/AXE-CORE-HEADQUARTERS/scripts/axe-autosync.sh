@@ -65,14 +65,21 @@ fi
 # Alleen op een Mac met de VPS-sleutel, alleen met een schone box en groene
 # tests, en bij een slechte /health gaat het vanzelf terug: zie vps_sync.py auto.
 # Uit: touch ~/.axe/auto-deploy-uit
+ENVF="$HIER/backend/axe_api/.env.local"
+SBU="$(grep -E '^SUPABASE_URL=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
+SBK="$(grep -E '^SUPABASE_SERVICE_ROLE(_KEY)?=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
 if [[ -f "${AXE_VPS_KEY:-$HOME/.ssh/axe-core-vps}" ]]; then
-  ENVF="$HIER/backend/axe_api/.env.local"
-  SBU="$(grep -E '^SUPABASE_URL=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
-  SBK="$(grep -E '^SUPABASE_SERVICE_ROLE(_KEY)?=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
   if ! SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" python3 "$HIER/scripts/vps_sync.py" auto \
        >> "$HOME/Library/Logs/axe-autodeploy.log" 2>&1; then
     log "VPS-update wacht of is teruggezet — zie ~/Library/Logs/axe-autodeploy.log"
   fi
+fi
+# De schijf leefbaar houden (29 okt: Mac mini 90%, iMac 91% vol). Eens per dag,
+# elke 3 uur boven 90%, en alleen wat vanzelf terugkomt: zie mac_opruimen.py.
+# Uit: touch ~/.axe/opruimen-uit
+if ! SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" python3 "$HIER/scripts/mac_opruimen.py" \
+     >> "$HOME/Library/Logs/axe-opruimen.log" 2>&1; then
+  log "opruimen mislukt — zie ~/Library/Logs/axe-opruimen.log"
 fi
 
 DOEL="$(git rev-parse --short HEAD)"
