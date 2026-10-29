@@ -1027,6 +1027,8 @@ class Planner:
         # van main/snapshot af op de werkbranch), anders weigert _werkrepo een
         # oude TRADING-OS-boom op main voordat we hem kunnen omzetten.
         canon = self._canon(gevraagd) if gevraagd else {"actie": "geen"}
+        if canon.get("geblokkeerd"):
+            return {"taak": taak["id"], "overgeslagen": canon["geblokkeerd"]}
         repo = self._werkrepo(gevraagd, streng=schrijven)
         if not repo:
             return {"taak": taak["id"], "overgeslagen":
@@ -1182,6 +1184,17 @@ class Planner:
                                              werk_map=WERK_MAP, overrides_pad=WERK_OVERRIDES)
         if uit.get("actie") == "overgezet":
             log.info("planner: %s wijst nu naar %s (%s)", repo, uit.get("naar"), uit.get("pad"))
+        # De eigen checkout van AXE (waar de app en axe-autosync uit draaien)
+        # nooit van branch laten wisselen: een eigen worktree voor de lus.
+        eigen = bouw_publiceer.zorg_voor_eigen_worktree(
+            _git, repo, _repos().get(repo), eigen_pad=os.path.dirname(os.path.abspath(__file__)),
+            werk_map=WERK_MAP, overrides_pad=WERK_OVERRIDES, basis_naam=bouw_publiceer.basis_voor(repo))
+        if eigen.get("actie") == "worktree" or eigen.get("reden"):
+            uit = {**uit, "eigen_worktree": eigen}
+            log.info("planner: %s eigen worktree: %s", repo, eigen)
+        if eigen.get("reden") and eigen.get("actie") == "geen":
+            # Liever geen run dan een run die de checkout van de app verplaatst.
+            return {**uit, "geblokkeerd": eigen["reden"]}
         pad = _repos().get(repo)
         if pad:
             werk = bouw_publiceer.zorg_voor_werkbranch(

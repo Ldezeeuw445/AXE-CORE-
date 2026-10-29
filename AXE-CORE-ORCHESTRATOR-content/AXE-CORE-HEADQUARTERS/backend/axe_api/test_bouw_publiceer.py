@@ -280,6 +280,60 @@ def test_een_checkout_van_de_oude_repo_wordt_een_kloon_van_de_nieuwe(tmp_path):
     assert json.loads(overrides.read_text()) == {"axon-memory": str(kloon)}
 
 
+@pytest.fixture
+def eigen_checkout(tmp_path):
+    """~/AXE-CORE- op de Mac mini: een kloon op orchestrator, waar AXE zelf uit draait."""
+    remote = tmp_path / "AXE-CORE-.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "orchestrator", str(remote)], check=True)
+    hoofd = tmp_path / "AXE-CORE-"
+    subprocess.run(["git", "clone", "-q", str(remote), str(hoofd)], check=True, capture_output=True)
+    sh(hoofd, "config", "user.email", "t@example.com")
+    sh(hoofd, "config", "user.name", "T")
+    (hoofd / "backend").mkdir()
+    (hoofd / "backend" / "planner.py").write_text("# app\n")
+    sh(hoofd, "add", "-A")
+    sh(hoofd, "commit", "-q", "-m", "begin")
+    sh(hoofd, "push", "-q", "origin", "orchestrator")
+    werk_map = tmp_path / ".axe" / "werk"
+    kw = {"eigen_pad": str(hoofd / "backend"), "werk_map": str(werk_map),
+          "overrides_pad": str(werk_map / "agent-repos.json"), "basis_naam": "orchestrator"}
+    return hoofd, werk_map, kw
+
+
+def test_de_lus_krijgt_een_eigen_worktree_en_een_vastgelopen_mac_komt_los(eigen_checkout):
+    hoofd, werk_map, kw = eigen_checkout
+    # Zoals de Mac mini op 29 okt: de lus had de app-checkout op axe-agent gezet.
+    sh(hoofd, "checkout", "-q", "-B", "axe-agent", "origin/orchestrator")
+    uit = bp.zorg_voor_eigen_worktree(agent_runner._git, "axe-core", str(hoofd), **kw)
+    assert uit == {"actie": "worktree", "pad": str(werk_map / "axe-core"), "terug_op": "orchestrator"}
+    assert sh(hoofd, "rev-parse", "--abbrev-ref", "HEAD").strip() == "orchestrator"
+    assert sh(werk_map / "axe-core", "rev-parse", "--abbrev-ref", "HEAD").strip() == "axe-agent"
+    assert json.loads((werk_map / "agent-repos.json").read_text()) == {"axe-core": str(werk_map / "axe-core")}
+    # De volgende ronde: niets meer te doen, de hoofdcheckout blijft op orchestrator.
+    assert bp.zorg_voor_eigen_worktree(agent_runner._git, "axe-core", str(hoofd), **kw) == {
+        "actie": "worktree", "pad": str(werk_map / "axe-core")}
+    assert sh(hoofd, "rev-parse", "--abbrev-ref", "HEAD").strip() == "orchestrator"
+
+
+def test_open_werk_in_de_app_checkout_wordt_nooit_verplaatst(eigen_checkout):
+    hoofd, werk_map, kw = eigen_checkout
+    sh(hoofd, "checkout", "-q", "-B", "axe-agent", "origin/orchestrator")
+    (hoofd / "backend" / "planner.py").write_text("# half werk\n")
+    uit = bp.zorg_voor_eigen_worktree(agent_runner._git, "axe-core", str(hoofd), **kw)
+    assert uit["actie"] == "geen" and "uncommitted" in uit["reden"]
+    assert sh(hoofd, "rev-parse", "--abbrev-ref", "HEAD").strip() == "axe-agent"
+    assert (hoofd / "backend" / "planner.py").read_text() == "# half werk\n"
+    assert not (werk_map / "axe-core").exists()
+
+
+def test_een_andere_repo_dan_de_eigen_blijft_waar_hij_is(eigen_checkout, tmp_path):
+    _, werk_map, kw = eigen_checkout
+    ander = tmp_path / "axe-companion"
+    subprocess.run(["git", "init", "-q", "-b", "axe-agent", str(ander)], check=True)
+    assert bp.zorg_voor_eigen_worktree(agent_runner._git, "axe-companion", str(ander), **kw) == {"actie": "geen"}
+    assert not werk_map.exists()
+
+
 def test_de_juiste_repo_of_een_onbekende_naam_blijft_zoals_hij_is(tmp_path):
     goed = tmp_path / "goed"
     subprocess.run(["git", "init", "-q", str(goed)], check=True)

@@ -357,6 +357,70 @@ def zorg_voor_canon(git: Git, naam: str, pad: str | None, *, werk_map: str, over
     return {"actie": "overgezet", "van": huidig, "naar": doel, "pad": nieuw}
 
 
+def _toplevel(git: Git, pad: str | None) -> str | None:
+    if not pad:
+        return None
+    uit = git(pad, "rev-parse", "--show-toplevel")
+    t = (uit.stdout or "").strip() if uit.returncode == 0 else ""
+    return os.path.realpath(t) if t else None
+
+
+def zorg_voor_eigen_worktree(git: Git, naam: str, pad: str | None, *, eigen_pad: str, werk_map: str,
+                             overrides_pad: str, basis_naam: str | None) -> dict:
+    """Werk nooit in de checkout waar AXE zelf uit draait.
+
+    29 okt: de lus zette ~/AXE-CORE- op de Mac mini op axe-agent (checkout -B in
+    zorg_voor_werkbranch). Daar draaien de app, de lokale API en axe-autosync
+    uit, en die laatste slaat een checkout buiten orchestrator over, dus de Mac
+    mini bleef sinds 28 okt op oude code. Nu krijgt de lus een eigen worktree in
+    werk_map/<naam> op de werkbranch, en de whitelist wijst daarheen.
+
+    Staat de hoofdcheckout schoon op de werkbranch zonder eigen commits, dan
+    gaat hij eerst terug naar de basis: dat haalt een vastgelopen Mac los. Met
+    open wijzigingen of eigen commits blijft hij staan, en dat staat in "reden".
+    Gooit nooit.
+    """
+    eigen, top = _toplevel(git, eigen_pad), _toplevel(git, pad)
+    if not eigen or not top or eigen != top or not basis_naam:
+        return {"actie": "geen"}
+    nieuw = os.path.join(werk_map, naam)
+    try:
+        if git(top, "fetch", "--quiet", "origin", basis_naam, timeout=180).returncode != 0:
+            return {"actie": "geen", "reden": f"fetch {basis_naam} failed"}
+        huidig = (git(top, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
+        terug = None
+        if huidig == WERKBRANCH:
+            open_ = (git(top, "status", "--porcelain", "--untracked-files=no").stdout or "").strip()
+            eigen_commits = (git(top, "rev-list", "--count", f"origin/{basis_naam}..HEAD").stdout or "0").strip()
+            if open_ or eigen_commits not in ("", "0"):
+                return {"actie": "geen", "reden": f"{top} is on {WERKBRANCH} with "
+                        + ("uncommitted changes" if open_ else f"{eigen_commits} own commit(s)") + "; left as is"}
+            if git(top, "checkout", "-q", basis_naam).returncode != 0:
+                return {"actie": "geen", "reden": f"could not put {top} back on {basis_naam}"}
+            git(top, "merge", "-q", "--ff-only", f"origin/{basis_naam}")
+            terug = basis_naam
+        if not os.path.isdir(nieuw):
+            os.makedirs(werk_map, exist_ok=True)
+            if git(top, "worktree", "add", "-q", "-B", WERKBRANCH, nieuw, f"origin/{basis_naam}",
+                   timeout=300).returncode != 0:
+                return {"actie": "geen", "reden": f"could not add a worktree at {nieuw}",
+                        **({"terug_op": terug} if terug else {})}
+        try:
+            with open(overrides_pad) as fh:
+                data = json.load(fh) or {}
+        except (OSError, ValueError):
+            data = {}
+        if data.get(naam) != nieuw:
+            data[naam] = nieuw
+            tijdelijk = overrides_pad + ".tmp"
+            with open(tijdelijk, "w") as fh:
+                json.dump(data, fh, indent=2)
+            os.replace(tijdelijk, overrides_pad)
+    except OSError as e:
+        return {"actie": "geen", "reden": f"{type(e).__name__}: {e}"[:200]}
+    return {"actie": "worktree", "pad": nieuw, **({"terug_op": terug} if terug else {})}
+
+
 def zorg_voor_werkbranch(git: Git, pad: str, branch: str = WERKBRANCH,
                          basis_naam: str | None = None) -> dict:
     """Zet de checkout op de werkbranch, vanaf de basis. Nooit main.
