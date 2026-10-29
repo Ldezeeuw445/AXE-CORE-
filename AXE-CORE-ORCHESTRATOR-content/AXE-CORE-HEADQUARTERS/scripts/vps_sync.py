@@ -539,7 +539,12 @@ def auto_besluit(rows: list, todo: list, tests: bool | None) -> tuple[str, str]:
 TEST_VENV = os.path.expanduser(os.environ.get("AXE_TEST_VENV", "~/.axe/test-venv"))
 # Wat in een testomgeving niet hoeft en op een Mac soms niet bouwt (http-ece is
 # C); geen test importeert het.
-NIET_VOOR_TESTS = ("pywebpush", "http-ece", "http_ece")
+NIET_VOOR_TESTS = ("pywebpush", "http-ece", "http_ece", "browser-use")
+# launchd geeft de autosync alleen /usr/bin:/bin:/usr/sbin:/sbin. Daar staat op
+# een Mac Python 3.9 en geen uv (29 okt, iMac: "no Python 3.11+"), terwijl de
+# app-bouw ze wel heeft. Dus ook op de vaste plekken kijken.
+_MAC_BIN = ("/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin"),
+            os.path.expanduser("~/.cargo/bin"))
 
 
 def _bruikbaar(py: str) -> bool:
@@ -547,9 +552,22 @@ def _bruikbaar(py: str) -> bool:
     return ok.returncode == 0
 
 
+def _uv() -> str | None:
+    import shutil
+    gevonden = shutil.which("uv")
+    if gevonden:
+        return gevonden
+    return next((os.path.join(d, "uv") for d in _MAC_BIN if os.access(os.path.join(d, "uv"), os.X_OK)), None)
+
+
 def _basis_python() -> str | None:
     """Een Python van 3.11 of nieuwer; de backend gebruikt `X | None` in modellen."""
-    for naam in ("python3.13", "python3.12", "python3.11", "/opt/homebrew/bin/python3", "/usr/local/bin/python3", "python3"):
+    namen = ["python3.13", "python3.12", "python3.11"]
+    namen += [os.path.join(d, n) for d in _MAC_BIN for n in ("python3.13", "python3.12", "python3.11", "python3")]
+    namen += [f"/Library/Frameworks/Python.framework/Versions/3.{m}/bin/python3" for m in (13, 12, 11)]
+    # De runtime die de app-bouw met uv neerzet (run-local.sh) is 3.12; als basis is hij goed.
+    namen += [os.path.join(HQ, "backend", "axe_api", ".venv-local", "bin", "python"), "python3"]
+    for naam in namen:
         p = subprocess.run([naam, "-c", "import sys; print(sys.version_info >= (3, 11))"],
                            capture_output=True, text=True, check=False) if _op_pad(naam) else None
         if p is not None and p.returncode == 0 and p.stdout.strip() == "True":
@@ -585,20 +603,28 @@ def maak_test_venv() -> tuple[str | None, str]:
         klaar = False
     if klaar and os.path.exists(py) and _bruikbaar(py):
         return py, ""
-    basis = _basis_python()
-    if not basis:
-        return None, "no Python 3.11+ on this Mac (brew install python@3.12)"
-    if not os.path.exists(py) and subprocess.run([basis, "-m", "venv", TEST_VENV], capture_output=True,
-                                                   check=False).returncode != 0:
-        return None, "could not create the test venv"
+    uv = _uv()
+    if not os.path.exists(py):
+        if uv:
+            # uv haalt zelf een 3.12 als de Mac er geen heeft, net als run-local.sh.
+            maak = [uv, "venv", "--python", "3.12", TEST_VENV]
+        else:
+            basis = _basis_python()
+            if not basis:
+                return None, "no Python 3.11+ and no uv on this Mac (brew install uv)"
+            maak = [basis, "-m", "venv", TEST_VENV]
+        if subprocess.run(maak, capture_output=True, timeout=600, check=False).returncode != 0:
+            return None, "could not create the test venv"
     regels = [r for r in inhoud.decode("utf-8", "replace").splitlines()
               if r.strip() and not r.strip().startswith("#")
               and not any(r.strip().lower().startswith(n) for n in NIET_VOOR_TESTS)]
     gefilterd = os.path.join(TEST_VENV, "requirements-tests.txt")
     with open(gefilterd, "w") as fh:
         fh.write("\n".join(regels) + "\npytest\npytest-asyncio\n")
-    p = subprocess.run([py, "-m", "pip", "install", "-q", "-r", gefilterd], capture_output=True, text=True,
-                       timeout=1800, check=False)
+    # Een uv-venv heeft geen pip; uv installeert dan zelf.
+    installeer = ([uv, "pip", "install", "-q", "--python", py, "-r", gefilterd] if uv
+                  else [py, "-m", "pip", "install", "-q", "-r", gefilterd])
+    p = subprocess.run(installeer, capture_output=True, text=True, timeout=1800, check=False)
     if p.returncode != 0 or not _bruikbaar(py):
         return None, "pip install for the test venv failed: " + (p.stderr or p.stdout or "")[-200:]
     with open(merk, "w") as fh:

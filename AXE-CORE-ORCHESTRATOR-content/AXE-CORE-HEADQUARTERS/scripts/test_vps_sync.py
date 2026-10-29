@@ -223,5 +223,33 @@ def test_een_ontbrekende_testomgeving_wordt_volgende_ronde_opnieuw_geprobeerd(ne
 def test_de_testomgeving_laat_dingen_weg_die_geen_test_nodig_heeft(tmp_path, monkeypatch):
     monkeypatch.setattr(vs, "TEST_VENV", str(tmp_path / "venv"))
     monkeypatch.setattr(vs, "_basis_python", lambda: None)
+    monkeypatch.setattr(vs, "_uv", lambda: None)
     py, waarom = vs.maak_test_venv()
     assert py is None and "Python 3.11+" in waarom
+
+
+def test_met_uv_buiten_het_pad_bouwt_de_testomgeving_toch(tmp_path, monkeypatch):
+    """Onder launchd staat uv niet op PATH; de vaste Mac-plek moet genoeg zijn."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    uv = bin_ / "uv"
+    # Nep-uv: logt zijn argumenten; "venv" zet een python neer die naar deze testpython wijst.
+    uv.write_text(f"""#!/bin/sh
+echo "$@" >> {tmp_path / "uv.log"}
+if [ "$1" = venv ]; then
+  mkdir -p "$4/bin"
+  printf '#!/bin/sh\\nexec {sys.executable} "$@"\\n' > "$4/bin/python"
+  chmod +x "$4/bin/python"
+fi
+""")
+    uv.chmod(0o755)
+    monkeypatch.setattr(vs, "_MAC_BIN", (str(bin_),))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setattr(vs, "TEST_VENV", str(tmp_path / "venv"))
+    monkeypatch.setattr(vs, "_basis_python", lambda: pytest.fail("met uv geen andere Python zoeken"))
+    py, waarom = vs.maak_test_venv()
+    log = (tmp_path / "uv.log").read_text()
+    assert py == str(tmp_path / "venv" / "bin" / "python") and waarom == ""
+    assert "venv --python 3.12" in log and "pip install -q --python" in log
+    eisen = (tmp_path / "venv" / "requirements-tests.txt").read_text().splitlines()
+    assert not [r for r in eisen if r.startswith(("browser-use", "pywebpush"))] and "pytest" in eisen
