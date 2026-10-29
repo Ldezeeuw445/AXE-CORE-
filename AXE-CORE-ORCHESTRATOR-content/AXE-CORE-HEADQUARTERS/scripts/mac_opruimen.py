@@ -79,7 +79,9 @@ def grootte(pad_: str, timeout: int = 300) -> int:
 #: Op een Mac heet npm in de proceslijst "node"; daarom op de volledige regel zoeken.
 BEZIG = {
     "rust": r"(^|/)(cargo|rustc)( |$)",
-    "npm": r"npm-cli\.js|(^|/)npm( |$)|(^|/)npx( |$)",
+    # Alleen een install raakt de cache aan. Een npx-MCP-server die de hele dag
+    # draait hield hem anders altijd "in use" (Mac mini, 29 okt: ~/.npm 3,1 GB).
+    "npm": r"(npm-cli\.js|(^|/)npm) (ci|install|i|update|add)( |$)",
 }
 
 
@@ -196,8 +198,11 @@ def grootste(n: int = 6, timeout: int = 600) -> list[tuple[str, int]]:
             if map_ and os.path.normpath(map_) != os.path.normpath(basis) and kb.strip().isdigit():
                 uit.append((map_, int(kb) * 1024))
         return uit
-    bib = pad("Library")
-    rijen = [r for r in niveau(HOME) if os.path.normpath(r[0]) != os.path.normpath(bib)] + niveau(bib)
+    # ~/Library en ~/.cache in delen: "15 GB in .cache" zegt niet wat er weg kan.
+    delen = [pad("Library"), pad(".cache"), pad("Library", "Application Support")]
+    rijen = [r for r in niveau(HOME) if os.path.normpath(r[0]) not in {os.path.normpath(d) for d in delen}]
+    for d in delen:
+        rijen += [r for r in niveau(d) if os.path.normpath(r[0]) not in {os.path.normpath(x) for x in delen}]
     rijen.sort(key=lambda r: -r[1])
     return [("~" + m[len(HOME):] if m.startswith(HOME) else m, b) for m, b in rijen[:n]]
 
