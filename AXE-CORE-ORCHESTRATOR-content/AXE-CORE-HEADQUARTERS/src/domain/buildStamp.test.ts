@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildStamp, buildStampLine, buildLooksStale } from './buildStamp';
+import { appVersieVan, buildStamp, buildStampLine, buildLooksStale, commitUitAppVersie } from './buildStamp';
 
 const NOW = Date.parse('2026-08-27T12:00:00.000Z');
 const at = (iso: string) => ({ at: iso, commit: 'abc1234' });
@@ -59,5 +59,19 @@ describe('buildLooksStale', () => {
     // Unknown age is not the same as old — colouring it as a problem teaches
     // people to ignore the colour.
     expect(buildLooksStale(null, 1, NOW)).toBe(false);
+  });
+});
+
+describe('appVersieVan', () => {
+  it('puts the commit in the device row, so a stale phone shows', () => {
+    expect(appVersieVan(at('2026-10-29T12:00:00.000Z'))).toBe('1.0.0+abc1234');
+    expect(commitUitAppVersie('1.0.0+abc1234')).toBe('abc1234');
+  });
+
+  it('stays the plain version without a real commit', () => {
+    expect(appVersieVan(null)).toBe('1.0.0');
+    expect(appVersieVan({ at: '2026-10-29T12:00:00.000Z', commit: 'unknown' })).toBe('1.0.0');
+    expect(commitUitAppVersie('1.0.0')).toBeNull();
+    expect(commitUitAppVersie(null)).toBeNull();
   });
 });

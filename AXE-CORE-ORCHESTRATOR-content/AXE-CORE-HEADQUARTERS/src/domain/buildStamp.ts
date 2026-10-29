@@ -69,3 +69,21 @@ export function buildLooksStale(stamp: BuildStamp | null, maxAgeMs: number, now 
   const ms = now - Date.parse(stamp.at);
   return Number.isFinite(ms) && ms > maxAgeMs;
 }
+
+/**
+ * What a device row says it runs: `1.0.0+<commit>`.
+ *
+ * 29 okt: every heartbeat in core_axe_devices said `1.0.0`, on the A17, the
+ * Mac mini and the iMac alike, so "does the phone run the newest bundle" had
+ * no answer anywhere. The commit is the part that answers it.
+ */
+export function appVersieVan(stamp: BuildStamp | null, basis = '1.0.0'): string {
+  const commit = stamp?.commit?.trim();
+  return commit && commit !== 'unknown' ? `${basis}+${commit}` : basis;
+}
+
+/** The commit back out of an app_version, or null when the row predates it. */
+export function commitUitAppVersie(appVersie: string | null | undefined): string | null {
+  const m = /\+([0-9a-f]{7,40})$/i.exec(appVersie ?? '');
+  return m ? m[1].toLowerCase() : null;
+}

@@ -48,6 +48,7 @@ const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string })
   kilocode: apiExecuteKiloCode,
 };
 import { multiMonitorAvailable, openPageOnMonitor, OPENABLE_PAGES } from '@/infrastructure/gateways/windowManagerService';
+import { openEigenApp } from '@/infrastructure/gateways/eigenAppShell';
 import { OBSIDIAN_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.obsidian';
 import { SMARTTHINGS_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.smartthings';
 import { INCOME_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.income';
@@ -423,9 +424,22 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   },
   {
     ...catalogEntry('open_window'),
-    available: () => multiMonitorAvailable(),
+    // Een eigen app openen kan overal (web: nieuwe tab, of op een Mac via core_tasks);
+    // een losse AXE-pagina in een eigen venster alleen in de desktop-app.
+    available: () => true,
     run: async (raw) => {
-      const parsed = JSON.parse(raw) as { page?: string; monitor?: number };
+      const parsed = JSON.parse(raw) as {
+        page?: string; monitor?: number; app?: string;
+        screen?: 'this' | 'other' | number; device?: 'here' | 'imac' | 'macmini'; size?: 'phone' | 'tablet' | 'desktop';
+      };
+      if (parsed.app) {
+        const scherm = parsed.screen === 'other' ? 'ander' : typeof parsed.screen === 'number' ? parsed.screen : 'dit';
+        const toestel = parsed.device === 'imac' || parsed.device === 'macmini' ? parsed.device : 'hier';
+        const vorm = parsed.size === 'phone' ? 'telefoon' : parsed.size === 'tablet' ? 'tablet' : parsed.size === 'desktop' ? 'bureaublad' : undefined;
+        const tekst = await openEigenApp(parsed.app, { scherm, toestel, ...(vorm ? { vorm } : {}) });
+        return `OPEN_WINDOW: ${tekst}`;
+      }
+      if (!multiMonitorAvailable()) return 'OPEN_WINDOW: pages in their own window need the AXE CORE desktop app. Apps (trading-os, companion, axon, developer, northsea) work here.';
       const page = parsed.page;
       const monitor = Number(parsed.monitor ?? 0);
       if (!page) return `OPEN_WINDOW failed. Valid: ${OPENABLE_PAGES.join(', ')}`;

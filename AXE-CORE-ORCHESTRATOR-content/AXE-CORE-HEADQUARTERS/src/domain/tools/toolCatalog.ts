@@ -351,7 +351,9 @@ Examples:
 \`[OPEN_WINDOW: {"page":"trading","monitor":1}]\`
 Desktop-app-only (Tauri) — if Luka is on the web version this tool isn't available and you should say so instead of calling it. "page" must be one of the app's real routes (home, trading, memory, cron-manager, code-editor, browser, terminal, settings, maps-3d, etc. — match what he asks to the closest real page). "monitor" is 0-indexed, left-to-right (0 = leftmost/primary if he doesn't specify one — just use 0 unless he names a screen). Use this ONLY when he explicitly asks to put something on another screen, in its own window, or side-by-side — that's the whole point of this tool existing (see AXE's own principle: anything the app can do, he should be able to just ask for).
 Do NOT use this for a plain "show me New York" / "laat de Eiffeltoren zien" / "show me this document" — those already project straight onto the Home sphere just by you naturally confirming it in your reply (no tool call needed for that at all). Calling OPEN_WINDOW for a request like that opens an entire separate native window on top of Home instead of the intended in-place sphere projection — a real regression, not a nicer answer.
-Example: "Zet 'm op het tweede scherm. [OPEN_WINDOW: {"page":"trading","monitor":1}]"`,
+Example: "Zet 'm op het tweede scherm. [OPEN_WINDOW: {"page":"trading","monitor":1}]"
+**Luka's own apps, each in its own shell** (works everywhere, also from the phone): \`{"app":"trading-os|companion|axon|developer|northsea","screen":"this|other","device":"here|imac|macmini","size":"phone|tablet|desktop"}\` -- all but "app" optional. Companion opens phone-sized by default. "op dit scherm" = this, "op me andere scherm" = other, "op me iMac" = device imac.
+Example: "Doe ik. [OPEN_WINDOW: {"app":"northsea","device":"imac"}]"`,
   },
   {
     id: 'obsidian_write',

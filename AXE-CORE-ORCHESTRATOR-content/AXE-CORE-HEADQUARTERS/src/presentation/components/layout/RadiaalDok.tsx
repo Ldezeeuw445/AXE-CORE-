@@ -31,7 +31,7 @@ import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, NotebookPen, PanelRigh
 import { radiaalPosities } from '@/domain/radiaal';
 import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
-import { openRegisteredProductShell } from '@/infrastructure/gateways/productWindowService';
+import { openEigenApp } from '@/infrastructure/gateways/eigenAppShell';
 import { wisselZwevend } from '@/infrastructure/gateways/zwevendeVensters';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { SLOT_ID } from '@/presentation/components/layout/PlaatSlots';
@@ -66,7 +66,8 @@ export interface DokTab {
   label: string;
   /** Een icoon, of een letter -- de N is geen icoon maar een letterteken. */
   teken: React.ReactNode;
-  doe: () => void;
+  /** De klik gaat mee: met Alt of Shift kiest een app-tab het andere scherm. */
+  doe: (klik?: { altKey: boolean; shiftKey: boolean }) => void;
   /** Staat wat deze tab aanzet nu aan? Dan licht hij op. */
   aan?: boolean;
 }
@@ -155,17 +156,23 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
     { id: 'browser', label: 'Browser shell', teken: <PanelRightOpen size={18} />, doe: () => openPagina('browser') },
     { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
   ];
-  const openProduct = (name: string) => {
-    void openRegisteredProductShell(name).catch(err => {
-      console.error('[RadiaalDok] product shell failed', name, err);
+  /* Luka's eigen apps, elk in een eigen shell (29 okt). Met Alt of Shift
+     ingedrukt gaat hij naar je andere scherm. Vroeger zocht de AXON-tab
+     "AXON Memory" terwijl het register "Axon Memory" zegt: hoofdlettergevoelig,
+     dus hij viel altijd terug op /apps. openEigenApp kijkt niet naar hoofdletters. */
+  const openEigen = (id: string, klik?: { altKey: boolean; shiftKey: boolean }) => {
+    const scherm = klik?.altKey || klik?.shiftKey ? 'ander' : 'dit';
+    void openEigenApp(id, { scherm }).catch(err => {
+      console.error('[RadiaalDok] eigen app failed', id, err);
       navigate('/apps');
     });
   };
   const rechterTabs: DokTab[] = [
-    { id: 'code', label: 'Code Studio window', teken: <Code2 size={18} />, doe: () => openPagina('code-editor') },
-    { id: 'axon', label: 'AXON Memory', teken: <BrainCircuit size={18} />, doe: () => openProduct('AXON Memory') },
-    { id: 'companion', label: 'AXE Companion', teken: <Bot size={18} />, doe: () => openProduct('AXE Companion') },
-    { id: 'trading-os', label: 'Trading OS', teken: <span className="axe-dok-n">T</span>, doe: () => openProduct('Trading OS') },
+    { id: 'developer', label: 'AXE Developer', teken: <Code2 size={18} />, doe: (k) => openEigen('developer', k) },
+    { id: 'axon', label: 'AXON Memory', teken: <BrainCircuit size={18} />, doe: (k) => openEigen('axon', k) },
+    { id: 'companion', label: 'AXE Companion (phone)', teken: <Bot size={18} />, doe: (k) => openEigen('companion', k) },
+    { id: 'trading-os', label: 'Trading OS', teken: <span className="axe-dok-n">T</span>, doe: (k) => openEigen('trading-os', k) },
+    { id: 'northsea-desk', label: 'NorthSea Desk', teken: <span className="axe-dok-n">N</span>, doe: (k) => openEigen('northsea', k) },
     { id: 'apps', label: 'Apps', teken: <AppWindow size={18} />, doe: () => navigate('/apps') },
   ];
   const standaardTabs = kant === 'links' ? linkerTabs : rechterTabs;
@@ -216,7 +223,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
             tabIndex={open ? 0 : -1}
             onMouseEnter={() => setZweeft(tab.id)}
             onMouseLeave={() => setZweeft(null)}
-            onClick={() => { tab.doe(); sluit(); }}
+            onClick={(e) => { tab.doe({ altKey: e.altKey, shiftKey: e.shiftKey }); sluit(); }}
             style={{
               width: TAB,
               height: TAB,

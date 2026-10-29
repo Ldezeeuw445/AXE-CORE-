@@ -17,6 +17,7 @@ import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
 import { isIngebed } from '@/presentation/components/layout/zweef/ingebed';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { useAxeDeviceHeartbeat } from '@/presentation/hooks/useAxeDeviceHeartbeat';
+import { luisterNaarShellOpdrachten } from '@/infrastructure/gateways/eigenAppShell';
 import { AndroidLockGate } from '@/presentation/hooks/useAndroidLock';
 import { isAndroidTauriRuntime, isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { vergrendel, wisPin, zetCijferPin } from '@/domain/androidPin';
@@ -160,6 +161,8 @@ export default function App() {
   const navigate = useNavigate();
   const [clapEnabled, setClapEnabled] = useState(false);
   useAxeDeviceHeartbeat();
+  // "Open NorthSea Desk op me iMac": het hoofdvenster op die Mac voert het uit.
+  useEffect(() => (user ? luisterNaarShellOpdrachten() : undefined), [user]);
 
   useEffect(() => {
     useVoiceStore.getState().loadConversation().catch(() => {});

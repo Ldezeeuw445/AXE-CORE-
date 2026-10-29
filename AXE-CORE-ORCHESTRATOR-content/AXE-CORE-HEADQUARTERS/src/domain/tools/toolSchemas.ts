@@ -133,7 +133,11 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
                                    task: str('What it should do.') }, required: ['agent', 'task'] },
   crew:            { properties: { task: str('Task for the CrewAI specialists.') }, required: ['task'] },
   project:         { properties: { target: str('What to project onto the Home sphere.') }, required: ['target'] },
-  open_window:     { properties: { url: str('Page to open.'), screen: { type: 'number', description: 'Which display. Optional.' } }, required: ['url'] },
+  open_window:     { properties: { page: str('AXE page to open in its own window. Optional when app is set.'),
+                                   app: str('One of Luka\'s apps: trading-os, companion, axon, developer, northsea. Optional.'),
+                                   screen: str('this, other, or a display number. Optional.'),
+                                   device: str('here, imac or macmini. Optional.'),
+                                   size: str('phone, tablet or desktop. Optional.') }, required: [] },
 
   obsidian_write:  { properties: { title: str('Note title.'), content: str('Note body.'),
                                    folder: str('Folder. Optional.') }, required: ['title', 'content'] },

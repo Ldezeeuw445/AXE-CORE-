@@ -135,6 +135,34 @@ fn ensure_vault_dir(vault_root: String, relative_dir: String) -> Result<(), Stri
     Ok(())
 }
 
+/// Welke machine dit is. De webview riep `platform_info` al aan
+/// (axeDeviceService.ts), maar het commando bestond niet: beide Macs heetten in
+/// core_axe_devices "Mac", en "open NorthSea Desk op me iMac" kon de iMac niet
+/// van de Mac mini onderscheiden (29 okt).
+#[tauri::command]
+fn platform_info() -> serde_json::Value {
+    serde_json::json!({
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "hostname": hostnaam(),
+    })
+}
+
+fn hostnaam() -> Option<String> {
+    let lees = |programma: &str, args: &[&str]| -> Option<String> {
+        let uit = std::process::Command::new(programma).args(args).output().ok()?;
+        let naam = String::from_utf8_lossy(&uit.stdout).trim().to_string();
+        (uit.status.success() && !naam.is_empty()).then_some(naam)
+    };
+    // LocalHostName is de vaste Bonjour-naam (main-imac-luka); `hostname` kan
+    // per netwerk wisselen.
+    #[cfg(target_os = "macos")]
+    if let Some(naam) = lees("/usr/sbin/scutil", &["--get", "LocalHostName"]) {
+        return Some(naam);
+    }
+    lees("hostname", &["-s"])
+}
+
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {
@@ -281,6 +309,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        platform_info,
         diensten_stand,
         dienst_start,
         dienst_stop,
@@ -299,6 +328,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        platform_info,
         gesture_lock::gesture_lock_load,
         gesture_lock::gesture_lock_save,
         gesture_lock::gesture_lock_clear,

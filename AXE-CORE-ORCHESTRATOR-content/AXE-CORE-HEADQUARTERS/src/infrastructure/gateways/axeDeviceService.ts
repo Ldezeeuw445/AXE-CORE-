@@ -6,6 +6,7 @@
  * is, staat er niet.
  */
 import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
+import { appVersieVan, buildStamp } from '@/domain/buildStamp';
 import { isTauriRuntime, isAndroidRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
   capabilitiesVoor,
@@ -65,7 +66,7 @@ export async function ditToestel(): Promise<AxeDevice> {
     device_name: naamVoor(platform, native?.hostname ?? null, ua),
     device_type: type,
     platform,
-    app_version: '1.0.0',
+    app_version: appVersieVan(buildStamp()),
     capabilities: capabilitiesVoor(platform, type),
     last_seen: new Date().toISOString(),
     ditToestel: true,
