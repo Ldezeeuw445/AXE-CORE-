@@ -32,14 +32,59 @@ fi
 trap 'rm -rf "$SLOT"' EXIT
 
 cd "$REPO" || exit 0
+ENVF="$HIER/backend/axe_api/.env.local"
+SBU="$(grep -E '^SUPABASE_URL=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
+SBK="$(grep -E '^SUPABASE_SERVICE_ROLE(_KEY)?=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
+
+# Vast zonder dat iemand het ziet (29 okt): de Mac mini draaide uren een oude
+# app terwijl de iMac al bijgewerkt was, omdat deze checkout niet op
+# orchestrator stond of open wijzigingen had. Dan stopt dit script, terecht,
+# maar stil. Zit hij langer dan een uur vast om dezelfde reden, dan één melding
+# in AXE (core_notifications), en pas weer bij een andere reden.
+VAST_MAP="$HOME/.axe"
+meld_vast() {  # $1 = reden, $2 = wat te doen
+  mkdir -p "$VAST_MAP"
+  local nu reden_oud sinds gemeld
+  nu="$(date +%s)"
+  reden_oud="$(cat "$VAST_MAP/autosync-vast-reden" 2>/dev/null || true)"
+  if [[ "$reden_oud" != "$1" ]]; then
+    printf '%s' "$1" > "$VAST_MAP/autosync-vast-reden"
+    printf '%s' "$nu" > "$VAST_MAP/autosync-vast-sinds"
+    rm -f "$VAST_MAP/autosync-vast-gemeld"
+    return
+  fi
+  sinds="$(cat "$VAST_MAP/autosync-vast-sinds" 2>/dev/null || echo "$nu")"
+  gemeld="$(cat "$VAST_MAP/autosync-vast-gemeld" 2>/dev/null || true)"
+  if (( nu - sinds < 3600 )) || [[ "$gemeld" == "$1" || -z "$SBU" || -z "$SBK" ]]; then
+    return
+  fi
+  local tekst body
+  tekst="$(scutil --get LocalHostName 2>/dev/null || hostname -s) autosync is stuck for $(( (nu - sinds) / 3600 ))h: $1. The app here and its VPS deploys stay on an old version until this is fixed. $2"
+  body="$(python3 -c 'import json,sys; print(json.dumps({"type":"warning","message":sys.argv[1][:1900]}))' "$tekst")"
+  # De sleutel via stdin (-H @-), nooit als argument: dat staat in de proceslijst.
+  if printf 'apikey: %s\nAuthorization: Bearer %s\n' "$SBK" "$SBK" \
+       | curl -s -m 15 -o /dev/null -w '%{http_code}' -X POST "$SBU/rest/v1/core_notifications" \
+           -H @- -H "Content-Type: application/json" -H "Prefer: return=minimal" -d "$body" | grep -q '^20'; then
+    printf '%s' "$1" > "$VAST_MAP/autosync-vast-gemeld"
+  fi
+}
+niet_meer_vast() { rm -f "$VAST_MAP"/autosync-vast-{reden,sinds,gemeld}; }
+
 TAK="$(git rev-parse --abbrev-ref HEAD)"
 if [[ "$TAK" != "orchestrator" ]]; then
   log "staat op '$TAK', niet op orchestrator — overgeslagen"
+  meld_vast "the checkout $REPO is on branch '$TAK', not orchestrator" \
+    "Fix: cd $REPO && git checkout orchestrator. Agent work belongs in its own worktree under ~/.axe/werk, not in this checkout."
   exit 0
 fi
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  exit 0  # er wordt nu gewerkt; volgende ronde weer
+GEWIJZIGD="$(git status --porcelain --untracked-files=no)"
+if [[ -n "$GEWIJZIGD" ]]; then
+  # er wordt nu gewerkt; volgende ronde weer
+  meld_vast "$(printf '%s\n' "$GEWIJZIGD" | wc -l | tr -d ' ') uncommitted file(s) in $REPO ($(printf '%s\n' "$GEWIJZIGD" | head -3 | awk '{print $2}' | tr '\n' ' '))" \
+    "Fix: commit or stash them (git -C $REPO status)."
+  exit 0
 fi
+niet_meer_vast
 
 git fetch -q origin orchestrator || { log "fetch mislukt (offline?)"; exit 0; }
 
@@ -65,9 +110,6 @@ fi
 # Alleen op een Mac met de VPS-sleutel, alleen met een schone box en groene
 # tests, en bij een slechte /health gaat het vanzelf terug: zie vps_sync.py auto.
 # Uit: touch ~/.axe/auto-deploy-uit
-ENVF="$HIER/backend/axe_api/.env.local"
-SBU="$(grep -E '^SUPABASE_URL=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
-SBK="$(grep -E '^SUPABASE_SERVICE_ROLE(_KEY)?=' "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "\"'")"
 if [[ -f "${AXE_VPS_KEY:-$HOME/.ssh/axe-core-vps}" ]]; then
   if ! SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" python3 "$HIER/scripts/vps_sync.py" auto \
        >> "$HOME/Library/Logs/axe-autodeploy.log" 2>&1; then
