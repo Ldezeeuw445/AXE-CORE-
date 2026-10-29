@@ -108,8 +108,9 @@ export async function runTradingTeamCycle(opts?: {
     ]);
     void chartsPlaceholder;
     const sentiment = runSentiment(top, news);
-    const charts = await runCharts(top, sentiment);
-    const risk = runRisk({ news, charts });
+    const scoutTop = scout.candidates[0] ?? null;
+    const charts = await runCharts(top, sentiment, scoutTop);
+    const risk = runRisk({ news, charts, scoutTop });
     const decision = runDecision({ scout, sentiment, charts, risk });
 
     let execution: Record<string, unknown> = {
@@ -177,8 +178,8 @@ export async function runTradingTeamCycle(opts?: {
               confidence: decision.confidence,
               stopLoss: decision.proposal.stopLoss,
               takeProfit: decision.proposal.takeProfit,
-              strategy: 'trading-team-test',
-              timeframe: 'D1',
+              strategy: scoutTop?.strategyId ?? 'trading-team-test',
+              timeframe: scoutTop?.strategyId === 'gold-orb-1am-ny' ? 'm5' : 'D1',
               account,
               clearance: assessed.clearance,
             });

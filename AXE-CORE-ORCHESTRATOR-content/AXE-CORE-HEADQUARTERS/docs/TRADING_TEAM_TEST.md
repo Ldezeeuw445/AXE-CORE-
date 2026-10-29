@@ -33,3 +33,24 @@ Without env IDs, the module accepts exactly one Core account whose label matches
 ## Cron
 
 Schedule row is inserted **disabled**. Enable only after allowlist env is set. Action type `webhook` / job_key `axe_core:trading-team-test-15m`.
+
+## Strategy: Gold ORB 1AM NY
+
+Pluggable Scout strategy on **XAUUSD m5** (demo only via the same allowlist).
+
+- ORB = high/low **01:00–01:15 America/New_York**
+- Entry: 5m close outside range → next bar open, window **01:15–03:40**; SL = other side of range; **TP = 0.5R**
+- Size: `floor(risk / stopDistance)` with risk = `AXE_GOLD_ORB_RISK_PERCENT` (default **0.35%**) of `AXE_GOLD_ORB_EQUITY` (default **500000**), capped by `AXE_GOLD_ORB_MAX_LOTS`
+- Max 2 trades/day, reversal OK, flat **06:00 NY** (enforced in backtest engine)
+- Filters (trend / extension / **volatility** / volume / candle / VWAP). Default: **only volatility ON**. Mode `AXE_GOLD_ORB_FILTER_MODE=all|n-of-m|weighted`. Rejected filters kill the NY day.
+
+```bash
+# optional tuning
+AXE_GOLD_ORB_RISK_PERCENT=0.35
+AXE_GOLD_ORB_EQUITY=500000
+AXE_GOLD_ORB_FILTER_VOLATILITY=1
+AXE_GOLD_ORB_FILTER_TREND=0
+# …
+```
+
+Pure backtest: `backtestGoldOrb(bars, config)` in `application/tradingTeam/strategies/goldOrb1amNy.ts` (also Team tab button when m5 cache exists). Claims from the source reel are unverified — prove on history + demo first.

@@ -9,11 +9,29 @@ export type TradingTeamSide = 'buy' | 'sell';
 export type TradingTeamRunStatus = 'running' | 'completed' | 'blocked' | 'error';
 export type AccountGuardStatus = 'pending' | 'allowed' | 'rejected';
 
+export interface StrategySignalPayload {
+  strategyId: string;
+  side: TradingTeamSide;
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  riskReward: number;
+  orbHigh?: number;
+  orbLow?: number;
+  sessionDateNy?: string;
+  lots?: number;
+  filterSummary?: string;
+  notes?: string[];
+}
+
 export interface ScoutCandidate {
   symbol: string;
   reason: string;
   edgeHint?: string;
   score: number;
+  /** Pluggable strategy id when Scout promoted a concrete setup (e.g. gold-orb-1am-ny). */
+  strategyId?: string;
+  strategySignal?: StrategySignalPayload;
 }
 
 export interface ScoutResult {

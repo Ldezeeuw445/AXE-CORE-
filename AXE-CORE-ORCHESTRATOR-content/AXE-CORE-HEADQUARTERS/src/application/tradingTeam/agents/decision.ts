@@ -1,6 +1,6 @@
 /**
  * Decision — combine Scout/News/Sentiment/Charts/Risk into GO|WAIT|NO-GO.
- * SETUP: proposals only; Luka approves. Auto-execute is a separate env flag.
+ * Strategy signals (Gold ORB) use Charts levels + Risk; still propose-only by default.
  */
 import type {
   ChartsResult,
@@ -10,6 +10,7 @@ import type {
   SentimentResult,
   TradeProposal,
 } from '../types';
+import { GOLD_ORB_STRATEGY_ID } from '../strategies';
 
 export function runDecision(input: {
   scout: ScoutResult;
@@ -51,6 +52,7 @@ export function runDecision(input: {
 
   const charts = input.charts;
   const sentiment = input.sentiment;
+  const isOrb = top.strategyId === GOLD_ORB_STRATEGY_ID && top.strategySignal;
   if (!charts?.structureOk || charts.entry == null || charts.stopLoss == null || charts.takeProfit == null) {
     return {
       verdict: 'WAIT',
@@ -61,12 +63,21 @@ export function runDecision(input: {
     };
   }
 
-  const side = charts.bias === 'bearish' ? 'sell' : 'buy';
+  const side = isOrb
+    ? top.strategySignal!.side
+    : charts.bias === 'bearish' ? 'sell' : 'buy';
   const aligned =
-    !sentiment || sentiment.bias === 'neutral' || sentiment.bias === charts.bias;
-  let confidence = 0.55;
-  if (aligned) confidence += 0.15;
-  if ((charts.riskReward ?? 0) >= 2.2) confidence += 0.1;
+    !sentiment || sentiment.bias === 'neutral' ||
+    (side === 'buy' ? sentiment.bias === 'bullish' : sentiment.bias === 'bearish');
+
+  let confidence = isOrb ? 0.62 : 0.55;
+  if (aligned) confidence += 0.12;
+  if (isOrb) {
+    confidence += 0.1; // concrete strategy setup
+    if (top.strategySignal?.filterSummary?.includes('volatility:ok')) confidence += 0.05;
+  } else if ((charts.riskReward ?? 0) >= 2.2) {
+    confidence += 0.1;
+  }
   if ((sentiment?.score ?? 50) >= 65 || (sentiment?.score ?? 50) <= 35) confidence += 0.05;
   confidence = Math.min(0.92, confidence);
 
@@ -77,21 +88,24 @@ export function runDecision(input: {
     stopLoss: charts.stopLoss,
     takeProfit: charts.takeProfit,
     riskReward: charts.riskReward,
-    lots: input.risk?.suggestedLots ?? 0.1,
-    rationale: `TEST Decision: ${charts.bias} structure, sentiment=${sentiment?.bias ?? 'n/a'}, R:R=${(charts.riskReward ?? 0).toFixed(2)}. Scout: ${top.reason}`,
+    lots: input.risk?.suggestedLots ?? top.strategySignal?.lots ?? 0.1,
+    rationale: isOrb
+      ? `Gold ORB 1AM NY ${side.toUpperCase()} XAUUSD — ORB ${top.strategySignal!.orbLow}–${top.strategySignal!.orbHigh}, TP ${top.strategySignal!.riskReward}R, filters=${top.strategySignal!.filterSummary ?? 'n/a'}. Scout: ${top.reason}`
+      : `TEST Decision: ${charts.bias} structure, sentiment=${sentiment?.bias ?? 'n/a'}, R:R=${(charts.riskReward ?? 0).toFixed(2)}. Scout: ${top.reason}`,
   };
 
-  const verdict = confidence >= 0.7 && aligned ? 'GO' : 'WAIT';
+  const verdict = confidence >= 0.7 && (isOrb || aligned) ? 'GO' : 'WAIT';
   return {
     verdict,
     confidence,
     proposal,
     summary:
       verdict === 'GO'
-        ? `GO ${side.toUpperCase()} ${top.symbol} @ ${charts.entry}`
+        ? `GO ${side.toUpperCase()} ${top.symbol} @ ${charts.entry}${isOrb ? ' [gold-orb-1am-ny]' : ''}`
         : `WAIT — confidence ${confidence.toFixed(2)} or sentiment misaligned`,
     notes: [
       `aligned=${aligned}`,
+      isOrb ? `strategy=${GOLD_ORB_STRATEGY_ID}` : 'strategy=none',
       ...(input.risk?.checks.map(c => `${c.id}:${c.ok}`) ?? []),
     ],
   };
