@@ -50,6 +50,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },
   { path: '/ledger', label: 'Ledger', keywords: ['ledger', 'grootboek', 'runs', 'job runs', 'logboek', 'alle taken', 'wat draaide er'] },
   { path: '/tasks', label: 'Tasks', keywords: ['tasks', 'todo', 'to-do', 'task'], recordType: 'task' },
+  { path: '/brief', label: 'Daily Brief', keywords: ['daily brief', 'dagbrief', 'brief', 'briefing', 'wat is er gebeurd', 'what happened'] },
   { path: '/finance', label: 'Finance', keywords: ['finance', 'financien', 'budget', 'money'] },
   { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets', 'trading os', 'trading desk'] },
   { path: '/companion', label: 'AXE Companion', keywords: ['companion', 'axe companion', 'pocket trading'] },

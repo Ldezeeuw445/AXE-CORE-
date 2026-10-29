@@ -5,7 +5,7 @@ import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
   Bot, Megaphone, BookOpenCheck, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb,
-  TerminalSquare, Monitor, type LucideIcon,
+  TerminalSquare, Monitor, type LucideIcon, Newspaper,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -41,6 +41,7 @@ const rightItems: NavItem[] = [
   { icon: CalendarDays, label: navLabel('/calendar'), path: '/calendar' },
   { icon: BookOpenCheck, label: navLabel('/ledger'), path: '/ledger' },
   { icon: ListTodo, label: navLabel('/tasks'), path: '/tasks' },
+  { icon: Newspaper, label: navLabel('/brief'), path: '/brief' },
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
   { icon: LineChart, label: navLabel('/trading-intel'), path: '/trading-intel' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },

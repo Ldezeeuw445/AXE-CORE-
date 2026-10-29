@@ -27,6 +27,7 @@ import MemoryScenePreview from '@/presentation/pages/MemoryScenePreview';
 const AICore = lazy(() => import('@/presentation/pages/AICore'));
 const Agents = lazy(() => import('@/presentation/pages/Agents'));
 const Tasks = lazy(() => import('@/presentation/pages/Tasks'));
+const DailyBrief = lazy(() => import('@/presentation/pages/DailyBrief'));
 const CalendarPage = lazy(() => import('@/presentation/pages/CalendarPage'));
 const Memory = lazy(() => import('@/presentation/pages/Memory'));
 const MemoryHub = lazy(() => import('@/presentation/pages/MemoryHub'));
@@ -277,6 +278,7 @@ export default function App() {
             <Route path="apps" element={<AppsPage />} />
             <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />
+            <Route path="brief" element={<DailyBrief />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="ledger" element={<Grootboek />} />
             <Route path="companion" element={<CompanionPage />} />

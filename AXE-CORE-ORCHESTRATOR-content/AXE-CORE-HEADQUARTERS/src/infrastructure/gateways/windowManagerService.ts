@@ -59,7 +59,7 @@ export async function listMonitors(): Promise<MonitorInfo[]> {
  *  (rather than accepting any string) means a malformed/hallucinated page
  *  name fails loudly instead of opening a blank or wrong window. */
 export const OPENABLE_PAGES = [
-  'home', 'ai-core', 'apps', 'agents', 'tasks', 'calendar', 'memory', 'obsidian', 'knowledge',
+  'home', 'ai-core', 'apps', 'agents', 'tasks', 'brief', 'calendar', 'memory', 'obsidian', 'knowledge',
   // 'command' stond hier en is weg: die route bestaat niet meer, dus
   // openPageOnMonitor('command') opende een VENSTER op een lege pagina --
   // erger dan niets, want het ziet eruit alsof het werkte.
