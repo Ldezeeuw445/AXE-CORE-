@@ -21,6 +21,15 @@ describe('taakFoutVan', () => {
     expect(f.regel).toMatch(/Claude CLI/);
   });
 
+  it('biedt geen retry aan als GitHub de sleutel van de VPS weigert', () => {
+    const f = taakFoutVan({
+      code: 'handler_error',
+      message: "DAX build checkout failed: fatal: could not read Username for 'https://github.com': No such device or address\n",
+    }, 'DAX build: next task in AXE-CORE-');
+    expect(f.actie).toBe('open');
+    expect(f.regel).toMatch(/zet_github_token\.sh/);
+  });
+
   it('stuurt login-fouten naar reconnect', () => {
     expect(taakFoutVan('OAuth session expired and could not be refreshed').actie).toBe('reconnect');
     expect(taakActieLabel('reconnect')).toBe('Reconnect account');

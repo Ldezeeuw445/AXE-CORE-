@@ -31,6 +31,7 @@ geeft als hij er geen open heeft: "pak de volgende open taak van de bouwlijst".
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shlex
@@ -295,6 +296,47 @@ def _github_geweigerd() -> bool:
     return (laatste.get("github") or {}).get("state") == "fail"
 
 
+SLEUTEL_FOUT = "could not read Username for 'https://github.com'"
+
+
+def archiveer_sleutelfouten(db: Any, nu: datetime) -> int:
+    """Mislukte bouwtaken die alleen op de geweigerde sleutel strandden: uit Home.
+
+    29 okt: Luka zag ze als "3 tasks need attention", en Dismiss bracht ze na
+    20 s terug. Er valt niets aan te doen behalve de sleutel, en die staat al
+    als eigenaar-actie vps-github-key. Zelfde boekhouding als
+    staande_diensten.archiveer_bekende_fouten: geannuleerd, met reden, rij blijft.
+    """
+    try:
+        rijen = (db.table("core_tasks").select("id,status,error,payload,metadata")
+                 .eq("assignee", "developer").eq("status", "failed")
+                 .limit(50).execute().data) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dax-bouw: mislukte taken onleesbaar (%s)", exc)
+        return 0
+    reden = ("Archived: the checkout failed because GitHub rejected the VPS key. "
+             "Owner action vps-github-key tracks the fix; builds resume once the key works.")
+    n = 0
+    for t in rijen:
+        meta = t.get("metadata") if isinstance(t.get("metadata"), dict) else {}
+        fout = t.get("error") if isinstance(t.get("error"), dict) else {"message": t.get("error")}
+        if not (t.get("payload") or {}).get("dax_bouw") or meta.get("archived") or fout.get("archived"):
+            continue
+        if SLEUTEL_FOUT not in json.dumps(fout, default=str):
+            continue
+        try:
+            db.table("core_tasks").update({
+                "status": "cancelled",
+                "cancelled_at": nu.isoformat(),
+                "error": {**fout, "archived": True, "archive_reason": reden},
+                "metadata": {**meta, "archived": True, "archive_reason": reden},
+            }).eq("id", t["id"]).execute()
+            n += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("dax-bouw: kon %s niet archiveren (%s)", t.get("id"), exc)
+    return n
+
+
 def plan_bouwtaak(db: Any, nu: datetime) -> dict[str, Any]:
     """Eén taak voor de developer-DAX als hij er geen open heeft, om de beurt per repo."""
     if _open_bouwtaken(db):
@@ -303,7 +345,8 @@ def plan_bouwtaak(db: Any, nu: datetime) -> dict[str, Any]:
     # sleutel van de VPS weigerde (401). Zolang /health dat meet: geen taak die
     # alleen maar kan mislukken; de eigenaar-actie vps-github-key zegt wat er moet.
     if _github_geweigerd():
-        return {"gepland": False, "reden": "GitHub rejects the VPS key; waiting for a new one (owner action vps-github-key)"}
+        return {"gepland": False, "gearchiveerd": archiveer_sleutelfouten(db, nu),
+                "reden": "GitHub rejects the VPS key; waiting for a new one (owner action vps-github-key)"}
     try:
         laatste = (db.table("core_tasks").select("payload").eq("assignee", "developer")
                    .order("created_at", desc=True).limit(20).execute().data) or []

@@ -167,7 +167,16 @@ class _Db:
                 self.rij = rij
                 return self
 
+            def update(self, velden):
+                self.wijziging = velden
+                return self
+
             def execute(self):
+                if getattr(self, "wijziging", None) is not None:
+                    for t in db.taken:
+                        if all(t.get(k) == v for k, v in self.filters):
+                            t.update(self.wijziging)
+                    return type("R", (), {"data": []})()
                 if self.rij is not None:
                     db.ingevoegd.append(self.rij)
                     db.taken.append({**self.rij, "id": f"t{len(db.taken)}"})
@@ -208,3 +217,25 @@ def test_geen_bouwtaak_zolang_github_de_sleutel_weigert(monkeypatch):
     db = _Db()
     uit = db_.plan_bouwtaak(db, datetime(2026, 10, 29, 9, 20, tzinfo=timezone.utc))
     assert uit["gepland"] is False and "vps-github-key" in uit["reden"] and not db.ingevoegd
+
+
+def test_sleutelfouten_verdwijnen_uit_home_maar_andere_fouten_blijven(monkeypatch):
+    from datetime import datetime, timezone
+
+    import gezondheid
+    monkeypatch.setitem(gezondheid._cache, "uit", {"checks": {"github": {"state": "fail"}}})
+    sleutel = {"message": "DAX build checkout failed: fatal: could not read Username for "
+                          "'https://github.com': No such device or address"}
+    db = _Db([
+        {"id": "a", "assignee": "developer", "status": "failed", "payload": {"dax_bouw": True},
+         "error": sleutel, "metadata": {"dax_bouw": True}},
+        {"id": "b", "assignee": "developer", "status": "failed", "payload": {"dax_bouw": True},
+         "error": {"message": "tests red"}, "metadata": {}},
+        {"id": "c", "assignee": "developer", "status": "failed", "payload": {}, "error": sleutel, "metadata": {}},
+    ])
+    uit = db_.plan_bouwtaak(db, datetime(2026, 10, 29, 11, 20, tzinfo=timezone.utc))
+    assert uit["gepland"] is False and uit["gearchiveerd"] == 1
+    a, b, c = db.taken
+    assert a["status"] == "cancelled" and a["metadata"]["archived"] is True and a["error"]["archived"] is True
+    assert "vps-github-key" in a["metadata"]["archive_reason"] and "could not read Username" in a["error"]["message"]
+    assert b["status"] == "failed" and c["status"] == "failed"

@@ -26,6 +26,12 @@ export function taakFoutVan(error: unknown, titel = ''): TaakFout {
   const raw = tekstVan(error);
   const laag = `${raw} ${titel}`.toLowerCase();
 
+  // 29 okt: de DAX-bouw liep vier keer stuk op een geweigerde GitHub-sleutel en
+  // Home bood "Retry" aan, wat alleen dezelfde fout herhaalt. De sleutel kan
+  // alleen Luka vernieuwen.
+  if (/could not read username for 'https:\/\/github\.com'|github rejects the (vps )?key/.test(laag)) {
+    return { regel: 'GitHub rejects the VPS key, so a retry fails the same way. Make a new token and run scripts/zet_github_token.sh on the iMac.', actie: 'open' };
+  }
   if (/no handler for northsea_desk|no handler for northsea/.test(laag)) {
     return { regel: 'NorthSea desk had no worker. Retry routes it to the crew on :8040 (drafts only).', actie: 'retry' };
   }
