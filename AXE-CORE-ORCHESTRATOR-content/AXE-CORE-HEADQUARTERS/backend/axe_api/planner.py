@@ -1063,6 +1063,8 @@ class Planner:
         if bouwljist is not None:
             import bouw_publiceer
             extra = "\n" + bouw_publiceer.trading_os_prompt(bouwljist) + "\n"
+        if schrijven and bouw_publiceer_aan():
+            extra += self._archief_hint(repo, vers)
         prompt = (
             f"Taak van de planner ({AGENT_LABEL[agent]}): {taak.get('title')}\n\n{taak.get('goal')}\n"
             + extra
@@ -1203,6 +1205,24 @@ class Planner:
             _git, pad, branch,
             basis_naam=bouw_publiceer.basis_voor(repo),
             verboden=bouw_publiceer.verboden_basis(repo))
+
+    def _archief_hint(self, repo: str, vers: dict | None) -> str:
+        """Bewaard werk van deze werkbranch noemen, zodat de lus port in plaats van herschrijft."""
+        import bouw_publiceer
+        try:
+            from agent_runner import _git, _repo_pad
+        except ImportError:
+            return ""
+        pad, branch, fout = _repo_pad(repo)
+        if fout:
+            return ""
+        try:
+            namen = bouw_publiceer.archieven(_git, pad, branch)
+        except Exception as e:  # noqa: BLE001
+            log.info("planner: archieven van %s onleesbaar (%s)", repo, e)
+            return ""
+        basis = (vers or {}).get("basis") or f"origin/{bouw_publiceer.basis_voor(repo) or 'main'}"
+        return "\n" + bouw_publiceer.archief_prompt(namen, basis) if namen else ""
 
     def _bouwljist(self, repo: str) -> dict:
         """Eerste open taak uit docs/BOUWLIJST.md in de (net ververste) checkout."""

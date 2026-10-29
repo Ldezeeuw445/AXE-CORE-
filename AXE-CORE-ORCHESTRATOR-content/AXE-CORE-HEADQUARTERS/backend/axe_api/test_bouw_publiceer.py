@@ -201,6 +201,25 @@ def test_botst_main_dan_gaat_het_oude_werk_naar_een_archief_en_begint_de_branch_
     assert sh(remote, "rev-parse", "axe-agent").strip() == sh(remote, "rev-parse", "main").strip()
 
 
+def test_de_lus_hoort_welk_archief_er_ligt_zodat_hij_port_in_plaats_van_herschrijft(twee_kanten):
+    from datetime import datetime, timezone
+    werk, _, ander = twee_kanten
+    assert bp.archieven(agent_runner._git, str(werk), "axe-agent") == []
+    for uur in (9, 11):
+        (werk / "app.py").write_text(f"regel = 'lus {uur}'\n")
+        sh(werk, "commit", "-q", "-am", f"werk {uur}")
+        sh(werk, "push", "-q", "-f", "origin", "axe-agent")
+        main_krijgt(ander, "app.py", f"regel = 'main {uur}'\n")
+        sh(werk, "fetch", "-q", "origin")
+        assert bp.ververs_werkbranch(agent_runner._git, str(werk), "axe-agent",
+                                     nu=datetime(2026, 10, 28, uur, 13, tzinfo=timezone.utc))["actie"] == "opnieuw"
+    namen = bp.archieven(agent_runner._git, str(werk), "axe-agent")
+    assert namen == ["axe-agent-archief-20261028-1113", "axe-agent-archief-20261028-0913"]
+    tekst = bp.archief_prompt(namen, "origin/main")
+    assert "axe-agent-archief-20261028-1113" in tekst and "origin/main..origin/axe-agent-archief-20261028-1113" in tekst
+    assert bp.archief_prompt([]) == "" and bp.archieven(agent_runner._git, str(werk), "") == []
+
+
 def test_een_vuile_checkout_wordt_niet_aangeraakt(twee_kanten):
     werk, _, ander = twee_kanten
     main_krijgt(ander, "nieuw.py", "z = 3\n")

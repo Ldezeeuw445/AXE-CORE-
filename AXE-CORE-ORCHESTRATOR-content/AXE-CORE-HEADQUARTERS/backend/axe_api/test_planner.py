@@ -431,6 +431,32 @@ class TestHandoffAndereManager:
         assert klaar[0]["metadata"]["bewijs"]["bouwljist"]["basis"] == "snapshot-2026-10-17"
         assert not any(v.get("assignee") == "trading" for t, s, v in rijen if s == "insert")
 
+    def test_een_bouwrun_hoort_van_het_archief_van_zijn_werkbranch(self, monkeypatch):
+        """29 okt: 11 dagen Companion-werk lag in een archief en de lus begon opnieuw."""
+        import agent_runner
+        import bouw_publiceer
+        gedraaid = []
+
+        def run(repo, prompt, modus, t, motor, **kw):
+            gedraaid.append(prompt)
+            return {"status": "ok", "result": "C6: ported the push fix from the archive"}
+
+        pl, _ = TestVoerUitEerlijk()._pl(monkeypatch, run)
+        monkeypatch.setattr(pl, "_werkrepo", lambda *a, **k: "axe-companion")
+        monkeypatch.setattr(pl, "_canon", lambda repo: {"actie": "geen"})
+        monkeypatch.setattr(pl, "_ververs", lambda repo: {"actie": "gemerged", "basis": "origin/main", "achter": 1})
+        monkeypatch.setattr(pl, "_bewijs", lambda repo: {"repo": repo, "leesbaar": True, "veranderd": False})
+        monkeypatch.setattr(agent_runner, "_repo_pad", lambda repo: ("/tmp/x", "axe-agent", None))
+        monkeypatch.setattr(bouw_publiceer, "archieven",
+                            lambda git, pad, branch: ["axe-agent-archief-20261028-1113"] if branch == "axe-agent" else [])
+        taak = {"id": "t-co", "title": "Build next step: AXE Companion", "goal": "C6 push end to end",
+                "payload": {"repo": "axe-companion"},
+                "metadata": {"agent": "code-agent", "motor": "cursor", "risico": "schrijven", "oorsprong_bouw": "ja"}}
+        uit = pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert uit.get("ok") and gedraaid
+        assert "axe-agent-archief-20261028-1113" in gedraaid[0]
+        assert "origin/main..origin/axe-agent-archief-20261028-1113" in gedraaid[0]
+
     def test_bouw_trading_os_zonder_open_bouwljist_verzint_geen_werk(self, monkeypatch):
         gedraaid = []
         pl, rijen = TestVoerUitEerlijk()._pl(

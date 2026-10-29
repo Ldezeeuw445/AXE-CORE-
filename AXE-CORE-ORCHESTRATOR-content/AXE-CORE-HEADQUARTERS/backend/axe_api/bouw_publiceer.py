@@ -186,6 +186,36 @@ def _korte_ref(ref: str) -> str:
     return (ref or "").rsplit("/", 1)[-1]
 
 
+def archieven(git: Git, pad: str, branch: str, max_n: int = 2) -> list[str]:
+    """Archieven van deze werkbranch op origin, nieuwste eerst (de naam draagt de tijd).
+
+    29 okt: op axe-companion stond 11 dagen bouwwerk (gratis intel-bronnen,
+    push-fixes, TOS-SEC-2) in axe-agent-archief-20261028-1113, en de lus begon
+    daarna dezelfde drie taken opnieuw vanaf main. Wie het archief kent, port.
+    """
+    if not branch:
+        return []
+    p = git(pad, "ls-remote", "--heads", "origin", f"{branch}-archief-*", timeout=60)
+    if p.returncode != 0:
+        return []
+    namen = {r.split("refs/heads/", 1)[1] for r in (p.stdout or "").splitlines() if "refs/heads/" in r}
+    return sorted(namen, reverse=True)[:max_n]
+
+
+def archief_prompt(namen: list[str], basis: str = "origin/main") -> str:
+    if not namen:
+        return ""
+    lijst = ", ".join(namen)
+    eerste = namen[0]
+    return (
+        f"Eerder werk van deze branch staat in {lijst} op origin: het liet zich niet meer mergen met "
+        f"{basis}, dus het is bewaard en de branch begon opnieuw. Kijk daar eerst "
+        f"(git fetch origin {eerste}; git log --oneline {basis}..origin/{eerste}; git show). Breng over "
+        "wat nog ontbreekt en nog klopt met de huidige code, in plaats van het opnieuw te schrijven, "
+        "en zeg in je verslag wat je uit het archief hebt overgenomen.\n"
+    )
+
+
 def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = None,
                        basis_naam: str | None = None, verboden: set[str] | None = None) -> dict:
     """Haal de basisbranch binnen voordat de lus verder bouwt. Gooit nooit.
