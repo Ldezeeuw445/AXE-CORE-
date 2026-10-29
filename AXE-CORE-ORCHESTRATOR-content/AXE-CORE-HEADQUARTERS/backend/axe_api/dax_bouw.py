@@ -101,6 +101,11 @@ def voorbereid(ux: Any, repo: str, taak_id: str, token: str = "", url: str | Non
     script = _AUTH_SH + "\n".join([
         "set -e",
         f"B={shlex.quote(basis_map)}",
+        # 29 okt: een clone die halverwege stukliep (de sleutel werd geweigerd) liet
+        # een niet-lege map zonder .git achter, en daarna weigerde elke clone met
+        # "already exists and is not an empty directory". Dit is onze eigen kopie
+        # onder REPOS_MAP: zonder werkende .git mag hij weg en opnieuw.
+        'if [ -e "$B" ] && { [ ! -d "$B/.git" ] || ! git -C "$B" rev-parse HEAD >/dev/null 2>&1; }; then rm -rf "$B"; fi',
         f'if [ ! -d "$B/.git" ]; then mkdir -p {shlex.quote(REPOS_MAP)}; g clone --quiet {shlex.quote(url or _url(repo))} "$B"; fi',
         'g -C "$B" fetch --quiet --prune origin',
         'git -C "$B" remote set-head origin --auto >/dev/null 2>&1 || true',

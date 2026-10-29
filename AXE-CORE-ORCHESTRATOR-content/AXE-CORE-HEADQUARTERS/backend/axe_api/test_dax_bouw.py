@@ -130,6 +130,23 @@ def test_niets_veranderd_is_geen_pr(omgeving):
         "veranderd": False, "reden": "no changes"}
 
 
+def test_een_halve_clone_van_een_eerdere_ronde_blokkeert_niet_meer(omgeving, tmp_path):
+    """29 okt: '/dax/workspace/repos/axon-memory already exists and is not an empty directory'."""
+    import pathlib
+    _, _, remote = omgeving
+    basis = pathlib.Path(db_.REPOS_MAP) / "axon-memory"
+    import shutil
+    shutil.rmtree(basis)
+    basis.mkdir(parents=True)
+    (basis / "rest-van-een-mislukte-clone").write_text("x")
+    werk = tmp_path / "taak2"
+    werk.mkdir()
+    prep = db_.voorbereid(Lokaal(werk), "axon-memory", "def456-taak", token="", url=str(remote))
+    assert "fout" not in prep, prep
+    assert (basis / ".git").is_dir() and not (basis / "rest-van-een-mislukte-clone").exists()
+    assert (pathlib.Path(prep["pad"]) / "app.js").exists()
+
+
 def test_een_onbekende_repo_wordt_niet_uitgecheckt(tmp_path):
     assert "fout" in db_.voorbereid(Lokaal(tmp_path), "iets-anders", "x")
 
