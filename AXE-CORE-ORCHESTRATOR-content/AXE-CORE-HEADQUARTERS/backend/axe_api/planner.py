@@ -601,6 +601,11 @@ def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
         if account_fout(str((t.get("error") or {}).get("message") or "")):
             continue
         titel = str(t.get("title") or "asked work").strip()
+        # 29 okt: 38 open "Continue: Yes needed: DEAL-001 — Copper Cathode" sinds 10
+        # okt. Een "Yes needed" wacht op Luka's ja (RULE 13); een vervolgtaak kan
+        # daar niets aan doen. En "Continue: Continue: ..." is nooit bedoeld.
+        if re.match(r"(yes needed|continue)\b", titel, re.IGNORECASE):
+            continue
         sleutel = f"vervolg:{t.get('id') or titel}"
         if sleutel in gezien or f"titel:{titel.lower()}" in gezien:
             continue
@@ -1318,10 +1323,10 @@ class Planner:
         gezien: set[str] = set()
         try:
             rijen = (self.sb().table("core_tasks")
-                     .select("id,status,metadata,payload")
+                     .select("id,status,title,metadata,payload")
                      .eq("capability", "planner")
                      .in_("status", ["pending", "running"])
-                     .limit(80).execute().data) or []
+                     .limit(200).execute().data) or []
         except Exception as e:  # noqa: BLE001
             log.warning("planner: open echte rijen lezen faalde: %s", e)
             return gezien
@@ -1330,6 +1335,10 @@ class Planner:
             bron = meta.get("bron_id") or (r.get("payload") or {}).get("bron_id")
             if bron:
                 gezien.add(str(bron))
+            # Ook op titel: een bron die steeds met een nieuw id terugkomt (dezelfde
+            # NorthSea-vraag) mag geen tweede open vervolgtaak geven.
+            if r.get("title"):
+                gezien.add("titel:" + str(r["title"]).strip().lower())
         return gezien
 
     def _sluit_verzonnen_eenmaal(self, staat: dict) -> int:
@@ -1378,7 +1387,8 @@ class Planner:
             gemaakt: list[dict] = []
             for v in voorstellen:
                 bron = str(v.get("bron_id") or "")
-                if bron and bron in al_open:
+                titel_sleutel = "titel:" + str(v.get("titel") or "").strip().lower()
+                if (bron and bron in al_open) or titel_sleutel in al_open:
                     continue
                 agent = v.get("agent") if v.get("agent") in AGENTS else "axe-core"
                 motor = motoren.get(agent, STANDAARD_MOTOREN[agent])

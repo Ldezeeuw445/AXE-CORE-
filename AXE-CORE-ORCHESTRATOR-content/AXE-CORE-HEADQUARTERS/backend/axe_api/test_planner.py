@@ -316,6 +316,16 @@ class TestGeenVervolgOpAccountOfBouwlus:
         ], [])
         assert [v["titel"] for v in uit] == ["Continue: DEAL-002"]
 
+    def test_een_ja_van_luka_of_een_vervolg_krijgt_geen_nieuw_vervolg(self):
+        """29 okt: 38 open 'Continue: Yes needed: DEAL-001 — Copper Cathode' sinds 10 okt."""
+        uit = p.planner_pass([
+            {"id": "y1", "title": "Yes needed: DEAL-001 — Copper Cathode", "status": "blocked", "requested_by": "luka"},
+            {"id": "y2", "title": "Continue: Yes needed: DEAL-001 — Copper Cathode", "status": "blocked",
+             "requested_by": "luka"},
+            {"id": "d", "title": "DEAL-003 offer check", "status": "blocked", "requested_by": "luka"},
+        ], [])
+        assert [v["titel"] for v in uit] == ["Continue: DEAL-003 offer check"]
+
 
 class TestVoerUitEerlijk:
     def _pl(self, monkeypatch, run):
