@@ -46,6 +46,22 @@ type Melding = {
   actie: 'retry' | 'open' | 'reconnect';
 };
 
+async function archiveerTaak(id: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const reden = 'Dismissed by Luka on Home.';
+  const { data } = await sb.from('core_tasks').select('error,metadata').eq('id', id).maybeSingle();
+  const fout = data?.error && typeof data.error === 'object' ? data.error as Record<string, unknown> : { message: data?.error ?? null };
+  const meta = data?.metadata && typeof data.metadata === 'object' ? data.metadata as Record<string, unknown> : {};
+  const { error } = await sb.from('core_tasks').update({
+    status: 'cancelled',
+    cancelled_at: new Date().toISOString(),
+    error: { ...fout, archived: true, archive_reason: reden },
+    metadata: { ...meta, archived: true, archive_reason: reden },
+  }).eq('id', id).in('status', ['failed', 'blocked']);
+  if (error) console.warn('[AxeAgentsBalk] dismiss niet bewaard', error.message);
+}
+
 function stip(aan: boolean, fout = false) {
   return {
     width: 6,
@@ -141,6 +157,11 @@ export function AxeAgentsBalk() {
   const doe = (m: Melding, soort: 'retry' | 'open' | 'reconnect' | 'dismiss' | 'speak') => {
     if (soort === 'dismiss') {
       setMeldingen((prev) => prev.filter((x) => x.id !== m.id));
+      // Luka, 29 okt: Dismiss bracht de taak na 20 s terug, want de lijst laadt
+      // opnieuw uit core_tasks. Een mislukte taak die hij wegklikt wordt dus
+      // gearchiveerd, zoals staande_diensten dat met oude fouten doet: de rij
+      // blijft staan (met reden), alleen telt hij niet meer mee op Home.
+      if (m.mislukt) void archiveerTaak(m.id);
       return;
     }
     if (soort === 'speak') {
