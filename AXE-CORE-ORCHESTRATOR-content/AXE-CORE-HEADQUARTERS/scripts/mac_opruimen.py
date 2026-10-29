@@ -175,6 +175,33 @@ def melden() -> tuple:
     )
 
 
+def grootste(n: int = 6, timeout: int = 600) -> list[tuple[str, int]]:
+    """De grootste mappen direct onder ~ en ~/Library, alleen gemeten.
+
+    29 okt: de eerste ronde op de iMac maakte 0,1 GB vrij bij 91,8%. Wat de schijf
+    vult zijn dus geen caches maar iets van Luka zelf; zonder te zeggen wat, kan hij
+    niet kiezen. ~/Library telt als zijn delen, niet als één blok.
+    """
+    def niveau(basis: str) -> list[tuple[str, int]]:
+        if not os.path.isdir(basis):
+            return []
+        try:
+            p = subprocess.run(["du", "-k", "-d", "1", basis], capture_output=True, text=True,
+                               timeout=timeout, check=False)
+        except (subprocess.TimeoutExpired, OSError):
+            return []
+        uit = []
+        for regel in (p.stdout or "").splitlines():
+            kb, _, map_ = regel.partition("\t")
+            if map_ and os.path.normpath(map_) != os.path.normpath(basis) and kb.strip().isdigit():
+                uit.append((map_, int(kb) * 1024))
+        return uit
+    bib = pad("Library")
+    rijen = [r for r in niveau(HOME) if os.path.normpath(r[0]) != os.path.normpath(bib)] + niveau(bib)
+    rijen.sort(key=lambda r: -r[1])
+    return [("~" + m[len(HOME):] if m.startswith(HOME) else m, b) for m, b in rijen[:n]]
+
+
 def voer_uit(stap: dict, droog: bool) -> tuple[int, str]:
     """(vrijgekomen bytes, reden als hij is overgeslagen)."""
     p = stap["pad"]
@@ -235,6 +262,9 @@ def meld(uit: dict) -> None:
              f"{gb(uit['vrij'])} freed ({gedaan}). {uit['na']['vrij_gb']} GB free.")
     if groot:
         tekst += f" Left alone, yours to decide: {groot}."
+    grootst = ", ".join(f"{m} {gb(b)}" for m, b in uit.get("grootst") or [] if b >= 1e9)
+    if grootst:
+        tekst += f" Biggest folders: {grootst}."
     soort = "warning" if uit["na"]["pct"] >= VOL_PCT else "info"
     import urllib.request
     req = urllib.request.Request(
@@ -283,6 +313,7 @@ def ruim_op(droog: bool = False, forceer: bool = False, nu: float | None = None)
         "vrij": sum(s["vrij"] for s in gedaan),
         "gedaan": gedaan,
         "groot": sorted(((n, grootte(p, timeout=60)) for n, p in melden()), key=lambda x: -x[1]),
+        "grootst": grootste(),
         "op": datetime.fromtimestamp(nu, timezone.utc).isoformat(),
     }
     if not droog:

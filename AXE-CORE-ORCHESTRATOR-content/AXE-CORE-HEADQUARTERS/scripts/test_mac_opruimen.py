@@ -126,5 +126,18 @@ def test_de_melding_noemt_wat_vrijkwam_en_wat_luka_zelf_moet_kiezen(mac, monkeyp
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE", "sleutel")
     monkeypatch.setattr(mo, "grootte", lambda p, timeout=300: 2_000_000_000 if p.endswith("Downloads") else
                         (300_000_000 if os.path.exists(p) else 0))
+    monkeypatch.setattr(mo, "grootste", lambda: [("~/Movies", 48_000_000_000), ("~/Library/Mail", 9_000_000_000)])
     mo.ruim_op(nu=1_000_000.0)
     assert gezien and "cleanup: disk 80.0% -> 80.0%" in gezien[0] and "Downloads 2.0 GB" in gezien[0]
+    assert "Biggest folders: ~/Movies 48.0 GB, ~/Library/Mail 9.0 GB" in gezien[0]
+
+
+def test_grootste_toont_library_in_delen_en_kort_de_paden_in(mac):
+    home, _ = mac
+    # Groter dan de log van 21 MB die de fixture al in ~/Library/Logs zet.
+    for p, n in (("Movies/film.mov", 40_000_000), ("Library/Mail/m.emlx", 2_000_000), ("klein/x", 1000)):
+        os.makedirs(os.path.dirname(home / p), exist_ok=True)
+        with open(home / p, "wb") as fh:
+            fh.write(b"x" * n)
+    namen = [m for m, _ in mo.grootste(n=3)]
+    assert namen[0] == "~/Movies" and "~/Library/Mail" in namen and "~/Library" not in namen
