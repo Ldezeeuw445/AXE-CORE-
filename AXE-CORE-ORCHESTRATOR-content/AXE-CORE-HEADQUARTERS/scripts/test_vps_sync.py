@@ -209,3 +209,19 @@ def test_auto_staat_uit_met_de_schakelaar(nep_box, monkeypatch):
     monkeypatch.setenv("AXE_AUTO_DEPLOY", "0")
     monkeypatch.setattr(vs, "survey", lambda: (_ for _ in ()).throw(AssertionError("uit is uit")))
     assert vs.cmd_auto(None) == 0
+
+
+def test_een_ontbrekende_testomgeving_wordt_volgende_ronde_opnieuw_geprobeerd(nep_box, monkeypatch):
+    nep_box["tests"] = (None, "no Python 3.11+ on this Mac")
+    assert vs.cmd_auto(None) == 1
+    uit = lees_staat()
+    assert uit["actie"] == "geweigerd" and "no Python 3.11+" in uit["reden"]
+    nep_box["tests"] = (True, "645 passed")
+    assert vs.cmd_auto(None) == 0 and lees_staat()["actie"] == "gedeployd"
+
+
+def test_de_testomgeving_laat_dingen_weg_die_geen_test_nodig_heeft(tmp_path, monkeypatch):
+    monkeypatch.setattr(vs, "TEST_VENV", str(tmp_path / "venv"))
+    monkeypatch.setattr(vs, "_basis_python", lambda: None)
+    py, waarom = vs.maak_test_venv()
+    assert py is None and "Python 3.11+" in waarom

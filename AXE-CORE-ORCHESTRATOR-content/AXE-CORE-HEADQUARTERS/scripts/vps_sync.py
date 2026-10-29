@@ -536,21 +536,89 @@ def auto_besluit(rows: list, todo: list, tests: bool | None) -> tuple[str, str]:
     return "deploy", "box matches git, tests green"
 
 
-def test_python() -> str | None:
-    for kandidaat in (os.environ.get("AXE_TEST_PYTHON"),
-                      os.path.join(HQ, "backend", "axe_api", ".venv-local", "bin", "python"),
-                      sys.executable):
-        if kandidaat and os.path.exists(kandidaat):
-            ok = subprocess.run([kandidaat, "-c", "import pytest, fastapi, httpx"], capture_output=True, check=False)
-            if ok.returncode == 0:
-                return kandidaat
+TEST_VENV = os.path.expanduser(os.environ.get("AXE_TEST_VENV", "~/.axe/test-venv"))
+# Wat in een testomgeving niet hoeft en op een Mac soms niet bouwt (http-ece is
+# C); geen test importeert het.
+NIET_VOOR_TESTS = ("pywebpush", "http-ece", "http_ece")
+
+
+def _bruikbaar(py: str) -> bool:
+    ok = subprocess.run([py, "-c", "import pytest, fastapi, httpx"], capture_output=True, check=False)
+    return ok.returncode == 0
+
+
+def _basis_python() -> str | None:
+    """Een Python van 3.11 of nieuwer; de backend gebruikt `X | None` in modellen."""
+    for naam in ("python3.13", "python3.12", "python3.11", "/opt/homebrew/bin/python3", "/usr/local/bin/python3", "python3"):
+        p = subprocess.run([naam, "-c", "import sys; print(sys.version_info >= (3, 11))"],
+                           capture_output=True, text=True, check=False) if _op_pad(naam) else None
+        if p is not None and p.returncode == 0 and p.stdout.strip() == "True":
+            return naam
     return None
 
 
+def _op_pad(naam: str) -> bool:
+    import shutil
+    return bool(os.path.exists(naam) or shutil.which(naam))
+
+
+def maak_test_venv() -> tuple[str | None, str]:
+    """~/.axe/test-venv, eenmalig, en opnieuw als requirements.txt verandert.
+
+    28 okt: de eerste auto-deploy op de iMac wachtte met "no test environment on
+    this Mac". Zonder groene tests rolt auto terecht niet uit; dus zet hij die
+    omgeving zelf neer in plaats van erop te wachten.
+    """
+    req = os.path.join(HQ, "backend", "axe_api", "requirements.txt")
+    try:
+        with open(req, "rb") as fh:
+            inhoud = fh.read()
+    except OSError:
+        return None, "requirements.txt not found"
+    vinger = hashlib.sha256(inhoud).hexdigest()[:16]
+    py = os.path.join(TEST_VENV, "bin", "python")
+    merk = os.path.join(TEST_VENV, ".requirements")
+    try:
+        with open(merk) as fh:
+            klaar = fh.read().strip() == vinger
+    except OSError:
+        klaar = False
+    if klaar and os.path.exists(py) and _bruikbaar(py):
+        return py, ""
+    basis = _basis_python()
+    if not basis:
+        return None, "no Python 3.11+ on this Mac (brew install python@3.12)"
+    if not os.path.exists(py) and subprocess.run([basis, "-m", "venv", TEST_VENV], capture_output=True,
+                                                   check=False).returncode != 0:
+        return None, "could not create the test venv"
+    regels = [r for r in inhoud.decode("utf-8", "replace").splitlines()
+              if r.strip() and not r.strip().startswith("#")
+              and not any(r.strip().lower().startswith(n) for n in NIET_VOOR_TESTS)]
+    gefilterd = os.path.join(TEST_VENV, "requirements-tests.txt")
+    with open(gefilterd, "w") as fh:
+        fh.write("\n".join(regels) + "\npytest\npytest-asyncio\n")
+    p = subprocess.run([py, "-m", "pip", "install", "-q", "-r", gefilterd], capture_output=True, text=True,
+                       timeout=1800, check=False)
+    if p.returncode != 0 or not _bruikbaar(py):
+        return None, "pip install for the test venv failed: " + (p.stderr or p.stdout or "")[-200:]
+    with open(merk, "w") as fh:
+        fh.write(vinger)
+    return py, ""
+
+
+def test_python() -> tuple[str | None, str]:
+    for kandidaat in (os.environ.get("AXE_TEST_PYTHON"),
+                      os.path.join(HQ, "backend", "axe_api", ".venv-local", "bin", "python"),
+                      sys.executable):
+        if kandidaat and os.path.exists(kandidaat) and _bruikbaar(kandidaat):
+            return kandidaat, ""
+    return maak_test_venv()
+
+
 def draai_tests() -> tuple[bool | None, str]:
-    py = test_python()
+    py, waarom = test_python()
     if not py:
-        return None, ""
+        return None, waarom
     # Zonder sleutels: een test mag nooit per ongeluk een echte dienst raken.
     schoon = {k: v for k, v in os.environ.items()
               if not k.startswith(("SUPABASE", "AXE_", "GITHUB", "GH_", "OPENAI", "GROQ", "ANTHROPIC",
@@ -618,7 +686,10 @@ def cmd_auto(_args) -> int:
                             check=False).stdout.strip()
     # Dezelfde commit geeft dezelfde tests: niet elke 5 minuten opnieuw rood draaien
     # (en niet elke 5 minuten dezelfde regel in het log). Een nieuwe commit probeert opnieuw.
-    if vorige.get("commit") == commit and vorige.get("actie") in ("geweigerd", "teruggezet"):
+    # Alleen bij rode tests of een terugzetting: een ontbrekende testomgeving of
+    # een slot van de andere Mac lost zichzelf op en wordt gewoon opnieuw geprobeerd.
+    if vorige.get("commit") == commit and (vorige.get("actie") == "teruggezet" or (
+            vorige.get("actie") == "geweigerd" and "tests are red" in str(vorige.get("reden")))):
         return 0
     try:
         rows = survey()
@@ -634,6 +705,8 @@ def cmd_auto(_args) -> int:
     else:
         tests, staart = (draai_tests() if todo and not [r for r in rows if r[3] == BOX_DRIFT] else (True, ""))
         actie, reden = auto_besluit(rows, todo, tests)
+        if tests is None and staart:
+            reden = f"{reden}: {staart[:200]}"
     uitkomst = {"commit": commit, "actie": actie, "reden": reden,
                 "bestanden": [naam_van(r[0]) for r in todo], "tests": staart[-600:]}
     if actie == "deploy":

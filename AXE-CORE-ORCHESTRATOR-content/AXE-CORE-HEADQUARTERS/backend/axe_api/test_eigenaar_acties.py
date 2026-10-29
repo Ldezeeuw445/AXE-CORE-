@@ -50,7 +50,10 @@ def wereld(gedaan: bool, lus_rijen: int | None = None, functions_live: bool | No
         if request.url.host == "api.axecompanion.com" and pad == "/health":
             body = {"status": "ok"}
             if gedaan:
-                body.update(checks={"supabase": {"state": "ok"}, "ollama_box": {"state": "ok", "models": 12}}, degraded=[])
+                body.update(checks={"supabase": {"state": "ok"}, "ollama_box": {"state": "ok", "models": 12},
+                                    "github": {"state": "ok"}}, degraded=[])
+            else:
+                body.update(checks={"github": {"state": "fail", "detail": "GitHub rejects the key (HTTP 401)"}})
             return httpx.Response(200, json=body)
         if pad.endswith("/core_axe_devices"):
             if gedaan:
@@ -176,7 +179,7 @@ def test_herinnering_pas_vanaf_acht_uur_en_een_keer_per_dag():
     assert ea.herinnering(stand, VOOR_ACHT, None) is None
     datum, tekst = ea.herinnering(stand, NA_ACHT, None)
     assert datum == "2026-10-17"
-    assert tekst.startswith("Owner actions: 7 open\n1. Build loop")
+    assert tekst.startswith("Owner actions: 8 open\n1. Build loop")
     assert "deploy.sh check" in tekst
     assert ea.herinnering(stand, NA_ACHT, "2026-10-17") is None
 
@@ -199,7 +202,7 @@ def test_herinner_schrijft_een_rij_per_dag_met_vast_id(tmp_path):
     assert len(posts) == 1
     rij = posts[0]
     assert rij["recipient"] == ea.USER_ID and rij["type"] == "warning"
-    assert rij["message"].startswith("Owner actions: 7 open")
+    assert rij["message"].startswith("Owner actions: 8 open")
     # Zelfde datum, zelfde id: een herhaalde poging na een timeout wordt geen tweede rij.
     assert rij["id"] == "%s" % ea.uuid.uuid5(ea.uuid.NAMESPACE_URL, "axe-eigenaar-acties/2026-10-17")
 
@@ -226,3 +229,11 @@ def test_api_deploy_is_pas_af_als_de_vps_de_ollama_box_meet():
         return httpx.Response(200, json={"status": "ok", "checks": {"supabase": {"state": "ok"}}, "degraded": []})
     done, gemeten = meting(handler, ea._api_health)
     assert done is False and "ollama_box" in gemeten
+
+
+def test_de_github_sleutel_van_de_vps_wordt_gemeten_niet_aangenomen():
+    handler, _ = wereld(gedaan=False)
+    done, gemeten = meting(handler, ea._vps_github)
+    assert done is False and "401" in gemeten
+    handler, _ = wereld(gedaan=True)
+    assert meting(handler, ea._vps_github)[0] is True

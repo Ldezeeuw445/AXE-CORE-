@@ -17,6 +17,12 @@ gaf een 401 zonder CORS-header, en dat leest een browser als "unreachable".
 Zo stond de box op 20 okt op beide apparaten OFFLINE terwijl hij met 12
 modellen antwoordde. Hier meet de VPS hem, en de zijbalk leest dit.
 
+  github         of de GitHub-sleutel van de VPS nog wordt aanvaard (rate_limit kost niets)
+
+Tot 29 okt zei /health "github": true zodra er een GITHUB_TOKEN stond. Die sleutel
+gaf sinds 19 okt 401, en de bouwende DAX liep er vier rondes op stuk zonder dat
+iets het zei. Nu staat een geweigerde sleutel in degraded.
+
 Elke meting heeft een korte timeout en gooit nooit; samen hooguit eens per CACHE_S.
 `status` blijft "ok" zolang de API zelf leeft, zodat de bewaker en de uptimecheck
 het proces blijven meten en niet de buren. Wat er mis is staat in `degraded`.
@@ -24,6 +30,7 @@ het proces blijven meten en niet de buren. Wat er mis is staat in `degraded`.
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import time
 from datetime import datetime, timezone
@@ -139,9 +146,21 @@ async def _veilig(meting: Callable[[], Awaitable[dict]]) -> dict:
         return {"state": "fail", "detail": type(e).__name__}
 
 
+async def _github(client: httpx.AsyncClient, token: str) -> dict:
+    if not token:
+        return {"state": "unknown", "detail": "no GITHUB_TOKEN"}
+    r = await client.get("https://api.github.com/rate_limit",
+                         headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+    if r.status_code == 200:
+        return {"state": "ok"}
+    if r.status_code in (401, 403):
+        return {"state": "fail", "detail": f"GitHub rejects the key (HTTP {r.status_code})"}
+    return {"state": "unknown", "detail": f"HTTP {r.status_code}"}
+
+
 async def controles(supabase_url: str, supabase_key: str, *, client: Optional[httpx.AsyncClient] = None,
                     systemctl: Optional[str] = None, northsea_url: str = NORTHSEA_MCP_HEALTH,
-                    ollama_url: str = OLLAMA_BOX_TAGS,
+                    ollama_url: str = OLLAMA_BOX_TAGS, github_token: str | None = None,
                     nu: Optional[float] = None, cache: bool = True) -> dict:
     """{"checks": {...}, "degraded": [...], "checked_at": ...}; hooguit eens per CACHE_S."""
     t = time.time() if nu is None else nu
@@ -151,12 +170,14 @@ async def controles(supabase_url: str, supabase_key: str, *, client: Optional[ht
     eigen = client is None
     client = client or httpx.AsyncClient(timeout=TIMEOUT_S)
     try:
-        sb, ns, tw, ob, cap = await asyncio.gather(
+        gh_token = os.environ.get("GITHUB_TOKEN", "") if github_token is None else github_token
+        sb, ns, tw, ob, cap, gh = await asyncio.gather(
             _veilig(lambda: _supabase(client, supabase_url, supabase_key)),
             _veilig(lambda: _northsea(client, northsea_url)),
             _veilig(lambda: _task_worker(systemctl)),
             _veilig(lambda: _ollama_box(client, ollama_url)),
             _veilig(lambda: _memory_cap(client, supabase_url, supabase_key)),
+            _veilig(lambda: _github(client, gh_token)),
         )
     finally:
         if eigen:
@@ -164,7 +185,7 @@ async def controles(supabase_url: str, supabase_key: str, *, client: Optional[ht
     if cap.get("state") == "fail":
         cap = {"state": "unknown", "detail": cap.get("detail", "fail")}
     checks = {"supabase": sb, "cron_tick": beoordeel_tick(_laatste_tick, t), "task_worker": tw, "northsea_mcp": ns,
-              "ollama_box": ob, "memory_cap": cap}
+              "ollama_box": ob, "memory_cap": cap, "github": gh}
     uit = {
         "checks": checks,
         "degraded": sorted(k for k, v in checks.items() if v.get("state") == "fail"),

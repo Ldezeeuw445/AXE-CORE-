@@ -124,3 +124,25 @@ def test_niet_geconfigureerd_supabase_is_onbekend():
             return await gz.controles("", "", client=c, systemctl="", nu=1.0, cache=False)
     assert asyncio.run(run())["checks"]["supabase"]["state"] == "unknown"
 
+
+
+def _github_client(code):
+    def handler(request: httpx.Request):
+        if request.url.host == "api.github.com":
+            assert request.headers["authorization"] == "Bearer gh-test"
+            return httpx.Response(code, json={})
+        return httpx.Response(404)
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def test_een_geweigerde_github_sleutel_staat_in_degraded():
+    """29 okt: de sleutel gaf al tien dagen 401 terwijl /health "github": true zei."""
+    uit = meet(c=_github_client(401), systemctl="", nu=10.0, github_token="gh-test")
+    assert uit["checks"]["github"] == {"state": "fail", "detail": "GitHub rejects the key (HTTP 401)"}
+    assert "github" in uit["degraded"]
+
+
+def test_een_werkende_github_sleutel_is_ok_en_geen_sleutel_is_onbekend():
+    assert meet(c=_github_client(200), systemctl="", nu=10.0, github_token="gh-test")["checks"]["github"] == {"state": "ok"}
+    geen = meet(c=_github_client(200), systemctl="", nu=10.0, github_token="")
+    assert geen["checks"]["github"]["state"] == "unknown" and "github" not in geen["degraded"]

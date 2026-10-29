@@ -286,10 +286,24 @@ def _open_bouwtaken(db: Any) -> list[dict[str, Any]]:
     return [r for r in rijen if (r.get("payload") or {}).get("dax_bouw")]
 
 
+def _github_geweigerd() -> bool:
+    try:
+        import gezondheid
+    except ImportError:
+        return False
+    laatste = (gezondheid._cache.get("uit") or {}).get("checks") or {}
+    return (laatste.get("github") or {}).get("state") == "fail"
+
+
 def plan_bouwtaak(db: Any, nu: datetime) -> dict[str, Any]:
     """Eén taak voor de developer-DAX als hij er geen open heeft, om de beurt per repo."""
     if _open_bouwtaken(db):
         return {"gepland": False, "reden": "a DAX build task is still open"}
+    # 28-29 okt: vier rondes faalden op "could not read Username" omdat GitHub de
+    # sleutel van de VPS weigerde (401). Zolang /health dat meet: geen taak die
+    # alleen maar kan mislukken; de eigenaar-actie vps-github-key zegt wat er moet.
+    if _github_geweigerd():
+        return {"gepland": False, "reden": "GitHub rejects the VPS key; waiting for a new one (owner action vps-github-key)"}
     try:
         laatste = (db.table("core_tasks").select("payload").eq("assignee", "developer")
                    .order("created_at", desc=True).limit(20).execute().data) or []

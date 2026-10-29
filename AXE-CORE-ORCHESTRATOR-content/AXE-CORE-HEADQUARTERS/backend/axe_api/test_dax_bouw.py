@@ -198,3 +198,13 @@ def test_gevoelige_paden():
     assert db_.gevoelig(["supabase/functions/stripe-webhook/index.ts", "src/pages/Login.jsx",
                          "src/lib/auth.ts", "docs/tasks.json", "src/App.jsx", ".github/workflows/x.yml"]) == [
         "supabase/functions/stripe-webhook/index.ts", "src/lib/auth.ts", ".github/workflows/x.yml"]
+
+
+def test_geen_bouwtaak_zolang_github_de_sleutel_weigert(monkeypatch):
+    from datetime import datetime, timezone
+
+    import gezondheid
+    monkeypatch.setitem(gezondheid._cache, "uit", {"checks": {"github": {"state": "fail"}}})
+    db = _Db()
+    uit = db_.plan_bouwtaak(db, datetime(2026, 10, 29, 9, 20, tzinfo=timezone.utc))
+    assert uit["gepland"] is False and "vps-github-key" in uit["reden"] and not db.ingevoegd

@@ -81,6 +81,14 @@ ACTIES = (
                "then python3 scripts/vps_sync.py deploy.",
     },
     {
+        "id": "vps-github-key",
+        "title": "VPS: a new GitHub key (the old one gets 401, so the DAX bots cannot clone or push)",
+        "how": "Make a token on github.com > Settings > Developer settings > Personal access tokens "
+               "(classic: scope repo; or fine-grained: Contents and Pull requests read/write on your repos, "
+               "1 year). Then on the iMac in the HQ folder: bash scripts/zet_github_token.sh and paste it. "
+               "It checks the key with GitHub first, never shows it, and restarts the API.",
+    },
+    {
         "id": "phone-push",
         "title": "Phone: Device Manager native notifications",
         "how": "Rebuild com.axecore.core with docs/android/notify/ (WorkManager poll of "
@@ -194,6 +202,19 @@ async def _northsea_n4(client, supabase_url, key, env, nu):
     return _versie(data["version"]) >= NORTHSEA_N4_VERSIE, f"northsea-mcp runs {data['version']}"
 
 
+async def _vps_github(client, supabase_url, key, env, nu):
+    """/health meet sinds 29 okt of GitHub de sleutel van de VPS aanvaardt."""
+    url = (env.get("AXE_MONITOR_API_URL") or "https://api.axecompanion.com").rstrip("/")
+    r = await client.get(url + "/health")
+    data = r.json() if r.is_success else None
+    gh = ((data or {}).get("checks") or {}).get("github") if isinstance(data, dict) else None
+    if not isinstance(gh, dict):
+        return None, "cannot measure: /health has no github check yet"
+    if gh.get("state") == "ok":
+        return True, "GitHub accepts the VPS key"
+    return (False if gh.get("state") == "fail" else None), str(gh.get("detail") or gh.get("state"))
+
+
 async def _api_health(client, supabase_url, key, env, nu):
     """Na de uitrol van 20 okt meet /health ook de Ollama box (checks.ollama_box).
 
@@ -259,6 +280,7 @@ METINGEN: dict[str, Meting] = {
     "axon-pr2-live": _axon_live,
     "northsea-n4-deploy": _northsea_n4,
     "axe-api-deploy": _api_health,
+    "vps-github-key": _vps_github,
     "phone-push": _push_abonnement,
     "northsea-inventory-job-off": _inventaris_uit,
 }
