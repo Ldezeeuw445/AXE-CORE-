@@ -16,6 +16,12 @@ describe('wieVan', () => {
     expect(wieVan({ titel: 'A1: a wordt 2', head: 'dax/abc123-taak' })).toBe('dax');
     expect(wieVan(commit('docs: kleine fix'))).toBe('luka');
   });
+
+  it('een naam in de tekst maakt iemand nog geen auteur', () => {
+    // De Daily Brief-commit zelf noemt "Grok Bot, Cursor" en is van Claude.
+    expect(wieVan(commit('Daily Brief', 'per helper (Claude, Grok Bot, Cursor)\n\nClaude-Session: https://claude.ai/code/s'))).toBe('claude');
+    expect(wieVan(commit('Uitleg over Grok Bot', 'zoals Grok Bot dat doet'))).toBe('luka');
+  });
 });
 
 describe('eigenaarActiesUit', () => {

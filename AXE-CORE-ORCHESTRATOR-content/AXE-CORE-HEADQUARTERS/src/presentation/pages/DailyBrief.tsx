@@ -88,7 +88,7 @@ export default function DailyBrief() {
                 onClick={() => kiesVenster(v.id)}
                 className="rounded-button px-2.5 py-1 text-[12px] font-medium"
                 style={{
-                  background: venster === v.id ? 'var(--tint)' : 'transparent',
+                  background: venster === v.id ? 'var(--tint)' : 'var(--surface-bg)',
                   border: '1px solid var(--tint-line)',
                   color: venster === v.id ? 'var(--accent-cyan)' : 'var(--text-secondary)',
                 }}
@@ -109,7 +109,11 @@ export default function DailyBrief() {
           </div>
         }
       >
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+        {/* Eigen ondergrond: op een lichte achtergrondfoto was de legenda niet te lezen. */}
+        <div
+          className="mb-3 inline-flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-card px-3 py-1.5 text-[11px]"
+          style={{ color: 'var(--text-secondary)', background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)' }}
+        >
           {LEGENDA.map(([k, uitleg]) => (
             <span key={k} className="flex items-center gap-1.5"><Stip kleur={k} />{uitleg}</span>
           ))}

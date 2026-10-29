@@ -61,8 +61,10 @@ export function wieVan(x: { titel: string; body?: string; auteur?: string; head?
   const head = x.head ?? '';
   if (/^build next step\b/i.test(titel) || /^AXE build loop\b/i.test(titel) || /AXE build loop, task/i.test(body)) return 'bouwlus';
   if (/^dax\//i.test(head) || /^DAX build\b/i.test(titel)) return 'dax';
-  if (/grok bot/i.test(auteur) || /grok bot/i.test(body) || /^grok\//i.test(head)) return 'grok';
+  // Op wie het maakte (auteur, trailer, co-author), niet op een naam die in de
+  // tekst staat: een Claude-commit die "Grok Bot" noemt is geen Grok-commit.
   if (/claude-session:|co-authored-by: claude|generated with \[claude code\]/i.test(body) || /^claude$/i.test(auteur) || /^claude\//i.test(head)) return 'claude';
+  if (/grok bot/i.test(auteur) || /co-authored-by: grok/i.test(body) || /^grok\//i.test(head)) return 'grok';
   if (/cursor agent/i.test(auteur) || /cursoragent@cursor\.com|co-authored-by: cursor|CURSOR_AGENT_PR_BODY/i.test(body) || /^cursor\//i.test(head)) return 'cursor';
   if (/codex|chatgpt/i.test(auteur) || /^(chatgpt|codex)\//i.test(head)) return 'chatgpt';
   return 'luka';
