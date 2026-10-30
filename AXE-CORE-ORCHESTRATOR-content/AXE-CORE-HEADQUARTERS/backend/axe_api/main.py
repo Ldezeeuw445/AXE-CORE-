@@ -416,7 +416,7 @@ async def health():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ORCHESTRATOR LUS (Fase 2 stap 1) — dunne facade, geen side-effects
+# ORCHESTRATOR LUS (Fase 2) — facade; /tasks blijft de UI-queue
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/orchestrator/status", dependencies=[AUTH])
@@ -426,7 +426,36 @@ async def orchestrator_status():
         import orchestrator_lus
         return orchestrator_lus.status()
     except ImportError:
-        return {"fase": 2, "stap": 1, "error": "orchestrator_lus.py not deployed"}
+        return {"fase": 2, "stap": 2, "error": "orchestrator_lus.py not deployed"}
+
+
+class OrchestratorVoorstel(BaseModel):
+    title: Optional[str] = None
+    detail: Optional[str] = None
+    goal: Optional[str] = None
+    kind: Optional[str] = None
+    metadata: Optional[dict] = None
+    command: Optional[str] = None
+    app: Optional[str] = None
+    dax: bool = False
+
+
+@app.post("/orchestrator/beoordeel", dependencies=[AUTH])
+async def orchestrator_beoordeel(req: OrchestratorVoorstel):
+    """Stap 2 dry-run: access/approval via beslis_beleid. Geen execute, geen side-effects."""
+    try:
+        import orchestrator_lus
+    except ImportError as exc:
+        raise HTTPException(503, "orchestrator_lus.py not deployed") from exc
+    voorstel = {
+        k: v for k, v in {
+            "title": req.title, "detail": req.detail, "goal": req.goal,
+            "kind": req.kind, "metadata": req.metadata or {},
+        }.items() if v is not None
+    }
+    return orchestrator_lus.beoordeel_voorstel(
+        voorstel, command=req.command, app=req.app, dax=req.dax,
+    )
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DURABLE TASK KERNEL
