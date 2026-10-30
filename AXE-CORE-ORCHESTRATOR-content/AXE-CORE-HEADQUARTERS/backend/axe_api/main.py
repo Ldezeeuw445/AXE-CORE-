@@ -426,7 +426,7 @@ async def orchestrator_status():
         import orchestrator_lus
         return orchestrator_lus.status()
     except ImportError:
-        return {"fase": 2, "stap": 2, "error": "orchestrator_lus.py not deployed"}
+        return {"fase": 2, "stap": 6, "error": "orchestrator_lus.py not deployed"}
 
 
 class OrchestratorVoorstel(BaseModel):
@@ -456,6 +456,37 @@ async def orchestrator_beoordeel(req: OrchestratorVoorstel):
     return orchestrator_lus.beoordeel_voorstel(
         voorstel, command=req.command, app=req.app, dax=req.dax,
     )
+
+
+@app.get("/orchestrator/providers", dependencies=[AUTH])
+async def orchestrator_providers(agent: Optional[str] = "axe", alleen_gratis: bool = False):
+    """Stap 3: provider-fallback keten via provider_router (geen netwerk-calls)."""
+    try:
+        import orchestrator_lus
+    except ImportError as exc:
+        raise HTTPException(503, "orchestrator_lus.py not deployed") from exc
+    return orchestrator_lus.provider_fallback(agent, alleen_gratis=alleen_gratis)
+
+
+class OrchestratorPluginReq(BaseModel):
+    naam: str
+    payload: Optional[dict] = None
+
+
+@app.post("/orchestrator/plugin", dependencies=[AUTH])
+async def orchestrator_plugin(req: OrchestratorPluginReq):
+    """Stap 4–6: roep device_actions / northsea_crews / trading_demo aan.
+
+    Guards blijven gelden: geen live trades, geen payments, geen outgoing mail.
+    """
+    try:
+        import orchestrator_lus
+    except ImportError as exc:
+        raise HTTPException(503, "orchestrator_lus.py not deployed") from exc
+    if not (req.naam or "").strip():
+        raise HTTPException(422, "naam verplicht")
+    return orchestrator_lus.roep_plugin(req.naam.strip(), req.payload or {})
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DURABLE TASK KERNEL
