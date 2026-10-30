@@ -88,7 +88,6 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'git.diff': 'observe',
   'git.log': 'observe',
   'memory.recall': 'observe',
-  'vercel.status': 'observe',
 
   // ── safe execute ───────────────────────────────────────────────────────
   'terminal.typecheck': 'safe_execute',
@@ -123,7 +122,6 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'git.pr_open': 'consequential',
   'git.merge': 'consequential',
   'terminal.free': 'consequential',
-  'vercel.promote': 'consequential',
   'db.migrate': 'consequential',
   'files.delete': 'consequential',
 };
