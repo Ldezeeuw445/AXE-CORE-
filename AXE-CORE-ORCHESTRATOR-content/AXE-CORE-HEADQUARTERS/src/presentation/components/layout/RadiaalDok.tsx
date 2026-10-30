@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useOpenPagina } from '@/presentation/hooks/useOpenPagina';
-import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, NotebookPen, PanelRightOpen, Smartphone, SmartphoneNfc, StickyNote, X } from 'lucide-react';
+import { AppWindow, Bell, Bot, BrainCircuit, Code2, Menu, NotebookPen, PanelRightOpen, Smartphone, SmartphoneNfc, StickyNote, X, Sparkles } from 'lucide-react';
 import { radiaalPosities } from '@/domain/radiaal';
 import { useTelefoonZichtbaar, wisselTelefoon } from '@/presentation/components/devices/telefoonZichtbaar';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
@@ -146,6 +146,7 @@ export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, o
     ...(isTauriRuntime() ? [
       { id: 'notities-venster', label: 'Notes window', teken: <NotebookPen size={18} />, doe: () => { void wisselZwevend('notes'); } },
       { id: 'telefoon-venster', label: 'Phone window', teken: <SmartphoneNfc size={18} />, doe: () => { void wisselZwevend('phone'); } },
+      { id: 'axe-overlay', label: 'AXE overlay', teken: <Sparkles size={18} />, doe: () => { void wisselZwevend('axe'); } },
     ] : []),
     /* Deze drie openden een eigen venster via openPageOnMonitor, met `void`
        ervoor. Buiten Tauri gooit die, dus op de iPad deed de knop niets --

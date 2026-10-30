@@ -1,0 +1,10 @@
+{
+  "name": "axe-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Always-on AXE notch for macOS (login launch). See README.md.",
+  "scripts": {
+    "dev": "echo 'Use HQ: openZwevend(\"axe\") or tauri after scaffolding'",
+    "tauri": "echo 'Scaffold: npm create tauri-app — link AxeOverlayNotch from HQ'"
+  }
+}

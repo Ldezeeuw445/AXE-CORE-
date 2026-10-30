@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><title>Home — current improved</title>
+<link rel="stylesheet" href="_all.css"/>
+<style>
+body{width:1440px;height:900px;overflow:hidden;margin:0}
+.app{width:1440px;height:900px}
+.stage{position:relative;flex:1;min-height:0;background:
+  radial-gradient(ellipse at 50% 40%,rgba(34,211,238,.07),transparent 50%),
+  linear-gradient(180deg,#0a0c10,#050608)}
+.core{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);
+  width:280px;height:280px;border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,rgba(34,211,238,.35),rgba(10,14,20,.9) 55%,#050608);
+  box-shadow:0 0 80px rgba(34,211,238,.25),inset 0 0 40px rgba(34,211,238,.15);
+  display:grid;place-items:center;z-index:2}
+.core .orb{width:120px;height:120px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#67e8f9,#0891b2 50%,#0e7490);
+  box-shadow:0 0 40px rgba(34,211,238,.6)}
+.core.morph{width:420px;height:340px;border-radius:24px;background:rgba(12,16,22,.96);
+  border:1px solid rgba(34,211,238,.25);box-shadow:0 24px 80px rgba(0,0,0,.5),0 0 40px rgba(34,211,238,.12);
+  display:flex;flex-direction:column;padding:16px;align-items:stretch}
+.morph-h{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:13px;font-weight:600}
+.morph-body{flex:1;font-size:12.5px;color:var(--muted);line-height:1.5;overflow:hidden}
+.morph-in{margin-top:10px;display:flex;gap:8px;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.morph-in input{flex:1;background:transparent;border:none;color:var(--text);font-size:13px;outline:none}
+.rail-m{position:absolute;top:18%;bottom:22%;width:200px;display:flex;flex-direction:column;gap:8px;z-index:3}
+.rail-m.L{left:28px}.rail-m.R{right:28px;align-items:flex-end}
+.mgr{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;
+  background:rgba(18,22,28,.85);border:1px solid rgba(255,255,255,.08);width:180px;cursor:pointer}
+.mgr .av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#22D3EE,#6366f1);flex-shrink:0}
+.mgr .nm{font-size:12px;font-weight:550}.mgr .st{font-size:10.5px;color:var(--muted)}
+.mgr.active{border-color:rgba(34,211,238,.4);box-shadow:0 0 20px rgba(34,211,238,.15)}
+.seg{position:absolute;left:50%;bottom:210px;transform:translateX(-50%);display:flex;gap:6px;z-index:4;
+  background:rgba(0,0,0,.4);padding:4px;border-radius:999px;border:1px solid var(--line)}
+.seg span{padding:6px 12px;border-radius:999px;font-size:11.5px;color:var(--muted)}
+.seg span.on{background:rgba(34,211,238,.15);color:var(--cyan)}
+.chatplaat{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);width:min(720px,90%);
+  background:rgba(12,16,22,.92);border:1px solid rgba(34,211,238,.2);border-radius:20px;padding:14px 16px;z-index:5}
+.chatplaat .ask{font-size:12px;color:var(--muted);margin-bottom:8px}
+.chatplaat .box{display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.4);border-radius:12px;padding:10px 12px;border:1px solid var(--line)}
+.chatplaat input{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none}
+.note{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:11.5px;color:var(--dim);
+  background:rgba(0,0,0,.5);padding:6px 12px;border-radius:8px;border:1px solid var(--line);z-index:6;white-space:nowrap}
+</style></head><body><div class="app">
+<aside class="rail"><div class="logo">AX</div>
+<div class="nav-item active"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg></div>
+<div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19c1.5-3 4-4.5 6-4.5S13.5 16 15 19"/></svg></div>
+<div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.8 2.5 9.2 0 16"/></svg></div>
+<div class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 16l5-5 4 3 7-8"/><path d="M15 6h5v5"/></svg></div>
+<div class="nav-item"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></div>
+<div class="nav-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg></div>
+<div class="rail-spacer"></div>
+</aside>
+<div class="main" style="display:flex;flex-direction:column;padding:0">
+<div class="topbar" style="padding:12px 20px"><h1>Home <span class="sub">Current layout · improved</span></h1>
+<span class="pill live">AXE core</span><span class="pill cyan">Neural · Terrain kept</span></div>
+<div class="stage" style="flex:1">
+  <div class="note">Managers L/R · klik → core morpht tot chat · sluit → terug naar core · AXE blijft hoofdpersoon</div>
+  <div class="rail-m L">
+    <div class="mgr"><div class="av"></div><div><div class="nm">Wingman</div><div class="st">idle</div></div></div>
+    <div class="mgr active"><div class="av" style="background:linear-gradient(135deg,#34D399,#0d9488)"></div><div><div class="nm">NorthSea</div><div class="st">working · open</div></div></div>
+    <div class="mgr"><div class="av" style="background:linear-gradient(135deg,#FBBF24,#d97706)"></div><div><div class="nm">Trading</div><div class="st">idle</div></div></div>
+    <div class="mgr"><div class="av" style="background:linear-gradient(135deg,#a78bfa,#7c3aed)"></div><div><div class="nm">Dev</div><div class="st">idle</div></div></div>
+  </div>
+  <div class="rail-m R">
+    <div class="mgr"><div class="av" style="background:linear-gradient(135deg,#f472b6,#db2777)"></div><div><div class="nm">Think</div><div class="st">idle</div></div></div>
+    <div class="mgr"><div class="av" style="background:linear-gradient(135deg,#38bdf8,#0284c7)"></div><div><div class="nm">Web</div><div class="st">idle</div></div></div>
+    <div class="mgr"><div class="av" style="background:linear-gradient(135deg,#94a3b8,#475569)"></div><div><div class="nm">Mem</div><div class="st">idle</div></div></div>
+    <div class="mgr"><div class="av" style="background:linear-gradient(135deg,#4ade80,#16a34a)"></div><div><div class="nm">Finance</div><div class="st">idle</div></div></div>
+  </div>
+  <!-- Core morphed into manager chat (same visual language as projections) -->
+  <div class="core morph">
+    <div class="morph-h"><div class="av" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#34D399,#0d9488)"></div>
+      NorthSea manager · via AXE core<button class="btn ghost" style="margin-left:auto;height:26px;padding:0 10px">✕</button></div>
+    <div class="morph-body">AXE handed Copper / Harcros follow-up to NorthSea.<br/><br/>
+      <span style="color:var(--text)">NorthSea:</span> NCNDA+FPA signed 29 Oct — ready for buyer intro.<br/>
+      <span style="color:var(--amber)">Needs you:</span> confirm intro pack before send.</div>
+    <div class="morph-in"><input value="Tell NorthSea…" readonly/><button class="btn primary" style="height:28px;padding:0 12px">↑</button></div>
+  </div>
+  <div class="seg"><span class="on">AXE</span><span>Neural</span><span>Terrain</span><span>Runtime</span></div>
+  <div class="chatplaat">
+    <div class="ask">Ask AXE — hij blijft de hoofdpersoon; managers werken via hem</div>
+    <div class="box"><input placeholder="Wat moet er gebeuren?" readonly/><button class="btn primary" style="height:32px">Send</button></div>
+  </div>
+</div>
+</div>
+</div></body></html>
