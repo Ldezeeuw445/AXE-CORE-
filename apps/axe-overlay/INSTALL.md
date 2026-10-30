@@ -1,22 +1,74 @@
-# AXE Overlay — installatie (Mac mini + iMac)
+# AXE Overlay — install on Luka’s iMac
 
-**Agent installeert dit niet.** Alleen jij (of een latere expliciete opdracht).
+Run these on the **iMac** (macOS 12+). The Linux build box cannot emit a macOS app.
 
-## Optie A — via AXE HQ (snel)
+## 0) One-time prerequisites
 
-1. Bouw/update HQ zoals gebruikelijk (`npm run tauri:build` in HEADQUARTERS).
-2. Start HQ één keer, open radial dock → AXE overlay (of `openZwevend('axe')`).
-3. Venster: always-on-top, zichtbaar op alle Spaces. Plek wordt onthouden.
+```bash
+xcode-select --install
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# reopen terminal, then:
+rustup default stable
+```
 
-## Optie B — Login Items standalone
+Node 20+ / npm must be available (`brew install node` if needed).
 
-1. Op de Mac: `cd apps/axe-overlay` → volg README build.
-2. Zet `.app` in Applications.
-3. System Settings → General → Login Items → AXE Overlay.
-4. Herstart of open de app; notch verschijnt bovenaan.
+## 1) Get the code
 
-## Check
+```bash
+cd ~/Projects   # of waar AXE-CORE staat
+git fetch origin
+git checkout orchestrator
+git pull --ff-only origin orchestrator
+cd apps/axe-overlay
+```
 
-- Notch ~54px hoog, starry dark, witte blob in het midden.
-- Klik blob of chat-icoon → panel met PDF-chip + Continue….
-- Always on top boven Safari/Slack.
+## 2) Build .app + .dmg
+
+```bash
+npm run build:macos
+```
+
+Artifacts:
+
+- `src-tauri/target/release/bundle/macos/AXE Overlay.app`
+- `src-tauri/target/release/bundle/dmg/AXE Overlay_0.1.0_*.dmg`
+
+## 3) Install to /Applications
+
+```bash
+npm run install:macos
+```
+
+## 4) API key (local only)
+
+```bash
+mkdir -p "$HOME/Library/Application Support/nl.axe.overlay"
+cat > "$HOME/Library/Application Support/nl.axe.overlay/config.json" <<'JSON'
+{
+  "apiOrigin": "https://api.axecompanion.com",
+  "apiKey": "PLAK_HIER_AXE_CORE_API_KEY"
+}
+JSON
+```
+
+Do **not** commit this file. Do not paste the key into chat.
+
+## 5) Launch
+
+```bash
+open -a "AXE Overlay"
+```
+
+In the expanded chat: check **Start bij inloggen** for Login Items (LaunchAgent).
+
+## All-in-one (after repo is on orchestrator)
+
+```bash
+cd /pad/naar/AXE-CORE/apps/axe-overlay && \
+  npm run build:macos && \
+  npm run install:macos && \
+  open -a "AXE Overlay"
+```
+
+Then edit `~/Library/Application Support/nl.axe.overlay/config.json` and set `apiKey`.

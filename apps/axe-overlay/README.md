@@ -1,37 +1,41 @@
-# AXE Overlay (always-on notch)
+# AXE Overlay
 
-Lightweight always-on-top AXE chat for Mac mini + iMac. Visual language matches
-louis_rlee notch refs: starry dark pill, white blob mascot, home / chat / + /
-settings / volume; expands to attachment + Continue….
+Standalone macOS floating notch + expandable chat (Tauri 2). Always-on-top, launch at login, talks to the AXE backend (`api.axecompanion.com`). UI inspired by the louis_rlee-style notch bar.
 
-## Modes
+## Why this app
 
-1. **In-shell float** (already in HQ): `openZwevend('axe')` → `/float/axe`
-   WebviewWindow, alwaysOnTop, transparent.
-2. **Standalone** (this folder): separate Tauri binary that only shows the
-   notch — for Login Items launch without opening the full HQ shell.
+HQ already has an in-web `AxeOverlayNotch`. This package is the **real** desktop shell: its own `.app`, Login Items, transparent always-on-top window under the menu bar / notch.
 
-## Build standalone (on a Mac with Xcode + Rust)
+## Security
+
+- **No API keys in the bundle or git.** Put your key in:
+  `~/Library/Application Support/nl.axe.overlay/config.json`
+  ```json
+  { "apiOrigin": "https://api.axecompanion.com", "apiKey": "…" }
+  ```
+- Chat uses `POST /proxy/ai`. Health uses `GET /health`.
+
+## Dev (any OS for frontend; native shell needs macOS)
 
 ```bash
 cd apps/axe-overlay
 npm install
-npm run tauri build
-# .app → dist/bundle/macos/AXE Overlay.app
+npm run dev          # Vite only (transparent UI in browser)
+# on macOS with Rust + Xcode CLT:
+npm run tauri:dev
 ```
 
-## Install (manual — agent does not install on your Macs)
-
-1. Copy `AXE Overlay.app` to `/Applications`.
-2. System Settings → General → Login Items → `+` → AXE Overlay.
-3. First launch: allow Accessibility if prompted; pin stays on by default.
-4. Optional: keep HQ float as fallback via radial dock → AXE overlay.
-
-## Dev
+## Build & install (macOS / iMac)
 
 ```bash
-npm run tauri dev
+cd apps/axe-overlay
+npm run build:macos
+npm run install:macos
+open -a "AXE Overlay"
 ```
 
-Points at the same AxeOverlayNotch UI (copied or linked from HQ
-`src/presentation/components/overlay`).
+Exact one-liners: see [INSTALL.md](./INSTALL.md).
+
+## Linux / CI note
+
+This repo’s Linux box **cannot** produce `.app` / `.dmg`. `scripts/build-macos.sh` exits with a clear message off-Darwin; CI should treat macOS bundle as a Mac-only job.

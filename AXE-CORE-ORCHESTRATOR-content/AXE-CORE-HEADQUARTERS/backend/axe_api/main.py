@@ -414,6 +414,20 @@ async def health():
         **extra,
     }
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ORCHESTRATOR LUS (Fase 2 stap 1) — dunne facade, geen side-effects
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/orchestrator/status", dependencies=[AUTH])
+async def orchestrator_status():
+    """Fase 2: status van de één-lus orchestrator + geregistreerde plugins."""
+    try:
+        import orchestrator_lus
+        return orchestrator_lus.status()
+    except ImportError:
+        return {"fase": 2, "stap": 1, "error": "orchestrator_lus.py not deployed"}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # DURABLE TASK KERNEL
 # ══════════════════════════════════════════════════════════════════════════════
