@@ -3047,6 +3047,37 @@ async def _check_vps_services() -> dict:
         ollama_health(),
     )
     results = {**dict(zip(names, checked)), **runtimes, "ollama": ollama}
+    # Hermes is not a separate daemon — it is the Ollama model hermes3:8b.
+    # HERMES_URL historically pointed at .../v1/chat/completions, so the
+    # generic "/health" derivation 404'd and the Models & Tests card stayed
+    # Failed/Testing even while hermes3 answered through /proxy/ai. Derive
+    # reachability from local Ollama tags instead of that dead health URL.
+    try:
+        ollama_ok = bool(results.get("ollama", {}).get("reachable"))
+        has_hermes = False
+        if ollama_ok:
+            async with httpx.AsyncClient(timeout=4) as client:
+                tags = await client.get("http://127.0.0.1:11434/api/tags")
+                if tags.is_success:
+                    models = (tags.json() or {}).get("models") or []
+                    has_hermes = any(
+                        str(m.get("name", "")).startswith("hermes3")
+                        for m in models
+                        if isinstance(m, dict)
+                    )
+        results["hermes"] = {
+            "configured": True,
+            "reachable": has_hermes,
+            "latency_ms": results.get("ollama", {}).get("latency_ms"),
+            "note": "ollama model hermes3:8b (not a separate HTTP gateway)",
+        }
+    except Exception as e:  # noqa: BLE001
+        results["hermes"] = {
+            "configured": True,
+            "reachable": False,
+            "error": str(e)[:150],
+            "note": "ollama model hermes3:8b (not a separate HTTP gateway)",
+        }
     # Branch C. Counts only — this endpoint is open (no AXE_API_KEY), so repo
     # paths and branch names stay behind /claude/repos, which is authed.
     try:
