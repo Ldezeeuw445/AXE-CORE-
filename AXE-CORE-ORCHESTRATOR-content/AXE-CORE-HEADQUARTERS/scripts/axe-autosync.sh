@@ -123,6 +123,14 @@ if ! SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" python3 "$HIER/scripts/mac
      >> "$HOME/Library/Logs/axe-opruimen.log" 2>&1; then
   log "opruimen mislukt — zie ~/Library/Logs/axe-opruimen.log"
 fi
+# De Device Manager op de telefoon (30 okt): hangt hij aan deze Mac met een oude
+# versie, dan bouwen en `adb install -r` -- alleen als Luka 5 min niets aanraakt,
+# nooit verwijderen, één melding per uitkomst: zie android_bijwerken.py.
+# Uit: touch ~/.axe/android-uit
+if ! SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" python3 "$HIER/scripts/android_bijwerken.py" \
+     >> "$HOME/Library/Logs/axe-android.log" 2>&1; then
+  log "android-update mislukt — zie ~/Library/Logs/axe-android.log"
+fi
 
 DOEL="$(git rev-parse --short HEAD)"
 GEBOUWD="$(cat "$APP_STEMPEL" 2>/dev/null || true)"

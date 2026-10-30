@@ -25,6 +25,12 @@ volgorde van bouwen, met wat er nu gemeten is.
    `orchestrator`, dan `./build-web.sh --apk` en `adb install -r` met dezelfde
    sleutel. Alleen als de Mac stil is (zoals de app-build), en één melding:
    "Phone updated to <commit>" of waarom niet.
+   **Gebouwd 30 okt:** `scripts/android_bijwerken.py`, vanuit `axe-autosync.sh`
+   op elke Mac met een toegestaan adb-toestel. Hij onthoudt de laatst
+   geïnstalleerde commit in `~/.axe/android.json` (de heartbeat van de huidige
+   APK zegt nog `1.0.0` zonder commit), probeert een mislukte commit niet
+   opnieuw, hooguit eens per 6 uur na een geslaagde, en verwijdert nooit.
+   Uit: `touch ~/.axe/android-uit`. Log: `~/Library/Logs/axe-android.log`.
 2. **Achterstand zichtbaar.** Device Manager en de Daily Brief tonen per toestel
    "draait X, N commits achter" in geel of rood, uit `app_version`.
 3. **Android-CI weer aan** (Actions-tegoed of de build verplaatsen naar de Mac
