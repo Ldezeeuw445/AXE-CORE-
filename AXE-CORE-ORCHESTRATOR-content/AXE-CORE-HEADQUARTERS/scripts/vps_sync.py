@@ -186,6 +186,9 @@ MANIFEST = {
     # CORE-HEALTH-1: /health meet de afhankelijkheden (Supabase, tick, worker, northsea-mcp).
     "/opt/axe-core-api/gezondheid.py": ("backend/axe_api/gezondheid.py", "axe-core-api"),
     "/opt/axe-core-api/memory_schrijfhek.py": ("backend/axe_api/memory_schrijfhek.py", "axe-core-api"),
+    # main.py, het schrijfhek en cli_laag verbergen er sleutels mee (30 okt). Zonder deze
+    # regel startte de API niet: 58dae2e3 en 6468bb40 werden teruggedraaid op /health 000.
+    "/opt/axe-core-api/geheimen.py": ("backend/axe_api/geheimen.py", "axe-core-api"),
     # planner importeert dit na een geslaagde bouwrun (draft-PR); de bouwlus draait op de
     # Mac, maar planner.py staat op de box, dus zijn module ook.
     "/opt/axe-core-api/bouw_publiceer.py": ("backend/axe_api/bouw_publiceer.py", "axe-core-api"),
@@ -209,7 +212,8 @@ OPTIONAL_WHEN_MISSING = {
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py", "dax_bouw.py", "bouw_publiceer.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "device_notify.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py"),
+    "memory_schrijfhek.py": ("geheimen.py",),
     "staande_diensten.py": ("grok_managers.py", "dax_bouw.py"),
 }
 
@@ -652,7 +656,14 @@ def draai_tests() -> tuple[bool | None, str]:
     p = subprocess.run([py, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=os.path.join(HQ, "backend", "axe_api"),
                        capture_output=True, text=True, timeout=1800, env=schoon, check=False)
     staart = (p.stdout or "")[-1200:] + (p.stderr or "")[-300:]
-    return p.returncode == 0, staart
+    if p.returncode != 0:
+        return False, staart
+    # Ook het manifest zelf: een nieuwe module die main.py importeert maar hier ontbreekt,
+    # start de API niet (30 okt, geheimen.py). Dat hoort de deploy tegen te houden, niet
+    # pas de terugval na /health 000.
+    m = subprocess.run([py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "scripts/test_vps_sync.py"], cwd=HQ,
+                       capture_output=True, text=True, timeout=300, env=schoon, check=False)
+    return m.returncode == 0, staart if m.returncode == 0 else (m.stdout or "")[-1200:] + (m.stderr or "")[-300:]
 
 
 def _schrijf_staat(uitkomst: dict) -> None:
