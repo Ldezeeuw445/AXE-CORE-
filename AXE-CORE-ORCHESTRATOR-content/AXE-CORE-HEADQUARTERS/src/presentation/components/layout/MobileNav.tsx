@@ -26,7 +26,7 @@ import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
 import { PHONE_MENU, phoneHeeftAppBar, phoneMenuActief } from '@/domain/phone/phoneMenu';
 
 const ROUTE_ICON: Record<string, LucideIcon> = {
-  '/': Home, '/mobile': Home, '/thinkthanks': Sparkles, '/ai-core': Brain, '/memory': Database,
+  '/': Home, '/mobile': Home, '/managers': Bot, '/northsea': Globe, '/bouwen': FileCode, '/systeem': Settings, '/thinkthanks': Sparkles, '/ai-core': Brain, '/memory': Database,
   '/memory/trading': TrendingUp, '/obsidian': Share2, '/knowledge': BookMarked,
   '/mcp': Cable, '/infrastructure': Network, '/control-plane': Workflow,
   '/table-editor': Table2, '/cron-manager': Clock, '/agents': Bot,

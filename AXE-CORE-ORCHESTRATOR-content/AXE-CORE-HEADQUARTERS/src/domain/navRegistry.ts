@@ -32,6 +32,10 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Home', keywords: ['home', 'dashboard', 'main screen', 'main view'] },
+  { path: '/managers', label: 'Managers', keywords: ['managers', 'manager', 'grok managers', 'workforce', 'war room'] },
+  { path: '/northsea', label: 'NorthSea', keywords: ['northsea', 'northsea desk', 'north sea', 'northsea deals', 'deals', 'deal desk', 'commodity', 'commodity desk', '3d maps', 'maps', 'map'] },
+  { path: '/bouwen', label: 'Bouwen', keywords: ['bouwen', 'build', 'builder', 'code hub'] },
+  { path: '/systeem', label: 'Systeem', keywords: ['systeem', 'system', 'systems hub'] },
   { path: '/thinkthanks', label: 'THINKTHANKS', keywords: ['thinkthanks', 'think thanks', 'drop zone', 'inbox', 'build from drop', 'inspiration', 'reel'] },
   { path: '/ai-core', label: 'AI Core', keywords: ['ai core', 'core'] },
   { path: '/memory', label: 'Memory', keywords: ['memory', 'memories'], recordType: 'memory' },
@@ -45,7 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/control-plane', label: 'Control Plane', keywords: ['control plane'] },
   { path: '/table-editor', label: 'Table Editor', keywords: ['table editor', 'tables', 'database editor'] },
   { path: '/cron-manager', label: 'Cron Manager', keywords: ['cron manager', 'cron', 'scheduler', 'cron jobs', 'workflow', 'workflows'], recordType: 'cron' },
-  { path: '/agents', label: 'Agents', keywords: ['agents', 'agent'], recordType: 'agent' },
+  { path: '/agents', label: 'Agents', keywords: ['agents', 'agent', 'full roster'], recordType: 'agent' },
   { path: '/crewai', label: 'CrewAI', keywords: ['crewai', 'crew ai', 'crew'] },
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },
   { path: '/ledger', label: 'Ledger', keywords: ['ledger', 'grootboek', 'runs', 'job runs', 'logboek', 'alle taken', 'wat draaide er'] },
@@ -70,9 +74,9 @@ export const NAV_ITEMS: NavItem[] = [
       'trading agent',
     ],
   },
-  /* Het pad blijft /maps-3d: dat staat in opgeslagen links, in de agenten en
-     in de systeemlijst. Alleen het etiket verandert -- de tab IS de desk. */
-  { path: '/maps-3d', label: 'Northsea Desk', keywords: ['northsea', 'northsea desk', 'northsea deals', 'deals', 'deal desk', 'commodity', 'commodity desk', '3d maps', 'maps', 'map'] },
+  /* Legacy path kept for kluis/opgeslagen links; chat keywords live on /northsea.
+     App redirects /maps-3d → /northsea. */
+  { path: '/maps-3d', label: 'Northsea Desk', keywords: ['maps-3d'] },
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
   { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'browser use', 'navigate', 'surf'] },
@@ -164,3 +168,6 @@ const RUNTIME_NODE_ROUTES: Record<string, string> = {
 export function findRouteForRuntimeNodeId(nodeId: string): string | undefined {
   return RUNTIME_NODE_ROUTES[nodeId];
 }
+
+/** Fase 1 desktop primary shell (BottomNav). Deep routes stay reachable via hubs. */
+export const PRIMARY_NAV_PATHS = ['/', '/managers', '/northsea', '/trading', '/bouwen', '/systeem'] as const;

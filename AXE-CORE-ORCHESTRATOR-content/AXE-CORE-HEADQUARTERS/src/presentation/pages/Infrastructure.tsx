@@ -18,10 +18,10 @@ const PROJECTS = [
   {
     id: 'axe-core', name: 'AXE CORE', color: 'var(--accent-cyan)', emoji: '◈',
     description: 'AI Operating System — Headquarters',
-    url: 'axe-core-rust.vercel.app',
+    url: 'www.axeheadquarters.com',
     tablePrefixes: ['core_'],
     stack: [
-      { name: 'Vercel',      color: 'var(--text-primary)', note: 'axe-core-rust.vercel.app' },
+      { name: 'Cloudflare Pages', color: '#F48120', note: 'www.axeheadquarters.com' },
       { name: 'Supabase',    color: '#3ECF8E', note: 'pqnngpcgbdwxavbatbia' },
       { name: 'GitHub',      color: '#E5E7EB', note: 'Ldezeeuw445/AXE-CORE-' },
       { name: 'LiveKit',     color: '#A855F7', note: 'axe-core-yma6pgy1.livekit.cloud' },
@@ -41,7 +41,7 @@ const PROJECTS = [
     tablePrefixes: ['assistant_', 'adaptive_ui_', 'axe_', 'automation_', 'trigger_', 'push_', 'vault_', 'user_workspace_'],
     exactTables: ['conversations', 'messages', 'notes', 'attachments', 'landing_feedback_public', 'landing_feedback_submissions'],
     stack: [
-      { name: 'Vercel',     color: 'var(--text-primary)', note: 'axecompanion.com' },
+      { name: 'Cloudflare Pages', color: '#F48120', note: 'axecompanion.com' },
       { name: 'Supabase',   color: '#3ECF8E', note: 'shared project (auth + DB)' },
       { name: 'Cloudflare', color: '#F48120', note: 'DNS + tunnels' },
       { name: 'MetaAPI',    color: '#0066CC', note: 'metaapi.cloud (broker bridge)' },
@@ -56,7 +56,7 @@ const PROJECTS = [
     tablePrefixes: ['mt5_', 'broker_', 'execution_', 'trade_journal_', 'user_broker_', 'user_crypto_', 'user_journal_', 'user_trading_'],
     exactTables: ['positions', 'watchlists', 'watch_requests', 'chart_live_snapshots', 'setup_reviews', 'alerts', 'user_alerts'],
     stack: [
-      { name: 'Vercel',       color: 'var(--text-primary)', note: 'tradingos.app' },
+      { name: 'Cloudflare Pages', color: '#F48120', note: 'tradingos.app' },
       { name: 'Supabase',     color: '#3ECF8E', note: 'shared project' },
       { name: 'Cloudflare',   color: '#F48120', note: 'DNS' },
       { name: 'MetaTrader 5', color: '#0066CC', note: 'MT5 broker API' },

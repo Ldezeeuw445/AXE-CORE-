@@ -1,6 +1,6 @@
 /**
- * Het telefoonmenu: negen apps, één naam, geen desktop-favorieten.
- * De hamburger is de enige navigatie op de A17.
+ * Het telefoonmenu: dezelfde zes primaire deuren als desktop (fase 1).
+ * Diepere apps zitten onder Bouwen / Systeem.
  */
 export interface PhoneMenuItem {
   path: string;
@@ -9,19 +9,27 @@ export interface PhoneMenuItem {
 
 export const PHONE_MENU: readonly PhoneMenuItem[] = [
   { path: '/mobile', label: 'Home' },
+  { path: '/managers', label: 'Managers' },
+  { path: '/northsea', label: 'NorthSea' },
   { path: '/trading', label: 'Trading' },
-  { path: '/maps-3d', label: 'NorthSea Desk' },
-  { path: '/browser', label: 'Browser' },
-  { path: '/companion', label: 'AXE Companion' },
-  { path: '/memory', label: 'AXON Memory' },
-  { path: '/code-editor', label: 'AXE Developer' },
-  { path: '/tasks', label: 'Tasks' },
-  { path: '/infrastructure', label: 'Systems' },
+  { path: '/bouwen', label: 'Bouwen' },
+  { path: '/systeem', label: 'Systeem' },
 ];
 
 export function phoneMenuActief(pathname: string, path: string): boolean {
   if (path === '/mobile') return pathname === '/mobile' || pathname === '/';
-  if (path === '/memory') return pathname === '/memory' || pathname.startsWith('/memory/');
+  if (path === '/northsea') return pathname === '/northsea' || pathname === '/maps-3d';
+  if (path === '/managers') return pathname === '/managers' || pathname === '/agents' || pathname === '/ai-core';
+  if (path === '/bouwen') {
+    return ['/bouwen', '/browser', '/code-editor', '/terminals', '/computer-use', '/apps', '/control-plane', '/developer'].some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    );
+  }
+  if (path === '/systeem') {
+    return ['/systeem', '/settings', '/device', '/memory', '/tasks', '/infrastructure', '/cron-manager'].some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    );
+  }
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
@@ -33,12 +41,9 @@ export function phoneHeeftAppBar(path: string): boolean {
 
 export function phoneAppBarTitel(path: string): { title: string; extra?: string } {
   const hit = PHONE_MENU.find((i) => phoneMenuActief(path, i.path));
-  if (path === '/trading') return { title: 'Trading', extra: 'Read-only' };
-  if (path === '/maps-3d') return { title: 'NorthSea', extra: 'Never send' };
-  if (path === '/browser') return { title: 'Browser' };
-  if (path === '/code-editor') return { title: 'AXE Developer' };
-  if (path === '/notifications') return { title: 'Alerts' };
-  if (path === '/apps') return { title: 'Apps' };
+  if (path === '/trading' || path.startsWith('/trading')) return { title: 'Trading', extra: 'Demo only' };
+  if (path === '/northsea' || path === '/maps-3d') return { title: 'NorthSea', extra: 'Never send' };
+  if (path === '/bouwen' || path === '/code-editor') return { title: hit?.label ?? 'Bouwen' };
   if (hit) return { title: hit.label };
   const stuk = path.split('/').filter(Boolean)[0] ?? 'AXE';
   return { title: stuk.replace(/-/g, ' ') };

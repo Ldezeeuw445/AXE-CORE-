@@ -24,8 +24,10 @@ import { vergrendel, wisPin, zetCijferPin } from '@/domain/androidPin';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
 import MemoryScenePreview from '@/presentation/pages/MemoryScenePreview';
-const AICore = lazy(() => import('@/presentation/pages/AICore'));
 const Agents = lazy(() => import('@/presentation/pages/Agents'));
+const BouwenHub = lazy(() => import('@/presentation/pages/hubs/BouwenHub'));
+const SysteemHub = lazy(() => import('@/presentation/pages/hubs/SysteemHub'));
+const TradingDemoHub = lazy(() => import('@/presentation/pages/hubs/TradingDemoHub'));
 const Tasks = lazy(() => import('@/presentation/pages/Tasks'));
 const DailyBrief = lazy(() => import('@/presentation/pages/DailyBrief'));
 const CalendarPage = lazy(() => import('@/presentation/pages/CalendarPage'));
@@ -41,7 +43,6 @@ const Finance = lazy(() => import('@/presentation/pages/Finance'));
 const MCPCenter = lazy(() => import('@/presentation/pages/MCPCenter'));
 const Infrastructure = lazy(() => import('@/presentation/pages/Infrastructure'));
 const CommandCenter = lazy(() => import('@/presentation/pages/CommandCenter'));
-const TerminalPage = lazy(() => import('@/presentation/pages/TerminalPage'));
 const TerminalsPage = lazy(() => import('@/presentation/pages/TerminalsPage'));
 const SettingsPageWithAxeQuotes = lazy(() => import('@/presentation/pages/SettingsPageWithAxeQuotes'));
 const TableEditor = lazy(() => import('@/presentation/pages/TableEditor'));
@@ -56,7 +57,6 @@ const NorthseaDesk = lazy(() => import('@/presentation/pages/northsea/NorthseaDe
 const Grootboek = lazy(() => import('@/presentation/pages/Grootboek'));
 const CrewAI = lazy(() => import('@/presentation/pages/CrewAI'));
 const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'));
-const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
 const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
 const ComputerUse = lazy(() => import('@/presentation/pages/ComputerUse'));
 const ComputerUseOverlay = lazy(() => import('@/presentation/pages/ComputerUseOverlay'));
@@ -66,11 +66,8 @@ const StandaloneNorthseaPage = lazy(() => import('@/presentation/pages/Standalon
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
-const Organization = lazy(() => import('@/presentation/pages/Organization'));
-const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
 const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
-const AxeDevicesPage = lazy(() => import('@/presentation/pages/AxeDevices'));
 const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
 const PhonePinScreen = lazy(() => import('@/presentation/pages/PhonePinScreen'));
 const CompanionPage = lazy(() => import('@/presentation/pages/phone/ProductEmbed'));
@@ -274,9 +271,7 @@ export default function App() {
             <Route index element={<HomeEntry />} />
             {/* The page that answers "what actually works". */}
             <Route path="status" element={<StatusPage />} />
-            <Route path="ai-core" element={<AICore />} />
             <Route path="apps" element={<AppsPage />} />
-            <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="brief" element={<DailyBrief />} />
             <Route path="calendar" element={<CalendarPage />} />
@@ -288,15 +283,27 @@ export default function App() {
             <Route path="memory/trading" element={<TradingMemory />} />
             <Route path="obsidian" element={<ObsidianMemory />} />
             <Route path="knowledge" element={<KnowledgeBase />} />
-            <Route path="trading" element={<Trading />} />
+            <Route path="trading" element={<TradingDemoHub />} />
+            <Route path="trading-desk" element={<Trading />} />
             <Route path="trading-intel" element={<TradingIntel />} />
+            <Route path="managers" element={<Agents managersOnly />} />
+            <Route path="agents" element={<Navigate to="/managers" replace />} />
+            <Route path="bouwen" element={<BouwenHub />} />
+            <Route path="systeem" element={<SysteemHub />} />
+            <Route path="northsea" element={<NorthseaDesk />} />
+            <Route path="maps-3d" element={<Navigate to="/northsea" replace />} />
+            <Route path="ai-core" element={<Navigate to="/managers" replace />} />
+            <Route path="organization" element={<Navigate to="/managers" replace />} />
+            <Route path="devices" element={<Navigate to="/device" replace />} />
+            <Route path="terminal" element={<Navigate to="/terminals" replace />} />
+            <Route path="thinkthanks" element={<Navigate to="/" replace />} />
+            <Route path="eve" element={<Navigate to="/bouwen" replace />} />
             <Route path="finance" element={<Finance />} />
             <Route path="mcp" element={<MCPCenter />} />
             <Route path="infrastructure" element={<Infrastructure />} />
             {/* /command was a second route onto the same TerminalPage, with no
                 entry in navRegistry — reachable only by typing the URL, and
                 indistinguishable from /terminal once there. Removed 31-08-2026. */}
-            <Route path="terminal" element={<TerminalPage />} />
             <Route path="terminals" element={<TerminalsPage />} />
             <Route path="settings" element={<SettingsPageWithAxeQuotes />} />
             <Route path="table-editor" element={<TableEditor />} />
@@ -304,18 +311,13 @@ export default function App() {
             <Route path="control-plane" element={<ControlPlane />} />
             {/* De Maps-tab is de NorthSea Commodity desk (Luka, 14 september). De
                 oude 3D-kaart staat nog op /dev-map-preview. */}
-            <Route path="maps-3d" element={<NorthseaDesk />} />
             <Route path="crewai" element={<CrewAI />} />
             <Route path="developer" element={<CommandCenter />} />
             <Route path="code-editor" element={<CodeEditorPage />} />
-            <Route path="eve" element={<EveFramework />} />
             <Route path="browser" element={<BrowserPage />} />
             <Route path="computer-use" element={<ComputerUse />} />
-            <Route path="organization" element={<Organization />} />
-            <Route path="thinkthanks" element={<ThinkThanksPage />} />
             <Route path="mobile" element={<MobileSystem />} />
             <Route path="device" element={<DeviceManager />} />
-            <Route path="devices" element={<AxeDevicesPage />} />
             {/* Lock Screen — binnen de AppShell, maar als command-surface
                 (zie AppShell): alle chrome weg, de plaat blijft eronder, dus
                 exact de app-look met licht/donker. */}

@@ -48,6 +48,8 @@ export interface TierRoosterProps {
   /** Open vragen aan Luka (core_approvals), zelfde knoppen als Home. */
   goedkeuringen?: readonly GoedkeuringsRij[];
   onBeslis?: (rij: GoedkeuringsRij, akkoord: boolean) => void;
+  /** Fase 1: only AXE + six Grok managers in primary UI. */
+  managersOnly?: boolean;
 }
 
 function Teller({ n, woord, kleur }: { n: number; woord: string; kleur?: string }) {
@@ -155,6 +157,7 @@ function AgentKaart({
 export function TierRooster(p: TierRoosterProps) {
   const kolommen = tierKolommen();
   const crew = agentsByKind('crew');
+  const only = !!p.managersOnly;
 
   /* De routing-log: wie kreeg de laatste chatbeurt. Kwam uit de War Room, die
      dit raster nu is -- zonder dit zou de tab alleen nog zien wat er in de
@@ -195,6 +198,8 @@ export function TierRooster(p: TierRoosterProps) {
         </p>
       </div>
 
+      {!only && (
+      <>
       {/* Drie kolommen als het past, anders onder elkaar. minmax meet de
           werkelijke plek -- met de rechterlade open is dat smaller dan het
           venster, en dan hoort hij ook terug te vallen. */}
@@ -234,13 +239,17 @@ export function TierRooster(p: TierRoosterProps) {
           </div>
         ))}
       </div>
+      </>
+      )}
 
       <SectieBlok
         id="managers"
         titel="MANAGERS"
         extra={
           <span className="text-[10.5px]" style={{ color: 'var(--text-muted)' }}>
-            The six Grok Bot managers, always on — next to the War Room, not instead of it.
+            {only
+              ? 'Primary workforce — AXE plus these six. Tier agents run as motors behind them.'
+              : 'The six Grok Bot managers, always on — next to the War Room, not instead of it.'}
           </span>
         }
       >
@@ -281,6 +290,7 @@ export function TierRooster(p: TierRoosterProps) {
         )}
       </SectieBlok>
 
+      {!only && (
       <SectieBlok
         titel="Wingman's crew"
         extra={
@@ -310,6 +320,7 @@ export function TierRooster(p: TierRoosterProps) {
           ))}
         </div>
       </SectieBlok>
+      )}
     </>
   );
 }

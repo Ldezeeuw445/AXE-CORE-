@@ -102,7 +102,7 @@ describe('notificationTarget', () => {
   });
 
   it('stuurt NorthSea-OK naar de desk en klaar/mislukt naar taken', () => {
-    expect(notificationTarget('Yes needed: DEAL-002 — Copper Cathode')?.route).toBe('/maps-3d');
+    expect(notificationTarget('Yes needed: DEAL-002 — Copper Cathode')?.route).toBe('/northsea');
     expect(notificationTarget('Goedkeuring nodig: Agent wil een commando')?.route).toBe('/tasks');
     expect(notificationTarget('Stuck: Import positions')?.route).toBe('/tasks');
     expect(notificationTarget('Done: NorthSea Desk Manager')?.route).toBe('/tasks');

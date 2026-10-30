@@ -10,7 +10,7 @@ describe('werkplekVanTekst', () => {
     const plek = werkplekVanTekst(tekst);
     expect(plek.opdracht).toBe(true);
     expect(plek.agent).toBe('northsea');
-    expect(plek.tab).toBe('Northsea Desk');
+    expect(plek.tab).toBe('NorthSea');
     expect(classifyAxeTier(tekst).agent).toBe('northsea');
     expect(jobAgentVan(classifyAxeTier(tekst), tekst)).toBe('northsea');
     expect(kluisPadVoorTaak('task-1', 'northsea')).toBe(

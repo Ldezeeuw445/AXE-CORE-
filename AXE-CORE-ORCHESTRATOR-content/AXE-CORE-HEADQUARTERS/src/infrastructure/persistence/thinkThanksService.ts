@@ -1312,7 +1312,7 @@ function materializeFeatureFromBlueprint(
   else if (/trad|chart|market|broker/.test(blob)) href = '/trading';
   else if (/task|todo|cron|schedule/.test(blob)) href = '/tasks';
   else if (/code|editor|patch|repo/.test(blob)) href = '/code-editor';
-  else if (/map|3d|terrain|neural/.test(blob)) href = '/maps-3d';
+  else if (/map|3d|terrain|neural/.test(blob)) href = '/northsea';
   else if (apps.includes('axe-core')) href = '/ai-core';
 
   try {

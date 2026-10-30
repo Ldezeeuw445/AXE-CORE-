@@ -217,6 +217,15 @@ export function HomeLiveDashboard() {
     </div>
   );
 
+
+  const kaartVolgende = (
+    <div className="axe-home-live-kaart-vak" data-axe-home-kaart="next">
+      <Kaart className="axe-home-live-kaart" titel="NEXT STEPS">
+        <Regel kleur="var(--text-muted)">Stub — wingman will propose next actions here (fase 2).</Regel>
+      </Kaart>
+    </div>
+  );
+
   return (
     <div className="axe-home-live" data-axe-home-live>
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="links">
@@ -226,6 +235,7 @@ export function HomeLiveDashboard() {
       <div className="axe-home-live-midden" aria-hidden="true" />
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="rechts">
         {kaartOk}
+        {kaartVolgende}
         {kaartSeats}
       </div>
 

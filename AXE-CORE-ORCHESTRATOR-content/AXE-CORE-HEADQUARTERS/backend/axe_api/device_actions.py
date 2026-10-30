@@ -43,7 +43,6 @@ TOOL_TIERS: dict[str, str] = {
     "git.diff": "observe",
     "git.log": "observe",
     "memory.recall": "observe",
-    "vercel.status": "observe",
     "terminal.typecheck": "safe_execute",
     "terminal.lint": "safe_execute",
     "terminal.test": "safe_execute",
@@ -72,7 +71,6 @@ TOOL_TIERS: dict[str, str] = {
     "git.pr_open": "consequential",
     "git.merge": "consequential",
     "terminal.free": "consequential",
-    "vercel.promote": "consequential",
     "db.migrate": "consequential",
     "files.delete": "consequential",
 }

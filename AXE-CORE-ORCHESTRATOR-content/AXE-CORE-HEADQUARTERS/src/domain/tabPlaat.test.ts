@@ -67,7 +67,7 @@ const TAB_BRONNEN: Array<{ route: string; files: string[] }> = [
   { route: 'table-editor', files: ['presentation/pages/TableEditor.tsx'] },
   { route: 'cron-manager', files: ['presentation/pages/CronManager.tsx'] },
   { route: 'control-plane', files: ['presentation/pages/ControlPlane.tsx'] },
-  { route: 'maps-3d', files: ['presentation/pages/northsea/NorthseaDesk.tsx'] },
+  { route: 'northsea', files: ['presentation/pages/northsea/NorthseaDesk.tsx'] },
   { route: 'crewai', files: ['presentation/pages/CrewAI.tsx'] },
   { route: 'developer', files: ['presentation/pages/CommandCenter.tsx'] },
   { route: 'code-editor', files: ['presentation/pages/CodeEditorPage.tsx'] },

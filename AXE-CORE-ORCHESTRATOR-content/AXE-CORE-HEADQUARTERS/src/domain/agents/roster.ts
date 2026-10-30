@@ -122,7 +122,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
     canDecide: true,
     dropdownScope: 'subscription',
     runtime: 'subscription CLI · NorthSea MCP + crews',
-    route: 'maps-3d',
+    route: 'northsea',
     accent: '#EC4899',
   },
   {
@@ -355,7 +355,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
     canDecide: true,
     dropdownScope: 'subscription',
     runtime: 'subscription CLI · standing pulse',
-    route: 'maps-3d',
+    route: 'northsea',
     accent: '#F472B6',
   },
 ] as const;
