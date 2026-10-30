@@ -27,14 +27,14 @@ _SLEUTEL = re.compile(
     r"eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
     r")"
 )
-_PRIVE_SLEUTEL = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S)
+_PRIVE_SLEUTEL = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL)
 # Een veld dat zegt wat het is, ook als de waarde geen bekend formaat heeft
 # (een broker-wachtwoord, een MetaApi-token). Ook met escapes, want de waarde in
 # global_memory is vaak JSON in JSON.
 _VELD = re.compile(
     r'(\\?"(?:token|api_?key|apiKey|secret|client_secret|password|passwd|wachtwoord|'
     r'access_token|refresh_token|private_key|auth_token)\\?"\s*:\s*\\?")([^"\\]{6,})(\\?")',
-    re.I,
+    re.IGNORECASE,
 )
 
 
