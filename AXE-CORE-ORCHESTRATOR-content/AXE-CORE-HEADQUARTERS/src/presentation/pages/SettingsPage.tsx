@@ -627,18 +627,46 @@ function ProviderKeysSection() {
       return;
     }
 
-    // OpenHands/OpenClaw/CrewAI are agent bridges on the VPS, not
-    // OpenAI-chat-format endpoints — voice.testSlot() below POSTs a
-    // /chat/completions probe they were never built to answer (OpenHands in
-    // particular needs a two-step task-start + poll flow), so every "Test"
-    // click read as a permanent Fail even while the bridges themselves
-    // worked fine (verified live: /internal/openhands/execute round-trips
-    // correctly). Reuse the same reachability probe the Home "Models & Tests"
-    // panel already gets right instead of the chat-completion probe.
-    if (id === 'openhands' || id === 'openclaw' || id === 'crewai') {
-      const { ok: bridgeOk, latency } = await vpsAgentStatus(id);
+    // VPS bridges + local CLI + Ollama/Hermes are NOT OpenAI chat-completion
+    // endpoints the way voice.testSlot() expects. OpenHands needs a two-step
+    // task flow; CrewAI is a Python runtime; OpenClaw is a messaging gateway;
+    // Hermes is an Ollama model (hermes3:8b); Abonnement is a Mac CLI session.
+    // Hitting them with /chat/completions made every Test look permanently
+    // Failed (or hang on "Testing...") while the services themselves were fine.
+    // Reuse /status/vps-agents — same probe the panel should trust — with a
+    // hard ceiling so a stuck probe can never leave the card yellow forever.
+    const VPS_STATUS_IDS: Record<string, string> = {
+      openhands: 'openhands',
+      openclaw: 'openclaw',
+      crewai: 'crewai',
+      ollama: 'ollama',
+      hermes: 'hermes',
+      abonnement: 'claude_code',
+    };
+    if (id in VPS_STATUS_IDS) {
+      const statusKey = VPS_STATUS_IDS[id];
+      let bridgeOk = false;
+      let latency = 0;
+      let msg: string | undefined = 'VPS status onbereikbaar';
+      try {
+        const result = await Promise.race([
+          vpsAgentStatus(statusKey),
+          new Promise<{ ok: boolean; latency: number }>((resolve) =>
+            setTimeout(() => resolve({ ok: false, latency: 8000 }), 8000),
+          ),
+        ]);
+        bridgeOk = result.ok;
+        latency = result.latency;
+        msg = bridgeOk ? undefined : (id === 'abonnement'
+          ? 'Abonnement-CLI niet bereikbaar op de agent-host'
+          : id === 'hermes'
+            ? 'Hermes (hermes3:8b op Ollama) onbereikbaar'
+            : 'VPS bridge onbereikbaar');
+      } catch {
+        bridgeOk = false;
+        msg = 'VPS status timeout';
+      }
       setTesting(t => ({ ...t, [id]: bridgeOk ? 'ok' : 'fail' }));
-      const msg = bridgeOk ? undefined : 'VPS bridge onbereikbaar';
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: bridgeOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
         saveConnections(next);
