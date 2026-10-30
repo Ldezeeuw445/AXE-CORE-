@@ -28,8 +28,11 @@ def test_status_shape():
     assert s["entry"]["execute"] == "voer_taak_uit"
     assert s["entry"]["provider"] == "provider_fallback"
     assert s["guards"]["geen_trades"] is True
+    assert s["guards"]["geen_payments"] is True
+    assert s["guards"]["geen_signing"] is True
     assert s["guards"]["trading_paper_only"] is True
-    assert s["guards"]["northsea_geen_auto_send"] is True
+    assert s["guards"]["northsea_deal_mail_ok"] is True
+    assert s["guards"]["northsea_geen_auto_send"] is False
     names = {p["naam"] for p in s["plugins"]}
     assert names >= {"northsea_crews", "trading_demo", "device_actions"}
     assert all(p["heeft_handler"] for p in s["plugins"])
@@ -88,18 +91,25 @@ def test_plugin_device_actions():
     assert refuse["ok"] is False
 
 
-def test_plugin_northsea_plan_only():
+def test_plugin_northsea_deal_mail_ok():
     reset_plugins_for_tests()
     s = roep_plugin("northsea_crews", {"actie": "status"})
-    assert s["guards"]["geen_auto_send"] is True
+    assert s["guards"]["deal_mail_ok"] is True
+    assert "payments" in s["guards"]["hard_gate"]
     plan = roep_plugin(
         "northsea_crews",
-        {"actie": "plan", "crew": "research", "task": "scan copper basis", "specialists": ["intel"]},
+        {"actie": "plan", "crew": "research", "task": "chase Harcros deal email", "specialists": ["intel"]},
     )
-    assert plan["executed"] is False and plan["auto_send"] is False
+    assert plan["executed"] is False and plan.get("deal_mail_ok") is True
     assert plan["specialists"] == ["intel"]
-    run = roep_plugin("northsea_crews", {"actie": "run", "task": "x"})
-    assert run["ok"] is False
+    run = roep_plugin("northsea_crews", {"actie": "run", "task": "follow up Montanwerke Brixlegg"})
+    assert run["ok"] is True and run["allowed"] is True and run["deal_mail_ok"] is True
+    verstuur = roep_plugin("northsea_crews", {"actie": "verstuur", "draft_id": "draft-1"})
+    assert verstuur["ok"] is True and verstuur["route"] == "northsea_verstuur.verstuur"
+    pay = roep_plugin("northsea_crews", {"actie": "run", "task": "wire payment to supplier"})
+    assert pay["ok"] is False and pay.get("vraag_luka") is True
+    sign = roep_plugin("northsea_crews", {"actie": "plan", "crew": "operations", "task": "sign contract with buyer"})
+    assert sign["ok"] is False and sign.get("vraag_luka") is True
 
 
 def test_plugin_trading_paper_only():
@@ -130,7 +140,7 @@ if __name__ == "__main__":
     test_beoordeel_routine_auto()
     test_beoordeel_payment_asks()
     test_plugin_device_actions()
-    test_plugin_northsea_plan_only()
+    test_plugin_northsea_deal_mail_ok()
     test_plugin_trading_paper_only()
     test_unknown_plugin()
     print("ok")

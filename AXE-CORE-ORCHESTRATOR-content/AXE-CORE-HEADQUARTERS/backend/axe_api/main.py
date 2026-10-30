@@ -477,7 +477,7 @@ class OrchestratorPluginReq(BaseModel):
 async def orchestrator_plugin(req: OrchestratorPluginReq):
     """Stap 4–6: roep device_actions / northsea_crews / trading_demo aan.
 
-    Guards blijven gelden: geen live trades, geen payments, geen outgoing mail.
+    Guards: geen live trades/payments/signing. NorthSea deal-mails (staande toestemming) OK.
     """
     try:
         import orchestrator_lus
