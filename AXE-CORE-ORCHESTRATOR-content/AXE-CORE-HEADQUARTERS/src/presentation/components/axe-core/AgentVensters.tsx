@@ -210,7 +210,6 @@ export function AgentVensters() {
     { id: 'rechts' as const, rijen: rechts },
   ];
   const open = gekozen ? alle.find((r) => r.agent.id === gekozen) ?? null : null;
-  const openRechts = !isMobile && !!open && rechts.some((r) => r.agent.id === open.agent.id);
   const extra = server.approvals.map((a) => ({
     id: a.id,
     task_id: a.task_id,
@@ -263,19 +262,21 @@ export function AgentVensters() {
         </div>
       ))}
 
+      {/* Luka okt 2026: klik manager → core morfht tot chat (zelfde plek/taal als
+          sphere-projecties), rails L/R blijven; Escape/✕ klapt terug naar core. */}
       <AnimatePresence>
         {open && (
           <div
             key={open.agent.id}
-            className="pointer-events-none absolute"
-            style={{
-              ...(openRechts
-                ? { right: 'calc(var(--axe-home-rail-inset) + 64px + 12px)' }
-                : { left: 'calc(var(--axe-home-rail-inset) + 64px + 12px)' }),
-              top: '40%',
-              transform: 'translateY(-50%)',
-            }}
+            className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+            data-axe-core-morph="manager-chat"
+            aria-live="polite"
           >
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{ background: 'radial-gradient(ellipse at 50% 42%, rgba(0,0,0,.45), transparent 55%)' }}
+              aria-hidden="true"
+            />
             <ManagerChat
               agent={open.agent}
               job={open.job}

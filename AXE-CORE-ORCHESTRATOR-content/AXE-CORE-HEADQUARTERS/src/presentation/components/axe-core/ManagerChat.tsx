@@ -130,28 +130,35 @@ export function ManagerChat({
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.18 }}
+      initial={{ opacity: 0, scale: 0.72, y: 12 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.78, y: 8 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
       className="pointer-events-auto"
       role="dialog"
       aria-modal="false"
       aria-label={`Gesprek met ${agent.name}`}
+      data-axe-morph-panel="core"
     >
       <Kaart
         compact
-        style={{ width: 330, maxWidth: '86vw', display: 'flex', flexDirection: 'column' }}
+        style={{
+          width: 420,
+          maxWidth: 'min(440px, 92vw)',
+          maxHeight: 'min(520px, 70vh)',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 24px 80px rgba(0,0,0,.55), 0 0 40px rgba(34,211,238,.12)',
+          borderColor: 'rgba(34,211,238,.28)',
+        }}
         titel={
           <span className="flex items-center gap-2 min-w-0">
             <ManagerAvatar agent={agent} size={22} />
             <span className="min-w-0 truncate">
               {agent.name}
-              {tierRegel ? (
-                <span className="ml-1.5 font-normal" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
-                  {tierRegel}
-                </span>
-              ) : null}
+              <span className="ml-1.5 font-normal" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                via AXE core{tierRegel ? ` · ${tierRegel}` : ''}
+              </span>
             </span>
           </span>
         }

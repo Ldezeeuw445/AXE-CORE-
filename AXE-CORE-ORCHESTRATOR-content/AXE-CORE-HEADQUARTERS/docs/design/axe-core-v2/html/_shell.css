@@ -1,0 +1,93 @@
+@import url('_tokens.css');
+.app {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  height: 100vh;
+  width: 1440px;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(34,211,238,.07), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(59,130,246,.05), transparent 50%),
+    var(--bg);
+}
+.rail {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 18px 0 16px; gap: 6px;
+  border-right: 1px solid var(--line);
+  background: rgba(4,5,7,.85);
+  backdrop-filter: blur(20px);
+}
+.logo {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: linear-gradient(145deg, #1a2330, #0a0c10);
+  border: 1px solid rgba(34,211,238,.35);
+  display: grid; place-items: center;
+  color: var(--cyan); font-weight: 700; font-size: 13px; letter-spacing: .04em;
+  margin-bottom: 14px;
+  box-shadow: 0 0 24px rgba(34,211,238,.15);
+}
+.nav-item {
+  width: 48px; height: 48px; border-radius: 14px;
+  display: grid; place-items: center; color: var(--dim);
+  position: relative; transition: .15s ease;
+}
+.nav-item svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.nav-item:hover { color: var(--muted); background: rgba(255,255,255,.03); }
+.nav-item.active {
+  color: var(--ice);
+  background: rgba(34,211,238,.1);
+  box-shadow: inset 0 0 0 1px rgba(34,211,238,.28);
+}
+.nav-item.active::before {
+  content: ""; position: absolute; left: -12px; width: 3px; height: 18px;
+  border-radius: 2px; background: var(--cyan); box-shadow: 0 0 10px var(--cyan);
+}
+.rail-spacer { flex: 1; }
+.main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 28px 12px; border-bottom: 1px solid var(--line);
+}
+.topbar h1 { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+.topbar .sub { color: var(--muted); font-size: 12.5px; margin-left: 8px; font-weight: 400; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 500;
+  background: rgba(255,255,255,.04); border: 1px solid var(--line); color: var(--muted);
+}
+.pill.live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+.pill.cyan { color: var(--ice); border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.08); }
+.pill.green { color: var(--green); border-color: rgba(52,211,153,.3); background: rgba(52,211,153,.08); }
+.pill.amber { color: var(--amber); border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.08); }
+.top-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.btn {
+  height: 32px; padding: 0 14px; border-radius: 10px; font-size: 12.5px; font-weight: 500;
+  border: 1px solid var(--line2); background: var(--card); color: var(--text);
+}
+.btn.primary {
+  background: linear-gradient(180deg, rgba(34,211,238,.25), rgba(34,211,238,.12));
+  border-color: rgba(34,211,238,.4); color: var(--ice);
+  box-shadow: 0 0 20px rgba(34,211,238,.12);
+}
+.btn.ghost { background: transparent; }
+.content { flex: 1; overflow: hidden; padding: 20px 28px 28px; }
+.card {
+  background: linear-gradient(180deg, rgba(18,22,28,.9), rgba(10,12,16,.95));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.card-pad { padding: 18px 20px; }
+.label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+.metric { font-size: 28px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.metric-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.row { display: flex; gap: 14px; }
+.col { display: flex; flex-direction: column; gap: 14px; }
+.divider { height: 1px; background: var(--line); margin: 14px 0; }
+.badge {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 6px;
+}
+.badge.docs { background: rgba(52,211,153,.12); color: var(--green); }
+.badge.stage { background: rgba(34,211,238,.12); color: var(--ice); }
+.badge.wait { background: rgba(251,191,36,.12); color: var(--amber); }
+.badge.hot { background: rgba(248,113,113,.12); color: var(--red); }

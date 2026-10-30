@@ -51,6 +51,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/trading-desk': 'Legacy Trading page under hub',
   '/trading-intel': 'Trading demo hub deep link',
   '/float/notes': 'Zwevend venster',
+  '/float/axe': 'Zwevend venster',
   '/float/phone': 'Zwevend venster',
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
   '/dev-memory-scene-preview': 'Ontwikkelvoorbeeld',

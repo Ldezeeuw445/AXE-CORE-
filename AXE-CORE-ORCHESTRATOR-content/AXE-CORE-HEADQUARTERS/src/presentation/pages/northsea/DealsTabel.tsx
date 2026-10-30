@@ -20,9 +20,10 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { dealStand, type KaartDeal } from '@/domain/northsea/kaart';
 import {
-  commissieTekst, dealId, dealRijen, faseLabel, tegenpartijen, volumeTekst,
+  commissieTekst, dealId, dealRijen, dealVoorDesk, faseLabel, quietTeller, tegenpartijen, volumeTekst,
   type DealTab, type DeskTellers,
 } from '@/domain/northsea/desk';
+import { realityVoor } from '@/domain/northsea/realitySync';
 import { tijdGeleden } from '@/domain/northsea/chase';
 import { blokkadeToon, eigenaarLabel } from '@/domain/northsea/engine';
 import { TOON_KLEUR } from '@/domain/northsea/tabs/status';
@@ -81,7 +82,8 @@ export function DealsTabel({ deals, tellers, nu, fout, openDeal }: {
 }) {
   const [tab, setTab] = useState<DealTab>('actief');
   const [open, setOpen] = useState(true);
-  const rijen = deals ? dealRijen(deals, tab) : [];
+  const rijen = deals ? dealRijen(deals, tab).map(dealVoorDesk) : [];
+  const quiet = deals ? quietTeller(deals) : null;
 
   return (
     /* Precies zo breed als de composer: dezelfde linker- en rechterlijn als de
@@ -116,6 +118,13 @@ export function DealsTabel({ deals, tellers, nu, fout, openDeal }: {
           {open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
         </button>
       </div>
+      {tab === 'actief' && quiet !== null && (
+        <div className="flex items-center gap-2 px-4 py-1.5 text-[11px]" style={{ color: 'var(--text-muted)', borderBottom: open ? '1px solid var(--axe-vak-lijn)' : undefined }}>
+          <span style={{ color: '#34D399' }}>Active lane</span>
+          <span>· Gmail reality (Harcros signed · Brixlegg indication) surfaces here</span>
+          <span className="ml-auto tabular-nums">Quiet lane · {quiet} identified</span>
+        </div>
+      )}
 
       {open && (
         <div className="max-h-[196px] overflow-auto">
@@ -166,7 +175,27 @@ export function DealsTabel({ deals, tellers, nu, fout, openDeal }: {
                       {/* P1: de engine-beoordeling gaat voor; zonder beoordeling blijft de oude volgende stap staan. */}
                       <Cel titel={d.beste_actie ? [d.huidige_blokkade, d.beste_actie, d.actie_eigenaar ? `Owner: ${eigenaarLabel(d.actie_eigenaar)}` : null].filter(Boolean).join('\n') : (d.volgende ?? undefined)}
                         stijl={{ color: d.blokkade_code ? TOON_KLEUR[blokkadeToon(d.blokkade_code)] : 'var(--text-secondary)' }}>
-                        {d.beste_actie?.trim() || d.volgende?.trim() || '—'}
+                        <span className="flex flex-col gap-0.5 min-w-0">
+                          <span className="truncate">{d.beste_actie?.trim() || d.volgende?.trim() || '—'}</span>
+                          {(() => {
+                            const ev = realityVoor(d)?.evidence;
+                            if (!ev?.length) return null;
+                            return (
+                              <span className="flex flex-wrap gap-1">
+                                {ev.map((e) => (
+                                  <span key={e.label} className="rounded px-1.5 py-0.5 text-[9.5px] font-medium"
+                                    style={{
+                                      background: e.status === 'signed' ? 'rgba(52,211,153,.15)' : 'rgba(251,191,36,.12)',
+                                      color: e.status === 'signed' ? '#34D399' : '#FBBF24',
+                                      border: `1px solid ${e.status === 'signed' ? 'rgba(52,211,153,.35)' : 'rgba(251,191,36,.3)'}`,
+                                    }}>
+                                    {e.label} · {e.status}
+                                  </span>
+                                ))}
+                              </span>
+                            );
+                          })()}
+                        </span>
                       </Cel>
                       <Cel stijl={{ color: 'var(--text-muted)' }}>{d.updated_at ? tijdGeleden(d.updated_at, nu) : '—'}</Cel>
                     </tr>

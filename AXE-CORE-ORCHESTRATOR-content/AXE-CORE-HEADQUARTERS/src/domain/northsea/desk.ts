@@ -16,6 +16,7 @@
  */
 import { isDealCode } from './chase';
 import { isActief, type KaartDeal } from './kaart';
+import { metReality, realityVoor } from './realitySync';
 
 export type DealTab = 'actief' | 'pipeline' | 'afgerond';
 
@@ -33,8 +34,13 @@ function open(d: KaartDeal): boolean {
   return s !== 'won' && s !== 'lost';
 }
 
+function isActiefOfReality(d: KaartDeal): boolean {
+  if (realityVoor(d)?.lane === 'active') return true;
+  return isActief(d);
+}
+
 function inTab(d: KaartDeal, tab: DealTab): boolean {
-  if (tab === 'actief') return isActief(d);
+  if (tab === 'actief') return isActiefOfReality(d);
   if (tab === 'pipeline') return open(d);
   return (d.stage ?? '').trim() === 'won';
 }
@@ -106,14 +112,33 @@ export function deskTellers(deals: readonly KaartDeal[], nu: number): DeskTeller
   const wachten = openDeals.filter(d => d.akkoord_nodig);
   const bedragen = openDeals.map(d => getal(d.commissie_bedrag)).filter((n): n is number => n !== null);
   return {
-    actief: deals.filter(isActief).length,
+    actief: deals.filter(isActiefOfReality).length,
     pipeline: openDeals.length,
     afgerond: deals.filter(d => inTab(d, 'afgerond')).length,
-    nieuwDezeWeek: deals.filter(d => isActief(d) && nu - tijd(d.created_at) < WEEK_MS).length,
+    nieuwDezeWeek: deals.filter(d => isActiefOfReality(d) && nu - tijd(d.created_at) < WEEK_MS).length,
     akkoord: wachten.length,
     akkoordNamen: wachten.map(d => (isDealCode(d.code) ? d.code.trim() : d.product?.trim() || dealId(d))),
     geblokkeerd: openDeals.filter(d => d.geblokkeerd).length,
     commissie: bedragen.length ? bedragen.reduce((a, b) => a + b, 0) : null,
     commissieDeals: bedragen.length,
+  };
+}
+
+
+/** Quiet lane: open deals that are not Active (typically ~53 identified). */
+export function quietTeller(deals: readonly KaartDeal[]): number {
+  return deals.filter(d => open(d) && !isActiefOfReality(d)).length;
+}
+
+/** View-model: overlay Gmail reality onto a deal for the desk table. */
+export function dealVoorDesk(d: KaartDeal): KaartDeal & { realityNote?: string } {
+  const m = metReality(d);
+  if (!m.reality) return d;
+  return {
+    ...d,
+    stage: m.stage,
+    execution_state: m.execution_state,
+    volgende: m.volgende,
+    realityNote: m.reality.note,
   };
 }

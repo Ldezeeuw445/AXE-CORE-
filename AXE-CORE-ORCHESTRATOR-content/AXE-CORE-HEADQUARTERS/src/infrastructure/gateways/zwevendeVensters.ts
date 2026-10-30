@@ -12,13 +12,16 @@
  */
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
-export type ZwevendType = 'notes' | 'phone';
+export type ZwevendType = 'notes' | 'phone' | 'axe';
 
 interface Ontwerp { label: string; route: string; titel: string; b: number; h: number; minB: number; minH: number }
 
 export const ZWEVENDE_VENSTERS: Record<ZwevendType, Ontwerp> = {
   notes: { label: 'axe-float-notes', route: '/float/notes', titel: 'AXE Notes', b: 780, h: 540, minB: 360, minH: 300 },
   phone: { label: 'axe-float-phone', route: '/float/phone', titel: 'AXE Phone', b: 420, h: 860, minB: 300, minH: 560 },
+  /* Luka okt 2026: always-on AXE notch — lightweight, buiten de shell-flow; aparte
+     apps/axe-overlay voor login-launch. Start collapsed (notch), expand in-UI. */
+  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 440, h: 54, minB: 320, minH: 48 },
 };
 
 export interface Frame { x: number; y: number; b: number; h: number }

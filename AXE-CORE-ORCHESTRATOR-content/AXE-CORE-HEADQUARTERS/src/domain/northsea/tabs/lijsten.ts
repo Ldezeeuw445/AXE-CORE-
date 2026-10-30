@@ -39,6 +39,10 @@ const UITVOERING_KOLOM: Record<string, KolomId> = {
   awaiting_buyer_reply: 'wacht',
   seller_lc_terms_pending: 'voorwaarden',
   commercial_mismatch: 'geblokkeerd',
+  /* Reality sync okt 2026 — Gmail-signed / indication. */
+  docs_signed: 'afronding',
+  indication_received: 'wacht',
+  ncnda_pending: 'wacht',
 };
 
 const STAGE_KOLOM: Record<string, KolomId> = {
@@ -54,6 +58,9 @@ const STAGE_KOLOM: Record<string, KolomId> = {
   shipment: 'afronding',
   commission_due: 'afronding',
   won: 'afronding',
+  /* Docs / indication stages from reality sync. */
+  docs_signed: 'afronding',
+  indication: 'wacht',
 };
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();

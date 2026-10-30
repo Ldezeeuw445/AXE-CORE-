@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><title>AXE Overlay — notch bar</title>
+<link rel="stylesheet" href="_all.css"/>
+<style>
+body{width:1440px;height:900px;overflow:hidden;margin:0}
+.app{width:1440px;height:900px;position:relative;
+  background:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="%231a2744"/><stop offset="1" stop-color="%23080c14"/></linearGradient></defs><rect fill="url(%23g)" width="1440" height="900"/><circle cx="200" cy="180" r="2" fill="%23fff" opacity=".4"/><circle cx="900" cy="120" r="1.5" fill="%23fff" opacity=".5"/><circle cx="1100" cy="400" r="1" fill="%23fff" opacity=".35"/></svg>') center/cover;
+}
+.desktop-icons{position:absolute;left:28px;top:48px;display:flex;flex-direction:column;gap:18px;color:rgba(255,255,255,.75);font-size:12px}
+.desk-ico{width:48px;height:48px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);margin-bottom:4px}
+.taskbar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);height:52px;padding:0 18px;border-radius:16px;display:flex;align-items:center;gap:10px;
+  background:rgba(20,24,32,.72);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.1)}
+.tb{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.08)}
+.tb.blob{background:radial-gradient(circle at 35% 30%,#fff,#d0d6e0 55%,#9aa3b2);position:relative}
+.tb.blob::before,.tb.blob::after{content:"";position:absolute;width:4px;height:4px;background:#1a1a1a;border-radius:50%;top:14px}
+.tb.blob::before{left:11px}.tb.blob::after{right:11px}
+
+/* Collapsed notch bar */
+.notch{position:absolute;left:50%;top:14px;transform:translateX(-50%);
+  width:420px;height:54px;border-radius:28px;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 0%,#1a2233 0%,#07090e 70%);
+  border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 12px 40px rgba(0,0,0,.55),0 0 40px rgba(34,211,238,.06);
+  display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:5}
+.notch .stars{position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(1px 1px at 20% 30%,rgba(255,255,255,.55),transparent),
+    radial-gradient(1px 1px at 70% 20%,rgba(255,255,255,.4),transparent),
+    radial-gradient(1.5px 1.5px at 45% 70%,rgba(255,255,255,.35),transparent),
+    radial-gradient(1px 1px at 85% 55%,rgba(255,255,255,.5),transparent)}
+.n-icons{display:flex;gap:14px;align-items:center;z-index:1;color:rgba(255,255,255,.55)}
+.n-icons svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7}
+.mascot{width:38px;height:28px;border-radius:14px;z-index:1;
+  background:radial-gradient(circle at 50% 40%,#fff 0%,#eef1f6 55%,#c5ccd8 100%);
+  box-shadow:0 0 24px rgba(255,255,255,.55),0 4px 12px rgba(0,0,0,.35);
+  position:relative}
+.mascot::before,.mascot::after{content:"";position:absolute;width:4px;height:4px;background:#151515;border-radius:50%;top:11px}
+.mascot::before{left:12px}.mascot::after{right:12px}
+
+/* Expanded chat panel under notch */
+.panel{position:absolute;left:50%;top:14px;transform:translateX(-50%);
+  width:440px;border-radius:28px;overflow:hidden;z-index:4;
+  background:radial-gradient(ellipse at 50% 0%,#1a2233 0%,#07090e 55%);
+  border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.panel .stars{position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(1px 1px at 15% 20%,rgba(255,255,255,.5),transparent),
+    radial-gradient(1px 1px at 80% 40%,rgba(255,255,255,.35),transparent),
+    radial-gradient(1.5px 1.5px at 40% 75%,rgba(255,255,255,.3),transparent)}
+.panel-top{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:12px 18px 8px}
+.panel-body{position:relative;z-index:1;padding:8px 16px 16px;min-height:160px}
+.attach{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:12.5px;margin-bottom:14px}
+.pdf{width:28px;height:32px;border-radius:5px;background:#2a3140;display:grid;place-items:center;color:#22D3EE;font-size:8px;font-weight:700}
+.dots{display:flex;gap:5px;margin:12px 0 18px 4px}
+.dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.35);animation:pulse 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+.input-row{display:flex;align-items:center;gap:10px;
+  background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:8px 10px 8px 12px}
+.blob-sm{width:28px;height:22px;border-radius:11px;flex-shrink:0;
+  background:radial-gradient(circle at 50% 40%,#fff,#c8ced8);position:relative}
+.blob-sm::before,.blob-sm::after{content:"";position:absolute;width:3px;height:3px;background:#151515;border-radius:50%;top:9px}
+.blob-sm::before{left:8px}.blob-sm::after{right:8px}
+.input-row input{flex:1;background:transparent;border:none;outline:none;color:#E8EAED;font-size:13.5px}
+.send{width:28px;height:28px;border-radius:50%;background:#fff;color:#111;border:none;font-size:14px;cursor:pointer}
+.caption{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,.45);
+  background:rgba(0,0,0,.45);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.08)}
+</style></head><body><div class="app">
+  <div class="desktop-icons">
+    <div><div class="desk-ico"></div>korus</div>
+    <div><div class="desk-ico" style="background:rgba(34,211,238,.12)"></div>quote.pdf</div>
+  </div>
+  <!-- Expanded state (primary mockup matching louis_rlee) -->
+  <div class="panel">
+    <div class="stars"></div>
+    <div class="panel-top">
+      <div class="n-icons">
+        <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M5 6h14v10H8l-3 3V6z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+      <div class="mascot" title="AXE"></div>
+      <div class="n-icons">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M4 10v4h3l4 4V6L7 10H4zM16 9a3 3 0 0 1 0 6"/></svg>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="attach"><div class="pdf">PDF</div><span>quote.pdf</span></div>
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="input-row">
+        <div class="blob-sm"></div>
+        <input value="Continue…" readonly/>
+        <button class="send">↑</button>
+      </div>
+    </div>
+  </div>
+  <div class="caption">Always-on-top · buiten Tauri shell · Mac mini + iMac · login launch</div>
+  <div class="taskbar"><div class="tb"></div><div class="tb"></div><div class="tb blob"></div><div class="tb"></div></div>
+</div></body></html>

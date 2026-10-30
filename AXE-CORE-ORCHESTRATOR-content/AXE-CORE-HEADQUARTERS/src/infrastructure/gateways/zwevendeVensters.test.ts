@@ -24,3 +24,14 @@ describe('zwevende vensters: een bewaarde plek moet op een bestaand scherm valle
     for (const o of Object.values(ZWEVENDE_VENSTERS)) expect(o.label).toMatch(/^axe-/);
   });
 });
+
+
+describe('AXE overlay float (louis_rlee notch)', () => {
+  it('registreert type axe met notch-startmaat en float-route', () => {
+    const o = ZWEVENDE_VENSTERS.axe;
+    expect(o.label).toBe('axe-float-axe');
+    expect(o.route).toBe('/float/axe');
+    expect(o.h).toBeLessThanOrEqual(64);
+    expect(o.b).toBeGreaterThanOrEqual(400);
+  });
+});

@@ -62,6 +62,7 @@ const ComputerUse = lazy(() => import('@/presentation/pages/ComputerUse'));
 const ComputerUseOverlay = lazy(() => import('@/presentation/pages/ComputerUseOverlay'));
 const FloatNotes = lazy(() => import('@/presentation/pages/FloatNotes'));
 const FloatPhone = lazy(() => import('@/presentation/pages/FloatPhone'));
+const FloatAxe = lazy(() => import('@/presentation/pages/FloatAxe'));
 const StandaloneNorthseaPage = lazy(() => import('@/presentation/pages/StandaloneNorthseaPage'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
@@ -266,6 +267,7 @@ export default function App() {
           {/* Eigen vensters boven het hele bureaublad: notities en telefoon (zwevendeVensters.ts). */}
           <Route path="/float/notes" element={<RequireAuth><FloatNotes /></RequireAuth>} />
           <Route path="/float/phone" element={<RequireAuth><FloatPhone /></RequireAuth>} />
+          <Route path="/float/axe" element={<RequireAuth><FloatAxe /></RequireAuth>} />
           <Route path="/northsea-desktop" element={<RequireAuth><StandaloneNorthseaPage /></RequireAuth>} />
           <Route element={<RequireAuth><AndroidLockGate><AppShell /></AndroidLockGate></RequireAuth>}>
             <Route index element={<HomeEntry />} />
