@@ -18,7 +18,7 @@ export function activiteitUitServer(
   const uit: AxeActiviteit[] = [];
   for (const [id, a] of Object.entries(na)) {
     const oud = voor[id];
-    const doelen = [`agent:${id}`, id === 'northsea' ? '/maps-3d' : id === 'trading' ? '/trading' : '/agents'];
+    const doelen = [`agent:${id}`, id === 'northsea' ? '/northsea' : id === 'trading' ? '/trading' : '/agents'];
     if (a.status === 'WAITING_APPROVAL' && oud?.status !== 'WAITING_APPROVAL') {
       uit.push({ doelen, label: `${id}: needs your OK${a.task?.title ? ` — ${a.task.title}` : ''}`, kleur: KLEUR_VRAAG });
       continue;
@@ -42,7 +42,7 @@ export function doelVoorTool(tool: string): string[] {
   if (/computer|exec|terminal|shell|mac/.test(t)) return ['/computer-use', '/terminal'];
   if (/search|web|browse|perplexity|tavily|fetch/.test(t)) return ['/browser'];
   if (/git|code|vercel|deploy/.test(t)) return ['/code-editor'];
-  if (/northsea|deal/.test(t)) return ['/maps-3d'];
+  if (/northsea|deal/.test(t)) return ['/northsea'];
   if (/agenda|calendar|place/.test(t)) return ['/calendar'];
   if (/db|sql|table/.test(t)) return ['/table-editor'];
   if (/agent|crew|task/.test(t)) return ['/agents', '/tasks'];

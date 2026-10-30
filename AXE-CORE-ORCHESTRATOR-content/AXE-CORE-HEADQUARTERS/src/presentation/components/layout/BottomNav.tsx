@@ -2,10 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
-  Home, Database, BookMarked, Cable, Network as Infra, Settings,
-  Bot, Megaphone, BookOpenCheck, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb,
-  TerminalSquare, Monitor, type LucideIcon, Newspaper,
+  Home, Bot, Globe, LineChart, Hammer, Settings2, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -19,47 +16,17 @@ type NavItem = {
   path: string;
 };
 
+/** Fase 1 primary shell: max 6 tabs. Deep routes live under hubs. */
 const leftItems: NavItem[] = [
   { icon: Home, label: navLabel('/'), path: '/' },
-  { icon: Lightbulb, label: navLabel('/thinkthanks'), path: '/thinkthanks' },
-  { icon: LayoutGrid, label: 'Apps', path: '/apps' },
-  { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
-  { icon: Database, label: navLabel('/memory'), path: '/memory' },
-  { icon: Share2, label: navLabel('/obsidian'), path: '/obsidian' },
-  { icon: BookMarked, label: navLabel('/knowledge'), path: '/knowledge' },
-  { icon: Cable, label: navLabel('/mcp'), path: '/mcp' },
-  { icon: Infra, label: navLabel('/infrastructure'), path: '/infrastructure' },
-  { icon: Workflow, label: navLabel('/control-plane'), path: '/control-plane' },
-  { icon: Table2, label: navLabel('/table-editor'), path: '/table-editor' },
-  { icon: Clock, label: navLabel('/cron-manager'), path: '/cron-manager' },
+  { icon: Bot, label: navLabel('/managers'), path: '/managers' },
+  { icon: Globe, label: navLabel('/northsea'), path: '/northsea' },
 ];
 
 const rightItems: NavItem[] = [
-  { icon: Compass, label: navLabel('/browser'), path: '/browser' },
-  { icon: Bot, label: navLabel('/agents'), path: '/agents' },
-  { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
-  { icon: CalendarDays, label: navLabel('/calendar'), path: '/calendar' },
-  { icon: BookOpenCheck, label: navLabel('/ledger'), path: '/ledger' },
-  { icon: ListTodo, label: navLabel('/tasks'), path: '/tasks' },
-  { icon: Newspaper, label: navLabel('/brief'), path: '/brief' },
-  { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
-  { icon: LineChart, label: navLabel('/trading-intel'), path: '/trading-intel' },
-  { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
-  { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
-  // In navRegistry sinds integration/axe-desktop-final maar zonder deur hier --
-  // precies wat de comment hierboven waarschuwt. /computer-use-overlay en
-  // /northsea-desktop horen hier NIET bij: die zijn losse vensters (App.tsx
-  // buiten de AppShell-routes) en staan in navBereikbaar.test.ts's
-  // BEWUST_VERBORGEN, niet hier.
-  { icon: Monitor, label: navLabel('/computer-use'), path: '/computer-use' },
-  // Naast de code-editor, want dat is waar je hem nodig hebt: een bouw draaien,
-  // de lokale API herstarten, een poort vrijmaken. Deze lijst is met de hand
-  // gemaakt en staat los van navRegistry -- een route toevoegen zonder deze
-  // regel levert een tab op die bestaat maar nergens te vinden is. Precies wat
-  // er met /terminals gebeurde.
-  { icon: TerminalSquare, label: navLabel('/terminals'), path: '/terminals' },
-  { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
-  { icon: Settings, label: navLabel('/settings'), path: '/settings' },
+  { icon: LineChart, label: navLabel('/trading'), path: '/trading' },
+  { icon: Hammer, label: navLabel('/bouwen'), path: '/bouwen' },
+  { icon: Settings2, label: navLabel('/systeem'), path: '/systeem' },
 ];
 
 /**
@@ -75,7 +42,7 @@ const rightItems: NavItem[] = [
  * Desktop is untouched — everything fits there, and the left/right split
  * around the voice orb is deliberate.
  */
-const MOBILE_FIRST = ['/', '/browser', '/ai-core', '/thinkthanks', '/agents', '/tasks', '/trading-intel'];
+const MOBILE_FIRST = ['/', '/managers', '/northsea', '/trading', '/bouwen', '/systeem'];
 
 function orderForMobile(items: NavItem[]): NavItem[] {
   const rank = (p: string) => {
@@ -352,7 +319,7 @@ export function BottomNav() {
             <NavTile
               key={item.path}
               item={item}
-              isActive={activePath === item.path || (item.path !== '/' && activePath.startsWith(item.path))}
+              isActive={activePath === item.path || (item.path !== '/' && item.path !== '/trading' && activePath.startsWith(item.path + '/')) || (item.path === '/trading' && (activePath === '/trading' || activePath.startsWith('/trading/')))}
               isMobile={isMobile}
               onClick={() => navigate(item.path)}
             />
@@ -377,7 +344,7 @@ export function BottomNav() {
             <NavTile
               key={item.path}
               item={item}
-              isActive={activePath === item.path || (item.path !== '/' && activePath.startsWith(item.path))}
+              isActive={activePath === item.path || (item.path !== '/' && item.path !== '/trading' && activePath.startsWith(item.path + '/')) || (item.path === '/trading' && (activePath === '/trading' || activePath.startsWith('/trading/')))}
               isMobile={isMobile}
               onClick={() => navigate(item.path)}
             />

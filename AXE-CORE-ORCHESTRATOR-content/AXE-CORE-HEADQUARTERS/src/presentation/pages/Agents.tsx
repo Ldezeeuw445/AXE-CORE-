@@ -181,7 +181,7 @@ function statusNote(status: string): string | null {
   }
 }
 
-export default function Agents() {
+export default function Agents({ managersOnly = true }: { managersOnly?: boolean } = {}) {
   const phone = usePhoneApp();
   const [agents, setAgents] = useState<CoreAgent[]>(DEFAULT_AGENTS);
   const [loading, setLoading] = useState(true);
@@ -205,6 +205,9 @@ export default function Agents() {
      instellingen. Dat is vier schermen scrollen voor je bij de instellingen
      bent, en op de telefoon tien. Nu kies je er één, en staan er steeds
      dezelfde agents onder. */
+  const zichtbareWeergaven = managersOnly
+    ? WEERGAVEN.filter((w) => w.id !== 'settings')
+    : WEERGAVEN;
   const [weergave, setWeergave] = useState<AgentsWeergave>('roster');
   const [gekozenAgent, setGekozenAgent] = useState<AxeAgentId | null>(null);
   const [gekozenCrew, setGekozenCrew] = useState<string | null>(null);
@@ -509,10 +512,12 @@ export default function Agents() {
     >
       <PageHeader
         eyebrow="Workforce"
-        title="Agents"
+        title={managersOnly ? 'Managers' : 'Agents'}
         description={loading
-          ? 'Loading agents…'
-          : 'AXE, the thirteen he delegates to, and the six Grok managers. Pick a view; click an agent for only his.'}
+          ? 'Loading…'
+          : managersOnly
+            ? 'AXE Core and the six Grok managers. Tier workers stay as motors behind them — not primary UI.'
+            : 'AXE, the thirteen he delegates to, and the six Grok managers. Pick a view; click an agent for only his.'}
       />
       <div className="flex flex-wrap items-center gap-2 mt-3 mb-4">
         <StatPill label="Working" value={String(aantalWerkend(pulses))} tone="success" />
@@ -524,6 +529,7 @@ export default function Agents() {
           loading={activity.loading}
           now={now}
         />
+        {!managersOnly && (
         <button
           type="button"
           onClick={addCustomAgent}
@@ -532,12 +538,13 @@ export default function Agents() {
         >
           <Plus size={13} /> Add agent
         </button>
+        )}
       </div>
 
       {/* Dezelfde tegels als de balk boven de plaat (PlaatViewSwitch): dat is de
           vorm die deze app al heeft voor "kies er één uit een rij". */}
       <div className="axe-viewctl axe-viewctl--inline mb-4" role="tablist" aria-label="Agents view">
-        {WEERGAVEN.map((w) => (
+        {zichtbareWeergaven.map((w) => (
           <button
             key={w.id}
             role="tab"
@@ -570,6 +577,7 @@ export default function Agents() {
       {!heeftRail && detail && <div className="mb-4">{detail}</div>}
       {weergave === 'roster' && (
         <TierRooster
+          managersOnly={managersOnly}
           pulses={pulses}
           plans={plans}
           queues={queues}

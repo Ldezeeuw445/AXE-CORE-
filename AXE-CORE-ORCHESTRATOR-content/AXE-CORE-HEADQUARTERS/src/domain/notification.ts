@@ -131,7 +131,7 @@ export function collapseRepeats<T extends { message: string; timestamp: number }
  */
 const TARGETS: Array<{ test: RegExp; route: string; why: string }> = [
   { test: /^AXE (?:service (?:outage|recovered)|dependency)/i, route: '/status', why: 'service status and first mitigation step' },
-  { test: /^Yes needed|\bDEAL-\d+/i, route: '/maps-3d', why: 'the NorthSea desk' },
+  { test: /^Yes needed|\bDEAL-\d+/i, route: '/northsea', why: 'the NorthSea desk' },
   { test: /^Goedkeuring nodig|needs your OK|waiting.?approval/i, route: '/tasks', why: 'the approval' },
   { test: /^(Stuck|Done)\b/i, route: '/tasks', why: 'the task' },
   // "OpenAI (Primair) is niet meer bereikbaar" -- 173 of the stored rows. The

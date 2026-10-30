@@ -24,44 +24,63 @@ const VENSTERS = 'src/infrastructure/gateways/windowManagerService.ts';
  * te laten verdwijnen -- en dan bewaakt deze test niets meer.
  */
 const BEWUST_VERBORGEN: Record<string, string> = {
-  '/device': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
-  '/devices': 'inventory van AXE-installaties; command palette (navRegistry), naast /device',
-  '/lock': 'in de voet van elke lade (SchuifVoet), naast Settings -- Luka, 25 sep',
-  '/lock/pin': 'Android cijfer-PIN; AndroidLockGate opent hem alleen als er een PIN staat',
-  '/companion': 'Telefoon-tab AXE Companion; iframe van axecompanion.com, pinbaar op de A17-balk',
-  '/notifications': 'Telefoon-alerts; bel opent de in-app lijst. Desktop gebruikt AwarenessCenter',
-  '/': 'Home heeft zijn eigen icoon, staat als eerste in leftItems',
-  '/mobile': 'Alleen voor het telefoonoppervlak',
-  '/login': 'Voor wie niet ingelogd is; dan is er geen balk',
-  '/developer': 'Command Center, bereikbaar via de kopbalk',
-  '/organization': 'Bereikbaar vanuit AI Core',
-  '/memory/trading': 'Subweergave van Memory',
-  '/terminal': 'De oude enkele terminal — vervangen door /terminals, blijft alleen bestaan zolang er nog ergens naar verwezen wordt',
+  '/': 'Home — primary nav',
+  '/managers': 'Primary nav (Managers)',
+  '/northsea': 'Primary nav (NorthSea)',
+  '/trading': 'Primary nav (Trading demo hub)',
+  '/bouwen': 'Primary nav (Bouwen hub)',
+  '/systeem': 'Primary nav (Systeem hub)',
+  // Deep routes: reachable from hubs / redirects / dedicated doors, not BottomNav
+  '/device': 'Systeem hub + SchuifVoet',
+  '/devices': 'Redirect → /device',
+  '/lock': 'SchuifVoet',
+  '/lock/pin': 'AndroidLockGate',
+  '/companion': 'Telefoon / Apps',
+  '/notifications': 'Telefoon alerts / AwarenessCenter',
+  '/mobile': 'Telefoon Home',
+  '/login': 'Signed-out only',
+  '/developer': 'Bouwen hub',
+  '/organization': 'Redirect → /managers',
+  '/memory': 'Systeem hub · Geheugen',
+  '/memory/trading': 'Sub van Memory',
+  '/memory/explore': 'Sub van Memory',
+  '/terminal': 'Redirect → /terminals',
+  '/terminals': 'Bouwen hub',
   '/stub': 'Plaatshouder',
-  '/apps': 'Staat er wel, maar met een eigen label',
-  '/trading': 'Sneltoets r, en de ThinkThanks-router linkt ernaartoe',
-  '/memory/explore': 'Vanuit Terrain — NeuralMemorySystem linkt de hubs ernaartoe',
-  '/float/notes': 'Eigen venster boven het bureaublad (zwevendeVensters.ts), geopend vanuit het radiaal dok en de Quick Note',
-  '/float/phone': 'Eigen venster boven het bureaublad (zwevendeVensters.ts), geopend vanuit het radiaal dok',
+  '/apps': 'Bouwen hub',
+  '/trading-desk': 'Legacy Trading page under hub',
+  '/trading-intel': 'Trading demo hub deep link',
+  '/float/notes': 'Zwevend venster',
+  '/float/phone': 'Zwevend venster',
   '/dev-map-preview': 'Ontwikkelvoorbeeld',
-  '/dev-memory-scene-preview': 'Ontwikkelvoorbeeld — Terrain/Neural screenshots',
-  '/dev-strategy-lab-preview': 'Ontwikkelvoorbeeld, alleen in npm run dev (Strategy Lab buiten de login)',
+  '/dev-memory-scene-preview': 'Ontwikkelvoorbeeld',
+  '/dev-strategy-lab-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-preview': 'Ontwikkelvoorbeeld',
   '/dev-browser-standalone': 'Ontwikkelvoorbeeld',
-  // integration/axe-desktop-final: eigen vensters, geregistreerd in App.tsx
-  // BUITEN de AppShell-routes, en geopend via windowManagerService.ts
-  // (openPersonalComputerUse/openStandaloneNorthsea), niet via een klik in de
-  // balk van het hoofdvenster. /computer-use zelf (de volle pagina, WEL binnen
-  // de AppShell) staat gewoon in rightItems hierboven.
-  '/computer-use-overlay': 'Los venster (Personal Computer Use compact), geopend via windowManagerService',
-  '/northsea-desktop': 'Los venster (NorthSea Global Trade Center), geopend via windowManagerService',
-
-  // NAGEMETEN 11-9-2026: deze twee hebben NUL verwijzingen in de hele broncode
-  // en staan niet in de balk. Ze zijn dus vanuit de app niet te bereiken --
-  // alleen door de URL met de hand te typen. Dat is geen keuze maar een
-  // vergetelheid, en het staat hier zodat het een vergetelheid BLIJFT heten in
-  // plaats van stilletjes normaal te worden. Luka beslist of ze een plek
-  // krijgen of weg mogen.
+  '/computer-use-overlay': 'Los venster',
+  '/northsea-desktop': 'Los venster',
+  '/computer-use': 'Bouwen hub',
+  '/browser': 'Bouwen hub',
+  '/code-editor': 'Bouwen hub',
+  '/control-plane': 'Bouwen hub',
+  '/settings': 'Systeem hub',
+  '/cron-manager': 'Systeem hub',
+  '/mcp': 'Systeem hub',
+  '/finance': 'Systeem hub',
+  '/table-editor': 'Systeem hub',
+  '/obsidian': 'Systeem hub · Geheugen',
+  '/knowledge': 'Systeem hub · Geheugen',
+  '/infrastructure': 'Systeem hub',
+  '/calendar': 'Systeem hub',
+  '/tasks': 'Systeem hub',
+  '/ledger': 'Systeem hub',
+  '/brief': 'Systeem hub',
+  '/crewai': 'Systeem hub',
+  '/agents': 'Redirect → /managers',
+  '/ai-core': 'Redirect → /managers',
+  '/maps-3d': 'Redirect → /northsea',
+  '/thinkthanks': 'Redirect → Home',
+  '/eve': 'Redirect → /bouwen',
   '/status': 'ONBEREIKBAAR — nul verwijzingen; te beslissen',
   '/browser-desktop': 'ONBEREIKBAAR — nul verwijzingen; te beslissen',
 };
@@ -98,9 +117,9 @@ describe('elke route heeft een deur', () => {
     expect(dood, `Deze knoppen wijzen naar een route die niet bestaat: ${dood.join(', ')}`).toEqual([]);
   });
 
-  it('/terminals is bereikbaar', () => {
-    // De aanleiding, expliciet vastgelegd.
-    expect(navPaden()).toContain('/terminals');
+  it('primary shell heeft max 6 items inclusief de hubs', () => {
+    const paden = navPaden();
+    expect(paden).toEqual(['/', '/managers', '/northsea', '/trading', '/bouwen', '/systeem']);
   });
 });
 

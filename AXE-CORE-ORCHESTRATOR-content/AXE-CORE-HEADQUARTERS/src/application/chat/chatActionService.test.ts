@@ -5,16 +5,16 @@ describe('chat workspace navigation', () => {
   it('opens the NorthSea desk from a natural show command', async () => {
     await expect(detectChatAction('show me the NorthSea desk')).resolves.toEqual({
       kind: 'navigate',
-      path: '/maps-3d',
-      label: 'Northsea Desk',
+      path: '/northsea',
+      label: 'NorthSea',
     });
   });
 
   it('opens NorthSea for deal language too', async () => {
     await expect(detectChatAction('show me the deals')).resolves.toEqual({
       kind: 'navigate',
-      path: '/maps-3d',
-      label: 'Northsea Desk',
+      path: '/northsea',
+      label: 'NorthSea',
     });
   });
 

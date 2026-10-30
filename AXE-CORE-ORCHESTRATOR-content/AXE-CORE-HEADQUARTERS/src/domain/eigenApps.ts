@@ -49,7 +49,7 @@ export const EIGEN_APPS: readonly EigenApp[] = [
     vorm: 'bureaublad', trefwoorden: ['axe developer', 'developer', 'code editor', 'code studio', 'code-editor'],
   },
   {
-    id: 'northsea', naam: 'NorthSea Desk', pagina: 'maps-3d',
+    id: 'northsea', naam: 'NorthSea Desk', pagina: 'northsea',
     vorm: 'bureaublad', trefwoorden: ['northsea desk', 'north sea desk', 'northsea', 'north sea', 'deal desk'],
   },
 ];
