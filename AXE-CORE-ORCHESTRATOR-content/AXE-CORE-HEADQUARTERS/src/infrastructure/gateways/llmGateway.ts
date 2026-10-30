@@ -29,7 +29,7 @@ import {
 } from '@/domain/gebruikslimiet';
 import { proxyProviderNaam } from '@/domain/proxyProvider';
 import { herstelModelNaam, isModelBestaatNiet } from '@/domain/modelHerstel';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
@@ -64,7 +64,7 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   const signal=AbortSignal.timeout(isOllama?180_000:15_000);
 
   const callNativeOllama=async(target:string):Promise<string>=>{
-    const root=target.replace(/\/+$/,'');
+    const root=ollamaUrl(target).replace(/\/+$/,'');
     const r=await fetch(`${root}/api/chat`,{
       method:'POST',
       headers:{'Content-Type':'application/json',...ollamaHeaders(root)},

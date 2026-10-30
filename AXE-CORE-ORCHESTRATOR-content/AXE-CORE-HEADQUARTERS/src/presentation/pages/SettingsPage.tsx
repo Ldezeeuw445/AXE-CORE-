@@ -55,7 +55,7 @@ import { MindsetQuotesSection } from '@/presentation/components/settings/Mindset
 import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
 import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
 import { UsageCreditsSection } from '@/presentation/components/settings/UsageCreditsSection';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 import {
   readAllProviderUsage,
   refreshProviderBalance,
@@ -1119,7 +1119,7 @@ function OllamaModelsSection() {
     setSyncing(true);
     try {
       const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
-      const baseUrl = conns.ollama?.baseUrl ?? OLLAMA_BASE_URL;
+      const baseUrl = ollamaUrl(conns.ollama?.baseUrl ?? OLLAMA_BASE_URL);
       const res = await fetch(`${baseUrl}/api/tags`, { headers: ollamaHeaders(baseUrl), signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
       const data = await res.json();
@@ -1169,7 +1169,7 @@ function OllamaModelsSection() {
       // AXE's proxy and could abort while an 8B model was still cold-loading,
       // producing "Fetch is aborted" even though /api/tags proved the box was
       // reachable. A model-health card should test the model, not the proxy.
-      const root = baseUrl.replace(/\/+$/, '');
+      const root = ollamaUrl(baseUrl).replace(/\/+$/, '');
       const res = await fetch(`${root}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...ollamaHeaders(root) },

@@ -11,14 +11,17 @@
  * op Instellingen. De vorm verschilt -- daar een raster, hier regels -- maar
  * de bron en de woorden zijn gelijk.
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { standTekst, standKleur, type KaartStand } from '@/domain/providerCardStand';
 import type { ProviderConn } from '@/domain/providerConnections';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
 import { leesProviderOpslag } from '@/domain/providers';
+import { LIVE_VPS_PROVIDERS, meetVpsProviders, type LiveVpsProvider } from '@/application/system/vpsProviderMeting';
 
 const VERVERS_MS = 60_000;
+/** Een "Testing…" die zo oud is, is een test die nooit terugkwam (Abonnement en Hermes hingen sinds 17 okt). */
+const TESTING_VERLOOPT_MS = 5 * 60_000;
 
 interface Regel {
   id: string;
@@ -33,7 +36,7 @@ interface Regel {
 /** Leest wat er in de app bekend is over elke provider. Geen eigen meting: de
  *  kaarten op Instellingen schrijven hun testuitslag weg, en die lezen we hier
  *  terug -- anders krijg je twee metingen die het oneens kunnen zijn. */
-function leesRegels(): Regel[] {
+function leesRegels(live: Partial<Record<string, KaartStand>> = {}): Regel[] {
   // Dezelfde opslag die Instellingen schrijft. Eén sleutel, één waarheid --
   // een tweede meting hier zou met die van de kaarten kunnen botsen.
   // Onleesbare opslag betekent 'niets bekend', niet 'alles stuk' -- dat
@@ -42,7 +45,10 @@ function leesRegels(): Regel[] {
   return PROVIDER_KEY_CATALOGUE.map(p => {
     const conn = conns[p.id] ?? {};
     const ruw = conn.lastTest;
-    const stand: KaartStand = ruw === 'ok' || ruw === 'fail' || ruw === 'testing' ? ruw : 'idle';
+    const hangt = ruw === 'testing' && Date.now() - Date.parse(conn.lastTestAt ?? '') > TESTING_VERLOOPT_MS;
+    const opgeslagen: KaartStand = hangt ? 'idle' : ruw === 'ok' || ruw === 'fail' || ruw === 'testing' ? ruw : 'idle';
+    // De VPS-regels meten we zelf (zie vpsProviderMeting.ts); de rest is wat Instellingen testte.
+    const stand: KaartStand = live[p.id] ?? opgeslagen;
     return {
       id: p.id,
       naam: p.name,
@@ -56,14 +62,30 @@ function leesRegels(): Regel[] {
 }
 
 export function ModelStatusWidget() {
-  const [regels, setRegels] = useState<Regel[]>(() => leesRegels());
+  const [live, setLive] = useState<Partial<Record<string, KaartStand>>>({});
+  // Telt op bij elke ronde en elke opslagwijziging; de regels lezen daarna de opslag opnieuw.
+  const [ronde, setRonde] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `ronde` is de aanleiding om de opslag opnieuw te lezen
+  const regels = useMemo(() => leesRegels(live), [live, ronde]);
 
-  const ververs = useCallback(() => { setRegels(leesRegels()); }, []);
+  const ververs = useCallback(() => { setRonde(n => n + 1); }, []);
+
+  // De VPS-regels: elke ronde gemeten; de uitslag gaat over wat Instellingen ooit opsloeg.
+  useEffect(() => {
+    let weg = false;
+    const meet = () => {
+      const conns = leesProviderOpslag() as Record<string, ProviderConn>;
+      const instelling = Object.fromEntries(LIVE_VPS_PROVIDERS.map(id => [id, { baseUrl: conns[id]?.baseUrl, model: conns[id]?.model }])) as
+        Partial<Record<LiveVpsProvider, { baseUrl?: string; model?: string }>>;
+      void meetVpsProviders(instelling).then(uit => { if (!weg) setLive(uit); });
+    };
+    meet();
+    const t = window.setInterval(meet, VERVERS_MS);
+    return () => { weg = true; window.clearInterval(t); };
+  }, []);
 
   useEffect(() => {
-    // Niet meteen ververs() aanroepen: de beginstand komt al uit de lazy
-    // initializer van useState, dus een synchrone setState hier zou alleen een
-    // tweede render veroorzaken met precies dezelfde inhoud.
+    // Niet meteen ververs() aanroepen: de eerste regels komen al uit useMemo.
     const t = window.setInterval(ververs, VERVERS_MS);
     // Een test op Instellingen verandert de opslag; dan hoort deze balk mee te
     // veranderen zonder dat je een minuut wacht.

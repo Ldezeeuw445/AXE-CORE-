@@ -11,7 +11,7 @@ import { Menu } from 'lucide-react';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
 import PhoneSystems from '@/presentation/pages/phone/PhoneSystems';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 
 /* ─── Project definitions ──────────────────────────────────────────── */
 const PROJECTS = [
@@ -364,7 +364,7 @@ function OllamaModelCards() {
 
   const loadModels = async () => {
     try {
-      const baseUrl = (import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+      const baseUrl = ollamaUrl((import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com'));
       // De sleutel moet mee naar ollama.axecompanion.com, net als op de negen
       // andere plekken. Deze twee stonden er niet in, en zouden dus 401 geven
       // zodra het slot op de modelbox dichtgaat (infra/vps-bootstrap.sh stap 4).
@@ -389,7 +389,7 @@ function OllamaModelCards() {
     setTesting(name);
     const t0 = Date.now();
     try {
-      const baseUrl = (import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+      const baseUrl = ollamaUrl((import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com'));
       const r = await fetch(`${baseUrl}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...ollamaHeaders(baseUrl) },

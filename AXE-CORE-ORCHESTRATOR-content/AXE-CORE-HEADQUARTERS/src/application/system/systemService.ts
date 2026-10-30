@@ -15,7 +15,7 @@ import { VPS_API_ORIGIN, axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrast
 // ── Types ─────────────────────────────────────────────────────────────────
 
 import { statusVan, NIET_INGESTELD, type ServiceStatus } from '@/domain/serviceStatus';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 import { getProviderKeySlot } from '@/infrastructure/config/providerSleutels';
 export type { ServiceStatus };
 
@@ -224,7 +224,7 @@ const SERVICES: Array<{
     key: 'ollama',
     check: async () => {
       // Default to the Cloudflare-tunneled HTTPS endpoint (direct HTTP IP is blocked from HTTPS browsers)
-      const url = OLLAMA_URL;
+      const url = ollamaUrl(OLLAMA_URL);
       const t = Date.now();
       try {
         const res = await fetch(`${url}/api/tags`, { headers: ollamaHeaders(url), signal: AbortSignal.timeout(5000) });

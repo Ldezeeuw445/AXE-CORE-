@@ -4,7 +4,7 @@ import type { AIConfig } from '@/domain/types/aiConfig';
 import type { AIMode } from '@/domain/types/browser';
 import { getOpenAITools, parseToolCalls, extractMessageContent, executeToolCall } from '@/application/browser/tools';
 import type { ToolCall, ToolResult } from '@/application/browser/tools';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 
 // System prompt with tool awareness
 function getSystemPrompt(mode: AIMode, currentUrl: string, context: {
@@ -213,11 +213,12 @@ export async function sendToAI(
         })),
       ];
 
-      response = await fetch(config.apiEndpoint, {
+      const doel = ollamaUrl(config.apiEndpoint);
+      response = await fetch(doel, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...ollamaHeaders(config.apiEndpoint),
+          ...ollamaHeaders(doel),
           ...(preset.headers || {}),
         },
         body: JSON.stringify({

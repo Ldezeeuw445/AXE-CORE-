@@ -25,7 +25,7 @@ import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
 import { VPS_API_ORIGIN, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 import { webProxyStand } from '@/domain/webProxyStand';
 import { useLocation } from 'react-router';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 import { modelboxUitHealth, ZONDER_SLEUTEL } from '@/domain/modelboxStand';
 import { STEM_UI, stemStandVanHealth, type StemStand } from '@/domain/stemIdentiteit';
 import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
@@ -209,9 +209,10 @@ function VpsHealthWidget() {
     const tickModelbox = async () => {
       if (modelboxViaVps) return;
       const t0 = performance.now();
-      const heeftSleutel = Object.keys(ollamaHeaders(OLLAMA_HEALTH_URL)).length > 0;
+      const doel = ollamaUrl(OLLAMA_HEALTH_URL);
+      const heeftSleutel = Object.keys(ollamaHeaders(doel)).length > 0;
       try {
-        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { headers: ollamaHeaders(OLLAMA_HEALTH_URL), signal: AbortSignal.timeout(6000) });
+        const res = await fetch(`${doel}/api/tags`, { headers: ollamaHeaders(doel), signal: AbortSignal.timeout(6000) });
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
         if (!res.ok) {

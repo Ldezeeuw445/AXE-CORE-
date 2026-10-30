@@ -17,7 +17,7 @@ import { proxyErrorMessage } from '@/domain/proxyError';
 import { proxyProviderNaam } from '@/domain/proxyProvider';
 import { herstelModelNaam } from '@/domain/modelHerstel';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
-import { ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
+import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 
 export type StreamTokenFn = (delta: string, full: string) => void;
@@ -125,7 +125,7 @@ async function streamNativeOllama(
 ): Promise<string> {
   const cfg = slotCfg(slot);
   const model = herstelModelNaam(slot.provider, slot.model) || cfg.defaultModel;
-  const root = target.replace(/\/+$/, '');
+  const root = ollamaUrl(target).replace(/\/+$/, '');
   const r = await fetch(`${root}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...ollamaHeaders(root) },

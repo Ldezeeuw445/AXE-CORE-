@@ -189,6 +189,8 @@ MANIFEST = {
     # main.py, het schrijfhek en cli_laag verbergen er sleutels mee (30 okt). Zonder deze
     # regel startte de API niet: 58dae2e3 en 6468bb40 werden teruggedraaid op /health 000.
     "/opt/axe-core-api/geheimen.py": ("backend/axe_api/geheimen.py", "axe-core-api"),
+    # /ollama/* naar de modelbox, zodat geen toestel een eigen Ollama-sleutel nodig heeft (30 okt).
+    "/opt/axe-core-api/modelbox.py": ("backend/axe_api/modelbox.py", "axe-core-api"),
     # planner importeert dit na een geslaagde bouwrun (draft-PR); de bouwlus draait op de
     # Mac, maar planner.py staat op de box, dus zijn module ook.
     "/opt/axe-core-api/bouw_publiceer.py": ("backend/axe_api/bouw_publiceer.py", "axe-core-api"),
@@ -212,7 +214,7 @@ OPTIONAL_WHEN_MISSING = {
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py", "dax_bouw.py", "bouw_publiceer.py"),
     "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py", "modelbox.py"),
     "memory_schrijfhek.py": ("geheimen.py",),
     "staande_diensten.py": ("grok_managers.py", "dax_bouw.py"),
 }

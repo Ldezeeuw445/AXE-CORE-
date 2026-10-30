@@ -623,6 +623,10 @@ app.include_router(_missie_router(sb), dependencies=[AUTH], tags=["missions"])
 # niet op het toestel bewaren. AUTH hangt hier bewust niet op.
 app.include_router(_device_notify_router(sb), tags=["device"])
 
+# De modelbox via deze API: de app heeft geen eigen Ollama-sleutel nodig (zie modelbox.py).
+from modelbox import maak_router as _modelbox_router  # noqa: E402
+app.include_router(_modelbox_router(), dependencies=[AUTH], tags=["ollama"])
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PROXIES — LLM providers, Exa search, Fish TTS
 # ══════════════════════════════════════════════════════════════════════════════
