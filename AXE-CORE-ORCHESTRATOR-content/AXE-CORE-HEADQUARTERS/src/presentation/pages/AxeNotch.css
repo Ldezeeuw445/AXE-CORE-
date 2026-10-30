@@ -1,0 +1,212 @@
+/* AXE notch — matzwart paneel hangend vanaf de bovenrand (ref-notch-reel). */
+.axe-notch-root {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: transparent;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  color: #e8eaed;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.axe-notch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #0c0c0e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: none;
+  box-shadow:
+    0 10px 36px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  transition:
+    width 180ms ease,
+    height 180ms ease,
+    border-radius 180ms ease;
+}
+
+.axe-notch--collapsed {
+  width: 200px;
+  height: 44px;
+  border-radius: 0 0 22px 22px;
+}
+
+.axe-notch--hover {
+  width: 260px;
+  height: 52px;
+  border-radius: 0 0 24px 24px;
+}
+
+.axe-notch--expanded {
+  width: 720px;
+  height: 420px;
+  border-radius: 0 0 28px 28px;
+}
+
+.axe-notch__cap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+.axe-notch--hover .axe-notch__cap,
+.axe-notch--expanded .axe-notch__cap {
+  min-height: 52px;
+  height: 52px;
+}
+
+.axe-notch__avatar-wrap {
+  position: relative;
+  width: 34px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.axe-notch__glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 70%);
+  filter: blur(4px);
+  pointer-events: none;
+  animation: axe-notch-pulse 2.4s ease-in-out infinite;
+}
+
+.axe-notch__avatar {
+  position: relative;
+  width: 30px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 10px;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
+}
+
+@keyframes axe-notch-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.axe-notch__hint {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+}
+
+.axe-notch__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.axe-notch__side {
+  width: 148px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.axe-notch__tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.axe-notch__tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.axe-notch__tab[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.axe-notch__panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  gap: 12px;
+}
+
+.axe-notch__panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.axe-notch__panel-copy {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.axe-notch__input-row {
+  margin-top: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.axe-notch__input-row input {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 13px;
+  outline: none;
+}
+
+.axe-notch__input-row input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.axe-notch__send {
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.axe-notch__send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

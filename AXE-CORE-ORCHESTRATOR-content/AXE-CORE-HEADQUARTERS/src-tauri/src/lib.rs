@@ -215,37 +215,62 @@ fn toon_sneltoets_venster(app: &tauri::AppHandle) {
     let _ = win.set_focus();
 }
 
-// ── De AXE-balk ─────────────────────────────────────────────────────────────
+// ── De AXE-notch (was: dunne balk) ──────────────────────────────────────────
 //
-// Een smalle, zwevende balk bovenaan het scherm (backlog-item 1+3, spec in
-// twin/axe-core-balk-spec.md). Eigen venster `axe-balk`, zodat het onder de
-// bestaande capability `axe-*` valt en er geen nieuwe rechten bij komen.
-// Namen staan ook in src/domain/balk/balk.ts; verandert er hier één, dan daar mee.
+// Matzwart paneel hangend vanaf de bovenrand (backlog 1+3, twin/axe-core-balk-spec.md
+// + Luka 30-10 17:16). Label blijft `axe-balk` (capability axe-*). Afmetingen en
+// stands spiegelen src/domain/balk/balk.ts.
+//
+// Onafhankelijkheid: dit venster leeft los van "main" (tray houdt het proces).
+// Voor een écht los lightweight proces: apps/axe-overlay (voorkeur Mac Mini).
+// AXE_NOTCH_ONLY=1: main verborgen bij start, alleen tray + notch.
 #[cfg(desktop)]
 const BALK_LABEL: &str = "axe-balk";
 #[cfg(desktop)]
 const BALK_ACCELERATOR: &str = "Alt+Shift+Space";
 #[cfg(desktop)]
-const BALK_BREEDTE: f64 = 720.0;
+const NOTCH_EVENT: &str = "axe://notch-stand";
 #[cfg(desktop)]
-const BALK_HOOGTE: f64 = 56.0;
+const NOTCH_COLLAPSED: (f64, f64) = (200.0, 44.0);
+#[cfg(desktop)]
+const NOTCH_HOVER: (f64, f64) = (260.0, 52.0);
+#[cfg(desktop)]
+const NOTCH_EXPANDED: (f64, f64) = (720.0, 420.0);
 
-/// Maakt de balk aan, onzichtbaar. Pas de sneltoets laat hem zien.
-///
-/// Anders dan bij "main" staat visible_on_all_workspaces hier WEL aan: de balk
-/// is juist bedoeld om boven een app in volledig scherm te blijven.
+#[cfg(desktop)]
+fn notch_size(stand: &str) -> (f64, f64) {
+    match stand {
+        "expanded" => NOTCH_EXPANDED,
+        "hover" => NOTCH_HOVER,
+        _ => NOTCH_COLLAPSED, // collapsed / onbekend
+    }
+}
+
+#[cfg(desktop)]
+fn centreer_notch(venster: &tauri::WebviewWindow, breedte: f64) {
+    if let Ok(Some(scherm)) = venster.primary_monitor() {
+        let schaal = scherm.scale_factor();
+        let scherm_w = scherm.size().width as f64 / schaal;
+        let x = ((scherm_w - breedte) / 2.0).max(0.0);
+        // y=0: hangt vanaf de bovenrand (zoals ref-notch-reel).
+        let _ = venster.set_position(tauri::LogicalPosition::new(x, 0.0));
+    }
+}
+
+/// Maakt de notch aan (start collapsed, standaard verborgen tot sneltoets/hover-flow).
 #[cfg(desktop)]
 fn maak_balk_venster(app: &tauri::AppHandle) -> tauri::Result<()> {
     if app.get_webview_window(BALK_LABEL).is_some() {
         return Ok(());
     }
+    let (w, h) = NOTCH_COLLAPSED;
     let venster = tauri::WebviewWindowBuilder::new(
         app,
         BALK_LABEL,
         tauri::WebviewUrl::App("balk.html".into()),
     )
     .title("AXE")
-    .inner_size(BALK_BREEDTE, BALK_HOOGTE)
+    .inner_size(w, h)
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
@@ -255,55 +280,86 @@ fn maak_balk_venster(app: &tauri::AppHandle) -> tauri::Result<()> {
     .visible(false)
     .build()?;
 
-    // Bovenaan, midden op het hoofdscherm, net onder de menubalk.
-    if let Ok(Some(scherm)) = venster.primary_monitor() {
-        let schaal = scherm.scale_factor();
-        let breedte = scherm.size().width as f64 / schaal;
-        let x = ((breedte - BALK_BREEDTE) / 2.0).max(0.0);
-        let _ = venster.set_position(tauri::LogicalPosition::new(x, 32.0));
-    }
+    centreer_notch(&venster, w);
     Ok(())
 }
 
-/// Sneltoets: balk tonen of weer wegzetten. Op macOS zonder focus te pakken,
-/// om dezelfde reden als bij toon_sneltoets_venster.
+#[cfg(desktop)]
+fn pas_notch_stand_toe(app: &tauri::AppHandle, stand: &str) -> Result<(), String> {
+    use tauri::Emitter;
+    if app.get_webview_window(BALK_LABEL).is_none() {
+        maak_balk_venster(app).map_err(|e| e.to_string())?;
+    }
+    let win = app
+        .get_webview_window(BALK_LABEL)
+        .ok_or_else(|| "notch bestaat niet".to_string())?;
+
+    if stand == "hidden" {
+        let _ = win.hide();
+        let _ = app.emit(NOTCH_EVENT, "hidden");
+        return Ok(());
+    }
+
+    let (w, h) = notch_size(stand);
+    win.set_size(tauri::LogicalSize::new(w, h))
+        .map_err(|e| e.to_string())?;
+    centreer_notch(&win, w);
+    let _ = win.show();
+    #[cfg(not(target_os = "macos"))]
+    let _ = win.set_focus();
+    let _ = app.emit(NOTCH_EVENT, stand);
+    Ok(())
+}
+
+/// Sneltoets: hidden/collapsed → expanded; expanded → collapsed (kleine notch).
 #[cfg(desktop)]
 fn wissel_balk(app: &tauri::AppHandle) {
     if app.get_webview_window(BALK_LABEL).is_none() {
         if let Err(err) = maak_balk_venster(app) {
-            eprintln!("AXE balk niet aangemaakt: {err}");
+            eprintln!("AXE notch niet aangemaakt: {err}");
             return;
         }
     }
     let Some(win) = app.get_webview_window(BALK_LABEL) else {
         return;
     };
-    if win.is_visible().unwrap_or(false) {
-        let _ = win.hide();
+    let zichtbaar = win.is_visible().unwrap_or(false);
+    let stand = if !zichtbaar {
+        "expanded"
     } else {
-        let _ = win.show();
-        #[cfg(not(target_os = "macos"))]
-        let _ = win.set_focus();
+        // Zichtbaar: toggle expanded ↔ collapsed op basis van hoogte.
+        let h = win.inner_size().map(|s| s.height).unwrap_or(0);
+        let scale = win.scale_factor().unwrap_or(1.0);
+        let logical_h = h as f64 / scale;
+        if logical_h > 80.0 {
+            "collapsed"
+        } else {
+            "expanded"
+        }
+    };
+    if let Err(err) = pas_notch_stand_toe(app, stand) {
+        eprintln!("AXE notch sneltoets: {err}");
     }
 }
 
-/// Balk vergroten voor een antwoord, of terug naar de smalle stand.
+/// Frontend vraagt een stand: collapsed | hover | expanded | hidden.
 #[tauri::command]
-fn balk_uitklappen(app: tauri::AppHandle, open: bool) -> Result<(), String> {
+fn notch_zet_stand(app: tauri::AppHandle, stand: String) -> Result<(), String> {
     #[cfg(desktop)]
     {
-        let win = app
-            .get_webview_window(BALK_LABEL)
-            .ok_or_else(|| "balk bestaat niet".to_string())?;
-        let hoogte = if open { 420.0 } else { BALK_HOOGTE };
-        win.set_size(tauri::LogicalSize::new(BALK_BREEDTE, hoogte))
-            .map_err(|e| e.to_string())?;
+        pas_notch_stand_toe(&app, &stand)
     }
     #[cfg(not(desktop))]
     {
-        let _ = (app, open);
+        let _ = (app, stand);
+        Ok(())
     }
-    Ok(())
+}
+
+/// Oude naam — boolean open → expanded/collapsed.
+#[tauri::command]
+fn balk_uitklappen(app: tauri::AppHandle, open: bool) -> Result<(), String> {
+    notch_zet_stand(app, if open { "expanded".into() } else { "collapsed".into() })
 }
 
 /// Wisselt het native glas mee met de lichte of donkere stand.
@@ -401,6 +457,7 @@ pub fn run() {
         list_vault_files,
         show_main_window,
         balk_uitklappen,
+        notch_zet_stand,
         platform_info,
         diensten_stand,
         dienst_start,
@@ -421,6 +478,7 @@ pub fn run() {
         list_vault_files,
         show_main_window,
         balk_uitklappen,
+        notch_zet_stand,
         platform_info,
         gesture_lock::gesture_lock_load,
         gesture_lock::gesture_lock_save,
@@ -532,6 +590,26 @@ pub fn run() {
                 .build(app)?;
             }
 
+            #[cfg(desktop)]
+            {
+            // Notch-venster klaarzetten (onzichtbaar). Main mag dicht; tray +
+            // notch houden het proces. AXE_NOTCH_ONLY=1: main meteen verbergen
+            // (lightweight "alleen notch"-modus van deze binary).
+            if let Err(err) = maak_balk_venster(app.handle()) {
+                eprintln!("AXE notch niet aangemaakt bij start: {err}");
+            }
+            let notch_only = std::env::var("AXE_NOTCH_ONLY")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            if notch_only {
+                if let Some(main) = app.get_webview_window("main") {
+                    let _ = main.hide();
+                }
+                // Optioneel: toon collapsed notch meteen in notch-only modus.
+                let _ = pas_notch_stand_toe(app.handle(), "collapsed");
+            }
+            }
+
             // ── Option+Space, overal ────────────────────────────────────
             //
             // useKeyboardShortcuts.ts hoort alleen wat er in ONS venster
@@ -553,7 +631,7 @@ pub fn run() {
                 // Option heet op Windows en Linux Alt, en in Tauri heet hij
                 // overal Alt. Zelfde toets, andere naam op de kap.
                 let mic_sneltoets = Shortcut::new(Some(Modifiers::ALT), Code::Space);
-                // De AXE-balk: Option+Shift+Space. Los van de mic, zodat die
+                // De AXE-notch: Option+Shift+Space. Los van de mic, zodat die
                 // precies blijft doen wat hij deed.
                 let balk_sneltoets =
                     Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::Space);
@@ -591,7 +669,7 @@ pub fn run() {
                     );
                 }
                 if let Err(err) = app.global_shortcut().register(balk_sneltoets) {
-                    eprintln!("AXE balk-sneltoets ({BALK_ACCELERATOR}) not registered: {err}");
+                    eprintln!("AXE notch-sneltoets ({BALK_ACCELERATOR}) not registered: {err}");
                 }
             }
 
