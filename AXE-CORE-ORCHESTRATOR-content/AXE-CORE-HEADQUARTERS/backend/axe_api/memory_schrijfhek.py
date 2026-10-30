@@ -12,6 +12,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from geheimen import is_config_sleutel, verberg_geheimen
+
 GEHEUGEN_MAG_PER_DAG = 120
 
 _NOOP = re.compile(
@@ -131,14 +133,17 @@ def _meta(data: dict) -> dict:
 
 
 def herschrijf(tabel: str, data: dict) -> tuple[str, Optional[dict]]:
-    """Zonder database: weiger ruis, zet een stabiele sleutel + inhoudshash."""
-    tekst = _tekst(tabel, data)
+    """Zonder database: weiger ruis, verberg sleutels, zet een stabiele sleutel + inhoudshash."""
     key = _sleutel(data)
+    tekst = _tekst(tabel, data)
+    uit = dict(data)
+    if not is_config_sleutel(key):
+        tekst = verberg_geheimen(tekst)
+        uit["value" if tabel == "global_memory" else "content"] = tekst
     reden = mag_schrijven(key=key, content=tekst)
     if reden != "ok":
         return reden, None
     h = inhoud_hash(tekst)
-    uit = dict(data)
     meta = _meta(data)
     meta["content_hash"] = h
     uit["metadata"] = meta

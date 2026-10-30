@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import CrewRunRequest, run_crew
+from geheimen import is_config_sleutel, verberg_geheimen
 from zuinig import Bezet, lagere_prioriteit, slot as zuinig_slot
 import contextlib as _contextlib
 
@@ -1945,6 +1946,10 @@ async def memory_upsert(entries: list[MemoryEntry]):
     for e in entries:
         deduped[(e.user_id, e.key)] = e
     rows = [e.model_dump() for e in deduped.values()]
+    # Ook als het hek hieronder faalt: geen sleutel in het geheugen (zie geheimen.py).
+    for rij in rows:
+        if not is_config_sleutel(rij.get("key")):
+            rij["value"] = verberg_geheimen(rij.get("value"))
     try:
         import memory_schrijfhek as hek
         rows, _skipped = hek.filter_batch(sb(), "global_memory", rows)
@@ -1971,8 +1976,16 @@ async def memory_list(
         q = q.eq("category", category)
     if key_prefix:
         q = q.like("key", f"{key_prefix}%")
-    result = q.execute()
-    return result.data or []
+    # Configuratie (cfg:) alleen voor wie erom vraagt; de rest gaat naar prompts
+    # en krijgt nooit een sleutel mee, ook niet uit rijen van voor geheimen.py.
+    vraagt_config = is_config_sleutel(key_prefix)
+    if not vraagt_config:
+        q = q.not_.like("key", "cfg:%")
+    rijen = q.execute().data or []
+    if not vraagt_config:
+        for rij in rijen:
+            rij["value"] = verberg_geheimen(rij.get("value"))
+    return rijen
 
 @app.get("/memory/stats", dependencies=[AUTH])
 async def memory_stats(user_id: str):

@@ -16,6 +16,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from geheimen import verberg_geheimen
+
 AXE_USER_UUID = "acff7a12-1111-481d-a7a9-cc07583b8069"
 AXE_USER_MEMORY = f"{AXE_USER_UUID}-axe-core"
 OS3_CONVERSATION = "axe-os3"
@@ -206,17 +208,17 @@ def build_router(
             rag = (sb().table("rag_memories").select("id,content,category,importance,created_at")
                    .ilike("content", f"%{q}%").limit(lim).execute().data) or []
             hits.extend({
-                "id": r.get("id"), "source": "rag", "content": r.get("content"),
+                "id": r.get("id"), "source": "rag", "content": verberg_geheimen(r.get("content")),
                 "category": r.get("category"), "score": r.get("importance"),
             } for r in rag)
         except Exception:
             rag = []
         if len(hits) < lim:
             glob = (sb().table("global_memory").select("key,value,category,updated_at")
-                    .eq("user_id", user_id).ilike("value", f"%{q}%")
+                    .eq("user_id", user_id).ilike("value", f"%{q}%").not_.like("key", "cfg:%")
                     .limit(lim - len(hits)).execute().data) or []
             hits.extend({
-                "id": r.get("key"), "source": "global", "content": r.get("value"),
+                "id": r.get("key"), "source": "global", "content": verberg_geheimen(r.get("value")),
                 "category": r.get("category"), "key": r.get("key"),
             } for r in glob)
         return {"backend": "rag", "hits": hits}
