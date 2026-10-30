@@ -10,10 +10,13 @@ Motors (blijven de implementatie):
 
 Plugins (stap 4–6):
   - device_actions    — observe/safe_execute dry-run + list metadata
-  - northsea_crews    — plan-only crews; geen auto-send
+  - northsea_crews    — deal-mails toegestaan (staande Luka-toestemming);
+                        harde poort alleen op betalingen + ondertekenen
   - trading_demo      — paper-only demo; nooit live orders
 
-Guards: geen live trades, geen payments, geen outgoing mail vanuit deze laag.
+Guards: geen live trades, geen payments, geen contract-signing vanuit deze laag.
+NorthSea deal-moving e-mail (support@northseacommodity.com) mag wél — bestaande
+cron/verstuur-pad blijft onaangeraakt; deze facade blokkeert dat niet.
 """
 
 from __future__ import annotations
@@ -132,9 +135,12 @@ def status() -> Dict[str, Any]:
         "guards": {
             "geen_trades": True,
             "geen_payments": True,
-            "geen_outgoing_mail": True,
+            "geen_signing": True,
             "trading_paper_only": True,
-            "northsea_geen_auto_send": True,
+            # Deal-mails via NorthSea crews/cron/verstuur: toegestaan (staande toestemming).
+            "northsea_deal_mail_ok": True,
+            "northsea_geen_auto_send": False,
+            "geen_outgoing_mail": False,
         },
     }
 
@@ -369,21 +375,49 @@ def _normalize_specialists(raw: Any) -> list[str]:
     return uit
 
 
+_NORTHSEA_HARD_GATE = (
+    "payment", "betaling", "wire", "invoice pay", "transfer funds",
+    "sign contract", "onderteken", "signing", "handtekening", "escrow release",
+)
+
+
+def _northsea_hard_gate(tekst: str) -> str | None:
+    """Alleen betalingen + ondertekenen vragen Luka-ja. Deal-mails niet."""
+    t = (tekst or "").lower()
+    for woord in _NORTHSEA_HARD_GATE:
+        if woord in t:
+            return woord
+    return None
+
+
 def _plugin_northsea_crews(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """NorthSea crews als plugin — plan-only; nooit auto-send / outgoing mail."""
+    """NorthSea crews — deal-mails OK (staande toestemming); poort op pay/sign.
+
+    Het bestaande pad (cron northsea jobs, northsea_verstuur, send-approved-reply
+    via support@northseacommodity.com) blijft de implementatie. Deze facade
+    blokkeert dat niet en mag `run`/`verstuur` doorverwijzen.
+    """
     actie = str(payload.get("actie") or "status").strip().lower()
     specialists = _normalize_specialists(payload.get("specialists"))
+    blob = " ".join(
+        str(v) for v in (
+            payload.get("task"), payload.get("goal"), payload.get("detail"),
+            payload.get("kind"), payload.get("draft_id"), actie,
+        ) if v
+    )
+    gate = _northsea_hard_gate(blob)
     if actie in ("status", "meta", ""):
         return {
             "actie": "status",
             "crews": list(_NORTHSEA_CREWS),
             "max_specialists": 9,
             "guards": {
-                "geen_auto_send": True,
-                "geen_outgoing_mail": True,
-                "run_via": "/crew/run of cron northsea jobs — niet via deze facade",
+                "deal_mail_ok": True,
+                "staande_toestemming": "Harcros / Montanwerke Brixlegg deal-mails via support@northseacommodity.com",
+                "hard_gate": ["payments", "signing"],
+                "run_via": "crew_runner / northsea cron / northsea_verstuur (onaangeraakt)",
             },
-            "note": "Deze plugin plant en normaliseert; kickoff blijft bij crew_runner / northsea jobs.",
+            "note": "Deal-moving e-mail mag. Betalen of contract tekenen = Luka-ja.",
         }
     if actie == "plan":
         task = str(payload.get("task") or payload.get("goal") or "").strip()
@@ -392,24 +426,57 @@ def _plugin_northsea_crews(payload: Dict[str, Any]) -> Dict[str, Any]:
         crew = str(payload.get("crew") or "research").strip().lower()
         if crew not in _NORTHSEA_CREWS:
             return {"ok": False, "actie": "plan", "error": f"onbekende crew {crew!r}", "crews": list(_NORTHSEA_CREWS)}
+        if gate:
+            return {
+                "ok": False,
+                "actie": "plan",
+                "vraag_luka": True,
+                "error": f"harde poort: {gate!r} vereist Luka-ja (geen auto)",
+                "crew": crew,
+                "task": task[:500],
+            }
         return {
             "actie": "plan",
             "crew": crew,
             "task": task[:500],
             "specialists": specialists,
             "would_call": "crew_runner.run_crew" if specialists else "northsea job tick",
-            "auto_send": False,
+            "deal_mail_ok": True,
             "executed": False,
-            "note": "plan-only — geen subprocess, geen mail, geen send",
+            "note": "plan klaar; deal-mail/send mag via bestaande northsea_verstuur / cron",
         }
-    if actie == "run":
+    if actie in ("run", "verstuur", "send"):
+        if gate:
+            return {
+                "ok": False,
+                "actie": actie,
+                "vraag_luka": True,
+                "error": f"harde poort: {gate!r} — betalingen/ondertekenen niet auto",
+                "specialists": specialists,
+            }
+        draft_id = str(payload.get("draft_id") or "").strip()
+        # Facade voert zelf geen netwerk-send uit (geen secrets hier); wijst naar
+        # het bestaande onaangeraakte pad zodat callers/cron het mogen doen.
         return {
-            "ok": False,
-            "actie": "run",
-            "error": "northsea_crews plugin runt niet vanuit orchestrator_lus (geen auto-send). Gebruik /crew/run of bestaande northsea cron.",
+            "ok": True,
+            "actie": actie,
+            "allowed": True,
+            "deal_mail_ok": True,
+            "executed": False,
+            "draft_id": draft_id or None,
             "specialists": specialists,
+            "route": (
+                "northsea_verstuur.verstuur"
+                if draft_id or actie == "verstuur"
+                else "crew_runner.run_crew / northsea cron tick"
+            ),
+            "note": (
+                "Toegestaan onder staande toestemming (deal-mails). "
+                "Aanroeper gebruikt bestaande northsea_verstuur of cron — "
+                "orchestrator_lus blokkeert send niet."
+            ),
         }
-    return {"ok": False, "error": f"onbekende actie {actie!r}", "bekend": ["status", "plan", "run"]}
+    return {"ok": False, "error": f"onbekende actie {actie!r}", "bekend": ["status", "plan", "run", "verstuur"]}
 
 
 # ── Stap 6: trading demo paper-only ───────────────────────────────────────────
@@ -511,7 +578,7 @@ def _seed_builtin_plugins() -> None:
     registreer_plugin(
         Plugin(
             naam="northsea_crews",
-            beschrijving="NorthSea crews als plugin — plan-only, geen auto-send.",
+            beschrijving="NorthSea crews — deal-mails OK (staande toestemming); harde poort op betalen/ondertekenen.",
             devices=["vps", "mac"],
             handler=_plugin_northsea_crews,
         )

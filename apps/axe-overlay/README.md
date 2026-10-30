@@ -1,41 +1,41 @@
-# AXE Overlay
+# AXE Overlay (macOS notch)
 
-Standalone macOS floating notch + expandable chat (Tauri 2). Always-on-top, launch at login, talks to the AXE backend (`api.axecompanion.com`). UI inspired by the louis_rlee-style notch bar.
+Always-on-top floating notch for AXE Core — chat, file drop, push-to-talk, live
+computer/browser-use tasks, approvals, and a one-click HQ shell open.
 
-## Why this app
+## Character
 
-HQ already has an in-web `AxeOverlayNotch`. This package is the **real** desktop shell: its own `.app`, Login Items, transparent always-on-top window under the menu bar / notch.
+The notch mascot is **AXE-own SVG** (charcoal / cyan→violet TriangleLogo palette).
+It is **not** Mochi artwork. Mochi assets are reserved under LICENSE-ASSETS and
+must not be shipped here.
 
-## Security
+Island FSM / drag-drop / expand patterns were studied from
+[Coucou](https://github.com/louis_rlee/Coucou) (MIT, Louis Raillé). Implementation
+in this repo is original AXE code.
 
-- **No API keys in the bundle or git.** Put your key in:
-  `~/Library/Application Support/nl.axe.overlay/config.json`
-  ```json
-  { "apiOrigin": "https://api.axecompanion.com", "apiKey": "…" }
-  ```
-- Chat uses `POST /proxy/ai`. Health uses `GET /health`.
+## Features
 
-## Dev (any OS for frontend; native shell needs macOS)
+- Top-center pill with animated idle / thinking / working / done states
+- Expand panel: chat → HQ `/chat` with `computer_use` + `browser_use` hints
+- Drag-and-drop files into AXE (context attached to next message)
+- Push-to-talk (Web Speech API, `nl-NL`)
+- Live tasks + pending approvals polled from the API
+- “Open shell” → HQ in the default browser / Tauri shell plugin
+
+## Dev
 
 ```bash
 cd apps/axe-overlay
+cp .env.example .env   # AXE_CORE_API_KEY + optional AXE_CORE_API_ORIGIN
 npm install
-npm run dev          # Vite only (transparent UI in browser)
-# on macOS with Rust + Xcode CLT:
-npm run tauri:dev
+npm run tauri dev
 ```
 
-## Build & install (macOS / iMac)
+## Release (Mac)
 
 ```bash
-cd apps/axe-overlay
-npm run build:macos
-npm run install:macos
-open -a "AXE Overlay"
+npm run tauri build
+# Install .app / .dmg on iMac (preferred) or Mac mini when idle
 ```
 
-Exact one-liners: see [INSTALL.md](./INSTALL.md).
-
-## Linux / CI note
-
-This repo’s Linux box **cannot** produce `.app` / `.dmg`. `scripts/build-macos.sh` exits with a clear message off-Darwin; CI should treat macOS bundle as a Mac-only job.
+Never put secrets, trades, payments, or mailbox credentials in the overlay UI.

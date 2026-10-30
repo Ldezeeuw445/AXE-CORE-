@@ -71,7 +71,7 @@ fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
         let scale = m.scale_factor();
         let screen_w = size.width as f64 / scale;
         let x = ((screen_w - w) / 2.0).max(0.0);
-        let _ = win.set_position(LogicalPosition::new(x, 8.0));
+        let _ = win.set_position(LogicalPosition::new(x, 0.0));
     }
     let _ = win.set_always_on_top(true);
     Ok(())
@@ -100,7 +100,7 @@ pub fn run() {
                     let screen_w = size.width as f64 / scale;
                     let w = 460.0_f64;
                     let x = ((screen_w - w) / 2.0).max(0.0);
-                    let _ = win.set_position(LogicalPosition::new(x, 8.0));
+                    let _ = win.set_position(LogicalPosition::new(x, 0.0));
                 }
             }
             if let Ok(dir) = app.path().app_data_dir() {
