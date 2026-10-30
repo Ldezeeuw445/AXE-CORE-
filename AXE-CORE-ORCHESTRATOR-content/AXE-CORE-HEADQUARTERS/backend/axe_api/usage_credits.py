@@ -47,7 +47,7 @@ STOELEN: tuple[dict[str, Any], ...] = (
      "notes": "own Cursor account"},
     {"id": "cursor2", "label": "Cursor Pro 2", "family": "cursor", "kind": "paid",
      "sessions_min": 0, "sessions_max": 3, "window_hours": None,
-     "notes": "second Cursor seat (CURSOR2_API_KEY)"},
+     "notes": "second Cursor account (hotmail), via CURSOR2_API_KEY"},
     {"id": "xai", "label": "Grok (xAI)", "family": "grok", "kind": "grok",
      "sessions_min": 0, "sessions_max": 8, "window_hours": None,
      "notes": "VPS XAI_API_KEY; first of the Grok Bot twins"},

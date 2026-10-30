@@ -283,7 +283,7 @@ describe('wat Luka moet doen', () => {
     expect(watMoetLukaDoen(stoel({ id: 'cursor', provider: 'cursor', logged_in: false, login_command: 'cursor-agent login', machine: 'mini-van-luka-5' })))
       .toMatch(/cursor-agent login/);
     expect(watMoetLukaDoen(stoel({ id: 'cursor2', provider: 'cursor', logged_in: false, machine: 'imac-1' })))
-      .toMatch(/CURSOR2_API_KEY/);
+      .toMatch(/zet_cursor2_sleutel\.sh/);
     expect(watMoetLukaDoen(stoel({ id: 'xai', provider: 'xai', logged_in: false, machine: 'vps' })))
       .toMatch(/XAI_API_KEY/);
     expect(watMoetLukaDoen(stoel({ logged_in: true }))).toBeNull();

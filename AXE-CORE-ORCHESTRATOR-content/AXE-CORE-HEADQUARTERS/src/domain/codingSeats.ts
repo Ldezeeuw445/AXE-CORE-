@@ -478,7 +478,7 @@ export function watMoetLukaDoen(stoel: Pick<CodingSeat, 'provider' | 'id' | 'log
   }
   if (stoel.logged_in !== true) {
     if (sid === 'cursor2' || sid.startsWith('cursor') && sid !== 'cursor') {
-      return `On ${machine}: set CURSOR2_API_KEY (second Cursor seat), or run: cursor-agent login`;
+      return `On ${machine}: bash scripts/zet_cursor2_sleutel.sh (Cursor key of your hotmail account)`;
     }
     if (stoel.provider === 'cursor' || sid === 'cursor') {
       return `On ${machine}: cursor-agent login   — or set CURSOR_API_KEY for headless.`;

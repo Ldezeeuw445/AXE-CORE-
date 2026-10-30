@@ -23,7 +23,7 @@ export const SEATS = [
   { id: 'codex2',  provider: 'codex',  login: 'CODEX_HOME=~/.codex-tweede codex login', home: '~/.codex-tweede' },
   { id: 'codex3',  provider: 'codex',  login: 'CODEX_HOME=~/.codex-derde codex login', home: '~/.codex-derde' },
   { id: 'cursor',  provider: 'cursor', login: 'cursor-agent login', apiKeyEnv: 'CURSOR_API_KEY' },
-  { id: 'cursor2', provider: 'cursor', login: 'Set CURSOR2_API_KEY on this Mac (second Cursor seat)', apiKeyEnv: 'CURSOR2_API_KEY' },
+  { id: 'cursor2', provider: 'cursor', login: 'bash scripts/zet_cursor2_sleutel.sh (Cursor key of your hotmail account)', apiKeyEnv: 'CURSOR2_API_KEY' },
 ];
 
 export function expandHome(p, home = homedir()) {

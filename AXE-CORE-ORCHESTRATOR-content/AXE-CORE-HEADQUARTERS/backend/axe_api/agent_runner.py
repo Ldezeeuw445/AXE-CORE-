@@ -336,7 +336,7 @@ ENGINES = {
         "cmd": _cursor_cmd,
         "leest_bestand": False,
         "install": "curl https://cursor.com/install -fsS | bash",
-        "login": "Set CURSOR2_API_KEY on this Mac (second Cursor seat)",
+        "login": "bash scripts/zet_cursor2_sleutel.sh (Cursor key of your hotmail account)",
         "alleen_lezen": True,
     },
     "cursor": {
