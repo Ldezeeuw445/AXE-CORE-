@@ -203,6 +203,11 @@ export default defineConfig(async ({ command }) => ({
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
     rollupOptions: {
+      // De AXE-balk is een eigen venster met een eigen pagina (balk.html).
+      input: {
+        main: path.resolve(import.meta.dirname, 'index.html'),
+        balk: path.resolve(import.meta.dirname, 'balk.html'),
+      },
       output: {
         /* ── Eén brok van 5,19 MB was het probleem ────────────────────────
          *

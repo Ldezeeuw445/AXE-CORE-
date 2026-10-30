@@ -215,6 +215,97 @@ fn toon_sneltoets_venster(app: &tauri::AppHandle) {
     let _ = win.set_focus();
 }
 
+// ── De AXE-balk ─────────────────────────────────────────────────────────────
+//
+// Een smalle, zwevende balk bovenaan het scherm (backlog-item 1+3, spec in
+// twin/axe-core-balk-spec.md). Eigen venster `axe-balk`, zodat het onder de
+// bestaande capability `axe-*` valt en er geen nieuwe rechten bij komen.
+// Namen staan ook in src/domain/balk/balk.ts; verandert er hier één, dan daar mee.
+#[cfg(desktop)]
+const BALK_LABEL: &str = "axe-balk";
+#[cfg(desktop)]
+const BALK_ACCELERATOR: &str = "Alt+Shift+Space";
+#[cfg(desktop)]
+const BALK_BREEDTE: f64 = 720.0;
+#[cfg(desktop)]
+const BALK_HOOGTE: f64 = 56.0;
+
+/// Maakt de balk aan, onzichtbaar. Pas de sneltoets laat hem zien.
+///
+/// Anders dan bij "main" staat visible_on_all_workspaces hier WEL aan: de balk
+/// is juist bedoeld om boven een app in volledig scherm te blijven.
+#[cfg(desktop)]
+fn maak_balk_venster(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if app.get_webview_window(BALK_LABEL).is_some() {
+        return Ok(());
+    }
+    let venster = tauri::WebviewWindowBuilder::new(
+        app,
+        BALK_LABEL,
+        tauri::WebviewUrl::App("balk.html".into()),
+    )
+    .title("AXE")
+    .inner_size(BALK_BREEDTE, BALK_HOOGTE)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .visible_on_all_workspaces(true)
+    .resizable(false)
+    .visible(false)
+    .build()?;
+
+    // Bovenaan, midden op het hoofdscherm, net onder de menubalk.
+    if let Ok(Some(scherm)) = venster.primary_monitor() {
+        let schaal = scherm.scale_factor();
+        let breedte = scherm.size().width as f64 / schaal;
+        let x = ((breedte - BALK_BREEDTE) / 2.0).max(0.0);
+        let _ = venster.set_position(tauri::LogicalPosition::new(x, 32.0));
+    }
+    Ok(())
+}
+
+/// Sneltoets: balk tonen of weer wegzetten. Op macOS zonder focus te pakken,
+/// om dezelfde reden als bij toon_sneltoets_venster.
+#[cfg(desktop)]
+fn wissel_balk(app: &tauri::AppHandle) {
+    if app.get_webview_window(BALK_LABEL).is_none() {
+        if let Err(err) = maak_balk_venster(app) {
+            eprintln!("AXE balk niet aangemaakt: {err}");
+            return;
+        }
+    }
+    let Some(win) = app.get_webview_window(BALK_LABEL) else {
+        return;
+    };
+    if win.is_visible().unwrap_or(false) {
+        let _ = win.hide();
+    } else {
+        let _ = win.show();
+        #[cfg(not(target_os = "macos"))]
+        let _ = win.set_focus();
+    }
+}
+
+/// Balk vergroten voor een antwoord, of terug naar de smalle stand.
+#[tauri::command]
+fn balk_uitklappen(app: tauri::AppHandle, open: bool) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        let win = app
+            .get_webview_window(BALK_LABEL)
+            .ok_or_else(|| "balk bestaat niet".to_string())?;
+        let hoogte = if open { 420.0 } else { BALK_HOOGTE };
+        win.set_size(tauri::LogicalSize::new(BALK_BREEDTE, hoogte))
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = (app, open);
+    }
+    Ok(())
+}
+
 /// Wisselt het native glas mee met de lichte of donkere stand.
 ///
 /// Houdt het glas gelijk in beide standen.
@@ -309,6 +400,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        balk_uitklappen,
         platform_info,
         diensten_stand,
         dienst_start,
@@ -328,6 +420,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        balk_uitklappen,
         platform_info,
         gesture_lock::gesture_lock_load,
         gesture_lock::gesture_lock_save,
@@ -460,6 +553,10 @@ pub fn run() {
                 // Option heet op Windows en Linux Alt, en in Tauri heet hij
                 // overal Alt. Zelfde toets, andere naam op de kap.
                 let mic_sneltoets = Shortcut::new(Some(Modifiers::ALT), Code::Space);
+                // De AXE-balk: Option+Shift+Space. Los van de mic, zodat die
+                // precies blijft doen wat hij deed.
+                let balk_sneltoets =
+                    Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::Space);
 
                 app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
@@ -468,9 +565,14 @@ pub fn run() {
                             // dezelfde sneltoets twee keer -- ook bij loslaten --
                             // en zet de schakelaar zichzelf meteen weer terug,
                             // zodat je van de mic nooit meer dan een tik hoort.
-                            if shortcut != &mic_sneltoets
-                                || event.state() != ShortcutState::Pressed
-                            {
+                            if event.state() != ShortcutState::Pressed {
+                                return;
+                            }
+                            if shortcut == &balk_sneltoets {
+                                wissel_balk(app);
+                                return;
+                            }
+                            if shortcut != &mic_sneltoets {
                                 return;
                             }
                             toon_sneltoets_venster(app);
@@ -487,6 +589,9 @@ pub fn run() {
                     eprintln!(
                         "AXE global shortcut ({SNELTOETS_ACCELERATOR}) not registered: {err}"
                     );
+                }
+                if let Err(err) = app.global_shortcut().register(balk_sneltoets) {
+                    eprintln!("AXE balk-sneltoets ({BALK_ACCELERATOR}) not registered: {err}");
                 }
             }
 
