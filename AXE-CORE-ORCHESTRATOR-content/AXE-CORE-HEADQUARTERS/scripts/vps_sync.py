@@ -191,6 +191,9 @@ MANIFEST = {
     "/opt/axe-core-api/geheimen.py": ("backend/axe_api/geheimen.py", "axe-core-api"),
     # /ollama/* naar de modelbox, zodat geen toestel een eigen Ollama-sleutel nodig heeft (30 okt).
     "/opt/axe-core-api/modelbox.py": ("backend/axe_api/modelbox.py", "axe-core-api"),
+    # Fase 2 (#255-#257): main.py laadt hem in een try voor /orchestrator/*; zonder deze
+    # regel gaf dat endpoint "not deployed" en hield de importsluiting-test de deploy tegen.
+    "/opt/axe-core-api/orchestrator_lus.py": ("backend/axe_api/orchestrator_lus.py", "axe-core-api"),
     # planner importeert dit na een geslaagde bouwrun (draft-PR); de bouwlus draait op de
     # Mac, maar planner.py staat op de box, dus zijn module ook.
     "/opt/axe-core-api/bouw_publiceer.py": ("backend/axe_api/bouw_publiceer.py", "axe-core-api"),
