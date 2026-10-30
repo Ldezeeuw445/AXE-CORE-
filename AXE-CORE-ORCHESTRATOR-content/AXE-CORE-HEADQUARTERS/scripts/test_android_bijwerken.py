@@ -108,3 +108,30 @@ def test_wacht_terwijl_luka_werkt(mac, monkeypatch):
     monkeypatch.setattr(ab, "stil_s", lambda: 20)
     assert ab.werk_bij(nu=1000.0, forceren=False) == "Luka is using this Mac"
     assert not any("build-web.sh" in a for a, _ in aanroepen)
+
+
+USB = ('{"SPUSBDataType":[{"_name":"USB31Bus","_items":[{"_name":"USB3.1 Hub","_items":'
+       '[{"_name":"SAMSUNG_Android","manufacturer":"SAMSUNG","serial_num":"RZGL61L9P8R"}]},'
+       '{"_name":"Magic Keyboard","manufacturer":"Apple Inc."}]}]}')
+
+
+def test_usb_telefoon_herkennen_zonder_adb():
+    assert ab.usb_telefoon(USB) == "SAMSUNG_Android"
+    assert ab.usb_telefoon('{"SPUSBDataType":[{"_name":"Bus","_items":[{"_name":"Magic Keyboard","manufacturer":"Apple Inc."}]}]}') is None
+    assert ab.usb_telefoon("kapot") is None
+
+
+def test_telefoon_aan_de_usb_maar_geen_adb_geeft_een_melding(mac, monkeypatch, capsys):
+    monkeypatch.setattr(ab, "vind_adb", lambda which=None: None)
+    monkeypatch.setattr(ab, "usb_telefoon", lambda json_uit=None: "SAMSUNG_Android")
+    assert ab.werk_bij(nu=1000.0, forceren=False) == "phone on USB but no adb"
+    assert "no Android tools" in capsys.readouterr().out
+    monkeypatch.setattr(ab, "usb_telefoon", lambda json_uit=None: None)
+    assert ab.werk_bij(nu=1000.0, forceren=False) == "no adb on this Mac"
+
+
+def test_telefoon_aan_de_usb_maar_adb_ziet_hem_niet(mac, monkeypatch):
+    _, stand = mac
+    stand["adb"] = "List of devices attached\n\n"
+    monkeypatch.setattr(ab, "usb_telefoon", lambda json_uit=None: "SAMSUNG_Android")
+    assert ab.werk_bij(nu=1000.0, forceren=False) == "phone on USB but not in adb"

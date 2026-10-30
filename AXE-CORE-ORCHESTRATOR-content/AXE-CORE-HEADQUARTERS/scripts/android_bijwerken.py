@@ -67,6 +67,32 @@ def toestellen(uitvoer: str) -> tuple[list[str], list[str]]:
     return klaar, geweigerd
 
 
+_TELEFOON = re.compile(r"samsung|galaxy|\bSM-[A-Z0-9]+|android|pixel|oneplus|xiaomi", re.IGNORECASE)
+
+
+def usb_telefoon(json_uit: str | None = None) -> str | None:
+    """De naam van een telefoon aan de USB, ook zonder adb (system_profiler)."""
+    if json_uit is None:
+        try:
+            json_uit = draai(["system_profiler", "SPUSBDataType", "-json"], timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+    try:
+        boom = json.loads(json_uit or "{}")
+    except ValueError:
+        return None
+    stapel = list(boom.get("SPUSBDataType") or [])
+    while stapel:
+        item = stapel.pop()
+        if not isinstance(item, dict):
+            continue
+        naam = str(item.get("_name") or "")
+        if _TELEFOON.search(f"{naam} {item.get('manufacturer') or ''}"):
+            return naam or str(item.get("manufacturer"))
+        stapel.extend(item.get("_items") or [])
+    return None
+
+
 def java_home() -> str | None:
     for kandidaat in (os.environ.get("JAVA_HOME"),
                       "/Applications/Android Studio.app/Contents/jbr/Contents/Home"):
@@ -176,6 +202,17 @@ def werk_bij(nu: float | None = None, forceren: bool | None = None) -> str:
         return "off"
     adb = vind_adb()
     if not adb:
+        # Zonder adb kan deze Mac niets, maar hangt er wel een telefoon aan, dan
+        # zeggen we dat (30 okt: de A17 hing aan de Mac mini, Android Studio
+        # stond op de iMac, en er gebeurde stil niets).
+        tel = usb_telefoon()
+        if tel:
+            staat = lees_staat()
+            meld(staat, "warning", f"A phone ({tel}) is plugged into {machine()}, but this Mac has no Android "
+                 "tools to update it. Plug it into the Mac that has Android Studio, or install Android Studio "
+                 "here once; after that AXE updates the phone by itself.")
+            schrijf_staat(staat)
+            return "phone on USB but no adb"
         return "no adb on this Mac"
     try:
         klaar, geweigerd = toestellen(draai([adb, "devices"], timeout=15).stdout)
@@ -189,6 +226,12 @@ def werk_bij(nu: float | None = None, forceren: bool | None = None) -> str:
                  "Tap Allow on the phone (and 'Always allow from this computer'); AXE then updates it by itself.")
             schrijf_staat(staat)
             return "phone not authorized"
+        tel = usb_telefoon()
+        if tel:
+            meld(staat, "warning", f"A phone ({tel}) is plugged into {host}, but adb does not see it. On the phone: "
+                 "Settings > Developer options > USB debugging on, and USB mode 'File transfer'.")
+            schrijf_staat(staat)
+            return "phone on USB but not in adb"
         return "no phone"
 
     commit = draai(["git", "-C", HQ, "rev-parse", "--short", "HEAD"], timeout=15).stdout.strip()
