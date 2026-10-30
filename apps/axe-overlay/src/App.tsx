@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
-import { open as shellOpen } from "@tauri-apps/plugin-shell";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { AxeMascot, type MascotState } from "./components/AxeMascot";
 import {
   sendOverlayChat,
@@ -19,6 +20,17 @@ import "./App.css";
 
 const COLLAPSED = { w: 168, h: 44 };
 const EXPANDED = { w: 420, h: 560 };
+/** Match CSS emerge/retract durations */
+const EMERGE_MS = 520;
+const RETRACT_MS = 420;
+
+type ShellStateDto = {
+  running: boolean;
+  visible: boolean;
+  showNotch: boolean;
+};
+
+type NotchPhase = "hidden" | "emerging" | "visible" | "retracting";
 
 type SpeechRec = {
   continuous: boolean;
@@ -58,10 +70,14 @@ export default function App() {
   const [tasks, setTasks] = useState<LiveTask[]>([]);
   const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
   const [flashDone, setFlashDone] = useState(false);
+  const [notchPhase, setNotchPhase] = useState<NotchPhase>("hidden");
+  const [shellRunning, setShellRunning] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const recRef = useRef<SpeechRec | null>(null);
   const dragDepth = useRef(0);
+  const notchPhaseRef = useRef<NotchPhase>("hidden");
+  const animTimer = useRef<number | null>(null);
 
   const activity = classifyActivity(tasks);
   const mascotState: MascotState = !online
@@ -110,6 +126,80 @@ export default function App() {
     return () => {
       cancelled = true;
       window.clearInterval(id);
+    };
+  }, []);
+
+  // Shell presence → notch emerge / retract ("AXE always on your side")
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    const applyShow = async (show: boolean) => {
+      if (cancelled) return;
+      if (animTimer.current) {
+        window.clearTimeout(animTimer.current);
+        animTimer.current = null;
+      }
+      const win = getCurrentWindow();
+      const phase = notchPhaseRef.current;
+
+      if (show) {
+        if (phase === "visible" || phase === "emerging") return;
+        try {
+          await win.show();
+          await win.setAlwaysOnTop(true);
+        } catch { /* preview */ }
+        notchPhaseRef.current = "emerging";
+        setNotchPhase("emerging");
+        animTimer.current = window.setTimeout(() => {
+          notchPhaseRef.current = "visible";
+          setNotchPhase("visible");
+          animTimer.current = null;
+        }, EMERGE_MS);
+      } else {
+        if (phase === "hidden" || phase === "retracting") return;
+        // Collapse chat first so retract looks clean
+        setExpanded(false);
+        try {
+          await win.setSize(new LogicalSize(COLLAPSED.w, COLLAPSED.h));
+        } catch { /* preview */ }
+        notchPhaseRef.current = "retracting";
+        setNotchPhase("retracting");
+        animTimer.current = window.setTimeout(async () => {
+          notchPhaseRef.current = "hidden";
+          setNotchPhase("hidden");
+          try {
+            await win.hide();
+          } catch { /* preview */ }
+          animTimer.current = null;
+        }, RETRACT_MS);
+      }
+    };
+
+    const onState = (s: ShellStateDto) => {
+      setShellRunning(s.running);
+      void applyShow(s.showNotch);
+    };
+
+    (async () => {
+      try {
+        const initial = await invoke<ShellStateDto>("get_shell_state");
+        if (!cancelled) onState(initial);
+      } catch {
+        // Browser preview / missing command → keep notch visible
+        if (!cancelled) void applyShow(true);
+      }
+      try {
+        unlisten = await listen<ShellStateDto>("shell-state", (ev) => onState(ev.payload));
+      } catch {
+        /* non-tauri */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      if (animTimer.current) window.clearTimeout(animTimer.current);
     };
   }, []);
 
@@ -221,8 +311,7 @@ export default function App() {
 
   const openShell = async () => {
     try {
-      // Prefer local AXE HQ shell URL; fall back to public HQ.
-      await shellOpen("https://hq.axe.core/");
+      await invoke("activate_axe_shell");
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -231,9 +320,18 @@ export default function App() {
     }
   };
 
+  /** Collapsed pill: open shell. Expanded: toggle chat. Double-click always opens shell. */
+  const onPillClick = () => {
+    if (expanded) {
+      void toggle();
+      return;
+    }
+    void openShell();
+  };
+
   return (
     <div
-      className={`overlay-root ${expanded ? "expanded" : "collapsed"} ${dragging ? "dragging" : ""} state-${mascotState}`}
+      className={`overlay-root ${expanded ? "expanded" : "collapsed"} ${dragging ? "dragging" : ""} state-${mascotState} phase-${notchPhase}`}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
@@ -242,8 +340,14 @@ export default function App() {
       <button
         type="button"
         className="notch-pill"
-        onClick={() => void toggle()}
-        aria-label={expanded ? "AXE inklappen" : "AXE uitklappen"}
+        onClick={onPillClick}
+        onDoubleClick={() => void openShell()}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          void toggle();
+        }}
+        aria-label={expanded ? "AXE inklappen" : shellRunning ? "Open AXE CORE shell" : "AXE CORE starten"}
+        title={expanded ? "Inklappen" : "Klik → shell · rechtsklik → chat"}
       >
         <AxeMascot state={mascotState} size={expanded ? 40 : 32} />
         <span className="pill-meta">
@@ -303,8 +407,7 @@ export default function App() {
           <div className="messages" ref={listRef}>
             {messages.length === 0 && (
               <p className="empty">
-                Vraag iets, sleep bestanden hierheen, of houd PTT in voor spraak. Computer use en browser use
-                lopen always-on via de orchestrator.
+                AXE always on your side — notch alleen als de shell geminimaliseerd is. Vraag iets, sleep bestanden, of PTT. Rechtsklik op de notch voor chat.
               </p>
             )}
             {messages.map((m, i) => (

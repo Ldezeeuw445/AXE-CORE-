@@ -44,7 +44,6 @@ html, body, #root {
   -webkit-app-region: no-drag;
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 280ms ease;
   backdrop-filter: blur(18px) saturate(1.4);
-  animation: pill-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .notch-pill:hover {
   transform: translateY(1px) scale(1.02);
@@ -54,6 +53,65 @@ html, body, #root {
 }
 .overlay-root.dragging .notch-pill {
   box-shadow: 0 0 0 2px var(--axe-cyan), 0 12px 36px rgba(34,211,238,0.35);
+}
+
+/* —— Emerge from notch / retract into notch —— */
+.overlay-root.phase-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.overlay-root.phase-emerging .notch-pill {
+  animation: axe-emerge 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.overlay-root.phase-emerging .axe-mascot .blob-body {
+  animation: axe-pop-out 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.overlay-root.phase-retracting .notch-pill {
+  animation: axe-retract 420ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.overlay-root.phase-retracting .axe-mascot .blob-body {
+  animation: axe-tuck-in 420ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.overlay-root.phase-visible .notch-pill {
+  /* settled */
+}
+
+@keyframes axe-emerge {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.55);
+    filter: blur(2px);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(3px) scale(1.06);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes axe-retract {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-32px) scale(0.4);
+    filter: blur(1.5px);
+  }
+}
+@keyframes axe-pop-out {
+  0% { transform: translateY(-18px) scale(0.4); }
+  60% { transform: translateY(2px) scale(1.12); }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes axe-tuck-in {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-22px) scale(0.35); opacity: 0.4; }
 }
 
 .pill-meta { display: flex; align-items: center; gap: 6px; }
@@ -87,10 +145,7 @@ html, body, #root {
   animation: ring-flash 0.9s ease-out 1;
 }
 
-@keyframes pill-in {
-  from { opacity: 0; transform: translateY(-12px) scale(0.86); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
+/* pill-in replaced by axe-emerge / axe-retract */
 @keyframes ring-pulse {
   0% { transform: scale(1); opacity: 0.7; }
   100% { transform: scale(1.18); opacity: 0; }

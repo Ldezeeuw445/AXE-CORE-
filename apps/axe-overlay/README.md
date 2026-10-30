@@ -15,6 +15,8 @@ in this repo is original AXE code.
 
 ## Features
 
+- **Shell-aware**: notch appears only when AXE CORE is minimized/hidden/closed
+  (“AXE always on your side”), with emerge/retract animation; click reopens the shell
 - Top-center pill with animated idle / thinking / working / done states
 - Expand panel: chat → HQ `/chat` with `computer_use` + `browser_use` hints
 - Drag-and-drop files into AXE (context attached to next message)

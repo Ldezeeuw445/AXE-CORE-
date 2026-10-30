@@ -1,3 +1,5 @@
+mod shell_watch;
+
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
@@ -77,6 +79,16 @@ fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_shell_state() -> shell_watch::ShellState {
+    shell_watch::probe_shell_state()
+}
+
+#[tauri::command]
+fn activate_axe_shell() -> Result<(), String> {
+    shell_watch::activate_axe_shell()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -89,7 +101,9 @@ pub fn run() {
             get_overlay_config,
             set_launch_at_login,
             get_launch_at_login,
-            resize_overlay
+            resize_overlay,
+            get_shell_state,
+            activate_axe_shell
         ])
         .setup(|app| {
             if let Some(win) = app.get_webview_window("overlay") {
@@ -106,6 +120,8 @@ pub fn run() {
             if let Ok(dir) = app.path().app_data_dir() {
                 let _ = fs::create_dir_all(&dir);
             }
+            // Start shell presence watcher (macOS). On other OS it no-ops to "show".
+            shell_watch::start_watcher(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
