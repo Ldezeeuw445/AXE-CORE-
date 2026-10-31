@@ -174,6 +174,24 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Pending route from the standalone axe-overlay notch (`~/.axe/overlay-open-route`).
+/// Reads + deletes the file. Only `/northsea` and `/trading` are accepted.
+#[tauri::command]
+fn consume_overlay_open_route() -> Result<Option<String>, String> {
+    let home = std::env::var_os("HOME").ok_or_else(|| "HOME niet gezet".to_string())?;
+    let path = PathBuf::from(home).join(".axe").join("overlay-open-route");
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(&path).map_err(|e| format!("lees overlay-open-route: {e}"))?;
+    let _ = fs::remove_file(&path);
+    let route = raw.trim();
+    match route {
+        "/northsea" | "/trading" => Ok(Some(route.to_string())),
+        _ => Ok(None),
+    }
+}
+
 // ── De globale mic-sneltoets ────────────────────────────────────────────────
 //
 // Deze twee namen staan ook in src/domain/voice/sneltoets.ts. Verandert er hier
@@ -309,6 +327,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        consume_overlay_open_route,
         platform_info,
         diensten_stand,
         dienst_start,
@@ -328,6 +347,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        consume_overlay_open_route,
         platform_info,
         gesture_lock::gesture_lock_load,
         gesture_lock::gesture_lock_save,

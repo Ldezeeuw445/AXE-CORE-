@@ -8,9 +8,13 @@ test("precies zes tabs, Home eerst", () => {
   assert.equal(new Set(NOTCH_TABS.map((t) => t.id)).size, 6);
 });
 
-test("Home opent de shell, de rest kiest een tab", () => {
+test("Home/NorthSea/Trading openen de shell; Chat/Meldingen/Agents kiezen een tab", () => {
   assert.deepEqual(tabActie("home"), { soort: "open-shell" });
-  assert.deepEqual(tabActie("trading"), { soort: "kies-tab", tab: "trading" });
+  assert.deepEqual(tabActie("northsea"), { soort: "open-shell", route: "/northsea" });
+  assert.deepEqual(tabActie("trading"), { soort: "open-shell", route: "/trading" });
+  assert.deepEqual(tabActie("chat"), { soort: "kies-tab", tab: "chat" });
+  assert.deepEqual(tabActie("meldingen"), { soort: "kies-tab", tab: "meldingen" });
+  assert.deepEqual(tabActie("agents"), { soort: "kies-tab", tab: "agents" });
 });
 
 test("badges alleen op Meldingen en Agents", () => {
@@ -18,4 +22,5 @@ test("badges alleen op Meldingen en Agents", () => {
   assert.equal(tabBadge("meldingen", c), 3);
   assert.equal(tabBadge("agents", c), 2);
   assert.equal(tabBadge("chat", c), 0);
+  assert.equal(tabBadge("northsea", c), 0);
 });

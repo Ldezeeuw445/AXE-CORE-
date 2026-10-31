@@ -4,6 +4,9 @@
  */
 export type NotchTab = "home" | "chat" | "meldingen" | "agents" | "northsea" | "trading";
 
+/** Routes die de notch rechtstreeks in de HQ-shell mag openen (allowlist). */
+export type ShellRoute = "/northsea" | "/trading";
+
 export const NOTCH_TABS: readonly { id: NotchTab; label: string; icon: string }[] = [
   { id: "home", label: "Home", icon: "⌂" },
   { id: "chat", label: "Chat", icon: "💬" },
@@ -14,12 +17,17 @@ export const NOTCH_TABS: readonly { id: NotchTab; label: string; icon: string }[
 ];
 
 export type TabActie =
-  | { soort: "open-shell" }
+  | { soort: "open-shell"; route?: ShellRoute }
   | { soort: "kies-tab"; tab: NotchTab };
 
-/** Home opent altijd de HQ-shell; andere tabs wisselen de actieve tab in het paneel. */
+/**
+ * Home / NorthSea / Trading openen de HQ-shell (eventueel op een vaste route).
+ * Chat / Meldingen / Agents blijven in het notch-paneel.
+ */
 export function tabActie(tab: NotchTab): TabActie {
   if (tab === "home") return { soort: "open-shell" };
+  if (tab === "northsea") return { soort: "open-shell", route: "/northsea" };
+  if (tab === "trading") return { soort: "open-shell", route: "/trading" };
   return { soort: "kies-tab", tab };
 }
 

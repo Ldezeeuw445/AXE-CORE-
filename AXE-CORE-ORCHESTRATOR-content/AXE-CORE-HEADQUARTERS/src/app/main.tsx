@@ -70,6 +70,7 @@ import { installVoorkeurSync } from '@/presentation/store/installVoorkeurSync'
 import { installDeelDoel } from '@/presentation/store/installDeelDoel'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installCoreStatus } from '@/presentation/store/installCoreStatus'
+import { installOverlayDeeplink } from '@/infrastructure/gateways/installOverlayDeeplink'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 import { installContinuousMemory } from '@/infrastructure/persistence/continuousMemoryService'
 import { installMemoryFlushHooks } from '@/infrastructure/persistence/memoryRecorder'
@@ -94,6 +95,8 @@ installDeelDoel();
 // elk met een eigen interval -- en dus met antwoorden die tot een minuut uit
 // de pas liepen. Nu vraagt deze het, en leest de rest de store.
 installCoreStatus();
+// Overlay-notch: NorthSea/Trading tabs → focus shell + navigeer naar route
+installOverlayDeeplink();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
 // Voice has ONE path on every surface: OpenAI Realtime speech-to-speech.

@@ -311,9 +311,9 @@ export default function App() {
     if (!expanded) void toggle();
   };
 
-  const openShell = async () => {
+  const openShell = async (route?: string) => {
     try {
-      await invoke("activate_axe_shell");
+      await invoke("activate_axe_shell", { route: route ?? null });
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -397,7 +397,7 @@ export default function App() {
                   className={`tab ${activeTab === t.id ? "on" : ""}`}
                   onClick={() => {
                     const a = tabActie(t.id);
-                    if (a.soort === "open-shell") void openShell();
+                    if (a.soort === "open-shell") void openShell(a.route);
                     else setActiveTab(a.tab);
                   }}
                   title={t.label}
@@ -440,17 +440,6 @@ export default function App() {
                   </div>
                 ))
               )}
-            </div>
-          )}
-
-          {(activeTab === "northsea" || activeTab === "trading") && (
-            <div className="tab-body">
-              <p className="empty">
-                {activeTab === "northsea"
-                  ? "NorthSea Desk: deals, kandidaten en crews staan in de shell."
-                  : "Trading: posities en signalen staan in de shell. AXE handelt nooit zonder jouw ja."}
-              </p>
-              <button type="button" className="ghost" onClick={() => void openShell()}>Open in de shell</button>
             </div>
           )}
 

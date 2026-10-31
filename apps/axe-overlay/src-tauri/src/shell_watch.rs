@@ -3,6 +3,7 @@
 //! minimized; hides when the shell has a real on-screen window.
 
 use serde::Serialize;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -197,7 +198,39 @@ pub fn probe_shell_state() -> ShellState {
     macos::probe()
 }
 
-pub fn activate_axe_shell() -> Result<(), String> {
+/// Allowlisted HQ HashRouter paths the notch may open. Anything else is ignored.
+const ALLOWED_SHELL_ROUTES: &[&str] = &["/northsea", "/trading"];
+
+fn overlay_route_path() -> Result<PathBuf, String> {
+    let home = std::env::var_os("HOME").ok_or_else(|| "HOME niet gezet".to_string())?;
+    Ok(PathBuf::from(home).join(".axe").join("overlay-open-route"))
+}
+
+/// Schrijf (of wis) het pending-route bestand dat de HQ-shell oppikt.
+fn set_pending_shell_route(route: Option<&str>) -> Result<(), String> {
+    let path = overlay_route_path()?;
+    match route {
+        None => {
+            let _ = std::fs::remove_file(&path);
+            Ok(())
+        }
+        Some(r) => {
+            let trimmed = r.trim();
+            if !ALLOWED_SHELL_ROUTES.contains(&trimmed) {
+                return Err(format!("route niet toegestaan: {trimmed}"));
+            }
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| format!("mkdir ~/.axe: {e}"))?;
+            }
+            std::fs::write(&path, trimmed).map_err(|e| format!("schrijf overlay-open-route: {e}"))
+        }
+    }
+}
+
+/// Activeer de HQ-shell. Optionele `route` (/northsea|/trading) wordt via
+/// `~/.axe/overlay-open-route` doorgegeven; de shell leest en wist dat bestand.
+pub fn activate_axe_shell(route: Option<String>) -> Result<(), String> {
+    set_pending_shell_route(route.as_deref())?;
     macos::activate_shell()
 }
 
