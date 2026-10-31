@@ -150,14 +150,17 @@ export function AxeOverlayNotch({
     [onOpenChange],
   );
 
-  // If the window is already tall (oversized empty glass), open the body.
+  // If the window is already tall (oversized empty glass), open the body once on mount.
+  // Do NOT depend on onOpenChange — FloatAxe passes an inline lambda, so a dependency
+  // would re-fire after every collapse and immediately expand again.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.innerHeight > 120) {
       setOpen(true);
       onOpenChange?.(true);
     }
-  }, [onOpenChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
