@@ -50,6 +50,15 @@ export function taakFoutVan(error: unknown, titel = ''): TaakFout {
   if (/oauth|not logged in|please (log|sign) in|login required|authentication (failed|required)|invalid_grant/.test(laag)) {
     return { regel: 'This account is logged out. Reconnect it in Settings → Seats.', actie: 'reconnect' };
   }
+  if (/every provider failed|waiting for capacity/.test(laag)) {
+    if (/no credits|insufficient_quota|credit/.test(laag)) {
+      return { regel: 'Cloud model credits ran out. AXE will retry on free models or your Mac seats — top up OpenAI/Gemini only if you want those back.', actie: 'retry' };
+    }
+    if (/rate limit|429|afkoelend/.test(laag)) {
+      return { regel: 'Models are cooling after a rate limit. AXE will retry shortly on Groq, Ollama, or a free Mac seat.', actie: 'retry' };
+    }
+    return { regel: 'No cloud model answered. AXE will fall back to Ollama on the VPS or a Mac seat — try again in a moment.', actie: 'retry' };
+  }
   if (/rate limit|quota exceeded|too many requests|\b429\b|usage limit/.test(laag)) {
     return { regel: 'This seat hit its usage limit. Retry after it cools, or reconnect another seat.', actie: 'retry' };
   }

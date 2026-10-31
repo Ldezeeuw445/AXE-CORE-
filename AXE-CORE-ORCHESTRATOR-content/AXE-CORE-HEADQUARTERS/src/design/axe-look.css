@@ -2122,6 +2122,20 @@ html:root[data-look][data-ios-pwa],
   padding: 10px 12px 12px;
 }
 
+/* Home manager chat v2 — tall flex panel over the neural core. */
+:root[data-look] .axe-manager-chat-kaart {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+:root[data-look] .axe-manager-chat-kaart .axe-kaart-lijf {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Sectie — WAR ROOM / WINGMAN'S CREW. */
 :root[data-look] .axe-sectie {
   width: 100%;

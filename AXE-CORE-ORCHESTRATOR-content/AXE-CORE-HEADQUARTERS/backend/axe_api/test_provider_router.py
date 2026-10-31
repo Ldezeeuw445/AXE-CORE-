@@ -118,6 +118,9 @@ def test_tier3_en_gratis_gebruiken_geen_stoel():
     assert pr.mag_stoel("developer", alleen_gratis=True) is False
     assert pr.api_namen("developer", alleen_gratis=True) == ["groq", "cerebras", "ollama"]
     assert "openai" not in pr.api_namen("developer")
+    assert "openrouter" in pr.api_namen("developer")
+    assert pr.api_namen("northseamgr")[-1] == "ollama"
+    assert "openrouter" in pr.api_namen("northseamgr")
 
 
 def test_tegoed_melding_eenmaal_per_provider_per_dag():

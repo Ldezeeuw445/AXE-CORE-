@@ -105,8 +105,12 @@ def test_groq_en_gemini_overgeslagen_na_dagquotum_en_credits(monkeypatch, caplog
     assert len(uitgeput) == 2, [r.getMessage() for r in uitgeput]
 
 
-def test_minuutlimiet_koelt_niet_af(monkeypatch):
-    """Een 429 van een minuut is over voor de volgende stap begint."""
+def test_minuutlimiet_korte_afkoeling(monkeypatch):
+    """Een 429-per-minuut krijgt een korte backoff, geen dagblokkade.
+
+    Zo slaat de volgende stap Groq over en landt meteen op Ollama, in plaats
+    van opnieuw dezelfde nutteloze HTTP-rondjes te doen.
+    """
     monkeypatch.setattr(agent_loop, "_AFKOELING", {})
     monkeypatch.setenv("GROQ_API_KEY", "g")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -115,7 +119,14 @@ def test_minuutlimiet_koelt_niet_af(monkeypatch):
 
     async def nep_compat(contents, url, key, model):
         pogingen.append(model)
-        raise RuntimeError(f"{model} 429: Rate limit reached: requests per minute")
+        raise agent_loop._provider_fout(
+            model,
+            type("R", (), {
+                "status_code": 429,
+                "text": "Rate limit reached: requests per minute",
+                "headers": {},
+            })(),
+        )
 
     async def nep_ollama(contents):
         return {"parts": [{"text": "lokaal"}]}
@@ -124,10 +135,67 @@ def test_minuutlimiet_koelt_niet_af(monkeypatch):
     monkeypatch.setattr(agent_loop, "_call_ollama", nep_ollama)
 
     vraag = [{"role": "user", "parts": [{"text": "hi"}]}]
-    asyncio.run(agent_loop._call_model(vraag, None))
-    asyncio.run(agent_loop._call_model(vraag, None))
-    assert pogingen == [agent_loop.GROQ_MODEL, agent_loop.GROQ_MODEL]
-    assert agent_loop._AFKOELING == {}
+    eerste = asyncio.run(agent_loop._call_model(vraag, None))
+    tweede = asyncio.run(agent_loop._call_model(vraag, None))
+    assert eerste == tweede == {"parts": [{"text": "lokaal"}]}
+    # Tweede stap: Groq nog in de korte afkoeling → alleen ollama.
+    assert pogingen == [agent_loop.GROQ_MODEL]
+    assert f"groq/{agent_loop.GROQ_MODEL}" in agent_loop._AFKOELING
+
+
+def test_openai_credits_als_429_koelt_lang(monkeypatch):
+    """OpenAI meldt 'no credits' soms als 429 — dat is credits, geen minuutlimiet."""
+    monkeypatch.setattr(agent_loop, "_AFKOELING", {})
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "o")
+
+    async def nep_compat(contents, url, key, model):
+        raise agent_loop._provider_fout(
+            model,
+            type("R", (), {
+                "status_code": 429,
+                "text": "You have no credits remaining",
+                "headers": {},
+            })(),
+        )
+
+    async def nep_ollama(contents):
+        return {"parts": [{"text": "lokaal"}]}
+
+    monkeypatch.setattr(agent_loop, "_call_openai_compat", nep_compat)
+    monkeypatch.setattr(agent_loop, "_call_ollama", nep_ollama)
+    vraag = [{"role": "user", "parts": [{"text": "hi"}]}]
+    assert asyncio.run(agent_loop._call_model(vraag, "gemini-key")) == {"parts": [{"text": "lokaal"}]}
+    naam = f"openai/{agent_loop.OPENAI_MODEL}"
+    assert naam in agent_loop._AFKOELING
+    # Credits → uren, niet 60s.
+    assert agent_loop._AFKOELING[naam] - __import__("time").monotonic() > 1000
+
+
+def test_openrouter_zit_in_keten_voor_ollama(monkeypatch):
+    monkeypatch.setattr(agent_loop, "_AFKOELING", {})
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+    volgorde = []
+
+    async def nep_compat(contents, url, key, model):
+        volgorde.append((url, model))
+        return {"parts": [{"text": "via-or"}]}
+
+    monkeypatch.setattr(agent_loop, "_call_openai_compat", nep_compat)
+    vraag = [{"role": "user", "parts": [{"text": "hi"}]}]
+    uit = asyncio.run(agent_loop._call_model(vraag, None))
+    assert uit == {"parts": [{"text": "via-or"}]}
+    assert volgorde[0][1] == agent_loop.OPENROUTER_MODEL
+    assert "openrouter.ai" in volgorde[0][0]
+
+
+def test_gemini_default_is_niet_deprecated():
+    assert "pro-latest" not in agent_loop.MODEL
+    assert "flash" in agent_loop.MODEL or "2.5" in agent_loop.MODEL
 
 
 # ── W1: één Ollama tegelijk ──────────────────────────────────────────────────

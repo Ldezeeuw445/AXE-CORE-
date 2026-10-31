@@ -106,15 +106,20 @@ def mag_stoel(agent: str | None, *, alleen_gratis: bool = False, kaart: dict[str
 
 
 def api_namen(agent: str | None, *, alleen_gratis: bool = False, kaart: dict[str, Any] | None = None) -> list[str]:
-    """Welke API-aanbieders deze agent mag proberen, in volgorde."""
+    """Welke API-aanbieders deze agent mag proberen, in volgorde.
+
+    OpenRouter zit bij de betaalde keten (heeft een key nodig, maar is al
+    geconfigureerd op de VPS). Ollama blijft altijd laatste — keyloos.
+    Claude/Anthropic loopt via de Mac-seat (zie mag_stoel), niet via API-key.
+    """
     rij = kaart_voor(agent, kaart)
     tier = int(rij.get("tier") or 2)
     if alleen_gratis or tier >= 3:
         return ["groq", "cerebras", "ollama"]
     if tier == 1:
-        # Seats eerst in de lus; API alleen als noodrem (gratis + xAI als die er is).
-        return ["groq", "cerebras", "xai", "ollama"]
-    return ["groq", "cerebras", "gemini", "openai", "xai", "ollama"]
+        # Seats eerst in de lus; API alleen als noodrem (gratis + xAI / OpenRouter).
+        return ["groq", "cerebras", "xai", "openrouter", "ollama"]
+    return ["groq", "cerebras", "gemini", "openai", "xai", "openrouter", "ollama"]
 
 
 def _iso_ts(waarde: Any) -> float | None:

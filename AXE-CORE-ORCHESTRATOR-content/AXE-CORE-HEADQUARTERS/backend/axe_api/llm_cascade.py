@@ -63,11 +63,13 @@ class Aanbieder:
 AANBIEDERS: tuple[Aanbieder, ...] = (
     Aanbieder("openai", "https://api.openai.com/v1/chat/completions", "OPENAI_API_KEY", "BROWSER_USE_MODEL", "gpt-4o-mini"),
     Aanbieder("gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-              "GEMINI_API_KEY", "BROWSER_LLM_GEMINI_MODEL", "gemini-flash-latest"),
+              "GEMINI_API_KEY", "BROWSER_LLM_GEMINI_MODEL", "gemini-2.5-flash"),
     # gpt-oss denkt eerst; zonder "low" gaat de hele tokenbudget op aan redeneren en blijft het antwoord leeg.
     Aanbieder("groq", "https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY", "BROWSER_LLM_GROQ_MODEL",
               "openai/gpt-oss-120b", {"reasoning_effort": "low"}),
     Aanbieder("xai", "https://api.x.ai/v1/chat/completions", "XAI_API_KEY", "BROWSER_LLM_XAI_MODEL", "grok-4.5"),
+    Aanbieder("openrouter", "https://openrouter.ai/api/v1/chat/completions",
+              "OPENROUTER_API_KEY", "BROWSER_LLM_OPENROUTER_MODEL", "openrouter/auto"),
     # De eigen modelbox: geen tegoed om op te raken. Hetzelfde model als de agent-loop en de crews, zodat
     # er maar één algemeen model in het geheugen staat.
     Aanbieder("ollama", "", "OLLAMA_PROXY_KEY", "BROWSER_LLM_OLLAMA_MODEL", "llama3.1:8b-16k", {},
