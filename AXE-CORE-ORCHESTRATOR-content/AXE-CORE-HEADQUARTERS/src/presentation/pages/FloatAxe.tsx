@@ -40,6 +40,15 @@ async function dockTop(open: boolean) {
         mon.position.x + (mon.size.width - physW) / 2,
         mon.position.y,
       ));
+    });
+      } catch { /* ignore */ }
+      await w.setSize(new LogicalSize(width, height));
+      const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
+      const physW = width * scale;
+      await w.setPosition(new PhysicalPosition(
+        mon.position.x + (mon.size.width - physW) / 2,
+        mon.position.y,
+      ));
     }
     await w.setAlwaysOnTop(true);
   } catch { /* preview browser */ }
