@@ -15,19 +15,19 @@ export type FileContext = {
 };
 
 /**
- * Lightweight chat via HQ /chat. Always-on: computer_use + browser_use hints
- * so the orchestrator can drive live device sessions from the notch.
+ * Chat via HQ /proxy/ai (OpenAI-compatible). Never logs the API key.
  */
 export async function sendOverlayChat(
   text: string,
   history: ChatMessage[],
   files: FileContext[] = [],
+  systemExtra = "",
 ): Promise<string> {
   const c = await loadLocalConfig();
   const origin = (c.apiOrigin || DEFAULT_API_ORIGIN).replace(/\/$/, "");
   const key = c.apiKey;
   if (!key) {
-    throw new Error("Geen AXE_CORE_API_KEY — zet apps/axe-overlay/.env of overlay.config.json");
+    throw new Error("Geen API key — zet ~/.axe/axe-api.key of overlay config.json");
   }
 
   const fileBlock =
@@ -37,29 +37,31 @@ export async function sendOverlayChat(
           .map((f) => `- ${f.name} (${f.kind}, ${f.size} B): ${f.note}`)
           .join("\n")}`;
 
+  const system =
+    "Je bent AXE Core in de notch-overlay. Kort, Nederlands, actiegericht. " +
+    "Computer use en browser use zijn always-on. " +
+    "Nooit secrets, trades, payments of mail-credentials tonen of uitvoeren." +
+    (systemExtra ? ` ${systemExtra}` : "");
+
   const messages = [
-    {
-      role: "system",
-      content:
-        "Je bent AXE Core in de notch-overlay. Kort, Nederlands, actiegericht. " +
-        "Computer use en browser use zijn always-on: als de gebruiker iets wil doen " +
-        "op het apparaat of in een browser, plan dat via de orchestrator/tasks. " +
-        "Nooit secrets, trades, payments of mail-credentials tonen.",
-    },
+    { role: "system", content: system },
     ...history.slice(-12).map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: text + fileBlock },
   ];
 
-  const r = await fetch(`${origin}/chat`, {
+  const r = await fetch(`${origin}/proxy/ai`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...authHeaders(key),
     },
     body: JSON.stringify({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      format: "openai",
+      baseUrl: "https://api.openai.com/v1",
       messages,
       source: "axe-overlay",
-      capabilities_hint: ["computer_use", "browser_use", "chat"],
     }),
   });
 
@@ -67,6 +69,19 @@ export async function sendOverlayChat(
     const body = await r.text().catch(() => "");
     throw new Error(`Chat ${r.status}: ${body.slice(0, 180)}`);
   }
-  const data = (await r.json()) as { reply?: string; message?: string; content?: string };
-  return data.reply || data.message || data.content || "(geen antwoord)";
+  const data = (await r.json()) as {
+    text?: string;
+    reply?: string;
+    message?: string;
+    content?: string;
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return (
+    data.text ||
+    data.reply ||
+    data.message ||
+    data.content ||
+    data.choices?.[0]?.message?.content ||
+    "(geen antwoord)"
+  );
 }

@@ -1,3 +1,4 @@
+mod cmd_watch;
 mod shell_watch;
 
 use serde::Serialize;
@@ -17,26 +18,39 @@ fn config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     Ok(dir.join("config.json"))
 }
 
+fn home_api_key() -> Option<String> {
+    let home = std::env::var_os("HOME")?;
+    let path = PathBuf::from(home).join(".axe").join("axe-api.key");
+    fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 #[tauri::command]
 fn get_overlay_config(app: AppHandle) -> Result<OverlayConfigDto, String> {
     let path = config_path(&app)?;
-    if !path.exists() {
-        return Ok(OverlayConfigDto::default());
-    }
-    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    Ok(OverlayConfigDto {
-        api_key: v
+    let mut dto = OverlayConfigDto::default();
+    if path.exists() {
+        let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+        dto.api_key = v
             .get("apiKey")
             .or_else(|| v.get("api_key"))
             .and_then(|x| x.as_str())
-            .map(|s| s.to_string()),
-        api_origin: v
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty());
+        dto.api_origin = v
             .get("apiOrigin")
             .or_else(|| v.get("api_origin"))
             .and_then(|x| x.as_str())
-            .map(|s| s.to_string()),
-    })
+            .map(|s| s.to_string());
+    }
+    // Prefer ~/.axe/axe-api.key so the key is never baked into the bundle.
+    if dto.api_key.is_none() {
+        dto.api_key = home_api_key();
+    }
+    Ok(dto)
 }
 
 #[tauri::command]
@@ -62,9 +76,9 @@ fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window missing".to_string())?;
     let (w, h) = if expanded {
-        (460.0_f64, 520.0_f64)
+        (420.0_f64, 560.0_f64)
     } else {
-        (460.0_f64, 56.0_f64)
+        (200.0_f64, 44.0_f64)
     };
     win.set_size(Size::Logical(LogicalSize::new(w, h)))
         .map_err(|e| e.to_string())?;
@@ -112,7 +126,7 @@ pub fn run() {
                     let size = m.size();
                     let scale = m.scale_factor();
                     let screen_w = size.width as f64 / scale;
-                    let w = 460.0_f64;
+                    let w = 200.0_f64;
                     let x = ((screen_w - w) / 2.0).max(0.0);
                     let _ = win.set_position(LogicalPosition::new(x, 0.0));
                 }
@@ -120,8 +134,8 @@ pub fn run() {
             if let Ok(dir) = app.path().app_data_dir() {
                 let _ = fs::create_dir_all(&dir);
             }
-            // Start shell presence watcher (macOS). On other OS it no-ops to "show".
             shell_watch::start_watcher(app.handle().clone());
+            cmd_watch::start_watcher(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
