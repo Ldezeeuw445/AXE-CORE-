@@ -21,7 +21,7 @@ export const ZWEVENDE_VENSTERS: Record<ZwevendType, Ontwerp> = {
   phone: { label: 'axe-float-phone', route: '/float/phone', titel: 'AXE Phone', b: 420, h: 860, minB: 300, minH: 560 },
   /* Luka okt 2026: always-on AXE notch — lightweight, buiten de shell-flow; aparte
      apps/axe-overlay voor login-launch. Start collapsed (notch), expand in-UI. */
-  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 440, h: 54, minB: 320, minH: 48 },
+  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 560, h: 54, minB: 400, minH: 48 },
 };
 
 export interface Frame { x: number; y: number; b: number; h: number }
@@ -66,18 +66,33 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
       if (schermen.length === 0 || frameOpSchermen(opgeslagen, schermen)) plek = { x: opgeslagen.x, y: opgeslagen.y };
     } catch { plek = { x: opgeslagen.x, y: opgeslagen.y }; }
   }
+  // Mochi notch: always flush top-center on the primary display (ignore saved y=72 frames).
+  if (type === 'axe') {
+    try {
+      const { primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
+      const mon = (await primaryMonitor()) || (await currentMonitor());
+      if (mon) {
+        const scale = mon.scaleFactor || 1;
+        const screenW = mon.size.width / scale;
+        const screenX = mon.position.x / scale;
+        const screenY = mon.position.y / scale;
+        const width = o.b;
+        plek = { x: screenX + (screenW - width) / 2, y: screenY };
+      }
+    } catch { /* fall through */ }
+  }
   const win = new WebviewWindow(o.label, {
     url: `index.html#${o.route}`,
     title: o.titel,
-    width: opgeslagen?.b ?? o.b,
-    height: opgeslagen?.h ?? o.h,
+    width: type === 'axe' ? o.b : (opgeslagen?.b ?? o.b),
+    height: type === 'axe' ? o.h : (opgeslagen?.h ?? o.h),
     minWidth: o.minB,
     minHeight: o.minH,
     decorations: false,
     transparent: true,
     alwaysOnTop: true,
     visibleOnAllWorkspaces: true,
-    resizable: true,
+    resizable: type !== 'axe',
     shadow: true,
     theme: 'dark',
     ...plek,

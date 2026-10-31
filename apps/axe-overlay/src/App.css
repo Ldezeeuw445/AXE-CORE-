@@ -222,7 +222,7 @@ html, body, #root {
 /* —— Expanded panel —— */
 .panel {
   margin-top: 8px;
-  width: min(400px, calc(100% - 16px));
+  width: min(560px, calc(100% - 8px));
   max-height: calc(100% - 56px);
   display: flex; flex-direction: column;
   border-radius: 18px;

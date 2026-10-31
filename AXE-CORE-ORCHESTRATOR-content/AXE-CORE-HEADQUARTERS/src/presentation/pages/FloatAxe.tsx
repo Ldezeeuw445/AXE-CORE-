@@ -1,40 +1,36 @@
-/** Always-on floating AXE notch (louis_rlee) — eigen Tauri-venster via zwevendeVensters type `axe`. */
+/** Always-on floating AXE notch — Mochi-style, flush top of main display. */
 import { useEffect } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
-async function resizeFor(open: boolean) {
+/** Default notch width — wider than the old 440 pill; expands drops down from y=0. */
+const NOTCH_W = 560;
+const COLLAPSED_H = 54;
+const EXPANDED_H = 560;
+
+/** Dock window flush to the top edge of the primary display, horizontally centered. */
+async function dockTop(open: boolean) {
   if (!isTauriRuntime()) return;
   try {
-    const { getCurrentWindow, currentMonitor } = await import('@tauri-apps/api/window');
+    const { getCurrentWindow, primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
     const { LogicalSize, LogicalPosition } = await import('@tauri-apps/api/dpi');
     const w = getCurrentWindow();
-    const height = open ? 560 : 54;
-    const width = 440;
+    const height = open ? EXPANDED_H : COLLAPSED_H;
+    const width = NOTCH_W;
     await w.setSize(new LogicalSize(width, height));
-    if (open) {
-      try {
-        const { availableMonitors } = await import('@tauri-apps/api/window');
-        const pos = await w.outerPosition();
-        const mons = await availableMonitors();
-        // Pick the monitor that contains the window center (fallback: first)
-        const cx = pos.x + 20;
-        const cy = pos.y + 10;
-        let mon = mons.find((m) => {
-          const x = m.position.x, y = m.position.y, w = m.size.width, h = m.size.height;
-          return cx >= x && cx < x + w && cy >= y && cy < y + h;
-        }) || mons[0] || await currentMonitor();
-        if (!mon) return;
-        const scale = mon.scaleFactor || 1;
-        const screenW = mon.size.width / scale;
-        const screenX = mon.position.x / scale;
-        const screenY = mon.position.y / scale;
-        // Always park expanded notch near the top so the body is visible
-        const nx = Math.min(Math.max(pos.x / scale, screenX + 24), screenX + screenW - width - 24);
-        const ny = screenY + 72;
-        await w.setPosition(new LogicalPosition(nx, ny));
-      } catch { /* position best-effort */ }
-    }
+    try {
+      const mon = (await primaryMonitor()) || (await currentMonitor());
+      if (!mon) return;
+      const scale = mon.scaleFactor || 1;
+      const screenW = mon.size.width / scale;
+      const screenX = mon.position.x / scale;
+      const screenY = mon.position.y / scale;
+      // Flush top (y=0 of monitor) — expanded grows downward; never park at y=72.
+      const nx = screenX + (screenW - width) / 2;
+      const ny = screenY;
+      await w.setPosition(new LogicalPosition(nx, ny));
+      await w.setAlwaysOnTop(true);
+    } catch { /* position best-effort */ }
   } catch { /* preview browser */ }
 }
 
@@ -81,7 +77,8 @@ export default function FloatAxe() {
     document.documentElement.style.height = '100%';
     document.body.style.height = '100%';
     document.body.style.margin = '0';
-    void resizeFor(window.innerHeight > 120);
+    // Always re-dock at top (ignore stale localStorage frames that parked at y=72).
+    void dockTop(window.innerHeight > 120);
     return () => {
       document.documentElement.style.background = prev[0];
       document.body.style.background = prev[1];
@@ -89,10 +86,10 @@ export default function FloatAxe() {
   }, []);
 
   return (
-    <div style={{ padding: 8, background: 'transparent', height: '100vh', boxSizing: 'border-box' }}>
+    <div style={{ padding: 0, background: 'transparent', height: '100vh', boxSizing: 'border-box' }}>
       <AxeOverlayNotch
-        onHome={() => { void resizeFor(false); }}
-        onOpenChange={(open) => { void resizeFor(open); }}
+        onHome={() => { void dockTop(false); }}
+        onOpenChange={(open) => { void dockTop(open); }}
       />
     </div>
   );
