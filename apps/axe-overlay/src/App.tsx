@@ -16,6 +16,7 @@ import {
   type ApprovalItem,
   type LiveTask,
 } from "./status";
+import { NOTCH_TABS, tabActie, tabBadge, type NotchTab } from "./tabs";
 import "./App.css";
 
 const COLLAPSED = { w: 168, h: 44 };
@@ -72,6 +73,7 @@ export default function App() {
   const [flashDone, setFlashDone] = useState(false);
   const [notchPhase, setNotchPhase] = useState<NotchPhase>("hidden");
   const [shellRunning, setShellRunning] = useState(false);
+  const [activeTab, setActiveTab] = useState<NotchTab>("chat");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const recRef = useRef<SpeechRec | null>(null);
@@ -347,9 +349,9 @@ export default function App() {
     if (!expanded) void toggle();
   };
 
-  const openShell = async () => {
+  const openShell = async (route?: string) => {
     try {
-      await invoke("activate_axe_shell");
+      await invoke("activate_axe_shell", { route: route ?? null });
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -423,6 +425,63 @@ export default function App() {
             </div>
           </header>
 
+          <nav className="tab-rail" aria-label="AXE tabs">
+            {NOTCH_TABS.map((t) => {
+              const n = tabBadge(t.id, { approvals: approvals.length, tasks: tasks.length });
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`tab ${activeTab === t.id ? "on" : ""}`}
+                  onClick={() => {
+                    const a = tabActie(t.id);
+                    if (a.soort === "open-shell") void openShell(a.route);
+                    else setActiveTab(a.tab);
+                  }}
+                  title={t.label}
+                >
+                  <span className="tab-ic">{t.icon}</span>
+                  <span className="tab-lb">{t.label}</span>
+                  {n > 0 && <span className="tab-badge">{n}</span>}
+                </button>
+              );
+            })}
+          </nav>
+
+          {activeTab === "meldingen" && (
+            <div className="tab-body">
+              {approvals.length === 0 ? (
+                <p className="empty">Geen openstaande goedkeuringen.</p>
+              ) : (
+                approvals.map((a) => (
+                  <div key={a.id} className="live-chip appr">
+                    <span className="dot warn" />
+                    <span className="chip-title">{a.title || a.kind || a.id}</span>
+                    <span className="chip-st">approval</span>
+                  </div>
+                ))
+              )}
+              <button type="button" className="ghost" onClick={() => void openShell()}>Goedkeuren in de shell</button>
+            </div>
+          )}
+
+          {activeTab === "agents" && (
+            <div className="tab-body">
+              {tasks.length === 0 ? (
+                <p className="empty">Geen live taken.</p>
+              ) : (
+                tasks.map((t) => (
+                  <div key={t.id} className="live-chip">
+                    <span className="dot" />
+                    <span className="chip-title">{t.title || t.goal || t.capability || t.id}</span>
+                    <span className="chip-st">{t.status}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {activeTab === "chat" && (<>
           {(activity.computer + activity.browser + activity.other > 0 || approvals.length > 0) && (
             <div className="live-strip">
               {tasks.slice(0, 4).map((t) => (
@@ -525,6 +584,7 @@ export default function App() {
               </button>
             </div>
           </div>
+          </>)}
         </section>
       )}
     </div>

@@ -99,8 +99,8 @@ fn get_shell_state() -> shell_watch::ShellState {
 }
 
 #[tauri::command]
-fn activate_axe_shell() -> Result<(), String> {
-    shell_watch::activate_axe_shell()
+fn activate_axe_shell(route: Option<String>) -> Result<(), String> {
+    shell_watch::activate_axe_shell(route)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
