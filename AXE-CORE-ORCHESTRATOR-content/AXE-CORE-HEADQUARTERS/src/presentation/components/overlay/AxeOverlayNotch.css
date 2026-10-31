@@ -1,13 +1,14 @@
 .axe-ov {
   position: relative;
   width: 100%;
-  max-width: 440px;
+  max-width: 560px;
   margin: 0 auto;
-  border-radius: 28px;
+  border-radius: 0 0 28px 28px;
   overflow: hidden;
   background: radial-gradient(ellipse at 50% 0%, #1a2233 0%, #07090e 70%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.06);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.06);
+  border-top: none;
   color: #E8EAED;
   font-family: Inter, system-ui, sans-serif;
   user-select: none;

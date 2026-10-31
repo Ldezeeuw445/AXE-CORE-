@@ -19,8 +19,8 @@ import {
 import { NOTCH_TABS, tabActie, tabBadge, type NotchTab } from "./tabs";
 import "./App.css";
 
-const COLLAPSED = { w: 168, h: 44 };
-const EXPANDED = { w: 420, h: 560 };
+const COLLAPSED = { w: 280, h: 48 };
+const EXPANDED = { w: 560, h: 560 };
 /** Match CSS emerge/retract durations */
 const EMERGE_MS = 520;
 const RETRACT_MS = 420;
