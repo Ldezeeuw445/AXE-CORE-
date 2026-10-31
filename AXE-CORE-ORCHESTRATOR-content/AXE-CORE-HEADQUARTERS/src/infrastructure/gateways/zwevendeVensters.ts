@@ -30,7 +30,7 @@ const sleutel = (t: ZwevendType) => `axe_float_frame_${t}`;
 function leesFrame(t: ZwevendType): Frame | null {
   try {
     const f = JSON.parse(localStorage.getItem(sleutel(t)) ?? 'null') as Frame | null;
-    return f && [f.x, f.y, f.b, f.h].every(Number.isFinite) && f.b > 100 && f.h > 100 ? f : null;
+    return f && [f.x, f.y, f.b, f.h].every(Number.isFinite) && f.b > 100 && f.h > 40 ? f : null;
   } catch { return null; }
 }
 export function bewaarFrame(t: ZwevendType, f: Frame): void {
