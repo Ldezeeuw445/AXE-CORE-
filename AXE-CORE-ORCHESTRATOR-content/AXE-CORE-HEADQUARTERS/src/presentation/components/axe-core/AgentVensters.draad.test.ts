@@ -19,7 +19,10 @@ describe('Home-agentvenster is een live draad', () => {
 
   it('het bestaande kaartvenster toont opdracht, goedkeuring en opvolging', () => {
     expect(chat).toMatch(/data-axe-agent-draad/);
-    expect(chat).toMatch(/Follow-up/);
+    expect(chat).toMatch(/data-axe-manager-chat="v2"/);
+    expect(chat).toMatch(/Message/);
+    expect(chat).toMatch(/MarkdownMessage/);
+    expect(chat).toMatch(/laadManagerChat|bewaarManagerChat/);
     expect(knoppen).toMatch(/Approve/);
     expect(knoppen).toMatch(/Decline/);
     expect(chat).toMatch(/pendingApproval|rijenVoorAgent/);

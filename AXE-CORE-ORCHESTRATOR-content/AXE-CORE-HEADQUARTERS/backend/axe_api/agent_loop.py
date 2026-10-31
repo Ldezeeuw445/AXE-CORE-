@@ -80,7 +80,7 @@ WORKSPACE = os.environ.get("WORKSPACE_DIR", "/opt/axe-workspace")
 # callers, so the loop 404'd before doing anything. ListModels still advertised
 # it -- being listed and being callable are not the same thing. An alias follows
 # Google's current pro model instead of rotting the moment they move on.
-MODEL = os.environ.get("AXE_AGENT_MODEL", "gemini-pro-latest")
+MODEL = os.environ.get("AXE_AGENT_MODEL", "gemini-2.5-flash")
 
 # The fallback. Not a downgrade to tolerate -- measured on Hetzner while warm:
 # a correct tool call in ~13s, and a plain answer in 2.3s. Slower per step than
@@ -122,6 +122,15 @@ _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 _OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 _CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
 _XAI_URL = "https://api.x.ai/v1/chat/completions"
+# OpenRouter: OpenAI-compat gateway to many models (incl. free Claude/Gemini
+# routes when the key has balance). Already configured on the VPS for probes.
+OPENROUTER_MODEL = os.environ.get("AXE_AGENT_OPENROUTER_MODEL", "openrouter/auto")
+_OPENROUTER_URL = os.environ.get(
+    "AXE_AGENT_OPENROUTER_URL", "https://openrouter.ai/api/v1/chat/completions"
+).rstrip("/")
+# Short cool-down for a minute/TPM 429 so we do not hammer the same bucket
+# every step, but still retry soon (unlike a day quota).
+_AFKOEL_MINUUT = 60.0
 
 # Cheap insurance on a box that also serves the API. This is not a security
 # boundary -- the agent legitimately has shell here -- it only catches the
@@ -622,29 +631,56 @@ def _afkoelduur(exc: BaseException) -> float | None:
     """Hoe lang deze provider overgeslagen wordt, of None om het niet te doen."""
     if not isinstance(exc, ProviderUitgeput):
         return None
+    body = getattr(exc, "body", "") or str(exc)
+    if _is_credits_op(body) or exc.status == 402:
+        if exc.retry_after and exc.retry_after > 0:
+            return min(float(exc.retry_after), _AFKOEL_MAX)
+        return _AFKOEL_CREDITS
     if exc.retry_after and exc.retry_after > 0:
         return min(float(exc.retry_after), _AFKOEL_MAX)
-    if exc.status == 402:
-        return _AFKOEL_CREDITS
+    if exc.status == 429 and not _is_dagquotum(body):
+        return _AFKOEL_MINUUT
     return _seconden_tot_middernacht()
+
+
+_CREDIT_MARKERS = (
+    "no credits", "insufficient_quota", "credit_balance", "credits are depleted",
+    "credits remaining", "billing hard limit", "prepayment credits",
+)
+
+
+def _is_credits_op(body: str) -> bool:
+    laag = (body or "").lower()
+    return any(m in laag for m in _CREDIT_MARKERS)
 
 
 def _provider_fout(provider: str, response: Any) -> RuntimeError:
     """Vertaal een mislukte HTTP-poging naar de juiste fout.
 
-    ProviderUitgeput als het een dagquotum (429) of opgebruikte credits (402)
-    is, anders een gewone RuntimeError -- een 500 of een timeout is een
-    incident, geen reden om de provider een dag te laten liggen.
+    ProviderUitgeput bij:
+      * credits op (402 of 429 met credit-tekst) → lange afkoeling
+      * dagquotum 429 → tot middernacht
+      * minuut/TPM 429 → korte backoff (_AFKOEL_MINUUT / Retry-After)
+
+    Anders een gewone RuntimeError — een 500 of timeout is een incident.
     """
     body = response.text or ""
     status = response.status_code
-    if status == 402 or (status == 429 and _is_dagquotum(body)):
-        na = (response.headers or {}).get("retry-after")
-        try:
-            retry_after = float(na) if na is not None else None
-        except (TypeError, ValueError):
-            retry_after = None
-        return ProviderUitgeput(provider, status, body, retry_after)
+    na = (response.headers or {}).get("retry-after")
+    try:
+        retry_after = float(na) if na is not None else None
+    except (TypeError, ValueError):
+        retry_after = None
+    if status == 402 or _is_credits_op(body):
+        return ProviderUitgeput(provider, status or 402, body, retry_after)
+    if status == 429:
+        if _is_dagquotum(body):
+            return ProviderUitgeput(provider, status, body, retry_after)
+        # Minute / TPM: short cool so the next step skips this bucket.
+        return ProviderUitgeput(
+            provider, status, body,
+            retry_after if (retry_after and retry_after > 0) else _AFKOEL_MINUUT,
+        )
     return RuntimeError(f"{provider} {status}: {body[:300]}")
 
 
@@ -1007,7 +1043,19 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
         attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
     if xai_key and not gratis and api_aan("xai"):
         attempts.append((f"xai/{XAI_MODEL}", lambda: _call_openai_compat(contents, _XAI_URL, xai_key, XAI_MODEL)))
-    if api_aan("ollama"):
+    openrouter_key = (
+        os.environ.get("OPENROUTER_API_KEY")
+        or os.environ.get("OPENROUTER2_API_KEY")
+        or ""
+    ).strip()
+    if openrouter_key and not gratis and api_aan("openrouter"):
+        attempts.append((
+            f"openrouter/{OPENROUTER_MODEL}",
+            lambda: _call_openai_compat(contents, _OPENROUTER_URL, openrouter_key, OPENROUTER_MODEL),
+        ))
+    # Ollama is keyless on the VPS — always last so a dead cloud key never
+    # leaves the desk without a model (Luka: must work without API credits).
+    if api_aan("ollama") or not attempts:
         attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
 
     errors: list[str] = []

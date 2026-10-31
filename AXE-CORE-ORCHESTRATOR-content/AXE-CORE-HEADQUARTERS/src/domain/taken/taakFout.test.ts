@@ -40,4 +40,13 @@ describe('taakFoutVan', () => {
     expect(f.regel).toBe('disk full on dax-3');
     expect(f.actie).toBe('retry');
   });
+  it('maps every-provider / rate-limit cascades to a short friendly line', () => {
+    const f = taakFoutVan(
+      'every provider failed — groq openai/gpt-oss-120b 429 rate limit | gemini-pro-latest: afkoelend | openai gpt-4.1-mini 429 no credits remaining',
+    );
+    expect(f.regel.length).toBeLessThan(160);
+    expect(f.regel).not.toMatch(/gpt-oss|afkoelend|429/);
+    expect(f.actie).toBe('retry');
+  });
+
 });

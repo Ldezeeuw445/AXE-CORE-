@@ -62,6 +62,21 @@ def taak_fout(error: Any, titel: str = "") -> dict[str, str]:
             "regel": "This account is logged out. Reconnect it in Settings → Seats.",
             "actie": "reconnect",
         }
+    if re.search(r"every provider failed|waiting for capacity", laag):
+        if re.search(r"no credits|insufficient_quota|credit", laag):
+            return {
+                "regel": "Cloud model credits ran out. AXE retries on free models or Mac seats — top up only if you want those APIs back.",
+                "actie": "retry",
+            }
+        if re.search(r"rate limit|429|afkoelend", laag):
+            return {
+                "regel": "Models are cooling after a rate limit. AXE retries on Groq, Ollama, or a free Mac seat.",
+                "actie": "retry",
+            }
+        return {
+            "regel": "No cloud model answered. AXE falls back to Ollama on the VPS or a Mac seat — try again shortly.",
+            "actie": "retry",
+        }
     if re.search(r"rate limit|quota exceeded|too many requests|\b429\b|usage limit", laag):
         return {
             "regel": "This seat hit its usage limit. Retry after it cools, or reconnect another seat.",
