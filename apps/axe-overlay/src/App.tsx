@@ -207,6 +207,44 @@ export default function App() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, expanded]);
 
+  // Hammerspoon / ~/.axe/overlay.cmd → expand, PTT, briefs, approvals, managers
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void (async () => {
+      un = await listen<string>("overlay-cmd", (ev) => {
+        const cmd = (ev.payload || "").trim();
+        if (!cmd) return;
+        if (cmd === "expand" || cmd.startsWith("ask:")) {
+          setExpanded(true);
+          void resize(true);
+          if (cmd.startsWith("ask:")) {
+            const q = cmd.slice(4).trim();
+            if (q) setInput(q);
+          }
+          return;
+        }
+        if (cmd === "ptt-start") {
+          setExpanded(true);
+          void resize(true);
+          setListening(true);
+          return;
+        }
+        if (cmd === "ptt-stop") {
+          setListening(false);
+          return;
+        }
+        if (cmd === "approvals" || cmd === "approve-top" || cmd === "northsea-brief" || cmd === "daily-brief" || cmd === "focus-on" || cmd === "focus-off" || cmd.startsWith("manager-")) {
+          setExpanded(true);
+          void resize(true);
+          if (cmd === "daily-brief") setInput("Geef een korte daily brief: approvals, NorthSea, app status.");
+          if (cmd === "northsea-brief") setInput("Geef een kort NorthSea brief: deal-replies en next actions.");
+        }
+      });
+    })();
+    return () => un?.();
+  }, [resize]);
+
+
   const send = async (raw?: string) => {
     const text = (raw ?? input).trim();
     if ((!text && pendingFiles.length === 0) || busy) return;

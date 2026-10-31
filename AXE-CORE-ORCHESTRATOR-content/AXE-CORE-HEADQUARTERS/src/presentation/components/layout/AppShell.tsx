@@ -1,3 +1,4 @@
+import { openZwevend } from '@/infrastructure/gateways/zwevendeVensters';
 import { useEffect, useState, Suspense } from 'react';
 import { ChevronDown, Triangle } from 'lucide-react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
@@ -114,6 +115,9 @@ function PageError({ fout }: { fout: string }) {
 }
 
 export function AppShell() {
+  // Always-on Mochi notch — open once on shell mount
+  useEffect(() => { void openZwevend('axe'); }, []);
+
   const openPagina = useOpenPagina();
   const location = useLocation();
 
