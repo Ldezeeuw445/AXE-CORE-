@@ -29,6 +29,8 @@ tauri-plugin-notification = "2"
 # wel doorzichtig maar zie je je bureaublad SCHERP -- en dat is geen matglas.
 [target."cfg(target_os = \"macos\")".dependencies]
 window-vibrancy = "0.5"
+cocoa = "0.26"
+objc = "0.2"
 
 # De globale sneltoets (Option+Space) die de mic opent terwijl een ANDERE app
 # voorop staat. Bewust NIET bij de gewone dependencies: op Android en iOS

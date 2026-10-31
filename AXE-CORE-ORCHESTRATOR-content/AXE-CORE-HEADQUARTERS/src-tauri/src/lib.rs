@@ -163,6 +163,48 @@ fn hostnaam() -> Option<String> {
     lees("hostname", &["-s"])
 }
 
+
+/// Pin the AXE float notch to an absolute top-left frame (logical points, top-left origin).
+/// Tauri/wry `set_position` is clamped under the menu bar (~y=30); NSWindow setFrame is not.
+#[tauri::command]
+fn dock_notch_frame(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+    let win = app
+        .get_webview_window("axe-float-axe")
+        .or_else(|| app.get_webview_window("AXE"))
+        .ok_or_else(|| "axe float window missing".to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        use cocoa::base::{id, YES};
+        use cocoa::foundation::{NSPoint, NSRect, NSSize};
+        use objc::{msg_send, sel, sel_impl};
+
+        let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
+        unsafe {
+            let screen: id = msg_send![ns_win, screen];
+            if screen.is_null() {
+                return Err("no screen for notch window".into());
+            }
+            let sf: NSRect = msg_send![screen, frame];
+            // Convert top-left logical → Cocoa bottom-left
+            let cocoa_y = sf.origin.y + sf.size.height - y - h;
+            let frame = NSRect::new(NSPoint::new(x, cocoa_y), NSSize::new(w, h));
+            let _: () = msg_send![ns_win, setFrame: frame display: YES];
+        }
+        let _ = win.set_always_on_top(true);
+        return Ok(());
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        use tauri::LogicalPosition;
+        use tauri::LogicalSize;
+        win.set_size(tauri::Size::Logical(LogicalSize::new(w, h)))
+            .map_err(|e| e.to_string())?;
+        win.set_position(tauri::Position::Logical(LogicalPosition::new(x, y)))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {
@@ -329,6 +371,7 @@ pub fn run() {
         show_main_window,
         consume_overlay_open_route,
         platform_info,
+            dock_notch_frame,
         diensten_stand,
         dienst_start,
         dienst_stop,
@@ -349,6 +392,7 @@ pub fn run() {
         show_main_window,
         consume_overlay_open_route,
         platform_info,
+            dock_notch_frame,
         gesture_lock::gesture_lock_load,
         gesture_lock::gesture_lock_save,
         gesture_lock::gesture_lock_clear,

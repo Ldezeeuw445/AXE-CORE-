@@ -80,13 +80,39 @@ fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
     } else {
         (560.0_f64, 54.0_f64)
     };
-    win.set_size(Size::Logical(LogicalSize::new(w, h)))
-        .map_err(|e| e.to_string())?;
-    if let Ok(Some(m)) = app.primary_monitor() {
+    let x = if let Ok(Some(m)) = app.primary_monitor() {
         let size = m.size();
         let scale = m.scale_factor();
         let screen_w = size.width as f64 / scale;
-        let x = ((screen_w - w) / 2.0).max(0.0);
+        let screen_x = m.position().x as f64 / scale;
+        screen_x + ((screen_w - w) / 2.0).max(0.0)
+    } else {
+        0.0
+    };
+    #[cfg(target_os = "macos")]
+    {
+        use cocoa::base::{id, YES};
+        use cocoa::foundation::{NSPoint, NSRect, NSSize};
+        use objc::{msg_send, sel, sel_impl};
+        let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
+        unsafe {
+            let screen: id = msg_send![ns_win, screen];
+            if !screen.is_null() {
+                let sf: NSRect = msg_send![screen, frame];
+                let cocoa_y = sf.origin.y + sf.size.height - h; // y=0 top
+                let frame = NSRect::new(NSPoint::new(x, cocoa_y), NSSize::new(w, h));
+                let _: () = msg_send![ns_win, setFrame: frame display: YES];
+            } else {
+                win.set_size(Size::Logical(LogicalSize::new(w, h)))
+                    .map_err(|e| e.to_string())?;
+                let _ = win.set_position(LogicalPosition::new(x, 0.0));
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        win.set_size(Size::Logical(LogicalSize::new(w, h)))
+            .map_err(|e| e.to_string())?;
         let _ = win.set_position(LogicalPosition::new(x, 0.0));
     }
     let _ = win.set_always_on_top(true);

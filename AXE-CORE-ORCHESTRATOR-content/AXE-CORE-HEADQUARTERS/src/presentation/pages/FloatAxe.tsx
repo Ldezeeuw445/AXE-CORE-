@@ -13,27 +13,35 @@ async function dockTop(open: boolean) {
   if (!isTauriRuntime()) return;
   try {
     const { getCurrentWindow, primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
-    const { LogicalSize, PhysicalPosition } = await import('@tauri-apps/api/dpi');
+    const { LogicalSize } = await import('@tauri-apps/api/dpi');
+    const { invoke } = await import('@tauri-apps/api/core');
     const w = getCurrentWindow();
     const height = open ? EXPANDED_H : COLLAPSED_H;
     const width = NOTCH_W;
-    await w.setSize(new LogicalSize(width, height));
+    const mon = (await primaryMonitor()) || (await currentMonitor());
+    if (!mon) {
+      await w.setSize(new LogicalSize(width, height));
+      return;
+    }
+    const scale = mon.scaleFactor || 1;
+    const screenW = mon.size.width / scale;
+    const screenX = mon.position.x / scale;
+    const screenY = mon.position.y / scale;
+    const nx = screenX + (screenW - width) / 2;
+    const ny = screenY; // flush top
+    // Native NSWindow setFrame — Tauri setPosition clamps under the menu bar (~y=30).
     try {
-      const mon = (await primaryMonitor()) || (await currentMonitor());
-      if (!mon) return;
-      const scale = mon.scaleFactor || 1;
-      // Physical pixels — LogicalPosition(y=0) was landing ~30pt below the top (menu-bar constraint).
+      await invoke('dock_notch_frame', { x: nx, y: ny, w: width, h: height });
+    } catch {
+      await w.setSize(new LogicalSize(width, height));
+      const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
       const physW = width * scale;
-      const nx = mon.position.x + (mon.size.width - physW) / 2;
-      const ny = mon.position.y; // true top of primary display
-      await w.setPosition(new PhysicalPosition(nx, ny));
-      await w.setAlwaysOnTop(true);
-      // Second pass after layout — some macOS builds nudge borderless windows down once.
-      window.setTimeout(() => {
-        void w.setPosition(new PhysicalPosition(nx, ny));
-        void w.setSize(new LogicalSize(width, height));
-      }, 50);
-    } catch { /* position best-effort */ }
+      await w.setPosition(new PhysicalPosition(
+        mon.position.x + (mon.size.width - physW) / 2,
+        mon.position.y,
+      ));
+    }
+    await w.setAlwaysOnTop(true);
   } catch { /* preview browser */ }
 }
 
