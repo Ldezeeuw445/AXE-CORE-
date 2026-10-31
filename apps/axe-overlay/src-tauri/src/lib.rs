@@ -78,7 +78,7 @@ fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
     let (w, h) = if expanded {
         (560.0_f64, 560.0_f64)
     } else {
-        (280.0_f64, 48.0_f64)
+        (560.0_f64, 54.0_f64)
     };
     win.set_size(Size::Logical(LogicalSize::new(w, h)))
         .map_err(|e| e.to_string())?;
@@ -126,7 +126,7 @@ pub fn run() {
                     let size = m.size();
                     let scale = m.scale_factor();
                     let screen_w = size.width as f64 / scale;
-                    let w = 280.0_f64;
+                    let w = 560.0_f64;
                     let x = ((screen_w - w) / 2.0).max(0.0);
                     let _ = win.set_position(LogicalPosition::new(x, 0.0));
                 }

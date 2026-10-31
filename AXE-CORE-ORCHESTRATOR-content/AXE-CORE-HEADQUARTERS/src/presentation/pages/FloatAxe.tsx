@@ -13,7 +13,7 @@ async function dockTop(open: boolean) {
   if (!isTauriRuntime()) return;
   try {
     const { getCurrentWindow, primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
-    const { LogicalSize, LogicalPosition } = await import('@tauri-apps/api/dpi');
+    const { LogicalSize, PhysicalPosition } = await import('@tauri-apps/api/dpi');
     const w = getCurrentWindow();
     const height = open ? EXPANDED_H : COLLAPSED_H;
     const width = NOTCH_W;
@@ -22,14 +22,17 @@ async function dockTop(open: boolean) {
       const mon = (await primaryMonitor()) || (await currentMonitor());
       if (!mon) return;
       const scale = mon.scaleFactor || 1;
-      const screenW = mon.size.width / scale;
-      const screenX = mon.position.x / scale;
-      const screenY = mon.position.y / scale;
-      // Flush top (y=0 of monitor) — expanded grows downward; never park at y=72.
-      const nx = screenX + (screenW - width) / 2;
-      const ny = screenY;
-      await w.setPosition(new LogicalPosition(nx, ny));
+      // Physical pixels — LogicalPosition(y=0) was landing ~30pt below the top (menu-bar constraint).
+      const physW = width * scale;
+      const nx = mon.position.x + (mon.size.width - physW) / 2;
+      const ny = mon.position.y; // true top of primary display
+      await w.setPosition(new PhysicalPosition(nx, ny));
       await w.setAlwaysOnTop(true);
+      // Second pass after layout — some macOS builds nudge borderless windows down once.
+      window.setTimeout(() => {
+        void w.setPosition(new PhysicalPosition(nx, ny));
+        void w.setSize(new LogicalSize(width, height));
+      }, 50);
     } catch { /* position best-effort */ }
   } catch { /* preview browser */ }
 }
@@ -57,6 +60,9 @@ function useOverlayCmdBridge() {
         for (const line of raw.split('\n')) {
           const cmd = line.trim();
           if (!cmd) continue;
+          // Resize immediately here — React onOpenChange alone was flaky on collapse.
+          if (cmd === 'collapse') void dockTop(false);
+          else if (cmd === 'expand' || cmd === 'chat' || cmd === 'approvals') void dockTop(true);
           window.dispatchEvent(new CustomEvent('axe-overlay-cmd', { detail: cmd }));
         }
       } catch { /* ignore */ }
