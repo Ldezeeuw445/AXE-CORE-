@@ -180,20 +180,35 @@ fn dock_notch_frame(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Re
 
         let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
         unsafe {
+            // NSStatusWindowLevel (25): allowed over the menu bar / notch strip.
+            let _: () = msg_send![ns_win, setLevel: 25_i64];
             let screen: id = msg_send![ns_win, screen];
             if screen.is_null() {
                 return Err("no screen for notch window".into());
             }
             let sf: NSRect = msg_send![screen, frame];
-            // Convert top-left logical → Cocoa bottom-left
             let cocoa_y = sf.origin.y + sf.size.height - y - h;
             let frame = NSRect::new(NSPoint::new(x, cocoa_y), NSSize::new(w, h));
             let _: () = msg_send![ns_win, setFrame: frame display: YES];
+            // Read back
+            let got: NSRect = msg_send![ns_win, frame];
+            let top_from_bottom = got.origin.y + got.size.height;
+            let want_top = sf.origin.y + sf.size.height - y;
+            // If still constrained, nudge via Accessibility-free CGWarp isn't available —
+            // fall back to Hammerspoon when installed (Mac mini has it).
+            if (top_from_bottom - want_top).abs() > 1.0 {
+                let script = format!(
+                    "for _,w in ipairs(hs.window.allWindows()) do if w:application():name()==\"AXE CORE\" and w:title()==\"AXE\" then w:setFrame(hs.geometry.rect({x},{y},{w},{h})) end end"
+                );
+                let out = std::process::Command::new("/opt/homebrew/bin/hs")
+                    .args(["-c", &script])
+                    .output();
+            }
         }
         let _ = win.set_always_on_top(true);
         return Ok(());
     }
-    #[cfg(not(target_os = "macos"))]
+#[cfg(not(target_os = "macos"))]
     {
         use tauri::LogicalPosition;
         use tauri::LogicalSize;
