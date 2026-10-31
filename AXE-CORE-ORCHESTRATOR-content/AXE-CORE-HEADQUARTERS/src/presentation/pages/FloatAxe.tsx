@@ -14,28 +14,25 @@ async function resizeFor(open: boolean) {
     await w.setSize(new LogicalSize(width, height));
     if (open) {
       try {
-        const mon = await currentMonitor();
-        const scale = mon?.scaleFactor || 1;
-        const screenH = (mon?.size.height || 900) / scale;
-        const screenW = (mon?.size.width || 1440) / scale;
-        const screenX = (mon?.position.x || 0) / scale;
-        const screenY = (mon?.position.y || 0) / scale;
+        const { availableMonitors } = await import('@tauri-apps/api/window');
         const pos = await w.outerPosition();
-        const lx = pos.x / scale;
-        const ly = pos.y / scale;
-        let nx = lx;
-        let ny = ly;
-        // If expanding would clip below the screen, pin near the top
-        if (ly + height > screenY + screenH - 24) {
-          ny = screenY + 72;
-        }
-        if (lx + width > screenX + screenW - 12) {
-          nx = screenX + screenW - width - 24;
-        }
-        if (lx < screenX + 8) nx = screenX + 24;
-        if (nx !== lx || ny !== ly) {
-          await w.setPosition(new LogicalPosition(nx, ny));
-        }
+        const mons = await availableMonitors();
+        // Pick the monitor that contains the window center (fallback: first)
+        const cx = pos.x + 20;
+        const cy = pos.y + 10;
+        let mon = mons.find((m) => {
+          const x = m.position.x, y = m.position.y, w = m.size.width, h = m.size.height;
+          return cx >= x && cx < x + w && cy >= y && cy < y + h;
+        }) || mons[0] || await currentMonitor();
+        if (!mon) return;
+        const scale = mon.scaleFactor || 1;
+        const screenW = mon.size.width / scale;
+        const screenX = mon.position.x / scale;
+        const screenY = mon.position.y / scale;
+        // Always park expanded notch near the top so the body is visible
+        const nx = Math.min(Math.max(pos.x / scale, screenX + 24), screenX + screenW - width - 24);
+        const ny = screenY + 72;
+        await w.setPosition(new LogicalPosition(nx, ny));
       } catch { /* position best-effort */ }
     }
   } catch { /* preview browser */ }
