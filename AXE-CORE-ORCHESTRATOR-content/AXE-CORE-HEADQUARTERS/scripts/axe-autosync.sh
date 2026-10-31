@@ -78,6 +78,23 @@ if [[ "$TAK" != "orchestrator" ]]; then
   exit 0
 fi
 GEWIJZIGD="$(git status --porcelain --untracked-files=no)"
+# Een build die een bestand precies zo aanpast als GitHub het al heeft, is geen
+# werk van iemand (30 okt: de Tauri-CLI zette macos-private-api in
+# apps/axe-overlay/src-tauri/Cargo.toml, en de iMac stond een dag stil, met de
+# VPS-updates erachter). Is elk gewijzigd bestand gelijk aan origin, dan terug
+# naar HEAD en doorgaan: de merge hieronder brengt dezelfde inhoud terug.
+if [[ -n "$GEWIJZIGD" ]] && git fetch -q origin orchestrator; then
+  GELIJK=1
+  while IFS= read -r pad; do
+    [[ -z "$pad" ]] && continue
+    git diff --quiet origin/orchestrator -- "$pad" || { GELIJK=0; break; }
+  done < <(git diff --name-only HEAD)
+  if [[ "$GELIJK" == 1 ]]; then
+    git diff --name-only HEAD | while IFS= read -r pad; do git checkout -q HEAD -- "$pad"; done
+    log "lokale wijzigingen waren al gelijk aan GitHub, teruggezet: $(printf '%s\n' "$GEWIJZIGD" | awk '{print $2}' | tr '\n' ' ')"
+    GEWIJZIGD="$(git status --porcelain --untracked-files=no)"
+  fi
+fi
 if [[ -n "$GEWIJZIGD" ]]; then
   # er wordt nu gewerkt; volgende ronde weer
   meld_vast "$(printf '%s\n' "$GEWIJZIGD" | wc -l | tr -d ' ') uncommitted file(s) in $REPO ($(printf '%s\n' "$GEWIJZIGD" | head -3 | awk '{print $2}' | tr '\n' ' '))" \
