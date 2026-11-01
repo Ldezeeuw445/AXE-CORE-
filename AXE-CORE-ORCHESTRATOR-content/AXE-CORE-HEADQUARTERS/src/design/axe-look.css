@@ -9054,3 +9054,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border-radius: 16px;
   border-color: rgba(148, 163, 184, 0.16);
 }
+
+/* ─── Status v3 ───────────────────────────────────────────────────────── */
+[data-axe-status="v3"] .axe-kaart,
+[data-axe-status="v3"] .widget-card {
+  border-radius: 16px;
+}
