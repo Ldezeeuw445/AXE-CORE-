@@ -9089,3 +9089,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-notifications="v3"] .axe-kaart {
   border-radius: 16px;
 }
+
+/* ─── Memory / Obsidian / Knowledge v3 ────────────────────────────────── */
+[data-axe-memory="v3"] .axe-geheugen-bib {
+  border-radius: 16px;
+}
+[data-axe-memory-explore="v3"],
+[data-axe-memory-trading="v3"],
+[data-axe-obsidian="v3"],
+[data-axe-knowledge="v3"] .axe-kaart,
+[data-axe-knowledge="v3"] .widget-card {
+  /* explore/trading/obsidian shells keep layout; cards soft */
+}
+[data-axe-memory-explore="v3"] .axe-kaart,
+[data-axe-obsidian="v3"] .axe-kaart,
+[data-axe-knowledge="v3"] .axe-kaart,
+[data-axe-knowledge="v3"] .widget-card {
+  border-radius: 16px;
+}

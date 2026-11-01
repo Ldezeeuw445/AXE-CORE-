@@ -441,7 +441,7 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <>
+    <div className="axe-knowledge-v3 flex min-h-0 flex-1 flex-col" data-axe-knowledge="v3">
     <TabRail kant="links">
       <SchuifBalk
         groepen={[
@@ -808,6 +808,6 @@ export default function KnowledgeBase() {
       )}
       </div>
     </motion.div>
-    </>
+    </div>
   );
 }

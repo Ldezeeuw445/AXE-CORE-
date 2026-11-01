@@ -127,6 +127,7 @@ export default function TradingMemory() {
   );
 
   return (
+    <div className="axe-memory-trading-v3 flex min-h-0 flex-1 flex-col" data-axe-memory-trading="v3">
     <Page
       className="axe-tabruimte axe-tm"
       title="Trading Memory"
@@ -301,5 +302,6 @@ export default function TradingMemory() {
         </Block>
       </div>
     </Page>
+    </div>
   );
 }
