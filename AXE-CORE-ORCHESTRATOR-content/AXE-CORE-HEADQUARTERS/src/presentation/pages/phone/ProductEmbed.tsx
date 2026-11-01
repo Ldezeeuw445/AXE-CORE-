@@ -62,7 +62,11 @@ export function ProductEmbed({
 }
 
 export default function CompanionPage() {
-  return <ProductEmbed naam="AXE Companion" src={COMPANION_URL} testid="companion" />;
+  return (
+    <div className="axe-companion-v3 flex h-full min-h-0 flex-1 flex-col" data-axe-companion="v3">
+      <ProductEmbed naam="AXE Companion" src={COMPANION_URL} testid="companion" />
+    </div>
+  );
 }
 
 function AxonInlog({ onKlaar }: { onKlaar: (s: AxonSessie) => void }) {
