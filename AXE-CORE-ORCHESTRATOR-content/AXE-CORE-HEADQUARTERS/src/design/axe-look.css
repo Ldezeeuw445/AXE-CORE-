@@ -5371,23 +5371,24 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   overflow: hidden;
   padding: 4px 6px;
   border: 0;
-  border-left: 2px solid currentColor;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.045);
+  border-left: 3px solid currentColor;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
   text-align: left;
   transition: background 0.12s ease;
 }
 .axe-week-blok:hover { background: rgba(255, 255, 255, 0.09); }
 .axe-week-bloktitel {
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.2;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  color: #F4FBFF;
 }
-.axe-week-bloktijd { font-size: 9.5px; color: var(--text-muted); }
+.axe-week-bloktijd { font-size: 10.5px; font-weight: 600; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); color: #EAF2F7; }
 
 .axe-week-voet {
   display: flex;
@@ -7242,6 +7243,52 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    scrollen, gevulde blokken in de kleur van hun app, en een nu-lijn. */
 .axe-kalender { display: flex; gap: 12px; flex: 1; min-height: 0; padding: 10px; }
 .axe-kalender .axe-week { margin: 0; }
+
+/* v3 calendar toolbar: Dag | Week | Maand (mockup cal-toolbar + segbar) */
+.axe-cal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 2px 4px 6px;
+  flex: none;
+}
+.axe-cal-titel {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  min-width: 0;
+  flex: 1;
+}
+.axe-cal-segbar {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.axe-cal-segbar button {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.axe-cal-segbar button.on,
+.axe-cal-segbar button[aria-selected='true'] {
+  background: rgba(34, 211, 238, 0.16);
+  color: #22D3EE;
+}
+.axe-cal-segbar button:hover:not(.on):not([aria-selected='true']) {
+  color: var(--text-secondary);
+}
+
 /* Smalle schermen (telefoon): mini-maand boven, rooster eronder, en de hele
    pagina scrollt. Naast elkaar bleef op 384px voor het rooster maar ~100px over
    en viel het rechterdeel van de week weg. */
@@ -7304,11 +7351,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 :root[data-look] .axe-week-blok:hover { filter: brightness(1.12); }
 :root[data-look] .axe-week-bloktijd {
-  width: 100%; padding: 3px 7px; font-size: 10px; font-weight: 600; text-align: center;
-  background: color-mix(in srgb, var(--blok, #64748b) 60%, #121214); color: #fff;
+  width: 100%; padding: 3px 7px; font-size: 10.5px; font-weight: 700; text-align: center;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  background: color-mix(in srgb, var(--blok, #64748b) 60%, #121214); color: #EAF2F7;
 }
 :root[data-look] .axe-week-bloksoort { padding: 0 7px; font-size: 10px; font-weight: 700; color: #fff; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-:root[data-look] .axe-week-bloktitel { padding: 0 7px; font-size: 10.5px; color: rgba(255, 255, 255, 0.78) !important; }
+:root[data-look] .axe-week-bloktitel { padding: 0 7px; font-size: 12px; font-weight: 600; color: #F4FBFF !important; }
 
 /* De nu-lijn: zacht over de hele week, fel in vandaag. */
 .axe-week-nulijn { position: absolute; left: 0; right: 0; height: 1px; background: rgba(249, 115, 22, 0.35); z-index: 2; pointer-events: none; }
@@ -8009,16 +8057,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-dag-leeg { margin: 24px 0; text-align: center; font-size: 13px; color: var(--text-secondary); }
 .axe-dag-kaart {
   position: relative; width: 100%; display: flex; align-items: flex-start; gap: 10px; text-align: left;
-  min-height: 56px; padding: 10px 12px 10px 14px; border-radius: 16px;
+  min-height: 64px; padding: 12px 14px 12px 16px; border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(9, 11, 15, 0.9); color: var(--text-primary);
 }
 .axe-dag-kaart::before {
   content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 4px 4px 0; background: var(--blok, #888);
 }
 .axe-dag-kaart[data-volgende='ja'] { border-color: var(--tint-line, rgba(34, 211, 238, 0.45)); }
-.axe-dag-tijd { flex: none; width: 46px; font: 600 13px/1.3 var(--font-mono, ui-monospace, monospace); color: var(--text-secondary); padding-top: 1px; }
+.axe-dag-tijd {
+  flex: none;
+  width: 52px;
+  font: 700 13.5px/1.3 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: #EAF2F7;
+}
 .axe-dag-inhoud { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.axe-dag-inhoud > b { font-size: 14.5px; line-height: 1.3; font-weight: 600; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.axe-dag-inhoud > b { font-size: 15.5px; line-height: 1.35; font-weight: 650; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .axe-dag-kaart[data-open='ja'] .axe-dag-inhoud > b { -webkit-line-clamp: unset; }
 .axe-dag-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--text-secondary); }
 .axe-dag-meta i { font-style: normal; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.12); font-size: 11px; text-transform: lowercase; }
