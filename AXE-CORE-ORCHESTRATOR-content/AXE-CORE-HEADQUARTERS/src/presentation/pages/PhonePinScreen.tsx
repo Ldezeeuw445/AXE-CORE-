@@ -106,8 +106,9 @@ export default function PhonePinScreen() {
 
   return (
     <div
-      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
+      className="axe-lock-pin-v3 relative flex h-full min-h-0 w-full flex-col overflow-hidden"
       data-axe-lock-pin
+      data-axe-lock-pin-v3="v3"
       data-axe-pin-soort="numeric"
     >
       <MobileGlass />

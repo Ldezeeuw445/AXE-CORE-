@@ -9131,3 +9131,14 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-computer-use="v3"] .widget-card {
   border-radius: 16px;
 }
+
+/* ─── Mobile / Device / Lock / Lock-pin v3 ────────────────────────────── */
+[data-axe-mobile="v3"],
+[data-axe-lock="v3"],
+[data-axe-lock-pin-v3="v3"] {
+  border-radius: 0;
+}
+[data-axe-device="v3"] .axe-kaart,
+[data-axe-device="v3"] .widget-card {
+  border-radius: 16px;
+}
