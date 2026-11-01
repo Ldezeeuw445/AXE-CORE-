@@ -1325,7 +1325,8 @@ export default function Memory() {
 
   return (
     <motion.div
-      className="axe-plaat axe-tabruimte axe-tabruimte--vullen h-full flex flex-col overflow-hidden"
+      className="axe-plaat axe-tabruimte axe-tabruimte--vullen axe-memory-explore-v3 h-full flex flex-col overflow-hidden"
+      data-axe-memory-explore="v3"
       style={{ background: HUD_BASE_BG }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
