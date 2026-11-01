@@ -42,10 +42,10 @@ type CoreView = 'axe' | 'neural' | 'terrain' | 'runtime';
 /* Zelfde volgorde en zelfde labels als Home. Een tweede volgorde hier zou
    betekenen dat het venster iets anders laat zien dan het beweert. */
 const VIEWS: Array<{ id: CoreView; label: string; icon: typeof BrainCircuit | null }> = [
-  { id: 'axe', label: 'Core', icon: null },
+  { id: 'axe', label: 'AXE', icon: null },
   { id: 'neural', label: 'Neural', icon: BrainCircuit },
   { id: 'terrain', label: 'Terrain', icon: Mountain },
-  { id: 'runtime', label: 'Architecture', icon: Network },
+  { id: 'runtime', label: 'Runtime', icon: Network },
 ];
 
 const LOOK_KEY = 'axe-stage-look';

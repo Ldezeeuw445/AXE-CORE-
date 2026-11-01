@@ -1,5 +1,5 @@
 /**
- * De balk midden boven: Awareness, Core, Neural, Terrain, Architecture.
+ * De balk midden boven: Awareness, AXE, Neural, Terrain, Runtime.
  *
  * ## Waarom dit in de schil zit en niet op Home
  *
@@ -35,10 +35,10 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 
 const SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCircuit }> = [
-  { id: 'axe', label: 'Core', icon: Sparkles },
+  { id: 'axe', label: 'AXE', icon: Sparkles },
   { id: 'neural', label: 'Neural', icon: BrainCircuit },
   { id: 'terrain', label: 'Terrain', icon: Mountain },
-  { id: 'runtime', label: 'Architecture', icon: Network },
+  { id: 'runtime', label: 'Runtime', icon: Network },
 ];
 
 export function PlaatViewSwitch() {
