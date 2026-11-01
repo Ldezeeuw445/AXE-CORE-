@@ -24,12 +24,16 @@ const VENSTERS = 'src/infrastructure/gateways/windowManagerService.ts';
  * te laten verdwijnen -- en dan bewaakt deze test niets meer.
  */
 const BEWUST_VERBORGEN: Record<string, string> = {
-  '/': 'Home — primary nav',
+  '/': 'Home — primary nav (v3)',
   '/managers': 'Primary nav (Managers)',
-  '/northsea': 'Primary nav (NorthSea)',
-  '/trading': 'Primary nav (Trading demo hub)',
-  '/bouwen': 'Primary nav (Bouwen hub)',
-  '/systeem': 'Primary nav (Systeem hub)',
+  '/calendar': 'Primary nav (Calendar)',
+  '/code-editor': 'Primary nav (Code)',
+  '/tasks': 'Primary nav (Tasks)',
+  '/settings': 'Primary nav (Settings)',
+  '/northsea': 'Command palette + hubs / radial dock (was primary pre-v3)',
+  '/trading': 'Command palette + Trading hub (was primary pre-v3)',
+  '/bouwen': 'Command palette + Bouwen hub (was primary pre-v3)',
+  '/systeem': 'Command palette + Systeem hub (was primary pre-v3)',
   // Deep routes: reachable from hubs / redirects / dedicated doors, not BottomNav
   '/device': 'Systeem hub + SchuifVoet',
   '/devices': 'Redirect → /device',
@@ -62,9 +66,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/northsea-desktop': 'Los venster',
   '/computer-use': 'Bouwen hub',
   '/browser': 'Bouwen hub',
-  '/code-editor': 'Bouwen hub',
   '/control-plane': 'Bouwen hub',
-  '/settings': 'Systeem hub',
   '/cron-manager': 'Systeem hub',
   '/mcp': 'Systeem hub',
   '/finance': 'Systeem hub',
@@ -72,8 +74,6 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/obsidian': 'Systeem hub · Geheugen',
   '/knowledge': 'Systeem hub · Geheugen',
   '/infrastructure': 'Systeem hub',
-  '/calendar': 'Systeem hub',
-  '/tasks': 'Systeem hub',
   '/ledger': 'Systeem hub',
   '/brief': 'Systeem hub',
   '/crewai': 'Systeem hub',
@@ -118,9 +118,9 @@ describe('elke route heeft een deur', () => {
     expect(dood, `Deze knoppen wijzen naar een route die niet bestaat: ${dood.join(', ')}`).toEqual([]);
   });
 
-  it('primary shell heeft max 6 items inclusief de hubs', () => {
+  it('primary shell heeft v3 bottom nav (6 tabs + orb, geen hubs in balk)', () => {
     const paden = navPaden();
-    expect(paden).toEqual(['/', '/managers', '/northsea', '/trading', '/bouwen', '/systeem']);
+    expect(paden).toEqual(['/', '/managers', '/calendar', '/code-editor', '/tasks', '/settings']);
   });
 });
 

@@ -2,13 +2,10 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
-  Home, Bot, Globe, LineChart, Hammer, Settings2, type LucideIcon,
+  Home, Bot, CalendarDays, Code2, ListTodo, Settings, type LucideIcon,
 } from 'lucide-react';
-import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
-
-const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
 type NavItem = {
   icon?: LucideIcon;
@@ -16,17 +13,19 @@ type NavItem = {
   path: string;
 };
 
-/** Fase 1 primary shell: max 6 tabs. Deep routes live under hubs. */
+/** AXE Core v3 primary shell: Home · Managers · Calendar | orb | Code · Tasks · Settings.
+ *  Deep routes (northsea, trading, bouwen, systeem, …) stay reachable via
+ *  command palette, hubs, radial dock and existing deep links. */
 const leftItems: NavItem[] = [
-  { icon: Home, label: navLabel('/'), path: '/' },
-  { icon: Bot, label: navLabel('/managers'), path: '/managers' },
-  { icon: Globe, label: navLabel('/northsea'), path: '/northsea' },
+  { icon: Home, label: 'Home', path: '/' },
+  { icon: Bot, label: 'Managers', path: '/managers' },
+  { icon: CalendarDays, label: 'Calendar', path: '/calendar' },
 ];
 
 const rightItems: NavItem[] = [
-  { icon: LineChart, label: navLabel('/trading'), path: '/trading' },
-  { icon: Hammer, label: navLabel('/bouwen'), path: '/bouwen' },
-  { icon: Settings2, label: navLabel('/systeem'), path: '/systeem' },
+  { icon: Code2, label: 'Code', path: '/code-editor' },
+  { icon: ListTodo, label: 'Tasks', path: '/tasks' },
+  { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
 /**
@@ -42,7 +41,7 @@ const rightItems: NavItem[] = [
  * Desktop is untouched — everything fits there, and the left/right split
  * around the voice orb is deliberate.
  */
-const MOBILE_FIRST = ['/', '/managers', '/northsea', '/trading', '/bouwen', '/systeem'];
+const MOBILE_FIRST = ['/', '/managers', '/calendar', '/code-editor', '/tasks', '/settings'];
 
 function orderForMobile(items: NavItem[]): NavItem[] {
   const rank = (p: string) => {
@@ -204,37 +203,20 @@ function NavTile({
   isMobile: boolean;
   onClick: () => void;
 }) {
-  const size = isMobile ? 46 : 54;
-  const iconPx = isMobile ? 22 : 26;
   const Icon = item.icon;
 
-  /* Zacht reliëf, zoals de soft-UI-knop uit het voorbeeld: de tegel heeft
-     dezelfde kleur als de band eronder, en de vorm komt alleen uit licht van
-     linksboven plus de schaduw rechtsonder. Zie --axe-tegel-op in
-     design/axe-look.css voor het waarom van de waarden.
-
-     De vulling was --bg-elevated: een tint LICHTER dan de band. Dat is hoe je
-     een kaart op een pagina zet, en precies wat een soft-UI-knop niet is --
-     zodra de vulling afwijkt van de ondergrond is het weer een blokje erop in
-     plaats van een uitstulping eruit. Nu hetzelfde vlak, en het verschil zit
-     in de schaduw.
-
-     Een lijn zit er niet meer om. Een uitstulping heeft geen rand; die had hij
-     wel, en dat maakte er een kadertje van. De actieve tab had er een cyane --
-     nu is hij INGEDRUKT, en dat zegt hetzelfde zonder lijn.
-
-     De tokens staan in de look-css met een terugval hier, want deze inline
-     stijl staat er ook voor het eerste frame, vóórdat data-look op <html>
-     staat. */
-  const tileBg = 'var(--axe-barbtn, var(--bg-base))';
-  const tileShadow = isActive
-    ? 'var(--axe-tegel-in, inset 4px 4px 9px rgba(0,0,0,0.8), inset -3px -3px 8px rgba(255,255,255,0.055))'
-    : 'var(--axe-tegel-op, -4px -4px 9px rgba(255,255,255,0.055), 5px 6px 14px rgba(0,0,0,0.8))';
-
-  // Inactive was the LIGHTER cyan (#67e8f9 against #22d3ee), so every tab you
-  // were not on glowed harder than the one you were. Selected keeps the accent;
-  // the rest step back to muted text.
-  const strokeColor = isActive ? 'var(--accent-cyan)' : 'var(--text-muted)';
+  /* v3 mockup: icon + label column, active = cyan wash + inset ring (not soft-UI tile). */
+  const activeWash = isActive
+    ? {
+        color: 'var(--accent-cyan)',
+        background: 'rgba(34,211,238,0.10)',
+        boxShadow: 'inset 0 0 0 1px rgba(34,211,238,0.28)',
+      }
+    : {
+        color: 'var(--text-muted)',
+        background: 'transparent',
+        boxShadow: 'none',
+      };
 
   return (
     <button
@@ -243,27 +225,29 @@ function NavTile({
       title={item.label}
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
-      // Een doel voor de zwevende bol: meldt iets op deze tab terwijl je er
-      // niet bent, dan vliegt hij naar dit icoon (shared/axeActiviteit).
       data-axe-doel={item.path}
-      className="flex items-center justify-center rounded-[16px] transition-all flex-shrink-0 active:scale-95"
+      className="flex flex-col items-center justify-center gap-1 rounded-[14px] transition-all flex-shrink-0 active:scale-95"
       style={{
-        width: size,
-        height: size,
+        minWidth: isMobile ? 56 : 72,
+        padding: isMobile ? '6px 8px' : '8px 12px',
         border: 0,
-        boxShadow: tileShadow,
-        background: tileBg,
+        ...activeWash,
       }}
     >
       {Icon ? (
-        /* Plat, zonder gloed. In het voorbeeld is het icoon gewoon grijs: de
-           diepte zit in de KNOP, niet in het teken erop. De actieve had een
-           cyane drop-shadow en de rest een zwarte, en samen met het reliëf
-           eronder werd dat twee soorten licht op één vorm -- dan leest geen van
-           beide meer als hoogte. Welke tab aan staat zie je nu aan de
-           ingedrukte tegel plus de accentkleur van het icoon. */
-        <Icon size={iconPx} strokeWidth={2.1} color={strokeColor} />
+        <Icon size={isMobile ? 18 : 20} strokeWidth={1.7} color="currentColor" />
       ) : null}
+      <span
+        className="leading-none"
+        style={{
+          fontSize: isMobile ? 9.5 : 10.5,
+          fontWeight: 550,
+          letterSpacing: '0.02em',
+          color: 'currentColor',
+        }}
+      >
+        {item.label}
+      </span>
     </button>
   );
 }
@@ -294,7 +278,7 @@ export function BottomNav() {
         // modals like ChartOrderConfirm (z-120), which should cover the nav.
         position: 'relative',
         zIndex: 100,
-        height: 'calc(76px + var(--axe-sab))',
+        height: 'calc(72px + var(--axe-sab))',
         backgroundColor: 'var(--bg-base)',
         borderTop: '1px solid rgba(255,255,255,0.06)',
         paddingBottom: 'var(--axe-sab)',
@@ -304,7 +288,7 @@ export function BottomNav() {
       <div
         className="flex items-center px-3 gap-2"
         style={{
-          height: 76,
+          height: 72,
           justifyContent: 'safe center',
           overflowX: 'auto',
           overflowY: 'hidden',
@@ -319,7 +303,7 @@ export function BottomNav() {
             <NavTile
               key={item.path}
               item={item}
-              isActive={activePath === item.path || (item.path !== '/' && item.path !== '/trading' && activePath.startsWith(item.path + '/')) || (item.path === '/trading' && (activePath === '/trading' || activePath.startsWith('/trading/')))}
+              isActive={activePath === item.path || (item.path !== '/' && activePath.startsWith(item.path + '/'))}
               isMobile={isMobile}
               onClick={() => navigate(item.path)}
             />
@@ -344,7 +328,7 @@ export function BottomNav() {
             <NavTile
               key={item.path}
               item={item}
-              isActive={activePath === item.path || (item.path !== '/' && item.path !== '/trading' && activePath.startsWith(item.path + '/')) || (item.path === '/trading' && (activePath === '/trading' || activePath.startsWith('/trading/')))}
+              isActive={activePath === item.path || (item.path !== '/' && activePath.startsWith(item.path + '/'))}
               isMobile={isMobile}
               onClick={() => navigate(item.path)}
             />
@@ -360,11 +344,11 @@ export function BottomNav() {
         <>
           <div
             className="pointer-events-none absolute left-0 top-0"
-            style={{ width: 20, height: 76, background: 'linear-gradient(to right, #000000, transparent)' }}
+            style={{ width: 20, height: 72, background: 'linear-gradient(to right, #000000, transparent)' }}
           />
           <div
             className="pointer-events-none absolute right-0 top-0"
-            style={{ width: 20, height: 76, background: 'linear-gradient(to left, #000000, transparent)' }}
+            style={{ width: 20, height: 72, background: 'linear-gradient(to left, #000000, transparent)' }}
           />
         </>
       )}
