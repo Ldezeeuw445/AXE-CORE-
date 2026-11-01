@@ -673,7 +673,11 @@ def _schrijf_stoel_snapshot() -> None:
         fd, tmp = tempfile.mkstemp(prefix="axe-seats-", suffix=".json", dir=os.path.dirname(_SEAT_SNAP) or ".")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"updated_at": time.time(), "machine": _machine_naam(), "seats": stoelen}, f)
+                # De worker leest eerst dit bestand. Zonder events overschaduwde
+                # het het echte verbruiksboek en rapporteerde iedere stoel 0 runs.
+                events = [e for e in (_usage_state().get("events") or []) if isinstance(e, dict)]
+                json.dump({"updated_at": time.time(), "machine": _machine_naam(),
+                           "seats": stoelen, "events": events}, f)
             os.replace(tmp, _SEAT_SNAP)
         except Exception:
             try:
@@ -685,7 +689,8 @@ def _schrijf_stoel_snapshot() -> None:
         log.warning("coding-seats snapshot write failed: %s", str(e)[:160])
 
 
-def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float | None = None) -> str | None:
+def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float | None = None,
+                     *, balanceer: bool = False) -> str | None:
     """Volgende stoel die ingelogd is en niet op een limiet zit.
 
     Minste gebruik eerst over ALLE gezonde stoelen. Familie/voorkeur is
@@ -714,9 +719,13 @@ def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float 
         acc = hit[1] if hit else {"ingelogd": None, "account": None}
         if acc.get("ingelogd") is False:
             return False
+        if balanceer and _motor_slot(naam).locked():
+            return False
         return not _stoel_koelt(naam, nu)
 
-    if geschikt(gewenst):
+    # Een interactieve keuze blijft een keuze. Achtergrondbouw gebruikt alle
+    # gezonde stoelen, ook wanneer de voorkeursstoel nog niet op zijn limiet zit.
+    if not balanceer and geschikt(gewenst):
         return gewenst
 
     vrij_rijen: list[tuple[tuple, str]] = []
@@ -739,6 +748,7 @@ def kies_vrije_stoel(gewenst: str, overslaan: set[str] | None = None, nu: float 
             vrij_rijen = [x for x in vrij_rijen if x[1] != vorig]
         gezien_account[ident] = naam
         score = (
+            0 if acc.get("ingelogd") is True else 1,
             runs,
             0 if _familie(naam) == familie else 1,
             0 if naam == gewenst else 1,
@@ -913,12 +923,13 @@ def run_agent(
 
     geprobeerd: list[str] = []
     overslaan: set[str] = set()
-    huidige = kies_vrije_stoel(gevraagd) or gevraagd
+    huidige = kies_vrije_stoel(gevraagd, balanceer=checks) or gevraagd
     laatste: dict | None = None
     while huidige and huidige not in geprobeerd:
         geprobeerd.append(huidige)
         laatste = _run_agent_stoel(
-            huidige, repo, repo_path, branch, prompt, mode, timeout, model, checks,
+            huidige, repo, repo_path, branch, prompt, mode, timeout,
+            model if _familie(huidige) == _familie(gevraagd) else "", checks,
         )
         if laatste.get("status") == "ok":
             if len(geprobeerd) > 1:
@@ -929,7 +940,7 @@ def run_agent(
             if not _model_fout(fout):
                 _onthoud_stoel_fout(huidige, fout)
             overslaan.add(huidige)
-            volgende = kies_vrije_stoel(gevraagd, overslaan=overslaan)
+            volgende = kies_vrije_stoel(gevraagd, overslaan=overslaan, balanceer=checks)
             if volgende:
                 log.info("%s faalde op account/limiet/model; probeer %s", huidige, volgende)
                 huidige = volgende
@@ -1000,8 +1011,8 @@ def _run_agent_stoel(
 
     def finish(result: dict) -> dict:
         _SEAT_BUSY.pop(motornaam, None)
-        _schrijf_stoel_snapshot()
         _record_agent_usage(motornaam, repo, result, run_started, (model or "").strip())
+        _schrijf_stoel_snapshot()
         return result
 
     uitvoer = ""

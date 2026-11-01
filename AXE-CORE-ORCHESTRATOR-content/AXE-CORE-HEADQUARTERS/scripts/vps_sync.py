@@ -226,10 +226,14 @@ IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", 
 
 
 def ssh(cmd: str) -> str:
-    return subprocess.run(
+    proc = subprocess.run(
         ["ssh", "-i", KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", HOST, cmd],
-        capture_output=True, text=True,
-    ).stdout
+        capture_output=True, text=True, timeout=180,
+    )
+    # 255 is de SSH-verbinding zelf. Een leeg antwoord is dan geen inventaris.
+    if proc.returncode == 255:
+        raise RuntimeError("VPS connection failed; deployment state could not be measured")
+    return proc.stdout
 
 
 def md5_local(path: str):
@@ -247,6 +251,8 @@ def remote_sums() -> dict:
         parts = line.split(None, 1)
         if len(parts) == 2:
             sums[parts[1].strip()] = parts[0].strip()
+    if not sums:
+        raise RuntimeError("No VPS file hashes received; deployment state is unknown")
     return sums
 
 
@@ -302,7 +308,11 @@ def known_to_git(rel: str, box_md5: str) -> bool:
 
 
 def cmd_check(args) -> int:
-    rows = survey()
+    try:
+        rows = survey()
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        print(f"VPS check failed: {exc}", file=sys.stderr)
+        return 2
     width = max(len(r.rsplit("/", 1)[-1]) for r, _, _, _ in rows)
     drift, ahead = [], []
     for remote, rel, _unit, state in sorted(rows, key=lambda r: r[3]):
@@ -323,8 +333,10 @@ def cmd_check(args) -> int:
         return 1
     if ahead:
         print(f"→ {len(ahead)} file(s) ready to deploy: {', '.join(ahead)}")
-    else:
+    elif all(state == IN_SYNC for _, _, _, state in rows):
         print("✓ box and repo agree on every managed file")
+    else:
+        print("Some managed files are missing; deployment is not fully verified")
     return 0
 
 

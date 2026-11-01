@@ -22,6 +22,12 @@ from task_worker import TaskWorker, WorkSignal, run_slot, run_slots
 # bestand altijd wat de worker werkelijk opvangt.
 TaskCancelled = tw.TaskCancelled
 
+
+def test_chat_capability_heeft_een_echte_handler():
+    handler = object()
+    assert tw.kies_handler({"agentic": handler}, "chat") is handler
+    assert tw.kies_handler({"agentic": handler}, "planner") is None
+
 LEASE = "11111111-1111-4111-8111-111111111111"
 
 

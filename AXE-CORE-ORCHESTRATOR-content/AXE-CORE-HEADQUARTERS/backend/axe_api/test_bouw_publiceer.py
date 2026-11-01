@@ -399,6 +399,64 @@ def test_volgende_bouwljist_leest_het_bestand_in_de_checkout(tmp_path):
     assert bp.volgende_bouwljist_in(str(tmp_path / "leeg"))["ok"] is False
 
 
+def test_genummerde_live_queue_is_geen_lege_bouwlijst():
+    tekst = """# BOUWLIJST
+Rules: never deploy without approval.
+## Queue (top = next)
+1. DONE 2026-10-28: P11a merged.
+2. DONE 2026-10-28: P11b merged.
+3. Review B1 PR #35, then request approval for main.
+4. P11c: sync broker accounts.
+## Blocked on Luka
+1. Bank instructions and live orders.
+"""
+    uit = bp.parse_bouwljist(tekst)
+    assert len(uit["taken"]) == 4
+    assert uit["volgende"]["id"] == "3"
+    assert "Review B1" in uit["volgende"]["titel"]
+    assert "never deploy" in uit["regels"]
+    assert not any("Bank" in t["titel"] for t in uit["taken"])
+
+
+def test_hostcontroles_draaien_echt_en_geven_nooit_een_cli_verhaal_als_bewijs(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": {
+        "test": "vitest", "build": "vite build", "deploy": "do-not-run"}}))
+    (tmp_path / "node_modules").mkdir()
+    gezien = []
+    def run(cmd, **kw):
+        gezien.append((cmd, kw))
+        return subprocess.CompletedProcess(cmd, 0)
+    uit = bp.verifieer_bouw(str(tmp_path), run=run, zoek=lambda _: "/bin/npm")
+    assert uit["passed"] is True
+    assert [c[0][1:] for c in gezien] == [["run", "test", "--", "--run"], ["run", "build"]]
+    assert all(c[1].get("shell", False) is False for c in gezien)
+    assert all(c[1]["env"]["CI"] == "true" for c in gezien)
+
+
+def test_mislukte_hostcontrole_blokkeert_publicatie(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"test":"node --test", "build":"vite build"}}')
+    (tmp_path / "node_modules").mkdir()
+    gezien = []
+    def run(cmd, **kw):
+        gezien.append(cmd)
+        return subprocess.CompletedProcess(cmd, 1)
+    uit = bp.verifieer_bouw(str(tmp_path), run=run, zoek=lambda _: "npm")
+    assert uit["passed"] is False and len(gezien) == 1
+    assert uit["reason"] == "Project check failed: test"
+
+
+def test_dependencies_zonder_lifecycle_scripts_en_geen_verzonnen_succes(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"build":"vite build"}}')
+    assert bp.verifieer_bouw(str(tmp_path), zoek=lambda _: "npm")["passed"] is False
+    (tmp_path / "package-lock.json").write_text('{}')
+    calls = []
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0)
+    assert bp.verifieer_bouw(str(tmp_path), run=run, zoek=lambda _: "npm")["passed"] is True
+    assert "--ignore-scripts" in calls[0]
+
+
 @pytest.fixture
 def trading_os_repo(tmp_path, monkeypatch):
     """Kale remote met main én snapshot-2026-10-17; werkcheckout op axe-agent vanaf snapshot."""

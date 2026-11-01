@@ -44,6 +44,7 @@ import logging
 import os
 import re
 import subprocess
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
@@ -60,7 +61,7 @@ STANDAARD_MOTOREN = {"axe-core": "claude", "code-agent": "cursor", "axe-algo": "
 ABONNEMENTEN = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2")
 
 STAAT_PAD = os.path.expanduser(os.environ.get("AXE_PLANNER_STAAT", "~/.axe/planner.json"))
-INTERVAL_S = int(os.environ.get("AXE_PLANNER_INTERVAL_S", str(3 * 3600)))
+INTERVAL_S = max(60, int(os.environ.get("AXE_PLANNER_INTERVAL_S", "300")))
 DAGBUDGET = int(os.environ.get("AXE_PLANNER_DAGBUDGET", "10"))
 MAX_VOORSTELLEN = 3
 MAX_POGINGEN = 2
@@ -68,6 +69,7 @@ PLANNER_RUN_S = 300
 # Een bouwrun schrijft code en draait daarna tests, typecheck, lint en build. In
 # 300 s lukte dat niet ("Claude Code 4 liep langer dan 300s", 15 okt).
 BOUW_RUN_S = 1500
+BOUW_CHECKS_S = 1200
 # De sleutel-route: de proxy op de VPS vult zijn eigen server-sleutel aan.
 PROXY_URL = os.environ.get("AXE_PLANNER_PROXY", "https://api.axecompanion.com/proxy/ai")
 SLEUTEL_MODEL = {"provider": "groq", "model": "openai/gpt-oss-120b", "format": "openai",
@@ -693,6 +695,7 @@ class Planner:
         # agent_runner.houd_warm op de agent-host; None = geen check-ins (tests, VPS).
         self.houd_warm = houd_warm
         self.bezig = False
+        self._ronde_slot = threading.Lock()
 
     # context ---------------------------------------------------------------
     def _herinneringen(self, agent: str, n: int = 25) -> str:
@@ -744,7 +747,7 @@ class Planner:
                         "payload,metadata,created_at,updated_at")
                     .eq("capability", "planner").eq("assignee", agent)
                     .in_("status", ["pending", "running"])
-                    .order("created_at", desc=True).limit(20).execute().data) or []
+                    .order("created_at", desc=False).limit(100).execute().data) or []
         except Exception as e:  # noqa: BLE001
             log.warning("planner: open taken lezen faalde: %s", e)
             return []
@@ -804,11 +807,15 @@ class Planner:
                 return None, f"{motor} is bezig met ander werk; volgende ronde"
         except ImportError:
             pass
-        tel_gebruik(staat, motor, vandaag)
         if modus == "acceptEdits":
             uit = self.run_agent(repo, prompt, modus, BOUW_RUN_S, motor, checks=True)
         else:
             uit = self.run_agent(repo, prompt, modus, PLANNER_RUN_S, motor)
+        # De runner kan zelf een andere stoel kiezen. Boek op de werkelijke
+        # stoelen, niet iedere beurt op de voorkeur die niet eens draaide.
+        for gebruikt in dict.fromkeys(uit.get("seats_tried") or [uit.get("engine") or motor]):
+            tel_gebruik(staat, gebruikt, vandaag)
+        staat["laatste_motor"] = uit.get("engine") or motor
         if uit.get("status") == "ok":
             (staat.get("account_kapot") or {}).pop(motor, None)
             # Een echte run ververst het token net zo goed als een check-in.
@@ -956,7 +963,7 @@ class Planner:
                           # zette er "No handler for planner" op (10-11 okt). Drie runs
                           # (de accountterugval) plus marge.
                           "lease_expires_at": (datetime.now(timezone.utc)
-                                               + timedelta(seconds=3 * BOUW_RUN_S + 300)).isoformat()})
+                                               + timedelta(seconds=3 * BOUW_RUN_S + BOUW_CHECKS_S + 300)).isoformat()})
                  .eq("id", taak_id).eq("status", "pending").eq("capability", "planner")
                  .execute().data)
         return bool(rijen)
@@ -974,6 +981,13 @@ class Planner:
                 meta["geen_wijziging"] = True
                 tekst = f"[No changes in the repo after this run]\n\n{tekst}" if tekst else tekst
         meta["uiStatus"] = "done" if tekst else "blocked"
+        if is_bouw_next_step(taak) and tekst:
+            # Een coding-run kan klaar zijn terwijl het product nog niet live is.
+            publicatie = (bewijs or {}).get("publicatie") or {}
+            levering = "review_required" if publicatie.get("gepusht") else "not_delivered"
+            meta["delivery_status"] = levering
+            meta["uiStatus"] = "in-progress" if levering == "review_required" else "blocked"
+            meta["progress"] = 75 if levering == "review_required" else 0
         meta["pogingen"] = int(meta.get("pogingen") or 0) + (0 if tekst else 1)
         # Niet eindeloos opnieuw: dat kost elke ronde budget voor niets.
         opgegeven = not tekst and meta["pogingen"] >= MAX_POGINGEN
@@ -992,6 +1006,8 @@ class Planner:
         else:
             velden["error"] = {"message": fout[:1000]}
         self.sb().table("core_tasks").update(velden).eq("id", taak["id"]).execute()
+        if is_bouw_next_step(taak):
+            self._meld_bouw(taak, meta, tekst, fout, bewijs)
         if tekst:
             agent = meta.get("agent") or "axe-core"
             try:
@@ -1007,6 +1023,32 @@ class Planner:
                 }).execute()
             except Exception as e:  # noqa: BLE001
                 log.warning("planner: uitkomst naar geheugen faalde: %s", e)
+
+    def _meld_bouw(self, taak: dict, meta: dict, tekst: Optional[str], fout: str,
+                   bewijs: Optional[dict]) -> None:
+        """Eén korte, eerlijke uitkomst naar dezelfde bel op Macs en Samsung."""
+        titel = str(taak.get("title") or "Product build")[:140]
+        pub = (bewijs or {}).get("publicatie") or {}
+        if not tekst:
+            soort, status = "error", "blocked"
+            detail = f"{fout[:350]}. AXE will retry within its task budget, then move to other work."
+        elif pub.get("gepusht"):
+            soort, status = "info", "ready for review"
+            detail = f"Project checks passed. Code is pushed. Integration and deployment are not verified. {pub.get('pr') or ''}"
+        else:
+            soort, status = "warning", "not delivered"
+            detail = str(pub.get("reden") or "No verified code delivery. AXE has not marked this product live.")[:400]
+        sleutel = f"{taak['id']}:{status}:{detail}"
+        if (taak.get("metadata") or {}).get("last_build_notice") == sleutel:
+            return
+        try:
+            self.sb().table("core_notifications").insert({
+                "type": soort, "message": f"Task {status}: {titel}\n{detail}"[:1900],
+            }).execute()
+            meta["last_build_notice"] = sleutel
+            self.sb().table("core_tasks").update({"metadata": meta}).eq("id", taak["id"]).execute()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("planner: bouwmelding kon niet worden opgeslagen: %s", exc)
 
     def _voer_uit(self, staat: dict, taak: dict, motoren: Optional[dict] = None,
                   engines: Optional[dict] = None) -> dict:
@@ -1067,9 +1109,12 @@ class Planner:
             return {"taak": taak["id"], "ok": True, "overgeslagen": reden, "bewijs": bewijs,
                     "motoren": [motor]}
         extra = ""
+        eerder = ((meta.get("bewijs") or {}).get("verification") or {})
+        if eerder.get("passed") is False:
+            extra += "\nPrevious host verification failed. Fix this before adding new work:\n" + json.dumps(eerder, ensure_ascii=False)[-6000:] + "\n"
         if bouwljist is not None:
             import bouw_publiceer
-            extra = "\n" + bouw_publiceer.trading_os_prompt(bouwljist) + "\n"
+            extra += "\n" + bouw_publiceer.trading_os_prompt(bouwljist) + "\n"
         if schrijven and bouw_publiceer_aan():
             extra += self._archief_hint(repo, vers)
         prompt = (
@@ -1104,6 +1149,18 @@ class Planner:
                 "basis": "snapshot-2026-10-17",
                 "repo": "Ldezeeuw445/trading-os-app",
             }
+        if is_bouw_next_step(taak) and bewijs and bewijs.get("veranderd"):
+            import bouw_publiceer
+            from agent_runner import _repo_pad
+            pad, _, pad_fout = _repo_pad(repo)
+            verificatie = ({"passed": False, "reason": pad_fout, "checks": []} if pad_fout else
+                           bouw_publiceer.verifieer_bouw(pad, budget_s=BOUW_CHECKS_S))
+            bewijs["verification"] = verificatie
+            if not verificatie.get("passed"):
+                bewijs["agent_report"] = str(tekst or "")[:4000]
+                fout = str(verificatie.get("reason") or "Project checks are not verified")
+                self._sluit(taak, None, fout, staat.get("laatste_motor") or geprobeerd[-1], bewijs)
+                return {"taak": taak["id"], "ok": False, "fout": fout, "bewijs": bewijs, "motoren": geprobeerd}
         if bewijs and bewijs.get("veranderd"):
             # Vastleggen en als draft-PR op GitHub, anders stapelt het werk zich
             # ongezien op in de checkout op de Mac (zie bouw_publiceer.py).
@@ -1114,7 +1171,7 @@ class Planner:
                 tekst = f"{regel}\n\n{tekst}"
             elif pub.get("geblokkeerd"):
                 tekst = f"[Not pushed: {pub.get('reden')}. The change stays in the checkout for review.]\n\n{tekst}"
-        self._sluit(taak, tekst, fout, geprobeerd[-1], bewijs)
+        self._sluit(taak, tekst, fout, staat.get("laatste_motor") or geprobeerd[-1], bewijs)
         return {"taak": taak["id"], "ok": bool(tekst), "fout": fout or None, "motoren": geprobeerd,
                 **({"bewijs": bewijs} if bewijs else {})}
 
@@ -1374,7 +1431,7 @@ class Planner:
 
     # ronde -----------------------------------------------------------------
     def ronde(self, motoren: Optional[dict] = None) -> dict:
-        if self.bezig:
+        if not self._ronde_slot.acquire(blocking=False):
             return {"overgeslagen": "er loopt al een ronde"}
         self.bezig = True
         staat = lees_staat()
@@ -1434,8 +1491,11 @@ class Planner:
         finally:
             verslag["klaar"] = datetime.now(timezone.utc).isoformat()
             staat["laatste_ronde"] = verslag
-            schrijf_staat(staat)
-            self.bezig = False
+            try:
+                schrijf_staat(staat)
+            finally:
+                self.bezig = False
+                self._ronde_slot.release()
         return verslag
 
 

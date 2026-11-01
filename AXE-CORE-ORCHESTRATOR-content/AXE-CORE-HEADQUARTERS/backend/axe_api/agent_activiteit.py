@@ -418,7 +418,7 @@ def agent_status(
         # (elke 3 u, met een dagbudget): zeg dat, in plaats van "a worker will pick it up".
         if t.get("capability") == "planner" and t.get("status") == "pending":
             n = sum(1 for x in rij if x.get("capability") == "planner")
-            reden = f"{n} planned task(s) in its backlog; the planner on the Mac picks them up every 3 hours."
+            reden = f"{n} planned task(s) in its backlog; waiting for the next Mac planner run and an available CLI account."
         if laatste_event and laatste_event.get("task_id") == t.get("id") and soort_van(laatste_event) == "waiting_capacity":
             reden = "Waiting for DAX capacity."
         return resultaat("QUEUED", reden, t, missie_van(t))

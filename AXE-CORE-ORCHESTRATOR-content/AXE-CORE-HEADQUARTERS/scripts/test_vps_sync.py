@@ -5,11 +5,24 @@ import ast
 import json
 import os
 import sys
+import subprocess
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vps_sync as vs
+
+
+def test_ssh_fout_is_geen_lege_succesvolle_inventaris(monkeypatch):
+    monkeypatch.setattr(vs.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a[0], 255, "", "permission denied"))
+    with pytest.raises(RuntimeError, match="connection failed"):
+        vs.remote_sums()
+
+
+def test_lege_remote_hashes_zijn_onbekend_niet_in_sync(monkeypatch, capsys):
+    monkeypatch.setattr(vs, "ssh", lambda _: "")
+    assert vs.cmd_check(None) == 2
+    assert "unknown" in capsys.readouterr().err
 
 
 def test_manifest_heeft_de_servermodules_die_199_miste():

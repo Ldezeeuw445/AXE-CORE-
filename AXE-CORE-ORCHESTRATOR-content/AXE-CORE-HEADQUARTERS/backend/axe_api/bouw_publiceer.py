@@ -42,7 +42,11 @@ import binascii
 import json
 import os
 import re
+import shutil
+import signal
 import subprocess
+import tempfile
+import time
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
@@ -455,13 +459,27 @@ def zorg_voor_werkbranch(git: Git, pad: str, branch: str = WERKBRANCH,
 
 
 def parse_bouwljist(tekst: str) -> dict:
-    """Regels bovenaan + checklist in volgorde. `volgende` is de eerste open taak."""
+    """Checklist of genummerde Queue, zonder de sectie 'Blocked on Luka' te bouwen."""
     regels_lijnen: list[str] = []
     taken: list[dict] = []
     gezien_check = False
+    in_queue = False
     for regel in (tekst or "").splitlines():
+        kop = re.match(r"^\s*#{1,6}\s+(.+?)\s*$", regel)
+        if kop:
+            naam = kop.group(1).strip().lower()
+            if naam.startswith(("blocked", "blokk", "waiting", "wacht")):
+                break
+            in_queue = naam in ("queue", "taken", "bouwvolgorde", "ordered queue") or naam.startswith("queue ")
         m = CHECKBOX.match(regel)
+        nummer = re.match(r"^\s*(\d+)[.)]\s+(.+)$", regel) if in_queue and not m else None
         if not m:
+            if nummer:
+                gezien_check = True
+                rest = nummer.group(2).strip()
+                done = bool(re.match(r"(?:\*\*)?(?:DONE|COMPLETED|KLAAR)\b", rest, re.I))
+                taken.append({"id": nummer.group(1), "titel": rest, "done": done, "regel": rest})
+                continue
             if not gezien_check:
                 regels_lijnen.append(regel)
             continue
@@ -508,13 +526,98 @@ def trading_os_prompt(bouwljist: dict | None) -> str:
         delen.append(
             f"This run's task is the first undone item in {TRADING_OS_TAKEN}, in order: {volg['id']}.\n"
             f"{volg.get('titel') or volg.get('regel') or ''}\n"
-            "Skip everything already marked done ([x]). Implement only this item.\n"
+            "Skip everything already marked done ([x] or DONE). Implement only this item.\n"
             f"Start your report with the task id {volg['id']}."
         )
     else:
         reden = (bouwljist or {}).get("reden") or f"no open item in {TRADING_OS_TAKEN}"
         delen.append(f"Do not invent work. {reden}")
     return "\n\n".join(delen)
+
+
+def _draai_controle(cmd: list[str], *, timeout: float, **kw):
+    """Stop bij timeout ook de test/build-kindprocessen, niet alleen npm."""
+    with subprocess.Popen(cmd, start_new_session=True, **kw) as proc:
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+            raise
+        return subprocess.CompletedProcess(cmd, proc.returncode)
+
+
+def verifieer_bouw(pad: str, *, run: Callable = _draai_controle,
+                   zoek: Callable = shutil.which, budget_s: int = 1200) -> dict:
+    """De host draait repo-controles zelf; een CLI-verslag is nooit testbewijs.
+
+    Alleen vaste npm-scriptnamen, zonder shell of nieuwe CLI-rechten. Een
+    ontbrekende dependency krijgt één lockfile-installatie zonder lifecycle-
+    scripts. Uitvoer blijft lokaal: geen sleutels of testdata in meldingen.
+    """
+    from pathlib import Path
+    root = Path(pad)
+    if not (root / "package.json").is_file():
+        hq = root / "AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS"
+        if (hq / "package.json").is_file():
+            root = hq
+    try:
+        package = json.loads((root / "package.json").read_text(encoding="utf-8"))
+        scripts = package.get("scripts") or {}
+    except (OSError, ValueError, AttributeError):
+        return {"passed": False, "reason": "No readable package.json; configure project checks first", "checks": []}
+    npm = zoek("npm")
+    if not npm:
+        return {"passed": False, "reason": "npm is unavailable on this worker", "checks": []}
+    namen = [n for n in ("typecheck", "lint") if scripts.get(n)]
+    test = next((n for n in ("test", "test:unit", "test:naming") if scripts.get(n)), None)
+    if test:
+        namen.append(test)
+    if scripts.get("build"):
+        namen.append("build")
+    if not namen:
+        return {"passed": False, "reason": "No project checks configured", "checks": []}
+    checks: list[dict] = []
+    deadline = time.monotonic() + budget_s
+
+    def uitvoeren(naam: str, args: list[str]) -> bool:
+        try:
+            # Geen onbeperkte capture_output: een testlus kan veel uitvoer maken.
+            with tempfile.TemporaryFile() as logbestand:
+                p = run([npm, *args], cwd=str(root), stdin=subprocess.DEVNULL,
+                        stdout=logbestand, stderr=subprocess.STDOUT,
+                        env={**os.environ, "CI": "true"},
+                        timeout=max(1, deadline - time.monotonic()))
+                detail = ""
+                if p.returncode:
+                    from geheimen import verberg_geheimen
+                    logbestand.seek(0, os.SEEK_END)
+                    grootte = logbestand.tell()
+                    logbestand.seek(max(0, grootte - 4000))
+                    detail = verberg_geheimen(logbestand.read().decode("utf-8", "replace"))[-2000:]
+            checks.append({"name": naam, "command": ["npm", *args],
+                           "exit_code": p.returncode, "passed": p.returncode == 0,
+                           **({"detail": detail} if detail else {})})
+            return p.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            checks.append({"name": naam, "passed": False, "reason": "command unavailable or timed out"})
+            return False
+
+    if not (root / "node_modules").is_dir():
+        if not (root / "package-lock.json").is_file():
+            return {"passed": False, "reason": "Dependencies missing and no npm lockfile; setup required", "checks": []}
+        if not uitvoeren("dependencies", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"]):
+            return {"passed": False, "reason": "Dependency setup failed", "checks": checks}
+    for naam in namen:
+        args = ["run", naam]
+        if naam == test and re.search(r"\bvitest\b", scripts[naam]) and not re.search(r"\bvitest\s+run\b", scripts[naam]):
+            args += ["--", "--run"]
+        if not uitvoeren(naam, args):
+            return {"passed": False, "reason": f"Project check failed: {naam}", "checks": checks}
+    return {"passed": True, "checks": checks, "reason": "Project checks passed; deployment not measured"}
 
 
 def _eigenaar_repo(git: Git, pad: str) -> Optional[str]:

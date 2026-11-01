@@ -346,6 +346,36 @@ class TestVoerUitEerlijk:
         monkeypatch.setattr(pl, "_werkrepo", lambda gevraagd, streng=False: "axe-core")
         return pl, sb_rijen
 
+    def test_bouw_met_tekst_en_diff_maar_rode_hostcheck_wordt_niet_gepubliceerd(self, monkeypatch):
+        import agent_runner
+        import bouw_publiceer
+        pl, rijen = self._pl(monkeypatch, lambda *a, **k: {"status": "ok", "result": "Everything built!"})
+        monkeypatch.setattr(pl, "_canon", lambda repo: {"actie": "geen"})
+        monkeypatch.setattr(pl, "_ververs", lambda repo: {"actie": "geen"})
+        monkeypatch.setattr(pl, "_archief_hint", lambda *a: "")
+        monkeypatch.setattr(pl, "_bewijs", lambda repo: {"repo": repo, "leesbaar": True, "veranderd": True})
+        monkeypatch.setattr(agent_runner, "_repo_pad", lambda repo: ("/tmp/project", "axe-agent", None))
+        monkeypatch.setattr(bouw_publiceer, "verifieer_bouw", lambda pad, **kw: {"passed": False, "reason": "Project check failed: test", "checks": []})
+        monkeypatch.setattr(pl, "_publiceer", lambda *a: (_ for _ in ()).throw(AssertionError("niet pushen")))
+        taak = {"id": "bouw-rood", "title": "Build next step: AXE Core", "goal": "finish task",
+                "payload": {"repo": "axe-core"},
+                "metadata": {"agent": "code-agent", "motor": "claude2", "risico": "schrijven", "oorsprong_bouw": "ja"}}
+        uit = pl._voer_uit({}, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert uit["ok"] is False
+        assert not any(v.get("status") == "completed" for t, s, v in rijen if s == "update")
+        assert any("Project check failed" in v.get("message", "") for t, s, v in rijen if t == "core_notifications")
+
+    def test_gepushte_bouwrun_is_in_de_ui_nog_niet_live_of_done(self, monkeypatch):
+        pl, rijen = self._pl(monkeypatch, lambda *a: {})
+        taak = {"id": "bouw-pr", "title": "Build next step: AXE Companion", "metadata": {}}
+        bewijs = {"veranderd": True, "verification": {"passed": True},
+                  "publicatie": {"gepusht": True, "pr": "https://github.com/example/repo/pull/1"}}
+        pl._sluit(taak, "Changed feature", "", "claude2", bewijs)
+        rij = next(v for t, s, v in rijen if s == "update" and "result" in v)
+        assert rij["metadata"]["uiStatus"] == "in-progress"
+        assert rij["metadata"]["delivery_status"] == "review_required"
+        assert any("deployment are not verified" in v.get("message", "") for t, s, v in rijen if t == "core_notifications")
+
     def test_accountfout_springt_door_naar_het_volgende_account_en_meldt_een_keer(self, monkeypatch):
         gedraaid = []
 

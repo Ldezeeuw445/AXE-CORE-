@@ -47,7 +47,7 @@ TaskHandler = Callable[[dict[str, Any], "TaskContext"], Awaitable[dict[str, Any]
 # Oude rijen in core_tasks hadden 'code'/'trading'/'research' als capability.
 # Alleen `agentic` had een handler (gemeten 25 sep: no_handler). Die namen
 # gaan naar dezelfde lus; northsea_desk heeft zijn eigen drafts-only pad.
-AGENTIC_ALIASSEN = ("code", "trading", "research", "browser", "build", "computer_use", "general")
+AGENTIC_ALIASSEN = ("code", "trading", "research", "browser", "build", "computer_use", "general", "chat")
 
 
 def kies_handler(handlers: dict[str, TaskHandler], capability: str | None) -> TaskHandler | None:

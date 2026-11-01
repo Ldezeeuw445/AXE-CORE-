@@ -4899,9 +4899,9 @@ async def _planner_start():
                 if not bestaand:
                     sb().table("core_schedules").insert({
                         "name": "Planner: agents plannen hun werk", "job_key": "axe_core:planner", "app": "axe_core", "executor": "mac",
-                        "action_type": "planner", "action_payload": {}, "cron_expr": "10 */3 * * *", "timezone": "Europe/Amsterdam",
-                        "enabled": True, "max_runtime_s": 1800, "metadata": {"app": "axe_core"},
-                        "next_run_at": _planning.volgende("10 */3 * * *", "Europe/Amsterdam").isoformat(),
+                        "action_type": "planner", "action_payload": {}, "cron_expr": "*/5 * * * *", "timezone": "Europe/Amsterdam",
+                        "enabled": True, "max_runtime_s": 7200, "metadata": {"app": "axe_core"},
+                        "next_run_at": _planning.volgende("*/5 * * * *", "Europe/Amsterdam").isoformat(),
                         "description": "Alleen een vervolg op wat Luka vroeg, of één echte storing. Verzint geen projecten (planner.py).",
                     }).execute()
             except Exception as e:  # noqa: BLE001

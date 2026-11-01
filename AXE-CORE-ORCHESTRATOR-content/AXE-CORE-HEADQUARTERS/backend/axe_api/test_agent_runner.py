@@ -7,6 +7,7 @@ vroeg zou gewoon mogen schrijven. Precies het soort fout dat pas opvalt als er
 iets herschreven is dat je niet bedoelde.
 """
 import os
+import json
 import subprocess
 import tempfile
 import time
@@ -387,6 +388,8 @@ class TestBouwrunMagControleren:
         pad = _repo()
         monkeypatch.setenv("AGENT_REPOS", f"proef={pad}")
         monkeypatch.setattr(a, "_binary", lambda motor: "claude")
+        # Deze test meet argv-rechten; stoelverdeling wordt apart gemeten.
+        monkeypatch.setattr(a, "kies_vrije_stoel", lambda *a, **kw: "claude")
         gezien = []
         echte_run = subprocess.run
 
@@ -458,6 +461,24 @@ class TestStoelKeuze:
 
     def test_onbekende_motor_geen_stoel(self):
         assert a.kies_vrije_stoel("verzonnen") is None
+
+    def test_achtergrondbouw_balanceert_ook_als_de_voorkeur_vrij_is(self, monkeypatch):
+        monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
+        for naam in a.SEAT_VOLGORDE:
+            a._ACCOUNT_CACHE[naam] = (0, {"ingelogd": False})
+        for naam in ("claude2", "codex"):
+            a._ACCOUNT_CACHE[naam] = (0, {"ingelogd": True, "account": naam + "@example.com"})
+        monkeypatch.setattr(a, "agent_usage_status", lambda: {"claude2": {"runs_7d": 80}, "codex": {"runs_7d": 1}})
+        assert a.kies_vrije_stoel("claude2", balanceer=True) == "codex"
+        assert a.kies_vrije_stoel("claude2") == "claude2"
+
+    def test_snapshot_bevat_werkelijk_verbruik_zonder_prompts(self, monkeypatch):
+        monkeypatch.setattr(a, "_usage_state", lambda: {"events": [{"engine": "claude2", "ts": time.time(), "status": "ok"}]})
+        a._schrijf_stoel_snapshot()
+        with open(a._SEAT_SNAP) as f:
+            snap = json.load(f)
+        assert snap["events"][0]["engine"] == "claude2"
+        assert "prompt" not in snap["events"][0]
 
     def test_kiest_minste_gebruik_over_alle_merken_als_gevraagde_niet_kan(self, monkeypatch):
         monkeypatch.setattr(a, "_binary", lambda motor: motor["bin_default"])
