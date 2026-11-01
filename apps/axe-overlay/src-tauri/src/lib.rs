@@ -75,10 +75,20 @@ fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
     let win = app
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window missing".to_string())?;
-    let (w, h) = if expanded {
-        (560.0_f64, 560.0_f64)
+    let (screen_w, screen_h) = if let Ok(Some(m)) = app.primary_monitor() {
+        let scale = m.scale_factor();
+        (
+            m.size().width as f64 / scale,
+            m.size().height as f64 / scale,
+        )
     } else {
-        (560.0_f64, 54.0_f64)
+        (1920.0, 1080.0)
+    };
+    let w = (screen_w * 0.34).max(720.0).round();
+    let h = if expanded {
+        (w * 0.7).max(screen_h * 0.42).max(720.0).round()
+    } else {
+        80.0
     };
     let x = if let Ok(Some(m)) = app.primary_monitor() {
         let size = m.size();
@@ -152,7 +162,11 @@ pub fn run() {
                     let size = m.size();
                     let scale = m.scale_factor();
                     let screen_w = size.width as f64 / scale;
-                    let w = 560.0_f64;
+                    let w = if let Ok(Some(m)) = app.primary_monitor() {
+                        let scale = m.scale_factor();
+                        let sw = m.size().width as f64 / scale;
+                        (sw * 0.34).max(720.0).round()
+                    } else { 720.0 };
                     let x = ((screen_w - w) / 2.0).max(0.0);
                     let _ = win.set_position(LogicalPosition::new(x, 0.0));
                 }

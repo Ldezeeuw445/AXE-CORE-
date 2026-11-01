@@ -16,8 +16,8 @@
       {
         "title": "AXE Overlay",
         "label": "overlay",
-        "width": 560,
-        "height": 54,
+        "width": 1306,
+        "height": 80,
         "minWidth": 140,
         "minHeight": 40,
         "resizable": false,

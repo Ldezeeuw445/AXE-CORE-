@@ -19,8 +19,18 @@ import {
 import { NOTCH_TABS, tabActie, tabBadge, type NotchTab } from "./tabs";
 import "./App.css";
 
-const COLLAPSED = { w: 560, h: 54 };
-const EXPANDED = { w: 560, h: 560 };
+function notchMetrics(screenW = 1920, screenH = 1080) {
+  const w = Math.max(720, Math.round(screenW * 0.34));
+  const collapsedH = 80;
+  const expandedH = Math.max(Math.round(w * 0.7), Math.round(screenH * 0.42), 720);
+  return { collapsed: { w, h: collapsedH }, expanded: { w, h: expandedH } };
+}
+const _m = notchMetrics(
+  typeof window !== "undefined" ? window.screen.width : 1920,
+  typeof window !== "undefined" ? window.screen.height : 1080,
+);
+const COLLAPSED = _m.collapsed;
+const EXPANDED = _m.expanded;
 /** Match CSS emerge/retract durations */
 const EMERGE_MS = 520;
 const RETRACT_MS = 420;

@@ -1,9 +1,11 @@
 .axe-ov {
+  --axe-notch-scale: 1;
+  --axe-notch-h: 80px;
   position: relative;
   width: 100%;
-  max-width: 560px;
+  max-width: none;
   margin: 0 auto;
-  border-radius: 0 0 28px 28px;
+  border-radius: 0 0 calc(28px * var(--axe-notch-scale)) calc(28px * var(--axe-notch-scale));
   overflow: hidden;
   background: radial-gradient(ellipse at 50% 0%, #1a2233 0%, #07090e 70%);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -14,9 +16,10 @@
   user-select: none;
   display: flex;
   flex-direction: column;
-  min-height: 54px;
+  min-height: var(--axe-notch-h);
+  font-size: calc(13px * var(--axe-notch-scale));
 }
-.axe-ov--notch { min-height: 54px; }
+.axe-ov--notch { min-height: var(--axe-notch-h); }
 .axe-ov--open {
   min-height: 100%;
   height: 100%;
@@ -36,7 +39,8 @@
 .axe-ov__top {
   position: relative; z-index: 1;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; min-height: 54px; gap: 8px;
+  padding: calc(10px * var(--axe-notch-scale)) calc(16px * var(--axe-notch-scale));
+  min-height: var(--axe-notch-h); gap: calc(8px * var(--axe-notch-scale));
   flex-shrink: 0;
 }
 .axe-ov__icons { display: flex; gap: 10px; align-items: center; color: rgba(255,255,255,.55); }
@@ -47,17 +51,20 @@
 .axe-ov__ico:hover, .axe-ov__ico[aria-pressed="true"] { color: #fff; background: rgba(255,255,255,.06); }
 .axe-ov__ico--hot { color: #22d3ee !important; }
 .axe-ov__blob {
-  width: 38px; height: 28px; border-radius: 14px; border: none; cursor: pointer; flex-shrink: 0;
+  width: calc(38px * var(--axe-notch-scale)); height: calc(28px * var(--axe-notch-scale));
+  border-radius: calc(14px * var(--axe-notch-scale)); border: none; cursor: pointer; flex-shrink: 0;
   background: radial-gradient(circle at 50% 40%, #fff 0%, #eef1f6 55%, #c5ccd8 100%);
   box-shadow: 0 0 24px rgba(255,255,255,.55), 0 4px 12px rgba(0,0,0,.35);
   position: relative;
 }
 .axe-ov__blob::before, .axe-ov__blob::after {
-  content: ""; position: absolute; width: 4px; height: 4px; background: #151515;
+  content: ""; position: absolute;
+  width: calc(4px * var(--axe-notch-scale)); height: calc(4px * var(--axe-notch-scale));
+  background: #151515;
   border-radius: 50%; top: 11px;
 }
-.axe-ov__blob::before { left: 12px; }
-.axe-ov__blob::after { right: 12px; }
+.axe-ov__blob::before { left: calc(12px * var(--axe-notch-scale)); }
+.axe-ov__blob::after { right: calc(12px * var(--axe-notch-scale)); }
 .axe-ov__body {
   position: relative; z-index: 1;
   padding: 0 16px 16px;
@@ -66,10 +73,10 @@
 }
 .axe-ov__manager {
   display: flex; align-items: center; gap: 8px;
-  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,.55);
+  font-size: calc(11px * var(--axe-notch-scale)); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,.55);
 }
 .axe-ov__mgr-btn {
-  background: rgba(255,255,255,.06); border: none; color: #fff; width: 22px; height: 22px;
+  background: rgba(255,255,255,.06); border: none; color: #fff; width: calc(22px * var(--axe-notch-scale)); height: calc(22px * var(--axe-notch-scale));
   border-radius: 6px; cursor: pointer;
 }
 .axe-ov__appr-badge {
@@ -131,7 +138,7 @@
   border-radius: 999px; padding: 8px 10px 8px 12px; flex-shrink: 0;
 }
 .axe-ov__input input {
-  flex: 1; background: transparent; border: none; outline: none; color: #E8EAED; font-size: 13.5px;
+  flex: 1; background: transparent; border: none; outline: none; color: #E8EAED; font-size: calc(13.5px * var(--axe-notch-scale));
 }
 .axe-ov__attach-btn {
   background: none; border: none; color: rgba(255,255,255,.55); cursor: pointer; display: grid; place-items: center;
