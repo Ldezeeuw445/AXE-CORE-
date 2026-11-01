@@ -119,7 +119,8 @@ export default function TerminalsPage() {
   }, []);
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden"
+    <motion.div className="axe-tabruimte axe-terminals-v3 flex min-h-0 flex-1 flex-col overflow-hidden"
+      data-axe-terminals="v3"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
       <TabRail kant="links">

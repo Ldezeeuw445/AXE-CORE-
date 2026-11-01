@@ -149,7 +149,8 @@ export default function TableEditor() {
 
   return (
     <motion.div
-      className="axe-tabruimte flex min-h-0 flex-1 overflow-hidden"
+      className="axe-tabruimte axe-table-editor-v3 flex min-h-0 flex-1 overflow-hidden"
+      data-axe-table-editor="v3"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}

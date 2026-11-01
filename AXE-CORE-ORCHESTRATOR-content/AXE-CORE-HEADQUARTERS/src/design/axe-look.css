@@ -9107,3 +9107,17 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-knowledge="v3"] .widget-card {
   border-radius: 16px;
 }
+
+/* ─── MCP / Infra / Terminals / Table / Cron / Control v3 ─────────────── */
+[data-axe-mcp="v3"] .axe-kaart,
+[data-axe-mcp="v3"] .widget-card,
+[data-axe-infrastructure="v3"] .axe-kaart,
+[data-axe-infrastructure="v3"] .widget-card,
+[data-axe-terminals="v3"] .axe-kaart,
+[data-axe-table-editor="v3"] .axe-kaart,
+[data-axe-cron-manager="v3"] .axe-kaart,
+[data-axe-cron-manager="v3"] table,
+[data-axe-control-plane="v3"] .axe-kaart,
+[data-axe-control-plane="v3"] .widget-card {
+  border-radius: 16px;
+}
