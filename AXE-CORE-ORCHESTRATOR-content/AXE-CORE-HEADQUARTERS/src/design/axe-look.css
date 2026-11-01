@@ -8926,3 +8926,113 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   backdrop-filter: blur(12px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
 }
+
+/* ─── Shared hub v3 (mockup .hub / .hub-grid / .tile) ─────────────────── */
+.axe-hub-v3 {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 6px 12px;
+  overflow: auto;
+}
+.axe-hub-v3-kop h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  color: #eaf2f7;
+}
+.axe-hub-v3-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.78);
+  margin-left: 8px;
+}
+.axe-hub-v3-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1;
+  align-content: start;
+}
+.axe-hub-v3-grid.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.axe-hub-v3-grid.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.axe-hub-v3-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 16px 16px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.55);
+  cursor: pointer;
+  color: inherit;
+  min-height: 110px;
+}
+.axe-hub-v3-tile:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(34, 211, 238, 0.06);
+}
+.axe-hub-v3-tile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.axe-hub-v3-label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.8);
+  font-weight: 600;
+}
+.axe-hub-v3-note {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #eaf2f7;
+  line-height: 1.35;
+}
+.axe-hub-v3-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: rgba(148, 163, 184, 0.9);
+}
+.axe-hub-v3-badge[data-tone="ex"] { color: #fbbf24; border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
+.axe-hub-v3-badge[data-tone="docs"] { color: #67e8f9; border-color: rgba(34, 211, 238, 0.35); background: rgba(34, 211, 238, 0.1); }
+.axe-hub-v3-badge[data-tone="stage"] { color: #a78bfa; border-color: rgba(167, 139, 250, 0.35); background: rgba(167, 139, 250, 0.1); }
+.axe-hub-v3-badge[data-tone="wait"] { color: #fb923c; border-color: rgba(251, 146, 60, 0.35); background: rgba(251, 146, 60, 0.1); }
+.axe-hub-v3-badge[data-tone="live"] { color: #34d399; border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.1); }
+@media (max-width: 900px) {
+  .axe-hub-v3-grid, .axe-hub-v3-grid.g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .axe-hub-v3-grid, .axe-hub-v3-grid.g2, .axe-hub-v3-grid.g4 { grid-template-columns: 1fr; }
+}
+
+/* ─── NorthSea v3 (keep realistic map; polish shell) ──────────────────── */
+.axe-northsea-v3 {
+  position: relative;
+}
+.axe-northsea-v3 .axe-plaat,
+.axe-northsea-v3.axe-plaat {
+  border-radius: 18px;
+}
+[data-axe-northsea="v3"] .axe-desk-tabs {
+  border-radius: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  background: rgba(6, 16, 24, 0.72);
+}
+[data-axe-northsea="v3"] [data-axe-doel="axe-chase"] {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(12, 16, 22, 0.88);
+  backdrop-filter: blur(10px);
+}
