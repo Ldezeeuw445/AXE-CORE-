@@ -161,7 +161,7 @@ export default function DeviceManager() {
   };
 
   return (
-    <div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5">
+    <div className="axe-tabruimte axe-device-v3 flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" data-axe-device="v3">
       {/* Kop — op smalle schermen wrappen de knoppen onder de titel. */}
       <header className="flex flex-none flex-wrap items-start justify-between gap-x-4 gap-y-3 pb-4">
         <div className="min-w-0">

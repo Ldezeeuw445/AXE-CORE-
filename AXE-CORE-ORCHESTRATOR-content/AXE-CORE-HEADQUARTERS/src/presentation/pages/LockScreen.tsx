@@ -292,7 +292,7 @@ export default function LockScreen() {
   // 1 van UI-MAATSTAF). De schil rendert /lock als command-surface, dus dit
   // vult de hele viewport zonder chrome.
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div className="axe-lock-v3 relative flex h-full min-h-0 w-full flex-col overflow-hidden" data-axe-lock="v3">
       <MobileGlass />
       <div className="relative z-[1] mx-auto flex h-full w-full max-w-md flex-col px-4 pb-4 pt-2">
         <LockScreenContent />
