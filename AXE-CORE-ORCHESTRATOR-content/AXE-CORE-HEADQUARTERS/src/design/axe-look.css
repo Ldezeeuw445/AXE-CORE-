@@ -9121,3 +9121,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-control-plane="v3"] .widget-card {
   border-radius: 16px;
 }
+
+/* ─── CrewAI / Developer / Browser / Computer-use v3 ──────────────────── */
+[data-axe-crewai="v3"] .axe-kaart,
+[data-axe-crewai="v3"] .widget-card,
+[data-axe-developer="v3"] .axe-kaart,
+[data-axe-browser="v3"],
+[data-axe-computer-use="v3"] .axe-kaart,
+[data-axe-computer-use="v3"] .widget-card {
+  border-radius: 16px;
+}

@@ -115,7 +115,7 @@ export default function CommandCenter() {
   useEffect(() => { loadTree(); }, [activeRepo]);
 
   return (
-    <motion.div className="axe-plaat axe-tabruimte axe-tabruimte--vullen h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="axe-plaat axe-tabruimte axe-tabruimte--vullen axe-developer-v3 h-full flex flex-col" data-axe-developer="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
         <FileCode size={12} style={{ color: 'var(--accent-cyan)' }} />
