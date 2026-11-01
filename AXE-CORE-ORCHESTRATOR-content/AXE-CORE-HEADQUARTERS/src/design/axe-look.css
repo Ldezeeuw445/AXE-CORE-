@@ -9060,3 +9060,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-status="v3"] .widget-card {
   border-radius: 16px;
 }
+
+/* ─── Apps / Brief / Ledger / Finance v3 ──────────────────────────────── */
+[data-axe-apps="v3"] .axe-kaart,
+[data-axe-apps="v3"] .widget-card,
+[data-axe-brief="v3"] .axe-kaart,
+[data-axe-brief="v3"] .widget-card,
+[data-axe-ledger="v3"] .axe-kaart,
+[data-axe-ledger="v3"] table,
+[data-axe-finance="v3"] .axe-kaart,
+[data-axe-finance="v3"] .widget-card {
+  border-radius: 16px;
+}
+[data-axe-apps="v3"] .axe-tabruimte,
+[data-axe-finance="v3"] .axe-tabruimte {
+  gap: 12px;
+}

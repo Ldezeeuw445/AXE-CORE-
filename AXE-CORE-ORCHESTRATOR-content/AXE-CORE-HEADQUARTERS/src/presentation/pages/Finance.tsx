@@ -119,7 +119,8 @@ export default function Finance() {
 
   return (
     <motion.div
-      className="flex min-h-0 flex-1 flex-col"
+      className="axe-finance-v3 flex min-h-0 flex-1 flex-col"
+      data-axe-finance="v3"
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}

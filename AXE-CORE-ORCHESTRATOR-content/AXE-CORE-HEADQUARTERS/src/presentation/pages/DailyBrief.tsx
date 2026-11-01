@@ -75,6 +75,7 @@ export default function DailyBrief() {
   const ververs = useCallback(() => { setBezig(true); setVerverst(n => n + 1); }, []);
 
   return (
+    <div className="axe-brief-v3 flex min-h-0 flex-1 flex-col" data-axe-brief="v3">
     <TabRuimte vullen>
       <Page
         title="Daily Brief"
@@ -169,5 +170,6 @@ export default function DailyBrief() {
         )}
       </Page>
     </TabRuimte>
+    </div>
   );
 }
