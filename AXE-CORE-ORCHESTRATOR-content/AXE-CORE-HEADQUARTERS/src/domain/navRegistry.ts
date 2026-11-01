@@ -169,5 +169,5 @@ export function findRouteForRuntimeNodeId(nodeId: string): string | undefined {
   return RUNTIME_NODE_ROUTES[nodeId];
 }
 
-/** Fase 1 desktop primary shell (BottomNav). Deep routes stay reachable via hubs. */
-export const PRIMARY_NAV_PATHS = ['/', '/managers', '/northsea', '/trading', '/bouwen', '/systeem'] as const;
+/** AXE Core v3 desktop primary shell (BottomNav). Deep routes stay reachable via palette/hubs/orb. */
+export const PRIMARY_NAV_PATHS = ['/', '/managers', '/calendar', '/code-editor', '/tasks', '/settings'] as const;
