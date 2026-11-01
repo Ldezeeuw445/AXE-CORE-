@@ -20,7 +20,7 @@ export default function Trading() {
   if (phone) return <PhoneTrading />;
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--bg-base)' }}>
+    <div className="axe-trading-desk-v3 h-full flex flex-col" data-axe-trading-desk="v3" style={{ background: 'var(--bg-base)' }}>
       <div
         className="hidden sm:flex items-center gap-2 px-4 py-2 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
