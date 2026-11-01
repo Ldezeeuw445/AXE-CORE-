@@ -17,6 +17,7 @@ import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFee
 import { taakAlsBron, voegWerkSamen } from '@/domain/werkBron';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
 import PhoneTasks from '@/presentation/pages/phone/PhoneTasks';
+import { TasksDesk } from '@/presentation/components/tasks/TasksDesk';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -372,7 +373,7 @@ export default function Tasks() {
 
   return (
     /* Flexkolom: knoppen en cijfers vast, de takenlijst krijgt de rest. */
-    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex min-h-0 flex-1 flex-col axe-tasks-page" data-axe-tasks="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <TabRail kant="links">
         <SchuifBalk
           groepen={[{
@@ -410,6 +411,15 @@ export default function Tasks() {
           </button>
         </div>
       </div>
+
+      <TasksDesk
+        tasks={tasks}
+        loading={loading}
+        initialSelectedId={openId}
+        onNew={() => setAdding(true)}
+        onMarkDone={(id) => { void updateStatus(id, 'done'); }}
+        onToggleDone={(id, done) => { void updateStatus(id, done ? 'done' : 'todo'); }}
+      />
 
       <PlannerTaken />
 
