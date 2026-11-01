@@ -18,9 +18,8 @@ import { ToolCallingSection } from '@/presentation/components/settings/ToolCalli
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { MeldingenSection } from '@/presentation/components/settings/MeldingenSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
-import { TabRail } from '@/presentation/components/layout/useTabRail';
 import {
-  TabRuimte, Kaart, KaartRaster, SectieBlok, SchuifBalk,
+  Kaart, KaartRaster, SectieBlok,
 } from '@/presentation/components/layout/tabMaatstaf';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
@@ -1977,6 +1976,58 @@ function TrustLevelsSection() {
 }
 
 /* ─── Main Settings page ──────────────────────────────────────────── */
+
+function PreferencesV3Card() {
+  const [bottomNav, setBottomNav] = useState(() => localStorage.getItem('axe_pref_bottom_nav') !== '0');
+  const [voiceOrb, setVoiceOrb] = useState(() => localStorage.getItem('axe_pref_voice_orb') !== '0');
+  const [demoBanner, setDemoBanner] = useState(() => localStorage.getItem('axe_pref_demo_banner') !== '0');
+  const [compactTop, setCompactTop] = useState(() => localStorage.getItem('axe_pref_compact_top') === '1');
+
+  const toggle = (key: string, value: boolean, set: (v: boolean) => void) => {
+    const next = !value;
+    set(next);
+    localStorage.setItem(key, next ? '1' : '0');
+  };
+
+  return (
+    <div className="axe-settings-v3-card">
+      <div className="axe-settings-v3-card-label">Voorkeuren</div>
+      <div className="axe-settings-v3-row">
+        <div>
+          <div className="axe-settings-v3-row-title">Bottom nav altijd tonen</div>
+          <div className="axe-settings-v3-row-sub">Home · Managers · Calendar · Code · Tasks · Settings</div>
+        </div>
+        <button type="button" className={`axe-settings-v3-toggle${bottomNav ? '' : ' off'}`} aria-pressed={bottomNav}
+          onClick={() => toggle('axe_pref_bottom_nav', bottomNav, setBottomNav)} />
+      </div>
+      <div className="axe-settings-v3-row">
+        <div>
+          <div className="axe-settings-v3-row-title">Voice orb</div>
+          <div className="axe-settings-v3-row-sub">Push-to-talk in bottom nav</div>
+        </div>
+        <button type="button" className={`axe-settings-v3-toggle${voiceOrb ? '' : ' off'}`} aria-pressed={voiceOrb}
+          onClick={() => toggle('axe_pref_voice_orb', voiceOrb, setVoiceOrb)} />
+      </div>
+      <div className="axe-settings-v3-row">
+        <div>
+          <div className="axe-settings-v3-row-title">Voorbeelddata-banner</div>
+          <div className="axe-settings-v3-row-sub">Label op mock & demo cijfers</div>
+        </div>
+        <button type="button" className={`axe-settings-v3-toggle${demoBanner ? '' : ' off'}`} aria-pressed={demoBanner}
+          onClick={() => toggle('axe_pref_demo_banner', demoBanner, setDemoBanner)} />
+      </div>
+      <div className="axe-settings-v3-row">
+        <div>
+          <div className="axe-settings-v3-row-title">Compacte topbar</div>
+          <div className="axe-settings-v3-row-sub">Meer ruimte voor content</div>
+        </div>
+        <button type="button" className={`axe-settings-v3-toggle${compactTop ? '' : ' off'}`} aria-pressed={compactTop}
+          onClick={() => toggle('axe_pref_compact_top', compactTop, setCompactTop)} />
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
@@ -2025,32 +2076,39 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voice.micPermission]);
 
+  const SETTINGS_NAV: { id: string; label: string }[] = [
+    { id: 'accounts', label: 'Accounts' },
+    { id: 'usage', label: 'Usage' },
+    { id: 'providers', label: 'Providers' },
+    { id: 'voice', label: 'Voice' },
+    { id: 'trust', label: 'Trust' },
+    { id: 'routing', label: 'Routing' },
+    { id: 'system', label: 'System' },
+  ];
+
   return (
-    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <TabRail kant="links">
-        <SchuifBalk
-          groepen={[
-            {
-              titel: 'Setup',
-              items: [
-                { id: 'accounts', label: 'Subscriptions', actief: sectie === 'accounts', onKies: () => kiesSectie('accounts') },
-                { id: 'usage', label: 'Usage & Credits', actief: sectie === 'usage', onKies: () => kiesSectie('usage') },
-                { id: 'providers', label: 'Providers', actief: sectie === 'providers', onKies: () => kiesSectie('providers') },
-                { id: 'voice', label: 'Voice', actief: sectie === 'voice', onKies: () => kiesSectie('voice') },
-                { id: 'trust', label: 'Trust', actief: sectie === 'trust', onKies: () => kiesSectie('trust') },
-              ],
-            },
-            {
-              titel: 'System',
-              items: [
-                { id: 'routing', label: 'Routing', actief: sectie === 'routing', onKies: () => kiesSectie('routing') },
-                { id: 'system', label: 'Services', actief: sectie === 'system', onKies: () => kiesSectie('system') },
-              ],
-            },
-          ]}
-        />
-      </TabRail>
-      <TabRuimte className="axe-settings">
+    <motion.div
+      className="axe-settings-v3 flex min-h-0 flex-1 flex-col"
+      data-axe-settings="v3"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      <div className="axe-settings-v3-wrap">
+        <nav className="axe-settings-v3-nav" aria-label="Settings sections">
+          <div className="axe-settings-v3-nav-label">Settings</div>
+          {SETTINGS_NAV.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={sectie === item.id ? 'on' : undefined}
+              aria-current={sectie === item.id ? 'page' : undefined}
+              onClick={() => kiesSectie(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="axe-settings-v3-panel axe-settings">
         <BuildStampLine />
         {/* Says so when a save only reached this device. Without it, pasting an
             API key while signed out looks identical to pasting one that worked,
@@ -2058,8 +2116,9 @@ export default function SettingsPage() {
         <UnsyncedSettingsBanner />
 
         {sectie === 'accounts' && (
-        <SectieBlok id="accounts" titel="SUBSCRIPTIONS">
+        <SectieBlok id="accounts" titel="ACCOUNTS">
           <CodingSeatsSection />
+          <PreferencesV3Card />
         </SectieBlok>
         )}
 
@@ -2167,7 +2226,8 @@ export default function SettingsPage() {
         )}
 
 
-      </TabRuimte>
+        </div>
+      </div>
     </motion.div>
   );
 }
