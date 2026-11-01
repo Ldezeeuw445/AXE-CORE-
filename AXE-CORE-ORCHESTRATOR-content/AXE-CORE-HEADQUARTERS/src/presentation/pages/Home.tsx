@@ -128,9 +128,15 @@ export default function Home() {
     <motion.div className="flex flex-col h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
       <motion.div variants={iv} className="flex-1 min-h-0">
         <div
-          className="axe-scene h-full relative rounded-2xl overflow-hidden"
+          className="axe-scene axe-home-v3 h-full relative rounded-2xl overflow-hidden"
+          data-axe-home="v3"
           style={{ backgroundColor: 'var(--bg-base)' }}
         >
+          {!isMobile && (
+            <div className="axe-home-v3-hint" role="note">
+              Managers L/R van de core · klik → chat · Escape → terug · bottom nav = 1-klik
+            </div>
+          )}
 
           <div className="axe-home-status absolute top-4 left-4 flex items-center gap-2 z-20 over-canvas-group">
             {(() => {
