@@ -127,18 +127,22 @@ export function ManagerChat({
   onMissie,
   extraGoedkeuringen = [],
   tierRegel = '',
+  layout = 'morph',
 }: {
   agent: AxeAgent;
   job: AxeJob | null;
   jobs?: AxeJob[];
-  onSluit: () => void;
+  onSluit?: () => void;
   onOpvolging?: (tekst: string) => void;
   onGoedkeuring?: (akkoord: boolean) => void;
   extraGoedkeuringen?: Array<{ id: string; task_id?: string; wat?: string | null; waarom?: string | null; title?: string; detail?: string }>;
   server?: ServerAgent;
   onMissie?: (missieId: string, actie: 'pause' | 'resume') => void;
   tierRegel?: string;
+  /** morph = Home overlay; desk = Managers tab full-height panel */
+  layout?: 'morph' | 'desk';
 }) {
+  const desk = layout === 'desk';
   const sluitRef = useRef<HTMLButtonElement>(null);
   const draadRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -157,6 +161,7 @@ export function ManagerChat({
   }, [agent.id]);
 
   useEffect(() => {
+    if (!onSluit) return;
     const opToets = (e: KeyboardEvent) => { if (e.key === 'Escape') onSluit(); };
     window.addEventListener('keydown', opToets);
     return () => window.removeEventListener('keydown', opToets);
@@ -253,20 +258,30 @@ export function ManagerChat({
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.72, y: 12 }}
+      initial={desk ? { opacity: 0 } : { opacity: 0, scale: 0.72, y: 12 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.78, y: 8 }}
-      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-      className="pointer-events-auto"
-      role="dialog"
-      aria-modal="false"
+      exit={desk ? { opacity: 0 } : { opacity: 0, scale: 0.78, y: 8 }}
+      transition={desk ? { duration: 0.2 } : { type: 'spring', stiffness: 380, damping: 28 }}
+      className={desk ? 'pointer-events-auto h-full min-h-0 flex flex-col' : 'pointer-events-auto'}
+      role={desk ? 'region' : 'dialog'}
+      aria-modal={desk ? undefined : false}
       aria-label={`Chat with ${agent.name}`}
-      data-axe-morph-panel="core"
+      data-axe-morph-panel={desk ? undefined : 'core'}
       data-axe-manager-chat="v2"
+      data-axe-manager-layout={layout}
     >
       <Kaart
-        className="axe-manager-chat-kaart"
-        style={{
+        className={desk ? 'axe-manager-chat-kaart axe-manager-chat-kaart--desk h-full min-h-0 flex flex-col' : 'axe-manager-chat-kaart'}
+        style={desk ? {
+          width: '100%',
+          height: '100%',
+          maxWidth: 'none',
+          maxHeight: 'none',
+          borderRadius: 18,
+          borderColor: 'rgba(255,255,255,.08)',
+          background: 'linear-gradient(165deg, rgba(14,18,24,.96), rgba(8,10,14,.98))',
+          boxShadow: 'none',
+        } : {
           width: 'min(720px, 60vw)',
           height: 'min(780px, 75vh)',
           maxWidth: '92vw',
@@ -277,11 +292,13 @@ export function ManagerChat({
         }}
         titel={
           <span className="flex items-center gap-2 min-w-0">
-            <ManagerAvatar agent={agent} size={24} />
+            <ManagerAvatar agent={agent} size={desk ? 32 : 24} />
             <span className="min-w-0 truncate">
               {agent.name}
-              <span className="ml-1.5 font-normal" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
-                via AXE core{tierRegel ? ` · ${tierRegel}` : ''}
+              <span className="ml-1.5 font-normal" style={{ color: 'var(--text-muted)', fontSize: desk ? 12 : 10 }}>
+                {desk
+                  ? (agent.id === 'axe' ? 'Routes to the right DAX · one brain' : (agent.role || 'via AXE core'))
+                  : `via AXE core${tierRegel ? ` · ${tierRegel}` : ''}`}
               </span>
             </span>
           </span>
@@ -293,6 +310,7 @@ export function ManagerChat({
                 {stand.label}
               </span>
             )}
+            {!desk && onSluit && (
             <button
               ref={sluitRef}
               type="button"
@@ -303,6 +321,7 @@ export function ManagerChat({
             >
               ×
             </button>
+            )}
           </span>
         }
       >
@@ -472,7 +491,7 @@ export function ManagerChat({
                   void filesToAttachments(files, attachments).then(setAttachments);
                 }
               }}
-              placeholder="Message… (Enter send · Shift+Enter newline)"
+              placeholder={desk ? `Message ${agent.name}…` : "Message… (Enter send · Shift+Enter newline)"}
               aria-label="Message"
               rows={2}
               className="flex-1 min-w-0 text-[12.5px] px-3 py-2 rounded-xl outline-none resize-none"
@@ -493,10 +512,12 @@ export function ManagerChat({
               Send
             </button>
           </div>
+          {!desk && (
           <p className="text-[9px] px-1" style={{ color: 'var(--text-muted)' }}>
             <Paperclip size={9} className="inline mr-1 opacity-70" />
             Attach files optional · chat stays with this manager
           </p>
+          )}
         </div>
       </Kaart>
     </motion.div>

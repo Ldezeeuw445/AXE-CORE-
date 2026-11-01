@@ -17,6 +17,7 @@ import { ActivityPlansPanel, LiveIndicator } from '@/presentation/components/age
 import { AgentMemoryPanel } from '@/presentation/components/agents/AgentMemoryPanel';
 import { useAgentActivity, useNow } from '@/presentation/components/agents/useAgentActivity';
 import { TierRooster } from '@/presentation/components/agents/TierRooster';
+import { ManagersDesk } from '@/presentation/components/managers/ManagersDesk';
 import { AgentDetail, CrewDetail } from '@/presentation/components/agents/AgentDetail';
 import {
   WEERGAVEN, aantalWerkend, type AgentsWeergave, type LadeTab,
@@ -511,13 +512,21 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
       <PageHeader
-        eyebrow="Workforce"
+        eyebrow={managersOnly ? 'DAX bots' : 'Workforce'}
         title={managersOnly ? 'Managers' : 'Agents'}
         description={loading
           ? 'Loading…'
           : managersOnly
-            ? 'AXE Core and the six Grok managers. Tier workers stay as motors behind them — not primary UI.'
+            ? '6 managers · status · open chat'
             : 'AXE, the thirteen he delegates to, and the six Grok managers. Pick a view; click an agent for only his.'}
+        actions={managersOnly ? (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
+            style={{ background: 'rgba(34,211,238,.1)', border: '1px solid rgba(34,211,238,.28)', color: 'var(--accent-cyan)' }}
+          >
+            AXE orchestrates
+          </span>
+        ) : undefined}
       />
       <div className="flex flex-wrap items-center gap-2 mt-3 mb-4">
         <StatPill label="Working" value={String(aantalWerkend(pulses))} tone="success" />
@@ -553,7 +562,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
             data-aan={weergave === w.id ? 'ja' : undefined}
             onClick={() => setWeergave(w.id)}
           >
-            <span>{w.label}</span>
+            <span>{managersOnly && w.id === 'roster' ? 'Desk' : w.label}</span>
           </button>
         ))}
       </div>
@@ -575,7 +584,33 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
         }}
       >
       {!heeftRail && detail && <div className="mb-4">{detail}</div>}
-      {weergave === 'roster' && (
+      {weergave === 'roster' && managersOnly && (
+        <>
+          <ManagersDesk />
+          <div className="mt-6">
+            <TierRooster
+              managersOnly
+              pulses={pulses}
+              plans={plans}
+              queues={queues}
+              counts={activity.counts}
+              episodes={episodesPerAgent}
+              now={now}
+              gekozen={gekozenAgent}
+              gekozenCrew={gekozenCrew}
+              onKies={kiesAgent}
+              onKiesCrew={kiesCrew}
+              goedkeuringen={goedkeuringen}
+              onBeslis={(rij, akkoord) => {
+                void beslisAgentOk({ akkoord, rij }).then(() => {
+                  setGoedkeuringen((nu) => nu.filter((r) => r.id !== rij.id));
+                });
+              }}
+            />
+          </div>
+        </>
+      )}
+      {weergave === 'roster' && !managersOnly && (
         <TierRooster
           managersOnly={managersOnly}
           pulses={pulses}
