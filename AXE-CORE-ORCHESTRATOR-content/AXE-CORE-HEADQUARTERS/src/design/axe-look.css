@@ -9036,3 +9036,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   background: rgba(12, 16, 22, 0.88);
   backdrop-filter: blur(10px);
 }
+
+/* ─── Trading desk / intel v3 polish ──────────────────────────────────── */
+[data-axe-trading-desk="v3"] {
+  border-radius: 16px;
+  overflow: hidden;
+}
+[data-axe-trading-desk="v3"] table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+[data-axe-trading-intel="v3"] {
+  gap: 10px;
+}
+[data-axe-trading-intel="v3"] .axe-kaart,
+[data-axe-trading-intel="v3"] .widget-card {
+  border-radius: 16px;
+  border-color: rgba(148, 163, 184, 0.16);
+}
