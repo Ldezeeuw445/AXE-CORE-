@@ -52,6 +52,7 @@ import {
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 import { meldActiviteit } from '@/shared/axeActiviteit';
+import { extractCodeOutline } from '@/domain/codeStudio/codeOutline';
 
 /**
  * De drie motoren waar dit paneel een taak aan kan geven, met dezelfde namen
@@ -545,8 +546,9 @@ export default function CodeEditorPage() {
   const termRef = useRef<XtermHandle>(null);
   /* De agent hangt in de editor, niet naast de composer. Motoren in de balk;
      vragen via de AXE-composer. Het chatvak klapt open als je vraagt. */
-  const [showAgent, setShowAgent] = useState(false);
-  const [showPreview, setShowPreview] = useState(true);
+  /* v3 mockup: tree | editor | agent aside. Preview remains toggleable. */
+  const [showAgent, setShowAgent] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
 
   const activePendingPatch = (() => {
@@ -1162,7 +1164,13 @@ export default function CodeEditorPage() {
 
   const allFiles = flattenFiles(fileTree);
 
+  const outlineItems = useMemo(
+    () => extractCodeOutline(activeTab?.content ?? ''),
+    [activeTab?.content],
+  );
+
   const focusComposer = useCallback(() => {
+
     setShowAgent(true);
     requestAnimationFrame(() => {
       document.querySelector<HTMLInputElement>('.axe-composer input')?.focus();
@@ -1326,7 +1334,7 @@ export default function CodeEditorPage() {
   });
 
   return (
-    <motion.div className="axe-tabruimte axe-tabruimte--vullen h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="axe-tabruimte axe-tabruimte--vullen axe-code-v3 h-full flex flex-col relative" data-axe-code="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {isMobile && phoneProjects && (
         <div className="relative z-[80] flex min-h-0 flex-1 flex-col overflow-auto" style={{ background: 'var(--bg-base, #05070b)' }} data-axe-dev-projects>
           <PhoneDeveloper
@@ -1747,7 +1755,30 @@ export default function CodeEditorPage() {
                   )}
                 </div>
                 {showAgent && (
-                  <section className="axe-studio-agent">
+                  <section className="axe-studio-agent axe-code-v3-aside" data-axe-code-aside="v3">
+                    <div className="axe-code-v3-aside-blok">
+                      <div className="axe-code-v3-label">Outline</div>
+                      <div className="axe-code-v3-box" role="list" aria-label="Outline">
+                        {outlineItems.length === 0 ? (
+                          <div className="axe-code-v3-box-muted">Open a file to see symbols</div>
+                        ) : (
+                          outlineItems.map(item => (
+                            <div key={`${item.kind}-${item.name}`} className="axe-code-v3-sym" data-depth={item.depth} role="listitem">
+                              {item.name}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="axe-code-v3-aside-blok">
+                      <div className="axe-code-v3-label">Problems</div>
+                      <div className="axe-code-v3-box axe-code-v3-box-muted">0 errors · 0 warnings</div>
+                    </div>
+                    <div className="axe-code-v3-aside-blok">
+                      <div className="axe-code-v3-label">Agent</div>
+                      <div className="axe-code-v3-box">Vraag AXE om deze file te refactoren of tests te schrijven.</div>
+                      <button type="button" className="axe-code-v3-ask" onClick={focusComposer}>Ask AXE</button>
+                    </div>
                     <div className="axe-studio-kop">
                       <span>Code agent</span>
                       <span className="rechts">
