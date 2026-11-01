@@ -175,7 +175,7 @@ export default function NorthseaDesk() {
   if (phone) return <PhoneNorthsea />;
 
   return (
-    <div className="axe-plaat axe-tabruimte relative flex min-h-0 flex-1 flex-col">
+    <div className="axe-plaat axe-tabruimte axe-northsea-v3 relative flex min-h-0 flex-1 flex-col" data-axe-northsea="v3">
       {/* Bovenin: losse kaartjes die doorschuiven. Boven de composer: de deals.
           De zuilen naast de composer blijven vrij voor wat er nog komt. */}
       <TopbalkSlot kant="links">
