@@ -134,6 +134,7 @@ export default function StatusPage() {
   const offline = services.filter(s => s.status === 'offline').length;
 
   return (
+    <div className="axe-status-v3 flex min-h-0 flex-1 flex-col" data-axe-status="v3">
     <TabRuimte vullen>
     <Page
       title="Status"
@@ -269,5 +270,6 @@ export default function StatusPage() {
       </Grid>
     </Page>
     </TabRuimte>
+    </div>
   );
 }
