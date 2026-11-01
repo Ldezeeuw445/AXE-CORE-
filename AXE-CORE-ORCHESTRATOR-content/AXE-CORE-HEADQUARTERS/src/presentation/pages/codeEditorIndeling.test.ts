@@ -43,4 +43,14 @@ describe('de indeling van de Code Editor', () => {
     expect(pagina).toMatch(/const \[phoneProjects, setPhoneProjects\] = useState\(true\)/);
     expect(pagina).toContain('<PhoneDeveloper');
   });
+
+  it('toont de v3 aside met Outline, Problems en Ask AXE (geen <aside>-tag)', () => {
+    const pagina = lees('./CodeEditorPage.tsx');
+    expect(pagina).toMatch(/data-axe-code="v3"/);
+    expect(pagina).toMatch(/data-axe-code-aside="v3"/);
+    expect(pagina).toMatch(/Ask AXE/);
+    expect(pagina).toMatch(/extractCodeOutline/);
+    expect(pagina).not.toMatch(/<aside[\s>]/);
+  });
+
 });

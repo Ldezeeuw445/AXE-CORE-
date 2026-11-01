@@ -8474,3 +8474,113 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 :root[data-look] .axe-manager-chat-kaart--desk {
   height: 100%;
 }
+
+/* ── Code editor v3 (mockup: tree | editor | Outline/Problems/Ask AXE) ───── */
+.axe-code-v3 .axe-studio[data-stand='code'] .axe-studio-kolommen {
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(10, 12, 16, 0.92);
+}
+.axe-code-v3 .axe-studio[data-stand='code'][data-preview='aan'] .axe-studio-kolommen {
+  grid-template-columns: 240px minmax(0, 1fr) minmax(280px, 420px);
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.axe-code-v3 .axe-studio-bestanden {
+  background: rgba(14, 17, 22, 0.95);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+}
+.axe-code-v3 .axe-studio-editor {
+  background: #07090c;
+  border-radius: 0;
+}
+.axe-code-v3 .axe-studio-tabs {
+  padding: 8px 8px 0;
+  height: auto;
+  min-height: 40px;
+  background: rgba(14, 17, 22, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+.axe-code-v3 .axe-studio-tabs .bestandtab {
+  border-radius: 10px 10px 0 0;
+  height: 32px;
+  color: rgba(214, 226, 236, 0.55);
+}
+.axe-code-v3 .axe-studio-tabs .bestandtab[data-aan='ja'] {
+  background: #07090c;
+  color: #67e8f9;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  border-bottom-color: #07090c;
+}
+.axe-code-v3 .axe-studio-agent.axe-code-v3-aside {
+  width: 300px;
+  flex: 0 0 300px;
+  padding: 12px 12px 8px;
+  gap: 10px;
+  background: rgba(14, 17, 22, 0.95);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+.axe-code-v3-aside-blok {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.axe-code-v3-label {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+  font-weight: 600;
+}
+.axe-code-v3-box {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 12, 16, 0.9);
+  font-size: 12.5px;
+  color: rgba(214, 226, 236, 0.85);
+  line-height: 1.45;
+}
+.axe-code-v3-box-muted,
+.axe-code-v3-box.axe-code-v3-box-muted {
+  color: rgba(148, 163, 184, 0.75);
+}
+.axe-code-v3-sym {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: #22d3ee;
+  padding: 2px 0;
+}
+.axe-code-v3-sym[data-depth='1'] {
+  padding-left: 10px;
+  color: rgba(148, 163, 184, 0.9);
+}
+.axe-code-v3-ask {
+  width: 100%;
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.1);
+  color: #67e8f9;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.axe-code-v3-ask:hover {
+  background: rgba(34, 211, 238, 0.18);
+}
+.axe-code-v3 .axe-studio-agent .axe-studio-kop {
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 8px;
+}
