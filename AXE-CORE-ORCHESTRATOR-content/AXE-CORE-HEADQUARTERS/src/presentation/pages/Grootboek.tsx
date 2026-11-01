@@ -80,7 +80,7 @@ export default function Grootboek() {
     .sort((a, b) => (a.next_run_at ?? '9').localeCompare(b.next_run_at ?? '9'));
 
   return (
-    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+    <motion.div className="axe-tabruimte axe-ledger-v3 flex min-h-0 flex-1 flex-col pt-4 sm:pt-6" data-axe-ledger="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <TopbalkSlot>
         <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
           {bezig && regels.length === 0 ? 'Laden…' : `${zichtbaar.length} rows · ${mislukt} failed · latest ${VENSTERS.find(v => v.uren === uren)?.label}`}

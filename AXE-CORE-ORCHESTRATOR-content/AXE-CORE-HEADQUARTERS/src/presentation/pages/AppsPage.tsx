@@ -328,7 +328,7 @@ export default function AppsPage() {
   if (phone) return <Navigate to="/mobile" replace />;
 
   return (
-    <>
+    <div className="axe-apps-v3 flex min-h-0 flex-1 flex-col" data-axe-apps="v3">
     <TabRail kant="links">
       <SchuifBalk
         groepen={[
@@ -693,6 +693,6 @@ export default function AppsPage() {
       )}
       </div>
     </div>
-    </>
+    </div>
   );
 }
