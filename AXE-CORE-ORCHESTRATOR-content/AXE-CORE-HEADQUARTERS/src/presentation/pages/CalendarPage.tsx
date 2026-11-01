@@ -12,7 +12,7 @@ import { AgendaLijst } from './agenda/AgendaLijst';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { TabRuimte, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { datumSleutel, minutenVan, type RoosterItem } from '@/domain/weekRooster';
-import { CalendarRange, LayoutGrid } from 'lucide-react';
+import { CalendarDays, CalendarRange, LayoutGrid } from 'lucide-react';
 import { APPS } from '@/domain/apps';
 import { werkAgenda, type AgendaTaak, type AgendaCron } from '@/domain/werkAgenda';
 import { calendarJobs, listDurableTasks, northseaTab, plannerTaken, type CalendarJobItem } from '@/infrastructure/gateways/axeCoreApiService';
@@ -28,10 +28,11 @@ import type { NorthseaAgendaItem } from '@/domain/northsea/tabs/typen';
  * sub-tabs van de trading-desk -- dezelfde component (IcoonZuil), want het is
  * dezelfde handeling: kiezen wat je in het midden ziet.
  */
-type Weergave = 'maand' | 'week';
+type Weergave = 'dag' | 'week' | 'maand';
 const WEERGAVEN: ZuilItem[] = [
-  { id: 'maand', label: 'Maand', kleur: '#22D3EE', icoon: <LayoutGrid size={17} /> },
+  { id: 'dag', label: 'Dag', kleur: '#2EF2C2', icoon: <CalendarDays size={17} /> },
   { id: 'week', label: 'Week', kleur: '#8B7CF6', icoon: <CalendarRange size={17} /> },
+  { id: 'maand', label: 'Maand', kleur: '#22D3EE', icoon: <LayoutGrid size={17} /> },
 ];
 
 /** De legenda: de kleur van elke app, dezelfde als in Taken en Cron. */
@@ -165,12 +166,12 @@ export default function CalendarPage() {
   }, []);
   /* De geplande runs van alle jobs (VPS, Mac, Supabase-cron) voor het venster dat
      je bekijkt: de maand, of de week, met een week marge. */
-  const vensterSleutel = weergave === 'week' ? datumSleutel(weekAnker) : `${currentYear}-${currentMonth}`;
+  const vensterSleutel = (weergave === 'week' || weergave === 'dag') ? datumSleutel(weekAnker) : `${currentYear}-${currentMonth}`;
   useEffect(() => {
     let weg = false;
-    const basis = weergave === 'week' ? new Date(weekAnker) : new Date(currentYear, currentMonth, 1);
+    const basis = (weergave === 'week' || weergave === 'dag') ? new Date(weekAnker) : new Date(currentYear, currentMonth, 1);
     const van = new Date(basis.getTime() - 7 * 86400_000);
-    const tot = new Date(basis.getTime() + (weergave === 'week' ? 14 : 38) * 86400_000);
+    const tot = new Date(basis.getTime() + ((weergave === 'week' || weergave === 'dag') ? 14 : 38) * 86400_000);
     const haal = () => {
       void calendarJobs(van, tot)
         .then(r => { if (!weg) setJobItems(r.items); })
@@ -242,11 +243,16 @@ export default function CalendarPage() {
         <AgendaLijst
           items={roosterItems}
           titel="Agenda"
-          vanaf={weergave === 'week' ? datumSleutel(new Date()) : undefined}
-          tot={weergave === 'maand' ? (selectedDate ?? undefined) : undefined}
-          opKies={item => { setSelectedDate(item.datum); }}
+          vanaf={weergave === 'week' ? datumSleutel(new Date()) : (weergave === 'dag' ? datumSleutel(weekAnker) : undefined)}
+          tot={weergave === 'maand' || weergave === 'dag' ? (weergave === 'dag' ? datumSleutel(weekAnker) : (selectedDate ?? undefined)) : undefined}
+          opKies={item => {
+            setSelectedDate(item.datum);
+            const [y, m, d] = item.datum.split('-').map(Number);
+            setWeekAnker(new Date(y, m - 1, d));
+            if (weergave === 'maand') setWeergave('dag');
+          }}
           leegTekst={
-            weergave === 'maand'
+            weergave === 'maand' || weergave === 'dag'
               ? 'Nothing on this day.'
               : 'Nothing scheduled: no tasks with a deadline, planner work or cron jobs this week.'
           }
@@ -262,8 +268,9 @@ export default function CalendarPage() {
             {
               titel: 'View',
               items: [
+                { id: 'dag', label: 'Day', actief: weergave === 'dag', onKies: () => setWeergave('dag') },
+                { id: 'week', label: 'Week', actief: weergave === 'week', onKies: () => setWeergave('week') },
                 { id: 'maand', label: 'Month', actief: weergave === 'maand', onKies: () => setWeergave('maand') },
-                { id: 'week', label: isMobile ? 'Day' : 'Week', actief: weergave === 'week', onKies: () => setWeergave('week') },
               ],
             },
             appGroep(app, setApp),
@@ -280,7 +287,7 @@ export default function CalendarPage() {
           items={WEERGAVEN}
           actief={weergave}
           kies={id => setWeergave(id as Weergave)}
-          rijen={2}
+          rijen={3}
         />
       </PlaatSlot>
 
@@ -289,18 +296,50 @@ export default function CalendarPage() {
       {/* Links de mini-maand + vandaag, rechts het rooster (Luka's voorbeeld). */}
       <div className="axe-kalender">
       {/* Op een telefoon is de mini-maand dubbel werk: de dagweergave heeft zijn eigen weekstrip. */}
-      {!isMobile && (
+      {!isMobile && weergave !== 'dag' && (
         <MiniMaand
           anker={weekAnker}
           items={roosterItems}
-          opKies={d => { setWeekAnker(d); setSelectedDate(datumSleutel(d)); setWeergave('week'); }}
+          opKies={d => { setWeekAnker(d); setSelectedDate(datumSleutel(d)); setWeergave('dag'); }}
         />
       )}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {weergave === 'week' && isMobile ? (
-          /* Een telefoon heeft hoogte, geen breedte: zeven kolommen van 40px laten geen titel zien.
-             Eén dag tegelijk, elke afspraak een kaart (Luka, 9 okt). */
-          <DagLijst anker={weekAnker} items={roosterItems} opAnker={setWeekAnker} soorten={SOORTEN} />
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden gap-2">
+        {/* v3 mockup: Dag | Week | Maand segbar + readable title */}
+        <div className="axe-cal-toolbar" role="toolbar" aria-label="Calendar view">
+          <h2 className="axe-cal-titel">
+            {weergave === 'dag'
+              ? weekAnker.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })
+              : weergave === 'week'
+                ? `${weekAnker.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })} · week`
+                : new Date(currentYear, currentMonth, 1).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })}
+          </h2>
+          <div className="axe-cal-segbar" role="tablist" aria-label="Day week month">
+            {([
+              ['dag', 'Dag'],
+              ['week', 'Week'],
+              ['maand', 'Maand'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={weergave === id}
+                className={weergave === id ? 'on' : undefined}
+                onClick={() => setWeergave(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {(weergave === 'dag' || (weergave === 'week' && isMobile)) ? (
+          /* Dag: high-contrast cards. Op mobiel blijft week → daglijst (geen smalle kolommen). */
+          <DagLijst
+            anker={weekAnker}
+            items={roosterItems}
+            opAnker={d => { setWeekAnker(d); setSelectedDate(datumSleutel(d)); }}
+            soorten={SOORTEN}
+          />
         ) : weergave === 'week' ? (
           <WeekRooster
             anker={weekAnker}
@@ -308,10 +347,11 @@ export default function CalendarPage() {
             opAnker={setWeekAnker}
             soorten={SOORTEN}
             opKies={item => {
-              /* Klik je een blok aan, dan spring je terug naar de maand met die
-                 dag geselecteerd -- daar staat de volle omschrijving. */
+              /* Klik → dagweergave (mockup: highly readable day list). */
               setSelectedDate(item.datum);
-              setWeergave('maand');
+              const [y, m, d] = item.datum.split('-').map(Number);
+              setWeekAnker(new Date(y, m - 1, d));
+              setWeergave('dag');
             }}
           />
         ) : (
@@ -320,7 +360,11 @@ export default function CalendarPage() {
             maand={currentMonth}
             items={roosterItems}
             gekozen={selectedDate}
-            opKies={setSelectedDate}
+            opKies={d => {
+              setSelectedDate(d);
+              const [y, m, day] = d.split('-').map(Number);
+              setWeekAnker(new Date(y, m - 1, day));
+            }}
             opMaand={(j, m) => { setCurrentYear(j); setCurrentMonth(m); }}
           />
         )}
