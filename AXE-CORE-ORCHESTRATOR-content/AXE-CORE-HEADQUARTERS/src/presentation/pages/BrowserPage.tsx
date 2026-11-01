@@ -9,9 +9,9 @@ export default function BrowserPage() {
   const phone = usePhoneApp();
   if (phone) return <PhoneBrowser />;
   return (
-    <>
+    <div className="axe-browser-v3 flex min-h-0 flex-1 flex-col" data-axe-browser="v3">
       <BrowserApp />
       <BezigVlag />
-    </>
+    </div>
   );
 }

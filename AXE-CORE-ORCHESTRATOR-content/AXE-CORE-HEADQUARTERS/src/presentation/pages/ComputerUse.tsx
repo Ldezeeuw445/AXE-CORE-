@@ -67,7 +67,7 @@ export default function ComputerUse() {
   }
 
   return (
-    <>
+    <div className="axe-computer-use-v3 flex min-h-0 flex-1 flex-col" data-axe-computer-use="v3">
     <TabRail kant="links">
       <SchuifBalk
         groepen={[
@@ -212,6 +212,6 @@ export default function ComputerUse() {
         {lastRefresh ? `Live refresh · ${lastRefresh.toLocaleTimeString()}` : 'Connecting…'}
       </div>
     </div>
-    </>
+    </div>
   );
 }

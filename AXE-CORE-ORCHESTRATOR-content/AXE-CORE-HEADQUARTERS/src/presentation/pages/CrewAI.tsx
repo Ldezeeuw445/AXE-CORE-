@@ -135,7 +135,7 @@ export default function CrewAI() {
   };
 
   return (
-    <motion.div className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="axe-crewai-v3 flex min-h-0 flex-1 flex-col" data-axe-crewai="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <TabRail kant="links">
         <SchuifBalk
           groepen={[
