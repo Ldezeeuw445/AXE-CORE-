@@ -9076,3 +9076,16 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-finance="v3"] .axe-tabruimte {
   gap: 12px;
 }
+
+/* ─── Companion / Notifications v3 ────────────────────────────────────── */
+[data-axe-companion="v3"] {
+  border-radius: 16px;
+  overflow: hidden;
+}
+[data-axe-notifications="v3"] {
+  gap: 8px;
+}
+[data-axe-notifications="v3"] table,
+[data-axe-notifications="v3"] .axe-kaart {
+  border-radius: 16px;
+}

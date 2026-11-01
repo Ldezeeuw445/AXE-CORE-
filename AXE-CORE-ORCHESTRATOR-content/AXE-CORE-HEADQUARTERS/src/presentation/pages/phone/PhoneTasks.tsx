@@ -52,7 +52,11 @@ export default function PhoneTasks({ start = 'open' }: { start?: Seg }) {
   }, [seg, open, overdue, follow]);
 
   return (
-    <div className="flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto px-1" data-axe-phone-app={start === 'alerts' ? 'notifications' : 'tasks'}>
+    <div
+      className="axe-notifications-v3 flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto px-1"
+      data-axe-phone-app={start === 'alerts' ? 'notifications' : 'tasks'}
+      data-axe-notifications={start === 'alerts' ? 'v3' : undefined}
+    >
       <PhoneKop title={start === 'alerts' ? 'Notifications' : 'Tasks'} />
       <PhoneSeg items={SEGS} on={seg} onKies={(id) => setSeg(id as Seg)} />
       {fout && <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{fout}</p>}
