@@ -90,3 +90,15 @@ def test_db_fout_breekt_niets():
         def table(self, _t):
             raise RuntimeError("down")
     assert "error" in worker_wacht.ronde(Kapot(), NU)
+
+
+def test_dax_bot_net_geblokkeerd_geeft_een_melding():
+    db = NepDB([])
+    bots = {"browser": {"mission": {"action": "blocked", "status": "blocked", "reason": "Can't run: no Chromium"}},
+            "trading": {"mission": {"action": "none", "status": "blocked"}},
+            "markets": {"mission": {"action": "created", "status": "active"}}}
+    assert worker_wacht.dax_meldingen(db, bots, NU) == ["browser"]
+    m = db.tabellen["core_notifications"]
+    assert len(m) == 1 and m[0]["message"].startswith("DAX geblokkeerd: browser ") and "Chromium" in m[0]["message"]
+    # tweede keer, nog ongelezen: geen dubbele bel
+    assert worker_wacht.dax_meldingen(db, bots, NU) == []

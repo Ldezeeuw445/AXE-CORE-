@@ -62,11 +62,12 @@ def bericht(rij: dict[str, Any]) -> str:
             f"(launchctl list | grep -i axe).")[:1900]
 
 
-def _al_gemeld(db: Any, rij: dict[str, Any], nu: datetime) -> bool:
+def _al_gemeld(db: Any, rij: dict[str, Any], nu: datetime, voorvoegsel: str | None = None) -> bool:
     sinds = (nu - HERHAAL_NA).isoformat()
+    voorvoegsel = voorvoegsel or f"{KOP}: {naam(rij)} "
     try:
         er = (db.table("core_notifications").select("id").eq("read", False)
-              .like("message", f"{KOP}: {naam(rij)} %").gt("created_at", sinds)
+              .like("message", f"{voorvoegsel}%").gt("created_at", sinds)
               .limit(1).execute().data) or []
     except Exception:  # noqa: BLE001 — bij twijfel liever geen dubbele bel
         return True
@@ -94,3 +95,32 @@ def ronde(db: Any, nu: datetime | None = None) -> dict[str, Any]:
         except Exception:  # noqa: BLE001
             pass
     return {"checked": len(rijen), "silent": [naam(r) for r in stil], "notified": gemeld}
+
+
+DAX_KOP = "DAX geblokkeerd"
+
+
+def dax_meldingen(db: Any, bots: dict[str, Any], nu: datetime | None = None) -> list[str]:
+    """Een DAX-bot die in deze ronde net op blocked ging (of onbereikbaar is) geeft
+    één warning op Home en telefoon. Zelfde regel als bij de Mac: niet opnieuw
+    zolang de vorige ongelezen is (24 uur). Slikt fouten."""
+    nu = nu or datetime.now(timezone.utc)
+    gemeld: list[str] = []
+    for agent, verslag in (bots or {}).items():
+        m = (verslag or {}).get("mission") or {}
+        net_geblokkeerd = m.get("action") == "blocked" or (m.get("action") == "created" and m.get("status") == "blocked")
+        if not net_geblokkeerd:
+            continue
+        voor = f"{DAX_KOP}: {agent} "
+        if _al_gemeld(db, {}, nu, voor):
+            continue
+        reden = str(m.get("reason") or verslag.get("error") or "onbekende reden")[:300]
+        try:
+            db.table("core_notifications").insert({
+                "recipient": LUKA_USER_ID, "type": "warning",
+                "message": f"{voor}kan zijn vaste missie niet draaien: {reden}"[:1900],
+            }).execute()
+            gemeld.append(agent)
+        except Exception:  # noqa: BLE001
+            pass
+    return gemeld
