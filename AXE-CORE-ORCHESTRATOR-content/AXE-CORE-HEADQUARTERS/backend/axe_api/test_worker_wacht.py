@@ -102,3 +102,36 @@ def test_dax_bot_net_geblokkeerd_geeft_een_melding():
     assert len(m) == 1 and m[0]["message"].startswith("DAX geblokkeerd: browser ") and "Chromium" in m[0]["message"]
     # tweede keer, nog ongelezen: geen dubbele bel
     assert worker_wacht.dax_meldingen(db, bots, NU) == []
+
+
+def _schema(min_geleden, enabled=True):
+    return {"job_key": worker_wacht.VPS_JOB, "enabled": enabled,
+            "last_run_at": (NU - timedelta(minutes=min_geleden)).isoformat()}
+
+
+def test_vps_stil_alleen_boven_drempel_en_als_aan():
+    assert worker_wacht.vps_stil(_schema(4), NU) is None
+    assert worker_wacht.vps_stil(_schema(40), NU) == timedelta(minutes=40)
+    assert worker_wacht.vps_stil(_schema(40, enabled=False), NU) is None
+    assert worker_wacht.vps_stil(_schema(8 * 24 * 60), NU) is None
+    assert worker_wacht.vps_stil(None, NU) is None
+
+
+def test_vps_ronde_meldt_een_keer():
+    db = NepDB([])
+    db.tabellen["core_schedules"] = [_schema(40)]
+    assert worker_wacht.vps_ronde(db, NU) == {"silent": True, "notified": True}
+    assert worker_wacht.vps_ronde(db, NU) == {"silent": True, "notified": False}
+    m = db.tabellen["core_notifications"]
+    assert len(m) == 1 and m[0]["message"].startswith("VPS-wacht stil: ") and m[0]["type"] == "warning"
+
+
+def test_vps_ronde_stil_als_alles_loopt_en_bij_db_fout():
+    db = NepDB([])
+    db.tabellen["core_schedules"] = [_schema(3)]
+    assert worker_wacht.vps_ronde(db, NU) == {"silent": False, "notified": False}
+
+    class Kapot:
+        def table(self, _t):
+            raise RuntimeError("down")
+    assert "error" in worker_wacht.vps_ronde(Kapot(), NU)

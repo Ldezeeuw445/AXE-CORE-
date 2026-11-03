@@ -124,3 +124,56 @@ def dax_meldingen(db: Any, bots: dict[str, Any], nu: datetime | None = None) -> 
         except Exception:  # noqa: BLE001
             pass
     return gemeld
+
+
+# ── Andersom: de Mac bewaakt de VPS (24/7, 3 nov 2026) ─────────────────────────
+# G1 laat de VPS (dax-wacht) een stille Mac melden. Maar stopt de VPS-crontab of
+# de API op de VPS, dan draait dax-wacht zelf niet meer en meldt niemand iets:
+# /health zet het wel in `degraded`, maar daar kijkt Luka niet naar. Daarom kijkt
+# de Mac-uitvoerder (_mac_lus in main.py, elke minuut, ander apparaat) of de
+# dax-wacht nog loopt. Twee machines die elkaar bewaken.
+
+VPS_KOP = "VPS-wacht stil"
+VPS_JOB = "axe_core:dax-wacht"
+VPS_DREMPEL = timedelta(minutes=15)   # dax-wacht draait elke 5 min: drie gemiste rondes
+
+
+def vps_stil(schema: dict[str, Any] | None, nu: datetime, drempel: timedelta = VPS_DREMPEL) -> timedelta | None:
+    """Hoe lang de dax-wacht al niet gedraaid heeft, of None als alles goed is
+    (of als Luka hem bewust heeft uitgezet / hij nog nooit gedraaid heeft)."""
+    if not schema or not schema.get("enabled"):
+        return None
+    laatst = _tijd(schema.get("last_run_at"))
+    if laatst is None:
+        return None
+    stil = nu - laatst
+    return stil if drempel < stil <= AFGEVOERD_NA else None
+
+
+def vps_ronde(db: Any, nu: datetime | None = None) -> dict[str, Any]:
+    """Eén controle vanaf de Mac. Eén warning op Home en telefoon; niet opnieuw
+    zolang de vorige ongelezen is (24 uur). Slikt fouten."""
+    nu = nu or datetime.now(timezone.utc)
+    try:
+        schema = ((db.table("core_schedules").select("job_key,enabled,last_run_at")
+                   .eq("job_key", VPS_JOB).limit(1).execute().data) or [None])[0]
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)[:300]}
+    stil = vps_stil(schema, nu)
+    if stil is None:
+        return {"silent": False, "notified": False}
+    voor = f"{VPS_KOP}: "
+    if _al_gemeld(db, {}, nu, voor):
+        return {"silent": True, "notified": False}
+    laatst = _tijd(schema.get("last_run_at"))
+    lokaal = laatst.astimezone().strftime("%d-%m %H:%M") if laatst else "?"
+    try:
+        db.table("core_notifications").insert({
+            "recipient": LUKA_USER_ID, "type": "warning",
+            "message": (f"{voor}de DAX-wacht op de VPS draaide niet meer sinds {lokaal} "
+                        f"({int(stil.total_seconds()) // 60} min). Check de VPS-crontab (/cron/tick) "
+                        f"en de API op de VPS.")[:1900],
+        }).execute()
+    except Exception:  # noqa: BLE001
+        return {"silent": True, "notified": False}
+    return {"silent": True, "notified": True}
