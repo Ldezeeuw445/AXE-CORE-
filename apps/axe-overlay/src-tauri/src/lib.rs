@@ -132,22 +132,35 @@ pub(crate) fn pin_overlay_frame<R: Runtime>(app: &AppHandle<R>, expanded: bool) 
 
 #[cfg(target_os = "macos")]
 fn cocoa_center_frame(expanded: bool) -> Result<(f64, f64, f64, f64, f64), String> {
-    // Returns (x, cocoa_y, w, h, top_y) on NSScreen.main — flush + centered.
+    // Returns (x, cocoa_y, w, h, top_y) on the *primary* display — flush + centered.
+    // Do NOT use NSScreen.mainScreen: it follows the key window and can pin the
+    // notch onto a secondary monitor when HQ/Trading OS is focused there.
     use cocoa::base::{id, nil};
     use cocoa::foundation::NSRect;
     use objc::{class, msg_send, sel, sel_impl};
     unsafe {
-        let mut screen: id = msg_send![class!(NSScreen), mainScreen];
-        if screen.is_null() || screen == nil {
-            let screens: id = msg_send![class!(NSScreen), screens];
-            if screens == nil {
-                return Err("geen scherm voor overlay".into());
+        let screens: id = msg_send![class!(NSScreen), screens];
+        if screens == nil {
+            return Err("geen scherm voor overlay".into());
+        }
+        let count: usize = msg_send![screens, count];
+        if count == 0 {
+            return Err("geen scherm voor overlay".into());
+        }
+        let mut screen: id = msg_send![screens, objectAtIndex: 0usize];
+        let mut best_score = f64::MAX;
+        for i in 0..count {
+            let s: id = msg_send![screens, objectAtIndex: i];
+            if s.is_null() || s == nil {
+                continue;
             }
-            let count: usize = msg_send![screens, count];
-            if count == 0 {
-                return Err("geen scherm voor overlay".into());
+            let sf: NSRect = msg_send![s, frame];
+            // Primary ≈ origin nearest (0,0), prefer larger area as tie-break.
+            let score = sf.origin.x.abs() + sf.origin.y.abs() - (sf.size.width * sf.size.height) * 1e-9;
+            if score < best_score {
+                best_score = score;
+                screen = s;
             }
-            screen = msg_send![screens, objectAtIndex: 0usize];
         }
         if screen.is_null() || screen == nil {
             return Err("geen scherm voor overlay".into());
