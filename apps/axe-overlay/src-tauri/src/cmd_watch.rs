@@ -67,8 +67,16 @@ pub fn start_watcher<R: Runtime + 'static>(app: AppHandle<R>) {
                         | "manager-open"
                 ) {
                     if let Some(win) = app.get_webview_window("overlay") {
-                        let _ = win.show();
-                        let _ = win.set_always_on_top(true);
+                        // show / set_always_on_top touch AppKit — main thread only.
+                        // Re-pin after show so frame stays flush-center (show/aot
+                        // can drift position after the main-thread hop).
+                        let win2 = win.clone();
+                        let app2 = app.clone();
+                        let _ = app.run_on_main_thread(move || {
+                            let _ = win2.show();
+                            let _ = win2.set_always_on_top(true);
+                            let _ = super::pin_overlay_frame(&app2, super::OVERLAY_EXPANDED.load(std::sync::atomic::Ordering::Relaxed));
+                        });
                     }
                 }
             }

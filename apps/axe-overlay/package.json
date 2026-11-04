@@ -12,7 +12,8 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "build:macos": "bash scripts/build-macos.sh",
-    "install:macos": "bash scripts/install-macos.sh"
+    "install:macos": "bash scripts/install-macos.sh",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
