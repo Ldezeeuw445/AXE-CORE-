@@ -17,6 +17,8 @@ import { kluisPadVoorTaak } from '@/domain/obsidian/kluisBoom';
 import { WIE_WERKT, werkplekVanTekst } from '@/domain/obsidian/werkplek';
 import type { PlanDevice } from '@/domain/tierRouter/beurtPlan';
 import type { TaakKluisInhoud } from '@/domain/obsidian/kluisBoom';
+import { isGrokManager } from '@/domain/agents/grokManagers';
+import { isCodingOpdracht, managerCodingMeta } from '@/domain/agents/bossRoute';
 
 interface JobStartInput {
   title: string;
@@ -61,7 +63,7 @@ export function jobsVanStukken(stukken: AxeBeurtStuk[], nu = Date.now(), id = ()
       sourceText: s.text,
       device: s.device ?? null,
       tab: plek.opdracht && plek.tab ? plek.tab : s.tab,
-      repo: plek.repo ?? null,
+      repo: s.repo ?? plek.repo ?? null,
       bron: s.bron,
     };
   });
@@ -106,17 +108,26 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
       // in de taal van het model terug. Nu overal, in plaats van nergens.
       reply_language: replyLanguageInstruction(),
     },
-    metadata: {
-      conversation_source: 'axe_tier_router',
-      route_tier: 3,
-      agent: job.agent,
-      device,
-      tab,
-      repo,
-      who: WIE_WERKT,
-      // Geen auto_send_*: NorthSea blijft read-only vanaf deze ingang.
-      northsea_read_only: job.agent === 'northsea',
-    },
+    metadata: (() => {
+      const managerMeta = isGrokManager(job.agent) && isCodingOpdracht(job.sourceText)
+        ? managerCodingMeta(job.agent, job.sourceText)
+        : isGrokManager(job.agent)
+          ? { no_auto_merge: true as const, no_deploy: true as const, produce_pr_only: true as const, manager: job.agent }
+          : {};
+      return {
+        conversation_source: 'axe_tier_router',
+        route_tier: 3,
+        agent: job.agent,
+        device,
+        tab,
+        who: WIE_WERKT,
+        // Geen auto_send_*: NorthSea blijft read-only vanaf deze ingang.
+        northsea_read_only: job.agent === 'northsea',
+        ...managerMeta,
+        // Prefer manager coding repo when present; else the job's own repo.
+        repo: ('repo' in managerMeta && managerMeta.repo) ? managerMeta.repo : repo,
+      };
+    })(),
   };
 }
 

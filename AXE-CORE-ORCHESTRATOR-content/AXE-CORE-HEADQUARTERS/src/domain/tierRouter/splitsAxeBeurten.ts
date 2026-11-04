@@ -16,6 +16,8 @@ export interface AxeBeurtStuk {
   device?: PlanDevice | null;
   /** Tab-context, zodat Home en Browser geen map delen. */
   tab?: string;
+  /** Optional repo id/name for coding tasks (Managers → durable task). */
+  repo?: string | null;
   bron?: 'plan' | 'followup';
 }
 

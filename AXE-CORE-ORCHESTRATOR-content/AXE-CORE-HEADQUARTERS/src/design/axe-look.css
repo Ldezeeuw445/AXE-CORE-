@@ -8430,6 +8430,27 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   flex-direction: column;
   gap: 4px;
 }
+.axe-managers-room-sectie {
+  list-style: none;
+  margin: 8px 4px 2px;
+  padding: 0 6px;
+}
+.axe-managers-room-sectie-label {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9CA3AF);
+}
+.axe-managers-room-rij[data-axe-boss='ja'] {
+  background: rgba(34, 211, 238, 0.06);
+  border-color: rgba(34, 211, 238, 0.18);
+}
+.axe-managers-room-rij[data-axe-boss='ja'][data-open='ja'] {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
 .axe-managers-room-rij {
   width: 100%;
   display: flex;
