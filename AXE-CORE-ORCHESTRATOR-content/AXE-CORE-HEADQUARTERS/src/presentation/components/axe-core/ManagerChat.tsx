@@ -74,11 +74,19 @@ function zietEruitAlsJson(raw: string): boolean {
   return t.startsWith('{') && (t.includes('"begon"') || t.includes('"agents"') || t.includes('"motor"'));
 }
 
-function menselijkeStatusChips(server?: ServerAgent, job?: AxeJob | null): string[] {
+function menselijkeStatusChips(
+  server?: ServerAgent,
+  job?: AxeJob | null,
+  /** Prefer live local job label (Actief / Wacht / Mislukt) over server heartbeat. */
+  lokaleLabel?: string | null,
+): string[] {
   const chips: string[] = [];
-  if (!server && !job) return chips;
-  const stand = server ? bepaalServerStand(server) : null;
-  if (stand?.label) chips.push(stand.label);
+  if (!server && !job && !lokaleLabel) return chips;
+  if (lokaleLabel) chips.push(lokaleLabel);
+  else if (server) {
+    const stand = bepaalServerStand(server);
+    if (stand?.label) chips.push(stand.label);
+  }
   const taken = (server?.pendingApprovals?.length ?? 0) + (job?.state === 'waiting' || job?.state === 'running' || job?.state === 'queued' ? 1 : 0);
   if (taken > 0) chips.push(`${taken} ${taken === 1 ? 'taak' : 'taken'}`);
   if (server?.current_action && !zietEruitAlsJson(server.current_action)) {
@@ -119,7 +127,7 @@ function veiligeStripSamenvatting(
     const t = kandidaat.trim();
     if (t) return t;
   }
-  const chips = menselijkeStatusChips(server, job);
+  const chips = menselijkeStatusChips(server, job, wieEnWat(agent, job) || null);
   return chips[0] || `AXE heeft niets open met ${agent.name}.`;
 }
 
@@ -461,14 +469,18 @@ export function ManagerChat({
               </div>
             </div>
             <div className="axe-manager-pro-chips" aria-label="Status">
-              {(menselijkeStatusChips(server, job).length
-                ? menselijkeStatusChips(server, job)
+              {(menselijkeStatusChips(server, job, stand?.label).length
+                ? menselijkeStatusChips(server, job, stand?.label)
                 : [stand?.label || 'Klaar']
-              ).map((c) => (
-                <span key={c} className="axe-manager-pro-chip" data-tone={stand?.label === 'waiting' || stand?.label === 'Waiting' ? 'wait' : 'live'}>
+              ).map((c) => {
+                const wait = /wacht|waiting|approval/i.test(c) || stand?.label === 'Waiting' || stand?.label === 'waiting';
+                const fail = /mislukt|failed|error/i.test(c);
+                return (
+                <span key={c} className="axe-manager-pro-chip" data-tone={fail ? 'err' : wait ? 'wait' : 'live'}>
                   {c}
                 </span>
-              ))}
+                );
+              })}
             </div>
           </header>
         )}
@@ -659,7 +671,8 @@ export function ManagerChat({
                           type="button"
                           role="option"
                           onClick={() => {
-                            setOpvolging((prev) => (prev ? `${prev.trimEnd()} /${s.id}` : `/${s.id}`));
+                            // Label matches skillVanTekst patterns (e.g. "Plan Today").
+                            setOpvolging((prev) => (prev ? `${prev.trimEnd()} ${s.label}` : s.label));
                             setPicker(null);
                             requestAnimationFrame(() => composerRef.current?.focus());
                           }}
@@ -683,7 +696,8 @@ export function ManagerChat({
                           type="button"
                           role="option"
                           onClick={() => {
-                            setOpvolging((prev) => (prev ? `${prev.trimEnd()} @${a.id}` : `@${a.id}`));
+                            // Natural app name — @axe_companion etc. are not route tokens.
+                            setOpvolging((prev) => (prev ? `${prev.trimEnd()} ${a.label}` : a.label));
                             setPicker(null);
                             requestAnimationFrame(() => composerRef.current?.focus());
                           }}

@@ -86,6 +86,12 @@ describe('ManagersDesk Grok Bot layout', () => {
     expect(src).toContain('AXE_SKILLS');
     expect(src).toContain('APPS');
     expect(src).toContain('axe-manager-picker');
+    // Pickers insert human labels (skillVanTekst / boss route), not raw /id or @app_id tokens
+    expect(src).toContain('s.label');
+    expect(src).toContain('a.label');
+    expect(src).not.toContain('/${s.id}');
+    expect(src).not.toContain('@${a.id}');
+    expect(src).toContain('stand?.label');
   });
 
 });
