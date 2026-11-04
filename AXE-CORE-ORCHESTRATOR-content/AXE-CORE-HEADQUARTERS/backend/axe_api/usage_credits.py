@@ -1,7 +1,9 @@
-"""Usage & Credits — stap 1 van plan B.
+"""Usage & Credits — sessies per stoel/app, gelezen en geschreven door de router.
 
-Telt sessies per codeer-stoel en per app, uit core_tasks + core_coding_seats.
-Schrijft niets. De load balancer (stap 2) leest `config_voor_balancer()`.
+Telt sessies per codeer-stoel en per app, uit core_task_attempts (als die
+tabel er is) plus core_tasks.provider_used / core_coding_seats. De router
+schrijft pogingen via `schrijf_poging`; de load balancer leest
+`config_voor_balancer()`.
 
 Indicative caps, niet de factuur van de aanbieder: Claude Pro ~3 sessies/dag
 per stoel (5-uursvenster), ChatGPT ~2, Cursor twee accounts, tweede Grok Bot
@@ -248,16 +250,30 @@ def herken_app(raw: Any) -> str | None:
 
 
 def taak_stoel(taak: dict[str, Any]) -> str | None:
+    gevonden = normaliseer_stoel(taak.get("provider_used"))
+    if gevonden:
+        return gevonden
     payload = taak.get("payload") if isinstance(taak.get("payload"), dict) else {}
     result = taak.get("result") if isinstance(taak.get("result"), dict) else {}
     meta = taak.get("metadata") if isinstance(taak.get("metadata"), dict) else {}
     bewijs = meta.get("bewijs") if isinstance(meta.get("bewijs"), dict) else {}
     for bron in (payload, result, meta, bewijs):
-        for sleutel in ("engine", "seat", "seat_id", "motor"):
+        for sleutel in ("engine", "seat", "seat_id", "motor", "provider_used"):
             gevonden = normaliseer_stoel(bron.get(sleutel))
             if gevonden:
                 return gevonden
     return None
+
+
+def draaide_op(provider: str | None) -> str | None:
+    """Home-regel: 'draaide op: claude2'. Geen geheimen."""
+    if not provider:
+        return None
+    return f"draaide op: {provider}"
+
+
+def poging_stoel(poging: dict[str, Any]) -> str | None:
+    return normaliseer_stoel(poging.get("seat_id") or poging.get("provider"))
 
 
 def taak_app(taak: dict[str, Any]) -> str | None:
@@ -402,6 +418,9 @@ def spreiding(per_stoel: dict[str, int], ids: Iterable[str]) -> dict[str, Any]:
     }
 
 
+_GEEN_POGING = frozenset({"skipped", "skip"})
+
+
 def aggregeer(
     taken: list[dict[str, Any]] | None = None,
     stoelen: list[dict[str, Any]] | None = None,
@@ -409,14 +428,21 @@ def aggregeer(
     nu: datetime | None = None,
     config_rijen: list[dict[str, Any]] | None = None,
     catalogus_override: dict[str, Any] | None = None,
+    pogingen: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Pure aggregatie. Geen I/O, geen geheimen."""
+    """Pure aggregatie. Geen I/O, geen geheimen.
+
+    Zijn er core_task_attempts, dan telt de stoel-sessie daaruit — anders
+    uit core_tasks (provider_used / payload.engine), zoals voor de migratie.
+    """
     moment = (nu or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cfg = catalogus_override or catalogus_uit(config_rijen)
     today0 = dag_start(moment)
     week0 = week_start(moment)
     taken = [t for t in (taken or []) if isinstance(t, dict) and is_sessie(t)]
     stoel_rijen = [s for s in (stoelen or []) if isinstance(s, dict)]
+    pogingen = [p for p in (pogingen or []) if isinstance(p, dict)]
+    via_pogingen = bool(pogingen)
 
     per_stoel_today: dict[str, int] = {}
     per_stoel_week: dict[str, int] = {}
@@ -425,11 +451,33 @@ def aggregeer(
     per_app_today: dict[str, int] = {}
     per_app_week: dict[str, int] = {}
 
+    if via_pogingen:
+        for pog in pogingen:
+            if str(pog.get("uitkomst") or "").strip().lower() in _GEEN_POGING:
+                continue
+            when = tot_dt(pog.get("started_at") or pog.get("ended_at") or pog.get("created_at"))
+            if when is None:
+                continue
+            sid = poging_stoel(pog)
+            if not sid:
+                continue
+            per_stoel_tijden.setdefault(sid, []).append(when)
+            if when >= week0:
+                per_stoel_week[sid] = per_stoel_week.get(sid, 0) + 1
+            if when >= today0:
+                per_stoel_today[sid] = per_stoel_today.get(sid, 0) + 1
+            if str(pog.get("uitkomst") or "").lower() not in {"ok", "success", "completed"}:
+                msg = _schoon(pog.get("fout") or pog.get("fout_klasse"))
+                if msg:
+                    vorig = per_stoel_fout.get(sid)
+                    if vorig is None or when > vorig[0]:
+                        per_stoel_fout[sid] = (when, msg)
+
     for taak in taken:
         when = taak_moment(taak)
         if when is None:
             continue
-        sid = taak_stoel(taak)
+        sid = None if via_pogingen else taak_stoel(taak)
         app = taak_app(taak)
         if sid:
             per_stoel_tijden.setdefault(sid, []).append(when)
@@ -511,6 +559,21 @@ def aggregeer(
     spread_ids = list(cfg.get("spread_seat_ids") or SPREAD_IDS)
     spread = spreiding(per_stoel_today, spread_ids)
     apps_met = sum(1 for a in app_out if a["met"])
+    recent_draaide = []
+    for taak in taken:
+        pu = taak.get("provider_used") or taak_stoel(taak)
+        if not pu:
+            continue
+        tekst = draaide_op(pu)
+        if not tekst:
+            continue
+        recent_draaide.append({
+            "id": taak.get("id"),
+            "provider_used": pu,
+            "draaide_op": tekst,
+        })
+        if len(recent_draaide) >= 20:
+            break
     return {
         "generated_at": moment.isoformat(),
         "timezone": cfg.get("timezone") or "Europe/Amsterdam",
@@ -520,6 +583,7 @@ def aggregeer(
         "apps_met": apps_met,
         "apps_total": len(app_out),
         "config": config_voor_balancer(cfg),
+        "draaide_op": recent_draaide,
     }
 
 
@@ -534,21 +598,51 @@ def lees_config(db: Any) -> list[dict[str, Any]] | None:
     return list(data or [])
 
 
+_TAKEN_KOLOMMEN = (
+    "id,title,status,source_app,assignee,capability,"
+    "payload,metadata,result,error,created_at,updated_at,"
+    "completed_at,started_at"
+)
+_TAKEN_KOLOMMEN_MET_PROVIDER = _TAKEN_KOLOMMEN + ",provider_used"
+
+
 def lees_taken(db: Any, nu: datetime | None = None) -> list[dict[str, Any]]:
+    if db is None:
+        return []
+    moment = nu or datetime.now(timezone.utc)
+    sinds = (moment - timedelta(days=TAKEN_DAGEN)).isoformat()
+    for kolommen in (_TAKEN_KOLOMMEN_MET_PROVIDER, _TAKEN_KOLOMMEN):
+        try:
+            data = (
+                db.table("core_tasks")
+                .select(kolommen)
+                .gte("created_at", sinds)
+                .order("created_at", desc=True)
+                .limit(TAKEN_LIMIET)
+                .execute()
+                .data
+            )
+            return list(data or [])
+        except Exception:
+            continue
+    return []
+
+
+def lees_pogingen(db: Any, nu: datetime | None = None) -> list[dict[str, Any]]:
+    """Leeg als de tabel nog niet bestaat (migratie niet live)."""
     if db is None:
         return []
     moment = nu or datetime.now(timezone.utc)
     sinds = (moment - timedelta(days=TAKEN_DAGEN)).isoformat()
     try:
         data = (
-            db.table("core_tasks")
+            db.table("core_task_attempts")
             .select(
-                "id,title,status,source_app,assignee,capability,"
-                "payload,metadata,result,error,created_at,updated_at,"
-                "completed_at,started_at"
+                "id,task_id,poging,provider,seat_id,model,"
+                "started_at,ended_at,uitkomst,fout_klasse,tokens,sessie"
             )
-            .gte("created_at", sinds)
-            .order("created_at", desc=True)
+            .gte("started_at", sinds)
+            .order("started_at", desc=True)
             .limit(TAKEN_LIMIET)
             .execute()
             .data
@@ -558,16 +652,32 @@ def lees_taken(db: Any, nu: datetime | None = None) -> list[dict[str, Any]]:
     return list(data or [])
 
 
+def schrijf_poging(db: Any, rij: dict[str, Any]) -> bool:
+    """De router schrijft hier. Geen geheimen: fouttekst gaat door _schoon."""
+    if db is None or not isinstance(rij, dict) or not rij.get("task_id"):
+        return False
+    schoon_rij = dict(rij)
+    for veld in ("fout", "sessie", "model", "provider", "seat_id"):
+        if schoon_rij.get(veld):
+            schoon_rij[veld] = _schoon(schoon_rij[veld], 240 if veld == "fout" else 80)
+    try:
+        db.table("core_task_attempts").insert(schoon_rij).execute()
+        return True
+    except Exception:
+        return False
+
+
 def snapshot(
     db: Any = None,
     *,
     stoelen: list[dict[str, Any]] | None = None,
     nu: datetime | None = None,
 ) -> dict[str, Any]:
-    """I/O-rand: taken + optionele configtabel, daarna pure aggregatie."""
+    """I/O-rand: taken + pogingen + optionele configtabel, daarna pure aggregatie."""
     return aggregeer(
         lees_taken(db, nu) if db is not None else [],
         stoelen or [],
         nu=nu,
         config_rijen=lees_config(db),
+        pogingen=lees_pogingen(db, nu) if db is not None else [],
     )

@@ -3432,10 +3432,14 @@ async def usage_credits():
         log.warning("usage-credits taken: %s", exc)
         taken = []
     try:
+        pogingen = _uc.lees_pogingen(sb())
+    except Exception:
+        pogingen = []
+    try:
         cfg = _uc.lees_config(sb())
     except Exception:
         cfg = None
-    return _uc.aggregeer(taken, rijen, config_rijen=cfg)
+    return _uc.aggregeer(taken, rijen, config_rijen=cfg, pogingen=pogingen)
 
 
 @app.get("/usage-credits/config", dependencies=[AUTH])
