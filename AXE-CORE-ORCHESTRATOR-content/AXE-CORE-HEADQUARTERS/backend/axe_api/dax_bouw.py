@@ -110,8 +110,13 @@ def voorbereid(ux: Any, repo: str, taak_id: str, token: str = "", url: str | Non
         'g -C "$B" fetch --quiet --prune origin',
         'git -C "$B" remote set-head origin --auto >/dev/null 2>&1 || true',
         'D=$(git -C "$B" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)',
-        'git -C "$B" worktree prune',
+        # 4 nov: een herkansing van dezelfde taak vond de worktree van poging 1
+        # nog geregistreerd (prune liep voor de rm), en `worktree add -B` weigerde
+        # dan "cannot force update the branch ... used by worktree". Eerst
+        # afmelden en weghalen, dan pas prune.
+        f'git -C "$B" worktree remove --force {shlex.quote(pad)} >/dev/null 2>&1 || true',
         f'rm -rf {shlex.quote(pad)}',
+        'git -C "$B" worktree prune',
         f'git -C "$B" worktree add --quiet --force -B {shlex.quote(branch)} {shlex.quote(pad)} "$D"',
         'echo "BASIS=$D"',
     ])

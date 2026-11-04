@@ -147,6 +147,20 @@ def test_een_halve_clone_van_een_eerdere_ronde_blokkeert_niet_meer(omgeving, tmp
     assert (pathlib.Path(prep["pad"]) / "app.js").exists()
 
 
+def test_een_tweede_poging_van_dezelfde_taak_checkt_opnieuw_uit(omgeving):
+    # 4 nov: taak 140c0dbe faalde bij de herkansing met "cannot force update
+    # the branch 'dax/140c0dbe-0d6' used by worktree at ...". De oude worktree
+    # van de eerste poging stond nog geregistreerd: prune liep voor de rm.
+    import pathlib
+    ux, prep, remote = omgeving
+    (pathlib.Path(prep["pad"]) / "halfwerk.txt").write_text("van poging 1\n")
+    opnieuw = db_.voorbereid(ux, "axon-memory", "abc123-taak", token="", url=str(remote))
+    assert "fout" not in opnieuw, opnieuw
+    assert opnieuw["pad"] == prep["pad"] and opnieuw["branch"] == prep["branch"]
+    assert sh(opnieuw["pad"], "rev-parse", "--abbrev-ref", "HEAD").strip() == "dax/abc123-taak"
+    assert not (pathlib.Path(opnieuw["pad"]) / "halfwerk.txt").exists()
+
+
 def test_een_onbekende_repo_wordt_niet_uitgecheckt(tmp_path):
     assert "fout" in db_.voorbereid(Lokaal(tmp_path), "iets-anders", "x")
 
