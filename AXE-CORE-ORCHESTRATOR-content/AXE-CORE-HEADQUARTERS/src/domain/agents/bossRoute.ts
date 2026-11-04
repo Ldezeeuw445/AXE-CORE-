@@ -1,6 +1,10 @@
 /**
- * Boss (AXE Core) is not a manager. In the Managers chat room he sits at the
- * top and forwards Luka's messages to the right app manager.
+ * Boss (AXE Core) is not a manager. In the Managers chat room he sits as the
+ * large top tile (Grok Bot–style Wingman) and forwards Luka's messages to the
+ * right app manager.
+ *
+ * Projects Manager is the orchestrator over the app managers (pinned under
+ * Boss) and can also dispatch with the same "Bericht gestuurd" relay line.
  *
  * Managers own coding for their repos via durable tasks (branch/PR only —
  * never auto-merge or deploy from this path).
@@ -13,8 +17,11 @@ import {
   type GrokManagerId,
 } from './grokManagers';
 
-/** Roster id for the Boss row in the Managers room. */
+/** Roster id for the Boss tile in the Managers room. */
 export const BOSS_ID: AxeAgentId = 'axe';
+
+/** Projects Manager — orchestrator over the other app managers. */
+export const PROJECTS_ORCH_ID: GrokManagerId = 'projectsmgr';
 
 const CODING_RE =
   /\b(code|coding|fix|bug|refactor|implement|feature|bouw|build|patch|pr\b|pull request|branch|commit|repo|typescript|tsx|python|tauri|vite|component|ui|nav|tab)\b/i;
@@ -29,17 +36,47 @@ const SIGNALEN: { id: GrokManagerId; re: RegExp }[] = [
   { id: 'axemanager', re: /\b(axe[- ]?core|hq|headquarters|shell|tauri|bottom[- ]?nav|managers? (tab|chat)|overlay|notch)\b/i },
 ];
 
+/** App groups for the Grok-style sidebar (mock order). Projects is pinned separately. */
+export const MANAGER_APP_GROEPEN: readonly {
+  label: string;
+  ids: readonly GrokManagerId[];
+}[] = [
+  { label: 'AXE CORE', ids: ['axemanager'] },
+  { label: 'AXE Companion', ids: ['companionmgr'] },
+  { label: 'Trading OS', ids: ['tradingos'] },
+  { label: 'AXON Memory App', ids: ['axon'] },
+  { label: 'NorthSea Commodity Partners', ids: ['northseamgr'] },
+] as const;
+
 export function isBoss(id: string | null | undefined): boolean {
   return id === BOSS_ID;
+}
+
+export function isProjectsOrch(id: string | null | undefined): boolean {
+  return id === PROJECTS_ORCH_ID;
+}
+
+/** Boss or Projects Manager may hand a message to another manager. */
+export function magDoorgeven(id: string | null | undefined): boolean {
+  return isBoss(id) || isProjectsOrch(id);
 }
 
 export function bossAgent(): AxeAgent {
   return agentById(BOSS_ID);
 }
 
+export function projectsOrchAgent(): AxeAgent {
+  return agentById(PROJECTS_ORCH_ID);
+}
+
 /** The six app managers — Boss is never in this list. */
 export function managersZonderBoss(): AxeAgent[] {
   return GROK_MANAGER_IDS.map((id) => agentById(id));
+}
+
+/** App managers under Projects (excludes Projects itself). */
+export function managersOnderProjects(): AxeAgent[] {
+  return GROK_MANAGER_IDS.filter((id) => id !== PROJECTS_ORCH_ID).map((id) => agentById(id));
 }
 
 export function classificeerBossNaarManager(tekst: string): GrokManagerId {
@@ -51,9 +88,23 @@ export function classificeerBossNaarManager(tekst: string): GrokManagerId {
   return 'axemanager';
 }
 
+/**
+ * Projects Manager routing: same signals, but never routes back to itself
+ * (falls through to AXE CORE Manager).
+ */
+export function classificeerProjectsNaarManager(tekst: string): GrokManagerId {
+  const target = classificeerBossNaarManager(tekst);
+  return target === PROJECTS_ORCH_ID ? 'axemanager' : target;
+}
+
 export function doorgestuurdTekst(managerId: GrokManagerId): string {
   const a = agentById(managerId);
   return `doorgestuurd naar ${a.name}`;
+}
+
+/** Label shown next to the relay avatar (Grok: "Bericht gestuurd • Name"). */
+export function berichtGestuurdLabel(fromAgentId: string): string {
+  return managerNaam(fromAgentId);
 }
 
 export function isCodingOpdracht(tekst: string): boolean {

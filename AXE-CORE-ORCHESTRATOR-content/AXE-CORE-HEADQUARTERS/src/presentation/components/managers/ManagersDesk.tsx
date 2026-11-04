@@ -1,25 +1,34 @@
 /**
- * Managers tab — Grok-style chat room:
- * left: Boss (AXE Core) pinned on top, then the six app managers
- * right: conversation thread + composer (ManagerChat, real jobs/server data)
+ * Managers tab — Grok Bot–style chat room (refs: managers-ref-grokbot / axe-mock):
+ * left: large AXE Core tile (Boss), Projects Manager pinned as orchestrator,
+ *       then real managers grouped per app
+ * right: conversation + composer (ManagerChat, real jobs/server data)
+ * relay: centered "Bericht gestuurd • <avatar> <Agent>" from Boss/Projects handoffs
  *
- * Boss is not a manager: he classifies Luka's message and forwards it
- * ("doorgestuurd naar <Manager>"). Managers create durable coding tasks
- * (branch/PR only — never auto-merge/deploy from this path).
+ * Boss is not a manager: he classifies Luka's message and forwards it.
+ * Projects Manager can dispatch to managers under it the same way.
+ * Managers create durable coding tasks (branch/PR only — never auto-merge/deploy).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
+import { Search } from 'lucide-react';
 import { agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
 import { isGrokManager, type GrokManagerId } from '@/domain/agents/grokManagers';
 import {
   BOSS_ID,
+  MANAGER_APP_GROEPEN,
+  PROJECTS_ORCH_ID,
   bossAgent,
   classificeerBossNaarManager,
+  classificeerProjectsNaarManager,
   doorgestuurdTekst,
   isBoss,
   isCodingOpdracht,
-  managersZonderBoss,
+  isProjectsOrch,
+  magDoorgeven,
+  managersOnderProjects,
   primaireRepoVoor,
+  projectsOrchAgent,
 } from '@/domain/agents/bossRoute';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
@@ -32,21 +41,28 @@ import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFoll
 import { wachtOpOk } from '@/domain/agents/pendingApproval';
 import { pauseMission, resumeMission } from '@/infrastructure/gateways/axeCoreApiService';
 import { agentTierRegel } from '@/domain/agents/agentTiers';
-import { bewaarManagerChat, laadManagerChat, nieuwMsg } from '@/domain/agents/managerChatOpslag';
+import {
+  bewaarManagerChat,
+  laadManagerChat,
+  nieuwMsg,
+  nieuwRelayMsg,
+} from '@/domain/agents/managerChatOpslag';
 import { amsterdamKlok } from '@/domain/tijd';
 import type { ServerAgent } from '@/domain/agents/serverStatus';
 
 const SUBTITELS: Partial<Record<AxeAgentId, string>> = {
-  axe: 'Boss · stuurt door naar de juiste manager',
+  axe: 'Boss · jouw hoofdassistent',
   axemanager: 'Owns AXE Core HQ · branch/PR only',
   northseamgr: 'Deal desk · commodities',
   tradingos: 'Demo only · geen live orders',
-  projectsmgr: 'Build & ship · repos & PRs',
+  projectsmgr: 'Orchestrator · alle managers',
   companionmgr: 'Product twin · UX stem',
   axon: 'Memory twin · long-term',
 };
 
 const LAST_READ_KEY = 'axe_managers_last_read_v1';
+
+type ZijTab = 'chat' | 'activity' | 'memory';
 
 function leesLastRead(): Record<string, number> {
   try {
@@ -65,10 +81,6 @@ function schrijfLastRead(id: string, at: number) {
     cur[id] = at;
     localStorage.setItem(LAST_READ_KEY, JSON.stringify(cur));
   } catch { /* ignore */ }
-}
-
-function deskLijst(): AxeAgent[] {
-  return managersZonderBoss();
 }
 
 function statusVoor(
@@ -103,6 +115,7 @@ function ongelezen(agentId: string, srv?: ServerAgent, busy = false): number {
   const chat = laadManagerChat(agentId);
   for (const m of chat) {
     if (m.role === 'assistant' && m.at > last) n += 1;
+    if (m.kind === 'relay' && m.at > last) n += 1;
   }
   if (busy && n === 0) return 0;
   return n;
@@ -110,7 +123,7 @@ function ongelezen(agentId: string, srv?: ServerAgent, busy = false): number {
 
 function previewTekst(agentId: string, srv?: ServerAgent): string {
   const chat = laadManagerChat(agentId);
-  const last = chat[chat.length - 1];
+  const last = [...chat].reverse().find((m) => m.kind !== 'relay' && m.text.trim());
   if (last?.text) return last.text.slice(0, 72);
   if (srv?.task?.title) return srv.task.title;
   if (srv?.reason) return srv.reason.slice(0, 72);
@@ -143,14 +156,20 @@ function startManagerJob(agentId: AxeAgentId, tekst: string, opts?: { device?: s
 }
 
 export function ManagersDesk() {
-  const managers = useMemo(() => deskLijst(), []);
   const boss = useMemo(() => bossAgent(), []);
-  const alleIds = useMemo(() => [BOSS_ID, ...managers.map((a) => a.id)] as AxeAgentId[], [managers]);
+  const projects = useMemo(() => projectsOrchAgent(), []);
+  const onderProjects = useMemo(() => managersOnderProjects(), []);
+  const alleIds = useMemo(
+    () => [BOSS_ID, PROJECTS_ORCH_ID, ...onderProjects.map((a) => a.id)] as AxeAgentId[],
+    [onderProjects],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const openParam = searchParams.get('open') as AxeAgentId | null;
   const [gekozen, setGekozen] = useState<AxeAgentId | null>(
     () => (openParam && alleIds.includes(openParam) ? openParam : BOSS_ID),
   );
+  const [zijTab, setZijTab] = useState<ZijTab>('chat');
+  const [zoek, setZoek] = useState('');
   const jobs = useAxeJobStore((s) => s.jobs);
   const server = useServerAgents();
   const navigate = useNavigate();
@@ -186,20 +205,48 @@ export function ManagersDesk() {
 
   const kies = (id: AxeAgentId) => {
     setGekozen(id);
+    setZijTab('chat');
     schrijfLastRead(id, Date.now());
     const next = new URLSearchParams(searchParams);
     next.set('open', id);
     setSearchParams(next, { replace: true });
   };
 
-  const renderRij = (a: AxeAgent, bossRij = false) => {
+  const matchZoek = (a: AxeAgent) => {
+    const q = zoek.trim().toLowerCase();
+    if (!q) return true;
+    return `${a.name} ${a.kort} ${a.role}`.toLowerCase().includes(q);
+  };
+
+  const handoff = (fromId: AxeAgentId, target: GrokManagerId, tekst: string) => {
+    const door = doorgestuurdTekst(target);
+    const fromChat = laadManagerChat(fromId);
+    bewaarManagerChat(fromId, [
+      ...fromChat,
+      nieuwMsg('user', tekst),
+      nieuwRelayMsg(fromId),
+      nieuwMsg('assistant', door),
+    ]);
+    const mgrChat = laadManagerChat(target);
+    bewaarManagerChat(target, [
+      ...mgrChat,
+      nieuwRelayMsg(fromId),
+      nieuwMsg('user', tekst),
+      nieuwMsg('assistant', `Van ${agentById(fromId).name}: ${door}. Ik pak dit op.`),
+    ]);
+    kies(target);
+    startManagerJob(target, tekst, { device: job?.device ?? null, tab: job?.tab });
+    tick((n) => n + 1);
+  };
+
+  const renderRij = (a: AxeAgent, opts?: { pin?: boolean; orch?: boolean }) => {
     const srv = server.agents[a.id];
     const busy = jobs.some((j) => j.agent === a.id && (j.state === 'running' || j.state === 'queued' || j.state === 'waiting'));
     const status = statusVoor(a, busy, srv);
     const unread = gekozen === a.id ? 0 : ongelezen(a.id, srv, busy);
     const open = gekozen === a.id;
     const chat = laadManagerChat(a.id);
-    const lastAt = chat[chat.length - 1]?.at;
+    const lastAt = [...chat].reverse().find((m) => m.at)?.at;
     return (
       <li key={a.id}>
         <button
@@ -207,7 +254,9 @@ export function ManagersDesk() {
           className="axe-managers-room-rij"
           data-open={open ? 'ja' : undefined}
           data-tone={status.tone}
-          data-axe-boss={bossRij ? 'ja' : undefined}
+          data-axe-boss={isBoss(a.id) ? 'ja' : undefined}
+          data-axe-orch={opts?.orch ? 'ja' : undefined}
+          data-axe-pin={opts?.pin ? 'ja' : undefined}
           aria-current={open ? 'true' : undefined}
           onClick={() => kies(a.id)}
           style={{ ['--mgr-accent' as string]: a.accent }}
@@ -219,7 +268,7 @@ export function ManagersDesk() {
           <span className="axe-managers-room-meta">
             <span className="axe-managers-room-rij-top">
               <span className="axe-managers-room-naam">
-                {bossRij ? 'Boss' : (a.kort || a.name)}
+                {a.kort || a.name}
               </span>
               <span className="axe-managers-room-tijd">
                 {lastAt ? amsterdamKlok(lastAt) : ''}
@@ -234,8 +283,8 @@ export function ManagersDesk() {
               )}
             </span>
             <span className="axe-managers-room-status" data-tone={status.tone}>
-              {bossRij ? 'Boss' : status.label}
-              {!bossRij && srv?.current_action ? ` · ${srv.current_action.slice(0, 40)}` : ''}
+              {opts?.orch ? 'Orchestrator' : status.label}
+              {!isBoss(a.id) && srv?.current_action ? ` · ${srv.current_action.slice(0, 40)}` : ''}
             </span>
           </span>
         </button>
@@ -243,13 +292,35 @@ export function ManagersDesk() {
     );
   };
 
+  const bossUnread = gekozen === BOSS_ID ? 0 : ongelezen(BOSS_ID, server.agents[BOSS_ID]);
+  const bossBusy = jobs.some((j) => j.agent === BOSS_ID && (j.state === 'running' || j.state === 'queued' || j.state === 'waiting'));
+  const bossStatus = statusVoor(boss, bossBusy, server.agents[BOSS_ID]);
+  const bossOpen = gekozen === BOSS_ID;
+
   return (
-    <div className="axe-managers-room" data-axe-managers-desk="chat-room">
+    <div className="axe-managers-room" data-axe-managers-desk="grokbot">
       <div className="axe-managers-room-lijst" aria-label="Managers">
         <header className="axe-managers-room-lijst-kop">
-          <div>
-            <p className="axe-managers-room-eyebrow">Managers</p>
-            <h2 className="axe-managers-room-titel">Chat</h2>
+          <div className="axe-managers-room-tabs" role="tablist" aria-label="Managers pane">
+            {(
+              [
+                ['chat', 'Chat'],
+                ['activity', 'Activity & plans'],
+                ['memory', 'Memory'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={zijTab === id}
+                data-active={zijTab === id ? 'ja' : undefined}
+                className="axe-managers-room-tab"
+                onClick={() => setZijTab(id)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           <button
             type="button"
@@ -260,20 +331,105 @@ export function ManagersDesk() {
             DAX
           </button>
         </header>
-        <ul className="axe-managers-room-ul" role="list">
-          <li className="axe-managers-room-sectie" aria-label="Boss">
-            <p className="axe-managers-room-sectie-label">Boss</p>
-          </li>
-          {renderRij(boss, true)}
-          <li className="axe-managers-room-sectie" aria-label="App managers">
-            <p className="axe-managers-room-sectie-label">Managers</p>
-          </li>
-          {managers.map((a) => renderRij(a, false))}
-        </ul>
+
+        {zijTab === 'chat' && (
+          <>
+            <div className="axe-managers-room-zoekrij">
+              <label className="axe-managers-room-zoek">
+                <Search size={14} aria-hidden />
+                <input
+                  type="search"
+                  value={zoek}
+                  onChange={(e) => setZoek(e.target.value)}
+                  placeholder="Zoek manager…"
+                  aria-label="Zoek manager"
+                />
+              </label>
+            </div>
+
+            {/* Large AXE Core tile — Grok "Luka's Wingman" equivalent */}
+            <button
+              type="button"
+              className="axe-managers-room-boss-tile"
+              data-open={bossOpen ? 'ja' : undefined}
+              data-axe-boss-tile="ja"
+              aria-current={bossOpen ? 'true' : undefined}
+              onClick={() => kies(BOSS_ID)}
+              style={{ ['--mgr-accent' as string]: boss.accent }}
+            >
+              <span className="axe-managers-room-boss-av">
+                <ManagerAvatar agent={boss} size={56} />
+                <span className="axe-managers-room-stip" data-tone={bossStatus.tone} aria-hidden />
+              </span>
+              <span className="axe-managers-room-boss-meta">
+                <span className="axe-managers-room-boss-naam">AXE Core</span>
+                <span className="axe-managers-room-boss-sub">
+                  {previewTekst(BOSS_ID, server.agents[BOSS_ID])}
+                </span>
+              </span>
+              {bossUnread > 0 && (
+                <span className="axe-managers-room-unread" aria-label={`${bossUnread} unread`}>
+                  {bossUnread > 9 ? '9+' : bossUnread}
+                </span>
+              )}
+            </button>
+
+            <ul className="axe-managers-room-ul" role="list">
+              {matchZoek(projects) && (
+                <>
+                  <li className="axe-managers-room-sectie" aria-label="Projects orchestrator">
+                    <p className="axe-managers-room-sectie-label">Projects</p>
+                  </li>
+                  {renderRij(projects, { pin: true, orch: true })}
+                </>
+              )}
+
+              {MANAGER_APP_GROEPEN.map((groep) => {
+                const agents = groep.ids
+                  .map((id) => agentById(id))
+                  .filter(matchZoek);
+                if (!agents.length) return null;
+                return (
+                  <li key={groep.label} className="axe-managers-room-groep" aria-label={groep.label}>
+                    <p className="axe-managers-room-sectie-label">{groep.label}</p>
+                    <ul className="axe-managers-room-groep-ul" role="list">
+                      {agents.map((a) => renderRij(a))}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+
+        {zijTab === 'activity' && (
+          <div className="axe-managers-room-zijpaneel" data-axe-managers-empty="activity">
+            <p className="axe-managers-room-zijpaneel-titel">Activity & plans</p>
+            <p className="axe-managers-room-zijpaneel-leeg">
+              Nog geen gedeelde activity in deze tab. Open Chat om live jobs en relays te zien.
+            </p>
+          </div>
+        )}
+
+        {zijTab === 'memory' && (
+          <div className="axe-managers-room-zijpaneel" data-axe-managers-empty="memory">
+            <p className="axe-managers-room-zijpaneel-titel">Memory</p>
+            <p className="axe-managers-room-zijpaneel-leeg">
+              Geen manager-memory hier. Gebruik AXON Memory Manager in Chat of de Memory-tab in de bottom nav.
+            </p>
+            <button
+              type="button"
+              className="axe-managers-room-daxlink"
+              onClick={() => kies('axon')}
+            >
+              Open AXON Memory Manager
+            </button>
+          </div>
+        )}
       </div>
 
       <section className="axe-managers-room-draad" aria-label={agent ? `Chat with ${agent.name}` : 'Conversation'}>
-        {agent ? (
+        {agent && zijTab === 'chat' ? (
           <ManagerChat
             key={agent.id}
             layout="desk"
@@ -305,25 +461,17 @@ export function ManagersDesk() {
                 return;
               }
 
-              // Boss: classify → show "doorgestuurd naar <Manager>" → hand off.
-              if (isBoss(agent.id)) {
-                const target = classificeerBossNaarManager(tekst);
-                const door = doorgestuurdTekst(target);
-                const bestaand = laadManagerChat(BOSS_ID);
-                bewaarManagerChat(BOSS_ID, [
-                  ...bestaand,
-                  nieuwMsg('user', tekst),
-                  nieuwMsg('assistant', door),
-                ]);
-                const mgrChat = laadManagerChat(target);
-                bewaarManagerChat(target, [
-                  ...mgrChat,
-                  nieuwMsg('user', tekst),
-                  nieuwMsg('assistant', `Van Boss: ${door}. Ik pak dit op.`),
-                ]);
-                kies(target);
-                startManagerJob(target, tekst, { device: job?.device ?? null, tab: job?.tab });
-                tick((n) => n + 1);
+              // Boss / Projects Manager: classify → relay line → hand off.
+              if (magDoorgeven(agent.id)) {
+                const target = isBoss(agent.id)
+                  ? classificeerBossNaarManager(tekst)
+                  : classificeerProjectsNaarManager(tekst);
+                // If Projects classifies to itself somehow, just run locally.
+                if (isProjectsOrch(agent.id) && target === PROJECTS_ORCH_ID) {
+                  startManagerJob(agent.id, tekst, { device: job?.device ?? null, tab: job?.tab });
+                  return;
+                }
+                handoff(agent.id, target, tekst);
                 return;
               }
 
@@ -343,9 +491,13 @@ export function ManagersDesk() {
               });
             }}
           />
+        ) : zijTab === 'chat' ? (
+          <div className="axe-managers-room-leeg">
+            <p>Select AXE Core or a manager to open the chat.</p>
+          </div>
         ) : (
           <div className="axe-managers-room-leeg">
-            <p>Select Boss or a manager to open the chat.</p>
+            <p>Kies Chat om met AXE Core of een manager te praten.</p>
           </div>
         )}
       </section>
