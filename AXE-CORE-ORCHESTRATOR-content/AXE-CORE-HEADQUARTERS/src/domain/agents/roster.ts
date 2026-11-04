@@ -88,8 +88,9 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'axe',
     name: 'AXE Core',
-    role: 'Orchestrator',
-    handles: 'Talks to you, understands intent, answers directly, or hands off to a manager.',
+    kort: 'Boss',
+    role: 'Boss · routes to the right manager',
+    handles: 'Not a manager. Sits above the app managers, classifies what Luka asks, and forwards to the right manager. Never codes the apps himself.',
     tier: 'axe',
     canDecide: true,
     dropdownScope: 'fast-smart',
@@ -283,9 +284,9 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'axemanager',
     name: 'AXE CORE Manager',
-    kort: 'CORE Mgr',
-    role: 'Boss · orchestrator of the other managers',
-    handles: 'Directs the other Grok managers, merges, deploys and verifies live. Reports to Luka in short Dutch, recommendation first.',
+    kort: 'CORE Manager',
+    role: 'Owns AXE Core app · codes & improves HQ',
+    handles: 'Owns the AXE Core HQ app (repo AXE-CORE-): nav, Managers chat, shell, overlay hooks. Codes via branch/PR only — never auto-merge or deploy. Reports to Luka in short Dutch.',
     tier: 'managers',
     canDecide: true,
     dropdownScope: 'subscription',
@@ -309,7 +310,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'companionmgr',
     name: 'AXE Companion Manager',
-    kort: 'Companion Mgr',
+    kort: 'Companion Manager',
     role: 'Owns AXE Companion',
     handles: 'Owns AXE Companion: repo AXE-COMPANION-OS-, VPS deploy, smoke tests.',
     tier: 'managers',
@@ -348,7 +349,7 @@ export const AXE_AGENTS: readonly AxeAgent[] = [
   {
     id: 'northseamgr',
     name: 'Northsea Desk Manager',
-    kort: 'NorthSea Mgr',
+    kort: 'NorthSea Manager',
     role: 'Owns NorthSea Desk · first deal is the priority',
     handles: 'Owns NorthSea Desk. Sends only with Luka’s approval; never flips auto_send_*; chases in existing threads only after Luka’s own yes.',
     tier: 'managers',

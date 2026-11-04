@@ -13,6 +13,7 @@ import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { goedkeuringVanJob } from '@/domain/agentBewustzijn';
+import { amsterdamKlok } from '@/domain/tijd';
 import { draadVoorAgent, type DraadBericht } from '@/domain/tierRouter/agentDraad';
 import type { AxeAgent } from '@/domain/agents/roster';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
@@ -451,6 +452,11 @@ export function ManagerChat({
                   ) : (
                     <MarkdownMessage text={m.text} />
                   )}
+                  {m.at ? (
+                    <span className="axe-manager-chat-tijd">
+                      {user ? 'Luka' : agent.name} · {amsterdamKlok(m.at)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             );

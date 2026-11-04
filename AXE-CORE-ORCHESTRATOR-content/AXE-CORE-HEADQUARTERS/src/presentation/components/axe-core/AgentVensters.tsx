@@ -7,6 +7,7 @@
  * vastzit. Needs-your-OK krijgt Approve/Decline op de rij.
  */
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { AnimatePresence } from 'framer-motion';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { agentRegel, goedkeuringVanJob } from '@/domain/agentBewustzijn';
@@ -48,16 +49,23 @@ const BALK: React.CSSProperties = {
   borderTopColor: 'var(--axe-kaart-lijn-boven)',
 };
 
-function DaxStip({ server }: { server?: ServerAgent }) {
+function DaxStip({ server, agentId }: { server?: ServerAgent; agentId?: string }) {
+  const navigate = useNavigate();
   const regel = server ? daxRegel(server) : null;
   if (!server?.dax_computer || !regel) return null;
   const wakker = regel.wakker;
   return (
-    <span
-      title={regel.blokkade ? `${regel.tekst} · can't: ${regel.blokkade}` : regel.tekst}
-      aria-label={`DAX ${wakker ? 'awake' : 'asleep'}`}
-      className="inline-block size-1.5 rounded-full"
-      style={{ background: wakker ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)', boxShadow: wakker ? '0 0 6px var(--accent-cyan)' : 'none' }}
+    <button
+      type="button"
+      title={regel.blokkade ? `${regel.tekst} · can't: ${regel.blokkade}` : `${regel.tekst} · open DAX overview`}
+      aria-label={`DAX ${wakker ? 'awake' : 'asleep'} — open overview`}
+      data-axe-dax-link={server.dax_computer}
+      className="inline-block size-1.5 rounded-full pointer-events-auto"
+      style={{ background: wakker ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)', boxShadow: wakker ? '0 0 6px var(--accent-cyan)' : 'none', padding: 0, border: 0 }}
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(`/dax?bot=${encodeURIComponent(agentId || server.agent || server.dax_computer || '')}`);
+      }}
     />
   );
 }
@@ -156,7 +164,7 @@ function Balkje({
               {tierRegel ? <span className="axe-home-rail-tier">{tierRegel}</span> : null}
               <span className="axe-home-rail-label flex items-center gap-1.5" style={{ color: stand.kleur }}>
                 {wacht ? STAND.waiting.label : stand.label}
-                <DaxStip server={server} />
+                <DaxStip server={server} agentId={agent.id} />
               </span>
             </span>
             {standTekst ? <span className="axe-home-rail-regel">{standTekst}</span> : null}
@@ -182,7 +190,7 @@ function Balkje({
           {tierRegel ? <span className="axe-home-rail-tier">{tierRegel}</span> : null}
           <span className="axe-home-rail-label flex items-center gap-1.5">
             {serverStand ? serverStand.label : 'idle'}
-            <DaxStip server={server} />
+            <DaxStip server={server} agentId={agent.id} />
           </span>
         </span>
       </span>

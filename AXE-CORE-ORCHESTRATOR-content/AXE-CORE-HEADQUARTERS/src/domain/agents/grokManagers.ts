@@ -1,6 +1,8 @@
 /**
  * De zes Grok Bot-managers die Luka 27 okt 2026 in AXE Core wil: dezelfde
  * bots, naast de bestaande roster, niet in plaats van.
+ * AXE Core zelf (id `axe`) is de Boss — geen manager. Hij staat apart
+ * boven deze lijst in de Managers-chat en stuurt door.
  *
  * De War Room-kolommen blijven tier 1–3. Deze groep heeft een eigen
  * MANAGERS-blok, een eigen 24/7-pulse, eigen geheugen (alleen echte lessen,

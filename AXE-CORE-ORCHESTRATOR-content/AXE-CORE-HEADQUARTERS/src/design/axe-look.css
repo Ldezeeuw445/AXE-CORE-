@@ -8351,101 +8351,345 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 
 
-/* ── Managers v3 (axe-core-v3/managers.html): 3-col card grid + open chat ── */
-.axe-managers-v3 {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-}
-.axe-managers-v3-grid {
+/* ── Managers chat room (Grok-style split) ───────────────────────────────── */
+.axe-managers-room {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-@media (max-width: 1100px) {
-  .axe-managers-v3-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 720px) {
-  .axe-managers-v3-grid { grid-template-columns: 1fr; }
-}
-.axe-managers-v3-card {
-  padding: 18px;
-  border-radius: 18px;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 0;
+  height: 100%;
+  min-height: min(640px, calc(100dvh - 160px));
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(18, 22, 28, 0.95), rgba(10, 12, 16, 0.98));
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(8, 10, 14, 0.92);
+}
+@media (max-width: 860px) {
+  .axe-managers-room {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(180px, 38%) minmax(0, 1fr);
+  }
+}
+.axe-managers-room-lijst {
+  /* Never inherit shell rail aside rules (fixed + translate off-screen). */
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  opacity: 1 !important;
+  z-index: auto !important;
+  width: auto !important;
+  height: auto !important;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.85);
-  min-height: 168px;
+  min-height: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(14, 18, 24, 0.98), rgba(8, 10, 14, 0.98));
 }
-.axe-managers-v3-card[data-open='ja'] {
-  border-color: color-mix(in srgb, var(--mgr-accent, #22D3EE) 45%, rgba(255,255,255,.12));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mgr-accent, #22D3EE) 35%, transparent),
-    0 18px 40px -28px rgba(0, 0, 0, 0.85);
-}
-.axe-managers-v3-card-kop {
+.axe-managers-room-lijst-kop {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.axe-managers-v3-av {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 13px;
-  color: #041016;
-  flex: none;
-}
-.axe-managers-v3-pill {
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 4px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
-  white-space: nowrap;
-}
-.axe-managers-v3-pill[data-tone='live'] {
-  color: #22D3EE;
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.28);
-}
-.axe-managers-v3-pill[data-tone='busy'] {
-  color: #FFCC66;
-  background: rgba(255, 204, 102, 0.12);
-  border-color: rgba(255, 204, 102, 0.3);
-}
-.axe-managers-v3-pill[data-tone='idle'] {
-  color: var(--text-muted);
-}
-.axe-managers-v3-naam {
+.axe-managers-room-eyebrow {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+}
+.axe-managers-room-titel {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 650;
   color: var(--text-primary);
 }
-.axe-managers-v3-sub {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--text-muted);
-  line-height: 1.45;
-  flex: 1;
+.axe-managers-room-daxlink {
+  appearance: none;
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  background: rgba(34, 211, 238, 0.1);
+  color: #22D3EE;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
 }
-.axe-managers-v3-acties {
+.axe-managers-room-ul {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.axe-managers-room-sectie {
+  list-style: none;
+  margin: 8px 4px 2px;
+  padding: 0 6px;
+}
+.axe-managers-room-sectie-label {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9CA3AF);
+}
+.axe-managers-room-rij[data-axe-boss='ja'] {
+  background: rgba(34, 211, 238, 0.06);
+  border-color: rgba(34, 211, 238, 0.18);
+}
+.axe-managers-room-rij[data-axe-boss='ja'][data-open='ja'] {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+.axe-managers-room-rij {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+}
+.axe-managers-room-rij:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.axe-managers-room-rij[data-open='ja'] {
+  background: rgba(34, 211, 238, 0.08);
+  border-color: rgba(34, 211, 238, 0.22);
+}
+.axe-managers-room-av {
+  position: relative;
+  flex: none;
+}
+.axe-managers-room-stip {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid #0a0c10;
+  background: var(--text-muted);
+}
+.axe-managers-room-stip[data-tone='live'] { background: #22D3EE; }
+.axe-managers-room-stip[data-tone='busy'] { background: #FFCC66; }
+.axe-managers-room-stip[data-tone='wait'] { background: #F87171; }
+.axe-managers-room-stip[data-tone='idle'] { background: #6B7280; }
+.axe-managers-room-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.axe-managers-room-rij-top,
+.axe-managers-room-rij-bot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 4px;
+  gap: 8px;
 }
-.axe-managers-v3-chatbtn {
+.axe-managers-room-naam {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.axe-managers-room-tijd {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex: none;
+}
+.axe-managers-room-preview {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.axe-managers-room-unread {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #22D3EE;
+  color: #041016;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+}
+.axe-managers-room-status {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.axe-managers-room-status[data-tone='busy'] { color: #FFCC66; }
+.axe-managers-room-status[data-tone='wait'] { color: #F87171; }
+.axe-managers-room-status[data-tone='live'] { color: #22D3EE; }
+.axe-managers-room-draad {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(165deg, rgba(12, 16, 22, 0.96), rgba(6, 8, 12, 0.98));
+  padding: 10px;
+}
+.axe-managers-room-leeg {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+:root[data-look] .axe-manager-chat-kaart--desk {
+  height: 100%;
+}
+.axe-manager-chat-tijd {
+  display: block;
+  margin-top: 4px;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+/* ── DAX bots overview ───────────────────────────────────────────────────── */
+.axe-dax-overzicht-stats .axe-dax-stat {
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+.axe-dax-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 980px) {
+  .axe-dax-grid { grid-template-columns: 1fr; }
+}
+.axe-dax-kaart {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(18, 22, 28, 0.96), rgba(10, 12, 16, 0.98));
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.85);
+}
+.axe-dax-kaart[data-highlight='ja'] {
+  border-color: rgba(34, 211, 238, 0.4);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.25);
+}
+.axe-dax-kaart-kop {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.axe-dax-kaart-titels { flex: 1; min-width: 0; }
+.axe-dax-kaart-titels h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.axe-dax-kaart-titels p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.axe-dax-kaart-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.axe-dax-pill {
+  font-size: 10.5px;
+  font-weight: 650;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.axe-dax-pill--on {
+  color: #22D3EE;
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.3);
+}
+.axe-dax-kaart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin: 0;
+}
+.axe-dax-kaart-grid dt {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 0 2px;
+}
+.axe-dax-kaart-grid dd {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.axe-dax-kaart-blok { grid-column: 1 / -1; }
+.axe-dax-kaart-acties {
+  list-style: none;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 110px;
+  overflow-y: auto;
+}
+.axe-dax-kaart-acties li {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.axe-dax-kaart-voet {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+.axe-dax-kaart-voet button {
   appearance: none;
   border: 1px solid rgba(34, 211, 238, 0.35);
   background: rgba(34, 211, 238, 0.12);
@@ -8456,23 +8700,21 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border-radius: 999px;
   cursor: pointer;
 }
-.axe-managers-v3-chatbtn:hover {
-  background: rgba(34, 211, 238, 0.2);
-}
-.axe-managers-v3-chatbtn[aria-pressed='true'] {
-  background: rgba(255, 255, 255, 0.06);
+.axe-dax-kaart-voet .axe-dax-kaart-sec {
   border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-secondary);
 }
-.axe-managers-v3-av-soft { opacity: 0.9; }
-.axe-managers-v3-chat {
-  min-height: 420px;
-  height: min(560px, 58vh);
-  border-radius: 18px;
-  overflow: hidden;
-}
-:root[data-look] .axe-manager-chat-kaart--desk {
-  height: 100%;
+.axe-dax-kaart-av-fallback {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(34, 211, 238, 0.2);
+  color: #22D3EE;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 /* ── Code editor v3 (mockup: tree | editor | Outline/Problems/Ask AXE) ───── */

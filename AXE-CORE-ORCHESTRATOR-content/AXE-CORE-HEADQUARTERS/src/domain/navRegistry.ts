@@ -89,6 +89,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/terminal', label: 'Terminal', keywords: ['terminal', 'console', 'shell', 'command line'] },
   { path: '/terminals', label: 'Terminals', keywords: ['terminals', 'machines', 'mac mini', 'imac', 'vps', 'ssh', 'hosts', 'worker starten'] },
   { path: '/developer', label: 'Command Center', keywords: ['command center', 'developer', 'dev tools', 'developer tools'] },
+  { path: '/dax', label: 'DAX bots', keywords: ['dax', 'dax bots', 'computers', 'heartbeats', 'always on', 'always-on', '24/7'] },
   { path: '/settings', label: 'Settings', keywords: ['settings', 'preferences', 'configuration'] },
 ];
 
@@ -165,5 +166,24 @@ export function findRouteForRuntimeNodeId(nodeId: string): string | undefined {
   return RUNTIME_NODE_ROUTES[nodeId];
 }
 
-/** AXE Core v3 desktop primary shell (BottomNav). Deep routes stay reachable via palette/hubs/orb. */
-export const PRIMARY_NAV_PATHS = ['/', '/managers', '/calendar', '/code-editor', '/tasks', '/settings'] as const;
+/** Desktop primary shell (BottomNav left|orb|right). Meer opens the rest. */
+export const PRIMARY_NAV_PATHS = [
+  '/', '/northsea', '/trading', '/managers',
+  '/tasks', '/code-editor', '/calendar', '/settings',
+] as const;
+
+/** Paths shown in the primary bar (same as PRIMARY_NAV_PATHS). */
+export const PRIMARY_NAV_SET = new Set<string>(PRIMARY_NAV_PATHS);
+
+/** Apps launcher (Meer): everything not on the primary bar, plus DAX. */
+export function meerNavItems(): NavItem[] {
+  const primary = PRIMARY_NAV_SET;
+  const extras = getAllNavItems().filter((i) => !primary.has(i.path));
+  // Prefer DAX near the top of Meer.
+  extras.sort((a, b) => {
+    if (a.path === '/dax') return -1;
+    if (b.path === '/dax') return 1;
+    return a.label.localeCompare(b.label);
+  });
+  return extras;
+}

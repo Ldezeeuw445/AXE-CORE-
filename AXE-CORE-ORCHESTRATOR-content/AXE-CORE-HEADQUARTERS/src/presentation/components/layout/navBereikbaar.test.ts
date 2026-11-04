@@ -24,16 +24,17 @@ const VENSTERS = 'src/infrastructure/gateways/windowManagerService.ts';
  * te laten verdwijnen -- en dan bewaakt deze test niets meer.
  */
 const BEWUST_VERBORGEN: Record<string, string> = {
-  '/': 'Home — primary nav (v3)',
-  '/managers': 'Primary nav (Managers)',
+  '/': 'Home — primary nav',
+  '/managers': 'Primary nav (Managers chat room)',
   '/calendar': 'Primary nav (Calendar)',
   '/code-editor': 'Primary nav (Code)',
-  '/tasks': 'Primary nav (Tasks)',
+  '/tasks': 'Primary nav (Taken)',
   '/settings': 'Primary nav (Settings)',
-  '/northsea': 'Command palette + hubs / radial dock (was primary pre-v3)',
-  '/trading': 'Command palette + Trading hub (was primary pre-v3)',
-  '/bouwen': 'Command palette + Bouwen hub (was primary pre-v3)',
-  '/systeem': 'Command palette + Systeem hub (was primary pre-v3)',
+  '/northsea': 'Primary nav (NorthSea)',
+  '/trading': 'Primary nav (Trading)',
+  '/dax': 'Meer sheet + Home side cards + Managers DAX link',
+  '/bouwen': 'Meer sheet + Bouwen hub',
+  '/systeem': 'Meer sheet + Systeem hub',
   // Deep routes: reachable from hubs / redirects / dedicated doors, not BottomNav
   '/device': 'Systeem hub + SchuifVoet',
   '/devices': 'Redirect → /device',
@@ -113,14 +114,22 @@ describe('elke route heeft een deur', () => {
 
   it('de balk verwijst niet naar een route die niet bestaat', () => {
     // De andere kant op: een pad in de balk zonder route geeft een lege pagina.
+    // __meer__ is the apps launcher sheet, not a route.
     const bestaat = new Set(routes());
-    const dood = navPaden().filter(p => !bestaat.has(p));
+    const dood = navPaden().filter(p => p !== '__meer__' && !bestaat.has(p));
     expect(dood, `Deze knoppen wijzen naar een route die niet bestaat: ${dood.join(', ')}`).toEqual([]);
   });
 
-  it('primary shell heeft v3 bottom nav (6 tabs + orb, geen hubs in balk)', () => {
-    const paden = navPaden();
-    expect(paden).toEqual(['/', '/managers', '/calendar', '/code-editor', '/tasks', '/settings']);
+  it('primary shell heeft Home/NorthSea/Trading/Managers | Taken/Code/Calendar/Settings + Meer', () => {
+    const paden = navPaden().filter((p) => p !== '__meer__');
+    expect(paden).toEqual([
+      '/', '/northsea', '/trading', '/managers',
+      '/tasks', '/code-editor', '/calendar', '/settings',
+    ]);
+  });
+
+  it('Meer knop staat in de balk', () => {
+    expect(navPaden()).toContain('__meer__');
   });
 });
 

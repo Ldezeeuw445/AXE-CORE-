@@ -147,5 +147,10 @@
     "topojson-client": "^3.1.0",
     "voice-glow": "^0.2.1",
     "world-atlas": "^2.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.27.0": true,
+    "esbuild@0.28.1": true,
+    "esbuild@0.27.7": true
   }
 }

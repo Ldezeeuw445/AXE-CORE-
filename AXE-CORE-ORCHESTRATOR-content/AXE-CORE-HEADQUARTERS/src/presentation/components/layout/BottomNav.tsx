@@ -1,11 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
-  Home, Bot, CalendarDays, Code2, ListTodo, Settings, type LucideIcon,
+  Home, Bot, CalendarDays, Code2, ListTodo, Settings,
+  Anchor, LineChart, LayoutGrid, type LucideIcon,
 } from 'lucide-react';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
+import { PRIMARY_NAV_PATHS } from '@/domain/navRegistry';
+import { MeerAppsSheet } from '@/presentation/components/layout/MeerAppsSheet';
 
 type NavItem = {
   icon?: LucideIcon;
@@ -13,56 +16,39 @@ type NavItem = {
   path: string;
 };
 
-/** AXE Core v3 primary shell: Home · Managers · Calendar | orb | Code · Tasks · Settings.
- *  Deep routes (northsea, trading, bouwen, systeem, …) stay reachable via
- *  command palette, hubs, radial dock and existing deep links. */
+/** Primary shell: Home · NorthSea · Trading · Managers | orb | Taken · Code · Calendar · Settings · Meer */
 const leftItems: NavItem[] = [
   { icon: Home, label: 'Home', path: '/' },
+  { icon: Anchor, label: 'NorthSea', path: '/northsea' },
+  { icon: LineChart, label: 'Trading', path: '/trading' },
   { icon: Bot, label: 'Managers', path: '/managers' },
-  { icon: CalendarDays, label: 'Calendar', path: '/calendar' },
 ];
 
 const rightItems: NavItem[] = [
+  { icon: ListTodo, label: 'Taken', path: '/tasks' },
   { icon: Code2, label: 'Code', path: '/code-editor' },
-  { icon: ListTodo, label: 'Tasks', path: '/tasks' },
+  { icon: CalendarDays, label: 'Calendar', path: '/calendar' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
-/**
- * What comes first on a phone.
- *
- * The strip holds 23 destinations and about seven fit on the Samsung, so
- * position is not decoration — it decides what exists. Browser sat at index
- * 13 (first of rightItems, behind all twelve on the left), which is why it
- * read as missing from the app entirely rather than as something to scroll
- * for. The fade hints added earlier say "there is more"; they cannot say
- * "the thing you wanted is eleven icons that way".
- *
- * Desktop is untouched — everything fits there, and the left/right split
- * around the voice orb is deliberate.
- */
-const MOBILE_FIRST = ['/', '/managers', '/calendar', '/code-editor', '/tasks', '/settings'];
+const MEER_ITEM: NavItem = { icon: LayoutGrid, label: 'Meer', path: '__meer__' };
+
+/** Keep PRIMARY_NAV_PATHS and BottomNav in lockstep (tested). */
+void PRIMARY_NAV_PATHS;
+
+const MOBILE_FIRST = [
+  '/', '/northsea', '/trading', '/managers',
+  '/tasks', '/code-editor', '/calendar', '/settings',
+];
 
 function orderForMobile(items: NavItem[]): NavItem[] {
   const rank = (p: string) => {
     const i = MOBILE_FIRST.indexOf(p);
     return i === -1 ? MOBILE_FIRST.length : i;
   };
-  // Stable: everything not promoted keeps the order it was written in.
   return [...items].sort((a, b) => rank(a.path) - rank(b.path));
 }
 
-/**
- * Hex on purpose, not tokens.
- *
- * These feed a <canvas>: the values are concatenated with hex alpha
- * (`color + 'cc'`) and handed to addColorStop/strokeStyle. 'var(--x)cc' is not
- * a colour — addColorStop throws on it outright, which took the whole app down
- * behind the error boundary, and strokeStyle would have failed silently.
- *
- * Canvas cannot resolve CSS variables. Anything that reaches a 2D context
- * stays a literal; the values mirror --accent-cyan / --success / --warning.
- */
 const STATUS_COLOR: Record<VoiceStatus, string> = {
   idle: '#22D3EE',
   listening: '#10B981',
@@ -160,17 +146,6 @@ function AxeVoiceOrb() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  /* Op de plaat is dit de equalizer uit de demo: vijf staafjes die op eigen
-     tempo op en neer gaan. De canvas-bol met het woord READY eronder maakte de
-     nav twee regels hoog en week af van alles ernaast -- in de demo is de orb
-     precies zo groot als een tab-knop, alleen zonder vlak eromheen.
-
-     De canvas blijft bestaan voor de stand zonder plaat; welke je ziet is één
-     voorwaarde, geen tweede component. */
-  /* Op de plaat: het gedeelde statusteken (AxeStatusOrb), 64px -- de maat die
-     thinking-orbs voert voor "groot". Elke stand heeft nu zijn eigen orb, dus
-     je ziet aan het midden van de balk wát AXE doet en niet alleen dát hij
-     bezig is. Spreken blijft de equalizer, met zeven staafjes. */
   if (opPlaat) {
     return (
       <div className="axe-voice-orb" title="AXE presence is beside the composer">
@@ -204,8 +179,6 @@ function NavTile({
   onClick: () => void;
 }) {
   const Icon = item.icon;
-
-  /* v3 mockup: icon + label column, active = cyan wash + inset ring (not soft-UI tile). */
   const activeWash = isActive
     ? {
         color: 'var(--accent-cyan)',
@@ -229,19 +202,19 @@ function NavTile({
       data-axe-doel={item.path}
       className="flex flex-col items-center justify-center gap-1 rounded-[14px] transition-all flex-shrink-0 active:scale-95"
       style={{
-        minWidth: isMobile ? 56 : 72,
-        padding: isMobile ? '6px 8px' : '8px 12px',
+        minWidth: isMobile ? 52 : 64,
+        padding: isMobile ? '6px 6px' : '8px 10px',
         border: 0,
         ...activeWash,
       }}
     >
       {Icon ? (
-        <Icon size={isMobile ? 18 : 20} strokeWidth={1.7} color="currentColor" />
+        <Icon size={isMobile ? 17 : 19} strokeWidth={1.7} color="currentColor" />
       ) : null}
       <span
         className="leading-none"
         style={{
-          fontSize: isMobile ? 9.5 : 10.5,
+          fontSize: isMobile ? 9 : 10,
           fontWeight: 550,
           letterSpacing: '0.02em',
           color: 'currentColor',
@@ -258,25 +231,16 @@ export function BottomNav() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const activePath = location.pathname;
+  const [meerOpen, setMeerOpen] = useState(false);
+
+  const meerActive = meerOpen || activePath === '/dax'
+    || (!!meerNavActive(activePath));
 
   return (
     <div
       className="axe-bottomnav flex-shrink-0 w-full overflow-hidden"
       data-axe-doel="axe-bottom-nav"
       style={{
-        // Explicitly stacked, because in normal flow this sat at level 0 and
-        // any in-page overlay covered it. ChartToolsDrawer's invisible
-        // full-viewport backdrop (z-60) swallowed every nav click, which is
-        // why the Trading tab appeared to freeze and only unmounting the
-        // drawer — by switching sub-tabs via Intel — freed the nav again.
-        //
-        // An earlier attempt lowered that backdrop from 10050 to 60 believing
-        // the nav sat at 100. It does not: that referred to `footer.z-fixed`,
-        // a different element, whose CSS rule only sets overflow. The nav had
-        // no z-index at all, so the fix could not work.
-        //
-        // 100 keeps navigation above page content while staying below real
-        // modals like ChartOrderConfirm (z-120), which should cover the nav.
         position: 'relative',
         zIndex: 100,
         height: 'calc(72px + var(--axe-sab))',
@@ -287,7 +251,7 @@ export function BottomNav() {
       }}
     >
       <div
-        className="flex items-center px-3 gap-2"
+        className="flex items-center px-2 gap-1.5"
         style={{
           height: 72,
           justifyContent: 'safe center',
@@ -299,7 +263,7 @@ export function BottomNav() {
           msOverflowStyle: 'none',
         }}
       >
-        <div className="flex items-center gap-1.5 sm:gap-2 justify-end flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 justify-end flex-shrink-0">
           {(isMobile ? orderForMobile([...leftItems, ...rightItems]) : leftItems).map((item) => (
             <NavTile
               key={item.path}
@@ -309,10 +273,18 @@ export function BottomNav() {
               onClick={() => navigate(item.path)}
             />
           ))}
+          {isMobile && (
+            <NavTile
+              item={MEER_ITEM}
+              isActive={meerActive}
+              isMobile={isMobile}
+              onClick={() => setMeerOpen(true)}
+            />
+          )}
         </div>
 
         <div
-          className="hidden sm:flex flex-shrink-0 w-28 h-full items-center justify-center"
+          className="hidden sm:flex flex-shrink-0 w-24 h-full items-center justify-center"
           data-axe-doel="axe-voice-orb-anchor"
           style={{
             borderLeft: '1px solid rgba(255,255,255,0.05)',
@@ -322,9 +294,7 @@ export function BottomNav() {
           <AxeVoiceOrb />
         </div>
 
-        {/* Mobile renders one merged, re-ordered strip above, so this second
-            group would repeat every destination. */}
-        <div className="flex items-center gap-1.5 sm:gap-2 justify-start flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 justify-start flex-shrink-0">
           {(isMobile ? [] : rightItems).map((item) => (
             <NavTile
               key={item.path}
@@ -334,13 +304,17 @@ export function BottomNav() {
               onClick={() => navigate(item.path)}
             />
           ))}
+          {!isMobile && (
+            <NavTile
+              item={MEER_ITEM}
+              isActive={meerActive}
+              isMobile={isMobile}
+              onClick={() => setMeerOpen(true)}
+            />
+          )}
         </div>
       </div>
 
-      {/* This row holds 23 destinations in a horizontally scrolling strip —
-          on mobile only ~7 fit in view, and nothing about a plain edge said
-          "there's more, swipe". These fades are the only signal; without them
-          the row read as complete and the rest was simply invisible. */}
       {isMobile && (
         <>
           <div
@@ -353,6 +327,22 @@ export function BottomNav() {
           />
         </>
       )}
+
+      <MeerAppsSheet open={meerOpen} onClose={() => setMeerOpen(false)} />
     </div>
   );
+}
+
+/** Highlight Meer when the current route is only reachable via Meer. */
+function meerNavActive(path: string): boolean {
+  const primary = new Set([
+    '/', '/northsea', '/trading', '/managers',
+    '/tasks', '/code-editor', '/calendar', '/settings',
+  ]);
+  if (primary.has(path)) return false;
+  // Deep primary children still count as primary.
+  for (const p of primary) {
+    if (p !== '/' && path.startsWith(`${p}/`)) return false;
+  }
+  return true;
 }
