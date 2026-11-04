@@ -40,7 +40,60 @@ export const OPOFFERBAAR: readonly string[] = [
   'axe_routing_log',
   'axe_ollama_model_health',
   'axe_smarthome_cache',
+  // Grote rebuildable caches — gemeten 2026-11-04: alleen axe_rag_memory was
+  // al ~4 MB en duwde WKWebView over de ~5 MB quota, zodat supabase-js de
+  // sessie niet kon bewaren ("The quota has been exceeded.").
+  'axe_embed_cache_v1',
+  'axe_trading_intel_reports',
+  'axe_trading_decision_traces',
+  'axe_trading_cycle_journal',
+  'axe_kb_docs',
+  'axe_obsidian_local_cache',
+  'axe_custom_skills',
+  'axe_planner_in_geheugen',
+  'axe_trading_funnel_last_run',
 ] as const;
+
+/**
+ * Extra caches met "memory" in de naam. Niet in OPOFFERBAAR: die lijst mag
+ * geen echte herinneringen/notities suggereren. Voor auth-persist mag dit
+ * wél weg — de cloud/RAG-store is de bron, localStorage is alleen cache.
+ */
+export const AUTH_CACHE_OPOFFERBAAR: readonly string[] = [
+  'axe_rag_memory',
+  'axe_global_memory_cache',
+  'axe_core_memory_local',
+  'axe_memory_feedback_v1',
+  'axe_memory_growth_history',
+] as const;
+
+/** Wis rebuildable caches zodat een auth-token nog past. */
+export function ruimCachesVoorAuth(
+  opslag: Storage | null | undefined = typeof localStorage !== 'undefined' ? localStorage : null,
+): string[] {
+  if (!opslag) return [];
+  const opgeruimd: string[] = [];
+  for (const kandidaat of [...OPOFFERBAAR, ...AUTH_CACHE_OPOFFERBAAR]) {
+    try {
+      if (opslag.getItem(kandidaat) === null) continue;
+      opslag.removeItem(kandidaat);
+      opgeruimd.push(kandidaat);
+    } catch { /* volgende */ }
+  }
+  // Chat-caches (axe_conv_v2_*) — prefix-scan, nooit sb-*-auth-token
+  try {
+    const teWissen: string[] = [];
+    for (let i = 0; i < opslag.length; i++) {
+      const k = opslag.key(i);
+      if (!k) continue;
+      if (k.startsWith('axe_conv_v2_')) teWissen.push(k);
+    }
+    for (const k of teWissen) {
+      try { opslag.removeItem(k); opgeruimd.push(k); } catch { /* */ }
+    }
+  } catch { /* */ }
+  return opgeruimd;
+}
 
 /** Herkent een volle opslag, over motoren heen.
  *
@@ -101,6 +154,22 @@ export function zetItem(
         opslag.setItem(sleutel, waarde);
         return { gelukt: true, opgeruimd };
       } catch { /* nog steeds vol; volgende kandidaat */ }
+    }
+
+    // Laatste redmiddel: auth/sessie-caches (RAG/embed) — anders kan
+    // supabase-js de sessie niet bewaren en ziet Luka precies WebKit's
+    // "The quota has been exceeded." op het login-scherm.
+    for (const kandidaat of AUTH_CACHE_OPOFFERBAAR) {
+      if (kandidaat === sleutel) continue;
+      try {
+        if (opslag.getItem(kandidaat) === null) continue;
+        opslag.removeItem(kandidaat);
+        opgeruimd.push(kandidaat);
+      } catch { /* */ }
+      try {
+        opslag.setItem(sleutel, waarde);
+        return { gelukt: true, opgeruimd };
+      } catch { /* */ }
     }
 
     return {

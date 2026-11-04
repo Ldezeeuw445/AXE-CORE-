@@ -15,6 +15,7 @@ import { loadConnectionOverrides } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
 import { isExterneOllama, ollamaHeaders } from '@/infrastructure/config/ollamaSleutel';
 import { embedProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
+import { setBoundedRecord } from '@/infrastructure/persistence/boundedLocalStorage';
 
 /**
  * Where Ollama actually is, according to Luka.
@@ -203,8 +204,11 @@ function cacheSet(key: string, vec: EmbeddingVector): void {
   if (embedSchrijf) clearTimeout(embedSchrijf);
   embedSchrijf = setTimeout(() => {
     embedSchrijf = null;
-    try { localStorage.setItem(LS_EMBED_CACHE, JSON.stringify(Object.fromEntries(cache))); }
-    catch { /* quota: dan alleen in het geheugen */ }
+    // Byte-cap i.p.v. alleen entry-cap: anders vult ~400 vectors de hele
+    // WKWebView-quota en blokkeert supabase auth-persist.
+    try {
+      setBoundedRecord(LS_EMBED_CACHE, [...cache.entries()], 400 * 1024);
+    } catch { /* quota: dan alleen in het geheugen */ }
   }, 4000);
 }
 
