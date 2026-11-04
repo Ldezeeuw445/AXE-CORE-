@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ontwerpModus } from '@/infrastructure/supabase/ontwerpModus';
 import { ontwerpClient } from '@/infrastructure/supabase/ontwerpData';
+import { zetItem, ruimCachesVoorAuth } from '@/infrastructure/persistence/veiligeOpslag';
 
 let _client: SupabaseClient | null = null;
 
@@ -89,6 +90,40 @@ function readOverride(key: string): string | null {
   return v && v.trim() ? v : null;
 }
 
+
+/**
+ * localStorage-adapter voor supabase-js auth.
+ *
+ * Zonder dit gooit `setItem` bij een volle WKWebView (~5 MB) QuotaExceededError
+ * met de letterlijke tekst "The quota has been exceeded." — die toast zag Luka
+ * op 2026-11-04 bij inloggen, terwijl GoTrue zelf gezond was. We vangen dat,
+ * wissen alleen rebuildable caches, en proberen de sessie opnieuw te bewaren.
+ */
+function maakAuthOpslag(): {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+  removeItem: (key: string) => void;
+} {
+  return {
+    getItem: (key) => {
+      try { return localStorage.getItem(key); } catch { return null; }
+    },
+    setItem: (key, value) => {
+      const eerste = zetItem(key, value);
+      if (eerste.gelukt) return;
+      ruimCachesVoorAuth();
+      const tweede = zetItem(key, value);
+      if (tweede.gelukt) return;
+      // Laat supabase-js de fout zien i.p.v. stil een sessie "kwijt" te raken
+      // zonder signaal — AuthContext toont dan een echte foutmelding.
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    },
+    removeItem: (key) => {
+      try { localStorage.removeItem(key); } catch { /* */ }
+    },
+  };
+}
+
 export function getSupabase(): SupabaseClient | null {
   if (_server) return _server.client;
   // Ontwerpmodus: verzonnen rijen in plaats van een echte verbinding, zodat de
@@ -106,7 +141,15 @@ export function getSupabase(): SupabaseClient | null {
   const key = readOverride('axe_supa_key') ?? ENV_KEY;
   if (!url || !key) return null;
   if (_client && url === _lastUrl && key === _lastKey) return _client;
-  _client = createClient(url, key);
+  _client = createClient(url, key, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      // detectSessionInUrl: default true — nodig voor OAuth/magic-link
+      // (ook via Tauri deeplink). Niet op false zetten.
+      storage: maakAuthOpslag(),
+    },
+  });
   _lastUrl = url;
   _lastKey = key;
   return _client;

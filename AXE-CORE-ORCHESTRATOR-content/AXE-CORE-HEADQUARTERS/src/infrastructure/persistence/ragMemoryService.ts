@@ -18,6 +18,7 @@ import {
   embedTextSync,
   type EmbeddingVector,
 } from '@/infrastructure/persistence/embeddingService';
+import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 
 export interface RagMemory {
   id?: string;
@@ -451,16 +452,25 @@ export async function initializeRagMemory(): Promise<void> {
 // ── localStorage ──────────────────────────────────────────────────────────
 
 function fallbackSaveRagMemory(memory: Omit<RagMemory, 'id' | 'created_at'>): void {
+  // Embeddings horen niet in localStorage: 250×~1024 floats blies de WKWebView
+  // quota (~5 MB) op tot login faalde met "The quota has been exceeded."
+  // Cloud/RAG blijft de bron; dit is alleen een lichte offline cache.
   try {
     const existing: RagMemory[] = JSON.parse(localStorage.getItem(LS_RAG_KEY) || '[]');
     const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const filtered = existing.filter((m) => m.content !== memory.content);
-    filtered.push({
-      ...memory,
+    const lichtBestaand = existing.map((m) => {
+      const { embedding: _e, ...rest } = m as RagMemory & { embedding?: unknown };
+      void _e;
+      return rest as RagMemory;
+    }).filter((m) => m.content !== memory.content);
+    const { embedding: _drop, ...zonderVector } = memory as RagMemory & { embedding?: unknown };
+    void _drop;
+    lichtBestaand.push({
+      ...zonderVector,
       id,
       created_at: new Date().toISOString(),
-    });
-    localStorage.setItem(LS_RAG_KEY, JSON.stringify(filtered.slice(-250)));
+    } as RagMemory);
+    zetJson(LS_RAG_KEY, lichtBestaand.slice(-80));
   } catch {
     /* */
   }
