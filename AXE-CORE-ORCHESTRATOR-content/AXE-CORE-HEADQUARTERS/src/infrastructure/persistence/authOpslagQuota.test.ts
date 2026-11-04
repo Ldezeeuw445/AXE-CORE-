@@ -84,7 +84,7 @@ describe('auth session past na volle cache', () => {
     o.setItem('axe_custom_skills', 's'.repeat(40));
     o.setItem('axe_embed_cache_v1', 'e'.repeat(40));
     o.setItem('axe_rag_memory', 'r'.repeat(40));
-    let maxTekens = 200; // genoeg voor bestaande data, te krap voor +auth
+    const maxTekens = 200; // genoeg voor bestaande data, te krap voor +auth
     const capped: Storage = {
       getItem: (k) => o.getItem(k),
       removeItem: (k) => o.removeItem(k),
