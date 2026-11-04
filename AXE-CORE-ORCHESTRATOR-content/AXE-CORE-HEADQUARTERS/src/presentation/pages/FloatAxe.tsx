@@ -2,6 +2,8 @@
 import { useEffect } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { applyStoredLookEarly } from '@/presentation/hooks/useLook';
+import { isLook } from '@/domain/look';
 
 /** Collapsed: ~34% of primary width (min 720), ~80px tall. Expanded: same width, taller panel. */
 const WIDTH_FRAC = 0.34;
@@ -92,6 +94,49 @@ async function dockTop(open: boolean) {
   } catch { /* preview browser */ }
 }
 
+
+/** Sync data-look with HQ main + standalone overlay (`~/.axe/look`).
+ *  Float webview starts with applyStoredLookEarly from main.tsx, but does not
+ *  re-apply when the main window toggles look (no shared React state). Poll the
+ *  shared file HQ writes in zet_plaat_materiaal; also honor storage events. */
+function useSharedLookSync() {
+  useEffect(() => {
+    applyStoredLookEarly();
+    let last: string | undefined = document.documentElement.dataset.look;
+    const applyNext = (raw: unknown) => {
+      if (!isLook(raw) || raw === last) return;
+      last = raw;
+      try { localStorage.setItem('axe_look', raw); } catch { /* private */ }
+      // DOM only — main already wrote ~/.axe/look via zet_plaat_materiaal.
+      document.documentElement.dataset.look = raw;
+      document.documentElement.style.colorScheme = raw === 'glass' ? 'light' : 'dark';
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'axe_look') applyNext(e.newValue);
+    };
+    window.addEventListener('storage', onStorage);
+    let stopped = false;
+    const tick = async () => {
+      if (stopped || !isTauriRuntime()) return;
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const raw = await invoke<string>('read_vault_file', {
+          vaultRoot: '/Users/luka/.axe',
+          relativePath: 'look',
+        }).catch(() => '');
+        applyNext((raw || '').trim());
+      } catch { /* ignore */ }
+    };
+    const id = window.setInterval(() => { void tick(); }, 500);
+    void tick();
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+}
+
 /** Poll Hammerspoon IPC (~/.axe/overlay.cmd) → CustomEvent for AxeOverlayNotch. */
 function useOverlayCmdBridge() {
   useEffect(() => {
@@ -128,6 +173,7 @@ function useOverlayCmdBridge() {
 }
 
 export default function FloatAxe() {
+  useSharedLookSync();
   useOverlayCmdBridge();
 
   useEffect(() => {

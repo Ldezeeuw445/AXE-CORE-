@@ -45,24 +45,24 @@
     0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-/* HQ glass — lichte plaat eronder; UI-materiaal blijft mat donker (zelfde als HQ) */
+/* HQ glass — notch/topbar chrome light-frosted; panel/cards stay matzwart (--axe-card-bg). */
 :root[data-look="glass"] {
   color-scheme: light;
-  --axe-ink: #e8ecf5;
-  --axe-ink-2: #9aa3b5;
-  --axe-ink-3: #6f7a90;
+  --axe-ink: #1b2432;
+  --axe-ink-2: rgba(27, 36, 50, 0.72);
+  --axe-ink-3: rgba(27, 36, 50, 0.50);
   --axe-text: var(--axe-ink);
   --axe-muted: var(--axe-ink-3);
   --axe-panel: var(--axe-card-bg);
-  --axe-glass: rgba(255, 255, 255, 0.08);
-  --axe-border: rgba(255, 255, 255, 0.12);
-  --axe-pill-bg: linear-gradient(180deg, rgba(28, 28, 34, 0.82) 0%, rgba(18, 18, 22, 0.88) 100%);
-  --axe-topbar-bg: linear-gradient(180deg, rgba(28, 28, 34, 0.86) 0%, rgba(18, 18, 22, 0.92) 100%);
+  --axe-glass: rgba(0, 0, 0, 0.05);
+  --axe-border: rgba(20, 40, 70, 0.14);
+  --axe-pill-bg: linear-gradient(180deg, rgba(248, 250, 253, 0.72) 0%, rgba(198, 210, 228, 0.55) 100%);
+  --axe-topbar-bg: linear-gradient(180deg, rgba(248, 250, 253, 0.78) 0%, rgba(198, 210, 228, 0.58) 100%);
   --axe-pill-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 1px 2px rgba(12, 20, 34, 0.22),
-    0 10px 30px rgba(12, 20, 34, 0.26),
-    0 0 0 1px rgba(255, 255, 255, 0.08);
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 1px 2px rgba(20, 40, 70, 0.12),
+    0 10px 28px rgba(30, 50, 80, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 * { box-sizing: border-box; }
