@@ -18,6 +18,8 @@ import { taakAlsBron, voegWerkSamen } from '@/domain/werkBron';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
 import PhoneTasks from '@/presentation/pages/phone/PhoneTasks';
 import { TasksDesk } from '@/presentation/components/tasks/TasksDesk';
+import { TakenSecties } from '@/presentation/components/tasks/TakenSecties';
+import { STATUS_NL } from '@/domain/takenOverzicht';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -32,6 +34,8 @@ interface Task {
   priority: TaskPriority;
   assignee: string;
   createdAt: number;
+  /** Wanneer hij klaar ging (completed_at, anders updated_at). Voor 'Klaar vandaag'. */
+  klaarOp?: number;
   progress: number;
   routedBy?: 'user' | 'axe-core';
   dueAt?: number;
@@ -48,10 +52,10 @@ interface Task {
 }
 
 const STATUS_CFG: Record<TaskStatus, { color: string; label: string }> = {
-  todo: { color: 'var(--text-muted)', label: 'To Do' },
-  'in-progress': { color: 'var(--accent-cyan)', label: 'In Progress' },
-  done: { color: 'var(--success)', label: 'Done' },
-  blocked: { color: 'var(--error)', label: 'Blocked' },
+  todo: { color: 'var(--text-muted)', label: STATUS_NL.todo },
+  'in-progress': { color: 'var(--accent-cyan)', label: STATUS_NL['in-progress'] },
+  done: { color: 'var(--success)', label: STATUS_NL.done },
+  blocked: { color: 'var(--error)', label: STATUS_NL.blocked },
 };
 
 
@@ -111,6 +115,13 @@ function plannerAlsRij(t: PlannerTaak): DurableTaskRun {
   };
 }
 
+function klaarOpVan(row: DurableTaskRun): number | undefined {
+  if (uiStatusOf(row) !== 'done') return undefined;
+  const raw = (row as { completed_at?: string | null }).completed_at ?? row.updated_at;
+  const t = raw ? new Date(raw).getTime() : NaN;
+  return Number.isFinite(t) ? t : undefined;
+}
+
 function normalizeRows(rows: DurableTaskRun[]): Task[] {
   return rows.map(row => ({
     id: row.id,
@@ -120,6 +131,7 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
     priority: row.priority,
     assignee: row.assignee ?? 'AXE Core',
     createdAt: new Date(row.created_at).getTime(),
+    klaarOp: klaarOpVan(row),
     progress: progressFromRow(row),
     routedBy: row.assignee === 'AXE Core' ? 'user' : 'axe-core',
     dueAt: dueFromRow(row),
@@ -380,7 +392,7 @@ export default function Tasks() {
             titel: 'Status',
             items: (['all', 'todo', 'in-progress', 'done', 'blocked'] as const).map(f => ({
               id: f,
-              label: f === 'all' ? 'All' : STATUS_CFG[f as TaskStatus]?.label ?? f,
+              label: f === 'all' ? 'Alles' : STATUS_CFG[f as TaskStatus]?.label ?? f,
               actief: filterStatus === f,
               onKies: () => setFilterStatus(f),
             })),
@@ -388,7 +400,11 @@ export default function Tasks() {
         />
       </TabRail>
       <TabRuimte>
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* Eén schuif voor de hele tab. Eerst schoof alleen de lijst onderaan,
+          en die kreeg 0px zodra secties, desk en planner hun hoogte namen: de
+          projectkaarten waren onbereikbaar en de desk werd onder de planner
+          platgedrukt. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-axe-taken-schuif="">
       <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
@@ -407,10 +423,12 @@ export default function Tasks() {
             className="inline-flex items-center justify-center gap-1.5 text-xs-custom px-3 py-2 rounded-lg"
             style={{ background: 'var(--accent-cyan)', color: '#000' }}
           >
-            <Plus size={13} /> New Task
+            <Plus size={13} /> Nieuwe taak
           </button>
         </div>
       </div>
+
+      <TakenSecties taken={tasks} loading={loading} />
 
       <TasksDesk
         tasks={tasks}
@@ -431,7 +449,7 @@ export default function Tasks() {
       <AnimatePresence>
         {adding && (
           <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -8, height: 0 }} className="overflow-hidden mb-4">
-            <Kaart titel="New Task">
+            <Kaart titel="Nieuwe taak">
               <div className="space-y-2.5">
                 <input
                   autoFocus
@@ -503,7 +521,7 @@ export default function Tasks() {
       {/* De lijst is de enige schuif, en hij vult wat er onder de cijfers over
           is. De lege staat gebruikt diezelfde ruimte in plaats van als strookje
           bovenin te blijven hangen met een halve pagina plaat eronder. */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex-none">
       {/* Per app zijn deadlines, en eronder zijn dagen.
         *
         * Dit was één lange lijst met alle taken van alles door elkaar, met een

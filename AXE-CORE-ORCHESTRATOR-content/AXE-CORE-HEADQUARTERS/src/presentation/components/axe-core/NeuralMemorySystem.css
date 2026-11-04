@@ -557,7 +557,7 @@
   width: min(260px, 40vw);
   border-radius: 14px;
   padding: 13px;
-  background: rgba(3, 3, 6, 0.92);
+  background: var(--axe-card-bg);
   border: 1px solid var(--nm-border);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
 }

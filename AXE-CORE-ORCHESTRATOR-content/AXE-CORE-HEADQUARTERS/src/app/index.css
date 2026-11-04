@@ -69,7 +69,7 @@
   --m-idle-dim: rgba(139, 145, 154, 0.14);
   --green: #10B981;
   --pink: #EC4899;
-  --card-2: #0c0c0c;
+  --card-2: var(--axe-card-bg, #0c0c0c);
   --dim: #8B919A;
   --live-indicator: #22D3EE;
   --radius: 12px;
@@ -89,7 +89,7 @@
   --surface-radius-row: 8px;
   --surface-radius-glyph: 6px;
 
-  --surface-bg: linear-gradient(180deg, rgba(23,23,23,.94), rgba(12,12,12,.96));
+  --surface-bg: var(--axe-card-bg, linear-gradient(180deg, rgba(23,23,23,.94), rgba(12,12,12,.96)));
   --surface-blur: blur(28px) saturate(150%);
   --surface-lift: 0 24px 64px rgba(0,0,0,.6);
   --surface-edge:
@@ -206,7 +206,7 @@ h1, h2, h3, h4, h5, h6 {
 .axe-kaart {
   /* Zelfde tokens als Browser-home. axe-look.css herhaalt ze onder data-look;
      de waarden staan daar één keer. Geen cyaan gloed. */
-  background: var(--axe-kaart-vlak, #17181C);
+  background: var(--axe-card-bg);
   border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.10));
   box-shadow: var(--axe-kaart-schaduw, 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 4px 14px rgba(0, 0, 0, 0.42));
   transition: border-color 160ms ease, box-shadow 160ms ease;

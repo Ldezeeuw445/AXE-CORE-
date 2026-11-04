@@ -8,7 +8,9 @@
   --axe-ink: #e8ecf5;
   --axe-ink-2: #9aa3b5;
   --axe-ink-3: #6f7a90;
-  --axe-panel: rgba(18, 18, 22, 0.92);
+  /* Zelfde matzwart als HQ --axe-card-bg; look.ts zet --axe-card-bg bij elke look-sync. */
+  --axe-card-bg: linear-gradient(180deg, rgba(23, 23, 23, 0.94), rgba(12, 12, 12, 0.96));
+  --axe-panel: var(--axe-card-bg);
   --axe-glass: rgba(255, 255, 255, 0.06);
   --axe-border: rgba(255, 255, 255, 0.10);
   --axe-text: #e8ecf5;
@@ -32,7 +34,7 @@
   --axe-ink-3: #6f7a90;
   --axe-text: var(--axe-ink);
   --axe-muted: var(--axe-ink-3);
-  --axe-panel: rgba(17, 17, 21, 0.94);
+  --axe-panel: var(--axe-card-bg);
   --axe-glass: rgba(255, 255, 255, 0.06);
   --axe-border: rgba(255, 255, 255, 0.10);
   --axe-pill-bg: linear-gradient(180deg, rgba(23, 23, 28, 0.94) 0%, rgba(15, 15, 18, 0.96) 100%);
@@ -51,7 +53,7 @@
   --axe-ink-3: #6f7a90;
   --axe-text: var(--axe-ink);
   --axe-muted: var(--axe-ink-3);
-  --axe-panel: rgba(18, 18, 22, 0.88);
+  --axe-panel: var(--axe-card-bg);
   --axe-glass: rgba(255, 255, 255, 0.08);
   --axe-border: rgba(255, 255, 255, 0.12);
   --axe-pill-bg: linear-gradient(180deg, rgba(28, 28, 34, 0.82) 0%, rgba(18, 18, 22, 0.88) 100%);

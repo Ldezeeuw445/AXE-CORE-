@@ -68,7 +68,7 @@
   --bg-panel: #141419;
   --bg-elevated: #1b1b21;
   --bg-surface: #17171d;
-  --card-2: #1d1d24;
+  --card-2: var(--axe-card-bg);
 
   /* Een haarlijn moet je kunnen zien, anders is het geen scheiding maar een
      gedachte. Op 2,8% viel hij weg tegen het glas. */
@@ -159,11 +159,10 @@
 
      Bovenop ligt een lichtval van boven (4% wit dat in 22% wegloopt): dat is
      wat een kaart van boven belicht laat lijken, samen met de haarlijn. */
-  --kaart:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 22%),
-    linear-gradient(180deg, rgba(23, 23, 28, 0.90) 0%, rgba(17, 17, 21, 0.88) 55%, rgba(15, 15, 18, 0.92) 100%);
+  /* Luka (4 nov): kaarten altijd matzwart -- ook chatplaat en rails. */
+  --kaart: var(--axe-card-bg);
   --kaart-filter: blur(20px) saturate(1.15);
-  --kaart-2: linear-gradient(180deg, #1D1D23 0%, #16161B 100%);
+  --kaart-2: var(--axe-card-bg);
   /* De rand in drie lagen: haarlijn van boven (belicht), donkere lijn onder
      (diepte), en om het geheel een ring van wit met daarbuiten een heel zwakke
      accentrand -- de edge glow. Op .035 zie je hem niet als lijn maar als een
@@ -834,7 +833,7 @@ html:root[data-look][data-ios-pwa],
   border-radius: 12px;
   z-index: 31;
   color: rgba(238, 243, 250, 0.78);
-  background: linear-gradient(180deg, rgba(20, 20, 24, 0.88), rgba(10, 10, 12, 0.92));
+  background: var(--axe-card-bg);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 12px 30px -20px rgba(0, 0, 0, 0.9);
   opacity: 0.36;
@@ -1047,7 +1046,7 @@ html:root[data-look][data-ios-pwa],
      zichtbaar op een donker bureaublad achter het glas; de schaduw laat hem
      zweven op licht. Geen gekleurde gloed. Eén bron: elke kaart en de
      Browser-kaarten zelf lezen hieruit. */
-  --axe-kaart-vlak: linear-gradient(180deg, rgba(23, 23, 23, 0.94), rgba(12, 12, 12, 0.96));
+  --axe-kaart-vlak: var(--axe-card-bg);
   --axe-kaart-lijn: rgba(255, 255, 255, 0.07);
   --axe-kaart-lijn-boven: rgba(255, 255, 255, 0.12);
   --axe-kaart-hoek: 18px;
@@ -3218,7 +3217,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   width: 100%;
   border-radius: 16px !important;
   padding: 14px 15px !important;
-  background: linear-gradient(180deg, rgba(20, 20, 24, 0.92), rgba(12, 12, 15, 0.95)) !important;
+  background: var(--axe-card-bg) !important;
   border: 0 !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
@@ -3706,7 +3705,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 16px;
   border-radius: 22px;
   margin-left: 14px;
-  background: linear-gradient(180deg, rgba(20, 20, 24, 0.96), rgba(12, 12, 15, 0.98));
+  background: var(--axe-card-bg);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.10) inset,
     0 0 0 1px rgba(255, 255, 255, 0.055),
@@ -5423,12 +5422,14 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   align-items: stretch;
-  min-height: 100%;
+  /* Elke projectkaart even groot: rijen van gelijke hoogte, ook de laatste
+     rij met twee kaarten (Luka, 4 nov). */
+  grid-auto-rows: 400px;
   padding-bottom: 12px;
 }
 @media (max-width: 1600px) { .axe-appvijf { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1000px) { .axe-appvijf { grid-template-columns: minmax(0, 1fr); } }
-.axe-appvijf > .axe-appkolom { min-height: 340px; }
+.axe-appvijf > .axe-appkolom { min-height: 0; height: 100%; }
 
 .axe-app {
   display: flex;
@@ -5437,7 +5438,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   min-height: 0;
   border-radius: var(--axe-kaart-hoek);
   border: 1px solid var(--axe-kaart-lijn);
-  background: var(--axe-kaart-vlak);
+  background: var(--axe-card-bg);
   box-shadow: var(--axe-kaart-zweef);
   overflow: hidden;
 }
@@ -6498,7 +6499,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border-radius: 16px;
   display: grid;
   place-items: center;
-  background: rgba(23, 23, 28, 0.72);
+  background: var(--axe-card-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow:
@@ -8058,7 +8059,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-dag-kaart {
   position: relative; width: 100%; display: flex; align-items: flex-start; gap: 10px; text-align: left;
   min-height: 64px; padding: 12px 14px 12px 16px; border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(9, 11, 15, 0.9); color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.08); background: var(--axe-card-bg); color: var(--text-primary);
 }
 .axe-dag-kaart::before {
   content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 4px 4px 0; background: var(--blok, #888);
@@ -8361,7 +8362,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
   overflow: hidden;
-  background: rgba(8, 10, 14, 0.92);
+  background: var(--axe-card-bg);
 }
 @media (max-width: 860px) {
   .axe-managers-room {
@@ -8385,7 +8386,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
-  background: linear-gradient(180deg, rgba(14, 18, 24, 0.98), rgba(8, 10, 14, 0.98));
+  background: var(--axe-card-bg);
 }
 .axe-managers-room-lijst-kop {
   display: flex;
@@ -8554,7 +8555,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(165deg, rgba(12, 16, 22, 0.96), rgba(6, 8, 12, 0.98));
+  background: var(--axe-card-bg);
   padding: 10px;
 }
 .axe-managers-room-leeg {
@@ -8794,7 +8795,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-dax-kaart {
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(18, 22, 28, 0.96), rgba(10, 12, 16, 0.98));
+  background: var(--axe-card-bg);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -8923,7 +8924,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   overflow: hidden;
-  background: rgba(10, 12, 16, 0.92);
+  background: var(--axe-card-bg);
 }
 .axe-code-v3 .axe-studio[data-stand='code'][data-preview='aan'] .axe-studio-kolommen {
   grid-template-columns: 240px minmax(0, 1fr) minmax(280px, 420px);
@@ -8933,19 +8934,19 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   background: transparent;
 }
 .axe-code-v3 .axe-studio-bestanden {
-  background: rgba(14, 17, 22, 0.95);
+  background: var(--axe-card-bg);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
 }
 .axe-code-v3 .axe-studio-editor {
-  background: #07090c;
+  background: var(--axe-card-bg);
   border-radius: 0;
 }
 .axe-code-v3 .axe-studio-tabs {
   padding: 8px 8px 0;
   height: auto;
   min-height: 40px;
-  background: rgba(14, 17, 22, 0.95);
+  background: var(--axe-card-bg);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: none;
 }
@@ -8955,7 +8956,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   color: rgba(214, 226, 236, 0.55);
 }
 .axe-code-v3 .axe-studio-tabs .bestandtab[data-aan='ja'] {
-  background: #07090c;
+  background: var(--axe-card-bg);
   color: #67e8f9;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
   border-bottom-color: #07090c;
@@ -8965,7 +8966,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   flex: 0 0 300px;
   padding: 12px 12px 8px;
   gap: 10px;
-  background: rgba(14, 17, 22, 0.95);
+  background: var(--axe-card-bg);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: none;
 }
@@ -8986,7 +8987,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 12px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 12, 16, 0.9);
+  background: var(--axe-card-bg);
   font-size: 12.5px;
   color: rgba(214, 226, 236, 0.85);
   line-height: 1.45;
@@ -9052,7 +9053,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 14px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(14, 17, 22, 0.92);
+  background: var(--axe-card-bg);
 }
 .axe-tasks-v3-inbox {
   display: flex;
@@ -9122,7 +9123,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 14px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(14, 17, 22, 0.92);
+  background: var(--axe-card-bg);
   margin-bottom: 8px;
   text-align: left;
   cursor: pointer;
@@ -9230,7 +9231,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 14px 12px;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--axe-card-bg);
   overflow: auto;
 }
 .axe-settings-v3-nav-label {
@@ -9275,7 +9276,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 16px 18px;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--axe-card-bg);
 }
 .axe-settings-v3-card-label {
   font-size: 11px;
@@ -9355,14 +9356,14 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   pointer-events: none;
 }
 [data-axe-home="v3"] .axe-home-rail-balk {
-  background: rgba(12, 16, 22, 0.88) !important;
+  background: var(--axe-card-bg) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   backdrop-filter: blur(12px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
   border-radius: 14px !important;
 }
 [data-axe-home="v3"] .axe-home-rail-tegel {
-  background: rgba(12, 16, 22, 0.88) !important;
+  background: var(--axe-card-bg) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   backdrop-filter: blur(12px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
@@ -9407,7 +9408,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 16px 16px 14px;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--axe-card-bg);
   cursor: pointer;
   color: inherit;
   min-height: 110px;
@@ -9469,12 +9470,12 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-northsea="v3"] .axe-desk-tabs {
   border-radius: 12px;
   border: 1px solid rgba(34, 211, 238, 0.18);
-  background: rgba(6, 16, 24, 0.72);
+  background: var(--axe-card-bg);
 }
 [data-axe-northsea="v3"] [data-axe-doel="axe-chase"] {
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(12, 16, 22, 0.88);
+  background: var(--axe-card-bg);
   backdrop-filter: blur(10px);
 }
 
@@ -9582,4 +9583,39 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-device="v3"] .axe-kaart,
 [data-axe-device="v3"] .widget-card {
   border-radius: 16px;
+}
+
+/* ── Taken: drie secties bovenaan (Wacht op jou / Bezig / Klaar vandaag) ── */
+.axe-taken-secties {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1000px) { .axe-taken-secties { grid-template-columns: minmax(0, 1fr); } }
+.axe-taken-sectie {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--axe-kaart-hoek);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-card-bg);
+  box-shadow: var(--axe-kaart-zweef);
+}
+.axe-planner-teller {
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+/* De Taken-tab schuift als geheel; de desk houdt zijn eigen hoogte in plaats
+   van tot niets te krimpen onder de planner. */
+.axe-tasks-page .axe-tasks-v3 { flex: none; min-height: 340px; }
+/* Vijf projectkaarten in 3+2 liet rechts een gat. Zes smalle kolommen, elke
+   kaart twee breed, en de laatste rij gecentreerd: symmetrisch, even groot. */
+@media (min-width: 1001px) and (max-width: 1600px) {
+  .axe-appvijf { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .axe-appvijf > .axe-appkolom { grid-column: span 2; }
+  .axe-appvijf > .axe-appkolom:nth-child(4):nth-last-child(2) { grid-column: 2 / span 2; }
+  .axe-appvijf > .axe-appkolom:nth-child(5):last-child { grid-column: 4 / span 2; }
 }

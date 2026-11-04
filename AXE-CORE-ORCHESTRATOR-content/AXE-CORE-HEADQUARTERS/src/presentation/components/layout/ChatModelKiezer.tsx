@@ -176,7 +176,7 @@ export function ChatModelKiezer({ variant = 'pil' }: { variant?: 'pil' | 'stip' 
               [plek.boven ? 'bottom' : 'top']: plek.verticaal,
               width: 300,
               maxHeight: plek.maxHoogte,
-              background: 'var(--bg-panel, rgba(12,16,24,0.98))',
+              background: 'var(--axe-card-bg)',
               border: '1px solid var(--border-default)',
               boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
             }}

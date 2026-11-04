@@ -9,8 +9,8 @@ describe('TasksDesk v3', () => {
     const src = lees('./TasksDesk.tsx');
     expect(src).toMatch(/data-axe-tasks-desk="v3"/);
     expect(src).toMatch(/Alle open/);
-    expect(src).toMatch(/Mark done/);
-    expect(src).toMatch(/\+ Nieuwe task/);
+    expect(src).toMatch(/Markeer klaar/);
+    expect(src).toMatch(/\+ Nieuwe taak/);
     expect(src).not.toMatch(/<aside[\s>]/);
   });
 
