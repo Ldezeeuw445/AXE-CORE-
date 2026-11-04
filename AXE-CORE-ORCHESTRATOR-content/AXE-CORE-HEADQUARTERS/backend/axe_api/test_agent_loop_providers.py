@@ -193,7 +193,101 @@ def test_openrouter_zit_in_keten_voor_ollama(monkeypatch):
     assert "openrouter.ai" in volgorde[0][0]
 
 
+
+# ── W9: HTTP 413 / request too large → trim + fallback ───────────────────────
+
+def test_provider_fout_413_is_context_te_groot():
+    exc = agent_loop._provider_fout(
+        "openai/gpt-oss-120b",
+        type("R", (), {
+            "status_code": 413,
+            "text": (
+                "Request too large for model `openai/gpt-oss-120b` in organization "
+                "org_x on tokens per minute (TPM)"
+            ),
+            "headers": {},
+        })(),
+    )
+    assert isinstance(exc, agent_loop.ContextTeGroot)
+    assert not isinstance(exc, agent_loop.ProviderUitgeput)
+    # 413 must not trigger cool-down — the payload is fat, not the wallet.
+    assert agent_loop._afkoelduur(exc) is None
+
+
+def test_trim_contents_houdt_brief_en_knipt_tool_dumps():
+    dik = "X" * 50_000
+    contents = [
+        {"role": "user", "parts": [{"text": "bouw feature A"}]},
+        {"role": "model", "parts": [{"functionCall": {"name": "run_shell", "args": {"command": "ls -R"}}}]},
+        {"role": "user", "parts": [{"functionResponse": {"name": "run_shell", "response": {"stdout": dik, "exit_code": 0}}}]},
+        {"role": "model", "parts": [{"functionCall": {"name": "run_shell", "args": {"command": "pwd"}}}]},
+        {"role": "user", "parts": [{"functionResponse": {"name": "run_shell", "response": {"stdout": "/tmp/ws", "exit_code": 0}}}]},
+    ]
+    uit = agent_loop._trim_contents(contents, budget=8_000)
+    assert uit[0]["parts"][0]["text"] == "bouw feature A"
+    assert agent_loop._estimate_contents_chars(uit) <= 8_000
+    # Fat stdout must not survive whole.
+    blob = str(uit)
+    assert "X" * 40_000 not in blob
+    assert "omitted" in blob.lower() or "truncated" in blob.lower() or len(blob) < 20_000
+
+
+def test_413_trimt_en_valt_terug_op_volgende_provider(monkeypatch):
+    """Groq 413 → trim + retry; still 413 → ollama with trimmed payload.
+
+    Without this, every provider gets the same fat body and the task lands on
+    Waiting for DAX capacity even though Ollama could finish the step.
+    """
+    monkeypatch.setattr(agent_loop, "_AFKOELING", {})
+    monkeypatch.setenv("GROQ_API_KEY", "g")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
+
+    dik = "Y" * 80_000
+    contents = [
+        {"role": "user", "parts": [{"text": "stap 1: verkent de repo"}]},
+        {"role": "model", "parts": [{"functionCall": {"name": "run_shell", "args": {"command": "ls -R"}}}]},
+        {"role": "user", "parts": [{"functionResponse": {"name": "run_shell", "response": {"stdout": dik}}}]},
+    ]
+    gezien = []
+
+    async def nep_compat(c, url, key, model):
+        size = agent_loop._estimate_contents_chars(c)
+        gezien.append(("groq", model, size))
+        raise agent_loop._provider_fout(
+            model,
+            type("R", (), {
+                "status_code": 413,
+                "text": "Request too large for model on tokens per minute (TPM)",
+                "headers": {},
+            })(),
+        )
+
+    async def nep_ollama(c):
+        size = agent_loop._estimate_contents_chars(c)
+        gezien.append(("ollama", agent_loop.OLLAMA_MODEL, size))
+        return {"parts": [{"text": "ok-na-trim"}]}
+
+    monkeypatch.setattr(agent_loop, "_call_openai_compat", nep_compat)
+    monkeypatch.setattr(agent_loop, "_call_ollama", nep_ollama)
+
+    # Fresh list so the loop can mutate it without touching the fixture above.
+    import copy
+    vraag = copy.deepcopy(contents)
+
+    uit = asyncio.run(agent_loop._call_model(vraag, None))
+    assert uit == {"parts": [{"text": "ok-na-trim"}]}
+    # Soft-trim may fire first; then Groq 413 → harder trim + retry; then ollama.
+    assert any(p == "ollama" for p, _, _ in gezien)
+    ollama_sizes = [s for p, _, s in gezien if p == "ollama"]
+    assert ollama_sizes and ollama_sizes[0] < 80_000
+    # No cool-down parked for the 413 path.
+    assert not any("413" in str(k) for k in agent_loop._AFKOELING)
+    assert f"groq/{agent_loop.GROQ_MODEL}" not in agent_loop._AFKOELING
+
+
 def test_gemini_default_is_niet_deprecated():
+
     assert "pro-latest" not in agent_loop.MODEL
     assert "flash" in agent_loop.MODEL or "2.5" in agent_loop.MODEL
 

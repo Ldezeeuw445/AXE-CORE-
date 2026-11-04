@@ -591,6 +591,182 @@ class ProviderUitgeput(RuntimeError):
         self.retry_after = retry_after
 
 
+class ContextTeGroot(RuntimeError):
+    """Request body past niet in het contextvenster / TPM-payload van de provider.
+
+    Groq geeft dit als HTTP 413 ("Request too large ... TPM"). Geen lange
+    afkoeling: de payload zelf is te dik. Oplossing = inkorten en opnieuw
+    proberen, daarna de volgende geconfigureerde provider met dezelfde
+    ingekorte context. Bestaande keys only — geen nieuwe secrets.
+    """
+
+    def __init__(self, provider: str, status: int, body: str):
+        super().__init__(f"{provider} {status}: {body[:300]}")
+        self.status = status
+        self.body = body
+
+
+# Soft budget for Gemini-shaped contents (chars ≈ tokens/4). Leaves room for
+# system prompt + tool decls + completion. Aggressive enough that a Step-1
+# `ls -R` of a fat tree still fits Groq's free TPM bucket after one trim.
+_CONTEXT_CHAR_BUDGET = 100_000
+_TOOL_RESPONSE_TRIM = 6_000
+_TE_GROOT_MARKERS = (
+    "request too large",
+    "payload too large",
+    "context_length_exceeded",
+    "maximum context length",
+    "context window",
+    "too many tokens",
+    "prompt is too long",
+    "token count exceeds",
+    "exceeds the model",
+)
+
+
+def _is_te_groot(status: int, body: str) -> bool:
+    if status == 413:
+        return True
+    laag = (body or "").lower()
+    return any(m in laag for m in _TE_GROOT_MARKERS)
+
+
+def _estimate_contents_chars(contents: list[dict[str, Any]]) -> int:
+    """Rough size of the conversation we would ship (not counting tools/system)."""
+    total = 0
+    for entry in contents:
+        for part in entry.get("parts") or []:
+            if part.get("text"):
+                total += len(part["text"])
+            elif "functionCall" in part:
+                total += len(json.dumps(part["functionCall"], default=str))
+            elif "functionResponse" in part:
+                total += len(json.dumps(part["functionResponse"], default=str))
+    return total
+
+
+def _knip_tekst(tekst: str, max_chars: int) -> str:
+    """Keep head + tail so errors and final lines survive a fat shell dump."""
+    if max_chars <= 0:
+        return ""
+    if len(tekst) <= max_chars:
+        return tekst
+    if max_chars < 80:
+        return tekst[:max_chars]
+    head = max_chars // 2
+    tail = max_chars - head - 40
+    weggelaten = len(tekst) - head - max(tail, 0)
+    midden = "\n...[%d chars omitted to fit model limit]...\n" % weggelaten
+    return tekst[:head] + midden + tekst[-max(tail, 0):]
+
+
+def _trim_function_response(response: Any, max_chars: int) -> Any:
+    if isinstance(response, dict):
+        out: dict[str, Any] = {}
+        for key, value in response.items():
+            if isinstance(value, str) and len(value) > max_chars // 2:
+                out[key] = _knip_tekst(value, max_chars // 2)
+            elif isinstance(value, (dict, list)):
+                raw = json.dumps(value, default=str)
+                if len(raw) > max_chars:
+                    out[key] = _knip_tekst(raw, max_chars)
+                else:
+                    out[key] = value
+            else:
+                out[key] = value
+        raw = json.dumps(out, default=str)
+        if len(raw) > max_chars:
+            return {"truncated": True, "preview": _knip_tekst(raw, max_chars)}
+        return out
+    if isinstance(response, str):
+        return _knip_tekst(response, max_chars)
+    raw = json.dumps(response, default=str)
+    return _knip_tekst(raw, max_chars) if len(raw) > max_chars else response
+
+
+def _trim_contents(
+    contents: list[dict[str, Any]],
+    budget: int = _CONTEXT_CHAR_BUDGET,
+) -> list[dict[str, Any]]:
+    """Shrink conversation so the next provider call fits model/TPM limits.
+
+    Keeps the original brief (first user turn) and the most recent turns.
+    Fat tool payloads are head+tail truncated. Middle history is dropped with
+    a short placeholder so the model knows work already happened.
+    """
+    if not contents:
+        return contents
+    if _estimate_contents_chars(contents) <= budget:
+        # Still harden individual tool dumps — a single 60k read blows TPM.
+        hardened: list[dict[str, Any]] = []
+        for entry in contents:
+            parts = entry.get("parts") or []
+            nieuw_parts = []
+            for part in parts:
+                if "functionResponse" in part:
+                    fr = part["functionResponse"]
+                    nieuw_parts.append({
+                        "functionResponse": {
+                            "name": fr.get("name"),
+                            "response": _trim_function_response(
+                                fr.get("response"), _TOOL_RESPONSE_TRIM
+                            ),
+                        }
+                    })
+                else:
+                    nieuw_parts.append(part)
+            hardened.append({**entry, "parts": nieuw_parts})
+        if _estimate_contents_chars(hardened) <= budget:
+            return hardened
+        contents = hardened
+
+    first = contents[0]
+    rest = contents[1:]
+    # Cap every tool response first.
+    capped: list[dict[str, Any]] = [first]
+    for entry in rest:
+        parts = entry.get("parts") or []
+        nieuw_parts = []
+        for part in parts:
+            if "functionResponse" in part:
+                fr = part["functionResponse"]
+                nieuw_parts.append({
+                    "functionResponse": {
+                        "name": fr.get("name"),
+                        "response": _trim_function_response(
+                            fr.get("response"), _TOOL_RESPONSE_TRIM
+                        ),
+                    }
+                })
+            elif part.get("text") and len(part["text"]) > _TOOL_RESPONSE_TRIM:
+                nieuw_parts.append({"text": _knip_tekst(part["text"], _TOOL_RESPONSE_TRIM)})
+            else:
+                nieuw_parts.append(part)
+        capped.append({**entry, "parts": nieuw_parts})
+
+    if _estimate_contents_chars(capped) <= budget:
+        return capped
+
+    # Drop oldest middle turns until under budget; keep first + recent tail.
+    keep_tail = list(capped[1:])
+    while keep_tail and _estimate_contents_chars([capped[0]] + keep_tail) > budget:
+        # Drop from the front of the middle (oldest after the brief).
+        keep_tail.pop(0)
+    placeholder = {
+        "role": "user",
+        "parts": [{"text": (
+            "Earlier tool results were omitted to fit the model context limit. "
+            "Continue from the recent transcript; re-read a file only if you still need it."
+        )}],
+    }
+    out = [capped[0]]
+    if keep_tail:
+        # Avoid double-placeholder noise if the next turn is already a nudge.
+        out.append(placeholder)
+        out.extend(keep_tail)
+    return out
+
+
 # Afkoeling per provider. Zonder dit probeert de lus elke stap opnieuw Groq
 # (dagquotum op) en Gemini (credits op): tot veertig keer dezelfde 429/402 per
 # taak, veertig keer dezelfde regel in het log, en elke stap twee nutteloze
@@ -662,6 +838,9 @@ def _provider_fout(provider: str, response: Any) -> RuntimeError:
       * dagquotum 429 → tot middernacht
       * minuut/TPM 429 → korte backoff (_AFKOEL_MINUUT / Retry-After)
 
+    ContextTeGroot bij HTTP 413 / "request too large" — trim + volgende
+    provider, geen lange afkoeling (de payload is te dik, niet de wallet).
+
     Anders een gewone RuntimeError — een 500 of timeout is een incident.
     """
     body = response.text or ""
@@ -673,6 +852,8 @@ def _provider_fout(provider: str, response: Any) -> RuntimeError:
         retry_after = None
     if status == 402 or _is_credits_op(body):
         return ProviderUitgeput(provider, status or 402, body, retry_after)
+    if _is_te_groot(status, body):
+        return ContextTeGroot(provider, status or 413, body)
     if status == 429:
         if _is_dagquotum(body):
             return ProviderUitgeput(provider, status, body, retry_after)
@@ -1058,8 +1239,23 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     if api_aan("ollama") or not attempts:
         attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama_begrensd(contents)))
 
+    # Soft-trim before the first attempt when the transcript is already fat
+    # (e.g. Step 1 `ls -R` of a whole monorepo). Mutate in place so every
+    # lambda below — and the caller's contents for later steps — see it.
+    if _estimate_contents_chars(contents) > _CONTEXT_CHAR_BUDGET:
+        ingekort = _trim_contents(contents, _CONTEXT_CHAR_BUDGET)
+        contents.clear()
+        contents.extend(ingekort)
+        log.info(
+            "[agent_loop] context trimmed to %d chars before provider cascade",
+            _estimate_contents_chars(contents),
+        )
+
     errors: list[str] = []
-    for name, call in attempts:
+    i = 0
+    getrimd_voor: set[str] = set()
+    while i < len(attempts):
+        name, call = attempts[i]
         tot = _AFKOELING.get(name)
         if tot is not None:
             if tot > time.monotonic():
@@ -1067,12 +1263,29 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
                 # provider in de afkoeling ging; het elke stap herhalen is
                 # precies het lawaai dat dit moest oplossen.
                 errors.append(f"{name}: afkoelend")
+                i += 1
                 continue
             _AFKOELING.pop(name, None)
         try:
             antwoord = await call()
             _LAATSTE_MOTOR.set(name)
             return antwoord
+        except ContextTeGroot as exc:
+            # Payload te dik: inkorten en dezelfde provider één keer opnieuw,
+            # daarna de volgende geconfigureerde provider met dezelfde trim.
+            # Geen afkoeling — 413 is geen lege wallet.
+            log.warning(
+                "[agent_loop] %s request too large — trimming context and retrying/falling back: %s",
+                name, str(exc)[:160],
+            )
+            errors.append(f"{name}: {str(exc)[:150]}")
+            if name not in getrimd_voor:
+                ingekort = _trim_contents(contents, _CONTEXT_CHAR_BUDGET // 2)
+                contents.clear()
+                contents.extend(ingekort)
+                getrimd_voor.add(name)
+                continue  # retry same provider with smaller payload
+            i += 1
         except Exception as exc:
             seconden = _afkoelduur(exc)
             if seconden:
@@ -1084,6 +1297,7 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
             else:
                 log.warning("[agent_loop] %s failed: %s", name, str(exc)[:200])
             errors.append(f"{name}: {str(exc)[:150]}")
+            i += 1
 
     samenvatting = "every provider failed — " + " | ".join(errors)
     db = _db_voor_stoelen()
