@@ -71,6 +71,21 @@ meld_vast() {  # $1 = reden, $2 = wat te doen
 niet_meer_vast() { rm -f "$VAST_MAP"/autosync-vast-{reden,sinds,gemeld}; }
 
 TAK="$(git rev-parse --abbrev-ref HEAD)"
+# Een helper die de hoofdmap op zijn eigen tak liet staan (1 nov: de Mac mini op
+# feat/notch-big-scale, al gemerged) legde de autosync dagen stil. Kost het niets,
+# dan terug naar orchestrator: geen gewijzigde bestanden, en elke commit van deze
+# tak staat al op GitHub (in orchestrator, of op de eigen tak daar).
+if [[ "$TAK" != "orchestrator" && "$TAK" != "HEAD" && -z "$(git status --porcelain --untracked-files=no)" ]] \
+   && git fetch -q origin orchestrator; then
+  git fetch -q origin "$TAK" 2>/dev/null
+  if git merge-base --is-ancestor HEAD origin/orchestrator \
+     || { git rev-parse -q --verify "origin/$TAK" >/dev/null && git merge-base --is-ancestor HEAD "origin/$TAK"; }; then
+    if git checkout -q orchestrator; then
+      log "stond op '$TAK' (schoon, alles al op GitHub), terug naar orchestrator"
+      TAK=orchestrator
+    fi
+  fi
+fi
 if [[ "$TAK" != "orchestrator" ]]; then
   log "staat op '$TAK', niet op orchestrator — overgeslagen"
   meld_vast "the checkout $REPO is on branch '$TAK', not orchestrator" \
@@ -115,7 +130,17 @@ if [[ "$(git rev-list --count origin/orchestrator..HEAD)" != "0" ]]; then
   AXE_PUSH_ORCHESTRATOR=1 git push -q origin HEAD:orchestrator && log "gepusht: $(git log -1 --format='%h %s')"
 fi
 
-git merge -q --ff-only origin/orchestrator 2>/dev/null
+# Een bouwbestand dat niet in git stond maar nu wel in orchestrator staat (1 nov:
+# apps/axe-overlay/src-tauri/Cargo.lock) houdt de merge tegen. Opzij zetten in
+# ~/.axe/autosync-bewaard, niet weggooien, en het nog eens proberen.
+if ! FOUT="$(git merge -q --ff-only origin/orchestrator 2>&1)"; then
+  BEWAAR="$HOME/.axe/autosync-bewaard/$(date +%Y%m%d-%H%M%S)"
+  while IFS= read -r pad; do
+    [[ -z "$pad" || ! -e "$pad" ]] && continue
+    mkdir -p "$BEWAAR/$(dirname "$pad")" && mv "$pad" "$BEWAAR/$pad" && log "opzij gezet voor de merge: $pad -> $BEWAAR"
+  done < <(printf '%s\n' "$FOUT" | sed -n 's/^\t//p')
+  git merge -q --ff-only origin/orchestrator 2>/dev/null || log "merge met orchestrator lukt niet: $(printf '%s' "$FOUT" | head -2 | tr '\n' ' ')"
+fi
 # De onafhankelijke bewaker bijwerken, ook als de API al luistert of de app
 # deze ronde niet gebouwd wordt. De installer weigert een niet-agent-host.
 if [[ -x "$HIER/backend/axe_api/.venv-local/bin/python" && -f "$HIER/backend/axe_api/.env.local" ]]; then
