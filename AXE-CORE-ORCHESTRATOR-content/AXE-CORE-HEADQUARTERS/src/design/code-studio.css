@@ -123,7 +123,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   /* Hetzelfde matzwarte materiaal als elke kaart (UI-MAATSTAF regel 3, 25 sep).
      Was een eigen, donkerder vlak met 18px hoek. */
-  background: var(--axe-kaart-vlak, #17181C);
+  background: var(--axe-card-bg);
   border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.10));
   border-radius: var(--axe-kaart-hoek, 16px);
   box-shadow: var(--axe-kaart-schaduw);

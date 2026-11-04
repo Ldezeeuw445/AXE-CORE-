@@ -344,7 +344,7 @@
 }
 #axe-slot-wereld .axe-neural-root #composer .box{
   height:var(--wereld-balk-hoogte, 36px); padding:0 12px; gap:8px; border-radius:14px;
-  background:linear-gradient(180deg, rgba(20,20,24,.98), rgba(8,8,10,.99));
+  background:var(--axe-card-bg);
   border:1px solid rgba(255,255,255,.09);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 10px 24px rgba(0,0,0,.30);
 }

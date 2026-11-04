@@ -5,7 +5,7 @@
  * vraagt jou. Ja laat de Code Agent hem in de volgende ronde uitvoeren.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Check, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, RefreshCw, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import {
@@ -13,6 +13,7 @@ import {
   type PlannerStatus, type PlannerTaak,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { goedkeuringVoorActie } from '@/domain/taakGoedkeuring';
+import { groepeerPlanner, plannerStatusNL } from '@/domain/takenOverzicht';
 import { heeftEchteEigenaar, taakAlsBron, werkOorsprongVan } from '@/domain/werkBron';
 
 const AGENT: Record<string, string> = {
@@ -23,17 +24,17 @@ const AGENT: Record<string, string> = {
 };
 
 const PLANNER_INPUT: Record<string, string> = {
-  'axe-core': 'recent memory + RAG + open planner tasks',
-  'code-agent': 'recent memory + RAG + Git status + last 5 commits + open planner tasks',
-  'axe-algo': 'trading/research memory + RAG + open planner tasks',
-  'maps-agent': 'NorthSea/shared memory + RAG + open planner tasks',
+  'axe-core': 'recent geheugen + RAG + open planner-taken',
+  'code-agent': 'recent geheugen + RAG + Git-status + laatste 5 commits + open planner-taken',
+  'axe-algo': 'trading/research-geheugen + RAG + open planner-taken',
+  'maps-agent': 'NorthSea/gedeeld geheugen + RAG + open planner-taken',
 };
 
 function intervalLabel(seconds?: number): string {
   if (!seconds) return 'onbekende cadans';
-  if (seconds % 3600 === 0) return `every ${seconds / 3600} h`;
-  if (seconds % 60 === 0) return `every ${seconds / 60} min`;
-  return `every ${seconds}s`;
+  if (seconds % 3600 === 0) return `elke ${seconds / 3600} u`;
+  if (seconds % 60 === 0) return `elke ${seconds / 60} min`;
+  return `elke ${seconds} s`;
 }
 
 function datumTijd(iso?: string | null): string {
@@ -53,13 +54,15 @@ function vraagVoor(t: PlannerTaak) {
 
 function stand(t: PlannerTaak): { tekst: string; kleur: string } {
   const g = t.metadata?.goedkeuring;
-  if (t.status === 'completed') return { tekst: 'klaar', kleur: 'var(--success)' };
-  if (t.status === 'running') return { tekst: 'bezig', kleur: 'var(--accent-cyan)' };
-  if (t.status === 'failed') return { tekst: 'mislukt', kleur: 'var(--error)' };
-  if (t.status === 'cancelled') return { tekst: 'afgewezen', kleur: 'var(--text-muted)' };
-  if (g === 'nodig' && vraagVoor(t)) return { tekst: 'waiting for you', kleur: 'var(--warning)' };
-  if (g === 'ja') return { tekst: 'goedgekeurd', kleur: 'var(--success)' };
-  return { tekst: 'gepland', kleur: 'var(--text-secondary)' };
+  const wacht = g === 'nodig' && !!vraagVoor(t);
+  const tekst = plannerStatusNL(t.status, wacht);
+  if (t.status === 'completed') return { tekst, kleur: 'var(--success)' };
+  if (t.status === 'running') return { tekst, kleur: 'var(--accent-cyan)' };
+  if (t.status === 'failed') return { tekst, kleur: 'var(--error)' };
+  if (t.status === 'cancelled') return { tekst, kleur: 'var(--text-muted)' };
+  if (wacht) return { tekst, kleur: 'var(--warning)' };
+  if (g === 'ja') return { tekst: 'Goedgekeurd', kleur: 'var(--success)' };
+  return { tekst, kleur: 'var(--text-secondary)' };
 }
 
 export function PlannerTaken() {
@@ -67,6 +70,15 @@ export function PlannerTaken() {
   const [status, setStatus] = useState<PlannerStatus | null>(null);
   const [fout, setFout] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  /* De log is naslag, geen werkvoorraad: standaard dicht, en hij onthoudt
+     wat je koos. */
+  const [logOpen, setLogOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('axe_planner_log_open') === '1'; } catch { return false; }
+  });
+  const wisselLog = () => setLogOpen((o) => {
+    try { localStorage.setItem('axe_planner_log_open', o ? '0' : '1'); } catch { /* geen opslag */ }
+    return !o;
+  });
 
   const laad = useCallback(async () => {
     try {
@@ -86,7 +98,7 @@ export function PlannerTaken() {
   const besluit = async (t: PlannerTaak, goed: boolean) => {
     try {
       await plannerBesluit(t.id, goed);
-      toast.success(goed ? 'Approved — the next round runs it' : 'Afgewezen');
+      toast.success(goed ? 'Goedgekeurd — de volgende ronde voert hem uit' : 'Afgewezen');
       void laad();
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
   };
@@ -94,7 +106,7 @@ export function PlannerTaken() {
   const nuPlannen = async () => {
     try {
       const r = await plannerRonde();
-      toast.success(r.gestart ? 'Round started — this takes a few minutes' : (r.reden ?? 'Not started'));
+      toast.success(r.gestart ? 'Ronde gestart — dit duurt een paar minuten' : (r.reden ?? 'Niet gestart'));
       setTimeout(() => { void laad(); }, 4000);
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
   };
@@ -104,28 +116,39 @@ export function PlannerTaken() {
     && t.status === 'pending'
     && vraagVoor(t)
   )).length;
+  const groepen = groepeerPlanner((taken ?? []).filter((t) => heeftEchteEigenaar(taakAlsBron({
+    id: t.id, title: t.title, status: t.status, assignee: t.assignee,
+    capability: 'planner', created_at: t.created_at, completed_at: t.completed_at,
+    metadata: { ...(t.metadata ?? {}), planner: true }, planner: true,
+  }))));
   const laatste = status?.laatste_ronde?.klaar ? new Date(status.laatste_ronde.klaar) : null;
 
   return (
     <div data-axe-doel="planner" className="mb-4 flex-none">
       <WidgetCard
-        title={`Planner${wacht ? ` · ${wacht} waiting for you` : ''}`}
+        title={`Planner${wacht ? ` · ${wacht} wacht op jou` : ''}`}
         icon={<Sparkles size={14} />}
         headerAction={
           <div className="flex items-center gap-2 flex-wrap justify-end min-w-0">
+            <button type="button" onClick={wisselLog} aria-expanded={logOpen}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md whitespace-nowrap"
+              style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
+              {logOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Planner-log
+              <span className="font-mono" style={{ color: 'var(--text-muted)' }}>{groepen.length}</span>
+            </button>
             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {status?.bezig ? 'round running…' : laatste ? `last round ${laatste.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : status?.host_kan ? 'no round yet' : 'staat uit op deze host'}
+              {status?.bezig ? 'ronde loopt…' : laatste ? `laatste ronde ${laatste.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}` : status?.host_kan ? 'nog geen ronde' : 'staat uit op deze host'}
             </span>
             <button type="button" onClick={() => { void nuPlannen(); }} disabled={!status?.host_kan || status?.bezig}
               className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md whitespace-nowrap"
               style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)', opacity: !status?.host_kan || status?.bezig ? 0.5 : 1 }}>
-              <RefreshCw size={11} /> Plan now
+              <RefreshCw size={11} /> Nu plannen
             </button>
           </div>
         }
       >
         {fout && <div className="text-[11px]" style={{ color: 'var(--error)' }}>Planner niet bereikbaar: {fout}</div>}
-        {!fout && (
+        {!fout && logOpen && (
           <div
             className="mb-3 rounded-lg px-3 py-2.5"
             style={{ background: 'var(--tint)', border: '1px solid var(--tint-line)' }}
@@ -133,8 +156,8 @@ export function PlannerTaken() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
               <span style={{ color: 'var(--accent-cyan)' }}>PLANNER</span>
               <span>{intervalLabel(status?.interval_s)}</span>
-              <span>only continues work you asked for, or a real failure</span>
-              <span>invented rows stay hidden</span>
+              <span>gaat alleen door met werk waar jij om vroeg, of een echte fout</span>
+              <span>verzonnen regels blijven verborgen</span>
             </div>
             <div className="mt-2 grid gap-1.5 md:grid-cols-2 xl:grid-cols-4">
               {Object.entries(status?.laatste_ronde?.agents ?? {}).map(([agentId, a]) => (
@@ -148,11 +171,11 @@ export function PlannerTaken() {
                   <div className="mt-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
                     {a.voorstellen?.length
                       ? `${a.voorstellen.length} voorstel${a.voorstellen.length === 1 ? '' : 'len'}: ${a.voorstellen.join(' · ')}`
-                      : a.fout ? `no proposal · ${a.fout}` : 'no new proposal'}
+                      : a.fout ? `geen voorstel · ${a.fout}` : 'geen nieuw voorstel'}
                   </div>
                   {a.plan_terugval && (
                     <div className="mt-1 text-[9px]" style={{ color: 'var(--warning)' }}>
-                      fallback {a.plan_terugval.van} → {a.plan_terugval.naar}: {a.plan_terugval.reden}
+                      terugval {a.plan_terugval.van} → {a.plan_terugval.naar}: {a.plan_terugval.reden}
                     </div>
                   )}
                 </div>
@@ -165,12 +188,16 @@ export function PlannerTaken() {
             Nog niets gepland. De planner leest recente context en open taken, en plant alleen als er aantoonbaar iets nuttigs ligt.
           </div>
         )}
-        <div className="flex flex-col gap-1.5 max-h-[440px] overflow-y-auto">
-          {(taken ?? []).filter((t) => heeftEchteEigenaar(taakAlsBron({
-            id: t.id, title: t.title, status: t.status, assignee: t.assignee,
-            capability: 'planner', created_at: t.created_at, completed_at: t.completed_at,
-            metadata: { ...(t.metadata ?? {}), planner: true }, planner: true,
-          }))).map(t => {
+        {!fout && !logOpen && groepen.length > 0 && (
+          <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            {groepen.length} regel{groepen.length === 1 ? '' : 's'} in de log
+            {groepen.length < (taken ?? []).length ? ` (${(taken ?? []).length} taken, dubbelen samengevoegd)` : ''}.
+            {wacht ? ` ${wacht} wacht op jou.` : ''}
+          </div>
+        )}
+        {logOpen && <div className="flex flex-col gap-1.5 max-h-[440px] overflow-y-auto">
+          {groepen.map(g => {
+            const t = g.laatste;
             const s = stand(t);
             const uitkomst = t.result?.output ?? t.error?.message ?? null;
             const agentId = t.metadata?.agent ?? t.assignee ?? 'axe-core';
@@ -182,7 +209,7 @@ export function PlannerTaken() {
               metadata: { ...(t.metadata ?? {}), planner: true }, planner: true,
             }));
             return (
-              <div key={t.id} className="rounded-lg px-3 py-2" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)' }}>
+              <div key={g.sleutel} data-axe-planner-groep={t.title} className="rounded-lg px-3 py-2" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)' }}>
                 {/* flex-wrap, and the title takes a whole line on a phone: every part of this row is
                     shrink-0, so on 384px the title was pushed past the card edge and clipped
                     ("continuatic…"). On md+ it is still one row. */}
@@ -203,6 +230,9 @@ export function PlannerTaken() {
                     className="order-last basis-full text-left text-[12px] font-medium md:order-none md:basis-0 md:flex-1 md:truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
                     {t.title}
                   </button>
+                  {g.aantal > 1 && (
+                    <span className="axe-planner-teller shrink-0" title={`${g.aantal} keer gepland`}>×{g.aantal}</span>
+                  )}
                   <span className="text-[9px] shrink-0 font-mono" style={{ color: 'var(--text-muted)' }}>
                     {datumTijd(t.created_at)}
                   </span>
@@ -218,15 +248,15 @@ export function PlannerTaken() {
                   <div className="mt-2 grid gap-2 text-[11px] md:grid-cols-2" style={{ color: 'var(--text-secondary)' }}>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Doel</div>
-                      <div className="whitespace-pre-wrap">{t.goal || 'No goal text saved.'}</div>
+                      <div className="whitespace-pre-wrap">{t.goal || 'Geen doel opgeslagen.'}</div>
                     </div>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Why planned</div>
-                      <div className="whitespace-pre-wrap">{vraag?.tekst || t.description || 'The model returned no separate reason.'}</div>
+                      <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Waarom gepland</div>
+                      <div className="whitespace-pre-wrap">{vraag?.tekst || t.description || 'Het model gaf geen aparte reden.'}</div>
                     </div>
                     <div className="rounded-md p-2" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Waar kwam dit vandaan?</div>
-                      <div>{PLANNER_INPUT[agentId] ?? 'recent memory + RAG + open planner tasks'}</div>
+                      <div>{PLANNER_INPUT[agentId] ?? 'recent geheugen + RAG + open planner-taken'}</div>
                       <div className="mt-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
                         De planner vraagt per ronde om maximaal 3 concrete taken en geeft bestaande open taken mee om dubbelen te voorkomen.
                       </div>
@@ -242,7 +272,7 @@ export function PlannerTaken() {
                     {uitkomst && (
                       <div className="md:col-span-2 rounded-md p-2 whitespace-pre-wrap" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                         <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: t.error?.message ? 'var(--error)' : 'var(--success)' }}>
-                          {t.error?.message ? 'Error / blocker' : 'Uitkomst'}
+                          {t.error?.message ? 'Fout / blokkade' : 'Uitkomst'}
                         </div>
                         {uitkomst}
                       </div>
@@ -252,7 +282,7 @@ export function PlannerTaken() {
               </div>
             );
           })}
-        </div>
+        </div>}
       </WidgetCard>
     </div>
   );

@@ -341,7 +341,7 @@ export function ManagerChat({
           maxHeight: 'none',
           borderRadius: 18,
           borderColor: 'rgba(255,255,255,.08)',
-          background: 'linear-gradient(165deg, rgba(14,18,24,.96), rgba(8,10,14,.98))',
+          background: 'var(--axe-card-bg)',
           boxShadow: 'none',
         } : {
           width: 'min(720px, 60vw)',
@@ -350,7 +350,7 @@ export function ManagerChat({
           maxHeight: '85vh',
           boxShadow: '0 28px 90px rgba(0,0,0,.6), 0 0 48px rgba(34,211,238,.14)',
           borderColor: 'rgba(34,211,238,.32)',
-          background: 'linear-gradient(165deg, rgba(12,16,22,.97), rgba(8,10,14,.98))',
+          background: 'var(--axe-card-bg)',
         }}
         titel={
           <span className="flex items-center gap-2 min-w-0">

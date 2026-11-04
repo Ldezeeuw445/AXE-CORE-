@@ -5,6 +5,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { AppId } from '@/domain/apps';
 import { appMeta } from '@/domain/apps';
+import { STATUS_NL } from '@/domain/takenOverzicht';
 
 export type TasksDeskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 export type TasksDeskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -69,9 +70,9 @@ function dueLabel(dueAt?: number): string | null {
 }
 
 function statusBadge(status: TasksDeskStatus): { text: string; tone: string } {
-  if (status === 'in-progress') return { text: 'STAGE', tone: 'stage' };
-  if (status === 'blocked') return { text: 'WAIT', tone: 'wait' };
-  if (status === 'done') return { text: 'DONE', tone: 'done' };
+  if (status === 'in-progress') return { text: 'BEZIG', tone: 'stage' };
+  if (status === 'blocked') return { text: 'WACHT', tone: 'wait' };
+  if (status === 'done') return { text: 'KLAAR', tone: 'done' };
   return { text: 'OPEN', tone: 'open' };
 }
 
@@ -149,7 +150,7 @@ export function TasksDesk({ tasks, loading, initialSelectedId, onNew, onMarkDone
           </button>
         ))}
         <div className="axe-tasks-v3-grow" />
-        <button type="button" className="axe-tasks-v3-new" onClick={onNew}>+ Nieuwe task</button>
+        <button type="button" className="axe-tasks-v3-new" onClick={onNew}>+ Nieuwe taak</button>
       </section>
 
       <section className="axe-tasks-v3-inbox" aria-label="Inbox">
@@ -198,7 +199,7 @@ export function TasksDesk({ tasks, loading, initialSelectedId, onNew, onMarkDone
       <section className="axe-tasks-v3-detail" aria-label="Geselecteerd">
         <div className="axe-tasks-v3-label">Geselecteerd</div>
         {!selected ? (
-          <div className="axe-tasks-v3-leeg">Selecteer een task</div>
+          <div className="axe-tasks-v3-leeg">Selecteer een taak</div>
         ) : (
           <>
             <h2 className="axe-tasks-v3-detail-titel">{selected.title}</h2>
@@ -206,9 +207,9 @@ export function TasksDesk({ tasks, loading, initialSelectedId, onNew, onMarkDone
               {selected.description?.trim() || 'Geen beschrijving.'}
             </p>
             <dl className="axe-tasks-v3-kv">
-              <div><dt>Status</dt><dd>{selected.status === 'in-progress' ? 'In progress' : selected.status === 'done' ? 'Done' : selected.status === 'blocked' ? 'Blocked' : 'To do'}</dd></div>
-              <div><dt>Owner</dt><dd>{selected.assignee}</dd></div>
-              <div><dt>Due</dt><dd>{dueLabel(selected.dueAt) ?? '—'}</dd></div>
+              <div><dt>Status</dt><dd>{STATUS_NL[selected.status]}</dd></div>
+              <div><dt>Wie</dt><dd>{selected.assignee}</dd></div>
+              <div><dt>Wanneer</dt><dd>{dueLabel(selected.dueAt) ?? '—'}</dd></div>
               <div>
                 <dt>Labels</dt>
                 <dd>
@@ -224,7 +225,7 @@ export function TasksDesk({ tasks, loading, initialSelectedId, onNew, onMarkDone
                 className="axe-tasks-v3-done"
                 onClick={() => onMarkDone(selected.id)}
               >
-                Mark done
+                Markeer klaar
               </button>
             )}
           </>

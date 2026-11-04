@@ -59,7 +59,11 @@
   --axe-r-chip: 999px;
 
   /* ── the panel recipe, as four named layers ─────────────────────── */
-  --axe-panel-bg: linear-gradient(180deg, rgba(23, 23, 23, .94), rgba(12, 12, 12, .96));
+  /* HET kaartmateriaal. Eén bron: het matzwart van de Browser-tab quick
+     actions. Elke kaart, tegel, rail en chatplaat leest dit; zie
+     src/design/kaartKleur.test.ts, die faalt op een losse rgba/#hex. */
+  --axe-card-bg: linear-gradient(180deg, rgba(23, 23, 23, .94), rgba(12, 12, 12, .96));
+  --axe-panel-bg: var(--axe-card-bg);
   --axe-panel-blur: blur(28px) saturate(150%);
   --axe-panel-lift: 0 24px 64px rgba(0, 0, 0, .6);
   --axe-panel-edge:
