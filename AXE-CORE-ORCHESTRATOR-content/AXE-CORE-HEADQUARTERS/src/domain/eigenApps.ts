@@ -186,3 +186,38 @@ export function shellOpdracht(app: EigenApp, plek: Plek, doel: ToestelRij, reque
     payload: { app: app.id, scherm: plek.scherm, vorm: plek.vorm ?? null },
   };
 }
+
+
+/** Founder-dashboard apps: run/monitor vanaf de Apps-tab in AXE Core. */
+export const FOUNDER_DASHBOARD_APP_IDS = ['companion', 'trading-os', 'axon'] as const;
+
+export type FounderDashboardAppId = (typeof FOUNDER_DASHBOARD_APP_IDS)[number];
+
+export type FounderAppKaart = {
+  id: FounderDashboardAppId;
+  label: string;
+  /** Korte monitor-hint voor de founder UI (geen live trading). */
+  monitorHint: string;
+  registerNaam?: string;
+};
+
+const FOUNDER_HINTS: Record<FounderDashboardAppId, string> = {
+  companion: 'Phone companion — open or check reachability from AXE Core',
+  'trading-os': 'Paper/sim only — open Trading OS; no live orders from here',
+  axon: 'AXON memory — open or check whether the app is reachable',
+};
+
+/** Kaarten voor de Apps-tab founder-sectie (Companion, Trading OS, AXON). */
+export function founderDashboardApps(): FounderAppKaart[] {
+  return FOUNDER_DASHBOARD_APP_IDS.map((id) => {
+    const app = eigenApp(id);
+    if (!app) throw new Error(`founder app ontbreekt in EIGEN_APPS: ${id}`);
+    return {
+      id,
+      label: app.naam,
+      monitorHint: FOUNDER_HINTS[id],
+      ...(app.registerNaam ? { registerNaam: app.registerNaam } : {}),
+    };
+  });
+}
+

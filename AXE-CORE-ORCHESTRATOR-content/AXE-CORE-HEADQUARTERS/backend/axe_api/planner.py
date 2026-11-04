@@ -586,6 +586,76 @@ def goedkeuring_voor_taak(titel: str, doel: str = "", app: str | None = None) ->
         return "nodig" if verlaat_app_plan(f"{titel} {doel}", app) else "niet_nodig"
 
 
+
+def is_yes_needed_wacht(titel: str | None) -> bool:
+    """True als de titel een open 'Yes needed' (of Continue/Fix daarvan) is.
+
+    Zo'n vraag wacht op Luka (RULE 13). De planner mag geen Fix/Continue
+    ernaast zetten en mag duplicaten later opruimen — hij mag de deal niet
+    zelf goed- of afkeuren.
+    """
+    t = str(titel or "").strip()
+    if not t:
+        return False
+    # Strip herhaalde Continue:/Fix: voorvoegsels
+    while True:
+        nieuw = re.sub(r"^(Continue|Fix):\s*", "", t, flags=re.IGNORECASE).strip()
+        if nieuw == t:
+            break
+        t = nieuw
+    return bool(re.match(r"yes needed\b", t, re.IGNORECASE))
+
+
+def yes_needed_sleutel(titel: str | None) -> str:
+    """Genormaliseerde deal/onderwerp-sleutel voor Yes-needed-duplicaten."""
+    t = str(titel or "").strip()
+    while True:
+        nieuw = re.sub(r"^(Continue|Fix):\s*", "", t, flags=re.IGNORECASE).strip()
+        if nieuw == t:
+            break
+        t = nieuw
+    t = re.sub(r"(?i)^Yes needed:\s*", "", t).strip()
+    return t[:90].lower()
+
+
+def ids_yes_needed_duplicaten(rijen: list[dict]) -> list[str]:
+    """Pending Yes-needed-taken: houd er één per sleutel, annuleer de rest.
+
+    Voorkeur: titel die met 'Yes needed:' begint, anders oudste Continue/Fix.
+    Geeft de ids die dicht mogen — nooit de keeper, nooit een beslissing.
+    """
+    groepen: dict[str, list[dict]] = {}
+    for r in rijen:
+        if str(r.get("status") or "") != "pending":
+            continue
+        titel = str(r.get("title") or "")
+        if not is_yes_needed_wacht(titel):
+            continue
+        sleutel = yes_needed_sleutel(titel) or titel.lower()
+        groepen.setdefault(sleutel, []).append(r)
+
+    te_sluiten: list[str] = []
+    for rows in groepen.values():
+        if len(rows) < 2:
+            continue
+
+        def rank(r: dict) -> tuple:
+            t = str(r.get("title") or "")
+            if re.match(r"(?i)^Yes needed:", t):
+                pref = 0
+            elif re.match(r"(?i)^Continue:", t):
+                pref = 1
+            else:
+                pref = 2
+            return (pref, str(r.get("created_at") or ""))
+
+        rows_sorted = sorted(rows, key=rank)
+        for r in rows_sorted[1:]:
+            if r.get("id"):
+                te_sluiten.append(str(r["id"]))
+    return te_sluiten
+
+
 def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
     """Wat deze ronde mag landen. Leeg als er niets te vervolgen is en niets stuk is."""
     uit: list[dict] = []
@@ -606,7 +676,7 @@ def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
         # 29 okt: 38 open "Continue: Yes needed: DEAL-001 — Copper Cathode" sinds 10
         # okt. Een "Yes needed" wacht op Luka's ja (RULE 13); een vervolgtaak kan
         # daar niets aan doen. En "Continue: Continue: ..." is nooit bedoeld.
-        if re.match(r"(yes needed|continue)\b", titel, re.IGNORECASE):
+        if is_yes_needed_wacht(titel) or re.match(r"continue\b", titel, re.IGNORECASE):
             continue
         sleutel = f"vervolg:{t.get('id') or titel}"
         if sleutel in gezien or f"titel:{titel.lower()}" in gezien:
@@ -631,8 +701,11 @@ def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
         sleutel = f"storing:{bron}"
         if sleutel in gezien:
             continue
-        gezien.add(sleutel)
         naam = str(p.get("naam") or p.get("name") or bron or "failed check").strip()
+        # Waiting-approval "Yes needed" is geen storing om te "Fixen" — Luka moet kiezen.
+        if is_yes_needed_wacht(naam):
+            continue
+        gezien.add(sleutel)
         status = str(p.get("last_status") or p.get("status") or "fail")
         uit.append({
             "titel": f"Fix: {naam}"[:120],
@@ -1365,6 +1438,9 @@ class Planner:
                 app = str(meta.get("app") or "")
                 if app != "northsea" and "northsea" not in str(t.get("title") or "").lower():
                     continue
+                # Yes needed wacht op Luka — geen Fix-storing van maken.
+                if is_yes_needed_wacht(t.get("title")):
+                    continue
                 kapot.append({
                     "id": t.get("id"),
                     "naam": t.get("title") or "NorthSea approval",
@@ -1429,6 +1505,40 @@ class Planner:
         staat["verzonnen_gesloten"] = True
         return len(ids)
 
+
+    def _sluit_yes_needed_duplicaten_eenmaal(self, staat: dict) -> int:
+        """Eén open Yes-needed per deal; rest cancelled. Geen approve/reject."""
+        if staat.get("yes_needed_dedupe"):
+            return 0
+        try:
+            rijen = (self.sb().table("core_tasks")
+                     .select("id,status,title,created_at,metadata")
+                     .ilike("title", "%Yes needed%")
+                     .eq("status", "pending")
+                     .limit(500).execute().data) or []
+        except Exception as e:  # noqa: BLE001
+            log.warning("planner: yes-needed duplicaten lezen faalde: %s", e)
+            return 0
+        ids = ids_yes_needed_duplicaten(rijen)
+        nu = datetime.now(timezone.utc).isoformat()
+        for tid in ids:
+            try:
+                rij = next((r for r in rijen if str(r.get("id")) == tid), {})
+                meta = dict(rij.get("metadata") or {})
+                meta["dedupe"] = "yes_needed_duplicate"
+                meta["uiStatus"] = "blocked"
+                self.sb().table("core_tasks").update({
+                    "status": "cancelled",
+                    "cancelled_at": nu,
+                    "updated_at": nu,
+                    "metadata": meta,
+                    "error": {"message": "duplicate Yes needed; kept one open ask"},
+                }).eq("id", tid).eq("status", "pending").execute()
+            except Exception as e:  # noqa: BLE001
+                log.warning("planner: yes-needed dedupe faalde voor %s: %s", tid, e)
+        staat["yes_needed_dedupe"] = True
+        return len(ids)
+
     # ronde -----------------------------------------------------------------
     def ronde(self, motoren: Optional[dict] = None) -> dict:
         if not self._ronde_slot.acquire(blocking=False):
@@ -1439,6 +1549,7 @@ class Planner:
         verslag: dict[str, Any] = {"begon": datetime.now(timezone.utc).isoformat(), "agents": {}, "gemaakt": []}
         try:
             verslag["verzonnen_gesloten"] = self._sluit_verzonnen_eenmaal(staat)
+            verslag["yes_needed_dedupe"] = self._sluit_yes_needed_duplicaten_eenmaal(staat)
             voorstellen = planner_pass(self._luka_werk(), self._echte_storingen())
             al_open = self._open_echte_bronnen()
             gemaakt: list[dict] = []

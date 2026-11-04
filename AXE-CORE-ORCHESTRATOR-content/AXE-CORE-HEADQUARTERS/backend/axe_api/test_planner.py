@@ -638,3 +638,60 @@ class TestBouwBeurtTelt:
         assert laatste, "geen core_bouw_aanvullen-migratie"
         assert "coalesce(t.metadata->>'archived', '') <> 'true'" in laatste
         assert "t.status in ('pending', 'running', 'completed', 'failed')" in laatste
+
+
+# --- Yes needed: één vraag, dan wachten (geen Fix/Continue spam) ---------------
+
+def test_is_yes_needed_wacht_stript_continue_en_fix():
+    assert p.is_yes_needed_wacht("Yes needed: DEAL-001 — Copper Cathode")
+    assert p.is_yes_needed_wacht("Continue: Yes needed: DEAL-001 — Copper Cathode")
+    assert p.is_yes_needed_wacht("Fix: Yes needed: DEAL-001 — Copper Cathode")
+    assert p.is_yes_needed_wacht("Fix: Continue: Yes needed: DEAL-001")
+    assert not p.is_yes_needed_wacht("Fix: NorthSea maps timeout")
+    assert not p.is_yes_needed_wacht("Continue: export deals CSV")
+
+
+def test_yes_needed_sleutel_normaliseert_deal():
+    assert p.yes_needed_sleutel("Continue: Yes needed: DEAL-001 — Copper Cathode") == \
+        p.yes_needed_sleutel("Yes needed: DEAL-001 — Copper Cathode")
+    assert "deal-001" in p.yes_needed_sleutel("Fix: Yes needed: DEAL-001 — Copper Cathode")
+
+
+def test_planner_pass_maakt_geen_fix_voor_yes_needed_storing():
+    """waiting_approval Yes needed mag geen Fix: Yes needed voorstel opleveren."""
+    kapot = [{
+        "id": "t1",
+        "naam": "Yes needed: DEAL-001 — Copper Cathode",
+        "last_status": "waiting_approval",
+        "soort": "northsea",
+    }]
+    assert p.planner_pass([], kapot) == []
+
+
+def test_planner_pass_geen_continue_op_yes_needed_gevraagd():
+    gevraagd = [{
+        "id": "t1",
+        "title": "Continue: Yes needed: DEAL-001 — Copper Cathode",
+        "status": "pending",
+    }]
+    assert p.planner_pass(gevraagd, []) == []
+
+
+def test_ids_yes_needed_duplicaten_houdt_een_per_deal():
+    rijen = [
+        {"id": "a", "status": "pending", "title": "Yes needed: DEAL-001 — Copper Cathode",
+         "created_at": "2025-10-10T10:00:00Z"},
+        {"id": "b", "status": "pending", "title": "Continue: Yes needed: DEAL-001 — Copper Cathode",
+         "created_at": "2025-10-11T10:00:00Z"},
+        {"id": "c", "status": "pending", "title": "Fix: Yes needed: DEAL-001 — Copper Cathode",
+         "created_at": "2025-10-12T10:00:00Z"},
+        {"id": "d", "status": "pending", "title": "Yes needed: DEAL-002 — Other",
+         "created_at": "2025-10-10T10:00:00Z"},
+        {"id": "e", "status": "done", "title": "Yes needed: DEAL-001 — Copper Cathode",
+         "created_at": "2025-10-09T10:00:00Z"},
+    ]
+    gesloten = set(p.ids_yes_needed_duplicaten(rijen))
+    assert "a" not in gesloten  # keeper: plain Yes needed
+    assert "b" in gesloten and "c" in gesloten
+    assert "d" not in gesloten  # andere deal, alleen
+    assert "e" not in gesloten  # al done

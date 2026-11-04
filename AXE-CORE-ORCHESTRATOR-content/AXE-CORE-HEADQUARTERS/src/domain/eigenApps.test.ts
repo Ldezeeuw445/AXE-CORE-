@@ -8,6 +8,8 @@ import {
   shellRechthoek,
   toestelVoor,
   vindEigenApp,
+  founderDashboardApps,
+  FOUNDER_DASHBOARD_APP_IDS,
 } from './eigenApps';
 
 describe('vindEigenApp', () => {
@@ -89,5 +91,17 @@ describe('shellOpdracht', () => {
     expect(rij.capability).toBe('axe_shell');
     expect(rij.target_device).toBe('main-imac-luka');
     expect(rij.payload).toEqual({ app: 'northsea', scherm: 'ander', vorm: null });
+  });
+});
+
+describe('founderDashboardApps', () => {
+  it('levert Companion, Trading OS en AXON voor de Apps-tab', () => {
+    const kaarten = founderDashboardApps();
+    expect(kaarten.map(k => k.id)).toEqual([...FOUNDER_DASHBOARD_APP_IDS]);
+    expect(kaarten).toHaveLength(3);
+    for (const k of kaarten) {
+      expect(k.label.length).toBeGreaterThan(0);
+      expect(k.monitorHint.length).toBeGreaterThan(0);
+    }
   });
 });

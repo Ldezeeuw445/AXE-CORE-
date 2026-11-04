@@ -21,6 +21,8 @@ import {
   PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
 } from '@/presentation/components/ui/AxeUI';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
+import { founderDashboardApps } from '@/domain/eigenApps';
+import { openEigenApp } from '@/infrastructure/gateways/eigenAppShell';
 
 interface RegisteredApp {
   id: string;
@@ -128,6 +130,8 @@ export default function AppsPage() {
   const navigate = useNavigate();
   const sendMessage = useVoiceStore(s => s.sendMessage);
   const [apps, setApps] = useState<RegisteredApp[] | null>(null);
+  const [founderMsg, setFounderMsg] = useState<string | null>(null);
+  const [founderBusy, setFounderBusy] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveState>>({});
   const [adding, setAdding] = useState(false);
@@ -359,7 +363,7 @@ export default function AppsPage() {
       <PageHeader
         eyebrow="Registry"
         title="Apps"
-        description="Registered product surfaces — status, deploy, and improve via AXE."
+        description="Founder dashboard: run and monitor Companion, Trading OS, and AXON from AXE Core — plus the product registry."
         actions={
           <div className="flex flex-wrap gap-1.5">
             <AxeButton size="sm" onClick={() => setAdding(true)}>
@@ -411,6 +415,76 @@ export default function AppsPage() {
         </div>
       ) : (
         <>
+          {/* B17 founder dashboard: run/monitor Companion, Trading OS, AXON
+              from AXE Core via eigenAppShell — no live trading, no Vercel. */}
+          <SectionLabel>Founder apps</SectionLabel>
+          {founderMsg && (
+            <div className="mb-3 text-[12px]" style={{ color: 'rgba(245,240,230,0.7)' }}>{founderMsg}</div>
+          )}
+          <CardGrid cols={3}>
+            {founderDashboardApps().map((kaart, i) => {
+              const reg = (apps ?? []).find(a => a.name === kaart.registerNaam);
+              const state = reg ? (live[reg.id] ?? 'unknown') : 'unknown';
+              const st = STATE_STYLE[state];
+              const notLaunched = kaart.registerNaam ? NOT_LAUNCHED_STATUS[kaart.registerNaam] : undefined;
+              return (
+                <motion.div
+                  key={kaart.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04, duration: 0.25 }}
+                >
+                  <AxeCard hover className="h-full flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold truncate" style={{ color: '#F5F0E6' }}>
+                          {kaart.label}
+                        </div>
+                        <div className="text-[11px] mt-0.5" style={{ color: 'rgba(245,240,230,0.55)' }}>
+                          {kaart.monitorHint}
+                        </div>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                        style={{ background: notLaunched ? 'rgba(255,255,255,0.04)' : st.bg, color: notLaunched ? 'rgba(255,255,255,0.5)' : st.fg }}
+                      >
+                        {notLaunched?.badge ?? st.label}
+                      </span>
+                    </div>
+                    {notLaunched?.detail && (
+                      <div className="text-[11px]" style={{ color: 'rgba(245,240,230,0.45)' }}>{notLaunched.detail}</div>
+                    )}
+                    <div className="mt-auto flex flex-wrap gap-1.5">
+                      <AxeButton
+                        size="sm"
+                        disabled={founderBusy === kaart.id}
+                        onClick={() => {
+                          setFounderBusy(kaart.id);
+                          setFounderMsg(null);
+                          void openEigenApp(kaart.id)
+                            .then((tekst) => setFounderMsg(tekst))
+                            .catch((err: unknown) => setFounderMsg(err instanceof Error ? err.message : String(err)))
+                            .finally(() => setFounderBusy(null));
+                        }}
+                      >
+                        <ExternalLink size={12} /> {founderBusy === kaart.id ? 'Opening…' : 'Open'}
+                      </AxeButton>
+                      {reg && (
+                        <AxeButton
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => naarApp(reg.id)}
+                        >
+                          <Activity size={12} /> Monitor
+                        </AxeButton>
+                      )}
+                    </div>
+                  </AxeCard>
+                </motion.div>
+              );
+            })}
+          </CardGrid>
+
           {/* One list, ordered by sort_order — the four product surfaces sit at
               10–40 and anything Luka adds lands at 500, so his own apps group
               at the end without needing a second grid of duplicated card. */}
