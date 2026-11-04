@@ -272,6 +272,10 @@ class TestAccountfout:
 
 
 class TestKiesMotor:
+    def setup_method(self):
+        import provider_router as pr
+        pr.reset_router_staat()
+
     def test_een_al_geprobeerde_stoel_wordt_overgeslagen(self):
         engines = {m: {"aanwezig": True, "ingelogd": True} for m in p.ABONNEMENTEN}
         motor, _ = p.kies_motor({}, "code-agent", "cursor", {}, engines, datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc),
@@ -303,6 +307,24 @@ class TestKiesMotor:
         assert afgevallen["cursor"] == "niet ingelogd"
         assert motor not in ("claude", "codex", "claude2")
 
+    def test_geen_stoel_kiest_api_keten_niet_none(self):
+        import provider_router as pr
+        pr.reset_router_staat()
+        engines = {m: {"aanwezig": True, "ingelogd": False} for m in p.ABONNEMENTEN}
+        motor, afgevallen = p.kies_motor({}, "code-agent", "cursor", {}, engines, NU)
+        assert motor is not None
+        assert motor not in p.ABONNEMENTEN
+        assert afgevallen["cursor"] == "niet ingelogd"
+
+    def test_bouwtaak_zonder_stoel_defert_niet_naar_api(self):
+        import provider_router as pr
+        pr.reset_router_staat()
+        engines = {m: {"aanwezig": True, "ingelogd": False} for m in p.ABONNEMENTEN}
+        taak = {"title": "Build next step: AXE Core", "metadata": {"oorsprong_bouw": "ja"}}
+        motor, afgevallen = p.kies_motor({}, "code-agent", "cursor", {}, engines, NU, taak=taak)
+        assert motor is None
+        assert afgevallen.get("_keten") == "bouwloop uses Luka's CLI seats only"
+
 
 class TestGeenVervolgOpAccountOfBouwlus:
     def test_gefaalde_bouwtaak_en_accountfout_geven_geen_continue(self):
@@ -328,6 +350,10 @@ class TestGeenVervolgOpAccountOfBouwlus:
 
 
 class TestVoerUitEerlijk:
+    def setup_method(self):
+        import provider_router as pr
+        pr.reset_router_staat()
+
     def _pl(self, monkeypatch, run):
         sb_rijen = []
 

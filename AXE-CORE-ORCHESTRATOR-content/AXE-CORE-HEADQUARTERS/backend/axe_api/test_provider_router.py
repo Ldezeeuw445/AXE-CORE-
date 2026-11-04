@@ -20,6 +20,14 @@ class _Q:
         self.actie, self.data = "insert", rij
         return self
 
+    def update(self, rij):
+        self.actie, self.data = "update", rij
+        return self
+
+    def eq(self, k, v):
+        self.filters.append((k, v))
+        return self
+
     def order(self, *_a, **_k):
         return self
 
@@ -31,7 +39,17 @@ class _Q:
         if self.actie == "insert":
             rijen.append(dict(self.data))
             return type("R", (), {"data": [dict(self.data)]})()
-        return type("R", (), {"data": list(rijen)})()
+        if self.actie == "update":
+            uit = []
+            for r in rijen:
+                if all(str(r.get(k)) == str(v) for k, v in self.filters):
+                    r.update(self.data)
+                    uit.append(dict(r))
+            return type("R", (), {"data": uit})()
+        uit = list(rijen)
+        for k, v in self.filters:
+            uit = [r for r in uit if str(r.get(k)) == str(v)]
+        return type("R", (), {"data": uit})()
 
 
 class NepDB:
@@ -277,3 +295,230 @@ def test_beleid_hard_limits_blijven_vragen():
     assert ask(title="Wire money to the seller", kind="leave_plan") == ACTIE_ASK
     assert ask(title="Yes needed: DEAL-009 — Copper", kind="northsea_notice") == ACTIE_ASK
     assert ask(title="Market data check (trading)", kind="leave_plan") == ACTIE_AUTO
+
+
+NU_KETEN = datetime(2026, 11, 4, 12, 0, tzinfo=timezone.utc)
+
+
+def _aanwezig(*ids: str) -> dict[str, bool]:
+    return {pid: pid in ids for pid, *_ in pr.KETEN}
+
+
+class TestClassificatie:
+    def setup_method(self):
+        pr.reset_router_staat()
+
+    def test_limiet_tegoed_transient_taakfout(self):
+        assert pr.classificeer_fout("HTTP 429 too many requests", 429) == "limiet"
+        assert pr.classificeer_fout("quota exceeded") == "limiet"
+        assert pr.classificeer_fout("You have no credits remaining") == "tegoed"
+        assert pr.classificeer_fout("prepayment credits are depleted", 402) == "tegoed"
+        assert pr.classificeer_fout("gateway timeout", 504) == "transient"
+        assert pr.classificeer_fout("timed out connecting") == "transient"
+        assert pr.classificeer_fout("pytest failed: 3 tests rood") == "taakfout"
+        assert pr.classificeer_fout("Project checks are not verified") == "taakfout"
+        assert pr.classificeer_fout("invalid input for this task") == "taakfout"
+
+
+class TestCircuitEnCooldown:
+    def setup_method(self):
+        pr.reset_router_staat()
+
+    def test_drie_fouten_in_tien_min_sluiten_vijftien_min(self):
+        from datetime import timedelta
+        t0 = NU_KETEN
+        for i in range(3):
+            pr.registreer_fout("groq", "transient", nu=t0 + timedelta(minutes=i))
+        assert pr.circuit_dicht("groq", nu=t0 + timedelta(minutes=2)) is True
+        assert pr.circuit_dicht("groq", nu=t0 + timedelta(minutes=2, seconds=pr.CIRCUIT_DICHT_S + 1)) is False
+
+    def test_limiet_zet_cooldown_tegoed_blijft_dicht_tot_reset(self):
+        from datetime import timedelta
+        tot = NU_KETEN + timedelta(hours=5)
+        pr.registreer_fout("openai", "limiet", nu=NU_KETEN, wacht_tot=tot)
+        assert pr.provider_skip_reden("openai", nu=NU_KETEN) == "limiet"
+        assert pr.provider_skip_reden("openai", nu=tot + timedelta(seconds=1)) is None
+        pr.registreer_fout("anthropic", "tegoed", nu=NU_KETEN)
+        assert pr.provider_skip_reden("anthropic", nu=NU_KETEN) == "tegoed"
+        assert pr.provider_skip_reden("anthropic", nu=NU_KETEN + timedelta(days=2)) == "tegoed"
+        pr.reset_tegoed("anthropic")
+        assert pr.provider_skip_reden("anthropic", nu=NU_KETEN) is None
+
+    def test_taakfout_opent_geen_circuit(self):
+        from datetime import timedelta
+        for i in range(5):
+            pr.registreer_fout("claude2", "taakfout", nu=NU_KETEN + timedelta(minutes=i))
+        assert pr.circuit_dicht("claude2", nu=NU_KETEN + timedelta(minutes=4)) is False
+
+
+class TestKetenVolgorde:
+    def setup_method(self):
+        pr.reset_router_staat()
+
+    def test_code_zet_stoelen_voor_apis_en_ollama_laatst(self):
+        rijen = [
+            stoel("claude2"), stoel("claude3"), stoel("codex"), stoel("cursor"),
+        ]
+        uit = pr.route(
+            {"capability": "code", "assignee": "developer", "title": "Fix CI"},
+            stoelen=rijen, nu=NU_KETEN,
+            aanwezig=_aanwezig("claude2", "claude3", "codex", "cursor", "xai", "openai", "groq", "ollama"),
+        )
+        ids = [k["id"] for k in uit["kandidaten"]]
+        assert ids[-1] == "ollama"
+        stoel_i = min(ids.index(s) for s in ("claude2", "claude3", "codex", "cursor") if s in ids)
+        api_i = ids.index("openai") if "openai" in ids else ids.index("groq")
+        assert stoel_i < api_i
+        assert "perplexity" not in ids
+
+    def test_klein_zet_groq_voor_stoelen(self):
+        rijen = [stoel("claude2")]
+        uit = pr.route(
+            {"capability": "cron", "title": "health check"},
+            stoelen=rijen, nu=NU_KETEN,
+            aanwezig=_aanwezig("claude2", "groq", "ollama"),
+        )
+        ids = [k["id"] for k in uit["kandidaten"]]
+        assert ids.index("groq") < ids.index("claude2")
+        assert ids[-1] == "ollama"
+
+    def test_research_houdt_perplexity_klein_niet(self):
+        research = pr.route(
+            {"capability": "research", "title": "Look up copper buyers"},
+            nu=NU_KETEN, aanwezig=_aanwezig("perplexity", "groq", "ollama"),
+        )
+        assert "perplexity" in [k["id"] for k in research["kandidaten"]]
+        klein = pr.route(
+            {"capability": "cron"},
+            nu=NU_KETEN, aanwezig=_aanwezig("perplexity", "groq", "ollama"),
+        )
+        assert "perplexity" not in [k["id"] for k in klein["kandidaten"]]
+
+    def test_spreidt_op_credits_en_slaat_venster_over(self):
+        import usage_credits as uc
+        taken = [
+            {
+                "id": "a", "title": "Build next step: AXE Core", "status": "completed",
+                "payload": {"engine": "claude2"}, "created_at": "2026-11-04T08:00:00+00:00",
+            }
+        ] * 4
+        credits = uc.aggregeer(taken, [], nu=NU_KETEN)
+        rijen = [stoel("claude2"), stoel("claude3", remaining_week=90)]
+        uit = pr.route(
+            {"capability": "code", "title": "Build next step: AXE Core", "assignee": "developer"},
+            stoelen=rijen, credits=credits, nu=NU_KETEN,
+            aanwezig=_aanwezig("claude2", "claude3", "ollama"),
+        )
+        ids = [k["id"] for k in uit["kandidaten"]]
+        # claude2 zit in een 5-uursvenster (eerste run 08:00, nu 12:00).
+        assert "claude2" not in ids
+        assert any(o["id"] == "claude2" and "venster" in (o.get("reden") or "") for o in uit["overgeslagen"])
+        assert ids[0] == "claude3"
+
+    def test_stale_hartslag_en_circuit_worden_overgeslagen(self):
+        from datetime import timedelta
+        pr.registreer_fout("codex", "transient", nu=NU_KETEN)
+        pr.registreer_fout("codex", "transient", nu=NU_KETEN + timedelta(minutes=1))
+        pr.registreer_fout("codex", "transient", nu=NU_KETEN + timedelta(minutes=2))
+        rijen = [
+            stoel("codex"),
+            stoel("claude2", last_seen_at="2020-01-01T00:00:00+00:00"),
+            stoel("claude3"),
+        ]
+        uit = pr.route(
+            {"capability": "code", "assignee": "developer"},
+            stoelen=rijen, nu=NU_KETEN + timedelta(minutes=2),
+            aanwezig=_aanwezig("codex", "claude2", "claude3", "ollama"),
+        )
+        ids = [k["id"] for k in uit["kandidaten"]]
+        assert "codex" not in ids
+        assert "claude2" not in ids
+        assert "claude3" in ids
+
+
+class TestLoopKeten:
+    def setup_method(self):
+        pr.reset_router_staat()
+
+    def _db(self):
+        return NepDB(core_tasks=[{"id": "t-keten"}], core_task_attempts=[], core_notifications=[])
+
+    def test_429_en_tegoed_lopen_door_timeout_retry_dan_volgende(self):
+        db = self._db()
+        gezien = []
+
+        def probeer(k):
+            gezien.append(k["id"])
+            if k["id"] == "claude2":
+                raise RuntimeError("429 rate limit quota exceeded")
+            if k["id"] == "claude3":
+                raise RuntimeError("You have no credits remaining")
+            if k["id"] == "codex":
+                raise TimeoutError("timed out")
+            return {"text": "ok via " + k["id"]}
+
+        rijen = [stoel("claude2"), stoel("claude3"), stoel("codex"), stoel("cursor")]
+        uit = pr.loop_keten(
+            {"id": "t-keten", "capability": "code", "assignee": "developer"},
+            probeer, stoelen=rijen, nu=NU_KETEN, db=db, slaap=lambda _s: None,
+            aanwezig=_aanwezig("claude2", "claude3", "codex", "cursor", "ollama"),
+        )
+        assert uit["ok"] is True
+        assert uit["provider_used"] == "cursor"
+        assert uit["draaide_op"] == "draaide op: cursor"
+        assert gezien.count("codex") == 2  # transient: 1 retry
+        assert db.tabellen["core_tasks"][0]["provider_used"] == "cursor"
+        assert any(r.get("fout_klasse") == "limiet" for r in db.tabellen["core_task_attempts"])
+        assert any(r.get("fout_klasse") == "tegoed" for r in db.tabellen["core_task_attempts"])
+        assert any(str(n.get("message") or "").startswith("[tegoed]") for n in db.tabellen["core_notifications"])
+
+    def test_taakfout_schuift_niet_door(self):
+        gezien = []
+
+        def probeer(k):
+            gezien.append(k["id"])
+            raise RuntimeError("pytest failed: tests rood")
+
+        rijen = [stoel("claude2"), stoel("claude3")]
+        try:
+            pr.loop_keten(
+                {"id": "t-keten", "capability": "code"},
+                probeer, stoelen=rijen, nu=NU_KETEN, slaap=lambda _s: None,
+                aanwezig=_aanwezig("claude2", "claude3", "ollama"),
+            )
+            raise AssertionError("had TaakFout moeten zijn")
+        except pr.TaakFout:
+            pass
+        assert gezien == ["claude2"]
+
+    def test_alles_op_deferred_niet_failed(self):
+        def probeer(k):
+            raise RuntimeError("429 quota exceeded")
+
+        rijen = [stoel("claude2")]
+        try:
+            pr.loop_keten(
+                {"id": "t-keten", "capability": "code"},
+                probeer, stoelen=rijen, nu=NU_KETEN, slaap=lambda _s: None,
+                aanwezig=_aanwezig("claude2", "ollama"),
+            )
+            raise AssertionError("had moeten deferren")
+        except pr.WaitingForCapacity as wacht:
+            assert wacht.deferred is True
+            assert wacht.status == "deferred"
+            assert wacht.retry_after_s >= 15
+
+    def test_migratie_dicht_voor_anon_niet_toepassen(self):
+        from pathlib import Path
+        sql = (
+            Path(__file__).resolve().parents[2]
+            / "supabase/migrations/20261104120000_core_task_attempts.sql"
+        ).read_text(encoding="utf-8")
+        assert "core_task_attempts" in sql
+        assert "provider_used" in sql
+        assert "public.core_owner()" in sql
+        assert "revoke all on table public.core_task_attempts from anon" in sql.lower() or "from anon" in sql
+        assert "NIET toepassen op live" in sql
+        assert "to anon;" not in sql.lower()
+        assert "grant select, insert, update, delete on table public.core_task_attempts to service_role" in sql
+        assert "VITE_" not in sql

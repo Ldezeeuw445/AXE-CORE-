@@ -227,16 +227,26 @@ def motor_reden(staat: dict, motor: str, engines: dict, nu: datetime) -> Optiona
         return f"limiet tot {staat['koeling'][motor]}"
     if budget_over(staat, motor, nu.strftime("%Y-%m-%d")) <= 0:
         return f"dagbudget van {DAGBUDGET} runs op"
+    try:
+        from provider_router import provider_skip_reden
+        extra = provider_skip_reden(motor, nu=nu)
+        if extra:
+            return extra
+    except Exception:
+        pass
     return None
 
 
 def kies_motor(staat: dict, agent: str, gewenst: str, motoren: dict, engines: dict,
-               nu: datetime, uitsluiten: tuple[str, ...] | set[str] = ()) -> tuple[Optional[str], dict]:
-    """(motor, {motor: reden} van wat afviel). None = geen enkele bruikbare CLI.
+               nu: datetime, uitsluiten: tuple[str, ...] | set[str] = (),
+               *, taak: dict | None = None, credits: dict | None = None) -> tuple[Optional[str], dict]:
+    """(motor, {motor: reden} van wat afviel). None = keten op, caller deferred.
 
     `uitsluiten`: stoelen die deze taak al probeerden. Zonder dat koos de lus in
     _voer_uit na een modelfout gewoon dezelfde stoel opnieuw, drie keer.
     Minste planner-gebruik eerst; familie/voorkeur is tiebreaker.
+    Geen stoel vrij → volgende schijf van de provider-keten (Grok, API, VPS).
+    axe-algo blijft van abonnementen af (trading).
     """
     bezet = {m for a, m in motoren.items() if a != agent} | set(uitsluiten)
     redenen: dict[str, str] = {}
@@ -272,7 +282,42 @@ def kies_motor(staat: dict, agent: str, gewenst: str, motoren: dict, engines: di
         )
         vrij.append((score, m))
     vrij.sort()
-    return (vrij[0][1], redenen) if vrij else (None, redenen)
+    if vrij:
+        return vrij[0][1], redenen
+
+    if taak and is_bouw_next_step(taak):
+        redenen["_keten"] = "bouwloop uses Luka's CLI seats only"
+        return None, redenen
+
+    api = _keten_na_stoelen(agent, gewenst, bezet, nu, taak=taak, credits=credits)
+    if api:
+        return api, redenen
+    redenen["_keten"] = "alle providers op"
+    return None, redenen
+
+
+def _keten_na_stoelen(agent: str, gewenst: str, bezet: set[str], nu: datetime,
+                      *, taak: dict | None = None, credits: dict | None = None) -> Optional[str]:
+    """Eerste niet-stoel uit de router-keten. Geen netwerk."""
+    try:
+        from provider_router import route
+    except Exception:
+        return None
+    rij = taak or {
+        "assignee": agent,
+        "capability": "code" if agent == "code-agent" or gewenst in ABONNEMENTEN else "klein",
+        "metadata": {"agent": agent, "motor": gewenst},
+    }
+    uit = route(rij, credits=credits, nu=nu, uitsluiten=bezet)
+    for k in uit.get("kandidaten") or []:
+        pid = str(k.get("id") or "")
+        if not pid or pid in bezet or pid in ABONNEMENTEN:
+            continue
+        skip = k.get("reden")
+        if skip:
+            continue
+        return pid
+    return None
 
 
 def plan_motor_voor(motor: str) -> str:
@@ -863,7 +908,8 @@ class Planner:
         """
         nu = datetime.now()
         vandaag = nu.strftime("%Y-%m-%d")
-        if motor == "sleutels":
+        if motor == "sleutels" or motor not in ABONNEMENTEN:
+            staat["laatste_motor"] = motor
             return self._sleutels(prompt)
         if koelt(staat, motor, nu):
             return None, f"{motor} koelt tot {staat['koeling'][motor]}"
@@ -1071,6 +1117,8 @@ class Planner:
             "metadata": meta,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
+        if tekst and motor:
+            velden["provider_used"] = motor
         if tekst:
             velden["result"] = {"output": tekst[:8000], **({"bewijs": bewijs} if bewijs else {})}
             velden["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -1155,13 +1203,14 @@ class Planner:
                     f"repo {gevraagd} mag niet (beschermde branch of niet op de whitelist)" if gevraagd
                     else "geen bruikbare repo (alle op main/master of weg)"}
         engines = engines if engines is not None else self._engines()
-        motor, afgevallen = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now())
+        motor, afgevallen = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now(),
+                                       taak=taak)
         if not motor:
             return self._blokkeer(taak, afgevallen)
         if is_bouw_next_step(taak) and motor not in ABONNEMENTEN:
             afgevallen[motor] = "bouwloop uses Luka's CLI seats only (Claude/ChatGPT/Cursor)"
             motor, meer = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now(),
-                                     uitsluiten={motor})
+                                     uitsluiten={motor}, taak=taak)
             afgevallen.update(meer)
             if not motor:
                 return self._blokkeer(taak, afgevallen)
@@ -1205,7 +1254,7 @@ class Planner:
                 break
             afgevallen[motor] = wissel_motor(fout) or "account werkt niet"
             motor, meer = kies_motor(staat, agent, gewenst, motoren, engines, datetime.now(),
-                                     uitsluiten=set(geprobeerd))
+                                     uitsluiten=set(geprobeerd), taak=taak)
             afgevallen.update(meer)
             if not motor:
                 break
@@ -1386,19 +1435,24 @@ class Planner:
         return bouw_publiceer.volgende_bouwljist_in(pad, rel)
 
     def _blokkeer(self, taak: dict, afgevallen: dict) -> dict:
-        """Geen enkele motor kan: zichtbaar geblokkeerd, en het kost geen poging."""
+        """Keten op: deferred, nooit failed. Zichtbaar geblokkeerd tot er weer plek is."""
+        from provider_router import WACHT_STANDAARD_S, wacht_na_keten
         reden = "no logged-in CLI engine: " + "; ".join(f"{m}: {r}" for m, r in afgevallen.items())
+        wacht = wacht_na_keten(afgevallen)
+        tot = datetime.now(timezone.utc) + timedelta(seconds=wacht or WACHT_STANDAARD_S)
         meta = dict(taak.get("metadata") or {})
         meta["uiStatus"] = "blocked"
         meta["geblokkeerd"] = reden[:600]
+        meta["wacht_tot"] = tot.isoformat()
         try:
             self.sb().table("core_tasks").update({
                 "metadata": meta, "error": {"message": reden[:1000]},
+                "next_attempt_at": tot.isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", taak["id"]).eq("status", "pending").execute()
         except Exception as e:  # noqa: BLE001
             log.warning("planner: blokkeren faalde: %s", e)
-        return {"taak": taak["id"], "geblokkeerd": reden}
+        return {"taak": taak["id"], "geblokkeerd": reden, "deferred": True, "retry_after_s": wacht}
 
     def _luka_werk(self) -> list[dict]:
         try:

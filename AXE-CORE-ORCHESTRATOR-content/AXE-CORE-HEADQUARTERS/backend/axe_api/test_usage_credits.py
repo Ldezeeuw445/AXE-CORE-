@@ -58,6 +58,11 @@ class TestNormalisatie:
         assert uc.taak_stoel(t) == "claude3"
         assert uc.taak_app(t) == "axe-core"
 
+    def test_provider_used_wint_van_payload_engine(self):
+        t = taak(payload={"engine": "claude3"}, provider_used="cursor2")
+        assert uc.taak_stoel(t) == "cursor2"
+        assert uc.draaide_op("cursor2") == "draaide op: cursor2"
+
 
 class TestAggregatie:
     def test_sessies_vandaag_en_deze_week_per_stoel(self):
@@ -190,6 +195,41 @@ class TestAggregatie:
         assert "example.com" in str(uit)  # account-identiteit mag
         assert "CURSOR2_API_KEY=" not in str(uit)
 
+    def test_pogingen_tellen_stoel_sessies_niet_dubbel_met_taken(self):
+        taken = [taak(payload={"engine": "claude2"}, provider_used="claude2")]
+        pogingen = [{
+            "task_id": "t", "poging": 1, "provider": "claude", "seat_id": "claude3",
+            "started_at": "2026-10-28T10:00:00+00:00", "uitkomst": "ok",
+        }]
+        uit = uc.aggregeer(taken, [], nu=NU, pogingen=pogingen)
+        per = {s["id"]: s for s in uit["seats"]}
+        assert per["claude3"]["sessions_today"] == 1
+        assert per["claude2"]["sessions_today"] == 0
+        assert any(r["draaide_op"] == "draaide op: claude2" for r in uit["draaide_op"])
+
+    def test_schrijf_poging_redacteert_geheimen(self):
+        gezien = []
+
+        class _Q:
+            def insert(self, rij):
+                gezien.append(rij)
+                return self
+
+            def execute(self):
+                return type("R", (), {"data": gezien[-1:]})()
+
+        class _DB:
+            def table(self, _n):
+                return _Q()
+
+        ok = uc.schrijf_poging(_DB(), {
+            "task_id": "t", "poging": 1, "provider": "openai",
+            "fout": "usage limit token sk-ant-GEHEIMTOKEN1234567890ABCD",
+        })
+        assert ok is True
+        assert "GEHEIM" not in str(gezien)
+        assert "sk-ant-" not in str(gezien)
+
 
 class TestApiKoppeling:
     def test_beide_routes_hangen_achter_auth_in_main(self):
@@ -197,5 +237,6 @@ class TestApiKoppeling:
         assert '@app.get("/usage-credits", dependencies=[AUTH])' in tekst
         assert '@app.get("/usage-credits/config", dependencies=[AUTH])' in tekst
         assert "import usage_credits" in tekst
+        assert "lees_pogingen" in tekst
         # Bestaande stoelen-route blijft; dit is ernaast, niet in plaats van.
         assert '@app.get("/coding-seats", dependencies=[AUTH])' in tekst
