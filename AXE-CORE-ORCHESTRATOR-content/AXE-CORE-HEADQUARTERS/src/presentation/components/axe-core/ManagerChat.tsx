@@ -8,7 +8,9 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowUp, ChevronDown, ChevronUp, Mic, Paperclip } from 'lucide-react';
+import { ArrowUp, ChevronDown, ChevronUp, Mic, Paperclip, Sparkles, Plug, X } from 'lucide-react';
+import { AXE_SKILLS } from '@/domain/tierRouter/axeSkills';
+import { APPS } from '@/domain/apps';
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { berichtGestuurdLabel } from '@/domain/agents/bossRoute';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -63,6 +65,70 @@ function vriendelijkeTekst(raw: string, failed: boolean): { text: string; error:
     return { text: taakFoutVan(t).regel, error: true };
   }
   return { text: t, error: false };
+}
+
+
+/** Never dump planner / mission JSON into the header or strip. */
+function zietEruitAlsJson(raw: string): boolean {
+  const t = (raw || '').trim();
+  return t.startsWith('{') && (t.includes('"begon"') || t.includes('"agents"') || t.includes('"motor"'));
+}
+
+function menselijkeStatusChips(
+  server?: ServerAgent,
+  job?: AxeJob | null,
+  /** Prefer live local job label (Actief / Wacht / Mislukt) over server heartbeat. */
+  lokaleLabel?: string | null,
+): string[] {
+  const chips: string[] = [];
+  if (!server && !job && !lokaleLabel) return chips;
+  if (lokaleLabel) chips.push(lokaleLabel);
+  else if (server) {
+    const stand = bepaalServerStand(server);
+    if (stand?.label) chips.push(stand.label);
+  }
+  const taken = (server?.pendingApprovals?.length ?? 0) + (job?.state === 'waiting' || job?.state === 'running' || job?.state === 'queued' ? 1 : 0);
+  if (taken > 0) chips.push(`${taken} ${taken === 1 ? 'taak' : 'taken'}`);
+  if (server?.current_action && !zietEruitAlsJson(server.current_action)) {
+    chips.push(server.current_action.slice(0, 48));
+  }
+  if (server?.task?.engine) chips.push(server.task.engine);
+  if (server?.mission?.title && !zietEruitAlsJson(server.mission.title)) {
+    chips.push(server.mission.title.slice(0, 40));
+  }
+  // Parse planner blob if reason is JSON — surface human crumbs only
+  const reason = server?.reason || '';
+  if (zietEruitAlsJson(reason)) {
+    try {
+      const j = JSON.parse(reason) as { begon?: string; agents?: Record<string, { motor?: string; voorstellen?: unknown[]; goedgekeurd_uitgevoerd?: unknown[] }> };
+      if (j.begon) chips.push(`Gestart ${j.begon}`);
+      const first = j.agents && Object.values(j.agents)[0];
+      if (first?.motor) chips.push(`Motor ${first.motor}`);
+      const v = first?.voorstellen?.length ?? 0;
+      const g = first?.goedgekeurd_uitgevoerd?.length ?? 0;
+      if (v || g) chips.push(`${v} voorstellen · ${g} uitgevoerd`);
+    } catch { /* ignore */ }
+  } else if (reason && !zietEruitAlsJson(reason)) {
+    chips.push(reason.slice(0, 48));
+  }
+  return chips.filter(Boolean).slice(0, 4);
+}
+
+function veiligeStripSamenvatting(
+  agent: AxeAgent,
+  job: AxeJob | null,
+  server?: ServerAgent,
+  missieTitle?: string | null,
+  routineSummary?: string | null,
+): string {
+  for (const kandidaat of [missieTitle, routineSummary, server?.reason, wieEnWat(agent, job)]) {
+    if (!kandidaat) continue;
+    if (zietEruitAlsJson(kandidaat)) continue;
+    const t = kandidaat.trim();
+    if (t) return t;
+  }
+  const chips = menselijkeStatusChips(server, job, wieEnWat(agent, job) || null);
+  return chips[0] || `AXE heeft niets open met ${agent.name}.`;
 }
 
 function draadNaarChat(berichten: DraadBericht[]): ManagerChatMsg[] {
@@ -202,6 +268,7 @@ export function ManagerChat({
   const [opvolging, setOpvolging] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [stripOpen, setStripOpen] = useState(false);
+  const [picker, setPicker] = useState<null | 'skills' | 'connectors'>(null);
   const startListening = useVoiceStore((s) => s.startListening);
   const stopListening = useVoiceStore((s) => s.stopListening);
   const voiceStatus = useVoiceStore((s) => s.voiceStatus);
@@ -352,22 +419,20 @@ export function ManagerChat({
           borderColor: 'rgba(34,211,238,.32)',
           background: 'var(--axe-card-bg)',
         }}
-        titel={
+        titel={desk ? undefined : (
           <span className="flex items-center gap-2 min-w-0">
-            <ManagerAvatar agent={agent} size={desk ? 32 : 24} />
+            <ManagerAvatar agent={agent} size={24} />
             <span className="min-w-0 truncate">
               {agent.name}
-              <span className="ml-1.5 font-normal" style={{ color: 'var(--text-muted)', fontSize: desk ? 12 : 10 }}>
-                {desk
-                  ? (agent.id === 'axe' ? 'Routes to the right DAX · one brain' : (agent.role || 'via AXE core'))
-                  : `via AXE core${tierRegel ? ` · ${tierRegel}` : ''}`}
+              <span className="ml-1.5 font-normal" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                {`via AXE core${tierRegel ? ` · ${tierRegel}` : ''}`}
               </span>
             </span>
           </span>
-        }
+        )}
         actie={
           <span className="flex items-center gap-2 flex-shrink-0">
-            {stand && (
+            {!desk && stand && (
               <span className="text-[10px] whitespace-nowrap" style={{ color: stand.kleur }}>
                 {stand.label}
               </span>
@@ -387,6 +452,39 @@ export function ManagerChat({
           </span>
         }
       >
+
+        {desk && (
+          <header className="axe-manager-pro-kop" data-axe-manager-header="pro">
+            <div className="axe-manager-pro-identiteit">
+              <ManagerAvatar agent={agent} size={40} />
+              <div className="axe-manager-pro-meta">
+                <p className="axe-manager-pro-naam">{agent.name}</p>
+                <p className="axe-manager-pro-rol">
+                  {agent.id === 'axe'
+                    ? 'Boss · classificeert en deelt uit'
+                    : agent.id === 'projectsmgr'
+                      ? 'Boss · Orchestrator · alle managers'
+                      : (agent.role || 'Manager')}
+                </p>
+              </div>
+            </div>
+            <div className="axe-manager-pro-chips" aria-label="Status">
+              {(menselijkeStatusChips(server, job, stand?.label).length
+                ? menselijkeStatusChips(server, job, stand?.label)
+                : [stand?.label || 'Klaar']
+              ).map((c) => {
+                const wait = /wacht|waiting|approval/i.test(c) || stand?.label === 'Waiting' || stand?.label === 'waiting';
+                const fail = /mislukt|failed|error/i.test(c);
+                return (
+                <span key={c} className="axe-manager-pro-chip" data-tone={fail ? 'err' : wait ? 'wait' : 'live'}>
+                  {c}
+                </span>
+                );
+              })}
+            </div>
+          </header>
+        )}
+
         {/* Compact collapsible mission / event strip — not mixed into chat */}
         {heeftStrip && (
           <div
@@ -404,9 +502,13 @@ export function ManagerChat({
                 Mission / status
               </span>
               <span className="flex-1 min-w-0 truncate text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                {missie?.title
-                  || server?.routines?.[0]?.summary
-                  || (!job && server && server.status !== 'SLEEPING' ? server.reason : wieEnWat(agent, job))}
+                {veiligeStripSamenvatting(
+                  agent,
+                  job,
+                  server,
+                  missie?.title,
+                  server?.routines?.[0]?.summary,
+                )}
               </span>
               {stripOpen ? <ChevronUp size={12} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />}
             </button>
@@ -478,9 +580,10 @@ export function ManagerChat({
           data-axe-agent-draad
         >
           {berichten.length === 0 && !typing && (
-            <p className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-              Ask {agent.name} anything — AXE will hand it over.
-            </p>
+            <div className="axe-manager-leeg" data-axe-managers-empty="chat">
+              <ManagerAvatar agent={agent} size={48} />
+              <p>Ask {agent.name} anything — AXE will hand it over.</p>
+            </div>
           )}
           {berichten.map((m) => {
             if (m.kind === 'relay' || (m.role === 'system' && m.fromAgentId)) {
@@ -492,9 +595,14 @@ export function ManagerChat({
             return (
               <div
                 key={m.id}
-                className={`flex ${user ? 'justify-end' : 'justify-start'}`}
+                className={`flex items-end gap-2 ${user ? 'justify-end' : 'justify-start'}`}
                 data-axe-chat-role={m.role}
               >
+                {!user && (
+                  <span className="flex-none mb-0.5">
+                    <ManagerAvatar agent={agent} size={22} />
+                  </span>
+                )}
                 <div
                   className="max-w-[82%] px-3 py-2 rounded-2xl"
                   style={{
@@ -544,8 +652,88 @@ export function ManagerChat({
           className="mt-2 pt-2 flex flex-col gap-1.5"
           style={{ borderTop: '1px solid rgba(255,255,255,.06)' }}
         >
+          {picker && (
+            <div className="axe-manager-picker" data-axe-manager-picker={picker} role="listbox" aria-label={picker === 'skills' ? 'Skills' : 'App connectors'}>
+              <div className="axe-manager-picker-kop">
+                <span>{picker === 'skills' ? 'Skills' : 'App connectors'}</span>
+                <button type="button" aria-label="Sluit" onClick={() => setPicker(null)}>
+                  <X size={12} />
+                </button>
+              </div>
+              {picker === 'skills' && (
+                AXE_SKILLS.length === 0 ? (
+                  <p className="axe-manager-picker-leeg">Geen skills geladen.</p>
+                ) : (
+                  <ul>
+                    {AXE_SKILLS.map((s) => (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          onClick={() => {
+                            // Label matches skillVanTekst patterns (e.g. "Plan Today").
+                            setOpvolging((prev) => (prev ? `${prev.trimEnd()} ${s.label}` : s.label));
+                            setPicker(null);
+                            requestAnimationFrame(() => composerRef.current?.focus());
+                          }}
+                        >
+                          <strong>{s.label}</strong>
+                          <span>{s.uitleg}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              )}
+              {picker === 'connectors' && (
+                APPS.length === 0 ? (
+                  <p className="axe-manager-picker-leeg">Geen app connectors gekoppeld.</p>
+                ) : (
+                  <ul>
+                    {APPS.map((a) => (
+                      <li key={a.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          onClick={() => {
+                            // Natural app name — @axe_companion etc. are not route tokens.
+                            setOpvolging((prev) => (prev ? `${prev.trimEnd()} ${a.label}` : a.label));
+                            setPicker(null);
+                            requestAnimationFrame(() => composerRef.current?.focus());
+                          }}
+                        >
+                          <strong style={{ color: a.kleur }}>{a.label}</strong>
+                          <span>{a.blurb}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              )}
+            </div>
+          )}
           <div className="axe-manager-composer flex items-end gap-1.5">
             <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
+            <button
+              type="button"
+              className="axe-manager-picker-btn"
+              aria-label="Skills"
+              title="Skills"
+              data-open={picker === 'skills' ? 'ja' : undefined}
+              onClick={() => setPicker((p) => (p === 'skills' ? null : 'skills'))}
+            >
+              <Sparkles size={15} />
+            </button>
+            <button
+              type="button"
+              className="axe-manager-picker-btn"
+              aria-label="App connectors"
+              title="App connectors"
+              data-open={picker === 'connectors' ? 'ja' : undefined}
+              onClick={() => setPicker((p) => (p === 'connectors' ? null : 'connectors'))}
+            >
+              <Plug size={15} />
+            </button>
             <textarea
               ref={composerRef}
               value={opvolging}

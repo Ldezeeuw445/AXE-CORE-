@@ -1,9 +1,9 @@
 /**
  * Managers tab — Grok Bot–style chat room (refs: managers-ref-grokbot / axe-mock):
- * left: large AXE Core tile (Boss), Projects Manager pinned as orchestrator,
- *       then real managers grouped per app
- * right: conversation + composer (ManagerChat, real jobs/server data)
- * relay: centered "Bericht gestuurd • <avatar> <Agent>" from Boss/Projects handoffs
+ * left: centered square AXE Core avatar (Grok Wingman style), Projects Manager
+ *       as Boss/orchestrator, then app managers with full names (no Twin)
+ * right: conversation + composer (ManagerChat) inside the in-app browser plaat
+ * Chat/Activity/Memory live once in Agents top viewctl — not duplicated here
  *
  * Boss is not a manager: he classifies Luka's message and forwards it.
  * Projects Manager can dispatch to managers under it the same way.
@@ -61,8 +61,6 @@ const SUBTITELS: Partial<Record<AxeAgentId, string>> = {
 };
 
 const LAST_READ_KEY = 'axe_managers_last_read_v1';
-
-type ZijTab = 'chat' | 'activity' | 'memory';
 
 function leesLastRead(): Record<string, number> {
   try {
@@ -168,7 +166,6 @@ export function ManagersDesk() {
   const [gekozen, setGekozen] = useState<AxeAgentId | null>(
     () => (openParam && alleIds.includes(openParam) ? openParam : BOSS_ID),
   );
-  const [zijTab, setZijTab] = useState<ZijTab>('chat');
   const [zoek, setZoek] = useState('');
   const jobs = useAxeJobStore((s) => s.jobs);
   const server = useServerAgents();
@@ -205,7 +202,6 @@ export function ManagersDesk() {
 
   const kies = (id: AxeAgentId) => {
     setGekozen(id);
-    setZijTab('chat');
     schrijfLastRead(id, Date.now());
     const next = new URLSearchParams(searchParams);
     next.set('open', id);
@@ -268,7 +264,7 @@ export function ManagersDesk() {
           <span className="axe-managers-room-meta">
             <span className="axe-managers-room-rij-top">
               <span className="axe-managers-room-naam">
-                {a.kort || a.name}
+                {a.name}
               </span>
               <span className="axe-managers-room-tijd">
                 {lastAt ? amsterdamKlok(lastAt) : ''}
@@ -283,7 +279,7 @@ export function ManagersDesk() {
               )}
             </span>
             <span className="axe-managers-room-status" data-tone={status.tone}>
-              {opts?.orch ? 'Orchestrator' : status.label}
+              {opts?.orch ? 'Boss · Orchestrator' : status.label}
               {!isBoss(a.id) && srv?.current_action ? ` · ${srv.current_action.slice(0, 40)}` : ''}
             </span>
           </span>
@@ -298,29 +294,20 @@ export function ManagersDesk() {
   const bossOpen = gekozen === BOSS_ID;
 
   return (
-    <div className="axe-managers-room" data-axe-managers-desk="grokbot">
+    <div className="axe-managers-room axe-browser-vak" data-axe-managers-desk="grokbot">
       <div className="axe-managers-room-lijst" aria-label="Managers">
         <header className="axe-managers-room-lijst-kop">
-          <div className="axe-managers-room-tabs" role="tablist" aria-label="Managers pane">
-            {(
-              [
-                ['chat', 'Chat'],
-                ['activity', 'Activity & plans'],
-                ['memory', 'Memory'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={zijTab === id}
-                data-active={zijTab === id ? 'ja' : undefined}
-                className="axe-managers-room-tab"
-                onClick={() => setZijTab(id)}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="axe-managers-room-zoekrij axe-managers-room-zoekrij--kop">
+            <label className="axe-managers-room-zoek">
+              <Search size={14} aria-hidden />
+              <input
+                type="search"
+                value={zoek}
+                onChange={(e) => setZoek(e.target.value)}
+                placeholder="Zoek manager…"
+                aria-label="Zoek manager"
+              />
+            </label>
           </div>
           <button
             type="button"
@@ -332,20 +319,7 @@ export function ManagersDesk() {
           </button>
         </header>
 
-        {zijTab === 'chat' && (
-          <>
-            <div className="axe-managers-room-zoekrij">
-              <label className="axe-managers-room-zoek">
-                <Search size={14} aria-hidden />
-                <input
-                  type="search"
-                  value={zoek}
-                  onChange={(e) => setZoek(e.target.value)}
-                  placeholder="Zoek manager…"
-                  aria-label="Zoek manager"
-                />
-              </label>
-            </div>
+        <>
 
             {/* Large AXE Core tile — Grok "Luka's Wingman" equivalent */}
             <button
@@ -358,14 +332,12 @@ export function ManagersDesk() {
               style={{ ['--mgr-accent' as string]: boss.accent }}
             >
               <span className="axe-managers-room-boss-av">
-                <ManagerAvatar agent={boss} size={56} />
+                <ManagerAvatar agent={boss} size={72} />
                 <span className="axe-managers-room-stip" data-tone={bossStatus.tone} aria-hidden />
               </span>
-              <span className="axe-managers-room-boss-meta">
-                <span className="axe-managers-room-boss-naam">AXE Core</span>
-                <span className="axe-managers-room-boss-sub">
-                  {previewTekst(BOSS_ID, server.agents[BOSS_ID])}
-                </span>
+              <span className="axe-managers-room-boss-naam">AXE Core</span>
+              <span className="axe-managers-room-boss-sub">
+                {previewTekst(BOSS_ID, server.agents[BOSS_ID])}
               </span>
               {bossUnread > 0 && (
                 <span className="axe-managers-room-unread" aria-label={`${bossUnread} unread`}>
@@ -378,7 +350,7 @@ export function ManagersDesk() {
               {matchZoek(projects) && (
                 <>
                   <li className="axe-managers-room-sectie" aria-label="Projects orchestrator">
-                    <p className="axe-managers-room-sectie-label">Projects</p>
+                    <p className="axe-managers-room-sectie-label">Boss</p>
                   </li>
                   {renderRij(projects, { pin: true, orch: true })}
                 </>
@@ -399,37 +371,11 @@ export function ManagersDesk() {
                 );
               })}
             </ul>
-          </>
-        )}
-
-        {zijTab === 'activity' && (
-          <div className="axe-managers-room-zijpaneel" data-axe-managers-empty="activity">
-            <p className="axe-managers-room-zijpaneel-titel">Activity & plans</p>
-            <p className="axe-managers-room-zijpaneel-leeg">
-              Nog geen gedeelde activity in deze tab. Open Chat om live jobs en relays te zien.
-            </p>
-          </div>
-        )}
-
-        {zijTab === 'memory' && (
-          <div className="axe-managers-room-zijpaneel" data-axe-managers-empty="memory">
-            <p className="axe-managers-room-zijpaneel-titel">Memory</p>
-            <p className="axe-managers-room-zijpaneel-leeg">
-              Geen manager-memory hier. Gebruik AXON Memory Manager in Chat of de Memory-tab in de bottom nav.
-            </p>
-            <button
-              type="button"
-              className="axe-managers-room-daxlink"
-              onClick={() => kies('axon')}
-            >
-              Open AXON Memory Manager
-            </button>
-          </div>
-        )}
+        </>
       </div>
 
       <section className="axe-managers-room-draad" aria-label={agent ? `Chat with ${agent.name}` : 'Conversation'}>
-        {agent && zijTab === 'chat' ? (
+        {agent ? (
           <ManagerChat
             key={agent.id}
             layout="desk"
@@ -491,13 +437,9 @@ export function ManagersDesk() {
               });
             }}
           />
-        ) : zijTab === 'chat' ? (
-          <div className="axe-managers-room-leeg">
-            <p>Select AXE Core or a manager to open the chat.</p>
-          </div>
         ) : (
           <div className="axe-managers-room-leeg">
-            <p>Kies Chat om met AXE Core of een manager te praten.</p>
+            <p>Select AXE Core or a manager to open the chat.</p>
           </div>
         )}
       </section>
