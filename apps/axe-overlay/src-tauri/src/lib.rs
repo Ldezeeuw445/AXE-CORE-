@@ -79,7 +79,7 @@ fn get_launch_at_login(app: AppHandle) -> Result<bool, String> {
 /// Collapsed topbar hoogte (logical). Moet matchen met frontend TOPBAR_HEIGHT.
 const COLLAPSED_H: f64 = 44.0;
 
-fn overlay_metrics(app: &AppHandle) -> (f64, f64, f64, f64, f64) {
+fn overlay_metrics<R: Runtime>(app: &AppHandle<R>) -> (f64, f64, f64, f64, f64) {
     // Returns (screen_x, screen_w, screen_h, menu_gap_y, visible_top_y_topleft)
     if let Ok(Some(m)) = app.primary_monitor() {
         let scale = m.scale_factor();
@@ -96,7 +96,7 @@ fn overlay_metrics(app: &AppHandle) -> (f64, f64, f64, f64, f64) {
     }
 }
 
-fn pin_overlay_frame(app: &AppHandle, expanded: bool) -> Result<(), String> {
+fn pin_overlay_frame<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Result<(), String> {
     let win = app
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window missing".to_string())?;

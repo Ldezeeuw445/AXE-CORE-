@@ -33,6 +33,7 @@ pub fn read_look() -> LookState {
     LookState { look: raw }
 }
 
+#[allow(dead_code)]
 pub fn write_look(look: &str) -> Result<(), String> {
     if look != "black" && look != "glass" {
         return Err(format!("onbekende look: {look}"));
