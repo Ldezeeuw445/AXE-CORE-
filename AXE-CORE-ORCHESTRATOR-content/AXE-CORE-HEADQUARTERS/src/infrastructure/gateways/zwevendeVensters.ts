@@ -21,7 +21,7 @@ export const ZWEVENDE_VENSTERS: Record<ZwevendType, Ontwerp> = {
   phone: { label: 'axe-float-phone', route: '/float/phone', titel: 'AXE Phone', b: 420, h: 860, minB: 300, minH: 560 },
   /* Luka okt 2026: always-on AXE notch — lightweight, buiten de shell-flow; aparte
      apps/axe-overlay voor login-launch. Start collapsed (notch), expand in-UI. */
-  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 1306, h: 80, minB: 720, minH: 64 },
+  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 1306, h: 44, minB: 720, minH: 40 },
 };
 
 export interface Frame { x: number; y: number; b: number; h: number }

@@ -166,49 +166,107 @@ fn hostnaam() -> Option<String> {
 
 /// Pin the AXE float notch to an absolute top-left frame (logical points, top-left origin).
 /// Tauri/wry `set_position` is clamped under the menu bar (~y=30); NSWindow setFrame is not.
+/// AppKit setFrame must run on the main thread (same pattern as axe-overlay pin_overlay_frame).
 #[tauri::command]
 fn dock_notch_frame(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use objc::{class, msg_send, sel, sel_impl};
+        let on_main: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
+        if !on_main {
+            let app2 = app.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            app.run_on_main_thread(move || {
+                let _ = tx.send(dock_notch_frame_inner(&app2, x, y, w, h));
+            })
+            .map_err(|e| e.to_string())?;
+            return rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap_or_else(|_| Err("dock_notch_frame: main-thread timeout".into()));
+        }
+        return dock_notch_frame_inner(&app, x, y, w, h);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        dock_notch_frame_inner(&app, x, y, w, h)
+    }
+}
+
+fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
     let win = app
         .get_webview_window("axe-float-axe")
         .or_else(|| app.get_webview_window("AXE"))
         .ok_or_else(|| "axe float window missing".to_string())?;
     #[cfg(target_os = "macos")]
     {
-        use cocoa::base::{id, YES};
+        use cocoa::base::{id, nil, YES};
         use cocoa::foundation::{NSPoint, NSRect, NSSize};
-        use objc::{msg_send, sel, sel_impl};
+        use objc::{class, msg_send, sel, sel_impl};
 
         let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
         unsafe {
             // NSStatusWindowLevel (25): allowed over the menu bar / notch strip.
             let _: () = msg_send![ns_win, setLevel: 25_i64];
-            let screen: id = msg_send![ns_win, screen];
-            if screen.is_null() {
+            // Prefer primary display (CGMainDisplay / origin near 0), not ns_win.screen
+            // (follows the window) or NSScreen.main (follows key window → secondary).
+            let mut screen: id = msg_send![class!(NSScreen), mainScreen];
+            let screens: id = msg_send![class!(NSScreen), screens];
+            if screens != nil {
+                let count: usize = msg_send![screens, count];
+                let mut best: id = screen;
+                let mut best_score = f64::MAX;
+                for i in 0..count {
+                    let s: id = msg_send![screens, objectAtIndex: i];
+                    if s.is_null() || s == nil {
+                        continue;
+                    }
+                    let sf: NSRect = msg_send![s, frame];
+                    // Primary is usually the screen with origin closest to (0,0) and largest area.
+                    let score = sf.origin.x.abs() + sf.origin.y.abs() - (sf.size.width * sf.size.height) * 1e-9;
+                    if score < best_score {
+                        best_score = score;
+                        best = s;
+                    }
+                }
+                if !best.is_null() && best != nil {
+                    screen = best;
+                }
+            }
+            if screen.is_null() || screen == nil {
                 return Err("no screen for notch window".into());
             }
             let sf: NSRect = msg_send![screen, frame];
-            let cocoa_y = sf.origin.y + sf.size.height - y - h;
-            let frame = NSRect::new(NSPoint::new(x, cocoa_y), NSSize::new(w, h));
+            let vf: NSRect = msg_send![screen, visibleFrame];
+            // Flush under menu bar: top of visibleFrame, unless caller already offset y.
+            let top_y = vf.origin.y + vf.size.height;
+            let cocoa_y = top_y - h;
+            // Keep caller's x (already centered on primary in JS); clamp into this screen.
+            let x_clamped = x.max(sf.origin.x).min(sf.origin.x + sf.size.width - w);
+            let frame = NSRect::new(NSPoint::new(x_clamped, cocoa_y), NSSize::new(w, h));
             let _: () = msg_send![ns_win, setFrame: frame display: YES];
-            // Read back
-            let got: NSRect = msg_send![ns_win, frame];
-            let top_from_bottom = got.origin.y + got.size.height;
-            let want_top = sf.origin.y + sf.size.height - y;
-            // If still constrained, nudge via Accessibility-free CGWarp isn't available —
-            // fall back to Hammerspoon when installed (Mac mini has it).
-            if (top_from_bottom - want_top).abs() > 1.0 {
-                let script = format!(
-                    "for _,w in ipairs(hs.window.allWindows()) do if w:application():name()==\"AXE CORE\" and w:title()==\"AXE\" then w:setFrame(hs.geometry.rect({x},{y},{w},{h})) end end"
-                );
-                let out = std::process::Command::new("/opt/homebrew/bin/hs")
-                    .args(["-c", &script])
-                    .output();
-            }
+            let _ = y; // top-left y unused; visibleFrame top is authoritative
         }
         let _ = win.set_always_on_top(true);
+        // Re-apply after set_always_on_top (Tauri can shift the frame).
+        unsafe {
+            use cocoa::base::{id, YES};
+            use cocoa::foundation::{NSPoint, NSRect, NSSize};
+            use objc::{msg_send, sel, sel_impl};
+            let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
+            let screen: id = msg_send![ns_win, screen];
+            if !screen.is_null() {
+                let sf: NSRect = msg_send![screen, frame];
+                let vf: NSRect = msg_send![screen, visibleFrame];
+                let top_y = vf.origin.y + vf.size.height;
+                let cocoa_y = top_y - h;
+                let x_clamped = x.max(sf.origin.x).min(sf.origin.x + sf.size.width - w);
+                let frame = NSRect::new(NSPoint::new(x_clamped, cocoa_y), NSSize::new(w, h));
+                let _: () = msg_send![ns_win, setFrame: frame display: YES];
+            }
+        }
         return Ok(());
     }
-#[cfg(not(target_os = "macos"))]
+    #[cfg(not(target_os = "macos"))]
     {
         use tauri::LogicalPosition;
         use tauri::LogicalSize;

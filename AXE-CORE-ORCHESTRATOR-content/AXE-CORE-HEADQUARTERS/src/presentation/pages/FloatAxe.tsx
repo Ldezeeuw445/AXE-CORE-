@@ -3,10 +3,10 @@ import { useEffect } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
-/** Collapsed: ~34% of primary width (min 720), ~80px tall. Expanded: same width, taller panel. */
+/** Collapsed: compact top-center notch (spec ~200–720×44). Expanded only on hover/click. */
 const WIDTH_FRAC = 0.34;
 const MIN_W = 720;
-const COLLAPSED_H = 80;
+const COLLAPSED_H = 44;
 const BASE_W = 560;
 const BASE_H = 54;
 
@@ -76,7 +76,8 @@ async function dockTop(open: boolean) {
     const screenX = mon.position.x / scale;
     const screenY = mon.position.y / scale;
     const nx = screenX + (screenW - width) / 2;
-    const ny = screenY;
+    // Flush under the menu bar (~30pt). Cocoa dock_notch_frame uses visibleFrame.
+    const ny = screenY + 30;
     try {
       await invoke('dock_notch_frame', { x: nx, y: ny, w: width, h: height });
     } catch {
@@ -139,7 +140,9 @@ export default function FloatAxe() {
     document.body.style.margin = '0';
     void (async () => {
       await readMetrics();
-      void dockTop(window.innerHeight > 120);
+      // Always start collapsed. Inferring from innerHeight re-opens a stale
+      // expanded frame (870×720) and leaves the notch "big in the screen".
+      void dockTop(false);
     })();
     return () => {
       document.documentElement.style.background = prev[0];
