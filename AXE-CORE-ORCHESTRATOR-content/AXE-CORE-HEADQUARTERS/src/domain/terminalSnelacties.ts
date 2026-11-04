@@ -329,9 +329,10 @@ const VPS: Snelactie[] = [
   {
     label: 'Companion: live check',
     // Niet "is de dienst gestart" maar "serveert hij de nieuwe code". Een
-    // mislukte build laat het oude proces vrolijk doordraaien.
-    cmd: `curl -s https://www.axecompanion.com/welcome | grep -oE '/_next/static/[^"]+\\.css' | sort -u | while read c; do curl -s "https://www.axecompanion.com$c"; done | grep -c tos-chart-dock`,
-    uitleg: '0 = oude build draait nog, 1 of meer = de nieuwe staat live',
+    // mislukte build laat het oude proces vrolijk doordraaien. tos-chart-dock
+    // bleef 1 op oude én nieuwe builds; /api/debug/build noemt commit + age.
+    cmd: `curl -fsS https://www.axecompanion.com/api/debug/build | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("shortCommit"), "age_s="+str(d.get("ageSeconds")), "branch="+str(d.get("branch"))); raise SystemExit(0 if d.get("shortCommit") and int(d.get("ageSeconds") or 10**9) < 86400*14 else 1)'`,
+    uitleg: 'Toont live shortCommit + leeftijd; exit 1 als build-info ontbreekt of ouder dan 14 dagen',
     groep: 'machine',
     leestAlleen: true,
   },
