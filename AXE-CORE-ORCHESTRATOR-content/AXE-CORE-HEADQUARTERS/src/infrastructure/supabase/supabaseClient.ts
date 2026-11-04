@@ -145,7 +145,8 @@ export function getSupabase(): SupabaseClient | null {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false,
+      // detectSessionInUrl: default true — nodig voor OAuth/magic-link
+      // (ook via Tauri deeplink). Niet op false zetten.
       storage: maakAuthOpslag(),
     },
   });

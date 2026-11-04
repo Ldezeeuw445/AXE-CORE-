@@ -34,6 +34,17 @@
 /** Sleutels die weg mogen om ruimte te maken. Allemaal opnieuw op te bouwen.
  *
  *  Volgorde is de weggooivolgorde: het minst waardevolle eerst. */
+/** Sleutels die NOOIT opgeofferd mogen worden bij quota-opruiming.
+ *  Gesprekken (`axe_conv_v2_*`) en skills (`axe_custom_skills`) zijn primaire
+ *  localStorage-stores (zie chatPersistence.ts), geen rebuildable caches. */
+export const BESCHERMDE_OPSLAG_PREFIXEN: readonly string[] = [
+  'axe_conv_v2_',
+  'sb-', // auth tokens
+] as const;
+export const BESCHERMDE_OPSLAG_SLEUTELS: readonly string[] = [
+  'axe_custom_skills',
+] as const;
+
 export const OPOFFERBAAR: readonly string[] = [
   'axe_browser_history',   // groeit onbegrensd bij elke bezochte pagina
   'axe_core_logs',
@@ -49,7 +60,6 @@ export const OPOFFERBAAR: readonly string[] = [
   'axe_trading_cycle_journal',
   'axe_kb_docs',
   'axe_obsidian_local_cache',
-  'axe_custom_skills',
   'axe_planner_in_geheugen',
   'axe_trading_funnel_last_run',
 ] as const;
@@ -80,18 +90,8 @@ export function ruimCachesVoorAuth(
       opgeruimd.push(kandidaat);
     } catch { /* volgende */ }
   }
-  // Chat-caches (axe_conv_v2_*) — prefix-scan, nooit sb-*-auth-token
-  try {
-    const teWissen: string[] = [];
-    for (let i = 0; i < opslag.length; i++) {
-      const k = opslag.key(i);
-      if (!k) continue;
-      if (k.startsWith('axe_conv_v2_')) teWissen.push(k);
-    }
-    for (const k of teWissen) {
-      try { opslag.removeItem(k); opgeruimd.push(k); } catch { /* */ }
-    }
-  } catch { /* */ }
+  // NOOIT axe_conv_v2_* of axe_custom_skills wissen: chatPersistence.ts
+  // gebruikt localStorage als primaire store voor gesprekken; skills idem.
   return opgeruimd;
 }
 
