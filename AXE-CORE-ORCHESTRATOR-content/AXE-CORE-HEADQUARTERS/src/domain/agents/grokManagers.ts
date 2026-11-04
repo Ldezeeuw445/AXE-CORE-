@@ -32,8 +32,9 @@ export function grokManagers(): AxeAgent[] {
 /** AXE CORE Manager mag iedereen aanschrijven; de rest rapporteert alleen terug. */
 export function magPeerBericht(from: string, to: string): boolean {
   if (!isGrokManager(from) || !isGrokManager(to) || from === to) return false;
-  if (from === 'axemanager') return true;
-  return to === 'axemanager';
+  // AXE CORE Manager and Projects Manager (orchestrator) may address anyone.
+  if (from === 'axemanager' || from === 'projectsmgr') return true;
+  return to === 'axemanager' || to === 'projectsmgr';
 }
 
 export const AUTO_SEND_VLAGGEN = [

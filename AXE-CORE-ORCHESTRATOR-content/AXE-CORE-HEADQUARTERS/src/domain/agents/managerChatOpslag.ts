@@ -1,6 +1,9 @@
 /**
  * Per-manager chat history on Home. Survives collapse/reopen and app reloads.
  * Jobs still drive live status; this keeps the conversational thread Luka sees.
+ *
+ * Relay lines (`kind: "relay"`) are the small centered "Bericht gestuurd • Agent"
+ * markers when Boss / Projects Manager hands a message to another manager.
  */
 export type ManagerChatRol = 'user' | 'assistant' | 'system';
 
@@ -11,6 +14,10 @@ export type ManagerChatMsg = {
   at: number;
   /** Soft error bubble — short friendly copy, never raw JSON. */
   error?: boolean;
+  /** Inter-agent handoff marker (Grok Bot–style relay line). */
+  kind?: 'relay';
+  /** Agent who dispatched / who the relay names (avatar + label). */
+  fromAgentId?: string;
 };
 
 const PREFIX = 'axe_manager_chat_v2:';
@@ -59,4 +66,12 @@ export function nieuwMsg(
     at: Date.now(),
     ...extra,
   };
+}
+
+/** Centered relay line payload: "Bericht gestuurd" + named agent. */
+export function nieuwRelayMsg(fromAgentId: string, label?: string): ManagerChatMsg {
+  return nieuwMsg('system', label || 'Bericht gestuurd', {
+    kind: 'relay',
+    fromAgentId,
+  });
 }

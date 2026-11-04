@@ -9,6 +9,9 @@ import {
   managerCodingMeta,
   managersZonderBoss,
   primaireRepoVoor,
+  berichtGestuurdLabel,
+  magDoorgeven,
+  classificeerProjectsNaarManager,
 } from './bossRoute';
 import { GROK_MANAGER_IDS } from './grokManagers';
 
@@ -52,5 +55,22 @@ describe('Boss vs managers', () => {
     });
     expect(primaireRepoVoor('axon')).toBe('axon-memory');
     expect(primaireRepoVoor('tradingos')).toBe('trading-os-app');
+  });
+});
+
+describe('Projects orchestrator + relay label', () => {
+  it('magDoorgeven for Boss and Projects only', () => {
+    expect(magDoorgeven('axe')).toBe(true);
+    expect(magDoorgeven('projectsmgr')).toBe(true);
+    expect(magDoorgeven('companionmgr')).toBe(false);
+  });
+
+  it('Projects never routes to itself', () => {
+    expect(classificeerProjectsNaarManager('update projecten board')).toBe('axemanager');
+  });
+
+  it('relay label uses agent display name', () => {
+    expect(berichtGestuurdLabel('projectsmgr')).toBe('Projects Manager');
+    expect(berichtGestuurdLabel('axe')).toBe('AXE Core');
   });
 });

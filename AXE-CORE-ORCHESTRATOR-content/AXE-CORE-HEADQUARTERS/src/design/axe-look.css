@@ -8567,6 +8567,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 :root[data-look] .axe-manager-chat-kaart--desk {
   height: 100%;
 }
+
 .axe-manager-chat-tijd {
   display: block;
   margin-top: 4px;
@@ -8574,6 +8575,204 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   color: var(--text-muted);
   opacity: 0.85;
 }
+
+/* ── Managers Grok Bot layout (feat/managers-grokbot-layout) ─────────────── */
+.axe-managers-room-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.axe-managers-room-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.axe-managers-room-tab[data-active='ja'] {
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--accent-cyan, #22D3EE);
+}
+.axe-managers-room-zoekrij {
+  padding: 8px 12px 4px;
+}
+.axe-managers-room-zoek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+.axe-managers-room-zoek input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+.axe-managers-room-boss-tile {
+  margin: 8px 12px 4px;
+  width: calc(100% - 24px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 14px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  background:
+    linear-gradient(145deg, rgba(34, 211, 238, 0.14), rgba(14, 18, 24, 0.9) 55%),
+    rgba(12, 16, 22, 0.95);
+  cursor: pointer;
+  color: inherit;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+.axe-managers-room-boss-tile:hover {
+  border-color: rgba(34, 211, 238, 0.38);
+}
+.axe-managers-room-boss-tile[data-open='ja'] {
+  border-color: rgba(34, 211, 238, 0.5);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.2), 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.axe-managers-room-boss-av {
+  position: relative;
+  flex: none;
+}
+.axe-managers-room-boss-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.axe-managers-room-boss-naam {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.axe-managers-room-boss-sub {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.axe-managers-room-rij[data-axe-orch='ja'] {
+  background: rgba(192, 132, 252, 0.08);
+  border-color: rgba(192, 132, 252, 0.22);
+}
+.axe-managers-room-rij[data-axe-orch='ja'][data-open='ja'] {
+  background: rgba(192, 132, 252, 0.14);
+  border-color: rgba(192, 132, 252, 0.4);
+}
+.axe-managers-room-groep {
+  list-style: none;
+  margin: 6px 0 2px;
+  padding: 0;
+}
+.axe-managers-room-groep-ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.axe-managers-room-zijpaneel {
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.axe-managers-room-zijpaneel-titel {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.axe-managers-room-zijpaneel-leeg {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.axe-manager-relay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin: 2px 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.axe-manager-relay-tekst {
+  letter-spacing: 0.01em;
+}
+.axe-manager-relay-dot {
+  opacity: 0.7;
+}
+.axe-manager-relay-naam {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.axe-manager-meer-weergeven {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent-cyan, #22D3EE);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 0 0;
+  cursor: pointer;
+}
+.axe-manager-mic,
+.axe-manager-send {
+  appearance: none;
+  border: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+}
+.axe-manager-mic[data-listening='ja'] {
+  background: var(--accent-cyan, #22D3EE);
+  color: #001018;
+}
+.axe-manager-send {
+  color: var(--accent-cyan, #22D3EE);
+}
+:root[data-look='white'] .axe-managers-room,
+:root[data-look='paper'] .axe-managers-room {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+:root[data-look='white'] .axe-managers-room-lijst,
+:root[data-look='paper'] .axe-managers-room-lijst {
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.98));
+  border-right-color: rgba(15, 23, 42, 0.08);
+}
+:root[data-look='white'] .axe-managers-room-boss-tile,
+:root[data-look='paper'] .axe-managers-room-boss-tile {
+  background: linear-gradient(145deg, rgba(14, 165, 233, 0.12), rgba(255, 255, 255, 0.95));
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
 
 /* ── DAX bots overview ───────────────────────────────────────────────────── */
 .axe-dax-overzicht-stats .axe-dax-stat {

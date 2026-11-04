@@ -8,7 +8,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
+import { ArrowUp, ChevronDown, ChevronUp, Mic, Paperclip } from 'lucide-react';
+import { agentById, type AxeAgentId } from '@/domain/agents/roster';
+import { berichtGestuurdLabel } from '@/domain/agents/bossRoute';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
@@ -96,6 +99,55 @@ function mergeGeschiedenis(lokaal: ManagerChatMsg[], uitJobs: ManagerChatMsg[]):
   return uit.sort((a, b) => a.at - b.at);
 }
 
+
+const LANG_COLLAPSE = 720;
+
+function CollapsibleBubbleText({
+  text,
+  asMarkdown,
+}: {
+  text: string;
+  asMarkdown: boolean;
+}) {
+  const lang = text.length > LANG_COLLAPSE || text.split('\n').length > 14;
+  const [open, setOpen] = useState(!lang ? true : false);
+  const shown = !lang || open ? text : `${text.slice(0, LANG_COLLAPSE).trimEnd()}…`;
+  return (
+    <div data-axe-msg-collapse={lang ? (open ? 'open' : 'closed') : undefined}>
+      {asMarkdown ? <MarkdownMessage text={shown} /> : <p className="whitespace-pre-wrap break-words">{shown}</p>}
+      {lang && (
+        <button
+          type="button"
+          className="axe-manager-meer-weergeven"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          {open ? 'Minder weergeven' : 'Meer weergeven'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RelayLine({ fromAgentId, text }: { fromAgentId?: string; text: string }) {
+  const agent = fromAgentId ? agentById(fromAgentId as AxeAgentId) : null;
+  const label = fromAgentId ? berichtGestuurdLabel(fromAgentId) : text;
+  return (
+    <div className="axe-manager-relay" data-axe-relay="ja" role="status">
+      <span className="axe-manager-relay-tekst">Bericht gestuurd</span>
+      {agent ? (
+        <>
+          <span className="axe-manager-relay-dot" aria-hidden>•</span>
+          <ManagerAvatar agent={agent} size={16} />
+          <span className="axe-manager-relay-naam">{label}</span>
+        </>
+      ) : (
+        text ? <span className="axe-manager-relay-naam">{text}</span> : null
+      )}
+    </div>
+  );
+}
+
 function TypingDots() {
   return (
     <div
@@ -150,6 +202,11 @@ export function ManagerChat({
   const [opvolging, setOpvolging] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [stripOpen, setStripOpen] = useState(false);
+  const startListening = useVoiceStore((s) => s.startListening);
+  const stopListening = useVoiceStore((s) => s.stopListening);
+  const voiceStatus = useVoiceStore((s) => s.voiceStatus);
+  const transcript = useVoiceStore((s) => s.transcript);
+  const isListening = voiceStatus === 'listening';
   const [lokaal, setLokaal] = useState<ManagerChatMsg[]>(() => laadManagerChat(agent.id));
   const [wachtOpAntwoord, setWachtOpAntwoord] = useState(false);
   const laatsteJobSamenvatting = useRef<string>('');
@@ -160,6 +217,10 @@ export function ManagerChat({
     laatsteJobSamenvatting.current = '';
     sluitRef.current?.focus();
   }, [agent.id]);
+
+  useEffect(() => {
+    if (isListening && transcript) setOpvolging(transcript);
+  }, [isListening, transcript]);
 
   useEffect(() => {
     if (!onSluit) return;
@@ -422,6 +483,11 @@ export function ManagerChat({
             </p>
           )}
           {berichten.map((m) => {
+            if (m.kind === 'relay' || (m.role === 'system' && m.fromAgentId)) {
+              return (
+                <RelayLine key={m.id} fromAgentId={m.fromAgentId} text={m.text} />
+              );
+            }
             const user = m.role === 'user';
             return (
               <div
@@ -448,9 +514,9 @@ export function ManagerChat({
                   }}
                 >
                   {user || m.error ? (
-                    <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                    <CollapsibleBubbleText text={m.text} asMarkdown={false} />
                   ) : (
-                    <MarkdownMessage text={m.text} />
+                    <CollapsibleBubbleText text={m.text} asMarkdown />
                   )}
                   {m.at ? (
                     <span className="axe-manager-chat-tijd">
@@ -478,7 +544,7 @@ export function ManagerChat({
           className="mt-2 pt-2 flex flex-col gap-1.5"
           style={{ borderTop: '1px solid rgba(255,255,255,.06)' }}
         >
-          <div className="flex items-end gap-1.5">
+          <div className="axe-manager-composer flex items-end gap-1.5">
             <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
             <textarea
               ref={composerRef}
@@ -497,9 +563,9 @@ export function ManagerChat({
                   void filesToAttachments(files, attachments).then(setAttachments);
                 }
               }}
-              placeholder={desk ? `Message ${agent.name}…` : "Message… (Enter send · Shift+Enter newline)"}
+              placeholder={desk ? `Bericht sturen naar ${agent.name}` : "Message… (Enter send · Shift+Enter newline)"}
               aria-label="Message"
-              rows={2}
+              rows={desk ? 1 : 2}
               className="flex-1 min-w-0 text-[12.5px] px-3 py-2 rounded-xl outline-none resize-none"
               style={{
                 background: 'var(--bg-base)',
@@ -507,15 +573,29 @@ export function ManagerChat({
                 color: 'var(--text-primary)',
                 maxHeight: 140,
               }}
+              data-axe-luistert={isListening ? 'ja' : 'nee'}
             />
+            <button
+              type="button"
+              className="axe-manager-mic"
+              aria-label={isListening ? 'Stop microfoon' : 'Microfoon'}
+              title="Spraak"
+              data-listening={isListening ? 'ja' : undefined}
+              onClick={() => {
+                void (isListening ? Promise.resolve(stopListening()) : startListening());
+              }}
+            >
+              <Mic size={16} />
+            </button>
             <button
               type="button"
               onClick={stuur}
               disabled={!opvolging.trim() && attachments.length === 0}
-              className="text-[11px] px-3 py-2 rounded-xl font-medium disabled:opacity-40"
-              style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--accent-cyan)', fontWeight: 600 }}
+              className="axe-manager-send disabled:opacity-40"
+              aria-label="Versturen"
+              style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--accent-cyan)' }}
             >
-              Send
+              <ArrowUp size={16} strokeWidth={2.5} />
             </button>
           </div>
           {!desk && (

@@ -24,11 +24,13 @@ describe('Grok Bot-managers', () => {
     );
   });
 
-  it('AXE CORE Manager mag iedereen aanschrijven; de rest alleen terug', () => {
+  it('AXE CORE Manager en Projects Manager mogen iedereen aanschrijven; de rest alleen terug', () => {
     expect(magPeerBericht('axemanager', 'projectsmgr')).toBe(true);
     expect(magPeerBericht('axemanager', 'northseamgr')).toBe(true);
     expect(magPeerBericht('projectsmgr', 'axemanager')).toBe(true);
-    expect(magPeerBericht('projectsmgr', 'axon')).toBe(false);
+    expect(magPeerBericht('projectsmgr', 'axon')).toBe(true);
+    expect(magPeerBericht('projectsmgr', 'tradingos')).toBe(true);
+    expect(magPeerBericht('companionmgr', 'tradingos')).toBe(false);
     expect(magPeerBericht('wingman', 'axemanager')).toBe(false);
     expect(magPeerBericht('axemanager', 'axemanager')).toBe(false);
   });
