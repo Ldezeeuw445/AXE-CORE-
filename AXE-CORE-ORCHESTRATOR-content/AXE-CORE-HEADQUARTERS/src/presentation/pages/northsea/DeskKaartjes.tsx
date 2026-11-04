@@ -46,7 +46,7 @@ function Tegel({ children, breed }: { children: ReactNode; breed?: boolean }) {
     /* Smal gehouden zodat de hele rij op een gewoon venster past en in het
        midden staat: gemeten op 2000 breed was hij met 196/132 net 30px te breed
        voor zijn ruimte (1526 in 1496), en dan schoof hij en stond er een pijl. */
-    <div className={`flex h-[74px] shrink-0 snap-start flex-col justify-center rounded-[15px] px-3 ${breed ? 'min-w-[172px]' : 'min-w-[120px]'}`}
+    <div className={`flex h-[74px] shrink-0 snap-start flex-col justify-center rounded-[15px] px-3 ${breed ? 'w-[172px]' : 'w-[124px]'}`}
       style={TEGEL_STIJL}>
       {children}
     </div>
@@ -61,7 +61,7 @@ function Getal({ waarde, label, sub, kleur, subKleur, onKies }: {
       <div className="text-[21px] font-semibold leading-none tabular-nums" style={{ color: kleur ?? 'var(--text-primary)' }}>{waarde}</div>
       <div className="mt-1.5 text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-secondary)' }}>{label}</div>
       {sub !== undefined && (
-        <div className="mt-0.5 max-w-[170px] truncate text-[10.5px]" style={{ color: subKleur ?? 'var(--text-muted)' }}>{sub}</div>
+        <div className="mt-0.5 max-w-full truncate text-[10.5px]" style={{ color: subKleur ?? 'var(--text-muted)' }}>{sub}</div>
       )}
     </>
   );
@@ -188,7 +188,7 @@ export function DeskKaartjes({ data, tellers, routes, kies }: {
           en schuift de rij zoals voorheen. De pijlen blijven ruimte houden als
           ze onzichtbaar zijn, dus het midden is echt het midden. */}
       <div ref={rijRef} className="ns-kaartrij pointer-events-auto flex min-w-0 flex-1 snap-x scroll-px-2 overflow-x-auto px-2 py-3">
-        <div className="mx-auto flex w-max gap-2.5">
+        <div className="mx-auto flex w-max gap-2.5" data-axe-gelijk="northsea-kpi">
         <Getal waarde={tellers?.actief ?? leeg} label="Active deals" kleur="#22D3EE"
           sub={tellers ? `+${tellers.nieuwDezeWeek} this week` : undefined} subKleur="#34D399" onKies={kies?.actief} />
         <Getal waarde={tellers?.akkoord ?? leeg} label="Awaiting approval" kleur="#FBBF24"

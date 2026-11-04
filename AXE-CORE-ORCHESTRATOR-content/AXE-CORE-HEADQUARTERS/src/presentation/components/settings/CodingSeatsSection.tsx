@@ -214,7 +214,7 @@ export function CodingSeatsSection() {
         </p>
       ))}
       {fout && <p className="axe-agentkaart-melding">{fout}</p>}
-      <div className="axe-agent-raster axe-agent-raster--ruim">
+      <div className="axe-agent-raster axe-agent-raster--ruim" data-axe-seats-raster data-axe-gelijk="seats">
         {groepen.kaarten.map(kaartVoor)}
         {stoelen?.length === 0 && (
           <StatusKaart
